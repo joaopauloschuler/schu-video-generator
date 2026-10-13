@@ -2,7 +2,7 @@
 line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
 layers that move by their factor when the camera moves (§69.7), props (§69.8), particles
 (§69.9), its light and shadows (§69.31), its wind (§69.32) or a room instead of the sky (§69.42),
-and props that move by themselves (§69.54)."""
+props that move by themselves (§69.54), snow that settles and fog (§69.60)."""
 
 import math
 from collections.abc import Iterator
@@ -199,6 +199,9 @@ class StageParticles(ParticleSettings, SceneParams):
     def _puddles_in_rain(self) -> "StageParticles":
         if self.puddles and self.kind != "rain":
             raise ValueError(f"puddles grow under rain only, not {self.kind}")
+        settle = settle_problem(self.kind, self)
+        if settle is not None:
+            raise ValueError(settle[1])
         return self
 
     @classmethod
@@ -245,6 +248,36 @@ class StageBirds(FlockSettings):
     def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
         """``true`` or a count is also a flock (JSON Schema ``anyOf`` true | count | object)."""
         return {"anyOf": [{"const": True}, {"type": "integer", "minimum": 1, "maximum": MAX_BIRDS}, handler(core_schema)]}
+
+
+class StageFogSetting(SceneParams):
+    """Fog over the stage (DESIGN.md §69.60): translucent bands lying between the things by depth,
+    thicker further back, drifting. ``true`` is fog with the defaults, a number its density."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (bool, float)
+
+    density: float = Field(FOG_DENSITY, gt=0.0, le=1.0)
+    """How thick: 0.5 hides about a third of a character at depth 0.5 and over half of the sky low down; 1 is a thick fog."""
+    color: ThemeColor | None = None
+    """Its colour (a theme token or #hex); default a pale grey blue."""
+    drift: float = Field(1.0, ge=0.0, le=5.0)
+    """How fast its waves drift sideways (1 slowly; 0 still, unless the wind blows: it is then drawn once per animation, not on every frame)."""
+    seed: int | None = None
+    """Varies its waves; default: one from the scene."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain(cls, data: Any) -> Any:
+        if data is False:
+            raise ValueError("fog: false is the default; leave fog out")
+        if data is True:
+            return {}
+        return {"density": data} if isinstance(data, (int, float)) else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """``true`` or a density is also fog (JSON Schema ``anyOf`` true | density | object)."""
+        return {"anyOf": [{"const": True}, {"type": "number", "exclusiveMinimum": 0, "maximum": 1}, handler(core_schema)]}
 
 
 class LayerShape(SceneParams):
@@ -452,7 +485,8 @@ class Stage(NarratedScene):
     muffin, a book and a letter and a gift (they ``open`` and ``close``), balloons (``let_go``
     floats them away), a vase of flowers and a watering can (``pour``). A tree with ``fruit`` carries fruits that
     ``drop_fruit`` lets fall (on a character's head too); ``birds`` (or the ``birds`` action) send
-    a flock across the sky.
+    a flock across the sky. Snow with ``settle: true`` lies on the ground and the props in a
+    growing white layer; ``fog`` lies in bands between the things by depth, thicker further back.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -538,7 +572,7 @@ class Stage(NarratedScene):
         props: list[StageProp] = []
         """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against, on, time, speed, fruit}."""
         particles: list[StageParticles] = []
-        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; for one beat use the particles action."""
+        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles, settle, settled}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; snow with settle: true lands on the ground and the props, where a white layer grows; for one beat use the particles action."""
         light: LightSetting = "day"
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene."""
         shadows: bool = True
@@ -551,6 +585,8 @@ class Stage(NarratedScene):
         """A strip of water with waves at the front of the stage, for a boat to float on: true (the whole width) or {left, right, color} (marks or x from 0 to 1); outdoors only."""
         birds: StageBirds | None = None
         """A flock of birds crossing the sky, flapping: true, a number of birds, or {count, direction, height, start, seconds, seed}; outdoors only (the birds action sends one later)."""
+        fog: StageFogSetting | None = None
+        """Fog in translucent bands lying between the characters and props by depth, thicker further back (the sky most), drifting slowly and with the wind: true, a density from 0 to 1 (true: 0.5), or {density, color, drift, seed}; outdoors only."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -653,6 +689,8 @@ class Stage(NarratedScene):
                 raise ValueError("there is no wind in a room: remove wind (or the room)")
             if self.birds is not None:
                 raise ValueError("birds fly outdoors: remove birds (or the room)")
+            if self.fog is not None:
+                raise ValueError("there is no fog in a room: remove fog (or the room)")
             for k, item in enumerate(self.particles):
                 if item.kind in OUTDOOR_PARTICLES:
                     raise ValueError(f"particles[{k}]: {item.kind} stays outdoors; a room has none inside (sparkles, dust, confetti, smoke and bubbles work)")
@@ -964,6 +1002,8 @@ class Stage(NarratedScene):
         changed = False
         for character, walk in self._depth_walks:
             changed |= self._keep_depth_order(character)
+        if self._depth_walks:
+            changed |= self._sort_fog()   # a walker may pass a fog band's depth (§69.60)
         self._depth_walks = [(c, w) for c, w in self._depth_walks if abs(c.stage_depth - w.to_depth) > SAME_DEPTH]
         for name, figure in self.cast.items():
             if self._part_orders.get(name) != figure.order_changes:
@@ -1030,6 +1070,10 @@ class Stage(NarratedScene):
             riders = [seat.rider for seat in anim.seats] if isinstance(anim, Ride) else []
             for thing in [anim.mobject, *riders, *(t for t in things if low - SAME_DEPTH <= float(getattr(t, "stage_depth", 0.0)) <= high + SAME_DEPTH)]:
                 found |= {id(m) for m in thing.get_family()}
+            fog = getattr(self, "fog", None)   # the fog bands it passes (§69.60)
+            for band in fog.bands if fog is not None else []:
+                if low - SAME_DEPTH <= band.stage_depth <= high + SAME_DEPTH:
+                    found |= {id(m) for m in band.get_family()}
         return found
 
     # ----- rain on the ground (DESIGN.md §69.39) --------------------------------------------------
@@ -1037,23 +1081,27 @@ class Stage(NarratedScene):
     def rain_ground(self) -> RainGround:
         """Where rain ends now: the landing band from the ground line up to the top of the ground
         area, and the shelters (open umbrellas, held or standing, and trees) where they are."""
-        shelters: list[ShelterBox] = []
-        for prop in self.props.values():
-            if prop.kind not in SHELTER_PROPS:
-                continue
-            holder = self.cast.get(prop.held_by) if prop.held_by is not None else None
-            feet = float((holder.feet() if holder is not None else prop.feet())[1])
-            box = (float(prop.get_left()[0]), float(prop.get_right()[0]), float(prop.get_top()[1]))
-            shelter = prop_shelter(prop.kind, prop.shape, box, feet)
-            if shelter is not None:
-                shelters.append(shelter)
+        shelters = [s for s in (self._shelter_of(prop) for prop in self.props.values()) if s is not None]
         top = ground_top(self.params.ground, self.params.items())
         return rain_ground(self.params.ground, top, self.frame_height, shelters)
+
+    def _shelter_of(self, prop: Prop) -> ShelterBox | None:
+        """The box ``prop`` keeps rain off now (an open umbrella, a tree; ``None``: none): its drawn
+        bounds, on its feet or its holder's."""
+        if prop.kind not in SHELTER_PROPS:
+            return None
+        holder = self.cast.get(prop.held_by) if prop.held_by is not None else None
+        feet = float((holder.feet() if holder is not None else prop.feet())[1])
+        box = (float(prop.get_left()[0]), float(prop.get_right()[0]), float(prop.get_top()[1]))
+        return prop_shelter(prop.kind, prop.shape, box, feet)
 
     def particles_started(self, field: Any, settings: Any) -> None:
         """A rain field: its sound bed plays while it lasts (with foley), and, with ``puddles:
         true``, puddles grow on the ground under it (drawn over the ground band, under the
-        shadows, characters and props)."""
+        shadows, characters and props). A snow field with ``settle: true``: its layer grows
+        (:meth:`_settle_snow`)."""
+        if field.seeds.kind == "snow" and settings.settle:
+            self._settle_snow(field, settings)
         if field.seeds.kind != "rain":
             return
         if self._foley_on():
@@ -1070,10 +1118,141 @@ class Stage(NarratedScene):
         self.puddles.append(puddles)
         self._lay_on_ground(puddles)
 
-    def _lay_on_ground(self, mobject: Mobject) -> None:
+    # ----- snow that settles (DESIGN.md §69.60) -----------------------------------------------------
+
+    def snow_ground(self) -> RainGround:
+        """Where settling snow ends now: rain's landing band, open umbrellas (held or standing) and
+        the top line of every prop that catches snow (:meth:`_snow_tops`)."""
+        tops = self._snow_tops()
+        shelters: list[Any] = []
+        for name, prop in self.props.items():
+            if prop.kind == "umbrella":
+                shelters += [s for s in [self._shelter_of(prop)] if s is not None]
+            elif name in tops:
+                shelters.append(tops[name])
+        top = ground_top(self.params.ground, self.params.items())
+        return rain_ground(self.params.ground, top, self.frame_height, shelters)
+
+    def _snow_tops(self) -> dict[str, TopLine]:
+        """The top lines of the props that catch snow, by name, taken once (they stay put): every
+        prop on the ground that no action moves, but flat ones (a rug), floating ones and
+        umbrellas (sheltering boxes)."""
+        if getattr(self, "_tops", None) is None:
+            hanging = {item.name for item in self.params.items() if item.lift + item.hang > 0}
+            fixed = set(self.props) - self._movable_props() - hanging
+            self._tops: dict[str, TopLine] | None = {}
+            for name in sorted(fixed):
+                prop = self.props[name]
+                if prop.kind in (*FLAT_PROPS, *WATER_VEHICLES, *AIR_VEHICLES, "umbrella") or prop.held_by is not None:
+                    continue
+                line = prop_top_line(prop)
+                if line is not None:
+                    self._tops[name] = TopLine(line[0], line[1], float(prop.feet()[1]))
+        return self._tops
+
+    def _settle_snow(self, field: Any, settings: Any) -> None:
+        """The layer a settling snow ``field`` leaves (:class:`SettledSnow`): a blanket on the
+        ground area (thin under trees and standing open umbrellas), laid like puddles, and a cap
+        right after each prop that catches snow and does not sway, all lit; it grows in steps."""
+        ground = self.rain_ground()
+        left, right = self.camera_bounds()[:2]
+        movable = self._movable_props()
+        bare = [s for s in (self._shelter_of(p) for n, p in self.props.items() if p.held_by is None and n not in movable) if s is not None]
+        token = settings.color[0] if isinstance(settings.color, list) else settings.color
+        color = SNOW_COLOR if token is None else resolve_color(token, self.theme)
+        swaying = set(SWAYS) if getattr(self, "blowing", None) is not None else set()
+        short = min(self.frame_width, self.frame_height)
+        caps = []
+        for name, line in self._snow_tops().items():
+            prop = self.props[name]
+            if prop.kind in swaying:
+                continue   # its cap would not sway with it
+            full = cap_full_thickness(short, float(getattr(prop, "stage_depth", 0.0)), float(prop.height))
+            caps.append(SnowCap(line.xs, line.ys, full, color, cap_of=name))
+        layer = SettledSnow(
+            SnowBlanket(color), caps, area=(left, right, -self.frame_height / 2, ground.back), frame_height=self.frame_height,
+            bare=bare_patches(bare), start=field.start, ended=lambda: field.ended, density=settings.density,
+            settled=settings.settled, seed=settings.seed,
+        )
+        mark_lit(layer.blanket, *caps)
+        self.snow_layers.append(layer)
+        self._lay_on_ground(layer.blanket, under_water=True)
+        for cap in caps:
+            self._put_after_prop(cap.cap_of, cap)
+        self._watch_living()
+
+    def _put_after_prop(self, name: str, mobject: Mobject) -> None:
+        """Draw ``mobject`` right after the prop ``name``: now, when the prop is on screen, else
+        when it comes in (:meth:`construct`'s entrance)."""
+        prop = self.props[name]
+        at = next((k for k, m in enumerate(self.mobjects) if m is prop), None)
+        if at is None:
+            self._after_props.setdefault(name, []).append(mobject)
+        else:
+            self.mobjects.insert(at + 1, mobject)
+
+    # ----- fog (DESIGN.md §69.60) -------------------------------------------------------------------
+
+    def _fog(self) -> StageFog | None:
+        """The stage's ``fog`` (``None``: none): its bands lit by the light, drifting with the
+        stage's wind when it may blow, and the scene updater when its waves move."""
+        setting = self.params.fog
+        if setting is None:
+            return None
+        left, right = self.camera_bounds()[:2]
+        color = resolve_color(setting.color, self.theme) if setting.color is not None else FOG_COLOR
+        wind = getattr(self, "particle_wind", None)
+        fog = StageFog(
+            density=setting.density, color=color, ground=self.params.ground, left=left, right=right, frame_height=self.frame_height,
+            drift=setting.drift, seed=setting.seed if setting.seed is not None else motion_seed(self.spec.id, "fog"),
+            blown=(lambda now: wind(0.0, now)[0]) if wind is not None else None,
+        )
+        mark_lit(*fog.bands)
+        if fog.moves:
+            self._watch_living()
+        return fog
+
+    def _sort_fog(self) -> bool:
+        """Put each fog band right before the first character or prop (in draw order) standing
+        at its depth or nearer (before the props that one holds in front of it), else before the
+        foreground: everything deeper is seen through it. Whether the draw order changed."""
+        fog = getattr(self, "fog", None)
+        if fog is None:
+            return False
+        before = [id(m) for m in self.mobjects]
+        bands = {id(b) for b in fog.bands}
+        self.mobjects[:] = [m for m in self.mobjects if id(m) not in bands]
+        depths = {id(m): float(getattr(m, "stage_depth", 0.0)) for m in [*self.cast.values(), *self.props.values()] if getattr(m, "held_by", None) is None}
+        front = {id(m) for m in self._in_front}
+        after = 0
+        for band in fog.bands:   # back to front
+            at = next((k for k, m in enumerate(self.mobjects) if k >= after and id(m) in depths and depths[id(m)] <= band.stage_depth), None)
+            if at is None:
+                at = next((k for k, m in enumerate(self.mobjects) if k >= after and (id(m) in front or isinstance(m, ParticleField))), len(self.mobjects))
+            else:
+                name = getattr(self.mobjects[at], "name", None)
+                while at > after and getattr(self.mobjects[at - 1], "held_by", None) == name:
+                    at -= 1
+            self.mobjects.insert(at, band)
+            after = at + 1
+        return [id(m) for m in self.mobjects] != before
+
+    def _watch_living(self) -> None:
+        """Install the scene updater of the things that move by themselves (once)."""
+        if not any(f is self._living_updater for f in self.updaters):
+            self.add_updater(self._living_updater)
+
+    def _lay_on_ground(self, mobject: Mobject, *, under_water: bool = False) -> None:
         """Put ``mobject`` right in front of the set behind the characters (before the shadows):
         into the backdrop while it has not come on screen yet (it fades in with it), else into
-        the scene."""
+        the scene. ``under_water``: right before the stage's water instead, when it has some."""
+        water = getattr(self, "water", None)
+        if under_water and water is not None:
+            for drawn in (self.mobjects, self._backdrop):
+                at = next((k for k, m in enumerate(drawn) if m is water.back), None)
+                if at is not None:
+                    drawn.insert(at, mobject)
+                    return
         behind = [m for m in self._backdrop if not isinstance(m, StageShadows)]
         ids = {id(m) for m in behind}
         shown = [k for k, m in enumerate(self.mobjects) if id(m) in ids]
@@ -1244,7 +1423,9 @@ class Stage(NarratedScene):
                 else:
                     live = self.living.get(t.name)   # a glow right behind it, steam right in front (§69.54, §69.55)
                     shown += [m for m in (live.glow if live else None, t.mobject, live.steam if live else None) if m is not None]
+                    shown += self._after_props.pop(t.name, [])   # its snow cap (§69.60)
             self.add(*shown, *in_front)
+            self._sort_fog()
             return [FadeOut(self._entrance_cover()), *items]
 
         self._start_wind(placements)
@@ -1260,6 +1441,12 @@ class Stage(NarratedScene):
         self._rain_fields: list[ParticleField] = []
         #: the puddles under the rain fields with ``puddles: true``
         self.puddles: list[Puddles] = []
+        #: the layers of the snow fields with ``settle: true``, what waits to be drawn right after
+        #: a prop when it comes in (its snow cap), and the stage's fog (DESIGN.md §69.60)
+        self.snow_layers: list[SettledSnow] = []
+        self._after_props: dict[str, list[Mobject]] = {}
+        self._in_front = in_front
+        self.fog = self._fog()
         #: the motion effects on the scene now (DESIGN.md §69.41), and the scene updater that
         #: takes finished ones off, kept: Manim removes an updater by identity
         self.motion_effects: list[MotionEffect] = []
@@ -1501,18 +1688,27 @@ class Stage(NarratedScene):
         return felt_force(blowing.wind.force(now)) if blowing is not None else 0.0
 
     def _living_things(self) -> list[Any]:
-        """The props that move by themselves and the flocks of birds (DESIGN.md §69.54, §69.55)."""
-        return [*getattr(self, "living", {}).values(), *getattr(self, "flocks", [])]
+        """The props that move by themselves, the flocks of birds, the layers of settling snow and
+        the fog (DESIGN.md §69.54, §69.55, §69.60)."""
+        fog = getattr(self, "fog", None)
+        return [*getattr(self, "living", {}).values(), *getattr(self, "flocks", []), *getattr(self, "snow_layers", []), *([fog] if fog is not None else [])]
 
     def _living_step(self, dt: float) -> None:
-        """Scene updater: every prop that moves by itself and every flock as it is at the scene
-        time now; it removes itself once only flocks that have flown away are left."""
+        """Scene updater: every prop that moves by itself, every flock, every layer of settling
+        snow and the fog as they are at the scene time now; it removes itself once only flocks that
+        have flown away and layers that grow no more are left."""
         now = float(self.renderer.time)
         for live in self.living.values():
             live.update(now)
         for flock in self.flocks:
             flock.update_to(now)
-        if not self.living and all(flock.done(now) for flock in self.flocks):
+        for layer in self.snow_layers:
+            layer.update(now)
+        fog = getattr(self, "fog", None)
+        if fog is not None and fog.moves:
+            fog.update(now)
+        settled = all(layer.done(now) for layer in self.snow_layers) and (fog is None or not fog.moves)
+        if not self.living and all(flock.done(now) for flock in self.flocks) and settled:
             self.remove_updater(self._living_updater)
 
     def switch_props(self, patterns: list[str], on: bool, time: float) -> None:

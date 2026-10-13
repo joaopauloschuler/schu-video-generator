@@ -137,7 +137,11 @@ src/vidgen/
                           # birds, §69.55; no manim), nature_drawing.py (Flock, FallenFruit,
                           # FruitDrop, hit_stars, §69.55), small_props.py (balloons floating away,
                           # a pour's tilt and drops, §69.56; no manim), small_props_drawing.py
-                          # (Pouring, WaterFlow, WaterDrops, §69.56); still.py also
+                          # (Pouring, WaterFlow, WaterDrops, §69.56), snow.py (snow that settles:
+                          # top lines, the layer's steps, blanket and caps, flakes on their floors,
+                          # §69.60; no manim), fog.py (fog bands by depth, their opacities and
+                          # waves, §69.60; no manim), weather_drawing.py (SettledSnow, SnowBlanket,
+                          # SnowCap, StageFog, FogBand, §69.60); still.py also
                           # draws the prop, furniture, small-prop and vehicle galleries (§69.43), the look gallery
                           # (§69.47) and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
@@ -933,6 +937,13 @@ Step 122 (§69.56) adds `SMALL_PROPS`, `WATERING_SPOUT`, `OVERHEAD_PROPS`, `FULL
 Compatible: a scene without them renders as before (`props.png` is byte-identical).
 Step 124 (§69.58) adds no names; `PART_NAMES` gains `antenna` and `cape` at its end (draw-order
 ties and pose-change order of the other parts unchanged; compatible).
+Step 126 (§69.60) adds `settle_problem`, `CAP_THICKNESS`, `SETTLE_SECONDS`, `SETTLE_STEP`,
+`SNOW_COLOR`, `TopLine`, `bare_patches`, `blanket_cover`, `cap_full_thickness`, `flake_floors`,
+`settle_amount`, `settled_seconds`, `FOG_COLOR`, `FOG_DENSITY`, `FOG_DEPTHS`, `band_opacities`,
+`fog_cover`, `FogBand`, `SettledSnow`, `SnowBlanket`, `SnowCap`, `StageFog` and `prop_top_line`;
+`ParticleSettings.settle` / `.settled`; the stage param `fog`; `Stage.snow_ground`,
+`Stage.snow_layers`, `Stage.fog`. Compatible: a scene without settling snow or fog renders as
+before, pixel for pixel.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -9083,6 +9094,116 @@ side and front, and fall back on SVG characters through their shape lists.
   `emote` and stage `expression` accept the new names (they read `Character.names`), and the
   character sheet lists them and the new mouth shapes (it reads the tables).
 - Tests: `tests/test_cartoon_expressions.py`.
+
+### 69.60 More weather, part 1: snow that settles, fog (Step 126)
+
+Snow on a `stage` may land and settle in a growing white layer, and a stage may have fog lying
+in bands between its things by depth. Both are seeded and pure, outdoors only, and a scene
+without them renders as before.
+
+- **Settling snow** (`cartoon/snow.py`, no manim; Manim units, `y` up): `ParticleSettings.settle`
+  (snow only, `settle_problem`; stage param error / validate problem like `puddles`) and
+  `settled` (seconds of snowfall already lying, 0–600, needs `settle`). `particle_field` gives a
+  snow field with `settle` the scene's `snow_ground` (rain keeps `rain_ground`). A
+  `RainGround`'s shelters may now also be a `TopLine(xs, ys, feet)`: a prop's upper edge, with
+  `top_at(x)` and `covers` like `ShelterBox`. `flake_floors` = Step 105's landing line or the
+  highest covering shelter's top there (a box's top, a line's height); `rest_flakes(bottom, floor,
+  speed)`: a flake below its floor lies on it (raised there) fading over `FLAKE_REST` 0.5 s, then
+  is hidden until it wraps (Step 76's drops keep their positions: the landing shares are Step
+  105's stream). `ParticleField` keeps its landing shares for any ground and makes splashes for
+  rain only.
+- **The layer**: `settled_seconds(now, start, ended, settled)` counts the snowfall in
+  `SETTLE_STEP` 0.5 s steps (frozen at the field's end: it never melts); `settle_amount(seconds,
+  density)` = seconds × density / `SETTLE_SECONDS` 24, at most 1 (linear, so each step adds the
+  same). Blanket: `blanket_outline(left, right, bottom, back, rise, frame_height, seed)` from the
+  frame's bottom edge to the ground area's back edge (rain's `back`) raised by amount ×
+  `BLANKET_RISE` 0.018 frame heights × `edge_lumps` (three seeded sines, 1 ± `LUMP_DEPTH` 0.6),
+  counter-clockwise; opacity `BLANKET_OPACITY` 0.97 × `blanket_cover` (amount / `COVER_SHARE` 0.4,
+  at most 1). `bare_patches(shelters)`: clockwise ellipses (`BARE_WIDTH` 0.8 of the shelter's width,
+  `BARE_FLAT` 0.22 high) on the feet line of each standing shelter (a tree, an open umbrella that
+  no action moves): holes in the blanket (Cairo fills by winding), covered by a second shape at
+  `THIN_SNOW` 0.45 of its opacity (a first try with plain holes showed the theme's dark ground as
+  black ellipses). Caps: `curve_segments` turns a member's cubic points into straight pieces
+  (6 samples a curve) and `top_line(segments, columns)` takes the highest crossing over each of
+  `CAP_COLUMNS` 28 column middles (plus segment ends inside a column; empty columns between their
+  neighbours) — sampling points per curve alone left dips where one long roof edge had no sample
+  and a window's top was the highest point (seen as thin white spikes); `cap_thickness` is the full
+  thickness × amount where the line's slope is at most `CAP_SLOPE` 1 (45°), tapered next to steeper
+  parts; `cap_outlines` makes one counter-clockwise shape per run, `CAP_SINK` 0.35 of it below
+  the line (over the outline), pointed ends; `cap_full_thickness` = `CAP_THICKNESS` 0.03 shorter
+  sides × the depth scale, at most `CAP_SHARE` 0.2 of the prop's height. `SNOW_COLOR` `#F4F7FC`
+  (or the field's first `color`).
+- **Drawing** (`cartoon/weather_drawing.py`): `SnowBlanket` (a `VGroup`: the blanket with holes,
+  the thin snow), `SnowCap(xs, ys, full, color, cap_of)`, `SettledSnow` (`amount_at`, `update`
+  redraws only when the step changes, `changing`, `done`, `movers`, `region`: the full layer's
+  box). `prop_top_line(prop)` reads the members with points that show (fill or stroke).
+- **Stage**: `snow_ground()` = rain's band, open umbrellas as boxes (`_shelter_of`, shared with
+  `rain_ground`) and the `_snow_tops()` top lines (taken once) of every prop on the ground that no
+  action moves (`_movable_props`), not lifted or hung, not `FLAT_PROPS`, water or air vehicles,
+  umbrellas or held. `particles_started` → `_settle_snow`: a `SettledSnow` for the field, its
+  blanket laid like the puddles (`_lay_on_ground(under_water=True)`: right before the water's
+  band when the stage has water), a cap right after each such prop (`_put_after_prop`: into
+  `scene.mobjects`, or kept in `_after_props` for the entrance, which adds it right after the
+  prop), none on swaying kinds (`SWAYS`) when the stage's wind may blow (the cap would not
+  sway); all lit (`mark_lit`). `Stage.snow_layers`.
+- **Fog** (`cartoon/fog.py`, no manim): `FOG_DEPTHS` (1, 0.8, 0.6, 0.4, 0.2); `band_opacities(
+  density)`: band k holds `1 − exp(−FOG_THICKNESS (1.8) × density × (d_k − d_{k+1}))` (the front
+  band down to 0), so the bands in front of a depth hide `1 − exp(−1.8 × density × d)` where d is
+  the deepest band in front of it; `fog_cover(depth, density, high=False)` multiplies them (0 at
+  depth ≤ 0.2; the sky = every band). Each band has `FOG_LAYERS` 3 layers holding
+  `FOG_LAYER_SHARES` (0.5, 0.25, 0.25) of its optical depth (`layer_opacity`; together exactly the
+  band's opacity): a haze up to the frame's top edge, banks up to 1 and 0.5 × `FOG_HEIGHT` 0.3
+  frame heights × the depth scale (the back band `FOG_HAZE_HEIGHT` 0.4) with wavy tops
+  (`FOG_WAVE` 0.3 × two seeded sines of 1.3 and 0.55 frame heights), each taller layer starting
+  `FOG_FEATHER` 0.015 frame heights lower (soft edges). `band_outlines(index, ground, left, right,
+  frame_height, shift, seed)`, `band_box` (the box whatever the drift). `fog_shift(t, blown,
+  depth, drift)` = drift × `FOG_DRIFT` 0.02 × (2 − depth) × t + `FOG_WIND_DRIFT` 0.12 × blown
+  (frame heights; nearer bands twice as fast). A first try with only short ground banks left
+  deep tree crowns crisp over fogged trunks; the haze layer fixes that.
+- **Drawing and order**: `FogBand` (a `VGroup` of the layers; `stage_depth` is its depth: Manim's
+  `Mobject.depth` is the z extent, and setting it on a first try scaled the band instead), and
+  `StageFog` (`update`, `moves` = drift > 0 or a wind may blow, `changing`, `movers`, `region`).
+  Stage param `fog` (`StageFogSetting`: `true`, a density, or {density, color, drift, seed};
+  `false` is an error like `birds: false`; refused in a room). `Stage._fog()` builds it lit
+  (`blown` from `particle_wind`), seed `motion_seed(scene, "fog")`; `_sort_fog()` puts each band
+  right before the first character or prop (draw order, held props excepted) standing at its
+  depth or nearer (before the props that one holds in front of it), else before the foreground
+  (`_in_front`) or the first particle field; it runs in the entrance and, while a walk in depth is
+  under way, on every frame in `_draw_order_step` (a changed order is then redrawn), and
+  `_depth_crossers` adds the bands a walker passes. The windows of a room show no fog.
+- **What is redrawn** (§69.54's rule): `_living_things` adds the snow layers and the fog;
+  `_living_step` updates them (installed by `_watch_living`) and removes itself once only flown
+  flocks, done layers and still fog are left. A layer redraws itself and what stands in front of
+  it only in animations where a step passes; a full layer (or after the snow) is static. Moving
+  fog redraws everything from the back band on.
+- **Measured** (scratch `s126/` in the scratchpad, preview 854×480 15 fps, no audio, one process
+  each under the 1500 MB cap, `s120/measure_room.py`):
+
+  | render | frames | Cairo draws | wall (s) |
+  |---|---|---|---|
+  | snowy meadow (house, tree, rock, table, umbrella, a walk in depth), snow without `settle`: HEAD e3e8e3d / this step | 277 | 48 224 / 48 224 | 11.9 / 11.6 |
+  | the same with rain and puddles: HEAD / this step | 277 | 62 416 / 62 416 | 14.9 / 14.6 |
+  | the meadow with `settle: true, settled: 6`, density 1.5 (the layer grows all along) | 277 | 54 427 | 12.9 |
+  | a night meadow, `settled: 30` (full from the start) / without `settle` | 162 | 22 757 / 22 547 | 6.9 / 6.8 |
+  | a forest (5 trees, 3 characters, a walk in depth) with `wind: breeze`: `fog: true` / none | 185 | 23 296 / 20 521 | 9.9 / 8.9 |
+  | the forest calm: `fog: {drift: 0}` / none | 185 | 22 092 / 19 833 | 9.4 / 8.3 |
+
+  Without the new things the raw frame hashes equal HEAD's (all 277 in both). A growing layer:
+  +13 % draws, +11 % wall; a full one: the blanket and caps once per animation. Moving fog: +12 %
+  wall; still fog still costs +13 % here: the walk in depth redraws the bands it passes, and five
+  translucent frame-high shapes are slow to draw even once per animation.
+- **Checked by eye** (preview frames): a snowy meadow by day (caps on the roof, chimney, crown,
+  table and rock, the blanket with lumps along its back edge, thin snow under the tree and the
+  umbrella, flakes lying a moment) and at night (`settled: 30`: the layer graded bluish, white
+  flakes); a foggy forest in a breeze (the trees at depths 1, 0.85, 0.55, 0.3 paler the further
+  back, characters at 0, 0.45 and 0.9, one walking from 0.9 to the front coming out of the fog);
+  a foggy night street at density 0.8 (houses fading, wavy banks over the sky).
+- **Not done**: no footprints; caps do not sway with a swaying prop (none then) and stay where a
+  prop stood when it is later moved (movable props get none); snow does not settle on characters
+  or held props; the layer does not melt; no fog action (it is there all scene) and none through
+  a room's windows; particles stay ungraded and in front of the fog. Seen while checking, not
+  from this step (also without `settle`): a character walking behind a house in depth leaves a
+  faint outline of itself over the house (Backlog). Tests: `tests/test_cartoon_snow_fog.py`.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

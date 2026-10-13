@@ -337,7 +337,31 @@ from vidgen.cartoon.stage import (  # noqa: E402
 from vidgen.camera import view_center_within  # noqa: E402
 from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, shot_figures, shot_view  # noqa: E402
 from vidgen.particles import MAX_PARTICLES, PARTICLE_KINDS, particle_count, particle_seeds, particle_states  # noqa: E402
-from vidgen.particle_field import ParticleField, ParticleKindName, ParticleSettings, ParticleWind, Puddles, RainGroundSource, particle_field  # noqa: E402
+from vidgen.particle_field import (  # noqa: E402
+    ParticleField,
+    ParticleKindName,
+    ParticleSettings,
+    ParticleWind,
+    Puddles,
+    RainGroundSource,
+    particle_field,
+    settle_problem,
+)
+from vidgen.cartoon.snow import (  # noqa: E402
+    CAP_THICKNESS,
+    SETTLE_SECONDS,
+    SETTLE_STEP,
+    SNOW_COLOR,
+    TopLine,
+    bare_patches,
+    blanket_cover,
+    cap_full_thickness,
+    flake_floors,
+    settle_amount,
+    settled_seconds,
+)
+from vidgen.cartoon.fog import FOG_COLOR, FOG_DENSITY, FOG_DEPTHS, band_opacities, fog_cover  # noqa: E402
+from vidgen.cartoon.weather_drawing import FogBand, SettledSnow, SnowBlanket, SnowCap, StageFog, prop_top_line  # noqa: E402
 from vidgen.cartoon.rain import (  # noqa: E402
     SHELTER_PROPS,
     SPLASH_SECONDS,
@@ -999,6 +1023,29 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "puddle_spots",
     "rain_ground",
     "splash_shapes",
+    "settle_problem",
+    "CAP_THICKNESS",
+    "SETTLE_SECONDS",
+    "SETTLE_STEP",
+    "SNOW_COLOR",
+    "TopLine",
+    "bare_patches",
+    "blanket_cover",
+    "cap_full_thickness",
+    "flake_floors",
+    "settle_amount",
+    "settled_seconds",
+    "FOG_COLOR",
+    "FOG_DENSITY",
+    "FOG_DEPTHS",
+    "band_opacities",
+    "fog_cover",
+    "FogBand",
+    "SettledSnow",
+    "SnowBlanket",
+    "SnowCap",
+    "StageFog",
+    "prop_top_line",
     "BURST_SPIN",
     "CARD_STYLES",
     "CardLayout",

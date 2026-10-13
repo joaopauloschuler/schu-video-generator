@@ -823,6 +823,11 @@ asks for one, say vidgen makes original characters and offer one with the same r
   ground with small splashes; an open umbrella (held or standing) and a tree's crown keep the
   rain off whoever stands under them; `{kind: rain, puddles: true}` grows puddles. A generated
   rain sound plays under it while it lasts, ducked less than music (off with `foley: false`).
+- **Snow and fog**: `{kind: snow, settle: true}` lands on the ground and on the props, where a
+  white layer grows (a blanket on the ground, caps on roofs, crowns, tables; full after 24 s at
+  density 1; thin under trees and open umbrellas); `settled: 30` starts it already white. `fog:
+  true` (or a density 0..1) lays fog in bands between the characters and props by depth: the
+  further back, the more hidden; it drifts slowly and with the wind. Both outdoors only.
 - **Indoors**: `room: {wallpaper: stripes, windows: [0.3], doors: [{at: 0.8}]}` (or `room:
   true`) replaces the sky and ground with a wall, a floor (`flooring: boards | tiles`) and a
   skirting board; windows show the sky of the stage's `light` (`indoor`: lamplight inside, evening

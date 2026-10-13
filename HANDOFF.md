@@ -11901,3 +11901,106 @@ How to test
   test_cartoon_acting` (233, 80 s); render: `test_voice_sounds`, `test_cartoon_idle poses robots
   animals`, `test_cartoon_sheet` (all of it), `test_cartoon_stage` (all passed). The full suite
   was not run.
+
+## Step 126 — More weather, part 1: snow and fog
+
+What was built (DESIGN §69.60)
+- Snow that settles: `ParticleSettings.settle` (snow only) and `settled` (seconds of snowfall
+  already lying, needs `settle`), on the stage param and the `particles` action
+  (`particle_field.settle_problem`). `particle_field` gives such a field the scene's
+  `snow_ground` (`Stage.snow_ground()`: rain's landing band, open umbrellas as `ShelterBox`es and
+  the `TopLine` of every still prop on the ground, taken once by `Stage._snow_tops()` from its
+  drawing). Pure `cartoon/snow.py`: `curve_segments` / `top_line` (a prop's upper edge in 28
+  columns), `flake_floors`, `rest_flakes` (a flake lies 0.5 s on its floor, fading),
+  `settled_seconds` (0.5 s steps, frozen when the snow stops), `settle_amount` (full after 24 s at
+  density 1), `blanket_outline` / `edge_lumps` / `blanket_cover`, `bare_patches`, `cap_thickness`
+  (only where the line is at most 45° steep), `cap_outlines`, `cap_full_thickness`.
+- Drawing (`cartoon/weather_drawing.py`): `SnowBlanket` (holes under trees and standing open
+  umbrellas, thin snow in them), `SnowCap`, `SettledSnow` (redraws only when a step passes),
+  `FogBand`, `StageFog`, `prop_top_line`, `polygon_points`, `paths_points`.
+- Stage: `particles_started` → `_settle_snow` (blanket laid like puddles, before the water's band
+  when there is water; a cap right after each still prop, none on swaying kinds when the wind may
+  blow; all lit), `_put_after_prop` / `_after_props` (the entrance adds a cap right after its prop),
+  `_shelter_of` (shared by `rain_ground` and `snow_ground`), `_watch_living`, `snow_layers`.
+- Fog: stage param `fog` (`StageFogSetting`: `true`, a density, or {density, color, drift, seed};
+  refused in a room; `false` is an error like `birds: false`). Pure `cartoon/fog.py`: five bands at
+  depths 1, 0.8, 0.6, 0.4, 0.2 (`band_opacities`, `fog_cover`), each a haze to the frame top and
+  two wavy banks (`FOG_LAYER_SHARES`, `band_outlines`, `band_box`), drifting (`fog_shift`, nearer
+  bands faster, plus the wind's `blown`). `Stage._fog()`; `_sort_fog()` puts each band right before
+  the first character / prop at its depth or nearer (entrance; every frame of a walk in depth via
+  `_draw_order_step`, and `_depth_crossers` adds the bands a walker passes).
+- Redraw: `_living_things` / `_living_step` include the snow layers and the fog (§69.54's rule).
+- Layout dump leaves out `SnowBlanket`, `SnowCap`, `FogBand`.
+
+Measured (scratch `s126/` in the scratchpad; table in DESIGN §69.60)
+- Nothing new used: HEAD e3e8e3d and this step give the same 277 raw frame hashes and the same
+  Cairo draws on a snowy meadow without `settle` (48 224) and on the same with rain and puddles
+  (62 416).
+- A growing layer: 54 427 draws (+13 %), wall 12.9 s vs 11.6 s (+11 %); a full layer from the
+  start: +210 draws, wall within the noise. Fog in a breeze: 23 296 vs 20 521 draws, 9.9 vs 8.9 s
+  (+12 %); still fog on a calm stage with a walk in depth: 9.4 vs 8.3 s.
+
+Checked by eye (preview frames): snowy meadow by day (caps on roof, chimney, crown, table, rock;
+lumpy blanket edge; thin snow under the tree and the umbrella) and at night (bluish layer, white
+flakes); foggy forest in a breeze with characters at 0, 0.45, 0.9, one walking to the front out of
+the fog; foggy night street at density 0.8. Fixed on the way: dips in top lines (white spikes on a
+roof: points per curve missed long edges; now segment crossings), plain holes showing a dark
+theme ground as black ellipses (now thin snow), `FogBand.depth` clashing with Manim's
+`Mobject.depth` (renamed `stage_depth`), deep tree crowns crisp over fogged trunks (haze layer).
+`vidgen validate` ok and `vidgen lint` on the fog project: only author-caused `off_frame`.
+
+Files touched
+- New: `src/vidgen/cartoon/snow.py`, `src/vidgen/cartoon/fog.py`,
+  `src/vidgen/cartoon/weather_drawing.py`, `tests/test_cartoon_snow_fog.py`.
+- `src/vidgen/particle_field.py`, `src/vidgen/scenes/stage.py`, `src/vidgen/scenes/particles_action.py`,
+  `src/vidgen/introspect.py`, `src/vidgen/api.py`; guide `src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md` ("Snow and fog" bullet).
+- Docs: `docs/CONFIG.md` (stage rows `particles` / `room` / `fog`, particles keys `settle` /
+  `settled`, validate sentence, new "Snow that settles (`settle`)" and "Fog (`fog`)", rooms'
+  weather bullet, the `particles` action row), `DESIGN.md` (§2 tree, §6.4, new §69.60),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (rows as the docstrings read), `tasklist.md` (ticks,
+  two Backlog lines).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 126). `ParticleSettings.settle` / `.settled`;
+  stage param `fog`; `Stage.snow_ground`, `Stage.snow_layers`, `Stage.fog`. A `RainGround`'s
+  shelters may be `TopLine`s for snow (rain still builds only boxes). Compatible: nothing changes
+  without `settle` or `fog` (frame hashes above).
+
+Decisions / deviations
+- Settling is opt-in (`settle: true`, like `puddles`), so existing snow keeps its pixels; flakes
+  land only with it.
+- The layer grows in 0.5 s steps (linear in seconds × density), so it is redrawn only in
+  animations where a step passes; it never melts.
+- Snow does not need shelter boxes for trees: a tree's top line stops flakes on its crown; under a
+  tree and a standing open umbrella the blanket is thin instead of bare (bare showed the dark
+  ground of a dark theme as holes).
+- Fog bands are real members of the draw order between things (not a grade), so a walker in depth
+  passes in and out of them; equal-colour translucent shapes make their order among themselves
+  irrelevant.
+- Searched first: no fog code existed (`grep -rliw fog --include=*.py` in e3e8e3d's
+  `src/vidgen`: nothing; "settle" there is only the springs' overshoot and settle) and no snow
+  layer or top-line code (snow was only a particle kind and `OUTDOOR_PARTICLES`);
+  reused rain's landing band, `ShelterBox`, `prop_shelter`, `landing_shares` / `landing_lines`,
+  `_lay_on_ground`, `depth_scale`, `FAR_RISE`, `mark_lit`, `motion_seed`, `particle_wind`,
+  §69.54's living-thing redraw (`union_box`, `_living_redrawn`) and the depth-walk ordering.
+
+Known gaps / TODOs (Backlog line "Snow and fog")
+- No footprints; no caps on swaying props in wind, characters or held props; no melting; no `fog`
+  action and no fog through windows; still fog with a walk in depth costs ~13 %; no screenplay
+  words. A pre-existing glitch seen while checking (Backlog bug line): a character walking in depth
+  to behind a house leaves a faint outline over it (HEAD's frames are the same).
+
+How to test
+- `pytest tests/test_cartoon_snow_fog.py` (16 not-render 2.7 s, 2 render at 160x90 4.1 s).
+- Also run (not render): `test_particles test_cartoon_rain test_cartoon_stage test_api
+  test_actions test_introspect test_cartoon_wind test_cartoon_living test_cartoon_fire_nature
+  test_cartoon_depth test_cartoon_props test_cartoon_room test_cartoon_lighting` with the new file
+  (295 passed, 15 s), `test_docs test_guide test_schema test_gallery test_actions_coverage
+  test_config test_extensions` (230 passed, 82 s), `test_builtin_scenes test_json_output test_lint
+  test_cartoon_lint test_mcp test_cli test_phase_k_review test_cartoon_vehicles
+  test_cartoon_water_air test_cartoon_holding` (259 passed, 41 s); render: `test_cartoon_snow_fog
+  test_particles test_cartoon_rain test_cartoon_stage test_cartoon_wind test_cartoon_living
+  test_cartoon_fire_nature` (14 passed, 13 s), `test_cartoon_depth test_introspect
+  test_cartoon_lighting test_cartoon_room test_cartoon_water_air test_cartoon_holding` (10 passed,
+  15 s). The full suite was not run.

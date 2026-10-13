@@ -4331,13 +4331,14 @@ never leaves the stage.
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
-| `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) |
+| `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
 | `water` | `true` \| mapping | none | a strip of [water](#water-and-air-vehicles-water-land) with waves at the front of the stage, for a `boat`: `true` (the whole width) or `{left, right, color}` (`left` / `right`: marks or x from 0 to 1; `color`: a theme token or #hex, default a clear blue); not in a `room` |
-| `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds` or outdoor particles |
+| `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds`, `fog` or outdoor particles |
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
+| `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -4390,9 +4391,9 @@ a set's room and the scene's merge key by key).
   `door: <name>` brings a character in through it: the door opens (at once, if closed), the
   character fades in in the doorway over 0.35 s and walks to its mark; `exit` with `door:` walks
   it to the door, where it fades out, and then waits off stage. Doors cast no shadows.
-- **Indoors there is no weather**: `wind`, the `wind` action, `birds` and `rain`, `snow`, `leaves` and
+- **Indoors there is no weather**: `wind`, the `wind` action, `birds`, `fog` and `rain`, `snow`, `leaves` and
   `streaks` particles are refused (`vidgen validate`); sparkles, dust, confetti, smoke and bubbles
-  work.
+  work. The windows show no fog.
 - **Furniture** is built-in [props](#props): `sofa`, `armchair`, `bed`, `bookshelf`, `counter` (a
   kitchen counter), `fridge`, `picture`, `rug`, `houseplant`, `clock`, `tv` (on a low cabinet),
   `desk` (with its chair) and `fireplace` (a brick fireplace with a mantelpiece and logs), drawn as
@@ -5739,6 +5740,8 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 | `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF`, leaves `#7BAE4E #C9A23A #C2703D`, streaks `#FFFFFF` |
 | `seed` | `1` | another number gives other positions |
 | `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground)) |
+| `settle` | `false` | snow on a `stage` only: `true` lands it on the ground and on the props, where a white layer grows while it snows ([Snow that settles](#snow-that-settles-settle)) |
+| `settled` | `0` | with `settle`: seconds of snowfall already lying when it starts, 0–600 (`24` or more: the full layer at density 1) |
 
 ```yaml
 - id: storm
@@ -5759,8 +5762,8 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 ```
 
 `vidgen validate` reports an unknown kind (with a did-you-mean), the kind given twice, an `area`
-outside the frame, a `density` out of range, `keep` with `until`, and `puddles` on a kind other
-than rain. The layout dump sees a
+outside the frame, a `density` out of range, `keep` with `until`, `puddles` on a kind other
+than rain, `settle` on a kind other than snow and `settled` without `settle`. The layout dump sees a
 field as one object of kind `particles` named after its kind; `vidgen lint`'s `off_frame` leaves
 it out (particles cross the edges on purpose).
 
@@ -5799,6 +5802,71 @@ scene types get no ground and no bed: their rain falls through the frame as befo
     props: [{prop: tree, at: right}, {prop: umbrella, at: 0.35, open: true}]
     characters: [{name: dot, at: 0.3}, {name: moss, at: right}]
     particles: [{kind: rain, density: 1.5, puddles: true}]   # dot under the umbrella, moss under the tree
+```
+
+##### Snow that settles (`settle`)
+
+On a `stage`, snow with **`settle: true`** (the `particles` param or the `particles` action) lands
+instead of falling past the ground: each flake on its own line in the ground area (as rain does),
+or on a prop standing behind that line: on the upper edge of its drawing (a house's roof, a tree's
+crown, a table top, a rock, a car's roof...), and on an open umbrella. A landed flake lies still
+for half a second, fading. Where it lands a white **layer** grows with the seconds of snowfall
+(full after 24 s at `density: 1`, twice as fast at 2), in half-second steps:
+
+- a **blanket** over the ground area, faint at first and covering the ground from 40 % of the full
+  layer on, its back edge rising a little above the ground area in soft lumps; under a tree or a
+  standing open umbrella it stays thin (about half as opaque);
+- a **cap** on every prop on the ground that no action moves, along the upper edge of its drawing
+  where that edge is no steeper than 45°, up to 0.03 of the frame's shorter side thick at depth 0
+  (thinner further back, at most a fifth of the prop's height). Props that fly, float, lie flat
+  (a rug) or hang (a cloud, a picture), umbrellas and, while the stage's wind may blow, swaying
+  props (trees, bushes...) get none.
+
+The layer stays when the snow stops (it does not melt). **`settled: 30`** starts it as after 30
+seconds of snowfall: a white meadow from the first frame. The layer is graded by the
+[light](#light-and-shadows-light-shadows) (bluish at `night`); the flakes are not, like every
+particle. `color` (the first colour of a list) also colours the layer. Snow on other scene types,
+and without `settle`, falls through the frame as before. Only the layer and what stands in front
+of it are redrawn while it grows; once full (or once the snow has stopped) it costs nothing per
+frame. No footprints.
+
+```yaml
+- id: winter
+  type: stage
+  params:
+    light: night
+    props: [{prop: house, at: 0.2, depth: 0.5}, {prop: tree, at: 0.8, depth: 0.3}]
+    characters: [{name: dot, at: 0.45}]
+    particles: [{kind: snow, density: 1.5, settle: true, settled: 6}]
+```
+
+#### Fog (`fog`)
+
+**`fog:`** lays fog over a `stage` outdoors: translucent bands, one lying on the ground at each
+of the depths 1, 0.8, 0.6, 0.4 and 0.2, each drawn right in front of everything standing further
+back. So a character or prop is seen through every band in front of it: the further back it
+stands, the more fog covers it, and the sky and the background layers most; at depth 0.2 or
+nearer nothing covers it. Each band is densest near the ground (two wavy banks up to 0.3 of the
+frame height above its ground line) and thinner above (a haze up to the top of the frame), with
+soft edges. The banks' waves drift slowly sideways (the nearer ones faster) and with the stage's
+[wind](#wind-wind). A character walking in depth passes in and out of the bands.
+
+`fog: true` is a density of 0.5 (a character at depth 0.5 about a third hidden near the ground,
+the sky low down more than half); a number is the density (above 0, up to 1: a thick fog); a
+mapping sets `density`, `color` (a theme token or #hex; default a pale grey blue `#DCE2EA`),
+`drift` (0–5, default 1; `0`: the waves stay still unless the wind blows, so the fog is drawn
+once per animation, not on every frame) and `seed` (the waves; default one from the scene). The fog is graded by the
+light (a blue-grey fog at night). A `room` refuses it. While its waves move, everything from the
+backmost band on is redrawn on every frame (a scratch forest at preview: about 12 % more
+render time).
+
+```yaml
+- id: forest
+  type: stage
+  params:
+    fog: {density: 0.6}
+    props: [{prop: tree, at: 0.15, depth: 0.9}, {prop: tree, at: 0.6, depth: 0.5}]
+    characters: [{name: dot, at: 0.3}, {name: moss, at: 0.75, depth: 0.7}]
 ```
 
 #### Light and shadows (`light`, `shadows`)
@@ -6102,7 +6170,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
 | `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
 | `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action. Its "target" is the light, not a target of the scene; no `until`. |
-| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`, rain on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
+| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |

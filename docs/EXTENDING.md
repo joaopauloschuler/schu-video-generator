@@ -737,7 +737,12 @@ impact stars, a whoosh; docs/CONFIG.md "Motion effects"); `Walk(..., gait=RUNNIN
 field `particle_field` builds for the scene (before it is added; nothing by default): `stage`
 grows `Puddles` under rain and plays the rain sound bed. A scene with a method `rain_ground()`
 returning a `RainGround` (`rain_ground(ground, top, frame_height, shelters)` with `ShelterBox`es)
-gets rain that ends there with splashes (docs/CONFIG.md "Rain on the ground").
+gets rain that ends there with splashes (docs/CONFIG.md "Rain on the ground"); one with
+`snow_ground()` (the same, its shelters may also be `TopLine`s: a prop's upper edge) gets snow
+with `settle: true` that lands there (flakes lie a moment, `flake_floors`, `rest_flakes`). `stage`
+then grows a `SettledSnow` (a `SnowBlanket` and `SnowCap`s from `prop_top_line`, in
+`settle_amount(settled_seconds(...))` steps) and draws its `fog` as `StageFog` bands
+(`band_opacities`, `fog_cover`; docs/CONFIG.md "Snow that settles", "Fog").
 A scene type that adds beat actions of its own (automatic directing) overrides the class method
 `auto_actions(cls, project, spec, params)` and returns `DirectedBeat(beat, actions)` items, each
 action made with `ActionConfig.automatic({...})`; they are appended after each beat's written

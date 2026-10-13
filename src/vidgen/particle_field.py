@@ -5,7 +5,8 @@ the camera shows (so they stay on screen through a zoom or a pan).
 :class:`ParticleSettings` holds the options shared by the ``particles`` beat action and the
 ``stage`` scene's ``particles`` param; :func:`particle_field` builds a field for a running scene.
 Rain on a stage ends on its ground with splashes, and :class:`Puddles` grow there
-(DESIGN.md §69.39, the model in :mod:`vidgen.cartoon.rain`).
+(DESIGN.md §69.39, the model in :mod:`vidgen.cartoon.rain`); snow with ``settle`` lands there and
+on the props (§69.60, :mod:`vidgen.cartoon.snow`).
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from vidgen.cartoon.rain import (
     splash_depth_scale,
     splash_shapes,
 )
+from vidgen.cartoon.snow import flake_floors, rest_flakes
 from vidgen.helpers import resolve_color
 from vidgen.particles import (
     PARTICLE_KINDS,
@@ -81,6 +83,10 @@ class ParticleSettings(BaseModel):
     """Another number gives other positions; the same number gives the same particles in every render."""
     puddles: bool = False
     """Rain on a stage: true lets puddles grow on the ground while it rains."""
+    settle: bool = False
+    """Snow on a stage: true lands it on the ground and on the props, where a white layer grows while it snows (only thinly under a tree or an open umbrella)."""
+    settled: float = Field(0.0, ge=0.0, le=600.0)
+    """With settle: seconds of snowfall already lying when it starts (24 or more: the full layer at density 1)."""
 
     @field_validator("area")
     @classmethod
@@ -161,8 +167,9 @@ class ParticleField(VGroup):
         self._stroke = [p.stroke_rgbas[:, 3].copy() for p in self.drops]
         #: rain on a stage's ground (DESIGN.md §69.39): each drop's landing share and splash spread
         self.splashes: VMobject | None = None
-        if ground is not None:
+        if ground is not None:   # rain splashes; snow settling on a stage's ground lies still for a moment (§69.60)
             self._landing, self._spread = landing_shares(len(seeds), seed)
+        if ground is not None and seeds.kind == "rain":
             self._circle = Circle(radius=1.0, num_components=9).points.copy()
             self.splashes = VMobject()
             self.splashes.points = np.zeros((0, 3))
@@ -200,8 +207,13 @@ class ParticleField(VGroup):
         cos, sin = np.cos(states.angle), np.sin(states.angle)
         shown = states.opacity * level
         ground = self.ground() if self.ground is not None else None
-        if ground is not None:
+        if ground is not None and self.splashes is not None:
             shown = shown * self._draw_splashes(ground, xs, ys, states, short, level)
+        elif ground is not None:
+            size = states.size * short
+            floor = flake_floors(xs, landing_lines(self._landing, ground), ground)
+            seen, lift = rest_flakes(ys - size, floor, particle_kind(self.seeds.kind).fall * np.abs(self.seeds.speed) * short)
+            shown, ys = shown * seen, ys + lift
         unit = self._unit
         for k, particle in enumerate(self.drops):
             size = states.size[k] * short
@@ -321,13 +333,32 @@ class Puddles(VGroup):
             self.clear_updaters()
 
 
+def settle_problem(kind: str, settings: ParticleSettings) -> tuple[str, str] | None:
+    """``(option, message)`` when ``settle`` / ``settled`` do not fit ``kind`` (DESIGN.md §69.60)."""
+    if settings.settle and kind != "snow":
+        return "settle", f"only snow settles, not {kind}"
+    if settings.settled and not settings.settle:
+        return "settled", "settled is for snow that settles: add settle: true"
+    return None
+
+
+def _ground_of(scene: NarratedScene, kind: str, settings: ParticleSettings) -> RainGroundSource | None:
+    """Where the field's particles end: rain on the scene's ``rain_ground``, snow with ``settle`` on
+    its ``snow_ground`` (a stage's, DESIGN.md §69.39, §69.60); ``None``: they fall through."""
+    if kind == "rain":
+        return getattr(scene, "rain_ground", None)
+    if kind == "snow" and settings.settle:
+        return getattr(scene, "snow_ground", None)
+    return None
+
+
 def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) -> ParticleField:
     """A field of ``kind`` particles for ``scene``, starting now, drawn above everything on screen
     (not added to the scene). Fewer particles when the scene renders at preview quality
     (:attr:`NarratedScene.is_preview`). They drift with the scene's ``particle_wind`` when it has
     one (a windy stage, DESIGN.md §69.32); rain ends on the scene's ``rain_ground`` when it has
-    one (a stage, §69.39). The scene's :meth:`~vidgen.scene.NarratedScene.particles_started`
-    hears of the new field."""
+    one (a stage, §69.39), snow with ``settle`` on its ``snow_ground`` (§69.60). The scene's
+    :meth:`~vidgen.scene.NarratedScene.particles_started` hears of the new field."""
     area = settings.area or [0.0, 0.0, 1.0, 1.0]
     colors = particle_colors(kind, settings.color, scene.theme)
     count = particle_count(kind, settings.density, area[2] * area[3], preview=scene.is_preview)
@@ -341,7 +372,7 @@ def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) 
         short_side=min(scene.frame_width, scene.frame_height),
         frame_width=scene.frame_width,
         wind=getattr(scene, "particle_wind", None),
-        ground=getattr(scene, "rain_ground", None) if kind == "rain" else None,
+        ground=_ground_of(scene, kind, settings),
         seed=settings.seed,
     )
     top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)

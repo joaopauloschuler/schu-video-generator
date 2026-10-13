@@ -102,12 +102,14 @@ scenes:
 | `props.time` | `str \| None` |  | A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning. |
 | `props.speed` | `float \| None` |  | A clock: how fast it runs, clock seconds per second (1 real time, the default; 60 a minute a second; up to 3600); with time or speed the clock runs. |
 | `props.fruit` | `bool` | `False` | A tree: true hangs a few fruits on it (the drop_fruit action lets one fall). |
-| `particles` | `list[str \| StageParticles]` |  | Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; for one beat use the particles action. |
+| `particles` | `list[str \| StageParticles]` |  | Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles, settle, settled}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; snow with settle: true lands on the ground and the props, where a white layer grows; for one beat use the particles action. |
 | `particles.density` | `float` | `1.0` | How many: 1 = the kind's usual amount for a whole frame, 2 = twice as many (at most 300 in all; half at preview quality). |
 | `particles.area` | `list[float] \| None` |  | Where they are: [x, y, w, h] fractions 0-1 of the visible frame from its top-left corner; default the whole frame. |
 | `particles.color` | `color \| list[color] \| None` |  | A colour or a list (each particle picks one); default per kind (rain light blue, snow white, sparkles highlight, confetti the theme's colours...). |
 | `particles.seed` | `int` | `1` | Another number gives other positions; the same number gives the same particles in every render. |
 | `particles.puddles` | `bool` | `False` | Rain on a stage: true lets puddles grow on the ground while it rains. |
+| `particles.settle` | `bool` | `False` | Snow on a stage: true lands it on the ground and on the props, where a white layer grows while it snows (only thinly under a tree or an open umbrella). |
+| `particles.settled` | `float` | `0.0` | With settle: seconds of snowfall already lying when it starts (24 or more: the full layer at density 1). |
 | `particles.kind` | `'rain' \| 'snow' \| 'sparkles' \| 'dust' \| 'confetti' \| 'smoke' \| 'bubbles' \| 'leaves' \| 'streaks'` | required | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines, seen only in wind). |
 | `light` | `'day' \| 'morning' \| 'sunset' \| 'night' \| 'indoor' \| CustomLight` | `'day'` | The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene. |
 | `light.tint` | `color` | required | The light's colour (a theme token or #hex): the set's colours are multiplied towards it. |
@@ -148,6 +150,11 @@ scenes:
 | `birds.seconds` | `float \| None` |  | How long they take to cross the stage (from beyond one edge to beyond the other); default about 5 s per frame width of the stage. |
 | `birds.seed` | `int \| None` |  | Varies the flock (their places, sizes and wing beats); default: one from the scene. |
 | `birds.start` | `float` | `0.5` | When it sets off, seconds into the scene. |
+| `fog` | `bool \| float \| StageFogSetting \| None` |  | Fog in translucent bands lying between the characters and props by depth, thicker further back (the sky most), drifting slowly and with the wind: true, a density from 0 to 1 (true: 0.5), or {density, color, drift, seed}; outdoors only. |
+| `fog.density` | `float` | `0.5` | How thick: 0.5 hides about a third of a character at depth 0.5 and over half of the sky low down; 1 is a thick fog. |
+| `fog.color` | `color \| None` |  | Its colour (a theme token or #hex); default a pale grey blue. |
+| `fog.drift` | `float` | `1.0` | How fast its waves drift sideways (1 slowly; 0 still, unless the wind blows: it is then drawn once per animation, not on every frame). |
+| `fog.seed` | `int \| None` |  | Varies its waves; default: one from the scene. |
 
 ## Targets
 
