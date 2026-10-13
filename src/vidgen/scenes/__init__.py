@@ -10,7 +10,8 @@ exit, gesture, jump; ``keyframes_action``: keyframes, move_along; ``handling``: 
 put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_in, ride_to, get_out;
 ``shot_action``: shot;
 ``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``switch_action``:
-switch_on, switch_off; ``nature_action``: drop_fruit, birds) and the
+switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: lightning,
+rainbow) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
 """
@@ -57,6 +58,7 @@ from vidgen.scenes import (  # noqa: F401
     sfx_action,
     stage,
     stat,
+    storm_action,
     switch_action,
     table,
     text_card,

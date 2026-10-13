@@ -14,13 +14,18 @@ from vidgen.api import *
 class Light(Action):
     """Change a stage's light from `at` of the beat: `- light: night` (day, morning, sunset,
     night, indoor) or `tint` + `strength` for a colour of its own; it fades over `run_time`
-    seconds (default 2) and lasts until another `light` action. Stage scenes only."""
+    seconds (default 2) and lasts until another `light` action. `move_sun: true` moves the
+    stage's sun and moon along their arc across the sky meanwhile (a sunset: the sun sinks to the
+    right; night: it sets and the moon rises), the shadows turning and lengthening away from the
+    sun. Stage scenes only."""
 
     class Options(ActionOptions):
         tint: ThemeColor | None = None
         """Instead of a preset: the light's colour (a theme token or #hex), the set's colours multiplied towards it."""
         strength: float = Field(DEFAULT_STRENGTH, ge=0.0, le=1.0)
         """With tint: how strongly (0 = no change, 1 = multiplied by the tint)."""
+        move_sun: bool = False
+        """true: the stage's sun and moon props move along the sky's arc to their places for this light while it fades (morning low on the left, day at the top, sunset low on the right, night: the sun set and the moon up); outdoors, with a preset."""
 
     run_time = LIGHT_FADE_SECONDS
     needs_target = False
@@ -53,9 +58,17 @@ class Light(Action):
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
         if not hasattr(scene_cls, "change_light"):
             return [("action", f"light is for stage scenes; a {scene_cls.__name__} scene has no set to light")]
+        if not self.options.move_sun:
+            return []
+        if self.options.tint is not None:
+            return [("move_sun", "move_sun takes the sun to a preset's place: give a preset (- light: sunset), not a tint")]
+        if getattr(params, "room", None) is not None:
+            return [("move_sun", "the sun and moon move across the sky outdoors, not in a room (the stage has room:)")]
+        if not any(prop.prop in SKY_BODIES for prop in getattr(params, "props", [])):
+            return [("move_sun", "move_sun moves the stage's sun or moon: add a sun or a moon prop (props: [sun])")]
         return []
 
     def cue(self, scene: NarratedScene, time: float) -> None:
-        """Start the fade at scene ``time``."""
+        """Start the fade at scene ``time`` (and the sun's move, with ``move_sun``)."""
         seconds = self.run_time if self.config.run_time is None else float(self.config.run_time)
-        scene.change_light(self.setting(), time, seconds)
+        scene.change_light(self.setting(), time, seconds, move_sun=self.options.move_sun)

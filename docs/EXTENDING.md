@@ -742,7 +742,15 @@ gets rain that ends there with splashes (docs/CONFIG.md "Rain on the ground"); o
 with `settle: true` that lands there (flakes lie a moment, `flake_floors`, `rest_flakes`). `stage`
 then grows a `SettledSnow` (a `SnowBlanket` and `SnowCap`s from `prop_top_line`, in
 `settle_amount(settled_seconds(...))` steps) and draws its `fog` as `StageFog` bands
-(`band_opacities`, `fog_cover`; docs/CONFIG.md "Snow that settles", "Fog").
+(`band_opacities`, `fog_cover`; docs/CONFIG.md "Snow that settles", "Fog"). Rain with
+`lightning` (`storm_every(settings)`) gets a `RainStorm` of seeded `Strike`s (`storm_strikes`) on
+the stage's `StageLight` (`strikes`, `storms`; `flash_grade`, `flash_level`), which also takes the
+`lightning` action's strikes (`Stage.strike_lightning`), with a `LightningBolt` (`bolt_paths`) and
+the `thunder` sound (`thunder_cue`, `thunder_delay`, `thunder_pan`); the `rainbow` action adds a
+`StageRainbow` (`Rainbow`, `rainbow_level`), and a `light` action with `move_sun` moves the
+stage's sun and moon as `SkyBody`s along the sky's path (`PathMove`, `path_point`, `place_for`),
+the `StageShadows` cast away from them (`shadow_cast`, `set_cast`; docs/CONFIG.md "Lightning and
+thunder", "Rainbows", "Light and shadows").
 A scene type that adds beat actions of its own (automatic directing) overrides the class method
 `auto_actions(cls, project, spec, params)` and returns `DirectedBeat(beat, actions)` items, each
 action made with `ActionConfig.automatic({...})`; they are appended after each beat's written
@@ -1153,7 +1161,8 @@ starts with the scene time the use is due (`at`, on a frame), whatever the scene
 with `scene_targets = False` its `target` names something other than a scene target (checked by
 your `problems()`, not against the scene's targets). The built-in `sfx` action
 (`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`; so is
-the `light` action (`- light: night` cues the stage's `change_light`). The
+the `light` action (`- light: night` cues the stage's `change_light`), and so are `lightning` and
+`rainbow` (`strike_lightning`, `show_rainbow`). The
 built-in `particles` action (`src/vidgen/scenes/particles_action.py`) also has `scene_targets =
 False` (`- particles: snow`), but animates: its `apply` adds a mobject that moves on its own and
 returns no animation.

@@ -420,3 +420,32 @@ def test_props_at_the_depth_a_walker_leaves_stay_drawn(make_project, tmp_path: P
     assert (props["fridge"]["prop"], props["fridge"]["depth"], props["armchair"]["depth"]) == ("fridge", 0.4, 0.2)
     assert props["door"]["prop"] == "door" and "raised" not in props["door"] and "flat" not in props["door"]
     assert props["picture"]["raised"] and props["rug"]["flat"] and "raised" not in props["rug"]
+
+
+@pytest.mark.render
+def test_a_character_behind_a_house_does_not_show_through_it_as_the_scene_fades_out(make_project, tmp_path: Path, monkeypatch) -> None:
+    """pip walks to behind the house, where the house hides it: the frames of the scene's fade-out
+    (its outro) are the same as without pip. (Each thing used to fade on its own, so the fading
+    house let pip's outline show through it.)"""
+    from manim.scene.scene_file_writer import SceneFileWriter
+
+    frames: list[np.ndarray] = []
+    write = SceneFileWriter.write_frame
+
+    def keeping(self: Any, frame: Any, num_frames: int = 1) -> None:
+        frames.extend([np.asarray(frame).astype(int)] * num_frames)
+        write(self, frame, num_frames)
+
+    monkeypatch.setattr(SceneFileWriter, "write_frame", keeping)
+    outros = []
+    for folder, cast in (("with_pip", [{"name": "pip", "at": 0.2}, {"name": "kit", "at": 0.9}]), ("without", [{"name": "kit", "at": 0.9}])):
+        params = {"idle": False, "props": [{"prop": "house", "at": 0.5, "depth": 0.4, "scale": 1.4}], "characters": cast}
+        walk = [{"walk_to": "pip", "to": {"mark": 0.5, "depth": 0.9}, "speed": 8}] if folder == "with_pip" else []
+        scenes = [{"id": "lane", "type": "stage", "params": params, "beats": [{"text": "Pip walks round to the back of the house.", "actions": walk}]}]
+        project = Project.load(make_project(minimal_config(characters=CAST, voices=VOICES, scenes=scenes), folder=folder))
+        frames.clear()
+        scene, _ = render_with_layout(project, "lane", tmp_path / folder)
+        outros.append(frames[-round(scene.outro * 5) - 1:])   # from the last frame before it
+    assert scene.cast["kit"] and len(outros[0]) == len(outros[1]) >= 3
+    assert int(np.abs(outros[0][0] - outros[1][0]).max()) <= 2   # the house hides pip
+    assert max(int(np.abs(a - b).max()) for a, b in zip(*outros)) <= 2

@@ -34,6 +34,8 @@ from vidgen.cartoon.lighting import (
     shadow_ellipse,
     tint_grade,
 )
+from vidgen.cartoon.storm import FLASH_SHARE, RainStorm, Strike, flash_grade, flash_level, flashing
+from vidgen.cartoon.sun_path import cast_shadow
 from vidgen.config import CHARACTER_INK
 from vidgen.helpers import resolve_color
 from vidgen.particle_field import particle_shape
@@ -80,7 +82,9 @@ def mark_lit(*mobjects: Mobject) -> None:
 
 class StageLight:
     """A stage's light: ``base`` from the start, then the :class:`LightChange`\\s the ``light``
-    action schedules. Wraps ``camera`` (a Manim Cairo camera) so the fill and stroke colours and
+    action schedules, lit up by lightning (``strikes`` of the ``lightning`` action and the
+    ``storms`` of rain fields with ``lightning``, DESIGN.md §69.61; ``flash_share`` of a flash:
+    less in a room). Wraps ``camera`` (a Manim Cairo camera) so the fill and stroke colours and
     the pictures of lit mobjects are drawn graded by :attr:`grade`; :meth:`update` sets the grade
     for a scene time and tells the listeners (stars, shadows) when it changed."""
 
@@ -88,6 +92,11 @@ class StageLight:
         self.base = base
         self.grade = base
         self.changes: list[LightChange] = []
+        self.strikes: list[Strike] = []
+        self.storms: list[RainStorm] = []
+        self.flash_share = FLASH_SHARE
+        #: how bright the lightning lights the set now (0..1)
+        self.flash = 0.0
         self._listeners: list[Callable[[LightGrade], None]] = []
         fill, stroke, image = camera.get_fill_rgbas, camera.get_stroke_rgbas, camera.display_image_mobject
         camera.get_fill_rgbas = lambda vmobject: self._graded(vmobject, fill(vmobject))
@@ -119,21 +128,31 @@ class StageLight:
         """Fade to ``grade`` from scene time ``start`` over ``seconds`` (0: at once)."""
         self.changes.append(LightChange(float(start), max(float(seconds), 0.0), grade))
 
+    def strikes_until(self, until: float) -> list[Strike]:
+        """The lightning strikes before scene time ``until``: the actions' and the storms'."""
+        return [*self.strikes, *(s for storm in self.storms for s in storm.strikes(until))]
+
     def update(self, now: float) -> None:
-        """Set the grade for scene time ``now``."""
+        """Set the grade for scene time ``now`` (with a flash while lightning lights the set)."""
         grade = light_at(self.base, self.changes, now)
+        self.flash = flash_level(self.strikes_until(now), now) if self.strikes or self.storms else 0.0
+        if self.flash > 0:
+            grade = flash_grade(grade, self.flash, share=self.flash_share)
         if grade != self.grade:
             self.grade = grade
             for listener in self._listeners:
                 listener(grade)
 
     def changing(self, start: float, end: float) -> bool:
-        """Whether the light changes between scene times ``start`` and ``end``."""
-        return light_changing(self.changes, start, end)
+        """Whether the light changes (or lightning flashes) between scene times ``start`` and
+        ``end``."""
+        return light_changing(self.changes, start, end) or flashing(self.strikes_until(end), start, end)
 
     def settled(self, now: float) -> bool:
-        """Whether every change is over at scene time ``now``."""
-        return all(change.end <= now and (change.seconds > 0 or change.start < now) for change in self.changes)
+        """Whether every change and every flash is over at scene time ``now`` (and no rain field
+        with lightning still falls)."""
+        changes = all(change.end <= now and (change.seconds > 0 or change.start < now) for change in self.changes)
+        return changes and all(s.end <= now for s in self.strikes) and all(storm.over(now) for storm in self.storms)
 
 
 class StarField(VGroup):
@@ -216,12 +235,15 @@ class Shadow(VGroup):
 
 class StageShadows(VGroup):
     """The shadows of ``casters``, at ``strength`` (the light's ``shadow``); :meth:`follow` puts
-    each under its caster as it is now (an updater calls it for things that move)."""
+    each under its caster as it is now (an updater calls it for things that move), cast by a low
+    sun or moon (:meth:`set_cast`, DESIGN.md §69.61)."""
 
     def __init__(self, casters: Sequence[ShadowCaster], strength: float = 1.0) -> None:
         super().__init__()
         self.casters = list(casters)
         self.strength = strength
+        #: how long the shadows stretch and which way (:func:`~vidgen.cartoon.sun_path.shadow_cast`)
+        self.cast = (0.0, 0.0)
         self.name = "shadows"
         for _ in self.casters:
             self.add(Shadow())
@@ -230,7 +252,15 @@ class StageShadows(VGroup):
     def follow(self) -> StageShadows:
         """Place every shadow under its caster now."""
         for shadow, caster in zip(self.submobjects, self.casters):
-            shadow.place(caster.ellipse(self.strength))
+            shadow.place(cast_shadow(caster.ellipse(self.strength), *self.cast))
+        return self
+
+    def set_cast(self, stretch: float, side: float) -> StageShadows:
+        """Stretch the shadows ``stretch`` (0: under their casters) towards ``side`` (+1 right, -1
+        left), away from the sun."""
+        if (stretch, side) != self.cast:
+            self.cast = (float(stretch), float(side))
+            self.follow()
         return self
 
     def set_strength(self, strength: float) -> StageShadows:

@@ -140,8 +140,12 @@ src/vidgen/
                           # (Pouring, WaterFlow, WaterDrops, §69.56), snow.py (snow that settles:
                           # top lines, the layer's steps, blanket and caps, flakes on their floors,
                           # §69.60; no manim), fog.py (fog bands by depth, their opacities and
-                          # waves, §69.60; no manim), weather_drawing.py (SettledSnow, SnowBlanket,
-                          # SnowCap, StageFog, FogBand, §69.60); still.py also
+                          # waves, §69.60; no manim), storm.py (lightning strikes, their flashes,
+                          # bolts, thunder, rain storms, rainbows, §69.61; no manim), sun_path.py
+                          # (the sun's and moon's path across the sky, shadows cast by a low sun,
+                          # §69.61; no manim), weather_drawing.py (SettledSnow, SnowBlanket,
+                          # SnowCap, StageFog, FogBand, §69.60; LightningBolt, Rainbow,
+                          # StageRainbow, SkyBody, §69.61); still.py also
                           # draws the prop, furniture, small-prop and vehicle galleries (§69.43), the look gallery
                           # (§69.47) and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
@@ -232,6 +236,7 @@ src/vidgen/
                           # wind_action.py: wind (a stage's wind fades), §69.32;
                           # effect_action.py: effect (a symbol over a head), §69.40;
                           # switch_action.py: switch_on, switch_off (a tv or a lamp), §69.54;
+                          # storm_action.py: lightning, rainbow, §69.61;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6; card.py: the card scene type, §69.46)
@@ -944,6 +949,17 @@ Step 126 (§69.60) adds `settle_problem`, `CAP_THICKNESS`, `SETTLE_SECONDS`, `SE
 `ParticleSettings.settle` / `.settled`; the stage param `fog`; `Stage.snow_ground`,
 `Stage.snow_layers`, `Stage.fog`. Compatible: a scene without settling snow or fog renders as
 before, pixel for pixel.
+Step 127 (§69.61) adds `LightningBolt`, `Rainbow`, `SkyBody`, `StageRainbow`, `FLASH_SECONDS`,
+`MAX_DISTANCE`, `RAINBOW_FADE_SECONDS`, `RAINBOW_OPACITY`, `RAINBOW_WIDTH`, `ROOM_FLASH`,
+`STORM_EVERY`, `THUNDER_DISTANCE`, `RainStorm`, `Strike`, `bolt_paths`, `flash_grade`,
+`flash_level`, `flash_strength`, `rainbow_level`, `storm_strikes`, `thunder_cue`, `thunder_delay`,
+`thunder_pan`, `SKY_BODIES`, `PathMove`, `path_point`, `place_for`, `shadow_cast`, `flash_sky`,
+`storm_every` and `storm_problem`; `ParticleSettings.lightning`; `StageLight.strikes`, `.storms`,
+`.flash_share`, `.flash`, `.strikes_until`; `StageShadows.cast`, `.set_cast`; the `light`
+action's `move_sun` and `Stage.change_light(..., move_sun=False)`; actions `lightning`,
+`rainbow`; built-in sound `thunder`; `Stage.strike_lightning`, `.show_rainbow`,
+`.hide_rainbows`, `.bolt`, `.rainbows`, `.sky_bodies`. Compatible: a scene without them renders
+as before, pixel for pixel, but for its outro (below: a stage now fades out as one picture).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -8446,12 +8462,16 @@ with an animal are a config error (`config.SPECIES_OWN_KEYS`); `svg` with `speci
 - **The set fades in as one picture**: the stage's entrance faded each thing in on its own, so
   during the fade (and under an `iris_in` that opens meanwhile) what stood behind showed through
   what stood in front (the dog over the armchair, the door over the sofa). The entrance now adds
-  the set, props, shadows and characters at once, back to front, under `Stage._entrance_cover`: a
+  the set, props, shadows and characters at once, back to front, under `Stage._cover`: a
   rectangle of the camera's background colour, 1.5 times the view and kept on it, that fades out
   over the same time. Every frame of the fade is the finished picture blended with the background
   by one amount (`test_the_set_fades_in_as_one_picture`). A copy carried from the scene before
-  (`carry:`) still moves in. Not changed: the scene's fade out (`finish` → `clear_all`) still
-  fades each thing on its own (Backlog); with a transition other than a cut it is held instead.
+  (`carry:`) still moves in. Since Step 127 the scene's fade out is one picture too:
+  `Stage.finish` fades the same kind of cover in over everything (its z index above all, so
+  particles, bubbles and symbols go under it as well) instead of `clear_all` fading each thing (a
+  character behind a house showed through the fading house as a faint outline). With a
+  transition other than a cut the picture is held as before; when the next scene carries a
+  target out (`carry:`) the outro stays `clear_all(keep=)`.
 
 ### 69.52 Vehicles on the ground (Step 118)
 
@@ -9203,7 +9223,123 @@ without them renders as before.
   or held props; the layer does not melt; no fog action (it is there all scene) and none through
   a room's windows; particles stay ungraded and in front of the fog. Seen while checking, not
   from this step (also without `settle`): a character walking behind a house in depth leaves a
-  faint outline of itself over the house (Backlog). Tests: `tests/test_cartoon_snow_fog.py`.
+  faint outline of itself over the house (fixed in Step 127, §69.61: it was the scene's outro).
+  Tests: `tests/test_cartoon_snow_fog.py`.
+
+### 69.61 More weather, part 2: lightning, rainbows, the sun and moon moving (Step 127)
+
+- **Strikes** (`cartoon/storm.py`, no manim): `Strike(time, x, distance, seed, bolt)`: its
+  `pulses` (`strike_pulses(seed)`: the first two or all three of `FLASH_PULSES` (start, length,
+  peak): (0, 0.1, 1), (0.2, 0.08, 0.7), (0.36, 0.06, 0.45), the later ones ±0.03 s and 85–100 %
+  of their peak), each held for its length, then `peak · exp(-age / 0.07)` for `FLASH_TAIL`
+  0.25 s; `level(now)` = `flash_strength(distance)` (1.1 − 0.14 · km, 0.4..1) × the brightest
+  pulse; `end`. `flash_level(strikes, now)`, `flashing(strikes, start, end)` (like
+  `lighting.changing`). `flash_grade(grade, level, share=FLASH_SHARE 0.5)`: every channel
+  `f = level · share` of the way to `FLASH_COLOR` `#EEF2FF` (`multiply · (1 − f)`, `glow · (1 − f)
+  + f · white`), stars and shadow × (1 − f).
+- **Thunder**: `thunder_delay(km) = km / 0.343` s; `thunder_cue(km)`: gain −3 − 3 · km (≥ −18 dB),
+  duration 2.2 + 0.6 · km (≤ 7 s), intensity 0.9 − 0.15 · km (0.15..0.9), pitch −km semitones (≥ −6);
+  `thunder_pan(x)` (x − 0.5) · 1.6 within ±0.8. The built-in sound `thunder` (`sfx._thunder`, 3 s,
+  1–8): a crack (noise band-passed at 1.8 kHz, 60 ms decay, × 1.6 · intensity) over a rumble (noise
+  low-passed at 120 Hz) in 3–5 seeded Gaussian swells, rising in 3 % of its length, falling as
+  (1 − u)^1.2. `Stage._thunder` cues it with those params (a project file `thunder` plays as is)
+  when the stage's foley is on.
+- **Rain storms**: `ParticleSettings.lightning: bool | float (2..120)` (`storm_problem`: rain only;
+  `storm_every`: 8 s for `true`). `storm_strikes(start, until, every, seed, stop)`: gaps
+  `every · (0.5 + r)` (the first `every · (0.3 + 0.7 r)` in), x 0.12..0.88, distance 0.6 + 3.4 r^1.5
+  km, 70 % with a bolt, a prefix of the same sequence whatever `until`. `RainStorm(start, every,
+  seed, ended)` (`ended`: the field's), `.strikes(until)`, `.over(now)`. `Stage.particles_started`
+  adds one per rain field with `lightning` (seed from the scene, the field's seed and its index)
+  to the light; `_storm_thunder` (after the scene played) cues the thunder of those whose thunder
+  starts before the scene's end.
+- **The flash** (`shading.StageLight`): `strikes` (the action's), `storms`, `flash_share`
+  (outdoors `FLASH_SHARE`, × `ROOM_FLASH` 0.5 in a room), `flash` (the level now),
+  `strikes_until(t)`; `update` grades `light_at(...)` and then `flash_grade`; `changing` also when
+  a strike's window overlaps; `settled` also needs every strike over and every storm `over`. The
+  stage installs its light from the start when the scene may flash (`Stage._lightning_used`: a
+  `lightning` action, or rain with `lightning` in the param or a `particles` action), so a stage
+  without a background gets the lit background rectangle (the theme's colour: the same pixels).
+  `_light_step` keeps running while flashes may come; `get_moving_mobjects` redraws everything in
+  an animation where one falls. `_show_light` also lights a room's window skies
+  (`room.flash_sky(sky, level)`: `WINDOW_FLASH` 0.85 × level of the way to the flash colour).
+- **The bolt** (`weather_drawing.LightningBolt`, not graded, named `lightning`): one per stage
+  outdoors when the scene may flash, put right after the sky (`_put_in_sky`), 4 paths × (a glow 4 ×
+  the width, `#9FB6FF` at 0.55, and a white core). `Stage._show_bolt(now)` (in `_sky_step`) shows
+  the brightest strike with a bolt: `bolt_paths(seed, x, top, bottom, spread)` (cached per seed)
+  from the frame's top to the horizon (`_horizon_y`: the ground area's back edge), its stage x
+  `left + strike.x · stage_width`, spread `BOLT_SPREAD` 0.12 frame heights (`BOLT_CORNERS` 11
+  corners jittering ±0.175 · spread, 1–3 branches of 3–4 corners from a middle corner, down and
+  out), core width `BOLT_WIDTH` 4 × (1.2 − 0.1 · km, 0.4..1.2), at the pulse level (without the
+  distance's strength); hidden otherwise.
+- **The `lightning` action** (`scenes/storm_action.py`, non-animating like `light`, `run_time`
+  `FLASH_SECONDS` 0.7, `number_target`): target a mark or an x (`_place`: a number written as the
+  target is an x), `distance` (0..10 km), `bolt`, `seed`; `cue` → `Stage.strike_lightning(at,
+  time, ...)` (no place: x 0.15..0.85 from the seed; seed default `motion_seed(scene,
+  "lightning", time)`; no bolt in a room). Validate: a stage scene, one place, a known mark or x.
+- **Rainbows**: `RAINBOW_COLORS` (7, soft, red outside), `rainbow_bands(cx, base, radius,
+  thickness=0.16)` (half rings, the outer `radius`, each band `radius · 0.16 / 7`),
+  `RainbowChange` + `rainbow_level` (`fade_at` from 0). `Rainbow` (a `VGroup` of 7 filled bands,
+  `opacity`, `box`), `StageRainbow` (a thing that moves by itself, §69.54: `fade`, `update`,
+  `changing`, `done`, `movers`, `region`), in `Stage.rainbows` / `_living_things`. The `rainbow`
+  action (non-animating, `run_time` 3): target where its middle is (default `centre`), `width`
+  (frame widths across, default 0.75), `opacity` (0.55), `hide` (fades all rainbows out; no
+  place); refused in a room. `Stage.show_rainbow` puts it right after the sky, lit, standing on
+  the horizon; `hide_rainbows`.
+- **The sun and moon's path** (`cartoon/sun_path.py`, no manim): a path share 0 (horizon, left)
+  .. 0.5 (top) .. 1 (horizon, right), hidden beyond for `PATH_HIDDEN` 0.08 at each end, one round
+  `PATH_ROUND` 1.16 (`wrap_share`). `PATH_PLACES`: sun morning 0.1, day 0.5, sunset 0.9, night and
+  indoor 1.08; moon morning 0.9, day −0.08, sunset 0.1, night 0.5, indoor 0.3. `path_blend`
+  moves forward only (round the hidden part when the place is behind); `PathMove` +
+  `path_share_at` (`fade_at`, eased like the light). `path_point(s)` → x share `0.1 + 0.8 s` of
+  the stage, height `sin(π s)` (below 0 under the horizon), shown (smoothstep of height / 0.15).
+  `elevation(s)` = 65° · height; `shadow_cast(s)` → (stretch = cot(elevation) ≤ `MAX_SHADOW_STRETCH`
+  3, the maximum under the horizon; side +1 before noon, −1 after, 0 at 0.5);
+  `cast_shadow(ellipse, stretch, side)`: `width · 0.6 · stretch` longer on that side (its foot
+  stays), opacity / (1 + 0.25 · stretch); the ellipse itself when stretch or side is 0.
+- **Moving them** (`light` option `move_sun`; validate: a preset, outdoors, a `sun` or `moon`
+  prop): with it anywhere in the scene, `Stage._start_sky_path` makes every sun and moon prop a
+  `SkyBody` (base: the stage light's place, a tint as `day`; `stage_depth` 1), the entrance moves
+  them right after the sky, `change_light(..., move_sun=True)` adds a `PathMove` per body with the
+  light change's start and seconds, `_sky_place(x, height)` puts a body's middle at `left + x ·
+  stage_width`, `horizon + height · (frame top − horizon − SKY_TOP_ROOM 0.14 frame heights)`, and
+  `SkyBody.update` fades its own opacities by `shown`. `_sky_step(now)` (in `_light_step` and
+  `get_moving_mobjects`, before the light's update) places the bodies, sets every shadow group's
+  `set_cast(stretch · shown, side)` from the body that shows most (the sun on a tie) and shows the
+  bolt. A sun move only comes with a light change, so the whole stage is redrawn while it moves.
+- **The outro** (the Backlog bug from Step 126): `NarratedScene.finish` → `clear_all` faded every
+  mobject on its own, so for 0.5 s a fading house (opacity 0.98, 0.9, ...) showed the character
+  standing behind it as a faint outline (a frame-by-frame check proved the drawn frames equal a
+  whole redraw: neither the depth walk's draw order, `_moving_in_order` nor the static image was
+  the cause). `Stage.finish` now fades in a cover of the background colour (`_cover`, also the
+  entrance's) with a z index above everything over `outro` seconds, then removes every mobject
+  (the scene ends empty, as after `clear_all`); with a transition other than
+  a cut, or a next scene carrying a target out, it keeps the old behaviour.
+  `test_a_character_behind_a_house_does_not_show_through_it_as_the_scene_fades_out` (54 levels
+  off before, ≤ 2 after). Also fixed: while the light changed during an animation, a moving part
+  of a character was listed again after everything (`get_moving_mobjects`), so it was drawn over
+  the entrance's cover.
+- **Measured** (scratch `s127/`, preview 854×480 15 fps, no audio, `s127/measure.py`):
+
+  | render | frames | Cairo draws | wall (s) |
+  |---|---|---|---|
+  | rainy stage (house, tree, 2 characters): HEAD 4f2dc6e / this step (no new things) | 237 | 38 178 / 38 039 | 8.7 / 9.0 |
+  | the same with 2 `lightning` actions, `lightning: 4` on the rain and a `rainbow` | 237 | 43 423 | 11.1 |
+  | dusk: `light: sunset`, then `night` (4 s fades) with `move_sun` / without | 168 | 17 495 / 17 682 | 7.0 / 6.8 |
+  | a room with one `lightning` / without | 71 | 4 001 / 2 573 | 2.5 / 2.2 |
+
+  Without the new things the raw frames equal HEAD's but for the outro (the meadow of §69.60: 270
+  of 277 frames equal, the last 7 differ; the rainy stage: 230 of 237). Every frame of the new
+  renders equals the scene drawn whole in its draw order (`s127/ghost_check.py`).
+- **Checked by eye** (preview frames): the rainy stage flashing (washed out, the bolt behind the
+  tree), the rainbow behind the house and the hills; the dusk with the sun sinking to the right
+  behind the hills, the shadows stretching left, the moon rising behind the house and standing at
+  the top at night with the stars; the room's windows flashing white.
+- **Not done**: the bolt strikes only at the horizon (never on a prop or a character); clouds
+  are not lit from inside; no rain-storm thunder after the scene's end; the sun and moon move only
+  with a light change (no `sun_path` of their own) and keep their size; shadows of a moving body
+  stretch only along the ground (no skew, no second shadow for the moon at the same time); a
+  room's light does not change with `move_sun` (refused). Tests: `tests/test_cartoon_storm.py`
+  (13 without rendering, 2 tiny renders), `tests/test_cartoon_depth.py` (the outro).
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

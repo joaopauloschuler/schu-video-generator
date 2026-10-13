@@ -256,14 +256,15 @@ class LayoutRecorder:
         from vidgen.cartoon.small_props_drawing import WaterDrops
         from vidgen.cartoon.props import Prop
         from vidgen.cartoon.shading import StageShadows, StarField
-        from vidgen.cartoon.weather_drawing import FogBand, SnowBlanket, SnowCap
+        from vidgen.cartoon.weather_drawing import FogBand, LightningBolt, Rainbow, SnowBlanket, SnowCap
         from vidgen.icon_mobject import Icon
         from vidgen.particle_field import ParticleField, Puddles
         from vidgen.vector_mobject import VectorPicture
 
         # a stage's shadows, stars, puddles, glows, steam, birds, fallen fruit, poured water,
-        # settled snow and fog: not placed by authors (§69.31, §69.39, §69.54, §69.55, §69.56, §69.60)
-        unplaced = (StageShadows, StarField, Puddles, PropGlow, PropSteam, Flock, FallenFruit, WaterDrops, SnowBlanket, SnowCap, FogBand)
+        # settled snow, fog, lightning and rainbows: not placed by authors (§69.31, §69.39, §69.54,
+        # §69.55, §69.56, §69.60, §69.61)
+        unplaced = (StageShadows, StarField, Puddles, PropGlow, PropSteam, Flock, FallenFruit, WaterDrops, SnowBlanket, SnowCap, FogBand, LightningBolt, Rainbow)
         if id(mob) in walk.seen or isinstance(mob, unplaced):
             return
         walk.seen.add(id(mob))

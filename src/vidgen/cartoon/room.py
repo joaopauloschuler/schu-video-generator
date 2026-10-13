@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from vidgen.cartoon.lighting import fade_at, grade_rgbas, tint_grade
+from vidgen.cartoon.storm import FLASH_COLOR, WINDOW_FLASH
 from vidgen.cartoon.stage import FAR_RISE, StageItem, depth_scale
 from vidgen.lint.color import blend, hex_rgb, relative_luminance, rgb_hex
 
@@ -354,6 +355,15 @@ def blend_skies(a: WindowSky, b: WindowSky, share: float) -> WindowSky:
     )
 
 
+def flash_sky(sky: WindowSky, level: float) -> WindowSky:
+    """The sky outside lit by lightning at ``level`` (0..1, DESIGN.md §69.61): ``level`` ×
+    :data:`~vidgen.cartoon.storm.WINDOW_FLASH` of the way to the flash's colour (nothing indoors
+    dims it); ``sky`` at 0."""
+    if level <= 0:
+        return sky
+    return blend_skies(sky, WindowSky(FLASH_COLOR, FLASH_COLOR), level * WINDOW_FLASH)
+
+
 @dataclass(frozen=True)
 class SkyChange:
     """The sky outside fading to ``value`` from scene time ``start`` over ``seconds`` (a ``light``
@@ -393,6 +403,7 @@ __all__ = [
     "WindowParts",
     "WindowSky",
     "blend_skies",
+    "flash_sky",
     "darker",
     "floor_lines",
     "floor_rows",

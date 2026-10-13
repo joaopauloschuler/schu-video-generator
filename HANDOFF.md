@@ -12004,3 +12004,127 @@ How to test
   test_cartoon_fire_nature` (14 passed, 13 s), `test_cartoon_depth test_introspect
   test_cartoon_lighting test_cartoon_room test_cartoon_water_air test_cartoon_holding` (10 passed,
   15 s). The full suite was not run.
+
+## Step 127 — More weather, part 2: lightning, rainbow, moving sun and moon
+
+What was built (DESIGN §69.61)
+- Lightning: pure `cartoon/storm.py` (`Strike` with seeded `strike_pulses`, `level`, `end`;
+  `flash_level`, `flashing`, `flash_grade` (half way to `#EEF2FF` at full), `flash_strength`,
+  `thunder_delay` (km / 0.343), `thunder_cue` (gain, duration, intensity, pitch by distance),
+  `thunder_pan`, `bolt_paths`, `storm_strikes`, `RainStorm`). `StageLight` gains `strikes`,
+  `storms`, `flash_share`, `flash`, `strikes_until`; it grades the flash in `update` and counts
+  flashes in `changing` / `settled`. New action `lightning` (`scenes/storm_action.py`: target a
+  mark or an x, `distance`, `bolt`, `seed`; non-animating) → `Stage.strike_lightning`: the flash,
+  a `LightningBolt` right after the sky (outdoors), the new generated sound `thunder` (sfx.py) after
+  the delay (foley). In a room: the window skies flash (`room.flash_sky`) and the room half as
+  much; no bolt. Rain with `lightning: true | seconds` (`ParticleSettings.lightning`,
+  `storm_problem`, `storm_every`) strikes at seeded times (`Stage.particles_started` →
+  `RainStorm`; thunder cued after the scene played, those starting before its end).
+- Rainbow: `rainbow_bands`, `RainbowChange`, `rainbow_level`; `Rainbow`, `StageRainbow` (a thing
+  that moves by itself); action `rainbow` (target where, `width`, `opacity`, `hide`; outdoors
+  only) → `Stage.show_rainbow` / `hide_rainbows`, right after the sky, lit.
+- Sun and moon: pure `cartoon/sun_path.py` (`PATH_PLACES`, `wrap_share`, `path_blend` (forward
+  only), `PathMove`, `path_share_at`, `path_point`, `elevation`, `shadow_cast`, `cast_shadow`);
+  `SkyBody` (weather_drawing.py); the `light` action's option `move_sun` (validate: a preset,
+  outdoors, a sun or moon prop) → `Stage.change_light(..., move_sun=True)` adds a `PathMove` per
+  body. With `move_sun` in a scene, `_start_sky_path` puts the sun and moon on the arc from the
+  start and the entrance moves them right after the sky; `_sky_step` (in `_light_step` and
+  `get_moving_mobjects`) places them, sets `StageShadows.set_cast` from the body that shows most
+  and shows the bolt.
+- Layout dump leaves out `LightningBolt` and `Rainbow`.
+
+Bug fixed (Backlog line from Step 126, removed)
+- "A character walking in depth to behind a house leaves a faint outline of itself over the
+  house": reproduced on a copy of Step 126's snowy meadow at preview (frame 270 of 277). A check
+  comparing every written frame with the scene drawn whole in its draw order found them equal, so
+  neither the depth walk's order rebuild, `_moving_in_order` nor Manim's static image was at
+  fault: the house's opacity was 0.98 in that frame. The frame is in the scene's 0.5 s outro, where
+  `NarratedScene.finish` → `clear_all` fades every mobject on its own, so the fading house showed
+  mira behind it. `Stage.finish` now fades in a background-coloured cover (`_cover`, renamed from
+  `_entrance_cover`) above everything (z index) and then removes every mobject; with a transition
+  other than a cut, or a next scene carrying a target, it is `NarratedScene.finish` as before. Test
+  `test_a_character_behind_a_house_does_not_show_through_it_as_the_scene_fades_out`
+  (tests/test_cartoon_depth.py): the outro frames with pip hidden behind the house equal those
+  without pip; before the fix they differed by 54 levels. The Quality Backlog line "Stage fades
+  and props" now only keeps the carried case.
+- Also fixed (found while checking): while the light changed during an animation,
+  `get_moving_mobjects` appended moving parts of characters again after `self.mobjects`, so they
+  were drawn over the entrance cover (`[*self.mobjects, *(m for m in moving if m not in
+  self.mobjects)]` compared top-level mobjects only; it now skips any family member).
+
+Measured (scratch `s127/`, preview 854×480 15 fps, no audio, `s127/measure.py`)
+- Without the new things the raw frames equal HEAD 4f2dc6e's but for the 7 outro frames (meadow
+  270/277 equal, rainy stage 230/237).
+- Rainy stage with 2 `lightning` actions, `lightning: 4` on the rain and a `rainbow`: 43 423 vs
+  38 039 Cairo draws, 11.1 vs 9.0 s wall (+22 %); dusk with `move_sun` vs the same light changes
+  without: 7.0 vs 6.8 s (noise: a light change redraws everything anyway); a room with one
+  lightning: 2.5 vs 2.2 s. Every frame of these renders equals the scene drawn whole
+  (`s127/ghost_check.py`).
+
+Checked by eye (preview frames): a day and a night storm (washed-out flash, the bolt behind the
+tree), the rainbow behind the house and hills, dusk to night (the sun sinking right behind the
+hills, shadows stretching left, the moon rising behind the house and at the top at night), a
+room's windows flashing. `vidgen validate` ok; `vidgen lint` of the scratch project: only
+author-caused `off_frame`.
+
+Files touched
+- New: `src/vidgen/cartoon/storm.py`, `src/vidgen/cartoon/sun_path.py`,
+  `src/vidgen/scenes/storm_action.py`, `tests/test_cartoon_storm.py`.
+- `src/vidgen/scenes/stage.py`, `scenes/light_action.py`, `scenes/particles_action.py`,
+  `scenes/__init__.py`, `cartoon/shading.py`, `cartoon/weather_drawing.py`, `cartoon/room.py`,
+  `particle_field.py`, `sfx.py`, `introspect.py`, `api.py`; guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`.
+- Docs: `docs/CONFIG.md` (particles `lightning`, the `thunder` sound row, "Lightning and thunder",
+  "Rainbows", `move_sun` under "Light and shadows", rooms' weather bullet, action rows),
+  `DESIGN.md` (§2, §6.4, §69.51 note, new §69.61), `docs/EXTENDING.md`, `docs/gallery/stage.md`
+  (particles row), `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists gain `lightning`, `rainbow`),
+  `tests/test_cartoon_depth.py` (the outro test).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 127). New actions `lightning`, `rainbow`;
+  `light` option `move_sun`; particles key `lightning`; built-in sound `thunder`;
+  `Stage.change_light(setting, start, seconds, *, move_sun=False)`. Behaviour change: a stage's
+  outro fades out as one picture and the scene ends empty, as before.
+
+Decisions / deviations
+- `move_sun` on the `light` action instead of a `sun_path` action: the sun's place always goes
+  with a light (sunset, night), and both fade together over the same `run_time`.
+- The sun and moon follow presets' places on one forward path; with `move_sun` in a scene they
+  stand on that path from the start (their `at` / `lift` ignored), so the shadows can turn from
+  the first frame. Without it nothing about them changes.
+- The flash is part of the light's grade (no white overlay), so speech bubbles and text keep
+  their contrast; the bolt is not graded.
+- Searched first: no lightning / thunder / rainbow / sun path code (`grep -rniw
+  "lightning\|thunder\|rainbow\|sun_path" src/vidgen` at 4f2dc6e: only the icon set's
+  `cloud-lightning` / `rainbow` icons and their search words); reused `fade_at`,
+  `changing`, `StageLight` and its listeners, `_put_in_sky`, the living-thing redraw,
+  `blend_skies`, `mark_x`, `motion_seed`, `ground_top`, `shadow_ellipse`, the sfx machinery.
+
+Known gaps / TODOs (Backlog line "Lightning, rainbows, the sun's path")
+- The bolt strikes only the horizon; clouds are not lit; storm thunder after the scene's end is
+  dropped; the sun and moon move only with a light change and keep their size; long shadows only
+  stretch (no skew); an animation with a flash in it is redrawn whole.
+
+How to test
+- `pytest tests/test_cartoon_storm.py` (13 not-render ~2 s, 2 render at 160x90 ~3 s);
+  `pytest tests/test_cartoon_depth.py -k fades_out` (render, ~3 s).
+- Also run (not render): `test_particles test_cartoon_rain test_cartoon_stage test_api
+  test_actions test_introspect test_cartoon_wind test_cartoon_living test_cartoon_fire_nature
+  test_cartoon_depth test_cartoon_props test_cartoon_room test_cartoon_lighting
+  test_cartoon_snow_fog test_sfx` with the new file (404 passed, 23 s), `test_docs test_guide
+  test_schema test_gallery test_actions_coverage test_config test_extensions` (230 passed, 81 s);
+  render (after the last change): `test_cartoon_storm` (with its not-render tests: 15 passed, 3 s),
+  `test_cartoon_depth test_cartoon_room test_cartoon_lighting test_cartoon_snow_fog
+  test_cartoon_rain test_cartoon_stage test_cartoon_living test_cartoon_fire_nature
+  test_cartoon_wind test_particles test_introspect` (22 passed, 23 s), `test_cartoon_holding
+  test_cartoon_water_air test_cartoon_vehicles test_cartoon_small_props test_cartoon_props
+  test_cartoon_parallax test_cartoon_acting test_cartoon_moving test_cartoon_keyframes
+  test_cartoon_foley test_cartoon_motion_effects test_cartoon_seating test_cartoon_effects` (17
+  passed, 15 s), `test_cartoon_shots test_cartoon_furniture test_cartoon_cards test_overlap
+  test_includes test_translation test_cartoon_robots test_cartoon_expressions
+  test_cartoon_more_animals test_cartoon_animals test_cartoon_outfits test_cartoon_style
+  test_cartoon_directing test_random_cast test_cartoon_motion test_frames` (23 passed, 82 s),
+  `test_builtin_scenes test_actions_coverage test_phase_k_review test_cartoon_sheet
+  test_phase_i_review test_phase_h_review test_gallery test_cartoon_lint -k "stage or review or
+  sheet or gallery or lint"` (9 passed, 38 s). The full suite was not run.

@@ -2,7 +2,8 @@
 line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
 layers that move by their factor when the camera moves (§69.7), props (§69.8), particles
 (§69.9), its light and shadows (§69.31), its wind (§69.32) or a room instead of the sky (§69.42),
-props that move by themselves (§69.54), snow that settles and fog (§69.60)."""
+props that move by themselves (§69.54), snow that settles and fog (§69.60), lightning, rainbows
+and the sun and moon moving across the sky (§69.61)."""
 
 import math
 from collections.abc import Iterator
@@ -31,6 +32,11 @@ FIRE_LIGHT_GAIN = -10.0
 FIRE_LIGHT_SECONDS = 0.8
 #: The level of a ringing phone's ``phone`` sound (dB), one per burst of rings.
 PHONE_RING_GAIN = -6.0
+#: Lightning (DESIGN.md §69.61): a bolt's core width (Manim stroke width) and how far it zigzags
+#: (frame heights); the band left free above the sky's path for the sun and moon (frame heights).
+BOLT_WIDTH = 4.0
+BOLT_SPREAD = 0.12
+SKY_TOP_ROOM = 0.14
 
 IDENTIFIER_PATTERN = r"^[A-Za-z0-9_]+$"
 Identifier = Annotated[str, Field(pattern=IDENTIFIER_PATTERN)]
@@ -199,9 +205,9 @@ class StageParticles(ParticleSettings, SceneParams):
     def _puddles_in_rain(self) -> "StageParticles":
         if self.puddles and self.kind != "rain":
             raise ValueError(f"puddles grow under rain only, not {self.kind}")
-        settle = settle_problem(self.kind, self)
-        if settle is not None:
-            raise ValueError(settle[1])
+        for problem in (settle_problem(self.kind, self), storm_problem(self.kind, self)):
+            if problem is not None:
+                raise ValueError(problem[1])
         return self
 
     @classmethod
@@ -487,6 +493,10 @@ class Stage(NarratedScene):
     ``drop_fruit`` lets fall (on a character's head too); ``birds`` (or the ``birds`` action) send
     a flock across the sky. Snow with ``settle: true`` lies on the ground and the props in a
     growing white layer; ``fog`` lies in bands between the things by depth, thicker further back.
+    ``lightning`` flashes the set with a bolt, its thunder following by the strike's distance
+    (rain with ``lightning: true`` strikes on its own); ``rainbow`` fades a rainbow into the sky;
+    a ``light`` change with ``move_sun: true`` moves the sun and the moon along their arc across
+    the sky, the shadows lengthening and turning away from the sun.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -572,7 +582,7 @@ class Stage(NarratedScene):
         props: list[StageProp] = []
         """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against, on, time, speed, fruit}."""
         particles: list[StageParticles] = []
-        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles, settle, settled}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; snow with settle: true lands on the ground and the props, where a white layer grows; for one beat use the particles action."""
+        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles, lightning, settle, settled}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; rain with lightning: true flashes lightning with thunder at seeded times; snow with settle: true lands on the ground and the props, where a white layer grows; for one beat use the particles action."""
         light: LightSetting = "day"
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene."""
         shadows: bool = True
@@ -1104,6 +1114,12 @@ class Stage(NarratedScene):
             self._settle_snow(field, settings)
         if field.seeds.kind != "rain":
             return
+        every = storm_every(settings)
+        if every is not None:   # lightning while it rains (§69.61)
+            storm = RainStorm(field.start, every, motion_seed(self.spec.id, "storm", settings.seed, len(self._storms)), lambda: field.ended)
+            self._storms.append(storm)
+            self._lit().storms.append(storm)
+            self._watch_light()
         if self._foley_on():
             self._rain_fields.append(field)
         if not settings.puddles:
@@ -1398,6 +1414,7 @@ class Stage(NarratedScene):
         self._start_living(living)
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
+        self._start_sky_path()
         # register back to front, so the fade-ins add them (and draw them) in that order
         targets = [self.target(name, mob) for name, mob in on_stage]
         for whole in targets:  # parts come on screen with their character (§69.14)
@@ -1425,8 +1442,11 @@ class Stage(NarratedScene):
                     shown += [m for m in (live.glow if live else None, t.mobject, live.steam if live else None) if m is not None]
                     shown += self._after_props.pop(t.name, [])   # its snow cap (§69.60)
             self.add(*shown, *in_front)
+            for body in self.sky_bodies:   # a moving sun or moon goes behind everything (§69.61)
+                self.mobjects.remove(body.prop)
+                self._put_in_sky(body.prop)
             self._sort_fog()
-            return [FadeOut(self._entrance_cover()), *items]
+            return [FadeOut(self._cover()), *items]
 
         self._start_wind(placements)
         self._start_water()
@@ -1437,6 +1457,9 @@ class Stage(NarratedScene):
         self.flocks: list[Flock] = []
         if p.birds is not None:
             self.add_flock(p.birds, p.birds.start)
+        if p.room is None and self._lightning_used():
+            self.bolt = LightningBolt()
+            self._put_in_sky(self.bolt)
         #: the rain fields whose sound bed plays (foley on)
         self._rain_fields: list[ParticleField] = []
         #: the puddles under the rain fields with ``puddles: true``
@@ -1459,16 +1482,32 @@ class Stage(NarratedScene):
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
         self._ring_sounds()
+        self._storm_thunder()
 
-    def _entrance_cover(self) -> Rectangle:
+    def _cover(self) -> Rectangle:
         """A rectangle of the background colour over everything, larger than the view and kept
-        on it, for the set to fade in under as one picture (:meth:`construct`'s entrance)."""
+        on it, for the set to fade in under as one picture (:meth:`construct`'s entrance) or out
+        (:meth:`finish`)."""
         frame = self.camera.frame
         cover = Rectangle(width=frame.width * 1.5, height=frame.height * 1.5, stroke_width=0)
         cover.set_fill(self.camera.background_color, opacity=1.0)
         cover.add_updater(lambda m: m.move_to(frame.get_center()))
         self.add(cover.move_to(frame.get_center()))
         return cover
+
+    def finish(self) -> None:
+        """The scene's outro: the set fades out as one picture, under a cover of the background
+        colour fading in over everything (also the particles, bubbles and symbols drawn above it),
+        then everything leaves the scene (as after a fade out); fading each thing on its own
+        showed what stands behind a house through it. As
+        :meth:`NarratedScene.finish` when there is no outro, a transition takes the picture away or
+        the next scene carries something on (DESIGN.md §49, §50)."""
+        if self.outro <= 0 or (self.transition_out is not None and not self.transition_out.cut) or self._carried_parts():
+            super().finish()
+            return
+        top = max((m.z_index for m in self.get_mobject_family_members()), default=0)
+        self.play(FadeIn(self._cover().set_z_index(top + 1)), run_time=self.outro)
+        self.remove(*self.mobjects)   # gone, as a fade out leaves the scene
 
     # ----- light and shadows (DESIGN.md §69.31) ---------------------------------------------------
 
@@ -1479,8 +1518,18 @@ class Stage(NarratedScene):
         self.base_light = resolve_light(self.params.light, self.theme)
         changes = [resolve_light(use.setting(), self.theme) for use in self.action_uses("light")]
         self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
+        flashes = self._lightning_used()
         #: the stage's light (``None``: the set as drawn, nothing changes it)
-        self.light: StageLight | None = StageLight(self.renderer.camera, self.base_light) if self.base_light.changes_colors or changes else None
+        self.light: StageLight | None = StageLight(self.renderer.camera, self.base_light) if self.base_light.changes_colors or changes or flashes else None
+        if self.light is not None and self.params.room is not None:
+            self.light.flash_share *= ROOM_FLASH   # only what comes in through the windows (§69.61)
+        #: the lightning bolt in the sky, the rainbows, the suns and moons moving along the sky's
+        #: path and the rain fields' storms (DESIGN.md §69.61)
+        self.bolt: LightningBolt | None = None
+        self.rainbows: list[StageRainbow] = []
+        self.sky_bodies: list[SkyBody] = []
+        self._storms: list[RainStorm] = []
+        self._bolt_paths: dict[int, list[np.ndarray]] = {}
         self.stars: StarField | None = None
         self.window_views: WindowViews | None = None
         self.shadows: list[StageShadows] = []
@@ -1488,22 +1537,37 @@ class Stage(NarratedScene):
         #: and each ``self._light_step`` is a new bound method
         self._light_updater = self._light_step
 
-    def change_light(self, setting: str | CustomLight, start: float, seconds: float) -> None:
+    def change_light(self, setting: str | CustomLight, start: float, seconds: float, *, move_sun: bool = False) -> None:
         """Fade the light to ``setting`` (a preset or a tint) from scene time ``start`` over
-        ``seconds`` (the ``light`` action); everything is redrawn on every frame meanwhile."""
+        ``seconds`` (the ``light`` action); everything is redrawn on every frame meanwhile.
+        ``move_sun``: the suns and moons move along the sky's path to their places for the preset
+        meanwhile (DESIGN.md §69.61)."""
         if self.window_views is not None:   # the sky outside fades with it (§69.42)
             self._sky_changes.append(SkyChange(float(start), max(float(seconds), 0.0), window_sky(self._light_key(setting))))
+        if move_sun and isinstance(setting, str):
+            for body in self.sky_bodies:
+                body.moves.append(PathMove(float(start), max(float(seconds), 0.0), place_for(body.kind, setting)))
+        self._lit().change(resolve_light(setting, self.theme), start, seconds)
+        self._watch_light()
+
+    def _lit(self) -> StageLight:
+        """The stage's light, made now when it has none yet."""
         if self.light is None:
             self.light = StageLight(self.renderer.camera, self.base_light)
             self.light.on_change(self._show_light)
-        self.light.change(resolve_light(setting, self.theme), start, seconds)
+        return self.light
+
+    def _watch_light(self) -> None:
+        """Install the scene updater of the light (once)."""
         if not any(f is self._light_updater for f in self.updaters):
             self.add_updater(self._light_updater)
 
     def _light_step(self, dt: float) -> None:
-        """Scene updater while the light changes: the grade for the scene time now; it removes
-        itself once every change is over (a scene updater makes Manim redraw every frame)."""
+        """Scene updater while the light changes or lightning may flash: the sky (§69.61) and the
+        grade for the scene time now; it removes itself once every change and flash is over (a
+        scene updater makes Manim redraw every frame)."""
         now = float(self.renderer.time)
+        self._sky_step(now)
         if self.light is not None:
             self.light.update(now)
         if self.light is None or self.light.settled(now):
@@ -1511,13 +1575,131 @@ class Stage(NarratedScene):
 
     def _show_light(self, grade: LightGrade) -> None:
         """The stars' brightness and the shadows' darkness for ``grade``, and the sky outside a
-        room's windows for the light now."""
+        room's windows for the light now (lit by lightning, §69.61)."""
         if self.stars is not None:
             self.stars.set_level(grade.stars)
         if self.window_views is not None:
-            self.window_views.show(sky_at(self._sky_base, self._sky_changes, float(self.renderer.time)))
+            sky = sky_at(self._sky_base, self._sky_changes, float(self.renderer.time))
+            self.window_views.show(flash_sky(sky, self.light.flash) if self.light is not None else sky)
         for group in self.shadows:
             group.set_strength(grade.shadow)
+
+    # ----- lightning, rainbows, the sun and moon moving (DESIGN.md §69.61) --------------------------
+
+    def _lightning_used(self) -> bool:
+        """Whether lightning may flash in this scene: a ``lightning`` action, or rain with
+        ``lightning`` (the stage's or a ``particles`` action's)."""
+        rain = [p for p in self.params.particles if p.kind == "rain"] + [u.options for u in self.action_uses("particles") if u.kind() == "rain"]
+        return bool(self.action_uses("lightning")) or any(r.lightning is not False for r in rain)
+
+    def _horizon_y(self) -> float:
+        """The y of the horizon: the back edge of the ground area (Manim units)."""
+        return (ground_top(self.params.ground, self.params.items()) - 0.5) * self.frame_height
+
+    def strike_lightning(self, at: str | float | None, time: float, *, distance: float = THUNDER_DISTANCE, bolt: bool = True, seed: int | None = None) -> Strike:
+        """Lightning strikes at scene ``time`` (the ``lightning`` action): the set flashes (a room
+        less, through its windows), a bolt strikes at ``at`` (a mark or an x; ``None``: a seeded
+        place; none in a room or with ``bolt`` false) and its thunder follows ``distance`` km
+        later (foley)."""
+        seed = seed if seed is not None else motion_seed(self.spec.id, "lightning", round(float(time), 3))
+        x = mark_x(at, self.params.stage_marks()) if at is not None else 0.15 + 0.7 * (seed % 1000) / 999
+        strike = Strike(float(time), x, float(distance), seed, bolt and self.params.room is None)
+        self._lit().strikes.append(strike)
+        self._watch_light()
+        self._thunder(strike)
+        return strike
+
+    def _thunder(self, strike: Strike) -> None:
+        """The thunder of ``strike`` (foley; heard where it struck)."""
+        if not self._foley_on():
+            return
+        cue = strike.thunder
+        params = {} if self.sounds.file("thunder") is not None else {"duration": cue.duration, "intensity": cue.intensity, "pitch": cue.pitch}
+        self.sfx("thunder", strike.time + cue.delay, gain=cue.gain, pan=thunder_pan(strike.x), **params)
+
+    def _storm_thunder(self) -> None:
+        """The thunder of the strikes of the rain fields' storms, once the scene has played: of
+        those whose thunder starts before the scene's end (the others' would only begin in the
+        next scene)."""
+        end = float(self.renderer.time)
+        for storm in self._storms:
+            for strike in storm.strikes(end):
+                if strike.time + strike.thunder.delay < end:
+                    self._thunder(strike)
+
+    def _show_bolt(self, now: float) -> None:
+        """The bolt of the brightest strike with one at scene time ``now`` (none: hidden)."""
+        if self.bolt is None or self.light is None:
+            return
+        lit = [(s.level(now), s) for s in self.light.strikes_until(now) if s.bolt]
+        level, strike = max(lit, key=lambda ls: ls[0], default=(0.0, None))
+        if strike is None or level <= 0:
+            self.bolt.hide()
+            return
+        if strike.seed not in self._bolt_paths:
+            left = -self.stage_width / 2
+            self._bolt_paths[strike.seed] = bolt_paths(
+                strike.seed, left + strike.x * self.stage_width, self.frame_height / 2, self._horizon_y(), BOLT_SPREAD * self.frame_height,
+            )
+        width = BOLT_WIDTH * min(max(1.2 - 0.1 * strike.distance, 0.4), 1.2)
+        self.bolt.show(self._bolt_paths[strike.seed], width, min(level / flash_strength(strike.distance), 1.0))
+
+    def show_rainbow(self, at: str | float | None, time: float, seconds: float, *, width: float = RAINBOW_WIDTH, opacity: float = RAINBOW_OPACITY) -> StageRainbow:
+        """A rainbow fading in from scene ``time`` over ``seconds`` (the ``rainbow`` action): a
+        half ring standing on the horizon with its middle at ``at`` (a mark or an x; ``None``: the
+        middle), ``width`` frame widths across, drawn right after the sky (behind the layers, the
+        ground and everything on it) and graded by the light."""
+        x = mark_x(at if at is not None else "centre", self.params.stage_marks())
+        radius = width * self.frame_width / 2
+        rainbow = Rainbow((x - 0.5) * self.stage_width, self._horizon_y(), radius, opacity, name="rainbow" if not self.rainbows else f"rainbow_{len(self.rainbows) + 1}")
+        mark_lit(rainbow)
+        stage_rainbow = StageRainbow(rainbow)
+        stage_rainbow.fade(1.0, time, seconds)
+        stage_rainbow.update(float(self.renderer.time))
+        self.rainbows.append(stage_rainbow)
+        self._put_in_sky(rainbow)
+        self._watch_living()
+        return stage_rainbow
+
+    def hide_rainbows(self, time: float, seconds: float) -> None:
+        """Every rainbow fades out from scene ``time`` over ``seconds`` (``rainbow`` with ``hide``)."""
+        for rainbow in self.rainbows:
+            rainbow.fade(0.0, time, seconds)
+        if self.rainbows:
+            self._watch_living()
+
+    def _start_sky_path(self) -> None:
+        """With a ``light`` action that has ``move_sun`` (outdoors), every ``sun`` and ``moon``
+        prop is a :class:`SkyBody`: placed on the sky's path where the light at the start puts it
+        (a tint: as by day), moved by the light changes, and the shadows cast away from it."""
+        if self.params.room is not None or not any(use.options.move_sun for use in self.action_uses("light")):
+            return
+        start = self.params.light if isinstance(self.params.light, str) else "day"
+        for prop in self.props.values():
+            if prop.kind in SKY_BODIES and prop.held_by is None:
+                body = SkyBody(prop, prop.kind, place_for(prop.kind, start), self._sky_place)
+                prop.stage_depth = 1.0   # it moves into the sky, behind everything (entrance)
+                self.sky_bodies.append(body)
+        self._sky_step(float(self.renderer.time))
+
+    def _sky_place(self, x_share: float, height: float) -> tuple[float, float]:
+        """Where a sky body's middle is for an x share of the stage and a height on the sky's path
+        (0 on the horizon, 1 at the top of the arc, :func:`path_point`)."""
+        horizon = self._horizon_y()
+        room = self.frame_height / 2 - horizon - SKY_TOP_ROOM * self.frame_height
+        return -self.stage_width / 2 + x_share * self.stage_width, horizon + height * room
+
+    def _sky_step(self, now: float) -> None:
+        """The sky for scene time ``now``: the suns and moons on their path, the shadows they cast
+        (from the one that shows most, the sun on a tie), and the lightning bolt."""
+        if self.sky_bodies:
+            for body in self.sky_bodies:
+                body.update(now)
+            body = max(self.sky_bodies, key=lambda b: (b.shown, b.kind == "sun"))
+            stretch, side = shadow_cast(body.share if body.shown > 0 else None)
+            for group in self.shadows:
+                group.set_cast(stretch * body.shown, side)
+        self._show_bolt(now)
 
     def get_moving_mobjects(self, *animations: Animation) -> list[Mobject]:
         """Manim's moving mobjects, or every mobject while the light changes during this
@@ -1534,9 +1716,11 @@ class Stage(NarratedScene):
         end = now + (math.inf if duration is None else float(duration))
         light = getattr(self, "light", None)
         if light is not None:
+            self._sky_step(now)
             light.update(now)
-            if light.changing(now, end):
-                return [*self.mobjects, *(m for m in moving if m not in self.mobjects)]
+            if light.changing(now, end):   # (a part of a character is in its family already: not again, on top)
+                known = {id(m) for m in self.get_mobject_family_members()}
+                return [*self.mobjects, *(m for m in moving if id(m) not in known)]
         redrawn = self._depth_crossers(animations) if hasattr(self, "_depth_walks") else set()
         redrawn |= self._water_movers()
         blowing = getattr(self, "blowing", None)
@@ -1688,15 +1872,19 @@ class Stage(NarratedScene):
         return felt_force(blowing.wind.force(now)) if blowing is not None else 0.0
 
     def _living_things(self) -> list[Any]:
-        """The props that move by themselves, the flocks of birds, the layers of settling snow and
-        the fog (DESIGN.md §69.54, §69.55, §69.60)."""
+        """The props that move by themselves, the flocks of birds, the layers of settling snow, the
+        fog and the rainbows (DESIGN.md §69.54, §69.55, §69.60, §69.61)."""
         fog = getattr(self, "fog", None)
-        return [*getattr(self, "living", {}).values(), *getattr(self, "flocks", []), *getattr(self, "snow_layers", []), *([fog] if fog is not None else [])]
+        return [
+            *getattr(self, "living", {}).values(), *getattr(self, "flocks", []), *getattr(self, "snow_layers", []), *([fog] if fog is not None else []),
+            *getattr(self, "rainbows", []),
+        ]
 
     def _living_step(self, dt: float) -> None:
         """Scene updater: every prop that moves by itself, every flock, every layer of settling
-        snow and the fog as they are at the scene time now; it removes itself once only flocks that
-        have flown away and layers that grow no more are left."""
+        snow, the fog and every rainbow as they are at the scene time now; it removes itself once
+        only flocks that have flown away, layers that grow no more and rainbows done fading are
+        left."""
         now = float(self.renderer.time)
         for live in self.living.values():
             live.update(now)
@@ -1707,7 +1895,9 @@ class Stage(NarratedScene):
         fog = getattr(self, "fog", None)
         if fog is not None and fog.moves:
             fog.update(now)
-        settled = all(layer.done(now) for layer in self.snow_layers) and (fog is None or not fog.moves)
+        for rainbow in self.rainbows:
+            rainbow.update(now)
+        settled = all(layer.done(now) for layer in [*self.snow_layers, *self.rainbows]) and (fog is None or not fog.moves)
         if not self.living and all(flock.done(now) for flock in self.flocks) and settled:
             self.remove_updater(self._living_updater)
 

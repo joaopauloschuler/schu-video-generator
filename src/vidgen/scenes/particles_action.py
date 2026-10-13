@@ -17,8 +17,9 @@ class Particles(Action):
     on every scene type; seeded, so every render is the same. Options: density, area [x, y, w,
     h] of the visible frame from its top-left corner, color (one or a list), seed, puddles (rain
     on a stage: it ends on the ground with splashes, stops on open umbrellas and trees, plays a
-    rain sound with foley), settle and settled (snow on a stage: it lands on the ground and the
-    props and a white layer grows there)."""
+    rain sound with foley), lightning (rain on a stage: flashes and thunder at seeded times),
+    settle and settled (snow on a stage: it lands on the ground and the props and a white layer
+    grows there)."""
 
     class Options(ParticleSettings, ActionOptions):
         kind: ParticleKindName | None = None
@@ -55,9 +56,9 @@ class Particles(Action):
             found.append(("target", f"unknown particles '{names[0]}'{hint} (kinds: {', '.join(PARTICLE_KINDS)})"))
         if o.puddles and self.kind() != "rain":
             found.append(("puddles", "puddles grow under rain only (- particles: rain, on a stage)"))
-        settle = settle_problem(self.kind(), o)
-        if settle is not None:
-            found.append(settle)
+        for problem in (settle_problem(self.kind(), o), storm_problem(self.kind(), o)):
+            if problem is not None:
+                found.append(problem)
         if o.keep and self.config.until is not None:
             found.append(("keep", "keep: stays to the scene's end, until: goes at a beat; give one of them"))
         return found

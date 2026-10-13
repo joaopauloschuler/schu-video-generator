@@ -1,5 +1,7 @@
 """Drawing snow that settles and fog on a stage (DESIGN.md §69.60; the maths in
-:mod:`vidgen.cartoon.snow` and :mod:`vidgen.cartoon.fog`).
+:mod:`vidgen.cartoon.snow` and :mod:`vidgen.cartoon.fog`), and lightning bolts, rainbows and the
+sun and moon moving across the sky (§69.61; :mod:`vidgen.cartoon.storm`,
+:mod:`vidgen.cartoon.sun_path`).
 
 :class:`SettledSnow` grows a :class:`SnowBlanket` on the ground and a :class:`SnowCap` on each
 prop that holds snow while a settling snow field falls; :class:`StageFog` drifts the
@@ -17,7 +19,10 @@ import numpy as np
 from manim import Mobject, VGroup, VMobject
 
 from vidgen.cartoon.fog import FOG_DEPTHS, FOG_LAYER_SHARES, band_box, band_opacities, band_outlines, fog_shift, layer_opacity
+from vidgen.cartoon.lighting import changing
 from vidgen.cartoon.living import Box, union_box
+from vidgen.cartoon.storm import BOLT_BRANCHES, RAINBOW_COLORS, RainbowChange, rainbow_bands, rainbow_level
+from vidgen.cartoon.sun_path import PathMove, path_point, path_share_at
 from vidgen.cartoon.snow import (
     BLANKET_OPACITY,
     BLANKET_RISE,
@@ -32,6 +37,13 @@ from vidgen.cartoon.snow import (
     settled_seconds,
     top_line,
 )
+
+
+#: A bolt's paths at most (its main channel and branches), and its colours: a white core in a pale
+#: blue glow.
+BOLT_PATHS = 1 + BOLT_BRANCHES[1]
+BOLT_CORE = "#FFFFFF"
+BOLT_GLOW = "#9FB6FF"
 
 
 def polygon_points(corners: np.ndarray) -> np.ndarray:
@@ -236,4 +248,149 @@ class StageFog:
         return box
 
 
-__all__ = ["FogBand", "SettledSnow", "SnowBlanket", "SnowCap", "StageFog", "paths_points", "polygon_points", "prop_top_line"]
+class LightningBolt(VGroup):
+    """A lightning bolt (DESIGN.md §69.61): up to :data:`BOLT_PATHS` jagged paths (a main channel
+    and its branches), each a wide pale glow under a white core; :meth:`show` draws one strike's
+    paths, :meth:`hide` none. Never graded by the light (it is the light)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.name = "lightning"
+        for _ in range(BOLT_PATHS):
+            glow, core = VMobject(), VMobject()
+            glow.set_fill(opacity=0.0).set_stroke(BOLT_GLOW, width=0.0, opacity=0.0)
+            core.set_fill(opacity=0.0).set_stroke(BOLT_CORE, width=0.0, opacity=0.0)
+            self.add(glow, core)
+        self.hide()
+
+    def show(self, paths: Sequence[np.ndarray], width: float, level: float) -> None:
+        """Draw ``paths`` (corners, the main channel first) with a core ``width`` wide (Manim
+        stroke width; branches thinner) at ``level`` (0..1) of its brightness."""
+        for k in range(BOLT_PATHS):
+            glow, core = self.submobjects[2 * k], self.submobjects[2 * k + 1]
+            if k >= len(paths) or level <= 0:
+                for member in (glow, core):
+                    member.points = np.zeros((0, 3))
+                    member.set_stroke(opacity=0.0)
+                continue
+            corners = np.zeros((len(paths[k]), 3))
+            corners[:, :2] = paths[k]
+            thin = 1.0 if k == 0 else 0.55
+            for member, scale, opacity in ((glow, 4.0, 0.55), (core, 1.0, 1.0)):
+                member.set_points_as_corners(corners)
+                member.set_stroke(width=width * thin * scale, opacity=opacity * level)
+
+    def hide(self) -> None:
+        """Draw nothing."""
+        self.show([], 0.0, 0.0)
+
+
+class Rainbow(VGroup):
+    """A rainbow (DESIGN.md §69.61): a half ring of :data:`~vidgen.cartoon.storm.RAINBOW_COLORS`
+    bands about (``cx``, ``base``) with an outer ``radius``, its ``opacity`` when fully in;
+    :meth:`show` sets how much of it shows."""
+
+    def __init__(self, cx: float, base: float, radius: float, opacity: float, name: str = "rainbow") -> None:
+        super().__init__(*[
+            _filled(VMobject(), color, 0.0) for color in RAINBOW_COLORS
+        ])
+        self.name = name
+        self.opacity = opacity
+        for band, outline in zip(self.submobjects, rainbow_bands(cx, base, radius)):
+            band.points = polygon_points(outline)
+        self.box: Box = (cx - radius, base, cx + radius, base + radius)
+
+    def show(self, level: float) -> None:
+        """Show it at ``level`` (0..1) of its opacity."""
+        for band in self.submobjects:
+            band.set_fill(opacity=self.opacity * min(max(level, 0.0), 1.0))
+
+
+class StageRainbow:
+    """A :class:`Rainbow` on a stage fading in and out (``rainbow`` actions:
+    :class:`~vidgen.cartoon.storm.RainbowChange` s), a thing that moves by itself (DESIGN.md
+    §69.54): only it and what is drawn over it are redrawn while it fades."""
+
+    def __init__(self, rainbow: Rainbow) -> None:
+        self.rainbow = rainbow
+        self.changes: list[RainbowChange] = []
+        self.level: float | None = None
+
+    def fade(self, value: float, start: float, seconds: float) -> None:
+        """Fade to ``value`` (1 in, 0 out) from scene time ``start`` over ``seconds``."""
+        self.changes.append(RainbowChange(float(start), max(float(seconds), 0.0), float(value)))
+
+    def update(self, now: float) -> None:
+        """Show it for scene time ``now``."""
+        level = rainbow_level(self.changes, now)
+        if level != self.level:
+            self.level = level
+            self.rainbow.show(level)
+
+    def changing(self, start: float, end: float) -> bool:
+        """Whether it fades between scene times ``start`` and ``end``."""
+        return changing(self.changes, start, end)
+
+    def done(self, now: float) -> bool:
+        """Whether every fade is over at scene time ``now``."""
+        return all(c.end <= now for c in self.changes)
+
+    def movers(self) -> list[Mobject]:
+        """The rainbow."""
+        return [self.rainbow]
+
+    def region(self, start: float, end: float) -> Box:
+        """Where it is."""
+        return self.rainbow.box
+
+
+class SkyBody:
+    """A ``sun`` or ``moon`` prop moving along the sky's path (DESIGN.md §69.61): from path share
+    ``base`` at the start, then each :class:`~vidgen.cartoon.sun_path.PathMove`; ``place(x share,
+    height)`` gives where its middle is (Manim units). It fades out under the horizon."""
+
+    def __init__(self, prop: Mobject, kind: str, base: float, place: Callable[[float, float], tuple[float, float]]) -> None:
+        self.prop = prop
+        self.kind = kind
+        self.base = base
+        self.place = place
+        self.moves: list[PathMove] = []
+        self._alphas = [(m, m.fill_rgbas[:, 3].copy(), m.stroke_rgbas[:, 3].copy()) for m in prop.family_members_with_points()]
+        #: where it is now (path share; ``None``: not placed yet) and how much of it shows
+        self.share: float | None = None
+        self.shown = 1.0
+
+    def share_at(self, now: float) -> float:
+        """Its path share at scene time ``now``."""
+        return path_share_at(self.base, self.moves, now)
+
+    def update(self, now: float) -> bool:
+        """Put it where it is at scene time ``now``; whether it moved."""
+        share = self.share_at(now)
+        if share == self.share:
+            return False
+        self.share = share
+        x_share, height, shown = path_point(share)
+        x, y = self.place(x_share, height)
+        self.prop.shift(np.array([x, y, 0.0]) - self.prop.get_center())
+        self.shown = shown
+        for member, fill, stroke in self._alphas:
+            member.fill_rgbas[:, 3] = fill * shown
+            member.stroke_rgbas[:, 3] = stroke * shown
+        return True
+
+
+__all__ = [
+    "FogBand",
+    "LightningBolt",
+    "Rainbow",
+    "SettledSnow",
+    "SkyBody",
+    "SnowBlanket",
+    "SnowCap",
+    "StageFog",
+    "StageRainbow",
+    "paths_points",
+    "polygon_points",
+    "prop_top_line",
+]

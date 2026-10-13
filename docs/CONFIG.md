@@ -2066,6 +2066,7 @@ writes them as WAV files to listen to):
 | `burner` | 1.2 s (0.4–4) | a gas burner's roar: deep breathy noise around 450 Hz with a faint hiss, fluttering at 9 Hz, dying away at the end | a hot-air balloon rising |
 | `launch` | 1.0 s (0.4–3) | a toy rocket taking off: a soft low "whump", then a fizzing hiss climbing ~1.5 → ~5 kHz with a crackle, fading out | a toy rocket or a firework launching |
 | `phone` | 1.0 s (0.4–3) | a phone ringing, "brring-brring": a soft electronic trill (a tone flipping between ~1.1 and ~1.4 kHz 20 times a second) in two pulses of about 0.4 s | a ringing [phone](#everyday-small-props-let_go-pour) (each burst of rings) |
+| `thunder` | 3 s (1–8) | thunder: a crack of bright noise around 1.8 kHz (stronger with `intensity`: a near strike), then a deep rumble below ~120 Hz rolling in three to five swells, dying away | after [lightning](#lightning-and-thunder-lightning) (played for it: later, quieter, longer and lower the farther the strike) |
 | `gasp` | 0.35 s (0.15–1) | a sharp breath in, "hah": breath noise around 1.1, 1.75 and 2.9 kHz, loudest after ~50 ms, cut off | surprise ([`[gasp]`](#voice-sounds) at a line's start or end) |
 | `sigh` | 0.9 s (0.4–2.5) | a long breath out, "haaah": breathy "ah" noise with a faint hum falling ~190 → ~130 Hz, trailing off | tiredness, relief ([`[sigh]`](#voice-sounds) at a line's start or end) |
 | `beep` | 0.4 s (0.2–1.2) | a friendly robot chirp, "bee-boop": two soft electronic notes, ~1.3 kHz (with a quick upward blip) then ~880 Hz | a robot's voice sound ([`[beep]`](#voice-sounds) at a line's start or end), a gadget |
@@ -4331,7 +4332,7 @@ never leaves the stage.
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
-| `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
+| `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
@@ -4391,9 +4392,10 @@ a set's room and the scene's merge key by key).
   `door: <name>` brings a character in through it: the door opens (at once, if closed), the
   character fades in in the doorway over 0.35 s and walks to its mark; `exit` with `door:` walks
   it to the door, where it fades out, and then waits off stage. Doors cast no shadows.
-- **Indoors there is no weather**: `wind`, the `wind` action, `birds`, `fog` and `rain`, `snow`, `leaves` and
-  `streaks` particles are refused (`vidgen validate`); sparkles, dust, confetti, smoke and bubbles
-  work. The windows show no fog.
+- **Indoors there is no weather**: `wind`, the `wind` action, `birds`, `fog`, `rainbow`, a
+  `light` action's `move_sun` and `rain`, `snow`, `leaves` and `streaks` particles are refused
+  (`vidgen validate`); sparkles, dust, confetti, smoke and bubbles work. The windows show no fog;
+  the `lightning` action flashes them (and the room a little), without a bolt.
 - **Furniture** is built-in [props](#props): `sofa`, `armchair`, `bed`, `bookshelf`, `counter` (a
   kitchen counter), `fridge`, `picture`, `rug`, `houseplant`, `clock`, `tv` (on a low cabinet),
   `desk` (with its chair) and `fireplace` (a brick fireplace with a mantelpiece and logs), drawn as
@@ -5740,6 +5742,7 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 | `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF`, leaves `#7BAE4E #C9A23A #C2703D`, streaks `#FFFFFF` |
 | `seed` | `1` | another number gives other positions |
 | `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground)) |
+| `lightning` | `false` | rain on a `stage` only: `true` flashes [lightning](#lightning-and-thunder-lightning) while it rains, at seeded times about every 8 s, with thunder; a number (2–120) is the seconds between strikes on average |
 | `settle` | `false` | snow on a `stage` only: `true` lands it on the ground and on the props, where a white layer grows while it snows ([Snow that settles](#snow-that-settles-settle)) |
 | `settled` | `0` | with `settle`: seconds of snowfall already lying when it starts, 0–600 (`24` or more: the full layer at density 1) |
 
@@ -5762,8 +5765,8 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 ```
 
 `vidgen validate` reports an unknown kind (with a did-you-mean), the kind given twice, an `area`
-outside the frame, a `density` out of range, `keep` with `until`, `puddles` on a kind other
-than rain, `settle` on a kind other than snow and `settled` without `settle`. The layout dump sees a
+outside the frame, a `density` out of range, `keep` with `until`, `puddles` or `lightning` on a
+kind other than rain, `settle` on a kind other than snow and `settled` without `settle`. The layout dump sees a
 field as one object of kind `particles` named after its kind; `vidgen lint`'s `off_frame` leaves
 it out (particles cross the edges on purpose).
 
@@ -5869,6 +5872,71 @@ render time).
     characters: [{name: dot, at: 0.3}, {name: moss, at: 0.75, depth: 0.7}]
 ```
 
+#### Lightning and thunder (`lightning`)
+
+The **`lightning`** [beat action](#beat-actions) strikes at its `at`: the whole set flashes two
+or three times within about half a second (each flash held for a few hundredths of a second and
+dying away, seeded), every graded colour taken half way to a cold white at the brightest (stars and
+shadows fading as much; speech bubbles and text unchanged, like the [light](#light-and-shadows-light-shadows)),
+and a **bolt** (a white zigzag with a pale blue glow and one to three branches) strikes the
+horizon behind everything on the stage, shown only while it flashes. Its target is where:
+`- lightning: right` (a mark) or `- lightning: 0.7` (an x); without one the scene picks a place.
+`distance` (km, default `1`, up to 10) sets how far away it is: a farther strike flashes less (at
+least 0.4 of a near one) and its bolt is thinner, and its **thunder** (the generated
+[`thunder`](#sound-effects-sfx) sound: a crack, then a rolling rumble) comes later at the speed of
+sound (**about 3 s per km**: 0.343 km a second), quieter (−3 dB at the strike, −3 dB per km, at
+least −18), longer (2.2 s + 0.6 s per km) and lower (a semitone per km), panned where it struck.
+`bolt: false` is sheet lightning (a flash only); `seed` varies the bolt and the flashes. The
+thunder follows the stage's foley (off with `foley: false`); a thunder later than the scene's end
+plays into the next scene (`vidgen render` says so).
+
+In a `room`, lightning comes in through the **windows**: their sky flashes nearly white and the
+room lights up half as much as outdoors; no bolt. Rain with **`lightning: true`** (the
+`particles` param or action) strikes on its own while it rains: seeded times about every 8 s (a
+number: those seconds on average, at least 2), places across the stage, 0.6 to 4 km away, most
+with a bolt (the others sheet lightning); its thunders whose start would fall after the scene's
+end are left out. While a flash lights the set the whole stage is redrawn on every frame (an
+animation in which one falls is redrawn whole): a scratch rainy stage with two strikes, a storm
+striking every 4 s and a rainbow took about 20 % more render time at preview.
+
+```yaml
+- id: storm
+  type: stage
+  params:
+    light: night
+    props: [{prop: house, at: 0.2, depth: 0.5}, {prop: tree, at: 0.8, depth: 0.3}]
+    characters: [dot]
+    particles: [{kind: rain, density: 1.5, lightning: true}]
+  beats:
+    - text: "The storm broke over the house."
+      actions:
+        - {lightning: right, at: 0.3, distance: 0.5}   # the thunder 1.5 s later
+```
+
+#### Rainbows (`rainbow`)
+
+The **`rainbow`** [beat action](#beat-actions) fades a rainbow into the sky over `run_time`
+seconds (default `3`) from its `at`, and it stays: seven soft bands (red outside to violet inside),
+a half ring standing on the horizon (the back edge of the ground area), drawn right after the sky,
+so the hills, the ground and everything on the stage stand in front of it. Its target is where its
+middle is (`- rainbow: centre`, a mark or an x; default the middle of the stage); `width` is its
+outer width in frame widths (default `0.75`), `opacity` how strongly it shows (default `0.55`). It
+is graded by the light. **`hide: true`** (without a place) fades every rainbow shown so far out.
+Best after rain (it does not check for any). Outdoors only: a `room` refuses it. Only the rainbow
+and what is drawn over it are redrawn while it fades.
+
+```yaml
+- id: after_the_rain
+  type: stage
+  params:
+    background: ["#9CC4E8", "#E8EEF4"]
+    characters: [dot, moss]
+  beats:
+    - text: "Then the rain stopped and a rainbow came out."
+      actions:
+        - {rainbow: centre, at: 0.2, width: 0.9}
+```
+
 #### Light and shadows (`light`, `shadows`)
 
 A stage's `light` sets the mood with a colour grade of everything on the set: the background
@@ -5891,6 +5959,37 @@ The `light` [beat action](#beat-actions) changes the light during the scene: `- 
 and lasts until another `light` action; the stars fade in and out with it. Everything on the
 stage is redrawn on every frame while the light fades; before and after, the set stays in
 Manim's static image as usual.
+
+**`move_sun: true`** on a `light` action (with a preset) moves the stage's `sun` and `moon`
+props along an arc across the sky while the light fades, to their places for the new light: the
+sun low on the left in the `morning`, at the top by `day`, low on the right at `sunset`, set
+(under the horizon) at `night` and `indoor`; the moon rising on the left at `sunset`, at the top at
+`night`, setting on the right in the `morning`, under the horizon by `day`. They always move
+forward (left to right), so a sun that set comes up again on the left. In a scene with
+`move_sun`, the sun and the moon stand on that arc from the start (where the stage's own `light`
+puts them; a tint: as by day), whatever their `at` and `lift`, are drawn right after the sky
+(behind the hills and everything on the ground), fade out as they sink under the horizon and in as
+they rise. The **shadows** then follow the body that shows most (the sun on a tie): stretched
+along the ground away from it, longer the lower it is (by the cotangent of its height in the sky,
+at most 3 × 0.6 of a shadow's width longer, and fainter), its foot staying under the caster;
+straight overhead they are as usual. It needs a `sun` or a `moon` prop and the stage outdoors;
+`vidgen validate` says so. A scene without `move_sun` draws its sun, moon and shadows as before.
+
+```yaml
+- id: evening
+  type: stage
+  params:
+    background: ["#9CC4E8", "#E8EEF4"]
+    props: [sun, moon, {prop: tree, at: 0.85, depth: 0.3}]
+    characters: [dot]
+  beats:
+    - text: "The afternoon wore on and the shadows grew long."
+      actions:
+        - {light: sunset, move_sun: true, run_time: 4}
+    - text: "Then night came and the moon rose."
+      actions:
+        - {light: night, move_sun: true, run_time: 4}
+```
 
 `shadows` (default `true`) puts a soft shadow on the ground under each character and each prop
 standing on the ground (not under a cloud, sun or moon or another prop with a `lift`): an
@@ -6169,8 +6268,10 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
 | `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
-| `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action. Its "target" is the light, not a target of the scene; no `until`. |
-| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
+| `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`); `move_sun` (`false`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action; `move_sun: true` moves the sun and moon across the sky meanwhile, the shadows turning. Its "target" is the light, not a target of the scene; no `until`. |
+| `lightning` | as the target: where (`- lightning: right`, a mark or an x; optional); `distance` (`1` km), `bolt` (`true`), `seed` | on a `stage`: the set flashes and a bolt strikes from `at`, its thunder `distance` × ~3 s later (foley); in a room the windows flash; see [Lightning](#lightning-and-thunder-lightning). `run_time` is the flash (0.7 s); no `until`. |
+| `rainbow` | as the target: where its middle is (`- rainbow: centre`; optional); `width` (`0.75`), `opacity` (`0.55`), `hide` (`false`) | on a `stage` outdoors: a rainbow fades into the sky over `run_time` (`3`) from `at` and stays; `hide: true` fades the rainbows out; see [Rainbows](#rainbows-rainbow). No `until`. |
+| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`) and `lightning` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 from manim import Animation, Circle, Ellipse, Mobject, Polygon, Rectangle, VGroup, VMobject
@@ -32,6 +32,7 @@ from vidgen.cartoon.rain import (
     splash_shapes,
 )
 from vidgen.cartoon.snow import flake_floors, rest_flakes
+from vidgen.cartoon.storm import STORM_EVERY
 from vidgen.helpers import resolve_color
 from vidgen.particles import (
     PARTICLE_KINDS,
@@ -87,6 +88,8 @@ class ParticleSettings(BaseModel):
     """Snow on a stage: true lands it on the ground and on the props, where a white layer grows while it snows (only thinly under a tree or an open umbrella)."""
     settled: float = Field(0.0, ge=0.0, le=600.0)
     """With settle: seconds of snowfall already lying when it starts (24 or more: the full layer at density 1)."""
+    lightning: bool | Annotated[float, Field(ge=2.0, le=120.0)] = False
+    """Rain on a stage: true flashes lightning while it rains, about every 8 s at seeded times and places, mostly with a bolt, thunder following by the distance (with foley); a number is the seconds between strikes on average."""
 
     @field_validator("area")
     @classmethod
@@ -340,6 +343,20 @@ def settle_problem(kind: str, settings: ParticleSettings) -> tuple[str, str] | N
     if settings.settled and not settings.settle:
         return "settled", "settled is for snow that settles: add settle: true"
     return None
+
+
+def storm_problem(kind: str, settings: ParticleSettings) -> tuple[str, str] | None:
+    """``(option, message)`` when ``lightning`` is given to particles that are not rain (DESIGN.md §69.61)."""
+    if settings.lightning is not False and kind != "rain":
+        return "lightning", f"lightning flashes in rain only, not {kind} (or use the lightning action)"
+    return None
+
+
+def storm_every(settings: ParticleSettings) -> float | None:
+    """Seconds between a rain field's strikes on average (``None``: no lightning)."""
+    if settings.lightning is False:
+        return None
+    return STORM_EVERY if settings.lightning is True else float(settings.lightning)
 
 
 def _ground_of(scene: NarratedScene, kind: str, settings: ParticleSettings) -> RainGroundSource | None:

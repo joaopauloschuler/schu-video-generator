@@ -469,6 +469,21 @@ def _beep(s: Synth) -> np.ndarray:
     return tone * gate
 
 
+def _thunder(s: Synth) -> np.ndarray:
+    # thunder: a crack of bright noise at the start (stronger with intensity: a near strike), then
+    # a deep rumble (noise low-passed near 120 Hz) rolling in three to five seeded swells and dying
+    # away over the whole length
+    t, u = s.t, s.u
+    crack = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 1800 * s.ratio, 1.4))) * _decay(t, 0.002, 0.06)
+    rumble = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _lowpass(f, 120 * s.ratio, 2) * _highpass(f, 28.0, 2)))
+    swells = np.zeros(s.n)
+    for _ in range(3 + int(s.rng.integers(0, 3))):
+        middle, width = s.rng.uniform(0.05, 0.6), s.rng.uniform(0.08, 0.25)
+        swells += s.rng.uniform(0.5, 1.0) * np.exp(-(((u - middle) / width) ** 2))
+    roll = (0.35 + swells) * np.clip(u / 0.03, 0.0, 1.0) * (1 - u) ** 1.2
+    return 1.6 * s.intensity * crack + rumble * roll
+
+
 def _harmonic_tone(phase: np.ndarray, brightness: np.ndarray | float, harmonics: int, tilt: float) -> np.ndarray:
     """A tone of ``harmonics`` partials of ``phase``: partial ``h`` at ``brightness ** (h - 1) /
     h ** tilt`` (brightness 0..1, constant or per sample: a brass or muted-horn timbre)."""
@@ -689,6 +704,14 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "A phone ringing, 'brring-brring': a soft electronic trill (a tone flipping between ~1.1 "
             "and ~1.4 kHz 20 times a second) in two pulses of about 0.4 s with a short gap.",
             "a phone ringing (a stage's phone plays it at each burst of rings while it is on: foley)",
+        ),
+        BuiltinSound(
+            "thunder", _thunder, 3.0, (1.0, 8.0),
+            "Thunder: a crack of bright noise around 1.8 kHz at the start (stronger with intensity, "
+            "as from a near strike), then a deep rumble (noise below ~120 Hz) rolling in three to "
+            "five swells over the first 60% and dying away over its whole length.",
+            "a storm (a stage's lightning action and rain with lightning play it after the flash, "
+            "later, quieter, longer and lower the farther the strike: foley)",
         ),
         BuiltinSound(
             "gasp", _gasp, 0.35, (0.15, 1.0),
