@@ -355,7 +355,8 @@ def looked_state(character: Character, look: LookPose) -> CharacterState:
 @action("turn")
 class Turn(_Acting):
     """The target character turns round (``to: left`` / ``right``: faces that way; ``front``:
-    faces the viewer, its front view, narrowing as it turns and swapping its shapes half-way; an
+    faces the viewer, its front view with the head straight and the eyes ahead, narrowing as it
+    turns and swapping its shapes half-way; an
     SVG character has no front view and keeps its side). It stays so (``until: <beat>`` turns it
     back)."""
 
@@ -377,7 +378,9 @@ class Turn(_Acting):
             facing = self.options.to or (character.side_facing if character.facing == "front" else "left" if character.facing == "right" else "right")
             if facing == "front" and not character.has_front_view:
                 continue   # an SVG character keeps its side (vidgen validate warns)
-            if facing != character.facing:
+            if facing == "front" and facing != character.facing:   # a look's head angle would tilt it sideways
+                anims.append(self._change(character, looked_state(character, camera_look("front"))))
+            elif facing != character.facing:
                 state = character.state()
                 anims.append(self._change(character, CharacterState(facing, dict(state.parts))))
         return anims

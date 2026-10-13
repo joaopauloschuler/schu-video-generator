@@ -8304,3 +8304,37 @@ with an animal are a config error (`config.SPECIES_OWN_KEYS`); `svg` with `speci
   repeats. `--species cat dog` (MCP `species`) gives only random animals. The voice kind of a
   random look is its drawn kind.
   Tests: `tests/test_random_cast.py`.
+
+### 69.50 Review of Phase K (Step 116)
+
+- **The indoor example**: `examples/cartoon-muffin-mystery` (an original screenplay,
+  `muffin_mystery.md`, then hand-edited `video.yaml`): a `card` title and end card, `iris_in` /
+  `iris_out` (closing on the dog), one `sets: home` room (stripes, boards, a window, a door, sofa,
+  picture, clock, armchair at depth 0.2, rug, counter and fridge against the wall), a dog
+  character (`species: dog`) and two people, `indoor` light fading to `night`, then `morning`;
+  effect symbols (written and from `auto_direct`), `run_to`, `jump`, walks in depth behind and in
+  front of the armchair and the others, `enter` / `exit` through the door, a basket held from the
+  start, a close-up in the front view, captions and a music bed. End to end by the CLI and the
+  MCP tools `screenplay` (also with a `cast` of dogs and people), `cast`, `validate`, `direct`,
+  `lint`, `storyboard`, `character_sheet`; lint clean at preview (word-count timing) and with
+  Kokoro audio. `tests/test_phase_k_review.py` repeats the cheap part.
+- **`vidgen screenplay` without `--json` crashed on a silent card** (`KeyError: 'beats'`: a
+  `card` scene with only `duration` has no beats); the summary now counts a card's beats as 0 and
+  says "N scenes" (not "N stage scenes").
+- **A prop held before its holder's entrance flew across the set**: `hold` at `at: 0` by a
+  character that waits off stage for an `enter` moved the prop from its own spot into the hand off
+  stage, in view (and it stood there through the set's fade-in). `Stage._held_before_entering`
+  finds the props a `hold` gives to a character of `_entering()` before its first `enter` (in the
+  order the scene's actions are written); the construct puts each beside its holder off stage, so
+  the hold plays unseen.
+- **A held prop did not fade through a door**: `Walk`'s `fade_in` / `fade_out` (§69.42) now scale
+  the props in `carried` with the character; `enter` / `exit` with `door` pass the props the
+  character holds (`moving._carried`, also used by walks in depth).
+- **Turning to the front kept a look's head angle**: from the side the head angle is a nod; in the
+  front view it rolls the head sideways (seen after `look_at` a held basket, then `turn: front`).
+  `turn` `to: front` now ends with `camera_look("front")` (head straight, eyes in the middle), and
+  `look_pose` facing the front (a point straight above or below) keeps the head upright and moves
+  only the eyes up or down.
+- **Real narration**: Kokoro (narrator `bf_emma` 0.8, Mira `af_heart` 0.75, Olen `am_fenrir`
+  0.75, the dog `bm_fable` 0.8; `narration_speed` warned at 3.52 words/s for Mira at 0.8), rendered
+  at 1280x720 (`/home/claude/work/phase-k-review/muffin_mystery.mp4`, 69.9 s, −16.2 LUFS).

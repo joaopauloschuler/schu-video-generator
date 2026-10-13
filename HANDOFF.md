@@ -10909,3 +10909,93 @@ How to test
   test_json_output test_schema test_config test_cli test_phase_i_review test_phase_h_review` (231,
   93 s), `test_mcp` (15, 26 s); render: `test_screenplay test_cartoon_lint test_lint` (2, 4 s),
   `test_phase_h_review test_phase_i_review test_includes` (2, 24 s). The full suite was not run.
+
+## Step 116 — Review of Phase K, with an indoor example
+
+What was done
+- **Example** `examples/cartoon-muffin-mystery/` ("The Muffin Mystery", original): `muffin_mystery.md`
+  (front matter declares the dog Crumb; Mira and Olen generated, then restyled) and the
+  hand-edited `video.yaml` (2-line header, compact, no audio): a silent title `card`, `iris_in`
+  into the evening, one `sets: home` room (stripes, boards, a window, a door at 0.13; sofa and
+  counter / fridge against the wall, a picture and a clock on it, an armchair at depth 0.2, a rug),
+  Crumb (`species: dog`) sitting in the armchair with hearts and Zs, Mira (pear, ponytail, apron)
+  walking to the front and back behind the armchair and out through the door, `indoor` light
+  fading to night; a crossfade to the morning: Olen (tall, sleepy eyes, striped pyjamas) comes in
+  through the door holding the "missing" basket, an exclamation mark, a sparkle, `run_to` the
+  counter behind Mira, `?` from `auto_direct`, Crumb sweats and jumps, Mira points, Olen walks to
+  the front, Crumb runs in depth behind him, "Well. Case closed." in a front-view close-up with a
+  comic sting, Olen gives Crumb the basket (hearts), `iris_out` on Crumb, "The End" card. Captions
+  in speaker colours, `bright` bed at −4. Voices: narrator `bf_emma` 0.8, Mira `af_heart` 0.75,
+  Olen `am_fenrir` 0.75, Crumb `bm_fable` 0.8.
+- **Checks**: `vidgen validate` ok; `vidgen lint` 0 findings at preview with word-count timing and
+  with Kokoro audio (first passes found: the door and fridge cut at the edges, two `facing_away`, a
+  `walk_overlap`, Mira at 3.52 words/s at 0.8, a `rushed_animation` from a run in a short beat:
+  fixed in the yaml). CLI: `screenplay` (also with `vidgen cast --random 4 --species dog human`),
+  `direct`, `character-sheet --all`, `storyboard`. MCP (stdio, SDK client): `screenplay`, `validate`,
+  `direct`, `cast`, `screenplay` with `cast`, `lint`, `storyboard`, `character_sheet`: all ok.
+- **Real narration and render** (scratch copy, kvenv312, 2500 MB cgroup, offline HF cache; a
+  script file): 12 beats; render 1280x720 30 fps with `--frames-per-beat 3` in one command (167 s):
+  `/home/claude/work/phase-k-review/muffin_mystery.mp4`, 69.93 s, −16.2 LUFS integrated, true peak
+  −1.9 dBTP.
+- **Stills by eye** (~70 at 720p plus frames from the MP4): feet on the floor walking and
+  standing, on the armchair (hips on the seat; the round dog hides most of the chair), basket on
+  the counter's top (`lift` 0.185); furniture depth order (Mira behind the armchair and Crumb, Olen
+  running behind Mira at the wall's depth, Crumb running towards the camera behind Olen; shadows
+  under them); effect symbols on the dog's head (hearts above the ears, Zs in front, sweat at the
+  back, `!` above) and on the people; the front view talking in the close-up (mouth shapes
+  change, head upright after the fix); the title card's iris closing on the centre and opening on
+  the room; the iris closing on Crumb's face, then opening on the end card; Mira fading out and
+  Olen (with the basket, after the fix) fading in at the door.
+- **Levels** (stems from `build/final/padded`: music = mix / gain − `voice.wav` − `sfx.wav`,
+  correlation with the voice −0.09; LUFS before the +5.4 dB normalisation): narration −20.8; music
+  under speech −42.3 (evening) / −40.3 (morning), in pauses −33.3 / −33.2, on the cards −33.9 /
+  −36.4; foley −29.4 overall, loudest −7.7 dBFS (the `!` pop). The limiter took up to 4.7 dB off 20
+  of 1398 50-ms windows (Olen's loudest syllables, `am_fenrir`).
+
+Fixes (with tests in `tests/test_phase_k_review.py`)
+- `cli.cmd_screenplay`: the text summary did `len(s["beats"])`; a silent `card` (only `duration`)
+  has none → `KeyError` after writing the file. Now `s.get("beats", [])` and "N scenes" (not "N
+  stage scenes"). `--json` was already right.
+- `Stage._held_before_entering` + construct: a `hold` at the start by a character waiting off
+  stage for its `enter` flew the prop from its spot to off stage in view (and showed it during the
+  set's fade-in); the prop now starts beside its holder off stage.
+- `Walk` fades the props in `carried` with `fade_in` / `fade_out`; `enter` / `exit` with `door`
+  pass the props the character holds (`moving._carried`, shared with walks in depth).
+- `turn` `to: front` ends with `camera_look("front")` (head straight); `look_pose` facing front
+  keeps the head angle 0 and moves only the eyes (a head angle rolls the front view sideways).
+
+Docs
+- DESIGN new §69.50; CONFIG (`look_at`, `turn`, `hold`, `enter` / `exit` rows); EXTENDING (`Walk`
+  `carried=`); README (cartoon scene types line, screenplay command row, the example in the list);
+  `docs/gallery/stage.md` regenerated by `vidgen gallery --types stage` (the `props.prop` row gains
+  the furniture and a `props.against` row appears, both missing since Step 110; stills and GIFs
+  byte-identical); the `card` page and media regenerated identical. Checked by grep: Phase K
+  actions, keys, commands, MCP tools and lint rules are in CONFIG, DESIGN and the guide; `AGENTS.md`
+  is the guide's copy (the guide needed no change).
+- Wheel (`pip wheel --no-deps --no-build-isolation` in kvenv312): all 426 tracked `src/vidgen`
+  files, the 14 Phase K modules among them, 223 data files.
+- Backlog: 8 lines for Phase K gaps (Steps 107–116).
+
+Files touched
+- New: `examples/cartoon-muffin-mystery/muffin_mystery.md`, `examples/cartoon-muffin-mystery/video.yaml`,
+  `tests/test_phase_k_review.py`.
+- `src/vidgen/cli.py`, `scenes/stage.py`, `scenes/moving.py`, `scenes/acting.py`,
+  `scenes/handling.py` (docstring), `cartoon/transition.py`, `cartoon/acting.py`; `DESIGN.md`,
+  `docs/CONFIG.md`, `docs/EXTENDING.md`, `README.md`, `docs/gallery/stage.md`, `tasklist.md`.
+
+Public interfaces
+- No `vidgen.api` names added. Behaviour: `look_pose(..., "front")` returns head angle 0;
+  `turn` to the front straightens the head; `Walk(carried=)` also fades; `vidgen screenplay`'s
+  text summary says "N scenes".
+
+Known gaps
+- In the Backlog (8 lines). Not listened to by a person; Whisper not run.
+
+How to test
+- `pytest tests/test_phase_k_review.py` (8 not-render, ~8 s).
+- Run: not render `tests/test_cartoon_*.py test_random_cast test_screenplay test_includes
+  test_phase_f_review test_phase_h_review test_phase_i_review test_phase_k_review` (882 passed,
+  85 s), `test_docs test_guide test_gallery test_schema test_cli test_json_output test_actions
+  test_push_wipe_carry` (250, 79 s), `test_mcp` (15, 29 s); render: the cartoon files in two
+  batches (27, 39 s; 16, 13 s), `test_random_cast test_screenplay test_includes test_phase_*_review`
+  (5, 37 s). The full suite was not run (not asked).

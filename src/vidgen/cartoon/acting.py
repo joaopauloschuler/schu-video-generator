@@ -41,13 +41,16 @@ def look_pose(dx: float, dy: float, facing: str) -> LookPose:
     """Looking at a point ``dx``, ``dy`` (Manim units) from the character's head: facing that
     way (kept when the point is within :data:`SAME_X`), the head tilted up or down towards it (at
     most :data:`LOOK_MAX_DEGREES`) and the eyes a little forward, raised or lowered with the head
-    (facing ``front``, straight above or below: the eyes stay in the middle)."""
+    (facing ``front``, straight above or below: the head stays upright, since its angle would tilt
+    it sideways in the front view, and only the eyes move up or down)."""
     if abs(dx) >= SAME_X:
         facing = "right" if dx > 0 else "left"
     angle = math.degrees(math.atan2(dy, max(abs(dx), SAME_X)))
     angle = max(-LOOK_MAX_DEGREES, min(LOOK_MAX_DEGREES, angle))
-    ahead = 0.0 if facing == "front" else LOOK_EYES_AHEAD
-    return LookPose(facing, angle, (ahead, LOOK_EYES_AHEAD * angle / LOOK_MAX_DEGREES))
+    eyes_y = LOOK_EYES_AHEAD * angle / LOOK_MAX_DEGREES
+    if facing == "front":
+        return LookPose(facing, 0.0, (0.0, eyes_y))
+    return LookPose(facing, angle, (LOOK_EYES_AHEAD, eyes_y))
 
 
 def camera_look(facing: str) -> LookPose:

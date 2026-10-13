@@ -71,9 +71,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `code`, `code_walkthrough` (a long file scrolling to the lines each beat explains);
   - cartoons: `stage` (the video's `characters:` on a set: a picture, a generated picture or a
-    gradient, a ground line, marks and depth; characters walk, sit, lean, pick up, give and throw
-    props; shots, light and wind, voice sounds like `[laugh]`, overlapping lines, and automatic
-    directing with `auto_direct`).
+    gradient, a ground line, marks and depth, or a room with furniture, windows and doors;
+    characters (people or animals) walk, run, walk towards the camera and face it, sit, lean,
+    pick up, give and throw props; effect symbols over heads, motion effects, shots, light, wind
+    and rain, voice sounds like `[laugh]`, overlapping lines, and automatic directing with
+    `auto_direct`), `card` (title cards, opened and closed with an iris).
 
   See them all in the **[scene gallery](docs/gallery/README.md)**: every type at 16:9 and 9:16,
   with a GIF, its YAML, params and targets (`vidgen gallery` makes it, also for a project's own
@@ -458,7 +460,7 @@ narration.
 | `vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right\|left]` | print a character of `characters:` (its `look:` and colours); `--png` writes one still of it (default `exports/character_<name>.png`) |
 | `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]` | every pose, expression and mouth shape of a character on one PNG (`exports/character_sheet_<name>.png`); no NAME: one sheet per character |
 | `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks, reactions, gestures and close-ups `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
-| `vidgen screenplay INPUT [--out DIR\|FILE] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]` | a cartoon project from a screenplay (no AI): one `stage` scene per `# Scene:` heading (`set:` line: background, props, marks), one beat per `NAME (manner): line` or narrator paragraph, `[stage directions]` mapped to walks, entrances, exits, jumps, looks and gestures (others kept as `# TODO:`), generated looks (well contrasted; `--species`: animals) and voices for undeclared characters (`--cast`: include a series' cast and sets), `auto_direct: true`; validates the project |
+| `vidgen screenplay INPUT [--out DIR\|FILE] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]` | a cartoon project from a screenplay (no AI): one `stage` scene per `# Scene:` heading (`set:` line: background or a room, props and furniture, marks), a `card` per `# Card:` heading, one beat per `NAME (manner): line` or narrator paragraph, `[stage directions]` mapped to walks, entrances, exits, jumps, looks, gestures and effect symbols (others kept as `# TODO:`), generated looks (well contrasted; `--species`: animals) and voices for undeclared characters (`--cast`: include a series' cast and sets), `auto_direct: true`; validates the project |
 | `vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider P] [--json]` | write N original characters that differ clearly (silhouette, colours, accessories, voice kind and voice) as an include file (`cast.yaml`) for `include:` or `vidgen screenplay --cast`; the same seed gives the same cast |
 | `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N] [--force] [--output-dir DIR] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter; needs `schu-video-generator[pdf]`) |
 
@@ -566,6 +568,13 @@ my_video/
   ground and under the tree with a rain sound bed, puddles, light from day to storm grey to night
   with stars, an overlap, an interruption, a comic sting and a pull-back, two music beds; about
   94 s with Kokoro narration (no audio committed).
+- [examples/cartoon-muffin-mystery](examples/cartoon-muffin-mystery) — "The Muffin Mystery", an
+  indoor cartoon from its screenplay (`muffin_mystery.md`) after hand editing: a title card and an
+  iris in, a furnished room with a door (entering and leaving through it), a dog character in an
+  armchair, effect symbols (hearts, Zs, an exclamation mark, sweat), a run, a jump, walking towards
+  the camera behind and in front of the furniture, a close-up in the front view, evening fading to
+  night, an iris out on the dog and an end card; about 70 s with Kokoro narration (no audio
+  committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

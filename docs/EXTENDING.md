@@ -194,7 +194,8 @@ character without a mouth is left alone. `Walk(hero, x)` walks it along the grou
 (`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit; `fade_in=` /
 `fade_out=` seconds to appear or vanish on the way, as through a door, `passage_fade`; `depth=`
 with `feet_y=` (the ground line's y at a depth) walks towards or away from the camera too,
-growing or shrinking, from `hero.stage_depth`, DESIGN.md §69.44), `Gesture(hero,
+growing or shrinking, from `hero.stage_depth`, DESIGN.md §69.44; `carried=` the props it holds,
+which grow and fade with it), `Gesture(hero,
 "wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
 end in the pose; all three keep lip sync in step, and their timing is the pure functions
 `walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). These four animations add

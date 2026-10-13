@@ -264,7 +264,7 @@ class Walk(Animation):
     ``gait``: :data:`~vidgen.cartoon.acting.RUNNING` runs (longer strides, bigger swings, leaning
     forward as it speeds up; ``run_to``). ``fade_in`` / ``fade_out``: seconds it takes to appear at
     the start / disappear at the end (through a door, DESIGN.md §69.42; at most half the walk
-    each); its colours are as before once it is over.
+    each), the props in ``carried`` with it; its colours are as before once it is over.
 
     ``depth``: it also walks towards or away from the camera, from its :attr:`Character.stage_depth`
     to this one (DESIGN.md §69.44), x and depth in a straight line on the ground
@@ -348,8 +348,9 @@ class Walk(Animation):
         self.from_depth = self._shown_depth = float(figure.stage_depth)
         self._path = self._distance(figure, distance, self.from_depth)
         self._heights = self._path / figure.character_height if figure.character_height > 0 else 0.0
-        if self.fade_in > 0 or self.fade_out > 0:
-            self._alphas = [(m, m.fill_rgbas[:, 3].copy(), m.stroke_rgbas[:, 3].copy()) for m in figure.get_family()]
+        if self.fade_in > 0 or self.fade_out > 0:   # what it carries fades with it
+            members = [*figure.get_family(), *(m for prop in self.carried for m in prop.get_family())]
+            self._alphas = [(m, m.fill_rgbas[:, 3].copy(), m.stroke_rgbas[:, 3].copy()) for m in members]
         super().begin()
 
     def _to_depth_now(self, share: float) -> float:

@@ -56,6 +56,11 @@ def _walk_time(character: Character, distance: float, speed: float) -> float:
     return walk_motion_seconds(walk_seconds(distance, speed), character.motion_strength)
 
 
+def _carried(scene: NarratedScene, character: Character) -> list[Mobject]:
+    """The props ``character`` holds (they grow with a walk in depth and fade through a door)."""
+    return [p for p in getattr(scene, "props", {}).values() if getattr(p, "held_by", None) == character.name]
+
+
 def _ended_walk(scene: NarratedScene, character: Character) -> None:
     """Record the beat its walk ends in (the layout dump's ``walked_in``, lint ``walk_overlap``)."""
     beat = scene.current_beat
@@ -157,8 +162,8 @@ class WalkTo(_Moving):
             if not deeper:
                 anims.append(Walk(character, x, speed=self.options.speed, gait=self.gait))
             else:
-                carried = [p for p in getattr(scene, "props", {}).values() if getattr(p, "held_by", None) == character.name]
-                walk = Walk(character, x, speed=self.options.speed, gait=self.gait, depth=depth, feet_y=scene.feet_y_at, carried=carried)
+                walk = Walk(character, x, speed=self.options.speed, gait=self.gait, depth=depth, feet_y=scene.feet_y_at,
+                            carried=_carried(scene, character))
                 anims.append(walk)
                 scene.walk_in_depth(character, walk)
             _ended_walk(scene, character)
@@ -257,7 +262,9 @@ class Enter(_Moving):
         anims: list[Animation] = []
         for character in _characters(scene, targets, "enter"):
             _, start, end = self._path(scene, character, opening=True)
-            door = {} if self.options.door is None else {"fade_in": DOOR_FADE_SECONDS, "run_time": self._seconds(character, start, end)}
+            door = {} if self.options.door is None else {
+                "fade_in": DOOR_FADE_SECONDS, "run_time": self._seconds(character, start, end), "carried": _carried(scene, character),
+            }
             anims.append(Walk(character, end, start_x=start, speed=self.options.speed, **door))
             _ended_walk(scene, character)
         return anims
@@ -307,7 +314,9 @@ class Exit(_Moving):
                 scene.follow_with_camera(None)
             half = character.width / 2
             side, end = self._end(scene, character, opening=True)
-            door = {} if self.options.door is None else {"fade_out": DOOR_FADE_SECONDS, "run_time": self._seconds(character, end)}
+            door = {} if self.options.door is None else {
+                "fade_out": DOOR_FADE_SECONDS, "run_time": self._seconds(character, end), "carried": _carried(scene, character),
+            }
             anims.append(Walk(character, end, park_x=offstage_x(side, left, right, half), speed=self.options.speed, **door))
         return anims
 

@@ -190,9 +190,9 @@ def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
     problems, _ = validate_all(project, keep_going=True)
     if args.json:
         return jsonout.screenplay_document(project, draft, result, problems)
-    beats = sum(len(s["beats"]) for s in draft.config["scenes"])
+    beats = sum(len(s.get("beats", [])) for s in draft.config["scenes"])   # a silent card has none
     print(
-        f"wrote {len(draft.config['scenes'])} stage scenes ({beats} beats), {len(project.config.characters)} characters, "
+        f"wrote {len(draft.config['scenes'])} scenes ({beats} beats), {len(project.config.characters)} characters, "
         f"about {_format_seconds(project.estimated_duration())}; {draft.todo_count} TODOs to review (# TODO: in the config)"
     )
     print(f"{'created project in' if result.created else 'wrote'} {result.root if result.created else result.config}")

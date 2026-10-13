@@ -1005,6 +1005,9 @@ class Stage(NarratedScene):
                 figure.shift([offstage_x(side, left, right, figure.width / 2) - place_at.feet[0], 0.0, 0.0])
             self.cast[member.name] = figure
             on_stage.append((member.name, figure))
+        for prop_name, holder in self._held_before_entering(entering).items():   # waits off stage with its holder
+            item, figure = self.props[prop_name], self.cast[holder]
+            item.shift([float(figure.feet()[0] - item.feet()[0]), 0.0, 0.0])
         # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
         mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews))], *in_front, *(mob for _, mob in on_stage))
         still, moving = self._shadows(placements)
@@ -1230,6 +1233,21 @@ class Stage(NarratedScene):
                     if fnmatchcase(name, pattern):
                         entering.setdefault(name, use.options.side)
         return entering
+
+    def _held_before_entering(self, entering: dict[str, str | None]) -> dict[str, str]:
+        """The props a ``hold`` gives to a character of ``entering`` before its first ``enter``
+        (prop name -> holder): they wait off stage with it instead of flying there in view."""
+        held: dict[str, str] = {}
+        entered: set[str] = set()
+        for use in self._actions.uses if self._actions is not None else []:
+            if use.kind.name not in ("hold", "enter"):
+                continue
+            names = [name for name in entering if any(fnmatchcase(name, p) for p in use.config.targets())]
+            if use.kind.name == "enter":
+                entered.update(names)
+            elif names and names[0] not in entered and use.action.options.to in self.props:
+                held.setdefault(use.action.options.to, names[0])
+        return held
 
     def _prop(self, name: str, prop: StageProp, height: float) -> Prop:
         """The prop ``name`` drawn ``height`` units tall, its feet at the origin; outlines as wide

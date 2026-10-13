@@ -249,7 +249,8 @@ class PickUp(_Handling):
 class Hold(_Handling):
     """The target character holds the prop ``to`` in its ``hand`` from now on without picking it
     up (a prop it has from the start; use at: 0 of the scene's first beat): the prop moves into
-    its hand while the arm comes up."""
+    its hand while the arm comes up. Held by a character waiting off stage for its enter, the prop
+    waits there with it (the stage puts it beside it)."""
 
     class Options(ActionOptions):
         to: str
