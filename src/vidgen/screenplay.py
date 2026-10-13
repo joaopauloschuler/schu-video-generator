@@ -29,8 +29,10 @@ The format (Markdown-like, one element per line or paragraph):
 :func:`parse_screenplay` reads the text (pure); :func:`screenplay_project` builds the
 ``video.yaml`` mapping and its comments: every character without a declaration gets a generator
 look of :data:`LOOKS` (shape, colours and accessories differ; of the stated voice kind when there
-is one) and a voice of the provider's list that suits it (:func:`assign_voices`: the look's or
-the stated voice kind, other accent first), ``auto_direct: true``. No manim import
+is one) while those stay clearly distinct from the other characters, then a random well-contrasted
+look (:mod:`vidgen.random_cast`), and a voice of the provider's list that suits it
+(:func:`assign_voices`: the look's or the stated voice kind, other accent first),
+``auto_direct: true``. No manim import
 (the props' kinds come from :mod:`vidgen.cartoon.props` when a ``set:`` line is read).
 """
 
@@ -123,7 +125,8 @@ PRONOUN_KINDS: dict[str, str] = {"she": "feminine", "he": "masculine", "they": "
 _PRONOUN = re.compile(r"^(she|he|they)(?:\s*/\s*(?:her|him|them))?$", re.IGNORECASE)
 #: Generator looks for characters without a declaration, in turn: each differs from the others in
 #: body, hair, eyes, accessories and colours (skin, clothes, hair) and has the ``voice_kind`` that
-#: suits it (the voice is chosen from that kind); later ones repeat with a seed.
+#: suits it (the voice is chosen from that kind); after them come random looks
+#: (:func:`vidgen.random_cast.pick_looks`).
 LOOKS: tuple[dict[str, Any], ...] = (
     {"look": {"body": "round", "head_size": 1.15, "eyes": "round", "hair": "bun", "accessories": ["scarf"]},
      "colors": {"skin": "#F2C9A0", "clothes": "primary", "hair": "#6B4226", "accessory": "accent"}, "voice_kind": "feminine"},
@@ -941,24 +944,51 @@ def _stated_kinds(play: Screenplay, declared: list[dict[str, Any]]) -> dict[str,
     return {cid: kind for cid, (kind, _) in stated.items()}
 
 
-def _pick_look(kind: str | None, uses: Sequence[int]) -> int:
-    """The index in :data:`LOOKS` of the look for a generated character of voice ``kind``
-    (``None``: any), ``uses`` being how often each look is taken: a look of that kind (then a
-    neutral one) used least, else the least used look, in order."""
-    def fit(k: int) -> int:
-        own = LOOKS[k]["voice_kind"]
-        return 0 if kind is None or own == kind else 1 if own == "neutral" else 2
+def _generated_looks(
+    config: Mapping[str, Any], kinds: Sequence[str | None], others: Sequence[Mapping[str, Any]], species: Sequence[str], seed: int
+) -> list[dict[str, Any]]:
+    """Looks for the undeclared characters (voice ``kinds``, ``None``: any) by
+    :func:`vidgen.random_cast.pick_looks`: :data:`LOOKS` in order (with ``human`` among
+    ``species``) while they stay distinct from ``others`` (declared and cast characters) and each
+    other, then random looks of ``species`` from ``seed``."""
+    import random
 
-    return min(range(len(LOOKS)), key=lambda k: (fit(k), uses[k], k))
+    from vidgen.cartoon.contrast import look_features
+    from vidgen.config import ThemeConfig
+    from vidgen.random_cast import pick_looks
+    from vidgen.theme import Theme
+
+    try:
+        theme: Theme | None = Theme(ThemeConfig.model_validate(config.get("theme") or {}))
+    except ValueError:
+        theme = None
+    existing = []
+    for entry in others:
+        try:
+            features = look_features(entry.get("look") or {}, entry.get("colors") or {}, theme)
+        except ValueError:   # validate reports a bad entry
+            continue
+        if features is not None:
+            existing.append(features)
+    curated = LOOKS if "human" in species else ()
+    return pick_looks(kinds, random.Random(seed), species=species, existing=existing, curated=curated, theme=theme)
 
 
 def screenplay_project(
-    play: Screenplay, default_title: str = "Untitled", cast: Mapping[str, Any] | None = None, include: str | None = None
+    play: Screenplay,
+    default_title: str = "Untitled",
+    cast: Mapping[str, Any] | None = None,
+    include: str | None = None,
+    *,
+    species: Sequence[str] = ("human",),
+    seed: int = 0,
 ) -> ScreenplayProject:
     """The stage project of ``play`` (see the module doc). With ``cast`` (an include file read
     by :func:`vidgen.includes.read_include_file`, ``vidgen screenplay --cast``) its characters
     count as declared and keep their voices, its sets are what ``set: NAME`` lines name, and the
-    project includes it (``include``: its path from the project folder) instead of copying it."""
+    project includes it (``include``: its path from the project folder) instead of copying it.
+    Undeclared characters get looks of ``species`` (``seed``: the random ones', see
+    :func:`_generated_looks`)."""
     front = dict(play.front)
     cast = cast or {}
     declared: list[dict[str, Any]] = [dict(c) for c in front.pop("characters", None) or [] if isinstance(c, dict)]
@@ -985,16 +1015,10 @@ def screenplay_project(
     generated = [cid for cid in written if cid not in declared_ids]
     characters = [*declared]
     kinds: dict[str, str] = dict(stated)
-    uses = [0] * len(LOOKS)
-    for k, cid in enumerate(generated):
-        pick = _pick_look(stated.get(cid), uses)
-        look = LOOKS[pick]
-        entry = {"name": cid, "look": dict(look["look"]), "colors": dict(look["colors"])}
-        if uses[pick]:
-            entry["look"]["seed"] = k
-        uses[pick] += 1
+    looks = _generated_looks(config, [stated.get(cid) for cid in generated], [*declared, *from_cast], species, seed)
+    for cid, look in zip(generated, looks):
+        characters.append({"name": cid, "look": look["look"], "colors": look["colors"]})
         kinds.setdefault(cid, look["voice_kind"])
-        characters.append(entry)
     project.generated = generated
     speaking = [c for c in characters if c["name"] in written and not c.get("voice")]
     voice_base = config["voice"] if isinstance(config["voice"], dict) else {}

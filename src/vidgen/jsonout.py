@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from vidgen.deck import Deck
     from vidgen.plan import Plan
     from vidgen.plan_yaml import PlanResult
+    from vidgen.random_cast import RandomCast
     from vidgen.screenplay import ScreenplayProject
     from vidgen.slides import SlidesResult
     from vidgen.slides_pdf import PdfResult
@@ -232,6 +233,32 @@ def screenplay_document(
         notes=list(draft.notes),
         scenes=scenes,
         problems=[p.to_json() for p in problems],
+    )
+
+
+def cast_document(
+    path: Path, cast: RandomCast, seed: int, species: Sequence[str], provider: str, minimum: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen cast --json`` document: the include file written and each character with its
+    voice kind, voice and look."""
+    return envelope(
+        "cast",
+        True,
+        warnings,
+        path=_path(path),
+        seed=seed,
+        species=list(species),
+        provider=provider,
+        lowest_contrast=cast.lowest_contrast,
+        min_contrast=minimum,
+        characters=[
+            {
+                "name": c["name"], "voice_kind": cast.kinds[c["name"]], "voice": c["voice"],
+                "provider_voice": cast.voices[c["voice"]].get("voice"), "look": c["look"], "colors": c["colors"],
+            }
+            for c in cast.characters
+        ],
+        notes=list(cast.notes),
     )
 
 

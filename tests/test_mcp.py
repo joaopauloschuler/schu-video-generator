@@ -203,7 +203,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
-    "character_sheet", "direct", "screenplay",
+    "character_sheet", "direct", "screenplay", "cast",
 }
 
 
@@ -384,6 +384,12 @@ def test_server_screenplay_writes_a_project(tmp_path: Path) -> None:
         assert doc["command"] == "screenplay" and doc["scenes"][0]["characters"] == ["pip", "kit"]
         assert (tmp_path / "toon" / "video.yaml").is_file()
         assert "give either" in error_text(await client.call_tool("screenplay", {"out": "toon"}))
+        # Step 115: a random cast (species repeated as --species=..., seed 0 passed), then a screenplay drawing cats
+        cast = doc_of(await client.call_tool("cast", {"count": 2, "species": ["cat", "dog"], "out": "shared/cast.yaml"}))
+        assert cast["command"] == "cast" and cast["species"] == ["cat", "dog"] and (tmp_path / "shared" / "cast.yaml").is_file()
+        assert "outside the folder" in error_text(await client.call_tool("cast", {"count": 2, "out": "../cast.yaml"}))
+        cats = doc_of(await client.call_tool("screenplay", {"screenplay_text": text, "out": "cats", "species": ["cat"], "seed": 3}))
+        assert cats["ok"] and "species: cat" in (tmp_path / "cats" / "video.yaml").read_text(encoding="utf-8")
 
     run_session(tmp_path, body)
 

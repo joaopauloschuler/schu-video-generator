@@ -165,11 +165,11 @@ def commented_yaml(
     scene_comments: Sequence[Sequence[str]] = (),
     beat_comments: Sequence[Sequence[Sequence[str]]] = (),
 ) -> str:
-    """``config`` (a ``video.yaml`` mapping with ``scenes``) as YAML text with comments: the
-    ``header`` lines (``# ...`` as given) on top, ``key_comments`` (top-level key -> comment
-    texts) above their keys, and per scene its ``scene_comments`` above it and, per beat, its
-    ``beat_comments``; a comment text is wrapped as ``# <text>``. The text is checked to load
-    back to exactly ``config``."""
+    """``config`` (a ``video.yaml`` mapping, or an include file's without ``scenes``) as YAML
+    text with comments: the ``header`` lines (``# ...`` as given) on top, ``key_comments``
+    (top-level key -> comment texts) above their keys, and per scene its ``scene_comments`` above
+    it and, per beat, its ``beat_comments``; a comment text is wrapped as ``# <text>``. The text
+    is checked to load back to exactly ``config``."""
     out = list(header)
     for key, value in config.items():
         if key == "scenes":
@@ -178,8 +178,9 @@ def commented_yaml(
             out.extend(_comment("", text, 0))
         out.extend(_entry(f"{key}:", value, 0))
     out.append("")
-    out.append("scenes:")
-    for k, entry in enumerate(config["scenes"]):
+    if "scenes" in config:
+        out.append("scenes:")
+    for k, entry in enumerate(config.get("scenes", [])):
         for text in scene_comments[k] if k < len(scene_comments) else ():
             out.extend(_comment("", text, 2))
         notes = beat_comments[k] if k < len(beat_comments) else ()

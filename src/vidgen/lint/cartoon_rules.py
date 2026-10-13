@@ -4,7 +4,8 @@ They read the keys the layout dump gives a ``character`` object (``facing``, ``s
 ``face``, ``viseme``, ``looked_at``, ``passage``, ``walked_in``), the ``bubble`` key of a speech
 bubble's objects, the ``effect`` objects (symbols over heads, §69.40) and the frame's
 ``narrating``. Like every still rule they see beat-end stills
-only (mid-action stills are skipped by the runner).
+only (mid-action stills are skipped by the runner). ``look_alike`` is a scene rule: it reads the
+config's characters (``SceneContext.character_pairs``, §69.49), not a still.
 """
 
 from __future__ import annotations
@@ -20,12 +21,13 @@ from vidgen.config import (
     CharacterOverlapRule,
     FacingAwayRule,
     HiddenSpeakerRule,
+    LookAlikeRule,
     MouthWithoutVoiceRule,
     OffStageRule,
     WalkOverlapRule,
 )
 from vidgen.lint.layout_rules import area, describe, intersection, is_text, object_box
-from vidgen.lint.rules import Bbox, Issue, StillContext, rule
+from vidgen.lint.rules import Bbox, Issue, SceneContext, StillContext, rule
 
 #: Points per side of the grid on which :func:`_covered_share` samples a face.
 _FACE_SAMPLES = 12
@@ -331,4 +333,19 @@ def mouth_without_voice(ctx: StillContext, settings: MouthWithoutVoiceRule) -> I
             "clock=self.beat_clock() and stop it when the beat ends",
             object_box(obj),
             (obj,),
+        )
+
+
+@rule("look_alike", scope="scene")
+def look_alike(ctx: SceneContext, settings: LookAlikeRule) -> Iterator[Issue]:
+    """Two generated characters of the video look too alike to tell apart at a glance."""
+    for pair in ctx.character_pairs:
+        if pair.score >= settings.min_contrast:
+            continue
+        yield Issue(
+            pair.message(settings.min_contrast),
+            None,
+            value=round(pair.score, 3),
+            limit=settings.min_contrast,
+            beat=ctx.beat_at(0.0),
         )

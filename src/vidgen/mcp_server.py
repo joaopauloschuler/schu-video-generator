@@ -60,7 +60,7 @@ INSTRUCTIONS = """\
 schu-video-generator (the `vidgen` command) makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
 relative to the server's root folder; nothing outside it can be read or written.
 Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
-an outline), `screenplay` (a cartoon from a screenplay) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
+an outline), `screenplay` (a cartoon from a screenplay; `cast` writes a well-contrasted cast for it) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
 returns) -> `lint` -> fix -> repeat; then `tts` with dry_run=true (free), and only after the user \
 agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provider kokoro is local and \
 free: no confirm_cost); then `render`. `schema` with \
@@ -284,6 +284,7 @@ def build_server(root: Path) -> Any:
     Jobs = Annotated[int, Field(ge=1, le=16, description="scenes rendered in parallel")]
     Images = Annotated[int, Field(ge=0, le=MAX_IMAGES, description="pictures to return in this call (0: none)")]
     Offset = Annotated[int, Field(ge=0, description="first picture to return (to page through many)")]
+    from vidgen.config import Species
 
     # ----- guide, scaffolding --------------------------------------------------------------------
 
@@ -342,11 +343,16 @@ def build_server(root: Path) -> Any:
         screenplay_text: Annotated[str | None, Field(description="the screenplay itself (instead of input_path)")] = None,
         out: Annotated[str | None, Field(description="project folder to create, or a .yaml file (default: named after the input; 'screenplay' for screenplay_text)")] = None,
         cast: Annotated[str | None, Field(description="an include file under the root (characters, voices, sets) to reuse: the project includes it; set: NAME lines use its sets")] = None,
+        species: Annotated[list[Species] | None, Field(description="species of the undeclared characters (default: human; several: a mix)")] = None,
+        seed: Annotated[int, Field(description="seed of the random looks given once the built-in ones are used")] = 0,
         force: Annotated[bool, Field(description="write into a non-empty folder / replace a config")] = False,
     ) -> Any:
         if (input_path is None) == (screenplay_text is None):
             raise ToolError("give either input_path or screenplay_text")
-        options = {"out": str(where(out, "out")) if out else None, "cast": str(where(cast, "cast")) if cast else None, "force": force}
+        options = {
+            "out": str(where(out, "out")) if out else None, "cast": str(where(cast, "cast")) if cast else None,
+            "species": species, "seed": seed, "force": force,
+        }
         if input_path is not None:
             return answer(await call(ctx, args_of(["screenplay"], [str(where(input_path, "input_path"))], options)))
         if options["out"] is None:
@@ -355,6 +361,26 @@ def build_server(root: Path) -> Any:
             source = Path(folder) / "screenplay.md"
             source.write_text(screenplay_text or "", encoding="utf-8")
             return answer(await call(ctx, args_of(["screenplay"], [str(source)], options)))
+
+    @tool("Write a cast of original characters that differ clearly (silhouette, colours, accessories, voice kind and "
+          "voice) as an include file: use it with include: in video.yaml or as screenplay's cast. The same seed gives "
+          "the same cast.", writes)
+    async def cast(
+        ctx: Context,
+        count: Annotated[int, Field(ge=1, le=24, description="how many characters")],
+        seed: Annotated[int, Field(description="the same seed gives the same cast")] = 0,
+        species: Annotated[list[Species] | None, Field(description="species to draw from (default: human; several: a mix)")] = None,
+        out: Annotated[str, Field(description="the .yaml file to write, relative to the root")] = "cast.yaml",
+        provider: Annotated[Literal["kokoro", "openrouter", "elevenlabs"], Field(description="the video's voice provider")] = "kokoro",
+        narrator: Annotated[str | None, Field(description="the narrator's voice, left out of the cast's (kokoro default: bf_emma)")] = None,
+        model: Annotated[str | None, Field(description="openrouter: the TTS model whose voices to use")] = None,
+        force: Annotated[bool, Field(description="replace an existing file")] = False,
+    ) -> Any:
+        options = {
+            "random": count, "seed": seed, "species": species, "out": str(where(out, "out")), "provider": provider,
+            "narrator": narrator, "model": model, "force": force,
+        }
+        return answer(await call(ctx, args_of(["cast"], [], options)))
 
     # ----- checking --------------------------------------------------------------------------------
 

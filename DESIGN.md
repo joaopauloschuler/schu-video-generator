@@ -58,6 +58,7 @@ src/vidgen/
   plan_yaml.py            # `vidgen plan` output: commented video.yaml writer, project scaffold, assets (§61; no manim);
                           # also writes `vidgen screenplay`'s project (commented_yaml, write_project)
   screenplay.py           # `vidgen screenplay`: screenplay -> stage scenes, set, direction grammar, looks, voices (§69.25; no manim)
+  random_cast.py          # `vidgen cast --random N`: seeded well-contrasted looks, names, voices; screenplay looks (§69.49; no manim)
   mcp_server.py           # `vidgen mcp`: MCP server (optional SDK), tools = CLI subprocesses with --json, resources (§62)
   mcp_tools.py            # its SDK-free parts: root folder policy, command lines, cost refusal, pictures, paging (§62)
   schema.py               # JSON Schema export (see §12)
@@ -77,7 +78,8 @@ src/vidgen/
                           # poses, mirroring; character(); part drawings cached by look, §69.20), cast.py (characters: lookups, checks; no manim),
                           # generator.py (look: parameters -> parts, §69.1), clothes.py (outfits,
                           # patterns, shoes, things worn on the body, §69.47), animals.py (species:
-                          # heads, paws, wings, tails, a beak that talks, §69.48), primitives.py (the
+                          # heads, paws, wings, tails, a beak that talks, §69.48), contrast.py (how
+                          # clearly two looks differ, §69.49; no manim), primitives.py (the
                           # generator's shapes, trailing and outer-hair marks, outline maths), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
                           # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3;
@@ -1016,6 +1018,8 @@ vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--t
               [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
 vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]   # a character's look, poses; one still (§69.1)
 vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]   # every pose, expression, mouth shape on one PNG (§69.16)
+vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider P] [--narrator VOICE] [--model NAME]
+              [--language TAG] [--force] [--json]   # a well-contrasted cast as an include file (§69.49)
 ```
 PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
 or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
@@ -4512,7 +4516,9 @@ the measured loudness, §48).
   `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
   `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
   `translate_template`; Step 83 adds `character_sheet` (§69.16), Step 90 `direct` (§69.24), Step 91
-  `screenplay` (§69.25; `input_path` or `screenplay_text`, `out`, `cast` (§69.35), `force`). Parameters mirror the command's options (snake_case; lists for repeatable
+  `screenplay` (§69.25; `input_path` or `screenplay_text`, `out`, `cast` (§69.35), `species`, `seed`
+  (§69.49), `force`), Step 115 `cast` (§69.49; `count`, `seed`, `species`, `out`, `provider`,
+  `narrator`, `model`, `force`). Parameters mirror the command's options (snake_case; lists for repeatable
   options), with pydantic `Field` descriptions and bounds. Result: one text block with the
   command's `--json` document re-serialised compactly (fewer tokens), then images; a document with
   `ok` false is an `isError` result holding only the JSON. Argument errors (path outside the root,
@@ -6135,7 +6141,8 @@ rendering it whole.
 Six still rules in `lint/cartoon_rules.py` (with §69.12's `walk_overlap`, moved there; imported
 right after `layout_rules`, so `RULES` keeps `LINT_RULES`' order), default `warning`, one settings
 model each in `config.LintRules`. Like every still rule they read beat-end stills only (`k == n`;
-§69.16's mid-action stills stay skipped by the runner).
+§69.16's mid-action stills stay skipped by the runner). Step 115 adds a scene rule there,
+`look_alike` (after `mouth_without_voice`; it reads the config, not a still: §69.49).
 
 - **Layout dump** (`introspect._character_keys`, read by these rules only): a `character` object
   always has `facing` (`left` / `right`) and `speaking` (a lip sync runs:
@@ -6560,7 +6567,7 @@ rendering: `plan_directions(scene_id, cast, beats, stage=None)` stays a pure fun
 
 ### 69.25 Screenplays (Step 91)
 
-`vidgen screenplay FILE [--out DIR|FILE.yaml] [--force] [--json]` (`cli.cmd_screenplay`, MCP tool
+`vidgen screenplay FILE [--out DIR|FILE.yaml] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]` (`cli.cmd_screenplay`, MCP tool
 `screenplay`) makes a stage project from a screenplay without AI. `screenplay.py` (no manim;
 props' kinds imported when a `set:` line is read) has the parser and the builder; the writing is
 `vidgen plan`'s (`plan_yaml.commented_yaml`: a config with comments above top-level keys, scenes
@@ -6608,17 +6615,20 @@ config; `write_plan` now calls both, its output unchanged).
   written (declared; only a screenplay `voice_kind:` key is taken out); every other speaker
   (`character_id`: `OLD ASH` -> `old_ash`) gets a look of `LOOKS` (eleven looks differing in body,
   hair, eyes, ears, accessories, skin, clothes and hair colours, the last five also in outfit,
-  pattern, shoes and facial hair, §69.47; a look taken again gets `seed: k`) and a `<id>_voice`
+  pattern, shoes and facial hair, §69.47; since Step 115 no look is taken twice: random
+  well-contrasted looks follow, §69.49) and a `<id>_voice`
   entry with `label`. **Voice kinds** (`VOICE_KINDS` feminine / masculine / neutral; Phase I
   review follow-up): each look carries the `voice_kind` that suits it (bun + scarf, long hair,
   ponytail + dress and braids + apron feminine; tall short hair + glasses, bald + hat, beard +
   coat and moustache + shorts masculine; the other three neutral). `_stated_kinds` reads a kind from a pronoun in a line's brackets (`FEN (she): ...`,
   `(he, doubtful)`, `(they)`; `_pronoun_kind` takes it out of the manner, `Line.voice_kind`;
   `PRONOUN_KINDS`) or a front matter character's `voice_kind:`; two kinds for one character, a
-  pronoun on the narrator or an unknown kind are `VidgenError`s naming the line. `_pick_look`
-  gives a generated character the least used look of its stated kind (then a neutral look, then
-  any; without a kind: the least used look in order, as before), and the character's voice kind
-  is the stated one, else its look's. Declared characters keep their entries; one without a
+  pronoun on the narrator or an unknown kind are `VidgenError`s naming the line.
+  `_generated_looks` (Step 115, replacing `_pick_look`; §69.49) gives a generated character the
+  first unused look of its stated kind (then a neutral look; without a kind: the first unused
+  look in order) that keeps `MIN_CONTRAST` against the declared, cast and earlier generated
+  characters, else a random look of its kind, and the character's voice kind is the stated one,
+  else its look's. Declared characters keep their entries; one without a
   `voice` gets one of its stated kind (else any).
   `assign_voices(voice, language, kinds)` (`kinds`: one per character, or a count of
   characters without a kind): Kokoro: the voices of the narrator's language
@@ -8229,3 +8239,68 @@ with an animal are a config error (`config.SPECIES_OWN_KEYS`); `svg` with `speci
 - **Docs**: CONFIG.md "Animal characters (`species`)" and `docs/gallery/media/animals.png` (the six
   species side and front, `still.write_looks_png`, about 30 KB).
   Tests: `tests/test_cartoon_animals.py`.
+
+### 69.49 A random, well-contrasted cast (Step 115)
+
+- **Contrast score** (`cartoon/contrast.py`, no manim): `look_features(look, colors, theme)`
+  reduces a generated look to `LookFeatures` (silhouette values; the clothes, skin, hair and
+  accessory colours with theme tokens resolved, a bald head's hair colour taken as its skin and a
+  look without accessories or shoes its accessory colour as its clothes, since nothing is drawn
+  in them; a set of small details); `None` for an `svg` look. `contrast_score(a, b)` (pure,
+  symmetric, 0 the same look .. 1) = `WEIGHTS` silhouette 0.45 + colour 0.4 + accessories 0.15 of
+  `contrast_parts`: silhouette = `SILHOUETTE_WEIGHTS` (body 0.25, hair 0.2, species 0.15,
+  headwear (hat / cap / bow) 0.1, proportions 0.1, head size 0.1 (|difference| / 0.4, capped),
+  ears 0.05, outfit (dress / coat / other) 0.05) of the features that differ; colour =
+  `COLOUR_WEIGHTS` (clothes 0.4, skin 0.3, hair 0.2, accessory 0.1) of CIEDE2000 in CIELAB
+  (`lint.color.lab` / `delta_e`) / `COLOUR_SPAN` 30, capped at 1 (an unresolved token: 0 when the
+  same name, else 1); accessories = the Jaccard distance of the detail sets (accessories other
+  than headwear, facial hair, pattern, shoes, eyes, nose; both empty: 0). The weights favour what
+  reads at stage size: outline first, then large colour areas. Calibration: the screenplay's 11
+  `LOOKS` in `soft_pastel` score 0.49 to 0.84 against each other; a look and a copy with only the
+  clothes colour changed far scores 0.16; the same silhouette in all-new colours about 0.4.
+  `MIN_CONTRAST` (0.35) is the `look_alike` default.
+- **Advice**: `compare(first, a, second, b) -> PairContrast(score, parts, shared, advice)`:
+  `shared` lists the equal silhouette features (not the unremarkable defaults: no ears, plain
+  outfit, nothing on the head, human, adult, head size 1) and the colours closer than
+  `CLOSE_COLOUR` 10, ordered by their weight in the score; `advice` names the keys of the three
+  heaviest (`give 'ben' another colors.clothes, colors.skin, look.body`).
+- **Lint `look_alike`** (scene scope, in `lint/cartoon_rules.py`; `LookAlikeRule.min_contrast`
+  0.35; default warning): `contrast.character_pairs(config, theme)` compares every two generated
+  characters on the video's stages (any scene's `params.characters`, sets expanded), in the order
+  they first appear, and ties each pair to the scene where the later one first appears. The runner
+  (`_timing_findings`) fills `SceneContext.character_pairs` with that scene's pairs (the theme:
+  `Theme.for_format` of the project) when the rule runs; the issue is at the scene's first beat,
+  without objects (the names are in the message). Video-level, so one finding per pair, not per
+  scene they share.
+- **Generator** (`random_cast.py`, no manim): `random_look(rng, kind, species)` draws every
+  generator value (bodies, head sizes 0.85..1.3, eyes, nose / ears for humans, hair (animals: none,
+  short, spiky, curly), outfit, pattern, shoes, 0-2 accessories never hat with cap, facial hair
+  for 40 % of masculine humans) and hex colours from fixed lists (`SKIN_COLORS` / `FUR_COLORS`,
+  `CLOTHES_COLORS`, ...: the same in every theme), all through `Random(seed).random()` (`_pick`,
+  `_shuffled`: the one call Python keeps stable, §69.1). `KIND_EXCLUDES` keeps a look suited to its
+  voice kind (feminine: no facial hair; masculine: no dress, bow, bun, ponytail, braids; neutral:
+  no facial hair, dress or bow). Adult proportions only (a kid needs the stage's `scale`, §69.47).
+  `pick_looks(kinds, rng, species, existing, curated, theme)`: per character, first the first
+  unused `curated` look of the kind (then neutral) whose `min_contrast` against `existing` and the
+  picks so far is at least `MIN_CONTRAST`; else `CANDIDATES` (48) random looks and the one with the
+  highest lowest contrast (greedy maximin; ties: the first drawn); a kind of `None` takes the voice
+  kind picked least so far.
+- **`vidgen cast --random N`** (`cli.cmd_cast`, MCP tool `cast`, `jsonout.cast_document`):
+  `random_cast(count, seed, species, voice, language, taken)`: kinds from `balanced_kinds` (each
+  round of three a shuffle of `VOICE_KINDS`), looks, names and voices each from their own stream
+  (`Random(3 * seed)`, `+ 1`, `+ 2`), so `--random 5` starts with `--random 4`'s cast; names from
+  `NAMES[kind]` (short common first names, none a famous character's; `_k` suffixes when a kind's
+  list runs out); voices by `screenplay.assign_voices` (Kokoro by the kinds' genders, narrator
+  `--narrator` default `bf_emma` left out; OpenRouter in turn; ElevenLabs labels and a TODO).
+  Written with `plan_yaml.commented_yaml` (now also for a mapping without `scenes`): a header, the
+  kinds and the lowest contrast above `characters:`, TODOs above `voices:`; each entry is checked
+  with `CharacterEntry`. 1-24 characters (`MAX_CAST`); `.yaml` only; an existing file needs `--force`.
+- **Screenplay** (§69.25): `_generated_looks` calls `pick_looks` with the stated kinds, the
+  declared and cast characters as `existing`, `LOOKS` as `curated` (when `human` is among
+  `--species`), the front matter's theme and `Random(--seed)`. Casts of up to 11 that do not
+  collide with a declared character get the same looks as before; a look of `LOOKS` too like a
+  declared one is skipped; after the 11 (and for a fifth stated "she", which took the first
+  feminine look again with a seed before) come unused neutral looks, then random looks instead of
+  repeats. `--species cat dog` (MCP `species`) gives only random animals. The voice kind of a
+  random look is its drawn kind.
+  Tests: `tests/test_random_cast.py`.

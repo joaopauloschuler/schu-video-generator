@@ -545,6 +545,7 @@ LINT_RULES: tuple[str, ...] = (
     "facing_away",
     "hidden_speaker",
     "mouth_without_voice",
+    "look_alike",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -569,6 +570,7 @@ RuleName = Literal[
     "facing_away",
     "hidden_speaker",
     "mouth_without_voice",
+    "look_alike",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -710,6 +712,13 @@ class MouthWithoutVoiceRule(RuleConfig):
     """``mouth_without_voice``: a character's lip sync showing a speech shape while no narration is heard."""
 
 
+class LookAlikeRule(RuleConfig):
+    """``look_alike``: two generated characters of the video too alike to tell apart at a glance (DESIGN.md §69.49)."""
+
+    min_contrast: float = Field(default=0.35, ge=0, le=1)
+    """Lowest acceptable contrast score of two characters (0 the same look, 1 fully different: silhouette, colours, accessories)."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -811,6 +820,8 @@ class LintRules(_Strict):
     """A speaking character whose face is hidden by something in front of it (default: warning)."""
     mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
     """A mouth moving with lip sync while no narration is heard (default: warning)."""
+    look_alike: LookAlikeRule = Field(default_factory=LookAlikeRule)
+    """Two characters of the video that look too alike (default: warning)."""
     narration_speed: NarrationSpeedRule = Field(default_factory=NarrationSpeedRule)
     """Narration too fast or too slow (default: warning; info for beats without audio)."""
     dead_air: DeadAirRule = Field(default_factory=DeadAirRule)

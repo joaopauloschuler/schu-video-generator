@@ -171,6 +171,12 @@ def _timing_findings(
         from vidgen.readback import cached_readback
 
         ctx.readback = cached_readback(project, [beat.id for beat in project.scene(scene_id).beats])
+    if "look_alike" in names and lint.rules.look_alike.severity != "off":
+        from vidgen.cartoon.contrast import character_pairs
+        from vidgen.theme import Theme
+
+        theme = Theme.for_format(project.config.theme, project.config.format)
+        ctx.character_pairs = [pair for where, pair in character_pairs(project.config, theme) if where == scene_id]
     ignores = project.scene(scene_id).lint_ignores()
     findings: list[Finding] = []
     groups: dict[tuple[Any, ...], Finding] = {}

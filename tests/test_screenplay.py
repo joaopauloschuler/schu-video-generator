@@ -223,7 +223,8 @@ def test_generated_looks_and_voices_suit_each_other() -> None:
     assert [many[f"p{k}"]["look"].get("hair") for k in range(3)] == ["bun", "long", "ponytail"] and "seed" not in many["p2"]["look"]
     assert all(v[1] == "f" for v in voices.values()) and len(set(voices.values())) == 3
     more, _ = _cast("# Scene: a\n" + "".join(f"P{k} (she): Hi.\n" for k in range(5)))
-    assert [more[f"p{k}"]["look"].get("hair") for k in range(5)] == ["bun", "long", "ponytail", "braids", "bun"] and more["p4"]["look"]["seed"] == 4
+    # Step 115: a fifth "she" gets the first unused neutral look (spiky hair, hat), no longer the bun again with a seed
+    assert [more[f"p{k}"]["look"].get("hair") for k in range(5)] == ["bun", "long", "ponytail", "braids", "spiky"] and "seed" not in more["p4"]["look"]
 
 
 def test_declared_characters_keep_their_entries() -> None:

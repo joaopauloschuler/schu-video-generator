@@ -553,7 +553,8 @@ sets:
   voice stale and gives a changed `generate:` prompt a new picture; a set no scene uses changes
   nothing. SVGs and pictures an included file names outside `assets/` count like assets.
 - **`vidgen screenplay --cast FILE`** reuses a cast (see
-  [cartoons from a screenplay](#cartoons-from-a-screenplay-vidgen-screenplay)).
+  [cartoons from a screenplay](#cartoons-from-a-screenplay-vidgen-screenplay)); `vidgen cast
+  --random N` writes a new one whose characters differ clearly ([a random cast](#a-random-cast-vidgen-cast)).
 
 `examples/cartoon_series/` is a series of two episodes on one shared cast and two sets.
 
@@ -4988,7 +4989,7 @@ scenes:
 
 #### Cartoons from a screenplay (`vidgen screenplay`)
 
-`vidgen screenplay FILE.md [--out DIR|FILE.yaml] [--cast FILE] [--force] [--json]` (MCP tool `screenplay`)
+`vidgen screenplay FILE.md [--out DIR|FILE.yaml] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]` (MCP tool `screenplay`)
 writes a stage project from a screenplay, without AI: one `stage` scene per `# Scene:` heading,
 one beat per line, `auto_direct: true`, and `# TODO:` comments for what it could not map. The
 project is checked like `vidgen validate` (exit code 1 when it finds problems). The format:
@@ -5068,7 +5069,12 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   [gallery](#characters-characters) shows them) and a named voice `NAME_voice` with its `label`. Each look
   has a voice kind (four feminine, four masculine, three neutral); a character
   with a stated kind gets a look of that kind (then a neutral one), and its voice is of the
-  look's kind (or the stated one), so the voice suits the look. Kokoro: a feminine character
+  look's kind (or the stated one), so the voice suits the look. A look of the set is skipped
+  when it would be too like a declared or cast character (a [contrast](#a-random-cast-vidgen-cast)
+  below 0.35), and once the set is used up the next characters get
+  [random looks](#a-random-cast-vidgen-cast) chosen to differ from everyone before them:
+  `--species cat dog` draws them from those species instead of the set (`human` among them keeps
+  the set first), `--seed S` gives other random looks (default 0). Kokoro: a feminine character
   gets an `af_` / `bf_` voice, a masculine one `am_` / `bm_`, a neutral one the gender used less
   so far; another accent (American / British) than the characters before where possible, the
   narrator's kind last. The OpenRouter model's listed voices go in turn (no kinds known); with
@@ -5085,6 +5091,38 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   set's marks, props and character places count for the directions.
 
 A sample is `examples/screenplay/humming_box.md`.
+
+#### A random cast (`vidgen cast`)
+
+`vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE.yaml] [--provider kokoro|openrouter|elevenlabs]
+[--narrator VOICE] [--model NAME] [--language TAG] [--force] [--json]` (MCP tool `cast`) writes N
+original characters as an [include file](#shared-casts-and-sets-include-and-sets) (`characters`
+and `voices`; default `cast.yaml`), chosen to be told apart at a glance. Use it with `include:
+[cast.yaml]` in `video.yaml` or `vidgen screenplay STORY.md --cast cast.yaml`.
+
+- **Looks**: generated looks (any body, head size, eyes, hair, outfit, pattern, shoes, up to two
+  accessories; adult proportions; hex colours, so the cast looks the same in every theme). For
+  each character 48 random looks are drawn and the one least like the characters before it is
+  kept (the highest lowest contrast). `--species` draws from those species (`human`, `cat`, `dog`,
+  `bird`, `bear`, `rabbit`, `mouse`; several: a mix; default `human`).
+- **Voice kinds and voices**: the kinds go round feminine, masculine and neutral (each round of
+  three shuffled); a look suits its kind (facial hair only masculine; no dress or bow for a
+  masculine or neutral character; no bun, ponytail or braids for a masculine one). Voices are
+  chosen like `vidgen screenplay`'s: Kokoro voices of the kind's gender, all different, other
+  accents first, never the narrator's (`--narrator`, default `bf_emma`); OpenRouter's listed
+  voices of `--model` in turn; ElevenLabs: `label`s only and a `# TODO:` to set `voice_id`s.
+- **Names**: short, common first names of the character's kind from a built-in list (never a
+  famous character's name), each once.
+- **Seeds**: the same seed gives the same file; a bigger cast of the same seed starts with the
+  smaller one (`--random 5` adds a character to `--random 4`).
+- **Contrast**: a score from 0 (the same look) to 1, the sum of three parts: silhouette 0.45
+  (body 0.25, hair 0.2, species 0.15, a hat / cap / bow 0.1, proportions 0.1, head size 0.1, ears
+  0.05, a dress or coat 0.05), colour 0.4 (how far apart the clothes 0.4, skin or fur 0.3, hair 0.2
+  and accessory 0.1 colours are in CIELAB, the theme's tokens resolved; 30 CIEDE2000 counts as
+  fully different) and accessories 0.15 (the share of accessories, facial hair, pattern, shoes,
+  eyes and nose only one of them has). The file's comment gives the lowest contrast of the cast;
+  the [lint rule](#lint-vidgen-lint) `look_alike` warns when two characters of a video score below
+  `min_contrast` (0.35).
 
 #### Animation principles (`cartoon_motion`)
 
@@ -6208,6 +6246,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
+| `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared. Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` (or, when the next beat [overlaps](#overlapping-lines-overlap-interrupt) it, than the time until that beat) by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
@@ -6238,6 +6277,7 @@ lint:
     facing_away: {}
     hidden_speaker: {min_hidden: 0.5}       # fraction of the speaker's face box
     mouth_without_voice: {}
+    look_alike: {min_contrast: 0.35}        # contrast score of two characters, 0 to 1
     narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range
     dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
     animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
@@ -6460,7 +6500,8 @@ back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`,
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
-(`input_path` or `screenplay_text`, `out`, `cast`, `force`). Their parameters are the command's
+(`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `cast` (`count`
+for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`). Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
@@ -6955,6 +6996,20 @@ anyway).
 | `notes` | list | TODOs about the whole video (e.g. voices to set by hand) |
 | `scenes` | list | `{id, beats, characters, actions, todos}` per scene: the characters on its stage, the actions written from stage directions and manners, its `# TODO:` comments |
 | `problems` | list | `vidgen validate` problems of the project, `{location, message, variant, file}` (normally empty) |
+
+### `vidgen cast --json`
+
+The include file written by [`vidgen cast`](#a-random-cast-vidgen-cast).
+
+| key | type | |
+|---|---|---|
+| `path` | str | the file written |
+| `seed` | int | the seed used |
+| `species` | list | the species drawn from |
+| `provider` | str | the voice provider the voices were chosen for |
+| `lowest_contrast`, `min_contrast` | float | the lowest contrast between two of the characters, and the `look_alike` default threshold |
+| `characters` | list | `{name, voice_kind, voice, provider_voice, look, colors}` per character: `voice` the `voices:` entry, `provider_voice` its voice name (`null` with ElevenLabs) |
+| `notes` | list | TODOs (e.g. voices to set by hand) |
 
 ### `vidgen lint --json`
 

@@ -10821,3 +10821,91 @@ How to test
   test_introspect test_mcp` (211, 35 s); render: `test_cartoon_animals test_cartoon_outfits
   test_cartoon_wind test_cartoon_character test_cartoon_svg test_cartoon_motion test_cartoon_poses
   test_cartoon_idle` (11, 9 s). The full suite was not run.
+
+## Step 115 — A random, well-contrasted cast
+
+What was built
+- **Contrast score** (`src/vidgen/cartoon/contrast.py`, pure, no manim): `look_features(look,
+  colors, theme)` -> `LookFeatures` (silhouette values, four colours resolved and in CIELAB, a set of
+  details; `None` for an svg look); `contrast_score(a, b)` 0 (the same) .. 1 = silhouette 0.45
+  (body 0.25, hair 0.2, species 0.15, hat / cap / bow 0.1, proportions 0.1, head size 0.1, ears
+  0.05, dress / coat 0.05) + colour 0.4 (CIEDE2000 / 30, capped: clothes 0.4, skin 0.3, hair 0.2,
+  accessory 0.1) + accessories 0.15 (Jaccard distance of accessories, facial hair, pattern, shoes,
+  eyes, nose). `compare` -> `PairContrast` with what the two share (by weight) and advice (`give
+  'ben' another colors.clothes, colors.skin, look.body`). `MIN_CONTRAST` 0.35.
+- **Lint `look_alike`** (scene rule in `lint/cartoon_rules.py`, `config.LookAlikeRule.min_contrast`
+  0.35, warning): every two generated characters on the video's stages (`character_pairs`),
+  reported once per pair at the first beat of the scene where the later one first appears;
+  `lint/run.py` fills `SceneContext.character_pairs` (new field) with the project's theme.
+- **Generator** (`src/vidgen/random_cast.py`, no manim): `random_look` (every choice through
+  `Random(seed).random()`; hex colour lists; `KIND_EXCLUDES` so a look suits its voice kind; adult
+  only), `pick_looks` (curated looks first while they keep `MIN_CONTRAST`, else the best of
+  `CANDIDATES` 48 random looks by the lowest contrast to the others: greedy maximin),
+  `balanced_kinds`, `random_cast` (kinds, looks and names on separate streams so a bigger cast of
+  a seed starts with the smaller one; names per kind from `NAMES`; voices by
+  `screenplay.assign_voices`), `cast_yaml` (via `plan_yaml.commented_yaml`, which now also writes
+  a mapping without `scenes`), `parse_species`.
+- **`vidgen cast --random N [--seed S] [--species ...] [--out cast.yaml] [--provider] [--narrator]
+  [--model] [--language] [--force] [--json]`** (`cli.cmd_cast`, `jsonout.cast_document`), MCP tool
+  `cast` (`count`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`).
+- **Screenplay**: `screenplay_project(..., species=, seed=)` and `vidgen screenplay --species
+  --seed` (MCP `species`, `seed`): `_generated_looks` (replaces `_pick_look`) calls `pick_looks`
+  with `LOOKS` as curated looks (when `human` is a species), the declared and cast characters as
+  existing ones and the front matter theme.
+
+Files touched
+- New: `src/vidgen/cartoon/contrast.py`, `src/vidgen/random_cast.py`, `tests/test_random_cast.py`.
+- `src/vidgen/config.py` (`look_alike` in `LINT_RULES` / `RuleName`, `LookAlikeRule`, `LintRules`),
+  `lint/cartoon_rules.py`, `lint/rules.py`, `lint/run.py`, `screenplay.py`, `plan_yaml.py`,
+  `cli.py`, `jsonout.py`, `mcp_server.py`.
+- Docs: `docs/CONFIG.md` (screenplay options and looks, new "A random cast (`vidgen cast`)", lint
+  table row and defaults block, shared casts line, MCP tools, `vidgen cast --json`), `DESIGN.md`
+  (§2 tree, §8 CLI, MCP tools, §69.17, §69.25, new §69.49), `README.md` (feature, command rows, MCP
+  list), guide (MCP list, characters bullet, screenplay paragraph, cartoon lint rules,
+  troubleshooting row) + `AGENTS.md` copy, `tasklist.md`.
+- Tests updated: `tests/test_screenplay.py` (one pin, see below), `tests/test_mcp.py` (`cast` in
+  the tool set; `cast` and `screenplay` with `species` / `seed` in the screenplay session test).
+
+Public interfaces
+- No `vidgen.api` change. CLI `vidgen cast` (+ `--json`), `vidgen screenplay --species --seed`;
+  MCP tool `cast`; lint rule `look_alike` (`lint.rules.look_alike.min_contrast`);
+  `SceneContext.character_pairs`; `screenplay_project` keyword arguments `species`, `seed`;
+  `commented_yaml` accepts a config without `scenes`.
+
+Decisions / deviations
+- Video-level rule as a scene rule: lint has only still and scene scopes, so the pair is tied to
+  the scene where the later character first appears (one finding per pair, `lint_ignore` by that
+  scene). The finding has no `objects` (`object_json` needs layout keys); names are in the message.
+- Random looks use hex colours (not tokens), so a cast reads the same in every theme; the curated
+  `LOOKS` keep their tokens and are compared in the project's theme.
+- Kids are not drawn (they need the stage's `scale`, Step 113); names are chosen per voice kind.
+- Screenplay pins: casts of up to 11 without a colliding declared character get the same looks as
+  before (`test_generated_looks_and_voices_suit_each_other`'s first pins unchanged). Updated pin: a
+  fifth stated "she" got the bun again with `seed: 4`; it now gets the first unused neutral look
+  (spiky hair, hat), since no look repeats any more.
+- Searched first: `lint/color.py` had `lab` and `delta_e` (CIEDE2000; reused); no contrast-between-
+  characters, random-look or name code existed; voices reuse `assign_voices`.
+
+Evidence
+- The 11 `LOOKS` in soft_pastel score 0.49..0.84 against each other; the example casts (cartoon,
+  music box, rain check, both series episodes) 0.70..0.84, so `look_alike` finds nothing there.
+- Random casts seen (seeds 1, 2, 3 and 7; 3 to 12 characters; humans and animal mixes): lowest
+  contrast 0.64..0.81; the test asserts at least 0.55 for seeds 0..3 at 8 characters, and a
+  clearly lower sum with no choice (1 candidate).
+- Stills checked by eye: two 8-character casts (seed 1 humans; seed 2 human / cat / rabbit / bird)
+  side and front: every pair tells apart at a glance by outline and colours.
+
+Known gaps / TODOs
+- The score compares parameters, not drawn pixels (two different hair styles of the same colour
+  may still look close from far away); eyes / nose count as details only.
+- `vidgen cast` has no `--theme` (the cast uses hex colours); a screenplay's random looks ignore
+  `--seed` until the 11 built-in looks are used up.
+- `look_alike` does not compare characters drawn from SVG files.
+
+How to test
+- `pytest tests/test_random_cast.py` (15 not-render, ~3 s).
+- Also run, not render: `test_random_cast test_screenplay test_lint test_cartoon_lint
+  test_cartoon_outfits test_plan test_includes` (211, 20 s), `test_docs test_guide
+  test_json_output test_schema test_config test_cli test_phase_i_review test_phase_h_review` (231,
+  93 s), `test_mcp` (15, 26 s); render: `test_screenplay test_cartoon_lint test_lint` (2, 4 s),
+  `test_phase_h_review test_phase_i_review test_includes` (2, 24 s). The full suite was not run.

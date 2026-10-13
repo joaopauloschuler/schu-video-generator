@@ -165,7 +165,7 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
 `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template`, `character_sheet`, `direct`, `screenplay` (options in snake_case: `per_beat`,
+`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast` (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
@@ -765,7 +765,9 @@ asks for one, say vidgen makes original characters and offer one with the same r
   filled black, still differ? A child: `proportions: kid` (or `tall_kid`) and a smaller `scale`
   on the stage (about 0.7). An animal: `species: cat | dog | bird | bear | rabbit | mouse`
   (fur colour `colors.skin`: natural tones or theme tokens, different for each; it gets a
-  `tail`). `vidgen character-sheet` shows every pose and the front view.
+  `tail`). `vidgen character-sheet` shows every pose and the front view. `vidgen cast --random 4
+  [--seed S] [--species cat dog]` writes a cast chosen to differ (looks, colours, voice kinds
+  and voices, original names) for `include:`; lint `look_alike` warns when two look too alike.
 - Give each a want and a temper (the eager one, the doubter); their starting `pose` and
   `expression` say it before they speak. Short names, easy to say (the voice says them).
 - One voice each (`voices:` + `characters[].voice`), clearly different; keep the narrator's
@@ -920,7 +922,9 @@ one, the voice follows the look's kind); a plain paragraph is the narrator; `[..
 at, point at, wave, nod, shrug and shake head, and effect symbols (`[Pip has an idea]`, `is
 confused`, `falls asleep`, `cries`...) (on its own line: at the next line's start; inside a
 line: at that word), except a voice sound such as `[laugh]` inside a line, which stays in the
-line. `docs/CONFIG.md` "Cartoons from a screenplay" has the whole format.
+line. Undeclared characters get looks that differ from the others (`--species cat dog` for
+animals, `--seed` for other random ones). `docs/CONFIG.md` "Cartoons from a screenplay" has the
+whole format.
 
 **A series: one cast, shared sets.** Put the characters and their voices in `shared/cast.yaml`
 and the places in `shared/sets.yaml` (`sets: {meadow: {background, props, marks, light...}}`);
@@ -996,7 +1000,7 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
    through a walk, gesture, jump or path. Ask: is it clear who speaks? Are both faces visible,
    facing each other? Does the reaction read without the words? Is anything cut by the edge?
 4. `vidgen lint --json`: the cartoon rules `off_stage`, `character_overlap`, `walk_overlap`,
-   `bubble_overlap`, `facing_away`, `hidden_speaker` and `mouth_without_voice` (fixes in
+   `bubble_overlap`, `facing_away`, `hidden_speaker`, `mouth_without_voice` and `look_alike` (fixes in
    `vidgen guide troubleshooting`).
 5. Voices: with Kokoro (`vidgen guide audio`) `vidgen tts` is free and writes the lip sync
    tracks; then storyboard and lint again, since real lines change the timing.
@@ -1511,6 +1515,7 @@ install; `vidgen validate` warns when it is missing.
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
+| `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |
 | `animation_overrun` | animations ran past the narration | a custom scene's animations are too long for the beat |

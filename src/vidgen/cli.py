@@ -35,7 +35,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -145,6 +145,7 @@ def cmd_plan(args: argparse.Namespace) -> CommandResult:
 def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
     """Write a stage project from a screenplay (DESIGN.md §69.25)."""
     from vidgen.plan_yaml import commented_yaml, write_project
+    from vidgen.random_cast import parse_species
     from vidgen.screenplay import parse_screenplay, screenplay_project
 
     source = Path(args.input)
@@ -169,7 +170,10 @@ def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
         cast = read_include_file(cast_file)
         folder = output.parent if output.suffix.lower() in (".yaml", ".yml") else output
         include = project_relative(cast_file.resolve(), folder.resolve())
-    draft = screenplay_project(play, source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled", cast, include)
+    draft = screenplay_project(
+        play, source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled", cast, include,
+        species=parse_species(args.species), seed=args.seed,
+    )
     header = [
         f"# Written by `vidgen screenplay` from {source.name}: the screenplay's scenes as stage scenes, one",
         "# beat per line. Characters without a declaration got a generated look and a voice; auto_direct adds",
@@ -196,6 +200,46 @@ def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
         print(f"problem: {problem}", file=sys.stderr)
     print("next: `vidgen character-sheet --all`, `vidgen direct`, `vidgen storyboard`, `vidgen lint`; then `vidgen tts`")
     return 1 if problems else 0
+
+
+def cmd_cast(args: argparse.Namespace) -> CommandResult:
+    """Write a random, well-contrasted cast as an include file (DESIGN.md §69.49)."""
+    from vidgen.cartoon.contrast import MIN_CONTRAST
+    from vidgen.config import CharacterEntry
+    from vidgen.languages import normalize_language
+    from vidgen.random_cast import cast_yaml, parse_species, random_cast
+
+    species = parse_species(args.species)
+    try:
+        language = normalize_language(args.language) if args.language else None
+    except ValueError as exc:
+        raise VidgenError(f"--language: {exc}") from None
+    out = Path(args.out)
+    if out.suffix.lower() not in (".yaml", ".yml"):
+        raise VidgenError(f"--out {out}: give a .yaml file (the cast is an include file)")
+    if out.exists() and not args.force:
+        raise VidgenError(f"{out} already exists (use --force to replace it)")
+    voice = {"provider": args.provider, **({"voice": args.narrator} if args.narrator else {}), **({"model": args.model} if args.model else {})}
+    if args.provider == "kokoro" and not args.narrator:
+        voice["voice"] = "bf_emma"   # vidgen screenplay's narrator
+    cast = random_cast(args.random, args.seed, species=species, voice=voice, language=language)
+    for entry in cast.characters:   # what vidgen wrote must load (a bug otherwise, never the user's fault)
+        CharacterEntry.model_validate(entry)
+    command = f"vidgen cast --random {args.random} --seed {args.seed}" + (f" --species {' '.join(species)}" if species != ["human"] else "")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(cast_yaml(cast, command), encoding="utf-8")
+    if args.json:
+        return jsonout.cast_document(out, cast, args.seed, species, voice["provider"], MIN_CONTRAST)
+    print(f"wrote {len(cast.characters)} characters to {out} (lowest contrast between two: {cast.lowest_contrast:.2f}; lint look_alike warns below {MIN_CONTRAST:g})")
+    for entry in cast.characters:
+        look = entry["look"]
+        said = cast.voices[entry["voice"]].get("voice", "set by hand")
+        print(f"  {entry['name']:<6} {cast.kinds[entry['name']]:<9} voice {said:<12} {look.get('species', 'human')}, body {look['body']}, "
+              f"hair {look.get('hair', 'none')}, clothes {entry['colors']['clothes']}")
+    for note in cast.notes:
+        print(f"TODO: {note}", file=sys.stderr)
+    print(f"next: `include: [{out.name}]` in video.yaml or `vidgen screenplay STORY.md --cast {out}`; `vidgen character-sheet --all`")
+    return 0
 
 
 def project_problems(project: Project) -> list[Problem]:
@@ -1298,8 +1342,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("input", help="the screenplay (.md or .txt)")
     p.add_argument("--out", "-o", metavar="DIR|FILE", help="project folder to create, or a .yaml file to write (default: a folder named after INPUT)")
     p.add_argument("--cast", metavar="FILE", help="reuse a cast: an include file (characters, voices, sets) the project includes; set: NAME lines use its sets")
+    p.add_argument("--species", nargs="+", action="extend", metavar="NAME", help="species of the undeclared characters: human (default), cat, dog, bird, bear, rabbit, mouse (several: a mix)")
+    p.add_argument("--seed", type=int, default=0, help="seed of the random looks undeclared characters get once the built-in ones are used (default: 0)")
     p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
     p.set_defaults(func=cmd_screenplay)
+
+    p = sub.add_parser("cast", help="write a cast of characters that differ clearly (looks, colours, voices) as an include file (no AI)")
+    p.add_argument("--random", type=int, required=True, metavar="N", help="how many characters (1-24)")
+    p.add_argument("--seed", type=int, default=0, help="the same seed gives the same cast (default: 0)")
+    p.add_argument("--species", nargs="+", action="extend", metavar="NAME", help="human (default), cat, dog, bird, bear, rabbit, mouse (several: a mix)")
+    p.add_argument("--out", "-o", default="cast.yaml", metavar="FILE", help="the include file to write (default: cast.yaml)")
+    p.add_argument("--provider", choices=["kokoro", "openrouter", "elevenlabs"], default="kokoro", help="the video's voice provider (default: kokoro)")
+    p.add_argument("--narrator", metavar="VOICE", help="the narrator's voice, left out of the cast's (default for kokoro: bf_emma)")
+    p.add_argument("--model", metavar="NAME", help="openrouter: the TTS model whose voices to use")
+    p.add_argument("--language", metavar="TAG", help="the video's language (BCP-47): Kokoro voices of that language")
+    p.add_argument("--force", action="store_true", help="replace an existing file")
+    p.set_defaults(func=cmd_cast)
 
     p = sub.add_parser("guide", help="the author guide for AI agents making videos (workflow, pacing, scene types, ...)")
     p.add_argument("topic", nargs="?", metavar="TOPIC", help="print only this topic (vidgen guide --list shows them)")
