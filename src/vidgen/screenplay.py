@@ -6,9 +6,11 @@ The format (Markdown-like, one element per line or paragraph):
   ``theme``, ``voice``, ``voices``, ``characters``, ``format``...; not ``scenes``) that win over
   the generated ones; ``characters`` listed there are *declared* (kept as written);
 - ``# Title``: the first heading, when it is a level-1 heading that does not start with
-  ``Scene``; ``# Scene: yard`` (any level) starts a ``stage`` scene, followed by optional
+  ``Scene`` or ``Card``; ``# Scene: yard`` (any level) starts a ``stage`` scene, followed by optional
   ``set:`` lines: ``background: night; props: box (kite) at 0.4, tree at right; marks: gate 0.9;
-  characters: wren at left`` (:func:`parse_set`);
+  characters: wren at left`` (:func:`parse_set`); ``# Card: Later that day…`` (any level) is
+  a ``card`` scene with that text, silent unless lines follow it, coming in with an
+  ``iris_out`` (after another scene), the scene after it with an ``iris_in``;
 - ``WREN: line`` (a name in capitals) is a line of that character, ``PELL (doubtful): line``
   one with a manner: words naming a built-in expression or pose (or one of :data:`MANNERS`)
   become a ``react`` for the line; a pronoun among those words (``FEN (she): ...``, ``(he,
@@ -90,6 +92,8 @@ PROP_GAP = 0.1
 CHARACTER_GAP = 0.14
 #: Walking speed of ``runs to`` (twice the default walk).
 RUN_SPEED = 5.0
+#: Seconds of a ``# Card:`` without lines (a silent ``card`` scene).
+CARD_SECONDS = 2.5
 #: Latest ``at`` of a direction's action; where directions after a scene's last line start.
 LATEST_AT = 0.95
 TRAILING_AT = 0.6
@@ -138,6 +142,7 @@ LOOKS: tuple[dict[str, Any], ...] = (
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 _SCENE = re.compile(r"^scene\s*[:.\-–—]?\s*(.*)$", re.IGNORECASE)
 _SET = re.compile(r"^set\s*:\s*(.*)$", re.IGNORECASE)
+_CARD = re.compile(r"^card\s*[:.\-–—]\s*(\S.*)$", re.IGNORECASE)
 _SPEAKER = re.compile(r"^(?P<name>[A-Z][A-Z0-9'’.\-]*(?: [A-Z][A-Z0-9'’.\-]*)*)\s*(?:\((?P<manner>[^)]*)\))?\s*:\s*(?P<text>.*)$")
 _INLINE = re.compile(r"\[([^\[\]]*)\]")
 _SLUG = re.compile(r"[^a-z0-9]+")
@@ -212,12 +217,14 @@ class Line:
 
 @dataclass
 class ScriptScene:
-    """A ``# Scene:`` section: its ``name``, its ``set:`` text and its lines and directions in order."""
+    """A ``# Scene:`` section: its ``name``, its ``set:`` text and its lines and directions in
+    order; a ``# Card:`` section (``card``: its ``name`` is the card's text) has no set."""
 
     name: str
     line: int
     set_text: str = ""
     items: list[Line | Direction] = field(default_factory=list)
+    card: bool = False
 
 
 @dataclass
@@ -325,9 +332,12 @@ def parse_screenplay(text: str) -> Screenplay:
         heading = _HEADING.match(raw)
         if heading:
             level, name = len(heading.group(1)), heading.group(2).strip()
-            scene_name = _SCENE.match(name)
-            if level == 1 and not scene_name and title is None and not scenes:
+            scene_name, card = _SCENE.match(name), _CARD.match(name)
+            if level == 1 and not scene_name and not card and title is None and not scenes:
                 title = name
+                continue
+            if card:
+                scenes.append(ScriptScene(card.group(1).strip(), number, card=True))
                 continue
             name = (scene_name.group(1) if scene_name else name).strip() or f"scene {len(scenes) + 1}"
             scenes.append(ScriptScene(name, number))
@@ -337,6 +347,8 @@ def parse_screenplay(text: str) -> Screenplay:
         scene = scenes[-1]
         set_line = _SET.match(raw)
         if set_line:
+            if scene.card:
+                raise VidgenError(f"line {number}: set: belongs to a # Scene:, not to a # Card: (a card has no stage)")
             if scene.items:
                 raise VidgenError(f"line {number}: set: belongs right under its scene's heading, before the first line")
             scene.set_text = f"{scene.set_text}; {set_line.group(1)}" if scene.set_text else set_line.group(1)
@@ -990,9 +1002,54 @@ def screenplay_project(
     used: dict[str, int] = {}
     voice_of = {str(c["name"]): c.get("voice") for c in [*from_cast, *characters]}
     sets = cast.get("sets") if isinstance(cast.get("sets"), Mapping) else {}
-    for scene in play.scenes:
-        _add_scene(project, scene, names, voice_of, used, sets)
+    for k, scene in enumerate(play.scenes):
+        if scene.card:
+            _add_card(project, scene, voice_of, used)
+        else:
+            _add_scene(project, scene, names, voice_of, used, sets)
+        if k and play.scenes[k - 1].card:   # the scene after a card opens with an iris
+            entry = project.config["scenes"][-1]
+            project.config["scenes"][-1] = {"id": entry["id"], "type": entry["type"], "transition": "iris_in", **entry}
     return project
+
+
+def _scene_id(name: str, used: dict[str, int]) -> str:
+    """A scene id from a heading's name, numbered from its second use (``yard``, ``yard_2``)."""
+    base = character_id(name)
+    used[base] = used.get(base, 0) + 1
+    return base if used[base] == 1 else f"{base}_{used[base]}"
+
+
+def _add_card(project: ScreenplayProject, scene: ScriptScene, voice_of: Mapping[str, Any], used: dict[str, int]) -> None:
+    """A ``# Card:`` section as a ``card`` scene: silent for :data:`CARD_SECONDS` without lines,
+    else narrated by them (stage directions become TODOs: a card has no stage); after another
+    scene it comes in with an ``iris_out``."""
+    entry: dict[str, Any] = {"id": _scene_id(scene.name, used), "type": "card", "params": {"text": scene.name}}
+    if project.config["scenes"]:
+        entry["transition"] = "iris_out"
+    beats: list[dict[str, Any]] = []
+    todos: list[list[str]] = []
+    pending: list[str] = []
+    for item in scene.items:
+        if isinstance(item, Direction):
+            pending.append(f"TODO: [{item.text}] (line {item.line}): a card has no stage; act it in the scene before or after")
+            continue
+        beat: dict[str, Any] = {"text": item.text}
+        cid = character_id(item.speaker) if item.speaker else None
+        if cid and voice_of.get(cid):
+            beat["voice"] = voice_of[cid]
+        notes = pending + [f"TODO: [{d.text}] (line {d.line}): a card has no stage" for d in item.directions]
+        pending = []
+        beats.append(beat)
+        todos.append(notes)
+    if beats:
+        entry["beats"] = beats
+        todos[-1].extend(pending)
+    else:
+        entry["duration"] = CARD_SECONDS
+    project.config["scenes"].append(entry)
+    project.scene_todos.append([] if beats else pending)
+    project.beat_todos.append(todos)
 
 
 def _scene_cast(scene: ScriptScene, names: Mapping[str, str], design: SetDesign) -> list[str]:
@@ -1013,9 +1070,7 @@ def _add_scene(
 ) -> None:
     from vidgen.includes import entry_names
 
-    base = character_id(scene.name)
-    used[base] = used.get(base, 0) + 1
-    scene_id = base if used[base] == 1 else f"{base}_{used[base]}"
+    scene_id = _scene_id(scene.name, used)
     design = parse_set(scene.set_text, names, sets)
     stage = design.stage_params()
     marks = dict(stage.get("marks") or {})

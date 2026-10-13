@@ -297,6 +297,7 @@ project's own scene types, in its theme).
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
 | characters on a set (a cartoon) | `stage` | `characters`, `props`, `background`, `image`, `generate`, `marks`, `ground`, `layers`, `width`, `particles`, `light`, `wind` |
+| a cartoon's title card, "Later that day…", "The End" | `card` | `text`, `subtitle`, `style`, `color`, `sting` |
 | thanks, links, call to action | `end_card` | `title`, `lines`, `icon`, `logo` |
 
 How beats drive scenes: each type splits its content into **reveal steps** and plays step *i*
@@ -599,7 +600,15 @@ scenes:
     beats: [{text: "Pip waves at an old friend across the park."}]
 ```
 
-A whole cartoon (characters, staging, shots, timing): `vidgen guide cartoons`.
+```yaml
+# cartoons
+- id: later
+  type: card                  # style: burst (rays turning), frame or plain
+  params: {text: "Later that day…", subtitle: "at the old mill", sting: comic}
+  duration: 2.5               # silent; or beats: to narrate it
+```
+
+A whole cartoon (characters, staging, shots, timing, title cards and irises): `vidgen guide cartoons`.
 
 **When to write a custom scene type** (a Python file in the project's `extensions/`, see
 `docs/EXTENDING.md`): when the idea is a specific drawing no built-in can express (a mechanism,
@@ -830,6 +839,34 @@ dizzy `stars`, a `sparkle`, a `tear`. It follows the character, sounds with fole
 for none) and goes at the next beat (`until:` keeps it longer). Use one per line at most, on the
 moment the feeling lands (`at`); it says "she has an idea" without a word.
 
+**Title cards and irises.** A `card` scene is the cartoon's title card: the episode's name, a
+"Later that day…" between two scenes, "The End" (`style: burst`, `frame` or `plain`; `sting:
+reveal`, `comic` or `sad` as the text pops in). The classic way between them is an iris: a black
+circle closes on the scene before and opens on the next. `transition: {type: iris_out,
+character: pip}` closes on Pip's head (a pause on the face, then black); `{type: iris_in,
+character: kit}` opens on Kit in the scene it leads into; `at: [x, y]` (fractions of the frame
+from the top left) for a point, `color` for another colour. The other side opens or closes on
+the frame's centre. `iris_in` on the first scene opens the video.
+
+```yaml
+characters: [{name: pip, look: {body: bean}}, {name: kit, look: {body: tall}}]
+scenes:
+  - id: yard
+    type: stage
+    params: {characters: [{name: pip, at: left}]}
+    beats: [{text: "And that was the last Pip saw of the kite."}]
+  - id: later
+    type: card
+    params: {text: "Later that day…"}
+    duration: 2.5
+    transition: {type: iris_out, character: pip}
+  - id: hill
+    type: stage
+    params: {characters: [{name: kit, at: right}]}
+    transition: {type: iris_in, character: kit}
+    beats: [{text: "Up on the hill, Kit found something."}]
+```
+
 **Automatic directing.** `auto_direct: true` (top level, a stage's param or a beat's key) adds
 the routine looks and reactions for you: listeners `look_at` whoever speaks, the speaker looks at
 the one it answers, and after a line with `?`, a negation or `!` the listeners `react` in the
@@ -849,7 +886,9 @@ an `auto:` line under each beat.
 `vidgen screenplay story.md --out DIR` (MCP tool `screenplay`) make the project: one `stage`
 scene per `# Scene:` heading, one beat per line, a generated look and a voice for each character
 not declared in the front matter, `auto_direct: true`. Then refine the YAML as usual (check the
-`# TODO:` lines: directions and manners it could not map).
+`# TODO:` lines: directions and manners it could not map). `# Card: Later that day…` makes a
+title card (silent unless lines follow), coming in with an `iris_out`; the scene after it opens
+with an `iris_in`.
 
 ```markdown
 ---
@@ -1032,7 +1071,8 @@ Lint's `overlay_overlap` reports an overlay over scene text: give it `reserve: t
 **Transitions** (`transition:` per scene = the way into it, or video-wide). Default: cuts (every
 scene fades out by itself), which is right most of the time. `crossfade` (0.5 s) for a calm
 flow, `fade_color` into `chapter` cards to mark a new section, `push` / `wipe` sparingly (one
-style per video). Transitions never cover narration.
+style per video), `iris_out` / `iris_in` in cartoons (`vidgen guide cartoons`). Transitions
+never cover narration.
 
 ```yaml
 transition: crossfade

@@ -683,7 +683,9 @@ pan=0.0, align="start", **params)` plays a built-in sound (`vidgen list-sfx`) or
 `play`); `params` are `duration`, `pitch` (semitones) and `intensity` (0–1). It takes no time and
 draws nothing: the sound is recorded in `self.sfx_log` (`SfxEvent`s, written to the scene's
 timings) and mixed into the video by `vidgen render`, sample-exact (not with `--no-audio`).
-Unknown sounds and bad values raise `VidgenError`. `self.sounds` is the scene's `SoundLibrary`
+Unknown sounds and bad values raise `VidgenError`. `self.sting(sting, time)` plays a music sting
+(`"reveal"`, `"comic"`, `"sad"` or a `StingCue(kind, gain=)`) at scene time `time`, ducked under the
+narration like a beat's `sting:` (the `card` scene's `sting` param uses it). `self.sounds` is the scene's `SoundLibrary`
 (`names()`, `knows(name)`); `synthesize(name, duration, pitch, intensity)` returns a built-in
 sound's samples (48 kHz mono float32) if you want to analyse or mix one yourself. A scene type
 that should make a sound when it starts with `sfx: {auto: true}` sets the class attribute

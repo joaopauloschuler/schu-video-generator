@@ -29,19 +29,20 @@ from vidgen.actions import TARGET_NAME, ActionRunner, ActionUse, Target, match_n
 from vidgen.camera import Bounds, view_center_within
 from vidgen.capture import FrameCapture
 from vidgen.cartoon.directing import DirectedBeat, with_auto_actions
+from vidgen.cartoon.effect_symbols import head_box
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
-from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneConfig, SfxCue, StingCue, validation_error_lines
+from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, IRIS_TRANSITIONS, BeatConfig, SceneConfig, SfxCue, StingCue, TransitionConfig, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
 from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.speech import audio_duration
 from vidgen.theme import Theme
-from vidgen.transitions import ColorFade, has_transitions, resolve_color
+from vidgen.transitions import IRIS_HEAD_SCALE, ColorFade, IrisPoint, effective, has_transitions, resolve_color
 from vidgen.videoplan import TransitionSlot, VideoPlan
 from vidgen.voicesounds import SOUND_GAIN_DB, VOICE_SOUNDS, beat_sound_spans
 
@@ -392,7 +393,8 @@ class NarratedScene(MovingCameraScene):
         return t is not None and t.type in DIRECTED_TRANSITIONS and t.overlap > 0
 
     def _attach_color_fade(self) -> None:
-        """Fade the first / last frames from / to a colour for ``fade_color`` transitions (§49)."""
+        """Fade the first / last frames from / to a colour for ``fade_color`` transitions (§49),
+        or open / close them with an iris (§69.45)."""
         t_in, t_out = self.transition_in, self.transition_out
         frames_in = t_in.fade_in if t_in is not None else 0
         frames_out = t_out.fade_out if t_out is not None else 0
@@ -400,13 +402,41 @@ class NarratedScene(MovingCameraScene):
             return
         i = self._video_plan.index(self.spec.id)
         fade = ColorFade(
-            resolve_color(t_in.color, self.theme) if frames_in and t_in is not None else None,
+            resolve_color(t_in.color, self.theme, t_in.type) if frames_in and t_in is not None else None,
             frames_in,
-            resolve_color(t_out.color, self.theme) if frames_out and t_out is not None else None,
+            resolve_color(t_out.color, self.theme, t_out.type) if frames_out and t_out is not None else None,
             frames_out,
             round(self._video_plan.scene_duration(i) * config.frame_rate),
+            iris_in=self._iris_point(effective(self.project.config, i), own=True) if frames_in else None,
+            iris_out=self._iris_point(effective(self.project.config, i + 1), own=False) if frames_out else None,
         )
         fade.attach(self.renderer)  # outermost: overlays are drawn over the faded picture
+
+    def _iris_point(self, transition: TransitionConfig, *, own: bool) -> Callable[[int, int], IrisPoint] | None:
+        """Where an iris into (``own``) or out of this scene opens / closes, as a callable of
+        the frame's pixel size: its ``character``'s head or its ``at`` point when the iris
+        targets this scene (iris_in into it, iris_out out of it), else the frame's centre;
+        ``None`` for a fade_color."""
+        if transition.type not in IRIS_TRANSITIONS:
+            return None
+        targeted = (transition.type == "iris_in") == own
+        name = transition.character if targeted else None
+        at = transition.at if targeted and transition.at is not None else (0.5, 0.5)
+        def point(width: int, height: int) -> IrisPoint:
+            if name is None:
+                return IrisPoint(at[0] * width, at[1] * height)
+            figure = getattr(self, "cast", {}).get(name)   # looked up per frame: the cast is built in construct()
+            if figure is None:
+                raise VidgenError(f"scene '{self.spec.id}': the {transition.type} names '{name}', who is not on its stage")
+            frame = self.camera.frame
+            left, bottom, right, top = head_box(figure)
+            scale = width / frame.width
+            cx, cy = frame.get_center()[:2]
+            x = width / 2 + ((left + right) / 2 - cx) * scale
+            y = height / 2 - ((bottom + top) / 2 - cy) * scale
+            return IrisPoint(x, y, IRIS_HEAD_SCALE * math.hypot(right - left, top - bottom) / 2 * scale)
+
+        return point
 
     # ----- params ----------------------------------------------------------------------------
 
@@ -634,7 +664,7 @@ class NarratedScene(MovingCameraScene):
         self._current_beat = b.id
         self._beat_start = start
         if b.sting is not None:
-            self._add_sting(b.sting, start + (window.heard if b.sting.placed_at == "end" else 0.0))
+            self.sting(b.sting, start + (window.heard if b.sting.placed_at == "end" else 0.0))
         for span in beat_sound_spans(self.project, b, d):
             cut = window.shape.cut
             if span.generated and (cut is None or span.start < cut):   # a breath the TTS cannot say, in the silence before / after the line (§69.33)
@@ -910,10 +940,12 @@ class NarratedScene(MovingCameraScene):
         time = float(self.renderer.time) if at is None else at
         return self._add_sfx(sound, time, gain, pan, align, params, "sfx")
 
-    def _add_sting(self, sting: StingCue, time: float) -> None:
-        """Record the beat's music sting (DESIGN.md §69.19) at scene time ``time``: its built-in
-        sound (or the project's file of that name), ducked under the narration when mixed."""
-        self._add_sfx(STING_SOUNDS[sting.kind], time, sting.gain, 0.0, "start", {}, "sting", duck=True)
+    def sting(self, sting: StingCue | str, time: float) -> SfxEvent:
+        """Play a music sting (a beat's ``sting:``, DESIGN.md §69.19; a ``card``'s) at scene time
+        ``time``: its built-in sound (or the project's file of that name), ducked under the
+        narration when mixed. ``sting``: a :class:`StingCue` or its kind (``reveal``...)."""
+        cue = StingCue(kind=sting) if isinstance(sting, str) else sting  # type: ignore[arg-type]
+        return self._add_sfx(STING_SOUNDS[cue.kind], time, cue.gain, 0.0, "start", {}, "sting", duck=True)
 
     def _add_sfx(
         self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str, duck: bool = False

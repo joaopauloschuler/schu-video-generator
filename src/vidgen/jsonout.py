@@ -209,9 +209,9 @@ def screenplay_document(
     scenes = [
         {
             "id": scene["id"],
-            "beats": len(scene["beats"]),
-            "characters": [c["name"] for c in scene["params"]["characters"]],
-            "actions": sum(len(b.get("actions", [])) for b in scene["beats"]),
+            "beats": len(scene.get("beats", [])),
+            "characters": [c["name"] for c in scene["params"].get("characters", [])],
+            "actions": sum(len(b.get("actions", [])) for b in scene.get("beats", [])),
             "todos": [*todos, *(t for beat in beat_todos for t in beat)],
         }
         for scene, todos, beat_todos in zip(draft.config["scenes"], draft.scene_todos, draft.beat_todos)

@@ -10513,3 +10513,116 @@ How to test
   files in two batches (12 + 15 passed, plus the lighting test above), `test_cartoon_directing
   test_introspect test_cartoon_depth` (5, 15 s), `test_builtin_scenes test_actions_coverage -k
   stage` (3, 3 s). The full suite was not run.
+
+
+## Step 112 — Cartoon transitions and title cards
+
+What was built
+- **Iris transitions** `iris_out` / `iris_in` (DESIGN §69.45): `transition: {type: iris_out,
+  character: pip}` closes a black circle on Pip's head in the scene before (it eases to a circle
+  round the head, pauses there, then closes), then the next scene opens from the frame's centre;
+  `iris_in` closes the scene before on its centre and opens on a character (or `at: [x, y]`) of the
+  scene it leads into. Keys `character` / `at` (not both; `at` in frame fractions from the top
+  left), `color` (default black), `duration` (default 1.2 s, half closing, half opening). `iris_in`
+  on the first scene opens the video; `iris_out` there is a config error. `vidgen validate`
+  reports a `character` not on that stage (`transitions.iris_problems`).
+- **How**: an iris is a `fade_color` with a circular mask. `ColorFade` takes `iris_in` / `iris_out`
+  callables (`(width, height) -> IrisPoint(x, y, hold)`) and replaces the uniform blend of the
+  fade frames by the disc (`iris_radius`, `iris_full_radius`, `iris_coverage`, pure, in
+  `transitions.py`). `NarratedScene._iris_point` asks for the character's head (`head_box` of
+  `self.cast[name]` through the camera frame) on every masked frame, so the circle follows it.
+  Plan, holds, silent tails, fingerprints: the fade_color contract (`TransitionConfig.through_color`
+  replaced the `type == "fade_color"` tests).
+- **`card` scene type** (DESIGN §69.46, `scenes/card.py`; pure layout and colours in
+  `cartoon/cards.py`): `text`, `subtitle`, `style: burst | frame | plain`, `color` (default
+  `primary`), `text_color` / `outline_color` (default: white or the dark ink, whichever reads
+  better on the card, outlined in the other), `spin`, `sting` (as the text pops in). Silent with
+  `duration` or narrated. The text pops in with a bounce (`pop_scale`, strength 0.5); the burst
+  grows and turns slowly.
+- **Screenplay**: `# Card: Later that day…` (any level) is a `card` scene: silent for 2.5 s, or
+  one beat per line under it; `[directions]` there become TODOs; `set:` under it is an error.
+  After another scene it comes in with `iris_out`; the scene after a card gets `iris_in`.
+- **Gallery**: a `card` snippet and chooser row in the guide's scenes topic; `docs/gallery/card.md`
+  plus `media/card-16x9|9x16.png|gif` (184 KB) from `vidgen gallery --types card`; README index
+  gains the row.
+- **Fix (predates Step 111)**: `tests/test_cartoon_lighting.py::test_sunset_to_night_keeps_the_bubble_readable`
+  failed alone with `-m render` ("unknown scene type 'stage' (known types: none)"). Cause: the test
+  called `registry.get("stage")` (to patch `outro`) before anything had imported the built-in
+  scene modules; in a whole-file run the earlier `test_validate_light_actions_and_param` imported
+  them through `check_project`. The test now calls `extensions.load_builtins()` first (idempotent).
+  Alone with `-m render`: 2 passed; whole file: 8 passed.
+
+Files touched
+- New: `src/vidgen/cartoon/cards.py`, `src/vidgen/scenes/card.py`, `tests/test_cartoon_cards.py`,
+  `docs/gallery/card.md`, `docs/gallery/media/card-16x9.png`, `card-16x9.gif`, `card-9x16.png`,
+  `card-9x16.gif`.
+- `src/vidgen/config.py` (types, keys, `IRIS_TRANSITIONS`, `COLOR_TRANSITIONS`, `TransitionType`,
+  `through_color`, first-scene check), `transitions.py` (frames, colour, iris maths, `IrisPoint`,
+  `ColorFade` irises, `iris_scene`, `iris_problems`), `videoplan.py`, `scene.py` (`_iris_point`,
+  public `sting`), `cli.py` (validate), `api.py` (exports), `scenes/__init__.py`, `screenplay.py`
+  (`# Card:`, `_add_card`, `_scene_id`, `CARD_SECONDS`), `jsonout.py` (screenplay JSON with
+  silent cards).
+- Tests: `tests/test_cartoon_lighting.py` (the fix).
+- Docs: `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md` (chooser row, card snippet, cartoons
+  "Title cards and irises", screenplay `# Card:`, transitions line), `docs/CONFIG.md`
+  (transitions table and keys, an iris example, `### card`, screenplay headings, carry note),
+  `docs/EXTENDING.md` (`self.sting`), `DESIGN.md` (tree, Step 112 API note, §69.45, §69.46),
+  `docs/gallery/README.md`, `tasklist.md`.
+
+Public interfaces added / changed
+- `vidgen.api`: `BURST_SPIN`, `CARD_STYLES`, `CardLayout`, `burst_ray_color`, `burst_rays`,
+  `card_layout`, `card_outline_width`, `card_text_inks`, `StingCue`, `StingSetting`;
+  `NarratedScene.sting(sting, time)` (public; was the private `_add_sting`).
+- Config: transition types `iris_out`, `iris_in`, keys `character`, `at`; `color` now also for
+  the irises. Scene type `card`. Screenplay `# Card:` headings.
+- `transitions.resolve_color(color, theme, kind="fade_color")`, `ColorFade(..., iris_in=None,
+  iris_out=None)` (compatible).
+
+Decisions / deviations
+- **The irises are drawn in the renders, not with an FFmpeg filter at the join.** The step (and the
+  brief) pictured an `xfade` path tested on 6.1 / 7.1 / 8.x and the head position read from the
+  layout dump. Through a colour, an iris needs only one picture at a time, exactly like
+  `fade_color`, which §49 already draws inside the renders. Doing it there keeps the fade_color
+  timing contract (no overlap, the next scene's narration never starts under black), follows a
+  moving head on every frame from the live character (the layout dump is only written for
+  stills), shows in storyboards and stills, and leaves the join a cut, so no FFmpeg version can
+  break it. An `xfade` custom expression was rejected: an overlapping iris hides the next scene's
+  first frames while it speaks, the worker would have to record the head position, and the
+  expression's planes depend on the pixel format FFmpeg negotiates. Checked: the render + join
+  test (with a crossfade in the same video, so the irises sit inside an `xfade` run) passes with
+  FFmpeg 6.1.1 (system), 7.1.5 and 8.1.3 (the Step 64 builds in the scratchpad, first on PATH).
+  "Tests: transition filter graphs": there is no new filter graph; the test checks the join's
+  concat list keeps the iris boundaries as cuts inside the run.
+- Semantics: one boundary = close then open; the type picks which side has the target. The key
+  is `character`, not `on` (PyYAML reads a bare `on:` key as `True`).
+- The card's outline is a layer of glyph-shaped VMobjects behind the text, not a background
+  stroke (a per-glyph stroke covered the letter before it); the burst grows by an
+  `UpdateFromAlphaFunc` because Manim's `GrowFromCenter` re-adds the burst over the text.
+- A card's `sting` with `at: end` is an error (a beat's own sting does that).
+- The screenplay adds the irises around cards by default (a card between scenes is the cartoon
+  flow); authors can change them in the YAML.
+- Fingerprints: a scene next to a transition renders again once (the transition's dump gains
+  `character` and `at`), as when Step 47 added `direction` / `soft`.
+
+Known gaps / TODOs
+- `wipe_star` (optional) not done; no iris shape but a circle; no iris on a prop; the screenplay's
+  `iris_out` closes on the centre, not on the last speaker.
+- A wide card wraps "Later that day…" onto two lines at the start size before shrinking (fit_text
+  wraps first); fine by eye, a one-line preference could come later.
+- Not listened to: the card's sting is the existing built-in sound.
+
+How to test
+- `pytest tests/test_cartoon_cards.py` (17 not-render in 1.7 s; 2 render: the card with lint's
+  contrast / off_frame rules, the stage -iris_out-> card -iris_in-> stage -crossfade-> card video
+  through the join, ~12 s). With another FFmpeg first on PATH:
+  `env PATH=<dir with ffmpeg>:$PATH pytest tests/test_cartoon_cards.py::test_irises_through_the_join`
+  (passed with 7.1.5 in 11.1 s and 8.1.3 in 10.9 s; 6.1.1 in 11.7 s).
+- Also run, not render: `test_guide test_gallery test_docs test_api test_schema
+  test_cartoon_cards` (197 passed + 1 after recopying the guide, 69 s), `test_transitions
+  test_push_wipe_carry test_screenplay test_config test_json_output test_plan test_cartoon_foley
+  test_sfx test_cli test_includes test_ffmpeg_version` (294 passed, 14 s); render:
+  `test_transitions` (4, 14 s), `test_cartoon_foley test_sfx test_cartoon_cards
+  test_cartoon_lighting` (10, 27 s), `test_cartoon_lighting` whole (8, 3 s). By hand: `vidgen
+  render` and `vidgen lint` (0 findings) of a 4-scene iris / card project at 320x180, contact
+  sheets checked by eye; `vidgen screenplay` on a story with two cards (valid, irises written).
+  The full suite was not run.

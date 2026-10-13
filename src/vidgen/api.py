@@ -96,7 +96,7 @@ from vidgen.registry import action, overlay, scene  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
 from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize, one_or_many  # noqa: E402
 from vidgen.pronunciation import Pronunciation, Spoken  # noqa: E402
-from vidgen.config import SfxParams  # noqa: E402
+from vidgen.config import SfxParams, StingCue, StingSetting  # noqa: E402
 from vidgen.sfx import SfxEvent, SoundLibrary, sound_library, synthesize  # noqa: E402
 from vidgen.speech import WordTime, beat_word_times, estimate_word_times, map_word_times, speech_bounds, spoken_words, syllables  # noqa: E402
 from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
@@ -316,6 +316,16 @@ from vidgen.cartoon.effects import (  # noqa: E402
     pop_scale,
 )
 from vidgen.cartoon.effect_symbols import EffectSymbol, effect_color, head_box  # noqa: E402
+from vidgen.cartoon.cards import (  # noqa: E402
+    BURST_SPIN,
+    CARD_STYLES,
+    CardLayout,
+    burst_ray_color,
+    burst_rays,
+    card_layout,
+    card_outline_width,
+    card_text_inks,
+)
 from vidgen.cartoon.motion_effects import (  # noqa: E402
     FAST_SPEED,
     HARD_LANDING,
@@ -532,6 +542,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "speaker_prefix",
     "SfxEvent",
     "SfxParams",
+    "StingCue",
+    "StingSetting",
     "SoundLibrary",
     "sound_library",
     "synthesize",
@@ -802,6 +814,14 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "puddle_spots",
     "rain_ground",
     "splash_shapes",
+    "BURST_SPIN",
+    "CARD_STYLES",
+    "CardLayout",
+    "burst_ray_color",
+    "burst_rays",
+    "card_layout",
+    "card_outline_width",
+    "card_text_inks",
     "EFFECT_KINDS",
     "EFFECT_SECONDS",
     "EFFECT_STYLES",

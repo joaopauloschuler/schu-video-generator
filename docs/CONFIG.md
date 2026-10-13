@@ -2235,19 +2235,41 @@ scenes:
 | `fade_color` | the previous scene fades to `color` over the first half of `duration`, the next one fades in from it over the second half | no overlap: the video keeps its length |
 | `push` | the next scene slides in from one side and pushes the previous one out the other side | overlap, like `crossfade` |
 | `wipe` | an edge sweeps across the picture, uncovering the next scene behind it (`soft`: a blurred edge) | overlap, like `crossfade` |
+| `iris_out` | a cartoon iris: a circle closes on a `character` (its head, with a pause on the face) or a point `at` of the previous scene over the first half of `duration`, to `color`; then a circle opens on the next scene from the frame's centre | no overlap, like `fade_color` |
+| `iris_in` | a circle closes on the previous scene's centre, then opens on a `character` or a point `at` of the next scene | no overlap, like `fade_color` |
 
 | key | default | |
 |---|---|---|
-| `type` | `cut` | `cut`, `crossfade`, `fade_color`, `push` or `wipe` (a plain string is the type with its defaults) |
-| `duration` | `crossfade` 0.5, `fade_color` 1.0, `push` / `wipe` 0.6 | seconds, at most 5; not allowed on a cut |
-| `color` | the theme's `background` | `fade_color` only: a theme colour token (`surface`, `accent`, ...), `background`, or hex |
+| `type` | `cut` | `cut`, `crossfade`, `fade_color`, `push`, `wipe`, `iris_out` or `iris_in` (a plain string is the type with its defaults) |
+| `duration` | `crossfade` 0.5, `fade_color` 1.0, `push` / `wipe` 0.6, `iris_out` / `iris_in` 1.2 | seconds, at most 5; not allowed on a cut |
+| `color` | the theme's `background`; black for an iris | `fade_color`, `iris_out`, `iris_in` only: a theme colour token (`surface`, `accent`, ...), `background`, or hex |
 | `direction` | `left` (16:9, square), `up` (9:16) | `push` / `wipe` only: where the pictures (push) or the edge (wipe) move: `left`, `right`, `up`, `down`. `left` = the next scene comes in from the right; `up` = from below (like scrolling a phone feed) |
 | `soft` | `false` | `wipe` only: a soft, blurred edge (FFmpeg's `smooth*` transitions) instead of a hard one |
+| `character` | none | `iris_out` / `iris_in` only: the character the circle closes on (`iris_out`: one on the stage of the scene before, where its head is as that scene ends) or opens on (`iris_in`: one on this scene's stage, where its head is as it starts); the circle follows the head and pauses around it. `vidgen validate` checks it is on that stage |
+| `at` | the centre | `iris_out` / `iris_in` only, instead of `character`: the point `[x, y]` the circle closes or opens on, fractions of the frame from its top-left corner (`[0.3, 0.4]`) |
 
 A scene's `transition:` is the way **into** that scene; the video's `transition:` is the default
-for every scene but the first (a crossfade, push or wipe on the first scene is an error: nothing
-comes before it; `fade_color` there fades the video in from the colour). A video-level `push`
+for every scene but the first (a crossfade, push, wipe or iris_out on the first scene is an error: nothing
+comes before it; `fade_color` there fades the video in from the colour, `iris_in` opens on it). A video-level `push`
 with no `direction` follows each variant's frame: left in the 16:9 video, up in a 9:16 variant.
+
+```yaml
+  - id: later
+    type: card                                       # a cartoon title card
+    params: {text: "Later that day…"}
+    duration: 2.5
+    transition: {type: iris_out, character: pip}     # the scene before closes on pip's head
+  - id: hill
+    type: stage
+    params: {characters: [{name: kit, at: right}]}
+    transition: {type: iris_in, at: [0.75, 0.6]}     # this scene opens on that point
+    beats: [{text: "Up on the hill, Kit was waiting."}]
+```
+
+The irises are drawn inside the scenes' renders, like a `fade_color` (the colour covers the
+picture outside the circle, the overlays stay on top), so the join stays a cut there and no
+FFmpeg filter is involved: they work with every FFmpeg vidgen supports (checked with 6.1, 7.1
+and 8.1), and storyboards and stills show them.
 
 - **Speech never overlaps.** A transition covers only the *silent end* of the scene before it:
   the frames after its narration ends (its pad and fade-out; a whole silent scene). When that is
@@ -2330,7 +2352,7 @@ colour they were — a *match cut* — and then move them into its own layout:
   some other way makes the copy fade out as it appears; a destination the scene does not have
   fades it out with the scene's first animation (with a warning).
 - **Transitions**: a cut (the natural choice) or a crossfade keep the carried objects in place;
-  `fade_color`, `push` and `wipe` fade or move them with the picture (`vidgen validate` warns).
+  `fade_color`, `push`, `wipe` and the irises fade, move or cover them with the picture (`vidgen validate` warns).
 - **Rendering**: the carrying scene is rendered after the scene before it (with `--jobs` it waits
   for it). `vidgen render --scene ID` / `storyboard --scene ID` also render the scene before when
   its record is missing or out of date, and the carrying scene when the scene before was
@@ -4932,8 +4954,12 @@ BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
 GUS (glad): There it is! [jumps] I left my song in that crate.
 ```
 
-- **Headings**: a first `# Title` (level 1, not `Scene...`) is the title; `# Scene: NAME` (any
+- **Headings**: a first `# Title` (level 1, not `Scene...` or `Card...`) is the title; `# Scene: NAME` (any
   level; `Scene:` may be left out) starts a scene, its id from the name (`yard`, then `yard_2`).
+  `# Card: Later that day…` (any level) is a [`card`](#card) scene with that text: silent for
+  2.5 s, or narrated by the lines under it (a `[direction]` there becomes a `# TODO:`: a card has
+  no stage; `set:` is an error). After another scene it comes in with an `iris_out`, and the
+  scene after it opens with an `iris_in` ([iris transitions](#transitions-transition)).
 - **`set:`** (right under the heading; `;`-separated, the colons optional): `background` a sky
   (`day`, `night`, `dusk`, `dawn`, `indoors`; default `day`), a colour or `a to b` (a gradient), or
   a picture file (`image`); `room` an [indoor set](#rooms-room) instead (alone: the defaults;
@@ -5360,6 +5386,36 @@ A wide stage with layers, the camera panning and then following a character:
         actions: [{action: pan, to: far_right, run_time: 2}]
       - text: "Back to Pip, who has not seen her yet."
         actions: [{follow: pip}]
+```
+
+### `card`
+
+A cartoon title card: the episode's name, "Later that day…" between two scenes, "The End". The
+card's `color` fills the frame behind a burst of rays turning slowly (`style: burst`), a double
+frame (`frame`) or nothing (`plain`); the text pops in with a bounce, bold, in white or the dark
+ink (whichever reads better on the card) with a thick outline in the other; the subtitle rises
+under it. Steps: (1) the burst or frame, the text (and the subtitle with one beat or none),
+(2) the subtitle. Silent with a `duration`, or narrated by its beats. Fades out over 0.5 s. It
+pairs with the [iris transitions](#transitions-transition) and a screenplay's `# Card:` heading.
+[Action targets](#beat-actions): `text`, `subtitle` (when given), `burst` or `frame` (by style).
+
+| param | type | default | |
+|---|---|---|---|
+| `text` | str | required | the card's words, wrapped to fit |
+| `subtitle` | str | `""` | a smaller line under the text |
+| `style` | `burst` \| `frame` \| `plain` | `burst` | rays behind the text, a double frame round it, or the colour alone |
+| `color` | color | `primary` | the card's colour; the lighter rays are a tint of it |
+| `text_color` | color | white or the dark ink | fill of the letters |
+| `outline_color` | color | the other one | outline of the letters and the frame's lines |
+| `spin` | bool | `true` | `burst`: the rays turn slowly while the card is on |
+| `sting` | `reveal` \| `comic` \| `sad` \| `{kind, gain}` | none | a [music sting](#foley-and-music-stings) as the text pops in (a beat's own `sting` can come after its line instead) |
+
+```yaml
+- id: later
+  type: card
+  params: {text: "Later that day…", subtitle: "at the old mill", sting: comic}
+  duration: 2.5
+  transition: {type: iris_out, character: pip}   # closes on pip in the scene before
 ```
 
 ## Beat actions

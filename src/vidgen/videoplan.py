@@ -56,7 +56,8 @@ class TransitionSlot:
     """The transition into a scene as planned (DESIGN.md §49), in frames of the plan's fps:
     ``overlap`` frames shared by the end of the scene before and the start of this one
     (crossfade, push, wipe), ``fade_out`` frames at the end of the scene before faded to ``color`` and
-    ``fade_in`` frames at the start of this one faded in from it (fade_color), ``hold`` frames
+    ``fade_in`` frames at the start of this one faded in from it (fade_color; an iris closes and
+    opens in them), ``hold`` frames
     the scene before is held longer so the transition covers no narration. ``seconds`` is the
     duration asked for; ``color`` as written (``None``: the theme's background)."""
 
@@ -228,8 +229,8 @@ class VideoPlan:
                 want = requested_frames(t, self.fps)
                 own = self._own_frames(i)
                 overlap = min(want, own) if t.overlaps else 0
-                fade_in = min(want, own) if t.type == "fade_color" else 0
-                fade_out = want if t.type == "fade_color" and i > 0 else 0
+                fade_in = min(want, own) if t.through_color else 0
+                fade_out = want if t.through_color and i > 0 else 0
                 hold = 0
                 need = overlap + fade_out
                 if i > 0 and need:

@@ -158,7 +158,7 @@ def test_validate_light_actions_and_param(make_project) -> None:
 
 @pytest.mark.render
 def test_sunset_to_night_keeps_the_bubble_readable(make_project, tmp_path: Path, monkeypatch) -> None:
-    from vidgen import registry
+    from vidgen import extensions, registry
     from vidgen.cartoon.shading import LIT, StageShadows, StarField
     from vidgen.introspect import LayoutRecorder
 
@@ -175,6 +175,7 @@ def test_sunset_to_night_keeps_the_bubble_readable(make_project, tmp_path: Path,
     scenes = [{"id": "park", "type": "stage", "params": params, "beats": beats}]
     project = Project.load(make_project(minimal_config(characters=CAST, voices=VOICES, scenes=scenes)))
     recorder = LayoutRecorder()
+    extensions.load_builtins()   # registry.get needs the built-ins imported; alone, no earlier test did it
     monkeypatch.setattr(registry.get("stage").cls, "outro", 0)   # no fade out: the stage stays to look at
     scene, _ = render_with_layout(project, "park", tmp_path / "media", recorder)
 

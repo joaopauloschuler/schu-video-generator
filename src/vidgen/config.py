@@ -1332,43 +1332,66 @@ class ThumbnailConfig(_Strict):
         return "frame" if self.scene is not None else "design"
 
 
-#: Transition types (DESIGN.md §49, §50).
-TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe")
+#: Transition types (DESIGN.md §49, §50, §69.45).
+TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe", "iris_out", "iris_in")
 #: Transitions that overlap the two scenes (both pictures are on screen at once).
 OVERLAPPING_TRANSITIONS = ("crossfade", "push", "wipe")
 #: Transitions that move a picture or an edge in a ``direction`` (DESIGN.md §50).
 DIRECTED_TRANSITIONS = ("push", "wipe")
+#: Cartoon irises (DESIGN.md §69.45): a circle closes on the scene before, then opens on the next.
+IRIS_TRANSITIONS = ("iris_out", "iris_in")
+#: Transitions through a colour, inside the renders: the scene before ends in it, the next
+#: scene starts from it (no overlap; fade_color and the irises).
+COLOR_TRANSITIONS = ("fade_color", *IRIS_TRANSITIONS)
 #: Seconds of a transition when its entry gives no ``duration``.
-TRANSITION_DURATIONS = {"cut": 0.0, "crossfade": 0.5, "fade_color": 1.0, "push": 0.6, "wipe": 0.6}
+TRANSITION_DURATIONS = {"cut": 0.0, "crossfade": 0.5, "fade_color": 1.0, "push": 0.6, "wipe": 0.6, "iris_out": 1.2, "iris_in": 1.2}
 #: Directions of a push or wipe: where the pictures (push) or the edge (wipe) move.
 TransitionDirection = Literal["left", "right", "up", "down"]
+#: A transition's ``type`` as written.
+TransitionType = Literal["cut", "crossfade", "fade_color", "push", "wipe", "iris_out", "iris_in"]
 
 
 class TransitionConfig(_Strict):
-    """How the video passes into a scene from the one before it (DESIGN.md §49, §50)."""
+    """How the video passes into a scene from the one before it (DESIGN.md §49, §50, §69.45)."""
 
-    type: Literal["cut", "crossfade", "fade_color", "push", "wipe"] = "cut"
-    """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it; push: the next scene slides in and pushes the previous one out; wipe: an edge sweeps across, uncovering the next scene."""
+    type: TransitionType = "cut"
+    """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it; push: the next scene slides in and pushes the previous one out; wipe: an edge sweeps across, uncovering the next scene; iris_out: a circle closes on a character or point of the scene before, then opens on the next scene; iris_in: a circle closes on the scene before, then opens on a character or point of the next scene."""
     duration: float | None = Field(default=None, gt=0, le=5)
-    """Seconds of the transition (default: crossfade 0.5, fade_color 1.0 split evenly between fading out and in, push and wipe 0.6)."""
+    """Seconds of the transition (default: crossfade 0.5, fade_color 1.0 split evenly between fading out and in, push and wipe 0.6, iris_out and iris_in 1.2 split evenly between closing and opening)."""
     color: ColorRef | None = None
-    """fade_color only: a theme colour token or hex (default: the theme's background)."""
+    """fade_color, iris_out, iris_in only: a theme colour token or hex (default: the theme's background for fade_color, black for an iris)."""
     direction: TransitionDirection | None = None
     """push / wipe only: where the pictures (push) or the edge (wipe) move: left, right, up or down (default: left in a wide or square frame, up in a tall one: the next scene comes in from the right / from below)."""
     soft: bool | None = None
     """wipe only: a soft (blurred) edge instead of a hard one (default false)."""
+    character: str | None = None
+    """iris_out / iris_in only: the character the circle closes on (iris_out: one of the scene before, its head as the scene ends) or opens on (iris_in: one of this scene, its head as it starts); it pauses around the head (default: the point at)."""
+    at: tuple[float, float] | None = None
+    """iris_out / iris_in only: the point [x, y] the circle closes on (iris_out) or opens on (iris_in), as fractions of the frame from its top-left corner (default: the centre); the other side of the iris uses the centre."""
 
     @model_validator(mode="after")
     def _keys_of_type(self) -> TransitionConfig:
         if self.type == "cut" and self.duration is not None:
             raise ValueError("a cut has no duration")
-        if self.type != "fade_color" and self.color is not None:
-            raise ValueError(f"color is only for fade_color, not {self.type}")
+        if self.type not in COLOR_TRANSITIONS and self.color is not None:
+            raise ValueError(f"color is only for fade_color, iris_out and iris_in, not {self.type}")
         if self.type not in DIRECTED_TRANSITIONS and self.direction is not None:
             raise ValueError(f"direction is only for push and wipe, not {self.type}")
         if self.type != "wipe" and self.soft is not None:
             raise ValueError(f"soft is only for wipe, not {self.type}")
+        for key in ("character", "at"):
+            if self.type not in IRIS_TRANSITIONS and getattr(self, key) is not None:
+                raise ValueError(f"{key} is only for iris_out and iris_in, not {self.type}")
+        if self.character is not None and self.at is not None:
+            raise ValueError("an iris closes on a character or a point (at), not both")
+        if self.at is not None and not all(0.0 <= v <= 1.0 for v in self.at):
+            raise ValueError(f"at {list(self.at)}: x and y are fractions of the frame, from 0 to 1")
         return self
+
+    @property
+    def through_color(self) -> bool:
+        """Whether the scene before ends in a colour the next one starts from (fade_color, iris)."""
+        return self.type in COLOR_TRANSITIONS
 
     @property
     def overlaps(self) -> bool:
@@ -1385,10 +1408,8 @@ def _transition(value: str | TransitionConfig) -> TransitionConfig:
     return TransitionConfig(type=value) if isinstance(value, str) else value  # type: ignore[arg-type]
 
 
-#: A ``transition:`` value: a type name, or {type, duration, color, direction, soft}.
-TransitionSetting = Annotated[
-    Union[Literal["cut", "crossfade", "fade_color", "push", "wipe"], TransitionConfig], AfterValidator(_transition)
-]
+#: A ``transition:`` value: a type name, or {type, duration, color, direction, soft, character, at}.
+TransitionSetting = Annotated[Union[TransitionType, TransitionConfig], AfterValidator(_transition)]
 
 #: ``carry:`` entry: ``name`` or ``"name -> other"`` (a target of the scene before -> one of this scene).
 CARRY_ARROW = "->"
@@ -1547,7 +1568,7 @@ class SceneConfig(_Strict):
     music: bool | SceneMusic = True
     """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here."""
     transition: TransitionSetting | None = None
-    """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}; default the video's transition."""
+    """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}; default the video's transition."""
     carry: CarrySetting = Field(default_factory=list)
     """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
     set: Identifier | None = None
@@ -1658,7 +1679,7 @@ class VideoConfig(_Strict):
     audio: AudioConfig = Field(default_factory=AudioConfig)
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
     transition: TransitionSetting | None = None
-    """Default transition between scenes (cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}); a scene's transition wins."""
+    """Default transition between scenes (cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}); a scene's transition wins."""
     chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)
     """What the render writes about the chapters: MP4 chapter entries, the YouTube list <output>_chapters.txt, the intro chapter at 0:00 {metadata, youtube, intro}."""
     metadata: MetadataConfig = Field(default_factory=MetadataConfig)
@@ -1767,9 +1788,10 @@ class VideoConfig(_Strict):
         if self.thumbnail is not None:
             problems += self.thumbnail_problems(self.thumbnail)
         first = self.scenes[0].transition
-        if first is not None and first.overlaps:
+        if first is not None and (first.overlaps or first.type == "iris_out"):
             problems.append(
-                f"scenes[0].transition: the first scene has no scene before it to {first.type} from (fade_color fades it in from a colour)"
+                f"scenes[0].transition: the first scene has no scene before it to {first.type} from "
+                "(fade_color fades it in from a colour, iris_in opens on it)"
             )
         if self.scenes[0].carry:
             problems.append("scenes[0].carry: the first scene has no scene before it to carry objects from")

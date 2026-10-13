@@ -20,6 +20,7 @@ from vidgen.scenes import (  # noqa: F401
     bullets,
     callout_action,
     captions,
+    card,
     chapter,
     code,
     code_walkthrough,

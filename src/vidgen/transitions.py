@@ -5,7 +5,9 @@ whose scenes overlap. No manim: used by the planned timeline, the render pipelin
 The timing contract: a ``crossfade``, ``push`` or ``wipe`` **overlaps** the two scenes (the next
 one starts while the previous one's last frames are still on screen, so the video gets shorter by
 the overlap); a ``fade_color`` does not (the previous scene's last frames fade to the colour, the
-next scene's first frames fade in from it). Each one only covers the **silent tail** of the scene
+next scene's first frames fade in from it), nor does an ``iris_out`` / ``iris_in`` (a circle
+closes over the previous scene's last frames and opens over the next one's first, drawn in the
+renders like the fade, so the join sees a cut). Each one only covers the **silent tail** of the scene
 before (the frames after its last narration ends): when that tail is shorter than the transition,
 the scene before is held longer (``hold``) so no two narrations ever sound at once.
 """
@@ -14,13 +16,15 @@ from __future__ import annotations
 
 import math
 import wave
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 
-from vidgen.config import DIRECTED_TRANSITIONS, TransitionConfig, VideoConfig
+from vidgen.cartoon.motion import smoothstep
+from vidgen.config import DIRECTED_TRANSITIONS, IRIS_TRANSITIONS, TransitionConfig, VideoConfig
 from vidgen.errors import Problem, VidgenError
 
 if TYPE_CHECKING:
@@ -31,6 +35,13 @@ if TYPE_CHECKING:
 CUT = TransitionConfig()
 #: ``color`` naming the theme's background (also the default of ``fade_color``).
 BACKGROUND = "background"
+#: The colour of an iris without ``color``: the classic cartoon black.
+IRIS_COLOR = "#000000"
+#: An iris closing on a character pauses around its head: it reaches the head's circle
+#: (:data:`IRIS_HEAD_SCALE` x half the head box's diagonal) at the first share of its closing
+#: frames and leaves it at the second (opening: the same in reverse).
+IRIS_HOLD = (0.55, 0.8)
+IRIS_HEAD_SCALE = 1.5
 
 
 def effective(config: VideoConfig, index: int) -> TransitionConfig:
@@ -50,11 +61,11 @@ def has_transitions(config: VideoConfig) -> bool:
 
 
 def requested_frames(transition: TransitionConfig, fps: int) -> int:
-    """Frames a transition asks for: the overlap of a crossfade / push / wipe, a fade_color's
-    frames on *each* side (half its duration); 0 for a cut."""
+    """Frames a transition asks for: the overlap of a crossfade / push / wipe, a fade_color's or
+    an iris's frames on *each* side (half its duration); 0 for a cut."""
     if transition.overlaps:
         return max(1, round(transition.seconds * fps))
-    if transition.type == "fade_color":
+    if transition.through_color:
         return max(1, round(transition.seconds * fps / 2))
     return 0
 
@@ -85,11 +96,11 @@ def join_overlaps(config: VideoConfig, fps: int, frames: Sequence[int], speech_e
 
 def head_frames(config: VideoConfig, index: int, fps: int, frames: int, overlap: int) -> int:
     """Frames at the start of scene ``index`` (``frames`` long) its incoming transition uses: the
-    ``overlap`` of a crossfade / push / wipe, the fade-in of a fade_color."""
+    ``overlap`` of a crossfade / push / wipe, the fade-in of a fade_color, the opening of an iris."""
     t = effective(config, index)
     if t.overlaps:
         return overlap
-    if t.type == "fade_color":
+    if t.through_color:
         return min(requested_frames(t, fps), frames)
     return 0
 
@@ -121,12 +132,51 @@ def moves_pictures(transition: TransitionConfig) -> bool:
     return transition.type in DIRECTED_TRANSITIONS
 
 
-def resolve_color(color: str | None, theme: Theme) -> str:
-    """The hex colour a ``fade_color`` fades through: ``color`` as written (a theme token or
-    hex; ``background`` or ``None``: the theme's background)."""
+def resolve_color(color: str | None, theme: Theme, kind: str = "fade_color") -> str:
+    """The hex colour a ``fade_color`` or an iris (``kind``) passes through: ``color`` as written
+    (a theme token or hex; ``background``: the theme's background); ``None``: the theme's
+    background for a fade_color, :data:`IRIS_COLOR` for an iris."""
+    if color is None and kind in IRIS_TRANSITIONS:
+        return IRIS_COLOR
     if color in (None, BACKGROUND):
         return theme.background
     return theme.color(color)
+
+
+def iris_scene(index: int, transition: TransitionConfig) -> int:
+    """The scene whose character or point an iris into scene ``index`` targets: the scene
+    before for ``iris_out`` (it closes on it), the scene itself for ``iris_in`` (it opens on it)."""
+    return index - 1 if transition.type == "iris_out" else index
+
+
+def iris_problems(config: VideoConfig) -> list[Problem]:
+    """Irises whose ``character`` is not on the scene they close or open on (scene types that
+    declare their targets; skipped where the params do not validate, reported elsewhere)."""
+    from pydantic import ValidationError
+
+    from vidgen import registry
+    from vidgen.cartoon.cast import character_names
+
+    declared = set(character_names(config))
+    problems: list[Problem] = []
+    for i, spec in enumerate(config.scenes):
+        t = effective(config, i)
+        if t.type not in IRIS_TRANSITIONS or t.character is None or iris_scene(i, t) < 0:
+            continue
+        target = config.scenes[iris_scene(i, t)]
+        entry = registry.find(target.type)
+        if entry is None or not entry.cls.target_patterns:
+            continue
+        try:
+            names = [n for n in entry.cls.target_names(entry.cls.validate_params(target.params)) if n in declared]
+        except ValidationError:
+            continue
+        if t.character not in names:
+            where = f"scenes[{i}].transition.character" if spec.transition is not None else "transition.character"
+            on_stage = f"its characters: {', '.join(names)}" if names else "it has no characters"
+            side = "closes on" if t.type == "iris_out" else "opens on"
+            problems.append(Problem(where, f"the {t.type} into '{spec.id}' {side} '{t.character}', who is not in scene '{target.id}' ({on_stage})"))
+    return problems
 
 
 def color_problems(config: VideoConfig, theme: Theme) -> list[Problem]:
@@ -176,7 +226,7 @@ def transition_warnings(project: Project) -> list[str]:
         return []  # reported as problems elsewhere
 
 
-# ----- fade_color inside a scene's render ----------------------------------------------------------------
+# ----- fade_color and irises inside a scene's render ----------------------------------------------------
 
 
 def hex_rgb(color: str) -> tuple[int, int, int]:
@@ -187,6 +237,46 @@ def hex_rgb(color: str) -> tuple[int, int, int]:
     return int(digits[0:2], 16), int(digits[2:4], 16), int(digits[4:6], 16)
 
 
+def iris_radius(weight: float, full: float, hold: float | None = None) -> float:
+    """Radius (pixels) of an iris whose colour covers ``weight`` of its way (0: open, the circle
+    of radius ``full`` clears the frame; 1: closed). It eases from ``full`` to 0; with ``hold``
+    (a head's circle) it eases to ``hold``, stays there between the :data:`IRIS_HOLD` shares,
+    then closes."""
+    w = min(max(weight, 0.0), 1.0)
+    if hold is None or hold >= full:
+        return full * (1.0 - smoothstep(w))
+    reach, leave = IRIS_HOLD
+    if w <= reach:
+        return full + (hold - full) * smoothstep(w / reach)
+    if w <= leave:
+        return hold
+    return hold * (1.0 - smoothstep((w - leave) / (1.0 - leave)))
+
+
+def iris_full_radius(width: int, height: int, x: float, y: float) -> float:
+    """Radius (pixels) of a circle about ``(x, y)`` that just clears a ``width`` x ``height``
+    frame (its farthest corner, plus the soft edge)."""
+    return max(math.hypot(cx - x, cy - y) for cx in (0.0, width) for cy in (0.0, height)) + 1.0
+
+
+def iris_coverage(height: int, width: int, x: float, y: float, radius: float) -> np.ndarray:
+    """``height`` x ``width`` weights of the picture inside a circle of ``radius`` pixels about
+    pixel point ``(x, y)``: 1 inside, 0 outside, a one-pixel soft edge (pixel centres at +0.5)."""
+    ys = np.arange(height, dtype=np.float32)[:, None] + 0.5 - y
+    xs = np.arange(width, dtype=np.float32)[None, :] + 0.5 - x
+    return np.clip(radius + 0.5 - np.sqrt(xs * xs + ys * ys), 0.0, 1.0)
+
+
+@dataclass(frozen=True)
+class IrisPoint:
+    """Where an iris closes or opens, in pixels of the frame (``x`` right, ``y`` down from the
+    top-left corner), and the radius it pauses at (a character's head; ``None``: no pause)."""
+
+    x: float
+    y: float
+    hold: float | None = None
+
+
 class ColorFade:
     """A scene's first ``frames_in`` frames faded in from ``color_in`` and its last
     ``frames_out`` frames (of ``total``) faded out to ``color_out`` (DESIGN.md §49).
@@ -195,15 +285,39 @@ class ColorFade:
     the overlays (drawn by the next wrapper in) stay on top, as they do in a crossfade. The
     colour's weight is 1 on the scene's very first and last frame and falls linearly over the
     fade (``1 - k / frames_in`` in, ``(j + 1) / frames_out`` out).
+
+    ``iris_in`` / ``iris_out`` (DESIGN.md §69.45): the colour covers the frame outside a circle
+    instead of blending into it: the circle opens over the first frames from the point the
+    callable returns (asked on each of those frames, so it follows a moving character) and
+    closes over the last ones; its radius is :func:`iris_radius` of the same weight.
     """
 
-    def __init__(self, color_in: str | None, frames_in: int, color_out: str | None, frames_out: int, total: int) -> None:
+    def __init__(
+        self,
+        color_in: str | None,
+        frames_in: int,
+        color_out: str | None,
+        frames_out: int,
+        total: int,
+        iris_in: Callable[[int, int], IrisPoint] | None = None,
+        iris_out: Callable[[int, int], IrisPoint] | None = None,
+    ) -> None:
         self.color_in = np.array(hex_rgb(color_in), dtype=np.float32) if color_in else None
         self.color_out = np.array(hex_rgb(color_out), dtype=np.float32) if color_out else None
         self.frames_in = frames_in if color_in else 0
         self.frames_out = frames_out if color_out else 0
         self.total = total
+        self.iris_in = iris_in
+        self.iris_out = iris_out
         self.written = 0
+
+    def iris_at(self, frame: int) -> Callable[[int, int], IrisPoint] | None:
+        """The iris point callable at the scene's frame ``frame`` (``None``: a plain fade or none)."""
+        if self.frames_out and frame >= self.total - self.frames_out:
+            return self.iris_out
+        if self.frames_in and frame < self.frames_in:
+            return self.iris_in
+        return None
 
     def weight(self, frame: int) -> tuple[float, np.ndarray | None]:
         """The colour and its weight (0..1) at the scene's frame ``frame``."""
@@ -219,7 +333,15 @@ class ColorFade:
         if color is None or w <= 0:
             return frame
         out = np.array(frame, copy=True)
-        out[:, :, :3] = np.rint(frame[:, :, :3] * (1.0 - w) + color * w).clip(0, 255).astype(np.uint8)
+        iris = self.iris_at(k)
+        if iris is None:
+            out[:, :, :3] = np.rint(frame[:, :, :3] * (1.0 - w) + color * w).clip(0, 255).astype(np.uint8)
+            return out
+        height, width = frame.shape[:2]
+        point = iris(width, height)
+        radius = iris_radius(w, iris_full_radius(width, height, point.x, point.y), point.hold)
+        inside = iris_coverage(height, width, point.x, point.y, radius)[:, :, None]
+        out[:, :, :3] = np.rint(frame[:, :, :3] * inside + color * (1.0 - inside)).clip(0, 255).astype(np.uint8)
         return out
 
     def attach(self, renderer: object) -> None:

@@ -115,7 +115,9 @@ src/vidgen/
                           # they fire and their shapes, §69.41; no manim),
                           # motion_effect_shapes.py (MotionEffect, §69.41), room.py (rooms:
                           # wall, floor, windows, the sky outside, §69.42; no manim),
-                          # room_drawing.py (draw_room, WindowViews, §69.42); still.py also
+                          # room_drawing.py (draw_room, WindowViews, §69.42), cards.py (title
+                          # cards: layout, burst rays, outlined text colours, §69.46; no manim);
+                          # still.py also
                           # draws the prop and furniture galleries (§69.43) and
                           # `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
@@ -187,7 +189,7 @@ src/vidgen/
   music.py                # background music: generated beds, music files as looping sources (§48; no manim)
   mix.py                  # the final mix: music placement, ducking, normalisation, limiter (§48; no manim)
   loudness.py             # BS.1770-4 integrated loudness and true peak, block by block (§48; no manim)
-  transitions.py          # scene transitions: effective transition, frame math, colour fade, voice track, xfade names (§49-50; no manim)
+  transitions.py          # scene transitions: effective transition, frame math, colour fade and irises (§69.45), voice track, xfade names (§49-50; no manim)
   carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
@@ -206,7 +208,7 @@ src/vidgen/
                           # effect_action.py: effect (a symbol over a head), §69.40;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
-                          # stage.py: the stage scene type, §69.6)
+                          # stage.py: the stage scene type, §69.6; card.py: the card scene type, §69.46)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
@@ -855,6 +857,13 @@ ground from the caster's `ground_y`); `StageFrame.depths`; `holding_problems(dep
 `walk_to` / `run_to` options `depth` and `to: {mark, depth}`; `turn` `to: front`; stage
 character `facing: front`; layout key `depth`. Compatible: a scene without them renders as
 before (a generated character also carries its front view's hidden shapes).
+Step 112 (§69.45, §69.46) adds `BURST_SPIN`, `CARD_STYLES`, `CardLayout`, `burst_ray_color`,
+`burst_rays`, `card_layout`, `card_outline_width`, `card_text_inks`, `StingCue` and
+`StingSetting`; `NarratedScene.sting(sting, time)` (public; it was the private `_add_sting`).
+New built-in scene type `card`; transition types `iris_out` / `iris_in` with the keys
+`character` and `at`. Compatible: renders without them are unchanged, but the fingerprint of a
+scene with a transition next to it changes once (the transition's dump gains `character` and
+`at`), so those scenes render again once.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -8002,3 +8011,90 @@ away from the camera, and turn to face the viewer.
   (automatic directing, reframing) keeps each character's start depth and size; sitting on the
   ground or lying, from the front.
   Tests: `tests/test_cartoon_depth.py`.
+
+### 69.45 Iris transitions (Step 112)
+
+- **Config** (`config.py`): `TransitionConfig.type` adds `iris_out` and `iris_in` (default 1.2 s,
+  `TRANSITION_DURATIONS`), with `character` (a character name) or `at` (`[x, y]`, fractions of
+  the frame from its top-left corner, each 0..1; not both) and `color` (default black,
+  `transitions.IRIS_COLOR`; `background`, tokens and hex as for `fade_color`). `character` / `at`
+  on another type, `color` on a type other than fade_color and the irises are config errors.
+  `IRIS_TRANSITIONS`, `COLOR_TRANSITIONS = (fade_color, iris_out, iris_in)` and
+  `TransitionConfig.through_color` replace the `type == "fade_color"` tests (plan, requested and
+  head frames). The key is `character`, not `on`: PyYAML reads a bare `on:` key as `True`.
+  An `iris_out` on the first scene is an error (nothing before it); an `iris_in` there opens the
+  video (fade_in only, like `fade_color`).
+- **Semantics (decision).** Both are a close then an open through the colour, split like a
+  `fade_color` (`round(duration x fps / 2)` frames on each side, no overlap, the timing contract
+  of §49: the closing covers the silent tail of the scene before or holds it). The type says
+  which side has the target: `iris_out` closes on the scene before's `character` / `at` and opens
+  the next scene from the frame's centre; `iris_in` closes the scene before on its centre and
+  opens on the next scene's `character` / `at` (`transitions.iris_scene(i, t)`: `i - 1` for
+  iris_out, `i` for iris_in). One transition per boundary gives the classic "iris out, iris in";
+  a card between two scenes (iris_out into it, iris_in out of it) is the usual cartoon flow.
+- **Drawn in the renders, not at the join (decision).** The iris is a `fade_color` with a
+  circular mask: `ColorFade(..., iris_in=, iris_out=)` (outermost `add_frame` wrapper, §49)
+  replaces the uniform blend of those frames by `frame x inside + colour x (1 - inside)`,
+  `inside = iris_coverage(h, w, x, y, r)` (1 in the disc, a one-pixel soft edge),
+  `r = iris_radius(weight, iris_full_radius(w, h, x, y), hold)` of the same colour weight as the
+  fade (1 on the boundary frames: closed). `iris_radius` eases from the radius that clears the
+  frame's farthest corner to 0 (`smoothstep`); with `hold` (a character's head) it eases to it by
+  `IRIS_HOLD[0]` (0.55) of the way, stays until `IRIS_HOLD[1]` (0.8), then closes (an opening is
+  the same in reverse). `NarratedScene._iris_point` gives the callable `(width, height) ->
+  IrisPoint(x, y, hold)`: the `at` point, the frame's centre, or the character's head (`head_box`
+  of `self.cast[name]`, through the camera frame, so shots and zooms are followed; `hold` =
+  `IRIS_HEAD_SCALE` 1.5 x half the head box's diagonal), asked on every masked frame (the circle
+  follows a moving character; "its head as the scene ends" is where it is in those frames). A
+  name not in the scene's cast at render time is a `VidgenError`. So the join sees a cut: no
+  `xfade` filter, nothing that depends on the FFmpeg version (the render test joins with 6.1.1,
+  7.1.5 and 8.1.3; in a video with crossfades the iris boundaries are cuts inside a run, tested),
+  and stills, storyboards and the layout dump see the irises. Rejected: a custom `xfade`
+  expression at the join (an overlapping transition would hide the next scene's first frames
+  under the colour while its narration starts, needs the head position written by the worker,
+  and the expression's planes and pixel format differ per FFmpeg build).
+- **Validate**: `transitions.iris_problems(config)` (in `vidgen validate`): a `character` not on
+  the target scene's stage (`target_names` of its params, declared characters only):
+  `scenes[1].transition.character: the iris_out into 'later' closes on 'kit', who is not in
+  scene 'a' (its characters: pip)` (`transition.character` for the video's default).
+- **Not done**: `wipe_star` (optional in the step); a shape other than a circle; an iris that
+  closes on a prop.
+  Tests: `tests/test_cartoon_cards.py`.
+
+### 69.46 Title cards: the `card` scene (Step 112)
+
+- **Scene** (`scenes/card.py`, `@scene("card")`): `text` (required), `subtitle`, `style: burst |
+  frame | plain`, `color` (default `primary`), `text_color` / `outline_color` (default the better
+  of white and the dark ink for the fill, the other for the outline), `spin` (burst: turns at
+  `BURST_SPIN` 0.12 rad/s by an updater), `sting` (`StingSetting`; `at: end` is an error: the
+  card's sting plays as the text pops in, `NarratedScene.sting(cue, 0.0)`). The card's colour is
+  a full-frame rectangle from frame 0 (an `iris_in` opens on the card, not on the theme's
+  background). Steps: burst / frame, text (and the subtitle unless there are two beats), then
+  the subtitle; silent with `duration` or narrated; `outro` 0.5. Targets `text`, `subtitle`,
+  `burst` / `frame`.
+- **Pure layout** (`cartoon/cards.py`, no manim): `card_layout(width, height, style=,
+  subtitle=)` -> `CardLayout` (text box 0.8 of the room in a wide frame, 0.9 in a tall one; 0.36
+  / 0.46 of its height with / without a subtitle; the frame's outer and inner rectangles at
+  `FRAME_INSET` 0.05 and `FRAME_GAP` 0.025 of the shorter side, the text kept clear of them; a
+  burst radius past the corners); `burst_rays(radius, turn, count=18)` (every other ray, the
+  lighter tone `burst_ray_color(color)` = 22 % towards white); `card_text_inks(*backgrounds)`
+  (white or `CHARACTER_INK`, whichever has the higher worst contrast over the card's colours:
+  lint's `contrast` passes on the fill alone); `card_outline_width(cap)` (twice
+  `OUTLINE_SHARE` 0.09 of the cap height: the stroke is centred on the letters' edge).
+- **Drawing**: the outline is a layer of plain shapes (each glyph's points) filled and stroked
+  in the outline colour behind the text, not a background stroke per glyph (each glyph's stroke
+  would cover the glyph before it: found in the first render). In the layout dump it is a
+  `group` object below the text. The text pops in with `pop_scale` (§69.40) at strength 0.5 (a
+  15 % overshoot; the text box leaves room for it); the burst grows by an `UpdateFromAlphaFunc`,
+  not Manim's `GrowFromCenter`: an introducer is added to the scene again as it starts, over the
+  text popping in with it (found by eye: the rays covered the letters).
+- **Screenplay** (§69.25): `# Card: TEXT` (any level, `Card` with `:`, `.` or a dash; not a title
+  heading) is a `ScriptScene(card=True)`; `_add_card` writes a `card` scene with that text,
+  `duration: CARD_SECONDS` (2.5) without lines, else one beat per line (voices as on a stage;
+  `[directions]` become `# TODO:` notes, a card has no stage); `set:` under a card is an error.
+  After another scene the card comes in with `iris_out`, and the scene after a card gets
+  `transition: iris_in` (written right after its `type`). `vidgen screenplay --json` counts a
+  silent card's beats and characters as 0.
+- **Gallery**: the guide's `scenes` topic has a `card` snippet (`# cartoons`) and a chooser row;
+  `docs/gallery/card.md` and its four media files (about 180 KB) come from `vidgen gallery
+  --types card`.
+  Tests: `tests/test_cartoon_cards.py`.
