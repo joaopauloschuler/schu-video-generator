@@ -11,7 +11,7 @@ put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_i
 ``shot_action``: shot;
 ``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``switch_action``:
 switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: lightning,
-rainbow) and the
+rainbow; ``knock_action``: knock) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
 """
@@ -39,6 +39,7 @@ from vidgen.scenes import (  # noqa: F401
     icon_grid,
     image,
     keyframes_action,
+    knock_action,
     light_action,
     line_chart,
     moving,

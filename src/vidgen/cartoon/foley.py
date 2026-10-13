@@ -7,7 +7,10 @@ boing as a jump takes off, a thud where a thrown prop lands (``throw``), a pop o
 face (``emote`` / ``react``), a short sound as most effect symbols pop up (``effect``,
 :data:`EFFECT_SOUNDS`), and a bicycle's bell, an engine, a balloon's burner or a toy rocket's
 launch as a vehicle sets off, its brakes as it stops, and a soft thud where a balloon or a rocket
-lands (``ride_to``, :data:`RIDE_SOUNDS`).
+lands (``ride_to``, :data:`RIDE_SOUNDS`); a door's creak as it opens or closes (``open`` /
+``close``, an ``enter`` / ``exit`` through a closed door) and its thud as it shuts, a splash as a
+boat sets off and where a watering can's water lands (``pour``), and a splash under each step on
+wet ground (:func:`wet_steps`) (DESIGN.md §69.62).
 
 Footfalls follow the walk cycle of :func:`~vidgen.cartoon.acting.walk_cycle`: a foot lands each
 time the legs are furthest apart (half a step, :data:`~vidgen.cartoon.acting.STEP_LENGTH`
@@ -23,7 +26,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from vidgen.cartoon.acting import STEP_LENGTH, WALK_EASE
+from vidgen.cartoon.holding import RESHAPE_SHARE
 from vidgen.cartoon.motion import Phases
+from vidgen.cartoon.small_props import pour_flow
 from vidgen.cartoon.vehicles import ROCKET_ASCENT_SHARE
 
 #: Level (dB) of each sound tied to an action, under the library's level (about 7 dB under
@@ -72,6 +77,19 @@ EFFECT_SOUNDS: dict[str, tuple[str, float, dict[str, float]]] = {
     "hearts": ("pop", -6.0, {"pitch": 2.0, "intensity": 0.4}),
     "sparkle": ("chime", -9.0, {"duration": 0.4, "pitch": 12.0}),
 }
+#: A door (DESIGN.md §69.62): ``(gain dB, params)`` of its creak as it opens, of the shorter,
+#: higher creak as it closes, and of the thud as it shuts (when its shape switches).
+DOOR_OPEN_CREAK: tuple[float, dict[str, float]] = (-8.0, {"duration": 0.9})
+DOOR_CLOSE_CREAK: tuple[float, dict[str, float]] = (-10.0, {"duration": 0.5, "pitch": 2.0})
+DOOR_SHUT: tuple[float, dict[str, float]] = (-6.0, {"duration": 0.3, "pitch": 5.0})
+#: A boat setting off: a soft, low splash (gain dB, params).
+BOAT_SPLASH: tuple[float, dict[str, float]] = (-12.0, {"duration": 0.9, "pitch": -3.0, "intensity": 0.3})
+#: A watering can's water landing: a long, soft, high splash of droplets (gain dB, pitch,
+#: intensity) while the water runs, from :data:`POUR_FALL_SECONDS` after it leaves the spout.
+POUR_SPLASH: tuple[float, float, float] = (-10.0, 7.0, 0.15)
+POUR_FALL_SECONDS = 0.25
+#: A step on wet ground (puddles): a tiny splash under the footstep (gain dB, params).
+WET_STEP: tuple[float, dict[str, float]] = (-14.0, {"duration": 0.25, "pitch": 4.0, "intensity": 0.2})
 
 
 @dataclass(frozen=True)
@@ -106,6 +124,14 @@ class PlayedAction:
     """The kind of the vehicle a ``ride_to`` moved (DESIGN.md §69.52)."""
     rolls: bool = False
     """A walk on wheels (a robot's, DESIGN.md §69.58): no footsteps."""
+    prop: str | None = None
+    """The kind of the prop an ``open`` / ``close`` reshaped (a ``door`` creaks, §69.62)."""
+    through_door: bool = False
+    """An ``enter`` / ``exit`` through a room's door (no whoosh or swoosh: it fades in the doorway)."""
+    opens_door: bool = False
+    """... and it opened that door, closed until then (a creak)."""
+    pours: bool = False
+    """The water of a ``pour`` (it lands on the ground: a splash)."""
 
 
 @dataclass(frozen=True)
@@ -152,7 +178,7 @@ def footfall_shares(heights: float, phases: Phases = Phases(), step_length: floa
 def ride_cues(played: PlayedAction) -> list[FoleyCue]:
     """The sounds of a ``ride_to`` (DESIGN.md §69.52, §69.53): as it sets off a bicycle's bell, a
     balloon's burner or a toy rocket's launch, or an engine (a car's, a bus's, a boat's motor) for
-    most of the ride (at least :data:`ENGINE_MIN_SECONDS`); its brakes ending as it stops
+    most of the ride (at least :data:`ENGINE_MIN_SECONDS`), a boat with a splash (§69.62); its brakes ending as it stops
     (:data:`BRAKES`); a rocket's parachute popping open at the top of a landing flight; a soft thud
     as a balloon or a rocket touches down (``played.lands``: it lands)."""
     start, seconds = played.start, played.seconds
@@ -163,6 +189,8 @@ def ride_cues(played: PlayedAction) -> list[FoleyCue]:
         cues = [FoleyCue(start, "engine", gain, {"duration": round(length, 3), "pitch": pitch})]
     else:
         cues = [FoleyCue(start, off, gain, {"pitch": pitch})]
+    if vehicle == "boat":
+        cues.append(FoleyCue(start, "splash", BOAT_SPLASH[0], BOAT_SPLASH[1]))
     if vehicle in BRAKES:
         brakes_pitch, brakes_gain = BRAKES[vehicle]
         cues.append(FoleyCue(start + seconds, "brakes", brakes_gain, {"pitch": brakes_pitch}, align="end"))
@@ -174,21 +202,50 @@ def ride_cues(played: PlayedAction) -> list[FoleyCue]:
     return cues
 
 
+def door_cues(played: PlayedAction) -> list[FoleyCue]:
+    """A door's ``open`` (its creak from the start) or ``close`` (a shorter, higher creak, then a
+    thud when it shuts, at :data:`~vidgen.cartoon.holding.RESHAPE_SHARE` of the action)."""
+    if played.action == "open":
+        return [FoleyCue(played.start, "creak", DOOR_OPEN_CREAK[0], DOOR_OPEN_CREAK[1])]
+    return [
+        FoleyCue(played.start, "creak", DOOR_CLOSE_CREAK[0], DOOR_CLOSE_CREAK[1]),
+        FoleyCue(played.start + RESHAPE_SHARE * played.seconds, "thud", DOOR_SHUT[0], DOOR_SHUT[1]),
+    ]
+
+
+def wet_steps(cues: list[FoleyCue], wet_from: float | None) -> list[FoleyCue]:
+    """``cues`` with a tiny splash (:data:`WET_STEP`) under each footstep from scene time
+    ``wet_from`` on (the ground is wet: puddles lie there; ``None``: dry)."""
+    if wet_from is None:
+        return cues
+    splashes = [FoleyCue(cue.time, "splash", WET_STEP[0], WET_STEP[1]) for cue in cues if cue.sound == "footstep" and cue.time >= wet_from]
+    return sorted([*cues, *splashes], key=lambda cue: cue.time)
+
+
 def foley_cues(played: PlayedAction) -> list[FoleyCue]:
     """The sounds of one action as it played (scene times from ``played.start``, scaled by the
     seconds it took): none for actions without foley."""
     start, seconds = played.start, played.seconds
     cues: list[FoleyCue] = []
     if played.action in WALKING_ACTIONS:
-        if played.action == "enter":
+        if played.opens_door:
+            cues.append(FoleyCue(start, "creak", DOOR_OPEN_CREAK[0], DOOR_OPEN_CREAK[1]))
+        if played.action == "enter" and not played.through_door:
             cues.append(FoleyCue(start, "whoosh", WHOOSH_GAIN))
         footfalls = [] if played.rolls else footfall_shares(played.heights, played.phases, played.step_length)
         for k, (share, last) in enumerate(footfalls):
             pitch, intensity = FEET[k % 2]
             cues.append(FoleyCue(start + share * seconds, "footstep", FOOTSTEP_GAIN, {"pitch": pitch, "intensity": LAST_STEP_INTENSITY if last else intensity}))
-        if played.action == "exit":
+        if played.action == "exit" and not played.through_door:
             moved = start + (1.0 - played.phases.after) * seconds
             cues.append(FoleyCue(moved, "swoosh", WHOOSH_GAIN, align="end"))
+    elif played.action in ("open", "close") and played.prop == "door":
+        cues += door_cues(played)
+    elif played.pours:
+        flow_start, flow_end = pour_flow(seconds)
+        gain, pitch, intensity = POUR_SPLASH
+        length = min(max(flow_end - flow_start, 0.2), 3.0)
+        cues.append(FoleyCue(start + flow_start + POUR_FALL_SECONDS, "splash", gain, {"duration": round(length, 3), "pitch": pitch, "intensity": intensity}))
     elif played.action == "jump":
         cues.append(FoleyCue(start + played.phases.before * seconds, "boing", BOING_GAIN))
     elif played.action == "ride_to" and played.vehicle in RIDE_SOUNDS:

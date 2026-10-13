@@ -12128,3 +12128,102 @@ How to test
   `test_builtin_scenes test_actions_coverage test_phase_k_review test_cartoon_sheet
   test_phase_i_review test_phase_h_review test_gallery test_cartoon_lint -k "stage or review or
   sheet or gallery or lint"` (9 passed, 38 s). The full suite was not run.
+
+## Step 128 — More sounds
+
+What was built
+- Three new generated built-in sounds in `src/vidgen/sfx.py` (numpy, seeded per name, no
+  recordings; 29 sounds now): `creak` (a door hinge: stick-slip pulses gliding 45 → 110 → 70 Hz
+  through wood bands), `knock` (three raps 0.19 s apart), `splash` (burst + plunk + droplets; low
+  intensity = mostly droplets). `bell` (bicycle bell), `engine` (the engine hum) and `phone` (the
+  ring, Step 122) already existed: kept unchanged, not duplicated.
+- Set beds in `src/vidgen/ambience.py`: `birdsong_loop` (20 s), `city_loop` (16 s),
+  `room_tone_loop` (8 s), seamless, seeded, at −36 / −35 / −46 LUFS, ducking 4 / 5 / 0 dB, fades
+  2 s in / 1.5 s out; `AMBIENCE_BEDS` / `BEDS` gain them, so `mix.plan_ambience` and the mix report
+  take them as they took rain and fire. `_leveled` now levels every loop (rain and fire unchanged).
+- Pure `set_ambience(setting, room=, lights=, rain=, end=)`: `False` none; a list of bed names for
+  the whole scene; `True` = automatic: a room → `room_tone`; outdoors → `birdsong` while the light
+  is `day` / `morning` (a light change counts half-way through its fade; tints, sunset, night,
+  indoor: none), never in rain nor 2 s after it, spans < 2 s dropped; `city` only when named.
+- Config: top-level `ambience: bool = True`; stage param `ambience: auto | birdsong | city |
+  room_tone | [list] | true | false` (none: the video's). `Stage.set_beds`, `Stage.light_marks`;
+  `Stage.timings()` adds the set beds after rain / fire. Everything stays under `foley`.
+- Door foley (`cartoon/foley.py` `door_cues`): `open` of a door → `creak`; `close` → shorter
+  higher `creak` + `thud` when it shuts (at `RESHAPE_SHARE`); `enter` / `exit` through a room
+  door → no whoosh / swoosh (it fades in the doorway: the Step 109 gap), plus a `creak` when the
+  door was closed (`Walk(opens_door=)`, set in `scenes/moving.py` by `_door_closed`).
+- Water: a boat's `ride_to` adds a soft `splash`; a `pour` (its `WaterFlow`) a long soft splash
+  while the water runs; `wet_steps` adds a tiny splash under each footstep once puddles lie
+  (`Stage.puddles`' first start).
+- New action `knock` (`scenes/knock_action.py`, non-animating like `switch_on`): `- knock: front`
+  on a door prop (a room's door or a `door` prop) → `Stage.knock_on` plays `knock` (−3 dB) with
+  foley; validate names the stage's doors.
+
+Compatibility decision (please read)
+- Automatic ambience is **on by default** (top-level `ambience: true`). Re-rendering an existing
+  project changes its sound: outdoor stages by day gain birdsong, rooms a quiet room tone, door
+  passages creak instead of whooshing, boat rides splash, pours splash, steps in puddles splash.
+  Pixels are unchanged (no drawing code changed). `ambience: false` at the top level restores the
+  earlier beds (only rain and fire); `foley: false` silences all. "Only for new projects" was
+  rejected: nothing marks a project as new except a key `vidgen new` would write, and authors
+  writing YAML by hand would never get the feature the step asks to be automatic.
+
+Evidence
+- `tests/test_cartoon_sounds.py`: 13 without rendering (each sound deterministic incl. params;
+  knock = 3 onsets 0.19 s apart; creak / splash / bed bands; each bed loop seamless, cached,
+  re-made identical, at its level ±0.1 LU, peak < −15 dBFS; the `set_ambience` rules; the stage's
+  setting resolution; placement and ducking; door / water / wet-step cues; knock validation), 2 tiny
+  renders (a room: knock, 3 creaks, 1 thud, no whoosh, `room_tone` all along; a park turning to
+  night: birdsong until the light change's middle; `ambience: false`: none).
+- Measured (`scratchpad s128/measure.py`, loudest 400 ms at intensity 0 / 0.5 / 1): creak −30.0 /
+  −27.6 / −27.4 LUFS (peak −9 dBFS limited), knock −30.0 / −27.0 / −24.0 (peak −12.1 at 0.5),
+  splash −30.0 / −27.0 / −26.4 (peak −10.3); beds integrated: birdsong −36.0 (peak −23.4), city
+  −35.0 (−23.1), room tone −46.0 (−34.1); loops made in 0.13–0.6 s once per process.
+- A 28 s scratch project (`s128/proj`: park day → night, a room with knock / open / exit through
+  the back door / close, a street with `ambience: city`) rendered with `vidgen render --preview`
+  (15 s): mix report lists birdsong 0–7.5 s, room_tone 10.9–22.4 s, city 22.4–28.3 s; in the mix
+  (word-count timing, ducked all along) birdsong −38.2 LUFS, room + foley −30.5, city −41.3;
+  sfx: knock, pop, creak (open), creak (exit through the closed back door), footsteps, creak +
+  thud (close). Not listened to by a human (no audio playback here; no matplotlib for spectrograms).
+
+Files touched
+- New: `src/vidgen/scenes/knock_action.py`, `tests/test_cartoon_sounds.py`.
+- `src/vidgen/sfx.py`, `ambience.py`, `config.py`, `api.py`, `cartoon/foley.py`,
+  `cartoon/transition.py` (`Walk(opens_door=)`), `scenes/stage.py`, `scenes/moving.py`,
+  `scenes/__init__.py`.
+- Tests updated: `test_actions.py` (action lists gain `knock`), `test_cartoon_water_air.py` (a
+  boat now also splashes), `test_cartoon_rain.py` / `test_cartoon_fire_nature.py` (filter the
+  rain / fire bed: other beds now play beside them).
+- Docs: `docs/CONFIG.md` (top-level `ambience`, stage `ambience` row, sounds table, foley
+  paragraph, new "Ambience and door sounds (`ambience`, `knock`)", action rows / lists),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (rows as `_param_rows` writes them),
+  `DESIGN.md` (§2 tree, §6.4 Step 128 names, new §69.62), guide
+  (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: `knock` row, cartoon Sound bullet, sounds
+  list), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `SET_BEDS`, `set_ambience`, `wet_steps`; `PlayedAction.prop`,
+  `.through_door`, `.opens_door`, `.pours`; `Walk(opens_door=False)`. Config: top-level
+  `ambience`, stage param `ambience`, action `knock`. Sounds `creak`, `knock`, `splash`; beds
+  `birdsong`, `city`, `room_tone` (timings / mix report `ambience`).
+
+Known gaps / TODOs
+- No door shake or character animation on a knock; knock and creaks are centred (not panned);
+  no splash on getting into / out of a boat or a fruit into water; birdsong ignores snow and fog;
+  a light fade counts as one instant; nobody has listened to the new sounds.
+
+How to test
+- `pytest tests/test_cartoon_sounds.py` (13 not-render, 5 s; 2 render, 3 s).
+- Also run, not render: `test_sfx test_cartoon_foley test_cartoon_rain test_cartoon_fire_nature
+  test_actions test_api test_music test_cartoon_room test_cartoon_small_props
+  test_cartoon_water_air` (268, 34 s; the one boat failure fixed after), `test_cartoon_water_air
+  test_docs test_guide test_schema test_gallery test_config test_actions_coverage
+  test_cartoon_moving test_cartoon_living test_includes` (293 + the guide failure fixed after, 87
+  s), `test_guide test_docs test_sfx test_cartoon_sounds test_cartoon_water_air test_actions
+  test_api test_extensions` (301, 17 s), `test_cartoon_storm test_cartoon_lighting
+  test_cartoon_holding test_cartoon_motion_effects test_cartoon_vehicles test_cartoon_foley
+  test_cartoon_rain test_cartoon_fire_nature test_cartoon_stage` (125, 6 s); render
+  `test_cartoon_rain test_cartoon_fire_nature test_cartoon_room test_cartoon_foley
+  test_cartoon_small_props test_cartoon_water_air` (9, 10 s), `test_cartoon_moving
+  test_cartoon_living test_cartoon_storm test_cartoon_lighting test_sfx test_music
+  test_cartoon_sounds` (18, 43 s). The full suite was not run.

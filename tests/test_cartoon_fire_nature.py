@@ -278,7 +278,7 @@ def test_a_fire_lit_later_is_drawn_as_before_until_then(make_project, tmp_path: 
     extensions.load_builtins()
     monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
     plain, before = frames_of(room_project(make_project, ROOM, BEATS), tmp_path / "plain", monkeypatch)
-    assert plain.living == {} and "ambience" not in plain.timings()
+    assert plain.living == {} and [b["bed"] for b in plain.timings()["ambience"]] == ["room_tone"]   # a room's tone since Step 128
     lit = [BEATS[0], {**BEATS[1], "actions": [{"switch_on": "fireplace", "at": 0.3}]}]
     scene, after = frames_of(room_project(make_project, ROOM, lit), tmp_path / "lit", monkeypatch)
     fire = scene.living["fireplace"]
@@ -286,7 +286,7 @@ def test_a_fire_lit_later_is_drawn_as_before_until_then(make_project, tmp_path: 
     assert len(after) == len(before) and 5 < switch < len(after) - 3
     assert all(np.array_equal(a, b) for a, b in zip(after[:switch], before[:switch]))
     assert not np.array_equal(after[switch + 1], before[switch + 1])
-    [bed] = scene.timings()["ambience"]
+    [bed] = [b for b in scene.timings()["ambience"] if b["bed"] != "room_tone"]
     assert bed["bed"] == "fire" and bed["start"] == pytest.approx(fire.switches[0][0]) and bed["end"] == pytest.approx(float(scene.renderer.time))
     assert [s for s in scene.sfx_log if s.sound == "burner"]
 

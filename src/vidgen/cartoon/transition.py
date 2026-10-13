@@ -287,6 +287,7 @@ class Walk(Animation):
     (:attr:`Character.species_motion`: a turtle's short steps, a penguin's waddle). ``fade_in`` / ``fade_out``: seconds it takes to appear at
     the start / disappear at the end (through a door, DESIGN.md §69.42; at most half the walk
     each), the props in ``carried`` with it; its colours are as before once it is over.
+    ``opens_door``: the door was closed and opened as it set off (read by foley).
 
     ``depth``: it also walks towards or away from the camera, from its :attr:`Character.stage_depth`
     to this one (DESIGN.md §69.44), x and depth in a straight line on the ground
@@ -313,11 +314,14 @@ class Walk(Animation):
         depth: float | None = None,
         feet_y: Callable[[float], float] | None = None,
         carried: Sequence[Mobject] = (),
+        opens_door: bool = False,
         **kwargs,
     ) -> None:
         if depth is not None and feet_y is None:
             raise TypeError("Walk: a walk in depth needs feet_y (the ground line's y at a depth)")
         self.to_x, self.start_x, self.park_x = float(x), start_x, park_x
+        #: Whether it opened a closed door as it set off (foley plays a creak, DESIGN.md §69.62).
+        self.opens_door = opens_door
         self.fade_in, self.fade_out = max(float(fade_in), 0.0), max(float(fade_out), 0.0)
         #: The depth it walks to (``None``: it keeps its depth), the ground's y at a depth, and
         #: the props it carries (they grow and shrink with it).

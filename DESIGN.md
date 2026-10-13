@@ -159,7 +159,7 @@ src/vidgen/
   particles.py            # particle kinds, count cap, seeded positions over time (§69.9; no manim)
   particle_field.py       # ParticleField: draws the particles over the camera's view, shared options (§69.9);
                           # rain splashes, Puddles (§69.39)
-  ambience.py             # the generated rain sound bed: a seamless loop, its level and ducking (§69.39; no manim)
+  ambience.py             # the generated sound beds (rain, fire, birdsong, city, room tone): seamless loops, levels, ducking, which a set plays (§69.39, §69.55, §69.62; no manim)
   capture.py              # frame capture: stills at beat ends / N per beat (see §13); mid-action stills (§69.16)
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
@@ -237,6 +237,7 @@ src/vidgen/
                           # effect_action.py: effect (a symbol over a head), §69.40;
                           # switch_action.py: switch_on, switch_off (a tv or a lamp), §69.54;
                           # storm_action.py: lightning, rainbow, §69.61;
+                          # knock_action.py: knock (a door), §69.62;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6; card.py: the card scene type, §69.46)
@@ -960,6 +961,11 @@ action's `move_sun` and `Stage.change_light(..., move_sun=False)`; actions `ligh
 `rainbow`; built-in sound `thunder`; `Stage.strike_lightning`, `.show_rainbow`,
 `.hide_rainbows`, `.bolt`, `.rainbows`, `.sky_bodies`. Compatible: a scene without them renders
 as before, pixel for pixel, but for its outro (below: a stage now fades out as one picture).
+Step 128 (§69.62) adds `SET_BEDS`, `set_ambience` and `wet_steps`; `PlayedAction.prop`,
+`.through_door`, `.opens_door`, `.pours`; `Walk(opens_door=False)`; the top-level key `ambience`
+and the stage param `ambience`; `Stage.knock_on`, `.set_beds`, `.light_marks`; action `knock`;
+built-in sounds `creak`, `knock`, `splash`; the ambience beds `birdsong`, `city`, `room_tone`.
+Pixels unchanged; the sound of a stage changes on purpose (§69.62: set beds, door creaks, water).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -9340,6 +9346,76 @@ without them renders as before.
   stretch only along the ground (no skew, no second shadow for the moon at the same time); a
   room's light does not change with `move_sun` (refused). Tests: `tests/test_cartoon_storm.py`
   (13 without rendering, 2 tiny renders), `tests/test_cartoon_depth.py` (the outro).
+
+### 69.62 More sounds: door creaks, knocks, splashes, the set's ambience (Step 128)
+
+- **Searched first**: `bell` (a bicycle bell, Step 118), `engine` (starting and running, the
+  "engine hum", Step 118) and `phone` (a ringing trill, Step 122) existed and are kept as they
+  are; no creak, knock, splash or set bed existed. Reused: `sfx` generators and `_finish`, the
+  ambience beds' `AmbienceBed` / `plan_ambience` / `merge_spans` / `_circular`, `foley_cues`,
+  `pour_flow`, `RESHAPE_SHARE`, `on_spans`'s pattern for timings, the non-animating action shape
+  of `switch_on`.
+- **New built-in sounds** (`sfx.py`, now 29; finishing and level as §47; measured at intensity
+  0 / 0.5 / 1 as the loudest 400 ms, K-weighted): `creak` (0.9 s, 0.3–3: stick-slip pulses at a
+  rate gliding 45 → 110 → 70 Hz with a seeded 3.3 / 7.9 Hz wobble, filtered by wood bands at 550
+  Hz, 1.3 kHz, 2.6 kHz; −30.0 / −27.6 / −27.4 LUFS, peak-limited at −9 dBFS), `knock` (0.75 s,
+  0.3–2: three raps at 0, 0.19, 0.38 of 0.75 s, each a 190 Hz thump falling from +15 %, a 410 Hz
+  hollow and a tap of noise at 1.5 kHz; −30.0 / −27.0 / −24.0, peak −12.1 at 0.5), `splash`
+  (0.6 s, 0.2–3: a noise burst at 2.5 kHz decaying in 70 ms, a 250 → 600 Hz plunk, 18 droplets a
+  second of length (+4) placed early-weighted, a fading 4 kHz fizz; the burst and plunk × (0.35 +
+  1.3 · intensity); −30.0 / −27.0 / −26.4, peak −10.3 at 0.5). Generation 20–55 ms each.
+- **Set beds** (`ambience.py`, numpy only, seeded by `crc32("ambience:<bed>")`, circular so they
+  loop without a seam, `_leveled` to their integrated loudness; the rain and fire loops use the same
+  helper, unchanged): `birdsong_loop` (20 s; 18 phrases from `_bird_phrase`: 3–6 falling tweets at
+  3–5 kHz, a two-note whistle at 2–3.2 kHz, or a 0.5–0.9 s trill at 3.5–5.5 kHz warbling 18–25
+  Hz; each at 30–100 %, panned ±0.8 equal-power, placed around the loop by `_placed`; a rustle of
+  noise at 3 kHz at 0.04; −36 LUFS, peak −23.4 dBFS, channels correlate 0.63), `city_loop` (16 s:
+  a 35–250 Hz rumble swelling once a loop, 3–4 cars as wrapped Gaussian swells of 600 Hz noise
+  0.8–1.6 s wide, a 900 Hz murmur whose level wanders at three whole-cycle rates of 3–6 Hz; −35,
+  peak −23.1), `room_tone_loop` (8 s: 40–250 Hz noise + 0.2 × a wide 1.5 kHz hiss, ±5 % once a
+  loop; −46, peak −34.1). Ducking `BIRDSONG_DUCK` 4 dB, `CITY_DUCK` = `RAIN_DUCK` 5 dB,
+  `ROOM_TONE_DUCK` 0 (it is ~25 dB under the voice); fades `SET_FADE_IN` 2 s / `SET_FADE_OUT`
+  1.5 s. `AMBIENCE_BEDS` / `BEDS` gain the three, so `plan_ambience`, the mix report and the
+  pipeline's shift to video times take them unchanged. In a scratch 28 s preview (word-count
+  timing, so ducked all along): birdsong −38.2 LUFS, the city −41.3, the room with its foley −30.5.
+- **Which bed** (`set_ambience(setting, room=, lights=, rain=, end=)`, pure): `False` none; a list
+  of `SET_BEDS` names: each for the whole scene (deduplicated, in order); `True` (automatic): a
+  room → `room_tone` for the whole scene; outdoors `birdsong` over the spans whose light is in
+  `DAYLIGHT` (`day`, `morning`; a tint counts as not), minus each rain span extended by
+  `BIRDS_AFTER_RAIN` 2 s, spans under `MIN_BIRDSONG_SECONDS` 2 s dropped; `city` never automatic.
+  `Stage.set_beds(rain, end)`: none without foley; the stage's `ambience` (`auto` / `true`
+  automatic, a bed name or a list, `false`), else the top-level `ambience` (bool, default true =
+  automatic). `Stage.light_marks`: `(0, params.light)` and, per `change_light`, `(start +
+  seconds / 2, preset or None)`. `Stage.timings()` appends the beds after the rain and fire ones,
+  with the rain spans of the foley-kept rain fields.
+- **Door foley**: `_played` maps a `PropReshape` to `PlayedAction(prop=kind)` and a `Walk` to
+  `through_door` (it fades in or out: a door passage, §69.42) and `opens_door` (`Walk(opens_door=)`,
+  set by `enter` / `exit` from `_door_closed` before `_door_x` opens it). `door_cues`: `open` →
+  `creak` (−8 dB, 0.9 s) at the start; `close` → `creak` (−10 dB, 0.5 s, +2 st), then `thud` (−6 dB,
+  0.3 s, +5 st) at `RESHAPE_SHARE` of the action, when it shuts. A walk through a door plays no
+  whoosh / swoosh (it fades in the doorway; the Step 109 gap), and a creak first when it opened
+  the door. An open door or one that is already in the asked shape makes no sound (no animation).
+- **Water**: a boat's `ride_to` adds `splash` (−12 dB, 0.9 s, −3 st, intensity 0.3) at its start;
+  a `pour`'s `WaterFlow` → `PlayedAction(pours=True)` → one long soft `splash` (−10 dB, +7 st,
+  intensity 0.15, as long as the water runs, 0.2–3 s) from `pour_flow`'s start +
+  `POUR_FALL_SECONDS` 0.25; `wet_steps(cues, wet_from)` adds a `splash` (−14 dB, 0.25 s, +4 st,
+  intensity 0.2) under every footstep from the first puddles' start (`Stage.puddles`) on.
+- **`knock`** (`scenes/knock_action.py`, non-animating like `switch_on`, `run_time` 0.75):
+  targets door props (a room's doors or a `door` prop; validate names the stage's doors otherwise,
+  and a scene without `knock_on`); `cue` → `Stage.knock_on(patterns, time)`: one `knock` at
+  `KNOCK_GAIN` −3 dB with foley, however many doors match. Nothing moves (a knock from outside).
+- **Compatibility, decided**: the automatic beds are on by default (top-level `ambience: true`),
+  as the step asks ("chosen automatically where it fits"), so a project rendered again sounds
+  different: outdoor day stages gain birdsong, rooms a room tone; door passages creak instead of
+  whooshing, a boat ride splashes. Turning it on only for new projects was rejected: nothing tells
+  an old project from a new one but a key `vidgen new` would write, and authors who write YAML by
+  hand would never get it. `ambience: false` (top level) brings back the earlier beds; `foley:
+  false` silences all. Pixels are untouched (no drawing changed).
+- **Not done**: no door rattle or visible shake on a knock (nobody needs to stand there); no
+  splash when getting in or out of a boat or for a fruit falling into water; the knock and creaks
+  are centred (not panned by the door's x); birdsong ignores snow and fog; a light action's
+  fade counts as one instant (its middle); no listening by a human. Tests:
+  `tests/test_cartoon_sounds.py` (13 without rendering, 2 tiny renders).
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

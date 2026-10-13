@@ -196,7 +196,7 @@ character without a mouth is left alone. `Walk(hero, x)` walks it along the grou
 `fade_out=` seconds to appear or vanish on the way, as through a door, `passage_fade`; `depth=`
 with `feet_y=` (the ground line's y at a depth) walks towards or away from the camera too,
 growing or shrinking, from `hero.stage_depth`, DESIGN.md §69.44; `carried=` the props it holds,
-which grow and fade with it), `Gesture(hero,
+which grow and fade with it; `opens_door=True` tells foley it opened a closed door: a creak), `Gesture(hero,
 "wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
 end in the pose; all three keep lip sync in step, and their timing is the pure functions
 `walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). These four animations add
@@ -277,7 +277,9 @@ them for a scene time (`update(t)`, from a scene updater; `switch(on, time)`); i
 `PropGlow`, or `None`) is a mobject of its own to add right before the prop. The maths is pure:
 `hand_angles(seconds)`, `parse_clock_time("21:45")`, `tv_picture(t, seed)`, `glow_box`, and
 `redrawn_members(boxes, regions)` says which members drawn after a moving part must be redrawn
-with it. The `switch_on` / `switch_off` actions call `Stage.switch_props(patterns, on, time)`.
+with it. The `switch_on` / `switch_off` actions call `Stage.switch_props(patterns, on, time)`,
+the `knock` action `Stage.knock_on(patterns, time)` (any scene type with a `knock_on` method
+takes it).
 A `fireplace` and a `kettle` drawn `living` burn and steam the same way (`flame_shapes(t, seed,
 lean)`, `steam_puffs(t, seed, lean)`; `LivingProp(..., wind=)` takes the felt wind force at a
 time, its `steam` is a `PropSteam` to add right after the prop); `on_spans` gives when one is on.
@@ -729,7 +731,12 @@ wants sounds tied to the beat actions overrides `action_foley(self, action, opti
 start, seconds)`: the action runner calls it for each built-in action as it starts playing, with
 its scene start time and the seconds it plays (after any shortening); the base class does
 nothing, `stage` plays its foley through the pure `foley_cues(PlayedAction(...))` (docs/CONFIG.md
-"Foley and music stings"). Right after it the runner calls `action_motion_effects` with the same
+"Foley and music stings"; `PlayedAction(prop=, through_door=, opens_door=, pours=)` for a door's
+creak and a watering can's splash, `wet_steps(cues, wet_from)` adds splashes under the steps on
+wet ground). A scene type's timings may name ambience beds (`ambience: [{bed, start, end}]`,
+scene seconds; the beds of `vidgen.ambience.AMBIENCE_BEDS`): `stage` picks its set's with the pure
+`set_ambience(setting, room=, lights=, rain=, end=)` (`SET_BEDS`; docs/CONFIG.md "Ambience and
+door sounds"). Right after it the runner calls `action_motion_effects` with the same
 arguments (nothing by default): `stage` turns each animation into `motion_effect_cues(...)` and
 adds a `MotionEffect(cue, mover, delay=, seed=motion_seed(...))` per cue (dust, speed lines,
 impact stars, a whoosh; docs/CONFIG.md "Motion effects"); `Walk(..., gait=RUNNING)` runs.

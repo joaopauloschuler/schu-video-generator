@@ -484,6 +484,58 @@ def _thunder(s: Synth) -> np.ndarray:
     return 1.6 * s.intensity * crack + rumble * roll
 
 
+def _creak(s: Synth) -> np.ndarray:
+    # a door's hinge creaking: stick-slip pulses whose rate glides from ~45 up to ~110 Hz and back
+    # to ~70 with a seeded wobble, each pulse ringing a wooden body (~550 Hz, ~1.3 kHz, ~2.6 kHz)
+    t, u = s.t, s.u
+    wobble = 1 + 0.1 * np.sin(2 * np.pi * 3.3 * t + s.rng.uniform(0, 2 * np.pi)) + 0.05 * np.sin(2 * np.pi * 7.9 * t + s.rng.uniform(0, 2 * np.pi))
+    rate = s.ratio * (45 + 65 * np.sin(np.pi * np.clip(u, 0, 1) ** 0.7) - 20 * u) * wobble
+    cycles = np.floor(np.cumsum(rate) / RATE)
+    pulses = np.zeros(s.n)
+    slips = np.nonzero(np.diff(cycles) > 0)[0] + 1
+    pulses[slips] = s.rng.uniform(0.6, 1.0, len(slips))
+    r = s.ratio
+    body = _filtered(pulses, lambda f: _band(f, 550 * r, 0.3) + 0.8 * _band(f, 1300 * r, 0.25) + (0.25 + 0.5 * s.intensity) * _band(f, 2600 * r, 0.25))
+    return body * _bump(u, 0.35)
+
+
+def _knock(s: Synth) -> np.ndarray:
+    # knock-knock-knock: three knuckle raps on a wooden door 190 ms apart, each a dull hollow
+    # thump (~190 and ~410 Hz, ringing ~30 ms) with a short bright tap (noise around 1.5 kHz)
+    scale = s.duration / 0.75
+    out = np.zeros(s.n)
+    for start, amp in ((0.0, 1.0), (0.19, 0.85), (0.38, 0.95)):
+        a = int(start * scale * RATE)
+        m = s.n - a
+        t = np.arange(m) / RATE
+        tap = _normalized(_filtered(s.rng.standard_normal(m), lambda f: _band(f, 1500 * s.ratio * 2 ** (s.intensity - 0.5), 0.8))) * _decay(t, 0.0003, 0.004)
+        thump = np.sin(_tone(190 * s.ratio * (1 + 0.15 * np.exp(-t / 0.006)), m)) * _decay(t, 0.0008, 0.035)
+        hollow = 0.5 * np.sin(_tone(410 * s.ratio, m)) * _decay(t, 0.0008, 0.02)
+        out[a:] += amp * (thump + hollow + (0.35 + 0.4 * s.intensity) * tap)
+    return out
+
+
+def _splash(s: Synth) -> np.ndarray:
+    # something dropping into water: a burst of bright noise (around 2.5 kHz, ~70 ms) with a low
+    # "plunk" gliding up from ~250 to ~600 Hz, then droplets falling back (tiny rising blips at
+    # 1-3 kHz, thinning out) and a fading fizz; intensity sets the burst against the droplets
+    t, u = s.t, s.u
+    scale = s.duration / 0.6
+    burst = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 2500 * s.ratio, 1.2) * _highpass(f, 300 * s.ratio, 2)))
+    burst *= _decay(t, 0.003, 0.07 * min(scale, 1.5))
+    plunk = np.sin(_tone(250 * s.ratio * (1 + 1.4 * (1 - np.exp(-t / 0.02))), s.n)) * _decay(t, 0.002, 0.05)
+    drops = np.zeros(s.n)
+    blip = int(0.03 * RATE)
+    for _ in range(int(18 * s.duration) + 4):
+        a = int(s.rng.uniform(0.04, 1.0) ** 1.5 * (s.n - blip))
+        tt = np.arange(blip) / RATE
+        f0 = s.rng.uniform(1000, 3000) * s.ratio
+        drops[a : a + blip] += s.rng.uniform(0.2, 1.0) * np.sin(_tone(f0 * (1 + 0.6 * tt / 0.03), blip)) * _decay(tt, 0.0005, 0.008)
+    fizz = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 4000 * s.ratio, 1.0))) * (1 - u) ** 2
+    impact = 0.35 + 1.3 * s.intensity
+    return impact * (burst + 0.4 * plunk) + 0.5 * drops + 0.12 * fizz
+
+
 def _harmonic_tone(phase: np.ndarray, brightness: np.ndarray | float, harmonics: int, tilt: float) -> np.ndarray:
     """A tone of ``harmonics`` partials of ``phase``: partial ``h`` at ``brightness ** (h - 1) /
     h ** tilt`` (brightness 0..1, constant or per sample: a brass or muted-horn timbre)."""
@@ -712,6 +764,28 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "five swells over the first 60% and dying away over its whole length.",
             "a storm (a stage's lightning action and rain with lightning play it after the flash, "
             "later, quieter, longer and lower the farther the strike: foley)",
+        ),
+        BuiltinSound(
+            "creak", _creak, 0.9, (0.3, 3.0),
+            "A door's hinge creaking: a rough, buzzy squeak of stick-slip pulses whose rate glides "
+            "from ~45 up to ~110 Hz and back to ~70 Hz with a wobble, coloured by a wooden body "
+            "(~550 Hz, ~1.3 kHz, ~2.6 kHz), swelling early and fading out.",
+            "a door opening or closing (a stage's open / close of a door and an enter / exit through "
+            "a closed one play it: foley), an old chair, a spooky moment",
+        ),
+        BuiltinSound(
+            "knock", _knock, 0.75, (0.3, 2.0),
+            "Knock-knock-knock: three knuckle raps on a wooden door 190 ms apart, each a dull hollow "
+            "thump (~190 and ~410 Hz, ringing ~30 ms) with a short bright tap around 1.5 kHz.",
+            "someone at the door (a stage's knock action plays it: foley)",
+        ),
+        BuiltinSound(
+            "splash", _splash, 0.6, (0.2, 3.0),
+            "Something dropping into water: a burst of bright noise around 2.5 kHz (~70 ms) with a "
+            "low 'plunk' gliding up from ~250 to ~600 Hz, then droplets falling back (tiny rising "
+            "blips at 1-3 kHz, thinning out) and a fading fizz; at low intensity mostly droplets.",
+            "water (a boat setting off, a watering can pouring, steps in puddles play it: foley), "
+            "something falling into a pond",
         ),
         BuiltinSound(
             "gasp", _gasp, 0.35, (0.15, 1.0),

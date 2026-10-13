@@ -277,7 +277,7 @@ def test_a_rain_action_plays_the_bed_while_it_lasts(make_project, tmp_path: Path
     beats = [{"text": "Then it starts to rain.", "actions": [{"particles": "rain", "at": 0.3, "puddles": True}]}, {"text": "And it stops."}]
     recorder = OrderRecorder()
     scene, _ = render_with_layout(rain_stage(make_project, {}, beats), "park", tmp_path / "media", recorder)
-    [bed] = scene.timings()["ambience"]
+    [bed] = [b for b in scene.timings()["ambience"] if b["bed"] == "rain"]   # birdsong around it since Step 128
     second = scene.beat_log[1].start
     assert 0.0 < bed["start"] < second < bed["end"] <= second + 1.0   # from the action to the end of its fade out
     [puddles] = scene.puddles

@@ -213,6 +213,11 @@ def _door_problems(params: Any, door: str | None, other: str, given: Any) -> lis
     return problems
 
 
+def _door_closed(scene: NarratedScene, name: str | None) -> bool:
+    """Whether the room's door ``name`` is closed now (``None``: no door)."""
+    return name is not None and scene.door(name).shape != "open"
+
+
 def _door_x(scene: NarratedScene, name: str) -> float:
     """The x of the room's door ``name`` (opened if it is closed: a character goes through it)."""
     door = scene.door(name)
@@ -269,9 +274,11 @@ class Enter(_Moving):
         (fading in at the door)."""
         anims: list[Animation] = []
         for character in _characters(scene, targets, "enter"):
+            closed = _door_closed(scene, self.options.door)
             _, start, end = self._path(scene, character, opening=True)
             door = {} if self.options.door is None else {
                 "fade_in": DOOR_FADE_SECONDS, "run_time": self._seconds(character, start, end), "carried": _carried(scene, character),
+                "opens_door": closed,
             }
             anims.append(Walk(character, end, start_x=start, speed=_speed(self.options, character), **door))
             _ended_walk(scene, character)
@@ -321,9 +328,11 @@ class Exit(_Moving):
             if getattr(scene.camera_following, "followed", None) is character:
                 scene.follow_with_camera(None)
             half = character.width / 2
+            closed = _door_closed(scene, self.options.door)
             side, end = self._end(scene, character, opening=True)
             door = {} if self.options.door is None else {
                 "fade_out": DOOR_FADE_SECONDS, "run_time": self._seconds(character, end), "carried": _carried(scene, character),
+                "opens_door": closed,
             }
             anims.append(Walk(character, end, park_x=offstage_x(side, left, right, half), speed=_speed(self.options, character), **door))
         return anims

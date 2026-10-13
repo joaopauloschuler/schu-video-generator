@@ -313,7 +313,7 @@ def test_validate_a_toy_rocket_nobody_rides(make_project) -> None:
 
 def test_water_and_air_sounds() -> None:
     boat = foley_cues(PlayedAction("ride_to", 1.0, 4.0, vehicle="boat"))
-    assert [c.sound for c in boat] == ["engine"] and boat[0].params["pitch"] > 0   # a small motor, no brakes
+    assert [c.sound for c in boat] == ["engine", "splash"] and boat[0].params["pitch"] > 0   # a small motor, no brakes (a splash since Step 128)
     balloon = foley_cues(PlayedAction("ride_to", 0.0, 8.0, vehicle="hot_air_balloon", lands=1.0))
     assert [(c.sound, c.time) for c in balloon] == [("burner", 0.0), ("thud", 8.0)]
     rocket = foley_cues(PlayedAction("ride_to", 2.0, 3.0, vehicle="toy_rocket", lands=1.0))

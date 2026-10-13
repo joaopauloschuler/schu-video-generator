@@ -32,6 +32,8 @@ FIRE_LIGHT_GAIN = -10.0
 FIRE_LIGHT_SECONDS = 0.8
 #: The level of a ringing phone's ``phone`` sound (dB), one per burst of rings.
 PHONE_RING_GAIN = -6.0
+#: The level of a ``knock`` on a door (dB).
+KNOCK_GAIN = -3.0
 #: Lightning (DESIGN.md §69.61): a bolt's core width (Manim stroke width) and how far it zigzags
 #: (frame heights); the band left free above the sky's path for the sun and moon (frame heights).
 BOLT_WIDTH = 4.0
@@ -504,7 +506,9 @@ class Stage(NarratedScene):
     (``walk_to``, ``run_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them; ``effect``
     puts a symbol over a head (an idea bulb, a sweat drop, a question mark...). A character with an
     ``enter`` action waits off stage until it enters. Walks, entrances, exits, jumps, a
-    surprised face and most symbols make their own sounds (foley; ``foley: false`` turns them off);
+    surprised face and most symbols make their own sounds, doors creak (``knock`` knocks on one),
+    and the set plays a quiet bed: birdsong outdoors by day, a room tone indoors, or ``ambience:
+    city`` (foley; ``foley: false`` turns them off);
     runs and jumps raise dust, fast moves leave speed lines (motion effects; ``motion_effects:
     false`` turns them off). With
     ``auto_direct``, listeners look at whoever speaks and react after lines on their own. A
@@ -564,7 +568,9 @@ class Stage(NarratedScene):
         idle: bool = True
         """false: the characters do not breathe, sway or blink in this scene."""
         foley: bool | None = None
-        """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols): false for none in this scene; default: the video's foley (on)."""
+        """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols), and the ambience: false for none in this scene; default: the video's foley (on)."""
+        ambience: bool | Literal["auto", "birdsong", "city", "room_tone"] | list[Literal["birdsong", "city", "room_tone"]] | None = None
+        """A sound bed under the whole scene while foley is on: birdsong, city (street sounds), room_tone, or a list of them; auto (or true): chosen from the set: room_tone in a room, birdsong outdoors while the light is day or morning and it does not rain; false: none; default: the video's ambience (auto). Rain and a burning fire play their own beds whatever this says."""
         auto_direct: AutoDirectSetting | None = None
         """Automatic directing in this scene: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up (true, false or {looks, reactions, gestures, closeups, effects}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
         cartoon_motion: MotionSetting | None = None
@@ -892,13 +898,15 @@ class Stage(NarratedScene):
     def action_foley(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
         """The sounds of a character's action as it plays (DESIGN.md §69.19): footsteps on
         walks, a whoosh on enter / exit, a boing on jump, a thud where a thrown prop lands, a pop
-        on a surprised face, a sound for an effect symbol (unless its ``sound: false``)
-        (:func:`foley_cues`); none with ``foley: false`` (the stage's, else the video's). A
+        on a surprised face, a sound for an effect symbol (unless its ``sound: false``), a door's
+        creak, a splash of water (:func:`foley_cues`), splashing steps once puddles lie on the
+        ground (:func:`wet_steps`); none with ``foley: false`` (the stage's, else the video's). A
         project file with a sound's name plays as it is (without the cue's params)."""
         if not self._foley_on():
             return
+        wet_from = min((p.start for p in getattr(self, "puddles", [])), default=None)
         for anim in animations:
-            for cue in foley_cues(_played(action, options, anim, start, seconds)):
+            for cue in wet_steps(foley_cues(_played(action, options, anim, start, seconds)), wet_from):
                 params = {} if self.sounds.file(cue.sound) is not None else cue.params
                 self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)
 
@@ -1281,17 +1289,35 @@ class Stage(NarratedScene):
 
     def timings(self) -> dict[str, Any]:
         """The scene's timings, plus ``ambience``: the rain sound bed from each rain field's start
-        to its end (the scene's end while it lasts, DESIGN.md §69.39) and the fire's crackle while
-        each fireplace burns (with foley, §69.55), scene seconds."""
+        to its end (the scene's end while it lasts, DESIGN.md §69.39), the fire's crackle while
+        each fireplace burns (§69.55) and the set's beds (:meth:`set_beds`, §69.62), with foley;
+        scene seconds."""
         data = super().timings()
         end = float(self.renderer.time)
         spans = [(f.start, end if f.ended is None else min(f.ended, end)) for f in getattr(self, "_rain_fields", [])]
         beds = [{"bed": "rain", "start": round(a, 6), "end": round(b, 6)} for a, b in spans if b > a]
         fires = [live for live in getattr(self, "living", {}).values() if live.kind == "fireplace"] if self._foley_on() else []
         beds += [{"bed": "fire", "start": round(a, 6), "end": round(b, 6)} for live in fires for a, b in on_spans(live.on, live.switches, end)]
+        beds += [{"bed": bed, "start": round(a, 6), "end": round(b, 6)} for bed, a, b in self.set_beds([s for s in spans if s[1] > s[0]], end)]
         if beds:
             data["ambience"] = beds
         return data
+
+    def set_beds(self, rain: list[tuple[float, float]], end: float) -> list[tuple[str, float, float]]:
+        """The set's ambience beds of a scene of ``end`` seconds with ``rain`` spans
+        (:func:`set_ambience`): the stage's ``ambience``, else the video's; none without foley."""
+        if not self._foley_on():
+            return []
+        given = self.params.ambience
+        setting: bool | list[str]
+        if given is None:
+            setting = self.project.config.ambience
+        elif isinstance(given, bool):
+            setting = given
+        else:
+            setting = True if given == "auto" else [given] if isinstance(given, str) else list(given)
+        lights = getattr(self, "light_marks", [(0.0, None)])
+        return set_ambience(setting, room=self.params.room is not None, lights=lights, rain=rain, end=end)
 
     def shot_framing(self, kind: str, names: list[str]) -> tuple[ShotView, Shot]:
         """The camera view of a ``kind`` shot of the characters ``names`` (filled in by
@@ -1516,6 +1542,9 @@ class Stage(NarratedScene):
         changes it, the :class:`StageLight` that grades the set as the camera draws it."""
         #: the light from the start, and whether any light of the scene has stars
         self.base_light = resolve_light(self.params.light, self.theme)
+        #: (scene time, light preset or ``None`` for a tint) from the start: where the light
+        #: counts as changed for the ambience (half-way through each change, DESIGN.md §69.62)
+        self.light_marks: list[tuple[float, str | None]] = [(0.0, self.params.light if isinstance(self.params.light, str) else None)]
         changes = [resolve_light(use.setting(), self.theme) for use in self.action_uses("light")]
         self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
         flashes = self._lightning_used()
@@ -1542,6 +1571,7 @@ class Stage(NarratedScene):
         ``seconds`` (the ``light`` action); everything is redrawn on every frame meanwhile.
         ``move_sun``: the suns and moons move along the sky's path to their places for the preset
         meanwhile (DESIGN.md §69.61)."""
+        self.light_marks.append((float(start) + max(float(seconds), 0.0) / 2, setting if isinstance(setting, str) else None))
         if self.window_views is not None:   # the sky outside fades with it (§69.42)
             self._sky_changes.append(SkyChange(float(start), max(float(seconds), 0.0), window_sky(self._light_key(setting))))
         if move_sun and isinstance(setting, str):
@@ -1915,6 +1945,13 @@ class Stage(NarratedScene):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
         if on and any(self.living[name].kind == "fireplace" for name in names):
             self.sfx("burner", max(float(time), 0.0), gain=FIRE_LIGHT_GAIN, duration=FIRE_LIGHT_SECONDS)
+
+    def knock_on(self, patterns: list[str], time: float) -> None:
+        """Someone knocks on the doors matching ``patterns`` at scene ``time`` (the ``knock``
+        action): a ``knock`` sound (foley, DESIGN.md §69.62), once however many doors match."""
+        names = [name for name, prop in self.props.items() if prop.kind == "door" and any(fnmatchcase(name, pat) for pat in patterns)]
+        if names and self._foley_on():
+            self.sfx("knock", max(float(time), 0.0), gain=KNOCK_GAIN)
 
     def _ring_sounds(self) -> None:
         """A ``phone`` sound at each burst of rings of each phone while it rings in the scene
@@ -2368,7 +2405,13 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     """One animation of a built-in ``action`` (its ``options``) as it plays from scene time
     ``start`` for ``seconds``, for foley and motion effects."""
     if isinstance(anim, Walk):
-        return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length, rolls=anim.gait.rolls)
+        through_door = anim.fade_in > 0 or anim.fade_out > 0   # a fade in a doorway (§69.42)
+        return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length, rolls=anim.gait.rolls,
+                            through_door=through_door, opens_door=anim.opens_door)
+    if isinstance(anim, PropReshape):
+        return PlayedAction(action, start, seconds, prop=getattr(anim.mobject, "kind", None))
+    if isinstance(anim, WaterFlow):
+        return PlayedAction(action, start, seconds, pours=True)
     if isinstance(anim, Ride):
         lands = 1.0 if anim.flies and anim.course.land else None   # a balloon or a toy rocket touching down (§69.53)
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind, lands=lands)

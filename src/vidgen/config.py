@@ -1792,6 +1792,8 @@ class VideoConfig(_Strict):
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
     foley: bool = True
     """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face, a sound with most effect symbols; false: none (a stage's foley param wins)."""
+    ambience: bool = True
+    """A sound bed chosen from each stage scene's set while foley is on: a room tone in a room, birdsong outdoors while the light is day or morning and it does not rain; false: none unless a stage's ambience param names one."""
     auto_direct: AutoDirectSetting = False
     """Automatic directing on stage scenes: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups, effects}); a stage's or a beat's setting wins; actions written in a beat always win."""
     reframe: ReframeSetting | None = None
