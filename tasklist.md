@@ -618,6 +618,72 @@ changes and a wider range of original characters. Same rules as Phases H–J.
 
 ---
 
+## Phase L — Render jobs, vehicles, living props, more assets
+
+Goal: renders that use the machine's memory safely, and many more cartoon assets. Same rules as
+Phases H–K. Examples may now be up to 10 KB (owner, after Step 116).
+
+### Step 117 — `--jobs auto`
+- [ ] `--jobs auto` on `render` (and anything else that takes `--jobs`): jobs = min(available physical memory ÷ per-job memory, CPU cores), at least 1; swap never counted; "available" memory, not total; read on Linux (`/proc/meminfo` MemAvailable), Windows and macOS without new heavy dependencies; prints what it chose and why (also in `--json`)
+- [ ] Measure a scene render's peak memory on the cartoon examples (preview and 1080p) and set the per-job figure from it (3 GB unless the measurements say otherwise); document the numbers
+- [ ] Kokoro `vidgen tts` always runs alone; tests are never run in parallel (unchanged)
+- [ ] Docs (CONFIG, README, guide); propose the matching change to docs/CODING-AND-COMMUNICATION-GUIDE.md rule 7 to the owner (do not edit the guide without approval)
+- [ ] Tests: the job formula with mocked memory / cores per platform
+
+### Step 118 — Vehicles, part 1: on the ground
+- [ ] Built-in vehicles `bicycle`, `car`, `bus` (original simple shapes, theme colours, wheels that turn); actions `get_in` (or on), `ride_to` (a mark / x / depth; speed; the riders move with it, seated or pedalling), `get_out`; several riders in a car or bus; foley (bell, engine, brakes) from generated sounds
+- [ ] Tests: seat points per vehicle, ride paths, rider attachment and detachment (no render)
+
+### Step 119 — Vehicles, part 2: water and air
+- [ ] `boat` (bobbing on a water strip / the beach later), `hot-air balloon` (rising and drifting with the wind), `toy rocket` (a launch with smoke and a small arc; a toy, not a real spacecraft); flight and float paths seeded and pure
+- [ ] Tests: paths, wind drift, the riders follow
+
+### Step 120 — Props that move by themselves, part 1: indoors
+- [ ] `clock` hands turning (real time from the scene clock, or a `time:`), `tv` flickering picture (`on: true`, an `switch_on` / `switch_off` action), `lamp` on / off lighting a soft glow around it (and the room's light where simple)
+- [ ] Only the moving parts leave the static background (render cost measured)
+- [ ] Tests: hand angles over time, on / off state, the glow box
+
+### Step 121 — Props that move by themselves, part 2: fire, steam, nature
+- [ ] `fireplace` with crackling flames (seeded flicker, a warm glow, crackle sound), `kettle` with rising steam, fruit falling from a tree (`fruit: true` on a tree, an action to drop one, a bounce and a thud), birds flying across the sky (a `birds` particle-like flock, flapping)
+- [ ] Tests: seeded flame / steam shapes, fall paths, flock paths
+
+### Step 122 — Everyday small props
+- [ ] `cake`, `muffin`, `book` (open / closed), `phone` (ringing shake), `letter` (folded / open), `gift` box (closed / open), `balloons` (on a string, floating up when let go), `ball`, `vase` with flowers, `watering_can` (pouring water drops); hold / give / put_down work; prop gallery still updated
+- [ ] Tests: each builds, open / closed shapes, balloon float path
+
+### Step 123 — More animals
+- [ ] Species `fox`, `owl`, `frog`, `turtle` (a shell), `penguin` (flipper-arms, a waddle) — generic, original designs from primitives, not resembling any known character; all actions, lip sync, effects, front view, tails / wind where relevant; animals gallery still updated
+- [ ] Tests: each species builds, poses, talks
+
+### Step 124 — Robots and costumes
+- [ ] `species: robot`: friendly original robots (box / round heads, antenna on a spring, screen-face option, joints; a beep voice option via sounds, voices as usual); costume pieces `crown`, `wizard_hat`, `cape` (trails in the wind), `party_hat`, as accessories with front views
+- [ ] Tests: robot looks, costume combinations, cape spring
+
+### Step 125 — More expressions
+- [ ] Expressions `laughing` (closed curved eyes, open mouth), `blushing` (cheek blush), `tongue_out`, `crying` (streams, beyond the `tear` effect), `dizzy` (swirl eyes, swaying), `frightened` (hair or ears standing up, wide eyes, a shiver); on humans, animals and robots; front views; auto_direct / screenplay manners map to them
+- [ ] Tests: each expression on each species family, transitions
+
+### Step 126 — More weather, part 1: snow and fog
+- [ ] Snow that settles: a growing white layer on the ground, props' tops and roofs, footprints optional; fog as layered translucent bands drifting, thicker far away (depth)
+- [ ] Tests: settle heights over time, fog density by depth
+
+### Step 127 — More weather, part 2: lightning, rainbow, moving sun and moon
+- [ ] Lightning: a flash of the whole scene plus a bolt shape, thunder after a delay (generated sound); a rainbow arc appearing after rain; the sun or moon moving across the sky with a `light:` change (sunrise / sunset), shadows turning
+- [ ] Tests: flash timing, thunder delay, sun path and shadow direction
+
+### Step 128 — More sounds
+- [ ] Generated foley: door creak (on door open), knock, phone ring, a short splash, a bicycle bell, an engine hum; ambience beds like the rain bed: birdsong (outdoors by day), city (street sounds), indoor room tone; on with `foley`, chosen automatically where it fits (sets, light), with levels documented
+- [ ] Tests: each sound generates deterministically, the ambience plan
+
+### Step 129 — More music
+- [ ] Built-in beds `cartoon` (playful plucked strings, pizzicato, light percussion) and `lullaby` (gentle, slow, music-box-like), generated like the existing three, seamless loops, at the same loudness; `vidgen list-music` describes them
+- [ ] Tests: loop seams, loudness
+
+### Step 130 — Review of Phase L, with an example
+- [ ] An original example using vehicles, living props, new small props, a new animal or a robot, new expressions, weather and the new sounds and music; validates and lints clean; rendered at 1280x720 with real Kokoro narration (not committed) using `--jobs auto`, checked by eye; docs consistency; Phase L gaps moved to the Backlog
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
