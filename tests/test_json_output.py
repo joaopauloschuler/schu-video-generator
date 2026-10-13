@@ -290,7 +290,7 @@ def test_usage_error_json(capsys: pytest.CaptureFixture[str]) -> None:
 def test_usage_error_human(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["render", "--jobs", "x"]) == 2
     err = capsys.readouterr().err
-    assert err.startswith("usage: vidgen render") and "vidgen render: error: argument --jobs/-j: invalid int value: 'x'" in err
+    assert err.startswith("usage: vidgen render") and "vidgen render: error: argument --jobs/-j: invalid value: 'x' (a whole number, or auto)" in err
 
 
 def test_command_without_json_flag(capsys: pytest.CaptureFixture[str]) -> None:

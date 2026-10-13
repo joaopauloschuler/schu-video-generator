@@ -25,6 +25,7 @@ from vidgen.config import validation_problems
 from vidgen.describe import describe_params
 from vidgen.errors import Problem, VidgenError
 from vidgen.project import CONFIG_NAMES, Project, find_config_file
+from vidgen.render.jobs import AUTO as AUTO_JOBS, PER_JOB_BYTES, JobsChoice, choose_jobs
 from vidgen.sheets import DEFAULT_WIDTH as DEFAULT_SHEET_WIDTH
 from vidgen.theme import Theme
 
@@ -1315,6 +1316,13 @@ def build_parser() -> argparse.ArgumentParser:
     def json_arg(p: argparse.ArgumentParser) -> None:
         p.add_argument("--json", action="store_true", help="print one JSON document on stdout (see docs/CONFIG.md)")
 
+    def jobs_arg(p: argparse.ArgumentParser, what: str = "scenes", when: str = "") -> None:
+        p.add_argument(
+            "--jobs", "-j", type=_jobs_value, default=1, metavar="N|auto",
+            help=f"render N {what} in parallel{when}; auto: as many as the available memory "
+            f"({PER_JOB_BYTES / 1e9:.1f} GB each) and CPU cores allow (default: 1)",
+        )
+
     def output_dir_arg(p: argparse.ArgumentParser) -> None:
         p.add_argument(
             "--output-dir", metavar="DIR",
@@ -1438,7 +1446,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
     p.add_argument("--keep-going", action="store_true", help="continue after a scene fails")
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p)
     p.add_argument("--frames", action="store_true", help="also save a PNG still at the end of each beat (build/.../frames/)")
     p.add_argument(
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
@@ -1456,7 +1464,7 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--preview", action="store_true", help="use the preview format (the default)")
     quality.add_argument("--final", action="store_true", help="use the final format (slower)")
     p.add_argument("--width", type=int, default=DEFAULT_SHEET_WIDTH, metavar="PX", help=f"sheet width in pixels (default: {DEFAULT_SHEET_WIDTH})")
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     p.set_defaults(func=cmd_storyboard)
 
@@ -1469,7 +1477,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--at", type=float, metavar="SECONDS", help="with --scene: seconds into the beat (or the scene); default: the beat's end")
     p.add_argument("--no-overlays", action="store_true", help="with --scene: the frame without captions, watermark... (renders the scene again)")
     p.add_argument("--jpeg", action="store_true", help="also write <output>_thumbnail.jpg under 2 MB")
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel when scenes must be rendered (default: 1)")
+    jobs_arg(p, when=" when scenes must be rendered")
     output_dir_arg(p)
     p.set_defaults(func=cmd_thumbnail)
 
@@ -1524,7 +1532,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output", "-o", metavar="FILE",
         help="write here instead of exports/<output>[_<variant>][_preview]_slides.html (PDF: _slides.pdf, _notes.pdf with --notes)",
     )
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     output_dir_arg(p)
     p.set_defaults(func=cmd_slides)
@@ -1552,7 +1560,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--formats", default="16:9,9:16", metavar="F,F", help="formats to render: 16:9, 9:16 (default: both)")
     p.add_argument("--theme", metavar="PRESET", help="render in this theme preset (default: the project's theme, or the default one)")
     p.add_argument("--clips", action=argparse.BooleanOptionalAction, default=True, help="also write a GIF of each scene (default: yes)")
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p, what="samples")
     p.add_argument("--force", action="store_true", help="render the samples again even if their stills are current")
     p.set_defaults(func=cmd_gallery)
 
@@ -1567,7 +1575,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--fail-on", choices=["error", "warning", "info", "never"], help="lowest severity that fails (default: lint.fail_on, error)"
     )
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     p.set_defaults(func=cmd_lint)
 
@@ -1621,6 +1629,27 @@ def _cli_logging(collect: list[dict[str, Any]] | None = None) -> Iterator[None]:
         logger.propagate = saved[1]
 
 
+def _jobs_value(text: str) -> int | str:
+    """A ``--jobs`` value: a whole number (checked by the command) or ``auto``."""
+    if text == AUTO_JOBS:
+        return AUTO_JOBS
+    try:
+        return int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid value: {text!r} (a whole number, or {AUTO_JOBS})") from None
+
+
+def _resolve_auto_jobs(args: argparse.Namespace) -> JobsChoice | None:
+    """Replace ``--jobs auto`` by the number :func:`choose_jobs` picks and print the choice and
+    its reason; ``None`` when the command has no ``--jobs`` or was given a number."""
+    if getattr(args, "jobs", None) != AUTO_JOBS:
+        return None
+    choice = choose_jobs()
+    args.jobs = choice.jobs
+    print(f"jobs: {choice.jobs} (auto: {choice.reason})", flush=True)
+    return choice
+
+
 def _print_json(doc: dict[str, Any]) -> None:
     print(jsonout.dumps(doc), flush=True)
 
@@ -1640,8 +1669,10 @@ def _run_json(func: Callable[[argparse.Namespace], CommandResult], args: argpars
     """Run a command with ``--json``: everything it prints goes to stderr, then its document (or
     the error document) is printed on stdout; exit code 0 if ``ok``, else 1."""
     warnings: list[dict[str, Any]] = []
+    jobs: JobsChoice | None = None
     try:
         with _cli_logging(warnings), redirect_stdout(sys.stderr):
+            jobs = _resolve_auto_jobs(args)
             doc = func(args)
     except VidgenError as exc:
         doc = jsonout.error_document(args.command, exc)
@@ -1653,6 +1684,8 @@ def _run_json(func: Callable[[argparse.Namespace], CommandResult], args: argpars
         doc = jsonout.envelope(args.command, False, error=error)
     assert isinstance(doc, dict)
     doc["warnings"] = warnings + doc["warnings"]
+    if jobs is not None:
+        doc["jobs"] = jobs.to_json()
     _print_json(doc)
     return 0 if doc["ok"] else 1
 
@@ -1675,6 +1708,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_json(args.func, args)
         try:
             with _cli_logging():
+                _resolve_auto_jobs(args)
                 result = args.func(args)
         except VidgenError as exc:
             print(f"error: {exc}", file=sys.stderr)

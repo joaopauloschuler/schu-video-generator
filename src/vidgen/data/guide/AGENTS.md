@@ -153,7 +153,9 @@ layout on the word-count-timed preview, and commit `audio/` and `assets/generate
 be made again identically). Renders are slow but free: `storyboard`, `lint` and `render` re-render
 only the scenes that changed (`render` reuses the storyboard's renders of the same format;
 `--force` renders everything, e.g. after editing a file outside `assets/`); `--jobs N` renders
-several at once; preview while iterating.
+several at once, and `--jobs auto` picks N from the available memory (1.5 GB per job) and the CPU
+cores and prints why; never run two vidgen commands at once, and run Kokoro `tts` alone; preview
+while iterating.
 
 **JSON everywhere.** Every command but `mcp` takes `--json` (`validate`, `list-scenes`,
 `schema`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `plan`, `init`, ...): one document on

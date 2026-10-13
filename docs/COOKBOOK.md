@@ -36,10 +36,10 @@ cd my-video
 vidgen validate                    # schema, beats, audio status, duration estimate
 vidgen tts --dry-run               # what would be voiced, characters, cost
 vidgen tts                         # only changed beats are re-voiced
-vidgen storyboard --jobs 4         # contact sheets: build/preview/storyboard/*.png
+vidgen storyboard --jobs auto      # contact sheets: build/preview/storyboard/*.png
 vidgen storyboard --scene X        # iterate on one scene
 vidgen lint --json                 # overlaps, contrast, min font, dead air, narration speed
-vidgen render --jobs 4             # full quality: output/ gets MP4 + SRT + thumbnail + chapters
+vidgen render --jobs auto          # full quality: output/ gets MP4 + SRT + thumbnail + chapters
 vidgen lint --final                # lint on the real frames (slow)
 ```
 
@@ -47,7 +47,7 @@ vidgen lint --final                # lint on the real frames (slow)
   beat durations drive the animation timing.
 - `vidgen render --preview --scene X` gives a fast, low-resolution MP4 of one scene.
 - Long renders: run them in the background and follow the log, e.g.
-  `nohup vidgen render --jobs 4 > render.log 2>&1 &`. Re-running `vidgen render` after an
+  `nohup vidgen render --jobs auto > render.log 2>&1 &`. Re-running `vidgen render` after an
   interruption reuses every finished scene and only re-joins.
 - An MP4 in `output/` (or your `output_dir:`) newer than `video.yaml` and every file in
   `extensions/` is current.

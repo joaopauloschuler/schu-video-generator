@@ -179,7 +179,8 @@ src/vidgen/
                           # provider, §64; SVG and data-policy errors, §65), placeholder.py, run.py (`vidgen imagegen`)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
-                          # fingerprint.py (what a scene's render depends on, §14)
+                          # fingerprint.py (what a scene's render depends on, §14),
+                          # jobs.py (`--jobs auto`: memory and cores, §70)
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
   speech.py               # spoken words, speech bounds of an MP3, word times: estimate / TTS alignment (§43)
   pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
@@ -513,7 +514,8 @@ Refinements (Step 4):
   video is **not** joined, and the command fails listing the failed scenes.
 - **Parallelism**: `render_project(..., jobs=N)` / `vidgen render --jobs N` runs N workers at
   once (default 1). Live Manim progress is shown only for `jobs == 1` on a terminal; otherwise
-  worker output is captured and its `warning:` lines are re-printed.
+  worker output is captured and its `warning:` lines are re-printed. `--jobs auto` is resolved
+  to a number by the CLI before the command runs (§70); the Python functions take an int.
 - **Audio check**: before rendering, missing/stale narration audio (`tts.audio_status`) is
   logged as a warning recommending `vidgen tts`; ffmpeg missing is a `VidgenError` with install
   hints (`winget install ffmpeg` on Windows).
@@ -998,24 +1000,24 @@ vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with desc
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
-              [--jobs N] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]   # changed scenes only (§63)
+              [--jobs N|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]   # changed scenes only (§63)
 vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
-              [--width PX] [--jobs N] [--force] [--json]      # contact sheets (§14)
+              [--width PX] [--jobs N|auto] [--force] [--json]      # contact sheets (§14)
 vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview | --final]
-              [--fail-on SEVERITY] [--jobs N] [--force] [--json]   # layout checks (§16)
+              [--fail-on SEVERITY] [--jobs N|auto] [--force] [--json]   # layout checks (§16)
 vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at S] [--no-overlays]]
-              [--jpeg] [--jobs N] [--output-dir DIR] [--json]   # output/<output>_thumbnail.png (§53)
+              [--jpeg] [--jobs N|auto] [--output-dir DIR] [--json]   # output/<output>_thumbnail.png (§53)
 vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX]
               [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]   # exports/ (§53)
 vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
               [--overlays | --no-overlays] [--no-dedupe] [--image-format F] [--quality Q] [--max-width PX]
               [--audio] [--separate] [--notes] [--title-page] [--paper a4|letter]
-              [--output FILE] [--jobs N] [--force] [--output-dir DIR] [--json]   # HTML deck (§55), PDF deck (§56)
+              [--output FILE] [--jobs N|auto] [--force] [--output-dir DIR] [--json]   # HTML deck (§55), PDF deck (§56)
 vidgen translate-template [PROJECT] [--variant NAME] [--language TAG] [--output FILE] [--json]   # translation file (§54)
 vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]   # STT check of the audio (§57)
 vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]   # generated pictures (§58)
 vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
-              [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
+              [--clips | --no-clips] [--jobs N|auto] [--force] [--json]   # every scene type rendered (§60)
 vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]   # a character's look, poses; one still (§69.1)
 vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]   # every pose, expression, mouth shape on one PNG (§69.16)
 vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider P] [--narrator VOICE] [--model NAME]
@@ -1026,7 +1028,8 @@ or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders o
 and re-joins using the existing renders of the others (missing ones are rendered). Exit code
 non-zero on error.
 `render` prints one line per scene, then the output paths and the total duration (Step 45: and
-the measured loudness, §48).
+the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first prints `jobs: N
+(auto: <reason>)` (§70).
 
 ## 9. Testing
 
@@ -8372,3 +8375,52 @@ with an animal are a config error (`config.SPECIES_OWN_KEYS`); `svg` with `speci
   by one amount (`test_the_set_fades_in_as_one_picture`). A copy carried from the scene before
   (`carry:`) still moves in. Not changed: the scene's fade out (`finish` → `clear_all`) still
   fades each thing on its own (Backlog); with a transition other than a cut it is held instead.
+
+## 70. Render jobs: `--jobs auto` (Step 117)
+
+- **Formula** (`vidgen/render/jobs.py`, `jobs_for(available_bytes, cores, per_job_bytes)`):
+  `min(available_bytes // per_job_bytes, cores)`, at least 1; 1 when the memory cannot be read.
+  `choose_jobs()` reads both and returns a `JobsChoice(jobs, cores, per_job_bytes, memory)` with a
+  `reason` (`5.2 GB available (/proc/meminfo MemAvailable) / 1.5 GB per job = 3, 2 CPU cores`)
+  and `to_json()`.
+- **Available memory** (`available_memory()`, `MemoryReading(available_bytes, source)`), standard
+  library only; swap is never counted:
+  - Linux: `MemAvailable` of `/proc/meminfo`; `cgroup_headroom` walks the process's memory cgroup
+    (from `/proc/self/cgroup`) and its parents, v2 `memory.max` / `memory.current` /
+    `inactive_file`, v1 `memory.limit_in_bytes` / `memory.usage_in_bytes` / `total_inactive_file`,
+    and takes the smallest `limit - (usage - inactive file cache)`; the smaller of the two wins.
+    When the group's path from `/proc/self/cgroup` is not under the mount (a container), the
+    mount's root group is read.
+  - Windows: `ullAvailPhys` of `GlobalMemoryStatusEx` through `ctypes`.
+  - macOS: free + inactive pages of `vm_stat` (as `psutil` counts available memory).
+  - Other systems: unknown, so 1 job.
+- **Cores** (`cpu_cores()`): `len(os.sched_getaffinity(0))` where it exists, else `os.cpu_count()`.
+  A cgroup CPU quota is not read.
+- **Per-job figure** `PER_JOB_BYTES` = 1.5 GB, from measurements of one scene render at a time
+  (`--jobs 1`, `--no-audio`) in a fresh cgroup-v1 memory group, polling `memory.stat` every 50 ms
+  (peak anonymous memory of the group = the vidgen command, the worker and its ffmpeg):
+
+  | example | format | peak RSS of the group | largest process | incl. page cache | wall |
+  |---|---|---|---|---|---|
+  | `cartoon-muffin-mystery` | 640x360 @ 15 (preview) | 291 MB | 252 MB | 439 MB | 53 s |
+  | `cartoon-muffin-mystery` | 1920x1080 @ 30 | 756 MB | 717 MB | 995 MB | 191 s |
+  | `cartoon-rain-check` | 640x360 @ 15 (preview) | 288 MB | 246 MB | 557 MB | 56 s |
+  | `cartoon-rain-check` | 1920x1080 @ 30 | 790 MB | 752 MB | 1104 MB | 195 s |
+
+  (MB = MiB here; 790 MiB = 0.83 GB.) 1.5 GB is about 1.8 times the largest peak: room for
+  heavier scenes (pictures, video clips) without the 3 GB of the task list's default, which would
+  have halved the jobs on an 8 GB machine for no measured reason. Formats above 1080p are not
+  covered: memory grows with the pixel count (0.30 GB at 0.23 MP, 0.83 GB at 2.07 MP), so a 4K
+  render needs about 2.5 GB per job; the docs say to give `--jobs N` there.
+- **CLI**: every `--jobs` (`render`, `storyboard`, `lint`, `thumbnail`, `slides`, `gallery`) takes
+  `N` or `auto` (`_jobs_value`; anything else is a usage error `invalid value: 'x' (a whole
+  number, or auto)`; `0` is still the command's `--jobs must be at least 1`). `main` /
+  `_run_json` call `_resolve_auto_jobs` before the command: it replaces `auto` by the number,
+  prints `jobs: N (auto: <reason>)` on stdout (stderr with `--json`) and, with `--json`, the
+  document gets a `jobs` object (`JobsChoice.to_json()`, also on an error document). An explicit
+  number adds nothing.
+- **MCP**: the tools with `jobs` accept an int 1–16 or `"auto"` (default still 1) and pass
+  `--jobs=auto` on.
+- **Unchanged**: Kokoro `vidgen tts` has no `--jobs` and runs alone (the MCP server already runs
+  heavy tools one at a time); the Python functions (`render_project(jobs=...)` and the others)
+  take an int.

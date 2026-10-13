@@ -165,6 +165,7 @@ def test_cli_args() -> None:
     args = cli_args(["lint"], ["/p"], {"scene": ["a", "-b"], "final": True, "force": False, "variant": None, "jobs": 2, "rule": []})
     assert args == ["lint", "/p", "--scene=a", "--scene=-b", "--final", "--jobs=2", "--json"]
     assert cli_args(["guide"]) == ["guide", "--json"]
+    assert cli_args(["render"], ["/p"], {"jobs": "auto"}) == ["render", "/p", "--jobs=auto", "--json"]
     with pytest.raises(VidgenError, match="may not start with '-'"):
         cli_args(["guide"], ["--list"])
 
@@ -279,6 +280,8 @@ def test_server_tools_guide_and_resources(tmp_path: Path) -> None:
         schema = attr(tts, "input_schema", "inputSchema")
         assert schema["properties"]["dry_run"]["default"] is True and schema["properties"]["confirm_cost"]["default"] is False
         assert "ctx" not in schema["properties"] and "COSTS MONEY" in tts.description
+        jobs = attr(next(t for t in tools if t.name == "render"), "input_schema", "inputSchema")["properties"]["jobs"]
+        assert jobs["default"] == 1 and "auto" in json.dumps(jobs) and '"maximum": 16' in json.dumps(jobs)
 
         doc = doc_of(await client.call_tool("guide", {"topic": "start"}))
         assert doc["command"] == "guide" and doc["topic"] == "start" and doc["text"].startswith("## ")

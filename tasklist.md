@@ -624,11 +624,11 @@ Goal: renders that use the machine's memory safely, and many more cartoon assets
 Phases H–K. Examples may now be up to 10 KB (owner, after Step 116).
 
 ### Step 117 — `--jobs auto`
-- [ ] `--jobs auto` on `render` (and anything else that takes `--jobs`): jobs = min(available physical memory ÷ per-job memory, CPU cores), at least 1; swap never counted; "available" memory, not total; read on Linux (`/proc/meminfo` MemAvailable), Windows and macOS without new heavy dependencies; prints what it chose and why (also in `--json`)
-- [ ] Measure a scene render's peak memory on the cartoon examples (preview and 1080p) and set the per-job figure from it (3 GB unless the measurements say otherwise); document the numbers
-- [ ] Kokoro `vidgen tts` always runs alone; tests are never run in parallel (unchanged)
-- [ ] Docs (CONFIG, README, guide); propose the matching change to docs/CODING-AND-COMMUNICATION-GUIDE.md rule 7 to the owner (do not edit the guide without approval)
-- [ ] Tests: the job formula with mocked memory / cores per platform
+- [x] `--jobs auto` on `render` (and anything else that takes `--jobs`): jobs = min(available physical memory ÷ per-job memory, CPU cores), at least 1; swap never counted; "available" memory, not total; read on Linux (`/proc/meminfo` MemAvailable), Windows and macOS without new heavy dependencies; prints what it chose and why (also in `--json`) (`vidgen/render/jobs.py`; `render`, `storyboard`, `lint`, `thumbnail`, `slides`, `gallery` and the MCP tools; Linux also takes the smaller cgroup limit; JSON key `jobs`)
+- [x] Measure a scene render's peak memory on the cartoon examples (preview and 1080p) and set the per-job figure from it (3 GB unless the measurements say otherwise); document the numbers (muffin-mystery and rain-check: peak 0.29–0.30 GB at 640x360, 0.79–0.83 GB at 1920x1080; per job **1.5 GB**; DESIGN §70, HANDOFF Step 117)
+- [x] Kokoro `vidgen tts` always runs alone; tests are never run in parallel (unchanged) (`tts` has no `--jobs`; said in CONFIG and the guide)
+- [x] Docs (CONFIG, README, guide); propose the matching change to docs/CODING-AND-COMMUNICATION-GUIDE.md rule 7 to the owner (do not edit the guide without approval) (proposal in HANDOFF Step 117; guide not edited; COOKBOOK's `--jobs 4` → `auto`)
+- [x] Tests: the job formula with mocked memory / cores per platform (`tests/test_jobs.py`, 24 tests)
 
 ### Step 118 — Vehicles, part 1: on the ground
 - [ ] Built-in vehicles `bicycle`, `car`, `bus` (original simple shapes, theme colours, wheels that turn); actions `get_in` (or on), `ride_to` (a mark / x / depth; speed; the riders move with it, seated or pedalling), `get_out`; several riders in a car or bus; foley (bell, engine, brakes) from generated sounds

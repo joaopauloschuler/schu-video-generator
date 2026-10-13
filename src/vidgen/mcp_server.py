@@ -281,7 +281,10 @@ def build_server(root: Path) -> Any:
     ]
     Variant = Annotated[str | None, Field(description="apply this named variant of video.yaml (e.g. vertical)")]
     Scenes = Annotated[list[str] | None, Field(description="only these scene ids")]
-    Jobs = Annotated[int, Field(ge=1, le=16, description="scenes rendered in parallel")]
+    Jobs = Annotated[
+        Annotated[int, Field(ge=1, le=16)] | Literal["auto"],
+        Field(description="scenes rendered in parallel; auto: as many as the available memory and CPU cores allow"),
+    ]
     Images = Annotated[int, Field(ge=0, le=MAX_IMAGES, description="pictures to return in this call (0: none)")]
     Offset = Annotated[int, Field(ge=0, description="first picture to return (to page through many)")]
     from vidgen.config import Species

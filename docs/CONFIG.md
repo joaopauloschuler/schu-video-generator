@@ -287,7 +287,7 @@ Changing `thumbnail:` re-renders no scene.
 
 ```
 vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at SECONDS]
-                 [--no-overlays]] [--jpeg] [--jobs N] [--output-dir DIR] [--json]
+                 [--no-overlays]] [--jpeg] [--jobs N|auto] [--output-dir DIR] [--json]
 ```
 
 `--scene` (with `--beat`, `--at`, `--no-overlays`) takes a frame instead of what the config says;
@@ -347,7 +347,7 @@ including a transition out of it); without it they are times in the video (defau
 ```
 vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
               [--overlays | --no-overlays] [--no-dedupe] [--image-format webp|jpeg|png] [--quality Q]
-              [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N] [--force]
+              [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N|auto] [--force]
               [--output-dir DIR] [--json]
 ```
 
@@ -6016,6 +6016,34 @@ theme tokens or variants. If `video.yaml` is invalid, `vidgen schema` still work
 when it is most useful): it uses the file's `extensions` and `theme` as far as they are valid
 and prints a warning. `--scene` with an unknown type is an error (exit code 1).
 
+## Parallel renders (`--jobs`)
+
+`vidgen render`, `storyboard`, `lint`, `thumbnail`, `slides` and `gallery` take `--jobs N`
+(`-j N`): the number of scenes rendered at once, each in its own worker process (default 1).
+`--jobs auto` lets vidgen choose:
+
+    jobs = min(available memory ÷ 1.5 GB, CPU cores), at least 1
+
+- **Available memory** is what the system can give without swapping; swap is never counted.
+  Linux: `MemAvailable` of `/proc/meminfo`, or less when the process runs in a cgroup with a
+  memory limit (`memory.max` in cgroup v2, `memory.limit_in_bytes` in v1, of its group or a
+  parent group): the limit minus what the group uses, not counting file cache the kernel can
+  drop. Windows: `ullAvailPhys` of `GlobalMemoryStatusEx`. macOS: free + inactive pages of
+  `vm_stat`. Elsewhere, or when the reading fails, `auto` means 1.
+- **CPU cores** are the cores the process may run on (its CPU affinity on Linux).
+- **1.5 GB per job** is about twice the largest peak measured for one scene render (the Manim
+  worker and its ffmpeg): 0.30 GB for a cartoon scene at the 640x360 preview, 0.83 GB at
+  1920x1080 (`examples/cartoon-muffin-mystery` and `cartoon-rain-check`). A video larger than
+  1080p, or scenes with large pictures or video clips, can need more: give `--jobs N` yourself.
+
+The command prints its choice and the reason before it starts, e.g.
+
+    jobs: 2 (auto: 6.2 GB available (/proc/meminfo MemAvailable) / 1.5 GB per job = 4, 2 CPU cores)
+
+and with `--json` adds it to the document as `jobs` ([JSON output](#json-output---json)). The
+MCP tools that render take `jobs: "auto"` too. `vidgen tts` with Kokoro (about 2.2 GB) has no
+`--jobs` and should run alone, not next to a render.
+
 ## Frame stills (`vidgen render --frames`)
 
 `vidgen render --frames` also saves PNG stills of the render, so you (or an AI agent, which
@@ -6211,7 +6239,7 @@ Options:
 | `--variant NAME` | lint a variant (e.g. the vertical one) |
 | `--preview` / `--final` | preview format (the default) or the final format |
 | `--fail-on SEVERITY` | `error`, `warning`, `info` or `never`; overrides `lint.fail_on` |
-| `--jobs N` | scenes rendered in parallel |
+| `--jobs N\|auto` | scenes rendered in parallel ([`auto`](#parallel-renders---jobs): from the available memory and CPU cores) |
 | `--force` | render the selected scenes again even if their stills are current |
 | `--json` | print every finding as JSON (below) |
 
@@ -6342,7 +6370,7 @@ Options:
 | `--variant NAME` | storyboard a variant (e.g. the vertical one) |
 | `--preview` / `--final` | preview format (the default) or the final format |
 | `--width PX` | page width (default 1280) |
-| `--jobs N` | scenes rendered in parallel |
+| `--jobs N\|auto` | scenes rendered in parallel ([`auto`](#parallel-renders---jobs): from the available memory and CPU cores) |
 | `--force` | render the selected scenes again even if their stills are current |
 | `--json` | print the sheets and the stills on each (below) |
 
@@ -6405,7 +6433,7 @@ again; `--scene ID` renders those scenes whatever their state.
 | `--formats 16:9,9:16` | the formats to render (default both) |
 | `--theme PRESET` | render in this theme preset (default: the project's theme, or the default look) |
 | `--clips` / `--no-clips` | also write the GIFs (default yes); without, the pages link the GIFs already there |
-| `--jobs N` | samples rendered in parallel |
+| `--jobs N\|auto` | samples rendered in parallel ([`auto`](#parallel-renders---jobs): from the available memory and CPU cores) |
 | `--force` | render the samples again even if their stills are current |
 | `--json` | print the gallery's files (below) |
 
@@ -6570,6 +6598,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
+| `jobs` | object | only with [`--jobs auto`](#parallel-renders---jobs): `{requested: "auto", jobs, cores, per_job_bytes, available_bytes, memory_source, reason}` (`available_bytes` / `memory_source` `null` when the memory could not be read) |
 
 **Errors.** `error.kind` is `usage` (bad command line; exit code 2), `error` (something the user
 can fix: config, missing file, unknown scene, failed scene...; exit code 1) or `internal` (an

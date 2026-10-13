@@ -11059,3 +11059,76 @@ How to test
   tests/test_config.py` (182, 79 s); render: `tests/test_cartoon_[a-l]*.py` (21, 26 s),
   `tests/test_cartoon_[m-z]*.py` (24, 15 s), `test_phase_k_review test_lint test_introspect
   test_phase_h_review` (3, 28 s). The full suite was not run.
+
+## Step 117 — `--jobs auto`
+
+What was built (DESIGN §70)
+- `vidgen/render/jobs.py` (new; nothing similar existed: searched `jobs`, `meminfo`, `cpu_count`,
+  `cgroup` in `src/vidgen/`): `jobs_for(available_bytes, cores, per_job_bytes)` = min(memory ÷
+  per job, cores), at least 1, 1 when memory is unknown; `choose_jobs()` → `JobsChoice(jobs,
+  cores, per_job_bytes, memory)` with `reason` and `to_json()`; `available_memory()` per OS:
+  Linux `/proc/meminfo` `MemAvailable` or, when smaller, the cgroup headroom (`cgroup_headroom`:
+  the process's memory cgroup and its parents, v2 `memory.max` / v1 `memory.limit_in_bytes`,
+  limit − (usage − inactive file cache)); Windows `GlobalMemoryStatusEx.ullAvailPhys` (ctypes);
+  macOS `vm_stat` free + inactive pages; other systems → unknown → 1. Swap never counted. Cores:
+  `os.sched_getaffinity` where present, else `os.cpu_count()`. `PER_JOB_BYTES` = 1.5 GB.
+- CLI: `--jobs` of `render`, `storyboard`, `lint`, `thumbnail`, `slides`, `gallery` now takes `N` or
+  `auto` (one `jobs_arg` helper in `build_parser` replaces the six definitions; `_jobs_value`).
+  `main` and `_run_json` call `_resolve_auto_jobs` before the command: `auto` becomes the number,
+  the CLI prints `jobs: N (auto: <reason>)` (stdout; stderr with `--json`), and a `--json`
+  document gets a `jobs` object (also on an error document). The usage error for a bad value is
+  now `invalid value: 'x' (a whole number, or auto)` (was argparse's `invalid int value`).
+- MCP: the `Jobs` parameter type accepts an int 1–16 or `"auto"` (default 1, unchanged).
+
+Measurements (the per-job figure), one scene render at a time (`--jobs 1 --no-audio`), in a fresh
+cgroup-v1 memory group capped at 1500 MB, `memory.stat` polled every 50 ms (script kept in the
+scratchpad, `step117/measure_peak.py`); 1920x1080 by editing a scratch copy's `format:`:
+
+| example | format | peak RSS of the group | largest process | incl. page cache | wall |
+|---|---|---|---|---|---|
+| cartoon-muffin-mystery | 640x360 @ 15 | 291 MiB | 252 MiB | 439 MiB | 53 s |
+| cartoon-muffin-mystery | 1920x1080 @ 30 | 756 MiB | 717 MiB | 995 MiB | 191 s |
+| cartoon-rain-check | 640x360 @ 15 | 288 MiB | 246 MiB | 557 MiB | 56 s |
+| cartoon-rain-check | 1920x1080 @ 30 | 790 MiB | 752 MiB | 1104 MiB | 195 s |
+
+Decision: 1.5 GB per job (about 1.8 × the largest peak, 0.83 GB), not the task list's default
+3 GB: the measurements do not support 3 GB, which would halve the jobs on an 8 GB machine. Not
+covered: formats above 1080p (memory grows with pixels; about 2.5 GB at 4K by the two points
+above); CONFIG.md says to give `--jobs N` there. No cgroup was hit (failcnt 0). Check run: `vidgen
+render examples/minimal --preview --no-audio --jobs auto` (scratch copy) under the 1500 MB cap
+printed `jobs: 1 (auto: 1.5 GB available (cgroup memory.limit_in_bytes minus its use) / 1.5 GB per
+job = 1, 2 CPU cores)` and rendered 11 scenes; uncapped here it chooses 2 (6.2 GB, 2 cores).
+
+Proposed change to docs/CODING-AND-COMMUNICATION-GUIDE.md rule 7 (not applied; the owner decides).
+Replace the first bullet's "and `--jobs 1` for vidgen commands." with:
+
+> and `--jobs 1` or `--jobs auto` for vidgen commands, never a fixed N above 1. `--jobs auto`
+> reads the memory the cap leaves (cgroup `memory.max`), so under `MemoryMax=1500M` it renders
+> one scene at a time; it allows 1.5 GB per scene render (a 1080p cartoon scene peaks at about
+> 0.8 GB). Kokoro `vidgen tts` (about 2.2 GB) runs alone, never next to a render or a test run.
+
+Files touched
+- New: `src/vidgen/render/jobs.py`, `tests/test_jobs.py`.
+- `src/vidgen/cli.py`, `src/vidgen/mcp_server.py`; tests `tests/test_json_output.py` (new usage
+  message), `tests/test_mcp.py` (`--jobs=auto` pass-through, render tool schema).
+- Docs: `docs/CONFIG.md` (new section "Parallel renders (`--jobs`)", option tables, synopses, JSON
+  envelope `jobs`), `README.md`, guide `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`,
+  `docs/COOKBOOK.md` (`--jobs 4` → `--jobs auto`, not named by the step: a fixed 4 is what the
+  step replaces), `DESIGN.md` (§2 layout, §5.2, §8, new §70), `tasklist.md`.
+
+Public interfaces
+- CLI `--jobs auto`; JSON envelope key `jobs` (only with `--jobs auto`; schema version unchanged,
+  keys are only added); MCP `jobs: "auto"`. No `vidgen.api` names; Python functions still take an
+  int.
+
+Known gaps
+- A cgroup CPU quota (`cpu.max`) is not read: in a container limited by quota but not affinity,
+  `auto` may count more cores than it gets (memory still bounds it).
+- The per-job figure is one constant, not scaled by the format's pixel count.
+- Windows and macOS readings are tested with mocks only (no such machine here).
+
+How to test
+- `pytest -q tests/test_jobs.py` (24 passed, 2.0 s); `pytest -m "not render" tests/test_json_output.py
+  tests/test_mcp.py tests/test_cli.py` (46 passed, 4 deselected, 29.5 s); `tests/test_docs.py
+  tests/test_guide.py tests/test_packaging.py` (104 passed, 2.4 s). All under the 1500 MB cap. No
+  render tests changed or run; the full suite was not run.
