@@ -13484,3 +13484,131 @@ How to test
 - Manual: `vidgen validate examples/cartoon-music-box`, `vidgen lint examples/cartoon-music-box
   --all-languages`; with the Kokoro extra `vidgen tts examples/cartoon-music-box --all-languages`
   and `vidgen render examples/cartoon-music-box --preview --all-languages`.
+
+## Step 144 — Review of Phase M
+
+End to end (scratch copies in `scratchpad/s144/`, every heavy command alone under the 1500 MB
+cap, Kokoro and faster-whisper under the 2500 MB one; scripts `kokoro.sh`, `kmcp.sh`,
+`mcp_e2e.py`, `measure_beats.py`, `rungroup.sh` there)
+- `examples/host-explainer`: `validate`, `lint` (0 findings), `storyboard --per-beat 2`,
+  `animatic --json` (5.7 s, stills reused), `render --draft` (25 s of rendering for 59.9 s).
+  Stills: the host enters, points at each new bullet and bar, sparkles as the bars rise, the
+  pointer line reaches "Bake", the text card slides when it crosses, it leaves on the left.
+- `examples/cartoon-rain-check`: `render --draft` (4 scenes in 26 s), `animatic` (32 stills,
+  70 s with the still renders); a still checked (rain, the `!` symbol, drawn captions).
+- `examples/cartoon-music-box` en + pt: `validate` (the `dub [pt]` line), `tts --all-languages
+  --dry-run`, `lint --all-languages` (0 findings each), `render --draft --all-languages` with
+  Step 143's real pt audio (58.6 s, −16.2 LUFS; Portuguese captions and lip sync in the still).
+- A scratch project `sets/`: `set: city_street` and `set: kitchen` stages (a gesture, a walk to
+  the bench, a walk to a chair's depth and `sit_on`, `switch_on: kettle`), a `bullets` scene with a
+  left host and `auto_direct`, top-level `drawing: {outline: bold, shading: soft, texture:
+  storybook}` and a `plain` variant: validate ok, lint 0 findings, storyboard checked by eye.
+- MCP (`mcp_e2e.py`, a real `vidgen mcp` over stdio): `validate` ×2, `direct`, `lint`
+  `all_languages` (envelope `languages`), `storyboard` (an image back), `animatic`, `render`
+  `draft` and `draft` + `all_languages`; in the Kokoro venv `lint` with `readback` and the rule
+  `unclear_speech` (3 warnings, 7 info, renders reused). All `ok`.
+
+Real narration with emotions
+- A copy of host-explainer with `emotion:` on 7 of 11 beats (excited ×2, surprised, doubtful,
+  whisper, calm, happy) and a neutral copy, both voiced by Kokoro (`af_heart`, 0.95 as committed
+  then). Per beat (emotion vs neutral): excited 5.96 / 6.45 s, 218 / 194 Hz, −23.0 / −26.1 LUFS;
+  surprised 235 / 204 Hz; doubtful 3.91 / 3.63 s, −27.1 / −26.5; whisper 5.40 / 5.08 s, 186 /
+  200 Hz, −34.6 / −25.7; calm 4.41 / 4.25 s; happy 222 / 209 Hz. Readback (faster-whisper
+  `small.en`): WER 1.5 % with emotions, 2.3 % neutral; unclear words 1 vs 2.
+- `vidgen lint --readback` on the real audio: 8 `narration_speed` warnings, 3.6–4.6 words/s
+  (also on beats without an emotion): the example's `speed: 0.95` was never checked with audio
+  (Step 134 had none). At 0.75 (as the other `af_heart` voices in the examples): no
+  `narration_speed` finding; `unclear_speech` 3 warnings ("ever" 0.37, "in" heard "and", "Half"
+  0.48) and 7 info.
+- Final render (`render --jobs auto --frames-per-beat 3 --output-dir
+  /home/claude/work/phase-m-review`, 1280x720 @ 30; `jobs: 1`): `host_explainer.mp4`, 66.13 s,
+  3.3 MB, −22.3 LUFS integrated, −3.2 dBTP (narration only, so `normalize: auto` keeps the
+  narration's level). Scenes rendered in 8.6 / 17.2 / 18.3 / 13.2 / 12.2 s.
+- Stills (33 at the beat ends and thirds, plus the preview storyboards): the host stands in its
+  right column clear of the bullets, chart and process in 16:9; points reach towards the right
+  item or bar (up-left at the first bullet, level at the bars), the pointer line ends short of
+  "Bake"; no overlaps except the known walk across the text card during `host_move` (Backlog).
+  Seen: in `grow_b3` the host only points at bar 3 at the beat's end (the previous beat's point
+  and reaction are undone one after the other first; Backlog).
+- Verdict: the emotions vary pitch, pace and loudness as designed and cost no intelligibility,
+  so `examples/host-explainer` keeps them, with `speed: 0.75` (3.0 KB).
+
+Fixed
+- `vidgen lint --readback` printed faster-whisper's "Processing audio with duration" INFO line
+  for every beat (Manim's logging setup, imported by lint, shows INFO; `vidgen readback` alone
+  does not import Manim). `FasterWhisperProvider._load` sets the `faster_whisper` logger to
+  WARNING. Introduced with Step 141 (5a11a8c), which first ran faster-whisper inside lint.
+  Test `test_speech_flags.py::test_faster_whisper_info_lines_are_quiet` (fails without the fix).
+- `examples/host-explainer`: `speed: 0.95` → `0.75` (above), `emotion:` added.
+
+Full test suite (owner asked; Step 131's method: `rungroup.sh` = `capped python -m pytest -q -p
+no:cacheprovider --durations=15 -m "<mark>" <files>`, one group at a time, 145 files)
+
+| Group | Files | Result | Wall |
+|---|---|---|---|
+| not render 1 | `test_actions` … `test_cartoon_motion` (29) | 749 passed | 62 s |
+| not render 2 | `test_cartoon_motion_effects` … `test_charts` (29) | 665 passed | 74 s |
+| not render 3 | `test_cli` … `test_jobs` (29) | 666 passed | 18 s |
+| not render 4 | `test_json_output` … `test_review2` (29) | 603 passed | 159 s |
+| not render 5 | `test_review3` … `test_world_map` (29) | 760 passed, 2 skipped | 133 s |
+| render 1 | `test_actions` … `test_cartoon_fire_nature` (17) | 182 passed | 152 s |
+| render 2 | `test_cartoon_foley` … `test_cartoon_poses` (17) | 22 passed | 19 s |
+| render 3 | `test_cartoon_props` … `test_cartoon_svg` (17) | 20 passed | 20 s |
+| render 4 | `test_cartoon_vehicles` … `test_dubbing` (17) | 81 passed | 155 s |
+| render 5 | `test_emotions` … `test_includes` (17) | 49 passed | 152 s |
+| render 6 | `test_introspect` … `test_phase_k_review` (17) | 32 passed | 127 s |
+| render 7 | `test_phase_l_review` … `test_robustness` (17) | 92 passed | 198 s |
+| render 8 | `test_scales` … `test_transitions` (17) | 90 passed | 134 s |
+| render 9 | `test_translation` … `test_world_map` (9) | 31 passed | 49 s |
+
+Totals: 4042 passed (3443 not render + 599 render), 2 skipped, 0 failed, in 1452 s of wall time
+(446 s not render, 1006 s render; about 24 minutes; Step 131: 3822 in 1073 s). No group came near
+the cap or the timeout (longest 198 s). The fix above was in place for the run. The 2 skips are
+Step 131's (the kphi3 reference project is not here; real Kokoro synthesis needs the `kokoro`
+extra, which ran for real in the Kokoro venv during this step's TTS).
+
+Tests slower than 10 s (all `slow` but three, now marked)
+- Newly marked `slow`: `test_callout_action::test_label_callouts_on_a_crowded_bar_chart` 11.4 s,
+  `test_mcp::test_server_storyboard_and_lint_return_pictures` 13.2 s,
+  `test_review4::test_render_reuses_scenes_whose_inputs_did_not_change` 11.9 s.
+- Already `slow`: `test_chapter_export` rendered chapters 28.3 s, `test_frames` variant / CLI
+  23.8 s and beat-end stills 17.0 s, `test_phase_h_review` example 20.7 s, `test_comparison_table`
+  too big 19.3 s, `test_storyboard` reuse 16.7 s and vertical 10.2 s, `test_phase_l_review` MCP
+  14.7 s, `test_world_map` lint 14.3 s, `test_overlays` schema 14.2 s, `test_music` setup 13.6 s,
+  `test_transitions` setup 13.7 s, `test_icon_scenes` 12-icon grids 13.6 / 10.9 s,
+  `test_callout_action` lint 13.2 s, `test_presets` contrast per preset 10.0–11.4 s (6 of 7).
+
+Docs and packaging
+- `CHANGELOG.md`: 0.3.0 now covers Steps 61–144 (0.3.0 was never tagged or published, said
+  there): behaviour changes (automatic Kokoro dubbing, readback cache probabilities, screenplay
+  emotions and set props), sections for hosts, sets and drawing styles, emotion, dubbing,
+  readback word flags, drafts and animatics, the example, 4042 tests.
+- `MANIFEST.in` (new): `include CHANGELOG.md` (Step 132 noted the sdist lacked it). `python -m
+  build`: wheel 2.66 MB with all 463 tracked `src/vidgen` files (`data/sets/indoors.yaml`,
+  `outdoors.yaml` included; there is no packaged translations data: translations live in the
+  examples), sdist 3.1 MB with `CHANGELOG.md`. The wheel installed in Step 132's fresh 3.13 venv
+  validates the `sets` project (built-in sets found) and `examples/cartoon-music-box` (dub line).
+- README: features "Ready-made sets and drawing styles", "Lines with feeling", dubbing in "Other
+  languages", word flags in "Readback check"; `--all-languages` on `tts` / `render` / `lint` and
+  `--readback` in the command table; the example line. DESIGN §71.2 (example's emotions and
+  speed), §78 (logger). Guide (+ `AGENTS.md` copy): faster emotions with Kokoro want a voice
+  speed near 0.75–0.8. CONFIG and EXTENDING already matched Phase M (checked by grep).
+- Backlog: 9 lines (host timing, host gaps, emotions, sets, drawing style, dubbing, readback
+  flags, narration-only loudness, drafts / animatics).
+
+Files touched
+- `src/vidgen/stt/faster_whisper.py`; `tests/test_speech_flags.py`, `tests/test_callout_action.py`,
+  `tests/test_mcp.py`, `tests/test_review4.py`; `examples/host-explainer/video.yaml`;
+  `MANIFEST.in` (new), `CHANGELOG.md`, `README.md`, `DESIGN.md`,
+  `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `tasklist.md`, `HANDOFF.md`.
+
+Not done
+- No listening by a person (the emotions were judged by measurements and readback). The pt
+  readback was not run (only `small.en` is cached here). The host's late point and the
+  narration-only loudness are Backlog items, not fixed.
+
+How to test
+- `pytest tests/test_speech_flags.py tests/test_readback.py` (46 passed, 5 s); `-m "not render"
+  tests/test_docs.py tests/test_guide.py tests/test_packaging.py tests/test_host_acting.py
+  tests/test_builtin_scenes.py tests/test_speech_flags.py` (262 passed, 8 s); render
+  `test_host_acting test_callout_action test_review4` (12 passed, 54 s).

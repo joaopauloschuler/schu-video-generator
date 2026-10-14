@@ -4,6 +4,7 @@ with the text, per beat, with times and a suggested fix (``vidgen readback``, ``
 
 from __future__ import annotations
 
+import logging
 import sys
 import types
 from pathlib import Path
@@ -170,6 +171,21 @@ def test_faster_whisper_words_have_probabilities(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=ProbabilityWhisper))
     transcript = FasterWhisperProvider("small", "en").transcribe(write_sine(tmp_path / "b.mp3", 1.0))
     assert [(w.text, w.probability) for w in transcript.words] == [("Hello", 0.91), ("there.", 0.22)]
+
+
+def test_faster_whisper_info_lines_are_quiet(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Manim sets up logging at INFO, so `lint --readback` printed faster-whisper's "Processing audio" lines
+    root, logger = logging.getLogger(), logging.getLogger("faster_whisper")
+    levels = root.level, logger.level
+    root.setLevel(logging.INFO)
+    logger.setLevel(logging.NOTSET)
+    try:
+        monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=ProbabilityWhisper))
+        FasterWhisperProvider("small", "en").transcribe(write_sine(tmp_path / "b.mp3", 1.0))
+        assert not logger.isEnabledFor(logging.INFO) and logger.isEnabledFor(logging.WARNING)
+    finally:
+        root.setLevel(levels[0])
+        logger.setLevel(levels[1])
 
 
 def test_load_audio_decodes_with_ffmpeg_not_pyav(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

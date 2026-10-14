@@ -5,13 +5,18 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–131)
+## 0.3.0 (Steps 61–144)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
 indoors and outdoors, with weather, props, vehicles, sound and music, written as YAML or as a
 screenplay. It also adds two narration providers (OpenRouter, and Kokoro running free on your
-own computer), OpenRouter pictures including SVG, an `output/` folder and `--jobs auto`.
+own computer), OpenRouter pictures including SVG, an `output/` folder and `--jobs auto`; a
+cartoon host beside any explainer scene, lines spoken with feeling, drafts and animatics,
+ready-made sets, drawing styles, word-level readback flags and dubbing.
+
+0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–144
+(Phase M in `tasklist.md`) is part of this release rather than an "Unreleased" section.
 
 ### Behaviour changes and possible breaks
 
@@ -35,6 +40,14 @@ Changes that affect projects made with 0.2.0:
   the vidgen version.
 - **`--jobs` accepts `auto`** (Step 117). A bad value now gives the error `invalid value: 'x'
   (a whole number, or auto)` instead of argparse's message.
+- **A Kokoro voice of another language is dubbed** (Step 143): in a video (or variant) whose
+  `language:` is not the Kokoro voice's, vidgen now picks a Kokoro voice of the video's language
+  of the same kind (female / male) instead of reading the text with the wrong pronunciation and
+  only warning. `vidgen validate` prints the choice (`dub [pt]: ...`). Write `lang:` on the voice
+  to keep it on purpose, or `dub: {LANG: VOICE}` to choose. Those beats get new audio.
+- **Readback transcripts** (Step 141): `vidgen readback` keeps faster-whisper's word
+  probabilities in its cache; a cached faster-whisper transcript without them is transcribed
+  once more (local, free). Audio for faster-whisper is decoded with the ffmpeg executable.
 
 Cartoon behaviour that changed during the 0.3.0 cycle (cartoons are new in 0.3.0, so this
 matters only for projects made with development builds between Steps 67 and 131):
@@ -71,7 +84,10 @@ matters only for projects made with development builds between Steps 67 and 131)
   with splashes and has a rain sound bed (Step 105).
 - **`vidgen screenplay`** (Steps 113, 115, 130): it now picks from 11 looks (the first six as
   before), then random looks that contrast well. An exit's edge is written as `to` (it was
-  `side`, which validate refused).
+  `side`, which validate refused). Manner words that name a feeling (`(excited)`,
+  `(whispering)`) also set the line's `emotion` (Step 135), so those lines get new audio; a
+  `set:` line naming `bench`, `fence`, `log` and the other new outdoor props now places them
+  instead of writing a `# TODO` (Step 139).
 
 ### Cartoons: characters
 
@@ -105,6 +121,21 @@ matters only for projects made with development builds between Steps 67 and 131)
 - Vehicles: bicycle, car, bus (118); boat, hot-air balloon, toy rocket (119).
 - Reusable casts and sets with `include:` and `set:` (101); `cartoon_style` for generated
   backgrounds (77).
+- Ready-made sets for `set: NAME` without writing `sets:`: outdoors `city_street`, `park`,
+  `beach`, `forest`, `snowy_hills` (139) and rooms `classroom`, `kitchen`, `shop`,
+  `living_room`, `bedroom` (140), with 18 new props (shop, bench, fountain, pine, blackboard,
+  school desk, shelf with goods, till...) and marks for two characters and every seat.
+- A drawing style for the whole video: `drawing: {outline: thin | normal | bold, shading: flat |
+  soft, texture: none | paper | storybook}` (142); the default draws exactly as before.
+
+### Explainer hosts
+
+- `host:` puts a cartoon character beside the content of any explainer scene (bullets, charts,
+  code, diagrams...): the content's area shrinks to make room, the host speaks the narration
+  with lip sync, and lint rule `host_overlap` checks it (133).
+- Host actions `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`,
+  `host_exit`, and `auto_direct` for hosts: point at each newly revealed item, react to a
+  chart going up or down (134). Example `examples/host-explainer`.
 
 ### Cartoons: acting and directing
 
@@ -158,6 +189,18 @@ matters only for projects made with development builds between Steps 67 and 131)
   `generate: {format: svg}` and `.svg` files in `image` scenes, drawn, recoloured and cleaned up
   (61b). A clear message when the account's privacy settings block a model (Zero Data
   Retention).
+- Lines with feeling: `emotion:` on a beat or a voice (13 emotions such as `excited`, `sad`,
+  `whisper`, `doubtful`, or your own speed / pitch / gain / pauses). Kokoro changes speed,
+  pitch, loudness and pauses (135); ElevenLabs v3 gets audio tags, other ElevenLabs models voice
+  settings, OpenRouter models instructions or the same audio changes (136). Kokoro voice blends
+  with weights: `af_heart+af_bella:0.6` (135).
+- Dubbing: `dub: {LANG: VOICE}` on voices, automatic Kokoro voices of the same kind for a
+  translated variant, lip sync and timings from each language's audio, and `--all-languages`
+  on `tts`, `render` and `lint` (MCP `render` / `lint`) (143). `examples/cartoon-music-box`
+  has a Brazilian Portuguese variant.
+- `vidgen readback` flags single words the recogniser was unsure of or heard after an odd pause,
+  with the time in the video and a suggested fix; `vidgen lint --readback` reports them as rule
+  `unclear_speech` (141).
 
 ### Rendering and tooling
 
@@ -166,10 +209,16 @@ matters only for projects made with development builds between Steps 67 and 131)
 - Faster cartoon renders: static layers stay in Manim's static image, and part drawings are
   cached (87).
 - Works with Manim 0.22 (64).
+- `vidgen render --draft`: a quick render at about 8 fps and 240 px without decoration (idle
+  motion, wind, shadows, particles, light grade), every timing kept, in its own `build/draft`
+  folder and `_draft.mp4` (137).
+- `vidgen animatic` (also an MCP tool): the storyboard's stills timed to the narration with the
+  video's audio and captions, joined by ffmpeg in seconds (138).
 - Examples: `examples/cartoon`, `cartoon_series`, `screenplay`, `svg_character`,
-  `cartoon-music-box`, `cartoon-rain-check`, `cartoon-muffin-mystery`, `cartoon-rainbow-ride`.
-- Reviews 63, 88, 102, 116 and 130, and the full test suite run (131), fixed what they found
-  (3822 tests pass).
+  `cartoon-music-box`, `cartoon-rain-check`, `cartoon-muffin-mystery`, `cartoon-rainbow-ride`,
+  `host-explainer`.
+- Reviews 63, 88, 102, 116, 130 and 144, and full test suite runs (131, 144), fixed what they
+  found (4042 tests pass).
 
 ### Known gaps
 

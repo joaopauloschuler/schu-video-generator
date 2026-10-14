@@ -9750,7 +9750,10 @@ Reference: docs/CONFIG.md "Pointing, reacting and moving (host actions)".
   `host_enter` on the title, automatic points at bullets and bars and `happy` + sparkle as the
   bars rise, a written `host_point` with `line: true` on a `process` column, `host_move` and
   `host_exit` on the closing `text_card`. `vidgen validate` and `vidgen lint` (preview) clean;
-  stills checked by eye.
+  stills checked by eye. Step 144 gave its beats `emotion:` (§72) and slowed `af_heart` from 0.95
+  to 0.75 (at 0.95 the real Kokoro lines ran at 3.6–4.6 words/s, `narration_speed` warnings): 66 s
+  with Kokoro narration; `vidgen lint --readback` finds only `unclear_speech` word flags (3
+  warnings, 7 info).
 - **Not done**: no `reveal_steps` for the other built-in scene types (the host only looks at
   their written highlights); the host does not dodge a pointer line crossing other content; a
   walk across passes in front of the content mid-beat (by design: it lasts about two seconds);
@@ -10076,7 +10079,9 @@ times show where.
 - **Decoding**: `stt.faster_whisper.load_audio` decodes with the ffmpeg executable
   (`render.ffmpeg.decode_mono(path, rate)`: `-ac 1 -ar 16000 -f f32le pipe:1`, 1-D float32),
   not PyAV: no PyAV version can break it (Step 54's PyAV 19 fix decoded with `sfx.decode_audio`,
-  which stays for the other callers).
+  which stays for the other callers). Loading the model sets the `faster_whisper` logger to
+  WARNING (Step 144): `vidgen lint --readback` imports Manim, whose logging setup at INFO
+  otherwise printed faster-whisper's "Processing audio" line per beat among the progress lines.
 - **Alignment kept**: `compare_beat` stores on `BeatReadback` the `transcript` and `heard_spoken`
   (heard word index → aligned spoken word index, `None` for an extra word; voice sounds' heard
   words, skipped, are absent), and on each `Edit` its `heard_indices` and `written_index` (not in

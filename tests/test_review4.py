@@ -84,6 +84,7 @@ def test_silent_scenes_render_the_planned_frames_on_half_frames(make_project) ->
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_render_reuses_scenes_whose_inputs_did_not_change(make_project) -> None:
     from vidgen.render.pipeline import render_project
     from vidgen.storyboard import make_storyboard

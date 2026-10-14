@@ -340,6 +340,7 @@ def test_server_validate_paths_and_cost_guards(tmp_path: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_server_storyboard_and_lint_return_pictures(tmp_path: Path) -> None:
     tiny_project(tmp_path / "proj")
 

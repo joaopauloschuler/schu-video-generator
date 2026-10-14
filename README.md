@@ -97,6 +97,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
 - **Cartoon series**: `include: [../shared/cast.yaml, ../shared/sets.yaml]` shares characters,
   voices and named stage sets between episodes; a scene's `set: meadow` starts from the set and
   overrides what it needs ([example](examples/cartoon_series)).
+- **Ready-made sets and drawing styles**: `set: city_street` (or `park`, `beach`, `forest`,
+  `snowy_hills`, `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`) gives a stage a built-in
+  set with props, light, ambience and marks for two characters and every seat
+  ([docs](docs/CONFIG.md#ready-made-sets-set-city_street)); `drawing: {outline: bold, shading: soft, texture:
+  storybook}` changes how the whole video is drawn ([docs](docs/CONFIG.md#drawing-style-drawing)).
 - **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
   scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
   mouth follows the narration; it points at items, reacts, walks to the other side, enters and
@@ -163,8 +168,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   (faster-whisper locally, extra `schu-video-generator[stt]`, or ElevenLabs) and compares them with the beat
   texts: a word error rate per beat, the words expected and heard ("K-Phi-3" said "kay fye three",
   heard "kay five three"), and a suggested fix — a pronunciation entry for a term misheard in
-  several beats, regenerating a beat that lost words. Transcripts are cached; `vidgen lint`'s
-  `readback` rule reports the beats above the threshold ([reference](docs/CONFIG.md#readback-vidgen-readback)).
+  several beats, regenerating a beat that lost words. It also lists single words to listen to
+  (heard with low confidence or after an odd pause), with their time in the video and a fix.
+  Transcripts are cached; `vidgen lint`'s `readback` rule reports the beats above the threshold,
+  and `vidgen lint --readback` the words (rule `unclear_speech`) ([reference](docs/CONFIG.md#readback-vidgen-readback)).
 - **Generated images**: an `image` scene can take `generate: {prompt, negative, style, aspect,
   seed}` instead of a file. `vidgen imagegen` makes the missing pictures once with the OpenAI
   Images API (`OPENAI_API_KEY`, the default) or any image model on OpenRouter
@@ -182,7 +189,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `vidgen validate` lists them. Captions and the SRT break lines by the language's rules, the
   speed lint uses its rate, ElevenLabs gets its `language_code` where the model takes one, the
   MP4 its audio language tag, and translated beats get their own `audio/<variant>/`
-  ([reference](docs/CONFIG.md#languages-and-translations)).
+  ([reference](docs/CONFIG.md#languages-and-translations)). Cartoons are dubbed: `dub: {pt:
+  pm_alex}` on a voice, or a Kokoro voice of the language and the same kind chosen for you, with
+  lip sync from each language's audio; `--all-languages` on `tts`, `render` and `lint` does every
+  language in one command ([dubbing](docs/CONFIG.md#dubbing-dub---all-languages)).
 - **Multiple voices**: `voices: {ana: {voice_id: ..., label: "Dr. Ana"}}` plus `voice: ana` on a
   scene or a beat for interviews and dialogue; each named voice inherits the base `voice:`, only
   its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
@@ -197,6 +207,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `schu-video-generator[kokoro]`, below). One TTS provider per video — named voices change the
   voice, not the provider — and a variant may switch the whole video to another one
   ([reference](docs/CONFIG.md#narration-providers)).
+- **Lines with feeling**: `emotion: excited` (or `sad`, `whisper`, `doubtful`... 13 in all, or
+  your own speed, pitch, loudness and pauses) on a beat or a voice; Kokoro changes how the line
+  is spoken, ElevenLabs and OpenRouter get tags, settings or instructions
+  ([reference](docs/CONFIG.md#voices-with-feeling-emotion)).
 - **Sound effects**: eleven synthesised sounds (whoosh, swoosh, pop, click, tick, typing, riser,
   chime, success, error, thud; free to use in your videos, including commercially; no
   attribution needed) or your own `assets/sfx/NAME.wav`, placed as a beat
@@ -454,14 +468,14 @@ narration.
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
-| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
+| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
-| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
+| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME \| --all-languages] [--no-audio] [--keep-going] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N\|auto] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 | `vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions \| --no-captions] [--jobs N\|auto] [--output-dir DIR] [--json]` | `<output>_animatic.mp4`: the storyboard's stills held in time with the narration, with the video's audio and the subtitles drawn on; joined by ffmpeg in seconds when the stills are current (see [docs/CONFIG.md](docs/CONFIG.md#animatic-vidgen-animatic)) |
-| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`); exit code 1 on errors |
+| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME \| --all-languages] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--readback] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`; `--readback`: also transcribe and flag unclear words); exit code 1 on errors |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
 | `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
 | `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
@@ -596,8 +610,8 @@ my_video/
 - [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
   an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
   points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven
-  with a pointer line, crosses to the other side (the content slides over) and walks off; about
-  58 s with Kokoro narration (no audio committed).
+  with a pointer line, crosses to the other side (the content slides over) and walks off; lines
+  said with feeling (`emotion:`); about 66 s with Kokoro narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

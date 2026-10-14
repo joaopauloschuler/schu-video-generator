@@ -1306,7 +1306,9 @@ Give Kokoro lines feeling with `emotion:` on a beat (or as a speaker's default o
 `happy`, `excited`, `sad`, `angry`, `worried`, `scared`, `surprised`, `calm`, `doubtful`,
 `sleepy`, `whisper`, `shout`, or a row with changes such as `{like: sad, pitch: -2}`, change the
 speed, pitch, loudness and pauses of that line; use it on the lines of a dialogue that carry a feeling, not on every line.
-A screenplay's `PIP (cross):` sets it for you. A weighted blend `voice: af_heart+af_bella:0.6`
+`excited`, `happy`, `angry` and `shout` also speed a line up: with Kokoro keep the voice's `speed` near
+0.75–0.8 (`af_heart` at 0.95 read 3.6–4.6 words a second), then check `narration_speed` with
+`vidgen lint` on the real audio. A screenplay's `PIP (cross):` sets it for you. A weighted blend `voice: af_heart+af_bella:0.6`
 makes an in-between voice. ElevenLabs and OpenRouter speak the same `emotion` by its name: an
 audio tag such as `[excited]` before the line on `eleven_v3`, changed voice settings on other
 ElevenLabs models, a sentence added to the `instructions` of OpenRouter models that take them

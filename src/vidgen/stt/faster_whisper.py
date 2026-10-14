@@ -8,6 +8,7 @@ downloaded from the Hugging Face Hub once and cached there.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +67,9 @@ class FasterWhisperProvider:
     def _load(self) -> Any:
         if self._whisper is None:
             module = _module()
+            # its per-clip INFO lines would show between vidgen's progress lines wherever Manim
+            # has set up logging (vidgen lint --readback)
+            logging.getLogger("faster_whisper").setLevel(logging.WARNING)
             try:
                 self._whisper = module.WhisperModel(self.model, device=self.device)
             except Exception as exc:  # noqa: BLE001 - download / file / runtime errors of the library
