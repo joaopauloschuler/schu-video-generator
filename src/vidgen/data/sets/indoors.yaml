@@ -1,11 +1,11 @@
-# Built-in indoor sets (DESIGN.md §77): rooms with a door, windows, furniture, the indoor light and a
+# Built-in indoor sets (DESIGN.md §77): rooms with a door, windows, furniture, daylight (classroom, kitchen, shop) or the indoor light, and a
 # room tone. A stage scene uses one with set: NAME when the project's own sets: has no set of that
 # name; its params override the set's as for any set (CONFIG "Ready-made sets"). Every set leaves
 # two marks clear for two characters at depth 0: stand_left and stand_right. The furniture against
 # the wall stands at the wall's depth (0.4): a character walks there (depth 0.4) to sit or lean.
 sets:
   classroom:                     # a blackboard, the teacher's desk, two pupils' desks facing the board
-    light: indoor
+    light: day
     ambience: room_tone
     room:
       wall: "#DCE6D3"
@@ -20,7 +20,7 @@ sets:
       - {prop: school_desk, at: pupil_2, depth: 0.25, facing: left}
 
   kitchen:                       # a fridge, a counter with a kettle on it, a table with two chairs
-    light: indoor
+    light: day
     ambience: room_tone
     room:
       wall: "#F3E7CE"
@@ -39,7 +39,7 @@ sets:
       - {prop: chair, at: chair_2, depth: 0.2, facing: left}
 
   shop:                          # shelves with goods at the wall, a counter with a till in front
-    light: indoor
+    light: day
     ambience: room_tone
     room:
       wall: "#E2EBF1"

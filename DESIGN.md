@@ -10014,7 +10014,7 @@ outdoor ones by §76's lookup unchanged.
   `living_room`, `bedroom`. `_read_builtin_sets` reads the files sorted by name, so the rooms come
   first in `builtin_sets()` and in validate's "built-in sets:" list. Each is a `room:` (wall
   colour, wallpaper, flooring, one door named `door`, one window; the shop a ceiling and a wide
-  shop window without curtains), `light: indoor`, `ambience: room_tone` (what `auto` picks in a
+  shop window without curtains), `light: day` (classroom, kitchen, shop) or `light: indoor` (living room, bedroom), `ambience: room_tone` (what `auto` picks in a
   room, written out), marks `stand_left` / `stand_right` (two characters at depth 0, clear of
   every prop within 0.15 of their depth; checked by `test_marks_are_inside_the_stage_and_clear_of_the_props`,
   which now counts doors and furniture at the wall's depth through `Params.stage_props()` and checks

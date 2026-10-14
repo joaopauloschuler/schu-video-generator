@@ -118,10 +118,12 @@ def test_new_props_build_seat_and_lie_flat() -> None:
 
 
 @pytest.mark.parametrize("name", INDOOR_SETS)
-def test_each_room_has_a_door_windows_indoor_light_and_room_tone(name: str) -> None:
+def test_each_room_has_a_door_windows_its_light_and_room_tone(name: str) -> None:
     params = stage_params(**builtin_sets()[name])
     assert params.room is not None and params.room.doors and params.room.windows
-    assert params.light == "indoor" and params.ambience == "room_tone"
+    # Daytime places get daylight (a day sky in the windows); homes get the warm indoor light.
+    expected = "day" if name in {"classroom", "kitchen", "shop"} else "indoor"
+    assert params.light == expected and params.ambience == "room_tone"
     assert params.door_names() == ["door"] and "door" in params.stage_marks()
 
 

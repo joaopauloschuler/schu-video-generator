@@ -638,7 +638,7 @@ scenes using it again.
 ### Ready-made rooms (`set: classroom`)
 
 Five built-in sets are [rooms](#rooms-room): a wall, a floor, a door (`door`, a mark too: `enter`
-/ `exit` with `door: door`), windows, furniture against the wall, `light: indoor` (lamplight;
+/ `exit` with `door: door`), windows, furniture against the wall, `light: day` in the classroom, kitchen and shop (a day sky in the windows), `light: indoor` in the living room and bedroom (lamplight;
 the windows show the evening sky) and `ambience: room_tone`. They work like the outdoor sets
 above, with the same two clear marks `stand_left` and `stand_right` at depth 0. The room merges
 key by key (`room: {wallpaper: dots}` keeps the set's door and windows; `room: {windows: []}`
