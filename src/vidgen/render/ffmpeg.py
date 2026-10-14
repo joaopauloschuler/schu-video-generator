@@ -151,16 +151,23 @@ def concat_quote(path: str) -> str:
     return "'" + path.replace("'", "'\\''") + "'"
 
 
-def write_concat_list(files: list[Path], list_file: Path) -> None:
+def write_concat_list(files: list[Path], list_file: Path, durations: list[float] | None = None) -> None:
     """Write an ffmpeg concat list (UTF-8). Paths are relative to the list's folder when
-    possible (ffmpeg resolves them that way), otherwise absolute; both are quoted."""
+    possible (ffmpeg resolves them that way), otherwise absolute; both are quoted.
+
+    ``durations`` (seconds, one per file): each file is shown that long (stills), and the last
+    file is listed once more, as the concat demuxer ignores the last entry's duration."""
     lines = []
-    for f in files:
+    for k, f in enumerate(files):
         try:
             entry = f.relative_to(list_file.parent).as_posix()
         except ValueError:
             entry = f.resolve().as_posix()
         lines.append(f"file {concat_quote(entry)}\n")
+        if durations is not None:
+            lines.append(f"duration {durations[k]:.6f}\n")
+    if durations is not None and lines:
+        lines.append(lines[-2])
     list_file.parent.mkdir(parents=True, exist_ok=True)
     list_file.write_text("".join(lines), encoding="utf-8")
 
@@ -252,7 +259,6 @@ def join(
     """
     audio_list = work_dir / "audio_concat.txt"
     write_concat_list(audios, audio_list)
-    tmp = dst.with_name(f"{dst.stem}.partial{dst.suffix}")
     graph: list[str] = []
     if (crossfades and any(crossfades)) or overlays:
         crossfades = crossfades or [0] * (len(videos) - 1)
@@ -287,16 +293,9 @@ def join(
         write_concat_list(videos, video_list)
         inputs = ["-f", "concat", "-safe", "0", "-i", str(video_list)]
         video_map, video_codec, first_audio = "0:v:0", ["-c:v", "copy"], 1
-    if mix is not None:
-        inputs += ["-i", str(mix)]
-        audio_map = f"{first_audio}:a:0"
-    elif sfx is None:
-        inputs += ["-f", "concat", "-safe", "0", "-i", str(audio_list)]
-        audio_map = f"{first_audio}:a:0"
-    else:
-        inputs += ["-f", "concat", "-safe", "0", "-i", str(audio_list), "-i", str(sfx)]
-        graph.append(f"[{first_audio}:a][{first_audio + 1}:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mix]")
-        audio_map = "[mix]"
+    audio_inputs, audio_graph, audio_map = _audio_inputs(audio_list, first_audio, sfx, mix)
+    inputs += audio_inputs
+    graph += audio_graph
     tagging: list[str] = []
     if metadata is not None:
         index = inputs.count("-i")
@@ -305,20 +304,43 @@ def join(
     if language is not None:
         tagging += ["-metadata:s:a:0", f"language={language}"]
     filters = ["-filter_complex", ";".join(graph)] if graph else []
+    _write_video(
+        ffmpeg,
+        [
+            *inputs,
+            *filters,
+            "-map", video_map, "-map", audio_map,
+            *video_codec, "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
+            *tagging,
+            "-movflags", "+faststart",
+        ],
+        dst,
+        f"joining the scenes into {dst.name}",
+    )
+
+
+def _audio_inputs(audio_list: Path, first: int, sfx: Path | None, mix: Path | None) -> tuple[list[str], list[str], str]:
+    """The audio inputs of a join (numbered from ``first``), their filters and the ``-map`` of
+    the audio: ``mix`` alone, else the scene WAVs of the concat list ``audio_list`` (plus ``sfx``,
+    summed sample for sample)."""
+    if mix is not None:
+        return ["-i", str(mix)], [], f"{first}:a:0"
+    if sfx is None:
+        return ["-f", "concat", "-safe", "0", "-i", str(audio_list)], [], f"{first}:a:0"
+    return (
+        ["-f", "concat", "-safe", "0", "-i", str(audio_list), "-i", str(sfx)],
+        [f"[{first}:a][{first + 1}:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mix]"],
+        "[mix]",
+    )
+
+
+def _write_video(ffmpeg: str, args: list[str], dst: Path, what: str) -> None:
+    """Run ffmpeg with ``args`` writing ``<dst stem>.partial<suffix>`` and replace ``dst`` by it,
+    so a failure never leaves a truncated ``dst``; if ``dst`` cannot be replaced (open in a
+    player on Windows) the error names the partial file, which is kept."""
+    tmp = dst.with_name(f"{dst.stem}.partial{dst.suffix}")
     try:
-        run_ffmpeg(
-            ffmpeg,
-            [
-                *inputs,
-                *filters,
-                "-map", video_map, "-map", audio_map,
-                *video_codec, "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
-                *tagging,
-                "-movflags", "+faststart",
-                str(tmp),
-            ],
-            f"joining the scenes into {dst.name}",
-        )
+        run_ffmpeg(ffmpeg, [*args, str(tmp)], what)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
@@ -326,3 +348,48 @@ def join(
         replace_file(tmp, dst)
     except VidgenError as exc:
         raise VidgenError(f"{exc}\nthe new video was saved as {tmp}") from None
+
+
+#: Encoding of an animatic's held stills (DESIGN.md §75): x264 tuned for still pictures.
+STILLS_CODEC: tuple[str, ...] = ("-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", "-crf", "20", "-pix_fmt", "yuv420p")
+
+
+def join_stills(
+    ffmpeg: str,
+    stills: list[Path],
+    durations: list[float],
+    frames: int,
+    fps: int,
+    audios: list[Path],
+    dst: Path,
+    work_dir: Path,
+    sfx: Path | None = None,
+    mix: Path | None = None,
+    language: str | None = None,
+) -> None:
+    """Write ``dst``: the PNG ``stills`` each shown for its ``durations`` (seconds), exactly
+    ``frames`` frames at ``fps``, with the audio of :func:`join` (``audios``, ``sfx``, ``mix``
+    as there). Lists go into ``work_dir``; ``dst`` is replaced only when complete."""
+    still_list = work_dir / "stills_concat.txt"
+    write_concat_list(stills, still_list, durations)
+    audio_list = work_dir / "audio_concat.txt"
+    write_concat_list(audios, audio_list)
+    audio_inputs, graph, audio_map = _audio_inputs(audio_list, 1, sfx, mix)
+    # tpad: the last still lasts to the end even where the demuxer cut its final frame short
+    graph.insert(0, f"[0:v]fps={fps},tpad=stop_mode=clone:stop={fps},scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p[v]")
+    tagging = ["-metadata:s:a:0", f"language={language}"] if language is not None else []
+    _write_video(
+        ffmpeg,
+        [
+            "-f", "concat", "-safe", "0", "-i", str(still_list),
+            *audio_inputs,
+            "-filter_complex", ";".join(graph),
+            "-map", "[v]", "-map", audio_map,
+            "-frames:v", str(frames),
+            *STILLS_CODEC, "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
+            *tagging,
+            "-movflags", "+faststart",
+        ],
+        dst,
+        f"making the animatic {dst.name}",
+    )

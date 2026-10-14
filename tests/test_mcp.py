@@ -204,7 +204,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
-    "character_sheet", "direct", "screenplay", "cast",
+    "character_sheet", "direct", "screenplay", "cast", "animatic",
 }
 
 
@@ -359,6 +359,10 @@ def test_server_storyboard_and_lint_return_pictures(tmp_path: Path) -> None:
 
         doc = doc_of(await client.call_tool("lint", {"project": "proj", "fail_on": "never"}))
         assert doc["command"] == "lint" and doc["stills"] == 2 and doc["rendered"] == []  # the storyboard's stills reused
+
+        doc = doc_of(await client.call_tool("animatic", {"project": "proj", "captions": False, "no_audio": True}))  # Step 138
+        assert (doc["command"], doc["rendered"], doc["captions"], doc["audio"]) == ("animatic", [], False, False)
+        assert Path(doc["output"]) == (tmp_path / "proj" / "output" / "out_animatic.mp4").resolve()
 
     run_session(tmp_path, body)
 

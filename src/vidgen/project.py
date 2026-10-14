@@ -429,6 +429,12 @@ class Project:
         (``suffix`` ``.jpg`` for the JPEG copy)."""
         return self.output_dir / f"{self._output_stem(preview)}_thumbnail{suffix}"
 
+    def animatic_path(self) -> Path:
+        """The animatic (``vidgen animatic``, DESIGN.md §75): ``<output>[_<variant>]_animatic.mp4``
+        in :attr:`output_dir`."""
+        stem = self.output_name + (f"_{self.variant}" if self.variant else "")
+        return self.output_dir / f"{stem}_animatic.mp4"
+
     def export_stem(self, preview: bool = False) -> str:
         """Start of the names of ``vidgen export`` files: ``<output>[_<variant>][_preview|_draft]``."""
         return self._output_stem(preview)

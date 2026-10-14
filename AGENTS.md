@@ -131,6 +131,9 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
    measure the real speech. For a cartoon, `vidgen render --draft` is faster still (about 8 fps,
    240p, no idle motion, wind, shadows, particles or light grade; every timing, position, action
    and the lip sync kept): `<output>_draft.mp4`, to watch the timing and staging before a preview.
+   `vidgen animatic` is quicker still once the storyboard's stills are current (seconds, no
+   rendering): `<output>_animatic.mp4`, those stills held in time with the narration, with the
+   audio and the subtitles, to check the pacing.
 10. **`vidgen readback`** (optional extra `schu-video-generator[stt]`): speech-to-text of the MP3s against
     your texts; it names misheard terms and suggests a pronunciation entry. Fix, `vidgen tts`,
     and `vidgen lint` again (its `readback` rule reads the cached transcripts).

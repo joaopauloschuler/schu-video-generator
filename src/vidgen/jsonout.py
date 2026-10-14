@@ -22,6 +22,7 @@ from vidgen.errors import Problem, VidgenError
 from vidgen.project import Project
 
 if TYPE_CHECKING:
+    from vidgen.animatic import AnimaticResult
     from vidgen.cartoon.directing import DirectedBeat
     from vidgen.export import ExportResult
     from vidgen.gallery import GalleryResult
@@ -938,6 +939,46 @@ def storyboard_document(
         reused=result.reused,
         elapsed=round(elapsed, 3),
         sheets=sheets,
+    )
+
+
+# ----- animatic --------------------------------------------------------------------------------------
+
+
+def animatic_document(
+    project: Project, result: AnimaticResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen animatic --json`` document: the MP4 and the stills it holds, with times."""
+    worker_warnings = [warning(message, scene) for scene, message in result.warnings]
+    fmt = result.format
+    fps = fmt.fps
+    return envelope(
+        "animatic",
+        True,
+        [*warnings, *worker_warnings],
+        project=_path(project.root),
+        variant=project.variant,
+        audio=result.audio,
+        captions=result.captions,
+        format={"width": fmt.width, "height": fmt.height, "fps": fps},
+        output=_path(result.output),
+        duration=result.duration,
+        elapsed=round(elapsed, 3),
+        rendered=result.rendered,
+        reused=result.reused,
+        mix=result.mix,
+        stills=[
+            {
+                "scene": hold.still.scene_id,
+                "beat": hold.still.beat_id,
+                "mid": hold.still.mid,
+                "time": hold.still.time,
+                "start": round(hold.start / fps, 6),
+                "end": round(hold.end / fps, 6),
+                "path": _path(hold.still.path),
+            }
+            for hold in result.holds
+        ],
     )
 
 

@@ -298,6 +298,7 @@ my_video/
     <output>.srt          #                 for drafts (§74), <output>_<variant>.mp4 for variants)
     <output>_chapters.txt #   YouTube chapter list, when the video has chapters (Step 49, §52)
     <output>_thumbnail.png#   thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
+    <output>_animatic.mp4 #   `vidgen animatic`: storyboard stills timed to the narration (Step 138, §75)
   exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53); `vidgen slides` decks (§55, §56)
 ```
 
@@ -1113,6 +1114,8 @@ vidgen render [PROJECT] [--preview | --draft] [--scene ID ...] [--variant NAME] 
               [--jobs N|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]   # changed scenes only (§63)
 vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
               [--width PX] [--jobs N|auto] [--force] [--json]      # contact sheets (§14)
+vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions | --no-captions] [--jobs N|auto]
+              [--output-dir DIR] [--json]   # the storyboard's stills timed to the narration (§75)
 vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview | --final]
               [--fail-on SEVERITY] [--jobs N|auto] [--force] [--json]   # layout checks (§16)
 vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at S] [--no-overlays]]
@@ -9888,3 +9891,50 @@ slow-framed and without decoration, with every timing, position, action and the 
   1500 MB cap): `cartoon-rain-check` `storm` preview 640x360@15 21.2 / 21.8 s, draft 426x240@8
   8.0 / 8.2 s (×2.6); `cartoon-muffin-mystery` `morning` 25.3 / 25.4 s → 12.7 / 12.8 s (×2.0);
   peak memory of the worker processes at most 0.25 GB (muffin) and 0.28 GB (rain-check).
+
+## 75. Animatic: `vidgen animatic` (Step 138)
+
+Reference: docs/CONFIG.md "Animatic". An animatic is the storyboard's stills held in time with the
+narration, with the video's audio and captions: a way to watch the pacing in seconds, made by
+ffmpeg alone once the stills are current.
+
+- **Stills** (`animatic.py`, `make_animatic`): the preview format's stills of
+  `build/preview[_<variant>]/frames/<scene>/index.json`. A scene whose stills are not current
+  (`storyboard.stills_current(..., per_beat=None)`: any count per beat, the format and the render
+  fingerprint matching) is rendered by `render_scenes(..., frames=1)`, the storyboard's call; with
+  every scene current nothing is rendered and the scenes are not checked again (they were, from
+  this config, when rendered). No Manim render is added: the animatic uses no still the storyboard
+  does not make, and `animatic.py` is left out of the render fingerprint.
+- **Timing** (pure `hold_plan(scenes, frames, fps)`): a still is held from its time in the video
+  (scene start + its scene time) until the next still's, in whole frames; a scene's first still
+  from the scene's start, the video's first from frame 0, the last to the end; a still of a scene
+  at or after the next scene's start (overlapping scenes, §49) is left out, and a still held no
+  frame is dropped. Chosen as asked: the picture is the latest captured moment, so a beat-end
+  still shows through the following beat (a reveal shows at its beat's end, not during it). The
+  scene starts and the length are those of the combined timings, so beat overlaps (§69.34) and
+  word-count timing (no MP3s) need nothing of their own. No crossfade between stills or scenes:
+  the concat demuxer cannot blend, and a blend would need the filter graph `ff.join` uses for
+  scene transitions.
+- **Audio**: `render/pipeline.prepare_join` (split out of `join_scenes`, which now calls it and
+  `ff.join`) pads the scene WAVs, builds the effects track and mixes music, ambience and
+  normalisation exactly as for the video, into `build/preview[_<variant>]/animatic/audio/`; the
+  animatic's audio is the video's. `--no-audio`: a silent track.
+- **Captions** (pure `with_captions(holds, cues, fps)`; `draw_captions`): the cues of the video's
+  SRT (`pipeline.video_cues`, now also what `render_project` writes) cut the holds where they start
+  and end; each piece shows the cues spoken then (overlapping beats' cues stacked), drawn with
+  Pillow (bold font of `sheets.load_font`, `CAPTION_SIZE` 0.055 of the shorter side, white on a
+  plate of opacity `CAPTION_PLATE_ALPHA` 170, 5 % above the bottom, wrapped to 90 % of the width),
+  one PNG per still and text in `animatic/stills/`. Pillow rather than ffmpeg's `subtitles` filter:
+  that filter needs an ffmpeg built with libass, which not every Windows build has. Default on
+  unless the video has a `captions` overlay (`captions_default`).
+- **Encoding** (`render/ffmpeg.join_stills`): the concat demuxer with a `duration` per still
+  (`write_concat_list(..., durations)`, the last still listed twice), `fps`, `tpad` and
+  `-frames:v` for exactly `round(duration × fps)` frames, x264 `-tune stillimage`, the audio
+  inputs of `ff.join` (`_audio_inputs`, shared) and its partial-file replace (`_write_video`).
+  Output `Project.animatic_path()`: `<output>[_<variant>]_animatic.mp4` in `output_dir`.
+- **Interfaces**: CLI `vidgen animatic [PROJECT] [--variant] [--no-audio] [--captions |
+  --no-captions] [--jobs] [--output-dir] [--json]`; MCP tool `animatic` (`captions: null|true|false`).
+- **Measured** (copy of `examples/cartoon-music-box`, 51.1 s, 2 stage scenes, no MP3s, 21 stills,
+  under the 1500 MB cap): no stills 42 s (render of both scenes 34.7 s); stills current 7.0 to
+  9.1 s wall (profile: 2.9 s x264 for 767 frames at 640x360, 2.7 s the mix, 1.1 s of it the
+  music bed, 1.0 s loading the extensions), captions add 0.2 to 0.5 s; `--no-audio` 3.7 s.

@@ -7395,6 +7395,41 @@ scene's `status`: `rendered` or `reused`). So `vidgen render --preview` after a 
 lint of the preview only joins the video, and keeps their stills. `--force` renders every scene
 again; `--scene ID` renders those scenes whatever their state.
 
+## Animatic (`vidgen animatic`)
+
+`vidgen animatic [PROJECT]` writes `<output>[_<variant>]_animatic.mp4` into the
+[`output/` folder](#output-folder-output_dir---output-dir): the storyboard's stills (the preview
+format's) held in time with the narration, with the video's audio and the subtitles drawn on. It
+shows the pacing of a video, scene by scene and beat by beat, before a render: once the stills are
+current it takes seconds, because ffmpeg alone makes it (no Manim).
+
+- **Stills.** The ones `vidgen storyboard` uses: the end of each beat, the mid-action stills of a
+  [`stage`](#stage) and, after `vidgen storyboard --per-beat N`, the N stills of each beat. Current
+  stills at any count are reused; a scene without current stills (never storyboarded, edited
+  since, another format) is rendered first, with one still per beat, like `vidgen storyboard`
+  would (`--jobs` as there).
+- **Timing.** Each still is shown from its time in the video until the next still's: a beat's end
+  still from the end of the beat (so through the next beat, until that beat's mid-action or end
+  still), a mid-action still from half-way through its action. A scene's first still is shown
+  from the scene's start, the video's first from 0:00. The times are those of `vidgen render`:
+  the narration's MP3s, else the word-count timing; scenes overlapping in a
+  [transition](#transitions-transition) cut to the next scene where it starts (no crossfade, no
+  fades between stills).
+- **Audio** (`--no-audio`: silent): the video's audio as `vidgen render` mixes it, the narration,
+  sound effects, music and ambience, normalised to `audio.target_lufs` the same way.
+- **Captions** (`--captions` / `--no-captions`): the cues of the video's SRT, white on a dark
+  plate at the bottom of the stills, drawn when they are spoken. Default: on, unless the video
+  has a [`captions`](#captions) overlay (the stills show those already, as they were at the
+  still's moment).
+
+Measured on `examples/cartoon-music-box` (51 s, 2 stage scenes, no narration MP3s, under the
+1500 MB cap): 42 s with no stills (the two scenes rendered with their stills, 34 s), 7 to 9 s
+with current stills (2.9 s of that encoding 767 frames at 640x360, 2.7 s mixing the audio), 3.7 s
+with `--no-audio`.
+
+Files: the captioned stills, the audio tracks and ffmpeg's lists in
+`build/preview[_<variant>]/animatic/`.
+
 ## Scene gallery (`vidgen gallery`)
 
 `vidgen gallery [PROJECT]` renders **every scene type** from one canonical sample, at 16:9 and
@@ -7528,7 +7563,7 @@ The server calls itself `schu-video-generator`; configuration snippets (server k
 **Tools** (each returns the command's `--json` document below as JSON text; `ok` false comes
 back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `cast` (`count`
 for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`). Their parameters are the command's
@@ -7567,7 +7602,7 @@ commands it runs but never returns it; documents carry only paths and results.
 **How it runs.** Every call starts `python -m vidgen <command> ... --json` in the root folder (a
 fresh process: Manim's configuration is process-global and a crashing scene or extension cannot
 take the server down) and turns the command's stderr lines into MCP progress notifications.
-Rendering calls (`storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+Rendering calls (`storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`) run one at a time; cancelling a call stops its process and the
 render workers it started (the process group on macOS / Linux, the process tree on Windows).
 
@@ -7578,7 +7613,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct` and `vidgen screenplay` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -7781,6 +7816,25 @@ for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids 
 
 Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
 on a failed scene are as for `vidgen render --json`.
+
+### `vidgen animatic --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `audio` | bool | `false` with `--no-audio` |
+| `captions` | bool | whether captions were drawn onto the stills |
+| `format` | object | `{width, height, fps}` of the stills and the MP4 (the preview format) |
+| `output` | str | the animatic, `<output>[_<variant>]_animatic.mp4` |
+| `duration` | float | its length (the video's) |
+| `elapsed` | float | wall time of the command |
+| `rendered` | list | ids of the scenes rendered for their stills (config order) |
+| `reused` | list | ids of the scenes whose current stills were reused |
+| `mix` | object \| null | the loudness report of the audio as for `vidgen render --json` (`null` with `--no-audio`) |
+| `stills` | list | the stills in the order shown: `{scene, beat, mid, time, start, end, path}` — `beat` `null` for a silent scene, `mid` the actions of a mid-action still or `null`, `time` its moment in the video, `start` / `end` when it is shown (seconds, whole frames), `path` the still's PNG |
+
+`warnings` and `error.details` on a failed scene are as for `vidgen render --json`.
 
 ### `vidgen thumbnail --json`
 

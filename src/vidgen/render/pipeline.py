@@ -32,7 +32,7 @@ from vidgen import __version__, carry, chapter_export, hooks, mix, sfx, transiti
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
-from vidgen.fileio import remove_file
+from vidgen.fileio import remove_file, write_text_atomic
 from vidgen.render.worker import (
     scene_activity_path,
     scene_audio_path,
@@ -44,7 +44,7 @@ from vidgen.render.worker import (
     write_json,
 )
 from vidgen.languages import language_rules
-from vidgen.subtitles import write_srt
+from vidgen.subtitles import Cue, cues_from_timings, format_srt
 from vidgen.tts.elevenlabs import API_KEY_ENV
 
 if TYPE_CHECKING:
@@ -420,9 +420,58 @@ def render_scenes(project: Project, preview: bool, scene_ids: list[str], jobs: i
         return _render_scenes(project, preview, scene_ids, no_audio=False, keep_going=False, jobs=jobs, frames=frames)
 
 
+@dataclass
+class JoinParts:
+    """What :func:`prepare_join` made for joining the scenes: the combined ``timings``, the scene
+    ``videos`` and their ``frames`` counts, the padded scene WAVs ``audios`` (one summed track
+    with crossfades), the effects track ``sfx`` and the finished ``mix`` (``None`` when not
+    written), the frames each scene ``overlaps`` the one before, the ``xfade`` ``kinds`` into
+    scenes 2.., the overlay ``clips`` a push / wipe moves and the FFMETADATA file ``metadata``."""
+
+    timings: dict[str, Any]
+    videos: list[Path]
+    frames: list[int]
+    audios: list[Path]
+    sfx: Path | None
+    mix: Path | None
+    overlaps: list[int]
+    kinds: list[str]
+    clips: list[tuple[Path, int]]
+    metadata: Path
+
+
 def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) -> tuple[Path, dict[str, Any]]:
     """Join every scene's render (config order) into the final video; returns it and the
-    combined timings mapping.
+    combined timings mapping (the tracks and timings come from :func:`prepare_join`, written
+    into ``<render_dir>/padded``)."""
+    padded_dir = project.render_dir(preview) / "padded"
+    parts = prepare_join(project, preview, no_audio, ffmpeg, padded_dir)
+    fmt = project.render_format(preview)
+    output = project.output_path(preview)
+    output.parent.mkdir(parents=True, exist_ok=True)  # the SRT and chapter list go there too
+    ff.join(
+        ffmpeg, parts.videos, parts.audios, output, padded_dir,
+        sfx=parts.sfx,
+        mix=parts.mix,
+        crossfades=parts.overlaps[1:] if any(parts.overlaps) else None,
+        frames=parts.frames,
+        fps=fmt.fps,
+        kinds=parts.kinds[1:],
+        overlays=parts.clips or None,
+        metadata=parts.metadata,
+        language=audio_language(project),
+    )
+    return output, parts.timings
+
+
+def audio_language(project: Project) -> str | None:
+    """The ISO 639-2 code written as the audio stream's language (DESIGN.md §54), or ``None``."""
+    return language_rules(project.config.language).iso639_2 if project.config.language else None
+
+
+def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, padded_dir: Path) -> JoinParts:
+    """Everything the join of the scenes' renders (config order) needs but the pictures: the
+    combined timings and the audio tracks, written into ``padded_dir``.
 
     Each scene's audio (Manim's WAV, or silence for silent scenes and ``no_audio``) is padded to
     the exact length of its video. Lengths are measured from the rendered videos; the sample
@@ -446,8 +495,6 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     combined timings' ``chapters`` and, with ``chapters.metadata``, into the MP4 with its tags
     (``padded/metadata.txt``, FFMETADATA).
     """
-    render_dir = project.render_dir(preview)
-    padded_dir = render_dir / "padded"
     fmt = project.render_format(preview)
     videos: list[Path] = []
     audios: list[Path] = []
@@ -549,21 +596,18 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     if not no_audio:
         report = mix.mix_audio(project, combined, audios, track if track.is_file() else None, mixed)
         combined["mix"] = report.to_json()
-    output = project.output_path(preview)
-    output.parent.mkdir(parents=True, exist_ok=True)  # the SRT and chapter list go there too
-    ff.join(
-        ffmpeg, videos, audios, output, padded_dir,
+    return JoinParts(
+        timings=combined,
+        videos=videos,
+        frames=[round(d * fmt.fps) for _, _, d in renders],
+        audios=audios,
         sfx=track if track.is_file() else None,
         mix=mixed if mixed.is_file() else None,
-        crossfades=overlaps[1:] if any(overlaps) else None,
-        frames=[round(d * fmt.fps) for _, _, d in renders],
-        fps=fmt.fps,
-        kinds=kinds[1:],
-        overlays=clips or None,
+        overlaps=overlaps,
+        kinds=kinds,
+        clips=clips,
         metadata=metadata,
-        language=language_rules(project.config.language).iso639_2 if project.config.language else None,
     )
-    return output, combined
 
 
 def _scene_renders(project: Project, preview: bool) -> list[tuple[Path, dict[str, Any], float]]:
@@ -599,6 +643,13 @@ def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, An
                 t.type, spec.id, overlaps[i] / fps, wanted / fps, config.scenes[i - 1].id,
             )
     return overlaps
+
+
+def video_cues(project: Project, timings: dict[str, Any]) -> list[Cue]:
+    """The subtitle cues of the video with the combined ``timings`` (what its SRT holds): word
+    times from the narration MP3s, the project's pronunciation, speakers and language."""
+    spoken = {beat.id: project.spoken(beat) for _, beat in project.beats() if beat.voice_sounds}
+    return cues_from_timings(timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language, spoken)
 
 
 def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any]) -> Path | None:
@@ -736,8 +787,7 @@ def render_project(
         timings_file = project.render_dir(preview) / "timings.json"
         write_json(timings_file, timings)
         srt = project.srt_path(preview)
-        spoken = {beat.id: project.spoken(beat) for _, beat in project.beats() if beat.voice_sounds}
-        write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language, spoken)
+        write_text_atomic(srt, format_srt(video_cues(project, timings)))
         chapters_file = write_chapter_list(project, preview, timings)
         index = write_frames_index(project, preview, timings, frames) if frames else None
         post: dict[str, Any] = {

@@ -454,6 +454,23 @@ def build_server(root: Path) -> Any:
         sheets = sorted(doc.get("sheets", []), key=lambda s: s.get("kind") != "video")
         return paged(doc, [Path(s["path"]) for s in sheets], image_offset, images)
 
+    @tool("An animatic: the storyboard's stills (beat ends and half-way through actions) held in time with the "
+          "narration, with the video's audio (narration, effects, music) and captions, as an MP4 "
+          "(<output>_animatic.mp4) to check pacing before a full render. Joined by ffmpeg in seconds when the "
+          "storyboard's stills are current; scenes without them are rendered first.", writes)
+    async def animatic(
+        ctx: Context,
+        project: Project = ".",
+        variant: Variant = None,
+        no_audio: Annotated[bool, Field(description="a silent animatic")] = False,
+        captions: Annotated[bool | None, Field(description="draw the subtitles (default: on unless a captions overlay burns them in)")] = None,
+        jobs: Jobs = 1,
+    ) -> Any:
+        options = {
+            "variant": variant, "no-audio": no_audio, "captions": captions is True, "no-captions": captions is False, "jobs": jobs,
+        }
+        return answer(await call(ctx, args_of(["animatic"], [str(where(project))], options), heavy=True))
+
     # ----- listing ---------------------------------------------------------------------------------
 
     @tool("Every scene type (built-in and the project's) with its params, beats, targets; beat actions and overlays.", read_only)

@@ -12961,3 +12961,83 @@ How to test
   test_cartoon_storm test_cartoon_rain test_host test_host_acting` (130 passed, 7 s). Render:
   `test_cartoon_rain test_cartoon_storm` (4 passed), `test_cartoon_wind test_particles
   test_host` (6 passed). The full suite was not run.
+
+## Step 138 — Animatic (`vidgen animatic`)
+
+What was built
+- `vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions | --no-captions]
+  [--jobs N|auto] [--output-dir DIR] [--json]` and the MCP tool `animatic` (`captions`: null /
+  true / false): `<output>[_<variant>]_animatic.mp4` in the `output/` folder, the storyboard's
+  preview stills held in time with the narration, with the video's audio and captions, made by
+  ffmpeg alone (no Manim) once the stills are current.
+- Stills: `make_animatic` reuses every scene whose stills are current
+  (`storyboard.stills_current(..., None)`: any count per beat, so `storyboard --per-beat N` stills
+  are used too) and renders the others with `render_scenes(..., frames=1)`, the storyboard's own
+  call; nothing else renders. With every scene current, `render_scenes` is not called at all (it
+  would load the extensions once more to check scenes that were checked when rendered).
+- Timing (pure `hold_plan`): each still from its time in the video until the next still's
+  (beat-end stills from their beat's end, mid-action stills from half-way through their action),
+  rounded to frames; a scene's first still from the scene's start, the video's first from 0, the
+  last to the end; a still at or after the next scene's start (overlapping scenes) is dropped.
+  Scene starts and length come from the combined timings, so beat overlaps and word-count timing
+  need nothing extra.
+- Audio: decided "mixed like the final": `render/pipeline.prepare_join` (split out of
+  `join_scenes`, which now calls it then `ff.join`) writes the padded scene WAVs, the effects track
+  and the mix (music, ambience, normalisation) into `build/preview[_<variant>]/animatic/audio/`.
+- Captions (pure `with_captions`, `draw_captions`): the SRT's cues (`pipeline.video_cues`, which
+  `render_project` now also uses for the SRT) cut the holds; each piece gets the texts spoken
+  then (overlapping cues stacked), drawn with Pillow (bold, 0.055 of the shorter side, white on a
+  dark plate near the bottom). Default on unless the video has a `captions` overlay.
+- Encoding: `ff.join_stills` (concat demuxer with `duration` lines via
+  `write_concat_list(..., durations)`, `fps` + `tpad` + `-frames:v` for exactly
+  `round(duration × fps)` frames, x264 `-tune stillimage`); `ff.join`'s audio inputs and its
+  partial-file replace are now shared helpers (`_audio_inputs`, `_write_video`).
+
+Measured (copy of `examples/cartoon-music-box` in the scratchpad: 51.1 s, 2 stage scenes, no
+MP3s, 21 stills, 640x360 @ 15, under the 1500 MB cap)
+| run | time |
+| --- | --- |
+| no stills yet (`--jobs auto` chose 1): both scenes rendered (15.5 + 19.3 s worker) | 42.3 s |
+| stills current, captions off (default: the example has a `captions` overlay) | 7.0 / 7.2 s (9.1 s wall with Python start) |
+| stills current, `--captions` | 7.4 / 7.5 s |
+| stills current, `--no-audio` | 3.7 s |
+Profile of a cached run: x264 2.9 s (767 frames), mix 2.7 s (1.1 s the `bright` bed, 1.6 s
+limiter / loudness), extensions 1.0 s. A tiled strip of the result was checked by eye (stills
+change at beat ends and mid-actions, drawn captions under the overlay's).
+
+Files
+- New: `src/vidgen/animatic.py`, `tests/test_animatic.py`.
+- Changed: `render/pipeline.py` (`JoinParts`, `prepare_join`, `audio_language`, `video_cues`),
+  `render/ffmpeg.py` (`write_concat_list(durations=)`, `join_stills`, `STILLS_CODEC`,
+  `_audio_inputs`, `_write_video`), `render/fingerprint.py` (`animatic.py` not a render input),
+  `project.py` (`animatic_path`), `cli.py`, `jsonout.py` (`animatic_document`), `mcp_server.py`,
+  `tests/test_mcp.py`. Docs: CONFIG.md (new "Animatic" section, `animatic --json`, MCP list),
+  DESIGN.md (§3, §8, new §75), README, guide + `AGENTS.md` copy, `tasklist.md`.
+
+Public interfaces
+- CLI `vidgen animatic`, JSON `animatic` document, MCP tool `animatic`. `vidgen.api` unchanged.
+  Internal: `Project.animatic_path()`, `pipeline.prepare_join` / `JoinParts` / `video_cues`,
+  `ff.join_stills`.
+
+Decisions / deviations
+- Still timing as asked (held from its time until the next still's): the picture is the latest
+  captured moment, so a beat-end still shows through the following beat, and a bullet revealed
+  during a beat appears at that beat's end. Showing each still from the previous still's time
+  instead (a beat's picture during the beat) is a one-line change in `hold_plan` if wanted.
+- No crossfade between stills or scenes: the concat demuxer cannot blend; a blend would need the
+  `xfade` graph `ff.join` uses, re-encoding per still pair.
+- Captions with Pillow, not ffmpeg's `subtitles` filter (needs libass, absent from some Windows
+  builds); drawn per still and caption text, so a cue change costs one PNG.
+- Preview format only (what `vidgen storyboard` makes by default); no `--final`.
+
+Known gaps / TODOs
+- `test_sfx.py::test_extending_example` fails (unknown scene type `countdown`), also at HEAD
+  92aa2d1 (checked in a worktree): not caused by this step, not fixed.
+
+How to test
+- `pytest tests/test_animatic.py` (8 passed, 7 s; 1 tiny render).
+- Run here: non-render `test_cli test_json_output test_guide test_docs test_mcp test_project
+  test_jobs test_storyboard test_subtitles` (226 passed, 32 s); render: `test_render.py` (17
+  passed), `test_transitions.py` (20 passed), `test_draft.py` (18 passed), `test_mcp.py -m render`
+  (2 passed), `test_json_output.py -m render` (2 passed), `test_sfx.py` (109 passed, 1 failed:
+  the HEAD failure above). The full suite was not run.

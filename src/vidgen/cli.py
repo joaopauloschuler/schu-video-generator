@@ -36,7 +36,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -730,6 +730,26 @@ def cmd_storyboard(args: argparse.Namespace) -> CommandResult:
     for sheet in result.sheets:
         rel = sheet.path.relative_to(result.folder).as_posix()
         print(f"  {rel}  ({len(sheet.stills)} still{'s' if len(sheet.stills) != 1 else ''}, {sheet.width}x{sheet.height})")
+    return 0
+
+
+def cmd_animatic(args: argparse.Namespace) -> CommandResult:
+    """The storyboard's stills timed to the narration, with its audio and captions, as an MP4."""
+    from vidgen.animatic import make_animatic
+
+    started = time.monotonic()
+    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir)
+    result = make_animatic(project, no_audio=args.no_audio, captions=args.captions, jobs=args.jobs)
+    elapsed = time.monotonic() - started
+    if args.json:
+        return jsonout.animatic_document(project, result, elapsed)
+    reused = f", {len(result.reused)} reused" if result.reused else ""
+    print(f"rendered {len(result.rendered)} scene(s) for their stills{reused}")
+    print(f"animatic:  {result.output}")
+    print(f"stills:    {len(result.holds)} ({result.format.width}x{result.format.height}, captions {'on' if result.captions else 'off'})")
+    print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s), made in {elapsed:.1f} s")
+    if result.mix is not None:
+        print(f"loudness:  {_loudness_line(result.mix)}")
     return 0
 
 
@@ -1479,6 +1499,18 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     p.set_defaults(func=cmd_storyboard)
+
+    p = sub.add_parser("animatic", help="the storyboard's stills timed to the narration, with audio and captions, as an MP4 (no Manim when the stills are current)")
+    project_arg(p)
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument("--no-audio", action="store_true", help="a silent animatic (no narration, effects or music)")
+    p.add_argument(
+        "--captions", action=argparse.BooleanOptionalAction, default=None,
+        help="draw the subtitles onto the stills (default: on, unless the video burns in a captions overlay)",
+    )
+    jobs_arg(p, when=" when stills are missing")
+    output_dir_arg(p)
+    p.set_defaults(func=cmd_animatic)
 
     p = sub.add_parser("thumbnail", help="write the video's thumbnail (<output>_thumbnail.png) from the thumbnail: config or a scene's frame")
     project_arg(p)
