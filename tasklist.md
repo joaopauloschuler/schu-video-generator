@@ -748,6 +748,42 @@ test-suite run.
 
 ---
 
+## Phase N — Composed music (symusic)
+
+Goal: music written as notes and played with real instruments, for every kind of video (explainers,
+host explainers, cartoons). Research and a listening test chose symusic 0.5.9 with the GeneralUser
+GS SoundFont (owner, after Step 144; report in the session outputs). Per-character motifs were
+dropped (owner). The numpy beds stay as the fallback. Same rules as Phases H–M.
+
+### Step 145 — Optional extra and SoundFont
+- [ ] Extra `[music]` with `symusic==0.5.9` (0.6.0's render is broken); a clear `VidgenError` naming the extra when it is missing
+- [ ] GeneralUser GS 2.0.3 downloaded on first use into vidgen's cache from `https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2` (32,319,396 bytes, sha256 `9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe`; a mismatch is a clear error, never a silent use); `vidgen soundfont fetch|info`; `soundfont: PATH` override (any SF2/SF3); never in the wheel
+- [ ] THIRD_PARTY_NOTICES (symusic MIT, Prestosynth MIT, GeneralUser GS licence, a note on symusic's bundled abc tools), a suggested credit line in the docs
+- [ ] Tests: missing extra, hash check, override path (no download in tests)
+
+### Step 146 — Score and renderer
+- [ ] `vidgen/score.py` (pure): tempo, time signature, key, parts (GM program or drum kit, notes in beats with velocity, volume, pan), sections; `.mid` export
+- [ ] `vidgen/synth.py`: each part rendered with symusic, mixed in numpy with volume and pan, a light generated reverb, a tail; normalised to the music level (−28 LUFS, like the beds) and never clipping; cached by score hash + symusic version + SoundFont hash
+- [ ] Plugged into the existing music pipeline as a source (cues, loops, fades, ducking, per-scene volume unchanged)
+- [ ] Tests: score maths and MIDI export without rendering; one real render test skipped when the extra or the SoundFont is absent
+
+### Step 147 — Composer and moods
+- [ ] `music: {compose: {mood, key, tempo, instruments, seed}}`: moods for explainers (calm, focused, curious, upbeat) and cartoons (playful, sleepy, tense, triumphant), each with chord progressions, rhythms, drum patterns and default instruments; original melodies from chord tones and seeded motifs (never a known tune); the same seed gives the same music
+- [ ] `vidgen list-music` describes moods and instruments in words; `vidgen music preview` writes a WAV and a `.mid`
+- [ ] Tests: determinism, mood parameters, melody stays in range and on chord tones at strong beats
+
+### Step 148 — Music that follows the video
+- [ ] The composer gets the real timings: the piece fits the video, scene changes land on bar lines (tempo adjusted slightly where needed), per-scene `music: {mood: …}` changes, a small swell when a bullet / chart bar / result is revealed, a pause before a punchline beat (`music_pause: true` or auto for cards / short last lines), a closing cadence on the last scene
+- [ ] `sting:` (reveal / comic / sad) played with real instruments when composed music is on
+- [ ] Tests: section plan from timings (pure), bar alignment, swell placement
+
+### Step 149 — Tooling, docs, example and review
+- [ ] Without the extra: `validate` warns and the beds are used; storyboard / animatic / draft include composed music; MCP `list_music` / render support
+- [ ] Author guide section on composed music (explainers and cartoons); CONFIG, DESIGN, EXTENDING, README, CHANGELOG
+- [ ] One explainer example and one cartoon example switched to composed music; rendered with real Kokoro narration at 720p (not committed); loudness measured; short MP3 excerpts for the owner to listen to; Phase N gaps moved to the Backlog
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
