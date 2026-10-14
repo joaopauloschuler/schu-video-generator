@@ -12880,3 +12880,84 @@ How to test
   test_guide test_config test_schema test_emotions test_emotions_providers test_screenplay
   test_project` (264 passed, 85 s); `test_cartoon_visemes test_captions test_json_output
   test_mcp` (99 passed, 34 s). No render tests; the full suite was not run.
+
+
+## Step 137 — Fast drafts (`vidgen render --draft`)
+
+What was built
+- `vidgen render --draft` (exclusive with `--preview`) and MCP `render` `draft: true` (which
+  drops the default `preview`): a render to check timing and staging, about 8 fps at 240 px on
+  the shorter side, without decoration. Config `draft: {width, height, fps}` (each optional;
+  width and height together, even); default from the format's shape: 426x240 (16:9), 240x426
+  (9:16), 240x240 (1:1), 320x240 (4:3), never larger nor faster than `format`.
+- Never mixed: `Project.draft` (set by `Project.load(draft=True)`, kept by `without_overlays`)
+  makes `render_dir` `build/draft[_<variant>][_bare]`, `render_format` the draft's and every
+  output name `<output>[_<variant>]_draft` (MP4, SRT, chapter list, thumbnail, export stem),
+  whatever `preview` the path methods get; a preview made at the draft's exact size and rate is
+  still not reused (tested). The worker takes `--quality draft`; scene timings gain
+  `render.draft: true`, combined timings `draft: true`, `render --json` `draft`. The `draft` key is
+  left out of the scene fingerprint.
+- `NarratedScene.is_draft` (from the project, set in `__init__` before the host is built). In a
+  draft: no idle motion (stage characters and the host: `stop_idle`); the wind sways and trails
+  nothing (`StageWind` without props or characters, no updater; its `Wind` is kept so balloons
+  and blown props drift as in the video); no shadows, motion effects, puddles, settling snow,
+  fog, lightning bolt or flash; particle fields are empty and never move
+  (`ParticleField(drawn=False)`; their start / fade / end stay, so the rain bed, storms and
+  thunder are unchanged); the light is flat (`StageLight(flat=True)`: the camera is not wrapped,
+  no flashes, the changes keep their times, stars and window skies still follow the grade).
+  Splashing steps now read `Stage._puddles_from` (the puddle rains' starts) instead of the drawn
+  puddles, so a draft keeps them (same times as before otherwise).
+- Kept: every beat, action, position, lip sync (at 8 fps), effect symbols, overlays, cards,
+  living props, birds, water, rainbows and every sound.
+
+Measured (copies of the examples in the scratchpad, worker alone per scene, `--no-audio`
+word-count timing, under the 1500 MB cap, two alternating runs; `measure_draft.py` in the
+scratchpad)
+| scene | preview (640x360 @ 15) | draft (426x240 @ 8) | speed-up |
+| --- | --- | --- | --- |
+| `cartoon-rain-check` `storm` (23.4 s: wind, rain with puddles, a light change, blown umbrella) | 21.20 / 21.78 s wall (CPU 22.6 / 23.2 s) | 8.01 / 8.21 s (CPU 8.4 / 8.6 s) | ×2.65 |
+| `cartoon-muffin-mystery` `morning` (31.2 s indoors, 3 characters, walks, effects) | 25.34 / 25.39 s (CPU 26.3 / 26.4 s) | 12.68 / 12.80 s (CPU 13.1 s) | ×2.0 |
+Peak memory of the worker processes: 0.28 GB (rain-check), 0.25 GB (muffin), the same at both
+qualities. Beat starts: the draft's fall on whole 1/8 s frames, the preview's on 1/15 s ones
+(`narrate` waits relative to each beat's start), so they drift apart by up to 0.15 s (storm, 7
+beats) and 0.18 s (morning, 8 beats); sound effects (20 / 25) and ambience beds are the same
+apart from that. Stills at 10 s (storm) and 20 s (morning) checked by eye: same places and
+poses, no rain / puddles / shadows, ungraded colours, captions and the sweat symbol kept.
+
+Files
+- New: `tests/test_draft.py`.
+- Changed: `config.py` (`DraftConfig`, `draft_format`, `DRAFT_SHORT_SIDE`, `DRAFT_FPS`,
+  `_even_pixels`), `project.py`, `render/worker.py`, `render/pipeline.py`,
+  `render/fingerprint.py`, `cli.py`, `jsonout.py`, `mcp_server.py`, `scene.py`,
+  `scenes/stage.py`, `particle_field.py`, `cartoon/shading.py`. Docs: CONFIG.md (top-level
+  `draft`, new "Drafts" section, `render --json` `draft`), DESIGN.md (§3, §8, new §74), README,
+  EXTENDING.md, guide + `AGENTS.md` copy, `tasklist.md`.
+
+Public interfaces
+- Config `draft:`; CLI `render --draft`; MCP `render` `draft`; JSON `render.draft`; worker
+  `--quality draft`. `vidgen.api` unchanged. Internal: `Project.load(draft=)`, `Project.draft`,
+  `NarratedScene.is_draft`, `render_scene(draft=)`, `ParticleField(drawn=)`, `StageLight(flat=)`.
+
+Decisions / deviations
+- A draft is a preview for the scene code (`is_preview` true) but has its own folder and names,
+  chosen over a third quality value threaded through the ~360 `preview: bool` call sites.
+- Living props, birds, water and rainbows stay: they show actions (`switch_on`, a flock set
+  off, a rainbow) and their per-frame cost is already cut by the frame rate.
+- `vidgen lint`, `storyboard`, `thumbnail` and `export` have no `--draft` (lint and storyboard
+  must see the decoration; asked to stay unaffected).
+
+Known gaps / TODOs
+- Beat starts are rounded to whole frames per beat, so drafts (and previews) drift by up to a
+  couple of frames from the final's timeline over a scene; anchoring beat waits to the scene's
+  exact timeline would remove it for every quality (not done: it changes previews and finals).
+- A light change still redraws the whole frame while it lasts in a draft (the stars, window skies
+  and suns follow it).
+
+How to test
+- `pytest tests/test_draft.py` (18 passed in 17 s; 4 of them tiny renders).
+- Run here (non-render): `test_cli test_render test_project test_config test_schema test_mcp
+  test_json_output test_docs test_guide` (268 passed, 114 s); `test_particles
+  test_cartoon_motion_effects test_cartoon_lighting test_cartoon_wind test_cartoon_snow_fog
+  test_cartoon_storm test_cartoon_rain test_host test_host_acting` (130 passed, 7 s). Render:
+  `test_cartoon_rain test_cartoon_storm` (4 passed), `test_cartoon_wind test_particles
+  test_host` (6 passed). The full suite was not run.

@@ -187,6 +187,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
         "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets",
+        # a draft's size and frame rate: only drafts use them, checked like any format (§74)
+        "draft",
     }
     config = project.config.model_dump(mode="json", exclude=excluded)
     assets = project.root / "assets"

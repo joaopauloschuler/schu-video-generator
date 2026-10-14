@@ -665,10 +665,10 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
         raise VidgenError("--frames-per-beat must be at least 1")
     frames = args.frames_per_beat or (1 if args.frames else 0)
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir)
+    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir, draft=args.draft)
     result = render_project(
         project,
-        preview=args.preview,
+        preview=args.preview or args.draft,
         scenes=args.scene or None,
         no_audio=args.no_audio,
         keep_going=args.keep_going,
@@ -677,7 +677,7 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
         force=args.force,
     )
     if args.json:
-        return jsonout.render_document(project, result, args.preview, time.monotonic() - started)
+        return jsonout.render_document(project, result, args.preview or args.draft, time.monotonic() - started)
     reused = f", {len(result.reused)} reused" if result.reused else ""
     print(f"rendered {len(result.rendered)} scene(s){reused}")
     print(f"video:     {result.output}")
@@ -1448,7 +1448,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("render", help="render the video")
     project_arg(p)
-    p.add_argument("--preview", action="store_true", help="fast low-resolution render")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--preview", action="store_true", help="fast low-resolution render")
+    quality.add_argument(
+        "--draft", action="store_true",
+        help="fastest check of timing and staging: ~8 fps, 240p, no idle / wind / shadows / particles / light grade (build/draft, ..._draft.mp4)",
+    )
     p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene (repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")

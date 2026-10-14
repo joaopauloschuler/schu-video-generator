@@ -74,14 +74,59 @@ class FormatConfig(_Strict):
     @field_validator("width", "height")
     @classmethod
     def _even(cls, value: int) -> int:
-        # H.264 in yuv420p needs even sizes; Manim's encoder crashes on odd ones.
-        if value % 2:
-            raise ValueError(f"must be an even number of pixels (got {value}; H.264 video needs even sizes)")
-        return value
+        return _even_pixels(value)
+
+
+def _even_pixels(value: int) -> int:
+    # H.264 in yuv420p needs even sizes; Manim's encoder crashes on odd ones.
+    if value % 2:
+        raise ValueError(f"must be an even number of pixels (got {value}; H.264 video needs even sizes)")
+    return value
 
 
 def _preview_format() -> FormatConfig:
     return FormatConfig(width=854, height=480, fps=15)
+
+
+#: A draft's shorter side in pixels and its frame rate when ``draft:`` does not set them (DESIGN.md §74).
+DRAFT_SHORT_SIDE = 240
+DRAFT_FPS = 8
+
+
+class DraftConfig(_Strict):
+    """Resolution and frame rate of a draft (`vidgen render --draft`); unset keys follow the video's format."""
+
+    width: PositiveInt | None = Field(default=None, json_schema_extra=_EVEN)
+    """Width in pixels (even; give height too); default: 240 pixels on the shorter side at the format's shape (426x240 for 16:9, 240x426 for 9:16)."""
+    height: PositiveInt | None = Field(default=None, json_schema_extra=_EVEN)
+    """Height in pixels (even; give width too)."""
+    fps: PositiveInt | None = None
+    """Frames per second; default 8 (the format's when lower)."""
+
+    @field_validator("width", "height")
+    @classmethod
+    def _even(cls, value: int | None) -> int | None:
+        return None if value is None else _even_pixels(value)
+
+    @model_validator(mode="after")
+    def _both_sides(self) -> DraftConfig:
+        if (self.width is None) != (self.height is None):
+            raise ValueError("give both width and height, or neither (the draft then keeps the format's shape)")
+        return self
+
+
+def draft_format(video: FormatConfig, draft: DraftConfig | None = None) -> FormatConfig:
+    """The format of a draft of a video in the ``video`` format: ``draft``'s size and frame rate
+    where set, else :data:`DRAFT_SHORT_SIDE` pixels on the shorter side at the video's shape (even
+    sizes, never larger than the video) and :data:`DRAFT_FPS` (never more than the video's)."""
+    draft = draft or DraftConfig()
+    fps = draft.fps if draft.fps is not None else min(DRAFT_FPS, video.fps)
+    if draft.width is not None and draft.height is not None:
+        return FormatConfig(width=draft.width, height=draft.height, fps=fps)
+    short = min(DRAFT_SHORT_SIDE, video.width, video.height)
+    long_side = 2 * int(short * max(video.width, video.height) / min(video.width, video.height) / 2)
+    width, height = (long_side, short) if video.width >= video.height else (short, long_side)
+    return FormatConfig(width=width, height=height, fps=fps)
 
 
 class ThemeConfig(_Strict):
@@ -1851,6 +1896,8 @@ class VideoConfig(_Strict):
     """Final render resolution and frame rate."""
     preview: FormatConfig = Field(default_factory=_preview_format)
     """Resolution and frame rate of `vidgen render --preview`."""
+    draft: DraftConfig | None = None
+    """Resolution and frame rate of `vidgen render --draft` (fast drafts without decoration); default: 240 pixels on the shorter side at the format's shape, 8 fps."""
     include: Annotated[str, Field(min_length=1)] | list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     """YAML / JSON files (relative to this file, e.g. cast.yaml or ../shared/sets.yaml) whose characters, voices and sets this config starts from; this config's own entries win (a character of the same name: its keys win)."""
     sets: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)

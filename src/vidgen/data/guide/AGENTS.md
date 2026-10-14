@@ -128,7 +128,9 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
 8. **`vidgen tts`**: voices only new or changed beats (needs `ELEVENLABS_API_KEY`; costs money).
 9. **`vidgen render`** (`--preview` first): now timed by the real audio. Beats change length,
    so run `vidgen storyboard` and `vidgen lint` again: `narration_speed` and `dead_air` now
-   measure the real speech.
+   measure the real speech. For a cartoon, `vidgen render --draft` is faster still (about 8 fps,
+   240p, no idle motion, wind, shadows, particles or light grade; every timing, position, action
+   and the lip sync kept): `<output>_draft.mp4`, to watch the timing and staging before a preview.
 10. **`vidgen readback`** (optional extra `schu-video-generator[stt]`): speech-to-text of the MP3s against
     your texts; it names misheard terms and suggests a pronunciation entry. Fix, `vidgen tts`,
     and `vidgen lint` again (its `readback` rule reads the cached transcripts).
@@ -1526,7 +1528,7 @@ Good: the result first, then the context.
 ## Outputs: video, chapters, thumbnail, slides, GIFs, translations
 
 - **Video and subtitles**: `vidgen render` writes `output/<output>.mp4` and `<output>.srt`
-  (`--preview`: `<output>_preview.mp4`; `--variant NAME`: `<output>_<variant>.mp4`). The
+  (`--preview`: `<output>_preview.mp4`; `--draft`: `<output>_draft.mp4`; `--variant NAME`: `<output>_<variant>.mp4`). The
   chapter list and thumbnail go to `output/` too; `output_dir:` (relative to the project folder)
   or `--output-dir DIR` moves them. `build/` and `exports/` stay put.
 - **Chapters**: with `chapter` cards or `chapter:` keys the MP4 gets chapter marks and

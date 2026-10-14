@@ -497,12 +497,14 @@ def build_server(root: Path) -> Any:
     # ----- outputs ---------------------------------------------------------------------------------
 
     @tool("Render the video (MP4 + SRT + timings) and its thumbnail. preview=true (default) is fast and small; "
-          "the final render can take minutes. Scenes unchanged since their last render (e.g. by storyboard or "
-          "lint) are reused. Reports progress.", writes)
+          "draft=true is faster still (about 8 fps, 240p, no idle, wind, shadows, particles or light grade; same "
+          "timings) for checking timing and staging; the final render can take minutes. Scenes unchanged since "
+          "their last render (e.g. by storyboard or lint) are reused. Reports progress.", writes)
     async def render(
         ctx: Context,
         project: Project = ".",
         preview: Annotated[bool, Field(description="fast low-resolution render (false: the final format)")] = True,
+        draft: Annotated[bool, Field(description="a draft instead (wins over preview): ..._draft.mp4 from build/draft")] = False,
         variant: Variant = None,
         scene: Annotated[list[str] | None, Field(description="only re-render these scenes, then join")] = None,
         no_audio: Annotated[bool, Field(description="render without narration")] = False,
@@ -512,8 +514,8 @@ def build_server(root: Path) -> Any:
         force: Annotated[bool, Field(description="render every scene again, even unchanged ones")] = False,
     ) -> Any:
         options = {
-            "preview": preview, "scene": scene, "variant": variant, "no-audio": no_audio, "keep-going": keep_going,
-            "jobs": jobs, "frames": frames, "force": force,
+            "preview": preview and not draft, "draft": draft, "scene": scene, "variant": variant, "no-audio": no_audio,
+            "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force,
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 

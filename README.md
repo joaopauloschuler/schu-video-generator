@@ -458,7 +458,7 @@ narration.
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
-| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
+| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N\|auto] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 | `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`); exit code 1 on errors |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
@@ -479,7 +479,9 @@ the same flag); `build/` and `exports/` do not move.
 `render` renders only the scenes whose render is missing or out of date (their config, audio,
 assets, extensions or vidgen changed: the same check as `storyboard`), so a render after a
 storyboard of the same format just joins. Options: `--force` renders every scene again;
-`--preview` uses the `preview` resolution; `--scene ID` re-renders only those
+`--preview` uses the `preview` resolution; `--draft` makes a fast draft (about 8 fps, 240p, no
+idle motion, wind, shadows, particles or light grade, every timing and position kept;
+`<output>_draft.mp4` from `build/draft/`, see [docs/CONFIG.md](docs/CONFIG.md#drafts-vidgen-render---draft)); `--scene ID` re-renders only those
 scenes and re-joins with the existing renders of the others; `--variant NAME` applies a named
 variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing is unchanged);
 `--keep-going` renders the remaining scenes after a failure; `--jobs N` renders N scenes in

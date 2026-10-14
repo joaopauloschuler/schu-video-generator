@@ -905,7 +905,7 @@ class Stage(NarratedScene):
         project file with a sound's name plays as it is (without the cue's params)."""
         if not self._foley_on():
             return
-        wet_from = min((p.start for p in getattr(self, "puddles", [])), default=None)
+        wet_from = min(getattr(self, "_puddles_from", []), default=None)
         for anim in animations:
             for cue in wet_steps(foley_cues(_played(action, options, anim, start, seconds)), wet_from):
                 params = {} if self.sounds.file(cue.sound) is not None else cue.params
@@ -924,9 +924,9 @@ class Stage(NarratedScene):
         (the stage's, else the video's) or for a character whose ``cartoon_motion`` is none.
         Each is a :class:`MotionEffect` of its own, drawn right in front of its mover (speed
         lines right behind it), not graded by the light, and taken off the scene when its cue is
-        over."""
+        over. None in a draft (§74)."""
         on = self.params.motion_effects if self.params.motion_effects is not None else self.project.config.motion_effects
-        if not on:
+        if not on or self.is_draft:
             return
         movers = {id(m): name for name, m in [*self.cast.items(), *self.props.items()]}
         figure = next((a.mobject for a in animations if isinstance(a.mobject, Character)), None)
@@ -1119,19 +1119,23 @@ class Stage(NarratedScene):
         true``, puddles grow on the ground under it (drawn over the ground band, under the
         shadows, characters and props). A snow field with ``settle: true``: its layer grows
         (:meth:`_settle_snow`)."""
-        if field.seeds.kind == "snow" and settings.settle:
+        if field.seeds.kind == "snow" and settings.settle and not self.is_draft:
             self._settle_snow(field, settings)
         if field.seeds.kind != "rain":
             return
         every = storm_every(settings)
-        if every is not None:   # lightning while it rains (§69.61)
+        if every is not None:   # lightning while it rains (§69.61); a draft hears its thunder only (§74)
             storm = RainStorm(field.start, every, motion_seed(self.spec.id, "storm", settings.seed, len(self._storms)), lambda: field.ended)
             self._storms.append(storm)
-            self._lit().storms.append(storm)
-            self._watch_light()
+            if not self.is_draft:
+                self._lit().storms.append(storm)
+                self._watch_light()
         if self._foley_on():
             self._rain_fields.append(field)
         if not settings.puddles:
+            return
+        self._puddles_from.append(field.start)   # steps splash from then on, also in a draft without puddles (§74)
+        if self.is_draft:
             return
         left, right = self.camera_bounds()[:2]
         spots = puddle_spots(
@@ -1220,9 +1224,9 @@ class Stage(NarratedScene):
 
     def _fog(self) -> StageFog | None:
         """The stage's ``fog`` (``None``: none): its bands lit by the light, drifting with the
-        stage's wind when it may blow, and the scene updater when its waves move."""
+        stage's wind when it may blow, and the scene updater when its waves move. None in a draft (§74)."""
         setting = self.params.fog
-        if setting is None:
+        if setting is None or self.is_draft:
             return None
         left, right = self.camera_bounds()[:2]
         color = resolve_color(setting.color, self.theme) if setting.color is not None else FOG_COLOR
@@ -1415,7 +1419,7 @@ class Stage(NarratedScene):
                 figure.set_pose(member.pose)
             if member.expression is not None:
                 figure.set_expression(member.expression)
-            if not p.idle:
+            if not p.idle or self.is_draft:   # a draft: no breathing, swaying or blinking (§74)
                 figure.stop_idle()
             figure.shift(np.array([*place_at.feet, 0.0]) - figure.feet())
             self.homes[member.name] = place_at.feet[0]
@@ -1487,13 +1491,15 @@ class Stage(NarratedScene):
         self.flocks: list[Flock] = []
         if p.birds is not None:
             self.add_flock(p.birds, p.birds.start)
-        if p.room is None and self._lightning_used():
+        if p.room is None and self._lightning_used() and not self.is_draft:
             self.bolt = LightningBolt()
             self._put_in_sky(self.bolt)
         #: the rain fields whose sound bed plays (foley on)
         self._rain_fields: list[ParticleField] = []
         #: the puddles under the rain fields with ``puddles: true``
         self.puddles: list[Puddles] = []
+        #: the scene times the rain fields with ``puddles: true`` started (wet steps follow them)
+        self._puddles_from: list[float] = []
         #: the layers of the snow fields with ``settle: true``, what waits to be drawn right after
         #: a prop when it comes in (its snow cap), and the stage's fog (DESIGN.md §69.60)
         self.snow_layers: list[SettledSnow] = []
@@ -1553,7 +1559,10 @@ class Stage(NarratedScene):
         self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
         flashes = self._lightning_used()
         #: the stage's light (``None``: the set as drawn, nothing changes it)
-        self.light: StageLight | None = StageLight(self.renderer.camera, self.base_light) if self.base_light.changes_colors or changes or flashes else None
+        #: (a draft's is flat: nothing graded, no flashes, the changes at their times, §74)
+        self.light: StageLight | None = (
+            StageLight(self.renderer.camera, self.base_light, flat=self.is_draft) if self.base_light.changes_colors or changes or flashes else None
+        )
         if self.light is not None and self.params.room is not None:
             self.light.flash_share *= ROOM_FLASH   # only what comes in through the windows (§69.61)
         #: the lightning bolt in the sky, the rainbows, the suns and moons moving along the sky's
@@ -1587,7 +1596,7 @@ class Stage(NarratedScene):
     def _lit(self) -> StageLight:
         """The stage's light, made now when it has none yet."""
         if self.light is None:
-            self.light = StageLight(self.renderer.camera, self.base_light)
+            self.light = StageLight(self.renderer.camera, self.base_light, flat=self.is_draft)
             self.light.on_change(self._show_light)
         return self.light
 
@@ -1638,8 +1647,9 @@ class Stage(NarratedScene):
         seed = seed if seed is not None else motion_seed(self.spec.id, "lightning", round(float(time), 3))
         x = mark_x(at, self.params.stage_marks()) if at is not None else 0.15 + 0.7 * (seed % 1000) / 999
         strike = Strike(float(time), x, float(distance), seed, bolt and self.params.room is None)
-        self._lit().strikes.append(strike)
-        self._watch_light()
+        if not self.is_draft:   # a draft: no flash, no bolt, the thunder at its time (§74)
+            self._lit().strikes.append(strike)
+            self._watch_light()
         self._thunder(strike)
         return strike
 
@@ -1785,6 +1795,11 @@ class Stage(NarratedScene):
         if base == 0.0 and not any(later):
             return
         wind = Wind(base, seed=wind_seed(self.spec.id))
+        left = -self.stage_width / 2
+        if self.is_draft:   # nothing sways or trails; balloons and blown props still drift with it (§74)
+            self.blowing = StageWind(wind, [], {}, lambda x: (x - left) / self.stage_width)
+            self._wind_updater = self._wind_step
+            return
         lifts = {item.name: item.lift for item in self.params.items()}
         still = set(self.props) - self._movable_props() - self._posture_props()
         swaying = [
@@ -1792,7 +1807,6 @@ class Stage(NarratedScene):
             for place in placements
             if place.kind == "prop" and place.name in still and lifts[place.name] == 0 and self.props[place.name].kind in SWAYS
         ]
-        left = -self.stage_width / 2
         self.blowing = StageWind(wind, swaying, self.cast, lambda x: (x - left) / self.stage_width)
         self.particle_wind = self.blowing.particle_push
         self.blowing.update(float(self.renderer.time))
@@ -1811,7 +1825,7 @@ class Stage(NarratedScene):
         if self.blowing is None:
             return  # every level of the scene is 0: nothing to move
         self.blowing.wind.change(level, start, seconds)
-        if not any(f is self._wind_updater for f in self.updaters):
+        if not self.is_draft and not any(f is self._wind_updater for f in self.updaters):
             self.add_updater(self._wind_updater)
 
     def _wind_step(self, dt: float) -> None:
@@ -2107,8 +2121,8 @@ class Stage(NarratedScene):
     def _shadows(self, placements: list[StagePlacement]) -> tuple[StageShadows | None, StageShadows | None]:
         """The shadows (``shadows: true``): of the props on the ground that stay put (drawn
         with the backdrop, so they stay in Manim's static image), and of the characters and the
-        props an action may move (placed under them on every frame)."""
-        if not self.params.shadows:
+        props an action may move (placed under them on every frame). None in a draft (§74)."""
+        if not self.params.shadows or self.is_draft:
             return None, None
         lifts = {item.name: item.lift + item.hang for item in self.params.items()}
         movable = self._movable_props()

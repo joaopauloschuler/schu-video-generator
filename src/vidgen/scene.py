@@ -319,6 +319,10 @@ class NarratedScene(MovingCameraScene):
         #: Whether the scene renders at preview quality (set by the render worker); scenes may
         #: draw less then, e.g. fewer particles.
         self.is_preview = False
+        #: Whether the scene renders as a draft (its project's ``draft``, DESIGN.md §74): scenes
+        #: leave out what only decorates (idle motion, wind, shadows, motion effects, particles,
+        #: the light's grade...), never a timing, a position, an action or the lip sync.
+        self.is_draft = bool(getattr(self.project, "draft", False))
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:
@@ -418,6 +422,8 @@ class NarratedScene(MovingCameraScene):
             setting, find_character(cfg, setting.character), theme=self.theme, area=(area.x0, area.y0, area.x1, area.y1),
             frame_width=self.frame_width, frame_height=self.frame_height, root=self.project.root, motion=cfg.cartoon_motion,
         )
+        if self.is_draft:   # no breathing, swaying or blinking (DESIGN.md §74)
+            self.host.character.stop_idle()
         self._reserved.append(regions.Region(*self.host.layout.reserve))
 
         def takes_host(kind: str) -> bool:

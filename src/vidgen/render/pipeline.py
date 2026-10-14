@@ -222,7 +222,7 @@ def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, 
     """Run the worker for one scene; its output is captured (and echoed to stderr if ``live``)."""
     cmd = [
         sys.executable, "-m", "vidgen.render.worker", str(project.config_file), scene_id,
-        "--quality", "preview" if preview else "final",
+        "--quality", "draft" if project.draft else "preview" if preview else "final",
     ]
     if project.variant:
         cmd += ["--variant", project.variant]
@@ -529,6 +529,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         "variant": project.variant,
         "language": project.config.language,
         "preview": preview,
+        **({"draft": True} if project.draft else {}),
         "format": {"width": fmt.width, "height": fmt.height, "fps": fmt.fps},
         "audio": not no_audio,
         "duration": round(offset, 6),

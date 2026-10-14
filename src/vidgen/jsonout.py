@@ -658,6 +658,7 @@ def render_document(
         project=_path(project.root),
         variant=project.variant,
         preview=preview,
+        draft=project.draft,
         audio=timings["audio"],
         format=timings["format"],
         outputs={

@@ -27,10 +27,11 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | key | default | |
 |---|---|---|
 | `title` | required | the video's title (the MP4's title tag and `timings.json`; not drawn by itself) |
-| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_chapters.txt`, `<output>_thumbnail.png`, `<output>_preview.mp4`, `<output>_<variant>.mp4`, all in the [output folder](#output-folder-output_dir---output-dir); no path separators |
+| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_chapters.txt`, `<output>_thumbnail.png`, `<output>_preview.mp4`, `<output>_draft.mp4`, `<output>_<variant>.mp4`, all in the [output folder](#output-folder-output_dir---output-dir); no path separators |
 | `output_dir` | `output` | the [output folder](#output-folder-output_dir---output-dir) of those files: relative to the project folder, or absolute |
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
+| `draft` | 240 px on the shorter side, 8 fps | `vidgen render --draft`: `{width, height, fps}`, each optional; see [drafts](#drafts-vidgen-render---draft) |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
 | `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices` and `sets` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `sets` | `{}` | named `stage` sets (`name: {background, layers, props, marks, light, wind...}`) a stage scene uses with `set: NAME`; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
@@ -462,6 +463,36 @@ The same slides as a PDF, by default `exports/<output>[_<variant>][_preview]_sli
 and `fps` (30 / 15), all positive integers; `width` and `height` must be even (H.264). Any
 aspect ratio works: the shorter side of the frame is always 8 Manim units, so 9:16 gives a frame
 8 units wide and 14.22 high.
+
+### Drafts (`vidgen render --draft`)
+
+`vidgen render --draft` (MCP `render` with `draft: true`) is the fastest way to check a cartoon's
+timing and staging: everything is where and when it will be, without what only decorates.
+
+- **Size and frame rate**: 240 pixels on the shorter side at the format's shape (426x240 for
+  16:9, 240x426 for 9:16, 240x240 for 1:1; never larger than `format`), 8 fps (never more than
+  `format`'s). `draft: {width, height, fps}` sets them: `width` and `height` together (even),
+  `fps` alone or with them. A variant's `format` gives its drafts its shape.
+- **Left out**: idle motion (breathing, swaying, blinking; a host's too), the wind's swaying props
+  and trailing pieces (balloons and blown props still drift with it), shadows, motion effects
+  (dust, speed lines, stars, whoosh arcs, rocket smoke), particles (rain, snow, leaves...: none
+  drawn), puddles, settling snow, fog, lightning's flash and bolt, and the light's colour grade
+  (the set is drawn as by day; a `light` change still takes its time, stars and window skies still
+  follow it).
+- **Kept**: every beat, action, position and walk, the lip sync (mouths change at the draft's
+  frame rate), effect symbols, bubbles, captions, overlays, cards, living props, birds, water,
+  rainbows, and every sound (narration, foley, thunder, splashing steps, ambience and music).
+  Beat starts fall on whole frames, as at every frame rate, so over a scene they may run a frame or
+  two of the draft (up to about 0.2 s) apart from the preview's.
+- **Files**: renders go to `build/draft[_<variant>]/` and the video to
+  `<output>[_<variant>]_draft.mp4` (with `_draft.srt`, `_draft_chapters.txt`,
+  `_draft_thumbnail.png`); a draft never reuses or replaces a preview or final render, nor they a
+  draft. `vidgen lint` and `vidgen storyboard` never use drafts.
+
+Measured on one scene of each Phase K / L example, without audio (word-count timing), one
+render at a time: `cartoon-rain-check` `storm` (23 s of rain, wind and a light change) 21.5 s at
+preview (640x360, 15 fps) → 8.1 s as a draft; `cartoon-muffin-mystery` `morning` (31 s indoors)
+25.4 s → 12.7 s.
 
 ## Variants
 
@@ -7716,7 +7747,8 @@ difference between two palette colours).
 |---|---|---|
 | `project` | str | |
 | `variant` | str \| null | |
-| `preview` | bool | |
+| `preview` | bool | `true` also with `--draft` |
+| `draft` | bool | `true` with `--draft` ([drafts](#drafts-vidgen-render---draft)) |
 | `audio` | bool | `false` with `--no-audio` |
 | `format` | object | `{width, height, fps}` of this render |
 | `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |

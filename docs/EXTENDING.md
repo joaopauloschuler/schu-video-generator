@@ -310,11 +310,15 @@ of `PROP_KINDS` (`table`, `tree`, `house`, ...) and `svg_prop(path, height=, nam
 (through `load_vector`), both a `Prop` with `feet()` like a character's, so a `StageItem(name,
 "prop", at, depth, PROP_HEIGHTS[kind], lift)` places it; the layout dump reports it as kind `prop`.
 Particles: `particle_field(self, "snow", ParticleSettings(density=2))` builds a `ParticleField`
-for your scene (fewer at preview quality, `self.is_preview`) that moves on its own once added
+for your scene (fewer at preview quality, `self.is_preview`; none, not moving, in a draft) that moves on its own once added
 (`self.add(field)`) and fades out with `self.play(fade_out(field))`; `particle_states(particle_seeds(kind,
 count, seed), t)` gives the seeded positions without drawing anything.
+Drafts (`vidgen render --draft`, DESIGN.md §74): `self.is_draft` is true; leave out what only
+decorates (idle motion: `figure.stop_idle()`, shadows, effects that loop), never a timing, a
+position or a sound.
 Light: `StageLight(self.camera, light_grade("night"))` grades, as the camera draws, whatever you
-pass to `mark_lit(...)` (leave text and bubbles unmarked: they keep their contrast);
+pass to `mark_lit(...)` (leave text and bubbles unmarked: they keep their contrast; `flat=True`,
+as `stage` does in a draft, grades nothing but keeps the changes' times);
 `.change(grade, start, seconds)` and `.update(scene_time)` fade it (redraw everything while it
 fades: return every mobject from `get_moving_mobjects`, as `stage` does). The maths is pure:
 `light_grade`, `tint_grade`, `blend_grades`, `light_at`, `grade_rgbas`, `grade_pixels`;

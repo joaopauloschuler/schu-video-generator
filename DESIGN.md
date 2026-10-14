@@ -294,14 +294,14 @@ my_video/
     <variant>/            #   only for a variant whose voice or beat texts differ (§7)
   build/                  # generated: manim media, per-scene mp4, timings json, concat list
   output/                 # the deliverables (Step 66; `output_dir:` / `--output-dir` move it, see §4)
-    <output>.mp4          #   final video   (<output>_preview.mp4 for previews,
-    <output>.srt          #                 <output>_<variant>.mp4 for variants)
+    <output>.mp4          #   final video   (<output>_preview.mp4 for previews, <output>_draft.mp4
+    <output>.srt          #                 for drafts (§74), <output>_<variant>.mp4 for variants)
     <output>_chapters.txt #   YouTube chapter list, when the video has chapters (Step 49, §52)
     <output>_thumbnail.png#   thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
   exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53); `vidgen slides` decks (§55, §56)
 ```
 
-`build/<final|preview>[_<variant>]/` (Step 4) holds: `scenes/<id>.mp4` (the scene as rendered,
+`build/<final|preview>[_<variant>]/` (Step 4; `build/draft[_<variant>]/` for drafts, Step 137, §74) holds: `scenes/<id>.mp4` (the scene as rendered,
 with Manim's own audio) and `scenes/<id>.wav` (Manim's uncompressed sound mix, only if the scene
 has sound), `timings/<id>.json` (beat timings + the render settings), `media/` (Manim's
 intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact video length) with
@@ -1109,7 +1109,7 @@ vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]   # sound effects with des
 vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with descriptions (§48)
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]
-vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
+vidgen render [PROJECT] [--preview | --draft] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
               [--jobs N|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]   # changed scenes only (§63)
 vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
               [--width PX] [--jobs N|auto] [--force] [--json]      # contact sheets (§14)
@@ -9844,3 +9844,47 @@ Reference: docs/CONFIG.md "`emotion` with ElevenLabs and OpenRouter". The same `
 - **Not done**: OpenRouter's own ElevenLabs models (`elevenlabs/eleven-v3`) are treated like
   any model without instructions (post-processing), not given tags; no ElevenLabs `speed`
   setting; tags not checked against the real API (mocked tests only).
+
+## 74. Fast drafts: `vidgen render --draft` (Step 137)
+
+Reference: docs/CONFIG.md "Drafts". A draft is a render for checking timing and staging: small,
+slow-framed and without decoration, with every timing, position, action and the lip sync kept.
+
+- **Settings** (`config.py`): `draft: DraftConfig | None` (`width`, `height` together, `fps`, each
+  optional, sizes even). `draft_format(format, draft)`: the set values, else
+  `DRAFT_SHORT_SIDE` 240 px on the shorter side at the format's shape (the longer side rounded
+  down to even: 426x240, 240x426, 240x240, 320x240), never larger than `format`, and
+  `DRAFT_FPS` 8, never more than `format.fps`. `draft` is left out of the scene fingerprint
+  (only drafts use it; their format is checked like any render's).
+- **The project** (`project.py`): `Project.draft` (set by `Project.load(..., draft=True)`, kept by
+  `without_overlays`) wins over the `preview` argument of the path methods: `render_dir` →
+  `build/draft[_<variant>][_bare]`, `render_format` → `draft_format`, output names
+  `<output>[_<variant>]_draft` (MP4, SRT, chapter list, thumbnail, export stem). So a draft and a
+  preview or final render never share a folder or a file, even at the same size and rate, and
+  `current_render` / `_usable_render` never take one for the other.
+- **The pipeline**: `vidgen render --draft` (exclusive with `--preview`; MCP `render` `draft`,
+  which drops `preview`) loads the project as a draft and renders with `preview=True` (a draft is a
+  kind of preview: `is_preview` is true too). The worker gets
+  `--quality draft`; scene timings gain `render.draft: true`, the combined timings `draft: true`,
+  `render --json` `draft`. Hooks see `preview: true` and the draft's `render_dir`.
+- **The scene**: `NarratedScene.is_draft` (from its project, set before the host is built).
+  What a draft leaves out, each at the place that makes it: the host's and the stage
+  characters' idle motion (`stop_idle`: no breathing, swaying, blinking or mood motion); the
+  stage's wind (`StageWind` with no swaying props or trailing characters and no updater; its
+  `Wind` stays, so balloons and blown props drift as in the video); shadows (`_shadows`); motion
+  effects (`action_motion_effects`); particles (`particle_field`: a `ParticleField(drawn=False)`
+  with no particles, no ground and no updater; its start, fade out and end stay, so the rain bed,
+  storms and thunder follow it); puddles and settling snow (`particles_started`; steps still
+  splash from the puddles' start, kept in `_puddles_from`); fog (`_fog`); lightning's bolt and
+  flash (`strike_lightning` and rain storms do not reach the light; the thunder stays); the
+  light's grade (`StageLight(flat=True)`: the camera is not wrapped, flashes are 0, `changing` and
+  `settled` follow the light changes only; stars, window skies and sky bodies still follow the
+  grade's changes, so a `light` change still redraws the frame while it lasts).
+- **Kept on purpose**: living props, birds, water, rainbows, effect symbols, cards, overlays and
+  every sound. Beat starts fall on whole frames at any rate (`narrate` waits relative to the
+  beat's start), so a draft's beats may drift by a frame or two of 8 fps from the preview's over a
+  scene (measured: up to 0.15 s over 23 s and 0.18 s over 31 s).
+- **Measured** (worker wall time, one scene, `--no-audio`, two alternating runs, under the
+  1500 MB cap): `cartoon-rain-check` `storm` preview 640x360@15 21.2 / 21.8 s, draft 426x240@8
+  8.0 / 8.2 s (×2.6); `cartoon-muffin-mystery` `morning` 25.3 / 25.4 s → 12.7 / 12.8 s (×2.0);
+  peak memory of the worker processes at most 0.25 GB (muffin) and 0.28 GB (rain-check).

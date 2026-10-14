@@ -137,8 +137,12 @@ class ParticleField(VGroup):
         wind: ParticleWind | None = None,
         ground: RainGroundSource | None = None,
         seed: int = 1,
+        drawn: bool = True,
     ) -> None:
         super().__init__()
+        #: False for a draft's field (DESIGN.md §74): no particles and no updater; it keeps its
+        #: start, its fade out and its end (a rain bed and storms follow them)
+        self.drawn = drawn
         self.seeds = seeds
         self.clock = clock
         self.view = view
@@ -180,7 +184,8 @@ class ParticleField(VGroup):
             self.splashes.set_stroke(colors[0], width=0.0, opacity=0.0)
             self.add(self.splashes)
         self.draw_at(self.start)
-        self.add_updater(self._step)
+        if drawn:
+            self.add_updater(self._step)
 
     def _step(self, mob: Mobject, dt: float) -> None:
         """Updater (time based, so waits draw every frame): place the particles for now."""
@@ -375,10 +380,12 @@ def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) 
     (:attr:`NarratedScene.is_preview`). They drift with the scene's ``particle_wind`` when it has
     one (a windy stage, DESIGN.md §69.32); rain ends on the scene's ``rain_ground`` when it has
     one (a stage, §69.39), snow with ``settle`` on its ``snow_ground`` (§69.60). The scene's
-    :meth:`~vidgen.scene.NarratedScene.particles_started` hears of the new field."""
+    :meth:`~vidgen.scene.NarratedScene.particles_started` hears of the new field. A draft's field
+    (:attr:`NarratedScene.is_draft`) has no particles and does not move (DESIGN.md §74)."""
     area = settings.area or [0.0, 0.0, 1.0, 1.0]
     colors = particle_colors(kind, settings.color, scene.theme)
-    count = particle_count(kind, settings.density, area[2] * area[3], preview=scene.is_preview)
+    drawn = not getattr(scene, "is_draft", False)
+    count = particle_count(kind, settings.density, area[2] * area[3], preview=scene.is_preview) if drawn else 0
     seeds = particle_seeds(kind, count, settings.seed, colors=len(colors))
     field = ParticleField(
         seeds,
@@ -389,8 +396,9 @@ def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) 
         short_side=min(scene.frame_width, scene.frame_height),
         frame_width=scene.frame_width,
         wind=getattr(scene, "particle_wind", None),
-        ground=_ground_of(scene, kind, settings),
+        ground=_ground_of(scene, kind, settings) if drawn else None,
         seed=settings.seed,
+        drawn=drawn,
     )
     top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)
     field.set_z_index(top + 1)
