@@ -437,6 +437,8 @@ from vidgen.cartoon.lighting import (  # noqa: E402
     tint_grade,
 )
 from vidgen.cartoon.shading import CustomLight, LightSetting, ShadowCaster, StageLight, StageShadows, StarField, mark_lit, resolve_light  # noqa: E402
+from vidgen.cartoon.drawing_style import DrawingStyle, mark_shaded  # noqa: E402
+from vidgen.config import DrawingConfig  # noqa: E402
 from vidgen.cartoon.wind import (  # noqa: E402
     LIGHT_PROPS,
     SWAYS,
@@ -1020,6 +1022,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "StarField",
     "mark_lit",
     "resolve_light",
+    "DrawingConfig",
+    "DrawingStyle",
+    "mark_shaded",
     "LIGHT_PROPS",
     "SWAYS",
     "WIND_FADE_SECONDS",

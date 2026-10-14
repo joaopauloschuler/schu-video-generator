@@ -129,6 +129,20 @@ def draft_format(video: FormatConfig, draft: DraftConfig | None = None) -> Forma
     return FormatConfig(width=width, height=height, fps=fps)
 
 
+class DrawingConfig(_Strict):
+    """How cartoons are drawn (DESIGN.md §79): outline weight, shading, a paper texture; unset keys
+    follow the video's ``drawing:`` (on a stage scene), else the defaults."""
+
+    outline: Literal["thin", "normal", "bold"] | None = None
+    """Outline weight of every stroke on stage scenes (characters, props, sets, effects, bubbles) and of a host: thin (0.6x, never under one pixel), normal (as drawn), bold (1.7x); default normal."""
+    shading: Literal["flat", "soft"] | None = None
+    """flat: filled shapes in one colour; soft: characters' and props' filled shapes lighter at the top and darker at the bottom (the outline and the silhouette unchanged); default flat; drafts draw flat."""
+    texture: Literal["none", "paper", "storybook"] | None = None
+    """A still grain over each stage scene's frame, under the overlays and captions: none, paper (fine grain), storybook (stronger grain, blotches and darker corners); default none; drafts have none."""
+    seed: int | None = Field(default=None, ge=0)
+    """Seed of the texture's grain (the same seed and frame size give the same grain); default 0."""
+
+
 class ThemeConfig(_Strict):
     """Theme values from the config.
 
@@ -1985,6 +1999,8 @@ class VideoConfig(_Strict):
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
     motion_effects: bool = True
     """Motion effects on stage scenes, added on their own while cartoon_motion is lively or calm (smaller): dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture; false: none (a stage's motion_effects param wins)."""
+    drawing: DrawingConfig | None = None
+    """How the cartoons are drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: stage scenes and the host; a stage's drawing param wins key by key; default: normal, flat, none (as drawn)."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

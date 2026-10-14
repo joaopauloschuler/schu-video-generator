@@ -324,6 +324,11 @@ fades: return every mobject from `get_moving_mobjects`, as `stage` does). The ma
 `light_grade`, `tint_grade`, `blend_grades`, `light_at`, `grade_rgbas`, `grade_pixels`;
 `StageShadows([ShadowCaster(mob, ground_y, width, size)])` draws soft shadows (`follow()` in an
 updater for things that move), `StarField(night_stars(area_share), box, short_side)` stars.
+Drawing style (`drawing:`, DESIGN.md §79): a scene type with the class attribute
+`uses_drawing_style = True` (like `stage`) draws every stroke with the video's outline weight
+and gets its texture; `self.drawing` is the resolved `DrawingStyle` (override
+`drawing_settings()` to add a param of your own, as `stage` does), and with `self.drawing.shading
+== "soft"` pass the characters and props to `mark_shaded(...)` for the soft gradient.
 Wind: `Wind(0.6, seed=1)` is a pure, seeded wind (`.level(t)`, `.force(t, delay)`, `.change(level,
 start, seconds)`, `.blown(start, t)`); `sway_degrees(kind, force, t)` and `bent_points(points,
 degrees, foot_y, height)` bend a prop about its base, `trail_degrees(wind, t)` follows it on a

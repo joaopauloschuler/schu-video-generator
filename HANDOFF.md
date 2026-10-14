@@ -13289,3 +13289,100 @@ How to test
   `test_lint` (1 passed, 3.9 s). Full suite not run.
 - By hand: `vidgen readback <project>` with `stt: {model: small}` and `pip install -e ".[stt]"`;
   `vidgen lint <project> --readback --rule unclear_speech`.
+
+## Step 142 — Drawing style switch (`drawing:`)
+
+What was built
+- Config `drawing: {outline: thin | normal | bold, shading: flat | soft, texture: none | paper |
+  storybook, seed}` (`DrawingConfig`, every key optional) at the top level (variants change it as
+  any key) and as the `stage` param `drawing` (wins key by key). The name `drawing` was chosen
+  over the task's placeholder `cartoon_style_draw`; `cartoon_style` (Step 77, prompt words) is
+  untouched.
+- `src/vidgen/cartoon/drawing_style.py`: `DrawingStyle` / `resolve_drawing` (merge, defaults
+  normal / flat / none / 0, `for_draft`), `OUTLINE_FACTORS` (0.6 / 1 / 1.7), `soft_stops`,
+  `TEXTURES` + `texture_shade` (cached seeded H×W×4 uint16 multiplier: per-pixel grain, bicubic
+  blotches, storybook's darker corners) + `apply_texture`, `attach_texture`, `mark_shaded`,
+  `mark_outlined`, `style_camera`.
+- Applied as Manim draws, like the light (Step 97), never to the mobjects: `style_camera` wraps
+  the camera's `apply_stroke` (scales `cairo_line_width_multiple` per stroke: one place for every
+  stroke of a stage: characters, props, set, effect symbols, motion effects, bubbles; a thinned
+  stroke stays ≥ 1 px unless thinner) and `apply_fill` (a `soft` vertical Cairo gradient on
+  members marked shaded: the stage marks every character and prop, a host its character).
+  `attach_texture` wraps the renderer's `add_frame` between the overlay layer and the colour
+  fade: the grain covers everything the stage draws (bubbles too) and the fade colour, never
+  overlays or burned-in captions. Not a mobject, so no change to Manim's static image (Step 87).
+- `NarratedScene`: `uses_drawing_style` (class attribute; `stage` True), `drawing_settings()`
+  (`stage` adds its param), `_apply_drawing_style()` in `__init__` after `_build_host`, before
+  `_attach_color_fade`; `self.drawing`. A host on other scene types: outline and shading on its
+  figure (marked), no texture. Drafts: outline kept, shading and texture dropped.
+- Gallery still `docs/gallery/media/drawing_styles.png` (52 KB, 48 colours): `park` in six styles
+  (default, thin, bold, soft, paper, bold + soft + storybook), each a quarter of the preview still
+  around the left character; made by `tools/make_sets_gallery.py --styles --colors 48 park` (new
+  options `--styles`, `--colors`). Checked by eye, and a host-explainer copy with a styled host.
+
+Default unchanged
+- A plain style installs nothing (tests check the camera and renderer are not wrapped). Frames
+  compared with HEAD 5a11a8c (worktree in the scratchpad, `PYTHONPATH` to its `src`; scratchpad
+  `s142/frame_digest.py`, 320x180 @ 5 fps, no audio): `cartoon-rain-check` `storm` 117 frames
+  and `host-explainer` `grow` 75 frames, SHA-256 of every frame identical (3bbe96e677d07055,
+  ae9a388ed28c08e9). The generator's pinned digests (Steps 113–125) are untouched (the drawings do
+  not change); `test_cartoon_outfits` passes.
+
+Render cost (worker alone, `--no-audio`, a copy of `cartoon-rain-check` with a variant per style,
+scene `storm` 23.4 s; scratchpad `s142/measure_styles.py`)
+| style | 640x360 @ 15 (2 runs) | 1280x720 @ 30 |
+| --- | --- | --- |
+| plain | 20.65 / 21.39 / 22.28 s | 56.33 / 56.63 s |
+| thin | 21.12 / 22.61 s | |
+| bold | 21.38 / 22.15 s | 56.78 s |
+| soft | 22.29 / 22.19 s | 58.58 s |
+| paper | 21.85 s (22.49 / 23.77 before the faster multiply) | 62.18 s (68.81 before) |
+| storybook | 21.84 s (22.99 / 23.03 before) | |
+| bold + soft + storybook | 23.78 s (24.57 / 25.50 before) | 64.95 s (72.31 before) |
+The texture multiply on all four channels at once takes 1.9 ms a 1280x720 frame (8.0 ms at
+1080p; 14.5 ms with the first version on a colour slice); the rest of a textured frame's cost is
+H.264 encoding the grain. Preview runs vary by ±1 s between runs.
+
+Files touched
+- New: `src/vidgen/cartoon/drawing_style.py`, `tests/test_drawing_style.py`,
+  `docs/gallery/media/drawing_styles.png`.
+- `src/vidgen/config.py` (`DrawingConfig`, `VideoConfig.drawing`), `scene.py`, `scenes/stage.py`
+  (param, `drawing_settings`, `mark_shaded`), `api.py`, `tools/make_sets_gallery.py`.
+- Docs: `docs/CONFIG.md` (top-level row, stage row, new "Drawing style (`drawing`)", drafts list),
+  `DESIGN.md` (§2 tree, §6.4, new §79), `docs/EXTENDING.md`, `docs/gallery/stage.md` (rows as
+  `vidgen gallery` writes them), guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`:
+  "Drawing style" bullet), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `DrawingConfig`, `DrawingStyle`, `mark_shaded`. Config key `drawing` (top
+  level) and stage param `drawing`. `NarratedScene.uses_drawing_style`, `.drawing_settings()`,
+  `.drawing`. All compatible.
+
+Decisions / deviations
+- Texture placement: under overlays (so captions, lower thirds and watermarks stay crisp), over
+  speech bubbles (they are scene mobjects; leaving them out would need a mobject in the draw
+  order, which redraws the full-frame grain every frame and which the stage's depth ordering can
+  pass). Grain is in screen space: it does not pan with the camera.
+- "Outline weight scales every cartoon stroke" is done by stroke width at draw time on the stage's
+  camera, so later additions (effects, rain rings, motion effects) need no marking; overlays draw
+  with their own camera and are unaffected.
+- `soft` shading is a gradient over each member's own height (light from above), not a shape
+  drawn inside it: the silhouette and outline stay Manim's path.
+- Drafts keep the outline (it changes how a frame reads, not what moves) and drop the rest.
+- Searched first: no stroke-width or texture code existed beyond `scale_strokes` (build-time, per
+  object; kept for sizes) and `StageLight`'s camera wrapper (the pattern reused).
+
+Known gaps / TODOs
+- No texture on non-stage scenes (with or without a host); the host's effect symbols and pointer
+  line keep their width; `vidgen character --png`, character sheets and the prop galleries draw
+  plain; the soft gradient bands at 64 colours in quantized stills (fine in video).
+- Seen while measuring, not from this step: `storm` logs Manim's "Stage.wait() 0.0333 s is too
+  short for 15 FPS" warning (plain variant too).
+
+How to test
+- `pytest tests/test_drawing_style.py` (15 passed, 3 s; 2 tiny renders).
+- Ran (not render): `test_docs test_schema test_api test_guide test_config test_gallery
+  test_drawing_style` (223 passed, 84 s); `test_cartoon_stage test_cartoon_lighting test_draft
+  test_host test_cartoon_outfits test_extensions test_builtin_sets` (178 passed, 23 s); render:
+  `test_cartoon_stage test_cartoon_lighting test_draft test_host test_drawing_style` (9 passed,
+  21 s). Full suite not run.

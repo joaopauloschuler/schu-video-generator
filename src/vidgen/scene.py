@@ -372,6 +372,7 @@ class NarratedScene(MovingCameraScene):
         self.host: Any = None
         self._host_stays = False  # it stands on in the next scene, so it stays in the fade-out
         self._build_host()
+        self._apply_drawing_style()   # after the overlays, before the colour fade: its texture lies between
         self._attach_color_fade()
         if self.entrance_sfx is not None and self.project.config.sfx.auto:
             sound, gain = self.entrance_sfx
@@ -401,6 +402,34 @@ class NarratedScene(MovingCameraScene):
     #: Whether the video's ``host:`` is drawn on scenes of this type (DESIGN.md §71); ``stage`` and
     #: ``card`` draw characters or a full-frame design themselves and set it to ``False``.
     takes_host: ClassVar[bool] = True
+    #: Whether the video's ``drawing:`` style (DESIGN.md §79) draws every stroke of scenes of this
+    #: type and lays its texture over them; ``stage`` sets it. On other scenes it draws the host only.
+    uses_drawing_style: ClassVar[bool] = False
+
+    def drawing_settings(self) -> list[Any]:
+        """The ``drawing:`` settings of this scene, later ones winning key by key: the video's
+        (``stage`` adds its own ``drawing`` param)."""
+        return [self.project.config.drawing]
+
+    def _apply_drawing_style(self) -> None:
+        """Resolve the scene's :attr:`drawing` style and install it on the camera and the renderer
+        (nothing for a plain style; a draft's without shading or texture)."""
+        from vidgen.cartoon.drawing_style import attach_texture, mark_outlined, mark_shaded, resolve_drawing, style_camera
+
+        style = resolve_drawing(*self.drawing_settings())
+        #: How the scene's cartoon is drawn (DESIGN.md §79).
+        self.drawing = style.for_draft() if self.is_draft else style
+        if self.drawing.is_plain:
+            return
+        if self.uses_drawing_style:
+            style_camera(self.renderer.camera, self.drawing, every_stroke=True)
+            if self.drawing.texture != "none":
+                attach_texture(self.renderer, self.drawing)
+        elif self.host is not None:
+            mark_outlined(self.host)
+            if self.drawing.shading == "soft":
+                mark_shaded(self.host.character)
+            style_camera(self.renderer.camera, self.drawing, every_stroke=False)
 
     def _build_host(self) -> None:
         """Build the scene's host (:attr:`host`) in the safe area left by the overlays and

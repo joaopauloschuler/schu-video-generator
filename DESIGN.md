@@ -116,7 +116,9 @@ src/vidgen/
                           # the landscape stage a narrow frame crops, §69.30; no manim),
                           # lighting.py (light presets, grades, fades, stars and shadow ellipses,
                           # §69.31; no manim), shading.py (StageLight: the grade as the camera
-                          # draws, StarField, StageShadows, §69.31), wind.py (wind levels,
+                          # draws, StarField, StageShadows, §69.31), drawing_style.py (the
+                          # drawing: outline / shading / texture as the camera draws and the
+                          # renderer writes, §79), wind.py (wind levels,
                           # seeded gusts, fades, sway and trailing angles, §69.32; the felt
                           # force and a blown prop's path, §69.38; no manim),
                           # windblown.py (SwayingProp, StageWind, §69.32), rain.py (rain on a
@@ -985,6 +987,10 @@ Step 134 (§71.1, §71.2) adds `HAND_REACH_OUT`, `HostMove`, `facing_for`, `hand
 default `NarratedScene.auto_actions` (the host's directing; `stage` overrides it as before);
 actions `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`; host key
 `auto_direct`; layout kind `pointer`. Compatible: a video without a host renders as before.
+Step 142 (§79) adds `DrawingConfig`, `DrawingStyle` and `mark_shaded`; the top-level key and the
+stage param `drawing`; `NarratedScene.uses_drawing_style` (class attribute, `False`; `stage`
+sets it), `NarratedScene.drawing_settings()` and the attribute `drawing`. Compatible: a video
+without `drawing` renders the same frames as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -10120,3 +10126,53 @@ times show where.
   emotions' pauses, §72, vary too much for one threshold); the first word of a beat often comes
   out doubtful (Whisper's start-of-clip uncertainty); no per-word audio clip to listen to; the
   `readback` lint rule still reads only the cache.
+
+## 79. Drawing style switch: `drawing:` (Step 142)
+
+Reference: docs/CONFIG.md "Drawing style (`drawing`)". One video-wide switch for how cartoons are
+drawn, apart from the characters' looks. `cartoon_style:` (§69.10) stays the words of generated
+background prompts; it is not reused.
+
+- **Setting**: `DrawingConfig {outline: thin | normal | bold, shading: flat | soft, texture: none |
+  paper | storybook, seed ≥ 0}`, every key optional, at the top level (`VideoConfig.drawing`; a
+  variant changes it by the usual deep merge) and as the `stage` param `drawing`.
+  `resolve_drawing(*settings) -> DrawingStyle` merges them key by key, later winning (defaults
+  `normal`, `flat`, `none`, 0). `NarratedScene.drawing_settings()` lists a scene's settings (the
+  video's; `stage` adds its param); `__init__` resolves them into `self.drawing` after the
+  overlays and the host are built and before the colour fade is attached; a draft
+  (`is_draft`, §74) keeps the outline and drops shading and texture (`DrawingStyle.for_draft`).
+- **Applied when drawn**, like the light (§69.31): nothing is recoloured or re-stroked, so the
+  generator's pinned digests (Steps 113–125), the layout dump, lint and character sheets are
+  unchanged, and a plain style installs nothing (the frames are bit-identical: checked against
+  HEAD on `cartoon-rain-check` `storm` and `host-explainer` `grow`).
+  - **Outline** (`style_camera`): the camera's `apply_stroke` is wrapped; for a stroke of width
+    `w` it scales Manim's `cairo_line_width_multiple` by `max(w·f, min(w, 1 px)) / w` (`f` =
+    `OUTLINE_FACTORS`: thin 0.6, normal 1, bold 1.7) around the original call: a thinned stroke
+    stays at least one pixel unless it was thinner. On a `stage` (`uses_drawing_style`) every
+    stroke (set, characters, props, effect symbols, motion effects, bubbles, particle rings;
+    overlays have their own camera, §41); on another scene only what `mark_outlined` marked (the
+    host's figure and floor line, §71).
+  - **Shading** `soft`: `apply_fill` is wrapped; a member marked by `mark_shaded` (the stage
+    marks every character and prop at the start; a host its character) with a one-colour fill is
+    filled with a vertical Cairo linear gradient over its own points' height: `soft_stops` =
+    the colour 14 % towards white at the top, itself half-way, 16 % towards black at the bottom.
+    The colour is read through `camera.get_fill_rgbas`, so the light's grade applies first. The
+    path, and so the silhouette, is Manim's.
+  - **Texture** (stage only): `attach_texture` wraps the renderer's `add_frame` between the
+    overlay layer (§41) and the colour fade (§49): each written frame (a frozen wait: once) is
+    multiplied by `texture_shade(texture, seed, width, height)` (cached, H × W × 4 uint16, 256 =
+    unchanged; alpha kept): a per-pixel grain (`grain_pixels` large) plus bicubic blotches from a
+    grid of `cells` across the short side, `storybook` also darker corners; seeded with
+    `numpy.random.default_rng([seed, kind])`. So it lies over everything the scene draws (bubbles
+    too) and the fade's colour, under overlays and burned-in captions; frame stills, storyboards
+    and animatics show it. It is not a mobject and not in Manim's static image (§69.20): a
+    mobject over the moving characters would be redrawn each frame anyway, and the stage's depth
+    ordering can move a walker after the last mobject.
+- **Cost** (worker, `--no-audio`, `cartoon-rain-check` `storm`, 23 s): 640x360@15 plain 20.7–22.3
+  s, thin / bold +3–5 %, soft +5 %, texture +0–8 %, all three +12–18 %; 1280x720@30 plain 56.3–56.6
+  s, bold 56.8, soft 58.6, paper 62.2 (most of it the encoder: the multiply is 1.9 ms a frame),
+  bold + soft + storybook 65.0.
+- **Not done**: no texture on non-stage scenes or under a host; the host's effect symbols and
+  pointer line keep their width; bubbles and particles are not left out of the outline weight
+  (one rule for the stage's camera); the grain is in screen space (it does not pan with the
+  camera); `vidgen character --png`, character sheets and the props galleries draw plain.

@@ -825,6 +825,9 @@ asks for one, say vidgen makes original characters and offer one with the same r
   soft shadows") so all stages match, and a prompt that describes a set, not a scene: things at
   the edges, an empty middle, the ground across the lower part, `negative: "people, animals,
   text"` (`docs/CONFIG.md` "Generated backgrounds").
+- **Drawing style**: one top-level `drawing: {outline: thin | bold, shading: soft, texture:
+  paper | storybook}` restyles every stage (a stage's own `drawing` wins key by key); the
+  default draws as before; captions and overlays are never textured.
 - **Room to move**: a walk takes the time its distance needs (about 4 s from `left` to `right`
   in 16:9), so give it a beat that long and end it on a free mark (`walk_overlap`). On a stage wider than
   the frame (`width: 2`), the camera goes along with `follow`.

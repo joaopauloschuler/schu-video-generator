@@ -61,6 +61,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
 | `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
 | `motion_effects` | `true` | dust, speed lines, impact stars and whoosh arcs the moves on `stage` scenes add while `cartoon_motion` is not `none`; `false`: none; a stage's `motion_effects` param wins; see [motion effects](#motion-effects-motion_effects) |
+| `drawing` | none (`normal`, `flat`, `none`: as drawn) | how the cartoons are drawn: `{outline: thin \| normal \| bold, shading: flat \| soft, texture: none \| paper \| storybook, seed}` on `stage` scenes (the host: outline and shading); a stage's `drawing` param wins key by key; a variant may change it; see [drawing style](#drawing-style-drawing) |
 | `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
 | `ambience` | `true` | a sound bed chosen from each `stage` scene's set while foley is on: a room tone in a room, birdsong outdoors while the light is `day` or `morning` and it does not rain; `false`: none unless a stage's `ambience` param names one; see [ambience](#ambience-and-door-sounds-ambience-knock) |
 | `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
@@ -478,7 +479,8 @@ timing and staging: everything is where and when it will be, without what only d
   (dust, speed lines, stars, whoosh arcs, rocket smoke), particles (rain, snow, leaves...: none
   drawn), puddles, settling snow, fog, lightning's flash and bolt, and the light's colour grade
   (the set is drawn as by day; a `light` change still takes its time, stars and window skies still
-  follow it).
+  follow it), the [drawing style](#drawing-style-drawing)'s soft shading and texture (its outline
+  weight stays).
 - **Kept**: every beat, action, position and walk, the lip sync (mouths change at the draft's
   frame rate), effect symbols, bubbles, captions, overlays, cards, living props, birds, water,
   rainbows, and every sound (narration, foley, thunder, splashing steps, ambience and music).
@@ -4746,6 +4748,7 @@ never leaves the stage.
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
+| `drawing` | mapping | none (the video's `drawing`) | this scene's [drawing style](#drawing-style-drawing): `{outline, shading, texture, seed}`; the keys given win over the video's `drawing` |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
 | `water` | `true` \| mapping | none | a strip of [water](#water-and-air-vehicles-water-land) with waves at the front of the stage, for a `boat`: `true` (the whole width) or `{left, right, color}` (`left` / `right`: marks or x from 0 to 1; `color`: a theme token or #hex, default a clear blue); not in a `room` |
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds`, `fog` or outdoor particles |
@@ -6445,6 +6448,41 @@ light sets how dark they are (`night` faint). The layout dump leaves shadows and
       actions:
         - {light: night, at: 0.2, run_time: 3}
 ```
+
+#### Drawing style (`drawing`)
+
+The top-level **`drawing`** switches how every `stage` scene of the video is drawn; a stage's own
+`drawing` param overrides it key by key, and a variant may change it like any key. Characters keep
+their looks: only the line weight, the fill and the paper change.
+
+| key | values (default first) | what it does |
+|---|---|---|
+| `outline` | `normal` \| `thin` \| `bold` | the width of every stroke the stage draws (characters, props, the set, effect symbols, motion effects, speech bubbles, particles with rings): as drawn, 0.6 × (never thinner than one pixel unless it was already) or 1.7 × |
+| `shading` | `flat` \| `soft` | `soft`: each filled shape of the characters and props is a little lighter at its top and darker at its bottom (a vertical gradient over its own height, light from above); outlines and silhouettes are unchanged |
+| `texture` | `none` \| `paper` \| `storybook` | a still grain over the whole frame: `paper` a fine grain with faint blotches, `storybook` a coarser grain, bigger blotches and darker corners; it lies under the [overlays](#overlays) (captions, lower thirds, watermark…), which stay clean, and over everything the scene draws, the speech bubbles too |
+| `seed` | `0` | the texture's grain: the same seed and frame size give the same grain in every scene and every render |
+
+```yaml
+drawing: {outline: bold, shading: soft, texture: storybook}   # the whole video
+variants:
+  clean: {drawing: {texture: none}}                           # a variant without the grain
+scenes:
+  - id: dream
+    type: stage
+    params:
+      drawing: {outline: thin, texture: paper}                # this scene only (shading stays soft)
+```
+
+![One set in each drawing style](gallery/media/drawing_styles.png)
+
+The style is applied as the frames are drawn, never to the drawings themselves: `vidgen lint`,
+the layout dump and the character sheets see the same shapes in every style, and a video without
+`drawing` (or with `normal`, `flat`, `none`) renders exactly as before. A
+[draft](#drafts-vidgen-render---draft) keeps the outline and draws flat, without texture. A
+[host](#a-host-beside-any-scene-host) on other scene types gets the outline and the shading, not
+the texture (those scenes are not cartoons). Cost, measured on `cartoon-rain-check`'s `storm`
+scene: at 640x360 `bold` or `thin` +3–5 %, `soft` +5 %, a texture up to +8 %, all three
++12–18 %; at 1280x720 `soft` +4 %, a texture +10 % (the grain is harder to encode), all three +15 %.
 
 #### Wind (`wind`)
 

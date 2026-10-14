@@ -537,6 +537,7 @@ class Stage(NarratedScene):
     takes_host = False   # its characters are on the set already (DESIGN.md §71)
     target_patterns = ("<character>", "<prop>", "<character>.<part>")
     uses_cartoon_style = True
+    uses_drawing_style = True
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
     mid_still_actions = frozenset({
         "walk_to", "run_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
@@ -605,6 +606,8 @@ class Stage(NarratedScene):
         """A flock of birds crossing the sky, flapping: true, a number of birds, or {count, direction, height, start, seconds, seed}; outdoors only (the birds action sends one later)."""
         fog: StageFogSetting | None = None
         """Fog in translucent bands lying between the characters and props by depth, thicker further back (the sky most), drifting slowly and with the wind: true, a density from 0 to 1 (true: 0.5), or {density, color, drift, seed}; outdoors only."""
+        drawing: DrawingConfig | None = None
+        """How this scene is drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: the keys given win over the video's drawing."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -1342,6 +1345,10 @@ class Stage(NarratedScene):
         view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
         return view, shot
 
+    def drawing_settings(self) -> list[Any]:
+        """The video's ``drawing:``, then the scene's ``drawing`` param (DESIGN.md §79)."""
+        return [*super().drawing_settings(), self.params.drawing]
+
     @classmethod
     def camera_place(cls, params: Any, place: str | float) -> float:
         """A mark of the stage (its own and its room's doors too) or an x from 0 to 1."""
@@ -1446,6 +1453,8 @@ class Stage(NarratedScene):
                     self.water.float_boat(prop)
         # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
         mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews))], *in_front, *(mob for _, mob in on_stage))
+        if self.drawing.shading == "soft":   # the characters' and props' fills (DESIGN.md §79)
+            mark_shaded(*(mob for _, mob in on_stage))
         self._start_living(living)
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
