@@ -15,7 +15,8 @@ With overlays, also what the planned timeline reads from every scene (``vidgen.v
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
-Not the music and the final mix (``music``, ``audio``, a scene's ``music``): they are applied when
+Not the music and the final mix (``music``, ``audio``, a scene's ``music``, a beat's
+``music_pause``): they are applied when
 the video is joined; nor ``chapters``, ``metadata`` and ``thumbnail`` (outputs made after it).
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
 """
@@ -46,10 +47,10 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
-        "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
-        "slides_pdf.py", "stt", "readback.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/openrouter.py",
+        "loudness.py", "mix.py", "music.py", "musicfit.py", "composer.py", "score.py", "synth.py", "soundfont.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
+        "slides_pdf.py", "stt", "readback.py", "speech_flags.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/openrouter.py",
         "imagegen/run.py", "guide.py", "gallery.py", "outline.py", "prose.py", "plan.py", "plan_yaml.py",
-        "mcp_server.py", "mcp_tools.py",
+        "mcp_server.py", "mcp_tools.py", "animatic.py",
     }
 )
 
@@ -141,6 +142,13 @@ def _overlay_inputs(project: Project) -> Any:
     return {"scenes": scenes, "voices": cfg.model_dump(mode="json", include={"voices", "subtitles"})}
 
 
+def _next_scene(project: Project, scene_id: str) -> Any:
+    """The scene after ``scene_id`` (``None`` for the last)."""
+    scenes = project.config.scenes
+    i = [s.id for s in scenes].index(scene_id)
+    return scenes[i + 1] if i + 1 < len(scenes) else None
+
+
 def _next_transition(project: Project, scene_id: str) -> Any:
     """The transition into the scene after ``scene_id`` with what limits its length (that
     scene's duration, beats and MP3s); a cut alone, and ``None`` for the last scene."""
@@ -169,7 +177,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # The pronunciation changes only the audio (tracked below) and, with overlays, the captions'
     # word times (the spoken texts are in "overlays"); editing it must not re-render every scene.
     # Named voices and subtitle settings change only audio and, with overlays, captions (§46).
-    # Music and the final mix (§48) are added when the video is joined: no pixels, no timing.
+    # Music and the final mix (§48) are added when the video is joined: no pixels, no timing
+    # (so is the SoundFont composed music is played with, §81).
     # So are the MP4's chapters and tags and the YouTube chapter list (§52), and the thumbnail (§53).
     # A translation file's texts are already in the config (§54); its path changes nothing.
     # Speech to text (`vidgen readback`, §57) only reads the audio.
@@ -179,7 +188,9 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # (§69.35): the file names and the unused sets change nothing.
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
-        "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets",
+        "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets", "soundfont",
+        # a draft's size and frame rate: only drafts use them, checked like any format (§74)
+        "draft",
     }
     config = project.config.model_dump(mode="json", exclude=excluded)
     assets = project.root / "assets"
@@ -190,7 +201,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
-        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True, "beats": {"__all__": set(JOIN_KEYS)}}),
+        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True, "beats": {"__all__": {*JOIN_KEYS, "music_pause"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
@@ -199,6 +210,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # colour, or held longer (DESIGN.md §49)
         "next_transition": _next_transition(project, scene_id),
     }
+    after = _next_scene(project, scene_id)
+    if after is not None and (project.config.host is not None or spec.host is not None or after.host is not None):
+        # a host the next scene shows unchanged stays in this scene's fade-out (DESIGN.md §71)
+        data["next_host"] = [after.type, after.model_dump(mode="json", include={"host"})]
     named = [path for path in project.files_named_by_includes if not path.resolve().is_relative_to(assets.resolve())]
     if named:
         # SVGs and pictures an include: file names outside assets/, e.g. a shared folder's (§69.35)

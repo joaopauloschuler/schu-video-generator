@@ -24,6 +24,7 @@ class Card(NarratedScene):
     """
 
     outro = 0.5
+    takes_host = False   # a full-frame title card (DESIGN.md §71)
     target_patterns = ("text", "subtitle", "burst", "frame")
 
     @classmethod

@@ -40,6 +40,22 @@ def speech_bubble_boxes(scene: NarratedScene) -> list[tuple[float, float, float,
     ]
 
 
+def show_symbol(scene: NarratedScene, character: Character, kind: str, color: Any) -> tuple[EffectSymbol, Animation]:
+    """A symbol ``kind`` in ``color`` following ``character``'s head, in front of what is on
+    screen (clear of the speech bubbles there), and the animation that pops it in."""
+    symbol = EffectSymbol(kind, color=color, character_height=character.character_height)
+    symbol.follow(character, avoid=speech_bubble_boxes(scene))
+    top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)
+    symbol.set_z_index(top + 1)
+    return symbol, EffectAppear(symbol)
+
+
+def hide_symbol(symbol: EffectSymbol) -> Animation:
+    """The animation that shrinks ``symbol`` away (removed from the scene at its end)."""
+    symbol.leaving = symbol.age
+    return EffectAppear(symbol, leave=True)
+
+
 @action("effect")
 class Effect(_Acting):
     """A symbol over the target character's head (``to``): sweat (a drop at the back of the head),
@@ -74,19 +90,13 @@ class Effect(_Acting):
         self.symbols: list[EffectSymbol] = []
         anims: list[Animation] = []
         for character in _characters(scene, targets, "effect"):
-            symbol = EffectSymbol(kind, color=color, character_height=character.character_height)
-            symbol.follow(character, avoid=speech_bubble_boxes(scene))
-            top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)
-            symbol.set_z_index(top + 1)
+            symbol, appear = show_symbol(scene, character, kind, color)
             self.symbols.append(symbol)
-            anims.append(EffectAppear(symbol))
+            anims.append(appear)
         return anims
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Shrink the symbols away (removed from the scene at the end)."""
-        anims: list[Animation] = []
-        for symbol in getattr(self, "symbols", []):
-            symbol.leaving = symbol.age
-            anims.append(EffectAppear(symbol, leave=True))
+        anims = [hide_symbol(symbol) for symbol in getattr(self, "symbols", [])]
         self.symbols = []
         return anims

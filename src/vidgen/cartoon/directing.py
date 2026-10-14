@@ -1205,11 +1205,14 @@ def project_directions(project: Project, scenes: Sequence[str] | None = None) ->
 
 def directing_used(project: Project) -> bool:
     """Whether automatic actions are possible: ``auto_direct`` is set anywhere (the video, a
-    scene's params, a beat), a ``stage`` scene may reframe (its ``reframe``, else the video's,
+    host, a scene's params, a beat), a ``stage`` scene may reframe (its ``reframe``, else the video's,
     is not ``none``) or has voice sounds: a cheap check before :func:`project_directions`."""
     config = project.config
     if config.auto_direct:
         return True
+    hosts = [config.host, *(spec.host for spec in config.scenes)]
+    if any(getattr(host, "auto_direct", None) for host in hosts):
+        return True   # a host's own auto_direct (DESIGN.md §71.2)
     if any(spec.type == "stage" and (spec.params.get("reframe") or config.reframe) != "none" for spec in config.scenes):
         return True
     if any(spec.type == "stage" and any(b.voice_sounds for b in spec.beats) for spec in config.scenes):

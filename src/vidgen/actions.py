@@ -183,6 +183,11 @@ class Action:
         parts. Default: none."""
         return None
 
+    def alters(self, scene: NarratedScene) -> list[Mobject]:
+        """Mobjects it changes besides its targets (the host actions: the scene's host), so the
+        runner never plays it together with another action changing them. Default: none."""
+        return []
+
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
         """The run time this use needs for ``targets`` as they are when it falls due (``walk_to``:
         the distance over the speed), or ``None`` for the class's :attr:`run_time`. A
@@ -435,12 +440,13 @@ def _rank(due: _Due) -> int:
     return 2 if due.use.kind.cls.temporary else 0
 
 
-def _changed(due: _Due) -> set[int]:
+def _changed(due: _Due, scene: NarratedScene) -> set[int]:
     """Ids of the mobjects ``due`` changes: its targets' families (none for an action that only
-    reads them, :attr:`Action.alters_targets`)."""
+    reads them, :attr:`Action.alters_targets`) and those of :meth:`Action.alters`."""
+    other = {id(m) for mob in due.use.action.alters(scene) for m in mob.get_family()}
     if not due.use.kind.cls.alters_targets:
-        return set()
-    return {id(m) for t in due.use.targets for m in t.mobject.get_family()}
+        return other
+    return other | {id(m) for t in due.use.targets for m in t.mobject.get_family()}
 
 
 def _after_camera(due: _Due) -> bool:
@@ -567,9 +573,9 @@ class ActionRunner:
             moves = [d for d in due if d.use.kind.cls.moves_camera]
             due = moves + [d for d in due if d not in moves and not _after_camera(d)] + [d for d in due if d not in moves and _after_camera(d)]
         for d in due:
-            mobs = _changed(d)
+            mobs = _changed(d, scene)
             mobs |= {camera} if d.use.kind.cls.moves_camera or _after_camera(d) else set()
-            taken = {m for b in batch for m in _changed(b)}
+            taken = {m for b in batch for m in _changed(b, scene)}
             taken |= {camera} if any(b.use.kind.cls.moves_camera for b in batch) else set()
             if mobs & taken:
                 batch = []

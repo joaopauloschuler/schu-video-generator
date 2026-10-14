@@ -85,6 +85,13 @@ class Bullets(NarratedScene):
             names += [f"item{i}", f"item:{item.text}"]
         return names
 
+    @classmethod
+    def reveal_steps(cls, params: Any) -> list[RevealStep]:
+        """One step per item (``reveal: all``: one step, the first item)."""
+        if params.reveal == "all":
+            return [RevealStep("item1")]
+        return [RevealStep(f"item{i}") for i in range(1, len(params.items) + 1)]
+
     def construct(self) -> None:
         p = self.params
         body = self.safe_area

@@ -311,6 +311,9 @@ def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> Non
             note += f", ~{_money(cost)}" if cost is not None else ", price unknown"
         if named:
             note += f", voice {plan.voice_of(beat)}"
+        emotion = project.beat_emotion(beat.id)
+        if emotion is not None:
+            note += f", {emotion.name}"
         out(f"would generate {beat.id}.mp3 ({note})")
         if plan.say(beat) != beat.text:
             out(f"    says: {plan.say(beat)}")

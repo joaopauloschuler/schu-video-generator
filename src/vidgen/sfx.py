@@ -1084,10 +1084,11 @@ def stereo(samples: np.ndarray, gain_db: float = 0.0, pan: float = 0.0) -> np.nd
     return (x[:, :2] * balance * gain).astype(np.float32)
 
 
-def placed(event: SfxEvent, library: SoundLibrary, master_db: float = 0.0) -> tuple[int, np.ndarray]:
+def placed(event: SfxEvent, library: SoundLibrary, master_db: float = 0.0, audio: np.ndarray | None = None) -> tuple[int, np.ndarray]:
     """``(first sample, (n, 2) samples)`` of an event on a track that starts at time 0 (the first
-    sample may be negative: the part before 0 is cut)."""
-    data = stereo(library.audio(event.sound, event.params), event.gain + master_db, event.pan)
+    sample may be negative: the part before 0 is cut); ``audio``: samples to play instead of the
+    event's sound."""
+    data = stereo(library.audio(event.sound, event.params) if audio is None else audio, event.gain + master_db, event.pan)
     start = round(event.time * RATE)
     if event.align == "end":
         start -= len(data)
@@ -1110,12 +1111,15 @@ def write_track(
     library: SoundLibrary,
     master_db: float = 0.0,
     ducking_db: np.ndarray | None = None,
+    replaced: Mapping[int, np.ndarray] | None = None,
 ) -> None:
     """Write ``path``: a 48 kHz stereo 16-bit WAV of exactly ``samples`` samples holding the
     events (video times) at their sample positions; written in 10 s blocks (a long video's track
     never sits in memory whole); sums beyond full scale are clipped. Events with ``duck`` are
-    scaled by ``ducking_db`` (dB per 10 ms frame; ``None``: not ducked)."""
-    sounds = [placed(e, library, master_db) for e in events]
+    scaled by ``ducking_db`` (dB per 10 ms frame; ``None``: not ducked). ``replaced``: samples
+    played instead of the sound of the event at that index (stings with composed music)."""
+    replaced = replaced or {}
+    sounds = [placed(e, library, master_db, replaced.get(k)) for k, e in enumerate(events)]
     if ducking_db is not None:
         sounds = [(start, ducked(start, data, ducking_db)) if e.duck else (start, data) for e, (start, data) in zip(events, sounds)]
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,57 @@
+# Translation of 'The Humming Box' (variant 'pt'), written by `vidgen translate-template`.
+# Fill in each `text:` (the `source:` is the original; an empty text shows the source).
+# `stale: true`: the source changed since it was translated; check the text, then delete the
+# `stale` and `old_source` lines. `obsolete: true`: the key is gone from the config (kept so the
+# text is not lost; delete it when done). Run the command again after editing the config: it
+# keeps your translations. `references` are written by the command (do not edit them).
+version: 1
+language: pt-BR
+entries:
+  title:
+    source: The Humming Box
+    hash: ad854936fb
+    text: A Caixa que Cantarola
+  scenes.yard.beats.yard_b1.text:
+    source: On a quiet Sunday, Fen heard a sound that did not belong in the yard.
+    hash: 15cba12fd7
+    text: Num domingo tranquilo, Fen ouviu um som que não era do quintal.
+  scenes.yard.beats.yard_b2.text:
+    source: '[gasp] Bram, listen! That box is humming a song.'
+    hash: f57631fedb
+    text: '[gasp] Bram, escuta! Aquela caixa está cantarolando.'
+  scenes.yard.beats.yard_b3.text:
+    source: Boxes do not hum, Fen. Boxes do not do *anything*.
+    hash: 9f87df39af
+    text: Caixas não cantarolam, Fen. Caixas não fazem absolutamente *nada*.
+  scenes.yard.beats.yard_b4.text:
+    source: Then who is singing? Not me, and not you.
+    hash: 531dc57ce0
+    text: Então quem está cantando? Nem eu, nem você.
+  scenes.yard.beats.yard_b5.text:
+    source: Fine. It is humming. I do not like it at all.
+    hash: 8edf20de5d
+    text: Tá bom. Ela cantarola. E eu não gosto nada disso.
+  scenes.yard.beats.yard_b6.text:
+    source: Somewhere inside, the song went up a whole note.
+    hash: a7fdcdf5b0
+    text: Lá dentro, a música subiu um tom inteiro.
+  scenes.reveal.beats.reveal_b1.text:
+    source: '[laugh] There it is! I left my song in that crate this morning.'
+    hash: 3ab27a6337
+    text: '[laugh] Aí está ela! Eu deixei a minha música dentro desse caixote hoje de manhã.'
+  scenes.reveal.beats.reveal_b2.text:
+    source: You keep songs in boxes? Is that normal?
+    hash: 140a1c0d0d
+    text: Você guarda músicas em caixas? Isso é normal?
+  scenes.reveal.beats.reveal_b3.text:
+    source: Only the loud ones. The quiet ones live in my hat.
+    hash: c8aa943c7b
+    text: Só as barulhentas. As quietinhas moram no meu chapéu.
+  scenes.reveal.beats.reveal_b4.text:
+    source: Can we keep a song in our crate too? Please?
+    hash: 217b447fca
+    text: A gente pode guardar uma música no nosso caixote também? Por favor?
+  scenes.reveal.beats.reveal_b5.text:
+    source: And that is how the yard got its very first song box.
+    hash: e4672f2df8
+    text: E foi assim que o quintal ganhou sua primeira caixa de música.

@@ -1,5 +1,7 @@
 # A cartoon about a music box (examples/screenplay, hand-edited).
 # No audio committed: run `vidgen tts` (Kokoro, free).
+# Dubbed into Brazilian Portuguese (variant pt): `vidgen tts --all-languages`, then
+# `vidgen render --preview --all-languages` (docs/CONFIG.md "Dubbing").
 title: The Humming Box
 format:
   width: 1280
@@ -15,16 +17,21 @@ voice:
   provider: kokoro
   voice: bf_emma
   speed: 0.8
+  dub: {pt: pf_dora+bf_emma:0.4}  # Fen takes pf_dora: the narrator keeps some of her English timbre
 narration:
   pad: 0.7
 auto_direct: true
+variants:
+  pt:
+    language: pt-BR
+    translations: translations/pt.yaml
 voices:
-  fen_voice:
+  fen_voice:              # dubbed automatically: a feminine Portuguese voice (pf_dora)
     voice: af_heart
     label: Fen
     speed: 0.75
     color: primary
-  bram_voice:
+  bram_voice:             # dubbed automatically: pm_alex
     voice: bm_fable
     label: Bram
     speed: 0.75
@@ -34,6 +41,7 @@ voices:
     label: Gus
     speed: 0.75
     color: secondary
+    dub: {pt: pm_santa}
 characters:
 - name: fen
   look:

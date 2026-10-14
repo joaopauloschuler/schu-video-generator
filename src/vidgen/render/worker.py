@@ -1,10 +1,10 @@
 """Render one scene in its own process (DESIGN.md §5.2)::
 
-    python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview
+    python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview|draft
         [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare]
 
 Writes ``<render_dir>/scenes/<scene_id>.mp4`` and ``<render_dir>/timings/<scene_id>.json``
-(``render_dir`` = ``build/<final|preview>[_<variant>]``); with ``--frames N``, also N PNG stills
+(``render_dir`` = ``build/<final|preview|draft>[_<variant>]``); with ``--frames N``, also N PNG stills
 per beat and an index in ``<render_dir>/frames/<scene_id>/`` (see :mod:`vidgen.capture`), the
 layout of those frames in ``<render_dir>/layout/<scene_id>.json`` (:mod:`vidgen.introspect`) and
 the scene's timing activity in ``<render_dir>/activity/<scene_id>.json`` (:mod:`vidgen.activity`).
@@ -198,6 +198,7 @@ def render_scene(
     progress: bool = False,
     frames: int = 0,
     bare: bool = False,
+    draft: bool = False,
 ) -> Path:
     """Render one scene in this process (Manim's global config is modified); returns its video.
 
@@ -205,6 +206,8 @@ def render_scene(
     their layout in :func:`scene_layout_path` and the activity in :func:`scene_activity_path`.
     ``bare``: render the project :meth:`~vidgen.project.Project.without_overlays` (into its
     ``_bare`` folders; a frame thumbnail without overlays, DESIGN.md §53).
+    ``draft``: render a draft (DESIGN.md §74): the project loaded as a draft (its folders and
+    format), the scene with :attr:`~vidgen.scene.NarratedScene.is_draft` (and ``is_preview``).
     Call it only in a fresh process: this is the body of the worker.
     """
     from vidgen import carry, extensions, registry
@@ -218,7 +221,8 @@ def render_scene(
         raise VidgenError("frames per beat must not be negative")
     register_bundled_fonts()  # before extensions or scenes lay out any text
 
-    project = Project.load(project_path, variant=variant)
+    project = Project.load(project_path, variant=variant, draft=draft)
+    preview = preview or draft
     if bare:
         project = project.without_overlays()
     theme = extensions.activate(project)
@@ -278,6 +282,8 @@ def render_scene(
         "vidgen": __version__,
         "fingerprint": fingerprint,
     }
+    if project.draft:
+        timings["render"]["draft"] = True
     if layer is not None:  # what the overlays were drawn for (the pipeline checks the plan held)
         timed = any(o.timed for o in layer.overlays)
         slot = layer.overlays[0].context.scene if timed else None
@@ -313,7 +319,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m vidgen.render.worker", description="Render one vidgen scene.")
     parser.add_argument("project", help="project directory or config file")
     parser.add_argument("scene_id")
-    parser.add_argument("--quality", choices=("final", "preview"), default="final")
+    parser.add_argument("--quality", choices=("final", "preview", "draft"), default="final")
     parser.add_argument("--variant", metavar="NAME")
     parser.add_argument("--no-audio", action="store_true", help="do not add narration sounds")
     parser.add_argument("--progress", action="store_true", help="show Manim's progress bars")
@@ -334,7 +340,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         render_scene(
             args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames,
-            args.bare,
+            args.bare, args.quality == "draft",
         )
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)

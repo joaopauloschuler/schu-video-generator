@@ -310,16 +310,25 @@ of `PROP_KINDS` (`table`, `tree`, `house`, ...) and `svg_prop(path, height=, nam
 (through `load_vector`), both a `Prop` with `feet()` like a character's, so a `StageItem(name,
 "prop", at, depth, PROP_HEIGHTS[kind], lift)` places it; the layout dump reports it as kind `prop`.
 Particles: `particle_field(self, "snow", ParticleSettings(density=2))` builds a `ParticleField`
-for your scene (fewer at preview quality, `self.is_preview`) that moves on its own once added
+for your scene (fewer at preview quality, `self.is_preview`; none, not moving, in a draft) that moves on its own once added
 (`self.add(field)`) and fades out with `self.play(fade_out(field))`; `particle_states(particle_seeds(kind,
 count, seed), t)` gives the seeded positions without drawing anything.
+Drafts (`vidgen render --draft`, DESIGN.md §74): `self.is_draft` is true; leave out what only
+decorates (idle motion: `figure.stop_idle()`, shadows, effects that loop), never a timing, a
+position or a sound.
 Light: `StageLight(self.camera, light_grade("night"))` grades, as the camera draws, whatever you
-pass to `mark_lit(...)` (leave text and bubbles unmarked: they keep their contrast);
+pass to `mark_lit(...)` (leave text and bubbles unmarked: they keep their contrast; `flat=True`,
+as `stage` does in a draft, grades nothing but keeps the changes' times);
 `.change(grade, start, seconds)` and `.update(scene_time)` fade it (redraw everything while it
 fades: return every mobject from `get_moving_mobjects`, as `stage` does). The maths is pure:
 `light_grade`, `tint_grade`, `blend_grades`, `light_at`, `grade_rgbas`, `grade_pixels`;
 `StageShadows([ShadowCaster(mob, ground_y, width, size)])` draws soft shadows (`follow()` in an
 updater for things that move), `StarField(night_stars(area_share), box, short_side)` stars.
+Drawing style (`drawing:`, DESIGN.md §79): a scene type with the class attribute
+`uses_drawing_style = True` (like `stage`) draws every stroke with the video's outline weight
+and gets its texture; `self.drawing` is the resolved `DrawingStyle` (override
+`drawing_settings()` to add a param of your own, as `stage` does), and with `self.drawing.shading
+== "soft"` pass the characters and props to `mark_shaded(...)` for the soft gradient.
 Wind: `Wind(0.6, seed=1)` is a pure, seeded wind (`.level(t)`, `.force(t, delay)`, `.change(level,
 start, seconds)`, `.blown(start, t)`); `sway_degrees(kind, force, t)` and `bent_points(points,
 degrees, foot_y, height)` bend a prop about its base, `trail_degrees(wind, t)` follows it on a
@@ -402,7 +411,11 @@ away, given to someone not next to the giver, a seat taken, a walk of a characte
 - `self.safe_area` — the frame minus the scene's `margin_x` / `margin_y` (0.6 / 0.5 units). It
   is the rectangle the layout dump records and `vidgen lint`'s `safe_area` rule checks.
   `self.safe_width` / `self.safe_height` are its size. Without a scene: `safe_area()`;
-  `frame_region()` is the whole frame.
+  `frame_region()` is the whole frame. It also leaves out the room that `reserve`d overlays and
+  the video's [host](CONFIG.md#a-host-beside-any-scene-host) (a cartoon character beside the
+  content, `self.host`) take, so lay out in it, not on the frame's centre. A scene type that
+  fills the frame itself (a full-frame design, its own characters) sets the class attribute
+  `takes_host = False` (as `stage` and `card` do); it then gets no host.
 - `self.region(name)` (or `region(name, area=None)`; `area` is a `Region` or another region's
   name, e.g. `region("left", "body")`) — named parts of the safe area:
 
@@ -722,7 +735,11 @@ draws nothing: the sound is recorded in `self.sfx_log` (`SfxEvent`s, written to 
 timings) and mixed into the video by `vidgen render`, sample-exact (not with `--no-audio`).
 Unknown sounds and bad values raise `VidgenError`. `self.sting(sting, time)` plays a music sting
 (`"reveal"`, `"comic"`, `"sad"` or a `StingCue(kind, gain=)`) at scene time `time`, ducked under the
-narration like a beat's `sting:` (the `card` scene's `sting` param uses it). `self.sounds` is the scene's `SoundLibrary`
+narration like a beat's `sting:` (the `card` scene's `sting` param uses it); under composed music
+(`music: {compose: ...}`) the music's own instruments play it in its key, as for a beat's
+`sting:`. Composed music that follows the video swells where your type's `reveal_steps` (the
+host's pointing uses them too) show a step, and on `reveal` actions; nothing else in a scene type
+is needed for it (docs/CONFIG.md "Music that follows the video"). `self.sounds` is the scene's `SoundLibrary`
 (`names()`, `knows(name)`); `synthesize(name, duration, pitch, intensity)` returns a built-in
 sound's samples (48 kHz mono float32) if you want to analyse or mix one yourself. A scene type
 that should make a sound when it starts with `sfx: {auto: true}` sets the class attribute
@@ -758,13 +775,6 @@ the `thunder` sound (`thunder_cue`, `thunder_delay`, `thunder_pan`); the `rainbo
 stage's sun and moon as `SkyBody`s along the sky's path (`PathMove`, `path_point`, `place_for`),
 the `StageShadows` cast away from them (`shadow_cast`, `set_cast`; docs/CONFIG.md "Lightning and
 thunder", "Rainbows", "Light and shadows").
-A scene type that adds beat actions of its own (automatic directing) overrides the class method
-`auto_actions(cls, project, spec, params)` and returns `DirectedBeat(beat, actions)` items, each
-action made with `ActionConfig.automatic({...})`; they are appended after each beat's written
-actions before the actions are planned, and `vidgen direct` and the storyboard list them. The
-base class adds none; `stage` returns `stage_directions(project, spec, characters,
-params.auto_direct, stage_frame(project, params))` (its geometry, for the lint check of
-gestures and close-ups; docs/CONFIG.md "Automatic directing").
 
 ```python
 @scene("countdown")
@@ -782,6 +792,27 @@ class Countdown(NarratedScene):
                     self.play(FadeIn(dot, scale=0.5), run_time=0.3)
                 self.sfx("success", at=self.renderer.time + 0.2, gain=-3)
         self.finish()
+```
+
+A scene type that adds beat actions of its own (automatic directing) overrides the class method
+`auto_actions(cls, project, spec, params)` and returns `DirectedBeat(beat, actions)` items, each
+action made with `ActionConfig.automatic({...})`; they are appended after each beat's written
+actions before the actions are planned, and `vidgen direct` and the storyboard list them. The
+base class adds none; `stage` returns `stage_directions(project, spec, characters,
+params.auto_direct, stage_frame(project, params))` (its geometry, for the lint check of
+gestures and close-ups; docs/CONFIG.md "Automatic directing"). The base class's default is the
+host's directing (`host_directions`; docs/CONFIG.md "Automatic host directing"), so an override
+in a scene type that takes a host returns `super().auto_actions(project, spec, params)` plus its
+own. What the host points at and reacts to comes from the class method `reveal_steps(cls,
+params)`: one `RevealStep(focus, result=None)` per step the scene passes to `self.reveal(...)`,
+`focus` a target name of the scene and `result` `"rise"`, `"fall"`, `"error"` or `None`
+(`value_trend(values)` and `has_error_text(lines)` decide the built-ins'); the default returns
+none, and the host then only looks at written highlights.
+
+```python
+@classmethod
+def reveal_steps(cls, params):
+    return [RevealStep(f"item{i}") for i in range(1, len(params.items) + 1)]
 ```
 
 **Timing.** Beat-driven reveals without arithmetic:
@@ -1155,7 +1186,9 @@ lacks those parts (the built-in acting actions in `src/vidgen/scenes/acting.py`)
 when it falls due (the built-in `walk_to`: the distance over its speed), or `None` for the class's
 `run_time`; a `run_time:` in the config wins. `alters_targets = False` says the action only reads
 its targets (the built-in `pan` and `follow`), so it plays together with another action on them
-that falls due at the same moment instead of before or after it.
+that falls due at the same moment instead of before or after it. `alters(scene)` returns
+mobjects the action changes besides its targets (the built-in host actions: `[scene.host]`), so
+the runner never plays it at the same moment as another action changing them.
 A scene type that lists action type names in its class attribute `mid_still_actions` (the
 built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`,
 `pick_up`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`, `blow_away`, `get_in`, `ride_to`, `get_out`) gets a

@@ -28,7 +28,10 @@ from vidgen import carry, helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, ActionUse, Target, match_names, plan_actions
 from vidgen.camera import Bounds, view_center_within
 from vidgen.capture import FrameCapture
+from vidgen.cartoon.cast import beat_voice, find_character
 from vidgen.cartoon.directing import DirectedBeat, with_auto_actions
+from vidgen.cartoon.host import host_continues, host_speaks, scene_host
+from vidgen.cartoon.host_directing import RevealStep, host_directions, starts_present
 from vidgen.cartoon.effect_symbols import head_box
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
@@ -316,6 +319,10 @@ class NarratedScene(MovingCameraScene):
         #: Whether the scene renders at preview quality (set by the render worker); scenes may
         #: draw less then, e.g. fewer particles.
         self.is_preview = False
+        #: Whether the scene renders as a draft (its project's ``draft``, DESIGN.md §74): scenes
+        #: leave out what only decorates (idle motion, wind, shadows, motion effects, particles,
+        #: the light's grade...), never a timing, a position, an action or the lip sync.
+        self.is_draft = bool(getattr(self.project, "draft", False))
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:
@@ -361,6 +368,11 @@ class NarratedScene(MovingCameraScene):
                 box = mobject_region(mob) if overlay.reserves and mob is not None else None
                 if box is not None:
                     self._reserved.append(box)
+        #: The cartoon host beside the content (``host:``, DESIGN.md §71), or ``None``.
+        self.host: Any = None
+        self._host_stays = False  # it stands on in the next scene, so it stays in the fade-out
+        self._build_host()
+        self._apply_drawing_style()   # after the overlays, before the colour fade: its texture lies between
         self._attach_color_fade()
         if self.entrance_sfx is not None and self.project.config.sfx.auto:
             sound, gain = self.entrance_sfx
@@ -386,6 +398,90 @@ class NarratedScene(MovingCameraScene):
             after = cfg.scenes[plan.index(self.spec.id) + 1]
             following = scene_overlays(self.project, after, self.theme, plan)
         return own, following
+
+    #: Whether the video's ``host:`` is drawn on scenes of this type (DESIGN.md §71); ``stage`` and
+    #: ``card`` draw characters or a full-frame design themselves and set it to ``False``.
+    takes_host: ClassVar[bool] = True
+    #: Whether the video's ``drawing:`` style (DESIGN.md §79) draws every stroke of scenes of this
+    #: type and lays its texture over them; ``stage`` sets it. On other scenes it draws the host only.
+    uses_drawing_style: ClassVar[bool] = False
+
+    def drawing_settings(self) -> list[Any]:
+        """The ``drawing:`` settings of this scene, later ones winning key by key: the video's
+        (``stage`` adds its own ``drawing`` param)."""
+        return [self.project.config.drawing]
+
+    def _apply_drawing_style(self) -> None:
+        """Resolve the scene's :attr:`drawing` style and install it on the camera and the renderer
+        (nothing for a plain style; a draft's without shading or texture)."""
+        from vidgen.cartoon.drawing_style import attach_texture, mark_outlined, mark_shaded, resolve_drawing, style_camera
+
+        style = resolve_drawing(*self.drawing_settings())
+        #: How the scene's cartoon is drawn (DESIGN.md §79).
+        self.drawing = style.for_draft() if self.is_draft else style
+        if self.drawing.is_plain:
+            return
+        if self.uses_drawing_style:
+            style_camera(self.renderer.camera, self.drawing, every_stroke=True)
+            if self.drawing.texture != "none":
+                attach_texture(self.renderer, self.drawing)
+        elif self.host is not None:
+            mark_outlined(self.host)
+            if self.drawing.shading == "soft":
+                mark_shaded(self.host.character)
+            style_camera(self.renderer.camera, self.drawing, every_stroke=False)
+
+    def _build_host(self) -> None:
+        """Build the scene's host (:attr:`host`) in the safe area left by the overlays and
+        reserve its column or band, so the scene lays out its content beside it."""
+        if not self.takes_host:
+            return
+        cfg = self.project.config
+        try:
+            setting = scene_host(cfg, self.spec)
+        except ValueError as exc:
+            raise VidgenError(f"scene '{self.spec.id}': {exc}") from None
+        if setting is None:
+            return
+        from vidgen import registry
+        from vidgen.cartoon.host_drawing import build_host
+
+        area = self.safe_area
+        self.host = build_host(
+            setting, find_character(cfg, setting.character), theme=self.theme, area=(area.x0, area.y0, area.x1, area.y1),
+            frame_width=self.frame_width, frame_height=self.frame_height, root=self.project.root, motion=cfg.cartoon_motion,
+        )
+        if self.is_draft:   # no breathing, swaying or blinking (DESIGN.md §74)
+            self.host.character.stop_idle()
+        self._reserved.append(regions.Region(*self.host.layout.reserve))
+
+        def takes_host(kind: str) -> bool:
+            entry = registry.find(kind)
+            return entry is None or entry.cls.takes_host
+
+        index = next(i for i, s in enumerate(cfg.scenes) if s.id == self.spec.id)
+        self._host_stays = host_continues(cfg, index, takes_host)
+
+    def _host_speak(self, beat: BeatConfig) -> Any:
+        """Make the host lip-sync ``beat`` when its voice moves the host's mouth (``speaks``);
+        the track it plays, or ``None``. Called inside :meth:`narrate`."""
+        if self.host is None or not host_speaks(self.project.config, self.host.config, beat_voice(self.spec, beat)):
+            return None
+        self.speak(self.host.character)
+        return self.host.character.lip_sync_track
+
+    def _park_host(self) -> None:
+        """Start the host off screen (a ``host_enter`` brings it in, DESIGN.md §71.1): beyond the
+        frame's edge on its side, its floor line hidden. Its room stays reserved."""
+        from vidgen.cartoon.acting import offstage_x
+
+        host = self.host
+        figure = host.character
+        x = offstage_x(host.side, -self.frame_width / 2, self.frame_width / 2, host.half_reach)
+        figure.shift([x - float(figure.feet()[0]), 0.0, 0.0])
+        if host.floor is not None:
+            host.floor.set_stroke(opacity=0.0)
+        host.present = False
 
     def _moving_in(self) -> bool:
         """Whether a push or wipe leads into this scene (its first frames move)."""
@@ -495,8 +591,17 @@ class NarratedScene(MovingCameraScene):
     def auto_actions(cls, project: Project, spec: SceneConfig, params: Any) -> list[DirectedBeat]:
         """The actions automatic directing adds to the beats of ``spec`` (validated ``params``),
         appended after each beat's own before the scene plans its actions (DESIGN.md §69.23).
-        Default: none (``stage``: looks and reactions with ``auto_direct``). Pure for a given
-        project: ``vidgen direct`` and the storyboard call it without rendering."""
+        Default: the host's (looks, points and reactions with ``auto_direct`` when the scene has
+        a host, §71.2; ``stage``: its characters' looks, reactions, gestures...). Pure for a
+        given project: ``vidgen direct`` and the storyboard call it without rendering."""
+        return host_directions(project, spec, cls, params)
+
+    @classmethod
+    def reveal_steps(cls, params: Any) -> list[RevealStep]:
+        """What each step of the scene's own reveal (the steps it passes to :meth:`reveal`) shows,
+        for host directing (DESIGN.md §71.2): the target it shows or marks and whether it shows a
+        rise, a fall or an error. ``params`` are validated. Default: none (the host then only
+        looks at written highlights)."""
         return []
 
     #: How many beats the scene type narrates: ``None`` (any number, the default), an ``int``
@@ -663,6 +768,7 @@ class NarratedScene(MovingCameraScene):
             self.capture.begin_segment(b.id, round(window.window * config.frame_rate), include_end=False)
         self._current_beat = b.id
         self._beat_start = start
+        host_track = self._host_speak(b)
         if b.sting is not None:
             self.sting(b.sting, start + (window.heard if b.sting.placed_at == "end" else 0.0))
         for span in beat_sound_spans(self.project, b, d):
@@ -682,6 +788,8 @@ class NarratedScene(MovingCameraScene):
             self._current_beat = None
         self._stop_lingering()   # the voice of the beat before has ended by now
         self._voice_until = start + window.heard
+        if host_track is not None:
+            self.end_lip_sync(self.host.character, host_track)
         self.beat_log.append(BeatTiming(b.id, start, start + window.heard, b.text))
         if self.capture is not None:
             self.capture.end_segment(b.id)
@@ -736,13 +844,15 @@ class NarratedScene(MovingCameraScene):
         """Fade out everything over :attr:`outro` seconds (no-op when ``outro`` is 0). When a
         transition other than a cut leads to the next scene (DESIGN.md §49), the picture is held
         for those frames instead: the transition takes it away. Targets the next scene carries
-        (:attr:`carry_out`, DESIGN.md §50) stay on screen."""
+        (:attr:`carry_out`, DESIGN.md §50) stay on screen, and so does a host the next scene
+        shows unchanged (§71)."""
         if self.outro <= 0:
             return
         if self.transition_out is not None and not self.transition_out.cut:
             self.wait_seconds(math.ceil(self.outro * config.frame_rate - 1e-9) / config.frame_rate)
             return
-        self.clear_all(run_time=self.outro, keep=self._carried_parts())
+        kept = [self.host] if self.host is not None and self._host_stays and self.host.at_home else []
+        self.clear_all(run_time=self.outro, keep=[*self._carried_parts(), *kept])
 
     def play_steps(
         self,
@@ -1256,9 +1366,16 @@ class NarratedScene(MovingCameraScene):
         self.carry_state = state
 
     def setup(self) -> None:
-        """Manim's setup, then the objects carried from the scene before (:attr:`carried_in`),
-        drawn where they ended there from the first frame on (DESIGN.md §50)."""
+        """Manim's setup, then the host (on screen from the first frame, DESIGN.md §71) and the
+        objects carried from the scene before (:attr:`carried_in`), drawn where they ended there
+        from the first frame on (§50)."""
         super().setup()
+        if self.host is not None:
+            # a foreground mobject stays last in the draw order, so while it idles or speaks Manim
+            # redraws only it each frame, over a still image of the rest
+            self.add_foreground_mobject(self.host)
+            if self._actions is not None and not starts_present([u.config for u in self._actions.uses]):
+                self._park_host()
         if not self.carried_in or not self.spec.carry:
             return
         for entry in self.spec.carry:

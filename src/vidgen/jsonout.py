@@ -22,6 +22,7 @@ from vidgen.errors import Problem, VidgenError
 from vidgen.project import Project
 
 if TYPE_CHECKING:
+    from vidgen.animatic import AnimaticResult
     from vidgen.cartoon.directing import DirectedBeat
     from vidgen.export import ExportResult
     from vidgen.gallery import GalleryResult
@@ -125,13 +126,15 @@ def validate_document(
     warnings: Iterable[Mapping[str, Any]] = (),
     *,
     images: Iterable[Mapping[str, Any]] = (),
+    music: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """The ``vidgen validate --json`` document.
 
     ``project`` is ``None`` when the base config could not be loaded (then the summary fields
     are ``null``); ``variants`` maps every variant name to its loaded project (``None`` if it
     could not be loaded). ``error`` is the error to report when there are problems. ``images``:
-    :func:`images_json` of the base config and of each variant whose pictures differ.
+    :func:`images_json` of the base config and of each variant whose pictures differ;
+    ``music``: what each music cue plays (``vidgen.music.music_summary``).
     """
     ok = not problems and error is None
     summary: dict[str, Any] = {
@@ -176,6 +179,7 @@ def validate_document(
             ],
         )
     summary["images"] = [dict(i) for i in images]
+    summary["music"] = [dict(m) for m in music]
     doc = envelope("validate", ok, warnings, **summary, problems=[p.to_json() for p in problems])
     if error is not None:
         doc["error"] = error_json("error", str(error), problems, error.details)
@@ -604,10 +608,19 @@ def plan_document(
 
 
 def list_music_document(
-    root: Path | None, entries: Iterable[Mapping[str, Any]], previews: Path | None, warnings: Iterable[Mapping[str, Any]] = ()
+    root: Path | None,
+    entries: Iterable[Mapping[str, Any]],
+    previews: Path | None,
+    moods: Iterable[Mapping[str, Any]] = (),
+    instruments: Iterable[Mapping[str, Any]] = (),
+    warnings: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """The ``vidgen list-music --json`` document: the music level, the default ducking, every bed
-    and project file (``vidgen.music.music_entries``) and the previews folder."""
+    and project file (``vidgen.music.music_entries``), the previews folder, and composed music's
+    moods and instruments (``vidgen.composer.mood_entries`` / ``instrument_entries``) with the
+    symusic state."""
+    from vidgen import synth
+
     from vidgen import music
     from vidgen.config import DuckConfig
 
@@ -623,6 +636,42 @@ def list_music_document(
         count=len(items),
         music=items,
         previews=None if previews is None else _path(previews),
+        moods=[dict(m) for m in moods],
+        instruments=[dict(i) for i in instruments],
+        symusic=synth.symusic_status(),
+    )
+
+
+def music_preview_document(
+    piece: Any, wav: Path, mid: Path, seconds: float, lufs: float, true_peak: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen music preview --json`` document: the files written and what the piece is
+    (``piece`` a ``vidgen.composer.Piece``; ``seconds`` the WAV's length with its tail)."""
+    import math
+
+    return envelope(
+        "music",
+        True,
+        warnings,
+        action="preview",
+        wav=_path(wav),
+        midi=_path(mid),
+        mood=piece.mood.name,
+        family=piece.mood.family,
+        seed=piece.seed,
+        key=piece.key.name,
+        tempo=piece.tempo,
+        meter=f"{piece.mood.meter}/4",
+        bars=piece.bars,
+        piece_seconds=round(piece.seconds, 3),
+        seconds=round(seconds, 3),
+        parts=[{"role": v.role, "instrument": v.instrument.name, "volume": v.volume} for v in piece.voices],
+        phrases=[
+            {"bars": [4 * k + 1, 4 * k + 4], "phrase": phrase, "chords": [list(c) for c in piece.chords[4 * k : 4 * k + 4]]}
+            for k, phrase in enumerate(piece.phrases)
+        ],
+        loudness=round(lufs, 2) if math.isfinite(lufs) else None,
+        true_peak=round(true_peak, 2),
     )
 
 
@@ -658,6 +707,7 @@ def render_document(
         project=_path(project.root),
         variant=project.variant,
         preview=preview,
+        draft=project.draft,
         audio=timings["audio"],
         format=timings["format"],
         outputs={
@@ -940,6 +990,46 @@ def storyboard_document(
     )
 
 
+# ----- animatic --------------------------------------------------------------------------------------
+
+
+def animatic_document(
+    project: Project, result: AnimaticResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen animatic --json`` document: the MP4 and the stills it holds, with times."""
+    worker_warnings = [warning(message, scene) for scene, message in result.warnings]
+    fmt = result.format
+    fps = fmt.fps
+    return envelope(
+        "animatic",
+        True,
+        [*warnings, *worker_warnings],
+        project=_path(project.root),
+        variant=project.variant,
+        audio=result.audio,
+        captions=result.captions,
+        format={"width": fmt.width, "height": fmt.height, "fps": fps},
+        output=_path(result.output),
+        duration=result.duration,
+        elapsed=round(elapsed, 3),
+        rendered=result.rendered,
+        reused=result.reused,
+        mix=result.mix,
+        stills=[
+            {
+                "scene": hold.still.scene_id,
+                "beat": hold.still.beat_id,
+                "mid": hold.still.mid,
+                "time": hold.still.time,
+                "start": round(hold.start / fps, 6),
+                "end": round(hold.end / fps, 6),
+                "path": _path(hold.still.path),
+            }
+            for hold in result.holds
+        ],
+    )
+
+
 # ----- direct ----------------------------------------------------------------------------------------
 
 
@@ -986,8 +1076,8 @@ def character_sheet_document(
 
 
 def readback_document(project: Project, result: ReadbackResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The ``vidgen readback --json`` document: every compared beat with its differences and
-    suggestions, the beats skipped, a summary and the terms heard differently."""
+    """The ``vidgen readback --json`` document: every compared beat with its differences,
+    suggestions and word flags, the beats skipped, a summary and the terms heard differently."""
     beats = result.beats
     return envelope(
         "readback",
@@ -998,6 +1088,7 @@ def readback_document(project: Project, result: ReadbackResult, elapsed: float, 
         audio_dir=_path(project.audio_dir),
         stt=dict(result.settings),
         max_wer=result.max_wer,
+        flag_thresholds=result.flag_settings.model_dump(exclude={"severity"}),
         transcribed=result.transcribed,
         cached=result.cached,
         elapsed=round(elapsed, 3),
@@ -1008,6 +1099,8 @@ def readback_document(project: Project, result: ReadbackResult, elapsed: float, 
             "errors": sum(b.errors for b in beats),
             "wer": round(result.wer, 4),
             "worst": [{"beat": b.beat, "wer": round(b.wer, 4)} for b in result.worst()],
+            "unclear": sum(1 for f in result.flags if f.level == "unclear"),
+            "doubtful": sum(1 for f in result.flags if f.level == "doubtful"),
         },
         beats=[b.to_json() for b in beats],
         skipped=[{"beat": beat, "reason": reason} for beat, reason in result.skipped],

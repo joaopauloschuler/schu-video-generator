@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ from vidgen.render.worker import scene_activity_path, scene_layout_path
 
 #: ``fail_on`` values: the lowest severity that fails the command (``never``: none).
 FAIL_ON: tuple[str, ...] = ("error", "warning", "info", "never")
+#: The rule that runs only when asked (``--readback``): it transcribes the narration.
+UNCLEAR_SPEECH = "unclear_speech"
 
 
 @dataclass
@@ -93,7 +96,7 @@ def _read(path: Path, scene_id: str, what: str) -> dict[str, Any]:
 
 
 def _scene_findings(
-    project: Project, preview: bool, scene_id: str, start: float | None, rules: list[str]
+    project: Project, preview: bool, scene_id: str, start: float | None, rules: list[str], speech_flags: dict[str, list[Any]]
 ) -> tuple[list[Finding], int, int]:
     """Findings of one scene (merged across beats), stills checked, findings ignored."""
     path = scene_layout_path(project, preview, scene_id)
@@ -147,7 +150,7 @@ def _scene_findings(
                 elif finding.beat not in first.beats:
                     first.beats.append(finding.beat)
     findings = _group_similar(list(merged.values()))
-    timing, skipped = _timing_findings(project, preview, scene_id, start, rules, beat_stills)
+    timing, skipped = _timing_findings(project, preview, scene_id, start, rules, beat_stills, speech_flags)
     return findings + timing, stills, ignored + skipped
 
 
@@ -158,15 +161,19 @@ def _timing_findings(
     start: float | None,
     rules: list[str],
     beat_stills: dict[str | None, Path],
+    speech_flags: dict[str, list[Any]] | None = None,
 ) -> tuple[list[Finding], int]:
     """Findings of the ``scene`` (timing) rules for one scene, findings ignored. Issues sharing
-    a ``group`` become one finding listing their beats."""
+    a ``group`` become one finding listing their beats. ``speech_flags``: the word flags of
+    ``unclear_speech`` by beat."""
     names = [name for name in rules if RULES[name].scope == "scene"]
     if not names:
         return [], 0
     lint = project.config.lint
     activity = _read(scene_activity_path(project, preview, scene_id), scene_id, "activity file")
     ctx = SceneContext(scene_id, activity, project.audio_dir, project.spoken_texts(), project.config.language)
+    flags = speech_flags or {}
+    ctx.speech_flags = {beat.id: flags[beat.id] for beat in project.scene(scene_id).beats if beat.id in flags}
     if "readback" in names and lint.rules.readback.severity != "off":
         from vidgen.readback import cached_readback
 
@@ -248,6 +255,17 @@ def _group_similar(findings: list[Finding]) -> list[Finding]:
     return out
 
 
+def _speech_flags(project: Project, scene_ids: list[str], log: Callable[[str], None]) -> dict[str, list[Any]]:
+    """The word flags of the scenes' beats (beat id -> flags), from ``vidgen readback``'s run."""
+    from vidgen.readback import run_readback
+
+    beat_ids = [beat.id for sid in scene_ids for beat in project.scene(sid).beats]
+    if not beat_ids:
+        return {}
+    result = run_readback(project, beat_ids=beat_ids, log=log)
+    return {b.beat: b.flags for b in result.beats}
+
+
 def lint_project(
     project: Project,
     *,
@@ -257,13 +275,17 @@ def lint_project(
     fail_on: str | None = None,
     jobs: int = 1,
     force: bool = False,
+    readback: bool = False,
+    log: Callable[[str], None] = lambda line: None,
 ) -> LintResult:
     """Check the beat-end stills of ``project`` (loaded with its variant) with the lint rules.
 
     Stills and layout dumps are reused when current (any number of stills per beat, e.g. from
     ``vidgen storyboard``); otherwise the scene is rendered with one still per beat. ``scenes``
     / ``rules`` restrict what is checked; ``fail_on`` overrides the config's ``lint.fail_on``;
-    ``force`` renders the selected scenes again.
+    ``force`` renders the selected scenes again. The ``unclear_speech`` rule runs only with
+    ``readback`` (or when ``rules`` names it): the selected scenes' beats are then transcribed
+    as ``vidgen readback`` does (cached transcripts reused; progress lines to ``log``).
     """
     from vidgen.render.pipeline import render_scenes
     from vidgen.storyboard import scene_starts, stills_current
@@ -281,7 +303,12 @@ def lint_project(
     if jobs < 1:
         raise VidgenError("--jobs must be at least 1")
     selected = [sid for sid in known if not scenes or sid in scenes]
-    names = [name for name in RULES if not rules or name in rules]
+    names = [name for name in RULES if (name in rules if rules else name != UNCLEAR_SPEECH)]
+    if readback and UNCLEAR_SPEECH not in names:
+        names.append(UNCLEAR_SPEECH)
+    speech_flags: dict[str, list[Any]] = {}
+    if UNCLEAR_SPEECH in names and project.config.lint.rules.unclear_speech.severity != "off":
+        speech_flags = _speech_flags(project, selected, log)
 
     to_render = [sid for sid in selected if force or not stills_current(project, preview, sid, None)]
     runs = render_scenes(project, preview, to_render, jobs=jobs, frames=1)
@@ -297,7 +324,7 @@ def lint_project(
     )
     starts = scene_starts(project, preview)
     for sid in selected:
-        findings, stills, ignored = _scene_findings(project, preview, sid, starts[sid], names)
+        findings, stills, ignored = _scene_findings(project, preview, sid, starts[sid], names, speech_flags)
         findings.sort(key=lambda f: (f.scene_time, severity_rank(f.severity), names.index(f.rule)))
         result.findings.extend(findings)
         result.stills += stills

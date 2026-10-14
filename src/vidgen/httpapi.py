@@ -1,4 +1,5 @@
-"""POST requests to a paid web API with retries and scrubbed errors (standard library only).
+"""POST requests to a paid web API with retries and scrubbed errors, and plain GETs (standard
+library only).
 
 Shared by the ElevenLabs text-to-speech / speech-to-text providers and the image-generation
 providers (OpenAI, OpenRouter). The API key is passed in by the caller (read from an environment variable at the
@@ -108,6 +109,33 @@ def get(url: str, *, headers: Mapping[str, str], service: str, timeout: float, s
         reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
         what = f"{type(reason).__name__}: {reason}" if isinstance(reason, BaseException) else str(reason)
         raise VidgenError(f"cannot reach {service}: {scrub(what, secret)}") from None
+
+
+def stream_get(
+    url: str, write: Callable[[bytes], None], *, service: str, timeout: float, max_bytes: int | None = None, chunk_bytes: int = 1 << 20
+) -> int:
+    """GET ``url`` once and pass its body to ``write`` chunk by chunk (for large files); the
+    number of bytes read. Stops after more than ``max_bytes``. Every failure, an HTTP error
+    status included, becomes a :class:`VidgenError` naming ``service``."""
+    request = urllib.request.Request(url, method="GET")
+    total = 0
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            while chunk := response.read(chunk_bytes):
+                total += len(chunk)
+                try:
+                    write(chunk)
+                except OSError as exc:  # the disk, not the network
+                    raise VidgenError(f"cannot save the download from {service}: {exc}") from None
+                if max_bytes is not None and total > max_bytes:
+                    break
+    except urllib.error.HTTPError as exc:
+        raise VidgenError(f"{service} returned HTTP {exc.code} for {url}") from None
+    except (TimeoutError, ConnectionError, urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as exc:
+        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        what = f"{type(reason).__name__}: {reason}" if isinstance(reason, BaseException) else str(reason)
+        raise VidgenError(f"cannot reach {service}: {what}") from None
+    return total
 
 
 def _request(

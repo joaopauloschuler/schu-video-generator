@@ -101,7 +101,7 @@ def test_manner_words_become_expressions_and_poses() -> None:
 
 
 def test_parse_set_line() -> None:
-    design = parse_set("background: night; props: lamp (light) at 0.4, bench, tree, house at far_left; marks: steps 0.85; "
+    design = parse_set("background: night; props: lamp (light) at 0.4, piano, tree, house at far_left; marks: steps 0.85; "
                        "characters: wren at steps", {"wren": "wren"})
     params = design.params
     assert params["background"] == ["#1B2140", "#3D4677"] and params["ground_color"] == "#2E4A3A"
@@ -112,7 +112,7 @@ def test_parse_set_line() -> None:
     ]
     assert design.props == {"light": "lamp", "tree": "tree", "house": "house"}
     assert params["marks"] == {"steps": 0.85} and design.placed == {"wren": "steps"}
-    assert design.todos == ["set: prop 'bench' is not a built-in prop (" + design.todos[0].split("(", 1)[1]]
+    assert design.todos == ["set: prop 'piano' is not a built-in prop (" + design.todos[0].split("(", 1)[1]]
     colours = parse_set("background: primary to accent", {}).params
     assert colours == {"background": ["primary", "accent"], "ground_color": "tertiary"}
     assert parse_set("background: assets/park.png", {}).params == {"image": "assets/park.png"}
@@ -262,14 +262,15 @@ def test_screenplay_project_builds_stage_scenes() -> None:
     narrator, wren, ash = porch["beats"]
     assert "voice" not in narrator and wren["voice"] == "wren_voice"
     assert wren["actions"] == [{"react": "wren", "expression": "happy", "pose": "waving"}]
+    assert (wren["emotion"], ash["emotion"]) == ("excited", "whisper") and "emotion" not in narrator   # Step 135
     walk, look, shrug = ash["actions"]                                                            # (whispering): no react
     assert walk["walk_to"] == "old_ash" and "at" not in walk and look["at"] > 0                     # the look waits for the walk
     assert shrug == {"gesture": "old_ash", "to": "shrug", "at": shrug["at"]} and 0.4 < shrug["at"] < 0.7
     todos = draft.beat_todos[0][2]
-    assert any("The wind howls" in t for t in todos) and any("whispering" in t for t in todos)
+    assert any("The wind howls" in t for t in todos) and not any("whispering" in t for t in todos)   # an emotion now
     assert porch_2["beats"][0]["actions"][0] == {"exit": "wren", "to": "left"}
     assert porch_2["beats"][0]["actions"][1]["jump"] == "old_ash" and porch_2["beats"][0]["actions"][1]["at"] >= 0.6   # after the last line
-    assert draft.todo_count == 3                                                                   # bench, wind, whispering
+    assert draft.todo_count == 1                                                                   # the wind (a bench is a prop since Step 139)
 
 
 def test_a_scene_without_lines_is_an_error() -> None:

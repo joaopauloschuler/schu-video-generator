@@ -16,6 +16,7 @@ from typing import Annotated, Any, Literal, Union
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     ModelWrapValidatorHandler,
@@ -74,14 +75,73 @@ class FormatConfig(_Strict):
     @field_validator("width", "height")
     @classmethod
     def _even(cls, value: int) -> int:
-        # H.264 in yuv420p needs even sizes; Manim's encoder crashes on odd ones.
-        if value % 2:
-            raise ValueError(f"must be an even number of pixels (got {value}; H.264 video needs even sizes)")
-        return value
+        return _even_pixels(value)
+
+
+def _even_pixels(value: int) -> int:
+    # H.264 in yuv420p needs even sizes; Manim's encoder crashes on odd ones.
+    if value % 2:
+        raise ValueError(f"must be an even number of pixels (got {value}; H.264 video needs even sizes)")
+    return value
 
 
 def _preview_format() -> FormatConfig:
     return FormatConfig(width=854, height=480, fps=15)
+
+
+#: A draft's shorter side in pixels and its frame rate when ``draft:`` does not set them (DESIGN.md §74).
+DRAFT_SHORT_SIDE = 240
+DRAFT_FPS = 8
+
+
+class DraftConfig(_Strict):
+    """Resolution and frame rate of a draft (`vidgen render --draft`); unset keys follow the video's format."""
+
+    width: PositiveInt | None = Field(default=None, json_schema_extra=_EVEN)
+    """Width in pixels (even; give height too); default: 240 pixels on the shorter side at the format's shape (426x240 for 16:9, 240x426 for 9:16)."""
+    height: PositiveInt | None = Field(default=None, json_schema_extra=_EVEN)
+    """Height in pixels (even; give width too)."""
+    fps: PositiveInt | None = None
+    """Frames per second; default 8 (the format's when lower)."""
+
+    @field_validator("width", "height")
+    @classmethod
+    def _even(cls, value: int | None) -> int | None:
+        return None if value is None else _even_pixels(value)
+
+    @model_validator(mode="after")
+    def _both_sides(self) -> DraftConfig:
+        if (self.width is None) != (self.height is None):
+            raise ValueError("give both width and height, or neither (the draft then keeps the format's shape)")
+        return self
+
+
+def draft_format(video: FormatConfig, draft: DraftConfig | None = None) -> FormatConfig:
+    """The format of a draft of a video in the ``video`` format: ``draft``'s size and frame rate
+    where set, else :data:`DRAFT_SHORT_SIDE` pixels on the shorter side at the video's shape (even
+    sizes, never larger than the video) and :data:`DRAFT_FPS` (never more than the video's)."""
+    draft = draft or DraftConfig()
+    fps = draft.fps if draft.fps is not None else min(DRAFT_FPS, video.fps)
+    if draft.width is not None and draft.height is not None:
+        return FormatConfig(width=draft.width, height=draft.height, fps=fps)
+    short = min(DRAFT_SHORT_SIDE, video.width, video.height)
+    long_side = 2 * int(short * max(video.width, video.height) / min(video.width, video.height) / 2)
+    width, height = (long_side, short) if video.width >= video.height else (short, long_side)
+    return FormatConfig(width=width, height=height, fps=fps)
+
+
+class DrawingConfig(_Strict):
+    """How cartoons are drawn (DESIGN.md §79): outline weight, shading, a paper texture; unset keys
+    follow the video's ``drawing:`` (on a stage scene), else the defaults."""
+
+    outline: Literal["thin", "normal", "bold"] | None = None
+    """Outline weight of every stroke on stage scenes (characters, props, sets, effects, bubbles) and of a host: thin (0.6x, never under one pixel), normal (as drawn), bold (1.7x); default normal."""
+    shading: Literal["flat", "soft"] | None = None
+    """flat: filled shapes in one colour; soft: characters' and props' filled shapes lighter at the top and darker at the bottom (the outline and the silhouette unchanged); default flat; drafts draw flat."""
+    texture: Literal["none", "paper", "storybook"] | None = None
+    """A still grain over each stage scene's frame, under the overlays and captions: none, paper (fine grain), storybook (stronger grain, blotches and darker corners); default none; drafts have none."""
+    seed: int | None = Field(default=None, ge=0)
+    """Seed of the texture's grain (the same seed and frame size give the same grain); default 0."""
 
 
 class ThemeConfig(_Strict):
@@ -137,6 +197,30 @@ class VoiceSettings(_Strict):
     """ElevenLabs speaker boost."""
 
 
+#: The built-in emotions (:data:`vidgen.emotions.EMOTIONS`; a test keeps the two equal).
+EmotionName = Literal[
+    "neutral", "happy", "excited", "sad", "angry", "worried", "scared", "surprised", "calm", "doubtful", "sleepy", "whisper", "shout",
+]
+
+
+class EmotionConfig(_Strict):
+    """``emotion:`` as a mapping: a built-in emotion with some of its numbers changed (DESIGN.md §72)."""
+
+    like: EmotionName = "neutral"
+    """The built-in emotion to start from."""
+    speed: float | None = Field(default=None, ge=0.5, le=2.0)
+    """Factor on the voice's speed (0.5-2); default the emotion's."""
+    pitch: float | None = Field(default=None, ge=-3.0, le=3.0)
+    """Pitch shift in semitones (-3 to 3; the length is kept); default the emotion's."""
+    gain: float | None = Field(default=None, ge=-12.0, le=6.0)
+    """Loudness change in dB (-12 to 6; a boost is soft-limited below full scale); default the emotion's."""
+    pauses: float | None = Field(default=None, ge=0.25, le=3.0)
+    """Factor on the pauses at commas and full stops inside the line (0.25-3; Kokoro English); default the emotion's."""
+
+
+#: ``emotion:``: a built-in emotion's name or ``{like, speed, pitch, gain, pauses}``.
+EmotionSetting = Union[EmotionName, EmotionConfig]
+
 #: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
 TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
 #: Keys of ``voice:`` used only by some providers (the others ignore them).
@@ -151,6 +235,46 @@ PROVIDER_VOICE_KEYS: dict[str, tuple[str, ...]] = {
 }
 #: Kokoro's language codes (``voice.lang``; the first letter of its voice names).
 KokoroLang = Literal["a", "b", "e", "f", "h", "i", "j", "p", "z"]
+
+
+class VoiceSettingsOverride(_Strict):
+    """``voice_settings`` of a named voice: what is not given comes from ``voice.settings``."""
+
+    stability: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs stability (0-1); default the base voice's."""
+    similarity_boost: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs similarity boost (0-1); default the base voice's."""
+    style: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs style exaggeration (0-1); default the base voice's."""
+    use_speaker_boost: bool | None = None
+    """ElevenLabs speaker boost; default the base voice's."""
+
+
+class DubVoice(_Strict):
+    """A voice in one language of ``dub:`` (DESIGN.md §80) as a mapping: the keys given replace
+    the voice's own in videos of that language."""
+
+    voice: str | None = Field(default=None, min_length=1)
+    """kokoro / openrouter: the voice in this language (pf_dora, pm_alex...; a Kokoro blend such as pf_dora+af_heart:0.3)."""
+    voice_id: str | None = Field(default=None, min_length=1)
+    """elevenlabs: the voice id in this language."""
+    model_id: str | None = Field(default=None, min_length=1)
+    """elevenlabs: the model id in this language."""
+    model: str | None = Field(default=None, min_length=1)
+    """openrouter: the TTS model in this language."""
+    instructions: str | None = Field(default=None, min_length=1)
+    """openrouter: how to speak in this language."""
+    speed: float | None = Field(default=None, ge=0.25, le=4.0)
+    """kokoro / openrouter: speaking speed multiplier in this language (0.25-4)."""
+    lang: KokoroLang | None = None
+    """kokoro: the voice's language letter; default the first letter of voice."""
+    settings: VoiceSettingsOverride | None = None
+    """elevenlabs: voice_settings changed in this language."""
+
+
+#: A ``dub:`` value: the provider's voice (Kokoro / OpenRouter ``voice``, ElevenLabs ``voice_id``)
+#: or a mapping of voice keys (:class:`DubVoice`).
+DubSetting = Union[Annotated[str, Field(min_length=1)], DubVoice]
 
 
 class VoiceConfig(_Strict):
@@ -184,6 +308,10 @@ class VoiceConfig(_Strict):
     """kokoro only: language of the voice: a American English, b British English, e Spanish, f French, h Hindi, i Italian, j Japanese, p Brazilian Portuguese, z Mandarin Chinese; default: the first letter of voice, else from the video's language (English: a)."""
     device: Literal["cpu", "cuda", "auto"] = "cpu"
     """kokoro only: where the model runs: cpu, cuda (an NVIDIA GPU) or auto (a GPU if PyTorch sees one); does not change the audio hash."""
+    emotion: EmotionSetting | None = None
+    """How this voice's beats feel unless a beat says otherwise: a built-in emotion (excited, sad, whisper...) or {like, speed, pitch, gain, pauses}; ElevenLabs and OpenRouter models with instructions use only its name; not inherited by voices:."""
+    dub: dict[LanguageTag, DubSetting] | None = None
+    """This voice in other languages, by language tag: {pt: pf_dora} or {pt: {voice: pm_alex, speed: 0.9}}; used in videos (variants) of that language; without one, a Kokoro voice of another language is replaced by one of the video's language of the same kind (feminine / masculine)."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
@@ -192,7 +320,12 @@ class VoiceConfig(_Strict):
     @model_validator(mode="after")
     def _provider_options(self) -> VoiceConfig:
         # Keys of the other provider are ignored (a variant may switch the provider while the
-        # base config's keys are merged in); only openrouter's required model is checked here.
+        # base config's keys are merged in); only openrouter's required model and a Kokoro
+        # voice blend are checked here.
+        if self.provider == "kokoro" and self.voice is not None:
+            from vidgen.kokoro_voices import blend_weights
+
+            blend_weights(self.voice)
         if self.provider != "openrouter":
             return self
         if self.model is None:
@@ -202,19 +335,6 @@ class VoiceConfig(_Strict):
         if "/" not in self.model.strip("/"):
             raise ValueError(f"OpenRouter model ids look like author/name (e.g. mistralai/voxtral-mini-tts-2603), not {self.model!r}")
         return self
-
-
-class VoiceSettingsOverride(_Strict):
-    """``voice_settings`` of a named voice: what is not given comes from ``voice.settings``."""
-
-    stability: float | None = Field(default=None, ge=0, le=1)
-    """ElevenLabs stability (0-1); default the base voice's."""
-    similarity_boost: float | None = Field(default=None, ge=0, le=1)
-    """ElevenLabs similarity boost (0-1); default the base voice's."""
-    style: float | None = Field(default=None, ge=0, le=1)
-    """ElevenLabs style exaggeration (0-1); default the base voice's."""
-    use_speaker_boost: bool | None = None
-    """ElevenLabs speaker boost; default the base voice's."""
 
 
 class VoiceEntry(_Strict):
@@ -247,6 +367,10 @@ class VoiceEntry(_Strict):
     """openrouter / kokoro: speaking speed multiplier (0.25-4); default the base voice's."""
     lang: KokoroLang | None = None
     """kokoro: language of this speaker's voice (a, b, e, f, h, i, j, p, z); default the first letter of its voice, else the base voice's."""
+    emotion: EmotionSetting | None = None
+    """How this speaker's beats feel unless a beat says otherwise (excited, sad, whisper... or {like, speed, pitch, gain, pauses}); not inherited from the base voice."""
+    dub: dict[LanguageTag, DubSetting] | None = None
+    """This speaker's voice in other languages, by language tag ({pt: pf_dora}); default: the base voice's dub when this voice keeps the base voice, else chosen automatically (Kokoro: a voice of the video's language of the same kind)."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None
@@ -472,6 +596,71 @@ class CharacterEntry(_Strict):
     """Animation principles for this character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; wins over the scene's and the video's; default lively."""
 
 
+#: A host's height as a fraction of the frame's shorter side (DESIGN.md §71).
+HostSize = Annotated[float, Field(gt=0, le=0.9)]
+
+
+class HostConfig(_Strict):
+    """``host:`` (DESIGN.md §71): a character of ``characters:`` drawn beside the content of any
+    scene type (bullets, charts, code...), whose region shrinks to make room."""
+
+    character: Identifier
+    """The character (a name from characters:)."""
+    side: Literal["left", "right"] = "right"
+    """Which side of the content it stands on (in 9:16, below the content: the side of the band it stands on)."""
+    size: HostSize | None = None
+    """Its height as a fraction of the frame's shorter side; default 0.5 in 16:9, 0.42 in 1:1, 0.36 in 9:16."""
+    place: Literal["auto", "beside", "below"] = "auto"
+    """beside: a column next to the content; below: a band under it; auto: below in a vertical (9:16) frame, else beside."""
+    floor: bool = True
+    """A plain line it stands on; false: no floor."""
+    floor_color: ColorRef = "dim"
+    """Colour of the floor line (a theme token or hex)."""
+    facing: Literal["auto", "left", "right", "front"] = "auto"
+    """Which way it looks; auto: towards the content; front: at the viewer (an SVG character keeps its side)."""
+    speaks: Literal["narrator", "own"] = "narrator"
+    """Whose lines move its mouth (lip sync): narrator: every beat except those in another character's voice (the host speaks for the narrator); own: only beats in its own voice."""
+    pose: Identifier | None = None
+    """Its pose (stand, thinking, arms_crossed... or its own); none: standing."""
+    expression: Identifier | None = None
+    """Its expression (happy, neutral... or its own); none: its rest face."""
+    auto_direct: bool | None = None
+    """Automatic host directing (look at what is highlighted, point at each new item, react to results); default: on when the video's auto_direct is (a beat's auto_direct wins)."""
+
+
+class HostOverride(_Strict):
+    """A scene's ``host:`` as a mapping: the keys of the video's ``host:`` that change in this
+    scene (``character`` is required when the video has no host)."""
+
+    character: Identifier | None = None
+    """The character (a name from characters:)."""
+    side: Literal["left", "right"] | None = None
+    """left or right."""
+    size: HostSize | None = None
+    """Height as a fraction of the frame's shorter side."""
+    place: Literal["auto", "beside", "below"] | None = None
+    """auto, beside or below."""
+    floor: bool | None = None
+    """A floor line or not."""
+    floor_color: ColorRef | None = None
+    """Colour of the floor line."""
+    facing: Literal["auto", "left", "right", "front"] | None = None
+    """auto, left, right or front."""
+    speaks: Literal["narrator", "own"] | None = None
+    """narrator or own."""
+    pose: Identifier | None = None
+    """Its pose in this scene."""
+    expression: Identifier | None = None
+    """Its expression in this scene."""
+    auto_direct: bool | None = None
+    """Automatic host directing in this scene: true or false."""
+
+
+#: A scene's ``host:``: false (none in this scene), true or unset (the video's), a character
+#: name (the video's host settings with that character), or a mapping of :class:`HostOverride`.
+SceneHost = bool | Identifier | HostOverride
+
+
 class PronunciationEntry(_Strict):
     """The long form of a ``pronunciation:`` entry (DESIGN.md §45): how the narrator says a
     term. Applied to the text sent to the TTS only; subtitles and captions keep the term."""
@@ -579,6 +768,7 @@ LINT_RULES: tuple[str, ...] = (
     "contrast",
     "max_words",
     "overlay_overlap",
+    "host_overlap",
     "walk_overlap",
     "off_stage",
     "character_overlap",
@@ -594,6 +784,7 @@ LINT_RULES: tuple[str, ...] = (
     "rushed_animation",
     "talked_over",
     "readback",
+    "unclear_speech",
 )
 RuleName = Literal[
     "off_frame",
@@ -605,6 +796,7 @@ RuleName = Literal[
     "contrast",
     "max_words",
     "overlay_overlap",
+    "host_overlap",
     "walk_overlap",
     "off_stage",
     "character_overlap",
@@ -620,6 +812,7 @@ RuleName = Literal[
     "rushed_animation",
     "talked_over",
     "readback",
+    "unclear_speech",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -710,6 +903,13 @@ class OverlayOverlapRule(RuleConfig):
 
     min_overlap: Fraction = 0.05
     """Part of a scene object's box an overlay must cover to be reported."""
+
+
+class HostOverlapRule(RuleConfig):
+    """``host_overlap``: the cartoon host (``host:``) overlapping the scene's content, a caption or another overlay."""
+
+    min_overlap: Fraction = 0.02
+    """Part of the smaller of the two boxes they must share to be reported."""
 
 
 class WalkOverlapRule(RuleConfig):
@@ -835,6 +1035,23 @@ class ReadbackRule(RuleConfig):
     """Highest acceptable word error rate (differing words / words of the text); also `vidgen readback`'s threshold."""
 
 
+class UnclearSpeechRule(RuleConfig):
+    """``unclear_speech``: words the speech-to-text heard with low confidence, after an unusual pause, or differently from the text (`vidgen lint --readback`; `vidgen readback`'s word flags)."""
+
+    min_probability: float = Field(default=0.5, gt=0, le=1)
+    """A word heard with a probability below this is unclear (the rule's severity)."""
+    doubtful_probability: float = Field(default=0.75, gt=0, le=1)
+    """A word heard with a probability below this (and not below min_probability) is doubtful (info)."""
+    max_gap: PositiveFloat = 0.5
+    """Seconds of silence between two words inside a sentence (not at punctuation or a voice sound) from which the pause is unclear."""
+
+    @model_validator(mode="after")
+    def _ordered(self) -> UnclearSpeechRule:
+        if self.min_probability > self.doubtful_probability:
+            raise ValueError("min_probability must not be larger than doubtful_probability")
+        return self
+
+
 class LintRules(_Strict):
     """Per-rule settings of ``vidgen lint``."""
 
@@ -856,6 +1073,8 @@ class LintRules(_Strict):
     """Too many words on screen (default: warning)."""
     overlay_overlap: OverlayOverlapRule = Field(default_factory=OverlayOverlapRule)
     """Overlays covering scene text or icons (default: warning)."""
+    host_overlap: HostOverlapRule = Field(default_factory=HostOverlapRule)
+    """The cartoon host overlapping the scene's content, captions or other overlays (default: warning)."""
     walk_overlap: WalkOverlapRule = Field(default_factory=WalkOverlapRule)
     """A character ending its walk on another character (default: warning)."""
     off_stage: OffStageRule = Field(default_factory=OffStageRule)
@@ -886,6 +1105,8 @@ class LintRules(_Strict):
     """Whole words of a line spoken under the next beat's overlap (default: warning)."""
     readback: ReadbackRule = Field(default_factory=ReadbackRule)
     """Audio heard differently from its text, from the transcripts `vidgen readback` stored (default: warning; nothing without them)."""
+    unclear_speech: UnclearSpeechRule = Field(default_factory=UnclearSpeechRule)
+    """Words heard with low confidence or after an unusual pause; runs only with `vidgen lint --readback` (default: warning; info for doubtful words)."""
 
 
 class LintConfig(_Strict):
@@ -1283,14 +1504,70 @@ def _duck(value: bool | DuckConfig) -> DuckConfig:
     return DuckConfig() if value else DuckConfig(depth=0)
 
 
+class ComposeInstrument(_Strict):
+    """One part of composed music in its long form: the instrument and its mix."""
+
+    instrument: str | None = None
+    """A friendly instrument name (piano, strings, flute, ...; vidgen list-music); default: the mood's."""
+    volume: float | None = Field(default=None, ge=-60, le=12)
+    """dB against the other parts (each part is first set to the same loudness); default: the mood's."""
+    pan: float | None = Field(default=None, ge=-1, le=1)
+    """-1 (left) to 1 (right); default: the mood's."""
+    reverb: float | None = Field(default=None, ge=0, le=1)
+    """Share sent to the reverb, 0-1; default: the mood's."""
+
+
+def _compose_shorthand(value: Any) -> Any:
+    return {"mood": value} if isinstance(value, str) else value
+
+
+def _mood_name_schema(schema: dict[str, Any]) -> None:
+    """JSON Schema of ``compose:``: also a mood's name alone (``compose: playful``), which
+    :func:`_compose_shorthand` reads but the generated schema does not list."""
+    schema.setdefault("anyOf", []).insert(0, {"type": "string", "minLength": 1})
+
+
+class ComposeConfig(_Strict):
+    """Music composed for the video from a mood (``compose:``; DESIGN.md §83), played with real
+    instruments (needs the ``music`` extra; without it a built-in bed plays)."""
+
+    mood: str
+    """calm, focused, curious, upbeat (explainers), playful, sleepy, tense, triumphant (cartoons); vidgen list-music."""
+    key: str | None = None
+    """A note, or a note with the mood's mode (e.g. E, 'Eb major', 'F# minor'); default: the mood's."""
+    tempo: float | None = Field(default=None, ge=40, le=200)
+    """Quarter notes per minute; default: the mood's."""
+    instruments: dict[str, str | ComposeInstrument | None] = Field(default_factory=dict)
+    """Per part (melody, chords, pad, bass, drums): an instrument name, none (leave the part out), or {instrument, volume, pan, reverb}."""
+    seed: int = Field(default=1, ge=0)
+    """Another seed gives another piece in the same mood; the same seed always the same notes."""
+    bars: int | None = Field(default=None, ge=4, le=128, multiple_of=4)
+    """A piece of this many bars (a multiple of 4) that loops; default: none, the piece is composed for the video (as long as the cue, scene changes on bar lines, a cadence at the end)."""
+
+    @model_validator(mode="after")
+    def _check(self) -> ComposeConfig:
+        from vidgen.composer import settings_problems
+
+        problems = settings_problems(self.mood, self.key, self.tempo, self.instrument_settings(), self.bars)
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self
+
+    def instrument_settings(self) -> dict[str, Any]:
+        """``instruments`` as plain data for :func:`vidgen.composer.compose`."""
+        return {role: v.model_dump() if isinstance(v, ComposeInstrument) else v for role, v in self.instruments.items()}
+
+
 class MusicCue(_Strict):
-    """Background music (``music:``, or one entry of a list of cues): a built-in bed or a file,
-    over the whole video or from one scene to another."""
+    """Background music (``music:``, or one entry of a list of cues): a built-in bed, a file or
+    composed music, over the whole video or from one scene to another."""
 
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
-    source: str = Field(min_length=1)
-    """A built-in bed (calm, pulse, bright, cartoon, lullaby; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3)."""
+    source: str | None = Field(default=None, min_length=1)
+    """A built-in bed (calm, pulse, bright, cartoon, lullaby; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3); give this or compose."""
+    compose: Annotated[ComposeConfig | None, BeforeValidator(_compose_shorthand)] = Field(default=None, json_schema_extra=_mood_name_schema)
+    """Music composed from a mood instead of a source: a mood name or {mood, key, tempo, instruments, seed, bars}; needs the music extra."""
     volume: float = Field(default=0.0, ge=-60, le=12)
     """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""
     start: float = Field(default=0.0, ge=0)
@@ -1310,6 +1587,17 @@ class MusicCue(_Strict):
     to: Identifier | None = None
     """Last scene of the cue (to its end); default the video's last scene."""
 
+    @model_validator(mode="after")
+    def _one_source(self) -> MusicCue:
+        if (self.source is None) == (self.compose is None):
+            raise ValueError("give either source (a bed or a file) or compose (a mood), not both" if self.source else "give source (a bed or a file) or compose (a mood)")
+        return self
+
+    @property
+    def label(self) -> str:
+        """The source as summaries name it: the bed or file, or ``compose: <mood>``."""
+        return self.source if self.source is not None else f"compose: {self.compose.mood}"  # type: ignore[union-attr]
+
 
 def _music_cue(value: str | MusicCue) -> MusicCue:
     return MusicCue(source=value) if isinstance(value, str) else value
@@ -1326,10 +1614,31 @@ MusicSetting = Annotated[Union[MusicEntry, list[MusicEntry], Literal[False], Non
 
 
 class SceneMusic(_Strict):
-    """A scene's ``music:`` override in its long form."""
+    """A scene's ``music:`` override in its long form: its level and, under composed music that
+    follows the video (a ``compose:`` cue without ``bars``, DESIGN.md §84), other compose
+    settings from this scene's first bar to its end."""
 
     volume: float = Field(default=0.0, ge=-60, le=12)
     """dB added to the music's volume during this scene."""
+    mood: str | None = None
+    """Composed music only: another mood for this scene (vidgen list-music); it starts from that mood's defaults."""
+    key: str | None = None
+    """Composed music only: another key for this scene (a note, or a note with the mood's mode)."""
+    tempo: float | None = Field(default=None, ge=40, le=200)
+    """Composed music only: another tempo for this scene (quarter notes per minute)."""
+    instruments: dict[str, str | ComposeInstrument | None] = Field(default_factory=dict)
+    """Composed music only: other instruments for this scene, per part (added to the cue's for the same mood)."""
+    seed: int | None = Field(default=None, ge=0)
+    """Composed music only: another seed for this scene."""
+
+    @property
+    def compose_keys(self) -> list[str]:
+        """The compose settings this scene changes (``mood``, ``key``...), in field order."""
+        return [k for k in ("mood", "key", "tempo", "seed") if getattr(self, k) is not None] + (["instruments"] if self.instruments else [])
+
+    def instrument_settings(self) -> dict[str, Any]:
+        """``instruments`` as plain data for :func:`vidgen.composer.compose`."""
+        return {role: v.model_dump() if isinstance(v, ComposeInstrument) else v for role, v in self.instruments.items()}
 
 
 class AudioConfig(_Strict):
@@ -1614,7 +1923,9 @@ class BeatConfig(_Strict):
     voice: Identifier | None = None
     """Who says this beat: a name from voices (or default: the base voice); default the scene's voice."""
     sting: StingSetting | None = None
-    """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
+    """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration; played by the composed music's instruments under compose: music."""
+    music_pause: bool | None = None
+    """Composed music that follows the video: true pauses the music just before this beat (a punchline) until the next bar line after it; false stops the automatic pause (before a card scene, before a short last line)."""
     auto_direct: AutoDirectSetting | None = None
     """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups, effects}); default: the scene's, else the video's."""
     shot: ShotConfig | None = Field(default=None, json_schema_extra=_shot_words_schema)
@@ -1623,6 +1934,8 @@ class BeatConfig(_Strict):
     """Seconds this beat starts before the previous beat's speech ends: both lines are heard (the earlier a little lower) and both mouths move; not on a scene's first beat."""
     interrupt: bool = False
     """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
+    emotion: EmotionSetting | None = None
+    """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; Kokoro changes speed, pitch, loudness and pauses; ElevenLabs uses an audio tag (eleven_v3) or voice settings, OpenRouter an instruction or the audio's speed, pitch and loudness; default the voice's emotion."""
 
     @model_validator(mode="after")
     def _check_interrupt(self) -> BeatConfig:
@@ -1664,13 +1977,15 @@ class SceneConfig(_Strict):
     sfx: list[SfxEntry] = Field(default_factory=list)
     """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
     music: bool | SceneMusic = True
-    """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here."""
+    """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here; under composed music also {mood, key, tempo, instruments, seed} from this scene's first bar."""
     transition: TransitionSetting | None = None
     """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}; default the video's transition."""
     carry: CarrySetting = Field(default_factory=list)
     """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
     set: Identifier | None = None
-    """A stage scene's set: a name from sets: whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
+    """A stage scene's set: a name from sets:, or a built-in set (city_street, park, beach, forest, snowy_hills; rooms: classroom, kitchen, shop, living_room, bedroom), whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
+    host: SceneHost | None = None
+    """The cartoon host beside this scene's content: false for none, a character name, or {character, side, size, place, floor, facing, speaks, pose, expression, auto_direct} changing the video's host here; default the video's host."""
 
     @model_validator(mode="before")
     @classmethod
@@ -1738,6 +2053,8 @@ class VideoConfig(_Strict):
     """Final render resolution and frame rate."""
     preview: FormatConfig = Field(default_factory=_preview_format)
     """Resolution and frame rate of `vidgen render --preview`."""
+    draft: DraftConfig | None = None
+    """Resolution and frame rate of `vidgen render --draft` (fast drafts without decoration); default: 240 pixels on the shorter side at the format's shape, 8 fps."""
     include: Annotated[str, Field(min_length=1)] | list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     """YAML / JSON files (relative to this file, e.g. cast.yaml or ../shared/sets.yaml) whose characters, voices and sets this config starts from; this config's own entries win (a character of the same name: its keys win)."""
     sets: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
@@ -1752,7 +2069,9 @@ class VideoConfig(_Strict):
     """Named voices for dialogue (name: {voice_id, settings, label, color, ...}), each the base voice with what it sets changed; scenes and beats pick one with voice: NAME."""
     characters: list[CharacterEntry] = Field(default_factory=list)
     """Cartoon characters ({name, voice, look, colors}), declared once and used by any scene; names unique."""
-    subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
+    host: Identifier | HostConfig | None = None
+    """A cartoon host drawn beside the content of every scene (not stage or card scenes): a character name, or {character, side, size, place, floor, floor_color, facing, speaks, pose, expression, auto_direct}; a scene's host: wins (false: none there)."""
+    subtitles:SubtitlesConfig = Field(default_factory=SubtitlesConfig)
     """What the SRT shows besides the narration (speaker names)."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)
     """Beat padding and duration estimate."""
@@ -1773,7 +2092,9 @@ class VideoConfig(_Strict):
     sfx: SfxConfig = Field(default_factory=SfxConfig)
     """Sound effects of the whole video: automatic sounds for built-in animations, overall level."""
     music: MusicSetting = None
-    """Background music: a bed name or file, {source, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids."""
+    """Background music: a bed name or file, {source | compose, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids; compose: {mood, ...} composes music."""
+    soundfont: str | None = Field(default=None, min_length=1)
+    """SoundFont (an .sf2 or .sf3 file, relative to the project) that composed music is played with; default: GeneralUser GS 2.0.3, downloaded once into vidgen's cache (`vidgen soundfont fetch`)."""
     audio: AudioConfig = Field(default_factory=AudioConfig)
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
     transition: TransitionSetting | None = None
@@ -1802,6 +2123,8 @@ class VideoConfig(_Strict):
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
     motion_effects: bool = True
     """Motion effects on stage scenes, added on their own while cartoon_motion is lively or calm (smaller): dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture; false: none (a stage's motion_effects param wins)."""
+    drawing: DrawingConfig | None = None
+    """How the cartoons are drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: stage scenes and the host; a stage's drawing param wins key by key; default: normal, flat, none (as drawn)."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
@@ -1939,6 +2262,28 @@ class VideoConfig(_Strict):
                 if first <= b and a <= last:
                     problems.append(f"{where} overlaps {other} (each scene can have one music cue)")
             spans.append((first, last, where))
+        return problems + self._scene_compose_problems(index)
+
+    def _scene_compose_problems(self, index: dict[str, int]) -> list[str]:
+        """A scene's ``music: {mood, key, ...}`` needs a fitted ``compose:`` cue over the scene
+        (no ``bars``) and must compose."""
+        from vidgen.composer import settings_problems
+        from vidgen.musicfit import cue_settings, is_fitted, scene_settings
+
+        problems: list[str] = []
+        cues = self.music_cues
+        for i, scene in enumerate(self.scenes):
+            if not isinstance(scene.music, SceneMusic) or not scene.music.compose_keys:
+                continue
+            where = f"scenes[{i}].music"
+            covering = [c for c in cues if (index.get(c.from_, -1) if c.from_ else 0) <= i <= (index.get(c.to, -1) if c.to else len(self.scenes) - 1)]
+            if not covering or not is_fitted(covering[0]):
+                keys = ", ".join(scene.music.compose_keys)
+                problems.append(f"{where}: {keys} change composed music that follows the video: put the scene under a music cue with compose: and no bars")
+                continue
+            settings = scene_settings(cue_settings(covering[0].compose), scene.music)  # type: ignore[arg-type]
+            for problem in settings_problems(settings.mood, settings.key, settings.tempo, settings.instruments):
+                problems.append(f"{where}: {problem}")
         return problems
 
     @property
@@ -2004,10 +2349,11 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:
         raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None
+    from vidgen.cartoon.host import host_problems
     from vidgen.includes import set_reference_problems
     from vidgen.voices import voice_provider_problems, voice_reference_problems
 
-    problems = voice_reference_problems(config) + voice_provider_problems(config) + set_reference_problems(config)
+    problems = voice_reference_problems(config) + voice_provider_problems(config) + set_reference_problems(config) + host_problems(config)
     if problems:
         lines = [f"{source}: invalid config", *(f"  {problem}" for problem in problems)]
         raise VidgenError("\n".join(lines), problems=problems)

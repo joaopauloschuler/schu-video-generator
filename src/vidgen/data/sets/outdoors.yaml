@@ -1,0 +1,102 @@
+# Built-in outdoor sets (DESIGN.md §76). A stage scene uses one with set: NAME when the project's
+# own sets: has no set of that name; its params override the set's as for any set (CONFIG
+# "Ready-made sets"). Every set leaves two marks clear for two characters at depth 0:
+# stand_left and stand_right.
+sets:
+  city_street:                   # shop fronts across the road, a lamp post, a bench, a bus stop
+    background: ["#8FC3E8", "#DCEFFA"]
+    ground_color: "#BDC2CA"
+    light: day
+    ambience: city
+    marks: {stand_left: 0.3, stand_right: 0.68, bench: 0.5, bus_stop: 0.9}
+    layers:
+      - place: background
+        shapes:
+          - {shape: rect, x: 0.06, y: 0.3, width: 0.3, height: 0.42, color: "#B7C4D6"}
+          - {shape: rect, x: 0.3, y: 0.3, width: 0.22, height: 0.56, color: "#A9B8CC"}
+          - {shape: rect, x: 0.5, y: 0.3, width: 0.3, height: 0.36, color: "#B7C4D6"}
+          - {shape: rect, x: 0.7, y: 0.3, width: 0.24, height: 0.5, color: "#A9B8CC"}
+          - {shape: rect, x: 0.93, y: 0.3, width: 0.3, height: 0.4, color: "#B7C4D6"}
+    props:
+      - {prop: shop, at: 0.24, depth: 0.9}
+      - {prop: shop, at: 0.76, depth: 0.9, color: secondary, detail: primary}
+      - {prop: road, at: centre, depth: 0.5}
+      - {prop: lamp, at: 0.07, depth: 0.2}
+      - {prop: bench, at: bench, depth: 0.25}
+      - {prop: bus_stop, at: bus_stop, depth: 0.15}
+
+  park:                          # a fountain on the path, a fence at the back, flowers, a bench
+    background: ["#93C9EC", "#E2F2FB"]
+    ground_color: "#9CCB7F"
+    light: day
+    ambience: auto
+    marks: {stand_left: 0.3, stand_right: 0.7, fountain: 0.5, bench: 0.84}
+    layers:
+      - {place: background, shapes: [{shape: hills, y: 0.22, width: 0.9, height: 0.2, color: "#86BB6E"}]}
+    props:
+      - {prop: path, at: centre, depth: 0.45}
+      - {prop: fence, at: 0.14, depth: 0.95}
+      - {prop: fence, at: 0.86, depth: 0.95}
+      - {prop: tree, at: 0.15, depth: 0.7}
+      - {prop: fountain, at: fountain, depth: 0.6}
+      - {prop: bench, at: bench, depth: 0.25}
+      - {prop: flowers, at: 0.16, depth: 0.3}
+      - {prop: flowers, at: 0.93, depth: 0.55, color: primary}
+
+  beach:                         # the sea on the left with waves, sand, a beach umbrella, shells
+    background: ["#7FC4EE", "#E6F5FC"]
+    ground_color: "#F1D9A2"
+    light: day
+    ambience: false
+    marks: {stand_left: 0.4, stand_right: 0.84, umbrella: 0.63, shore: 0.15}
+    water: {left: 0.0, right: 0.3}
+    layers:
+      - {place: background, shapes: [{shape: rect, x: 0.5, y: 0.26, width: 4.0, height: 0.08, color: "#4C9BD6"}]}
+    props:
+      - {prop: sun, at: 0.88, lift: 0.56}
+      - {prop: beach_umbrella, at: umbrella, depth: 0.7}
+      - {prop: shell, at: 0.55, depth: 0.1}
+      - {prop: shell, at: 0.95, depth: 0.2, color: "#F4E9DC"}
+
+  forest:                        # trees and pines at several depths, a log, mushrooms
+    background: ["#A8D5C2", "#E4F2E8"]
+    ground_color: "#7FA865"
+    light: morning
+    ambience: auto
+    marks: {stand_left: 0.32, stand_right: 0.68, log: 0.5}
+    layers:
+      - place: background
+        shapes:
+          - {shape: triangle, x: 0.05, y: 0.28, width: 0.14, height: 0.34, color: "#8DB89A"}
+          - {shape: triangle, x: 0.25, y: 0.28, width: 0.12, height: 0.28, color: "#8DB89A"}
+          - {shape: triangle, x: 0.5, y: 0.28, width: 0.15, height: 0.36, color: "#8DB89A"}
+          - {shape: triangle, x: 0.74, y: 0.28, width: 0.12, height: 0.3, color: "#8DB89A"}
+          - {shape: triangle, x: 0.95, y: 0.28, width: 0.14, height: 0.34, color: "#8DB89A"}
+    props:
+      - {prop: pine, at: 0.12, depth: 0.95}
+      - {prop: pine, at: 0.6, depth: 0.95}
+      - {prop: tree, at: 0.36, depth: 0.85}
+      - {prop: tree, at: 0.86, depth: 0.85}
+      - {prop: pine, at: 0.15, depth: 0.55}
+      - {prop: tree, at: 0.84, depth: 0.5}
+      - {prop: bush, at: 0.27, depth: 0.4}
+      - {prop: log, at: log, depth: 0.35}
+      - {prop: mushroom, at: 0.2, depth: 0.1}
+      - {prop: mushroom, at: 0.84, depth: 0.15}
+
+  snowy_hills:                   # snow lying on white hills, pines, a rock
+    background: ["#B9D3EA", "#EEF4FA"]
+    ground_color: "#E8EFF7"
+    light: day
+    ambience: false
+    marks: {stand_left: 0.34, stand_right: 0.68}
+    layers:
+      - {place: background, shapes: [{shape: hills, y: 0.24, width: 1.1, height: 0.26, color: "#C9DAEC"}]}
+      - {place: middle, shapes: [{shape: hills, y: 0.22, width: 0.7, height: 0.14, color: "#F1F5FA"}]}
+    particles: [{kind: snow, density: 0.5, settle: true, settled: 60}]
+    props:
+      - {prop: pine, at: 0.15, depth: 0.6}
+      - {prop: pine, at: 0.24, depth: 0.9}
+      - {prop: pine, at: 0.84, depth: 0.7}
+      - {prop: pine, at: 0.6, depth: 0.95}
+      - {prop: rock, at: 0.5, depth: 0.5, scale: 1.6}

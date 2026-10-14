@@ -204,7 +204,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
-    "character_sheet", "direct", "screenplay", "cast",
+    "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview",
 }
 
 
@@ -288,6 +288,8 @@ def test_server_tools_guide_and_resources(tmp_path: Path) -> None:
         assert "did you mean" in error_text(await client.call_tool("guide", {"topic": "pacng"}))
         assert "may not start with '-'" in error_text(await client.call_tool("guide", {"topic": "--list"}))
         assert "scene=TYPE" in error_text(await client.call_tool("schema", {}))  # the whole schema only on request
+        assert "did you mean 'calm'" in error_text(await client.call_tool("music_preview", {"mood": "calmm"}))
+        assert "outside the folder" in error_text(await client.call_tool("music_preview", {"mood": "calm", "out": "../x"}))
         stat = doc_of(await client.call_tool("schema", {"scene": "stat"}))
         assert stat["schema"]["properties"]["value"] and len(json.dumps(stat)) < 50_000
 
@@ -340,6 +342,7 @@ def test_server_validate_paths_and_cost_guards(tmp_path: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_server_storyboard_and_lint_return_pictures(tmp_path: Path) -> None:
     tiny_project(tmp_path / "proj")
 
@@ -359,6 +362,10 @@ def test_server_storyboard_and_lint_return_pictures(tmp_path: Path) -> None:
 
         doc = doc_of(await client.call_tool("lint", {"project": "proj", "fail_on": "never"}))
         assert doc["command"] == "lint" and doc["stills"] == 2 and doc["rendered"] == []  # the storyboard's stills reused
+
+        doc = doc_of(await client.call_tool("animatic", {"project": "proj", "captions": False, "no_audio": True}))  # Step 138
+        assert (doc["command"], doc["rendered"], doc["captions"], doc["audio"]) == ("animatic", [], False, False)
+        assert Path(doc["output"]) == (tmp_path / "proj" / "output" / "out_animatic.mp4").resolve()
 
     run_session(tmp_path, body)
 

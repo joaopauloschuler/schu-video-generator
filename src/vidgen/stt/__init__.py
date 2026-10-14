@@ -6,7 +6,8 @@
 - :func:`stt_settings` gives what a transcript depends on (provider, model, language), without
   importing a provider library: the transcript cache (:mod:`vidgen.readback`) and the
   ``readback`` lint rule key on it.
-- A provider returns a :class:`Transcript`: the text heard and its words with times.
+- A provider returns a :class:`Transcript`: the text heard and its words with times (and, from
+  faster-whisper, how sure the recogniser is of each word: ``vidgen readback``'s word flags).
 
 No manim import.
 """
@@ -33,11 +34,13 @@ DEFAULT_MODELS: dict[str, str] = {"faster_whisper": "small", "elevenlabs": "scri
 
 @dataclass(frozen=True)
 class TranscriptWord:
-    """A word heard and when (seconds from the start of the audio)."""
+    """A word heard and when (seconds from the start of the audio); ``probability`` (0-1) how sure
+    the recogniser is of it (``None``: the provider does not say)."""
 
     text: str
     start: float
     end: float
+    probability: float | None = None
 
 
 @dataclass(frozen=True)
@@ -62,19 +65,35 @@ class Transcript:
             return [None] * len(self.text.split())
         return [(word.start, word.end) for word in self.words for _ in word.text.split()]
 
+    def word_probabilities(self) -> list[float | None]:
+        """For each of :meth:`word_texts`, the recogniser's probability, or ``None``."""
+        if not self.words:
+            return [None] * len(self.text.split())
+        return [word.probability for word in self.words for _ in word.text.split()]
+
+    @property
+    def has_probabilities(self) -> bool:
+        """Whether any word has a probability."""
+        return any(word.probability is not None for word in self.words)
+
     def to_json(self) -> dict[str, Any]:
-        """``{text, language, words: [[text, start, end], ...]}``."""
+        """``{text, language, words: [[text, start, end(, probability)], ...]}``."""
         return {
             "text": self.text,
             "language": self.language,
-            "words": [[w.text, round(w.start, 3), round(w.end, 3)] for w in self.words],
+            "words": [
+                [w.text, round(w.start, 3), round(w.end, 3)] + ([] if w.probability is None else [round(w.probability, 4)])
+                for w in self.words
+            ],
         }
 
     @classmethod
     def from_json(cls, doc: dict[str, Any]) -> Transcript:
         """The transcript of :meth:`to_json`; ``ValueError`` / ``KeyError`` / ``TypeError`` if
         it is malformed."""
-        words = tuple(TranscriptWord(str(t), float(s), float(e)) for t, s, e in doc["words"])
+        words = tuple(
+            TranscriptWord(str(t), float(s), float(e), float(rest[0]) if rest else None) for t, s, e, *rest in doc["words"]
+        )
         language = doc.get("language")
         return cls(str(doc["text"]), words, None if language is None else str(language))
 

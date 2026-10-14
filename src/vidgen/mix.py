@@ -35,11 +35,11 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from vidgen import loudness
+from vidgen import loudness, musicfit
 from vidgen.ambience import AMBIENCE_BEDS, BEDS, LoopSource, ambience_spans
 from vidgen.config import DuckConfig, MusicCue, SceneMusic
 from vidgen.errors import VidgenError
-from vidgen.music import Source, is_bed
+from vidgen.music import Source, cue_scene_range, fallback_bed
 from vidgen.sfx import RATE
 
 if TYPE_CHECKING:
@@ -176,12 +176,14 @@ class Placement:
     scenes: list[str]
     source: Source
     gain: np.ndarray
+    fit: dict[str, Any] | None = None  # composed music fitted to the video (musicfit summary)
 
     def summary(self) -> dict[str, Any]:
-        """``{source, kind, from, to, start, end, volume, duck}`` (times in seconds)."""
-        return {
-            "source": self.cue.source,
-            "kind": "bed" if is_bed(self.cue.source) else "file",
+        """``{source, kind, from, to, start, end, volume, duck}`` (times in seconds), and
+        ``fit`` (sections, swells, pauses) for composed music fitted to the video."""
+        data = {
+            "source": self.source.label,
+            "kind": self.source.kind,
             "from": self.scenes[0],
             "to": self.scenes[-1],
             "start": round(self.start / RATE, 6),
@@ -189,6 +191,9 @@ class Placement:
             "volume": self.cue.volume,
             "duck": self.cue.duck.depth,
         }
+        if self.fit is not None:
+            data["fit"] = self.fit
+        return data
 
 
 @dataclass
@@ -313,23 +318,28 @@ def plan_music(project: Project, timings: dict[str, Any], total: int) -> list[Pl
     clips = None
     placements = []
     for k, cue in enumerate(cues):
-        first = order.index(cue.from_) if cue.from_ else 0
-        last = order.index(cue.to) if cue.to else len(order) - 1
+        first, last = cue_scene_range(cue, order)
         start = round(scenes[first]["start"] * RATE)
         end = total if last == len(order) - 1 else round((scenes[last]["start"] + scenes[last]["duration"]) * RATE)
-        source = Source(cue, project.root)
+        fitted = None
+        if musicfit.is_fitted(cue) and fallback_bed(cue) is None:  # composed for this video's timings
+            fitted = musicfit.fitted_music(project, timings, cue, first, last, start / RATE, end / RATE)
+        source = Source(cue, project.root, cfg.soundfont, project.build_dir / "music", fitted.score if fitted else None)
         stop = end if source.ends_at is None else min(end, start + source.ends_at)
+        fade_out = cue.fade_out
+        if fitted is not None:  # the piece ends by itself: the fade never starts before its closing chord
+            fade_out = min(fade_out, max(0.0, stop / RATE - start / RATE - fitted.closing_seconds))
         spans = speech
         if cue.duck.clips and cue.duck.depth > 0:
             clips = clip_spans(project, timings) if clips is None else clips
             spans = speech + clips
         gain = (
             10 ** (cue.volume / 20)
-            * _fade_curve(times, start / RATE, stop / RATE, cue.fade_in, cue.fade_out)
+            * _fade_curve(times, start / RATE, stop / RATE, cue.fade_in, fade_out)
             * scene_curve
             * 10 ** (duck_curve(spans, frames, cue.duck) / 20)
         )
-        placements.append(Placement(k, cue, start, stop, order[first : last + 1], source, gain))
+        placements.append(Placement(k, cue, start, stop, order[first : last + 1], source, gain, fitted.summary(start / RATE) if fitted else None))
     return placements
 
 

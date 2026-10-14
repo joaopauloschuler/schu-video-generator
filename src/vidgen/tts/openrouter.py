@@ -10,7 +10,9 @@ The endpoint answers with raw audio (``response_format`` ``mp3``, or ``pcm``: 16
 which some models such as Gemini TTS return only); anything that is not MP3 is converted with
 ffmpeg so the ``audio/`` cache always holds MP3s. No neighbouring-beat context, no character
 timings and no ``language_code`` exist on this API: the language follows the text, and
-``instructions`` can name a language or accent.
+``instructions`` can name a language or accent. A beat's ``emotion`` becomes a sentence added to
+the ``instructions`` of models that take them, else a change of the audio's speed, pitch and
+loudness afterwards (DESIGN.md §73).
 
 Free lookups (no key): ``GET /api/v1/models?output_modalities=speech`` (every TTS model with its
 voices and list price) and ``GET /api/v1/models/{author}/{slug}/endpoints`` (each provider's
@@ -41,6 +43,7 @@ from typing import Any
 
 from vidgen import httpapi
 from vidgen.config import VoiceConfig
+from vidgen.emotions import Prosody, named_cues
 from vidgen.errors import VidgenError
 from vidgen.imagegen import PriceQuote
 from vidgen.imagegen.openrouter import (
@@ -56,6 +59,7 @@ from vidgen.imagegen.openrouter import (
     policy_intro,
     read_api_key,
 )
+from vidgen.tts import prosody
 
 API_URL = f"{API_BASE}/audio/speech"
 #: Every text-to-speech model with ``supported_voices`` and list ``pricing`` (public).
@@ -99,6 +103,12 @@ def known_voices(model: str) -> list[str] | None:
     entry = snapshot()["models"].get(model)
     voices = entry.get("voices") if isinstance(entry, dict) else None
     return list(voices) if isinstance(voices, list) else None
+
+
+def takes_instructions(model: str) -> bool:
+    """Whether OpenRouter documents ``instructions`` for ``model`` (OpenAI and Gemini TTS:
+    :data:`INSTRUCTION_PREFIXES`); an emotion becomes a sentence of them there (DESIGN.md §73)."""
+    return model.startswith(INSTRUCTION_PREFIXES)
 
 
 def voices_hint(voices: list[str], limit: int = 8) -> str:
@@ -265,7 +275,7 @@ def voice_notes(voice: VoiceConfig, lookup: SpeechLookup) -> list[str]:
             notes.append(f"{model} lists voices ({voices_hint(voices)}) but voice: is not set; the request may be refused")
         elif voice.voice not in voices:
             notes.append(f"voice '{voice.voice}' is not among the voices OpenRouter lists for {model} ({voices_hint(voices)})")
-    if voice.instructions is not None and not model.startswith(INSTRUCTION_PREFIXES):
+    if voice.instructions is not None and not takes_instructions(model):
         notes.append(f"{model} may ignore instructions (OpenRouter documents them for OpenAI and Gemini TTS models)")
     if voice.speed is not None and not model.startswith(SPEED_PREFIXES):
         notes.append(f"{model} may ignore speed or refuse a value other than 1 (OpenRouter documents it for OpenAI TTS)")
@@ -329,16 +339,21 @@ def pcm_rate(content_type: str | None) -> int:
     return int(found.group(1)) if found else PCM_RATE
 
 
-def convert_to_mp3(data: bytes, input_args: list[str], ffmpeg: str | None = None, source: str = "OpenRouter's audio") -> bytes:
-    """``data`` (read with ffmpeg's ``input_args``) encoded as MP3; ``source`` names it in errors."""
+def convert_to_mp3(
+    data: bytes, input_args: list[str], ffmpeg: str | None = None, source: str = "OpenRouter's audio", filters: str | None = None
+) -> bytes:
+    """``data`` (read with ffmpeg's ``input_args``) encoded as MP3, through the audio ``filters``
+    when given; ``source`` names it in errors."""
     from vidgen.render.ffmpeg import find_ffmpeg, run_ffmpeg
 
     exe = ffmpeg or find_ffmpeg()
+    filter_args = ["-af", filters] if filters else []
     with tempfile.TemporaryDirectory(prefix="vidgen-tts-") as folder:
         given, target = Path(folder) / "in.audio", Path(folder) / "out.mp3"
         given.write_bytes(data)
         try:
-            run_ffmpeg(exe, [*input_args, "-i", str(given), "-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, str(target)], f"converting {source} to MP3")
+            args = [*input_args, "-i", str(given), *filter_args, "-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, str(target)]
+            run_ffmpeg(exe, args, f"converting {source} to MP3")
         except (OSError, subprocess.SubprocessError) as exc:
             raise VidgenError(f"cannot convert {source} to MP3: {exc}") from None
         return target.read_bytes()
@@ -357,6 +372,27 @@ def as_mp3(data: bytes, content_type: str | None, requested: str, ffmpeg: str | 
         return convert_to_mp3(data, ["-f", "s16le", "-ar", str(pcm_rate(content_type)), "-ac", "1"], ffmpeg)
     preview = data[:200].decode("utf-8", errors="replace").strip()
     raise VidgenError(f"OpenRouter returned no audio vidgen can read ({content_type or 'no content type'}): {preview}")
+
+
+def with_prosody(mp3: bytes, emotion: Prosody, ffmpeg: str | None = None) -> bytes:
+    """``mp3`` spoken with ``emotion`` afterwards (DESIGN.md §73), for models without
+    instructions: re-encoded at 24 kHz mono with its gain (:func:`prosody.apply_gain`, a boost
+    soft-limited), speed (``atempo``, the pitch kept) and pitch (:func:`prosody.pitch_filter`,
+    the length kept). Its pauses are not changed: that needs word timings, which OpenRouter does
+    not return."""
+    from vidgen.sfx import decode_audio
+    from vidgen.tts.kokoro import SAMPLE_RATE, pcm16, pcm_to_mp3
+
+    with tempfile.TemporaryDirectory(prefix="vidgen-tts-") as folder:
+        path = Path(folder) / "speech.mp3"
+        path.write_bytes(mp3)
+        try:
+            samples = decode_audio(path, SAMPLE_RATE, mono=True).reshape(-1)
+        except Exception as exc:  # noqa: BLE001 - PyAV raises its own error types
+            raise VidgenError(f"cannot read OpenRouter's audio to apply the emotion {emotion.name}: {exc}") from None
+    samples = prosody.apply_gain(samples, emotion.gain)
+    filters = [f for f in (prosody.tempo_filter(emotion.speed), prosody.pitch_filter(emotion.pitch, SAMPLE_RATE)) if f]
+    return pcm_to_mp3(pcm16(samples), ffmpeg, ",".join(filters) or None)
 
 
 def _pcm_only_error(message: str) -> bool:
@@ -386,6 +422,7 @@ class OpenRouterTTSProvider:
         self,
         voice: VoiceConfig,
         *,
+        emotion: Prosody | None = None,
         timeout: float = 120.0,
         retries: int = 3,
         backoff: float = 4.0,
@@ -397,6 +434,9 @@ class OpenRouterTTSProvider:
         if voice.provider != "openrouter" or voice.model is None:
             raise VidgenError("the OpenRouter TTS provider needs voice.provider: openrouter and a model")
         self.voice = voice
+        #: The emotion as spoken (DESIGN.md §73): an instruction for models that take them (by its
+        #: name), else applied to the audio afterwards (by its numbers); ``None``: none.
+        self.emotion = emotion if emotion is not None and self._speaks(emotion) else None
         self.timeout = timeout
         self.retries = retries
         self.backoff = backoff
@@ -416,12 +456,46 @@ class OpenRouterTTSProvider:
         """The OpenRouter model id."""
         return str(self.voice.model)
 
+    @property
+    def takes_instructions(self) -> bool:
+        """Whether OpenRouter documents ``instructions`` for the model (:data:`INSTRUCTION_PREFIXES`)."""
+        return takes_instructions(self.model)
+
+    def _speaks(self, emotion: Prosody) -> bool:
+        """Whether ``emotion`` changes this model's audio: its name has an instruction, or (no
+        instructions) its speed, pitch or gain differ (the pauses need word timings)."""
+        if self.takes_instructions:
+            return named_cues(emotion) is not None
+        return (emotion.speed, emotion.pitch, emotion.gain) != (1.0, 0.0, 0.0)
+
+    @property
+    def instructions(self) -> str | None:
+        """The ``instructions`` sent: the voice's, then the emotion's sentence (models that take
+        instructions)."""
+        own = self.voice.instructions
+        cues = named_cues(self.emotion) if self.takes_instructions else None
+        if cues is None:
+            return own
+        if own is None:
+            return cues.instruction
+        own = own.strip()
+        return f"{own}{'' if own.endswith(('.', '!', '?')) else '.'} {cues.instruction}"
+
     # ----- cache keys ------------------------------------------------------------------------
 
     def spec(self) -> dict[str, Any]:
-        """What the audio depends on besides the text: provider, model, voice, instructions, speed."""
+        """What the audio depends on besides the text: provider, model, voice, instructions, speed
+        and, only with one, the emotion (its name and instruction, or the numbers applied to
+        the audio)."""
         v = self.voice
-        return {"provider": self.name, "model": v.model, "voice": v.voice, "instructions": v.instructions, "speed": v.speed}
+        spec = {"provider": self.name, "model": v.model, "voice": v.voice, "instructions": v.instructions, "speed": v.speed}
+        if self.emotion is not None:
+            cues = named_cues(self.emotion) if self.takes_instructions else None
+            if cues is not None:
+                spec["emotion"] = {"name": self.emotion.name, "instruction": cues.instruction}
+            else:
+                spec["emotion"] = {key: value for key, value in self.emotion.spec().items() if key != "pauses"}
+        return spec
 
     def cache_key(self, text: str) -> str:
         """sha1 of ``json(spec, sorted keys) | text`` (DESIGN.md §66)."""
@@ -441,13 +515,13 @@ class OpenRouterTTSProvider:
 
     def request_body(self, text: str) -> dict[str, Any]:
         """JSON body of ``POST /audio/speech``: model, input, response format, then voice,
-        instructions and speed when set."""
+        instructions (with the emotion's sentence) and speed when set."""
         body: dict[str, Any] = {"model": self.model, "input": text, "response_format": self.response_format}
         v = self.voice
         if v.voice is not None:
             body["voice"] = v.voice
-        if v.instructions is not None:
-            body["instructions"] = v.instructions
+        if self.instructions is not None:
+            body["instructions"] = self.instructions
         if v.speed is not None:
             body["speed"] = v.speed
         return body
@@ -457,7 +531,8 @@ class OpenRouterTTSProvider:
         read_api_key("tts")
 
     def synthesize(self, text: str, previous_text: str | None = None, next_text: str | None = None) -> bytes:
-        """MP3 bytes for ``text`` (neighbours are not sent: the API has no context fields).
+        """MP3 bytes for ``text`` (neighbours are not sent: the API has no context fields), with
+        the emotion applied to the audio on a model without instructions (:func:`with_prosody`).
         Raises :class:`VidgenError` on any failure."""
         try:
             data, headers = self._send(text)
@@ -473,7 +548,10 @@ class OpenRouterTTSProvider:
         generation = headers.get("x-generation-id")
         if generation:
             self.generations.append(generation.strip())
-        return as_mp3(data, headers.get("content-type"), self.response_format, self._ffmpeg)
+        mp3 = as_mp3(data, headers.get("content-type"), self.response_format, self._ffmpeg)
+        if self.emotion is not None and not self.takes_instructions:
+            return with_prosody(mp3, self.emotion, self._ffmpeg)
+        return mp3
 
     def _send(self, text: str) -> tuple[bytes, dict[str, str]]:
         key = read_api_key("tts")

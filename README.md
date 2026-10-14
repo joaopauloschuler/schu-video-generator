@@ -97,6 +97,16 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
 - **Cartoon series**: `include: [../shared/cast.yaml, ../shared/sets.yaml]` shares characters,
   voices and named stage sets between episodes; a scene's `set: meadow` starts from the set and
   overrides what it needs ([example](examples/cartoon_series)).
+- **Ready-made sets and drawing styles**: `set: city_street` (or `park`, `beach`, `forest`,
+  `snowy_hills`, `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`) gives a stage a built-in
+  set with props, light, ambience and marks for two characters and every seat
+  ([docs](docs/CONFIG.md#ready-made-sets-set-city_street)); `drawing: {outline: bold, shading: soft, texture:
+  storybook}` changes how the whole video is drawn ([docs](docs/CONFIG.md#drawing-style-drawing)).
+- **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
+  scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
+  mouth follows the narration; it points at items, reacts, walks to the other side, enters and
+  leaves, by hand or with `auto_direct` ([docs](docs/CONFIG.md#a-host-beside-any-scene-host),
+  [example](examples/host-explainer)).
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
   look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
@@ -158,8 +168,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   (faster-whisper locally, extra `schu-video-generator[stt]`, or ElevenLabs) and compares them with the beat
   texts: a word error rate per beat, the words expected and heard ("K-Phi-3" said "kay fye three",
   heard "kay five three"), and a suggested fix — a pronunciation entry for a term misheard in
-  several beats, regenerating a beat that lost words. Transcripts are cached; `vidgen lint`'s
-  `readback` rule reports the beats above the threshold ([reference](docs/CONFIG.md#readback-vidgen-readback)).
+  several beats, regenerating a beat that lost words. It also lists single words to listen to
+  (heard with low confidence or after an odd pause), with their time in the video and a fix.
+  Transcripts are cached; `vidgen lint`'s `readback` rule reports the beats above the threshold,
+  and `vidgen lint --readback` the words (rule `unclear_speech`) ([reference](docs/CONFIG.md#readback-vidgen-readback)).
 - **Generated images**: an `image` scene can take `generate: {prompt, negative, style, aspect,
   seed}` instead of a file. `vidgen imagegen` makes the missing pictures once with the OpenAI
   Images API (`OPENAI_API_KEY`, the default) or any image model on OpenRouter
@@ -177,7 +189,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `vidgen validate` lists them. Captions and the SRT break lines by the language's rules, the
   speed lint uses its rate, ElevenLabs gets its `language_code` where the model takes one, the
   MP4 its audio language tag, and translated beats get their own `audio/<variant>/`
-  ([reference](docs/CONFIG.md#languages-and-translations)).
+  ([reference](docs/CONFIG.md#languages-and-translations)). Cartoons are dubbed: `dub: {pt:
+  pm_alex}` on a voice, or a Kokoro voice of the language and the same kind chosen for you, with
+  lip sync from each language's audio; `--all-languages` on `tts`, `render` and `lint` does every
+  language in one command ([dubbing](docs/CONFIG.md#dubbing-dub---all-languages)).
 - **Multiple voices**: `voices: {ana: {voice_id: ..., label: "Dr. Ana"}}` plus `voice: ana` on a
   scene or a beat for interviews and dialogue; each named voice inherits the base `voice:`, only
   its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
@@ -192,6 +207,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `schu-video-generator[kokoro]`, below). One TTS provider per video — named voices change the
   voice, not the provider — and a variant may switch the whole video to another one
   ([reference](docs/CONFIG.md#narration-providers)).
+- **Lines with feeling**: `emotion: excited` (or `sad`, `whisper`, `doubtful`... 13 in all, or
+  your own speed, pitch, loudness and pauses) on a beat or a voice; Kokoro changes how the line
+  is spoken, ElevenLabs and OpenRouter get tags, settings or instructions
+  ([reference](docs/CONFIG.md#voices-with-feeling-emotion)).
 - **Sound effects**: eleven synthesised sounds (whoosh, swoosh, pop, click, tick, typing, riser,
   chime, success, error, thud; free to use in your videos, including commercially; no
   attribution needed) or your own `assets/sfx/NAME.wav`, placed as a beat
@@ -210,6 +229,13 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   (EBU R128) with a −1.5 dBTP true-peak limiter (`audio: {normalize, target_lufs, true_peak}`;
   narration-only videos keep their level unless `normalize: true`); `vidgen render` reports the
   measured loudness and `vidgen list-music` describes the beds in words ([reference](docs/CONFIG.md#background-music-music)).
+  With the `music` extra, `music: {compose: {mood: calm}}` composes original music in one of eight
+  moods (calm, focused, curious, upbeat for explainers; playful, sleepy, tense, triumphant for
+  cartoons), played with real instruments ([reference](docs/CONFIG.md#composed-music-compose)):
+  composed for the video's timings, every scene change on a bar line, a mood per scene
+  (`music: {mood: tense}`), swells on reveals, a pause before a punchline and a closing cadence
+  ([follows the video](docs/CONFIG.md#music-that-follows-the-video)). Without the extra the mood's
+  bed plays and `vidgen validate` says so.
 - **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
   `crossfade` (the scenes overlap, the video gets shorter by it), `fade_color` through a theme
   colour (`{type: fade_color, color: surface, duration: 1.2}`), `push` (the next scene slides in
@@ -245,7 +271,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 `vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `music_preview`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast` — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).
@@ -348,9 +374,17 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
     helps older kokoro / misaki versions, which find it through the environment variable
     `PHONEMIZER_ESPEAK_LIBRARY=C:\Program Files\eSpeak NG\libespeak-ng.dll`. Japanese and Chinese
     voices also need `pip install "misaki[ja]"` / `"misaki[zh]"`.
+12. Optional, only for composed music (music written as notes and played with real instruments,
+    Phase N): `pip install ".[music]"` (symusic 0.5.9, ~3 MB). The SoundFont it plays with,
+    GeneralUser GS 2.0.3 (32.3 MB, free for commercial use), is downloaded on first use into
+    `%LOCALAPPDATA%\vidgen\soundfonts` and checked against its SHA-256; `vidgen soundfont fetch`
+    downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
+    Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
+    by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
 
 If PowerShell refuses to run `Activate.ps1`, run
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
+step by step, follow [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md).
 
 ### Linux (Ubuntu / Debian)
 
@@ -383,13 +417,18 @@ export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter an
 pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU-only PyTorch (~200 MB)
 pip install ".[kokoro]"
 sudo apt install espeak-ng                    # optional fallback: kokoro uses the copy bundled in espeakng-loader
+
+# 7. Optional: composed music (symusic); the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
+pip install ".[music]"
+vidgen soundfont fetch                        # or let the first composed render download it
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
 pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
 `sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
 terminal needs `source .venv/bin/activate` again before running `vidgen`. The optional extras
-work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`.
+work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`, `".[music]"`
+(macOS keeps the SoundFont in `~/Library/Caches/vidgen`).
 
 **Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (with 3.13 the extra installs
 nothing: use `python3.12 -m venv .venv`, or the forced install of Windows step 11, which worked on
@@ -446,15 +485,18 @@ narration.
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
-| `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
+| `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
+| `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to (needs the `music` extra) |
+| `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
-| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
+| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
-| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
+| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME \| --all-languages] [--no-audio] [--keep-going] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N\|auto] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
-| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`); exit code 1 on errors |
+| `vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions \| --no-captions] [--jobs N\|auto] [--output-dir DIR] [--json]` | `<output>_animatic.mp4`: the storyboard's stills held in time with the narration, with the video's audio and the subtitles drawn on; joined by ffmpeg in seconds when the stills are current (see [docs/CONFIG.md](docs/CONFIG.md#animatic-vidgen-animatic)) |
+| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME \| --all-languages] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--readback] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`; `--readback`: also transcribe and flag unclear words); exit code 1 on errors |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
 | `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
 | `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
@@ -473,7 +515,9 @@ the same flag); `build/` and `exports/` do not move.
 `render` renders only the scenes whose render is missing or out of date (their config, audio,
 assets, extensions or vidgen changed: the same check as `storyboard`), so a render after a
 storyboard of the same format just joins. Options: `--force` renders every scene again;
-`--preview` uses the `preview` resolution; `--scene ID` re-renders only those
+`--preview` uses the `preview` resolution; `--draft` makes a fast draft (about 8 fps, 240p, no
+idle motion, wind, shadows, particles or light grade, every timing and position kept;
+`<output>_draft.mp4` from `build/draft/`, see [docs/CONFIG.md](docs/CONFIG.md#drafts-vidgen-render---draft)); `--scene ID` re-renders only those
 scenes and re-joins with the existing renders of the others; `--variant NAME` applies a named
 variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing is unchanged);
 `--keep-going` renders the remaining scenes after a failure; `--jobs N` renders N scenes in
@@ -568,7 +612,8 @@ my_video/
   its screenplay (`rain_check.md`) after hand editing: a picnic basket, a napkin handed over and
   blown away, an umbrella opened too late and lost to a gust, visible wind, rain that stops at the
   ground and under the tree with a rain sound bed, puddles, light from day to storm grey to night
-  with stars, an overlap, an interruption, a comic sting and a pull-back, two music beds; about
+  with stars, an overlap, an interruption, a comic sting and a pull-back, composed music
+  (`playful`, `tense` for the storm, `sleepy` at night, a pause before the last line); about
   94 s with Kokoro narration (no audio committed).
 - [examples/cartoon-muffin-mystery](examples/cartoon-muffin-mystery) — "The Muffin Mystery", an
   indoor cartoon from its screenplay (`muffin_mystery.md`) after hand editing: a title card and an
@@ -584,12 +629,22 @@ my_video/
   fireplace, a steaming kettle, a running clock, a knock at the door, a gift opened (blushing) and a
   lamp switched on at nightfall; birdsong, rain, fire and room-tone beds, the `cartoon` music bed;
   about 94 s with Kokoro narration (no audio committed).
+- [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
+  an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
+  points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven
+  with a pointer line, crosses to the other side (the content slides over) and walks off; lines
+  said with feeling (`emotion:`), composed music in the `curious` mood; about 66 s with Kokoro
+  narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each release (0.3.0: cartoons, Kokoro and
+  OpenRouter narration, `output/`, `--jobs auto`), behaviour changes first.
+- [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md) — a short checklist to try a release on Windows
+  (install with the extras, a cartoon preview, fonts, MiKTeX, Kokoro) and what to report back.
 
 ## Your content and third-party services
 
@@ -606,7 +661,9 @@ my_video/
   domain), sound effects and music beds may be used in your videos, including commercially. No
   attribution is required in a video (the OFL and ISC notices apply to redistributing the files
   themselves; Natural Earth asks for none, though "Made with Natural Earth" is appreciated).
-  Details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+  So may composed music played with the default GeneralUser GS SoundFont (no attribution
+  required; suggested credit in step 12 of the Windows install). Details:
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Working on schu-video-generator
 

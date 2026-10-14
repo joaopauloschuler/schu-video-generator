@@ -289,6 +289,7 @@ def test_label_spot_side_is_kept_only_while_clear() -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_label_callouts_on_a_crowded_bar_chart(make_project, media: Path) -> None:
     """Step 56's routed case: ``kind: label`` with ``side: right | top | left`` on seven bars sat
     on a neighbour's bar or against values / the title; now each label is over its own bar and

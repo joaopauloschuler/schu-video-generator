@@ -36,7 +36,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -252,20 +252,24 @@ def project_problems(project: Project) -> list[Problem]:
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
-    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), a designed
+    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), the
+    ``soundfont:`` file (§81), a designed
     ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours,
-    SVG files (§69) and the shapes of their own poses (§69.3). Each problem points where its
+    SVG files (§69) and the shapes of their own poses (§69.3), and the host's floor colour and a
+    scene's own ``host:`` on a type that draws none (§71). Each problem points where its
     value is written: an ``include:`` file, a set (§69.35).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
     from vidgen.carry import carry_problems
     from vidgen.cartoon.cast import character_color_problems, character_look_problems, character_pose_problems
+    from vidgen.cartoon.host import host_color_problems
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.imagegen import imagegen_problems
     from vidgen.music import config_problems as music_problems
     from vidgen.overlays import overlay_problems
     from vidgen.sfx import config_problems as sfx_problems
+    from vidgen.soundfont import soundfont_problems
     from vidgen.thumbnail import thumbnail_problems
     from vidgen.transitions import color_problems as transition_color_problems
     from vidgen.transitions import iris_problems
@@ -290,6 +294,8 @@ def project_problems(project: Project) -> list[Problem]:
                 beat_problem = entry.cls.check_beat_count(len(scene.beats))
                 if beat_problem is not None:
                     problems.append(Problem(f"scenes[{i}].beats", f"type '{scene.type}' {beat_problem}"))
+                if scene.host not in (None, False) and not entry.cls.takes_host:
+                    problems.append(Problem(f"scenes[{i}].host", f"type '{scene.type}' draws no host (remove host: here; the video's host: skips it)"))
                 try:
                     params = entry.cls.validate_params(scene.params, theme)
                 except ValidationError as exc:
@@ -306,6 +312,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(overlay_problems(project, theme))
             problems.extend(voice_color_problems(project.config, theme))
             problems.extend(character_color_problems(project.config, theme))
+            problems.extend(host_color_problems(project.config, theme))
             problems.extend(character_look_problems(project.config, project.root))
             problems.extend(character_pose_problems(project.config, project.root))
             problems.extend(transition_color_problems(project.config, theme))
@@ -313,6 +320,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
+            problems.extend(Problem(loc, message) for loc, message in soundfont_problems(project.config.soundfont, project.root))
             problems.extend(thumbnail_problems(project, theme))
             problems.extend(Problem(loc, message) for loc, message in imagegen_problems(project))
     except VidgenError as exc:
@@ -408,12 +416,16 @@ def validate_warnings(project: Project) -> list[str]:
     characters' unavailable actions and part warnings (§69.2), parts the characters' own
     poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
     character that lacks the parts they need (§69.11), front views asked of SVG characters
-    (§69.44), and lines that overlap a line of their own voice
-    (§69.34)."""
+    (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
+    line of their own voice (§69.34), dubbed voices that lose their kind or merge (§80) and
+    composed music without the ``music`` extra or the SoundFont (§85)."""
     from vidgen.carry import carry_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
+    from vidgen.cartoon.host import host_warnings
     from vidgen.chapter_export import chapter_warnings
+    from vidgen.dubbing import dub_warnings
     from vidgen.imagegen import imagegen_warnings
+    from vidgen.music import music_warnings
     from vidgen.overlap import overlap_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
@@ -436,7 +448,10 @@ def validate_warnings(project: Project) -> list[str]:
         + shared_voice_warnings(project.config)
         + acting_warnings(project)
         + front_view_warnings(project.config)
+        + host_warnings(project.config)
         + overlap_warnings(project.config)
+        + dub_warnings(project)
+        + music_warnings(project.config)
     )
 
 
@@ -463,6 +478,8 @@ def _invalid_project(project: Project, problems: list[Problem]) -> VidgenError:
 
 def cmd_validate(args: argparse.Namespace) -> CommandResult:
     """Load the project (and every variant), check it and print a short summary."""
+    from vidgen.music import music_summary, music_summary_line
+
     if args.json:
         return _validate_json(args.project)
     project = Project.load(args.project)
@@ -491,6 +508,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
         print(line)
     for line in images_summary_lines(project, variants):
         print(line)
+    for entry in music_summary(config):
+        print(f"music:     {music_summary_line(entry)}")
     print("ok")
     return 0
 
@@ -505,13 +524,18 @@ def _validate_json(path: str) -> dict[str, Any]:
     problems, variants = validate_all(project, keep_going=True)
     log_validate_warnings(project, variants)
     error = _invalid_project(project, problems) if problems else None
+    from vidgen.music import music_summary
+
     images = [jsonout.images_json(p, found) for p, found in variant_images(project, variants)]
-    return jsonout.validate_document(project, problems, variants, error, images=images)
+    return jsonout.validate_document(project, problems, variants, error, images=images, music=music_summary(project.config))
 
 
 def language_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
     """``language: pt-BR (translations/pt.yaml: 40 translated, 2 stale)`` for the base config
-    and each variant with a language or a translation file (DESIGN.md §54)."""
+    and each variant with a language or a translation file (DESIGN.md §54), each followed by
+    ``dub [pt]: default bf_emma -> pf_dora (auto), ...`` when its voices are dubbed (§80)."""
+    from vidgen.dubbing import dub_summary
+
     lines = []
     for p in [project, *(v for v in variants.values() if v is not None)]:
         report = p.translation
@@ -524,6 +548,10 @@ def language_summary_lines(project: Project, variants: dict[str, Project | None]
             what += f" ({report.file}: {len(report.applied)} translated" + (f", {len(report.stale)} stale" if report.stale else "") + ")"
         label = "language:" if p.variant is None else f"language [{p.variant}]:"
         lines.append(f"{label:<10} {what}" if p.variant is None else f"{label} {what}")
+        dubbed = dub_summary(p)
+        if dubbed is not None:
+            label = "dub:" if p.variant is None else f"dub [{p.variant}]:"
+            lines.append(f"{label:<10} {dubbed}" if p.variant is None else f"{label} {dubbed}")
     return lines
 
 
@@ -592,13 +620,41 @@ def cmd_imagegen(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def each_language(args: argparse.Namespace, command: str, run: Callable[[str | None], CommandResult]) -> CommandResult:
+    """``run(variant)`` for ``--variant`` alone, or with ``--all-languages`` for the base config
+    and every variant in another language (:func:`vidgen.dubbing.language_variants`, DESIGN.md
+    §80) in turn: a heading line before each, the worst exit code, or with ``--json`` one document
+    whose ``languages`` lists each one's."""
+    if not getattr(args, "all_languages", False):
+        return run(args.variant)
+    from vidgen.dubbing import language_variants
+
+    if args.variant:
+        raise VidgenError("--all-languages makes the base config and every variant in another language: leave out --variant")
+    base = Project.load(args.project)
+    results: list[CommandResult] = []
+    for variant, language in [(None, base.config.language), *language_variants(base)]:
+        if not args.json:
+            print(f"== {variant or 'base config'} ({language or 'no language'}) ==", flush=True)
+        results.append(run(variant))
+    if args.json:
+        docs = [r for r in results if isinstance(r, dict)]
+        return jsonout.envelope(command, all(d.get("ok", True) for d in docs), languages=docs)
+    return max((r for r in results if isinstance(r, int)), default=0)
+
+
 def cmd_tts(args: argparse.Namespace) -> CommandResult:
-    """Generate narration audio for beats whose MP3 is missing or stale."""
+    """Generate narration audio for beats whose MP3 is missing or stale (``--all-languages``: for
+    every language, :func:`each_language`)."""
+    return each_language(args, "tts", lambda variant: _tts(args, variant))
+
+
+def _tts(args: argparse.Namespace, variant: str | None) -> CommandResult:
     from vidgen import extensions
     from vidgen.tts.run import run_tts
 
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant)
+    project = Project.load(args.project, variant=variant)
     with extensions.project_session(project):
         plan = run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run, voices=args.voice)
     if args.json:
@@ -608,7 +664,8 @@ def cmd_tts(args: argparse.Namespace) -> CommandResult:
 
 def cmd_readback(args: argparse.Namespace) -> CommandResult:
     """Transcribe the beats' MP3s (speech to text, cached) and compare them with their texts:
-    word error rate, differing words and suggested fixes per beat (DESIGN.md §57)."""
+    word error rate, differing words, unclear words and suggested fixes per beat (DESIGN.md
+    §57, §78)."""
     from vidgen.readback import report_lines, run_readback
 
     started = time.monotonic()
@@ -649,19 +706,23 @@ def cmd_translate_template(args: argparse.Namespace) -> CommandResult:
 
 def cmd_render(args: argparse.Namespace) -> CommandResult:
     """Render what changed (every scene with ``--force``, or the ``--scene`` ones), join the
-    scenes and write the MP4 and SRT."""
-    from vidgen.render.pipeline import render_project
-
+    scenes and write the MP4 and SRT (``--all-languages``: of every language, :func:`each_language`)."""
     if args.jobs < 1:
         raise VidgenError("--jobs must be at least 1")
     if args.frames_per_beat is not None and args.frames_per_beat < 1:
         raise VidgenError("--frames-per-beat must be at least 1")
+    return each_language(args, "render", lambda variant: _render(args, variant))
+
+
+def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
+    from vidgen.render.pipeline import render_project
+
     frames = args.frames_per_beat or (1 if args.frames else 0)
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir)
+    project = Project.load(args.project, variant=variant, output_dir=args.output_dir, draft=args.draft)
     result = render_project(
         project,
-        preview=args.preview,
+        preview=args.preview or args.draft,
         scenes=args.scene or None,
         no_audio=args.no_audio,
         keep_going=args.keep_going,
@@ -670,7 +731,7 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
         force=args.force,
     )
     if args.json:
-        return jsonout.render_document(project, result, args.preview, time.monotonic() - started)
+        return jsonout.render_document(project, result, args.preview or args.draft, time.monotonic() - started)
     reused = f", {len(result.reused)} reused" if result.reused else ""
     print(f"rendered {len(result.rendered)} scene(s){reused}")
     print(f"video:     {result.output}")
@@ -723,6 +784,26 @@ def cmd_storyboard(args: argparse.Namespace) -> CommandResult:
     for sheet in result.sheets:
         rel = sheet.path.relative_to(result.folder).as_posix()
         print(f"  {rel}  ({len(sheet.stills)} still{'s' if len(sheet.stills) != 1 else ''}, {sheet.width}x{sheet.height})")
+    return 0
+
+
+def cmd_animatic(args: argparse.Namespace) -> CommandResult:
+    """The storyboard's stills timed to the narration, with its audio and captions, as an MP4."""
+    from vidgen.animatic import make_animatic
+
+    started = time.monotonic()
+    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir)
+    result = make_animatic(project, no_audio=args.no_audio, captions=args.captions, jobs=args.jobs)
+    elapsed = time.monotonic() - started
+    if args.json:
+        return jsonout.animatic_document(project, result, elapsed)
+    reused = f", {len(result.reused)} reused" if result.reused else ""
+    print(f"rendered {len(result.rendered)} scene(s) for their stills{reused}")
+    print(f"animatic:  {result.output}")
+    print(f"stills:    {len(result.holds)} ({result.format.width}x{result.format.height}, captions {'on' if result.captions else 'off'})")
+    print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s), made in {elapsed:.1f} s")
+    if result.mix is not None:
+        print(f"loudness:  {_loudness_line(result.mix)}")
     return 0
 
 
@@ -982,11 +1063,16 @@ def cmd_export(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_lint(args: argparse.Namespace) -> CommandResult:
-    """Check the layout of every beat-end still (rendering what is needed) and report problems."""
+    """Check the layout of every beat-end still (rendering what is needed) and report problems
+    (``--all-languages``: in every language, :func:`each_language`)."""
+    return each_language(args, "lint", lambda variant: _lint(args, variant))
+
+
+def _lint(args: argparse.Namespace, variant: str | None) -> CommandResult:
     from vidgen.lint import lint_project, report_lines
 
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant)
+    project = Project.load(args.project, variant=variant)
     if (not args.rule or "contrast" in args.rule) and project.config.lint.rules.contrast.severity != "off":
         for message in theme_warnings(project):  # the theme itself, as `vidgen validate` does
             logging.getLogger("vidgen").warning(message)
@@ -998,6 +1084,8 @@ def cmd_lint(args: argparse.Namespace) -> CommandResult:
         fail_on=args.fail_on,
         jobs=args.jobs,
         force=args.force,
+        readback=args.readback,
+        log=lambda line: print(line, file=sys.stderr),
     )
     if args.json:
         return jsonout.lint_document(project, result, time.monotonic() - started)
@@ -1181,10 +1269,12 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     root = None
     if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
         root = find_config_file(args.project).resolve().parent
+    from vidgen import composer, synth
+
     preview_dir = Path(args.render_dir).resolve() if args.render_dir else None
     entries = music.music_entries(root, preview_dir)
     if args.json:
-        return jsonout.list_music_document(root, entries, preview_dir)
+        return jsonout.list_music_document(root, entries, preview_dir, composer.mood_entries(), composer.instrument_entries())
     for e in entries:
         if e["origin"] == "builtin":
             tempo = f"{e['tempo']} BPM" if e["tempo"] else "no beat"
@@ -1201,6 +1291,98 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     )
     if preview_dir is not None:
         print(f"previews: {preview_dir} (one loop of each bed as WAV)")
+    print()
+    print(f"composed music (music: {{compose: {{mood: NAME, key, tempo, instruments, seed, bars}}}}; symusic: {synth.symusic_status()};")
+    print("without the music extra the bed named below plays; `vidgen music preview --mood NAME` writes a WAV and a .mid):")
+    for m in composer.mood_entries():
+        print(f"{m['name']}  {m['family']}  {m['key']}, {m['tempo']:g} BPM, {m['meter']}, {m['bars']} bars ({m['loop_seconds']:.0f} s loop)  [bed: {m['fallback_bed']}]")
+        print(f"    description: {m['description']}")
+        print(f"    use: {m['use']}")
+    print("instruments (instruments: {melody|chords|pad|bass|drums: NAME | none | {instrument, volume, pan, reverb}}):")
+    for i in composer.instrument_entries():
+        where = "drum kit" if i["drums"] else f"{i['low']}-{i['high']}"
+        print(f"    {i['name']} (GM {i['program']}, {where}): {i['description']}")
+    return 0
+
+
+def cmd_music(args: argparse.Namespace) -> CommandResult:
+    """``preview``: compose a piece (the project's first ``compose:`` cue, changed by the options)
+    and write it as ``<mood>-seed<N>.wav`` (one pass and the reverb's tail) and ``.mid`` (§83)."""
+    import math
+
+    from vidgen import composer, loudness, soundfont, synth
+    from vidgen.score import write_midi
+    from vidgen.sfx import RATE, write_wav
+
+    settings: dict[str, Any] = {}
+    setting, root = None, Path.cwd()
+    if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        project = Project.load(args.project)
+        setting, root = project.config.soundfont, project.root
+        found = next((c.compose for c in project.config.music_cues if c.compose is not None), None)
+        if found is not None and args.mood in (None, found.mood):
+            settings = {"mood": found.mood, "key": found.key, "tempo": found.tempo, "instruments": found.instrument_settings(), "seed": found.seed, "bars": found.bars}
+    for name in ("mood", "key", "tempo", "seed", "bars"):
+        if getattr(args, name) is not None:
+            settings[name] = getattr(args, name)
+    if "mood" not in settings:
+        raise VidgenError(f"music preview: give --mood NAME (moods: {', '.join(composer.MOODS)}) or a project with music: {{compose: ...}}")
+    piece = composer.compose_piece(**settings)
+    synth.require_symusic()
+    audio = synth.render_score(piece.score, soundfont.resolve(setting, root))
+    out = Path(args.out).resolve()
+    stem = f"{piece.mood.name}-seed{piece.seed}"
+    wav, mid = out / f"{stem}.wav", out / f"{stem}.mid"
+    write_wav(wav, audio)
+    write_midi(piece.score, mid)
+    peak = float(loudness.peak_envelope(audio.astype("float64")).max())
+    if args.json:
+        lufs = loudness.integrated_loudness(audio)
+        return jsonout.music_preview_document(piece, wav, mid, len(audio) / RATE, lufs, 20 * math.log10(max(peak, 1e-9)))
+    print(f"mood: {piece.mood.name} ({piece.mood.family}), seed {piece.seed}: {piece.key.name}, {piece.tempo:g} BPM, {piece.mood.meter}/4, "
+          f"{piece.bars} bars = {piece.seconds:.1f} s (loops; the WAV adds {synth.TAIL_SECONDS:g} s of tail)")
+    print("parts: " + ", ".join(f"{v.role} {v.instrument.name} ({v.volume:+g} dB)" for v in piece.voices))
+    for k, phrase in enumerate(piece.phrases):
+        print(f"    bars {4 * k + 1:>3}-{4 * k + 4:<3} {phrase:<11} " + " | ".join(" ".join(c) for c in piece.chords[4 * k : 4 * k + 4]))
+    print(f"loudness: {loudness.integrated_loudness(audio):.1f} LUFS integrated, true peak {20 * math.log10(max(peak, 1e-9)):.1f} dBTP, {len(audio) / RATE:.1f} s")
+    print(f"wrote: {wav}")
+    print(f"wrote: {mid}")
+    return 0
+
+
+def cmd_soundfont(args: argparse.Namespace) -> int:
+    """``fetch``: download the default SoundFont into vidgen's cache (checked) unless it is there;
+    ``info``: show the SoundFont a project (or any project) uses (DESIGN.md §81)."""
+    from vidgen import soundfont, synth
+
+    setting, root = None, None
+    if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        project = Project.load(args.project)
+        setting, root = project.config.soundfont, project.root
+    if args.action == "fetch":
+        if setting:
+            print(f"note: this project plays composed music with soundfont: {setting}; fetching the default one anyway")
+        present = soundfont.default_path().is_file() and not args.force
+        if not present:
+            print(f"downloading {soundfont.NAME} ({soundfont.SIZE_BYTES / 1e6:.1f} MB) from {soundfont.URL}", flush=True)
+        path = soundfont.fetch(force=args.force)
+        print(f"{'already there' if present else 'saved'}: {path} (sha256 checked)")
+        return 0
+    found = soundfont.info(setting, root)
+    print(f"soundfont: {found.path} ({'soundfont: in video.yaml' if found.origin == 'project' else soundfont.NAME + ', the default'})")
+    if not found.exists:
+        what = "file not found" if found.origin == "project" else "not downloaded yet: `vidgen soundfont fetch` (or the first composed render) downloads it"
+        print(f"    {what}")
+    else:
+        assert found.size_bytes is not None
+        print(f"    size: {found.size_bytes:,} bytes ({found.size_bytes / 1e6:.1f} MB)")
+        print(f"    sha256: {found.sha256}")
+        if found.matches is not None:
+            print(f"    check: {'ok, the expected file' if found.matches else 'MISMATCH, not used: `vidgen soundfont fetch --force`'}")
+    print(f"    licence: {found.licence}")
+    if found.origin == "default":
+        print(f"    suggested credit: {soundfont.CREDIT}")
+    print(f"symusic: {synth.symusic_status()}")
     return 0
 
 
@@ -1330,6 +1512,13 @@ def build_parser() -> argparse.ArgumentParser:
             "default: output_dir: in video.yaml, else <project>/output)",
         )
 
+    def all_languages_arg(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--all-languages", action="store_true",
+            help="the base config and then every variant whose language: differs from it (a dubbed video per language), "
+            "one after the other; not with --variant",
+        )
+
     p = sub.add_parser("init", help="scaffold a new project")
     p.add_argument("dir", help="directory to create (must not exist or be empty)")
     examples = sorted(d.name for d in TEMPLATES_DIR.iterdir() if d.is_dir())
@@ -1407,6 +1596,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--render-dir", metavar="DIR", help="also write one loop of every bed as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_music)
 
+    p = sub.add_parser("music", help="composed music: preview writes a piece in a mood as WAV and .mid (needs the music extra)")
+    p.add_argument("action", choices=["preview"], help="preview: compose the project's compose: music (or --mood) and write it")
+    project_arg(p)
+    p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
+    p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
+    p.add_argument("--bars", type=int, metavar="N", help="length in bars, a multiple of 4 (default: the mood's)")
+    p.add_argument("--key", metavar="KEY", help="e.g. E, 'Eb major', 'F# minor' (default: the mood's)")
+    p.add_argument("--tempo", type=float, metavar="BPM", help="quarter notes per minute (default: the mood's)")
+    p.add_argument("--out", default=".", metavar="DIR", help="folder for <mood>-seed<N>.wav and .mid (default: .)")
+    p.set_defaults(func=cmd_music)
+
+    p = sub.add_parser("soundfont", help="the SoundFont composed music is played with: fetch downloads GeneralUser GS into vidgen's cache, info shows it")
+    p.add_argument("action", choices=["fetch", "info"], help="fetch: download it (once; checked against its SHA-256); info: path, size, hash, licence")
+    project_arg(p)
+    p.add_argument("--force", action="store_true", help="fetch: download it again even if the cached file is there")
+    p.set_defaults(func=cmd_soundfont)
+
     p = sub.add_parser("tts", help="generate narration audio (ElevenLabs, or OpenRouter with voice.provider: openrouter)")
     project_arg(p)
     p.add_argument("--force", action="store_true", help="regenerate even if up to date")
@@ -1414,9 +1620,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--beat", action="append", default=[], metavar="ID", help="only this beat (repeatable)")
     p.add_argument("--voice", action="append", default=[], metavar="NAME", help="only the beats of this voice (a voices: name or default; repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (may have its own voice)")
+    all_languages_arg(p)
     p.set_defaults(func=cmd_tts)
 
-    p = sub.add_parser("readback", help="transcribe the narration (speech to text) and compare it with the beat texts: misheard, missing or extra words")
+    p = sub.add_parser("readback", help="transcribe the narration (speech to text) and compare it with the beat texts: misheard, missing or extra words, unclear words and pauses")
     project_arg(p)
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (its audio folder and language)")
     p.add_argument("--beat", action="append", default=[], metavar="ID", help="only this beat (repeatable)")
@@ -1441,7 +1648,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("render", help="render the video")
     project_arg(p)
-    p.add_argument("--preview", action="store_true", help="fast low-resolution render")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--preview", action="store_true", help="fast low-resolution render")
+    quality.add_argument(
+        "--draft", action="store_true",
+        help="fastest check of timing and staging: ~8 fps, 240p, no idle / wind / shadows / particles / light grade (build/draft, ..._draft.mp4)",
+    )
     p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene (repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
@@ -1453,6 +1665,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
     output_dir_arg(p)
+    all_languages_arg(p)
     p.set_defaults(func=cmd_render)
 
     p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")
@@ -1467,6 +1680,18 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     p.set_defaults(func=cmd_storyboard)
+
+    p = sub.add_parser("animatic", help="the storyboard's stills timed to the narration, with audio and captions, as an MP4 (no Manim when the stills are current)")
+    project_arg(p)
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument("--no-audio", action="store_true", help="a silent animatic (no narration, effects or music)")
+    p.add_argument(
+        "--captions", action=argparse.BooleanOptionalAction, default=None,
+        help="draw the subtitles onto the stills (default: on, unless the video burns in a captions overlay)",
+    )
+    jobs_arg(p, when=" when stills are missing")
+    output_dir_arg(p)
+    p.set_defaults(func=cmd_animatic)
 
     p = sub.add_parser("thumbnail", help="write the video's thumbnail (<output>_thumbnail.png) from the thumbnail: config or a scene's frame")
     project_arg(p)
@@ -1577,6 +1802,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
+    p.add_argument(
+        "--readback", action="store_true",
+        help="also run the unclear_speech rule: transcribe the narration (as `vidgen readback`, cached) and flag unclear words (slow)",
+    )
+    all_languages_arg(p)
     p.set_defaults(func=cmd_lint)
 
     p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")

@@ -11,14 +11,15 @@ from typing import Any
 
 import yaml
 
-from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, parse_config
+from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, draft_format, parse_config
+from vidgen.emotions import Prosody, named_cues, prosody
 from vidgen.errors import Problem, VidgenError
 from vidgen.includes import ConfigSource, Origin, after_variant, attributed, attributed_error, expand_sets, project_relative, read_project_config
 from vidgen.kokoro_voices import voice_parts
 from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
-from vidgen.voicesounds import voiced_spoken
+from vidgen.voicesounds import is_tagged_voice, voiced_spoken
 
 CONFIG_NAMES: tuple[str, ...] = ("video.yaml", "video.yml", "video.json")
 #: Folder of the deliverables (MP4, SRT, chapter list, thumbnail) without ``output_dir:`` or ``--output-dir``.
@@ -80,8 +81,8 @@ CONFINE_ENV = "VIDGEN_CONFINE_ROOT"
 #: Config keys (anywhere in the config, variants and sets included) whose string values are
 #: files or folders of the project: scene ``path`` / ``logo``, watermark, thumbnail, stage and
 #: layer ``image``, music ``source``, ``pronunciation_file``, ``translations``, ``extensions``,
-#: ``output_dir``, a character's ``look.svg`` and a stage prop's ``svg``.
-PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir", "svg"})
+#: ``output_dir``, ``soundfont``, a character's ``look.svg`` and a stage prop's ``svg``.
+PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir", "soundfont", "svg"})
 #: Config key whose value may name a file among other words: a Kokoro ``voice`` (a blend
 #: ``af_bella,own.pt``) whose parts ending in ``.pt`` are voice files Kokoro reads from the
 #: current folder (DESIGN.md §68).
@@ -207,21 +208,28 @@ class Project:
         self._voices: dict[str | None, VoiceConfig] = {}
         #: True for :meth:`without_overlays` copies: their renders go to ``build/..._bare``.
         self.bare = False
+        #: True for a draft (``vidgen render --draft``, DESIGN.md §74): every render of it goes to
+        #: ``build/draft...`` in the draft format, every output name ends in ``_draft``, whatever
+        #: ``preview`` the path methods are given.
+        self.draft = False
         #: The ``--output-dir`` folder (absolute); it wins over ``output_dir:`` (see :attr:`output_dir`).
         self.output_dir_override: Path | None = None
 
     @classmethod
-    def load(cls, path: str | Path = ".", variant: str | None = None, output_dir: str | Path | None = None) -> Project:
+    def load(
+        cls, path: str | Path = ".", variant: str | None = None, output_dir: str | Path | None = None, draft: bool = False,
+    ) -> Project:
         """Load the project at ``path`` (directory or config file), optionally applying a variant.
 
         The ``include:`` files are merged first and each stage's ``set:`` applied (DESIGN.md
         §69.35); the variant's overrides are deep-merged onto the raw config before validation.
         ``output_dir`` (the CLI's ``--output-dir``; relative to the current directory) overrides
-        where the deliverables go (:attr:`output_dir`).
+        where the deliverables go (:attr:`output_dir`). ``draft``: load it as a draft (:attr:`draft`).
         """
         project = cls._load(path, variant)
         if output_dir is not None:
             project.output_dir_override = Path(output_dir).resolve()
+        project.draft = draft
         return project
 
     @classmethod
@@ -258,6 +266,7 @@ class Project:
         bare = Project(self.root, self.config_file, config, self.variant, self.base_config, (self.source_data, self.source_config), self.translation)
         bare.included_files, bare.files_named_by_includes, bare.origins = self.included_files, self.files_named_by_includes, self.origins
         bare.bare = True
+        bare.draft = self.draft
         bare.output_dir_override = self.output_dir_override
         return bare
 
@@ -289,8 +298,8 @@ class Project:
     def has_own_audio(self) -> bool:
         """True for a variant whose audio would differ from the base config's: its effective
         ``voice`` differs, or a beat id present in both configs has a different spoken text (its
-        text, or the pronunciation of a term in it) or a different effective voice (``voices:``;
-        a speaker's ``label`` / ``color`` do not count)."""
+        text, or the pronunciation of a term in it), a different effective voice (``voices:``;
+        a speaker's ``label`` / ``color`` do not count) or a different emotion."""
         if self.variant is None:
             return False
         if self._own_audio is None:
@@ -306,6 +315,8 @@ class Project:
             if beat_id not in base_spoken:
                 continue
             if base_spoken[beat_id] != spoken or audio_fields(base.beat_voice(beat_id)) != audio_fields(self.beat_voice(beat_id)):
+                return True
+            if base.beat_emotion(beat_id) != self.beat_emotion(beat_id):
                 return True
         return False
 
@@ -329,6 +340,12 @@ class Project:
             raise VidgenError(f"unknown beat '{beat_id}'")
         return self.voice(names[beat_id])
 
+    def beat_emotion(self, beat_id: str) -> Prosody | None:
+        """How a beat's line feels (DESIGN.md §72): its ``emotion``, else its voice's; ``None``
+        when neither is set or the emotion changes nothing (``neutral``)."""
+        beat = self.beat(beat_id)
+        return prosody(beat.emotion if beat.emotion is not None else self.beat_voice(beat_id).emotion)
+
     def speaker_tags(self, mode: str | None = None) -> dict[str, str]:
         """Beat id -> speaker label shown before it (where the speaker changes) when ``mode``
         (default ``subtitles.speakers``) shows names; empty when it is ``off``."""
@@ -336,10 +353,15 @@ class Project:
         return {} if mode in ("off", "color") else speaker_tags(self.config)
 
     def spoken(self, beat: BeatConfig) -> Spoken:
-        """What the TTS gets for ``beat``: its text with ``pronunciation`` applied and what its
-        voice says for its voice sounds (:func:`vidgen.voicesounds.voiced_spoken`)."""
+        """What the TTS gets for ``beat``: its text with ``pronunciation`` applied, what its
+        voice says for its voice sounds (:func:`vidgen.voicesounds.voiced_spoken`) and, for an
+        ElevenLabs v3 voice, its emotion's audio tag before it (DESIGN.md §73)."""
         spoken = self.pronunciation.apply(beat.text)
-        return voiced_spoken(spoken, beat.voice_sounds, self.beat_voice(beat.id)) if beat.voice_sounds else spoken
+        voice = self.beat_voice(beat.id)
+        if beat.voice_sounds:
+            spoken = voiced_spoken(spoken, beat.voice_sounds, voice)
+        cues = named_cues(self.beat_emotion(beat.id)) if is_tagged_voice(voice) else None
+        return spoken.inserted([(0, f"{cues.tag} ", "emotion")]) if cues is not None else spoken
 
     def spoken_texts(self) -> dict[str, str]:
         """Beat id -> the text the TTS gets for it (:meth:`spoken`), in video order."""
@@ -356,9 +378,9 @@ class Project:
         return [self.root / d for d in self.config.extensions]
 
     def render_dir(self, preview: bool) -> Path:
-        """Per-quality build folder: ``build/<final|preview>[_<variant>]`` (``..._bare`` for a
-        project :meth:`without_overlays`)."""
-        name = "preview" if preview else "final"
+        """Per-quality build folder: ``build/<final|preview|draft>[_<variant>]`` (``draft`` for a
+        :attr:`draft`; ``..._bare`` for a project :meth:`without_overlays`)."""
+        name = "draft" if self.draft else "preview" if preview else "final"
         if self.variant:
             name += f"_{self.variant}"
         if self.bare:
@@ -366,14 +388,18 @@ class Project:
         return self.build_dir / name
 
     def render_format(self, preview: bool) -> FormatConfig:
-        """Resolution/fps for a final or preview render."""
+        """Resolution/fps for a final or preview render, or a :attr:`draft`'s (:func:`draft_format`)."""
+        if self.draft:
+            return draft_format(self.config.format, self.config.draft)
         return self.config.preview if preview else self.config.format
 
     def _output_stem(self, preview: bool) -> str:
         stem = self.output_name
         if self.variant:
             stem += f"_{self.variant}"
-        if preview:
+        if self.draft:
+            stem += "_draft"
+        elif preview:
             stem += "_preview"
         return stem
 
@@ -387,7 +413,7 @@ class Project:
         return self.root / (self.config.output_dir or DEFAULT_OUTPUT_DIR)
 
     def output_path(self, preview: bool = False) -> Path:
-        """Final video path: ``<output>[_<variant>][_preview].mp4`` in :attr:`output_dir`."""
+        """Final video path: ``<output>[_<variant>][_preview|_draft].mp4`` in :attr:`output_dir`."""
         return self.output_dir / f"{self._output_stem(preview)}.mp4"
 
     def srt_path(self, preview: bool = False) -> Path:
@@ -395,16 +421,22 @@ class Project:
         return self.output_dir / f"{self._output_stem(preview)}.srt"
 
     def chapters_path(self, preview: bool = False) -> Path:
-        """YouTube chapter list matching :meth:`output_path`: ``<output>[_<variant>][_preview]_chapters.txt``."""
+        """YouTube chapter list matching :meth:`output_path`: ``<output>[_<variant>][_preview|_draft]_chapters.txt``."""
         return self.output_dir / f"{self._output_stem(preview)}_chapters.txt"
 
     def thumbnail_path(self, preview: bool = False, suffix: str = ".png") -> Path:
-        """Thumbnail matching :meth:`output_path`: ``<output>[_<variant>][_preview]_thumbnail.png``
+        """Thumbnail matching :meth:`output_path`: ``<output>[_<variant>][_preview|_draft]_thumbnail.png``
         (``suffix`` ``.jpg`` for the JPEG copy)."""
         return self.output_dir / f"{self._output_stem(preview)}_thumbnail{suffix}"
 
+    def animatic_path(self) -> Path:
+        """The animatic (``vidgen animatic``, DESIGN.md §75): ``<output>[_<variant>]_animatic.mp4``
+        in :attr:`output_dir`."""
+        stem = self.output_name + (f"_{self.variant}" if self.variant else "")
+        return self.output_dir / f"{stem}_animatic.mp4"
+
     def export_stem(self, preview: bool = False) -> str:
-        """Start of the names of ``vidgen export`` files: ``<output>[_<variant>][_preview]``."""
+        """Start of the names of ``vidgen export`` files: ``<output>[_<variant>][_preview|_draft]``."""
         return self._output_stem(preview)
 
     @property

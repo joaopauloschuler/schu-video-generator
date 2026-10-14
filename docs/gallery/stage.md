@@ -156,6 +156,11 @@ scenes:
 | `fog.color` | `color \| None` |  | Its colour (a theme token or #hex); default a pale grey blue. |
 | `fog.drift` | `float` | `1.0` | How fast its waves drift sideways (1 slowly; 0 still, unless the wind blows: it is then drawn once per animation, not on every frame). |
 | `fog.seed` | `int \| None` |  | Varies its waves; default: one from the scene. |
+| `drawing` | `DrawingConfig \| None` |  | How this scene is drawn {outline: thin \| normal \| bold, shading: flat \| soft, texture: none \| paper \| storybook, seed}: the keys given win over the video's drawing. |
+| `drawing.outline` | `'thin' \| 'normal' \| 'bold' \| None` |  | Outline weight of every stroke on stage scenes (characters, props, sets, effects, bubbles) and of a host: thin (0.6x, never under one pixel), normal (as drawn), bold (1.7x); default normal. |
+| `drawing.shading` | `'flat' \| 'soft' \| None` |  | flat: filled shapes in one colour; soft: characters' and props' filled shapes lighter at the top and darker at the bottom (the outline and the silhouette unchanged); default flat; drafts draw flat. |
+| `drawing.texture` | `'none' \| 'paper' \| 'storybook' \| None` |  | A still grain over each stage scene's frame, under the overlays and captions: none, paper (fine grain), storybook (stronger grain, blotches and darker corners); default none; drafts have none. |
+| `drawing.seed` | `int \| None` |  | Seed of the texture's grain (the same seed and frame size give the same grain); default 0. |
 
 ## Targets
 

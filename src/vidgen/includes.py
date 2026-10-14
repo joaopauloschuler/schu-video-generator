@@ -9,7 +9,8 @@ the earlier entry of that name), other values replace.
 
 A stage scene's ``set: <name>`` starts its ``params`` from that set (:func:`apply_set`); the
 scene's own params win. :func:`expand_sets` applies the sets of every scene before the config is
-validated, so the stage itself never sees ``set``.
+validated, so the stage itself never sees ``set``. A name the project's ``sets:`` lacks falls back
+to a built-in set (:func:`builtin_sets`, DESIGN.md §76).
 
 Problems keep pointing at the text the user wrote: :class:`Origin` entries map a location of the
 merged config to the file and location the value is written at (:func:`attributed`).
@@ -19,11 +20,14 @@ from __future__ import annotations
 
 import copy
 import difflib
+import functools
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from vidgen.cartoon.stage import numbered_names, prop_default_name
 from vidgen.errors import Problem, VidgenError
@@ -36,6 +40,8 @@ BACKGROUND_KEYS = frozenset({"image", "generate", "background"})
 ROOM_KEY = "room"
 #: Set params whose lists combine with the stage's (the set's entries first).
 COMBINED_LISTS: tuple[str, ...] = ("characters", "props", "layers", "particles")
+#: The built-in sets (DESIGN.md §76): every ``*.yaml`` file here holds ``sets:``.
+BUILTIN_SETS_DIR = Path(__file__).resolve().parent / "data" / "sets"
 
 
 @dataclass(frozen=True)
@@ -292,40 +298,60 @@ def apply_set(set_params: Mapping[str, Any], params: Mapping[str, Any]) -> SetMe
     return result
 
 
+@functools.cache
+def _read_builtin_sets() -> dict[str, dict[str, Any]]:
+    sets: dict[str, dict[str, Any]] = {}
+    for path in sorted(BUILTIN_SETS_DIR.glob("*.yaml")):
+        sets.update(yaml.safe_load(path.read_text(encoding="utf-8"))["sets"])
+    return sets
+
+
+def builtin_sets() -> dict[str, dict[str, Any]]:
+    """The built-in sets (DESIGN.md §76), name -> stage params: what ``set: NAME`` uses when the
+    project's ``sets:`` has no set of that name (a copy: changing it changes nothing)."""
+    return copy.deepcopy(_read_builtin_sets())
+
+
 def expand_sets(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str, Origin]]:
     """``data`` with every scene's ``set:`` applied to its ``params`` (:func:`apply_set`), and
-    ``origins`` with where the set's values are written. A ``set`` naming no set is left for the
-    config check (:func:`set_reference_problems`)."""
+    ``origins`` with where the set's values are written: the project's ``sets:`` first, else a
+    built-in set (:func:`builtin_sets`; its values keep the scene's locations). A ``set`` naming no
+    set is left for the config check (:func:`set_reference_problems`)."""
     updated = dict(origins)
-    if not isinstance(data, Mapping) or not isinstance(data.get("sets"), Mapping) or not isinstance(data.get("scenes"), list):
+    if not isinstance(data, Mapping) or not isinstance(data.get("scenes"), list):
         return data, updated
-    sets = data["sets"]
+    sets = data.get("sets") if isinstance(data.get("sets"), Mapping) else {}
+    builtin = _read_builtin_sets()
     scenes: list[Any] = []
     for i, scene in enumerate(data["scenes"]):
         name = scene.get("set") if isinstance(scene, Mapping) else None
         params = scene.get("params", {}) if isinstance(scene, Mapping) else None
-        if not isinstance(name, str) or not isinstance(sets.get(name), Mapping) or not isinstance(params, Mapping):
+        own = isinstance(name, str) and isinstance(sets.get(name), Mapping)
+        if not isinstance(name, str) or not (own or name in builtin) or not isinstance(params, Mapping):
             scenes.append(scene)
             continue
-        merge = apply_set(sets[name], params)
+        merge = apply_set(sets[name] if own else builtin[name], params)
         scenes.append({**scene, "params": merge.params})
         here = f"scenes[{i}].params"
-        for at, written in merge.from_set.items():
-            updated[f"{here}.{at}"] = origin_of(f"sets.{name}.{written}", origins)
+        if own:
+            for at, written in merge.from_set.items():
+                updated[f"{here}.{at}"] = origin_of(f"sets.{name}.{written}", origins)
         for at, written in merge.from_stage.items():
             updated[f"{here}.{at}"] = origin_of(f"{here}.{written}", origins)
     return {**data, "scenes": scenes}, updated
 
 
 def set_reference_problems(config: Any) -> list[Problem]:
-    """Scenes whose ``set`` names no set of ``sets:`` (with a did-you-mean and the known names)."""
+    """Scenes whose ``set`` names neither a set of ``sets:`` nor a built-in set (with a
+    did-you-mean and the known names of both)."""
     problems = []
+    builtin = [name for name in _read_builtin_sets() if name not in config.sets]
     for i, scene in enumerate(config.scenes):
-        if scene.set is not None and scene.set not in config.sets:
-            close = difflib.get_close_matches(scene.set, list(config.sets), n=1, cutoff=0.6)
+        if scene.set is not None and scene.set not in config.sets and scene.set not in builtin:
+            close = difflib.get_close_matches(scene.set, [*config.sets, *builtin], n=1, cutoff=0.6)
             hint = f"; did you mean '{close[0]}'?" if close else ""
             known = ", ".join(config.sets) or "none (add sets: to the config or an include: file)"
-            problems.append(Problem(f"scenes[{i}].set", f"unknown set '{scene.set}'{hint} sets: {known}"))
+            problems.append(Problem(f"scenes[{i}].set", f"unknown set '{scene.set}'{hint} sets: {known}; built-in sets: {', '.join(builtin)}"))
     return problems
 
 

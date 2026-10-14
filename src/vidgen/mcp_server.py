@@ -281,6 +281,9 @@ def build_server(root: Path) -> Any:
     ]
     Variant = Annotated[str | None, Field(description="apply this named variant of video.yaml (e.g. vertical)")]
     Scenes = Annotated[list[str] | None, Field(description="only these scene ids")]
+    AllLanguages = Annotated[
+        bool, Field(description="the base config, then every variant in another language (dubbed videos); not with variant")
+    ]
     Jobs = Annotated[
         Annotated[int, Field(ge=1, le=16)] | Literal["auto"],
         Field(description="scenes rendered in parallel; auto: as many as the available memory and CPU cores allow"),
@@ -418,7 +421,8 @@ def build_server(root: Path) -> Any:
 
     @tool("Check the layout and timing of every beat-end still (renders what is needed, preview size): text off "
           "frame, overlaps, too small, low contrast, too many words, dead air, narration speed... "
-          "ok=false when a finding is at least fail_on.", writes)
+          "readback=true also transcribes the narration (slow; cached) and flags unclear words and pauses "
+          "(unclear_speech). ok=false when a finding is at least fail_on.", writes)
     async def lint(
         ctx: Context,
         project: Project = ".",
@@ -429,9 +433,21 @@ def build_server(root: Path) -> Any:
         fail_on: Literal["error", "warning", "info", "never"] | None = None,
         jobs: Jobs = 1,
         force: Annotated[bool, Field(description="render again even if current")] = False,
+        readback: Annotated[bool, Field(description="also run unclear_speech: speech to text of the narration (slow)")] = False,
+        confirm_cost: Annotated[bool, Field(description="readback with a paid STT provider: the user accepted the cost")] = False,
+        all_languages: AllLanguages = False,
     ) -> Any:
-        options = {"variant": variant, "scene": scene, "rule": rule, "final": final, "fail-on": fail_on, "jobs": jobs, "force": force}
-        return answer(await call(ctx, args_of(["lint"], [str(where(project))], options), heavy=True))
+        path = where(project)
+        if (readback or (rule and "unclear_speech" in rule)) and not confirm_cost and stt_provider(path, variant) in PAID_STT:
+            raise ToolError(
+                "lint with readback and this project's stt.provider calls a paid speech-to-text API; call again with "
+                "confirm_cost=true once the user agreed (transcripts are cached: unchanged beats cost nothing)"
+            )
+        options = {
+            "variant": variant, "scene": scene, "rule": rule, "final": final, "fail-on": fail_on, "jobs": jobs, "force": force,
+            "readback": readback, "all-languages": all_languages,
+        }
+        return answer(await call(ctx, args_of(["lint"], [str(path)], options), heavy=True))
 
     @tool("Contact sheets of the video (one still per beat end, labelled with beat, time and narration): the way "
           "to SEE what you made. Returns the sheets as images (whole-video sheets first) and their paths; "
@@ -453,6 +469,23 @@ def build_server(root: Path) -> Any:
         doc = await call(ctx, args_of(["storyboard"], [str(where(project))], options), heavy=True)
         sheets = sorted(doc.get("sheets", []), key=lambda s: s.get("kind") != "video")
         return paged(doc, [Path(s["path"]) for s in sheets], image_offset, images)
+
+    @tool("An animatic: the storyboard's stills (beat ends and half-way through actions) held in time with the "
+          "narration, with the video's audio (narration, effects, music) and captions, as an MP4 "
+          "(<output>_animatic.mp4) to check pacing before a full render. Joined by ffmpeg in seconds when the "
+          "storyboard's stills are current; scenes without them are rendered first.", writes)
+    async def animatic(
+        ctx: Context,
+        project: Project = ".",
+        variant: Variant = None,
+        no_audio: Annotated[bool, Field(description="a silent animatic")] = False,
+        captions: Annotated[bool | None, Field(description="draw the subtitles (default: on unless a captions overlay burns them in)")] = None,
+        jobs: Jobs = 1,
+    ) -> Any:
+        options = {
+            "variant": variant, "no-audio": no_audio, "captions": captions is True, "no-captions": captions is False, "jobs": jobs,
+        }
+        return answer(await call(ctx, args_of(["animatic"], [str(where(project))], options), heavy=True))
 
     # ----- listing ---------------------------------------------------------------------------------
 
@@ -490,19 +523,40 @@ def build_server(root: Path) -> Any:
     async def list_sfx(ctx: Context, project: OptionalProject = None) -> Any:
         return answer(await call(ctx, args_of(["list-sfx"], [str(where(project))] if project else [])))
 
-    @tool("Background music beds (built-in and the project's assets/music) with what they sound like.", read_only)
+    @tool("Background music: the built-in beds and the project's assets/music files, and composed music's moods "
+          "(music: {compose: MOOD}; explainers: calm, focused, curious, upbeat; cartoons: playful, sleepy, tense, "
+          "triumphant) and instrument names, each described in words, with whether the music extra is installed.", read_only)
     async def list_music(ctx: Context, project: OptionalProject = None) -> Any:
         return answer(await call(ctx, args_of(["list-music"], [str(where(project))] if project else [])))
+
+    @tool("Compose a piece of music in a mood (the project's first compose: cue, changed by the options, or mood "
+          "alone) and write it as a WAV and a MIDI file to listen to; returns its key, tempo, parts, chords per "
+          "phrase and loudness. Needs the music extra (and downloads the SoundFont, 32 MB, on first use).", writes)
+    async def music_preview(
+        ctx: Context,
+        project: OptionalProject = None,
+        mood: Annotated[str | None, Field(description="the mood (list_music); default the project's compose: mood")] = None,
+        seed: Annotated[int | None, Field(ge=0, description="another seed gives another piece in the mood")] = None,
+        bars: Annotated[int | None, Field(ge=4, le=128, description="length in bars, a multiple of 4 (default: the mood's)")] = None,
+        key: Annotated[str | None, Field(description="e.g. E, 'Eb major', 'F# minor' (default: the mood's)")] = None,
+        tempo: Annotated[float | None, Field(ge=40, le=200, description="quarter notes per minute (default: the mood's)")] = None,
+        out: Annotated[str, Field(description="folder for <mood>-seed<N>.wav and .mid, relative to the root")] = str(WORK_DIR / "music"),
+    ) -> Any:
+        options = {"mood": mood, "seed": seed, "bars": bars, "key": key, "tempo": tempo, "out": str(where(out, "out"))}
+        positionals = ["preview", *([str(where(project))] if project else [])]
+        return answer(await call(ctx, args_of(["music"], positionals, options), heavy=True))
 
     # ----- outputs ---------------------------------------------------------------------------------
 
     @tool("Render the video (MP4 + SRT + timings) and its thumbnail. preview=true (default) is fast and small; "
-          "the final render can take minutes. Scenes unchanged since their last render (e.g. by storyboard or "
-          "lint) are reused. Reports progress.", writes)
+          "draft=true is faster still (about 8 fps, 240p, no idle, wind, shadows, particles or light grade; same "
+          "timings) for checking timing and staging; the final render can take minutes. Scenes unchanged since "
+          "their last render (e.g. by storyboard or lint) are reused. Reports progress.", writes)
     async def render(
         ctx: Context,
         project: Project = ".",
         preview: Annotated[bool, Field(description="fast low-resolution render (false: the final format)")] = True,
+        draft: Annotated[bool, Field(description="a draft instead (wins over preview): ..._draft.mp4 from build/draft")] = False,
         variant: Variant = None,
         scene: Annotated[list[str] | None, Field(description="only re-render these scenes, then join")] = None,
         no_audio: Annotated[bool, Field(description="render without narration")] = False,
@@ -510,10 +564,11 @@ def build_server(root: Path) -> Any:
         jobs: Jobs = 1,
         frames: Annotated[bool, Field(description="also save a still per beat end")] = False,
         force: Annotated[bool, Field(description="render every scene again, even unchanged ones")] = False,
+        all_languages: AllLanguages = False,
     ) -> Any:
         options = {
-            "preview": preview, "scene": scene, "variant": variant, "no-audio": no_audio, "keep-going": keep_going,
-            "jobs": jobs, "frames": frames, "force": force,
+            "preview": preview and not draft, "draft": draft, "scene": scene, "variant": variant, "no-audio": no_audio,
+            "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force, "all-languages": all_languages,
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 
@@ -556,7 +611,8 @@ def build_server(root: Path) -> Any:
         return answer(await call(ctx, args_of(["imagegen"], [str(where(project))], options), heavy=True))
 
     @tool("Transcribe the narration MP3s (speech to text, cached) and compare them with the beat texts: word error "
-          "rate, misheard words, suggested fixes. With a paid STT provider (stt.provider: elevenlabs) it needs "
+          "rate, misheard words, words heard unclearly or after an odd pause (flags with beat and video times), "
+          "suggested fixes. With a paid STT provider (stt.provider: elevenlabs) it needs "
           "confirm_cost=true.", paid)
     async def readback(
         ctx: Context,

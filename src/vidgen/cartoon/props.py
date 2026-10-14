@@ -13,7 +13,8 @@ drawn in two shapes, closed and open (:data:`PROP_SHAPES`, :meth:`Prop.show_shap
 umbrella are held by a grip (:data:`PROP_GRIPS`, :meth:`Prop.grip_point`), DESIGN.md §69.37.
 The :data:`FURNITURE` furnishes a room (§69.43); a picture and a clock hang on its wall
 (:data:`PROP_HANGS`). The :data:`SMALL_PROPS` are everyday things to hold (§69.56): a book, a
-letter and a gift open too.
+letter and a gift open too. The :data:`OUTDOOR_PROPS` furnish the built-in outdoor sets (§76),
+the :data:`INDOOR_PROPS` the built-in rooms with the furniture (§77).
 """
 
 from __future__ import annotations
@@ -79,11 +80,18 @@ FURNITURE: tuple[str, ...] = (
 )
 #: The everyday small props (DESIGN.md §69.56): things to hold, give, open and put on a table.
 SMALL_PROPS: tuple[str, ...] = ("cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can")
+#: The outdoor props the built-in sets use (DESIGN.md §76): a street, a park, a beach, a forest.
+OUTDOOR_PROPS: tuple[str, ...] = (
+    "shop", "bench", "bus_stop", "road", "path", "fountain", "flowers", "fence", "beach_umbrella", "shell", "pine",
+    "mushroom", "log",
+)
+#: The indoor props the built-in rooms add to the furniture (DESIGN.md §77): a classroom, a shop, a bedroom.
+INDOOR_PROPS: tuple[str, ...] = ("blackboard", "school_desk", "shelf_with_goods", "till", "wardrobe")
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
     "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin", "kettle",
-    *SMALL_PROPS, *FURNITURE, *VEHICLE_KINDS,
+    *SMALL_PROPS, *FURNITURE, *OUTDOOR_PROPS, *INDOOR_PROPS, *VEHICLE_KINDS,
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
@@ -94,13 +102,16 @@ PROP_HEIGHTS: dict[str, float] = {
     "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42, "fireplace": 0.75, "kettle": 0.15,
     "cake": 0.22, "muffin": 0.08, "book": 0.13, "phone": 0.13, "letter": 0.08, "gift": 0.2, "balloons": 1.1, "vase": 0.32,
     "watering_can": 0.22,
+    "shop": 1.7, "bench": 0.32, "bus_stop": 1.35, "road": 0.12, "path": 0.08, "fountain": 0.75, "flowers": 0.28,
+    "fence": 0.42, "beach_umbrella": 1.3, "shell": 0.06, "pine": 1.9, "mushroom": 0.13, "log": 0.16,
+    "blackboard": 0.5, "school_desk": 0.4, "shelf_with_goods": 0.95, "till": 0.26, "wardrobe": 1.1,
     **{kind: spec.height for kind, spec in VEHICLES.items()},
 }
 #: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
 #: character standing where they are (on top of any ``lift``).
-PROP_HANGS: dict[str, float] = {"picture": 0.5, "clock": 0.85}
-#: Props lying flat on the floor, which cast no shadow (a rug).
-FLAT_PROPS: frozenset[str] = frozenset({"rug"})
+PROP_HANGS: dict[str, float] = {"picture": 0.5, "clock": 0.85, "blackboard": 0.42}
+#: Props lying flat on the floor, which cast no shadow (a rug, a road, a path).
+FLAT_PROPS: frozenset[str] = frozenset({"rug", "road", "path"})
 #: Props drawn in more than one shape: kind -> its shape names, the first drawn unless the stage
 #: asks for another (``open: true``); the ``open`` / ``close`` actions switch them.
 PROP_SHAPES: dict[str, tuple[str, ...]] = {
@@ -146,6 +157,13 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "balloons": ("accent", "highlight"), "vase": ("primary", "accent"), "watering_can": ("tertiary", "highlight"),
     "bicycle": ("primary", "accent"), "car": ("accent", "highlight"), "bus": ("highlight", "primary"),
     "boat": ("highlight", "accent"), "hot_air_balloon": ("accent", "secondary"), "toy_rocket": ("primary", "accent"),
+    "shop": ("primary", "accent"), "bench": ("secondary", "dim"), "bus_stop": ("primary", "dim"),
+    "road": ("#5A5F69", "#F4F6FA"), "path": ("#DCC9A0", "#B49A6C"), "fountain": ("dim", "primary"),
+    "flowers": ("accent", "highlight"), "fence": ("#F4F6FA", "dim"), "beach_umbrella": ("accent", "#F4F6FA"),
+    "shell": ("#F7D9C4", "#D9967A"), "pine": ("tertiary", "secondary"), "mushroom": ("accent", "#F4F6FA"),
+    "log": ("secondary", "highlight"),
+    "blackboard": ("secondary", "#2F5A46"), "school_desk": ("secondary", "dim"), "shelf_with_goods": ("secondary", "accent"),
+    "till": ("accent", "highlight"), "wardrobe": ("secondary", "highlight"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
@@ -1124,6 +1142,314 @@ def _fireplace(p: _Paint) -> list[VMobject]:
     ]
 
 
+# ----- outdoor props for the built-in sets (DESIGN.md §76) -------------------------------------------
+
+#: Fixed colours where no theme token fits every theme: a kerb's light stone, a flower bed's soil, a
+#: beach umbrella's pale pole.
+KERB = "#C9CDD3"
+SOIL = "#7A5536"
+BEACH_POLE = "#EDE6D6"
+#: Half the length of a road or a path (prop units): long enough to reach past both edges of a
+#: stage one frame wide at its usual size.
+BAND_HALF = 40.0
+
+
+def _shop(p: _Paint) -> list[VMobject]:
+    """A shop front: a sign board on top, two upper windows, a striped awning over a shop window
+    with goods on a shelf, and a glazed door."""
+    dark = p.dark(p.main)
+    stripes = [
+        _poly([(x0, 0.58), (x1, 0.58), (x1 * 1.07, 0.48), (x0 * 1.07, 0.48)], p.detail, p, outline=False)
+        for x0, x1 in zip(np.linspace(-0.58, 0.58, 8)[::2], np.linspace(-0.58, 0.58, 8)[1::2])
+    ]
+    goods = [_rect(x - 0.05, 0.2, x + 0.05, 0.2 + h, color, p, radius=0.02) for x, h, color in
+             ((-0.4, 0.12, p.detail), (-0.26, 0.08, p.light(p.detail)), (-0.12, 0.14, p.main))]
+    return [
+        _rect(-0.6, 0.0, 0.6, 0.86, p.main, p),
+        _rect(-0.6, 0.0, 0.6, 0.1, dark, p),
+        _rect(-0.64, 0.86, 0.64, 0.92, dark, p),
+        _rect(-0.4, 0.88, 0.4, 1.0, CLOTH, p, radius=0.02),
+        _line(-0.28, 0.94, 0.12, 0.94, p.detail, 2.5 * OUTLINE_WIDTH),
+        *[_rect(x0, 0.64, x0 + 0.3, 0.8, GLASS, p) for x0 in (-0.45, 0.15)],
+        _rect(-0.5, 0.12, 0.05, 0.44, GLASS, p),
+        _rect(-0.5, 0.18, 0.05, 0.2, dark, p, outline=False),
+        *goods,
+        _rect(0.13, 0.0, 0.51, 0.03, dark, p),
+        _rect(0.17, 0.03, 0.47, 0.46, p.dark(p.detail), p, radius=0.02),
+        _rect(0.22, 0.24, 0.42, 0.4, GLASS, p),
+        _circle(0.42, 0.18, 0.015, p.light(p.main), p, outline=False),
+        _poly([(-0.58, 0.58), (0.58, 0.58), (0.62, 0.48), (-0.62, 0.48)], CLOTH, p),
+        *stripes,
+    ]
+
+
+def _bench(p: _Paint) -> list[VMobject]:
+    """A park bench from the front: iron legs and arms, a slatted back, the seat's top at
+    :data:`~vidgen.cartoon.seating.PROP_SEATS`'s line."""
+    iron, wood = p.detail, p.main
+    return [
+        *[_rect(x, 0.0, x + 0.1, 0.43, iron, p) for x in (-1.3, 1.2)],
+        *[_rect(x, 0.43, x + 0.1, 1.0, iron, p) for x in (-1.32, 1.22)],
+        _rect(-1.45, 0.62, 1.45, 0.74, wood, p, radius=0.03),
+        _rect(-1.45, 0.82, 1.45, 0.94, wood, p, radius=0.03),
+        _rect(-1.5, 0.36, 1.5, 0.4375, wood, p, radius=0.02),
+        _line(-1.45, 0.38, 1.45, 0.38, p.dark(wood)),
+        *[_rect(x, 0.52, x + 0.32, 0.57, iron, p, radius=0.02) for x in (-1.52, 1.2)],
+    ]
+
+
+def _bus_stop(p: _Paint) -> list[VMobject]:
+    """A bus stop: a pole with a round sign showing a bus, and a timetable on the pole."""
+    pole = p.detail
+    timetable = [_line(0.07, y, 0.17, y, PAGE_TEXT, 1.2 * OUTLINE_WIDTH) for y in (0.57, 0.52, 0.47, 0.43)]
+    return [
+        _rect(-0.035, 0.0, 0.035, 0.84, pole, p),
+        _rect(-0.08, 0.0, 0.08, 0.03, p.dark(pole), p),
+        _rect(0.035, 0.4, 0.2, 0.62, PAPER, p),
+        *timetable,
+        _circle(0.0, 0.86, 0.14, p.main, p),
+        _circle(0.0, 0.86, 0.1, CLOTH, p, outline=False),
+        _rect(-0.065, 0.83, 0.065, 0.91, p.main, p, radius=0.015, outline=False),
+        _rect(-0.05, 0.87, 0.05, 0.895, GLASS, p, outline=False),
+        *[_circle(x, 0.83, 0.014, p.ink, p, outline=False) for x in (-0.035, 0.035)],
+    ]
+
+
+def _road(p: _Paint) -> list[VMobject]:
+    """A road lying flat across the stage: kerbs on both sides, a dashed line along its middle."""
+    dashes = [_rect(x, 0.47, x + 1.2, 0.53, p.detail, p, outline=False) for x in np.arange(-BAND_HALF + 0.9, BAND_HALF - 1.2, 3.0)]
+    return [
+        _rect(-BAND_HALF, 0.0, BAND_HALF, 0.12, KERB, p),
+        _rect(-BAND_HALF, 0.12, BAND_HALF, 0.88, p.main, p),
+        _rect(-BAND_HALF, 0.88, BAND_HALF, 1.0, KERB, p),
+        *dashes,
+    ]
+
+
+def _path(p: _Paint) -> list[VMobject]:
+    """A gravel path lying flat across the stage, edged, a few pebbles on it."""
+    pebbles = [_ellipse(x, 0.3 + 0.4 * (k % 3) / 2, 0.5, 0.18, p.dark(p.main), p, outline=False)
+               for k, x in enumerate(np.arange(-BAND_HALF + 1.3, BAND_HALF - 1.0, 2.6))]
+    return [
+        _rect(-BAND_HALF, 0.0, BAND_HALF, 1.0, p.main, p),
+        *pebbles,
+        _line(-BAND_HALF, 0.06, BAND_HALF, 0.06, p.detail, 1.5 * OUTLINE_WIDTH),
+        _line(-BAND_HALF, 0.94, BAND_HALF, 0.94, p.detail, 1.5 * OUTLINE_WIDTH),
+    ]
+
+
+def _jet(points: list[tuple[float, float]], color: str, width: float) -> VMobject:
+    """A curved jet of water through ``points``: a smooth ``color`` stroke ``width`` outlines wide."""
+    return VMobject().set_points_smoothly([np.array([x, y, 0.0]) for x, y in points]).set_fill(opacity=0).set_stroke(color, width=OUTLINE_WIDTH * width)
+
+
+def _fountain(p: _Paint) -> list[VMobject]:
+    """A stone fountain: a wide basin with water in it, a column, an upper bowl and jets of water
+    arching down into the basin."""
+    stone, water = p.main, p.detail
+    arch = [(0.0, 0.7), (0.18, 0.93), (0.42, 0.95), (0.68, 0.7), (0.86, 0.38)]
+    return [
+        _rect(-1.0, 0.0, 1.0, 0.3, stone, p, radius=0.05),
+        _rect(-0.9, 0.06, 0.9, 0.22, p.dark(stone), p, radius=0.03, outline=False),
+        _rect(-1.05, 0.28, 1.05, 0.36, p.light(stone), p, radius=0.03),
+        _rect(-0.97, 0.33, 0.97, 0.36, water, p, outline=False),
+        _rect(-0.08, 0.36, 0.08, 0.6, stone, p),
+        _poly([(-0.36, 0.66), (0.36, 0.66), (0.24, 0.58), (-0.24, 0.58)], p.light(stone), p),
+        _jet(arch, water, 2.4), _jet([(-x, y) for x, y in arch], water, 2.4),
+        _ellipse(0.0, 0.85, 0.12, 0.3, p.light(water), p),
+    ]
+
+
+def _flowers(p: _Paint) -> list[VMobject]:
+    """A flower bed: five flowers on green stems, two colours in turn, on a mound of soil."""
+    blooms = ((-0.7, 0.68), (-0.35, 0.8), (0.0, 0.74), (0.35, 0.84), (0.7, 0.66))
+    drawn: list[VMobject] = [_line(x * 0.8, 0.1, x, y, STEM, 1.6 * OUTLINE_WIDTH) for x, y in blooms]
+    drawn += [_ellipse(x * 0.9 + 0.08, 0.3, 0.1, 0.22, STEM, p, angle=-35) for x, _ in blooms[::2]]
+    for k, (x, y) in enumerate(blooms):
+        petal = p.main if k % 2 == 0 else p.detail
+        drawn += [_circle(x + 0.075 * math.cos(a), y + 0.075 * math.sin(a), 0.07, petal, p, outline=False)   # outlines would hide petals this small
+                  for a in np.linspace(math.pi / 2, math.pi / 2 + 2 * math.pi, 5, endpoint=False)]
+        drawn.append(_circle(x, y, 0.045, FLOWER_HEART if petal != p.detail else p.dark(p.detail), p))
+    return [*drawn, _ellipse(0.0, 0.08, 1.9, 0.16, SOIL, p)]
+
+
+def _fence(p: _Paint) -> list[VMobject]:
+    """A section of picket fence: two rails behind pointed pickets."""
+    rails = [_rect(-1.6, y, 1.6, y + 0.08, p.detail, p) for y in (0.25, 0.62)]
+    pickets = [_poly([(x - 0.09, 0.0), (x + 0.09, 0.0), (x + 0.09, 0.86), (x, 1.0), (x - 0.09, 0.86)], p.main, p)
+               for x in np.linspace(-1.48, 1.48, 10)]
+    return [*rails, *pickets]
+
+
+def _beach_umbrella(p: _Paint) -> list[VMobject]:
+    """A beach umbrella stuck in the sand: a pale pole and a wide canopy striped in its two colours."""
+    rim, top = 0.76, 0.97
+    dome = [(0.75 * math.cos(a), rim + (top - rim) * math.sin(a)) for a in np.linspace(0.0, math.pi, 25)]
+    ribs = np.linspace(-0.75, 0.75, 6)
+    stripes = [
+        _poly([(0.0, top), (x0, rim), (x1, rim)], p.detail, p, outline=False)
+        for k, (x0, x1) in enumerate(zip(ribs, ribs[1:])) if k % 2 == 1
+    ]
+    scallops = [_circle(x, rim, 0.075, p.main if k % 2 == 0 else p.detail, p) for k, x in enumerate((ribs[:-1] + ribs[1:]) / 2)]
+    return [
+        _rect(-0.025, 0.0, 0.025, rim, BEACH_POLE, p),
+        *scallops,
+        _poly(dome, p.main, p),
+        *stripes,
+        _circle(0.0, 0.985, 0.02, BEACH_POLE, p),
+    ]
+
+
+def _shell(p: _Paint) -> list[VMobject]:
+    """A scallop shell lying on the sand: a ribbed fan on a small hinge."""
+    fan = [(0.0, 0.08), *[(math.cos(a), 0.08 + 0.92 * math.sin(a)) for a in np.linspace(math.radians(15), math.radians(165), 15)]]
+    ribs = [_line(0.0, 0.12, 0.85 * math.cos(a), 0.08 + 0.8 * math.sin(a), p.detail, 1.2 * OUTLINE_WIDTH)
+            for a in np.linspace(math.radians(35), math.radians(145), 5)]
+    return [_poly([(-0.22, 0.0), (0.22, 0.0), (0.12, 0.14), (-0.12, 0.14)], p.detail, p), _poly(fan, p.main, p, round_by=0.04), *ribs]
+
+
+def _pine(p: _Paint) -> list[VMobject]:
+    """A pine tree: a short trunk under three tiers of needles, narrower towards the top."""
+    tiers = ((0.42, 0.14, 0.62), (0.34, 0.4, 0.82), (0.24, 0.62, 1.0))
+    drawn = [_rect(-0.06, 0.0, 0.06, 0.2, p.dark(p.detail), p)]
+    for k, (half, bottom, apex) in enumerate(tiers):
+        color = p.dark(p.main) if k == 0 else p.main
+        drawn.append(_poly([(-half, bottom), (half, bottom), (0.0, apex)], color, p, round_by=0.03))
+        drawn.append(_poly([(-0.4 * half, bottom + 0.05), (-0.1 * half, bottom + 0.05), (-0.05 * half, apex - 0.12)], p.light(p.main), p, outline=False))
+    return drawn
+
+
+def _mushroom_cap(cx: float, size: float, p: _Paint) -> list[VMobject]:
+    """One mushroom of a cluster: a stem and a spotted, domed cap, ``size`` times the tallest's."""
+    def at(x: float, y: float) -> tuple[float, float]:
+        return (cx + size * x, size * y)
+
+    cap = [at(0.5 * math.cos(a), 0.48 + 0.52 * math.sin(a)) for a in np.linspace(0.0, math.pi, 17)]
+    return [
+        _poly([at(-0.13, 0.0), at(0.13, 0.0), at(0.1, 0.55), at(-0.1, 0.55)], p.detail, p, round_by=0.02 * size),
+        _poly([*cap, at(-0.3, 0.42), at(0.3, 0.42)], p.main, p),
+        *[_circle(*at(x, y), r * size, p.detail, p, outline=False) for x, y, r in ((-0.22, 0.66, 0.07), (0.12, 0.82, 0.06), (0.28, 0.58, 0.05))],
+    ]
+
+
+def _mushroom(p: _Paint) -> list[VMobject]:
+    """Two mushrooms, a tall one and a small one beside it."""
+    return [*_mushroom_cap(0.42, 0.6, p), *_mushroom_cap(-0.12, 1.0, p)]
+
+
+def _log(p: _Paint) -> list[VMobject]:
+    """A fallen log lying along the ground, its cut end with rings on the right."""
+    bark, cut = p.main, p.detail
+    grain = [_line(x0, y0, x1, y1, p.dark(bark), 1.5 * OUTLINE_WIDTH)
+             for x0, y0, x1, y1 in ((-2.2, 0.3, -0.8, 0.32), (-0.4, 0.66, 1.2, 0.63), (0.6, 0.26, 1.9, 0.28), (-1.8, 0.72, -1.0, 0.7))]
+    return [
+        _rect(-2.6, 0.0, 2.35, 1.0, bark, p, radius=0.45),
+        *grain,
+        _ellipse(2.35, 0.5, 0.55, 1.0, cut, p),
+        _ellipse(2.35, 0.5, 0.32, 0.6, p.light(cut), p, outline=False),
+        _circle(2.35, 0.5, 0.05, p.dark(cut), p, outline=False),
+    ]
+
+
+# ----- indoor props for the built-in rooms (DESIGN.md §77) -------------------------------------------
+
+#: Chalk on a blackboard, and a shop's goods in four bright colours (fixed: the same in every theme).
+CHALK = "#F4F6FA"
+GOODS_COLORS: tuple[str, ...] = ("#E2574C", "#F6C945", "#5BA35B", "#4C8DD6")
+
+
+def _blackboard(p: _Paint) -> list[VMobject]:
+    """A blackboard on the wall: a wooden frame round a dark board with a triangle and three lines
+    of writing in chalk, a chalk tray along its bottom with two sticks of chalk."""
+    writing = [_jet([(x0 + 0.1 * k, y + 0.025 * (-1) ** k) for k in range(round((x1 - x0) / 0.1) + 1)], CHALK, 1.2)
+               for x0, x1, y in ((0.05, 0.85, 0.75), (0.05, 0.65, 0.57), (0.05, 0.75, 0.39))]
+    triangle = [(-0.85, 0.3), (-0.25, 0.3), (-0.55, 0.8), (-0.85, 0.3)]
+    return [
+        _rect(-1.1, 0.04, 1.1, 1.0, p.main, p, radius=0.03),
+        _rect(-1.02, 0.12, 1.02, 0.93, p.detail, p),
+        *[_line(*a, *b, CHALK, 1.4 * OUTLINE_WIDTH) for a, b in zip(triangle, triangle[1:])],
+        *writing,
+        _rect(-1.06, 0.0, 1.06, 0.1, p.dark(p.main), p, radius=0.02),
+        _rect(0.45, 0.1, 0.62, 0.15, CHALK, p, radius=0.02), _rect(0.72, 0.1, 0.82, 0.15, GOODS_COLORS[1], p, radius=0.02),
+    ]
+
+
+def _school_desk(p: _Paint) -> list[VMobject]:
+    """Side on: a pupil's desk with a sloping lid over a shelf on metal legs, and its chair on the
+    left as drawn facing right (a sitter faces the desk, like a ``desk``'s)."""
+    metal, seat = p.detail, PROP_SEATS["school_desk"][1]
+    return [
+        _rect(0.0, 0.0, 0.06, 0.74, metal, p), _rect(0.78, 0.0, 0.84, 0.74, metal, p),
+        _rect(-0.04, 0.0, 0.88, 0.04, metal, p),
+        _rect(-0.08, 0.72, 0.92, 0.86, p.dark(p.main), p),
+        _poly([(-0.15, 0.86), (0.95, 0.86), (0.95, 1.0), (-0.15, 0.92)], p.main, p),
+        _rect(-0.86, 0.0, -0.81, seat, metal, p), _rect(-0.42, 0.0, -0.37, seat, metal, p),
+        _rect(-0.92, seat - 0.06, -0.34, seat, p.main, p, radius=0.02),
+        _rect(-0.9, seat, -0.86, 0.72, metal, p),
+        _rect(-0.95, 0.5, -0.82, 0.74, p.main, p, radius=0.03),
+    ]
+
+
+def _goods(left: float, right: float, floor: float, top: float, seed: int, p: _Paint) -> list[VMobject]:
+    """A row of goods on a shelf at ``floor`` from ``left`` to ``right``, at most ``top`` high: boxes,
+    tins with a paper label and jars with a lid, in turn from ``seed`` (:data:`GOODS_COLORS`)."""
+    tall = top - floor
+    drawn: list[VMobject] = []
+    x, k = left + 0.03, seed
+    while x + 0.16 <= right:
+        color = GOODS_COLORS[k % len(GOODS_COLORS)]
+        kind = k % 3
+        if kind == 0:     # a box
+            drawn += [_rect(x, floor, x + 0.16, floor + 0.85 * tall, color, p), _rect(x + 0.03, floor + 0.45 * tall, x + 0.13, floor + 0.6 * tall, PAPER, p, outline=False)]
+        elif kind == 1:   # a tin
+            drawn += [_rect(x, floor, x + 0.13, floor + 0.5 * tall, color, p, radius=0.02), _rect(x, floor + 0.16 * tall, x + 0.13, floor + 0.34 * tall, PAPER, p, outline=False)]
+        else:             # a jar
+            drawn += [_rect(x, floor, x + 0.14, floor + 0.62 * tall, p.light(color), p, radius=0.03), _rect(x + 0.01, floor + 0.62 * tall, x + 0.13, floor + 0.72 * tall, color, p)]
+        x, k = x + 0.19, k + 1
+    return drawn
+
+
+def _shelf_with_goods(p: _Paint) -> list[VMobject]:
+    """A shop's shelves against the wall: three shelves of goods in a frame, a price strip along
+    each shelf's edge."""
+    shelves = (0.04, 0.35, 0.66)
+    drawn = [_rect(-0.45, 0.0, 0.45, 1.0, p.main, p), _rect(-0.4, 0.04, 0.4, 0.96, p.dark(p.main), p)]
+    for k, y in enumerate(shelves):
+        drawn += _goods(-0.4, 0.4, y + 0.04, y + 0.28, 2 * k, p)
+        drawn += [_rect(-0.4, y, 0.4, y + 0.04, p.main, p), _rect(-0.4, y, 0.4, y + 0.02, p.detail, p, outline=False)]
+    return drawn
+
+
+def _till(p: _Paint) -> list[VMobject]:
+    """A till for a counter: a cash drawer under a body whose top slopes down to the front with
+    rows of keys, and a display on a stalk at the back."""
+    keys = [_rect(x - 0.06, 0.48 - 0.2 * x - 0.11 * row - 0.05, x + 0.06, 0.48 - 0.2 * x - 0.11 * row, p.light(p.main), p)
+            for row in (0, 1) for x in (-0.25, 0.0, 0.25)]
+    return [
+        _rect(-0.33, 0.58, -0.25, 0.8, p.dark(p.main), p),
+        _rect(-0.55, 0.76, -0.05, 1.0, p.main, p, radius=0.04),
+        _rect(-0.5, 0.8, -0.1, 0.95, GLASS, p),
+        _line(-0.44, 0.875, -0.16, 0.875, p.dark(p.detail), 2.0 * OUTLINE_WIDTH),
+        _poly([(-0.5, 0.22), (0.5, 0.22), (0.5, 0.42), (-0.5, 0.62)], p.main, p, round_by=0.02),
+        *keys,
+        _rect(-0.55, 0.0, 0.55, 0.24, p.dark(p.main), p, radius=0.02),
+        _rect(-0.14, 0.09, 0.14, 0.14, p.detail, p, radius=0.02),
+    ]
+
+
+def _wardrobe(p: _Paint) -> list[VMobject]:
+    """A wardrobe against the wall: two doors with panels and knobs under a cornice, on short feet."""
+    dark, light = p.dark(p.main), p.light(p.main)
+    return [
+        *[_rect(x - 0.03, 0.0, x + 0.03, 0.04, dark, p) for x in (-0.25, 0.25)],
+        _rect(-0.3, 0.03, 0.3, 0.95, p.main, p),
+        *[_rect(x0, 0.1, x1, 0.86, light, p, radius=0.02, outline=False) for x0, x1 in ((-0.25, -0.04), (0.04, 0.25))],
+        _line(0.0, 0.05, 0.0, 0.93, p.ink),
+        *[_circle(x, 0.5, 0.025, p.detail, p) for x in (-0.05, 0.05)],
+        _rect(-0.33, 0.93, 0.33, 1.0, dark, p, radius=0.01),
+    ]
+
+
 _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]]]] = {
     "table": _table, "chair": _chair, "tree": _tree, "bush": _bush, "house": _house, "door": _door,
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
@@ -1134,6 +1460,11 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
     "sofa": _sofa, "armchair": _armchair, "bed": _bed, "bookshelf": _bookshelf, "counter": _counter,
     "fridge": _fridge, "picture": _picture, "rug": _rug, "houseplant": _houseplant, "clock": _clock,
     "tv": _tv, "desk": _desk, "fireplace": _fireplace,
+    "shop": _shop, "bench": _bench, "bus_stop": _bus_stop, "road": _road, "path": _path, "fountain": _fountain,
+    "flowers": _flowers, "fence": _fence, "beach_umbrella": _beach_umbrella, "shell": _shell, "pine": _pine,
+    "mushroom": _mushroom, "log": _log,
+    "blackboard": _blackboard, "school_desk": _school_desk, "shelf_with_goods": _shelf_with_goods, "till": _till,
+    "wardrobe": _wardrobe,
 }
 
 
@@ -1282,6 +1613,8 @@ __all__ = [
     "FLAT_PROPS",
     "FRUIT_INDEX",
     "FURNITURE",
+    "INDOOR_PROPS",
+    "OUTDOOR_PROPS",
     "PROP_COLORS",
     "PROP_HANGS",
     "PROP_HEIGHTS",

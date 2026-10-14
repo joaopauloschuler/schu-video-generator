@@ -231,6 +231,8 @@ from vidgen.cartoon.keyframes import (  # noqa: E402
 )
 from vidgen.config import ActionConfig, AutoDirect, AutoDirectSetting, MotionSetting, ReframeSetting, SHOT_NAMES, ShotConfig  # noqa: E402
 from vidgen.cartoon.directing import DirectedBeat, StageFrame, StagePlace, plan_reframe, stage_directions, stage_frame, stage_reframes  # noqa: E402
+from vidgen.cartoon.host import HAND_REACH_OUT, HostMove, facing_for, hand_goal, host_move_plan, pointed_spot  # noqa: E402
+from vidgen.cartoon.host_directing import RevealStep, has_error_text, value_trend  # noqa: E402
 from vidgen.cartoon.reframe import (  # noqa: E402
     REFRAME_SECONDS,
     REPLY_HOLD_SECONDS,
@@ -435,6 +437,8 @@ from vidgen.cartoon.lighting import (  # noqa: E402
     tint_grade,
 )
 from vidgen.cartoon.shading import CustomLight, LightSetting, ShadowCaster, StageLight, StageShadows, StarField, mark_lit, resolve_light  # noqa: E402
+from vidgen.cartoon.drawing_style import DrawingStyle, mark_shaded  # noqa: E402
+from vidgen.config import DrawingConfig  # noqa: E402
 from vidgen.cartoon.wind import (  # noqa: E402
     LIGHT_PROPS,
     SWAYS,
@@ -1018,6 +1022,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "StarField",
     "mark_lit",
     "resolve_light",
+    "DrawingConfig",
+    "DrawingStyle",
+    "mark_shaded",
     "LIGHT_PROPS",
     "SWAYS",
     "WIND_FADE_SECONDS",
@@ -1180,6 +1187,15 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "draw_room",
     "room_colors",
     "passage_fade",
+    "HAND_REACH_OUT",
+    "HostMove",
+    "facing_for",
+    "hand_goal",
+    "host_move_plan",
+    "pointed_spot",
+    "RevealStep",
+    "has_error_text",
+    "value_trend",
     "Field",
     "field_validator",
     "model_validator",

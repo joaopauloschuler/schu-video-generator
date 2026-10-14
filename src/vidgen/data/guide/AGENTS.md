@@ -128,10 +128,18 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
 8. **`vidgen tts`**: voices only new or changed beats (needs `ELEVENLABS_API_KEY`; costs money).
 9. **`vidgen render`** (`--preview` first): now timed by the real audio. Beats change length,
    so run `vidgen storyboard` and `vidgen lint` again: `narration_speed` and `dead_air` now
-   measure the real speech.
+   measure the real speech. For a cartoon, `vidgen render --draft` is faster still (about 8 fps,
+   240p, no idle motion, wind, shadows, particles or light grade; every timing, position, action
+   and the lip sync kept): `<output>_draft.mp4`, to watch the timing and staging before a preview.
+   `vidgen animatic` is quicker still once the storyboard's stills are current (seconds, no
+   rendering): `<output>_animatic.mp4`, those stills held in time with the narration, with the
+   audio and the subtitles, to check the pacing.
 10. **`vidgen readback`** (optional extra `schu-video-generator[stt]`): speech-to-text of the MP3s against
-    your texts; it names misheard terms and suggests a pronunciation entry. Fix, `vidgen tts`,
-    and `vidgen lint` again (its `readback` rule reads the cached transcripts).
+    your texts; it names misheard terms and suggests a pronunciation entry, and lists the
+    **words to check**: heard with low confidence or after an odd pause inside a sentence, with
+    their time in the beat and in the video. Fix, `vidgen tts`, and `vidgen lint` again (its
+    `readback` rule reads the cached transcripts; `vidgen lint --readback` also reports the words
+    to check, rule `unclear_speech`).
 11. **Final**: `vidgen render` (the full-size `format`, 1920x1080 by default) and a last
     `vidgen lint --final`.
 
@@ -165,9 +173,9 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 
 **Through MCP.** When your client has the vidgen MCP server (`vidgen mcp --root DIR`), the same
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
-`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
+`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `storyboard`, `lint`,
 `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast` (options in snake_case: `per_beat`,
+`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic` (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
@@ -728,6 +736,12 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
 | `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
+| `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
+| `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
+| `host_react` | with a `host:`: the host's expression for this beat (`- host_react: happy`; `effect: sparkle` adds a symbol) | on a result or a surprise |
+| `host_move` | with a `host:`: the host walks to the other side and the content slides over with it (`- host_move: other_side`, `left`, `right`) | one move per beat; rarely, between topics |
+| `host_enter` | with a `host:`: the host walks in from an edge (`{action: host_enter}`, or `- host_enter: left`); the scene starts without it | at the start of the video |
+| `host_exit` | with a `host:`: the host walks out by an edge (`- host_exit: left`); its room stays free | at the end |
 
 ```yaml
 - id: speeds
@@ -811,6 +825,9 @@ asks for one, say vidgen makes original characters and offer one with the same r
   soft shadows") so all stages match, and a prompt that describes a set, not a scene: things at
   the edges, an empty middle, the ground across the lower part, `negative: "people, animals,
   text"` (`docs/CONFIG.md` "Generated backgrounds").
+- **Drawing style**: one top-level `drawing: {outline: thin | bold, shading: soft, texture:
+  paper | storybook}` restyles every stage (a stage's own `drawing` wins key by key); the
+  default draws as before; captions and overlays are never textured.
 - **Room to move**: a walk takes the time its distance needs (about 4 s from `left` to `right`
   in 16:9), so give it a beat that long and end it on a free mark (`walk_overlap`). On a stage wider than
   the frame (`width: 2`), the camera goes along with `follow`.
@@ -863,6 +880,21 @@ asks for one, say vidgen makes original characters and offer one with the same r
   rings (`on: true` or `- switch_on: phone`; it shakes in bursts with a trill, `- switch_off:
   phone` answers it). Held balloons rise behind the head; `- let_go: pip` floats them away for
   good. `- pour: kit` tilts the watering can kit holds and water drops fall.
+- **Ready-made sets**: `set: city_street`, `park`, `beach`, `forest` or `snowy_hills` on a stage
+  scene gives a whole outdoor set without `sets:` (backdrop, props, light, ambience: a street
+  sounds like a city, a park and a forest have birdsong by day). Put two characters on its
+  `stand_left` and `stand_right` marks (clear of the props; other marks: `bench`, `bus_stop`,
+  `fountain`, `umbrella`, `log`...); the scene's params override it like any set (`light:
+  sunset`, `props: [{name: shop_2, color: tertiary}]`, `props: []`). Their props work on any
+  stage: `shop`, `bench` and `log` (sit two), `bus_stop`, `fountain`, `flowers`, `fence`,
+  `beach_umbrella`, `shell`, `pine`, `mushroom`, and flat `road` / `path` bands.
+- **Ready-made rooms**: `set: classroom`, `kitchen`, `shop`, `living_room` or `bedroom` gives a
+  furnished room (a door, windows, daylight or lamplight, a room tone) with the same `stand_left` /
+  `stand_right` marks. Furniture stands at the wall (depth 0.4): to sit or lean, walk there first
+  (`- walk_to: pip, to: {mark: sofa, depth: 0.4}`, then `- sit_on: pip, to: sofa`); pupils' desks
+  are at depth 0.25 (marks `pupil`, `pupil_2`), the kitchen table and chairs at 0.2. `light: day`
+  for a daytime room. New props: `blackboard` (hangs on the wall), `school_desk` (with its chair:
+  sit at it), `shelf_with_goods` and `wardrobe` (lean on them), `till` (`lift` it onto a counter).
 
 **Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
 key cuts the camera to a framing of the characters for that beat; the next beat without one cuts
@@ -970,7 +1002,8 @@ BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
 
 Indoors: `set: room: stripes, window at 0.3, door at right; props: sofa against the wall at 0.4,
 picture frame on the wall, rug at 0.5`. `NAME (manner):` turns an expression or pose word (`doubtful`, `glad`, `arms crossed`) into a
-`react`, and a pronoun there states the voice kind (`FEN (she):`, `BRAM (he, doubtful):`,
+`react` and a feeling word (`cross`, `whispering`, `sleepy`) into the beat's `emotion` (how the
+voice says it), and a pronoun there states the voice kind (`FEN (she):`, `BRAM (he, doubtful):`,
 `GUS (they):`; once per character is enough): the generated look and voice then suit it (without
 one, the voice follows the look's kind); a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
 at, point at, wave, nod, shrug and shake head, and effect symbols (`[Pip has an idea]`, `is
@@ -1042,7 +1075,9 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   names the street sounds instead (or `birdsong`, `room_tone`, a list), `ambience: false` none.
   `foley: false` (top level or a stage) turns all of them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
-  voice. One or two per cartoon, on the real punchline, or they stop being funny.
+  voice; under composed music the music's own instruments play it, in its key. One or two per
+  cartoon, on the real punchline, or they stop being funny. For music that follows the story
+  (a mood per scene, a pause before the punchline) see *Composed music* in `vidgen guide audio`.
 - **Voice sounds**: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`, `[beep]` in a line
   (`text: "[gasp] The box is open! [laugh]"`) are made by the voice at that point (`Ha ha ha!`,
   `Hmm.`; a gasp or sigh at the line's start or end is a generated breath, a beep a generated
@@ -1112,6 +1147,59 @@ scenes:
 
 A complete two-scene cartoon (under a minute, a wide stage, `follow` on a flying prop, a close-up
 punchline) is `examples/cartoon/` in the schu-video-generator repository.
+
+**A host for an explainer.** `host: NAME` (a character of `characters:`) puts that character
+beside the content of every scene: bullets, charts, code, diagrams... Each scene lays its content
+out in the room left (a column beside it; in 9:16 a band below it), so nothing needs moving by
+hand. Its mouth follows the narration (`speaks: narrator`, the default; `own`: only beats in its
+own voice), it blinks and breathes, and a scene can change it (`host: {expression: thinking}`) or
+drop it (`host: false`; a title or end card often looks better without). `stage` and `card`
+scenes never show it. Keep the host small next to dense content (`size: 0.4`), and check the
+storyboard: lint's `host_overlap` reports anything drawn over it.
+
+```yaml
+characters: [{name: dot, look: {body: bean, hair: bun, accessories: [glasses]}}]
+host: {character: dot, side: right}        # size, place (beside / below), floor, facing, pose, expression
+scenes:
+  - id: steps
+    type: bullets
+    params: {heading: "How it works", items: ["Write the beats", "Render a preview"]}
+    beats: [{text: "First, you write the narration as short beats."}]
+  - id: chart
+    type: bar_chart
+    host: {expression: happy}
+    params: {title: "Render minutes", labels: ["480p", "1080p"], values: [0.4, 2.6]}
+    beats: [{text: "Previews are the fast way to iterate."}]
+```
+
+**Make the host act.** Beat actions: `host_point: item2` (its arm reaches towards a target of
+the scene and it looks there; `line: true` adds a thin pointer line, best when nothing lies
+between the host and the target), `host_look: bar3`, `host_react: happy` (`effect: sparkle` adds
+a symbol), `host_move: other_side` (it walks across and the content slides to the other side
+with it; one move per beat), `host_enter` / `host_exit` (a scene whose first passage is
+`host_enter` starts without it). With `auto_direct: true` (or the host's own `auto_direct`) the
+host points at each new bullet, bar, series or code highlight, looks at written highlights, and
+reacts to results (a chart going up: happy; down: worried; an error in the code: surprised); it
+never moves by itself, and anything you write in a beat wins. `vidgen direct` lists what it adds.
+A complete example is `examples/host-explainer/`.
+
+```yaml
+auto_direct: true
+characters: [{name: mo, look: {species: mouse, outfit: apron}}]
+host: mo
+scenes:
+  - id: hello
+    type: title
+    params: {title: "Why Bread Rises"}
+    beats: [{text: "Hi, I'm Mo!", actions: [{action: host_enter}]}]
+  - id: bake
+    type: process
+    params: {stages: ["Mix", "Rise", "Bake"], layout: column}
+    beats:
+      - text: "Mix it, and let it rise."
+      - text: "Then into the oven."
+        actions: [{host_point: stage3, line: true, at: 0.5}]
+```
 
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->
 ## Overlays, transitions and continuity
@@ -1216,6 +1304,18 @@ expressive, has no context between beats, and is weak on very short lines (give 
 the person wants the most natural narration. It runs at about real time on a laptop CPU (~0.7x on
 a small cloud CPU): voice a long video once the script is settled.
 
+Give Kokoro lines feeling with `emotion:` on a beat (or as a speaker's default on its voice):
+`happy`, `excited`, `sad`, `angry`, `worried`, `scared`, `surprised`, `calm`, `doubtful`,
+`sleepy`, `whisper`, `shout`, or a row with changes such as `{like: sad, pitch: -2}`, change the
+speed, pitch, loudness and pauses of that line; use it on the lines of a dialogue that carry a feeling, not on every line.
+`excited`, `happy`, `angry` and `shout` also speed a line up: with Kokoro keep the voice's `speed` near
+0.75–0.8 (`af_heart` at 0.95 read 3.6–4.6 words a second), then check `narration_speed` with
+`vidgen lint` on the real audio. A screenplay's `PIP (cross):` sets it for you. A weighted blend `voice: af_heart+af_bella:0.6`
+makes an in-between voice. ElevenLabs and OpenRouter speak the same `emotion` by its name: an
+audio tag such as `[excited]` before the line on `eleven_v3`, changed voice settings on other
+ElevenLabs models, a sentence added to the `instructions` of OpenRouter models that take them
+(other OpenRouter models: the audio's speed, pitch and loudness).
+
 ```yaml
 voice: {provider: kokoro, voice: af_heart}       # speed: 1.0, lang: a, device: cpu (defaults)
 voices:
@@ -1243,7 +1343,9 @@ voices:
 **Pronunciation.** Write the text as it should be **read** on screen and in subtitles; fix
 how it is **said** with `pronunciation:` (applied to the TTS text only). Run
 `vidgen tts --dry-run` and read every `says:` line; after `vidgen tts`, `vidgen readback` finds
-what the voice still gets wrong.
+what the voice still gets wrong, and the words it says unclearly (`unclear`: probability below
+0.5 or a pause over 0.5 s inside a sentence; `doubtful`: below 0.75). For an unclear name or
+term, respell it in `pronunciation:`; for another word, try another voice, speed or `emotion:`.
 
 ```yaml
 pronunciation:
@@ -1288,6 +1390,47 @@ scenes:
     type: text_card
     params: {text: "Listen"}
     beats: [{text: "A calm bed sits under the voice."}]
+```
+
+**Composed music** (`music: {compose: MOOD}`) is written as notes for this video and played with
+real instruments: an original piece in a mood, the same piece for the same settings. Prefer it to
+a bed when the music should follow the video. Moods for explainers: `calm` (piano and harp, no
+drums: serious topics, long narration), `focused` (vibraphone, guitar, brushes: tech, data,
+walkthroughs), `curious` (staccato flute, harp: science, "how does it work"), `upbeat` (marimba,
+pop drums: launches, tutorials). For cartoons: `playful` (clarinet, marimba, tuba oom-pah),
+`sleepy` (celesta lullaby in 3/4: night, bedtime, endings), `tense` (low clarinet, tremolo
+strings, a heartbeat drum: storms, chases, suspense), `triumphant` (trumpet fanfare, march: the
+win). `vidgen list-music` describes each mood and instrument in words.
+- **It follows the video.** Without `bars` the piece is composed for the real timings when the
+  video is joined: every scene starts on a bar line (tempo within 8 % of the mood's), the music
+  swells a little when a bullet, chart bar or code step appears, and it ends on a held chord
+  instead of fading mid-phrase. After a script change the next render composes it again.
+- **A mood per scene.** `music: {mood: tense}` on a scene changes the music for that scene only
+  (the next scene returns to the cue's mood); add `volume: -3` under rain or a busy scene. Use it
+  where the story turns (calm → tense at the storm, sleepy at night), not on every scene.
+- **Pauses before punchlines.** `music_pause: true` on a beat stops the music just before the
+  line, until the next bar line after it; vidgen does this by itself before a `card` scene and
+  before a short last line (≤ 8 words), whose closing chord then lands as the line ends.
+  `music_pause: false` turns either off.
+- **Stings** (`sting: reveal | comic | sad`) are played by the music's own instruments, in its key.
+- **Without the extra.** Composed music needs `pip install "schu-video-generator[music]"`; the first
+  render downloads the SoundFont (32 MB, once; `vidgen soundfont fetch` does it now). Without the
+  extra `vidgen validate` warns and the mood's built-in bed plays instead (`calm` → calm,
+  `focused` / `tense` → pulse, `curious` / `upbeat` / `triumphant` → bright, `playful` → cartoon,
+  `sleepy` → lullaby), so the video still renders. `vidgen music preview --mood M` writes a piece
+  as WAV and MIDI to listen to (MCP `music_preview`). Drafts and animatics play it too; storyboards
+  have no sound.
+
+```yaml
+music: {compose: playful, volume: -2}
+scenes:
+  - id: storm
+    type: stage
+    music: {mood: tense, volume: -3}
+    beats:
+      - text: "Then the cloud did what clouds do."
+      - text: "The umbrella left without him."
+        music_pause: true
 ```
 
 <!-- topic: examples (also: good-bad, before-after, patterns, antipatterns) -->
@@ -1456,7 +1599,7 @@ Good: the result first, then the context.
 ## Outputs: video, chapters, thumbnail, slides, GIFs, translations
 
 - **Video and subtitles**: `vidgen render` writes `output/<output>.mp4` and `<output>.srt`
-  (`--preview`: `<output>_preview.mp4`; `--variant NAME`: `<output>_<variant>.mp4`). The
+  (`--preview`: `<output>_preview.mp4`; `--draft`: `<output>_draft.mp4`; `--variant NAME`: `<output>_<variant>.mp4`). The
   chapter list and thumbnail go to `output/` too; `output_dir:` (relative to the project folder)
   or `--output-dir DIR` moves them. `build/` and `exports/` stay put.
 - **Chapters**: with `chapter` cards or `chapter:` keys the MP4 gets chapter marks and
@@ -1488,6 +1631,12 @@ scenes:
   translations run longer), `vidgen validate` (lists what is still untranslated),
   `vidgen tts --variant pt` (voices only translated beats), then storyboard and lint the
   variant: longer text can overflow where the source fit.
+- **Dubbing a cartoon**: the same variant. With Kokoro every speaker gets a voice of the
+  language of the same kind automatically (`vidgen validate` prints `dub [pt]: ...` and warns
+  when two speakers end up with one voice); name one with `dub: {pt: pm_alex}` on that voice in
+  `voices:` (or on `voice:` for the narrator). Then `vidgen tts --all-languages`, `vidgen lint
+  --all-languages` (timings, overlaps and text are checked in each language) and `vidgen render
+  --preview --all-languages`. Example: `examples/cartoon-music-box` (variant `pt`).
 
 ```yaml
 variants:
@@ -1536,7 +1685,9 @@ scenes:
 - The built-in fonts (SIL OFL), Lucide icons (ISC), Natural Earth map data, sound effects and
   music beds may be used in your videos, including commercially, with no attribution required
   in the video (Natural Earth asks for none; the OFL and ISC notices concern redistributing the
-  files themselves).
+  files themselves). So may composed music played with the default GeneralUser GS SoundFont (no
+  attribution required; a credit in the description is welcome: `vidgen soundfont info` prints
+  one); with your own `soundfont:` its licence applies.
 
 <!-- topic: troubleshooting (also: errors, fixes, lint, validate, problems) -->
 ## Troubleshooting: messages and fixes
@@ -1576,6 +1727,7 @@ install; `vidgen validate` warns when it is missing.
 | `label_spacing` | a callout label touches other text (a value, the title) | another `side:`, an `arrow` instead of a `label`, a shorter label |
 | `contrast` | text hard to read on its background | theme tokens instead of custom colours; another preset |
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
+| `host_overlap` | the host overlaps the content, a caption or an overlay | a smaller host (`size`), another `side` / `place`, or `host: false` on that scene |
 | `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
 | `off_stage` | a character is cut by the edge of the view (in a `shot`: a character it frames is out of it) | another mark or x inside the view, or `pan` to it; in a shot, keep it from walking out or frame another shot |
 | `character_overlap` | two characters stand on each other (at about the same depth) | marks further apart, or `walk_to` one away (across, or in depth) |
@@ -1591,6 +1743,7 @@ install; `vidgen validate` warns when it is missing.
 | `rushed_animation` | animations squeezed into a short beat | merge two short beats, or reveal fewer things per beat |
 | `talked_over` | an `overlap` hides whole words of the line before, or an `interrupt` cuts them | a shorter `overlap` (none for an interrupt), or `interrupt: true` to cut the line |
 | `readback` | the audio does not say what the text says | add a `pronunciation:` entry, `vidgen tts`, check again |
+| `unclear_speech` | (only with `--readback`) a word heard unclearly or after an odd pause | respell it in `pronunciation:`, or another voice, speed or `emotion:` for the beat; `vidgen tts`, check again |
 
 **Other things that go wrong**
 

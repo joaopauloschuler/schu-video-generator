@@ -29,7 +29,7 @@ LANDING_FRONT = 0.05
 #: passing in front of a crown read as rain through it).
 SHELTER_REACH = 0.1
 #: Props that shelter from the rain: kind -> the shape that does (``None``: any shape).
-SHELTER_PROPS: dict[str, str | None] = {"tree": None, "umbrella": "open"}
+SHELTER_PROPS: dict[str, str | None] = {"tree": None, "pine": None, "umbrella": "open", "beach_umbrella": None}
 #: Seconds a splash shows after a drop lands.
 SPLASH_SECONDS = 0.3
 #: A splash's flat ring: its half width at the start and at the end (shorter sides of the frame).

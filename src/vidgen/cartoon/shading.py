@@ -86,11 +86,13 @@ class StageLight:
     ``storms`` of rain fields with ``lightning``, DESIGN.md §69.61; ``flash_share`` of a flash:
     less in a room). Wraps ``camera`` (a Manim Cairo camera) so the fill and stroke colours and
     the pictures of lit mobjects are drawn graded by :attr:`grade`; :meth:`update` sets the grade
-    for a scene time and tells the listeners (stars, shadows) when it changed."""
+    for a scene time and tells the listeners (stars, shadows) when it changed. ``flat`` (a draft,
+    DESIGN.md §74): nothing is graded and lightning never flashes; the changes keep their times."""
 
-    def __init__(self, camera: Any, base: LightGrade) -> None:
+    def __init__(self, camera: Any, base: LightGrade, *, flat: bool = False) -> None:
         self.base = base
         self.grade = base
+        self.flat = flat
         self.changes: list[LightChange] = []
         self.strikes: list[Strike] = []
         self.storms: list[RainStorm] = []
@@ -98,6 +100,8 @@ class StageLight:
         #: how bright the lightning lights the set now (0..1)
         self.flash = 0.0
         self._listeners: list[Callable[[LightGrade], None]] = []
+        if flat:
+            return
         fill, stroke, image = camera.get_fill_rgbas, camera.get_stroke_rgbas, camera.display_image_mobject
         camera.get_fill_rgbas = lambda vmobject: self._graded(vmobject, fill(vmobject))
         camera.get_stroke_rgbas = lambda vmobject, *args, **kwargs: self._graded(vmobject, stroke(vmobject, *args, **kwargs))
@@ -135,7 +139,7 @@ class StageLight:
     def update(self, now: float) -> None:
         """Set the grade for scene time ``now`` (with a flash while lightning lights the set)."""
         grade = light_at(self.base, self.changes, now)
-        self.flash = flash_level(self.strikes_until(now), now) if self.strikes or self.storms else 0.0
+        self.flash = flash_level(self.strikes_until(now), now) if (self.strikes or self.storms) and not self.flat else 0.0
         if self.flash > 0:
             grade = flash_grade(grade, self.flash, share=self.flash_share)
         if grade != self.grade:
@@ -146,12 +150,14 @@ class StageLight:
     def changing(self, start: float, end: float) -> bool:
         """Whether the light changes (or lightning flashes) between scene times ``start`` and
         ``end``."""
-        return light_changing(self.changes, start, end) or flashing(self.strikes_until(end), start, end)
+        return light_changing(self.changes, start, end) or (not self.flat and flashing(self.strikes_until(end), start, end))
 
     def settled(self, now: float) -> bool:
         """Whether every change and every flash is over at scene time ``now`` (and no rain field
         with lightning still falls)."""
         changes = all(change.end <= now and (change.seconds > 0 or change.start < now) for change in self.changes)
+        if self.flat:
+            return changes
         return changes and all(s.end <= now for s in self.strikes) and all(storm.over(now) for storm in self.storms)
 
 

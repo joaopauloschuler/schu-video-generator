@@ -6,15 +6,16 @@ The project and pip distribution are called `schu-video-generator`; the command 
 below unless it says otherwise. `vidgen.DIST_NAME` (`"schu-video-generator"`) is used where the
 distribution is meant: install hints of the optional extras (`schu-video-generator[pdf|stt|mcp]`),
 the PDF deck's creator and the HTML deck's `generator`, and the MCP server's advertised name. The
-JSON envelope key `vidgen`, the `vidgen://` MCP resources and `--version` (`vidgen 0.2.0`) keep
+JSON envelope key `vidgen`, the `vidgen://` MCP resources and `--version` (`vidgen 0.3.0`) keep
 the command's name.
 It generalises the one-off `kphi3_paper_video` project: the pipeline is shared, each video is a
 **project folder** with a config file, and each project can **extend** the tool with its own
 scene types, helpers, theme tokens and pipeline hooks.
 
-Status of this document: describes the implemented system (version 0.2.0: the version 0.1
-contract after the Step 7 review, plus the roadmap steps 8–60 in tasklist.md recorded in §11
-onwards; §63 is the final review and lists what changed for users of 0.1). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
+Status of this document: describes the implemented system (version 0.3.0: the version 0.1
+contract after the Step 7 review, plus the roadmap steps 8–60 (version 0.2.0) and 61–131
+(version 0.3.0) in tasklist.md recorded in §11 onwards; §63 is the 0.2.0 review and lists what
+changed for users of 0.1; `CHANGELOG.md` lists what changed from 0.2.0 to 0.3.0). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
 each step made it precise, and where a refinement differs from the text above it, the
 refinement is what the code does. Changing a public interface requires updating this file in
 the same commit and noting it in HANDOFF.md. User documentation: README.md, docs/CONFIG.md
@@ -89,6 +90,10 @@ src/vidgen/
                           # Walk, Gesture, Jump, §69.12; KeyedMotion, §69.14),
                           # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
                           # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
+                          # host.py (host: which host a scene has, its column / band, who speaks, checks,
+                          # §71; pointing and moving geometry, §71.1; no manim), host_drawing.py
+                          # (HostFigure: the host and its floor line, §71), host_directing.py (the
+                          # host's automatic directing, RevealStep, §71.2; no manim),
                           # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
                           # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
                           # svg_prop: props from primitives or an SVG, §69.8), acting.py (where a
@@ -111,7 +116,9 @@ src/vidgen/
                           # the landscape stage a narrow frame crops, §69.30; no manim),
                           # lighting.py (light presets, grades, fades, stars and shadow ellipses,
                           # §69.31; no manim), shading.py (StageLight: the grade as the camera
-                          # draws, StarField, StageShadows, §69.31), wind.py (wind levels,
+                          # draws, StarField, StageShadows, §69.31), drawing_style.py (the
+                          # drawing: outline / shading / texture as the camera draws and the
+                          # renderer writes, §79), wind.py (wind levels,
                           # seeded gusts, fades, sway and trailing angles, §69.32; the felt
                           # force and a blown prop's path, §69.38; no manim),
                           # windblown.py (SwayingProp, StageWind, §69.32), rain.py (rain on a
@@ -166,7 +173,7 @@ src/vidgen/
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
-                          # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57),
+                          # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
                           # color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
@@ -192,10 +199,13 @@ src/vidgen/
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
   tts/kokoro.py           # local Kokoro-82M provider (extra schu-video-generator[kokoro]): engine, MP3, timings (§68)
-  kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, validate warnings (§68)
+  kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, weighted blends, validate warnings (§68, §72)
+  tts/prosody.py          # an emotion applied to speech: pauses by word timings, soft-limited gain, pitch filter (§72)
+  emotions.py             # emotion: the table (speed, pitch, gain, pauses), manner words (§72; no manim)
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
                           # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
+  speech_flags.py         # word flags: low recogniser confidence, pauses inside sentences, differences; fixes (§78; no manim)
   textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
   imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
                           # helpers, warnings), openai.py (OpenAI Images provider), openrouter.py (OpenRouter
@@ -209,13 +219,19 @@ src/vidgen/
   pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
   voicesounds.py          # [gasp] [laugh] ... in a beat's text: markers, what each voice says, sound times (§69.33; no manim)
   overlap.py              # overlap: / interrupt: beats: windows, voice shapes (dip / cut), talked-over words (§69.34; no manim)
-  includes.py             # include: files and named sets: merge rules, set: of a stage, where problems are written (§69.35; no manim)
+  includes.py             # include: files and named sets: merge rules, set: of a stage (built-in sets, §76), where problems are written (§69.35; no manim)
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
   languages.py            # language tags and per-language rules: cue words, speech rate, TTS / MP4 codes (§54; no manim)
   translation.py          # translation files: text markers, keys, extracting, applying, merging, warnings (§54; no manim)
+  dubbing.py              # each voice's voice in the video's language (dub:, automatic Kokoro picks), --all-languages (§80; no manim)
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
-  music.py                # background music: generated beds, music files as looping sources (§48; no manim)
+  music.py                # background music: generated beds, music files and composed music as looping sources (§48, §82, §83; no manim)
+  composer.py             # composed music from a mood: moods, instruments, chords, phrases, melody, accompaniment (§83; pure, seeded, no manim)
+  musicfit.py             # composed music that follows the video: bar lines at scene changes, per-scene moods, swells, pauses, cadence, stings (§84)
+  score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
+  soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
+  synth.py                # composed music played with symusic (optional extra music): install check, per-part render, numpy mix, reverb, cache (§81, §82; no manim)
   mix.py                  # the final mix: music placement, ducking, normalisation, limiter (§48; no manim)
   loudness.py             # BS.1770-4 integrated loudness and true peak, block by block (§48; no manim)
   transitions.py          # scene transitions: effective transition, frame math, colour fade and irises (§69.45), voice track, xfade names (§49-50; no manim)
@@ -238,6 +254,8 @@ src/vidgen/
                           # switch_action.py: switch_on, switch_off (a tv or a lamp), §69.54;
                           # storm_action.py: lightning, rainbow, §69.61;
                           # knock_action.py: knock (a door), §69.62;
+                          # host_actions.py: host_point, host_look, host_react, host_move,
+                          # host_enter, host_exit (the scene's host), §71.1;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6; card.py: the card scene type, §69.46)
@@ -249,9 +267,11 @@ src/vidgen/
   data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
+  data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
                           # make_gallery_clip.py (data/gallery/clip.webm, §60),
+                          # make_sets_gallery.py (docs/gallery/media/sets_outdoors.png, §76),
                           # make_world_map.py (builds data/geo/world-110m.json from npm packages, §39)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
@@ -285,14 +305,15 @@ my_video/
     <variant>/            #   only for a variant whose voice or beat texts differ (§7)
   build/                  # generated: manim media, per-scene mp4, timings json, concat list
   output/                 # the deliverables (Step 66; `output_dir:` / `--output-dir` move it, see §4)
-    <output>.mp4          #   final video   (<output>_preview.mp4 for previews,
-    <output>.srt          #                 <output>_<variant>.mp4 for variants)
+    <output>.mp4          #   final video   (<output>_preview.mp4 for previews, <output>_draft.mp4
+    <output>.srt          #                 for drafts (§74), <output>_<variant>.mp4 for variants)
     <output>_chapters.txt #   YouTube chapter list, when the video has chapters (Step 49, §52)
     <output>_thumbnail.png#   thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
+    <output>_animatic.mp4 #   `vidgen animatic`: storyboard stills timed to the narration (Step 138, §75)
   exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53); `vidgen slides` decks (§55, §56)
 ```
 
-`build/<final|preview>[_<variant>]/` (Step 4) holds: `scenes/<id>.mp4` (the scene as rendered,
+`build/<final|preview>[_<variant>]/` (Step 4; `build/draft[_<variant>]/` for drafts, Step 137, §74) holds: `scenes/<id>.mp4` (the scene as rendered,
 with Manim's own audio) and `scenes/<id>.wav` (Manim's uncompressed sound mix, only if the scene
 has sound), `timings/<id>.json` (beat timings + the render settings), `media/` (Manim's
 intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact video length) with
@@ -966,6 +987,16 @@ Step 128 (§69.62) adds `SET_BEDS`, `set_ambience` and `wet_steps`; `PlayedActio
 and the stage param `ambience`; `Stage.knock_on`, `.set_beds`, `.light_marks`; action `knock`;
 built-in sounds `creak`, `knock`, `splash`; the ambience beds `birdsong`, `city`, `room_tone`.
 Pixels unchanged; the sound of a stage changes on purpose (§69.62: set beds, door creaks, water).
+Step 134 (§71.1, §71.2) adds `HAND_REACH_OUT`, `HostMove`, `facing_for`, `hand_goal`,
+`host_move_plan`, `pointed_spot`, `RevealStep`, `has_error_text` and `value_trend`;
+`Action.alters(scene)`; `NarratedScene.reveal_steps(params)` (class method, default none) and a
+default `NarratedScene.auto_actions` (the host's directing; `stage` overrides it as before);
+actions `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`; host key
+`auto_direct`; layout kind `pointer`. Compatible: a video without a host renders as before.
+Step 142 (§79) adds `DrawingConfig`, `DrawingStyle` and `mark_shaded`; the top-level key and the
+stage param `drawing`; `NarratedScene.uses_drawing_style` (class attribute, `False`; `stage`
+sets it), `NarratedScene.drawing_settings()` and the attribute `drawing`. Compatible: a video
+without `drawing` renders the same frames as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1091,13 +1122,16 @@ vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overri
 vidgen list-themes [PROJECT] [--swatches PNG] [--json]   # theme presets + type scales (§20)
 vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]   # icons (§22)
 vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]   # sound effects with descriptions (§47)
-vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with descriptions (§48)
+vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with descriptions (§48), moods and instruments (§83)
+vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR]   # composed music as WAV + .mid (§83)
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]
-vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
+vidgen render [PROJECT] [--preview | --draft] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
               [--jobs N|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]   # changed scenes only (§63)
 vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
               [--width PX] [--jobs N|auto] [--force] [--json]      # contact sheets (§14)
+vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions | --no-captions] [--jobs N|auto]
+              [--output-dir DIR] [--json]   # the storyboard's stills timed to the narration (§75)
 vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview | --final]
               [--fail-on SEVERITY] [--jobs N|auto] [--force] [--json]   # layout checks (§16)
 vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at S] [--no-overlays]]
@@ -4279,9 +4313,10 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(audio,
     language, beam_size=5, word_timestamps=True, condition_on_previous_text=False,
     vad_filter=False)` (each beat on its own, so one mistake cannot carry over; no VAD so quiet
-    words are not cut). `audio` is the beat decoded by vidgen (`load_audio`: PyAV via
-    `sfx.decode_audio(path, rate=16000, mono=True)`, 1-D float32), not the path: faster-whisper's
-    own decoder passes `metadata_errors`, which PyAV 19 removed. Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
+    words are not cut). `audio` is the beat decoded by vidgen (`load_audio`: the ffmpeg
+    executable via `render.ffmpeg.decode_mono(path, 16000)`, 1-D float32, since Step 141; PyAV
+    before), not the path: faster-whisper's own decoder passes `metadata_errors`, which PyAV 19
+    removed. Each word keeps its `probability` (§78). Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
     that cannot load (download refused, bad folder) → `VidgenError` naming the model.
   - `elevenlabs` (`stt/elevenlabs.py`): `POST /v1/speech-to-text`, multipart (`model_id`
     `scribe_v1`, `language_code` when known, `timestamps_granularity=word`,
@@ -9537,3 +9572,969 @@ without them renders as before.
 - **Unchanged**: Kokoro `vidgen tts` has no `--jobs` and runs alone (the MCP server already runs
   heavy tools one at a time); the Python functions (`render_project(jobs=...)` and the others)
   take an int.
+
+
+## 71. A cartoon host beside any scene (Step 133)
+
+A character of `characters:` presents an explainer: `host:` draws it beside the content of every
+scene type that lays out in the safe area. Part 1 (this step): placement, the region split,
+speaking, idle life, layout dump and lint. Pointing, reacting, walking between sides and
+entering / leaving are Step 134 (§71.1, §71.2). Reference: docs/CONFIG.md "A host beside any
+scene".
+
+- **Config** (`config.py`): `VideoConfig.host: Identifier | HostConfig | None` (a name is
+  `{character: name}`); `HostConfig(character, side left|right = right, size (0, 0.9] | None,
+  place auto|beside|below = auto, floor = true, floor_color = dim, facing auto|left|right|front =
+  auto, speaks narrator|own = narrator, pose, expression)`. `SceneConfig.host: SceneHost | None`
+  with `SceneHost = bool | Identifier | HostOverride`: `false` none, `true` / unset the video's, a
+  name (the video's settings with that character), or `HostOverride` (every key optional; the
+  keys written, `model_fields_set`, replace the video's). Variants deep-merge as usual.
+- **Which host** (`cartoon/host.py`, no manim): `video_host(config)`, `scene_host(config, scene)`
+  (`ValueError` for `true` or a mapping without a character when the video has none).
+  `host_problems(config)` runs in `parse_config` (next to the voice references, so variants and
+  every command reject them): those two, an unknown character (did-you-mean), a pose /
+  expression the character does not know (`cast.pose_name_problem`); a scene's are checked for
+  the keys it writes (`scenes[i].host.pose`). `cli.project_problems`: `floor_color` not a theme
+  colour (`host_color_problems`) and a scene's own `host:` on a type with `takes_host = False`;
+  `validate_warnings`: `speaks: own` for a character without a voice (`host_warnings`).
+- **Which scene types**: `NarratedScene.takes_host: ClassVar[bool] = True`; `stage` (its
+  characters stand on the set) and `card` (a full-frame title card) set `False` and ignore the
+  video's host. Every other built-in lays out in `self.safe_area`; `text_card` centred its text
+  on the frame's origin and now centres it on the safe area (equal without reserved room).
+- **Geometry** (`host_layout(area, frame_width, frame_height, host, width_ratio) -> HostLayout`,
+  pure; `area` = the scene's safe area after the overlays' reserves, as a tuple): `below` when
+  `place: below`, or `auto` in a portrait frame (9:16; 16:9 and 1:1 stand beside). Height =
+  `size` or `HOST_SIZES` (landscape 0.5, square 0.42, portrait 0.36) x the shorter side (8
+  units), capped at `BESIDE_MAX_HEIGHT` 0.95 / `BELOW_MAX_HEIGHT` 0.4 of the area's height and,
+  beside, so the column is at most `BESIDE_MAX_WIDTH` 0.4 of the area's width. The column is the
+  figure's width (`width_ratio` x height, measured from the posed character) x (1 + 2 x
+  `FLOOR_OVERHANG` 0.25) with a floor, else the figure's width. **Reserve**: beside, the
+  full-height column at the area's `side`; below, the full-width band at the area's bottom (the
+  figure at its `side` end) — the whole column / band, so `overlays.avoid` always keeps the
+  content on the intended side. Feet on the area's bottom edge; `facing: auto` looks at the
+  content (`left` on the right side). `HostLayout(height, feet, figure, floor, reserve, facing,
+  below)`.
+- **Drawing** (`cartoon/host_drawing.py`): `build_host(host, entry, *, theme, area, frame_width,
+  frame_height, root, motion) -> HostFigure`: `build_character` (the theme's colours, idle per the
+  entry's `idle`) at `REFERENCE_HEIGHT` with the facing, pose and expression to measure
+  `width / REFERENCE_HEIGHT`, then built again at the layout's height (so its outline has the
+  width of a character that tall, §69.1) and shifted so its drawing's middle is on the column's
+  middle and its feet on the area's bottom (an arm held out does not push it out of its column).
+  The floor is a `Line` across the column in `floor_color`, `OUTLINE_WIDTH x height /
+  REFERENCE_HEIGHT` wide (at least a pixel). `HostFigure(VGroup)`: `floor`, `character`, `layout`,
+  `config`, `host_name`. No stage code is used (`stage_layout`, grounds, shadows untouched).
+- **In the scene** (`scene.py`): `__init__` builds the overlays, then `_build_host()`: the host in
+  `self.safe_area` (overlays already reserved, so a bottom caption band stays below it), its
+  reserve appended to `_reserved` (§41's mechanism: `safe_area` = the margins' area cut by
+  `avoid(area, box, gap=0.2)` per reserved box), so every named region and `place()` call lays
+  out beside it, unchanged scene code. `self.host` (`None` without one). `setup()` adds it with
+  `add_foreground_mobject`: Manim keeps foreground mobjects last, so while it idles or speaks
+  (time-based updaters) Manim redraws only the host each frame over a static image of the rest
+  (`get_moving_mobjects` returns the list from the first moving mobject on). Measured at preview
+  854x480: a bullets scene of 15.5 s renders in 6.4 s with the host, 5.4 s without; a bar chart
+  of 8.1 s in 5.2 s / 4.6 s.
+- **Who speaks**: `host_speaks(config, host, voice)`: the host's own voice always; with `speaks:
+  narrator` also any voice no other character owns (the narrator's, a named voice nobody
+  has); `own`: only its own. `NarratedScene.narrate` calls `_host_speak(beat)` right after the beat
+  starts (`self.speak(host.character)`: the beat's viseme track on the scene clock, §69.11) and
+  `end_lip_sync` after the beat (on under an overlapping next beat, §69.34), like
+  `Stage.narrate`. A beat in another character's voice leaves the mouth at rest.
+- **Between scenes**: on screen from frame 0. `host_continues(config, index, takes_host)`: the
+  next scene shows an equal `HostConfig` (and both types take hosts) → `finish()` keeps it out
+  of the outro's `clear_all` (as carried targets are), so it stands still across a cut. The
+  fingerprint gains `next_host` (the next scene's type and `host:`) when the video or either
+  scene sets a host.
+- **Layout dump**: `HostFigure` → one object of kind `host` named after the character, its box
+  covering the floor line; `_character_keys` (`facing`, `speaking`, `face`, `viseme`...) plus
+  `side` and `below`. Cartoon rules read kind `character` only, so they do not see the host.
+- **Lint** `host_overlap` (layout rule after `overlay_overlap`, default warning, `min_overlap`
+  0.02 of the smaller box): the host's box against every scene object and overlay object, except
+  particles, motion effects, and scene objects whose box holds the whole host box (a backdrop:
+  full-frame image, band); findings on one overlay group together. `covered_text` skips the host
+  (this rule's finding). `describe` names it `host 'dot'`.
+- **Checked by eye** (scratch project, preview, `vidgen storyboard`): bullets, bar chart, code and
+  text_card in 16:9 (also with bottom captions), 9:16 (plain: the host in a band below the
+  chart / list / listing; with karaoke captions: above the caption band), 1:1 (beside), a left
+  host facing front, happy, without floor; the code scene with `pose: thinking`. `vidgen lint`:
+  0 findings in 16:9, 16:9 captions and 9:16 karaoke. Mid-beat stills: the mouth moves in the
+  narrator's beats (`speaking: true`, visemes) and rests in a guest's.
+- **Not done**: a `zoom` / `pan` moves the host with the scene (it is a scene mobject, not an
+  overlay: the host actions need scene targets). A scene type that draws outside
+  `self.safe_area` can overlap it (`host_overlap` reports it). The host's idle motion counts as
+  change for `dead_air` (as a stage's characters). Pointing, reacting and moving: §71.1, §71.2.
+
+### 71.1 Host actions: pointing, reacting, moving (Step 134)
+
+Six built-in beat actions in `scenes/host_actions.py` (written against `vidgen.api` only) act on
+`scene.host`; the host is never a target (they name a scene target, an expression or a side).
+Reference: docs/CONFIG.md "Pointing, reacting and moving (host actions)".
+
+- **Common** (`_HostAction(_Acting)`): `alters_targets = False` and the new
+  `Action.alters(scene) -> [scene.host]`, which `ActionRunner` adds to the mobjects an action
+  changes (`_changed`), so two host actions due together play one after the other.
+  `scene_problems`: a type with
+  `takes_host = False` (`stage`, `card`) rejects them. `cartoon/host.py`'s
+  `host_action_problems` (run by `host_problems` in `parse_config`): a host action in a scene
+  without a host, more than one move (`HOST_MOVES`: `host_move`, `host_enter`, `host_exit`) in a
+  beat, a `host_react` expression the character does not know.
+- **Pointing geometry** (pure, `cartoon/host.py`): `pointed_spot(shoulder, box)` = the point of
+  the target's box nearest the shoulder (clamped); `hand_goal(shoulder, spot, room, reach_out =
+  HAND_REACH_OUT 0.1)` = the point on the shoulder→spot line as far as the host's room (its
+  reserved column / band) grown by 0.1 allows: less than `avoid`'s 0.2 gap, so a pointing hand
+  never touches the content. `host_point` sets the look first (`_looked`: `look_pose` towards the
+  spot from the head, as `look_at`), reads the shoulder in that state, then
+  `Character.reached_parts(hand, goal)` (the two-bone solver of §69.26: elbow bent when the goal
+  is nearer than the arm is long, straight when farther) with the near arm (`left`, else
+  `right`). The target box is each target's `outline`, else its parts on screen, else its
+  mobject. One `PoseChange`; reverted at the next beat (`until_next_beat`) or `until:`.
+- **Pointer line** (`line: true`, `color` `dim`): a `Line` from the hand to `POINTER_GAP` 0.12
+  short of the spot, `POINTER_WIDTH` 3, growing in the action's second half, its start kept on
+  the hand by an updater; it fades with the revert. The layout dump records it as kind `pointer`
+  (attribute `host_pointer_of`), which `host_overlap` skips along with the host's own effect
+  symbol. Off by default and never added by automatic directing (it crosses whatever lies
+  between the hand and the target).
+- **`host_look`**: the same look without the arm. **`host_react`**: `posed_state(expression=)`
+  and, with `effect`, an effect symbol (§69.40's `show_symbol` / `hide_symbol`, factored out of
+  the `effect` action).
+- **`host_move`** (target `other_side` default, `left`, `right`; option `speed`). Decision: **the
+  content swaps side with the host.** `host_move_plan(area, feet_x, reserve, side, below, to) ->
+  HostMove(side, feet_x, reserve, content_shift)` mirrors the feet and the room within the area;
+  beside the content `content_shift` is the column's width, towards the side the host left. The
+  action moves the camera frame by `-content_shift` (`MoveCamera`, `moves_camera = True`), so
+  every scene mobject, also one revealed later, moves on screen together and the scene's own
+  layout code needs no second layout; overlays and captions are fixed in the frame and stay. The
+  host walks (`Walk`, then a `TURN_SECONDS` 0.3 turn to the content) to the mirrored feet in
+  scene coordinates (screen x minus the accumulated shift), the floor line fades out, jumps and
+  fades in. In a band below the content (9:16) only the host walks (`content_shift` 0).
+  `HostFigure` tracks `side`, `feet_x` and `room` on screen, and `content_shift`; `_room(host)`
+  gives the room in scene coordinates for `hand_goal` after a move. A `zoom` afterwards zooms
+  from the moved view. The next scene starts on its own `side`; `finish()` keeps the host on
+  through the cut only when it is `at_home` (present and on its configured side).
+- **`host_enter` / `host_exit`** (target `left` / `right`, default its side; option `speed`):
+  a walk between its place and `offstage_x(side, view edges, host.half_reach)` (`half_reach`:
+  the drawing's reach from the feet on its wider side, so an animal's tail does not stay in
+  view), the floor fading in / out. `starts_present(actions)`: a scene whose first passage is an
+  enter starts with the host parked off screen (`NarratedScene._park_host` in `setup()`); its
+  room stays reserved either way, so the layout never jumps. `host_exit` clears `pointing_at`.
+- **Layout dump**: the `host` object's `side` is `HostFigure.side` (where it stands now), plus
+  `pointing_at` while it points.
+
+### 71.2 Automatic host directing (Step 134)
+
+`cartoon/host_directing.py` (no manim). Reference: docs/CONFIG.md "Automatic host directing".
+
+- **When**: `directing_kinds(beat.auto_direct, host.auto_direct, video auto_direct)` per beat
+  (the nearest wins; new key `auto_direct: bool` on `HostConfig` / `HostOverride`).
+  `directing_used` also looks at hosts' `auto_direct`. `NarratedScene.auto_actions` now returns
+  `host_directions(project, spec, cls, params)` by default (`stage` overrides it unchanged).
+- **What a scene reveals**: the class method `NarratedScene.reveal_steps(params) ->
+  list[RevealStep(focus, result)]`, one per step passed to `reveal()`, mapped to beats with
+  `layout.distribute` exactly as `reveal()` does. Built-ins: `bullets` `item<N>` per item
+  (`reveal: all`: `item1`); `bar_chart` per bar (`per_beat`: `value_trend` of the bar and the one
+  before; `all`: the last bar with the trend first→last) plus the `highlight` bar's step;
+  `line_chart` a series per step with its first→last trend; `code` per `highlight` entry
+  (`line<N>`, `lines:<a>-<b>` when contiguous, `error` when `has_error_text` finds error,
+  exception, traceback, fail(ed/ure/s) or panic in the marked lines; none: `listing`).
+  `value_trend`: `rise` / `fall` when last − first exceeds `TREND_SHARE` 0.05 of the largest
+  magnitude.
+- **Planner** `plan_host_directions(beats: [HostBeat(id, actions, kinds, steps)], present)`,
+  pure, simple rules per beat: skip a beat with a written move (moves are the author's: they
+  change the layout, so automatic directing **never adds a move**, which also keeps "at most one
+  move per beat") or while the host is off screen (tracked through enters / exits); `gestures`:
+  `host_point` at the first revealed focus not pointed at before in the scene (one point per
+  beat) unless a `host_point` / `host_look` is written; `looks` (when no point was added and none
+  written): `host_look` at the first target of a written `highlight` / `callout` / `zoom` at its
+  `at`, else at the beat's first focus; `reactions`: the beat's first result →
+  `host_react` `HOST_REACTIONS` (rise happy, fall worried, error surprised) at `REACT_AT` 0.4,
+  with `HOST_EFFECTS` (sparkle, sweat, exclaim) as `effect` when `effects` is on, unless a
+  `host_react` is written. Every action is `ActionConfig.automatic` (shown as `(auto)` by
+  `vidgen direct` and the storyboard).
+- **Lint-safe by construction**: the hand stays in the host's room (`hand_goal`), looks and
+  reactions change only the host, the effect symbol is the host's own (skipped by
+  `host_overlap`), no pointer line is added.
+- **Example** `examples/host-explainer` ("Why Bread Rises", about 58 s, an original mouse host):
+  `host_enter` on the title, automatic points at bullets and bars and `happy` + sparkle as the
+  bars rise, a written `host_point` with `line: true` on a `process` column, `host_move` and
+  `host_exit` on the closing `text_card`. `vidgen validate` and `vidgen lint` (preview) clean;
+  stills checked by eye. Step 144 gave its beats `emotion:` (§72) and slowed `af_heart` from 0.95
+  to 0.75 (at 0.95 the real Kokoro lines ran at 3.6–4.6 words/s, `narration_speed` warnings): 66 s
+  with Kokoro narration; `vidgen lint --readback` finds only `unclear_speech` word flags (3
+  warnings, 7 info).
+- **Not done**: no `reveal_steps` for the other built-in scene types (the host only looks at
+  their written highlights); the host does not dodge a pointer line crossing other content; a
+  walk across passes in front of the content mid-beat (by design: it lasts about two seconds);
+  a `host_enter` on a scene with its own entrance animation starts after that animation.
+
+## 72. Voices with feeling, part 1: Kokoro (Step 135)
+
+Reference: docs/CONFIG.md "Voices with feeling (`emotion`)". The owner found Kokoro's lines flat
+(Juno in "Rain Check"); `emotion:` gives a line a feeling without a new model.
+
+- **Config**: `emotion: NAME | {like, speed, pitch, gain, pauses}` (`EmotionSetting`;
+  `EmotionName` literal = `emotions.EMOTION_NAMES`, a test keeps them equal; `EmotionConfig`
+  ranges speed 0.5-2, pitch -3..3 semitones, gain -12..6 dB, pauses 0.25-3) on `BeatConfig`,
+  `VoiceConfig` and `VoiceEntry`. `voices.SPEAKER_FIELDS = {"emotion"}`: `resolve_voice` does not
+  pass the base voice's emotion to a named voice (it names that speaker, like `label`).
+  `Project.beat_emotion(beat_id) -> Prosody | None`: the beat's, else its effective voice's;
+  `None` when unset or neutral. `has_own_audio` also compares the beats' emotions.
+- **Table** (`emotions.py`, no manim): `Prosody(name, speed, pitch, gain, pauses)`, frozen and
+  hashable; `EMOTIONS` 13 rows (neutral, happy, excited, sad, angry, worried, scared, surprised,
+  calm, doubtful, sleepy, whisper, shout); `prosody(setting)`; `EMOTION_WORDS` (manner words →
+  rows) and `manner_emotion(manner)`.
+- **Providers**: `get_provider(voice, emotion=None)`; `beat_providers` makes one provider per
+  (voice name, emotion) (Step 135: Kokoro only; since Step 136 every provider, §73).
+  `tts.emotion_warnings` (in `tts_warnings`): §73. The dry run names the emotion.
+- **Kokoro** (`KokoroProvider(voice, emotion=...)`): `spec()` gains `emotion: {name, speed,
+  pitch, gain, pauses}` only when there is a non-neutral emotion (so every existing hash, the
+  pinned ones included, is unchanged). `spoken_speed` = voice speed × emotion speed (clamped to
+  0.25-4) is passed to Kokoro, whose word timings already reflect it. After synthesis
+  (`tts/prosody.py`, numpy): `inner_pauses(timed)` (punctuation tokens `, ; : — – . ! ? …` with
+  a word after them; ≥ 0.02 s), `scale_pauses` (above 1: silence inserted at the pause's middle,
+  `(pauses − 1) × max(pause, natural_pause)` with `CLAUSE_PAUSE` 0.2 s / `SENTENCE_PAUSE` 0.4 s,
+  because Kokoro's own comma pause is ~0.05 s and scaling it alone is inaudible; below 1: the
+  middle `(1 − pauses) × pause` cut) returning edits, `shift_time` moving every token time and
+  every phoneme time (`last_phonemes`, so the viseme track follows), `apply_gain` (a tanh soft
+  limiter above 0.7 of full scale towards 0.98 for boosts), then `pitch_filter` →
+  `asetrate=r·2^(st/12),aresample=r,atempo=1/…` passed to ffmpeg with the MP3 encode
+  (`convert_to_mp3(..., filters=)`, `pcm_to_mp3(..., filters)`): the length is kept, so nothing
+  else moves. Pauses need the word timings: English (`a` / `b`) only.
+- **Weighted blends**: `kokoro_voices.blend_weights("af_heart+af_bella:0.6")` → `[(af_heart, 0.4),
+  (af_bella, 0.6)]` (unweighted parts share the rest; all weighted: normalised; malformed: a
+  `ValueError`, a config error from `VoiceConfig` and `voice_provider_problems`).
+  `KokoroProvider.voice_for(pipeline)` mixes `pipeline.load_single_voice(name)` packs by weight
+  once and passes the tensor as the voice (kokoro 0.9.4's `KPipeline.__call__` /
+  `load_voice` accept a `FloatTensor`); `voice_parts` strips the weights, so language and
+  validate warnings work as for `,` blends. The voice string is in the hash as written.
+- **Screenplays**: `screenplay_project` sets a line's `emotion` from `manner_emotion(manner)`
+  (not `neutral`); emotion words are no longer reported as `# TODO:` manners, and a narrator's
+  manner that is only an emotion is not either.
+- **Measured** (real Kokoro 0.9.4, `af_heart`, CPU, the 15-word line "Not a cloud in the sky, Pip.
+  I checked, and the forecast said sunshine all day."; median pitch by autocorrelation, BS.1770
+  loudness): neutral 5.20 s / 202 Hz / -25.7 LUFS / comma pause 0.05 s / sentence pause 0.12 s;
+  excited 4.85 / 228 / -22.7 / 0.03 / 0.09; sad 6.16 / 185 / -28.9 / 0.15 / 0.35; whisper 5.69 /
+  189 / -34.7 / 0.09 / 0.23; shout 5.00 / 232 / -20.7 / 0.04 / 0.10; sleepy 7.01 / 178 / -30.2 /
+  0.19 / 0.40; `af_heart+af_bella:0.5` 5.50 / 196 / -25.3. Kokoro's peaks were 0.3-0.6, so the
+  limiter did not act. 3-4 s per line after the model load.
+- **Not done**: other providers (Step 136, §73); a real whisper (no breathiness: a quieter, slower,
+  lower voice); pauses outside English; emotion inside a line (one emotion per beat).
+
+## 73. Voices with feeling, part 2: ElevenLabs and OpenRouter (Step 136)
+
+Reference: docs/CONFIG.md "`emotion` with ElevenLabs and OpenRouter". The same `emotion:`
+(§72) is spoken by every provider; without one, every request and hash is as before.
+
+- **Table** (`emotions.py`): `NamedCues(tag, stability, style, instruction)` and `NAMED_CUES`, one
+  row per emotion but `neutral` (a test keeps the names equal to `EMOTION_NAMES`);
+  `named_cues(prosody)` looks up the emotion's **name** (a mapping's `like`), so these providers
+  ignore a mapping's numbers and `like: neutral` changes nothing for them.
+- **ElevenLabs `eleven_v3`** (`voicesounds.is_tagged_voice`: provider `elevenlabs`, model id
+  starting `eleven_v3`): `Project.spoken(beat)` inserts `"<tag> "` at position 0 of the written
+  text with `Spoken.inserted` (term `emotion`), after the voice sounds are voiced, so the tag
+  comes first and belongs to no written word: captions, SRT, karaoke timings and the viseme track
+  map the alignment past it as they do for voice-sound tags (§69.33). The tag is part of the
+  text sent and so of the hash (`cache_key(text)`); `vidgen tts --dry-run` shows it in `says:`.
+  The voice settings stay. `readback.compare_beat` drops spoken words that are bracketed audio
+  tags no written word claims (`_audio_tags`), so neither an emotion tag nor a v3 voice-sound
+  tag counts as a word missing from the transcript. Tags: `[whispers]` and `[excited]` are in
+  ElevenLabs' documented v3 tag list (with `[sighs]`, `[laughs]` of the voice sounds); `[happy]`, `[sad]`, `[angry]`,
+  `[nervous]`, `[surprised]`, `[thoughtful]`, `[shouting]` are emotion words of its examples;
+  `[calm]` and `[tired]` were chosen by analogy (v3 reads free-form tags; untested against the
+  real API, which no step may call).
+- **Other ElevenLabs models**: `ElevenLabsProvider(voice, emotion=...)` keeps `cues` (none for
+  v3); `settings` adds the row's `stability` and `style` changes to the voice's
+  `voice_settings`, each clamped to 0-1 and rounded to 3 decimals. The text is never changed.
+  The hash follows through the settings in `cache_key` (the kphi3 legacy key then no longer
+  matches, as for any other settings).
+- **OpenRouter models with instructions** (`openrouter.takes_instructions(model)`:
+  `INSTRUCTION_PREFIXES` `openai/`, `google/`): `OpenRouterTTSProvider.instructions` = the
+  voice's own `instructions` (a full stop added when it has none) + `" "` + the row's sentence, or
+  the sentence alone; `request_body` sends it. `spec()` keeps `instructions` as the voice's
+  (pinned keys unchanged) and gains `emotion: {name, instruction}`.
+- **Other OpenRouter models**: no instructions and no word timings, so `with_prosody(mp3,
+  emotion)` changes the returned audio as Kokoro's is changed, without the pauses: decoded at
+  24 kHz mono (`sfx.decode_audio`), `prosody.apply_gain` (soft-limited boost), then
+  `prosody.tempo_filter` (`atempo`, 0.5-2) and `prosody.pitch_filter` in the MP3 encode
+  (`kokoro.pcm_to_mp3`). `spec()` gains `emotion: {name, speed, pitch, gain}` (not `pauses`:
+  they change nothing here). An emotion whose speed, pitch and gain are neutral (only pauses) is
+  dropped, so it keeps the plain hash.
+- **Providers per beat**: `beat_providers` keys every provider by (voice name, emotion);
+  `tts.EMOTION_PROVIDERS` is gone. `tts.speaks_emotion_by_name(voice)`: ElevenLabs, or an
+  OpenRouter model with instructions.
+- **Validate** (`tts.emotion_warnings`, replacing Step 135's "only kokoro" warning): (1) beats
+  whose emotion's numbers differ from its named row on a name-only voice (the numbers are
+  ignored); (2) per OpenRouter model without instructions, the beats whose emotion changes only
+  speed, pitch and loudness. Kokoro and plain named emotions give no warning.
+- **Not done**: OpenRouter's own ElevenLabs models (`elevenlabs/eleven-v3`) are treated like
+  any model without instructions (post-processing), not given tags; no ElevenLabs `speed`
+  setting; tags not checked against the real API (mocked tests only).
+
+## 74. Fast drafts: `vidgen render --draft` (Step 137)
+
+Reference: docs/CONFIG.md "Drafts". A draft is a render for checking timing and staging: small,
+slow-framed and without decoration, with every timing, position, action and the lip sync kept.
+
+- **Settings** (`config.py`): `draft: DraftConfig | None` (`width`, `height` together, `fps`, each
+  optional, sizes even). `draft_format(format, draft)`: the set values, else
+  `DRAFT_SHORT_SIDE` 240 px on the shorter side at the format's shape (the longer side rounded
+  down to even: 426x240, 240x426, 240x240, 320x240), never larger than `format`, and
+  `DRAFT_FPS` 8, never more than `format.fps`. `draft` is left out of the scene fingerprint
+  (only drafts use it; their format is checked like any render's).
+- **The project** (`project.py`): `Project.draft` (set by `Project.load(..., draft=True)`, kept by
+  `without_overlays`) wins over the `preview` argument of the path methods: `render_dir` →
+  `build/draft[_<variant>][_bare]`, `render_format` → `draft_format`, output names
+  `<output>[_<variant>]_draft` (MP4, SRT, chapter list, thumbnail, export stem). So a draft and a
+  preview or final render never share a folder or a file, even at the same size and rate, and
+  `current_render` / `_usable_render` never take one for the other.
+- **The pipeline**: `vidgen render --draft` (exclusive with `--preview`; MCP `render` `draft`,
+  which drops `preview`) loads the project as a draft and renders with `preview=True` (a draft is a
+  kind of preview: `is_preview` is true too). The worker gets
+  `--quality draft`; scene timings gain `render.draft: true`, the combined timings `draft: true`,
+  `render --json` `draft`. Hooks see `preview: true` and the draft's `render_dir`.
+- **The scene**: `NarratedScene.is_draft` (from its project, set before the host is built).
+  What a draft leaves out, each at the place that makes it: the host's and the stage
+  characters' idle motion (`stop_idle`: no breathing, swaying, blinking or mood motion); the
+  stage's wind (`StageWind` with no swaying props or trailing characters and no updater; its
+  `Wind` stays, so balloons and blown props drift as in the video); shadows (`_shadows`); motion
+  effects (`action_motion_effects`); particles (`particle_field`: a `ParticleField(drawn=False)`
+  with no particles, no ground and no updater; its start, fade out and end stay, so the rain bed,
+  storms and thunder follow it); puddles and settling snow (`particles_started`; steps still
+  splash from the puddles' start, kept in `_puddles_from`); fog (`_fog`); lightning's bolt and
+  flash (`strike_lightning` and rain storms do not reach the light; the thunder stays); the
+  light's grade (`StageLight(flat=True)`: the camera is not wrapped, flashes are 0, `changing` and
+  `settled` follow the light changes only; stars, window skies and sky bodies still follow the
+  grade's changes, so a `light` change still redraws the frame while it lasts).
+- **Kept on purpose**: living props, birds, water, rainbows, effect symbols, cards, overlays and
+  every sound. Beat starts fall on whole frames at any rate (`narrate` waits relative to the
+  beat's start), so a draft's beats may drift by a frame or two of 8 fps from the preview's over a
+  scene (measured: up to 0.15 s over 23 s and 0.18 s over 31 s).
+- **Measured** (worker wall time, one scene, `--no-audio`, two alternating runs, under the
+  1500 MB cap): `cartoon-rain-check` `storm` preview 640x360@15 21.2 / 21.8 s, draft 426x240@8
+  8.0 / 8.2 s (×2.6); `cartoon-muffin-mystery` `morning` 25.3 / 25.4 s → 12.7 / 12.8 s (×2.0);
+  peak memory of the worker processes at most 0.25 GB (muffin) and 0.28 GB (rain-check).
+
+## 75. Animatic: `vidgen animatic` (Step 138)
+
+Reference: docs/CONFIG.md "Animatic". An animatic is the storyboard's stills held in time with the
+narration, with the video's audio and captions: a way to watch the pacing in seconds, made by
+ffmpeg alone once the stills are current.
+
+- **Stills** (`animatic.py`, `make_animatic`): the preview format's stills of
+  `build/preview[_<variant>]/frames/<scene>/index.json`. A scene whose stills are not current
+  (`storyboard.stills_current(..., per_beat=None)`: any count per beat, the format and the render
+  fingerprint matching) is rendered by `render_scenes(..., frames=1)`, the storyboard's call; with
+  every scene current nothing is rendered and the scenes are not checked again (they were, from
+  this config, when rendered). No Manim render is added: the animatic uses no still the storyboard
+  does not make, and `animatic.py` is left out of the render fingerprint.
+- **Timing** (pure `hold_plan(scenes, frames, fps)`): a still is held up to its time in the video
+  (scene start + its scene time), from the time of the scene's still before it, in whole frames:
+  within a beat the stills split the beat's time in order and the last (beat-end) still covers it
+  until the beat's end (the gap between beats goes to the next beat's stills, as its beat-start
+  is the previous beat's end); a scene's first still from the scene's start, the video's first
+  from frame 0; a scene's last still until the next scene's first starts (through the scene's
+  tail), the video's last to the end. Where scenes overlap (§49) a still is cut at the next
+  scene's start and one that would start at or after it is left out; a still held no frame is
+  dropped. So each beat's picture is on screen during the beat it belongs to (Step 138 first held
+  each still from its own time, which showed a beat-end still through the following beat). The
+  scene starts and the length are those of the combined timings, so beat overlaps (§69.34) and
+  word-count timing (no MP3s) need nothing of their own. No crossfade between stills or scenes:
+  the concat demuxer cannot blend, and a blend would need the filter graph `ff.join` uses for
+  scene transitions.
+- **Audio**: `render/pipeline.prepare_join` (split out of `join_scenes`, which now calls it and
+  `ff.join`) pads the scene WAVs, builds the effects track and mixes music, ambience and
+  normalisation exactly as for the video, into `build/preview[_<variant>]/animatic/audio/`; the
+  animatic's audio is the video's. `--no-audio`: a silent track.
+- **Captions** (pure `with_captions(holds, cues, fps)`; `draw_captions`): the cues of the video's
+  SRT (`pipeline.video_cues`, now also what `render_project` writes) cut the holds where they start
+  and end; each piece shows the cues spoken then (overlapping beats' cues stacked), drawn with
+  Pillow (bold font of `sheets.load_font`, `CAPTION_SIZE` 0.055 of the shorter side, white on a
+  plate of opacity `CAPTION_PLATE_ALPHA` 170, 5 % above the bottom, wrapped to 90 % of the width),
+  one PNG per still and text in `animatic/stills/`. Pillow rather than ffmpeg's `subtitles` filter:
+  that filter needs an ffmpeg built with libass, which not every Windows build has. Default on
+  unless the video has a `captions` overlay (`captions_default`).
+- **Encoding** (`render/ffmpeg.join_stills`): the concat demuxer with a `duration` per still
+  (`write_concat_list(..., durations)`, the last still listed twice), `fps`, `tpad` and
+  `-frames:v` for exactly `round(duration × fps)` frames, x264 `-tune stillimage`, the audio
+  inputs of `ff.join` (`_audio_inputs`, shared) and its partial-file replace (`_write_video`).
+  Output `Project.animatic_path()`: `<output>[_<variant>]_animatic.mp4` in `output_dir`.
+- **Interfaces**: CLI `vidgen animatic [PROJECT] [--variant] [--no-audio] [--captions |
+  --no-captions] [--jobs] [--output-dir] [--json]`; MCP tool `animatic` (`captions: null|true|false`).
+- **Measured** (copy of `examples/cartoon-music-box`, 51.1 s, 2 stage scenes, no MP3s, 21 stills,
+  under the 1500 MB cap): no stills 42 s (render of both scenes 34.7 s); stills current 7.0 to
+  9.1 s wall (profile: 2.9 s x264 for 767 frames at 640x360, 2.7 s the mix, 1.1 s of it the
+  music bed, 1.0 s loading the extensions), captions add 0.2 to 0.5 s; `--no-audio` 3.7 s.
+
+## 76. Ready-made sets, part 1: outdoors (Step 139)
+
+Reference: docs/CONFIG.md "Ready-made sets". `set: NAME` on a stage scene works without
+`sets:` for five built-in outdoor sets.
+
+- **Library** (`src/vidgen/data/sets/outdoors.yaml`, package data; Step 140 adds indoor files
+  beside it): every `*.yaml` there holds `sets:` in the format of a project's. `includes.builtin_sets()`
+  returns a copy (read once, `functools.cache`). Plain YAML rather than Python so a set reads like
+  the project sets it can be copied into.
+- **Lookup** (`includes.expand_sets`): the project's `sets:` (with its includes) first, else the
+  built-in set of that name; `apply_set` merges it with the scene's params by the §69.35 rules
+  unchanged. Origins: a built-in set's values are not recorded (`from_set` skipped), so a problem in
+  one keeps the scene's own location (`scenes[i].params.props[k]`) instead of pointing at a
+  `sets.NAME` the project does not have; moved scene entries are recorded as before.
+  `set_reference_problems` checks both and lists both (`sets: ...; built-in sets: city_street,
+  park, beach, forest, snowy_hills`), did-you-mean over both. Fingerprints: the expanded params
+  carry the set, so an edit of a built-in set re-renders the scenes using it; nothing else.
+- **Sets**: each has a gradient sky, a `ground_color`, background (and middle) layer shapes, its
+  props at depths, `light`, `ambience`, and marks `stand_left` / `stand_right` (two characters at
+  depth 0, clear of every prop within 0.15 of their depth, 16:9) plus marks at its props.
+  `city_street`: building blocks, two `shop`s at depth 0.9 (`shop`, `shop_2`), a flat `road` at
+  0.5 between them and the pavement, a `lamp` (the existing lamp post with its lantern serves as
+  the streetlamp: searched first, it sways and glows `on`), a `bench`, a `bus_stop`; `ambience:
+  city`. `park`: hills, a flat `path`, two `fence`s, a `tree`, a `fountain`, a `bench`, two
+  `flowers`; `ambience: auto` (birdsong by day, §69.62). `beach`: a sea band in the background
+  layer and `water: {left: 0, right: 0.3}` (§69.53's strip with waves) in front on the left, sand,
+  the `sun`, a `beach_umbrella`, two `shell`s; `ambience: false` (no sea bed exists). `forest`:
+  far pine triangles, trees and pines at depths 0.95 to 0.5, a `bush`, a `log`, `mushroom`s;
+  `light: morning`, `ambience: auto`. `snowy_hills`: two hill layers, four `pine`s, a `rock`, snow
+  `{density: 0.5, settle: true, settled: 60}` (the full layer from the start, §69.60);
+  `ambience: false`.
+- **Props** (`cartoon/props.py`, `OUTDOOR_PROPS`, 13 new; primitives and two theme colours like
+  every built-in prop, fixed hex where no token fits: asphalt, gravel, white pickets, shell pink):
+  `shop` 1.7 (sign board, upper windows, striped awning, a shop window with goods, a glazed door),
+  `bench` 0.32 (seat line at 0.4375 = 0.14 of a character, places ±0.7), `bus_stop` 1.35, `road`
+  0.12 and `path` 0.08 (flat bands ±`BAND_HALF` 40 prop units long, in `FLAT_PROPS`: no shadow,
+  no snow, left out of `prop_overlap`), `fountain` 0.75, `flowers` 0.28 (petals without outlines:
+  at that size outlined petals read as black dots), `fence` 0.42, `beach_umbrella` 1.3, `shell`
+  0.06, `pine` 1.9, `mushroom` 0.13 (two in a cluster), `log` 0.16 (seat at 0.875, places −1.3 /
+  1.2). Seats in `PROP_SEATS` / `SEAT_PLACES` (bench, log); lean edges in `PROP_LEANS` (pine
+  trunk, bus stop pole, shop wall); `SWAYS` gains `pine` (6°, 0.4 Hz) and `flowers` (10°, 1.2
+  Hz); `SHELTER_PROPS` gains `pine` and `beach_umbrella` (rain stops above them, snow lies thin
+  under them). `write_props_png` leaves `OUTDOOR_PROPS` out of its default (props.png
+  byte-identical, md5 checked); `docs/gallery/media/outdoor_props.png` (19 KB) shows them but the
+  two bands.
+- **Gallery**: `tools/make_sets_gallery.py SETS... --work DIR --out PNG` writes a project with one
+  stage per set (two generated characters on `stand_left` / `stand_right`), runs `vidgen
+  storyboard --jobs 1 --json`, tiles each scene's first still at 320x180 (3 columns, names below,
+  64 colours): `docs/gallery/media/sets_outdoors.png` (28 KB).
+- **Checked**: a scratch project with the five sets, two characters each on their marks, at
+  preview 854x480: `vidgen lint` 0 findings (first run: `off_frame` on edge trees and pines, moved
+  in); each scene renders in about 5 s (5–6 s of video), like any stage of that size; stills
+  checked by eye.
+- **Not done**: no sea or wind ambience bed (the beach and the snowy hills are silent); the road
+  and the path do not reach across a stage wider than about 1.5 frames (give them a `scale`); the
+  sets are laid out and checked for 16:9 (in a 9:16 frame the props are wider for the frame and
+  may overlap the characters' marks);
+  `vidgen screenplay`'s `set:` line does not look up built-in sets (a screenplay `set: park; ...`
+  keeps meaning a default sky with those props). Tests: `tests/test_builtin_sets.py`.
+
+## 77. Ready-made sets, part 2: indoors (Step 140)
+
+Reference: docs/CONFIG.md "Ready-made rooms". Five built-in sets are rooms (§69.42), read with the
+outdoor ones by §76's lookup unchanged.
+
+- **Library** (`src/vidgen/data/sets/indoors.yaml`): `classroom`, `kitchen`, `shop`,
+  `living_room`, `bedroom`. `_read_builtin_sets` reads the files sorted by name, so the rooms come
+  first in `builtin_sets()` and in validate's "built-in sets:" list. Each is a `room:` (wall
+  colour, wallpaper, flooring, one door named `door`, one window; the shop a ceiling and a wide
+  shop window without curtains), `light: day` (classroom, kitchen, shop) or `light: indoor` (living room, bedroom), `ambience: room_tone` (what `auto` picks in a
+  room, written out), marks `stand_left` / `stand_right` (two characters at depth 0, clear of
+  every prop within 0.15 of their depth; checked by `test_marks_are_inside_the_stage_and_clear_of_the_props`,
+  which now counts doors and furniture at the wall's depth through `Params.stage_props()` and checks
+  every standing prop is inside the stage) and a mark at each seat. Furniture stands `against:
+  wall` (depth 0.4, the default wall depth; nothing stands deeper, so the wall stays there);
+  pupils' desks at 0.25, the kitchen table and chairs and the shop counter at 0.2: 0.15 or more
+  from the wall's furniture, so `prop_overlap` never compares them. Things on furniture are lifted
+  (kettle 0.18, till 0.2: the counter's height × the depth scale × `size`, 16:9); the blackboard
+  and pictures hang (§69.43). The layout puts the stand marks where the wall behind is low or bare
+  (a door, a window, between furniture), so the characters hide little of the set.
+- **Props** (`cartoon/props.py`, `INDOOR_PROPS`, 5 new, primitives and two colours like every
+  built-in prop): `blackboard` 0.5 (in `PROP_HANGS` at 0.42: hangs above desks; a fixed dark-green
+  board, chalk `CHALK` lines: a triangle and three wavy lines of writing), `school_desk` 0.4 (side on
+  like `desk`, a sloping lid on metal legs, its chair on the left as drawn: seat (−0.63, 0.35) =
+  0.14 of a character, in `SEAT_BACKS`, so the sitter faces the desk; the classroom's face left,
+  towards the board), `shelf_with_goods` 0.95 (three shelves of boxes, tins and jars in the fixed
+  `GOODS_COLORS`, the same in every theme like a tree's fruit; leans ±0.45), `till` 0.26 (a cash
+  drawer, a sloping key top, a display on a stalk), `wardrobe` 1.1 (two panelled doors, a cornice;
+  leans ±0.3). Searched first: the existing `table`, `chair`, `desk` (the teacher's), `counter`
+  (kitchen and shop, recoloured), `fridge`, `kettle`, `sofa`, `armchair`, `tv`, `lamp` (the lamp
+  post, `scale` 0.5–0.6, `on`), `rug`, `picture`, `clock` and `bed` are reused; a kitchen chair is
+  the `chair`. `write_props_png` leaves `INDOOR_PROPS` out of its default (props.png unchanged);
+  `docs/gallery/media/indoor_props.png` (11 KB) shows them.
+- **Gallery**: `tools/make_sets_gallery.py ... classroom kitchen shop living_room bedroom` →
+  `docs/gallery/media/sets_indoors.png` (27 KB).
+- **Checked**: a scratch project with the five rooms, two characters on their marks, at preview
+  854x480: `vidgen lint` 0 findings; each scene renders in about 3.5 s (2 s of video); stills
+  checked by eye. Tests: each room validates with two characters, every seat is sat on (both
+  places of a sofa or bed) and every lean leaned on after a walk to its depth, sitting without the
+  walk is refused, overrides (light, room key by key, a prop changed by name), lint rules on a
+  tiny render of each, two tiny renders of characters sitting (sofa, school desk).
+- **Not done**: like §76, laid out for 16:9 only; the lifts of the kettle and the till are frame
+  fractions, so in 9:16 they float or sink (give them another `lift`); no shop bell or classroom
+  sounds; `vidgen screenplay` does not know the rooms or the new props' other words (chalkboard,
+  cash register, closet).
+
+## 78. Flag badly spoken words (Step 141)
+
+Reference: docs/CONFIG.md "Readback" (words to check) and the `unclear_speech` lint rule. A voice
+can say every word of the text and still sound wrong (the owner heard a Kokoro line as "two
+Russian words"); a word error rate of 0 misses it. The recogniser's own confidence and its word
+times show where.
+
+- **Transcripts** (§57): `TranscriptWord(text, start, end, probability=None)`; faster-whisper's
+  `word.probability` is kept (ElevenLabs gives none). `Transcript.word_probabilities()` (parallel
+  to `word_texts()`), `has_probabilities`; JSON words `[text, start, end(, probability)]`, so
+  older cache files still load. `run_readback` transcribes again a cached faster-whisper
+  transcript with words but no probabilities (local and free; an ElevenLabs one is kept: no
+  probabilities to gain). `CACHE_VERSION` stays 1.
+- **Decoding**: `stt.faster_whisper.load_audio` decodes with the ffmpeg executable
+  (`render.ffmpeg.decode_mono(path, rate)`: `-ac 1 -ar 16000 -f f32le pipe:1`, 1-D float32),
+  not PyAV: no PyAV version can break it (Step 54's PyAV 19 fix decoded with `sfx.decode_audio`,
+  which stays for the other callers). Loading the model sets the `faster_whisper` logger to
+  WARNING (Step 144): `vidgen lint --readback` imports Manim, whose logging setup at INFO
+  otherwise printed faster-whisper's "Processing audio" line per beat among the progress lines.
+- **Alignment kept**: `compare_beat` stores on `BeatReadback` the `transcript` and `heard_spoken`
+  (heard word index → aligned spoken word index, `None` for an extra word; voice sounds' heard
+  words, skipped, are absent), and on each `Edit` its `heard_indices` and `written_index` (not in
+  the JSON). The helpers the flags share are public: `term_core`, `written_owner`,
+  `entries_by_word`, `entry_says`, `EDGE_CHARS`.
+- **Flags** (`speech_flags.py`, no manim): `flag_words(result, spoken, settings, pauses_before)
+  -> [WordFlag]`. Units: each compared heard word alone, or the heard words of one edit together,
+  plus edits with no heard words (deletions). Per unit: lowest probability `< min_probability`
+  → `low_probability` unclear, `< doubtful_probability` → doubtful; a pause before one of its
+  words `> max_gap` that is not expected → `gap` unclear; an edit → `mismatch`, unclear for a term
+  (`Edit.term`) or 2+ errors, else doubtful (one ordinary word heard differently with confidence
+  may be the transcriber's). The level is unclear if any reason is. A pause is **expected** (not
+  measured) after a word ending in punctuation (`, . ; : ! ? … — – - ) ] } " ' ” ’ »`) in the
+  transcript or in the spoken text (also on spoken words between the two heard ones: not heard),
+  before an opening quote / parenthesis / dash, before a written word with a voice sound before
+  it (`VoiceSound.word`), and next to skipped heard words (a laugh's "ha ha"); the first word
+  has none. Times: the unit's first start and last end in the MP3; a deletion at the end of the
+  last heard word before it (0 at the start). `detail`: the edit's `describe()` or the heard word
+  (with `(text "...")` when it differs), `heard with probability P`, `after a G s pause inside
+  the sentence`. `suggestion`: the edit's; else a pronunciation entry → respell its spoken form;
+  a hard term (`hard_term`) → add an entry with a respelling; only a gap → listen, change speed
+  or emotion or rephrase, or write a comma; else listen, change voice / speed / emotion or
+  respell the word. Each ends with `vidgen tts` (the change makes the audio stale).
+- **Settings** `lint.rules.unclear_speech` (`UnclearSpeechRule`: `min_probability` 0.5,
+  `doubtful_probability` 0.75, `max_gap` 0.5 s; ordered). The same thresholds serve
+  `vidgen readback` (`ReadbackResult.flag_settings`).
+- **Video time**: `beat_video_starts(project)` = scene start (`storyboard.scene_starts`, the
+  preview's renders, else the final format's) + the beat's start in its scene timings;
+  `set_video_times` fills `WordFlag.video_time` (`null` before a render; from the last render,
+  so stale if the audio changed since).
+- **`vidgen readback`**: always flags (no option): `BeatReadback.flags`, report section `words
+  to check: N unclear, M doubtful (thresholds)` with `level beat @ t (video t): detail` and `fix:`
+  lines. JSON: `flag_thresholds`, `summary.unclear` / `doubtful`, each beat's `flags` (`scene,
+  beat, word, written, level, reasons, time, end, video_time, probability, gap, detail,
+  suggestion`).
+- **Lint**: rule `unclear_speech` (scope `scene`, default warning, doubtful → `info`; last in
+  `LINT_RULES`, in `lint/readback_rule.py`). It runs only when asked: `lint_project(readback=True)`
+  (`vidgen lint --readback`, MCP `lint` `readback`) or a `rules` list naming it; otherwise it is
+  left out of the rules (`LintResult.rules`). Then, before rendering, `_speech_flags` runs
+  `run_readback` on the selected scenes' beats (cache reused; progress lines through `log`, the
+  CLI's stderr) and `SceneContext.speech_flags` gets each scene's beats' flags. One finding per
+  flag: time = the activity file's beat start + the flag's start; `value` / `limit` = probability
+  and its threshold, or the pause and `max_gap`. MCP `lint` with `readback` (or the rule) and a
+  paid `stt.provider` needs `confirm_cost`, like MCP `readback`.
+- **Checked** on a copy of the `cartoon-music-box` audio (Kokoro, 11 beats; Whisper `small` on
+  CPU in the Kokoro venv: ~5 s a beat, killed at 1.5 GB, ran under 2.5 GB): see HANDOFF Step 141.
+- **Not done**: no flag for a long pause at punctuation (Kokoro's sentence pauses and the
+  emotions' pauses, §72, vary too much for one threshold); the first word of a beat often comes
+  out doubtful (Whisper's start-of-clip uncertainty); no per-word audio clip to listen to; the
+  `readback` lint rule still reads only the cache.
+
+## 79. Drawing style switch: `drawing:` (Step 142)
+
+Reference: docs/CONFIG.md "Drawing style (`drawing`)". One video-wide switch for how cartoons are
+drawn, apart from the characters' looks. `cartoon_style:` (§69.10) stays the words of generated
+background prompts; it is not reused.
+
+- **Setting**: `DrawingConfig {outline: thin | normal | bold, shading: flat | soft, texture: none |
+  paper | storybook, seed ≥ 0}`, every key optional, at the top level (`VideoConfig.drawing`; a
+  variant changes it by the usual deep merge) and as the `stage` param `drawing`.
+  `resolve_drawing(*settings) -> DrawingStyle` merges them key by key, later winning (defaults
+  `normal`, `flat`, `none`, 0). `NarratedScene.drawing_settings()` lists a scene's settings (the
+  video's; `stage` adds its param); `__init__` resolves them into `self.drawing` after the
+  overlays and the host are built and before the colour fade is attached; a draft
+  (`is_draft`, §74) keeps the outline and drops shading and texture (`DrawingStyle.for_draft`).
+- **Applied when drawn**, like the light (§69.31): nothing is recoloured or re-stroked, so the
+  generator's pinned digests (Steps 113–125), the layout dump, lint and character sheets are
+  unchanged, and a plain style installs nothing (the frames are bit-identical: checked against
+  HEAD on `cartoon-rain-check` `storm` and `host-explainer` `grow`).
+  - **Outline** (`style_camera`): the camera's `apply_stroke` is wrapped; for a stroke of width
+    `w` it scales Manim's `cairo_line_width_multiple` by `max(w·f, min(w, 1 px)) / w` (`f` =
+    `OUTLINE_FACTORS`: thin 0.6, normal 1, bold 1.7) around the original call: a thinned stroke
+    stays at least one pixel unless it was thinner. On a `stage` (`uses_drawing_style`) every
+    stroke (set, characters, props, effect symbols, motion effects, bubbles, particle rings;
+    overlays have their own camera, §41); on another scene only what `mark_outlined` marked (the
+    host's figure and floor line, §71).
+  - **Shading** `soft`: `apply_fill` is wrapped; a member marked by `mark_shaded` (the stage
+    marks every character and prop at the start; a host its character) with a one-colour fill is
+    filled with a vertical Cairo linear gradient over its own points' height: `soft_stops` =
+    the colour 14 % towards white at the top, itself half-way, 16 % towards black at the bottom.
+    The colour is read through `camera.get_fill_rgbas`, so the light's grade applies first. The
+    path, and so the silhouette, is Manim's.
+  - **Texture** (stage only): `attach_texture` wraps the renderer's `add_frame` between the
+    overlay layer (§41) and the colour fade (§49): each written frame (a frozen wait: once) is
+    multiplied by `texture_shade(texture, seed, width, height)` (cached, H × W × 4 uint16, 256 =
+    unchanged; alpha kept): a per-pixel grain (`grain_pixels` large) plus bicubic blotches from a
+    grid of `cells` across the short side, `storybook` also darker corners; seeded with
+    `numpy.random.default_rng([seed, kind])`. So it lies over everything the scene draws (bubbles
+    too) and the fade's colour, under overlays and burned-in captions; frame stills, storyboards
+    and animatics show it. It is not a mobject and not in Manim's static image (§69.20): a
+    mobject over the moving characters would be redrawn each frame anyway, and the stage's depth
+    ordering can move a walker after the last mobject.
+- **Cost** (worker, `--no-audio`, `cartoon-rain-check` `storm`, 23 s): 640x360@15 plain 20.7–22.3
+  s, thin / bold +3–5 %, soft +5 %, texture +0–8 %, all three +12–18 %; 1280x720@30 plain 56.3–56.6
+  s, bold 56.8, soft 58.6, paper 62.2 (most of it the encoder: the multiply is 1.9 ms a frame),
+  bold + soft + storybook 65.0.
+- **Not done**: no texture on non-stage scenes or under a host; the host's effect symbols and
+  pointer line keep their width; bubbles and particles are not left out of the outline weight
+  (one rule for the stage's camera); the grain is in screen space (it does not pan with the
+  camera); `vidgen character --png`, character sheets and the props galleries draw plain.
+
+
+## 80. Dubbing: `dub:` and `--all-languages` (Step 143)
+
+Reference: docs/CONFIG.md "Dubbing (`dub`, `--all-languages`)". A dubbed video is the translated
+variant of §54 (a `language:` and a translation file); this section adds the voices, the checks
+and one command for every language.
+
+- **Setting**: `dub: {LANG: VOICE | {voice, voice_id, model_id, model, instructions, speed, lang,
+  settings}}` (`DubVoice`; default none) on `VoiceConfig` and `VoiceEntry`. A string is the
+  provider's voice key (`voice_id` for ElevenLabs, else `voice`). `dub_setting` picks the most
+  specific key that `language_matches` the video's language. It sits on voices, not on
+  `characters:` (the task list's example), because beats name voices: the narrator and a host
+  are voices too, and a character speaks only through its `voice`.
+- **Rules** (`dubbing.voice_dubs(config) -> {name | None: Dub}`, no manim, nothing without a
+  `language`): a given dub wins; a named voice with no `voice` / `voice_id` (and no `lang`) of its
+  own follows the base voice's dub (`how: base`); a Kokoro voice whose language letter is not the
+  video's (`a` / `b` count as one) and that has no `lang` written gets `auto`: a voice of the
+  video's Kokoro language of the same kind (`voice_kind`: second letter `f` / `m`, the
+  `voice_kind` of §69.25 screenplays), the least used so far counting the given ones (ties: best
+  grade), never a novelty voice (`NOVELTY_VOICES`: `santa`); one source voice maps to one target
+  (`chosen`), so two named voices of one speaker stay one voice. A language without the kind
+  takes any of its voices (`kind_kept: false`). ElevenLabs and OpenRouter voices are kept (both
+  speak many languages; ElevenLabs' `language_code` already follows the language, §54).
+  `screenplay.assign_voices` was not reused: it leaves out the narrator's voice and, in a language
+  with one voice of a kind, hands a character the other kind.
+- **Applied** in `voices.resolve_voice`: the dub's fields go over the named voice's (`_merge_voice`,
+  the same rule as a named voice over the base: a Kokoro `voice` without `lang` takes its own
+  language); the resolved voice has no `dub` (`DUB_FIELDS`), so `audio_fields`, hashes and the
+  provider see only the effective voice. A base voice without a dub is returned as before (the
+  same object). So the dubbed beats differ from the base config's: the variant gets
+  `audio/<variant>/` (`has_own_audio`), `vidgen tts --variant` voices them, the viseme tracks
+  (§69.4) are written from that audio and language, and every timing (VideoPlan, overlaps,
+  interrupts, §69.34) comes from those MP3s.
+- **Checks**: `voice_provider_problems` adds `_dub_problems` (keys the provider does not use, a
+  malformed Kokoro blend). `vidgen validate` warns (`dubbing.dub_warnings`) about a voice dubbed
+  without its kind and about voices that differ in their own language but speak with one voice in
+  this one (only voices the beats use; a Kokoro blend `target+source:0.3` suggested), and prints
+  `dub [pt]: default bf_emma -> pf_dora+bf_emma:0.4 (given), ...` under the language line.
+  `kokoro_voices.voice_warnings` no longer warns about the later voices of a blend (they lend
+  timbre; the first gives the language).
+- **Every language** (`cli.each_language`): `--all-languages` on `tts`, `render` and `lint` runs
+  the command for the base config and then each `dubbing.language_variants(project)` (variants
+  whose loaded `language` differs from the base config's), sequentially, a heading line before
+  each; exit code the worst; `--json` an envelope with `languages: [documents]`. Not with
+  `--variant`. MCP `render` / `lint` pass `all_languages`. Lint per language is the existing lint
+  of each variant: its timing rules (`talked_over`, `rushed_animation`, `narration_speed`, dead
+  air) see that language's lines.
+- **Example**: `examples/cartoon-music-box` variant `pt` (pt-BR; `translations/pt.yaml`, 12 texts;
+  narrator `pf_dora+bf_emma:0.4` and Gus `pm_santa` given, Fen `pf_dora` and Bram `pm_alex`
+  automatic).
+- **Not done**: no per-language `overlap` / `interrupt` values (a variant would have to replace the
+  scene); OpenRouter voices named after a language (Voxtral `fr_marie_*`) are not swapped; voice
+  labels (`Fen:`) are not translatable; Kokoro gives word timings only for English, so a dubbed
+  interrupt without `overlap` starts `INTERRUPT_LEAD` before the line's end.
+
+## 81. Composed music, part 1: the `music` extra and the SoundFont (Step 145)
+
+Reference: docs/CONFIG.md "SoundFont (`soundfont`, `vidgen soundfont`)". Phase N plays music
+written as notes with symusic 0.5.9 and the GeneralUser GS SoundFont (research report and
+listening test after Step 144); this section covers what has to be installed and downloaded.
+
+- **Extra** `music = ["symusic==0.5.9"]` (exact: 0.6.0's `Synthesizer.render` fails with a
+  TypeError). `synth.require_symusic()` imports it or raises `VidgenError` naming
+  `pip install "schu-video-generator[music]"`, also when another version is installed;
+  `synth.symusic_status()` is the one-line state for `vidgen soundfont info`. Nothing imports
+  symusic at load time. symusic's own `BuiltInSF` downloader (pySmartDL) is not used.
+- **Default SoundFont** (`vidgen/soundfont.py`): GeneralUser GS 2.0.3, `URL` =
+  `raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2`, `SIZE_BYTES`
+  32,319,396, `SHA256` `9575028c…8cfe` (upstream publishes no checksum; computed by the research
+  agent). Never in the wheel (no package data; a test checks `src/` holds no `.sf2` / `.sf3`).
+- **Cache folder** (`cache_dir()`; vidgen had none before: Kokoro's model lives in the Hugging
+  Face cache): `VIDGEN_CACHE_DIR`, else `%LOCALAPPDATA%\vidgen` (Windows), `~/Library/Caches/vidgen`
+  (macOS), `$XDG_CACHE_HOME/vidgen` or `~/.cache/vidgen`; the file is `soundfonts/GeneralUser-GS.sf2`.
+- **Download** (`fetch(force, url, progress)`): `httpapi.stream_get` streams 1 MB chunks (stopping
+  after more than `SIZE_BYTES`) into a `mkstemp` file next to the target while hashing; size and
+  SHA-256 are compared, then `fileio.replace_file` moves it into place; the temporary file is
+  removed on every failure. Errors: offline / HTTP status → "cannot download the GeneralUser GS
+  2.0.3 SoundFont (…); connect … `vidgen soundfont fetch`, or … set `soundfont: PATH`"; mismatch →
+  the sizes and hashes, "may have changed upstream", the same `soundfont: PATH` hint. A mismatch is
+  never used.
+- **Use** (`resolve(setting, root, download=True)`): `soundfont: PATH` (relative to the project
+  folder, or absolute) must be a file with suffix `.sf2` / `.sf3` and a RIFF `sfbk` header
+  (`override_problem`; also a `vidgen validate` problem, `soundfont_problems`); else the cached
+  default, hashed before its first use in a process (then remembered by size and mtime), else
+  downloaded (or, with `download=False`, an error naming `vidgen soundfont fetch`). `soundfont` is
+  in `PATH_KEYS` (confined under `vidgen mcp`) and left out of scene fingerprints (audio only).
+- **CLI** `vidgen soundfont fetch [--force]` and `vidgen soundfont info [PROJECT]` (path, origin,
+  size, sha256, check, licence line, suggested credit, symusic state); no `--json` yet.
+- **Licences**: THIRD_PARTY_NOTICES lists symusic (MIT), Prestosynth (MIT), symusic's bundled
+  `abc2midi` / `midi2abc` (not run by vidgen; licence unverified) and GeneralUser GS (licence
+  v2.0: free use in music, private or commercial; no attribution required). Suggested credit
+  (`soundfont.CREDIT`, naming the SoundFont's author, S. Christian Collins, as its licence and
+  README suggest) in THIRD_PARTY_NOTICES, CONFIG.md, the README and `vidgen soundfont info`.
+
+## 82. Composed music, part 2: the score and its renderer (Step 146)
+
+- **Score** (`vidgen/score.py`, pure dataclasses, frozen, checked on creation with `VidgenError`
+  "score: ..."): `Score(tempo, parts, time_signature=(4, 4), key="C major", sections=(), length=None)`,
+  `Part(name, notes, program=0, drums=False, volume=0.0 dB, pan=0.0, reverb=0.2)`,
+  `Note(start, length, pitch, velocity=90)`, `Section(name, start, tempo=None)`. A *beat* is a
+  quarter note (`tempo` in quarter notes per minute; a 6/8 bar is 3 beats). A drum part's
+  `program` is the GM drum kit (0 standard, 40 brushes...). `length_beats` defaults to the last
+  note's end rounded up to a whole bar; a section's `tempo` changes the tempo from its start
+  (`tempo_changes()`, `seconds_at(beat)`); `key` is `"<tonic> major|minor"` with a standard
+  signature (`key_signature()` → sharps, minor; `tonic` pitch class). `fingerprint()` hashes the
+  content and `FORMAT_VERSION`.
+- **MIDI export**: `to_symusic(score, parts, controls)` builds a symusic score in ticks (480 per
+  beat): tempo changes, time and key signature, section markers, one track per part, and (with
+  `controls`) volume / pan / reverb as CC 7 (`midi_volume`: 40 log10(v/127) dB), 10 and 91.
+  `write_midi(score, path)` writes a type-1 SMF. Both need the extra.
+- **Renderer** (`synth.render_score(score, soundfont, cache_dir)`): symusic 0.5.9 ignores CC 7 / 10 /
+  91 and pitch bends, ends at the last note and returns floats above 1, so each part with notes is
+  rendered alone (48 kHz stereo, quality 0, leading silence kept) and `mix_parts` mixes them in
+  float64: gain `10^(volume/20)`, constant-power pan (`pan_gains`: √2·cos, √2·sin of (pan+1)·π/4,
+  1 and 1 at the centre), `reverb` × the part sent to one reverb bus; the bus is convolved
+  (overlap-add FFT, 2^18-sample blocks) with `reverb_impulse()`: per channel its own seeded noise
+  (`crc32("vidgen:reverb")`), low-passed at 5 kHz, 12 ms pre-delay, 60 dB decay over 1.6 s,
+  2 s long, unit energy. The mix is cut or padded to the score's length + `TAIL_SECONDS` (3 s),
+  the last 20 ms faded, set to `MUSIC_LEVEL` (−28 LUFS integrated) and, only if its true peak
+  would pass `TRUE_PEAK_CEILING` (−1 dBTP), limited by `mix.limit`. Silence is an error.
+- **Cache**: `cache_dir / "score-<render_key>.wav"` (16-bit; the returned array is always the
+  16-bit value, so a cached and a fresh render are identical); `render_key` hashes the score's
+  fingerprint, the symusic version, the SoundFont's SHA-256 (`soundfont.content_sha256`: the
+  default file's known hash once checked, others hashed once per process by size + mtime),
+  `RENDERER_VERSION` and the rate. Written to a temporary file, then moved into place. The mix
+  passes `build/music/`; the symusic `Synthesizer` is kept per SoundFont (lru 1).
+- **As a music source**: Step 146's internal hook `music.SCORES` was replaced in Step 147 by
+  `music: {compose: ...}` (§83).
+- `score.py`, `synth.py` and `soundfont.py` are in `NOT_RENDER_INPUTS` (audio only: no scene
+  re-render when they change).
+- Measured (manual, GeneralUser GS, 2 cores): a 5-part, 16-bar score at 100 BPM (38.4 s + 3 s
+  tail) renders in 2.1 s (cached read 0.08 s, identical), −28.00 LUFS, −15.6 dBTP, 376 MB peak RSS.
+
+## 83. Composed music, part 3: the composer and its moods (Step 147)
+
+Reference: docs/CONFIG.md "Composed music (`compose`)" and "`vidgen music preview`".
+
+- **Config**: a music cue takes `compose:` instead of `source:` (exactly one; `MusicCue._one_source`),
+  so composed music is a cue like a bed or a file (lists of cues with `from` / `to`, `volume`,
+  fades, ducking, scene volumes). `ComposeConfig {mood, key, tempo, instruments, seed=1, bars}`
+  (`compose: playful` is short for `{mood: playful}`); `instruments` maps a part (`melody`,
+  `chords`, `pad`, `bass`, `drums`) to a friendly name, `none` / null, or `ComposeInstrument
+  {instrument, volume, pan, reverb}`. The model validator calls `composer.settings_problems`:
+  unknown mood / instrument / part with a did-you-mean (`cartoon.poses.unknown_name_message`), a
+  drum kit outside `drums` or the reverse, a key in the other mode, bars not a multiple of 4.
+  `MusicCue.label` is `compose: <mood>` for summaries.
+- **Composer** (`vidgen/composer.py`, pure, no numpy): `compose_piece(mood, key, tempo,
+  instruments, seed, bars) -> Piece` (score, key, tempo, bars, voices, chord names per bar,
+  phrases, `harmony` as `(beat, beats, Chord)`; `chord_at(beat)`), `compose(...) -> Score`. Seeded
+  by `random.Random(crc32("vidgen-compose:<mood>:<seed>"))`, one more generator per part (so
+  changing one part's instrument leaves the other parts' notes alone).
+  - *Moods* (`MOODS`): `Mood` holds family, words, key, tempo, meter, default bars, A
+    progressions (`themes`) and B / C progressions (`contrasts`) as `Progression(question,
+    answer)` of 4 bars each in Roman numerals (a bar may hold 2-4 chords), the melody's range,
+    words, rhythm cells (`"1 .5 .5 r1 1"`: beats, `r` a rest), the cadence cells (`half`, `full`)
+    and the last bar (`turn`), articulation, the chord / bass / drum pattern names, default
+    parts (`RoleDefault` instrument, volume, pan, reverb), the fallback bed, bass and chord
+    registers. A test checks every question ends on V and every answer on I.
+  - *Chords* (`parse_chord`): case gives major / minor, `°` `ø` `+`, `7` `maj7` `6` `9` `sus2`
+    `sus4` `add9`, `/3` `/5`, `b` / `#` before the numeral; each tone is `(scale degree, pitch
+    class)`, so `Chord.scale(key)` is the key's scale with the chord's tones on their degrees (the
+    raised leading tone over V in minor, the raised fourth over II); names are spelt from the
+    key's letters (`Gb`, not `F#`, in B♭ major).
+  - *Form* (`form`): blocks of A-question, A-answer, B (C in every second block)-question,
+    A-answer; the rest A / A A / A B A; the last phrase is an answer whose last bar becomes
+    `I V7` (`i V7`). Each letter picks one progression per seed (C another than B).
+  - *Melody*: per letter a motif of three rhythm cells (bar 1, bar 2, the answer's bar 3; a
+    question repeats bar 1's cell in bar 3; a return varies bar 2 / 3 by splitting the longest
+    note or merging two) and a shape (semitone offsets per anchor, inverted on a return). The
+    first note of a bar and notes on strong beats (1 and 3 in 4/4, 1 in 3/4) are *anchors*: a
+    chord tone of the chord sounding there, nearest to an arch target (a question rises and
+    stays up, an answer comes down; B higher, C lower) plus the shape, within a sixth of the
+    previous anchor, not repeating it; an answer's cadence takes the tonic nearest below or at
+    the previous note, a question's the V chord tone nearest it. The notes between anchors
+    follow the straight line to the next anchor in steps of the chord's scale (a chord tone for a
+    leap over 4 semitones), the last ones leading back to the first note. A bar equal to the bar
+    before (cell and first pitch) takes the second-best anchor or a varied cell. The melody's
+    range is the mood's moved by octaves into the instrument's (`fit_range`).
+  - *Accompaniment*: close-position voicings with the inversion nearest the previous one
+    (`_voicing`); patterns `pad`, `block`, `arpeggio` (eighths; a shape per letter), `broken`,
+    `oompah`, `ostinato` (root / fifth / octave), `strum` (staggered 15 ms per note); a chord
+    starting off the pattern's onsets is struck there; an event is cut at a chord change.
+    Bass patterns `sustain`, `half`, `root_fifth`, `walking` (with a chromatic approach to the
+    next root), `pulse`, `pop`; the root of an inversion is its bass note. Drum patterns
+    (`DrumPattern`: hits in 4/4, the phrase-end fill from `fill_from`, a cymbal at each new section
+    when `crash`, a generic 3/4 bar from `backbeat` / `tick`). Velocities are humanised ±4 (drums
+    ±5) by the part's generator; B / C drums play 8 % harder.
+  - The score is `balance=True`, its `length` exactly the bars (notes are cut at the end), its
+    sections named `A1 question`, `B1 question`...
+- **`Score.balance`** (new field, default false): `synth.mix_parts` first sets each part's dry
+  render to `BALANCE_LEVEL` (−28 LUFS integrated; measured from its first to its last sample
+  above −120 dBFS since Step 149, §85), then applies its `volume`. GeneralUser GS's
+  instruments differ by up to ~40 dB as symusic renders them (pizzicato −59 LUFS, horn −13 LUFS
+  for the same note), so the moods' volumes are levels against the other parts. Render time
+  of a 16-bar mood: ~4.5 s (2 cores; ~2 s without the per-part loudness measurement).
+- **As a music source** (`music.Source`): `source_kind(cue)` gives `composed`, `bed` or `file`;
+  `composed_score(cue)`; the render (`render_score`, cache `build/music/`) is the piece plus
+  `TAIL_SECONDS`: looped, the tail is added circularly onto the piece's start (the last bar
+  leads back to the first), the first pass is the piece without that tail, and `start` wraps
+  around the piece; `loop: false` plays the piece and its tail once. `crossfade` does not apply.
+  Without symusic 0.5.9 (`fallback_bed(cue)`) the mood's bed plays (`Mood.bed`: calm → calm,
+  focused / tense → pulse, curious / upbeat / triumphant → bright, playful → cartoon, sleepy →
+  lullaby) with a warning naming the install command; the summary then says `kind: bed`,
+  `source: "compose: <mood> (bed <bed>: no music extra)"`.
+- **Instruments**: 42 friendly names → GM programs with a playable range and words, and 5 drum
+  kits. Not offered, measured with GeneralUser GS 2.0.3 and symusic 0.5.9: pizzicato strings
+  (45) and xylophone (13) render a 5 ms click and silence (FluidR3 Mono plays its pizzicato), and
+  bright piano (1) is the piano's sound. All drum keys the patterns use sound in all five kits.
+- **CLI**: `vidgen list-music` adds the moods (`composer.mood_entries`, `describe(mood)` built
+  from the parameters, so the words follow the code) and the instruments
+  (`instrument_entries`); JSON keys `moods`, `instruments`, `symusic`. `vidgen music preview`
+  (`cli.cmd_music`) composes the project's first `compose:` cue changed by `--mood`, `--seed`,
+  `--bars`, `--key`, `--tempo` (another mood starts from its defaults) or the mood alone, renders
+  it with the project's SoundFont (no cache) and writes `<mood>-seed<S>.wav` and `.mid` into
+  `--out` (default `.`).
+- `composer.py` is in `NOT_RENDER_INPUTS`. Measured samples (scratchpad, not committed): every
+  mood −28.00 LUFS, true peak −13.0 to −17.1 dBTP, 33-47 s with the tail, 4.4-6.1 s to render.
+
+## 84. Composed music, part 4: music that follows the video (Step 148)
+
+Reference: docs/CONFIG.md "Music that follows the video".
+
+- **Which cues.** A `compose:` cue without `bars` (`musicfit.is_fitted`) is composed in
+  `mix.plan_music` from the combined timings, when the scenes are joined; with `bars` it loops as
+  in §83. Without the extra the mood's bed plays (§83). `start` and `loop` do not apply.
+- **Inputs** (`musicfit.cue_inputs`, reads the config and the timings): a `Slot(scene, start,
+  settings, button)` per scene of the cue (seconds from the cue's start: the scene's start, plus
+  half its transition's `overlap`); reveal times (the beats in which the scene type's
+  `reveal_steps` show a step, mapped with `layout.distribute` as host directing does; written
+  `reveal` actions at their `at` share of the beat; `sting_reveal` events of the timings); pauses
+  `Pause(start, end)` (a beat's `music_pause: true`; automatically a `card` scene that is not the
+  cue's first, until its first beat ends; the cue's last beat when it has at most `PAUSE_WORDS`
+  8 words and its scene another beat, unless `music_pause: false`). That last pause adds a
+  `button` slot where the line ends (when at least `BUTTON_MIN` 0.3 s remain).
+- **Settings** (`Settings(mood, key, tempo, instruments, seed)`; `cue_settings`,
+  `scene_settings`): a scene's `SceneMusic` (new optional fields `mood`, `key`, `tempo`,
+  `instruments`, `seed`; `compose_keys`) changes the cue's for that scene: another mood starts
+  from its defaults with the cue's seed; the same mood keeps the cue's settings, replaces `key`,
+  `tempo`, `seed` and adds `instruments`. `VideoConfig._scene_compose_problems`: only under a
+  fitted cue, and the result must pass `composer.settings_problems`.
+- **Sections** (`plan_sections(slots, seconds, limit=TEMPO_LIMIT)`, pure): a slot shorter than
+  one bar at the fastest tempo joins the next (the last, or one before the button, joins the one
+  before). `_fit` picks the bar count whose tempo (`60 · Σ stretch / seconds`) is nearest the
+  settings' within ±`TEMPO_LIMIT` (8 %); when even −8 % is too fast, the tempo is −8 % and the
+  missing time is a *hold*: added to the last bar's beats with weights 1..meter (`_hold`; no beat
+  under 20 BPM, the rest spilling over the section). When one bar at +8 % is too long (a cue
+  shorter than a bar), one bar at the tempo it needs. The last section *closes*: its last bar's
+  beats last `CLOSE_STRETCH` 1.3 beats and the bar before slows by `RIT_STEP` 6 % more per beat;
+  a button is one bar of plain beats at whatever tempo fills it (20-300 BPM: under 0.8 s in 4/4
+  it runs past the cue's end, cut there). Each `FitSection` keeps its per-beat `stretch`;
+  `TempoMap.of(sections)` is the tempo of each beat, with `seconds_at` / `beat_at`.
+- **The piece** (`fit_music(sections, reveals, pauses)`, pure): each run of sections with equal
+  settings is one `compose_piece(..., bars, ending)` (new `ending`: `loop` as before, `cadence`
+  for the last run, `open` for the others; any bar count when not looping: whole phrases of
+  `form`, then a tag repeating an answer's last `bars % 4` bars). `cadence`: the last bar is the
+  tonic alone (`_Bar.closing`: the melody holds the tonic, the chords hold the chord whatever the
+  pattern, the bass holds the root, the drums play one kick and cymbal) and the bar before ends
+  on V7 if it did not end on V. Parts are merged by (role, program, drums, volume, pan, reverb);
+  another instrument for a role becomes `"<role> 2"`. Score sections: one per fit section (named
+  by its scenes) and one per tempo change inside (`hold` / `a tempo`); `length` the total beats;
+  `time_signature` and `key` the first run's, and each run's first section carries its own
+  (`Section.key` / `time_signature`, Step 149; MIDI only: the audio follows the notes).
+- **Swells**: each reveal at the nearest beat (`_swell_beats`: not before beat 1, not in the
+  closing bar, not in or one beat before a pause, `SWELL_BEATS` 2 apart); notes in the 2 beats
+  before grow to `SWELL_GAIN` ×1.2 velocity, the beat on it ×1.2, and a chord tone near E5 (not
+  one struck there already) is held 2 beats in the pad, else chords, else melody part.
+- **Pauses** (`_pause_windows`): from the last whole beat at least `PAUSE_LEAD` 0.4 s before the
+  beat to the first bar line after it ends (the closing bar at the latest); notes starting inside
+  are dropped, notes sounding into it end at its start (`_cut`).
+- **Cache**: the fitted score is hashed like any score (`render_key`), so its tempo changes and
+  notes — the section plan — are in the key: new timings compose and render again; unchanged
+  timings reuse `build/music/score-<key>.wav`.
+- **In the mix**: `Source(..., fitted=score)` plays the render once from the cue's start;
+  `Placement.fit` adds `fit: {sections, swells, pauses, closing}` to the cue's mix summary; the
+  cue's fade-out never starts before the closing chord (`FittedMusic.closing_seconds`).
+  `music.cue_scene_range` is shared by the mix and the stings.
+- **Stings** (`sting_score(kind, settings)`, pure): in the settings' key, tempo and voices —
+  reveal: melody pickup a fourth below the tonic, then the tonic held 2.5 beats with the tonic
+  chord (chords, pad), bass root, kick and cymbal; comic: toms 48, 45 and kick + crash 49 on
+  eighths with the mood's kit (standard without drums), the bass and a short tonic chord on the
+  last; sad: melody tonic+3, +2, +1, then the tonic held. `composed_stings(project, timings,
+  events, library)` (from `join_scenes` before `sfx.write_track`, new `replaced` argument; also
+  `sfx.placed(..., audio)`): for each built-in sting event in a scene under a composed cue (with
+  the extra, no project `assets/sfx/sting_*` file), the sting of that scene's settings rendered
+  (`build/music`), its tail cut to `STING_TAIL` 1.5 s with a fade, scaled to the integrated
+  loudness of the built-in sting it replaces. Its `gain`, `at` and the sting ducking stay.
+- `musicfit.py` is in `NOT_RENDER_INPUTS`; a beat's `music_pause` is left out of scene
+  fingerprints (applied when joined).
+- **Measured** (scratch copies, preview): `host-explainer` with `compose: curious` and real Kokoro
+  audio (66.1 s, 5 scenes: tempos −8 % with a hold, +0.6 %, −4.4 %, 0 %, −8 % with a hold;
+  6 swells): scene changes on bar lines within 0.01 ms (plan and symusic's own tempo map) and
+  note onsets in the render within 3.3 ms; `cartoon-rain-check` with `compose: playful` and
+  `storm` `{mood: tense}`, word-count timing (75.9 s): within 0.02 ms (plan, symusic), onsets
+  within 45 ms (a coarse onset detector), a pause and button before the last line, the comic
+  sting played by the playful instruments.
+
+## 85. Composed music, part 5: tooling, examples and the review of Phase N (Step 149)
+
+- **`vidgen validate`** (`music.music_warnings(config)`, in `cli.validate_warnings`): with a
+  `compose:` cue and no usable symusic, one warning naming the extra (`synth.symusic_status()`)
+  and the bed each composed cue plays instead (and that scenes' compose settings are not
+  played); with the extra but no `soundfont:` and the default SoundFont not in the cache, one
+  warning that the first render downloads it (32.3 MB) or `vidgen soundfont fetch` does it now.
+  A missing SoundFont still downloads (or errors offline) at render time: only the extra's
+  absence falls back to the beds (§83), so a final render never silently loses its music for a
+  network problem. `music.music_summary(config)` (`{source, kind, plays, fitted, from, to,
+  scenes}` per cue) is printed as `music:` lines (`music_summary_line`) and is `validate
+  --json`'s new `music` key.
+- **Drafts, animatics, storyboards.** No code: `render --draft` and `vidgen animatic` mix through
+  `pipeline.prepare_join` like the video, so composed music (fitted to their own timings, which
+  differ from the preview's by up to a frame or two of 8 fps per beat) plays in both; the render
+  is cached in `build/music/` (shared by preview, draft and final). Measured on scratch copies:
+  host-explainer's draft (65.9 s) and animatic (66.1 s, 22 s) carry `compose: curious`;
+  composing rain-check's three-mood 93.9 s piece takes 2.0 s and rendering it 18.7 s without
+  the cache (21.8 s before the balance fix below), once per timing change, so no cheaper path for
+  drafts. Storyboards have no sound.
+- **MCP**: `list_music`'s description names the moods; new tool `music_preview` (`vidgen music
+  preview --json`, `music` added to `cli.JSON_COMMANDS`, `jsonout.music_preview_document`; `out`
+  confined, default `build/mcp/music`, a heavy call); `render` / `animatic` documents carry
+  `mix.music[].fit` as before.
+- **MIDI export of several moods** (`score.Section.key` / `time_signature`, optional, checked;
+  `to_symusic` writes a key or time signature change at a section that changes them;
+  `musicfit._score_sections` sets them at the first section of each run of settings).
+- **Fix: balance measured where a part sounds** (`synth._sounding`): `mix_parts` measured each
+  part's loudness over the whole piece; in a piece of several moods most parts play in one
+  stretch, so ~80 % of that time measured silence (13 parts × 94 s for rain-check). Only the
+  stretch from the first to the last sample above −120 dBFS is measured now; the gated loudness
+  differs only by the half-silent 400 ms blocks at its edges (≤ 0.34 dB on a 2 s tone, less on
+  real parts). `RENDERER_VERSION` 2, so cached renders are made again.
+- **Fix: `compose: MOOD` in the JSON Schema** (`config._mood_name_schema`): the short form
+  (Step 147) passed `vidgen validate` but not `vidgen schema`'s schema (`BeforeValidator` does not
+  reach the generated schema); `compose` now also accepts a string there, like `shot:`'s words.
+  Found by `tests/test_schema.py` once the examples used the short form.
+- **Examples**: `examples/host-explainer` `music: {compose: curious}`; `examples/cartoon-rain-check`
+  `music: {compose: playful, volume: -2}` with `storm` `{mood: tense, volume: -3}` (under the rain
+  bed) and `night` `{mood: sleepy, volume: -3}` (the two beds replaced); both validate and lint
+  with 0 findings on real Kokoro audio.
+- **Measured** (scratch copies with real Kokoro narration, 1280x720 @ 30, `--jobs auto`, outside
+  the repository in `/home/claude/work/phase-n-review/`): `host_explainer.mp4` 66.13 s, 3.7 MB,
+  −16.1 LUFS, −1.8 dBTP; music alone −33.0 LUFS under speech and −25.6 LUFS in the pauses (the mix
+  in speech −15.2 LUFS: the music ~18 dB under the voice, ~10 dB under it between lines); 5
+  sections (−8 % with a hold, +0.6, −4.2, 0, −8 % with a hold), 6 swells. `rain_check.mp4`
+  93.93 s, 11.4 MB, −16.1 LUFS, −1.8 dBTP; music −38.2 LUFS under speech, −29.0 LUFS in pauses
+  (plus the rain bed); sections playful −1.3 / −2.5 %, tense +2.2 %, sleepy (3/4) −3.9 %, the
+  button bar; the pause before "It rained for the rest of the week." (88.9-92.7 s) and its
+  closing chord. Scene changes on bar lines within 0.06 ms (plan and symusic's tempo map); every
+  note of the new section starts exactly there (onset detector within 3.3 ms for host-explainer;
+  for rain-check it picks an earlier woodblock pickup or the tense strings 70-78 ms before, while
+  the 5 ms levels rise at the change).
