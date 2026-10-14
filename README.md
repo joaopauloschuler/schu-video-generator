@@ -350,7 +350,8 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
     voices also need `pip install "misaki[ja]"` / `"misaki[zh]"`.
 
 If PowerShell refuses to run `Activate.ps1`, run
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
+step by step, follow [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md).
 
 ### Linux (Ubuntu / Debian)
 
@@ -590,6 +591,10 @@ my_video/
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each release (0.3.0: cartoons, Kokoro and
+  OpenRouter narration, `output/`, `--jobs auto`), behaviour changes first.
+- [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md) — a short checklist to try a release on Windows
+  (install with the extras, a cartoon preview, fonts, MiKTeX, Kokoro) and what to report back.
 
 ## Your content and third-party services
 

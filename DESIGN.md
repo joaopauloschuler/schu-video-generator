@@ -6,15 +6,16 @@ The project and pip distribution are called `schu-video-generator`; the command 
 below unless it says otherwise. `vidgen.DIST_NAME` (`"schu-video-generator"`) is used where the
 distribution is meant: install hints of the optional extras (`schu-video-generator[pdf|stt|mcp]`),
 the PDF deck's creator and the HTML deck's `generator`, and the MCP server's advertised name. The
-JSON envelope key `vidgen`, the `vidgen://` MCP resources and `--version` (`vidgen 0.2.0`) keep
+JSON envelope key `vidgen`, the `vidgen://` MCP resources and `--version` (`vidgen 0.3.0`) keep
 the command's name.
 It generalises the one-off `kphi3_paper_video` project: the pipeline is shared, each video is a
 **project folder** with a config file, and each project can **extend** the tool with its own
 scene types, helpers, theme tokens and pipeline hooks.
 
-Status of this document: describes the implemented system (version 0.2.0: the version 0.1
-contract after the Step 7 review, plus the roadmap steps 8–60 in tasklist.md recorded in §11
-onwards; §63 is the final review and lists what changed for users of 0.1). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
+Status of this document: describes the implemented system (version 0.3.0: the version 0.1
+contract after the Step 7 review, plus the roadmap steps 8–60 (version 0.2.0) and 61–131
+(version 0.3.0) in tasklist.md recorded in §11 onwards; §63 is the 0.2.0 review and lists what
+changed for users of 0.1; `CHANGELOG.md` lists what changed from 0.2.0 to 0.3.0). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
 each step made it precise, and where a refinement differs from the text above it, the
 refinement is what the code does. Changing a public interface requires updating this file in
 the same commit and noting it in HANDOFF.md. User documentation: README.md, docs/CONFIG.md

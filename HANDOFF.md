@@ -12482,3 +12482,57 @@ Files touched
 How to test
 - The same groups (file lists above), one command at a time under the cap; the fixed files:
   `pytest -m "not render" tests/test_overlap.py tests/test_registry.py tests/test_translation.py`.
+
+## Step 132 — Release 0.3.0
+
+What was done
+- **Version 0.3.0** where it is stated: `pyproject.toml`, `src/vidgen/__init__.py`
+  (`__version__`, which `--version`, the JSON envelope's `vidgen`, timings and the scene
+  fingerprint read), DESIGN.md (intro name line and status paragraph), docs/CONFIG.md (JSON
+  envelope example). Earlier HANDOFF sections keep their historical 0.2.0. No test pins the
+  number (`test_packaging` compares pyproject with `__version__`).
+- **`CHANGELOG.md`** (new): 0.2.0 → 0.3.0. "Behaviour changes and possible breaks" comes first,
+  in two groups. For 0.2.0 projects: `output/` (66), ffmpeg ≥ 4.4 (64), `[laugh]`-style markers
+  are voice sounds (99), `*word*` asterisks are stripped (90–91; new audio hashes for such
+  beats), every scene re-renders once after the upgrade (the fingerprint holds the version),
+  the `--jobs` usage message (117). For cartoon projects from development builds: default
+  ambience (128), split legs / forearms (92), interrupt timing (102 follow-up), `auto_direct`
+  effects (107), motion effects (108), shadows (97), one-picture stage fades (116a, 127), lower
+  seats (102), reframing (96), close-ups as shots (95), wind / rain on stages (104, 105),
+  screenplay looks and exit `to` (113, 115, 130). Each claim was checked against its HANDOFF
+  section. The theme sections follow: characters, stages / props, acting / directing,
+  screenplays / cards, weather, sound / music, narration / pictures, rendering / tooling, known
+  gaps.
+- **`docs/WINDOWS-CHECK.md`** (new): six steps for the owner on Windows (Python 3.12 venv with
+  `[pdf,mcp,kokoro]`, validate and `--jobs auto` preview of `examples/cartoon-rainbow-ride`,
+  font check on storyboard sheets of two `examples/minimal` scenes that need no LaTeX, MiKTeX on
+  the `math` scene, Kokoro `tts` + preview of `examples/cartoon`, optional PDF / MCP cancel /
+  long paths) and a "What to send back" list. There is no `vidgen doctor` command (it says so).
+  Linked from README's Windows install section and "Examples and docs" (with CHANGELOG.md).
+- **Packaging check** (scratchpad `rel132/`): `python -m build` (in a scratch venv with `build`;
+  setuptools 84 in its isolated env, no warnings) gave `schu_video_generator-0.3.0-py3-none-any.whl`
+  (2.6 MB, 451 `vidgen/` entries = every tracked `src/vidgen` file) and
+  `schu_video_generator-0.3.0.tar.gz` (3.0 MB). A fresh Python 3.13 venv, `pip install <wheel>`
+  (dependencies from PyPI): `vidgen --version` → `vidgen 0.3.0`; `vidgen validate` on a copy of
+  `examples/cartoon-rainbow-ride` → ok (with the expected Kokoro-extra warning on 3.13); `vidgen
+  render <copy of examples/minimal> --preview --jobs auto --scene intro --scene steps` under the
+  1500 MB cap → `jobs: 1 (auto: 1.1 GB available ...)`, 2 scenes rendered, joined (the other 9
+  came from the copied `build/`, as `--scene` does).
+
+Files touched
+- New: `CHANGELOG.md`, `docs/WINDOWS-CHECK.md`.
+- `pyproject.toml`, `src/vidgen/__init__.py`, `DESIGN.md`, `docs/CONFIG.md`, `README.md`,
+  `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.__version__` = `"0.3.0"`. Nothing else.
+
+Known gaps
+- No tag, no push (as asked). The CHANGELOG is not in the sdist (no MANIFEST.in; the README is).
+- The fresh-venv check ran on Linux / Python 3.13 only; Windows is what `docs/WINDOWS-CHECK.md`
+  is for. `/home/claude/venv`'s editable install still reports 0.2.0 through
+  `importlib.metadata` until it is reinstalled (`pip install -e ".[dev]"`); `__version__` is right.
+
+How to test
+- `pytest tests/test_packaging.py tests/test_docs.py tests/test_cli.py tests/test_json_output.py
+  tests/test_guide.py` (137 passed, 15 s, under the cap).

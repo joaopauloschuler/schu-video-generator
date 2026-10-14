@@ -7322,7 +7322,7 @@ relative to the project, `null` for the project's own config file).
 `details` is an object, empty unless stated below.
 
 ```json
-{"version": 1, "vidgen": "0.2.0", "command": "render", "ok": false, "warnings": [],
+{"version": 1, "vidgen": "0.3.0", "command": "render", "ok": false, "warnings": [],
  "error": {"kind": "usage", "message": "unrecognized arguments: --bogus", "problems": [], "details": {}}}
 ```
 
