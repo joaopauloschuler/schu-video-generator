@@ -126,7 +126,8 @@ class SceneContext:
     (:class:`vidgen.readback.BeatReadback`; only beats ``vidgen readback`` transcribed, and only
     filled when the ``readback`` rule runs), ``character_pairs`` every two characters of the video
     compared (:class:`vidgen.cartoon.contrast.PairContrast`) whose later one first appears in this
-    scene (filled when the ``look_alike`` rule runs).
+    scene (filled when the ``look_alike`` rule runs), ``speech_flags`` beat id -> the words to
+    check (:class:`vidgen.speech_flags.WordFlag`; filled when ``unclear_speech`` runs).
     """
 
     scene_id: str
@@ -136,6 +137,7 @@ class SceneContext:
     language: str | None = None
     readback: dict[str, Any] = field(default_factory=dict)
     character_pairs: list[Any] = field(default_factory=list)
+    speech_flags: dict[str, list[Any]] = field(default_factory=dict)
 
     def spoken_text(self, beat: dict[str, Any]) -> str:
         """What the narrator says for an activity-file beat."""

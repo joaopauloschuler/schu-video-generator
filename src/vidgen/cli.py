@@ -615,7 +615,8 @@ def cmd_tts(args: argparse.Namespace) -> CommandResult:
 
 def cmd_readback(args: argparse.Namespace) -> CommandResult:
     """Transcribe the beats' MP3s (speech to text, cached) and compare them with their texts:
-    word error rate, differing words and suggested fixes per beat (DESIGN.md §57)."""
+    word error rate, differing words, unclear words and suggested fixes per beat (DESIGN.md
+    §57, §78)."""
     from vidgen.readback import report_lines, run_readback
 
     started = time.monotonic()
@@ -1025,6 +1026,8 @@ def cmd_lint(args: argparse.Namespace) -> CommandResult:
         fail_on=args.fail_on,
         jobs=args.jobs,
         force=args.force,
+        readback=args.readback,
+        log=lambda line: print(line, file=sys.stderr),
     )
     if args.json:
         return jsonout.lint_document(project, result, time.monotonic() - started)
@@ -1443,7 +1446,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (may have its own voice)")
     p.set_defaults(func=cmd_tts)
 
-    p = sub.add_parser("readback", help="transcribe the narration (speech to text) and compare it with the beat texts: misheard, missing or extra words")
+    p = sub.add_parser("readback", help="transcribe the narration (speech to text) and compare it with the beat texts: misheard, missing or extra words, unclear words and pauses")
     project_arg(p)
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (its audio folder and language)")
     p.add_argument("--beat", action="append", default=[], metavar="ID", help="only this beat (repeatable)")
@@ -1621,6 +1624,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
+    p.add_argument(
+        "--readback", action="store_true",
+        help="also run the unclear_speech rule: transcribe the narration (as `vidgen readback`, cached) and flag unclear words (slow)",
+    )
     p.set_defaults(func=cmd_lint)
 
     p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")

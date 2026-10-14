@@ -1028,8 +1028,8 @@ def character_sheet_document(
 
 
 def readback_document(project: Project, result: ReadbackResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The ``vidgen readback --json`` document: every compared beat with its differences and
-    suggestions, the beats skipped, a summary and the terms heard differently."""
+    """The ``vidgen readback --json`` document: every compared beat with its differences,
+    suggestions and word flags, the beats skipped, a summary and the terms heard differently."""
     beats = result.beats
     return envelope(
         "readback",
@@ -1040,6 +1040,7 @@ def readback_document(project: Project, result: ReadbackResult, elapsed: float, 
         audio_dir=_path(project.audio_dir),
         stt=dict(result.settings),
         max_wer=result.max_wer,
+        flag_thresholds=result.flag_settings.model_dump(exclude={"severity"}),
         transcribed=result.transcribed,
         cached=result.cached,
         elapsed=round(elapsed, 3),
@@ -1050,6 +1051,8 @@ def readback_document(project: Project, result: ReadbackResult, elapsed: float, 
             "errors": sum(b.errors for b in beats),
             "wer": round(result.wer, 4),
             "worst": [{"beat": b.beat, "wer": round(b.wer, 4)} for b in result.worst()],
+            "unclear": sum(1 for f in result.flags if f.level == "unclear"),
+            "doubtful": sum(1 for f in result.flags if f.level == "doubtful"),
         },
         beats=[b.to_json() for b in beats],
         skipped=[{"beat": beat, "reason": reason} for beat, reason in result.skipped],

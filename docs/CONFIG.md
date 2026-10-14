@@ -1945,7 +1945,8 @@ is reported as a warning.
 Does the narration say what the text says? `vidgen readback [PROJECT]` transcribes every beat's
 MP3 with a speech-to-text (STT) provider and compares the transcript with the beat's text. It
 catches what nobody hears without listening: a name or acronym the voice mispronounces, a number
-read wrongly, words the voice dropped or added. An AI author can act on the report without
+read wrongly, words the voice dropped or added, words it says unclearly or after an odd pause.
+An AI author can act on the report without
 listening: each difference names the written words, what was heard, and a suggested fix. A
 beat's [voice sounds](#voice-sounds) are left out: the words a transcript writes for them (`ha
 ha`, `hmm`) are not differences.
@@ -1977,6 +1978,13 @@ flagged (word error rate above 10%): 1
 worst: setup_b2 20%, intro_b1 9%
 terms misheard in several beats:
   NVIDIA: 2 beats (setup_b2, results_b1), heard "and video", "in video" -> "NVIDIA" is misheard in 2 beats: add a pronunciation entry `NVIDIA: <how to say it>`
+words to check: 2 unclear, 1 doubtful (probability below 0.5 / 0.75, pauses over 0.5 s inside a sentence, differences)
+  unclear  intro_b2 @ 1.84s (video 9.12s): "rushing" (text "Russian"), heard with probability 0.22
+    fix: "Russian" is not heard clearly: add a pronunciation entry `Russian: <how to say it>` (a respelling), then `vidgen tts`
+  unclear  setup_b2 @ 3.20s (video 21.40s): expected "NVIDIA", heard "and video"
+    fix: "NVIDIA" is heard as "and video": add a pronunciation entry `NVIDIA: <how to say it>`, then `vidgen tts`
+  doubtful results_b1 @ 0.95s (video 33.05s): "layers", heard with probability 0.61
+    fix: listen to "layers": if it is slurred, change how the beat is said (another `voice:`, the voice's `speed`, an `emotion:`) or respell the word in `pronunciation:` (`layers: <respelling>`), then `vidgen tts`
 ```
 
 | option | |
@@ -2022,19 +2030,44 @@ voice's. Listen to a flagged beat before regenerating it.
 - the audio is **stale** (its hash does not match the current text or voice): run `vidgen tts`
   first. Beats without an MP3 are skipped.
 
-The report ends with the **worst** beats and the **terms misheard in several beats** (a term
+The report then lists the **worst** beats and the **terms misheard in several beats** (a term
 heard differently in two or more beats is very likely the voice, not the transcriber: the
 strongest reason to add or fix a pronunciation entry).
+
+**Words to check** (word flags). A voice can say every word of the text and still sound wrong:
+a slurred name, a word that comes out as something foreign, a hesitation in the middle of a
+sentence. The transcript tells where: the report ends with every word to listen to, in every
+beat (flagged or not), each with its time in the beat's MP3, its time in the video (from the
+last render, preview first; none before a render), what is wrong and a fix. Thresholds are the
+[`unclear_speech` lint rule](#lint-vidgen-lint)'s settings (`lint.rules.unclear_speech`):
+
+| a word is | when |
+|---|---|
+| **unclear** | heard with a probability below `min_probability` (0.5; faster-whisper says how sure it is of each word); heard after a pause longer than `max_gap` (0.5 s) inside a sentence: the word before ends without punctuation (in the text or the transcript) and no [voice sound](#voice-sounds) sits there; or part of a difference with the text (above) about a term (a name, acronym, number or pronunciation entry) or covering two or more words |
+| **doubtful** | heard with a probability below `doubtful_probability` (0.75); or a single ordinary word heard differently with confidence (maybe the transcriber's slip) |
+
+A difference and the low probability or pause of its words are one flag. The fixes: a word with
+a pronunciation entry, respell the entry's spoken form; a name, acronym or number, add a
+pronunciation entry with a respelling; another word, listen, then change how the beat is said
+(another `voice:`, the voice's `speed`, an [`emotion:`](#voices-with-feeling-emotion)) or respell the word
+in `pronunciation:`; a pause, change the speed or emotion, rephrase, or write a comma where the
+pause is wanted. Each fix ends with `vidgen tts` (the change makes the beat's audio stale).
+ElevenLabs Speech to Text gives no probabilities: with it, only pauses and differences are
+flagged.
 
 **Cache.** Transcripts are stored in `build/readback/<key>.json`, keyed by the MP3's content and
 the STT settings (`provider`, resolved `model` and `language`): a beat is transcribed again only
 when its audio or those settings change (or with `--force`); variants sharing audio share
 transcripts. Each file holds `{version, audio_sha1, stt, beat, transcript: {text, language,
-words: [[text, start, end]]}}`. Deleting the folder is safe.
+words: [[text, start, end, probability]]}}` (`probability` only when the provider gives one; a
+faster-whisper transcript stored before probabilities were kept is transcribed again). Deleting
+the folder is safe.
 
 **Lint.** The [`readback` rule](#lint-vidgen-lint) of `vidgen lint` reports the beats above
 `lint.rules.readback.max_wer` from these cached transcripts only: it never runs STT, so it finds
-nothing until `vidgen readback` has run, and transcripts of older audio are ignored.
+nothing until `vidgen readback` has run, and transcripts of older audio are ignored. The
+`unclear_speech` rule reports the word flags; it runs only with `vidgen lint --readback`, which
+transcribes what is not cached first.
 
 ## Generated images (`imagegen`, `vidgen imagegen`)
 
@@ -7301,7 +7334,8 @@ off by the frame edge or in the margins, overlapping text, shapes drawn over tex
 small for the frame, low contrast and too many words at once (**layout rules**); narration too
 fast or too slow, nothing moving for a long time, animations running past their narration or
 squeezed into a too short beat (**timing rules**); narration heard differently from its text
-(`readback`, from the transcripts of [`vidgen readback`](#readback-vidgen-readback)). It reads the
+(`readback`, from the transcripts of [`vidgen readback`](#readback-vidgen-readback)) and, with
+`--readback`, words heard unclearly (`unclear_speech`). It reads the
 [layout dump](#layout-dump-buildlayoutscenejson) of the beat-end stills and each scene's
 [activity file](#activity-file-buildactivityscenejson); scenes whose stills are current (from
 `vidgen render --frames` or `vidgen storyboard`, any `--per-beat`) are reused, the others are
@@ -7337,6 +7371,7 @@ Options:
 | `--fail-on SEVERITY` | `error`, `warning`, `info` or `never`; overrides `lint.fail_on` |
 | `--jobs N\|auto` | scenes rendered in parallel ([`auto`](#parallel-renders---jobs): from the available memory and CPU cores) |
 | `--force` | render the selected scenes again even if their stills are current |
+| `--readback` | also run `unclear_speech`: the selected scenes' beats are transcribed as [`vidgen readback`](#readback-vidgen-readback) does (cached transcripts reused, progress on stderr; slow the first time, and paid with `stt.provider: elevenlabs`). `--rule unclear_speech` implies it |
 | `--json` | print every finding as JSON (below) |
 
 **Exit code**: 1 when a finding is at least as severe as `fail_on` (default `error`), else 0;
@@ -7380,6 +7415,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
 | `talked_over` | warning | a beat with [`overlap`](#overlapping-lines-overlap-interrupt) that starts speaking before whole words of the line before it are said: those words are spoken entirely under the new line (word times from the alignment, else estimated). The message names the words and the largest overlap that keeps them clear. With `interrupt`: words of a line with audio that the cut removes before they start (the interrupt should cut at most the end of the last word). Fix: a shorter `overlap`, or `interrupt: true`; for an interrupt, a shorter `overlap` or none |
 | `readback` | warning | a beat whose MP3, transcribed by [`vidgen readback`](#readback-vidgen-readback), differs from its spoken text by a word error rate above `max_wer`; the message quotes the first differences and a suggested fix. Reads only the transcripts `vidgen readback` cached for the beats' current MP3s and the `stt:` settings (it never runs speech to text): nothing is reported until that command has run |
+| `unclear_speech` | warning; info for doubtful words | only with `--readback`: each [word to check](#readback-vidgen-readback) of `vidgen readback` — a word heard with a probability below `min_probability` (info: below `doubtful_probability`), after a pause longer than `max_gap` seconds inside a sentence, or differently from the text — at its time (the beat's start + the word's time in the MP3), with the fix (a respelling in `pronunciation:`, another voice, speed or emotion). `value` / `limit` are the probability or the pause and its threshold |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -7413,6 +7449,7 @@ lint:
     rushed_animation: {min_run_time: 0.5}   # seconds
     talked_over: {}
     readback: {max_wer: 0.1}                # word error rate; also `vidgen readback`'s threshold
+    unclear_speech: {min_probability: 0.5, doubtful_probability: 0.75, max_gap: 0.5}   # also `vidgen readback`'s word flags
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
@@ -8029,9 +8066,10 @@ API key or model, or an unknown `--beat`, is an error.
 | `audio_dir` | str | the folder of the MP3s compared |
 | `stt` | object | `{provider, model, language}`: the settings the transcripts are of (`language` `null`: detected) |
 | `max_wer` | float | the threshold beats are flagged above |
+| `flag_thresholds` | object | `{min_probability, doubtful_probability, max_gap}`: the thresholds of the word flags (`lint.rules.unclear_speech`) |
 | `transcribed`, `cached` | int | beats transcribed by this run / read from `build/readback/` |
 | `elapsed` | float | wall time of the command |
-| `summary` | object | `{beats, flagged, words, errors, wer, worst}`: beats compared, ids of the flagged ones, words of the spoken texts and differences over all of them, their ratio, and the worst beats `[{beat, wer}]` (at most 5, with differences, worst first) |
+| `summary` | object | `{beats, flagged, words, errors, wer, worst, unclear, doubtful}`: beats compared, ids of the flagged ones, words of the spoken texts and differences over all of them, their ratio, the worst beats `[{beat, wer}]` (at most 5, with differences, worst first), and the number of unclear and doubtful word flags |
 | `beats` | list | each compared beat, video order (below) |
 | `skipped` | list | `{beat, reason}`: beats not compared (no MP3) |
 | `terms` | list | `{term, entry, beats, heard, consistent, suggestion}`: written terms heard differently, most beats first; `entry` true when the term has a pronunciation entry, `heard` the different hearings, `consistent` true when heard differently in two or more beats |
@@ -8039,8 +8077,18 @@ API key or model, or an unknown `--beat`, is an error.
 Each beat: `scene`, `beat`; `audio` (`ok`, or `stale` when its hash does not match the current
 text and voice); `cached` (the transcript came from the cache); `wer`; `words` (normalised words
 of the spoken text); `errors` = `substitutions` + `deletions` + `insertions`; `flagged`; `text`
-(as written), `spoken` (with the pronunciation applied), `heard` (the transcript); `edits`; and
-`suggestions` (what to do, once each; empty without differences).
+(as written), `spoken` (with the pronunciation applied), `heard` (the transcript); `edits`;
+`suggestions` (what to do, once each; empty without differences); and `flags` (the words to
+check, in time order; below).
+
+Each flag: `scene`, `beat`; `word` (heard, as transcribed; empty for words not heard) and
+`written` (the beat's words concerned; empty for an extra word); `level` (`unclear` or
+`doubtful`); `reasons` (some of `low_probability`, `gap`, `mismatch`: a difference with the
+text); `time` and `end` (seconds in the beat's MP3; for words not heard, the end of the word
+before; `null` without word times); `video_time` (`time` in the video, from the last render;
+`null` without one); `probability` (the lowest of its words; `null` when the provider gives
+none); `gap` (the pause before it, seconds, when it is a reason); `detail` (what is wrong, in
+words); `suggestion`.
 
 Each edit: `kind` (`substitution`, `deletion`: words not heard, `insertion`: extra words heard);
 `expected` and `heard` (the normalised words); `written` (the beat's words concerned, as written;

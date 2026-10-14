@@ -738,6 +738,7 @@ LINT_RULES: tuple[str, ...] = (
     "rushed_animation",
     "talked_over",
     "readback",
+    "unclear_speech",
 )
 RuleName = Literal[
     "off_frame",
@@ -765,6 +766,7 @@ RuleName = Literal[
     "rushed_animation",
     "talked_over",
     "readback",
+    "unclear_speech",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -987,6 +989,23 @@ class ReadbackRule(RuleConfig):
     """Highest acceptable word error rate (differing words / words of the text); also `vidgen readback`'s threshold."""
 
 
+class UnclearSpeechRule(RuleConfig):
+    """``unclear_speech``: words the speech-to-text heard with low confidence, after an unusual pause, or differently from the text (`vidgen lint --readback`; `vidgen readback`'s word flags)."""
+
+    min_probability: float = Field(default=0.5, gt=0, le=1)
+    """A word heard with a probability below this is unclear (the rule's severity)."""
+    doubtful_probability: float = Field(default=0.75, gt=0, le=1)
+    """A word heard with a probability below this (and not below min_probability) is doubtful (info)."""
+    max_gap: PositiveFloat = 0.5
+    """Seconds of silence between two words inside a sentence (not at punctuation or a voice sound) from which the pause is unclear."""
+
+    @model_validator(mode="after")
+    def _ordered(self) -> UnclearSpeechRule:
+        if self.min_probability > self.doubtful_probability:
+            raise ValueError("min_probability must not be larger than doubtful_probability")
+        return self
+
+
 class LintRules(_Strict):
     """Per-rule settings of ``vidgen lint``."""
 
@@ -1040,6 +1059,8 @@ class LintRules(_Strict):
     """Whole words of a line spoken under the next beat's overlap (default: warning)."""
     readback: ReadbackRule = Field(default_factory=ReadbackRule)
     """Audio heard differently from its text, from the transcripts `vidgen readback` stored (default: warning; nothing without them)."""
+    unclear_speech: UnclearSpeechRule = Field(default_factory=UnclearSpeechRule)
+    """Words heard with low confidence or after an unusual pause; runs only with `vidgen lint --readback` (default: warning; info for doubtful words)."""
 
 
 class LintConfig(_Strict):

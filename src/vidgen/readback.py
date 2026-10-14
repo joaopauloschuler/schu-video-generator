@@ -15,6 +15,8 @@ entry for a term the voice gets wrong, regenerating a beat that lost words...).
 - Transcripts are cached in ``build/readback/<key>.json``, keyed by the MP3's content and the
   STT settings (:func:`vidgen.stt.stt_settings`): a beat is transcribed again only when its audio
   or the settings change. The ``readback`` lint rule reads only this cache.
+- :func:`run_readback` also flags the words to listen to (low recogniser confidence, unusual
+  pauses, the differences above), with :mod:`vidgen.speech_flags`.
 
 No manim import.
 """
@@ -30,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from vidgen.config import UnclearSpeechRule
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_text_atomic
 from vidgen.stt import STTProvider, Transcript, stt_settings
@@ -116,7 +119,9 @@ class Edit:
     the substitutions + deletions + insertions; ``at`` when the heard words start in the MP3
     (seconds, ``None`` without word times); ``term`` the written term a fix is about (a
     pronunciation entry's term, a name, acronym or number), ``entry`` true when it has a
-    pronunciation entry; ``suggestion`` what to do."""
+    pronunciation entry; ``suggestion`` what to do. ``heard_indices`` (the heard words of the
+    edit, indices into :meth:`Transcript.word_texts`) and ``written_index`` (its first written
+    word) place it for the word flags; not in the JSON."""
 
     kind: EditKind
     expected: str
@@ -129,6 +134,8 @@ class Edit:
     term: str | None = None
     entry: bool = False
     suggestion: str = ""
+    heard_indices: tuple[int, ...] = ()
+    written_index: int = 0
 
     def to_json(self) -> dict[str, Any]:
         """``{kind, expected, heard, written, said, after, errors, at, term, entry, suggestion}``."""
@@ -158,7 +165,11 @@ class Edit:
 
 @dataclass
 class BeatReadback:
-    """The comparison of one beat's text with what its MP3 says."""
+    """The comparison of one beat's text with what its MP3 says. ``transcript`` is what was
+    heard; ``heard_spoken`` maps each heard word that was compared (index into
+    :meth:`Transcript.word_texts`; voice sounds' words are left out) to the spoken word it was
+    aligned with (``None``: an extra word); ``flags`` the words to check
+    (:mod:`vidgen.speech_flags`, filled by :func:`run_readback`)."""
 
     scene: str
     beat: str
@@ -173,6 +184,9 @@ class BeatReadback:
     cached: bool = False
     flagged: bool = False
     suggestions: list[str] = field(default_factory=list)
+    transcript: Transcript | None = field(default=None, repr=False)
+    heard_spoken: dict[int, int | None] = field(default_factory=dict, repr=False)
+    flags: list[Any] = field(default_factory=list)
 
     @property
     def wer(self) -> float:
@@ -196,15 +210,18 @@ class BeatReadback:
             "heard": self.heard,
             "edits": [e.to_json() for e in self.edits],
             "suggestions": list(self.suggestions),
+            "flags": [f.to_json() for f in self.flags],
         }
 
 
-_EDGE = ".,;:!?\"'()[]{}…“”‘’«»¿¡"
+#: Punctuation stripped from the ends of a written word.
+EDGE_CHARS = ".,;:!?\"'()[]{}…“”‘’«»¿¡"
 _SENTENCE_END = re.compile(r"[.!?…:][\"'”’)\]]*$")
 
 
-def _core(word: str) -> str:
-    core = word.strip(_EDGE)
+def term_core(word: str) -> str:
+    """A written word without its edge punctuation and a possessive ``'s``."""
+    core = word.strip(EDGE_CHARS)
     for suffix in ("'s", "’s"):
         if core.endswith(suffix):
             core = core[: -len(suffix)]
@@ -215,7 +232,7 @@ def hard_term(words: Sequence[str], index: int) -> bool:
     """Whether written word ``index`` is the kind of term a voice may say wrongly and a
     pronunciation entry can fix: one with a digit, two capitals (``GPU``, ``LaMini``), a letter
     outside ASCII (``João``), or a capitalised word inside a sentence (a name)."""
-    core = _core(words[index])
+    core = term_core(words[index])
     if not core or not any(ch.isalnum() for ch in core):
         return False
     if any(ch.isdigit() for ch in core) or sum(ch.isupper() for ch in core) >= 2:
@@ -233,7 +250,7 @@ def _audio_tags(spoken: Spoken, spoken_words: Sequence[str]) -> set[int]:
     return {i for i, word in enumerate(spoken_words) if i not in claimed and re.fullmatch(r"\[[^\[\]]+\]", word)}
 
 
-def _invert_groups(spoken: Spoken, count: int) -> list[int]:
+def written_owner(spoken: Spoken, count: int) -> list[int]:
     """Spoken word index -> the written word it says (the nearest earlier one for a word no
     written word claims)."""
     owner = [-1] * count
@@ -249,7 +266,7 @@ def _invert_groups(spoken: Spoken, count: int) -> list[int]:
     return owner
 
 
-def _entries_by_word(spoken: Spoken) -> dict[int, str]:
+def entries_by_word(spoken: Spoken) -> dict[int, str]:
     """Written word index -> the pronunciation entry replaced in it."""
     out: dict[int, str] = {}
     for w, match in enumerate(re.finditer(r"\S+", spoken.text)):
@@ -259,7 +276,8 @@ def _entries_by_word(spoken: Spoken) -> dict[int, str]:
     return out
 
 
-def _says(spoken: Spoken, term: str) -> str | None:
+def entry_says(spoken: Spoken, term: str) -> str | None:
+    """What the pronunciation entry ``term`` says in ``spoken`` (``None``: not used there)."""
     for r in spoken.replacements:
         if r.term == term:
             return spoken.spoken[r.spoken_start : r.spoken_end]
@@ -307,8 +325,8 @@ def compare_beat(
     if skip_heard:
         said = {t.text for t in ref}
         hyp = [t for t in hyp if t.text not in skip_heard or t.text in said]
-    owner = _invert_groups(spoken, len(spoken_words))
-    entries = _entries_by_word(spoken)
+    owner = written_owner(spoken, len(spoken_words))
+    entries = entries_by_word(spoken)
 
     ops = align([t.text for t in ref], [t.text for t in hyp])
     word_of = _op_words(ops, [owner[t.source] for t in ref])
@@ -344,7 +362,13 @@ def compare_beat(
                 elif op.op == "insert":
                     counts["insertions"] += 1
         k = end
-    return BeatReadback(scene, beat, spoken.text, spoken.spoken, transcript.text, len(ref), sum(counts.values()), counts, edits)
+    heard_spoken: dict[int, int | None] = {}
+    for op in ops:
+        if op.hyp is not None:
+            heard_spoken.setdefault(hyp[op.hyp].source, None if op.ref is None else ref[op.ref].source)
+    result = BeatReadback(scene, beat, spoken.text, spoken.spoken, transcript.text, len(ref), sum(counts.values()), counts, edits)
+    result.transcript, result.heard_spoken = transcript, heard_spoken
+    return result
 
 
 def _edit(
@@ -364,7 +388,7 @@ def _edit(
     expected = [ref[op.ref].text for op in block if op.ref is not None]
     heard = [hyp[op.hyp].text for op in block if op.hyp is not None]
     has_ref = bool(expected)
-    written = " ".join(written_words[w_first : w_last + 1]).strip(_EDGE) if has_ref else ""
+    written = " ".join(written_words[w_first : w_last + 1]).strip(EDGE_CHARS) if has_ref else ""
     # not a difference in speech: words joined or split, or the STT wrote the term as written
     if "".join(expected) == "".join(heard):
         return None
@@ -374,12 +398,14 @@ def _edit(
     kind: EditKind = "insertion" if kinds == {"insert"} else "deletion" if kinds == {"delete"} else "substitution"
     errors = sum(1 for op in block if op.op != "equal")
     said_words = [spoken_words[s] for s in range(len(spoken_words)) if w_first <= owner[s] <= w_last] if has_ref else []
-    said = " ".join(said_words).strip(_EDGE)
+    said = " ".join(said_words).strip(EDGE_CHARS)
     # when the difference is heard: its first differing word heard, else the block's first
     sources = [hyp[op.hyp].source for op in block if op.hyp is not None and op.op != "equal"]
     sources += [hyp[op.hyp].source for op in block if op.hyp is not None and op.op == "equal"]
     at = next((t[0] for t in (times[s] for s in sources if s < len(times)) if t is not None), None)
     edit = Edit(kind, " ".join(expected), " ".join(heard), written, said if said and said != written else None, errors, at)
+    edit.heard_indices = tuple(sorted({hyp[op.hyp].source for op in block if op.hyp is not None}))
+    edit.written_index = w_first
     if not has_ref and written_words:
         edit.after = written_words[w_first]
     # an extra word heard next to a term says nothing about how the term is said
@@ -390,7 +416,7 @@ def _edit(
     else:
         hard = next((w for w in words if hard_term(written_words, w)), None)
         if hard is not None:
-            edit.term = _core(written_words[hard])
+            edit.term = term_core(written_words[hard])
     edit.suggestion = _suggestion(edit, spoken)
     return edit
 
@@ -398,7 +424,7 @@ def _edit(
 def _suggestion(edit: Edit, spoken: Spoken) -> str:
     heard = f'"{edit.heard}"' if edit.heard else "nothing"
     if edit.entry and edit.term is not None:
-        says = _says(spoken, edit.term)
+        says = entry_says(spoken, edit.term)
         return (
             f'the pronunciation entry "{edit.term}" (says "{says}") is heard as {heard}: respell its spoken form '
             "(other letters, syllables split by hyphens), then `vidgen tts`"
@@ -520,7 +546,8 @@ def write_cached(path: Path, digest: str, settings: dict[str, Any], transcript: 
 @dataclass
 class ReadbackResult:
     """What :func:`run_readback` found: compared beats (video order), skipped beats
-    ``(beat, reason)``, how many were transcribed now / read from the cache."""
+    ``(beat, reason)``, how many were transcribed now / read from the cache, and the
+    thresholds of the word flags (``lint.rules.unclear_speech``)."""
 
     settings: dict[str, Any]
     max_wer: float
@@ -528,11 +555,17 @@ class ReadbackResult:
     skipped: list[tuple[str, str]] = field(default_factory=list)
     transcribed: int = 0
     cached: int = 0
+    flag_settings: UnclearSpeechRule = field(default_factory=UnclearSpeechRule)
 
     @property
     def flagged(self) -> list[BeatReadback]:
         """Beats above ``max_wer``, in video order."""
         return [b for b in self.beats if b.flagged]
+
+    @property
+    def flags(self) -> list[Any]:
+        """Every beat's word flags (:class:`vidgen.speech_flags.WordFlag`), in video order."""
+        return [flag for b in self.beats for flag in b.flags]
 
     @property
     def wer(self) -> float:
@@ -581,8 +614,10 @@ def run_readback(
 ) -> ReadbackResult:
     """Transcribe the beats' MP3s (``beat_ids``: only these) that have no cached transcript
     (``force``: all), compare each with its spoken text and flag those above ``max_wer``
-    (default ``lint.rules.readback.max_wer``). ``provider`` replaces the configured one
-    (tests). Progress lines go to ``log``."""
+    (default ``lint.rules.readback.max_wer``), and flag the words to check
+    (:mod:`vidgen.speech_flags`, thresholds ``lint.rules.unclear_speech``). ``provider``
+    replaces the configured one (tests). Progress lines go to ``log``."""
+    from vidgen.speech_flags import beat_flags, beat_video_starts, set_video_times
     from vidgen.stt import get_stt_provider
 
     settings = stt_settings(project)
@@ -590,13 +625,15 @@ def run_readback(
     if not 0 <= threshold < 1:
         raise VidgenError("--max-wer must be at least 0 and below 1")
     chosen, skipped = _beats_with_audio(project, beat_ids)
-    result = ReadbackResult(settings, threshold, skipped=skipped)
+    result = ReadbackResult(settings, threshold, skipped=skipped, flag_settings=project.config.lint.rules.unclear_speech)
     pending: list[tuple[int, str, Path, Path, str]] = []
     transcripts: dict[str, Transcript] = {}
     for scene, beat, mp3, _state in chosen:
         digest = audio_digest(mp3)
         path = cache_path(project, digest, settings)
         cached = None if force else read_cached(path, digest, settings)
+        if cached is not None and settings["provider"] == "faster_whisper" and cached.words and not cached.has_probabilities:
+            cached = None  # stored before word probabilities were kept: transcribed again (local, free)
         if cached is not None:
             transcripts[beat] = cached
             result.cached += 1
@@ -618,7 +655,9 @@ def run_readback(
         compared.cached = beat not in {p[1] for p in pending}
         compared.flagged = compared.wer > threshold
         compared.suggestions = beat_suggestions(compared) if compared.edits else []
+        compared.flags = beat_flags(project, compared, result.flag_settings)
         result.beats.append(compared)
+    set_video_times(result.flags, beat_video_starts(project))
     return result
 
 
@@ -687,4 +726,23 @@ def report_lines(result: ReadbackResult) -> list[str]:
         for t in terms:
             heard = ", ".join(f'"{h}"' for h in t.heard[:3])
             lines.append(f"  {t.term}: {len(t.beats)} beats ({', '.join(t.beats)}), heard {heard} -> {t.suggestion}")
+    lines += flag_lines(result)
+    return lines
+
+
+def flag_lines(result: ReadbackResult) -> list[str]:
+    """The report's word flags: counts with the thresholds, then each flag with its times
+    (in the beat's MP3, and in the video when rendered) and fix."""
+    flags = result.flags
+    t = result.flag_settings
+    unclear = sum(1 for f in flags if f.level == "unclear")
+    lines = [
+        f"words to check: {unclear} unclear, {len(flags) - unclear} doubtful (probability below {t.min_probability:g} / "
+        f"{t.doubtful_probability:g}, pauses over {t.max_gap:g} s inside a sentence, differences)"
+    ]
+    for f in flags:
+        at = "" if f.start is None else f" @ {f.start:.2f}s"
+        video = "" if f.video_time is None else f" (video {f.video_time:.2f}s)"
+        lines.append(f"  {f.level:<8} {f.beat}{at}{video}: {f.detail}")
+        lines.append(f"    fix: {f.suggestion}")
     return lines

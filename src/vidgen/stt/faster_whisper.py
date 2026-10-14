@@ -24,13 +24,19 @@ SAMPLE_RATE = 16000
 
 
 def load_audio(path: Path) -> np.ndarray:
-    """``path`` decoded with PyAV to the 1-D float32 16 kHz mono samples Whisper takes.
+    """``path`` decoded by the ffmpeg executable to the 1-D float32 16 kHz mono samples Whisper
+    takes.
 
     Decoding here instead of handing faster-whisper the path keeps readback working with every
     PyAV version (faster-whisper's own decoder passes an argument PyAV 19 removed)."""
-    from vidgen.sfx import decode_audio
+    from vidgen.render.ffmpeg import decode_mono
 
-    return decode_audio(path, rate=SAMPLE_RATE, mono=True)[:, 0]
+    return decode_mono(path, SAMPLE_RATE)
+
+
+def _probability(word: Any) -> float | None:
+    probability = getattr(word, "probability", None)
+    return None if probability is None else float(probability)
 
 
 def _module() -> Any:
@@ -71,7 +77,7 @@ class FasterWhisperProvider:
         return self._whisper
 
     def transcribe(self, path: Path) -> Transcript:
-        """What is said in ``path``: word timestamps on, no conditioning on earlier text (each
+        """What is said in ``path``: word timestamps (and probabilities) on, no conditioning on earlier text (each
         beat is heard on its own, so a mistake cannot carry over), beam search of 5."""
         model = self._load()
         audio = load_audio(path)
@@ -88,7 +94,7 @@ class FasterWhisperProvider:
         except Exception as exc:  # noqa: BLE001
             raise VidgenError(f"faster-whisper could not transcribe {path.name}: {type(exc).__name__}: {exc}") from None
         words = tuple(
-            TranscriptWord(word.word.strip(), float(word.start), float(word.end))
+            TranscriptWord(word.word.strip(), float(word.start), float(word.end), _probability(word))
             for segment in segments
             for word in (segment.words or ())
             if word.word.strip()

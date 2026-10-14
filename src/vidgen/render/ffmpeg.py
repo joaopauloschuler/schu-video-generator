@@ -1,5 +1,5 @@
 """ffmpeg and media helpers for the render pipeline: discovery, audio padding, concatenation and
-reading stream information with PyAV.
+reading stream information with PyAV; decoding audio to samples for speech to text.
 
 Every ffmpeg call uses a list of arguments (no shell), so paths with spaces, quotes or non-ASCII
 characters are passed through unchanged.
@@ -16,6 +16,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import av
+import numpy as np
 
 from vidgen.errors import VidgenError
 from vidgen.fileio import replace_file
@@ -87,6 +88,23 @@ def run_ffmpeg(ffmpeg: str, args: list[str], what: str) -> None:
     if result.returncode != 0:
         details = result.stderr.strip()[-2000:] or f"exit code {result.returncode}"
         raise VidgenError(f"ffmpeg failed while {what}:\n{details}{version_hint(ffmpeg)}")
+
+
+def decode_mono(path: Path, rate: int) -> np.ndarray:
+    """``path`` decoded by the ``ffmpeg`` executable to 1-D float32 mono samples at ``rate`` Hz
+    (independent of the PyAV version); :class:`VidgenError` naming the file if it cannot be read."""
+    ffmpeg = find_ffmpeg()
+    result = subprocess.run(
+        [ffmpeg, "-hide_banner", "-nostdin", "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", str(rate), "-f", "f32le", "pipe:1"],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        details = result.stderr.decode("utf-8", errors="replace").strip()[-500:] or f"exit code {result.returncode}"
+        raise VidgenError(f"cannot read sound file {path}: {details}")
+    samples = np.frombuffer(result.stdout, dtype="<f4").astype(np.float32)
+    if not samples.size:
+        raise VidgenError(f"cannot read sound file {path}: no audio samples")
+    return samples
 
 
 @dataclass(frozen=True)

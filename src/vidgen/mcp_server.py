@@ -418,7 +418,8 @@ def build_server(root: Path) -> Any:
 
     @tool("Check the layout and timing of every beat-end still (renders what is needed, preview size): text off "
           "frame, overlaps, too small, low contrast, too many words, dead air, narration speed... "
-          "ok=false when a finding is at least fail_on.", writes)
+          "readback=true also transcribes the narration (slow; cached) and flags unclear words and pauses "
+          "(unclear_speech). ok=false when a finding is at least fail_on.", writes)
     async def lint(
         ctx: Context,
         project: Project = ".",
@@ -429,9 +430,20 @@ def build_server(root: Path) -> Any:
         fail_on: Literal["error", "warning", "info", "never"] | None = None,
         jobs: Jobs = 1,
         force: Annotated[bool, Field(description="render again even if current")] = False,
+        readback: Annotated[bool, Field(description="also run unclear_speech: speech to text of the narration (slow)")] = False,
+        confirm_cost: Annotated[bool, Field(description="readback with a paid STT provider: the user accepted the cost")] = False,
     ) -> Any:
-        options = {"variant": variant, "scene": scene, "rule": rule, "final": final, "fail-on": fail_on, "jobs": jobs, "force": force}
-        return answer(await call(ctx, args_of(["lint"], [str(where(project))], options), heavy=True))
+        path = where(project)
+        if (readback or (rule and "unclear_speech" in rule)) and not confirm_cost and stt_provider(path, variant) in PAID_STT:
+            raise ToolError(
+                "lint with readback and this project's stt.provider calls a paid speech-to-text API; call again with "
+                "confirm_cost=true once the user agreed (transcripts are cached: unchanged beats cost nothing)"
+            )
+        options = {
+            "variant": variant, "scene": scene, "rule": rule, "final": final, "fail-on": fail_on, "jobs": jobs, "force": force,
+            "readback": readback,
+        }
+        return answer(await call(ctx, args_of(["lint"], [str(path)], options), heavy=True))
 
     @tool("Contact sheets of the video (one still per beat end, labelled with beat, time and narration): the way "
           "to SEE what you made. Returns the sheets as images (whole-video sheets first) and their paths; "
@@ -575,7 +587,8 @@ def build_server(root: Path) -> Any:
         return answer(await call(ctx, args_of(["imagegen"], [str(where(project))], options), heavy=True))
 
     @tool("Transcribe the narration MP3s (speech to text, cached) and compare them with the beat texts: word error "
-          "rate, misheard words, suggested fixes. With a paid STT provider (stt.provider: elevenlabs) it needs "
+          "rate, misheard words, words heard unclearly or after an odd pause (flags with beat and video times), "
+          "suggested fixes. With a paid STT provider (stt.provider: elevenlabs) it needs "
           "confirm_cost=true.", paid)
     async def readback(
         ctx: Context,

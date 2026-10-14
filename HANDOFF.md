@@ -13201,3 +13201,91 @@ How to test
   test_cartoon_seating test_builtin_sets` (15 passed, 9.2 s).
 - By hand: a scratch project with the five rooms and two characters on their marks: `vidgen lint
   --jobs auto` at preview 0 findings, ~3.5 s per scene; stills checked by eye. Full suite not run.
+
+## Step 141 — Flag badly spoken words
+
+What was built
+- **Word flags** (`src/vidgen/speech_flags.py`, DESIGN §78): from each beat's transcript (word
+  times, and faster-whisper's per-word probability, now kept) and its comparison with the text,
+  `flag_words` lists the words to listen to. Unclear: probability below 0.5, a pause over 0.5 s
+  before a word inside a sentence (not after punctuation in the text or the transcript, not where
+  a voice sound sits), or a difference with the text about a term or covering 2+ words. Doubtful:
+  probability below 0.75, or one ordinary word heard differently with confidence. A difference
+  and the probability / pause of its words are one flag. Each flag: scene, beat, word heard,
+  written word, level, reasons (`low_probability`, `gap`, `mismatch`), time and end in the MP3,
+  time in the video (from the last render: preview, else final; `null` before one), probability,
+  gap, detail and a fix (respell the pronunciation entry; add an entry with a respelling for a
+  name / acronym / number; another voice, speed or emotion, or a respelling, for other words; a
+  comma, speed, emotion or rephrasing for a pause). Thresholds: `lint.rules.unclear_speech`
+  (`min_probability`, `doubtful_probability`, `max_gap`).
+- **`vidgen readback`** always flags: report section "words to check: N unclear, M doubtful
+  (...)" with `fix:` lines; JSON `flag_thresholds`, `summary.unclear` / `doubtful`, each beat's
+  `flags`.
+- **`vidgen lint --readback`**: lint rule `unclear_speech` (default warning, doubtful words info),
+  run only when asked (`--readback`, or `--rule unclear_speech`); it transcribes the selected
+  scenes' beats first as `vidgen readback` does (cache reused, progress on stderr). One finding
+  per flag at the beat's start + the word's time. MCP `lint` got `readback` and `confirm_cost`
+  (asked for a paid `stt.provider`, like MCP `readback`).
+- **Decoding with ffmpeg**: `stt.faster_whisper.load_audio` now decodes with the ffmpeg
+  executable (`render.ffmpeg.decode_mono`, f32le mono 16 kHz) instead of PyAV
+  (`sfx.decode_audio`, unchanged, still used elsewhere).
+- Transcript cache: words `[text, start, end, probability]` (3-element words of older files still
+  load); a cached faster-whisper transcript without probabilities is transcribed again (local,
+  free); ElevenLabs transcripts (no probabilities) are kept. `CACHE_VERSION` stays 1.
+
+Files touched
+- New: `src/vidgen/speech_flags.py`, `tests/test_speech_flags.py`.
+- `src/vidgen/stt/__init__.py` (`TranscriptWord.probability`, `word_probabilities`,
+  `has_probabilities`, JSON), `stt/faster_whisper.py` (probability, ffmpeg decoding),
+  `render/ffmpeg.py` (`decode_mono`), `readback.py` (alignment kept on `BeatReadback` /
+  `Edit`, flags in `run_readback`, `flag_lines`, cache refresh; helpers made public:
+  `term_core`, `written_owner`, `entries_by_word`, `entry_says`, `EDGE_CHARS`), `config.py`
+  (`UnclearSpeechRule`, `LintRules.unclear_speech`, `LINT_RULES` / `RuleName`),
+  `lint/readback_rule.py` (rule), `lint/rules.py` (`SceneContext.speech_flags`), `lint/run.py`
+  (`lint_project(readback=, log=)`, `_speech_flags`), `cli.py` (`lint --readback`, help texts),
+  `mcp_server.py` (`lint` readback / confirm_cost, readback description), `jsonout.py`,
+  `render/fingerprint.py` (`speech_flags.py` not a render input).
+- Docs: `docs/CONFIG.md` (Readback: words to check, cache format, lint; lint option, rule row,
+  defaults block; JSON keys), `DESIGN.md` (§2 layout, §57 decoding, new §78), guide
+  (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: workflow step 10, pronunciation, rule table).
+
+Public interfaces
+- CLI `vidgen lint --readback`; MCP `lint(readback, confirm_cost)`; config
+  `lint.rules.unclear_speech: {severity, min_probability, doubtful_probability, max_gap}`; lint
+  rule / `lint_ignore` name `unclear_speech`; JSON additions above. `vidgen.api` unchanged.
+
+Decisions / deviations
+- Flags are always computed by `vidgen readback` (no `--flags` option): they cost nothing once
+  transcribed.
+- The doubtful level (rule severity info) keeps confident single-word differences and
+  0.5-0.75 probabilities visible without failing `--fail-on warning`.
+- No threshold for long pauses at punctuation: Kokoro's sentence pauses and the emotions' pauses
+  (§72) vary; the brief's "0.7 s gap on '…three. That…'" sits at a full stop and is not flagged.
+
+Real check (Kokoro venv, faster-whisper `small` cached, CPU)
+- A copy of `examples/cartoon-music-box`'s audio (scratchpad `r102/show`, 11 Kokoro beats, voices
+  bf_emma / af_heart / bm_fable / am_fenrir, speeds 0.75-0.8) with `stt: {model: small}`. Under
+  the 1500 MB cap the run was killed (cgroup peak 1.5 GB: the model converted to float32 on CPU);
+  it ran under the brief's 2500 MB Kokoro-venv recipe: 11 beats in ~59 s (first 9.9 s with the
+  model load, then ~4.4-6.1 s each). WER 0.0 %, no beat flagged; words to check: 1 unclear,
+  9 doubtful, 0 pauses:
+  - unclear `yard_b3` @ 1.86 s (video 13.53 s): "fen" (the name Fen) probability 0.44 -> add a
+    pronunciation entry `Fen: <respelling>`; doubtful `yard_b1` @ 2.06 s "Fen" 0.66;
+  - doubtful `reveal_b5` "yard" 0.58 (video 53.06 s), "box" 0.57 (54.98 s); `yard_b4` "and" 0.73;
+  - doubtful first words of beats at 0.00 s: "Then" 0.64, "You" 0.75, "Only" 0.75, "Can" 0.74,
+    "And" 0.66 (Whisper is less sure of a clip's first word).
+
+Known gaps / TODOs
+- First words of a beat often come out doubtful (see above): a lower doubtful threshold for the
+  first word may be worth it after more real checks. No per-word clip to listen to. The
+  `readback` lint rule still reads only the cache. The line the owner heard as "two Russian
+  words" was not available here (not in the scratchpad audio), so it was not re-checked.
+
+How to test
+- `pytest tests/test_speech_flags.py` (18 tests, ~4 s; one starts the MCP server).
+- Ran (not render): `test_speech_flags test_readback test_lint test_timing_lint test_guide
+  test_json_output test_random_cast test_config test_schema` (244 passed, 92 s); `test_docs
+  test_mcp test_cli test_emotions_providers test_tts_openrouter` (123 passed, 30 s); render:
+  `test_lint` (1 passed, 3.9 s). Full suite not run.
+- By hand: `vidgen readback <project>` with `stt: {model: small}` and `pip install -e ".[stt]"`;
+  `vidgen lint <project> --readback --rule unclear_speech`.

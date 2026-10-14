@@ -171,7 +171,7 @@ src/vidgen/
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
-                          # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57),
+                          # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
                           # color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
@@ -203,6 +203,7 @@ src/vidgen/
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
                           # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
+  speech_flags.py         # word flags: low recogniser confidence, pauses inside sentences, differences; fixes (§78; no manim)
   textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
   imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
                           # helpers, warnings), openai.py (OpenAI Images provider), openrouter.py (OpenRouter
@@ -4299,9 +4300,10 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(audio,
     language, beam_size=5, word_timestamps=True, condition_on_previous_text=False,
     vad_filter=False)` (each beat on its own, so one mistake cannot carry over; no VAD so quiet
-    words are not cut). `audio` is the beat decoded by vidgen (`load_audio`: PyAV via
-    `sfx.decode_audio(path, rate=16000, mono=True)`, 1-D float32), not the path: faster-whisper's
-    own decoder passes `metadata_errors`, which PyAV 19 removed. Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
+    words are not cut). `audio` is the beat decoded by vidgen (`load_audio`: the ffmpeg
+    executable via `render.ffmpeg.decode_mono(path, 16000)`, 1-D float32, since Step 141; PyAV
+    before), not the path: faster-whisper's own decoder passes `metadata_errors`, which PyAV 19
+    removed. Each word keeps its `probability` (§78). Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
     that cannot load (download refused, bad folder) → `VidgenError` naming the model.
   - `elevenlabs` (`stt/elevenlabs.py`): `POST /v1/speech-to-text`, multipart (`model_id`
     `scribe_v1`, `language_code` when known, `timestamps_granularity=word`,
@@ -10050,3 +10052,71 @@ outdoor ones by §76's lookup unchanged.
   fractions, so in 9:16 they float or sink (give them another `lift`); no shop bell or classroom
   sounds; `vidgen screenplay` does not know the rooms or the new props' other words (chalkboard,
   cash register, closet).
+
+## 78. Flag badly spoken words (Step 141)
+
+Reference: docs/CONFIG.md "Readback" (words to check) and the `unclear_speech` lint rule. A voice
+can say every word of the text and still sound wrong (the owner heard a Kokoro line as "two
+Russian words"); a word error rate of 0 misses it. The recogniser's own confidence and its word
+times show where.
+
+- **Transcripts** (§57): `TranscriptWord(text, start, end, probability=None)`; faster-whisper's
+  `word.probability` is kept (ElevenLabs gives none). `Transcript.word_probabilities()` (parallel
+  to `word_texts()`), `has_probabilities`; JSON words `[text, start, end(, probability)]`, so
+  older cache files still load. `run_readback` transcribes again a cached faster-whisper
+  transcript with words but no probabilities (local and free; an ElevenLabs one is kept: no
+  probabilities to gain). `CACHE_VERSION` stays 1.
+- **Decoding**: `stt.faster_whisper.load_audio` decodes with the ffmpeg executable
+  (`render.ffmpeg.decode_mono(path, rate)`: `-ac 1 -ar 16000 -f f32le pipe:1`, 1-D float32),
+  not PyAV: no PyAV version can break it (Step 54's PyAV 19 fix decoded with `sfx.decode_audio`,
+  which stays for the other callers).
+- **Alignment kept**: `compare_beat` stores on `BeatReadback` the `transcript` and `heard_spoken`
+  (heard word index → aligned spoken word index, `None` for an extra word; voice sounds' heard
+  words, skipped, are absent), and on each `Edit` its `heard_indices` and `written_index` (not in
+  the JSON). The helpers the flags share are public: `term_core`, `written_owner`,
+  `entries_by_word`, `entry_says`, `EDGE_CHARS`.
+- **Flags** (`speech_flags.py`, no manim): `flag_words(result, spoken, settings, pauses_before)
+  -> [WordFlag]`. Units: each compared heard word alone, or the heard words of one edit together,
+  plus edits with no heard words (deletions). Per unit: lowest probability `< min_probability`
+  → `low_probability` unclear, `< doubtful_probability` → doubtful; a pause before one of its
+  words `> max_gap` that is not expected → `gap` unclear; an edit → `mismatch`, unclear for a term
+  (`Edit.term`) or 2+ errors, else doubtful (one ordinary word heard differently with confidence
+  may be the transcriber's). The level is unclear if any reason is. A pause is **expected** (not
+  measured) after a word ending in punctuation (`, . ; : ! ? … — – - ) ] } " ' ” ’ »`) in the
+  transcript or in the spoken text (also on spoken words between the two heard ones: not heard),
+  before an opening quote / parenthesis / dash, before a written word with a voice sound before
+  it (`VoiceSound.word`), and next to skipped heard words (a laugh's "ha ha"); the first word
+  has none. Times: the unit's first start and last end in the MP3; a deletion at the end of the
+  last heard word before it (0 at the start). `detail`: the edit's `describe()` or the heard word
+  (with `(text "...")` when it differs), `heard with probability P`, `after a G s pause inside
+  the sentence`. `suggestion`: the edit's; else a pronunciation entry → respell its spoken form;
+  a hard term (`hard_term`) → add an entry with a respelling; only a gap → listen, change speed
+  or emotion or rephrase, or write a comma; else listen, change voice / speed / emotion or
+  respell the word. Each ends with `vidgen tts` (the change makes the audio stale).
+- **Settings** `lint.rules.unclear_speech` (`UnclearSpeechRule`: `min_probability` 0.5,
+  `doubtful_probability` 0.75, `max_gap` 0.5 s; ordered). The same thresholds serve
+  `vidgen readback` (`ReadbackResult.flag_settings`).
+- **Video time**: `beat_video_starts(project)` = scene start (`storyboard.scene_starts`, the
+  preview's renders, else the final format's) + the beat's start in its scene timings;
+  `set_video_times` fills `WordFlag.video_time` (`null` before a render; from the last render,
+  so stale if the audio changed since).
+- **`vidgen readback`**: always flags (no option): `BeatReadback.flags`, report section `words
+  to check: N unclear, M doubtful (thresholds)` with `level beat @ t (video t): detail` and `fix:`
+  lines. JSON: `flag_thresholds`, `summary.unclear` / `doubtful`, each beat's `flags` (`scene,
+  beat, word, written, level, reasons, time, end, video_time, probability, gap, detail,
+  suggestion`).
+- **Lint**: rule `unclear_speech` (scope `scene`, default warning, doubtful → `info`; last in
+  `LINT_RULES`, in `lint/readback_rule.py`). It runs only when asked: `lint_project(readback=True)`
+  (`vidgen lint --readback`, MCP `lint` `readback`) or a `rules` list naming it; otherwise it is
+  left out of the rules (`LintResult.rules`). Then, before rendering, `_speech_flags` runs
+  `run_readback` on the selected scenes' beats (cache reused; progress lines through `log`, the
+  CLI's stderr) and `SceneContext.speech_flags` gets each scene's beats' flags. One finding per
+  flag: time = the activity file's beat start + the flag's start; `value` / `limit` = probability
+  and its threshold, or the pause and `max_gap`. MCP `lint` with `readback` (or the rule) and a
+  paid `stt.provider` needs `confirm_cost`, like MCP `readback`.
+- **Checked** on a copy of the `cartoon-music-box` audio (Kokoro, 11 beats; Whisper `small` on
+  CPU in the Kokoro venv: ~5 s a beat, killed at 1.5 GB, ran under 2.5 GB): see HANDOFF Step 141.
+- **Not done**: no flag for a long pause at punctuation (Kokoro's sentence pauses and the
+  emotions' pauses, §72, vary too much for one threshold); the first word of a beat often comes
+  out doubtful (Whisper's start-of-clip uncertainty); no per-word audio clip to listen to; the
+  `readback` lint rule still reads only the cache.

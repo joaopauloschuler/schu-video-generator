@@ -135,8 +135,11 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
    rendering): `<output>_animatic.mp4`, those stills held in time with the narration, with the
    audio and the subtitles, to check the pacing.
 10. **`vidgen readback`** (optional extra `schu-video-generator[stt]`): speech-to-text of the MP3s against
-    your texts; it names misheard terms and suggests a pronunciation entry. Fix, `vidgen tts`,
-    and `vidgen lint` again (its `readback` rule reads the cached transcripts).
+    your texts; it names misheard terms and suggests a pronunciation entry, and lists the
+    **words to check**: heard with low confidence or after an odd pause inside a sentence, with
+    their time in the beat and in the video. Fix, `vidgen tts`, and `vidgen lint` again (its
+    `readback` rule reads the cached transcripts; `vidgen lint --readback` also reports the words
+    to check, rule `unclear_speech`).
 11. **Final**: `vidgen render` (the full-size `format`, 1920x1080 by default) and a last
     `vidgen lint --final`.
 
@@ -1333,7 +1336,9 @@ voices:
 **Pronunciation.** Write the text as it should be **read** on screen and in subtitles; fix
 how it is **said** with `pronunciation:` (applied to the TTS text only). Run
 `vidgen tts --dry-run` and read every `says:` line; after `vidgen tts`, `vidgen readback` finds
-what the voice still gets wrong.
+what the voice still gets wrong, and the words it says unclearly (`unclear`: probability below
+0.5 or a pause over 0.5 s inside a sentence; `doubtful`: below 0.75). For an unclear name or
+term, respell it in `pronunciation:`; for another word, try another voice, speed or `emotion:`.
 
 ```yaml
 pronunciation:
@@ -1682,6 +1687,7 @@ install; `vidgen validate` warns when it is missing.
 | `rushed_animation` | animations squeezed into a short beat | merge two short beats, or reveal fewer things per beat |
 | `talked_over` | an `overlap` hides whole words of the line before, or an `interrupt` cuts them | a shorter `overlap` (none for an interrupt), or `interrupt: true` to cut the line |
 | `readback` | the audio does not say what the text says | add a `pronunciation:` entry, `vidgen tts`, check again |
+| `unclear_speech` | (only with `--readback`) a word heard unclearly or after an odd pause | respell it in `pronunciation:`, or another voice, speed or `emotion:` for the beat; `vidgen tts`, check again |
 
 **Other things that go wrong**
 
