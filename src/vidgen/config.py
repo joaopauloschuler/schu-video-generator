@@ -137,6 +137,30 @@ class VoiceSettings(_Strict):
     """ElevenLabs speaker boost."""
 
 
+#: The built-in emotions (:data:`vidgen.emotions.EMOTIONS`; a test keeps the two equal).
+EmotionName = Literal[
+    "neutral", "happy", "excited", "sad", "angry", "worried", "scared", "surprised", "calm", "doubtful", "sleepy", "whisper", "shout",
+]
+
+
+class EmotionConfig(_Strict):
+    """``emotion:`` as a mapping: a built-in emotion with some of its numbers changed (DESIGN.md §72)."""
+
+    like: EmotionName = "neutral"
+    """The built-in emotion to start from."""
+    speed: float | None = Field(default=None, ge=0.5, le=2.0)
+    """Factor on the voice's speed (0.5-2); default the emotion's."""
+    pitch: float | None = Field(default=None, ge=-3.0, le=3.0)
+    """Pitch shift in semitones (-3 to 3; the length is kept); default the emotion's."""
+    gain: float | None = Field(default=None, ge=-12.0, le=6.0)
+    """Loudness change in dB (-12 to 6; a boost is soft-limited below full scale); default the emotion's."""
+    pauses: float | None = Field(default=None, ge=0.25, le=3.0)
+    """Factor on the pauses at commas and full stops inside the line (0.25-3; Kokoro English); default the emotion's."""
+
+
+#: ``emotion:``: a built-in emotion's name or ``{like, speed, pitch, gain, pauses}``.
+EmotionSetting = Union[EmotionName, EmotionConfig]
+
 #: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
 TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
 #: Keys of ``voice:`` used only by some providers (the others ignore them).
@@ -184,6 +208,8 @@ class VoiceConfig(_Strict):
     """kokoro only: language of the voice: a American English, b British English, e Spanish, f French, h Hindi, i Italian, j Japanese, p Brazilian Portuguese, z Mandarin Chinese; default: the first letter of voice, else from the video's language (English: a)."""
     device: Literal["cpu", "cuda", "auto"] = "cpu"
     """kokoro only: where the model runs: cpu, cuda (an NVIDIA GPU) or auto (a GPU if PyTorch sees one); does not change the audio hash."""
+    emotion: EmotionSetting | None = None
+    """How this voice's beats feel unless a beat says otherwise: a built-in emotion (excited, sad, whisper...) or {like, speed, pitch, gain, pauses}; kokoro only so far; not inherited by voices:."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
@@ -192,7 +218,12 @@ class VoiceConfig(_Strict):
     @model_validator(mode="after")
     def _provider_options(self) -> VoiceConfig:
         # Keys of the other provider are ignored (a variant may switch the provider while the
-        # base config's keys are merged in); only openrouter's required model is checked here.
+        # base config's keys are merged in); only openrouter's required model and a Kokoro
+        # voice blend are checked here.
+        if self.provider == "kokoro" and self.voice is not None:
+            from vidgen.kokoro_voices import blend_weights
+
+            blend_weights(self.voice)
         if self.provider != "openrouter":
             return self
         if self.model is None:
@@ -247,6 +278,8 @@ class VoiceEntry(_Strict):
     """openrouter / kokoro: speaking speed multiplier (0.25-4); default the base voice's."""
     lang: KokoroLang | None = None
     """kokoro: language of this speaker's voice (a, b, e, f, h, i, j, p, z); default the first letter of its voice, else the base voice's."""
+    emotion: EmotionSetting | None = None
+    """How this speaker's beats feel unless a beat says otherwise (excited, sad, whisper... or {like, speed, pitch, gain, pauses}); not inherited from the base voice; kokoro only so far."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None
@@ -1699,6 +1732,8 @@ class BeatConfig(_Strict):
     """Seconds this beat starts before the previous beat's speech ends: both lines are heard (the earlier a little lower) and both mouths move; not on a scene's first beat."""
     interrupt: bool = False
     """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
+    emotion: EmotionSetting | None = None
+    """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; changes speed, pitch, loudness and pauses (kokoro only so far); default the voice's emotion."""
 
     @model_validator(mode="after")
     def _check_interrupt(self) -> BeatConfig:

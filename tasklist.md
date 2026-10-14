@@ -708,8 +708,8 @@ test-suite run.
 - [x] Tests: pointing geometry to targets, planner rules (`tests/test_host_acting.py`: 19 logic + 1 render)
 
 ### Step 135 — Voices with feeling, part 1: Kokoro
-- [ ] A line's manner (`emotion:` beat key; screenplay `(excited)` etc.) maps to prosody for Kokoro: speed, pitch shift (ffmpeg, formant-friendly within small ranges), energy (gain), pauses at commas; optional voice blending (`voice: af_heart+af_bella 0.6`) if Kokoro supports it; in the audio hash; documented emotion table
-- [ ] Tests: the mapping (pure), hash changes, a real Kokoro check in the Kokoro venv (durations / pitch measured)
+- [x] A line's manner (`emotion:` beat key; screenplay `(excited)` etc.) maps to prosody for Kokoro: speed, pitch shift (ffmpeg, formant-friendly within small ranges), energy (gain), pauses at commas; optional voice blending (`voice: af_heart+af_bella 0.6`) if Kokoro supports it; in the audio hash; documented emotion table (`emotion: NAME | {like, speed, pitch, gain, pauses}` on beats, `voice` and `voices.<name>` (not inherited); 13 emotions; pitch ±3 st via `asetrate,aresample,atempo` (length kept), soft-limited gain, pauses edited at punctuation by Kokoro's word timings (English only) with timings and visemes moved; weighted blend written `af_heart+af_bella:0.6` (Kokoro takes a mixed style tensor); hash changes only with a non-neutral emotion; other providers ignore it with a validate warning (Step 136); DESIGN §72)
+- [x] Tests: the mapping (pure), hash changes, a real Kokoro check in the Kokoro venv (durations / pitch measured) (`tests/test_emotions.py`, 22 tests; real check: neutral 5.20 s / 202 Hz / -25.7 LUFS, excited 4.85 / 228 / -22.7, sad 6.16 / 185 / -28.9, whisper 5.69 / 189 / -34.7; HANDOFF)
 
 ### Step 136 — Voices with feeling, part 2: other providers
 - [ ] The same `emotion:` becomes ElevenLabs v3 audio tags or voice settings (stability / style), and OpenRouter `instructions` text for models that take them; mocked; unchanged hashes without `emotion`

@@ -13,7 +13,9 @@ The format (Markdown-like, one element per line or paragraph):
   ``iris_out`` (after another scene), the scene after it with an ``iris_in``;
 - ``WREN: line`` (a name in capitals) is a line of that character, ``PELL (doubtful): line``
   one with a manner: words naming a built-in expression or pose (or one of :data:`MANNERS`)
-  become a ``react`` for the line; a pronoun among those words (``FEN (she): ...``, ``(he,
+  become a ``react`` for the line, and the first word naming an emotion
+  (:data:`vidgen.emotions.EMOTION_WORDS`: ``cross`` -> ``angry``) the beat's ``emotion`` (how
+  the voice says it, also for the narrator); a pronoun among those words (``FEN (she): ...``, ``(he,
   doubtful)``, ``(they)``) states the speaker's voice kind (:data:`PRONOUN_KINDS`; a front matter
   character may say ``voice_kind:`` instead); ``[...]`` inside a line is a stage direction of its speaker
   at that point of the line, except a voice sound marker (``[laugh]``, ``[gasp]``...:
@@ -52,6 +54,7 @@ from vidgen.cartoon.effects import EFFECT_SECONDS
 from vidgen.cartoon.motion import jump_motion_seconds, walk_motion_seconds
 from vidgen.cartoon.poses import EXPRESSIONS, POSES
 from vidgen.cartoon.stage import MARKS, mark_x
+from vidgen.emotions import EMOTION_WORDS, manner_emotion
 from vidgen.errors import VidgenError
 from vidgen.voicesounds import is_voice_sound, take_out_sounds
 
@@ -1176,8 +1179,14 @@ def _add_scene(
         pending.clear()
         if item.manner:
             change, unknown = manner_actions(item.manner)
+            emotion, _ = manner_emotion(item.manner)
+            if emotion is not None and emotion != "neutral":
+                beat["emotion"] = emotion
+            unknown = [word for word in unknown if word not in EMOTION_WORDS]
             if cid and change:
                 beat.setdefault("actions", []).insert(0, {"react": cid, **change})
+            if not cid and emotion is not None and not unknown:
+                change = {}   # the narrator's manner is its emotion: no face to change
             if unknown or (change and not cid):
                 notes.append(f"TODO: ({item.manner}) (line {item.line}): no expression or pose matches "
                               f"{', '.join(unknown) or item.manner}; react / emote / pose take {', '.join(EXPRESSIONS)}; {', '.join(POSES)}")

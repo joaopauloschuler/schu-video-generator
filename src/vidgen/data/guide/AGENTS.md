@@ -976,7 +976,8 @@ BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
 
 Indoors: `set: room: stripes, window at 0.3, door at right; props: sofa against the wall at 0.4,
 picture frame on the wall, rug at 0.5`. `NAME (manner):` turns an expression or pose word (`doubtful`, `glad`, `arms crossed`) into a
-`react`, and a pronoun there states the voice kind (`FEN (she):`, `BRAM (he, doubtful):`,
+`react` and a feeling word (`cross`, `whispering`, `sleepy`) into the beat's `emotion` (how the
+voice says it), and a pronoun there states the voice kind (`FEN (she):`, `BRAM (he, doubtful):`,
 `GUS (they):`; once per character is enough): the generated look and voice then suit it (without
 one, the voice follows the look's kind); a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
 at, point at, wave, nod, shrug and shake head, and effect symbols (`[Pip has an idea]`, `is
@@ -1274,6 +1275,13 @@ expressive, has no context between beats, and is weak on very short lines (give 
 ~8 words) — good for drafts, internal videos and your own experiments; suggest ElevenLabs when
 the person wants the most natural narration. It runs at about real time on a laptop CPU (~0.7x on
 a small cloud CPU): voice a long video once the script is settled.
+
+Give Kokoro lines feeling with `emotion:` on a beat (or as a speaker's default on its voice):
+`happy`, `excited`, `sad`, `angry`, `worried`, `scared`, `surprised`, `calm`, `doubtful`,
+`sleepy`, `whisper`, `shout`, or a row with changes such as `{like: sad, pitch: -2}`, change the
+speed, pitch, loudness and pauses of that line; use it on the lines of a dialogue that carry a feeling, not on every line.
+A screenplay's `PIP (cross):` sets it for you. A weighted blend `voice: af_heart+af_bella:0.6`
+makes an in-between voice. Other providers ignore `emotion` for now (`vidgen validate` warns).
 
 ```yaml
 voice: {provider: kokoro, voice: af_heart}       # speed: 1.0, lang: a, device: cpu (defaults)

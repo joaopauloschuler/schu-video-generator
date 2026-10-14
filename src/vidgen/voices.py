@@ -3,7 +3,7 @@
 A project's base ``voice:`` narrates every beat unless a scene or a beat names another voice
 from ``voices:``. A named voice is the base voice with the keys it gives changed (``settings``
 merge value by value); its ``label`` and ``color`` name the speaker in subtitles and captions
-and are never inherited. The name ``default`` means the base voice (e.g. a beat back to the
+and are never inherited, nor is its ``emotion`` (that speaker's default feeling, DESIGN.md §72). The name ``default`` means the base voice (e.g. a beat back to the
 narrator inside a scene of another voice).
 
 The audio of a beat is hashed with its effective voice (``provider.cache_key`` of that voice),
@@ -31,6 +31,8 @@ DEFAULT_VOICE = "default"
 DISPLAY_FIELDS = frozenset({"label", "color"})
 #: Fields of a voice that say where it runs, not what it sounds like (not compared for audio).
 RUNTIME_FIELDS = frozenset({"device"})
+#: Fields of a voice that belong to that speaker: a named voice does not inherit them.
+SPEAKER_FIELDS = frozenset({"emotion"})
 
 
 def voice_names(config: VideoConfig) -> list[str]:
@@ -106,6 +108,11 @@ def voice_provider_problems(config: VideoConfig) -> list[Problem]:
                 ))
     if base == "kokoro":
         problems += _kokoro_language_problems(config)
+        for name, entry in config.voices.items():
+            try:
+                kokoro_voices.blend_weights(entry.voice or "")
+            except ValueError as exc:
+                problems.append(Problem(f"voices.{name}.voice", str(exc)))
     return problems
 
 
@@ -138,7 +145,7 @@ def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
     entry = config.voices.get(name)
     if entry is None:
         raise VidgenError(unknown_voice_message(name, voice_names(config)))
-    data: dict[str, Any] = config.voice.model_dump(exclude=set(DISPLAY_FIELDS))
+    data: dict[str, Any] = config.voice.model_dump(exclude=set(DISPLAY_FIELDS | SPEAKER_FIELDS))
     given = entry.model_dump(exclude_none=True)
     settings = given.pop("settings", None)
     if data["provider"] == "kokoro" and "voice" in given and "lang" not in given:

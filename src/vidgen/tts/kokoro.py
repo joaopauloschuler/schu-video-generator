@@ -32,7 +32,9 @@ from typing import Any
 
 from vidgen import DIST_NAME, kokoro_voices
 from vidgen.config import VoiceConfig
+from vidgen.emotions import Prosody
 from vidgen.errors import VidgenError
+from vidgen.tts import prosody
 
 #: The model repository and weights file (v1.0, SHA256 496dba11...); both are in each beat's hash.
 REPO_ID = "hexgrad/Kokoro-82M"
@@ -261,11 +263,11 @@ def pcm16(audio: Any) -> bytes:
     return (samples * 32767.0).round().astype("<i2").tobytes()
 
 
-def pcm_to_mp3(pcm: bytes, ffmpeg: str | None = None) -> bytes:
-    """24 kHz mono 16-bit PCM as MP3 (ffmpeg, 128 kb/s)."""
+def pcm_to_mp3(pcm: bytes, ffmpeg: str | None = None, filters: str | None = None) -> bytes:
+    """24 kHz mono 16-bit PCM as MP3 (ffmpeg, 128 kb/s), through the audio ``filters`` when given."""
     from vidgen.tts.openrouter import convert_to_mp3
 
-    return convert_to_mp3(pcm, ["-f", "s16le", "-ar", str(SAMPLE_RATE), "-ac", "1"], ffmpeg, source="Kokoro's audio")
+    return convert_to_mp3(pcm, ["-f", "s16le", "-ar", str(SAMPLE_RATE), "-ac", "1"], ffmpeg, source="Kokoro's audio", filters=filters)
 
 
 def alignment_from_tokens(text: str, timed: Sequence[tuple[str, float, float]]) -> dict[str, list[Any]] | None:
@@ -311,7 +313,8 @@ def alignment_from_tokens(text: str, timed: Sequence[tuple[str, float, float]]) 
 
 
 class KokoroProvider:
-    """Synthesise speech with one Kokoro voice (voice name or blend, language, speed) on this
+    """Synthesise speech with one Kokoro voice (voice name or blend, language, speed) and an
+    ``emotion`` (DESIGN.md §72: speed, pitch, gain, pauses; ``None`` or neutral: none) on this
     computer. Constructing it loads nothing; the first beat loads the shared engine of
     ``voice.device`` (``engine`` replaces it, ``ffmpeg`` the ffmpeg used for MP3: tests).
     Neighbouring beats are not used (each beat is voiced on its own)."""
@@ -324,7 +327,9 @@ class KokoroProvider:
     #: viseme track from them, DESIGN.md §69.4).
     last_phonemes: list[tuple[str, float, float]]
 
-    def __init__(self, voice: VoiceConfig, *, engine: KokoroEngine | None = None, ffmpeg: str | None = None) -> None:
+    def __init__(
+        self, voice: VoiceConfig, *, emotion: Prosody | None = None, engine: KokoroEngine | None = None, ffmpeg: str | None = None
+    ) -> None:
         if voice.provider != "kokoro":
             raise VidgenError("the Kokoro provider needs voice.provider: kokoro")
         name, lang = kokoro_voices.resolve(voice.voice, voice.lang, None)
@@ -332,16 +337,27 @@ class KokoroProvider:
         self.voice_name = str(name)
         self.lang = str(lang)
         self.speed = 1.0 if voice.speed is None else float(voice.speed)
+        self.emotion = None if emotion is None or emotion.is_neutral else emotion
         self._engine = engine
         self._ffmpeg = ffmpeg
+        self._blend: Any = None
         self.last_phonemes = []
 
     # ----- cache keys ------------------------------------------------------------------------
 
     def spec(self) -> dict[str, Any]:
         """What the audio depends on besides the text: provider, model and weights, voice, lang,
-        speed (not the device)."""
-        return {"provider": self.name, "model": REPO_ID, "weights": WEIGHTS, "voice": self.voice_name, "lang": self.lang, "speed": self.speed}
+        speed (not the device), and the emotion with its numbers only when there is one."""
+        spec = {"provider": self.name, "model": REPO_ID, "weights": WEIGHTS, "voice": self.voice_name, "lang": self.lang, "speed": self.speed}
+        if self.emotion is not None:
+            spec["emotion"] = self.emotion.spec()
+        return spec
+
+    @property
+    def spoken_speed(self) -> float:
+        """The speed Kokoro is asked for: the voice's times the emotion's factor (0.25-4)."""
+        factor = self.emotion.speed if self.emotion is not None else 1.0
+        return min(max(self.speed * factor, 0.25), 4.0)
 
     def cache_key(self, text: str) -> str:
         """sha1 of ``json(spec, sorted keys) | text`` (DESIGN.md §68)."""
@@ -372,22 +388,28 @@ class KokoroProvider:
         self, text: str, previous_text: str | None = None, next_text: str | None = None
     ) -> tuple[bytes, dict[str, list[Any]] | None]:
         """MP3 bytes for ``text`` and, for English, when each character is spoken (``None`` for
-        other languages or when the timings cover too little of the text)."""
+        other languages or when the timings cover too little of the text). An emotion's speed
+        goes to Kokoro; its pauses, gain and pitch are applied to the samples afterwards
+        (:mod:`vidgen.tts.prosody`), the timings moved with the pauses."""
+        import numpy as np
+
         engine = self.engine()
-        chunks: list[bytes] = []
+        chunks: list[Any] = []
         timed: list[tuple[str, float, float]] = []
         self.last_phonemes = phonemes = []
         offset = 0.0
         try:
             with quiet_stdout():
                 pipeline = engine.pipeline(self.lang)
-                results = list(pipeline(text, voice=self.voice_name, speed=self.speed, split_pattern=None))
+                results = list(pipeline(text, voice=self.voice_for(pipeline), speed=self.spoken_speed, split_pattern=None))
             for result in results:
                 audio = getattr(result, "audio", None)
                 if audio is None:
                     continue
-                pcm = pcm16(audio)
-                seconds = len(pcm) / 2 / SAMPLE_RATE
+                if hasattr(audio, "detach"):
+                    audio = audio.detach().cpu().numpy()
+                samples = np.asarray(audio, dtype=np.float32).reshape(-1)
+                seconds = len(samples) / SAMPLE_RATE
                 token_phonemes = len(phonemes)
                 for token in getattr(result, "tokens", None) or ():
                     start, end = getattr(token, "start_ts", None), getattr(token, "end_ts", None)
@@ -398,16 +420,40 @@ class KokoroProvider:
                 if len(phonemes) == token_phonemes and getattr(result, "phonemes", None):
                     phonemes.append((str(result.phonemes), offset, offset + seconds))
                 offset += seconds
-                chunks.append(pcm)
+                chunks.append(samples)
         except VidgenError:
             raise
         except Exception as exc:  # noqa: BLE001 - any failure of the library, the download or PyTorch
             raise VidgenError(explain(exc, self.lang, engine.device)) from None
         if not chunks:
             raise VidgenError("Kokoro produced no audio for this text (nothing it could pronounce)")
-        mp3 = pcm_to_mp3(b"".join(chunks), self._ffmpeg)
+        samples = np.concatenate(chunks)
+        filters = None
+        if self.emotion is not None:
+            samples, edits = prosody.scale_pauses(samples, prosody.inner_pauses(timed), self.emotion.pauses, SAMPLE_RATE)
+            if edits:
+                timed = [(word, prosody.shift_time(s, edits), prosody.shift_time(e, edits)) for word, s, e in timed]
+                self.last_phonemes = [(ps, prosody.shift_time(s, edits), prosody.shift_time(e, edits)) for ps, s, e in phonemes]
+            samples = prosody.apply_gain(samples, self.emotion.gain)
+            filters = prosody.pitch_filter(self.emotion.pitch, SAMPLE_RATE)
+        mp3 = pcm_to_mp3(pcm16(samples), self._ffmpeg, filters)
         alignment = alignment_from_tokens(text, timed) if self.lang in kokoro_voices.TIMED_LANGS else None
         return mp3, alignment
+
+    def voice_for(self, pipeline: Any) -> Any:
+        """What the pipeline is given as the voice: the name (Kokoro's own ``,`` blend included),
+        or for a weighted blend (``af_heart+af_bella:0.6``) the voices' style tensors mixed by
+        their weights (``KPipeline.load_single_voice``; Kokoro takes a tensor as the voice)."""
+        weights = kokoro_voices.blend_weights(self.voice_name)
+        if weights is None:
+            return self.voice_name
+        if self._blend is None:
+            packs = [(pipeline.load_single_voice(name), weight) for name, weight in weights]
+            mixed = packs[0][0] * packs[0][1]
+            for pack, weight in packs[1:]:
+                mixed = mixed + pack * weight
+            self._blend = mixed
+        return self._blend
 
 
 # ----- vidgen validate ----------------------------------------------------------------------------

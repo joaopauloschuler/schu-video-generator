@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, parse_config
+from vidgen.emotions import Prosody, prosody
 from vidgen.errors import Problem, VidgenError
 from vidgen.includes import ConfigSource, Origin, after_variant, attributed, attributed_error, expand_sets, project_relative, read_project_config
 from vidgen.kokoro_voices import voice_parts
@@ -289,8 +290,8 @@ class Project:
     def has_own_audio(self) -> bool:
         """True for a variant whose audio would differ from the base config's: its effective
         ``voice`` differs, or a beat id present in both configs has a different spoken text (its
-        text, or the pronunciation of a term in it) or a different effective voice (``voices:``;
-        a speaker's ``label`` / ``color`` do not count)."""
+        text, or the pronunciation of a term in it), a different effective voice (``voices:``;
+        a speaker's ``label`` / ``color`` do not count) or a different emotion."""
         if self.variant is None:
             return False
         if self._own_audio is None:
@@ -306,6 +307,8 @@ class Project:
             if beat_id not in base_spoken:
                 continue
             if base_spoken[beat_id] != spoken or audio_fields(base.beat_voice(beat_id)) != audio_fields(self.beat_voice(beat_id)):
+                return True
+            if base.beat_emotion(beat_id) != self.beat_emotion(beat_id):
                 return True
         return False
 
@@ -328,6 +331,12 @@ class Project:
         if beat_id not in names:
             raise VidgenError(f"unknown beat '{beat_id}'")
         return self.voice(names[beat_id])
+
+    def beat_emotion(self, beat_id: str) -> Prosody | None:
+        """How a beat's line feels (DESIGN.md §72): its ``emotion``, else its voice's; ``None``
+        when neither is set or the emotion changes nothing (``neutral``)."""
+        beat = self.beat(beat_id)
+        return prosody(beat.emotion if beat.emotion is not None else self.beat_voice(beat_id).emotion)
 
     def speaker_tags(self, mode: str | None = None) -> dict[str, str]:
         """Beat id -> speaker label shown before it (where the speaker changes) when ``mode``

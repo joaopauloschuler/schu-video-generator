@@ -262,14 +262,15 @@ def test_screenplay_project_builds_stage_scenes() -> None:
     narrator, wren, ash = porch["beats"]
     assert "voice" not in narrator and wren["voice"] == "wren_voice"
     assert wren["actions"] == [{"react": "wren", "expression": "happy", "pose": "waving"}]
+    assert (wren["emotion"], ash["emotion"]) == ("excited", "whisper") and "emotion" not in narrator   # Step 135
     walk, look, shrug = ash["actions"]                                                            # (whispering): no react
     assert walk["walk_to"] == "old_ash" and "at" not in walk and look["at"] > 0                     # the look waits for the walk
     assert shrug == {"gesture": "old_ash", "to": "shrug", "at": shrug["at"]} and 0.4 < shrug["at"] < 0.7
     todos = draft.beat_todos[0][2]
-    assert any("The wind howls" in t for t in todos) and any("whispering" in t for t in todos)
+    assert any("The wind howls" in t for t in todos) and not any("whispering" in t for t in todos)   # an emotion now
     assert porch_2["beats"][0]["actions"][0] == {"exit": "wren", "to": "left"}
     assert porch_2["beats"][0]["actions"][1]["jump"] == "old_ash" and porch_2["beats"][0]["actions"][1]["at"] >= 0.6   # after the last line
-    assert draft.todo_count == 3                                                                   # bench, wind, whispering
+    assert draft.todo_count == 2                                                                   # bench, wind
 
 
 def test_a_scene_without_lines_is_an_error() -> None:

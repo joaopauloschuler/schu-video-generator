@@ -19,7 +19,7 @@ from vidgen.errors import VidgenError
 from vidgen.imagegen import PriceQuote
 from vidgen.project import Project
 from vidgen.speech import read_alignment, write_alignment
-from vidgen.tts import TTSProvider, beat_providers
+from vidgen.tts import EMOTION_PROVIDERS, TTSProvider, beat_providers
 from vidgen.tts.cache import atomic_write, hash_path, is_up_to_date, mp3_path, orphaned_audio
 from vidgen.voices import DEFAULT_VOICE, unknown_voice_message, voice_names
 
@@ -311,6 +311,9 @@ def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> Non
             note += f", ~{_money(cost)}" if cost is not None else ", price unknown"
         if named:
             note += f", voice {plan.voice_of(beat)}"
+        emotion = project.beat_emotion(beat.id) if plan.engine(beat).provider in EMOTION_PROVIDERS else None
+        if emotion is not None:
+            note += f", {emotion.name}"
         out(f"would generate {beat.id}.mp3 ({note})")
         if plan.say(beat) != beat.text:
             out(f"    says: {plan.say(beat)}")

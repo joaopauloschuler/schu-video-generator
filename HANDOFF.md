@@ -12720,3 +12720,100 @@ How to test
   test_cartoon_reframe test_host test_charts test_builtin_scenes test_actions_coverage
   test_registry` (379 passed, 92 s); render `test_host test_cartoon_effects test_actions` (9
   passed, 8 s). The full suite was not run.
+
+## Step 135 — Voices with feeling, part 1: Kokoro
+
+What was built
+- **`emotion:`** on a beat, on `voice:` and on `voices.<name>` (a speaker's default; not inherited
+  by named voices, `voices.SPEAKER_FIELDS`): a built-in name or `{like, speed, pitch, gain,
+  pauses}`. 13 emotions in `emotions.EMOTIONS` (neutral, happy, excited, sad, angry, worried,
+  scared, surprised, calm, doubtful, sleepy, whisper, shout), each a `Prosody` (speed factor,
+  pitch in semitones within ±3, gain in dB, pause factor); the table is in CONFIG.md and DESIGN §72.
+  `Project.beat_emotion(beat_id)`: the beat's, else its voice's; `None` when unset or neutral.
+- **Kokoro applies it** (`KokoroProvider(voice, emotion=...)`): speed = voice speed × factor
+  (Kokoro's own control; its timings follow); then `tts/prosody.py`: pauses at `, ; : — . ! ? …`
+  followed by a word edited in their middle using Kokoro's punctuation token times (above 1:
+  `(f − 1) × max(pause, 0.2 s comma / 0.4 s sentence)` of silence inserted, because Kokoro's comma
+  pause is ~0.05 s; below 1: the middle cut), every word and phoneme time moved (`shift_time`), so
+  `.align.json`, captions and the viseme track follow the edited audio; gain with a tanh soft
+  limiter for boosts; pitch via ffmpeg `asetrate,aresample,atempo` in the MP3 encode (length kept).
+  Pauses need word timings: English only.
+- **Weighted voice blends**: `voice: af_heart+af_bella:0.6` (0.4 / 0.6; unweighted parts share the
+  rest; all weighted: in proportion). Kokoro 0.9.4 supports it: `KPipeline.__call__` accepts a
+  `FloatTensor` voice, so `KokoroProvider.voice_for` mixes `load_single_voice` packs by weight once
+  per provider. Malformed blends are config errors (`VoiceConfig`, `voice_provider_problems`).
+  The `,` blend (Kokoro's equal average) is unchanged.
+- **Hash**: `spec()["emotion"] = {name, speed, pitch, gain, pauses}` only with a non-neutral
+  emotion; pinned Kokoro, ElevenLabs and OpenRouter keys unchanged (tested). `beat_providers`
+  makes one provider per (voice, emotion) for `tts.EMOTION_PROVIDERS` (kokoro) only; other
+  providers keep one provider per voice, ignore the emotion and `vidgen validate` warns
+  (`tts.emotion_warnings`). A variant whose beat emotions differ gets its own audio folder.
+- **Screenplays**: manner words also set the beat's `emotion` (`emotions.EMOTION_WORDS`:
+  `cross` → angry, `whispering` → whisper...; also for the narrator); emotion words are no longer
+  `# TODO:` manners. `vidgen tts --dry-run` names a beat's emotion.
+
+Real check (Kokoro venv, Python 3.12, kokoro 0.9.4, CPU, 2500 MB cgroup, run alone; script
+`scratchpad/s135/real_check.py`, audio left in `scratchpad/s135/`, not committed). Line: "Not a
+cloud in the sky, Pip. I checked, and the forecast said sunshine all day." (`af_heart`; median
+pitch by autocorrelation, BS.1770 loudness; pauses from the stored word timings):
+
+| emotion | duration | pitch | loudness | comma pause | sentence pause |
+|---|---|---|---|---|---|
+| neutral | 5.20 s | 202 Hz | -25.7 LUFS | 0.05 s | 0.12 s |
+| excited | 4.85 s | 228 Hz (+2.0 st) | -22.7 | 0.03 s | 0.09 s |
+| sad | 6.16 s | 185 Hz (-1.5 st) | -28.9 | 0.15 s | 0.35 s |
+| whisper | 5.69 s | 189 Hz | -34.7 | 0.09 s | 0.23 s |
+| shout | 5.00 s | 232 Hz (+2.4 st) | -20.7 | 0.04 s | 0.10 s |
+| sleepy | 7.01 s | 178 Hz | -30.2 | 0.19 s | 0.40 s |
+| neutral, `af_heart+af_bella:0.5` | 5.50 s | 196 Hz | -25.3 | 0.05 s | 0.12 s |
+
+Model load 142 s on the first (cold) run, 11 s on the second; then 3-4 s per line. Kokoro's peaks
+were 0.3-0.6, so the soft limiter did not act. A first version scaled only Kokoro's own pause
+(sad: comma 0.05 → 0.07 s, inaudible), hence the natural-pause floor.
+
+Files
+- New: `src/vidgen/emotions.py`, `src/vidgen/tts/prosody.py`, `tests/test_emotions.py`.
+- Changed: `config.py` (`EmotionName`, `EmotionConfig`, `EmotionSetting`, `emotion` on
+  `VoiceConfig` / `VoiceEntry` / `BeatConfig`, Kokoro blend check), `kokoro_voices.py`
+  (`blend_weights`, `voice_parts` strips weights), `voices.py` (`SPEAKER_FIELDS`, blend problems),
+  `project.py` (`beat_emotion`, `has_own_audio`), `tts/__init__.py` (`get_provider(voice,
+  emotion)`, `beat_providers`, `EMOTION_PROVIDERS`, `emotion_warnings`), `tts/kokoro.py`,
+  `tts/openrouter.py` (`convert_to_mp3(..., filters=)`), `tts/run.py` (dry run), `screenplay.py`;
+  tests `test_screenplay.py` (whispering is an emotion now: 2 TODOs, not 3), `test_docs.py`
+  (`EmotionConfig`). Docs: CONFIG.md (new "Voices with feeling (`emotion`)", voice block, beats,
+  `voices` table, Kokoro blend and hash), DESIGN.md (tree, §72), guide + `AGENTS.md` copy.
+
+Public interfaces
+- Config: `emotion` (beats, `voice`, `voices.<name>`), `voice: a+b:w` blends. `vidgen.api`
+  unchanged. Internal: `vidgen.emotions.*`, `vidgen.tts.prosody.*`, `Project.beat_emotion`,
+  `tts.get_provider(voice, emotion=None)`, `KokoroProvider(emotion=)` / `spoken_speed` /
+  `voice_for`, `kokoro_voices.blend_weights`, `pcm_to_mp3(..., filters)`.
+
+Decisions / deviations
+- Blend syntax `af_heart+af_bella:0.6` (the brief's form; the task list wrote `af_heart+af_bella
+  0.6`): one string, so the hash, `voices:` and `lang_of_voice` need nothing new.
+- Pitch is the simple resample + tempo shift (formants move with it); small ranges (±3 st, the
+  table uses ≤ 2.5) keep it natural.
+- Pauses are edited by word timings rather than by splitting the text and voicing pieces: splitting
+  at commas would make Kokoro end each piece with a falling tone. Consequence: English only.
+- `emotion` on a named voice is not inherited from the base voice (a narrator's `calm` should not
+  make every character calm).
+- The Rain Check example was not edited (no `emotion:` added to its beats).
+
+Known gaps / TODOs
+- Step 136: ElevenLabs / OpenRouter mappings (`EMOTION_PROVIDERS`, `emotion_warnings` then change).
+- No breathy whisper; no pauses outside English; one emotion per beat; `tts --json` does not list
+  the emotion.
+
+How to test
+- `pytest tests/test_emotions.py` (22 tests, ~3 s; one tiny ffmpeg call for the pitch).
+- Run here (non-render): `test_emotions test_tts_kokoro test_voices test_tts test_tts_openrouter
+  test_screenplay test_docs test_guide` (267 passed, 2 skipped, 15 s; 1 guide failure — a
+  backticked emotion read as a sound name — fixed and re-run in the next group); `test_guide test_config
+  test_schema test_cartoon_visemes test_voice_sounds test_project test_includes test_readback
+  test_pronunciation test_cartoon_expressions test_json_output test_mcp` (374 passed, 130 s);
+  `test_cartoon_effects test_plan test_cartoon_furniture test_random_cast test_cartoon_outfits
+  test_phase_l_review test_cartoon_cards test_cartoon_directing test_cartoon_animals
+  test_phase_k_review test_phase_i_review` (328 passed, 96 s). No render tests (nothing rendered
+  changed). The full suite was not run.
+- Real Kokoro: `bash scratchpad/s135/run_check.sh` (sets the cgroup and `HF_HUB_OFFLINE`).

@@ -197,7 +197,9 @@ src/vidgen/
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
   tts/kokoro.py           # local Kokoro-82M provider (extra schu-video-generator[kokoro]): engine, MP3, timings (§68)
-  kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, validate warnings (§68)
+  kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, weighted blends, validate warnings (§68, §72)
+  tts/prosody.py          # an emotion applied to speech: pauses by word timings, soft-limited gain, pitch filter (§72)
+  emotions.py             # emotion: the table (speed, pitch, gain, pauses), manner words (§72; no manim)
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
                           # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
@@ -9739,3 +9741,57 @@ Reference: docs/CONFIG.md "Pointing, reacting and moving (host actions)".
   their written highlights); the host does not dodge a pointer line crossing other content; a
   walk across passes in front of the content mid-beat (by design: it lasts about two seconds);
   a `host_enter` on a scene with its own entrance animation starts after that animation.
+
+## 72. Voices with feeling, part 1: Kokoro (Step 135)
+
+Reference: docs/CONFIG.md "Voices with feeling (`emotion`)". The owner found Kokoro's lines flat
+(Juno in "Rain Check"); `emotion:` gives a line a feeling without a new model.
+
+- **Config**: `emotion: NAME | {like, speed, pitch, gain, pauses}` (`EmotionSetting`;
+  `EmotionName` literal = `emotions.EMOTION_NAMES`, a test keeps them equal; `EmotionConfig`
+  ranges speed 0.5-2, pitch -3..3 semitones, gain -12..6 dB, pauses 0.25-3) on `BeatConfig`,
+  `VoiceConfig` and `VoiceEntry`. `voices.SPEAKER_FIELDS = {"emotion"}`: `resolve_voice` does not
+  pass the base voice's emotion to a named voice (it names that speaker, like `label`).
+  `Project.beat_emotion(beat_id) -> Prosody | None`: the beat's, else its effective voice's;
+  `None` when unset or neutral. `has_own_audio` also compares the beats' emotions.
+- **Table** (`emotions.py`, no manim): `Prosody(name, speed, pitch, gain, pauses)`, frozen and
+  hashable; `EMOTIONS` 13 rows (neutral, happy, excited, sad, angry, worried, scared, surprised,
+  calm, doubtful, sleepy, whisper, shout); `prosody(setting)`; `EMOTION_WORDS` (manner words →
+  rows) and `manner_emotion(manner)`.
+- **Providers**: `get_provider(voice, emotion=None)`; `beat_providers` makes one provider per
+  (voice name, emotion) for providers in `tts.EMOTION_PROVIDERS` (`kokoro`), one per voice as
+  before for the others (their hashes and instances unchanged). `tts.emotion_warnings` (in
+  `tts_warnings`): beats with an emotion whose provider ignores it. The dry run names the emotion.
+- **Kokoro** (`KokoroProvider(voice, emotion=...)`): `spec()` gains `emotion: {name, speed,
+  pitch, gain, pauses}` only when there is a non-neutral emotion (so every existing hash, the
+  pinned ones included, is unchanged). `spoken_speed` = voice speed × emotion speed (clamped to
+  0.25-4) is passed to Kokoro, whose word timings already reflect it. After synthesis
+  (`tts/prosody.py`, numpy): `inner_pauses(timed)` (punctuation tokens `, ; : — – . ! ? …` with
+  a word after them; ≥ 0.02 s), `scale_pauses` (above 1: silence inserted at the pause's middle,
+  `(pauses − 1) × max(pause, natural_pause)` with `CLAUSE_PAUSE` 0.2 s / `SENTENCE_PAUSE` 0.4 s,
+  because Kokoro's own comma pause is ~0.05 s and scaling it alone is inaudible; below 1: the
+  middle `(1 − pauses) × pause` cut) returning edits, `shift_time` moving every token time and
+  every phoneme time (`last_phonemes`, so the viseme track follows), `apply_gain` (a tanh soft
+  limiter above 0.7 of full scale towards 0.98 for boosts), then `pitch_filter` →
+  `asetrate=r·2^(st/12),aresample=r,atempo=1/…` passed to ffmpeg with the MP3 encode
+  (`convert_to_mp3(..., filters=)`, `pcm_to_mp3(..., filters)`): the length is kept, so nothing
+  else moves. Pauses need the word timings: English (`a` / `b`) only.
+- **Weighted blends**: `kokoro_voices.blend_weights("af_heart+af_bella:0.6")` → `[(af_heart, 0.4),
+  (af_bella, 0.6)]` (unweighted parts share the rest; all weighted: normalised; malformed: a
+  `ValueError`, a config error from `VoiceConfig` and `voice_provider_problems`).
+  `KokoroProvider.voice_for(pipeline)` mixes `pipeline.load_single_voice(name)` packs by weight
+  once and passes the tensor as the voice (kokoro 0.9.4's `KPipeline.__call__` /
+  `load_voice` accept a `FloatTensor`); `voice_parts` strips the weights, so language and
+  validate warnings work as for `,` blends. The voice string is in the hash as written.
+- **Screenplays**: `screenplay_project` sets a line's `emotion` from `manner_emotion(manner)`
+  (not `neutral`); emotion words are no longer reported as `# TODO:` manners, and a narrator's
+  manner that is only an emotion is not either.
+- **Measured** (real Kokoro 0.9.4, `af_heart`, CPU, the 15-word line "Not a cloud in the sky, Pip.
+  I checked, and the forecast said sunshine all day."; median pitch by autocorrelation, BS.1770
+  loudness): neutral 5.20 s / 202 Hz / -25.7 LUFS / comma pause 0.05 s / sentence pause 0.12 s;
+  excited 4.85 / 228 / -22.7 / 0.03 / 0.09; sad 6.16 / 185 / -28.9 / 0.15 / 0.35; whisper 5.69 /
+  189 / -34.7 / 0.09 / 0.23; shout 5.00 / 232 / -20.7 / 0.04 / 0.10; sleepy 7.01 / 178 / -30.2 /
+  0.19 / 0.40; `af_heart+af_bella:0.5` 5.50 / 196 / -25.3. Kokoro's peaks were 0.3-0.6, so the
+  limiter did not act. 3-4 s per line after the model load.
+- **Not done**: other providers (Step 136); a real whisper (no breathiness: a quieter, slower,
+  lower voice); pauses outside English; emotion inside a line (one emotion per beat).

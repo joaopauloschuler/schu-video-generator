@@ -14,10 +14,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 from vidgen.config import TTS_PROVIDERS, VoiceConfig
+from vidgen.emotions import Prosody
 from vidgen.errors import VidgenError
 
 if TYPE_CHECKING:
     from vidgen.project import Project
+
+#: Providers that speak a beat's ``emotion`` (DESIGN.md §72); the others ignore it.
+EMOTION_PROVIDERS: tuple[str, ...] = ("kokoro",)
 
 
 class TTSProvider(Protocol):
@@ -45,9 +49,10 @@ class TTSProvider(Protocol):
         """Audio bytes for ``text``; neighbours are context only. Raises ``VidgenError``."""
 
 
-def get_provider(voice: VoiceConfig) -> TTSProvider:
+def get_provider(voice: VoiceConfig, emotion: Prosody | None = None) -> TTSProvider:
     """The provider for ``voice.provider`` (ElevenLabs, OpenRouter: DESIGN.md §66, or Kokoro on
-    this computer: §68). Constructing one loads no model and needs no key."""
+    this computer: §68) speaking with ``emotion`` (§72; only Kokoro uses it so far). Constructing
+    one loads no model and needs no key."""
     if voice.provider == "elevenlabs":
         from vidgen.tts.elevenlabs import ElevenLabsProvider
 
@@ -59,7 +64,7 @@ def get_provider(voice: VoiceConfig) -> TTSProvider:
     if voice.provider == "kokoro":
         from vidgen.tts.kokoro import KokoroProvider
 
-        return KokoroProvider(voice)
+        return KokoroProvider(voice, emotion=emotion)
     raise VidgenError(f"unknown voice provider {voice.provider!r}; available: {', '.join(TTS_PROVIDERS)}")
 
 
@@ -81,18 +86,33 @@ def tts_warnings(project: Project) -> list[str]:
             if said not in seen:
                 seen.add(said)
                 out.append(warning)
-    return out + kokoro.install_warnings(project.voice(n) for n in names)
+    return out + kokoro.install_warnings(project.voice(n) for n in names) + emotion_warnings(project)
+
+
+def emotion_warnings(project: Project) -> list[str]:
+    """A warning naming the beats whose ``emotion`` their voice's provider does not speak yet."""
+    ignored = [
+        beat_id for beat_id, name in project.voice_names().items()
+        if project.voice(name).provider not in EMOTION_PROVIDERS and project.beat_emotion(beat_id) is not None
+    ]
+    if not ignored:
+        return []
+    shown = ", ".join(ignored[:5]) + (f" and {len(ignored) - 5} more" if len(ignored) > 5 else "")
+    providers = ", ".join(EMOTION_PROVIDERS)
+    return [f"emotion: only {providers} voices speak an emotion so far; the audio of {shown} ignores it"]
 
 
 def beat_providers(project: Project) -> dict[str, TTSProvider]:
-    """Beat id -> the provider of the beat's effective voice (DESIGN.md §46; one provider per
-    voice), in video order."""
-    by_voice: dict[str | None, TTSProvider] = {}
+    """Beat id -> the provider of the beat's effective voice and emotion (DESIGN.md §46, §72; one
+    provider per voice and emotion), in video order."""
+    made: dict[tuple[str | None, Prosody | None], TTSProvider] = {}
     out: dict[str, TTSProvider] = {}
     for beat_id, name in project.voice_names().items():
-        if name not in by_voice:
-            by_voice[name] = get_provider(project.voice(name))
-        out[beat_id] = by_voice[name]
+        voice = project.voice(name)
+        key = (name, project.beat_emotion(beat_id) if voice.provider in EMOTION_PROVIDERS else None)
+        if key not in made:
+            made[key] = get_provider(voice, key[1])
+        out[beat_id] = made[key]
     return out
 
 

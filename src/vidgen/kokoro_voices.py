@@ -54,8 +54,42 @@ def describe_langs() -> str:
 
 
 def voice_parts(voice: str) -> list[str]:
-    """The voices of a blend (``af_bella,af_heart``: Kokoro averages them), stripped."""
-    return [part.strip() for part in voice.split(",") if part.strip()]
+    """The voices of a blend (``af_bella,af_heart``: Kokoro averages them; ``af_heart+af_bella:0.6``:
+    weighted, :func:`blend_weights`), stripped, without weights."""
+    return [_split_weight(part)[0] for part in re.split(r"[,+]", voice) if part.strip()]
+
+
+def _split_weight(part: str) -> tuple[str, float | None]:
+    """``af_bella:0.6`` -> ``("af_bella", 0.6)``; a part without a number after its last colon
+    (``C:\\voices\\mine.pt``) has no weight."""
+    name, colon, weight = part.strip().rpartition(":")
+    if colon:
+        try:
+            return name.strip(), float(weight)
+        except ValueError:
+            pass
+    return part.strip(), None
+
+
+def blend_weights(voice: str) -> list[tuple[str, float]] | None:
+    """The voices and weights (summing to 1) of a weighted blend written with ``+``:
+    ``af_heart+af_bella:0.6`` is 0.4 af_heart and 0.6 af_bella (voices without a weight share what
+    the others leave; all weighted: in proportion); ``None`` for a voice without ``+``. Raises
+    :class:`ValueError` for a malformed blend."""
+    if "+" not in voice:
+        return None
+    parts = [_split_weight(part) for part in voice.split("+")]
+    if len(parts) < 2 or any(not name or "," in name for name, _ in parts):
+        raise ValueError(f"voice blend {voice!r}: write two or more voices joined by +, each with an optional :weight (af_heart+af_bella:0.6)")
+    if any(w is not None and w <= 0 for _, w in parts):
+        raise ValueError(f"voice blend {voice!r}: weights must be above 0")
+    given = sum(w for _, w in parts if w is not None)
+    free = [name for name, w in parts if w is None]
+    if free and given >= 1:
+        raise ValueError(f"voice blend {voice!r}: the weights add up to {given:g}, leaving nothing for {', '.join(free)}")
+    share = (1.0 - given) / len(free) if free else 0.0
+    total = given + share * len(free)
+    return [(name, round((share if w is None else w) / total, 6)) for name, w in parts]
 
 
 def lang_of_voice(voice: str | None) -> str | None:

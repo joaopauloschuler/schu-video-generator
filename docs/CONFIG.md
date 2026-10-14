@@ -138,7 +138,10 @@ beat of a `stage`. A beat's `shot` (default none) frames characters of a `stage`
 `closeup kit`, `two_shot`, `over_shoulder kit pip`, ... or `{kind, of, move, run_time}`, see
 [shots](#shots-shot). A beat's `overlap` (seconds, default none) starts it before the line of
 the beat before has ended, and `interrupt: true` (default `false`) cuts that line off, see
-[overlapping lines](#overlapping-lines-overlap-interrupt); not on a scene's first beat.
+[overlapping lines](#overlapping-lines-overlap-interrupt); not on a scene's first beat. A beat's
+`emotion` (default: its voice's, else none) says how the line feels — `excited`, `sad`,
+`whisper`... — and changes its speed, pitch, loudness and pauses, see [voices with
+feeling](#voices-with-feeling-emotion).
 
 ## Chapters
 
@@ -794,6 +797,7 @@ voice:
   speed: null                       # openrouter / kokoro: speed multiplier 0.25-4 (openrouter: not sent when null; kokoro: 1)
   lang: null                        # kokoro: language letter (a, b, e, f, h, i, j, p, z); null: from voice / language
   device: cpu                       # kokoro: cpu, cuda or auto
+  emotion: null                     # how this voice's beats feel (excited, sad, whisper...); kokoro so far
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
@@ -924,7 +928,7 @@ voice:
 
 | key | default | |
 |---|---|---|
-| `voice` | the language's default (below) | a voice name; a blend `af_bella,af_heart` averages voices (Kokoro's own feature) |
+| `voice` | the language's default (below) | a voice name; a blend `af_bella,af_heart` averages voices (Kokoro's own feature); `af_heart+af_bella:0.6` mixes them by weight (0.4 af_heart, 0.6 af_bella; voices without a weight share what the others leave; all weighted: in proportion) |
 | `speed` | 1 | speaking speed multiplier |
 | `lang` | the first letter of `voice`, else from the video's `language` | Kokoro's language letter; it decides the pronunciation rules |
 | `device` | `cpu` | `cuda`: an NVIDIA GPU (needs a CUDA build of PyTorch); `auto`: the GPU if PyTorch sees one. Not in the audio hash |
@@ -982,7 +986,8 @@ within each MP3's speech (`timestamps: true` there is a `vidgen validate` warnin
 {provider: kokoro}}}`, own `audio/<variant>/`). Audio goes to `audio/<beat_id>.mp3` (Kokoro's 24
 kHz samples encoded with ffmpeg, 128 kb/s) + `.hash`; the hash covers the spoken text
 (pronunciation applied) and `provider`, the model (`hexgrad/Kokoro-82M`, `kokoro-v1_0.pth`),
-`voice`, `lang` and `speed` (not `device`): changing any of them re-voices that voice's beats.
+`voice`, `lang` and `speed` (not `device`), and a beat's [emotion](#voices-with-feeling-emotion)
+when it has one: changing any of them re-voices that voice's beats.
 No neighbouring-beat context. Readback and the narration-speed lint work on its MP3s as on any.
 
 **Cost.** None: the dry run says `cost: free (local): Kokoro-82M runs on this computer`, `tts
@@ -1003,6 +1008,76 @@ beats for intonation); Kokoro is clear and pleasant in English (`af_heart`, `af_
 `bf_emma`), thinner in the other languages, weaker on very short lines (under ~10 words) and may
 rush very long ones. It is ideal for drafts, internal videos and projects with no budget, and
 costs nothing to re-voice while a script changes.
+
+### Voices with feeling (`emotion`)
+
+Kokoro reads every line in the same even tone. `emotion:` on a beat says how the line feels, and
+`vidgen tts` changes how it is spoken: the speed (Kokoro's own speed control), the pitch (a shift
+in semitones by ffmpeg after synthesis that keeps the length), the loudness (gain in dB; a boost
+is soft-limited so it never clips) and the pauses at commas and full stops inside the line.
+
+```yaml
+voices:
+  pip: {voice: af_bella, emotion: happy}     # pip's default feeling (not inherited by other voices)
+scenes:
+  - id: storm
+    type: stage
+    beats:
+      - {text: "Rain! Grab the basket!", voice: pip, emotion: excited}
+      - {text: "Our sandwiches are soup.", voice: pip, emotion: sad}
+      - {text: "Quick, under the tree.", emotion: {like: whisper, gain: -6}}   # a row with changes
+```
+
+| `emotion` | speed | pitch (semitones) | gain (dB) | pauses |
+|---|---|---|---|---|
+| `neutral` | 1 | 0 | 0 | 1 |
+| `happy` | 1.05 | +1 | +1.5 | 0.9 |
+| `excited` | 1.12 | +2 | +3 | 0.7 |
+| `sad` | 0.86 | -1.5 | -3 | 1.5 |
+| `angry` | 1.06 | -0.5 | +3 | 0.8 |
+| `worried` | 1.04 | +0.7 | -1.5 | 1.3 |
+| `scared` | 1.1 | +1.5 | -1 | 1.2 |
+| `surprised` | 1.04 | +2.5 | +2 | 1 |
+| `calm` | 0.93 | -0.5 | -1.5 | 1.2 |
+| `doubtful` | 0.92 | -0.3 | -1 | 1.4 |
+| `sleepy` | 0.8 | -2 | -4 | 1.6 |
+| `whisper` | 0.92 | -1 | -9 | 1.2 |
+| `shout` | 1.06 | +2.5 | +5 | 0.8 |
+
+- **Where it comes from**: the beat's `emotion`, else its voice's (`voice.emotion` for the
+  narrator, `voices.<name>.emotion` for a speaker — a character's default through its voice). A
+  named voice does not inherit the base voice's `emotion`; a beat's `emotion: neutral` speaks a
+  line plainly in a voice that has one.
+- **The mapping form** `{like, speed, pitch, gain, pauses}` starts from the row `like` (default
+  `neutral`) and changes the numbers given: `speed` 0.5-2 (times the voice's `speed`), `pitch`
+  -3 to 3, `gain` -12 to 6, `pauses` 0.25-3.
+- **Pauses**: above 1, silence is added in the middle of each pause at `,` `;` `:` `—` and
+  `.` `!` `?` `…` inside the line, `pauses - 1` times the longer of Kokoro's own pause and a
+  narrator's usual one (0.2 s at a comma, 0.4 s after a sentence), so `sad` (1.5) adds 0.1 s at a
+  comma and 0.2 s after a sentence; below 1, the middle of Kokoro's pause is cut. The pause after
+  the last word is the beat's padding (`narration.pad`), not changed. Pauses use Kokoro's word
+  timings, so they change in English (`lang` a / b) only; the other numbers work in every language.
+- **Timings and lip sync**: the word timings (`.align.json`, karaoke captions) and the
+  phonemes of the [viseme track](#lip-sync) move with the edited pauses; the pitch shift keeps
+  the length, so nothing else moves.
+- **Audio hash**: a beat with an emotion has the emotion's name and its four numbers in its hash
+  (changing them re-voices that beat only); a beat without one, or with `neutral`, keeps its
+  hash, so existing audio stays up to date.
+- **Measured** (`af_heart`, a 15-word line, 2026-10-13): neutral 5.20 s, 202 Hz, -25.7 LUFS;
+  `excited` 4.85 s, 228 Hz, -22.7 LUFS; `sad` 6.16 s, 185 Hz, -28.9 LUFS, comma pause 0.05 →
+  0.15 s; `whisper` 5.69 s, 189 Hz, -34.7 LUFS; `shout` 5.00 s, 232 Hz, -20.7 LUFS; `sleepy`
+  7.01 s, 178 Hz. `whisper` is a quiet, slower, lower voice, not a breathy one (Kokoro cannot
+  whisper).
+- **Other providers**: only Kokoro speaks an emotion so far; with ElevenLabs or OpenRouter the
+  key is accepted, the audio and its hash ignore it, and `vidgen validate` warns.
+- **Screenplays**: a manner word in brackets (`PIP (cross): ...`, `NARRATOR (whispering): ...`)
+  becomes the beat's `emotion` as well as the speaker's expression: the names above and words
+  such as cheerful, proud (happy), thrilled (excited), upset, crying (sad), cross, furious
+  (angry), nervous, shy (worried), frightened (scared), shocked (surprised), gentle, deadpan
+  (calm), puzzled, unsure (doubtful), tired (sleepy), whispers, quietly (whisper), shouting,
+  yelling (shout).
+- `vidgen tts --dry-run` names a beat's emotion (`would generate pip_b2.mp3 (24 chars, voice
+  pip, sad)`).
 
 ## Multiple voices (`voices:`)
 
@@ -1042,6 +1117,7 @@ scenes:
 | `context`, `timestamps` | the base voice's | as in [`voice:`](#voice-voice) |
 | `label` | the name (`dr_ana` → `Dr ana`) | the speaker's name in subtitles and captions; not inherited from `voice.label` |
 | `color` | palette colour by position | the speaker's colour in captions (`speakers: color` / `both` / the `name` tag); not inherited |
+| `emotion` | none | how this speaker's beats feel unless a beat says otherwise ([voices with feeling](#voices-with-feeling-emotion)); not inherited from `voice.emotion` |
 
 - **Names**: letters, digits and `_`; `default` is reserved for the base voice. An unknown name in
   a scene or beat is a config error with a suggestion (`scenes[2].beats[1].voice: unknown voice
