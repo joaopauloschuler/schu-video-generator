@@ -13070,3 +13070,72 @@ How to test
 - `pytest tests/test_animatic.py` (non-render 7 passed, render 1 passed); `tests/test_sfx.py`
   (non-render with test_docs/test_guide: 213 passed; render: 5 passed, including
   `test_extending_example`).
+
+## Step 139 — Ready-made sets, part 1: outdoors
+
+What was built
+- Built-in sets: `src/vidgen/data/sets/outdoors.yaml` (package data, `data/sets/*` in
+  pyproject) holds `sets:` `city_street`, `park`, `beach`, `forest`, `snowy_hills` in the format
+  of a project's sets. `includes.builtin_sets()` returns a copy (read once). `expand_sets` uses the
+  project's `sets:` first, else the built-in set, with the Step 101 merge rules unchanged (scene
+  params win, image / generate / background one choice, marks merge, lists add, name-matched
+  entries change, `[]` clears). A built-in set's values keep the scene's locations for problems
+  (no `sets.NAME` origin, the project has none). `set_reference_problems` checks both and lists
+  both (`... sets: none (...); built-in sets: city_street, park, beach, forest, snowy_hills`),
+  did-you-mean over both.
+- Each set: sky gradient, ground colour, layer shapes, props at depths, `light`, `ambience` and
+  marks `stand_left` / `stand_right` (two characters at depth 0, clear of the props) plus marks at
+  its props (`bench`, `bus_stop`, `fountain`, `umbrella`, `shore`, `log`). City: `ambience: city`;
+  park, forest: `auto` (birdsong by day); beach, snowy hills: `false` (no sea / wind bed exists).
+  Beach: a sea band layer plus `water: {left: 0, right: 0.3}`. Snowy hills: snow `settle: true,
+  settled: 60` (full layer from the start).
+- 13 new props (`OUTDOOR_PROPS` in `cartoon/props.py`, original shapes, theme tokens where they
+  fit): `shop`, `bench` (seat, two places), `bus_stop` (lean on its pole), `road` and `path` (flat
+  bands in `FLAT_PROPS`), `fountain`, `flowers` (sway), `fence`, `beach_umbrella` (shelter),
+  `shell`, `pine` (sways, shelter, lean), `mushroom`, `log` (seat, two places). The existing `lamp`
+  (a lamp post with a lantern, sways, glows `on`) is the streetlamp: searched first, not duplicated.
+- Gallery: `tools/make_sets_gallery.py` (maintainer tool: writes a project with one stage per set,
+  runs `vidgen storyboard --jobs 1 --json`, tiles the first stills) ->
+  `docs/gallery/media/sets_outdoors.png` (28 KB); `docs/gallery/media/outdoor_props.png` (19 KB,
+  `write_props_png(kinds=...)`, no road / path). `write_props_png`'s default leaves
+  `OUTDOOR_PROPS` out: `props.png` byte-identical (md5 checked).
+
+Files touched
+- New: `src/vidgen/data/sets/outdoors.yaml`, `tests/test_builtin_sets.py`,
+  `tools/make_sets_gallery.py`, `docs/gallery/media/sets_outdoors.png`, `outdoor_props.png`.
+- `src/vidgen/includes.py`, `cartoon/props.py`, `cartoon/seating.py` (seats, places, leans),
+  `cartoon/wind.py` (`SWAYS`), `cartoon/rain.py` (`SHELTER_PROPS`), `cartoon/still.py`,
+  `config.py` (`set` docstring), `scenes/stage.py` (docstrings), `pyproject.toml`.
+- Docs: `docs/CONFIG.md` (new "Ready-made sets", the `set` row, Props text, table and gallery,
+  sit / lean lists), `DESIGN.md` (§2 layout, new §76), guide (`src/vidgen/data/guide/AGENTS.md` +
+  `AGENTS.md`: "Ready-made sets").
+- Tests updated: `test_cartoon_props.py` (62 props), `test_cartoon_seating.py` (seats set, the
+  "has no seat" list), `test_screenplay.py` (a screenplay's `bench` is now a built-in prop, not a
+  TODO: the unknown-prop example is `piano`, the sample play has one TODO).
+
+Public interfaces
+- Config: `set: NAME` also takes the built-in names; no new keys. New prop kinds (schema enum).
+  `vidgen.api` unchanged (`OUTDOOR_PROPS` is in `vidgen.cartoon.props` only).
+
+Decisions / deviations
+- Data in YAML, not Python, so a set reads like (and can be copied into) a project's `sets:`.
+- The road is a flat prop at depth 0.5 (between the pavement and the shops), not a layer: layers
+  are drawn behind the ground band, and a flat prop gets no shadow, no snow and no `prop_overlap`.
+- Behaviour change: a screenplay `set:` line naming one of the new prop kinds (`bench`, `fence`,
+  `log`...) now places that prop instead of writing a TODO.
+
+Known gaps / TODOs
+- No sea or wind ambience bed (beach, snowy hills silent); road / path cover a stage up to about
+  1.5 frames wide (use `scale`); laid out and checked for 16:9 only; `vidgen screenplay` set lines
+  do not look up built-in sets (a `set: park; ...` line keeps its meaning); no set inheritance.
+
+How to test
+- `pytest tests/test_builtin_sets.py` (18 not-render in 2.3 s; 5 render in 4.2 s).
+- Ran (not render): `test_builtin_sets test_cartoon_props test_cartoon_seating test_includes
+  test_phase_i_review test_cartoon_wind test_cartoon_rain test_cartoon_snow_fog test_guide
+  test_docs test_schema test_cartoon_lint test_cartoon_furniture test_screenplay` (406 passed,
+  3 failed -> fixed as above, the two files re-run: 32 passed; 127 s); render:
+  `test_builtin_sets test_cartoon_props test_cartoon_seating` (8 passed, 5.7 s).
+- By hand: a scratch project with the five sets, two characters on `stand_left` / `stand_right`:
+  `vidgen validate` ok, `vidgen lint --jobs auto` at preview 0 findings (after moving edge trees,
+  pines and flowers in), each scene ~5 s to render; stills checked by eye. Full suite not run.

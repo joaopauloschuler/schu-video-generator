@@ -82,7 +82,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -520,8 +520,9 @@ class Stage(NarratedScene):
     The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
     by keys or along a path. Characters handle props with ``pick_up``, ``hold``, ``put_down``,
     ``give`` and ``throw``: a held prop goes along with its holder's hand (they crouch for a low
-    one). They sit on a chair, a rock, a box, a sofa, an armchair, a bed or at a desk with
-    ``sit_on``, lean on a tree, a door, a sign or a counter with ``lean_on``, and get up with
+    one). They sit on a chair, a rock, a box, a sofa, an armchair, a bed, a bench, a log or at a
+    desk with ``sit_on``, lean on a tree, a pine, a door, a sign, a bus stop or a counter with
+    ``lean_on``, and get up with
     ``stand_up``. They ``get_in`` a car or a bus (or on a bicycle), ``ride_to`` a place in it with
     its wheels turning (pedalling on a bicycle) and ``get_out``. ``water`` puts a strip of water
     with waves at the front, where a boat bobs and rides; a hot-air balloon rises, drifts with the

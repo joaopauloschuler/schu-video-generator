@@ -1826,7 +1826,7 @@ class SceneConfig(_Strict):
     carry: CarrySetting = Field(default_factory=list)
     """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
     set: Identifier | None = None
-    """A stage scene's set: a name from sets: whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
+    """A stage scene's set: a name from sets:, or a built-in set (city_street, park, beach, forest, snowy_hills), whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
     host: SceneHost | None = None
     """The cartoon host beside this scene's content: false for none, a character name, or {character, side, size, place, floor, facing, speaks, pose, expression, auto_direct} changing the video's host here; default the video's host."""
 

@@ -59,6 +59,8 @@ SWAYS: dict[str, Sway] = {
     "plant": Sway(12.0, 1.1, 0.45),
     "sign": Sway(2.0, 1.4),
     "lamp": Sway(1.5, 1.2),
+    "pine": Sway(6.0, 0.4, 0.08),
+    "flowers": Sway(10.0, 1.2, 0.2),
 }
 #: How much a prop's own to-and-fro adds to its lean (a share of it).
 SWAY_WOBBLE = 0.25

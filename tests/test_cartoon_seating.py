@@ -81,7 +81,7 @@ def test_seated_feet_and_the_crouch() -> None:
 
 
 def test_props_have_seats_and_lean_edges() -> None:
-    assert set(PROP_SEATS) == {"chair", "rock", "box", "sofa", "armchair", "bed", "desk"} and {"tree", "door", "sign"} <= set(PROP_LEANS)
+    assert set(PROP_SEATS) == {"chair", "rock", "box", "sofa", "armchair", "bed", "desk", "bench", "log"} and {"tree", "door", "sign"} <= set(PROP_LEANS)
     for kind, (x, y) in PROP_SEATS.items():
         prop = draw_prop(kind, height=2.0, theme=Theme()).shift([1.0, -1.0, 0.0])
         seat = prop.seat_point()
@@ -260,7 +260,7 @@ def test_validate_sitting_and_leaning(make_project) -> None:
     ]}])
     problems = check_project(bad)
     where = "scenes[0].beats[0].actions"
-    for start in (f"{where}[0].to: 'tree' has no seat (seats: chair, rock, box, sofa, armchair, bed, desk, or an SVG prop with data-seat)",
+    for start in (f"{where}[0].to: 'tree' has no seat (seats: chair, rock, box, sofa, armchair, bed, desk, bench, log, or an SVG prop with data-seat)",
                   f"{where}[1].to: 'ball' has no lean", f"{where}[2].to: 'stool' is not a prop of the scene"):
         assert any(p.startswith(start) for p in problems), (start, problems)
     order = seat_project(make_project, [

@@ -874,6 +874,14 @@ asks for one, say vidgen makes original characters and offer one with the same r
   rings (`on: true` or `- switch_on: phone`; it shakes in bursts with a trill, `- switch_off:
   phone` answers it). Held balloons rise behind the head; `- let_go: pip` floats them away for
   good. `- pour: kit` tilts the watering can kit holds and water drops fall.
+- **Ready-made sets**: `set: city_street`, `park`, `beach`, `forest` or `snowy_hills` on a stage
+  scene gives a whole outdoor set without `sets:` (backdrop, props, light, ambience: a street
+  sounds like a city, a park and a forest have birdsong by day). Put two characters on its
+  `stand_left` and `stand_right` marks (clear of the props; other marks: `bench`, `bus_stop`,
+  `fountain`, `umbrella`, `log`...); the scene's params override it like any set (`light:
+  sunset`, `props: [{name: shop_2, color: tertiary}]`, `props: []`). Their props work on any
+  stage: `shop`, `bench` and `log` (sit two), `bus_stop`, `fountain`, `flowers`, `fence`,
+  `beach_umbrella`, `shell`, `pine`, `mushroom`, and flat `road` / `path` bands.
 
 **Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
 key cuts the camera to a framing of the characters for that beat; the next beat without one cuts

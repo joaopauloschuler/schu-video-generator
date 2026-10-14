@@ -30,19 +30,22 @@ from dataclasses import dataclass, field
 PROP_SEATS: dict[str, tuple[float, float]] = {
     "chair": (0.1, 0.54), "rock": (0.0, 0.9), "box": (-0.1, 0.9),
     "sofa": (0.0, 0.39), "armchair": (0.0, 0.37), "bed": (0.15, 0.41), "desk": (-0.64, 0.333),
+    "bench": (0.0, 0.4375), "log": (0.0, 0.875),
 }
 #: Seats with more than one place: the x of each place on the seat line (prop units as drawn
 #: facing right); one sitter per place (DESIGN.md §69.43).
-SEAT_PLACES: dict[str, tuple[float, ...]] = {"sofa": (-0.6, 0.6), "bed": (-0.45, 0.75)}
+SEAT_PLACES: dict[str, tuple[float, ...]] = {"sofa": (-0.6, 0.6), "bed": (-0.45, 0.75), "bench": (-0.7, 0.7), "log": (-1.3, 1.2)}
 #: Props with a back: a character sitting on one faces the way the prop faces (a desk's chair
 #: faces the desk).
 SEAT_BACKS: frozenset[str] = frozenset({"chair", "desk"})
 #: The edges a character leans its back on, (left x, right x) in prop units as drawn facing right:
 #: a tree's trunk, a door's frame, a sign's board, a lamp's post, a house's wall, the sides of a
-#: bookshelf, a kitchen counter and a fridge.
+#: bookshelf, a kitchen counter and a fridge; outdoors (DESIGN.md §76) a pine's trunk, a bus
+#: stop's pole and a shop's wall.
 PROP_LEANS: dict[str, tuple[float, float]] = {
     "tree": (-0.08, 0.08), "door": (-0.3, 0.3), "sign": (-0.4, 0.36), "lamp": (-0.04, 0.04), "house": (-0.5, 0.5),
     "bookshelf": (-0.34, 0.34), "counter": (-1.1, 1.1), "fridge": (-0.3, 0.3),
+    "pine": (-0.06, 0.06), "bus_stop": (-0.035, 0.035), "shop": (-0.6, 0.6),
 }
 #: How far (in the character's heights, between its feet's x and the prop's) a character can sit
 #: down on a prop or lean on it without walking first.

@@ -216,7 +216,7 @@ src/vidgen/
   pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
   voicesounds.py          # [gasp] [laugh] ... in a beat's text: markers, what each voice says, sound times (§69.33; no manim)
   overlap.py              # overlap: / interrupt: beats: windows, voice shapes (dip / cut), talked-over words (§69.34; no manim)
-  includes.py             # include: files and named sets: merge rules, set: of a stage, where problems are written (§69.35; no manim)
+  includes.py             # include: files and named sets: merge rules, set: of a stage (built-in sets, §76), where problems are written (§69.35; no manim)
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
   languages.py            # language tags and per-language rules: cue words, speech rate, TTS / MP4 codes (§54; no manim)
   translation.py          # translation files: text markers, keys, extracting, applying, merging, warnings (§54; no manim)
@@ -258,9 +258,11 @@ src/vidgen/
   data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
+  data/sets/              # outdoors.yaml: the built-in stage sets `set: NAME` falls back to (§76)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
                           # make_gallery_clip.py (data/gallery/clip.webm, §60),
+                          # make_sets_gallery.py (docs/gallery/media/sets_outdoors.png, §76),
                           # make_world_map.py (builds data/geo/world-110m.json from npm packages, §39)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
@@ -9942,3 +9944,63 @@ ffmpeg alone once the stills are current.
   under the 1500 MB cap): no stills 42 s (render of both scenes 34.7 s); stills current 7.0 to
   9.1 s wall (profile: 2.9 s x264 for 767 frames at 640x360, 2.7 s the mix, 1.1 s of it the
   music bed, 1.0 s loading the extensions), captions add 0.2 to 0.5 s; `--no-audio` 3.7 s.
+
+## 76. Ready-made sets, part 1: outdoors (Step 139)
+
+Reference: docs/CONFIG.md "Ready-made sets". `set: NAME` on a stage scene works without
+`sets:` for five built-in outdoor sets.
+
+- **Library** (`src/vidgen/data/sets/outdoors.yaml`, package data; Step 140 adds indoor files
+  beside it): every `*.yaml` there holds `sets:` in the format of a project's. `includes.builtin_sets()`
+  returns a copy (read once, `functools.cache`). Plain YAML rather than Python so a set reads like
+  the project sets it can be copied into.
+- **Lookup** (`includes.expand_sets`): the project's `sets:` (with its includes) first, else the
+  built-in set of that name; `apply_set` merges it with the scene's params by the §69.35 rules
+  unchanged. Origins: a built-in set's values are not recorded (`from_set` skipped), so a problem in
+  one keeps the scene's own location (`scenes[i].params.props[k]`) instead of pointing at a
+  `sets.NAME` the project does not have; moved scene entries are recorded as before.
+  `set_reference_problems` checks both and lists both (`sets: ...; built-in sets: city_street,
+  park, beach, forest, snowy_hills`), did-you-mean over both. Fingerprints: the expanded params
+  carry the set, so an edit of a built-in set re-renders the scenes using it; nothing else.
+- **Sets**: each has a gradient sky, a `ground_color`, background (and middle) layer shapes, its
+  props at depths, `light`, `ambience`, and marks `stand_left` / `stand_right` (two characters at
+  depth 0, clear of every prop within 0.15 of their depth, 16:9) plus marks at its props.
+  `city_street`: building blocks, two `shop`s at depth 0.9 (`shop`, `shop_2`), a flat `road` at
+  0.5 between them and the pavement, a `lamp` (the existing lamp post with its lantern serves as
+  the streetlamp: searched first, it sways and glows `on`), a `bench`, a `bus_stop`; `ambience:
+  city`. `park`: hills, a flat `path`, two `fence`s, a `tree`, a `fountain`, a `bench`, two
+  `flowers`; `ambience: auto` (birdsong by day, §69.62). `beach`: a sea band in the background
+  layer and `water: {left: 0, right: 0.3}` (§69.53's strip with waves) in front on the left, sand,
+  the `sun`, a `beach_umbrella`, two `shell`s; `ambience: false` (no sea bed exists). `forest`:
+  far pine triangles, trees and pines at depths 0.95 to 0.5, a `bush`, a `log`, `mushroom`s;
+  `light: morning`, `ambience: auto`. `snowy_hills`: two hill layers, four `pine`s, a `rock`, snow
+  `{density: 0.5, settle: true, settled: 60}` (the full layer from the start, §69.60);
+  `ambience: false`.
+- **Props** (`cartoon/props.py`, `OUTDOOR_PROPS`, 13 new; primitives and two theme colours like
+  every built-in prop, fixed hex where no token fits: asphalt, gravel, white pickets, shell pink):
+  `shop` 1.7 (sign board, upper windows, striped awning, a shop window with goods, a glazed door),
+  `bench` 0.32 (seat line at 0.4375 = 0.14 of a character, places ±0.7), `bus_stop` 1.35, `road`
+  0.12 and `path` 0.08 (flat bands ±`BAND_HALF` 40 prop units long, in `FLAT_PROPS`: no shadow,
+  no snow, left out of `prop_overlap`), `fountain` 0.75, `flowers` 0.28 (petals without outlines:
+  at that size outlined petals read as black dots), `fence` 0.42, `beach_umbrella` 1.3, `shell`
+  0.06, `pine` 1.9, `mushroom` 0.13 (two in a cluster), `log` 0.16 (seat at 0.875, places −1.3 /
+  1.2). Seats in `PROP_SEATS` / `SEAT_PLACES` (bench, log); lean edges in `PROP_LEANS` (pine
+  trunk, bus stop pole, shop wall); `SWAYS` gains `pine` (6°, 0.4 Hz) and `flowers` (10°, 1.2
+  Hz); `SHELTER_PROPS` gains `pine` and `beach_umbrella` (rain stops above them, snow lies thin
+  under them). `write_props_png` leaves `OUTDOOR_PROPS` out of its default (props.png
+  byte-identical, md5 checked); `docs/gallery/media/outdoor_props.png` (19 KB) shows them but the
+  two bands.
+- **Gallery**: `tools/make_sets_gallery.py SETS... --work DIR --out PNG` writes a project with one
+  stage per set (two generated characters on `stand_left` / `stand_right`), runs `vidgen
+  storyboard --jobs 1 --json`, tiles each scene's first still at 320x180 (3 columns, names below,
+  64 colours): `docs/gallery/media/sets_outdoors.png` (28 KB).
+- **Checked**: a scratch project with the five sets, two characters each on their marks, at
+  preview 854x480: `vidgen lint` 0 findings (first run: `off_frame` on edge trees and pines, moved
+  in); each scene renders in about 5 s (5–6 s of video), like any stage of that size; stills
+  checked by eye.
+- **Not done**: no sea or wind ambience bed (the beach and the snowy hills are silent); the road
+  and the path do not reach across a stage wider than about 1.5 frames (give them a `scale`); the
+  sets are laid out and checked for 16:9 (in a 9:16 frame the props are wider for the frame and
+  may overlap the characters' marks);
+  `vidgen screenplay`'s `set:` line does not look up built-in sets (a screenplay `set: park; ...`
+  keeps meaning a default sky with those props). Tests: `tests/test_builtin_sets.py`.
