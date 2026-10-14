@@ -768,7 +768,20 @@ action made with `ActionConfig.automatic({...})`; they are appended after each b
 actions before the actions are planned, and `vidgen direct` and the storyboard list them. The
 base class adds none; `stage` returns `stage_directions(project, spec, characters,
 params.auto_direct, stage_frame(project, params))` (its geometry, for the lint check of
-gestures and close-ups; docs/CONFIG.md "Automatic directing").
+gestures and close-ups; docs/CONFIG.md "Automatic directing"). The base class's default is the
+host's directing (`host_directions`; docs/CONFIG.md "Automatic host directing"), so an override
+in a scene type that takes a host returns `super().auto_actions(project, spec, params)` plus its
+own. What the host points at and reacts to comes from the class method `reveal_steps(cls,
+params)`: one `RevealStep(focus, result=None)` per step the scene passes to `self.reveal(...)`,
+`focus` a target name of the scene and `result` `"rise"`, `"fall"`, `"error"` or `None`
+(`value_trend(values)` and `has_error_text(lines)` decide the built-ins'); the default returns
+none, and the host then only looks at written highlights.
+
+```python
+@classmethod
+def reveal_steps(cls, params):
+    return [RevealStep(f"item{i}") for i in range(1, len(params.items) + 1)]
+```
 
 ```python
 @scene("countdown")
@@ -1159,7 +1172,9 @@ lacks those parts (the built-in acting actions in `src/vidgen/scenes/acting.py`)
 when it falls due (the built-in `walk_to`: the distance over its speed), or `None` for the class's
 `run_time`; a `run_time:` in the config wins. `alters_targets = False` says the action only reads
 its targets (the built-in `pan` and `follow`), so it plays together with another action on them
-that falls due at the same moment instead of before or after it.
+that falls due at the same moment instead of before or after it. `alters(scene)` returns
+mobjects the action changes besides its targets (the built-in host actions: `[scene.host]`), so
+the runner never plays it at the same moment as another action changing them.
 A scene type that lists action type names in its class attribute `mid_still_actions` (the
 built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`,
 `pick_up`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`, `blow_away`, `get_in`, `ride_to`, `get_out`) gets a

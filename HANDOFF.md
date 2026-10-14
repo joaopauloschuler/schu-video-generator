@@ -12630,3 +12630,93 @@ How to test
   `test_captions.py -k test_lint_sees_captions_over_scene_text` (2 passed, 6 s, text_card moved),
   `test_cartoon_acting.py -k test_a_dialogue_on_a_stage` (1 passed, 2 s). The full suite was not
   run.
+
+## Step 134 — A cartoon host, part 2: pointing and reacting
+
+What was built
+- Six beat actions on the scene's host (`scenes/host_actions.py`, against `vidgen.api` only):
+  `host_point: <target>` (near arm via the two-bone solver towards the edge of the target's box
+  nearest the shoulder, head looking there; `line: true` a thin pointer line, `color`),
+  `host_look: <target>`, `host_react: <expression>` (`effect`: a symbol over the head),
+  `host_move: other_side|left|right`, `host_enter` / `host_exit` (`left` / `right`, default its
+  side; `speed`). Point / look / react last until the next beat (`until:` works).
+- Pure geometry in `cartoon/host.py`: `pointed_spot`, `hand_goal` (the hand stays in the host's
+  room grown by `HAND_REACH_OUT` 0.1, less than `avoid`'s 0.2 gap: it never touches the
+  content), `host_move_plan -> HostMove`, `facing_for`; checks `host_action_problems` (host action
+  in a scene without a host, two moves in a beat, unknown expression).
+- Planner `cartoon/host_directing.py`: `RevealStep`, `value_trend`, `has_error_text`,
+  `plan_host_directions` (pure), `starts_present`, `host_directions`; the new class method
+  `NarratedScene.reveal_steps(params)` (bullets, bar_chart, line_chart, code implement it) and
+  a default `NarratedScene.auto_actions` returning the host's directions. Host key
+  `auto_direct` (video or scene host).
+- `Action.alters(scene)` (runner keeps host actions from playing together); `HostFigure` tracks
+  `side`, `feet_x`, `room`, `content_shift`, `present`, `pointing_at`, `half_reach`; layout dump
+  `pointing_at` and kind `pointer`; `host_overlap` skips the host's pointer line and own effect
+  symbol. `effect_action.show_symbol` / `hide_symbol` factored out of `effect`.
+- Example `examples/host-explainer/` "Why Bread Rises" (~58 s estimated, 11 beats, an original
+  mouse host in an apron, Kokoro `af_heart`, no audio): title (`host_enter`, happy), bullets
+  (auto points), bar_chart per_beat (auto points, happy + sparkle as the dough rises), process in
+  a column (written `host_point: stage4, line: true`), text_card (`host_move`, happy + hearts,
+  `host_exit`).
+
+Decisions
+- **`host_move` swaps the content's side**: beside the content the column moves to the other
+  side and the camera frame moves by the column's width, so every scene object (also ones
+  revealed later) slides with it and no scene re-lays out; overlays and captions stay. In a 9:16
+  band only the host walks. The next scene starts on its own `side`; the host is kept through a
+  cut only when it is back home (`at_home`).
+- **Automatic directing never moves the host** (moves change the layout; author's choice), so
+  "at most one move per beat" holds; validate allows one written move per beat.
+- **No automatic pointer line** (it can cross other content); written only.
+- The reveal-step map uses `distribute` as `reveal()` does, so planner and render agree.
+- The example's topic changed from the earlier draft (a software cache) to an everyday topic, as
+  the brief asked; the process scene uses `layout: column` because in a snake layout the pointer
+  line to the last stage crossed another stage.
+
+Fix found on the way
+- A host's tail stayed in view after `host_exit` (and could show before `host_enter`): the
+  off-screen x used half the drawing's width from the feet; now `HostFigure.half_reach` (the
+  reach on the wider side). The stage's `exit` has the same formula (`moving.py`, character
+  width / 2); not changed (not this step), worth checking for long-tailed animals.
+
+Evidence
+- `vidgen validate examples/host-explainer`: ok (~0:58); `vidgen direct`: 8 automatic actions
+  (helpers points, grow points + 2 reactions). Scratch copy: `vidgen storyboard --per-beat 2`
+  (and 6 for hello) checked by eye: points reach towards items and bars, sparkles on the rising
+  bars, the pointer line to "Bake", the walk across with the text sliding right, the exit leaving
+  nothing behind; `vidgen lint` preview: 0 findings (11 beat-end stills).
+
+Files touched
+- New: `src/vidgen/cartoon/host_directing.py`, `src/vidgen/scenes/host_actions.py`,
+  `tests/test_host_acting.py`, `examples/host-explainer/video.yaml`.
+- `src/vidgen/actions.py`, `api.py`, `cartoon/directing.py` (`directing_used`), `cartoon/host.py`,
+  `cartoon/host_drawing.py`, `config.py`, `introspect.py`, `lint/layout_rules.py`, `scene.py`,
+  `scenes/__init__.py`, `scenes/bar_chart.py`, `bullets.py`, `code.py`, `line_chart.py`,
+  `effect_action.py`; `tests/test_actions.py` (action lists).
+- Docs: `DESIGN.md` (layout, §6.4 api note, §71 intro and gaps, new §71.1, §71.2),
+  `docs/CONFIG.md` (host key, "Pointing, reacting and moving", "Automatic host directing", action
+  tables, layout kind `pointer`, `host_overlap`), `docs/EXTENDING.md` (`alters`, `reveal_steps`,
+  default `auto_actions`), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`, `README.md`,
+  `tasklist.md`.
+
+Public interfaces
+- `vidgen.api`: `HAND_REACH_OUT`, `HostMove`, `facing_for`, `hand_goal`, `host_move_plan`,
+  `pointed_spot`, `RevealStep`, `has_error_text`, `value_trend`. `Action.alters`,
+  `NarratedScene.reveal_steps`, default `NarratedScene.auto_actions`. Config: host
+  `auto_direct`; six actions; layout kind `pointer`, host key `pointing_at`.
+
+Known gaps / TODOs
+- No `reveal_steps` for other built-in types (diagram, process, timeline...): the host only looks
+  at their written highlights. A pointer line is not routed around other content. The walk across
+  passes in front of the content for about two seconds. A `host_enter` in a scene with its own
+  entrance animation (title) starts after it. No CHANGELOG entry (no release yet). No Kokoro run
+  of the example.
+
+How to test
+- `pytest tests/test_host_acting.py` (20 passed, 3.3 s; 1 render); non-render
+  `test_guide test_docs test_actions test_lint test_api test_cartoon_directing
+  test_cartoon_effects test_overlap` (254 passed, 5 s); non-render `test_config test_schema
+  test_introspect test_scene test_voice_sounds test_stat_chapter test_timing_lint
+  test_cartoon_reframe test_host test_charts test_builtin_scenes test_actions_coverage
+  test_registry` (379 passed, 92 s); render `test_host test_cartoon_effects test_actions` (9
+  passed, 8 s). The full suite was not run.

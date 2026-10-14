@@ -1,0 +1,68 @@
+# A short explainer with a cartoon host (host:, DESIGN.md §71): Mo, an original mouse baker, walks
+# in, points at each new item and bar (auto_direct), cheers as the dough rises, points at the oven
+# with a pointer line, crosses to the other side (the content slides over) and leaves at the end.
+# No audio committed: run `vidgen tts` (Kokoro, free).
+title: Why Bread Rises
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 640, height: 360, fps: 15}
+theme: {preset: soft_pastel}
+voice: {provider: kokoro, voice: af_heart, speed: 0.95}
+narration: {pad: 0.6}
+auto_direct: true
+characters:
+  - name: mo
+    look: {species: mouse, eyes: round, outfit: apron, seed: 4}
+    colors: {skin: "#A89A8C", clothes: "#C8553D", trim: "#F3EDE2"}
+host: {character: mo, side: right}
+scenes:
+  - id: hello
+    type: title
+    params: {title: "Why Bread Rises", subtitle: "Tiny helpers, big loaf"}
+    beats:
+      - text: "Hi, I'm Mo. Ever wondered why a small lump of dough puffs up into a soft loaf? Let's find out!"
+        actions: [{action: host_enter, at: 0}, {host_react: happy, at: 0.7}]
+
+  - id: helpers
+    type: bullets
+    params:
+      heading: "Tiny helpers in the dough"
+      items:
+        - "Yeast eats the sugar in the flour"
+        - "It breathes out little bubbles of gas"
+        - "Stretchy gluten traps the bubbles"
+    beats:
+      - text: "Yeast is alive. It feeds on the sugar in the flour."
+      - text: "As it eats, it breathes out tiny bubbles of gas."
+      - text: "And stretchy gluten holds those bubbles in, like a net of balloons."
+
+  - id: grow
+    type: bar_chart
+    params:
+      title: "Dough in the bowl (cups)"
+      labels: ["Just mixed", "30 minutes", "One hour"]
+      values: [2, 3, 4.5]
+      reveal: per_beat
+    beats:
+      - text: "Right after mixing, our dough fills about two cups."
+      - text: "Half an hour in a warm spot, and it is up to three."
+      - text: "After an hour it has more than doubled. Time to bake!"
+
+  - id: bake
+    type: process
+    params:
+      heading: "From bowl to loaf"
+      stages: ["Mix", "Knead", "Rise", "Bake"]
+      layout: column
+    beats:
+      - text: "Mix and knead the dough, then give it time to rise."
+      - text: "In the hot oven the bubbles swell one last time, and the crust sets the shape."
+        actions: [{host_point: stage4, line: true, at: 0.6}]
+
+  - id: wrap
+    type: text_card
+    params: {text: "Yeast makes gas.\nGluten holds it."}
+    beats:
+      - text: "So remember: yeast makes the gas, and gluten holds it in."
+        actions: [{host_move: other_side, at: 0}]
+      - text: "Thanks for baking with me. See you next time!"
+        actions: [{host_react: happy, effect: hearts, at: 0}, {host_exit: left, at: 0.45}]

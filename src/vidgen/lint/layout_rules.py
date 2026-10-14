@@ -91,6 +91,8 @@ def describe(obj: dict[str, Any]) -> str:
         return f"effect '{obj.get('effect')}' of character '{obj.get('effect_of')}'"
     if obj["kind"] == "motion_effect":
         return f"motion effect '{obj.get('motion_effect')}' of '{obj.get('effect_of')}'"
+    if obj["kind"] == "pointer":
+        return f"pointer line of host '{obj.get('name')}'"
     return f"{obj['kind']} {obj['class']} '{obj.get('name') or obj['path']}'"
 
 
@@ -492,8 +494,9 @@ def overlay_overlap(ctx: StillContext, settings: OverlayOverlapRule) -> Iterator
             )
 
 
-#: Objects that cross a host on purpose (they pass in a moment or fill the frame).
-_PASSING_KINDS = frozenset({"host", "particles", "motion_effect"})
+#: Objects that cross a host on purpose (they pass in a moment or fill the frame; its own pointer
+#: line starts at its hand).
+_PASSING_KINDS = frozenset({"host", "particles", "motion_effect", "pointer"})
 
 
 def _contains(outer: Bbox, inner: Bbox) -> bool:
@@ -508,8 +511,8 @@ def host_overlap(ctx: StillContext, settings: HostOverlapRule) -> Iterator[Issue
     for host in (obj for obj in ctx.objects if obj["kind"] == "host"):
         hbox = object_box(host)
         for obj in ctx.objects:
-            if obj["kind"] in _PASSING_KINDS:
-                continue
+            if obj["kind"] in _PASSING_KINDS or (obj["kind"] == "effect" and obj.get("effect_of") == host.get("name")):
+                continue   # its own symbol (host_react) sits on its head
             box = object_box(obj)
             if not is_overlay(obj) and _contains(box, hbox):
                 continue

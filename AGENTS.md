@@ -728,6 +728,12 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
 | `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
+| `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
+| `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
+| `host_react` | with a `host:`: the host's expression for this beat (`- host_react: happy`; `effect: sparkle` adds a symbol) | on a result or a surprise |
+| `host_move` | with a `host:`: the host walks to the other side and the content slides over with it (`- host_move: other_side`, `left`, `right`) | one move per beat; rarely, between topics |
+| `host_enter` | with a `host:`: the host walks in from an edge (`{action: host_enter}`, or `- host_enter: left`); the scene starts without it | at the start of the video |
+| `host_exit` | with a `host:`: the host walks out by an edge (`- host_exit: left`); its room stays free | at the end |
 
 ```yaml
 - id: speeds
@@ -1135,6 +1141,35 @@ scenes:
     host: {expression: happy}
     params: {title: "Render minutes", labels: ["480p", "1080p"], values: [0.4, 2.6]}
     beats: [{text: "Previews are the fast way to iterate."}]
+```
+
+**Make the host act.** Beat actions: `host_point: item2` (its arm reaches towards a target of
+the scene and it looks there; `line: true` adds a thin pointer line, best when nothing lies
+between the host and the target), `host_look: bar3`, `host_react: happy` (`effect: sparkle` adds
+a symbol), `host_move: other_side` (it walks across and the content slides to the other side
+with it; one move per beat), `host_enter` / `host_exit` (a scene whose first passage is
+`host_enter` starts without it). With `auto_direct: true` (or the host's own `auto_direct`) the
+host points at each new bullet, bar, series or code highlight, looks at written highlights, and
+reacts to results (a chart going up: happy; down: worried; an error in the code: surprised); it
+never moves by itself, and anything you write in a beat wins. `vidgen direct` lists what it adds.
+A complete example is `examples/host-explainer/`.
+
+```yaml
+auto_direct: true
+characters: [{name: mo, look: {species: mouse, outfit: apron}}]
+host: mo
+scenes:
+  - id: hello
+    type: title
+    params: {title: "Why Bread Rises"}
+    beats: [{text: "Hi, I'm Mo!", actions: [{action: host_enter}]}]
+  - id: bake
+    type: process
+    params: {stages: ["Mix", "Rise", "Bake"], layout: column}
+    beats:
+      - text: "Mix it, and let it rise."
+      - text: "Then into the oven."
+        actions: [{host_point: stage3, line: true, at: 0.5}]
 ```
 
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->

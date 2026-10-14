@@ -91,7 +91,9 @@ src/vidgen/
                           # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
                           # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
                           # host.py (host: which host a scene has, its column / band, who speaks, checks,
-                          # §71; no manim), host_drawing.py (HostFigure: the host and its floor line, §71),
+                          # §71; pointing and moving geometry, §71.1; no manim), host_drawing.py
+                          # (HostFigure: the host and its floor line, §71), host_directing.py (the
+                          # host's automatic directing, RevealStep, §71.2; no manim),
                           # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
                           # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
                           # svg_prop: props from primitives or an SVG, §69.8), acting.py (where a
@@ -241,6 +243,8 @@ src/vidgen/
                           # switch_action.py: switch_on, switch_off (a tv or a lamp), §69.54;
                           # storm_action.py: lightning, rainbow, §69.61;
                           # knock_action.py: knock (a door), §69.62;
+                          # host_actions.py: host_point, host_look, host_react, host_move,
+                          # host_enter, host_exit (the scene's host), §71.1;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6; card.py: the card scene type, §69.46)
@@ -969,6 +973,12 @@ Step 128 (§69.62) adds `SET_BEDS`, `set_ambience` and `wet_steps`; `PlayedActio
 and the stage param `ambience`; `Stage.knock_on`, `.set_beds`, `.light_marks`; action `knock`;
 built-in sounds `creak`, `knock`, `splash`; the ambience beds `birdsong`, `city`, `room_tone`.
 Pixels unchanged; the sound of a stage changes on purpose (§69.62: set beds, door creaks, water).
+Step 134 (§71.1, §71.2) adds `HAND_REACH_OUT`, `HostMove`, `facing_for`, `hand_goal`,
+`host_move_plan`, `pointed_spot`, `RevealStep`, `has_error_text` and `value_trend`;
+`Action.alters(scene)`; `NarratedScene.reveal_steps(params)` (class method, default none) and a
+default `NarratedScene.auto_actions` (the host's directing; `stage` overrides it as before);
+actions `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`; host key
+`auto_direct`; layout kind `pointer`. Compatible: a video without a host renders as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -9547,7 +9557,8 @@ without them renders as before.
 A character of `characters:` presents an explainer: `host:` draws it beside the content of every
 scene type that lays out in the safe area. Part 1 (this step): placement, the region split,
 speaking, idle life, layout dump and lint. Pointing, reacting, walking between sides and
-entering / leaving are Step 134. Reference: docs/CONFIG.md "A host beside any scene".
+entering / leaving are Step 134 (§71.1, §71.2). Reference: docs/CONFIG.md "A host beside any
+scene".
 
 - **Config** (`config.py`): `VideoConfig.host: Identifier | HostConfig | None` (a name is
   `{character: name}`); `HostConfig(character, side left|right = right, size (0, 0.9] | None,
@@ -9625,8 +9636,106 @@ entering / leaving are Step 134. Reference: docs/CONFIG.md "A host beside any sc
   host facing front, happy, without floor; the code scene with `pose: thinking`. `vidgen lint`:
   0 findings in 16:9, 16:9 captions and 9:16 karaoke. Mid-beat stills: the mouth moves in the
   narrator's beats (`speaking: true`, visemes) and rests in a guest's.
-- **Not done** (Step 134 and later): pointing at targets, reacting, walking to the other side,
-  entering / exiting, `auto_direct` for hosts; the host is not an action target yet. A `zoom` /
-  `pan` moves it with the scene (it is a scene mobject, not an overlay: Step 134 needs scene
-  targets). A scene type that draws outside `self.safe_area` can overlap it (`host_overlap`
-  reports it). The host's idle motion counts as change for `dead_air` (as a stage's characters).
+- **Not done**: a `zoom` / `pan` moves the host with the scene (it is a scene mobject, not an
+  overlay: the host actions need scene targets). A scene type that draws outside
+  `self.safe_area` can overlap it (`host_overlap` reports it). The host's idle motion counts as
+  change for `dead_air` (as a stage's characters). Pointing, reacting and moving: §71.1, §71.2.
+
+### 71.1 Host actions: pointing, reacting, moving (Step 134)
+
+Six built-in beat actions in `scenes/host_actions.py` (written against `vidgen.api` only) act on
+`scene.host`; the host is never a target (they name a scene target, an expression or a side).
+Reference: docs/CONFIG.md "Pointing, reacting and moving (host actions)".
+
+- **Common** (`_HostAction(_Acting)`): `alters_targets = False` and the new
+  `Action.alters(scene) -> [scene.host]`, which `ActionRunner` adds to the mobjects an action
+  changes (`_changed`), so two host actions due together play one after the other.
+  `scene_problems`: a type with
+  `takes_host = False` (`stage`, `card`) rejects them. `cartoon/host.py`'s
+  `host_action_problems` (run by `host_problems` in `parse_config`): a host action in a scene
+  without a host, more than one move (`HOST_MOVES`: `host_move`, `host_enter`, `host_exit`) in a
+  beat, a `host_react` expression the character does not know.
+- **Pointing geometry** (pure, `cartoon/host.py`): `pointed_spot(shoulder, box)` = the point of
+  the target's box nearest the shoulder (clamped); `hand_goal(shoulder, spot, room, reach_out =
+  HAND_REACH_OUT 0.1)` = the point on the shoulder→spot line as far as the host's room (its
+  reserved column / band) grown by 0.1 allows: less than `avoid`'s 0.2 gap, so a pointing hand
+  never touches the content. `host_point` sets the look first (`_looked`: `look_pose` towards the
+  spot from the head, as `look_at`), reads the shoulder in that state, then
+  `Character.reached_parts(hand, goal)` (the two-bone solver of §69.26: elbow bent when the goal
+  is nearer than the arm is long, straight when farther) with the near arm (`left`, else
+  `right`). The target box is each target's `outline`, else its parts on screen, else its
+  mobject. One `PoseChange`; reverted at the next beat (`until_next_beat`) or `until:`.
+- **Pointer line** (`line: true`, `color` `dim`): a `Line` from the hand to `POINTER_GAP` 0.12
+  short of the spot, `POINTER_WIDTH` 3, growing in the action's second half, its start kept on
+  the hand by an updater; it fades with the revert. The layout dump records it as kind `pointer`
+  (attribute `host_pointer_of`), which `host_overlap` skips along with the host's own effect
+  symbol. Off by default and never added by automatic directing (it crosses whatever lies
+  between the hand and the target).
+- **`host_look`**: the same look without the arm. **`host_react`**: `posed_state(expression=)`
+  and, with `effect`, an effect symbol (§69.40's `show_symbol` / `hide_symbol`, factored out of
+  the `effect` action).
+- **`host_move`** (target `other_side` default, `left`, `right`; option `speed`). Decision: **the
+  content swaps side with the host.** `host_move_plan(area, feet_x, reserve, side, below, to) ->
+  HostMove(side, feet_x, reserve, content_shift)` mirrors the feet and the room within the area;
+  beside the content `content_shift` is the column's width, towards the side the host left. The
+  action moves the camera frame by `-content_shift` (`MoveCamera`, `moves_camera = True`), so
+  every scene mobject, also one revealed later, moves on screen together and the scene's own
+  layout code needs no second layout; overlays and captions are fixed in the frame and stay. The
+  host walks (`Walk`, then a `TURN_SECONDS` 0.3 turn to the content) to the mirrored feet in
+  scene coordinates (screen x minus the accumulated shift), the floor line fades out, jumps and
+  fades in. In a band below the content (9:16) only the host walks (`content_shift` 0).
+  `HostFigure` tracks `side`, `feet_x` and `room` on screen, and `content_shift`; `_room(host)`
+  gives the room in scene coordinates for `hand_goal` after a move. A `zoom` afterwards zooms
+  from the moved view. The next scene starts on its own `side`; `finish()` keeps the host on
+  through the cut only when it is `at_home` (present and on its configured side).
+- **`host_enter` / `host_exit`** (target `left` / `right`, default its side; option `speed`):
+  a walk between its place and `offstage_x(side, view edges, host.half_reach)` (`half_reach`:
+  the drawing's reach from the feet on its wider side, so an animal's tail does not stay in
+  view), the floor fading in / out. `starts_present(actions)`: a scene whose first passage is an
+  enter starts with the host parked off screen (`NarratedScene._park_host` in `setup()`); its
+  room stays reserved either way, so the layout never jumps. `host_exit` clears `pointing_at`.
+- **Layout dump**: the `host` object's `side` is `HostFigure.side` (where it stands now), plus
+  `pointing_at` while it points.
+
+### 71.2 Automatic host directing (Step 134)
+
+`cartoon/host_directing.py` (no manim). Reference: docs/CONFIG.md "Automatic host directing".
+
+- **When**: `directing_kinds(beat.auto_direct, host.auto_direct, video auto_direct)` per beat
+  (the nearest wins; new key `auto_direct: bool` on `HostConfig` / `HostOverride`).
+  `directing_used` also looks at hosts' `auto_direct`. `NarratedScene.auto_actions` now returns
+  `host_directions(project, spec, cls, params)` by default (`stage` overrides it unchanged).
+- **What a scene reveals**: the class method `NarratedScene.reveal_steps(params) ->
+  list[RevealStep(focus, result)]`, one per step passed to `reveal()`, mapped to beats with
+  `layout.distribute` exactly as `reveal()` does. Built-ins: `bullets` `item<N>` per item
+  (`reveal: all`: `item1`); `bar_chart` per bar (`per_beat`: `value_trend` of the bar and the one
+  before; `all`: the last bar with the trend first→last) plus the `highlight` bar's step;
+  `line_chart` a series per step with its first→last trend; `code` per `highlight` entry
+  (`line<N>`, `lines:<a>-<b>` when contiguous, `error` when `has_error_text` finds error,
+  exception, traceback, fail(ed/ure/s) or panic in the marked lines; none: `listing`).
+  `value_trend`: `rise` / `fall` when last − first exceeds `TREND_SHARE` 0.05 of the largest
+  magnitude.
+- **Planner** `plan_host_directions(beats: [HostBeat(id, actions, kinds, steps)], present)`,
+  pure, simple rules per beat: skip a beat with a written move (moves are the author's: they
+  change the layout, so automatic directing **never adds a move**, which also keeps "at most one
+  move per beat") or while the host is off screen (tracked through enters / exits); `gestures`:
+  `host_point` at the first revealed focus not pointed at before in the scene (one point per
+  beat) unless a `host_point` / `host_look` is written; `looks` (when no point was added and none
+  written): `host_look` at the first target of a written `highlight` / `callout` / `zoom` at its
+  `at`, else at the beat's first focus; `reactions`: the beat's first result →
+  `host_react` `HOST_REACTIONS` (rise happy, fall worried, error surprised) at `REACT_AT` 0.4,
+  with `HOST_EFFECTS` (sparkle, sweat, exclaim) as `effect` when `effects` is on, unless a
+  `host_react` is written. Every action is `ActionConfig.automatic` (shown as `(auto)` by
+  `vidgen direct` and the storyboard).
+- **Lint-safe by construction**: the hand stays in the host's room (`hand_goal`), looks and
+  reactions change only the host, the effect symbol is the host's own (skipped by
+  `host_overlap`), no pointer line is added.
+- **Example** `examples/host-explainer` ("Why Bread Rises", about 58 s, an original mouse host):
+  `host_enter` on the title, automatic points at bullets and bars and `happy` + sparkle as the
+  bars rise, a written `host_point` with `line: true` on a `process` column, `host_move` and
+  `host_exit` on the closing `text_card`. `vidgen validate` and `vidgen lint` (preview) clean;
+  stills checked by eye.
+- **Not done**: no `reveal_steps` for the other built-in scene types (the host only looks at
+  their written highlights); the host does not dodge a pointer line crossing other content; a
+  walk across passes in front of the content mid-beat (by design: it lasts about two seconds);
+  a `host_enter` on a scene with its own entrance animation starts after that animation.

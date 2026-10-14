@@ -15,7 +15,9 @@ character (``vidgen.cartoon.character.Character``) one object of kind ``characte
 the character (its box covers every part; plus ``facing``, ``speaking``, ``face`` and the other
 keys the cartoon lint rules read, :func:`_character_keys`), a host
 (``vidgen.cartoon.host_drawing.HostFigure``) one object of kind ``host`` named after its
-character (its box covers the floor line too; the same keys plus ``side`` and ``below``), the objects of a speech bubble carry
+character (its box covers the floor line too; the same keys plus ``side`` (where it stands
+now), ``below`` and, while it points, ``pointing_at``), a host's pointer line one object of kind
+``pointer`` named after the host, the objects of a speech bubble carry
 ``bubble`` (the speaker's name), and a stage prop (``vidgen.cartoon.props.Prop``) one
 object of kind ``prop`` named after the prop (a held one also ``held_by`` and ``hand``; its box
 is not part of its holder's; one with shapes also ``shape``, an umbrella's ``closed`` or
@@ -286,7 +288,13 @@ class LayoutRecorder:
         if isinstance(mob, HostFigure):  # the host and its floor line: one object (DESIGN.md §71)
             self._emit_parts(walk, mob, path, mob.host_name, "host", [m for m in mob.get_family() if _drawn(m)])
             if walk.objects and walk.objects[-1]["id"] == self._id(mob):
-                walk.objects[-1].update({**_character_keys(walk, mob.character), "side": mob.config.side, "below": mob.layout.below})
+                keys = {**_character_keys(walk, mob.character), "side": mob.side, "below": mob.layout.below}
+                if mob.pointing_at is not None:
+                    keys["pointing_at"] = mob.pointing_at
+                walk.objects[-1].update(keys)
+            return
+        if getattr(mob, "host_pointer_of", None) is not None:  # a host's pointer line (DESIGN.md §71.1)
+            self._emit_parts(walk, mob, path, mob.host_pointer_of, "pointer", [mob])
             return
         if isinstance(mob, Character):  # one figure, not one object per part
             self._emit_parts(walk, mob, path, name or mob.name, "character", [m for m in mob.get_family() if _drawn(m)])

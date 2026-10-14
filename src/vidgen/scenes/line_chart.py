@@ -45,6 +45,15 @@ class LineChart(NarratedScene):
             names += [f"series{i}", f"series:{s.name}"] + [f"point:{s.name}@{x}" for x in xs]
         return names
 
+    @classmethod
+    def reveal_steps(cls, params: Any) -> list[RevealStep]:
+        """One step per series, rising or falling as its values do from first to last
+        (``reveal: all``: one step, the first series)."""
+        series = params.series_list()
+        if params.reveal == "all":
+            series = series[:1]
+        return [RevealStep(f"series{i}", value_trend(s.values)) for i, s in enumerate(series, start=1)]
+
     @staticmethod
     def x_texts(params: Any) -> list[str]:
         """The x values as their tick labels read."""

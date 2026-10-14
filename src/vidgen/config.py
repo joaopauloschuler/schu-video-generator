@@ -500,6 +500,8 @@ class HostConfig(_Strict):
     """Its pose (stand, thinking, arms_crossed... or its own); none: standing."""
     expression: Identifier | None = None
     """Its expression (happy, neutral... or its own); none: its rest face."""
+    auto_direct: bool | None = None
+    """Automatic host directing (look at what is highlighted, point at each new item, react to results); default: on when the video's auto_direct is (a beat's auto_direct wins)."""
 
 
 class HostOverride(_Strict):
@@ -526,6 +528,8 @@ class HostOverride(_Strict):
     """Its pose in this scene."""
     expression: Identifier | None = None
     """Its expression in this scene."""
+    auto_direct: bool | None = None
+    """Automatic host directing in this scene: true or false."""
 
 
 #: A scene's ``host:``: false (none in this scene), true or unset (the video's), a character
@@ -1744,7 +1748,7 @@ class SceneConfig(_Strict):
     set: Identifier | None = None
     """A stage scene's set: a name from sets: whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
     host: SceneHost | None = None
-    """The cartoon host beside this scene's content: false for none, a character name, or {character, side, size, place, floor, facing, speaks, pose, expression} changing the video's host here; default the video's host."""
+    """The cartoon host beside this scene's content: false for none, a character name, or {character, side, size, place, floor, facing, speaks, pose, expression, auto_direct} changing the video's host here; default the video's host."""
 
     @model_validator(mode="before")
     @classmethod
@@ -1827,7 +1831,7 @@ class VideoConfig(_Strict):
     characters: list[CharacterEntry] = Field(default_factory=list)
     """Cartoon characters ({name, voice, look, colors}), declared once and used by any scene; names unique."""
     host: Identifier | HostConfig | None = None
-    """A cartoon host drawn beside the content of every scene (not stage or card scenes): a character name, or {character, side, size, place, floor, floor_color, facing, speaks, pose, expression}; a scene's host: wins (false: none there)."""
+    """A cartoon host drawn beside the content of every scene (not stage or card scenes): a character name, or {character, side, size, place, floor, floor_color, facing, speaks, pose, expression, auto_direct}; a scene's host: wins (false: none there)."""
     subtitles:SubtitlesConfig = Field(default_factory=SubtitlesConfig)
     """What the SRT shows besides the narration (speaker names)."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)

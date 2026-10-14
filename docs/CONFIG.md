@@ -38,7 +38,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
 | `characters` | `[]` | cartoon characters `{name, voice, look, colors}`, declared once and used by any scene; see [characters](#characters-characters) |
-| `host` | none | a cartoon host beside the content of every scene (not `stage` or `card` scenes): a character name, or `{character, side, size, place, floor, floor_color, facing, speaks, pose, expression}`; see [a host beside any scene](#a-host-beside-any-scene-host) |
+| `host` | none | a cartoon host beside the content of every scene (not `stage` or `card` scenes): a character name, or `{character, side, size, place, floor, floor_color, facing, speaks, pose, expression, auto_direct}`; see [a host beside any scene](#a-host-beside-any-scene-host) |
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
@@ -1514,6 +1514,7 @@ scenes:
 | `speaks` | `narrator` | whose lines move its mouth: `narrator` — every beat except those in another character's voice (the host speaks for the narrator, whatever voice says it); `own` — only beats in its own `voice` |
 | `pose` | none | its pose (`thinking`, `arms_crossed`... or its own; none: standing) |
 | `expression` | none | its expression (`happy`, `thinking`... or its own; none: its rest face) |
+| `auto_direct` | the video's | [automatic host directing](#automatic-host-directing): `true` or `false`; not given: on when the video's `auto_direct` is (a beat's `auto_direct` wins) |
 
 - **The room it takes.** The host's column (beside) or band (below) is *reserved* like an
   overlay's `reserve: true`: the scene's safe area (`self.safe_area`, every named region and
@@ -1525,9 +1526,10 @@ scenes:
   characters stand on the set already, and `card`, a full-frame title card; both ignore the video's
   `host:`, and a scene's own `host:` on them is a problem). A project's scene type takes a host
   unless it sets `takes_host = False` ([EXTENDING.md](EXTENDING.md)).
-- **Between scenes.** The host is on screen from a scene's first frame. When the next scene shows
-  the same host unchanged (same character, side, size, pose, ...), it stays in this scene's
-  fade-out, so it stands still across the cut; otherwise it fades out with the content.
+- **Between scenes.** The host is on screen from a scene's first frame (unless a `host_enter`
+  brings it in). When the next scene shows the same host unchanged (same character, side, size,
+  pose, ...), it stays in this scene's fade-out, so it stands still across the cut, unless it
+  walked to the other side or left in this scene; otherwise it fades out with the content.
 - **Speaking.** With `speaks: narrator`, a beat in the narrator's voice (or any voice no other
   character owns) moves its mouth; a beat in another character's voice (a guest's line) leaves it
   silent. The mouth follows the beat's viseme track (stored by `vidgen tts`, else built from the
@@ -1538,8 +1540,66 @@ scenes:
   theme colour. `vidgen lint`: the layout dump records the host as one object of kind `host`
   (floor line included), and `host_overlap` reports it over the scene's content, a caption or
   another overlay.
-- **Not yet** (Step 134): pointing at targets, reacting, walking between sides, entering and
-  leaving. A `zoom` or `pan` moves the host with the rest of the scene.
+- A `zoom` or `pan` moves the host with the rest of the scene.
+
+#### Pointing, reacting and moving (host actions)
+
+Six beat actions act on the scene's host (the host is not a target: these name a target of the
+scene, an expression or a side). They work in every scene type that draws a host; `vidgen
+validate` rejects them in a scene without one, on a `stage` or `card`, and more than one host
+move (`host_move`, `host_enter`, `host_exit`) in a beat.
+
+```yaml
+beats:
+  - text: "Here is the first step."
+    actions: [{host_point: item1, line: true}]       # the arm towards item1, and a pointer line
+  - text: "And that doubled the speed!"
+    actions: [{host_react: happy, effect: sparkle}]  # an expression, and a symbol over the head
+  - text: "Let me stand over here."
+    actions: [{host_move: other_side}]               # walk across; the content slides over
+  - text: "That's all for now."
+    actions: [{host_exit: right, at: 0.5}]           # walk off; host_enter brings it back
+```
+
+| action | target | options | |
+|---|---|---|---|
+| `host_point` | a target of the scene (`item2`, `bar:2024`, `lines:3-5`...) | `line` (`false`), `color` (`dim`) | the near arm reaches towards the edge of the target's box nearest the host and the head turns there; out of reach the arm points straight at it (the hand stays in the host's room, so it never touches the content); `line: true` adds a thin pointer line from the hand to just short of the target. Until the next beat starts (`until: <beat>`) |
+| `host_look` | a target of the scene | | the head turns to the target's nearest edge; until the next beat starts |
+| `host_react` | an expression (`happy`, `surprised`, `worried`... or the host's own) | `effect` (none) | the expression and, with `effect`, a [symbol](#effect-symbols-effect) over the head (`sparkle`, `exclaim`, `sweat`, `hearts`...); until the next beat starts |
+| `host_move` | `other_side` (default), `left` or `right` | `speed` (2.5) | the host walks to that side and turns to the content. Beside the content its column swaps sides and **the content slides over with it** in the same beat (the camera moves, so everything the scene shows or reveals later moves together; overlays and captions stay); in a band below the content (9:16) only the host walks. It stays there for the rest of the scene; the next scene starts on its own `side` |
+| `host_enter` | `left` or `right` (default: its side) | `speed` | the host walks in from beyond that edge to its place, its floor line fading in. A scene whose first host passage is a `host_enter` starts without the host (its room stays free) |
+| `host_exit` | `left` or `right` (default: its side) | `speed` | the host walks out beyond that edge, its floor line fading out; its room stays free |
+
+Write `{action: host_enter}` / `{action: host_move}` for the defaults. The layout dump's `host`
+object gains `pointing_at` while it points, its `side` is where it stands now, and a pointer
+line is one object of kind `pointer` (named after the host; `host_overlap` ignores it and the
+host's own effect symbol).
+
+#### Automatic host directing
+
+With `auto_direct` on (the video's, the host's `auto_direct`, or a beat's; the nearest wins), the
+host directs itself in every scene with a host:
+
+- **Points** (kind `gestures`) at each item the scene reveals in a beat, once per item and at
+  most once per beat (after the item appears).
+- **Looks** (kind `looks`) at what a beat highlights (the first target of a written `highlight`,
+  `callout` or `zoom`, at its `at`), else at the beat's revealed item, when it does not point.
+- **Reacts** (kind `reactions`) to results, at 0.4 of the beat: a chart going up → `happy`, going
+  down → `worried`, a code highlight showing an error (error, exception, traceback, fail, panic)
+  → `surprised`; with kind `effects` a symbol with it (`sparkle`, `sweat`, `exclaim`).
+- **Never moves**: `host_move`, `host_enter` and `host_exit` change the layout, so they are
+  yours; a beat with one gets nothing automatic (and one move per beat is the most `vidgen
+  validate` allows). Written host actions win: a written `host_point` / `host_look` stops the
+  automatic point and look in its beat, a written `host_react` the automatic reaction.
+
+What each scene type reveals: `bullets` an item per step (`reveal: all`: `item1`), `bar_chart` a
+bar per step (`per_beat`: up or down from the bar before; `all`: the last bar, up or down from
+the first) and the `highlight` bar, `line_chart` a series per step (up or down from its first
+value to its last), `code` the lines of each `highlight` entry (`listing` without highlights).
+Other types reveal nothing the host reacts to (it still looks at written highlights). Everything
+it adds is lint-safe by construction (the hand stays in its room; no pointer line). `vidgen
+direct` and the storyboard's `auto:` lines show the added actions; `examples/host-explainer`
+uses them.
 
 ## Narration (`narration:`)
 
@@ -5445,7 +5505,8 @@ variants:
 
 With `auto_direct: true` (top level, a stage's param or a beat's key; the nearest one wins; off
 by default) vidgen adds acting actions to a stage's beats so a dialogue looks directed without
-writing each look:
+writing each look (a [host](#a-host-beside-any-scene-host) beside other scene types directs
+itself too: [automatic host directing](#automatic-host-directing)):
 
 - **Looks.** When a character speaks (the beat's `voice`, or its `say`), the other characters on
   the stage `look_at` it, and it looks at the one it talks to: the last other character who
@@ -6346,7 +6407,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -6430,6 +6491,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock, a box or furniture (a sofa, an armchair, a bed, a desk), leans on a tree, a door, a sign or furniture (a counter...), and stands up again |
 | `get_in`, `ride_to`, `get_out` | see [Vehicles](#vehicles-get_in-ride_to-get_out) | a `stage`'s character gets in a car, a bus, a boat or a balloon or on a bicycle, the vehicle rides (or flies) to a place with its riders, and they get out |
 | `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |
+| `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit` | see [Pointing, reacting and moving](#pointing-reacting-and-moving-host-actions) | the scene's [host](#a-host-beside-any-scene-host) points at or looks at a target of the scene, shows an expression (and a symbol), walks to the other side (the content slides over), walks in or out; any scene type with a host |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
@@ -6909,7 +6971,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part), `host` (the [host](#a-host-beside-any-scene-host) beside the content: one object named after its character, its box covering the floor line too), `prop` (a prop on a stage, built-in or SVG: one object named after it), `particles` (a field of [particles](#particles): one object named after its kind), `motion_effect` (dust, speed lines, impact stars or a whoosh of a [motion effect](#motion-effects-motion_effects): one object named after its kind, with `motion_effect` and `effect_of`) |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part), `host` (the [host](#a-host-beside-any-scene-host) beside the content: one object named after its character, its box covering the floor line too), `pointer` (a host's pointer line, `host_point` with `line: true`: one object named after the host), `prop` (a prop on a stage, built-in or SVG: one object named after it), `particles` (a field of [particles](#particles): one object named after its kind), `motion_effect` (dust, speed lines, impact stars or a whoosh of a [motion effect](#motion-effects-motion_effects): one object named after its kind, with `motion_effect` and `effect_of`) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |
@@ -6932,7 +6994,7 @@ Each object:
 | `character` only: `holding` | the props in its hands, `{hand: prop}` (`{"left": "ball"}`); absent while it holds nothing ([Props in hands](#props-in-hands)) |
 | `character` only: `sitting_on`, `leaning_on` | the prop it sits or leans on; absent while it stands ([Sitting and leaning](#sitting-and-leaning)) |
 | `character` only: `riding` | the vehicle it rides; absent while it is on foot ([Vehicles](#vehicles-get_in-ride_to-get_out)) |
-| `host` only | the [host](#a-host-beside-any-scene-host): `facing`, `speaking`, `face`, `viseme` as for a character, plus `side` (`left` / `right`) and `below` (`true` when it stands under the content) |
+| `host` only | the [host](#a-host-beside-any-scene-host): `facing`, `speaking`, `face`, `viseme` as for a character, plus `side` (`left` / `right`: where it stands now, after a `host_move` too), `below` (`true` when it stands under the content) and `pointing_at` (the target it points at, while it does) |
 | `prop` only: `held_by`, `hand` | the character holding it and which hand; absent while it stands somewhere. A held prop is its own object, drawn right after its holder (an open umbrella right before it); its box is not part of the character's |
 | `prop` only: `shape` | the shape a prop with several shows: an umbrella's `closed` or `open`; absent for other props |
 | `prop` only: `prop`, `depth`, `raised`, `flat` | its kind (a built-in prop's name, or `svg`); how far back it stands (0..1, absent at the front); `raised: true` when it is lifted (`lift`) or hangs on a wall, `flat: true` when it lies on the floor (a rug), each absent otherwise; read by `prop_overlap` |
@@ -7049,7 +7111,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
 | `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
-| `host_overlap` | warning | the [host](#a-host-beside-any-scene-host) (its figure and floor line) sharing at least `min_overlap` of the smaller of two boxes with a scene object (text, shape, picture, character...) or an overlay's object (a caption, a lower third). Not reported: a scene object whose box holds the host's whole box (a backdrop: a full-frame picture, a band), particles and motion effects. `covered_text` leaves the host over text to this rule. Scenes lay out beside the host, so a finding means something was drawn outside the scene's regions (a project scene type that ignores `self.safe_area`, a `zoom`): make the host smaller (`size`), move it (`side`, `place`) or `host: false` on that scene |
+| `host_overlap` | warning | the [host](#a-host-beside-any-scene-host) (its figure and floor line) sharing at least `min_overlap` of the smaller of two boxes with a scene object (text, shape, picture, character...) or an overlay's object (a caption, a lower third). Not reported: a scene object whose box holds the host's whole box (a backdrop: a full-frame picture, a band), particles, motion effects, the host's own pointer line and effect symbol. `covered_text` leaves the host over text to this rule. Scenes lay out beside the host, so a finding means something was drawn outside the scene's regions (a project scene type that ignores `self.safe_area`, a `zoom`): make the host smaller (`size`), move it (`side`, `place`) or `host: false` on that scene |
 | `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`), and not two 0.15 or more apart in depth (one behind the other); see [Moving](#moving) |
 | `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. In a [shot](#shots-shot) (other than `wide`) only the characters it frames are checked, wholly outside too: their face in a `medium`, `over_shoulder` or `closeup` shot, their whole box in a `two_shot`; the near character of an `over_shoulder` shot and characters the shot does not frame may be cut. Fix: put it on a mark inside the view, or pan to it (in a shot: keep it from walking out, or frame another shot) |
 | `character_overlap` | warning | two characters at rest whose boxes share at least `min_overlap` of the narrower one's width, at depths less than 0.15 apart (further apart one stands behind the other: [walking in depth](#walking-in-depth-and-the-front-view)). A character that walked in the still's beat is `walk_overlap`'s. Fix: marks further apart, or walk one away (across, or in depth) |

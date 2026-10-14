@@ -99,7 +99,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   overrides what it needs ([example](examples/cartoon_series)).
 - **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
   scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
-  mouth follows the narration ([docs](docs/CONFIG.md#a-host-beside-any-scene-host)).
+  mouth follows the narration; it points at items, reacts, walks to the other side, enters and
+  leaves, by hand or with `auto_direct` ([docs](docs/CONFIG.md#a-host-beside-any-scene-host),
+  [example](examples/host-explainer)).
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
   look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
@@ -588,6 +590,11 @@ my_video/
   fireplace, a steaming kettle, a running clock, a knock at the door, a gift opened (blushing) and a
   lamp switched on at nightfall; birdsong, rain, fire and room-tone beds, the `cartoon` music bed;
   about 94 s with Kokoro narration (no audio committed).
+- [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
+  an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
+  points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven
+  with a pointer line, crosses to the other side (the content slides over) and walks off; about
+  58 s with Kokoro narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

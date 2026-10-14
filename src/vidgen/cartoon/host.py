@@ -71,7 +71,7 @@ def host_layout(area: Box, frame_width: float, frame_height: float, host: HostCo
     right = host.side == "right"
     centre = x1 - column / 2 if right else x0 + column / 2
     reserve = (x0, y0, x1, y0 + height) if below else ((x1 - column, y0, x1, y1) if right else (x0, y0, x0 + column, y1))
-    facing = host.facing if host.facing != "auto" else ("left" if right else "right")
+    facing = facing_for(host.side, host.facing)
     return HostLayout(
         height=height,
         feet=(centre, y0),
@@ -81,6 +81,73 @@ def host_layout(area: Box, frame_width: float, frame_height: float, host: HostCo
         facing=facing,
         below=below,
     )
+
+
+# ----- pointing and moving (Step 134) -------------------------------------------------------------
+
+#: How far (Manim units) a host's hand may reach past its room (its reserved column or band): less
+#: than the gap ``avoid`` keeps between the room and the content (0.2), so a pointing arm never
+#: touches the content.
+HAND_REACH_OUT = 0.1
+
+
+def pointed_spot(shoulder: tuple[float, float], box: Box) -> tuple[float, float]:
+    """The point of ``box`` (a target's) nearest ``shoulder``: the edge a host points at."""
+    x0, y0, x1, y1 = box
+    return min(max(shoulder[0], x0), x1), min(max(shoulder[1], y0), y1)
+
+
+def hand_goal(shoulder: tuple[float, float], spot: tuple[float, float], room: Box, reach_out: float = HAND_REACH_OUT) -> tuple[float, float]:
+    """Where a pointing hand goes: on the line from ``shoulder`` to ``spot``, as far towards
+    ``spot`` as ``room`` grown by ``reach_out`` allows (the arm's solver bends the elbow when that is
+    nearer than the arm is long, and points it straight when farther). A shoulder outside the room
+    stays where it is."""
+    x0, y0, x1, y1 = room[0] - reach_out, room[1] - reach_out, room[2] + reach_out, room[3] + reach_out
+    sx, sy = shoulder
+    if not (x0 <= sx <= x1 and y0 <= sy <= y1):
+        return shoulder
+    dx, dy = spot[0] - sx, spot[1] - sy
+    share = 1.0
+    for d, start, low, high in ((dx, sx, x0, x1), (dy, sy, y0, y1)):
+        if d > 1e-12:
+            share = min(share, (high - start) / d)
+        elif d < -1e-12:
+            share = min(share, (low - start) / d)
+    return sx + share * dx, sy + share * dy
+
+
+@dataclass(frozen=True)
+class HostMove:
+    """A host walking to the other side of its area: the ``side`` it goes to, the x its feet go to
+    on screen (``feet_x``), its room there (``reserve``, on screen) and how far the content slides
+    on screen meanwhile (``content_shift``: the column's width beside the content, 0 in a band
+    below it)."""
+
+    side: str
+    feet_x: float
+    reserve: Box
+    content_shift: float
+
+
+def host_move_plan(area: Box, feet_x: float, reserve: Box, side: str, below: bool, to: str) -> HostMove | None:
+    """Where a ``host_move`` to ``to`` (``other_side``, ``left`` or ``right``) takes a host standing
+    at ``feet_x`` (screen) on ``side`` of ``area`` (the safe area its layout used) with its room
+    ``reserve`` (screen): mirrored within the area. Beside the content its column swaps sides and
+    the content slides the column's width the other way; in a band below the content only the host
+    walks. ``None`` when it is on that side already."""
+    goal = ("left" if side == "right" else "right") if to == "other_side" else to
+    if goal == side:
+        return None
+    ax0, _, ax1, _ = area
+    rx0, ry0, rx1, ry1 = reserve
+    mirrored = (ax0 + ax1 - rx1, ry0, ax0 + ax1 - rx0, ry1)
+    shift = 0.0 if below else (rx1 - rx0) * (1.0 if goal == "left" else -1.0)
+    return HostMove(goal, ax0 + ax1 - feet_x, mirrored, shift)
+
+
+def facing_for(side: str, facing: str) -> str:
+    """Which way a host on ``side`` faces with ``facing`` (``auto``: towards the content)."""
+    return facing if facing != "auto" else ("left" if side == "right" else "right")
 
 
 # ----- which host a scene has ---------------------------------------------------------------------
@@ -165,7 +232,8 @@ def _character_problems(config: VideoConfig, host: HostConfig, where: str, writt
 
 def host_problems(config: VideoConfig) -> list[Problem]:
     """The video's and the scenes' ``host:`` checked against ``characters:`` (the character and
-    its pose / expression names) and merged per scene (``parse_config`` runs it)."""
+    its pose / expression names) and merged per scene, and the host actions of the beats
+    (:func:`host_action_problems`); ``parse_config`` runs it."""
     base = video_host(config)
     problems = _character_problems(config, base, "host", {"character"}) if base is not None else []
     for i, scene in enumerate(config.scenes):
@@ -182,6 +250,41 @@ def host_problems(config: VideoConfig) -> list[Problem]:
         if host is not None and isinstance(setting, (str, HostOverride)):
             written = {"character"} if isinstance(setting, str) else set(setting.model_fields_set)
             problems += _character_problems(config, host, where, written)
+    return problems + host_action_problems(config)
+
+
+#: The beat actions that act on a scene's host (DESIGN.md §71.1), and those that walk it.
+HOST_ACTIONS: frozenset[str] = frozenset({"host_point", "host_look", "host_react", "host_move", "host_enter", "host_exit"})
+HOST_MOVES: frozenset[str] = frozenset({"host_move", "host_enter", "host_exit"})
+
+
+def host_action_problems(config: VideoConfig) -> list[Problem]:
+    """Host actions written in a scene that has no host, more than one host move (``host_move``,
+    ``host_enter``, ``host_exit``) in a beat, and a ``host_react`` expression the host does not
+    know (``parse_config`` runs it with :func:`host_problems`)."""
+    problems = []
+    for i, scene in enumerate(config.scenes):
+        try:
+            host = scene_host(config, scene)
+        except (ValueError, ValidationError):
+            continue   # host_problems reports it
+        for j, beat in enumerate(scene.beats):
+            moves = 0
+            for k, act in enumerate(beat.actions):
+                if act.action not in HOST_ACTIONS:
+                    continue
+                where = f"scenes[{i}].beats[{j}].actions[{k}]"
+                if host is None:
+                    problems.append(Problem(where, f"{act.action}: scene '{scene.id}' has no host (give the video or the scene a host:)"))
+                    continue
+                moves += act.action in HOST_MOVES
+                if moves == 2:
+                    problems.append(Problem(where, f"{act.action}: one host move per beat (host_move, host_enter or host_exit); put it in another beat"))
+                if act.action == "host_react" and act.target is not None:
+                    for name in act.targets():
+                        message = pose_name_problem(config, host.character, "expression", name)
+                        if message is not None:
+                            problems.append(Problem(f"{where}.target", message))
     return problems
 
 

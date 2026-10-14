@@ -31,6 +31,7 @@ from vidgen.capture import FrameCapture
 from vidgen.cartoon.cast import beat_voice, find_character
 from vidgen.cartoon.directing import DirectedBeat, with_auto_actions
 from vidgen.cartoon.host import host_continues, host_speaks, scene_host
+from vidgen.cartoon.host_directing import RevealStep, host_directions, starts_present
 from vidgen.cartoon.effect_symbols import head_box
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
@@ -434,6 +435,19 @@ class NarratedScene(MovingCameraScene):
         self.speak(self.host.character)
         return self.host.character.lip_sync_track
 
+    def _park_host(self) -> None:
+        """Start the host off screen (a ``host_enter`` brings it in, DESIGN.md §71.1): beyond the
+        frame's edge on its side, its floor line hidden. Its room stays reserved."""
+        from vidgen.cartoon.acting import offstage_x
+
+        host = self.host
+        figure = host.character
+        x = offstage_x(host.side, -self.frame_width / 2, self.frame_width / 2, host.half_reach)
+        figure.shift([x - float(figure.feet()[0]), 0.0, 0.0])
+        if host.floor is not None:
+            host.floor.set_stroke(opacity=0.0)
+        host.present = False
+
     def _moving_in(self) -> bool:
         """Whether a push or wipe leads into this scene (its first frames move)."""
         t = self.transition_in
@@ -542,8 +556,17 @@ class NarratedScene(MovingCameraScene):
     def auto_actions(cls, project: Project, spec: SceneConfig, params: Any) -> list[DirectedBeat]:
         """The actions automatic directing adds to the beats of ``spec`` (validated ``params``),
         appended after each beat's own before the scene plans its actions (DESIGN.md §69.23).
-        Default: none (``stage``: looks and reactions with ``auto_direct``). Pure for a given
-        project: ``vidgen direct`` and the storyboard call it without rendering."""
+        Default: the host's (looks, points and reactions with ``auto_direct`` when the scene has
+        a host, §71.2; ``stage``: its characters' looks, reactions, gestures...). Pure for a
+        given project: ``vidgen direct`` and the storyboard call it without rendering."""
+        return host_directions(project, spec, cls, params)
+
+    @classmethod
+    def reveal_steps(cls, params: Any) -> list[RevealStep]:
+        """What each step of the scene's own reveal (the steps it passes to :meth:`reveal`) shows,
+        for host directing (DESIGN.md §71.2): the target it shows or marks and whether it shows a
+        rise, a fall or an error. ``params`` are validated. Default: none (the host then only
+        looks at written highlights)."""
         return []
 
     #: How many beats the scene type narrates: ``None`` (any number, the default), an ``int``
@@ -793,7 +816,7 @@ class NarratedScene(MovingCameraScene):
         if self.transition_out is not None and not self.transition_out.cut:
             self.wait_seconds(math.ceil(self.outro * config.frame_rate - 1e-9) / config.frame_rate)
             return
-        kept = [self.host] if self.host is not None and self._host_stays else []
+        kept = [self.host] if self.host is not None and self._host_stays and self.host.at_home else []
         self.clear_all(run_time=self.outro, keep=[*self._carried_parts(), *kept])
 
     def play_steps(
@@ -1316,6 +1339,8 @@ class NarratedScene(MovingCameraScene):
             # a foreground mobject stays last in the draw order, so while it idles or speaks Manim
             # redraws only it each frame, over a still image of the rest
             self.add_foreground_mobject(self.host)
+            if self._actions is not None and not starts_present([u.config for u in self._actions.uses]):
+                self._park_host()
         if not self.carried_in or not self.spec.carry:
             return
         for entry in self.spec.carry:

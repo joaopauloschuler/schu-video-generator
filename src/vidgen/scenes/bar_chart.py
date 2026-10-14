@@ -29,6 +29,19 @@ class BarChart(NarratedScene):
             names += [f"bar{i}", f"bar:{label}"]
         return names
 
+    @classmethod
+    def reveal_steps(cls, params: Any) -> list[RevealStep]:
+        """``reveal: all``: one step, the last bar, rising or falling as the values do from first
+        to last; ``per_beat``: one per bar, rising or falling from the bar before; then the
+        highlighted bar's step."""
+        values = params.values
+        if params.reveal == "all":
+            steps = [RevealStep(f"bar{len(values)}", value_trend(values))]
+        else:
+            steps = [RevealStep(f"bar{i + 1}", value_trend(values[i - 1 : i + 1]) if i else None) for i in range(len(values))]
+        hi = params.highlight_index()
+        return steps + ([RevealStep(f"bar{hi + 1}")] if hi is not None else [])
+
     class Params(SceneParams):
         title: TranslatableStr = ""
         """Chart title (in the header band at the top)."""

@@ -703,9 +703,9 @@ test-suite run.
 - [x] Tests: the region split, placement per format (16:9, 9:16, 1:1), lint (`tests/test_host.py`; stills of bullets, bar_chart, code in 16:9, 9:16, 1:1 checked by eye)
 
 ### Step 134 — A cartoon host, part 2: pointing and reacting
-- [ ] The host points at any action target of the scene (`host_point: <target>`, the arm and a look turning to it; a gesture line or not), reacts (`host_react: happy`), walks to the other side between beats, enters / exits; `auto_direct` for hosts: look at what the narration highlights, point at a newly revealed item, react to results (a chart going up → happy), at most one move per beat
-- [ ] An example `examples/host-explainer/` (a short original explainer with a host)
-- [ ] Tests: pointing geometry to targets, planner rules
+- [x] The host points at any action target of the scene (`host_point: <target>`, the arm and a look turning to it; a gesture line or not), reacts (`host_react: happy`), walks to the other side between beats, enters / exits; `auto_direct` for hosts: look at what the narration highlights, point at a newly revealed item, react to results (a chart going up → happy), at most one move per beat (actions `host_point` (`line: true`: pointer line), `host_look`, `host_react` (`effect`), `host_move` (`other_side` / `left` / `right`: the content slides to the other side with it, by a camera move), `host_enter`, `host_exit`; the hand stays in the host's room; planner `cartoon/host_directing.py` from each type's `reveal_steps` (bullets, bar_chart, line_chart, code); it never adds a move; DESIGN §71.1, §71.2)
+- [x] An example `examples/host-explainer/` (a short original explainer with a host) ("Why Bread Rises", ~58 s, an original mouse host; bullets, bar_chart, process, title, text_card; validate and preview lint clean, stills checked by eye; no audio)
+- [x] Tests: pointing geometry to targets, planner rules (`tests/test_host_acting.py`: 19 logic + 1 render)
 
 ### Step 135 — Voices with feeling, part 1: Kokoro
 - [ ] A line's manner (`emotion:` beat key; screenplay `(excited)` etc.) maps to prosody for Kokoro: speed, pitch shift (ffmpeg, formant-friendly within small ranges), energy (gain), pauses at commas; optional voice blending (`voice: af_heart+af_bella 0.6`) if Kokoro supports it; in the audio hash; documented emotion table

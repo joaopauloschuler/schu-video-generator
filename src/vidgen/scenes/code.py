@@ -198,15 +198,39 @@ class CodeListing(NarratedScene):
         return names + [f"lines:{a}-{b}" for a in range(1, n + 1) for b in range(a + 1, n + 1)]
 
     @staticmethod
-    def _line_count(params: Any) -> int:
-        """Lines of the listing (0 when its file cannot be read here)."""
+    def _code_lines(params: Any) -> list[str]:
+        """The listing's lines (none when its file cannot be read here)."""
         text = params.code
         if text is None:
             try:
                 text = current_project().asset(params.path).read_text(encoding="utf-8")
             except (VidgenError, OSError, UnicodeDecodeError):
-                return 0
-        return len(text.rstrip("\n").split("\n"))
+                return []
+        return text.rstrip("\n").split("\n")
+
+    @classmethod
+    def _line_count(cls, params: Any) -> int:
+        """Lines of the listing (0 when its file cannot be read here)."""
+        return len(cls._code_lines(params))
+
+    @classmethod
+    def reveal_steps(cls, params: Any) -> list[RevealStep]:
+        """The listing with the first ``highlight`` entry, then one step per later entry: the
+        lines it marks (``line<N>``, ``lines:<a-b>`` when they run on, else the first), an error
+        when they show one (:func:`has_error_text`)."""
+        code = cls._code_lines(params)
+        steps = []
+        for spec in params.highlight:
+            chosen = sorted(parse_line_spec(spec))
+            if len(chosen) == 1:
+                focus = f"line{chosen[0]}"
+            elif chosen == list(range(chosen[0], chosen[-1] + 1)):
+                focus = f"lines:{chosen[0]}-{chosen[-1]}"
+            else:
+                focus = f"line{chosen[0]}"
+            shown = [code[k - 1] for k in chosen if k <= len(code)]
+            steps.append(RevealStep(focus, "error" if has_error_text(shown) else None))
+        return steps or [RevealStep("listing")]
 
     class Params(SceneParams):
         code: str | None = None
