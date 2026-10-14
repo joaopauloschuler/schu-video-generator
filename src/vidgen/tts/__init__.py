@@ -20,10 +20,6 @@ from vidgen.errors import VidgenError
 if TYPE_CHECKING:
     from vidgen.project import Project
 
-#: Providers that speak a beat's ``emotion`` (DESIGN.md §72); the others ignore it.
-EMOTION_PROVIDERS: tuple[str, ...] = ("kokoro",)
-
-
 class TTSProvider(Protocol):
     """What the TTS command needs from a provider. Constructing one never needs an API key.
 
@@ -51,16 +47,16 @@ class TTSProvider(Protocol):
 
 def get_provider(voice: VoiceConfig, emotion: Prosody | None = None) -> TTSProvider:
     """The provider for ``voice.provider`` (ElevenLabs, OpenRouter: DESIGN.md §66, or Kokoro on
-    this computer: §68) speaking with ``emotion`` (§72; only Kokoro uses it so far). Constructing
-    one loads no model and needs no key."""
+    this computer: §68) speaking with ``emotion`` (Kokoro §72, the others §73). Constructing one
+    loads no model and needs no key."""
     if voice.provider == "elevenlabs":
         from vidgen.tts.elevenlabs import ElevenLabsProvider
 
-        return ElevenLabsProvider(voice)
+        return ElevenLabsProvider(voice, emotion=emotion)
     if voice.provider == "openrouter":
         from vidgen.tts.openrouter import OpenRouterTTSProvider
 
-        return OpenRouterTTSProvider(voice)
+        return OpenRouterTTSProvider(voice, emotion=emotion)
     if voice.provider == "kokoro":
         from vidgen.tts.kokoro import KokoroProvider
 
@@ -89,27 +85,60 @@ def tts_warnings(project: Project) -> list[str]:
     return out + kokoro.install_warnings(project.voice(n) for n in names) + emotion_warnings(project)
 
 
+def speaks_emotion_by_name(voice: VoiceConfig) -> bool:
+    """Whether ``voice`` speaks an emotion by its name only (DESIGN.md §73): ElevenLabs (an audio
+    tag or voice settings) and OpenRouter models that take instructions (a sentence); Kokoro and
+    the other OpenRouter models use its numbers."""
+    from vidgen.tts.openrouter import takes_instructions
+
+    return voice.provider == "elevenlabs" or (voice.provider == "openrouter" and takes_instructions(str(voice.model)))
+
+
 def emotion_warnings(project: Project) -> list[str]:
-    """A warning naming the beats whose ``emotion`` their voice's provider does not speak yet."""
-    ignored = [
-        beat_id for beat_id, name in project.voice_names().items()
-        if project.voice(name).provider not in EMOTION_PROVIDERS and project.beat_emotion(beat_id) is not None
-    ]
-    if not ignored:
-        return []
-    shown = ", ".join(ignored[:5]) + (f" and {len(ignored) - 5} more" if len(ignored) > 5 else "")
-    providers = ", ".join(EMOTION_PROVIDERS)
-    return [f"emotion: only {providers} voices speak an emotion so far; the audio of {shown} ignores it"]
+    """What ``vidgen validate`` says about beats whose ``emotion`` their voice speaks only in
+    part (DESIGN.md §73): numbers changed from a row where only the name counts, and OpenRouter
+    models without instructions (speed, pitch and loudness only)."""
+    from vidgen.emotions import EMOTIONS
+
+    numbers: list[str] = []
+    no_instructions: dict[str, list[str]] = {}
+    for beat_id, name in project.voice_names().items():
+        emotion = project.beat_emotion(beat_id)
+        if emotion is None:
+            continue
+        voice = project.voice(name)
+        if speaks_emotion_by_name(voice):
+            if emotion != EMOTIONS[emotion.name]:
+                numbers.append(beat_id)
+        elif voice.provider == "openrouter":
+            no_instructions.setdefault(str(voice.model), []).append(beat_id)
+    out: list[str] = []
+    if numbers:
+        out.append(
+            f"emotion: ElevenLabs voices and OpenRouter models with instructions speak an emotion by its name only; "
+            f"the numbers given for {_listed(numbers)} are ignored (Kokoro uses them)"
+        )
+    for model, beats in no_instructions.items():
+        out.append(
+            f"emotion: {model} takes no instructions, so the emotion of {_listed(beats)} changes only the speed, "
+            "pitch and loudness of the audio, not its tone or pauses"
+        )
+    return out
+
+
+def _listed(beat_ids: list[str]) -> str:
+    """``a, b, c, d, e and 3 more``."""
+    return ", ".join(beat_ids[:5]) + (f" and {len(beat_ids) - 5} more" if len(beat_ids) > 5 else "")
 
 
 def beat_providers(project: Project) -> dict[str, TTSProvider]:
-    """Beat id -> the provider of the beat's effective voice and emotion (DESIGN.md §46, §72; one
-    provider per voice and emotion), in video order."""
+    """Beat id -> the provider of the beat's effective voice and emotion (DESIGN.md §46, §72,
+    §73; one provider per voice and emotion), in video order."""
     made: dict[tuple[str | None, Prosody | None], TTSProvider] = {}
     out: dict[str, TTSProvider] = {}
     for beat_id, name in project.voice_names().items():
         voice = project.voice(name)
-        key = (name, project.beat_emotion(beat_id) if voice.provider in EMOTION_PROVIDERS else None)
+        key = (name, project.beat_emotion(beat_id))
         if key not in made:
             made[key] = get_provider(voice, key[1])
         out[beat_id] = made[key]

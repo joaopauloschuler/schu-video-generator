@@ -9759,9 +9759,8 @@ Reference: docs/CONFIG.md "Voices with feeling (`emotion`)". The owner found Kok
   calm, doubtful, sleepy, whisper, shout); `prosody(setting)`; `EMOTION_WORDS` (manner words →
   rows) and `manner_emotion(manner)`.
 - **Providers**: `get_provider(voice, emotion=None)`; `beat_providers` makes one provider per
-  (voice name, emotion) for providers in `tts.EMOTION_PROVIDERS` (`kokoro`), one per voice as
-  before for the others (their hashes and instances unchanged). `tts.emotion_warnings` (in
-  `tts_warnings`): beats with an emotion whose provider ignores it. The dry run names the emotion.
+  (voice name, emotion) (Step 135: Kokoro only; since Step 136 every provider, §73).
+  `tts.emotion_warnings` (in `tts_warnings`): §73. The dry run names the emotion.
 - **Kokoro** (`KokoroProvider(voice, emotion=...)`): `spec()` gains `emotion: {name, speed,
   pitch, gain, pauses}` only when there is a non-neutral emotion (so every existing hash, the
   pinned ones included, is unchanged). `spoken_speed` = voice speed × emotion speed (clamped to
@@ -9793,5 +9792,55 @@ Reference: docs/CONFIG.md "Voices with feeling (`emotion`)". The owner found Kok
   189 / -34.7 / 0.09 / 0.23; shout 5.00 / 232 / -20.7 / 0.04 / 0.10; sleepy 7.01 / 178 / -30.2 /
   0.19 / 0.40; `af_heart+af_bella:0.5` 5.50 / 196 / -25.3. Kokoro's peaks were 0.3-0.6, so the
   limiter did not act. 3-4 s per line after the model load.
-- **Not done**: other providers (Step 136); a real whisper (no breathiness: a quieter, slower,
+- **Not done**: other providers (Step 136, §73); a real whisper (no breathiness: a quieter, slower,
   lower voice); pauses outside English; emotion inside a line (one emotion per beat).
+
+## 73. Voices with feeling, part 2: ElevenLabs and OpenRouter (Step 136)
+
+Reference: docs/CONFIG.md "`emotion` with ElevenLabs and OpenRouter". The same `emotion:`
+(§72) is spoken by every provider; without one, every request and hash is as before.
+
+- **Table** (`emotions.py`): `NamedCues(tag, stability, style, instruction)` and `NAMED_CUES`, one
+  row per emotion but `neutral` (a test keeps the names equal to `EMOTION_NAMES`);
+  `named_cues(prosody)` looks up the emotion's **name** (a mapping's `like`), so these providers
+  ignore a mapping's numbers and `like: neutral` changes nothing for them.
+- **ElevenLabs `eleven_v3`** (`voicesounds.is_tagged_voice`: provider `elevenlabs`, model id
+  starting `eleven_v3`): `Project.spoken(beat)` inserts `"<tag> "` at position 0 of the written
+  text with `Spoken.inserted` (term `emotion`), after the voice sounds are voiced, so the tag
+  comes first and belongs to no written word: captions, SRT, karaoke timings and the viseme track
+  map the alignment past it as they do for voice-sound tags (§69.33). The tag is part of the
+  text sent and so of the hash (`cache_key(text)`); `vidgen tts --dry-run` shows it in `says:`.
+  The voice settings stay. `readback.compare_beat` drops spoken words that are bracketed audio
+  tags no written word claims (`_audio_tags`), so neither an emotion tag nor a v3 voice-sound
+  tag counts as a word missing from the transcript. Tags: `[whispers]` and `[excited]` are in
+  ElevenLabs' documented v3 tag list (with `[sighs]`, `[laughs]` of the voice sounds); `[happy]`, `[sad]`, `[angry]`,
+  `[nervous]`, `[surprised]`, `[thoughtful]`, `[shouting]` are emotion words of its examples;
+  `[calm]` and `[tired]` were chosen by analogy (v3 reads free-form tags; untested against the
+  real API, which no step may call).
+- **Other ElevenLabs models**: `ElevenLabsProvider(voice, emotion=...)` keeps `cues` (none for
+  v3); `settings` adds the row's `stability` and `style` changes to the voice's
+  `voice_settings`, each clamped to 0-1 and rounded to 3 decimals. The text is never changed.
+  The hash follows through the settings in `cache_key` (the kphi3 legacy key then no longer
+  matches, as for any other settings).
+- **OpenRouter models with instructions** (`openrouter.takes_instructions(model)`:
+  `INSTRUCTION_PREFIXES` `openai/`, `google/`): `OpenRouterTTSProvider.instructions` = the
+  voice's own `instructions` (a full stop added when it has none) + `" "` + the row's sentence, or
+  the sentence alone; `request_body` sends it. `spec()` keeps `instructions` as the voice's
+  (pinned keys unchanged) and gains `emotion: {name, instruction}`.
+- **Other OpenRouter models**: no instructions and no word timings, so `with_prosody(mp3,
+  emotion)` changes the returned audio as Kokoro's is changed, without the pauses: decoded at
+  24 kHz mono (`sfx.decode_audio`), `prosody.apply_gain` (soft-limited boost), then
+  `prosody.tempo_filter` (`atempo`, 0.5-2) and `prosody.pitch_filter` in the MP3 encode
+  (`kokoro.pcm_to_mp3`). `spec()` gains `emotion: {name, speed, pitch, gain}` (not `pauses`:
+  they change nothing here). An emotion whose speed, pitch and gain are neutral (only pauses) is
+  dropped, so it keeps the plain hash.
+- **Providers per beat**: `beat_providers` keys every provider by (voice name, emotion);
+  `tts.EMOTION_PROVIDERS` is gone. `tts.speaks_emotion_by_name(voice)`: ElevenLabs, or an
+  OpenRouter model with instructions.
+- **Validate** (`tts.emotion_warnings`, replacing Step 135's "only kokoro" warning): (1) beats
+  whose emotion's numbers differ from its named row on a name-only voice (the numbers are
+  ignored); (2) per OpenRouter model without instructions, the beats whose emotion changes only
+  speed, pitch and loudness. Kokoro and plain named emotions give no warning.
+- **Not done**: OpenRouter's own ElevenLabs models (`elevenlabs/eleven-v3`) are treated like
+  any model without instructions (post-processing), not given tags; no ElevenLabs `speed`
+  setting; tags not checked against the real API (mocked tests only).

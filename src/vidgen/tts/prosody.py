@@ -112,6 +112,15 @@ def apply_gain(samples: np.ndarray, gain_db: float) -> np.ndarray:
     return np.where(size > LIMIT_KNEE, np.sign(scaled) * bent, scaled).astype(np.float32)
 
 
+def tempo_filter(factor: float) -> str | None:
+    """An ffmpeg audio filter making speech ``factor`` times faster with its pitch kept
+    (``atempo``, 0.5-2); ``None`` for 1. Kokoro speeds itself up instead; OpenRouter's audio
+    uses this (DESIGN.md §73)."""
+    if factor == 1.0:
+        return None
+    return f"atempo={min(2.0, max(0.5, factor)):.6f}"
+
+
 def pitch_filter(semitones: float, rate: int) -> str | None:
     """An ffmpeg audio filter raising the pitch by ``semitones`` while keeping the length
     (``asetrate`` + ``aresample`` + ``atempo``); ``None`` for 0."""

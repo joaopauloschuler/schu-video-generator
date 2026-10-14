@@ -12817,3 +12817,66 @@ How to test
   test_phase_k_review test_phase_i_review` (328 passed, 96 s). No render tests (nothing rendered
   changed). The full suite was not run.
 - Real Kokoro: `bash scratchpad/s135/run_check.sh` (sets the cgroup and `HF_HUB_OFFLINE`).
+
+## Step 136 — Voices with feeling, part 2: other providers
+
+What was built
+- **One table by name**: `emotions.NamedCues(tag, stability, style, instruction)`,
+  `NAMED_CUES` (12 rows, every emotion but neutral) and `named_cues(prosody)`. ElevenLabs and
+  OpenRouter models with instructions use the emotion's name only (a mapping's `like`).
+- **ElevenLabs `eleven_v3`**: `Project.spoken` puts the tag before the line (`[excited] Hello
+  there.`) with `Spoken.inserted` (after the voice sounds, so it comes first); the text sent and
+  so the hash change; voice settings unchanged. `readback.compare_beat` now drops bracketed
+  audio tags that no written word claims (also fixes v3 voice-sound tags counting as missing
+  words).
+- **Other ElevenLabs models**: `ElevenLabsProvider(voice, emotion=)` adds the row's stability and
+  style changes to `voice_settings` (clamped 0-1); the text is never changed.
+- **OpenRouter**: `takes_instructions(model)` (`openai/`, `google/`): the row's sentence is added
+  after the voice's own `instructions` (`spec` gains `emotion: {name, instruction}`). Other
+  models: `with_prosody` re-encodes the returned MP3 with the emotion's gain (soft-limited),
+  speed (`prosody.tempo_filter`, atempo) and pitch; no pauses (no word timings); `spec` gains
+  `{name, speed, pitch, gain}`; a pauses-only emotion is dropped.
+- `beat_providers` keys every provider by (voice, emotion); `tts.EMOTION_PROVIDERS` removed;
+  `tts.speaks_emotion_by_name`. `tts.emotion_warnings` now warns about (1) numbers given on a
+  name-only voice, (2) OpenRouter models without instructions (speed / pitch / loudness only).
+  The dry run names every beat's emotion.
+- Hashes without `emotion` are unchanged (pinned keys tested for ElevenLabs and OpenRouter).
+
+Files
+- New: `tests/test_emotions_providers.py`.
+- Changed: `emotions.py`, `tts/__init__.py`, `tts/elevenlabs.py`, `tts/openrouter.py`,
+  `tts/prosody.py` (`tempo_filter`), `tts/run.py`, `project.py` (`spoken`), `readback.py`
+  (`_audio_tags`), `config.py` (docstrings), `tests/test_emotions.py` (the ignore test replaced).
+  Docs: CONFIG.md (new "`emotion` with ElevenLabs and OpenRouter" table and notes), DESIGN.md
+  (§72 references, new §73), guide + `AGENTS.md` copy.
+
+Public interfaces
+- Config unchanged (`emotion` now spoken by every provider). `vidgen.api` unchanged. Internal:
+  `emotions.NamedCues` / `NAMED_CUES` / `named_cues`, `ElevenLabsProvider(emotion=)`,
+  `OpenRouterTTSProvider(emotion=)` / `.instructions` / `.takes_instructions`,
+  `openrouter.takes_instructions`, `openrouter.with_prosody`, `prosody.tempo_filter`,
+  `tts.speaks_emotion_by_name`.
+
+Decisions / deviations
+- v3 tag in `Project.spoken`, not in the provider: the ElevenLabs alignment then maps back to
+  the written words as for voice-sound tags, and captions never show it.
+- v3 gets only the tag (no settings change); other models only settings (never a text change).
+- OpenRouter models without instructions are post-processed rather than only warned about: the
+  same numbers Kokoro uses, minus the pauses; a validate warning says what is not spoken.
+- Tags: `[whispers]`, `[excited]` are in ElevenLabs' documented v3 list; `[happy]`, `[sad]`,
+  `[angry]`, `[nervous]`, `[surprised]`, `[thoughtful]`, `[shouting]` are emotion words from its
+  examples (from memory of the docs; no web fetch); `[calm]` and `[tired]` were chosen by
+  analogy. None was checked against the real API.
+
+Known gaps / TODOs
+- OpenRouter's ElevenLabs models (`elevenlabs/eleven-v3`) get post-processing, not tags.
+- No ElevenLabs `speed` voice setting from the emotion's speed.
+- A tag override in `emotion: {...}` (e.g. `tag:`) would let a person fix a tag v3 ignores.
+
+How to test
+- `pytest tests/test_emotions_providers.py tests/test_emotions.py` (30 passed, 3 s).
+- Run here (non-render): `test_tts test_tts_openrouter test_tts_kokoro test_voice_sounds
+  test_readback test_voices test_pronunciation` (178 passed, 2 skipped, 12 s); `test_docs
+  test_guide test_config test_schema test_emotions test_emotions_providers test_screenplay
+  test_project` (264 passed, 85 s); `test_cartoon_visemes test_captions test_json_output
+  test_mcp` (99 passed, 34 s). No render tests; the full suite was not run.

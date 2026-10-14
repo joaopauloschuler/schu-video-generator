@@ -226,6 +226,13 @@ def hard_term(words: Sequence[str], index: int) -> bool:
     return core[0].isupper() and not starts_sentence and core.lower() not in ("i", "i'm", "i've", "i'll", "i'd")
 
 
+def _audio_tags(spoken: Spoken, spoken_words: Sequence[str]) -> set[int]:
+    """Indices of the spoken words that are audio tags no written word says (an ElevenLabs v3
+    ``[excited]`` or ``[laughs]`` inserted before or between words): never heard as words."""
+    claimed = {s for group in spoken.word_groups() for s in group}
+    return {i for i, word in enumerate(spoken_words) if i not in claimed and re.fullmatch(r"\[[^\[\]]+\]", word)}
+
+
 def _invert_groups(spoken: Spoken, count: int) -> list[int]:
     """Spoken word index -> the written word it says (the nearest earlier one for a word no
     written word claims)."""
@@ -292,7 +299,8 @@ def compare_beat(
     left out."""
     written_words = spoken.text.split()
     spoken_words = spoken.spoken.split()
-    ref = normalize_words(spoken_words, language)
+    tags = _audio_tags(spoken, spoken_words)
+    ref = [t for t in normalize_words(spoken_words, language) if t.source not in tags]
     heard_words = transcript.word_texts()
     times = transcript.word_times()
     hyp = normalize_words(heard_words, language)

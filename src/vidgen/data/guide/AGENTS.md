@@ -1281,7 +1281,10 @@ Give Kokoro lines feeling with `emotion:` on a beat (or as a speaker's default o
 `sleepy`, `whisper`, `shout`, or a row with changes such as `{like: sad, pitch: -2}`, change the
 speed, pitch, loudness and pauses of that line; use it on the lines of a dialogue that carry a feeling, not on every line.
 A screenplay's `PIP (cross):` sets it for you. A weighted blend `voice: af_heart+af_bella:0.6`
-makes an in-between voice. Other providers ignore `emotion` for now (`vidgen validate` warns).
+makes an in-between voice. ElevenLabs and OpenRouter speak the same `emotion` by its name: an
+audio tag such as `[excited]` before the line on `eleven_v3`, changed voice settings on other
+ElevenLabs models, a sentence added to the `instructions` of OpenRouter models that take them
+(other OpenRouter models: the audio's speed, pitch and loudness).
 
 ```yaml
 voice: {provider: kokoro, voice: af_heart}       # speed: 1.0, lang: a, device: cpu (defaults)

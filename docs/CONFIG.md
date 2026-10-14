@@ -140,7 +140,8 @@ beat of a `stage`. A beat's `shot` (default none) frames characters of a `stage`
 the beat before has ended, and `interrupt: true` (default `false`) cuts that line off, see
 [overlapping lines](#overlapping-lines-overlap-interrupt); not on a scene's first beat. A beat's
 `emotion` (default: its voice's, else none) says how the line feels — `excited`, `sad`,
-`whisper`... — and changes its speed, pitch, loudness and pauses, see [voices with
+`whisper`... — and changes how it is spoken (Kokoro: speed, pitch, loudness and pauses;
+ElevenLabs: an audio tag or voice settings; OpenRouter: an instruction), see [voices with
 feeling](#voices-with-feeling-emotion).
 
 ## Chapters
@@ -797,7 +798,7 @@ voice:
   speed: null                       # openrouter / kokoro: speed multiplier 0.25-4 (openrouter: not sent when null; kokoro: 1)
   lang: null                        # kokoro: language letter (a, b, e, f, h, i, j, p, z); null: from voice / language
   device: cpu                       # kokoro: cpu, cuda or auto
-  emotion: null                     # how this voice's beats feel (excited, sad, whisper...); kokoro so far
+  emotion: null                     # how this voice's beats feel (excited, sad, whisper...); every provider
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
@@ -1012,7 +1013,8 @@ costs nothing to re-voice while a script changes.
 ### Voices with feeling (`emotion`)
 
 Kokoro reads every line in the same even tone. `emotion:` on a beat says how the line feels, and
-`vidgen tts` changes how it is spoken: the speed (Kokoro's own speed control), the pitch (a shift
+`vidgen tts` changes how it is spoken (ElevenLabs and OpenRouter: an audio tag, voice settings
+or an instruction, [below](#emotion-with-elevenlabs-and-openrouter)). With Kokoro: the speed (Kokoro's own speed control), the pitch (a shift
 in semitones by ffmpeg after synthesis that keeps the length), the loudness (gain in dB; a boost
 is soft-limited so it never clips) and the pauses at commas and full stops inside the line.
 
@@ -1068,8 +1070,8 @@ scenes:
   0.15 s; `whisper` 5.69 s, 189 Hz, -34.7 LUFS; `shout` 5.00 s, 232 Hz, -20.7 LUFS; `sleepy`
   7.01 s, 178 Hz. `whisper` is a quiet, slower, lower voice, not a breathy one (Kokoro cannot
   whisper).
-- **Other providers**: only Kokoro speaks an emotion so far; with ElevenLabs or OpenRouter the
-  key is accepted, the audio and its hash ignore it, and `vidgen validate` warns.
+- **ElevenLabs and OpenRouter** speak an emotion in their own way (below); without an
+  `emotion` nothing changes, also not the audio hash.
 - **Screenplays**: a manner word in brackets (`PIP (cross): ...`, `NARRATOR (whispering): ...`)
   becomes the beat's `emotion` as well as the speaker's expression: the names above and words
   such as cheerful, proud (happy), thrilled (excited), upset, crying (sad), cross, furious
@@ -1078,6 +1080,51 @@ scenes:
   yelling (shout).
 - `vidgen tts --dry-run` names a beat's emotion (`would generate pip_b2.mp3 (24 chars, voice
   pip, sad)`).
+
+#### `emotion` with ElevenLabs and OpenRouter
+
+These providers take words or settings rather than numbers, so they use the emotion's **name**
+(a mapping's `like`); its numbers count only where vidgen changes the audio itself.
+
+| `emotion` | ElevenLabs `eleven_v3` tag | other ElevenLabs models: stability, style | OpenRouter instruction (added) |
+|---|---|---|---|
+| `happy` | `[happy]` | -0.10, +0.20 | Speak in a happy, warm and cheerful tone. |
+| `excited` | `[excited]` | -0.25, +0.45 | Speak with excitement: energetic, upbeat and a little faster. |
+| `sad` | `[sad]` | -0.15, +0.30 | Speak sadly: a soft, low and slower voice with longer pauses. |
+| `angry` | `[angry]` | -0.25, +0.45 | Speak angrily: firm, tense and forceful. |
+| `worried` | `[nervous]` | -0.15, +0.30 | Speak in a worried, anxious tone, a little hesitant. |
+| `scared` | `[nervous]` | -0.25, +0.40 | Speak as if scared: tense, breathy and a little shaky. |
+| `surprised` | `[surprised]` | -0.20, +0.35 | Speak with surprise: bright and astonished, the pitch raised. |
+| `calm` | `[calm]` | +0.15, 0 | Speak calmly: relaxed, even and unhurried. |
+| `doubtful` | `[thoughtful]` | -0.10, +0.20 | Speak doubtfully: unsure and hesitant, with thoughtful pauses. |
+| `sleepy` | `[tired]` | +0.10, 0 | Speak sleepily: slow, low and drowsy, as if about to yawn. |
+| `whisper` | `[whispers]` | -0.10, +0.20 | Whisper: speak very quietly and breathily. |
+| `shout` | `[shouting]` | -0.30, +0.50 | Shout: speak loudly and forcefully, projecting the voice. |
+
+- **ElevenLabs `eleven_v3`** (models whose id starts `eleven_v3`, the ones that read
+  [voice sounds](#voice-sounds) as audio tags): the tag goes before the line's text (`[excited]
+  Rain! Grab the basket!`), before any voice sound at its start; captions, subtitles and
+  `vidgen readback` leave it out. The voice settings are not changed. `[whispers]` and
+  `[excited]` are tags ElevenLabs documents for v3; the others are emotion words of its examples,
+  and v3 reads a tag it does not list as a direction too — it may follow some of them less
+  than others.
+- **Other ElevenLabs models** read no tags: the text is not changed, and the voice's
+  `settings` change instead — the stability (lower: more varied, more expressive) and the style
+  exaggeration by the amounts above, each kept within 0-1. A beat's emotion is in its hash
+  through these settings.
+- **OpenRouter models that take `instructions`** (OpenAI and Gemini TTS, the ones OpenRouter
+  documents them for): the sentence above is added after the voice's own `instructions`
+  (`instructions: Warm narrator` → `Warm narrator. Speak sadly: ...`). The hash gains the
+  emotion's name and sentence.
+- **Other OpenRouter models** take no instructions: vidgen changes the returned audio with the
+  emotion's numbers instead, as for Kokoro but without the pauses (OpenRouter returns no word
+  timings): the speed (ffmpeg `atempo`, the pitch kept), the pitch (the length kept) and the
+  loudness (a boost soft-limited). The hash gains the name, speed, pitch and gain. `vidgen
+  validate` says so (`emotion: mistralai/voxtral-mini-tts-2603 takes no instructions, so the
+  emotion of ... changes only the speed, pitch and loudness of the audio, not its tone or pauses`).
+- **Numbers on a name-only provider**: `{like: sad, pitch: -2}` on ElevenLabs or an
+  instructions model speaks as `sad`; `{like: neutral, ...}` speaks plainly. `vidgen validate`
+  warns that the numbers are ignored.
 
 ## Multiple voices (`voices:`)
 

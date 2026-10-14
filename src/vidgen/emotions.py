@@ -7,7 +7,8 @@ PyTorch.
 dB and a factor on the pauses at punctuation inside the beat. ``emotion: {like: sad, pitch: -2}``
 changes some numbers of a row. ``neutral`` (or numbers that change nothing) changes nothing,
 also not the beat's audio hash. :data:`EMOTION_WORDS` maps a screenplay's manner words
-(``PIP (cross): ...``) to the rows.
+(``PIP (cross): ...``) to the rows. :data:`NAMED_CUES` says how ElevenLabs and OpenRouter speak
+each row (an audio tag, voice settings, an instruction; DESIGN.md §73).
 """
 
 from __future__ import annotations
@@ -59,6 +60,43 @@ EMOTIONS: dict[str, Prosody] = {
     )
 }
 EMOTION_NAMES: tuple[str, ...] = tuple(EMOTIONS)
+
+
+@dataclass(frozen=True)
+class NamedCues:
+    """How providers that take words or settings rather than numbers speak an emotion (DESIGN.md
+    §73): ``tag`` (the ElevenLabs v3 audio tag put before the line), ``stability`` and ``style``
+    (added to an ElevenLabs voice's ``voice_settings`` for the other models, kept in 0-1) and
+    ``instruction`` (a sentence added to an OpenRouter model's ``instructions``)."""
+
+    tag: str
+    stability: float
+    style: float
+    instruction: str
+
+
+#: Cues of each emotion but ``neutral`` (the documented table, DESIGN.md §73). Strong feelings
+#: lower the stability and raise the style; calm and sleepy raise the stability.
+NAMED_CUES: dict[str, NamedCues] = {
+    "happy": NamedCues("[happy]", -0.10, 0.20, "Speak in a happy, warm and cheerful tone."),
+    "excited": NamedCues("[excited]", -0.25, 0.45, "Speak with excitement: energetic, upbeat and a little faster."),
+    "sad": NamedCues("[sad]", -0.15, 0.30, "Speak sadly: a soft, low and slower voice with longer pauses."),
+    "angry": NamedCues("[angry]", -0.25, 0.45, "Speak angrily: firm, tense and forceful."),
+    "worried": NamedCues("[nervous]", -0.15, 0.30, "Speak in a worried, anxious tone, a little hesitant."),
+    "scared": NamedCues("[nervous]", -0.25, 0.40, "Speak as if scared: tense, breathy and a little shaky."),
+    "surprised": NamedCues("[surprised]", -0.20, 0.35, "Speak with surprise: bright and astonished, the pitch raised."),
+    "calm": NamedCues("[calm]", 0.15, 0.0, "Speak calmly: relaxed, even and unhurried."),
+    "doubtful": NamedCues("[thoughtful]", -0.10, 0.20, "Speak doubtfully: unsure and hesitant, with thoughtful pauses."),
+    "sleepy": NamedCues("[tired]", 0.10, 0.0, "Speak sleepily: slow, low and drowsy, as if about to yawn."),
+    "whisper": NamedCues("[whispers]", -0.10, 0.20, "Whisper: speak very quietly and breathily."),
+    "shout": NamedCues("[shouting]", -0.30, 0.50, "Shout: speak loudly and forcefully, projecting the voice."),
+}
+
+
+def named_cues(emotion: Prosody | None) -> NamedCues | None:
+    """The cues of ``emotion``'s name (its row: a mapping's numbers change nothing here);
+    ``None`` for no emotion or one ``like: neutral``."""
+    return None if emotion is None else NAMED_CUES.get(emotion.name)
 #: Allowed ranges of the numbers (``emotion: {like, speed, pitch, gain, pauses}``).
 SPEED_RANGE = (0.5, 2.0)
 PITCH_RANGE = (-3.0, 3.0)

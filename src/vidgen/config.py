@@ -209,7 +209,7 @@ class VoiceConfig(_Strict):
     device: Literal["cpu", "cuda", "auto"] = "cpu"
     """kokoro only: where the model runs: cpu, cuda (an NVIDIA GPU) or auto (a GPU if PyTorch sees one); does not change the audio hash."""
     emotion: EmotionSetting | None = None
-    """How this voice's beats feel unless a beat says otherwise: a built-in emotion (excited, sad, whisper...) or {like, speed, pitch, gain, pauses}; kokoro only so far; not inherited by voices:."""
+    """How this voice's beats feel unless a beat says otherwise: a built-in emotion (excited, sad, whisper...) or {like, speed, pitch, gain, pauses}; ElevenLabs and OpenRouter models with instructions use only its name; not inherited by voices:."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
@@ -279,7 +279,7 @@ class VoiceEntry(_Strict):
     lang: KokoroLang | None = None
     """kokoro: language of this speaker's voice (a, b, e, f, h, i, j, p, z); default the first letter of its voice, else the base voice's."""
     emotion: EmotionSetting | None = None
-    """How this speaker's beats feel unless a beat says otherwise (excited, sad, whisper... or {like, speed, pitch, gain, pauses}); not inherited from the base voice; kokoro only so far."""
+    """How this speaker's beats feel unless a beat says otherwise (excited, sad, whisper... or {like, speed, pitch, gain, pauses}); not inherited from the base voice."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None
@@ -1733,7 +1733,7 @@ class BeatConfig(_Strict):
     interrupt: bool = False
     """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
     emotion: EmotionSetting | None = None
-    """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; changes speed, pitch, loudness and pauses (kokoro only so far); default the voice's emotion."""
+    """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; Kokoro changes speed, pitch, loudness and pauses; ElevenLabs uses an audio tag (eleven_v3) or voice settings, OpenRouter an instruction or the audio's speed, pitch and loudness; default the voice's emotion."""
 
     @model_validator(mode="after")
     def _check_interrupt(self) -> BeatConfig:

@@ -12,14 +12,14 @@ from typing import Any
 import yaml
 
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, parse_config
-from vidgen.emotions import Prosody, prosody
+from vidgen.emotions import Prosody, named_cues, prosody
 from vidgen.errors import Problem, VidgenError
 from vidgen.includes import ConfigSource, Origin, after_variant, attributed, attributed_error, expand_sets, project_relative, read_project_config
 from vidgen.kokoro_voices import voice_parts
 from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
-from vidgen.voicesounds import voiced_spoken
+from vidgen.voicesounds import is_tagged_voice, voiced_spoken
 
 CONFIG_NAMES: tuple[str, ...] = ("video.yaml", "video.yml", "video.json")
 #: Folder of the deliverables (MP4, SRT, chapter list, thumbnail) without ``output_dir:`` or ``--output-dir``.
@@ -345,10 +345,15 @@ class Project:
         return {} if mode in ("off", "color") else speaker_tags(self.config)
 
     def spoken(self, beat: BeatConfig) -> Spoken:
-        """What the TTS gets for ``beat``: its text with ``pronunciation`` applied and what its
-        voice says for its voice sounds (:func:`vidgen.voicesounds.voiced_spoken`)."""
+        """What the TTS gets for ``beat``: its text with ``pronunciation`` applied, what its
+        voice says for its voice sounds (:func:`vidgen.voicesounds.voiced_spoken`) and, for an
+        ElevenLabs v3 voice, its emotion's audio tag before it (DESIGN.md §73)."""
         spoken = self.pronunciation.apply(beat.text)
-        return voiced_spoken(spoken, beat.voice_sounds, self.beat_voice(beat.id)) if beat.voice_sounds else spoken
+        voice = self.beat_voice(beat.id)
+        if beat.voice_sounds:
+            spoken = voiced_spoken(spoken, beat.voice_sounds, voice)
+        cues = named_cues(self.beat_emotion(beat.id)) if is_tagged_voice(voice) else None
+        return spoken.inserted([(0, f"{cues.tag} ", "emotion")]) if cues is not None else spoken
 
     def spoken_texts(self) -> dict[str, str]:
         """Beat id -> the text the TTS gets for it (:meth:`spoken`), in video order."""

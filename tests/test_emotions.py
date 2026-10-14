@@ -16,7 +16,6 @@ import numpy as np
 import pytest
 import yaml
 
-from conftest import minimal_config
 from test_tts_kokoro import KOKORO, Factory, FakePipeline, fake, kokoro_config, tone  # noqa: F401 (fake: a fixture)
 from vidgen import config, emotions, kokoro_voices, tts
 from vidgen.cli import main, validate_warnings
@@ -137,10 +136,10 @@ def test_hash_changes_only_with_an_emotion() -> None:
     tweaked = kk.KokoroProvider(VoiceConfig(**KOKORO), emotion=prosody(EmotionConfig(like="excited", pitch=1)))
     sad = kk.KokoroProvider(VoiceConfig(**KOKORO), emotion=EMOTIONS["sad"])
     assert len({plain.cache_key("Hi"), excited.cache_key("Hi"), tweaked.cache_key("Hi"), sad.cache_key("Hi")}) == 4
-    # the other providers' pinned keys, with or without an emotion on the beat
-    assert tts.get_provider(VoiceConfig(), EMOTIONS["sad"]).cache_key("Hello there.") == "e07179cc8214a9008a163a96e3ab594f0d3da455"
+    # the other providers' pinned keys without an emotion (with one: tests/test_emotions_providers.py)
+    assert tts.get_provider(VoiceConfig()).cache_key("Hello there.") == "e07179cc8214a9008a163a96e3ab594f0d3da455"
     routed = VoiceConfig(provider="openrouter", model="mistralai/voxtral-mini-tts-2603", voice="en_paul_neutral")
-    assert tts.get_provider(routed, EMOTIONS["sad"]).cache_key("Hello there.") == "ed12a9d42adbd729f424fb9c6b73f406f5b27aaa"
+    assert tts.get_provider(routed).cache_key("Hello there.") == "ed12a9d42adbd729f424fb9c6b73f406f5b27aaa"
 
 
 def test_beat_providers_per_voice_and_emotion(make_project) -> None:
@@ -152,16 +151,9 @@ def test_beat_providers_per_voice_and_emotion(make_project) -> None:
     assert tts.beat_providers(Project.load(plain))["intro_b1"].cache_key("Hello there.") == "05cb88daec48cc27a4841b20f737de3c7cb847c4"
 
 
-def test_other_providers_ignore_emotion_with_a_warning(make_project) -> None:
-    data = minimal_config()
-    data["scenes"][0]["beats"][0]["emotion"] = "sad"
-    project = Project.load(make_project(data))
-    providers = tts.beat_providers(project)
-    assert providers["intro_b1"] is providers["intro_b2"]                      # one ElevenLabs provider, as before
-    assert providers["intro_b1"].cache_key("Hello there.") == "e07179cc8214a9008a163a96e3ab594f0d3da455"
-    warnings = validate_warnings(project)
-    assert "emotion: only kokoro voices speak an emotion so far; the audio of intro_b1 ignores it" in warnings
-    assert not tts.emotion_warnings(Project.load(make_project(emotion_config(), folder="k")))
+def test_kokoro_emotions_need_no_warning(make_project) -> None:
+    project = Project.load(make_project(emotion_config(), folder="k"))
+    assert not tts.emotion_warnings(project) and not [w for w in validate_warnings(project) if w.startswith("emotion")]
 
 
 # ----- the prosody edits --------------------------------------------------------------------------

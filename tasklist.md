@@ -712,8 +712,8 @@ test-suite run.
 - [x] Tests: the mapping (pure), hash changes, a real Kokoro check in the Kokoro venv (durations / pitch measured) (`tests/test_emotions.py`, 22 tests; real check: neutral 5.20 s / 202 Hz / -25.7 LUFS, excited 4.85 / 228 / -22.7, sad 6.16 / 185 / -28.9, whisper 5.69 / 189 / -34.7; HANDOFF)
 
 ### Step 136 — Voices with feeling, part 2: other providers
-- [ ] The same `emotion:` becomes ElevenLabs v3 audio tags or voice settings (stability / style), and OpenRouter `instructions` text for models that take them; mocked; unchanged hashes without `emotion`
-- [ ] Tests: the mapping per provider (mocked requests)
+- [x] The same `emotion:` becomes ElevenLabs v3 audio tags or voice settings (stability / style), and OpenRouter `instructions` text for models that take them; mocked; unchanged hashes without `emotion` (by the emotion's name: `emotions.NAMED_CUES`; v3: the tag before the line through `Project.spoken`, captions and readback leave it out; other ElevenLabs models: stability / style changes, text unchanged; OpenRouter models without instructions: speed, pitch and gain applied to the returned audio (no pauses: no timings); the "only kokoro" validate warning replaced by warnings for ignored numbers and no-instruction models; tags `[calm]` / `[tired]` chosen by analogy, not checked against the real API; DESIGN §73)
+- [x] Tests: the mapping per provider (mocked requests) (`tests/test_emotions_providers.py`, 8 tests, request bodies checked)
 
 ### Step 137 — Fast drafts
 - [ ] `vidgen render --draft`: low frame rate (~8 fps) and size (426x240), no idle / blink / wind / shadows / motion effects / particles / weather animation / flat lighting, timings unchanged; separate build folder and output name; measured speed-up on the cartoon examples

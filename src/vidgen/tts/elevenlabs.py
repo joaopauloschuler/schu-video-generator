@@ -19,7 +19,9 @@ from typing import Any
 
 from vidgen import httpapi
 from vidgen.config import VoiceConfig
+from vidgen.emotions import Prosody, named_cues
 from vidgen.errors import VidgenError
+from vidgen.voicesounds import is_tagged_voice
 
 API_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format={output_format}"
 #: The same speech as JSON with the audio in base64 and character timings (``alignment``).
@@ -54,7 +56,8 @@ def read_api_key() -> str:
 
 
 class ElevenLabsProvider:
-    """Synthesise speech with one ElevenLabs voice configuration.
+    """Synthesise speech with one ElevenLabs voice configuration, speaking with ``emotion``
+    through ``voice_settings`` on models other than v3 (DESIGN.md §73).
 
     ``retries`` transient failures (HTTP 429/5xx, timeouts, dropped connections) are retried
     with exponential backoff (``backoff * 2**attempt`` seconds, or the server's ``Retry-After``,
@@ -67,6 +70,7 @@ class ElevenLabsProvider:
         self,
         voice: VoiceConfig,
         *,
+        emotion: Prosody | None = None,
         timeout: float = 120.0,
         retries: int = 3,
         backoff: float = 2.0,
@@ -74,6 +78,9 @@ class ElevenLabsProvider:
         sleep: Callable[[float], None] | None = None,
     ) -> None:
         self.voice = voice
+        #: The cues whose settings change ``voice_settings`` (DESIGN.md §73); ``None`` for v3
+        #: models, which get the emotion as an audio tag in the text (:meth:`Project.spoken`).
+        self.cues = None if is_tagged_voice(voice) else named_cues(emotion)
         self.timeout = timeout
         self.retries = retries
         self.backoff = backoff
@@ -84,8 +91,13 @@ class ElevenLabsProvider:
 
     @property
     def settings(self) -> dict[str, Any]:
-        """``voice_settings`` as sent to the API."""
-        return self.voice.settings.model_dump()
+        """``voice_settings`` as sent to the API: the voice's, with an emotion's stability and
+        style changes added (kept in 0-1) on models other than v3."""
+        settings = self.voice.settings.model_dump()
+        if self.cues is not None:
+            for key, change in (("stability", self.cues.stability), ("style", self.cues.style)):
+                settings[key] = round(min(1.0, max(0.0, settings[key] + change)), 3)
+        return settings
 
     @property
     def language_code(self) -> str | None:
