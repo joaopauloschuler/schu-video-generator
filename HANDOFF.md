@@ -13760,3 +13760,93 @@ How to test
   `VIDGEN_TEST_SOUNDFONT=<path to an SF2>` or the downloaded default SoundFont, else 1 skipped).
 - Also: `tests/test_soundfont.py`, `-m "not render" tests/test_music.py tests/test_docs.py
   tests/test_packaging.py tests/test_render.py`, `-m render tests/test_music.py`.
+
+## Step 147 — Composer and moods
+
+What was built
+- **`src/vidgen/composer.py`** (new, pure, seeded; DESIGN.md §83): `compose_piece(mood, key, tempo,
+  instruments, seed=1, bars) -> Piece` and `compose(...) -> Score`. Eight `MOODS` (calm, focused,
+  curious, upbeat for explainers; playful, sleepy, tense, triumphant for cartoons), each with key,
+  tempo, meter (sleepy 3/4), default bars (16; playful 24), A and B / C progressions as 4-bar
+  question (ends on V) / answer (ends on I) pairs in Roman numerals, melody range, rhythm cells,
+  cadence cells, a last bar, articulation, chord / bass / drum patterns, default parts with volume,
+  pan and reverb, and a fallback bed. Form A A B A (C in every second block); the last bar becomes
+  I–V7 so the piece loops. Melody: per-letter motifs (rhythm cells + a shape) varied on return,
+  chord tones on the first note of a bar and on strong beats, scale steps between them, never the
+  same bar twice in a row. Accompaniment with voice-led voicings; patterns pad / block / arpeggio
+  / broken / oompah / ostinato / strum; bass sustain / half / root_fifth / walking / pulse / pop;
+  7 drum patterns with phrase-end fills and section cymbals. `parse_chord`, `parse_key`,
+  `resolve_voices`, `settings_problems`, `describe`, `mood_entries`, `instrument_entries`.
+- **Instruments**: 42 friendly names → GM programs (range + words) and 5 kits (`drums`,
+  `room_drums`, `jazz_drums`, `soft_drums`, `orchestral_drums`).
+- **Config**: `MusicCue.compose` (`ComposeConfig {mood, key, tempo, instruments, seed, bars}`,
+  `compose: playful` short form; `ComposeInstrument {instrument, volume, pan, reverb}`); a cue
+  needs exactly one of `source` / `compose`; `MusicCue.label`. Beds and files unchanged.
+- **Music source**: `music.source_kind(cue)` (`composed` / `bed` / `file`), `composed_score`,
+  `fallback_bed`; `Source` plays composed music as a seamless loop (the 3 s render tail added onto
+  the piece's start; `start` wraps; `loop: false` plays once with the tail); without symusic
+  0.5.9 it plays the mood's bed and logs a warning naming the install command. The mix summary
+  reads `kind`/`source` from the `Source` (`composed`, `compose: <mood>`; a fallback says
+  `kind: bed`, `compose: sleepy (bed lullaby: no music extra)`).
+- **`Score.balance`** (new, default false) and `synth.BALANCE_LEVEL`: `mix_parts` first sets each
+  part to −28 LUFS, then applies its volume. The composer sets it.
+- **CLI**: `vidgen list-music` adds the moods (described in words from their parameters) and the
+  instruments (JSON: `moods`, `instruments`, `symusic`); new `vidgen music preview [PROJECT]
+  [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR]` writes
+  `<mood>-seed<S>.wav` and `.mid` and prints parts, chords per phrase, loudness and peak.
+- `score.key_signature(key)` and `score.tonic_pitch_class(name)` moved out of `Score` (its methods
+  call them).
+
+Files
+- New: `src/vidgen/composer.py`, `tests/test_composer.py`.
+- Changed: `src/vidgen/config.py`, `music.py`, `mix.py`, `score.py`, `synth.py`, `cli.py`,
+  `jsonout.py`, `render/fingerprint.py` (`composer.py` not a render input), `tests/test_score.py`,
+  `tests/test_docs.py`, `docs/CONFIG.md` ("Composed music (`compose`)", "`vidgen music preview`",
+  `source` / `compose` rows, list-music text and JSON; the JSON `level` row said −30, now −28),
+  `README.md`, `DESIGN.md` (tree, commands, §82 hook line, new §83), `tasklist.md`.
+
+Public interfaces added/changed (`vidgen.api` unchanged)
+- Config: `music: {compose: ...}` (and in cue lists); `MusicCue.source` is now optional.
+- CLI: `vidgen music preview`; `list-music --json` gains keys. Mix summary `kind: composed`.
+- `music.source_kind` takes the cue (was the source string); `music.SCORES` removed (Step 146's
+  internal hook, as DESIGN §82 planned).
+
+Decisions / deviations
+- YAML: `compose:` is a cue key beside `source:` (not a `source:` value), so composed music gets
+  every cue key and lists of cues for free; `bars` added (the task list's keys plus the length).
+- `key` accepts a bare note; a key in the other mode than the mood's is an error (progressions are
+  written for one mode).
+- **Pizzicato (GM 45) and xylophone (GM 13) are not offered**: symusic 0.5.9 renders them with
+  GeneralUser GS 2.0.3 as a 5 ms click then silence (−59 / −40 LUFS; FluidR3 Mono's pizzicato
+  plays), measured for every instrument (`s147/survey.py`). The moods use harp, marimba and piano
+  instead; bright piano (1) dropped too (same sound as the piano).
+- **Balance**: SoundFont instruments differ by up to ~40 dB as symusic renders them, so the
+  volumes only mean something after `Score.balance`. Renders now take ~4.5 s (was ~2 s).
+- Fallback beds: calm → calm, focused / tense → pulse, curious / upbeat / triumphant → bright,
+  playful → cartoon, sleepy → lullaby. Only the extra's absence falls back; a missing SoundFont
+  still downloads or errors as in Step 145.
+- `vidgen music preview` does not cache the render and writes to `--out` (default `.`).
+- The did-you-mean message reuses `cartoon.poses.unknown_name_message` (imported lazily).
+
+Verification
+- 8 samples (scratchpad `s147/out/*.wav`, `.mid`; calm 12 bars, playful 20): every one −28.00 LUFS,
+  true peak −13.0 to −17.1 dBTP, 36–47 s with the tail, 3.9–6.2 s to render. MP3s for the owner:
+  `/mnt/user-data/outputs/composed_<mood>.mp3` (≤ 45 s, 128 kbps, made **10 dB louder** than in a
+  video, −18.4 LUFS, −3.5 to −7.6 dBTP, so they can be heard on their own).
+- `vidgen music preview --mood sleepy --bars 8 --seed 3` with an empty `VIDGEN_CACHE_DIR`
+  downloaded the default SoundFont (32 MB, checked) and wrote both files.
+- Nobody has listened to the samples yet (owner).
+
+Known gaps / TODOs
+- Step 148: fitting the piece to the video (bar lines at scene changes, per-scene moods, swells,
+  pauses, a closing cadence), stings with instruments. `Piece.harmony` / `chord_at` are there for it.
+- Step 149: `validate` warning without the extra, storyboard / animatic / draft, MCP, author guide
+  (AGENTS.md not changed here), CHANGELOG.
+- The melody has no chromatic passing tones and no syncopated anchors; the 3/4 drum bar is generic.
+
+How to test
+- `pytest tests/test_composer.py tests/test_score.py` (53 + 34 tests, ~13 s with
+  `VIDGEN_TEST_SOUNDFONT=<path to GeneralUser-GS.sf2>`; without it the 2 real renders skip).
+- Also: `-m "not render" tests/test_docs.py tests/test_music.py tests/test_soundfont.py
+  tests/test_guide.py tests/test_schema.py tests/test_config.py tests/test_phase_l_review.py`,
+  `-m render tests/test_music.py`.

@@ -1260,10 +1260,12 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     root = None
     if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
         root = find_config_file(args.project).resolve().parent
+    from vidgen import composer, synth
+
     preview_dir = Path(args.render_dir).resolve() if args.render_dir else None
     entries = music.music_entries(root, preview_dir)
     if args.json:
-        return jsonout.list_music_document(root, entries, preview_dir)
+        return jsonout.list_music_document(root, entries, preview_dir, composer.mood_entries(), composer.instrument_entries())
     for e in entries:
         if e["origin"] == "builtin":
             tempo = f"{e['tempo']} BPM" if e["tempo"] else "no beat"
@@ -1280,6 +1282,59 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     )
     if preview_dir is not None:
         print(f"previews: {preview_dir} (one loop of each bed as WAV)")
+    print()
+    print(f"composed music (music: {{compose: {{mood: NAME, key, tempo, instruments, seed, bars}}}}; symusic: {synth.symusic_status()};")
+    print("without the music extra the bed named below plays; `vidgen music preview --mood NAME` writes a WAV and a .mid):")
+    for m in composer.mood_entries():
+        print(f"{m['name']}  {m['family']}  {m['key']}, {m['tempo']:g} BPM, {m['meter']}, {m['bars']} bars ({m['loop_seconds']:.0f} s loop)  [bed: {m['fallback_bed']}]")
+        print(f"    description: {m['description']}")
+        print(f"    use: {m['use']}")
+    print("instruments (instruments: {melody|chords|pad|bass|drums: NAME | none | {instrument, volume, pan, reverb}}):")
+    for i in composer.instrument_entries():
+        where = "drum kit" if i["drums"] else f"{i['low']}-{i['high']}"
+        print(f"    {i['name']} (GM {i['program']}, {where}): {i['description']}")
+    return 0
+
+
+def cmd_music(args: argparse.Namespace) -> int:
+    """``preview``: compose a piece (the project's first ``compose:`` cue, changed by the options)
+    and write it as ``<mood>-seed<N>.wav`` (one pass and the reverb's tail) and ``.mid`` (§83)."""
+    import math
+
+    from vidgen import composer, loudness, soundfont, synth
+    from vidgen.score import write_midi
+    from vidgen.sfx import RATE, write_wav
+
+    settings: dict[str, Any] = {}
+    setting, root = None, Path.cwd()
+    if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        project = Project.load(args.project)
+        setting, root = project.config.soundfont, project.root
+        found = next((c.compose for c in project.config.music_cues if c.compose is not None), None)
+        if found is not None and args.mood in (None, found.mood):
+            settings = {"mood": found.mood, "key": found.key, "tempo": found.tempo, "instruments": found.instrument_settings(), "seed": found.seed, "bars": found.bars}
+    for name in ("mood", "key", "tempo", "seed", "bars"):
+        if getattr(args, name) is not None:
+            settings[name] = getattr(args, name)
+    if "mood" not in settings:
+        raise VidgenError(f"music preview: give --mood NAME (moods: {', '.join(composer.MOODS)}) or a project with music: {{compose: ...}}")
+    piece = composer.compose_piece(**settings)
+    synth.require_symusic()
+    audio = synth.render_score(piece.score, soundfont.resolve(setting, root))
+    out = Path(args.out).resolve()
+    stem = f"{piece.mood.name}-seed{piece.seed}"
+    wav, mid = out / f"{stem}.wav", out / f"{stem}.mid"
+    write_wav(wav, audio)
+    write_midi(piece.score, mid)
+    peak = float(loudness.peak_envelope(audio.astype("float64")).max())
+    print(f"mood: {piece.mood.name} ({piece.mood.family}), seed {piece.seed}: {piece.key.name}, {piece.tempo:g} BPM, {piece.mood.meter}/4, "
+          f"{piece.bars} bars = {piece.seconds:.1f} s (loops; the WAV adds {synth.TAIL_SECONDS:g} s of tail)")
+    print("parts: " + ", ".join(f"{v.role} {v.instrument.name} ({v.volume:+g} dB)" for v in piece.voices))
+    for k, phrase in enumerate(piece.phrases):
+        print(f"    bars {4 * k + 1:>3}-{4 * k + 4:<3} {phrase:<11} " + " | ".join(" ".join(c) for c in piece.chords[4 * k : 4 * k + 4]))
+    print(f"loudness: {loudness.integrated_loudness(audio):.1f} LUFS integrated, true peak {20 * math.log10(max(peak, 1e-9)):.1f} dBTP, {len(audio) / RATE:.1f} s")
+    print(f"wrote: {wav}")
+    print(f"wrote: {mid}")
     return 0
 
 
@@ -1528,6 +1583,17 @@ def build_parser() -> argparse.ArgumentParser:
     project_arg(p)
     p.add_argument("--render-dir", metavar="DIR", help="also write one loop of every bed as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_music)
+
+    p = sub.add_parser("music", help="composed music: preview writes a piece in a mood as WAV and .mid (needs the music extra)")
+    p.add_argument("action", choices=["preview"], help="preview: compose the project's compose: music (or --mood) and write it")
+    project_arg(p)
+    p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
+    p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
+    p.add_argument("--bars", type=int, metavar="N", help="length in bars, a multiple of 4 (default: the mood's)")
+    p.add_argument("--key", metavar="KEY", help="e.g. E, 'Eb major', 'F# minor' (default: the mood's)")
+    p.add_argument("--tempo", type=float, metavar="BPM", help="quarter notes per minute (default: the mood's)")
+    p.add_argument("--out", default=".", metavar="DIR", help="folder for <mood>-seed<N>.wav and .mid (default: .)")
+    p.set_defaults(func=cmd_music)
 
     p = sub.add_parser("soundfont", help="the SoundFont composed music is played with: fetch downloads GeneralUser GS into vidgen's cache, info shows it")
     p.add_argument("action", choices=["fetch", "info"], help="fetch: download it (once; checked against its SHA-256); info: path, size, hash, licence")

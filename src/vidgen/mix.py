@@ -39,7 +39,7 @@ from vidgen import loudness
 from vidgen.ambience import AMBIENCE_BEDS, BEDS, LoopSource, ambience_spans
 from vidgen.config import DuckConfig, MusicCue, SceneMusic
 from vidgen.errors import VidgenError
-from vidgen.music import Source, source_kind
+from vidgen.music import Source
 from vidgen.sfx import RATE
 
 if TYPE_CHECKING:
@@ -180,8 +180,8 @@ class Placement:
     def summary(self) -> dict[str, Any]:
         """``{source, kind, from, to, start, end, volume, duck}`` (times in seconds)."""
         return {
-            "source": self.cue.source,
-            "kind": source_kind(self.cue.source),
+            "source": self.source.label,
+            "kind": self.source.kind,
             "from": self.scenes[0],
             "to": self.scenes[-1],
             "start": round(self.start / RATE, 6),

@@ -59,6 +59,8 @@ MODELS: list[type[BaseModel]] = [
     config.StingCue,
     config.AutoDirect,
     config.MusicCue,
+    config.ComposeConfig,
+    config.ComposeInstrument,
     config.DuckConfig,
     config.SceneMusic,
     config.AudioConfig,

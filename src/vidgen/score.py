@@ -104,7 +104,9 @@ class Score:
     """A piece of music: ``tempo`` (quarter notes per minute), ``time_signature`` (numerator,
     denominator), ``key`` (``"<tonic> major|minor"``, e.g. ``"F# minor"``, ``"Bb major"``), its
     parts and sections, and its ``length`` in beats (default: the last note's end rounded up
-    to a whole bar)."""
+    to a whole bar). ``balance``: the renderer first sets every part to the same loudness, so a
+    part's ``volume`` is its level against the others whatever its instrument's own level in the
+    SoundFont (a SoundFont's instruments differ by up to ~40 dB)."""
 
     tempo: float
     parts: tuple[Part, ...]
@@ -112,6 +114,7 @@ class Score:
     key: str = "C major"
     sections: tuple[Section, ...] = field(default=())
     length: float | None = None
+    balance: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "parts", tuple(self.parts))
@@ -171,20 +174,12 @@ class Score:
     def key_signature(self) -> tuple[int, bool]:
         """``(sharps, minor)``: the number of sharps of ``key`` (negative: flats) and whether it
         is minor. :class:`VidgenError` for a key that has no standard signature (e.g. D# major)."""
-        match = _KEY.match(self.key)
-        _check(match is not None, f"key {self.key!r} must be '<tonic> major' or '<tonic> minor' (e.g. 'F# minor', 'Bb major')")
-        assert match is not None
-        tonic, mode = match.groups()
-        names = _MINOR_KEYS if mode == "minor" else _MAJOR_KEYS
-        _check(tonic in names, f"key {self.key!r} has no standard key signature")
-        return names.index(tonic) - 7, mode == "minor"
+        return key_signature(self.key)
 
     @property
     def tonic(self) -> int:
         """The key's tonic as a pitch class (0 = C ... 11 = B)."""
-        name = self.key.split()[0]
-        offset = {"#": 1, "b": -1}.get(name[1:], 0)
-        return (_PITCH_CLASSES[name[0]] + offset) % 12
+        return tonic_pitch_class(self.key.split()[0])
 
     def to_dict(self) -> dict[str, Any]:
         """The score as plain JSON data (what :meth:`fingerprint` hashes)."""
@@ -194,6 +189,24 @@ class Score:
         """SHA-256 (hex) of the score's content and :data:`FORMAT_VERSION`."""
         text = json.dumps({"format": FORMAT_VERSION, "score": self.to_dict()}, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def key_signature(key: str) -> tuple[int, bool]:
+    """``(sharps, minor)`` of a key written ``"<tonic> major|minor"``; :class:`VidgenError` for
+    another form or a key without a standard signature (e.g. D# major)."""
+    match = _KEY.match(key)
+    _check(match is not None, f"key {key!r} must be '<tonic> major' or '<tonic> minor' (e.g. 'F# minor', 'Bb major')")
+    assert match is not None
+    tonic, mode = match.groups()
+    names = _MINOR_KEYS if mode == "minor" else _MAJOR_KEYS
+    _check(tonic in names, f"key {key!r} has no standard key signature")
+    return names.index(tonic) - 7, mode == "minor"
+
+
+def tonic_pitch_class(name: str) -> int:
+    """A note name (``C``, ``F#``, ``Bb``) as a pitch class (0 = C ... 11 = B)."""
+    offset = {"#": 1, "b": -1}.get(name[1:], 0)
+    return (_PITCH_CLASSES[name[0]] + offset) % 12
 
 
 def _ticks(beat: float) -> int:

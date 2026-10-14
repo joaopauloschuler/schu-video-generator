@@ -605,10 +605,19 @@ def plan_document(
 
 
 def list_music_document(
-    root: Path | None, entries: Iterable[Mapping[str, Any]], previews: Path | None, warnings: Iterable[Mapping[str, Any]] = ()
+    root: Path | None,
+    entries: Iterable[Mapping[str, Any]],
+    previews: Path | None,
+    moods: Iterable[Mapping[str, Any]] = (),
+    instruments: Iterable[Mapping[str, Any]] = (),
+    warnings: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """The ``vidgen list-music --json`` document: the music level, the default ducking, every bed
-    and project file (``vidgen.music.music_entries``) and the previews folder."""
+    and project file (``vidgen.music.music_entries``), the previews folder, and composed music's
+    moods and instruments (``vidgen.composer.mood_entries`` / ``instrument_entries``) with the
+    symusic state."""
+    from vidgen import synth
+
     from vidgen import music
     from vidgen.config import DuckConfig
 
@@ -624,6 +633,9 @@ def list_music_document(
         count=len(items),
         music=items,
         previews=None if previews is None else _path(previews),
+        moods=[dict(m) for m in moods],
+        instruments=[dict(i) for i in instruments],
+        symusic=synth.symusic_status(),
     )
 
 

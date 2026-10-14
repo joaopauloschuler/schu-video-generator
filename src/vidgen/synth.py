@@ -43,6 +43,8 @@ REVERB_SECONDS = 2.0
 REVERB_RT60 = 1.6
 REVERB_PREDELAY = 0.012
 REVERB_LOWPASS = 5000.0
+#: Integrated loudness (LUFS) every part of a ``balance`` score is set to before its volume.
+BALANCE_LEVEL = -28.0
 #: The rendered music's true peak stays under this (dBTP); at -28 LUFS it is rarely reached.
 TRUE_PEAK_CEILING = -1.0
 #: Samples per block of the reverb's FFT convolution (overlap-add).
@@ -133,9 +135,11 @@ def convolve(x: np.ndarray, impulse: np.ndarray) -> np.ndarray:
 def mix_parts(score: Score, rendered: Iterable[np.ndarray | None]) -> np.ndarray:
     """The parts' dry renders (``rendered``: float ``(n, 2)`` at 48 kHz from the score's start,
     in ``score.parts`` order, ``None`` for a part without notes) mixed: each at its ``volume``
-    and ``pan``, a ``reverb`` share of it sent to :func:`reverb_impulse`, cut or padded to the
-    score's length plus :data:`TAIL_SECONDS`, the last 20 ms faded out, then set to
+    (with ``score.balance``, after being set to :data:`BALANCE_LEVEL`) and ``pan``, a
+    ``reverb`` share of it sent to :func:`reverb_impulse`, cut or padded to the score's length
+    plus :data:`TAIL_SECONDS`, the last 20 ms faded out, then set to
     :data:`~vidgen.music.MUSIC_LEVEL` under :data:`TRUE_PEAK_CEILING`. Float64 ``(n, 2)``."""
+    from vidgen.loudness import integrated_loudness
     from vidgen.sfx import RATE
 
     total = round((score.length_seconds + TAIL_SECONDS) * RATE)
@@ -145,7 +149,11 @@ def mix_parts(score: Score, rendered: Iterable[np.ndarray | None]) -> np.ndarray
         if audio is None:
             continue
         take = min(total, len(audio))
-        x = audio[:take] * (10 ** (part.volume / 20) * np.array(pan_gains(part.pan)))
+        gain_db = part.volume
+        if score.balance:
+            level = integrated_loudness(audio[:take])
+            gain_db += BALANCE_LEVEL - level if math.isfinite(level) else 0.0
+        x = audio[:take] * (10 ** (gain_db / 20) * np.array(pan_gains(part.pan)))
         dry[:take] += x
         if part.reverb > 0:
             send[:take] += part.reverb * x

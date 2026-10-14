@@ -1,5 +1,5 @@
-"""Composed music (Step 146): the Score, its MIDI export, the numpy mixing of rendered parts, the
-score as a music source; one real render, skipped without symusic 0.5.9 and a SoundFont."""
+"""Composed music (Step 146): the Score, its MIDI export, the numpy mixing of rendered parts, a
+composed score as a music source; one real render, skipped without symusic 0.5.9 and a SoundFont."""
 
 from __future__ import annotations
 
@@ -189,6 +189,17 @@ def test_mix_parts_pans_and_sets_volume() -> None:
     assert quiet[0] == pytest.approx(10 ** (-6 / 20), rel=1e-3)
 
 
+def test_balance_sets_the_parts_to_one_loudness_before_their_volume() -> None:
+    def ratio(balance: bool) -> float:
+        parts = [Part("a", [Note(0, 4, 60)], volume=-6, reverb=0), Part("ref", [Note(0, 4, 60)], reverb=0)]
+        out = synth.mix_parts(Score(tempo=120, parts=parts, balance=balance), [_tone(2, 300.0, 0.01), _tone(2, 400.0, 0.5)])
+        spectrum = np.abs(np.fft.rfft(out[: 2 * RATE, 0]))
+        return float(spectrum[600] / spectrum[800])  # 300 Hz / 400 Hz (near-equal K-weighting)
+
+    assert ratio(False) == pytest.approx(0.02 * 10 ** (-6 / 20), rel=1e-3)  # the raw levels, then the volume
+    assert 20 * math.log10(ratio(True)) == pytest.approx(-6.0, abs=0.3)  # same loudness, then -6 dB
+
+
 def test_silent_mix_is_an_error() -> None:
     score = Score(tempo=120, parts=[Part("a", [Note(0, 1, 60)])])
     with pytest.raises(VidgenError, match="the rendered music is silent"):
@@ -213,7 +224,9 @@ def _fake_soundfont(path: Path) -> Path:
     return path
 
 
-def test_score_plays_as_a_music_cue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_composed_music_plays_as_a_music_cue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from vidgen import composer
+
     calls: list[tuple[Score, Path, Path | None]] = []
 
     def fake_render(score: Score, soundfont: Path, cache_dir: Path | None = None) -> np.ndarray:
@@ -221,30 +234,34 @@ def test_score_plays_as_a_music_cue(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         audio = _tone(score.length_seconds + synth.TAIL_SECONDS, 262.0, 0.1)
         return (audio * 10 ** ((music.MUSIC_LEVEL - loudness.integrated_loudness(audio)) / 20)).astype(np.float32)
 
-    score = Score(tempo=120, parts=[Part("p", [Note(0, 8, 60)])])  # 4 s + 3 s tail
-    monkeypatch.setitem(music.SCORES, "test-piece", score)
+    monkeypatch.setattr(synth, "symusic_version", lambda: synth.SYMUSIC_VERSION)
     monkeypatch.setattr(synth, "render_score", fake_render)
     root = tmp_path / "p"
     _fake_soundfont(root / "sf" / "bank.sf2")
     scenes = [{"id": f"s{i}", "type": "title", "params": {"title": "x"}, "duration": 6.0} for i in range(2)]
-    video = {"title": "t", "soundfont": "sf/bank.sf2", "music": {"source": "test-piece", "fade_in": 0.5, "volume": -3}, "scenes": scenes}
+    compose = {"mood": "upbeat", "bars": 4, "tempo": 120}  # 8 s + 3 s tail
+    video = {"title": "t", "soundfont": "sf/bank.sf2", "music": {"compose": compose, "fade_in": 0.5, "volume": -3}, "scenes": scenes}
     root.mkdir(exist_ok=True)
     (root / "video.yaml").write_text(yaml.safe_dump(video), encoding="utf-8")
     project = Project.load(root)
-    assert music.source_kind("test-piece") == "score" and music.source_kind("calm") == "bed" and music.source_kind("a.mp3") == "file"
-    assert music.config_problems(project.config, root) == []
+    cue = project.config.music_cues[0]
+    assert music.source_kind(cue) == "composed" and music.config_problems(project.config, root) == []
     timings = {"scenes": [{"id": f"s{i}", "start": 6.0 * i, "duration": 6.0, "beats": []} for i in range(2)]}
     wavs = []
     for i in range(2):
         wavs.append(root / "padded" / f"s{i}.wav")
         write_wav(wavs[-1], np.zeros((6 * RATE, 2)))
     report = mix.mix_audio(project, timings, wavs, None, tmp_path / "mix.wav")
-    assert calls == [(score, (root / "sf" / "bank.sf2").resolve(), project.build_dir / "music")]
-    assert report.music == [{"source": "test-piece", "kind": "score", "from": "s0", "to": "s1", "start": 0.0, "end": 12.0, "volume": -3.0, "duck": 12.0}]
+    assert calls == [(composer.compose("upbeat", bars=4, tempo=120), (root / "sf" / "bank.sf2").resolve(), project.build_dir / "music")]
+    assert report.music == [{"source": "compose: upbeat", "kind": "composed", "from": "s0", "to": "s1", "start": 0.0, "end": 12.0, "volume": -3.0, "duck": 12.0}]
     assert report.mixed and report.normalized
-    # the 7 s render loops with the cue's 2 s cross-fade: the music still plays at 11 s
-    placement = mix.plan_music(project, timings, 12 * RATE)[0]
-    assert placement.source.loop and np.abs(placement.source.read(11 * RATE, 11 * RATE + 4800)).max() > 0
+    # looped: the 8 s piece repeats with its 3 s tail added onto its start (no cross-fade)
+    source = mix.plan_music(project, timings, 12 * RATE)[0].source
+    rendered = fake_render(calls[0][0], Path("x"))
+    piece = 8 * RATE
+    assert source.loop and source.length == piece and np.array_equal(source.head, rendered[:piece])
+    assert np.allclose(source.read(piece, piece + 10), rendered[:10] + rendered[piece : piece + 10])
+    assert np.array_equal(source.read(piece + 3 * RATE, piece + 3 * RATE + 10), rendered[3 * RATE : 3 * RATE + 10])
 
 
 # ----- one real render ------------------------------------------------------------------------------

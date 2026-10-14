@@ -226,7 +226,8 @@ src/vidgen/
   dubbing.py              # each voice's voice in the video's language (dub:, automatic Kokoro picks), --all-languages (§80; no manim)
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
-  music.py                # background music: generated beds, music files and composed scores as looping sources (§48, §82; no manim)
+  music.py                # background music: generated beds, music files and composed music as looping sources (§48, §82, §83; no manim)
+  composer.py             # composed music from a mood: moods, instruments, chords, phrases, melody, accompaniment (§83; pure, seeded, no manim)
   score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
   soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
   synth.py                # composed music played with symusic (optional extra music): install check, per-part render, numpy mix, reverb, cache (§81, §82; no manim)
@@ -1120,7 +1121,8 @@ vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overri
 vidgen list-themes [PROJECT] [--swatches PNG] [--json]   # theme presets + type scales (§20)
 vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]   # icons (§22)
 vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]   # sound effects with descriptions (§47)
-vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with descriptions (§48)
+vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with descriptions (§48), moods and instruments (§83)
+vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR]   # composed music as WAV + .mid (§83)
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]
 vidgen render [PROJECT] [--preview | --draft] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
@@ -10312,13 +10314,93 @@ listening test after Step 144); this section covers what has to be installed and
   default file's known hash once checked, others hashed once per process by size + mtime),
   `RENDERER_VERSION` and the rate. Written to a temporary file, then moved into place. The mix
   passes `build/music/`; the symusic `Synthesizer` is kept per SoundFont (lru 1).
-- **As a music source**: `music.SCORES` (name → Score) is Step 146's internal hook (tests, manual
-  checks); Step 147's `music: {compose: ...}` replaces it. `source_kind(source)` gives `bed`,
-  `score` or `file`; a score source is rendered with the project's `soundfont:` (else the default
-  SoundFont, downloaded if missing) and then played like a music file: `start`, `loop` with the
-  `crossfade` seam, fades, ducking, scene volumes unchanged; `Placement.summary()` says
-  `kind: score`; `config_problems` accepts it.
+- **As a music source**: Step 146's internal hook `music.SCORES` was replaced in Step 147 by
+  `music: {compose: ...}` (§83).
 - `score.py`, `synth.py` and `soundfont.py` are in `NOT_RENDER_INPUTS` (audio only: no scene
   re-render when they change).
 - Measured (manual, GeneralUser GS, 2 cores): a 5-part, 16-bar score at 100 BPM (38.4 s + 3 s
   tail) renders in 2.1 s (cached read 0.08 s, identical), −28.00 LUFS, −15.6 dBTP, 376 MB peak RSS.
+
+## 83. Composed music, part 3: the composer and its moods (Step 147)
+
+Reference: docs/CONFIG.md "Composed music (`compose`)" and "`vidgen music preview`".
+
+- **Config**: a music cue takes `compose:` instead of `source:` (exactly one; `MusicCue._one_source`),
+  so composed music is a cue like a bed or a file (lists of cues with `from` / `to`, `volume`,
+  fades, ducking, scene volumes). `ComposeConfig {mood, key, tempo, instruments, seed=1, bars}`
+  (`compose: playful` is short for `{mood: playful}`); `instruments` maps a part (`melody`,
+  `chords`, `pad`, `bass`, `drums`) to a friendly name, `none` / null, or `ComposeInstrument
+  {instrument, volume, pan, reverb}`. The model validator calls `composer.settings_problems`:
+  unknown mood / instrument / part with a did-you-mean (`cartoon.poses.unknown_name_message`), a
+  drum kit outside `drums` or the reverse, a key in the other mode, bars not a multiple of 4.
+  `MusicCue.label` is `compose: <mood>` for summaries.
+- **Composer** (`vidgen/composer.py`, pure, no numpy): `compose_piece(mood, key, tempo,
+  instruments, seed, bars) -> Piece` (score, key, tempo, bars, voices, chord names per bar,
+  phrases, `harmony` as `(beat, beats, Chord)`; `chord_at(beat)`), `compose(...) -> Score`. Seeded
+  by `random.Random(crc32("vidgen-compose:<mood>:<seed>"))`, one more generator per part (so
+  changing one part's instrument leaves the other parts' notes alone).
+  - *Moods* (`MOODS`): `Mood` holds family, words, key, tempo, meter, default bars, A
+    progressions (`themes`) and B / C progressions (`contrasts`) as `Progression(question,
+    answer)` of 4 bars each in Roman numerals (a bar may hold 2-4 chords), the melody's range,
+    words, rhythm cells (`"1 .5 .5 r1 1"`: beats, `r` a rest), the cadence cells (`half`, `full`)
+    and the last bar (`turn`), articulation, the chord / bass / drum pattern names, default
+    parts (`RoleDefault` instrument, volume, pan, reverb), the fallback bed, bass and chord
+    registers. A test checks every question ends on V and every answer on I.
+  - *Chords* (`parse_chord`): case gives major / minor, `°` `ø` `+`, `7` `maj7` `6` `9` `sus2`
+    `sus4` `add9`, `/3` `/5`, `b` / `#` before the numeral; each tone is `(scale degree, pitch
+    class)`, so `Chord.scale(key)` is the key's scale with the chord's tones on their degrees (the
+    raised leading tone over V in minor, the raised fourth over II); names are spelt from the
+    key's letters (`Gb`, not `F#`, in B♭ major).
+  - *Form* (`form`): blocks of A-question, A-answer, B (C in every second block)-question,
+    A-answer; the rest A / A A / A B A; the last phrase is an answer whose last bar becomes
+    `I V7` (`i V7`). Each letter picks one progression per seed (C another than B).
+  - *Melody*: per letter a motif of three rhythm cells (bar 1, bar 2, the answer's bar 3; a
+    question repeats bar 1's cell in bar 3; a return varies bar 2 / 3 by splitting the longest
+    note or merging two) and a shape (semitone offsets per anchor, inverted on a return). The
+    first note of a bar and notes on strong beats (1 and 3 in 4/4, 1 in 3/4) are *anchors*: a
+    chord tone of the chord sounding there, nearest to an arch target (a question rises and
+    stays up, an answer comes down; B higher, C lower) plus the shape, within a sixth of the
+    previous anchor, not repeating it; an answer's cadence takes the tonic nearest below or at
+    the previous note, a question's the V chord tone nearest it. The notes between anchors
+    follow the straight line to the next anchor in steps of the chord's scale (a chord tone for a
+    leap over 4 semitones), the last ones leading back to the first note. A bar equal to the bar
+    before (cell and first pitch) takes the second-best anchor or a varied cell. The melody's
+    range is the mood's moved by octaves into the instrument's (`fit_range`).
+  - *Accompaniment*: close-position voicings with the inversion nearest the previous one
+    (`_voicing`); patterns `pad`, `block`, `arpeggio` (eighths; a shape per letter), `broken`,
+    `oompah`, `ostinato` (root / fifth / octave), `strum` (staggered 15 ms per note); a chord
+    starting off the pattern's onsets is struck there; an event is cut at a chord change.
+    Bass patterns `sustain`, `half`, `root_fifth`, `walking` (with a chromatic approach to the
+    next root), `pulse`, `pop`; the root of an inversion is its bass note. Drum patterns
+    (`DrumPattern`: hits in 4/4, the phrase-end fill from `fill_from`, a cymbal at each new section
+    when `crash`, a generic 3/4 bar from `backbeat` / `tick`). Velocities are humanised ±4 (drums
+    ±5) by the part's generator; B / C drums play 8 % harder.
+  - The score is `balance=True`, its `length` exactly the bars (notes are cut at the end), its
+    sections named `A1 question`, `B1 question`...
+- **`Score.balance`** (new field, default false): `synth.mix_parts` first sets each part's dry
+  render to `BALANCE_LEVEL` (−28 LUFS integrated), then applies its `volume`. GeneralUser GS's
+  instruments differ by up to ~40 dB as symusic renders them (pizzicato −59 LUFS, horn −13 LUFS
+  for the same note), so the moods' volumes are levels against the other parts. Render time
+  of a 16-bar mood: ~4.5 s (2 cores; ~2 s without the per-part loudness measurement).
+- **As a music source** (`music.Source`): `source_kind(cue)` gives `composed`, `bed` or `file`;
+  `composed_score(cue)`; the render (`render_score`, cache `build/music/`) is the piece plus
+  `TAIL_SECONDS`: looped, the tail is added circularly onto the piece's start (the last bar
+  leads back to the first), the first pass is the piece without that tail, and `start` wraps
+  around the piece; `loop: false` plays the piece and its tail once. `crossfade` does not apply.
+  Without symusic 0.5.9 (`fallback_bed(cue)`) the mood's bed plays (`Mood.bed`: calm → calm,
+  focused / tense → pulse, curious / upbeat / triumphant → bright, playful → cartoon, sleepy →
+  lullaby) with a warning naming the install command; the summary then says `kind: bed`,
+  `source: "compose: <mood> (bed <bed>: no music extra)"`.
+- **Instruments**: 42 friendly names → GM programs with a playable range and words, and 5 drum
+  kits. Not offered, measured with GeneralUser GS 2.0.3 and symusic 0.5.9: pizzicato strings
+  (45) and xylophone (13) render a 5 ms click and silence (FluidR3 Mono plays its pizzicato), and
+  bright piano (1) is the piano's sound. All drum keys the patterns use sound in all five kits.
+- **CLI**: `vidgen list-music` adds the moods (`composer.mood_entries`, `describe(mood)` built
+  from the parameters, so the words follow the code) and the instruments
+  (`instrument_entries`); JSON keys `moods`, `instruments`, `symusic`. `vidgen music preview`
+  (`cli.cmd_music`) composes the project's first `compose:` cue changed by `--mood`, `--seed`,
+  `--bars`, `--key`, `--tempo` (another mood starts from its defaults) or the mood alone, renders
+  it with the project's SoundFont (no cache) and writes `<mood>-seed<S>.wav` and `.mid` into
+  `--out` (default `.`).
+- `composer.py` is in `NOT_RENDER_INPUTS`. Measured samples (scratchpad, not committed): every
+  mood −28.00 LUFS, true peak −13.0 to −17.1 dBTP, 33-47 s with the tail, 4.4-6.1 s to render.

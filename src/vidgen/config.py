@@ -16,6 +16,7 @@ from typing import Annotated, Any, Literal, Union
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     ModelWrapValidatorHandler,
@@ -1503,14 +1504,64 @@ def _duck(value: bool | DuckConfig) -> DuckConfig:
     return DuckConfig() if value else DuckConfig(depth=0)
 
 
+class ComposeInstrument(_Strict):
+    """One part of composed music in its long form: the instrument and its mix."""
+
+    instrument: str | None = None
+    """A friendly instrument name (piano, strings, flute, ...; vidgen list-music); default: the mood's."""
+    volume: float | None = Field(default=None, ge=-60, le=12)
+    """dB against the other parts (each part is first set to the same loudness); default: the mood's."""
+    pan: float | None = Field(default=None, ge=-1, le=1)
+    """-1 (left) to 1 (right); default: the mood's."""
+    reverb: float | None = Field(default=None, ge=0, le=1)
+    """Share sent to the reverb, 0-1; default: the mood's."""
+
+
+def _compose_shorthand(value: Any) -> Any:
+    return {"mood": value} if isinstance(value, str) else value
+
+
+class ComposeConfig(_Strict):
+    """Music composed for the video from a mood (``compose:``; DESIGN.md §83), played with real
+    instruments (needs the ``music`` extra; without it a built-in bed plays)."""
+
+    mood: str
+    """calm, focused, curious, upbeat (explainers), playful, sleepy, tense, triumphant (cartoons); vidgen list-music."""
+    key: str | None = None
+    """A note, or a note with the mood's mode (e.g. E, 'Eb major', 'F# minor'); default: the mood's."""
+    tempo: float | None = Field(default=None, ge=40, le=200)
+    """Quarter notes per minute; default: the mood's."""
+    instruments: dict[str, str | ComposeInstrument | None] = Field(default_factory=dict)
+    """Per part (melody, chords, pad, bass, drums): an instrument name, none (leave the part out), or {instrument, volume, pan, reverb}."""
+    seed: int = Field(default=1, ge=0)
+    """Another seed gives another piece in the same mood; the same seed always the same notes."""
+    bars: int | None = Field(default=None, ge=4, le=128, multiple_of=4)
+    """Length of the piece (it loops), a multiple of 4; default: the mood's (16 or 24)."""
+
+    @model_validator(mode="after")
+    def _check(self) -> ComposeConfig:
+        from vidgen.composer import settings_problems
+
+        problems = settings_problems(self.mood, self.key, self.tempo, self.instrument_settings(), self.bars)
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self
+
+    def instrument_settings(self) -> dict[str, Any]:
+        """``instruments`` as plain data for :func:`vidgen.composer.compose`."""
+        return {role: v.model_dump() if isinstance(v, ComposeInstrument) else v for role, v in self.instruments.items()}
+
+
 class MusicCue(_Strict):
-    """Background music (``music:``, or one entry of a list of cues): a built-in bed or a file,
-    over the whole video or from one scene to another."""
+    """Background music (``music:``, or one entry of a list of cues): a built-in bed, a file or
+    composed music, over the whole video or from one scene to another."""
 
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
-    source: str = Field(min_length=1)
-    """A built-in bed (calm, pulse, bright, cartoon, lullaby; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3)."""
+    source: str | None = Field(default=None, min_length=1)
+    """A built-in bed (calm, pulse, bright, cartoon, lullaby; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3); give this or compose."""
+    compose: Annotated[ComposeConfig | None, BeforeValidator(_compose_shorthand)] = None
+    """Music composed from a mood instead of a source: a mood name or {mood, key, tempo, instruments, seed, bars}; needs the music extra."""
     volume: float = Field(default=0.0, ge=-60, le=12)
     """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""
     start: float = Field(default=0.0, ge=0)
@@ -1529,6 +1580,17 @@ class MusicCue(_Strict):
     """First scene of the cue (from its start); default the video's first scene."""
     to: Identifier | None = None
     """Last scene of the cue (to its end); default the video's last scene."""
+
+    @model_validator(mode="after")
+    def _one_source(self) -> MusicCue:
+        if (self.source is None) == (self.compose is None):
+            raise ValueError("give either source (a bed or a file) or compose (a mood), not both" if self.source else "give source (a bed or a file) or compose (a mood)")
+        return self
+
+    @property
+    def label(self) -> str:
+        """The source as summaries name it: the bed or file, or ``compose: <mood>``."""
+        return self.source if self.source is not None else f"compose: {self.compose.mood}"  # type: ignore[union-attr]
 
 
 def _music_cue(value: str | MusicCue) -> MusicCue:
@@ -2001,7 +2063,7 @@ class VideoConfig(_Strict):
     sfx: SfxConfig = Field(default_factory=SfxConfig)
     """Sound effects of the whole video: automatic sounds for built-in animations, overall level."""
     music: MusicSetting = None
-    """Background music: a bed name or file, {source, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids."""
+    """Background music: a bed name or file, {source | compose, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids; compose: {mood, ...} composes music."""
     soundfont: str | None = Field(default=None, min_length=1)
     """SoundFont (an .sf2 or .sf3 file, relative to the project) that composed music is played with; default: GeneralUser GS 2.0.3, downloaded once into vidgen's cache (`vidgen soundfont fetch`)."""
     audio: AudioConfig = Field(default_factory=AudioConfig)

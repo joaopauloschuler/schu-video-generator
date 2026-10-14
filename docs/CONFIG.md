@@ -2738,7 +2738,8 @@ its defaults as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-sfx---json).
 A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
 vidgen generates five beds itself (no recordings, no samples; free to use in your videos,
 including commercially; no attribution needed); any audio file FFmpeg
-reads works too.
+reads works too, and so does music vidgen composes for the video in a mood
+([composed music](#composed-music-compose)).
 
 ```yaml
 music: calm                            # a bed or a file, with the defaults below
@@ -2786,7 +2787,8 @@ each as WAV): seamless loops, generated in about a second when the video is join
 
 | key | default | |
 |---|---|---|
-| `source` | required | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
+| `source` | required (or `compose`) | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
+| `compose` | none | instead of `source`: music composed in a mood, `compose: calm` or `{mood, key, tempo, instruments, seed, bars}` ([below](#composed-music-compose)); loops seamlessly like a bed, `start` wraps around the piece |
 | `volume` | `0` | dB, -60 to 12; at 0 the music is −28 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6.5 dB under ElevenLabs narration (≈ −21.4 LUFS) in its pauses |
 | `start` | `0` | seconds into the source where it starts; a loop restarts there |
 | `loop` | `true` | repeat the source as long as the cue lasts; `false`: it plays once and fades out at its end |
@@ -2820,7 +2822,86 @@ way). Between two cues the first fades out at the end of its last scene and the 
 - **Checks.** `vidgen validate` reports a source that is neither a bed nor an existing file, and
   cues naming unknown scenes, out of order or overlapping.
 - `timings.json` gains `mix` (below) with each cue's span (`music: [{source, kind, from, to,
-  start, end, volume, duck}]`).
+  start, end, volume, duck}]`; `kind` `bed`, `file` or `composed`, `source` `compose: <mood>` for
+  composed music).
+
+### Composed music (`compose`)
+
+Music written as notes for the video and played with real instruments (a SoundFont), in a mood:
+an original piece every time (never a known tune), the same piece for the same settings. It
+needs the optional extra (`pip install "schu-video-generator[music]"`) and a
+[SoundFont](#soundfont-soundfont-vidgen-soundfont); without the extra, `vidgen render` warns and
+plays the built-in bed named for the mood below.
+
+```yaml
+music: {compose: playful}              # a mood with its defaults
+```
+
+```yaml
+music:
+  compose:
+    mood: calm
+    key: E                             # a note, or 'E major' / 'F# minor' (the mood's mode)
+    tempo: 80                          # quarter notes per minute
+    seed: 3                            # another seed: another piece in the mood
+    bars: 16                           # a multiple of 4; the piece loops
+    instruments:
+      melody: flute                    # a friendly instrument name (vidgen list-music)
+      pad: none                        # leave a part out
+      drums: soft_drums                # add a part the mood has not
+      bass: {volume: -2}               # {instrument, volume, pan, reverb}
+  volume: -2                           # the cue's keys as for any source
+```
+
+| key | default | |
+|---|---|---|
+| `mood` | required | `calm`, `focused`, `curious`, `upbeat` (explainers), `playful`, `sleepy`, `tense`, `triumphant` (cartoons); a misspelt name gets a did-you-mean |
+| `key` | the mood's | a note (`E`, `Bb`) or a note with the mood's mode (`F# minor` for a minor mood); standard key signatures only |
+| `tempo` | the mood's | 40 to 200 quarter notes per minute |
+| `instruments` | the mood's | per part — `melody`, `chords`, `pad`, `bass`, `drums` — an instrument name, `none`, or `{instrument, volume, pan, reverb}` (`instrument` a name, default the mood's; `volume` in dB against the other parts: every part is first set to the same loudness; `pan` −1 to 1; `reverb` 0 to 1) |
+| `seed` | `1` | an integer ≥ 0: the same settings and seed always give the same notes |
+| `bars` | the mood's (16; `playful` 24) | 4 to 128, a multiple of 4 |
+
+| mood | for | key, tempo | sounds like (defaults) | without the extra |
+|---|---|---|---|---|
+| `calm` | explainers | D major, 72, 4/4 | a slow legato piano tune over flowing harp arpeggios, a soft string pad and held cello roots; no drums | `calm` |
+| `focused` | explainers | A minor, 96, 4/4 | a sparse vibraphone tune, nylon-guitar arpeggios, a warm synth pad, electric bass in eighths, soft brushed drums | `pulse` |
+| `curious` | explainers | F major, 108, 4/4 | a staccato flute tune, harp chords on the off-beats, upright bass root–fifth, a cabasa shaker and claves; a raised fourth (II) and ♭VII for colour | `bright` |
+| `upbeat` | explainers | G major, 116, 4/4 | a syncopated marimba tune, strummed steel guitar, a quiet string pad, a syncopated electric bass, a pop drum beat | `bright` |
+| `playful` | cartoons | C major, 132, 4/4 | a hopping staccato clarinet tune, marimba chords on the off-beats, a tuba oom-pah, woodblocks answering each other | `cartoon` |
+| `sleepy` | cartoons | F major, 66, 3/4 | a celesta lullaby over harp arpeggios, a soft string pad, plucked bass on each bar's first beat; no drums | `lullaby` |
+| `tense` | cartoons | D minor, 104, 4/4 | a low, sparse clarinet over a staccato piano ostinato, tremolo strings, bowed double bass, a heartbeat bass drum and rising snare | `pulse` |
+| `triumphant` | cartoons | B♭ major, 112, 4/4 | a trumpet fanfare, brass chords on 1 and 3, a string pad, a tuba, a march on orchestral drums with cymbals at new sections | `bright` |
+
+`vidgen list-music` describes each mood precisely in words (instruments and ranges, patterns,
+chord progressions) and lists the instrument names: `piano`, `electric_piano`, `harpsichord`,
+`celesta`, `glockenspiel`, `music_box`, `vibraphone`, `marimba`, `accordion`, `guitar`,
+`steel_guitar`, `clean_guitar`, `bass`, `electric_bass`, `synth_bass`, `violin`, `viola`, `cello`,
+`contrabass`, `tremolo_strings`, `harp`, `strings`, `slow_strings`, `choir`, `trumpet`,
+`trombone`, `tuba`, `muted_trumpet`, `horn`, `brass`, `alto_sax`, `oboe`, `bassoon`, `clarinet`,
+`piccolo`, `flute`, `recorder`, `pan_flute`, `ocarina`, `warm_pad`, `kalimba`, `steel_drums`, and
+the drum kits `drums`, `room_drums`, `jazz_drums`, `soft_drums` (brushes), `orchestral_drums`.
+(Pizzicato strings and the xylophone are not offered: with GeneralUser GS, symusic 0.5.9 plays
+them as a 5 ms click.)
+
+**How a piece is made** (`vidgen/composer.py`). It is a series of 4-bar phrases in the form
+A A B A (longer pieces repeat it with a C contrast): a *question* phrase ends on the dominant
+(V), its *answer* on the tonic; the last bar turns from the tonic to V7, leading back to the first
+bar, so the piece loops without a seam (the reverb's tail is added onto its start). Each section
+takes one of the mood's progressions; the melody has a motif (rhythm cells and a shape) that comes
+back varied, chord tones on the strong beats, steps of the chord's scale between them, and never
+the same bar twice in a row. Chords, pad, bass and drums follow the mood's patterns; a drum fill
+ends each phrase. `vidgen music preview` writes a piece as WAV and MIDI to listen to or open in
+any notation program.
+
+### `vidgen music preview`
+
+`vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR]`
+composes the project's first `compose:` cue (the options change it; another `--mood` starts from
+that mood's defaults), or `--mood M` outside a project, renders it with the project's SoundFont and
+writes `DIR/<mood>-seed<S>.wav` (one pass plus the 3 s reverb tail, at −28 LUFS) and `.mid`
+(type 1, a track per part, section markers). It prints the key, tempo, parts, the chords of each
+phrase and the measured loudness and true peak. Needs the `music` extra.
 
 ### Loudness of the final mix (`audio`)
 
@@ -2850,12 +2931,16 @@ raise the peak by ~0.2 dB, so the MP4 stays under it).
 `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` describes the built-in beds in words —
 instruments, key, tempo, chords, mood, frequency range — for an author who cannot listen, and
 lists the project's `assets/music` files (length, measured loudness); `--render-dir` writes one
-loop of every bed as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-music---json).
+loop of every bed as `DIR/<name>.wav`. Then the moods of [composed music](#composed-music-compose)
+(key, tempo, meter, length, each part's instrument and pattern, the melody's range and style, the
+chord progressions, the bed played without the extra) and every instrument name (General MIDI
+program, range, what it sounds like). JSON: see [below](#vidgen-list-music---json).
 
 ### SoundFont (`soundfont`, `vidgen soundfont`)
 
-Composed music (music written as notes and played with real instruments; being built in Phase N)
-needs the optional extra and a SoundFont, a bank of recorded instruments:
+Composed music (music written as notes and played with real instruments,
+[`compose:`](#composed-music-compose)) needs the optional extra and a SoundFont, a bank of
+recorded instruments:
 
 - **The extra**: `pip install "schu-video-generator[music]"` installs symusic 0.5.9 (MIT, ~3 MB
   of wheels for Windows, macOS and Linux; the exact version because 0.6.0 cannot render with a
@@ -8042,11 +8127,14 @@ difference between two palette colours).
 |---|---|---|
 | `project` | str \| null | the project folder whose `assets/music` was included (`null`: built-ins only) |
 | `rate` | int | sample rate (48000) |
-| `level` | float | integrated loudness (LUFS) of music at `volume: 0` (−30) |
+| `level` | float | integrated loudness (LUFS) of music at `volume: 0` (−28) |
 | `duck` | object | the default ducking `{depth, attack, release, hold, clips}` |
 | `count` | int | number of entries |
 | `music` | list | `{name, origin, description, use, tempo, key, chords, loop_seconds, duration, channels, loudness, preview}`: built-in beds (`origin` `builtin`; `description` what it sounds like, `use`, `tempo` BPM or `null` without a beat, `key`, `chords` in loop order, `loop_seconds`) then the project's files (`origin` `project`, `name` the path to use as `source`, `duration` s); `loudness` measured (LUFS); `preview` the WAV written with `--render-dir`, else `null` |
 | `previews` | str \| null | the `--render-dir` folder |
+| `moods` | list | composed music's moods: `{name, family, description, use, key, tempo, meter, bars, loop_seconds, instruments, fallback_bed}` (`family` `explainer` or `cartoon`; `instruments` part → instrument name; `fallback_bed` the bed played without the extra) |
+| `instruments` | list | `{name, program, drums, low, high, description}`: General MIDI program (a drum kit's number when `drums`), range as note names (`null` for drum kits) |
+| `symusic` | str | the installed symusic version, or how to install the extra |
 
 ### `vidgen schema --json`
 
