@@ -23,6 +23,8 @@ mcp = ["mcp>=1.19"]
 # kokoro 0.9.4 (and misaki) declare Python < 3.13; on 3.13 the extra installs nothing and
 # `vidgen tts` explains (DESIGN.md §68).
 kokoro = ["kokoro>=0.9.4; python_version < '3.13'"]
+# composed music (Phase N): 0.6.0's SoundFont render is broken, so the pin is exact.
+music = ["symusic==0.5.9"]
 dev = ["pytest", "jsonschema>=4.18", "pytest-xdist", "fpdf2>=2.7.9", "pypdf>=4", "mcp>=1.19"]
 
 [project.scripts]

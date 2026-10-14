@@ -51,6 +51,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
 | `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
 | `music` | none | background music: a bed name (`calm`, `pulse`, `bright`, `cartoon`, `lullaby`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
+| `soundfont` | none (GeneralUser GS 2.0.3, downloaded once) | the SoundFont (`.sf2` / `.sf3`, relative to the project) composed music is played with; see [SoundFont](#soundfont-soundfont-vidgen-soundfont) |
 | `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
 | `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color`, `push`, `wipe` or `{type, duration, color, direction, soft}`; see [transitions](#transitions-transition) |
 | `chapters` | `{metadata: true, youtube: true, intro: Intro}` | what the render writes about the chapters: MP4 chapter entries, the YouTube list `<output>_chapters.txt`, the chapter at 0:00; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
@@ -2850,6 +2851,45 @@ raise the peak by ~0.2 dB, so the MP4 stays under it).
 instruments, key, tempo, chords, mood, frequency range — for an author who cannot listen, and
 lists the project's `assets/music` files (length, measured loudness); `--render-dir` writes one
 loop of every bed as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-music---json).
+
+### SoundFont (`soundfont`, `vidgen soundfont`)
+
+Composed music (music written as notes and played with real instruments; being built in Phase N)
+needs the optional extra and a SoundFont, a bank of recorded instruments:
+
+- **The extra**: `pip install "schu-video-generator[music]"` installs symusic 0.5.9 (MIT, ~3 MB
+  of wheels for Windows, macOS and Linux; the exact version because 0.6.0 cannot render with a
+  SoundFont). Without it, composed music stops with an error naming this command.
+- **The SoundFont**: by default **GeneralUser GS 2.0.3** (32.3 MB, General MIDI instruments and
+  drum kits). vidgen does not ship it: the first composed render (or `vidgen soundfont fetch`)
+  downloads it from
+  `https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2` into
+  vidgen's cache folder, `soundfonts/GeneralUser-GS.sf2` under: `VIDGEN_CACHE_DIR` if set, else
+  `%LOCALAPPDATA%\vidgen` on Windows, `~/Library/Caches/vidgen` on macOS, `$XDG_CACHE_HOME/vidgen`
+  or `~/.cache/vidgen` on Linux. The download goes to a temporary file, is checked (32,319,396
+  bytes, sha256 `9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe`) and only then
+  moved into place; after that no network is needed. A file that does not match (the upstream
+  file changed, or the cached copy was altered) is an error, never used.
+- **Your own SoundFont**: `soundfont: PATH` uses any SF2 or SF3 file instead (relative to the
+  project, or absolute), and nothing is downloaded. `vidgen validate` reports a missing file or one
+  that is not a SoundFont. If the download fails (offline) or no longer matches, download a
+  SoundFont yourself (GeneralUser GS: <https://www.schristiancollins.com/generaluser>) and set
+  this key.
+
+```yaml
+soundfont: assets/soundfonts/MyBank.sf2   # optional; default: GeneralUser GS 2.0.3 from the cache
+```
+
+`vidgen soundfont fetch [--force]` downloads the default SoundFont now (`--force`: again, e.g.
+after a mismatch). `vidgen soundfont info [PROJECT]` shows the SoundFont the project uses (or the
+default outside a project): path, size, sha256, whether the default file is the expected one, its
+licence line, and whether symusic is installed.
+
+**Licence and credit.** GeneralUser GS's licence (v2.0) lets you use it without restriction in
+your own music, private or commercial; no attribution is required. A credit is welcome, for
+example in the video's description:
+
+> Music rendered with the GeneralUser GS SoundFont (https://www.schristiancollins.com/generaluser).
 
 ## Transitions (`transition`)
 
@@ -7826,7 +7866,7 @@ for `confirm_cost: true` when the project's `stt.provider` is a paid service (`e
 to `--root` (default: the current folder) and must resolve inside it, `..` and symbolic links
 included; other paths are refused. The files a project's config names (a scene's `path` /
 `logo`, a watermark, thumbnail, stage or layer `image`, a music `source` file,
-`pronunciation_file`, `translations`, `extensions`, `output_dir`, a character's `look.svg`, a
+`pronunciation_file`, `translations`, `extensions`, `output_dir`, `soundfont`, a character's `look.svg`, a
 stage prop's `svg`, a Kokoro `voice` file ending in `.pt`, in every variant, set and included
 file; and the `include:` files themselves, also those of `screenplay`'s `cast`) must be inside
 the root too: a config naming

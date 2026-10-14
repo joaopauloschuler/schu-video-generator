@@ -13612,3 +13612,74 @@ How to test
   tests/test_docs.py tests/test_guide.py tests/test_packaging.py tests/test_host_acting.py
   tests/test_builtin_scenes.py tests/test_speech_flags.py` (262 passed, 8 s); render
   `test_host_acting test_callout_action test_review4` (12 passed, 54 s).
+
+## Step 145 — Optional extra and SoundFont
+
+What was built
+- **Extra `music`** (`pyproject.toml`): `symusic==0.5.9` (exact; 0.6.0's SoundFont render fails).
+  `src/vidgen/synth.py` (new, Step 146 extends it): `INSTALL_COMMAND`, `SYMUSIC_VERSION`,
+  `symusic_version()`, `symusic_status()` and `require_symusic()`, which imports symusic or raises
+  `VidgenError` naming `pip install "schu-video-generator[music]"` (also when another version is
+  installed).
+- **SoundFont** (`src/vidgen/soundfont.py`, new): GeneralUser GS 2.0.3 constants (URL, 32,319,396
+  bytes, sha256, licence line, `CREDIT`); `cache_dir()` (`VIDGEN_CACHE_DIR`, else
+  `%LOCALAPPDATA%\vidgen`, `~/Library/Caches/vidgen`, `$XDG_CACHE_HOME/vidgen` / `~/.cache/vidgen`),
+  `default_path()` (`soundfonts/GeneralUser-GS.sf2`); `fetch(force, url, progress)` streams to a
+  `mkstemp` file next to the target, hashes while writing, compares size and SHA-256, then
+  `fileio.replace_file`; the temp file is removed on any failure. `resolve(setting, root,
+  download)` gives the override or the checked cached file (hashed once per process, then
+  remembered by size + mtime), downloading when missing. `info()` for the CLI;
+  `soundfont_problems()` for `vidgen validate`.
+- **`httpapi.stream_get(url, write, service, timeout, max_bytes)`**: a streaming GET (the existing
+  `get` reads the whole body into memory); HTTP statuses and network errors become `VidgenError`.
+- **Config** `soundfont: PATH` (top level, `VideoConfig.soundfont`): an SF2/SF3 file relative to
+  the project; `vidgen validate` reports a missing file or one without a RIFF `sfbk` header or
+  `.sf2` / `.sf3` suffix. In `PATH_KEYS` (confined under `vidgen mcp`); excluded from scene
+  fingerprints (audio only).
+- **CLI** `vidgen soundfont fetch [--force]` / `vidgen soundfont info [PROJECT]` (path, origin,
+  size, sha256, check, licence line, suggested credit, symusic state).
+- **Errors**: offline → "cannot download the GeneralUser GS 2.0.3 SoundFont (cannot reach GitHub
+  ...); connect to the internet and run `vidgen soundfont fetch`, or download an SF2 / SF3 SoundFont
+  yourself (GeneralUser GS: <home page>) and set `soundfont: PATH` in video.yaml"; mismatch → both
+  sizes / hashes, "may have changed upstream", the same `soundfont: PATH` hint; a changed cached
+  file → the same plus `vidgen soundfont fetch --force`.
+
+Files
+- New: `src/vidgen/soundfont.py`, `src/vidgen/synth.py`, `tests/test_soundfont.py`.
+- Changed: `pyproject.toml`, `src/vidgen/httpapi.py`, `config.py`, `project.py` (`PATH_KEYS`),
+  `render/fingerprint.py`, `cli.py` (command, validate problem), `THIRD_PARTY_NOTICES.md`,
+  `README.md` (Windows step 12, Linux step 7, commands table), `docs/CONFIG.md` (top-level row,
+  "SoundFont (`soundfont`, `vidgen soundfont`)", MCP path keys), `DESIGN.md` (tree, §81),
+  `tasklist.md`.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- Config key `soundfont`; command `vidgen soundfont`; extra `music`; env `VIDGEN_CACHE_DIR`.
+- The config dump gains `soundfont: null`, but it is excluded from scene fingerprints: no re-render.
+
+Decisions / deviations
+- vidgen had no cache folder of its own (Kokoro's model sits in the Hugging Face cache); the new
+  one follows each platform's convention, `VIDGEN_CACHE_DIR` moves it (tests use it).
+- symusic's own `BuiltInSF` downloader (pySmartDL, no hash check) is not used.
+- `fetch` follows `main` as the task list says; the sha256 pin turns an upstream change into a
+  clear error instead of using another file. No commit pin (the task list's URL).
+- THIRD_PARTY_NOTICES and the docs name projects and URLs, not people (brief rule).
+- No `--json` for `vidgen soundfont` and no MCP tool (not asked; Step 149 covers MCP).
+
+Verification
+- Manual (cache in the scratchpad, the research agent's copy of the file via `file://`, no
+  network): `fetch` 3.6 s, cached `resolve` 0.0001 s, no `.part` left; `vidgen soundfont fetch` →
+  "already there"; `vidgen soundfont info` → 32,319,396 bytes, the expected sha256, "check: ok",
+  "symusic: 0.5.9" (installed in /home/claude/venv).
+
+Known gaps / TODOs
+- Nothing plays the SoundFont yet (Step 146). No progress bar for the 32 MB download.
+- `validate` does not yet warn that the extra is missing (Step 149).
+- Seen, not caused here: `tests/test_render.py::test_ffmpeg_missing` fails when `test_render.py`
+  runs alone (manim is first imported while the test patches `sys.platform` to `win32`; click
+  then imports `msvcrt`); the same at HEAD before this step.
+
+How to test
+- `pytest tests/test_soundfont.py` (17 passed, ~3 s; no download: `file://` URLs of a fake SF2).
+- Also run: `-m "not render" tests/test_docs.py tests/test_guide.py tests/test_packaging.py
+  tests/test_config.py tests/test_project.py tests/test_schema.py tests/test_cli.py
+  tests/test_imagegen.py tests/test_music.py`.

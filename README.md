@@ -367,6 +367,13 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
     helps older kokoro / misaki versions, which find it through the environment variable
     `PHONEMIZER_ESPEAK_LIBRARY=C:\Program Files\eSpeak NG\libespeak-ng.dll`. Japanese and Chinese
     voices also need `pip install "misaki[ja]"` / `"misaki[zh]"`.
+12. Optional, only for composed music (music written as notes and played with real instruments,
+    Phase N): `pip install ".[music]"` (symusic 0.5.9, ~3 MB). The SoundFont it plays with,
+    GeneralUser GS 2.0.3 (32.3 MB, free for commercial use), is downloaded on first use into
+    `%LOCALAPPDATA%\vidgen\soundfonts` and checked against its SHA-256; `vidgen soundfont fetch`
+    downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
+    Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
+    (https://www.schristiancollins.com/generaluser)."
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
@@ -403,13 +410,18 @@ export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter an
 pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU-only PyTorch (~200 MB)
 pip install ".[kokoro]"
 sudo apt install espeak-ng                    # optional fallback: kokoro uses the copy bundled in espeakng-loader
+
+# 7. Optional: composed music (symusic); the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
+pip install ".[music]"
+vidgen soundfont fetch                        # or let the first composed render download it
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
 pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
 `sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
 terminal needs `source .venv/bin/activate` again before running `vidgen`. The optional extras
-work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`.
+work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`, `".[music]"`
+(macOS keeps the SoundFont in `~/Library/Caches/vidgen`).
 
 **Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (with 3.13 the extra installs
 nothing: use `python3.12 -m venv .venv`, or the forced install of Windows step 11, which worked on
@@ -467,6 +479,7 @@ narration.
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
+| `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |

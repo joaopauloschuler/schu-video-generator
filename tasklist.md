@@ -756,10 +756,10 @@ GS SoundFont (owner, after Step 144; report in the session outputs). Per-charact
 dropped (owner). The numpy beds stay as the fallback. Same rules as Phases H–M.
 
 ### Step 145 — Optional extra and SoundFont
-- [ ] Extra `[music]` with `symusic==0.5.9` (0.6.0's render is broken); a clear `VidgenError` naming the extra when it is missing
-- [ ] GeneralUser GS 2.0.3 downloaded on first use into vidgen's cache from `https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2` (32,319,396 bytes, sha256 `9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe`; a mismatch is a clear error, never a silent use); `vidgen soundfont fetch|info`; `soundfont: PATH` override (any SF2/SF3); never in the wheel
-- [ ] THIRD_PARTY_NOTICES (symusic MIT, Prestosynth MIT, GeneralUser GS licence, a note on symusic's bundled abc tools), a suggested credit line in the docs
-- [ ] Tests: missing extra, hash check, override path (no download in tests)
+- [x] Extra `[music]` with `symusic==0.5.9` (0.6.0's render is broken); a clear `VidgenError` naming the extra when it is missing (`vidgen/synth.py`: `require_symusic`, also refuses another installed version; `symusic_status`)
+- [x] GeneralUser GS 2.0.3 downloaded on first use into vidgen's cache from `https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2` (32,319,396 bytes, sha256 `9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe`; a mismatch is a clear error, never a silent use); `vidgen soundfont fetch|info`; `soundfont: PATH` override (any SF2/SF3); never in the wheel (`vidgen/soundfont.py`; cache `VIDGEN_CACHE_DIR` / `%LOCALAPPDATA%\vidgen` / `~/Library/Caches/vidgen` / `~/.cache/vidgen`, `soundfonts/`; streamed to a temp file by `httpapi.stream_get`, size + SHA-256 checked, then moved; `soundfont:` checked by `vidgen validate` (file, suffix, RIFF `sfbk` header), confined under MCP, not in scene fingerprints)
+- [x] THIRD_PARTY_NOTICES (symusic MIT, Prestosynth MIT, GeneralUser GS licence, a note on symusic's bundled abc tools), a suggested credit line in the docs (CONFIG.md "SoundFont", README install steps, `vidgen soundfont info`)
+- [x] Tests: missing extra, hash check, override path (no download in tests) (`tests/test_soundfont.py`, 17 tests, `file://` URLs of a fake SoundFont, ~3 s)
 
 ### Step 146 — Score and renderer
 - [ ] `vidgen/score.py` (pure): tempo, time signature, key, parts (GM program or drum kit, notes in beats with velocity, volume, pan), sections; `.mid` export

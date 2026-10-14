@@ -176,7 +176,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # The pronunciation changes only the audio (tracked below) and, with overlays, the captions'
     # word times (the spoken texts are in "overlays"); editing it must not re-render every scene.
     # Named voices and subtitle settings change only audio and, with overlays, captions (§46).
-    # Music and the final mix (§48) are added when the video is joined: no pixels, no timing.
+    # Music and the final mix (§48) are added when the video is joined: no pixels, no timing
+    # (so is the SoundFont composed music is played with, §81).
     # So are the MP4's chapters and tags and the YouTube chapter list (§52), and the thumbnail (§53).
     # A translation file's texts are already in the config (§54); its path changes nothing.
     # Speech to text (`vidgen readback`, §57) only reads the audio.
@@ -186,7 +187,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # (§69.35): the file names and the unused sets change nothing.
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
-        "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets",
+        "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets", "soundfont",
         # a draft's size and frame rate: only drafts use them, checked like any format (§74)
         "draft",
     }

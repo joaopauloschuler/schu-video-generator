@@ -2002,6 +2002,8 @@ class VideoConfig(_Strict):
     """Sound effects of the whole video: automatic sounds for built-in animations, overall level."""
     music: MusicSetting = None
     """Background music: a bed name or file, {source, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids."""
+    soundfont: str | None = Field(default=None, min_length=1)
+    """SoundFont (an .sf2 or .sf3 file, relative to the project) that composed music is played with; default: GeneralUser GS 2.0.3, downloaded once into vidgen's cache (`vidgen soundfont fetch`)."""
     audio: AudioConfig = Field(default_factory=AudioConfig)
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
     transition: TransitionSetting | None = None

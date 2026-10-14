@@ -227,6 +227,8 @@ src/vidgen/
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
   music.py                # background music: generated beds, music files as looping sources (§48; no manim)
+  soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
+  synth.py                # composed music played with symusic (optional extra music): the install check (§81; no manim)
   mix.py                  # the final mix: music placement, ducking, normalisation, limiter (§48; no manim)
   loudness.py             # BS.1770-4 integrated loudness and true peak, block by block (§48; no manim)
   transitions.py          # scene transitions: effective transition, frame math, colour fade and irises (§69.45), voice track, xfade names (§49-50; no manim)
@@ -10237,3 +10239,41 @@ and one command for every language.
   scene); OpenRouter voices named after a language (Voxtral `fr_marie_*`) are not swapped; voice
   labels (`Fen:`) are not translatable; Kokoro gives word timings only for English, so a dubbed
   interrupt without `overlap` starts `INTERRUPT_LEAD` before the line's end.
+
+## 81. Composed music, part 1: the `music` extra and the SoundFont (Step 145)
+
+Reference: docs/CONFIG.md "SoundFont (`soundfont`, `vidgen soundfont`)". Phase N plays music
+written as notes with symusic 0.5.9 and the GeneralUser GS SoundFont (research report and
+listening test after Step 144); this section covers what has to be installed and downloaded.
+
+- **Extra** `music = ["symusic==0.5.9"]` (exact: 0.6.0's `Synthesizer.render` fails with a
+  TypeError). `synth.require_symusic()` imports it or raises `VidgenError` naming
+  `pip install "schu-video-generator[music]"`, also when another version is installed;
+  `synth.symusic_status()` is the one-line state for `vidgen soundfont info`. Nothing imports
+  symusic at load time. symusic's own `BuiltInSF` downloader (pySmartDL) is not used.
+- **Default SoundFont** (`vidgen/soundfont.py`): GeneralUser GS 2.0.3, `URL` =
+  `raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2`, `SIZE_BYTES`
+  32,319,396, `SHA256` `9575028c…8cfe` (upstream publishes no checksum; computed by the research
+  agent). Never in the wheel (no package data; a test checks `src/` holds no `.sf2` / `.sf3`).
+- **Cache folder** (`cache_dir()`; vidgen had none before: Kokoro's model lives in the Hugging
+  Face cache): `VIDGEN_CACHE_DIR`, else `%LOCALAPPDATA%\vidgen` (Windows), `~/Library/Caches/vidgen`
+  (macOS), `$XDG_CACHE_HOME/vidgen` or `~/.cache/vidgen`; the file is `soundfonts/GeneralUser-GS.sf2`.
+- **Download** (`fetch(force, url, progress)`): `httpapi.stream_get` streams 1 MB chunks (stopping
+  after more than `SIZE_BYTES`) into a `mkstemp` file next to the target while hashing; size and
+  SHA-256 are compared, then `fileio.replace_file` moves it into place; the temporary file is
+  removed on every failure. Errors: offline / HTTP status → "cannot download the GeneralUser GS
+  2.0.3 SoundFont (…); connect … `vidgen soundfont fetch`, or … set `soundfont: PATH`"; mismatch →
+  the sizes and hashes, "may have changed upstream", the same `soundfont: PATH` hint. A mismatch is
+  never used.
+- **Use** (`resolve(setting, root, download=True)`): `soundfont: PATH` (relative to the project
+  folder, or absolute) must be a file with suffix `.sf2` / `.sf3` and a RIFF `sfbk` header
+  (`override_problem`; also a `vidgen validate` problem, `soundfont_problems`); else the cached
+  default, hashed before its first use in a process (then remembered by size and mtime), else
+  downloaded (or, with `download=False`, an error naming `vidgen soundfont fetch`). `soundfont` is
+  in `PATH_KEYS` (confined under `vidgen mcp`) and left out of scene fingerprints (audio only).
+- **CLI** `vidgen soundfont fetch [--force]` and `vidgen soundfont info [PROJECT]` (path, origin,
+  size, sha256, check, licence line, suggested credit, symusic state); no `--json` yet.
+- **Licences**: THIRD_PARTY_NOTICES lists symusic (MIT), Prestosynth (MIT), symusic's bundled
+  `abc2midi` / `midi2abc` (not run by vidgen; licence unverified) and GeneralUser GS (licence
+  v2.0: free use in music, private or commercial; no attribution required). Suggested credit
+  (`soundfont.CREDIT`) in CONFIG.md and the README.

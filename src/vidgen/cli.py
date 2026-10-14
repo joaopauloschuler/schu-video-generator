@@ -252,7 +252,8 @@ def project_problems(project: Project) -> list[Problem]:
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
-    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), a designed
+    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), the
+    ``soundfont:`` file (§81), a designed
     ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours,
     SVG files (§69) and the shapes of their own poses (§69.3), and the host's floor colour and a
     scene's own ``host:`` on a type that draws none (§71). Each problem points where its
@@ -268,6 +269,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.music import config_problems as music_problems
     from vidgen.overlays import overlay_problems
     from vidgen.sfx import config_problems as sfx_problems
+    from vidgen.soundfont import soundfont_problems
     from vidgen.thumbnail import thumbnail_problems
     from vidgen.transitions import color_problems as transition_color_problems
     from vidgen.transitions import iris_problems
@@ -318,6 +320,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
+            problems.extend(Problem(loc, message) for loc, message in soundfont_problems(project.config.soundfont, project.root))
             problems.extend(thumbnail_problems(project, theme))
             problems.extend(Problem(loc, message) for loc, message in imagegen_problems(project))
     except VidgenError as exc:
@@ -1280,6 +1283,42 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_soundfont(args: argparse.Namespace) -> int:
+    """``fetch``: download the default SoundFont into vidgen's cache (checked) unless it is there;
+    ``info``: show the SoundFont a project (or any project) uses (DESIGN.md §81)."""
+    from vidgen import soundfont, synth
+
+    setting, root = None, None
+    if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        project = Project.load(args.project)
+        setting, root = project.config.soundfont, project.root
+    if args.action == "fetch":
+        if setting:
+            print(f"note: this project plays composed music with soundfont: {setting}; fetching the default one anyway")
+        present = soundfont.default_path().is_file() and not args.force
+        if not present:
+            print(f"downloading {soundfont.NAME} ({soundfont.SIZE_BYTES / 1e6:.1f} MB) from {soundfont.URL}", flush=True)
+        path = soundfont.fetch(force=args.force)
+        print(f"{'already there' if present else 'saved'}: {path} (sha256 checked)")
+        return 0
+    found = soundfont.info(setting, root)
+    print(f"soundfont: {found.path} ({'soundfont: in video.yaml' if found.origin == 'project' else soundfont.NAME + ', the default'})")
+    if not found.exists:
+        what = "file not found" if found.origin == "project" else "not downloaded yet: `vidgen soundfont fetch` (or the first composed render) downloads it"
+        print(f"    {what}")
+    else:
+        assert found.size_bytes is not None
+        print(f"    size: {found.size_bytes:,} bytes ({found.size_bytes / 1e6:.1f} MB)")
+        print(f"    sha256: {found.sha256}")
+        if found.matches is not None:
+            print(f"    check: {'ok, the expected file' if found.matches else 'MISMATCH, not used: `vidgen soundfont fetch --force`'}")
+    print(f"    licence: {found.licence}")
+    if found.origin == "default":
+        print(f"    suggested credit: {soundfont.CREDIT}")
+    print(f"symusic: {synth.symusic_status()}")
+    return 0
+
+
 def cmd_schema(args: argparse.Namespace) -> CommandResult:
     """Print the JSON Schema of video.yaml (or of one scene type's params, or of a scene)."""
     from vidgen import registry, schema
@@ -1489,6 +1528,12 @@ def build_parser() -> argparse.ArgumentParser:
     project_arg(p)
     p.add_argument("--render-dir", metavar="DIR", help="also write one loop of every bed as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_music)
+
+    p = sub.add_parser("soundfont", help="the SoundFont composed music is played with: fetch downloads GeneralUser GS into vidgen's cache, info shows it")
+    p.add_argument("action", choices=["fetch", "info"], help="fetch: download it (once; checked against its SHA-256); info: path, size, hash, licence")
+    project_arg(p)
+    p.add_argument("--force", action="store_true", help="fetch: download it again even if the cached file is there")
+    p.set_defaults(func=cmd_soundfont)
 
     p = sub.add_parser("tts", help="generate narration audio (ElevenLabs, or OpenRouter with voice.provider: openrouter)")
     project_arg(p)

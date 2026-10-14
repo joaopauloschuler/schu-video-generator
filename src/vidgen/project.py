@@ -81,8 +81,8 @@ CONFINE_ENV = "VIDGEN_CONFINE_ROOT"
 #: Config keys (anywhere in the config, variants and sets included) whose string values are
 #: files or folders of the project: scene ``path`` / ``logo``, watermark, thumbnail, stage and
 #: layer ``image``, music ``source``, ``pronunciation_file``, ``translations``, ``extensions``,
-#: ``output_dir``, a character's ``look.svg`` and a stage prop's ``svg``.
-PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir", "svg"})
+#: ``output_dir``, ``soundfont``, a character's ``look.svg`` and a stage prop's ``svg``.
+PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir", "soundfont", "svg"})
 #: Config key whose value may name a file among other words: a Kokoro ``voice`` (a blend
 #: ``af_bella,own.pt``) whose parts ending in ``.pt`` are voice files Kokoro reads from the
 #: current folder (DESIGN.md §68).
