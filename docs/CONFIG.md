@@ -120,7 +120,7 @@ scenes:
 | `chapter` | none | a new [chapter](#chapters) starts at this scene: its title, or `{title, number}` |
 | `voice` | none (the base `voice:`) | who says this scene's beats: a name from [`voices:`](#multiple-voices-voices) or `default` |
 | `sfx` | `[]` | sound effects at seconds from the scene's start (silent scenes too), see [sound effects](#sound-effects-sfx) |
-| `music` | `true` | the [background music](#background-music-music) during this scene: `false` for none, `{volume: dB}` to change its level here |
+| `music` | `true` | the [background music](#background-music-music) during this scene: `false` for none, `{volume: dB}` to change its level here; under [music that follows the video](#music-that-follows-the-video) also `{mood, key, tempo, instruments, seed}` from this scene's first bar |
 | `transition` | the video's `transition` | how the video passes into this scene from the one before it, see [transitions](#transitions-transition) |
 | `carry` | `[]` | objects of the scene before that this scene starts with, where they ended (a match cut), then moves into its own targets: target names, or `"NAME -> NAME"`; see [continuity](#continuity-carrying-objects-into-the-next-scene-carry) |
 | `set` | none | a `stage` scene's set: a name from [`sets:`](#shared-casts-and-sets-include-and-sets) or a [built-in set](#ready-made-sets-set-city_street) (`city_street`, `park`, `beach`, `forest`, `snowy_hills`; rooms: `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`) whose params this scene starts from; its own `params` win |
@@ -135,7 +135,10 @@ spoken or shown. `[laugh]`, `[gasp]`, `[sigh]`, `[hmm]`, `[giggle]`, `[groan]` a
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
 that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices). A beat's
 `sting` (default none) plays a short music sting on it: `reveal`, `comic` or `sad`, or `{kind, at,
-gain}`, see [music stings](#foley-and-music-stings). A beat's `auto_direct` (default: its scene's,
+gain}`, see [music stings](#foley-and-music-stings). A beat's `music_pause` (default none) stops
+[composed music that follows the video](#music-that-follows-the-video) just before it (a
+punchline) until the next bar line after it: `true`, or `false` to stop the automatic pause before
+a `card` scene's first beat or a short last line. A beat's `auto_direct` (default: its scene's,
 else the video's) turns [automatic directing](#automatic-directing-auto_direct) on or off for that
 beat of a `stage`. A beat's `shot` (default none) frames characters of a `stage` for that beat:
 `closeup kit`, `two_shot`, `over_shoulder kit pip`, ... or `{kind, of, move, run_time}`, see
@@ -2622,7 +2625,9 @@ Stings go on the sound-effect track (any scene type) and duck under the narratio
 music: 6 dB down while the narrator speaks, 0.15 s down before the speech starts, 0.3 s back up
 after it ends, no hold (the music's 1.5 s hold would keep a sting down through every pause). A
 sting at a beat's end therefore plays in the clear and ducks when the next line starts. In a
-preview timed from word counts (no MP3s yet) the whole beat counts as speech.
+preview timed from word counts (no MP3s yet) the whole beat counts as speech. Under
+[composed music](#composed-music-compose) a sting is played by the music's own instruments, in
+its key ([stings](#music-that-follows-the-video)).
 
 ### Voice sounds
 
@@ -2788,7 +2793,7 @@ each as WAV): seamless loops, generated in about a second when the video is join
 | key | default | |
 |---|---|---|
 | `source` | required (or `compose`) | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
-| `compose` | none | instead of `source`: music composed in a mood, `compose: calm` or `{mood, key, tempo, instruments, seed, bars}` ([below](#composed-music-compose)); loops seamlessly like a bed, `start` wraps around the piece |
+| `compose` | none | instead of `source`: music composed in a mood, `compose: calm` or `{mood, key, tempo, instruments, seed, bars}` ([below](#composed-music-compose)); without `bars` it is composed for the video ([follows it](#music-that-follows-the-video): `start` and `loop` do not apply); with `bars` it loops seamlessly like a bed and `start` wraps around the piece |
 | `volume` | `0` | dB, -60 to 12; at 0 the music is −28 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6.5 dB under ElevenLabs narration (≈ −21.4 LUFS) in its pauses |
 | `start` | `0` | seconds into the source where it starts; a loop restarts there |
 | `loop` | `true` | repeat the source as long as the cue lasts; `false`: it plays once and fades out at its end |
@@ -2844,7 +2849,7 @@ music:
     key: E                             # a note, or 'E major' / 'F# minor' (the mood's mode)
     tempo: 80                          # quarter notes per minute
     seed: 3                            # another seed: another piece in the mood
-    bars: 16                           # a multiple of 4; the piece loops
+    bars: 16                           # a 16-bar piece that loops; without bars: composed for the video
     instruments:
       melody: flute                    # a friendly instrument name (vidgen list-music)
       pad: none                        # leave a part out
@@ -2860,7 +2865,7 @@ music:
 | `tempo` | the mood's | 40 to 200 quarter notes per minute |
 | `instruments` | the mood's | per part — `melody`, `chords`, `pad`, `bass`, `drums` — an instrument name, `none`, or `{instrument, volume, pan, reverb}` (`instrument` a name, default the mood's; `volume` in dB against the other parts: every part is first set to the same loudness; `pan` −1 to 1; `reverb` 0 to 1) |
 | `seed` | `1` | an integer ≥ 0: the same settings and seed always give the same notes |
-| `bars` | the mood's (16; `playful` 24) | 4 to 128, a multiple of 4 |
+| `bars` | none: the piece [follows the video](#music-that-follows-the-video) | 4 to 128, a multiple of 4: a piece of that length that loops (`vidgen music preview` without `--bars` uses the mood's 16; `playful` 24) |
 
 | mood | for | key, tempo | sounds like (defaults) | without the extra |
 |---|---|---|---|---|
@@ -2893,6 +2898,62 @@ back varied, chord tones on the strong beats, steps of the chord's scale between
 the same bar twice in a row. Chords, pad, bass and drums follow the mood's patterns; a drum fill
 ends each phrase. `vidgen music preview` writes a piece as WAV and MIDI to listen to or open in
 any notation program.
+
+### Music that follows the video
+
+A `compose:` cue without `bars` is composed when the video is joined, for its real timings
+(`vidgen/musicfit.py`): after the narration changes, the next render composes it again.
+
+```yaml
+music: {compose: playful}
+scenes:
+  - id: storm
+    type: stage
+    music: {mood: tense}               # from this scene's first bar to its end
+    beats:
+      - text: "Then the cloud did what clouds do."
+      - text: "The umbrella left without him."
+        music_pause: true              # the music stops just before this line
+```
+
+- **Length and bar lines.** The piece lasts exactly as long as the cue, and every scene starts on
+  a bar line (with a transition, half-way through it): each scene gets a whole number of bars and
+  its own tempo, at most 8 % faster or slower than the mood's. When even 8 % slower is too fast
+  (a scene a little longer than its bars), its last bar slows down into a held chord (more on each
+  later beat). A scene shorter than one bar at the fastest tempo shares its bars with the next
+  scene (its own start is on a bar line, the next scene's is not). On two test renders the bar
+  lines fell within 0.02 ms of the scene changes (the notes' onsets in the audio within 4 ms
+  where measured cleanly).
+- **A scene's mood.** `music: {mood, key, tempo, instruments, seed}` on a scene changes the music
+  from that scene's first bar to its end; the next scene goes back to the cue's settings. Another
+  `mood` starts from that mood's defaults (the cue's seed kept); otherwise `key`, `tempo`, `seed`
+  replace the cue's and `instruments` are added to the cue's. Each run of scenes with the same
+  settings is one piece in the form above (phrases may cross scene changes); a run that does not
+  end the cue ends on its own cadence. Only under a `compose:` cue without `bars`: elsewhere
+  `vidgen validate` reports it. (The `.mid` export has one key and time signature: the first.)
+- **Swells on reveals.** Where a beat reveals something — a step of the scene's own reveal
+  (bullets, chart bars, code steps: as the host's pointing sees them), a written `reveal` action,
+  a `sting: reveal` — the notes of the two beats before it grow up to 20 % louder and a held chord
+  tone starts on it (pad, else chords, else melody). Not on the first beat, in the closing bar,
+  or within two beats of the swell before.
+- **Pauses.** `music_pause: true` on a beat silences the music from the last beat at least 0.4 s
+  before the line until the first bar line after the line ends. Automatically (`music_pause:
+  false` on the beat turns it off): before a `card` scene (not the cue's first), until the card's
+  first line ends; and before the cue's last line when it has at most 8 words and its scene has
+  a line before it — then the closing chord is struck as that line ends (a "button") if at least
+  0.3 s of the cue is left (a chord shorter than its bar at 300 BPM runs past the cue's end and
+  is cut there).
+- **The ending.** The last bar is the tonic chord held (the melody on the tonic, one last kick and
+  cymbal), the bar before it holds V and slows down (each beat 6 % longer than the one before),
+  and the last bar's beats last 1.3 beats. The cue's `fade_out` never starts before that chord.
+- **Stings.** A beat's `sting:` under composed music (and with the extra) is played by the
+  music's own instruments, in its key and tempo (the scene's settings): `reveal` a pickup on the
+  dominant then the tonic chord held with a cymbal, `comic` two tom hits and a cymbal with the
+  bass and a short tonic chord, `sad` the melody falling three semitones onto the tonic. Each is
+  set to the loudness of the built-in sting it replaces and keeps its `at`, `gain` and ducking; a
+  project's own `assets/sfx/sting_*.wav` is kept. Without composed music the built-in stings play.
+- `timings.json`'s `mix.music` entry of the cue gains `fit`: `{sections: [{scenes, start, bars,
+  tempo, mood}], swells, pauses, closing}` (video seconds).
 
 ### `vidgen music preview`
 

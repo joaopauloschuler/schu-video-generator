@@ -1536,7 +1536,7 @@ class ComposeConfig(_Strict):
     seed: int = Field(default=1, ge=0)
     """Another seed gives another piece in the same mood; the same seed always the same notes."""
     bars: int | None = Field(default=None, ge=4, le=128, multiple_of=4)
-    """Length of the piece (it loops), a multiple of 4; default: the mood's (16 or 24)."""
+    """A piece of this many bars (a multiple of 4) that loops; default: none, the piece is composed for the video (as long as the cue, scene changes on bar lines, a cadence at the end)."""
 
     @model_validator(mode="after")
     def _check(self) -> ComposeConfig:
@@ -1608,10 +1608,31 @@ MusicSetting = Annotated[Union[MusicEntry, list[MusicEntry], Literal[False], Non
 
 
 class SceneMusic(_Strict):
-    """A scene's ``music:`` override in its long form."""
+    """A scene's ``music:`` override in its long form: its level and, under composed music that
+    follows the video (a ``compose:`` cue without ``bars``, DESIGN.md §84), other compose
+    settings from this scene's first bar to its end."""
 
     volume: float = Field(default=0.0, ge=-60, le=12)
     """dB added to the music's volume during this scene."""
+    mood: str | None = None
+    """Composed music only: another mood for this scene (vidgen list-music); it starts from that mood's defaults."""
+    key: str | None = None
+    """Composed music only: another key for this scene (a note, or a note with the mood's mode)."""
+    tempo: float | None = Field(default=None, ge=40, le=200)
+    """Composed music only: another tempo for this scene (quarter notes per minute)."""
+    instruments: dict[str, str | ComposeInstrument | None] = Field(default_factory=dict)
+    """Composed music only: other instruments for this scene, per part (added to the cue's for the same mood)."""
+    seed: int | None = Field(default=None, ge=0)
+    """Composed music only: another seed for this scene."""
+
+    @property
+    def compose_keys(self) -> list[str]:
+        """The compose settings this scene changes (``mood``, ``key``...), in field order."""
+        return [k for k in ("mood", "key", "tempo", "seed") if getattr(self, k) is not None] + (["instruments"] if self.instruments else [])
+
+    def instrument_settings(self) -> dict[str, Any]:
+        """``instruments`` as plain data for :func:`vidgen.composer.compose`."""
+        return {role: v.model_dump() if isinstance(v, ComposeInstrument) else v for role, v in self.instruments.items()}
 
 
 class AudioConfig(_Strict):
@@ -1896,7 +1917,9 @@ class BeatConfig(_Strict):
     voice: Identifier | None = None
     """Who says this beat: a name from voices (or default: the base voice); default the scene's voice."""
     sting: StingSetting | None = None
-    """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
+    """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration; played by the composed music's instruments under compose: music."""
+    music_pause: bool | None = None
+    """Composed music that follows the video: true pauses the music just before this beat (a punchline) until the next bar line after it; false stops the automatic pause (before a card scene, before a short last line)."""
     auto_direct: AutoDirectSetting | None = None
     """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups, effects}); default: the scene's, else the video's."""
     shot: ShotConfig | None = Field(default=None, json_schema_extra=_shot_words_schema)
@@ -1948,7 +1971,7 @@ class SceneConfig(_Strict):
     sfx: list[SfxEntry] = Field(default_factory=list)
     """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
     music: bool | SceneMusic = True
-    """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here."""
+    """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here; under composed music also {mood, key, tempo, instruments, seed} from this scene's first bar."""
     transition: TransitionSetting | None = None
     """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}; default the video's transition."""
     carry: CarrySetting = Field(default_factory=list)
@@ -2233,6 +2256,28 @@ class VideoConfig(_Strict):
                 if first <= b and a <= last:
                     problems.append(f"{where} overlaps {other} (each scene can have one music cue)")
             spans.append((first, last, where))
+        return problems + self._scene_compose_problems(index)
+
+    def _scene_compose_problems(self, index: dict[str, int]) -> list[str]:
+        """A scene's ``music: {mood, key, ...}`` needs a fitted ``compose:`` cue over the scene
+        (no ``bars``) and must compose."""
+        from vidgen.composer import settings_problems
+        from vidgen.musicfit import cue_settings, is_fitted, scene_settings
+
+        problems: list[str] = []
+        cues = self.music_cues
+        for i, scene in enumerate(self.scenes):
+            if not isinstance(scene.music, SceneMusic) or not scene.music.compose_keys:
+                continue
+            where = f"scenes[{i}].music"
+            covering = [c for c in cues if (index.get(c.from_, -1) if c.from_ else 0) <= i <= (index.get(c.to, -1) if c.to else len(self.scenes) - 1)]
+            if not covering or not is_fitted(covering[0]):
+                keys = ", ".join(scene.music.compose_keys)
+                problems.append(f"{where}: {keys} change composed music that follows the video: put the scene under a music cue with compose: and no bars")
+                continue
+            settings = scene_settings(cue_settings(covering[0].compose), scene.music)  # type: ignore[arg-type]
+            for problem in settings_problems(settings.mood, settings.key, settings.tempo, settings.instruments):
+                problems.append(f"{where}: {problem}")
         return problems
 
     @property

@@ -15,7 +15,8 @@ With overlays, also what the planned timeline reads from every scene (``vidgen.v
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
-Not the music and the final mix (``music``, ``audio``, a scene's ``music``): they are applied when
+Not the music and the final mix (``music``, ``audio``, a scene's ``music``, a beat's
+``music_pause``): they are applied when
 the video is joined; nor ``chapters``, ``metadata`` and ``thumbnail`` (outputs made after it).
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
 """
@@ -46,7 +47,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
-        "loudness.py", "mix.py", "music.py", "composer.py", "score.py", "synth.py", "soundfont.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
+        "loudness.py", "mix.py", "music.py", "musicfit.py", "composer.py", "score.py", "synth.py", "soundfont.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
         "slides_pdf.py", "stt", "readback.py", "speech_flags.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/openrouter.py",
         "imagegen/run.py", "guide.py", "gallery.py", "outline.py", "prose.py", "plan.py", "plan_yaml.py",
         "mcp_server.py", "mcp_tools.py", "animatic.py",
@@ -200,7 +201,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
-        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True, "beats": {"__all__": set(JOIN_KEYS)}}),
+        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True, "beats": {"__all__": {*JOIN_KEYS, "music_pause"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},

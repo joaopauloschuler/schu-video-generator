@@ -228,6 +228,7 @@ src/vidgen/
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
   music.py                # background music: generated beds, music files and composed music as looping sources (§48, §82, §83; no manim)
   composer.py             # composed music from a mood: moods, instruments, chords, phrases, melody, accompaniment (§83; pure, seeded, no manim)
+  musicfit.py             # composed music that follows the video: bar lines at scene changes, per-scene moods, swells, pauses, cadence, stings (§84)
   score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
   soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
   synth.py                # composed music played with symusic (optional extra music): install check, per-part render, numpy mix, reverb, cache (§81, §82; no manim)
@@ -10404,3 +10405,80 @@ Reference: docs/CONFIG.md "Composed music (`compose`)" and "`vidgen music previe
   `--out` (default `.`).
 - `composer.py` is in `NOT_RENDER_INPUTS`. Measured samples (scratchpad, not committed): every
   mood −28.00 LUFS, true peak −13.0 to −17.1 dBTP, 33-47 s with the tail, 4.4-6.1 s to render.
+
+## 84. Composed music, part 4: music that follows the video (Step 148)
+
+Reference: docs/CONFIG.md "Music that follows the video".
+
+- **Which cues.** A `compose:` cue without `bars` (`musicfit.is_fitted`) is composed in
+  `mix.plan_music` from the combined timings, when the scenes are joined; with `bars` it loops as
+  in §83. Without the extra the mood's bed plays (§83). `start` and `loop` do not apply.
+- **Inputs** (`musicfit.cue_inputs`, reads the config and the timings): a `Slot(scene, start,
+  settings, button)` per scene of the cue (seconds from the cue's start: the scene's start, plus
+  half its transition's `overlap`); reveal times (the beats in which the scene type's
+  `reveal_steps` show a step, mapped with `layout.distribute` as host directing does; written
+  `reveal` actions at their `at` share of the beat; `sting_reveal` events of the timings); pauses
+  `Pause(start, end)` (a beat's `music_pause: true`; automatically a `card` scene that is not the
+  cue's first, until its first beat ends; the cue's last beat when it has at most `PAUSE_WORDS`
+  8 words and its scene another beat, unless `music_pause: false`). That last pause adds a
+  `button` slot where the line ends (when at least `BUTTON_MIN` 0.3 s remain).
+- **Settings** (`Settings(mood, key, tempo, instruments, seed)`; `cue_settings`,
+  `scene_settings`): a scene's `SceneMusic` (new optional fields `mood`, `key`, `tempo`,
+  `instruments`, `seed`; `compose_keys`) changes the cue's for that scene: another mood starts
+  from its defaults with the cue's seed; the same mood keeps the cue's settings, replaces `key`,
+  `tempo`, `seed` and adds `instruments`. `VideoConfig._scene_compose_problems`: only under a
+  fitted cue, and the result must pass `composer.settings_problems`.
+- **Sections** (`plan_sections(slots, seconds, limit=TEMPO_LIMIT)`, pure): a slot shorter than
+  one bar at the fastest tempo joins the next (the last, or one before the button, joins the one
+  before). `_fit` picks the bar count whose tempo (`60 · Σ stretch / seconds`) is nearest the
+  settings' within ±`TEMPO_LIMIT` (8 %); when even −8 % is too fast, the tempo is −8 % and the
+  missing time is a *hold*: added to the last bar's beats with weights 1..meter (`_hold`; no beat
+  under 20 BPM, the rest spilling over the section). When one bar at +8 % is too long (a cue
+  shorter than a bar), one bar at the tempo it needs. The last section *closes*: its last bar's
+  beats last `CLOSE_STRETCH` 1.3 beats and the bar before slows by `RIT_STEP` 6 % more per beat;
+  a button is one bar of plain beats at whatever tempo fills it (20-300 BPM: under 0.8 s in 4/4
+  it runs past the cue's end, cut there). Each `FitSection` keeps its per-beat `stretch`;
+  `TempoMap.of(sections)` is the tempo of each beat, with `seconds_at` / `beat_at`.
+- **The piece** (`fit_music(sections, reveals, pauses)`, pure): each run of sections with equal
+  settings is one `compose_piece(..., bars, ending)` (new `ending`: `loop` as before, `cadence`
+  for the last run, `open` for the others; any bar count when not looping: whole phrases of
+  `form`, then a tag repeating an answer's last `bars % 4` bars). `cadence`: the last bar is the
+  tonic alone (`_Bar.closing`: the melody holds the tonic, the chords hold the chord whatever the
+  pattern, the bass holds the root, the drums play one kick and cymbal) and the bar before ends
+  on V7 if it did not end on V. Parts are merged by (role, program, drums, volume, pan, reverb);
+  another instrument for a role becomes `"<role> 2"`. Score sections: one per fit section (named
+  by its scenes) and one per tempo change inside (`hold` / `a tempo`); `length` the total beats;
+  `time_signature` and `key` the first run's (MIDI only: the audio follows the notes).
+- **Swells**: each reveal at the nearest beat (`_swell_beats`: not before beat 1, not in the
+  closing bar, not in or one beat before a pause, `SWELL_BEATS` 2 apart); notes in the 2 beats
+  before grow to `SWELL_GAIN` ×1.2 velocity, the beat on it ×1.2, and a chord tone near E5 (not
+  one struck there already) is held 2 beats in the pad, else chords, else melody part.
+- **Pauses** (`_pause_windows`): from the last whole beat at least `PAUSE_LEAD` 0.4 s before the
+  beat to the first bar line after it ends (the closing bar at the latest); notes starting inside
+  are dropped, notes sounding into it end at its start (`_cut`).
+- **Cache**: the fitted score is hashed like any score (`render_key`), so its tempo changes and
+  notes — the section plan — are in the key: new timings compose and render again; unchanged
+  timings reuse `build/music/score-<key>.wav`.
+- **In the mix**: `Source(..., fitted=score)` plays the render once from the cue's start;
+  `Placement.fit` adds `fit: {sections, swells, pauses, closing}` to the cue's mix summary; the
+  cue's fade-out never starts before the closing chord (`FittedMusic.closing_seconds`).
+  `music.cue_scene_range` is shared by the mix and the stings.
+- **Stings** (`sting_score(kind, settings)`, pure): in the settings' key, tempo and voices —
+  reveal: melody pickup a fourth below the tonic, then the tonic held 2.5 beats with the tonic
+  chord (chords, pad), bass root, kick and cymbal; comic: toms 48, 45 and kick + crash 49 on
+  eighths with the mood's kit (standard without drums), the bass and a short tonic chord on the
+  last; sad: melody tonic+3, +2, +1, then the tonic held. `composed_stings(project, timings,
+  events, library)` (from `join_scenes` before `sfx.write_track`, new `replaced` argument; also
+  `sfx.placed(..., audio)`): for each built-in sting event in a scene under a composed cue (with
+  the extra, no project `assets/sfx/sting_*` file), the sting of that scene's settings rendered
+  (`build/music`), its tail cut to `STING_TAIL` 1.5 s with a fade, scaled to the integrated
+  loudness of the built-in sting it replaces. Its `gain`, `at` and the sting ducking stay.
+- `musicfit.py` is in `NOT_RENDER_INPUTS`; a beat's `music_pause` is left out of scene
+  fingerprints (applied when joined).
+- **Measured** (scratch copies, preview): `host-explainer` with `compose: curious` and real Kokoro
+  audio (66.1 s, 5 scenes: tempos −8 % with a hold, +0.6 %, −4.4 %, 0 %, −8 % with a hold;
+  6 swells): scene changes on bar lines within 0.01 ms (plan and symusic's own tempo map) and
+  note onsets in the render within 3.3 ms; `cartoon-rain-check` with `compose: playful` and
+  `storm` `{mood: tense}`, word-count timing (75.9 s): within 0.02 ms (plan, symusic), onsets
+  within 45 ms (a coarse onset detector), a pause and button before the last line, the comic
+  sting played by the playful instruments.

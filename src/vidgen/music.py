@@ -547,6 +547,14 @@ def source_kind(cue: MusicCue) -> str:
     return "bed" if is_bed(cue.source) else "file"
 
 
+def cue_scene_range(cue: MusicCue, scene_ids: Sequence[str]) -> tuple[int, int]:
+    """The indices of the first and last scene ``cue`` plays over (``from`` / ``to``, default the
+    video's first / last scene)."""
+    first = list(scene_ids).index(cue.from_) if cue.from_ else 0
+    last = list(scene_ids).index(cue.to) if cue.to else len(scene_ids) - 1
+    return first, last
+
+
 def composed_score(cue: MusicCue) -> Score:
     """The score a ``compose:`` cue plays (:func:`vidgen.composer.compose`)."""
     from vidgen.composer import compose
@@ -588,9 +596,10 @@ class Source:
     (a file with a cross-faded seam, a bed or composed music seamlessly) or ending, at
     :data:`MUSIC_LEVEL`. Composed music is rendered with the SoundFont ``soundfont`` (the
     project's ``soundfont:`` setting, relative to ``root``) and its render kept in ``cache_dir``;
-    without the ``music`` extra its mood's bed plays instead (a warning says so)."""
+    without the ``music`` extra its mood's bed plays instead (a warning says so). ``fitted``: the
+    score composed for the cue's span (:mod:`vidgen.musicfit`), played once from its start."""
 
-    def __init__(self, cue: MusicCue, root: Path, soundfont: str | None = None, cache_dir: Path | None = None) -> None:
+    def __init__(self, cue: MusicCue, root: Path, soundfont: str | None = None, cache_dir: Path | None = None, fitted: Score | None = None) -> None:
         kind = source_kind(cue)
         bed = cue.source if kind == "bed" else fallback_bed(cue)
         #: What plays, as the mix summary names it: its kind and its source.
@@ -609,7 +618,7 @@ class Source:
             self.length = len(data)
             return
         if kind == "composed":
-            self._composed(cue, root, soundfont, cache_dir)
+            self._composed(cue, root, soundfont, cache_dir, fitted)
             return
         assert cue.source is not None
         path = root / cue.source
@@ -633,20 +642,20 @@ class Source:
             self.head = body
         self.length = len(self.data)
 
-    def _composed(self, cue: MusicCue, root: Path, soundfont: str | None, cache_dir: Path | None) -> None:
+    def _composed(self, cue: MusicCue, root: Path, soundfont: str | None, cache_dir: Path | None, fitted: Score | None) -> None:
         """Composed music: the piece plus its reverb tail; looped, the tail is added onto the
         piece's start (the piece ends turning back to its beginning), so it repeats without a
-        seam, and ``start`` wraps around the piece."""
+        seam, and ``start`` wraps around the piece. A ``fitted`` piece plays once, from its start."""
         from vidgen import soundfont as soundfonts
         from vidgen.synth import render_score
 
-        score = composed_score(cue)
+        score = fitted if fitted is not None else composed_score(cue)
         audio = render_score(score, soundfonts.resolve(soundfont, root), cache_dir)  # at the music level
         piece = min(len(audio), round(score.length_seconds * RATE))
-        first = round(cue.start * RATE) % piece
+        first = 0 if fitted is not None else round(cue.start * RATE) % piece
         self.seamless = False
         self.offset = 0
-        self.loop = cue.loop
+        self.loop = cue.loop and fitted is None
         if self.loop:
             loop = np.array(audio[:piece], dtype=np.float32)
             for c in range(2):

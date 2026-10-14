@@ -5,7 +5,8 @@ Pure and seeded: the same settings give the same notes.
 A piece is a number of 4-bar *phrases* in a fixed form (A A B A, then C for the second
 contrast): a phrase is a *question* (ending on the dominant: a half cadence) or an *answer*
 (ending on the tonic: an authentic cadence), and the last bar turns back (tonic, then V7) so the
-piece loops. Each section letter picks its own chord progression from the mood's, and its own
+piece loops, or (music fitted to a video, :mod:`vidgen.musicfit`) ends on V-I with the tonic held.
+Each section letter picks its own chord progression from the mood's, and its own
 *motif* (rhythm cells and a melodic shape) that comes back varied. The melody puts chord tones on
 the strong beats and fills between them with steps of the chord's scale; nothing is taken from a
 known tune.
@@ -625,8 +626,9 @@ class _Bar:
     letter: str
     role: str  # question | answer
     occurrence: int  # earlier phrases of the same letter and role
-    final: bool
+    final: bool  # the last bar of a looping piece (I V7) or of a closing cadence (I held)
     section_start: bool  # first bar of a phrase whose letter differs from the phrase before
+    closing: bool = False  # the final held tonic of a piece that ends (ending "cadence")
 
     def chord_at(self, beat: float) -> Chord:
         """The chord sounding at ``beat`` (within the bar)."""
@@ -657,10 +659,21 @@ def form(phrases: int) -> list[tuple[str, str]]:
 
 
 _SPLITS = {4: {1: (4,), 2: (2, 2), 3: (2, 1, 1), 4: (1, 1, 1, 1)}, 3: {1: (3,), 2: (2, 1), 3: (1, 1, 1)}}
+#: How a piece ends: ``loop`` (its last bar turns I-V7 back to its start), ``cadence`` (V-I and
+#: the tonic held: the end of the music) or ``open`` (the last phrase's own cadence on I, for a
+#: piece another mood follows).
+ENDINGS = ("loop", "cadence", "open")
 
 
-def _plan(mood: Mood, key: Key, bars: int, rng: random.Random) -> list[_Bar]:
-    phrases = form(bars // 4)
+def _plan(mood: Mood, key: Key, bars: int, rng: random.Random, ending: str = "loop") -> list[_Bar]:
+    """The bars of a piece: :func:`form` for its whole phrases, then (``bars`` not a multiple of
+    4) a tag repeating the last ``bars % 4`` bars of an answer, so any length ends on a cadence."""
+    whole, tag = divmod(bars, 4)
+    phrases = form(whole)
+    firsts = [0] * len(phrases)
+    if tag:
+        phrases.append(("A", "answer"))
+        firsts.append(4 - tag)
     chosen: dict[str, Progression] = {}
     for letter in ("A", "B", "C"):
         pool = mood.themes if letter == "A" else mood.contrasts
@@ -669,22 +682,30 @@ def _plan(mood: Mood, key: Key, bars: int, rng: random.Random) -> list[_Bar]:
         chosen[letter] = rng.choice(pool)
     seen: dict[tuple[str, str], int] = {}
     tonic = "i" if key.minor else "I"
-    out: list[_Bar] = []
+    rows: list[tuple[list[str], int, int, str, str, int, bool]] = []
     for p, (letter, role) in enumerate(phrases):
         occurrence = seen.get((letter, role), 0)
         seen[(letter, role)] = occurrence + 1
         progression = getattr(chosen[letter], role)
-        for position, text in enumerate(progression):
-            index = 4 * p + position
-            final = index == bars - 1
-            symbols = [tonic, "V7"] if final else text.split()
-            lengths = _SPLITS[mood.meter][len(symbols)]
-            spans, at = [], 0.0
-            for symbol, length in zip(symbols, lengths):
-                spans.append(_Span(at, float(length), parse_chord(symbol, key)))
-                at += length
-            new_section = position == 0 and (p == 0 or phrases[p - 1][0] != letter)
-            out.append(_Bar(index, float(index * mood.meter), tuple(spans), p, position, letter, role, occurrence, final, new_section))
+        for position in range(firsts[p], 4):
+            new_section = position == firsts[p] and (p == 0 or phrases[p - 1][0] != letter)
+            rows.append((progression[position].split(), p, position, letter, role, occurrence, new_section))
+    if ending == "loop":
+        rows[-1] = ([tonic, "V7"], *rows[-1][1:])
+    elif ending == "cadence":
+        rows[-1] = ([tonic], *rows[-1][1:])
+        if len(rows) > 1 and parse_chord(rows[-2][0][-1], key).root != (key.tonic + 7) % 12:
+            rows[-2] = ([rows[-2][0][0], "V7"], *rows[-2][1:])  # the cadence needs V before the last I
+    out: list[_Bar] = []
+    for index, (symbols, p, position, letter, role, occurrence, new_section) in enumerate(rows):
+        lengths = _SPLITS[mood.meter][len(symbols)]
+        spans, at = [], 0.0
+        for symbol, length in zip(symbols, lengths):
+            spans.append(_Span(at, float(length), parse_chord(symbol, key)))
+            at += length
+        final = index == bars - 1 and ending != "open"
+        closing = final and ending == "cadence"
+        out.append(_Bar(index, float(index * mood.meter), tuple(spans), p, position, letter, role, occurrence, final, new_section, closing))
     return out
 
 
@@ -754,7 +775,9 @@ def _rhythms(bars: list[_Bar], mood: Mood, rng: random.Random) -> list[list[tupl
             first, second, third = rng.sample(range(len(cells)), 3)
             motifs[bar.letter] = (cells[first], cells[second], cells[third])
         motif = motifs[bar.letter]
-        if bar.final:
+        if bar.closing:
+            cell = parse_cell(str(meter), meter)  # the tonic held through the last bar
+        elif bar.final:
             cell = parse_cell(mood.turn, meter)
         elif bar.position == 3:
             cell = parse_cell(mood.half if bar.role == "question" else mood.full, meter)
@@ -926,14 +949,17 @@ def _accompaniment(bars: list[_Bar], pattern: str, low: int, velocity: float, rn
         for span in bar.spans:
             previous = voicings[(bar.index, span.start)] = _voicing(span.chord, low, previous)
         variant = "ABC".index(bar.letter)
-        events = [(span.start, span.length, "all", 1.0) for span in bar.spans] if pattern == "pad" else _chord_events(pattern, meter, variant)
+        if pattern == "pad" or bar.closing:  # the closing chord is held, whatever the pattern
+            events = [(span.start, span.length, "all", 1.0) for span in bar.spans]
+        else:
+            events = _chord_events(pattern, meter, variant)
         onsets = {round(e[0], 6) for e in events}
         if pattern not in ("pad", "arpeggio", "broken", "ostinato"):
             events += [(s.start, min(s.length, 1.0), "all", 0.9) for s in bar.spans if round(s.start, 6) not in onsets]
         for onset, length, which, level in events:
             span = next(s for s in reversed(bar.spans) if s.start <= onset + 1e-9)
             voicing = voicings[(bar.index, span.start)]
-            length = min(length, bar.span_end(onset) - onset) if pattern != "pad" else length
+            length = min(length, bar.span_end(onset) - onset)
             if which == "all":
                 pitches = list(voicing)
             elif isinstance(which, int):
@@ -972,7 +998,7 @@ def _bass(bars: list[_Bar], pattern: str, low: int, high: int, velocity: float, 
 
     notes: list[Note] = []
     for i, bar in enumerate(bars):
-        events = _bass_events(pattern, meter)
+        events = _bass_events("sustain" if bar.closing else pattern, meter)
         onsets = {round(e[0], 6) for e in events}
         events += [(s.start, min(s.length, 0.9 if pattern != "sustain" else s.length), "root") for s in bar.spans if round(s.start, 6) not in onsets]
         starts = {round(s.start, 6) for s in bar.spans}
@@ -1006,7 +1032,9 @@ def _drums(bars: list[_Bar], pattern: DrumPattern, rng: random.Random, meter: in
     at each new section when the pattern has one."""
     notes: list[Note] = []
     for bar in bars:
-        if meter == 3:
+        if bar.closing:  # one last stroke: the kick and a cymbal, softer without the pattern's crashes
+            hits = [(0.0, 36, 80), (0.0, 49, 75 if pattern.crash else 55)]
+        elif meter == 3:
             hits = [(0.0, 36, 65), (1.0, pattern.backbeat, 45), (2.0, pattern.backbeat, 38)]
             if pattern.tick is not None:
                 hits += list(_eighths(pattern.tick, 32, 24, 3))
@@ -1064,17 +1092,24 @@ def compose_piece(
     instruments: Mapping[str, Any] | None = None,
     seed: int = DEFAULT_SEED,
     bars: int | None = None,
+    ending: str = "loop",
 ) -> Piece:
     """Compose ``bars`` bars (default: the mood's) in ``mood``, seeded by ``seed`` (the same
-    settings give the same notes). :class:`VidgenError` for invalid settings."""
-    problems = settings_problems(mood, key, tempo, instruments, bars)
+    settings give the same notes), ending as :data:`ENDINGS` says (``loop``: ``bars`` a multiple
+    of 4; ``cadence`` / ``open``: any number of bars). :class:`VidgenError` for invalid settings."""
+    looping = ending == "loop"
+    problems = settings_problems(mood, key, tempo, instruments, bars if looping else None)
+    if ending not in ENDINGS:
+        problems.append(f"ending {ending!r} must be one of {', '.join(ENDINGS)}")
+    if not looping and bars is not None and bars < 1:
+        problems.append(f"bars {bars} must be 1 or more")
     if problems:
         raise VidgenError("compose: " + "; ".join(problems))
     found = MOODS[mood]
     the_key = mood_key(found, key)
     count = bars or found.bars
     rng = random.Random(zlib.crc32(f"vidgen-compose:{mood}:{seed}".encode("utf-8")))
-    plan = _plan(found, the_key, count, rng)
+    plan = _plan(found, the_key, count, rng, ending)
     voices = resolve_voices(found, instruments)
     meter = found.meter
     parts = []
@@ -1099,7 +1134,7 @@ def compose_piece(
         parts.append(
             Part(voice.role, tuple(notes), program=voice.instrument.program, drums=voice.instrument.drums, volume=voice.volume, pan=voice.pan, reverb=voice.reverb)
         )
-    sections = tuple(Section(f"{b.letter}{b.occurrence + 1} {b.role}", b.start) for b in plan if b.position == 0)
+    sections = tuple(Section(f"{b.letter}{b.occurrence + 1} {b.role}", b.start) for b in plan if b.position == 0 or b.index == 0)
     score = Score(
         tempo=float(tempo or found.tempo), parts=tuple(parts), time_signature=(meter, 4), key=the_key.name,
         sections=sections, length=float(count * meter), balance=True,

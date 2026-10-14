@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from vidgen import __version__, carry, chapter_export, hooks, mix, sfx, transitions
+from vidgen import __version__, carry, chapter_export, hooks, mix, musicfit, sfx, transitions
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
@@ -570,7 +570,9 @@ def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, p
         samples = round(offset * ff.AUDIO_RATE)
         # music stings duck under the narration like the music (DESIGN.md §69.19)
         ducking = mix.sting_ducking(project, {"scenes": scenes}, samples) if any(e.duck for e in events) else None
-        sfx.write_track(track, events, samples, sfx.SoundLibrary(project.root), project.config.sfx.gain, ducking)
+        library = sfx.SoundLibrary(project.root)
+        stings = musicfit.composed_stings(project, {"scenes": scenes}, events, library)  # played by composed music's instruments
+        sfx.write_track(track, events, samples, library, project.config.sfx.gain, ducking, stings)
     combined: dict[str, Any] = {
         "title": project.config.title,
         "variant": project.variant,

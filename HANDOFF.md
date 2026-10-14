@@ -13850,3 +13850,96 @@ How to test
 - Also: `-m "not render" tests/test_docs.py tests/test_music.py tests/test_soundfont.py
   tests/test_guide.py tests/test_schema.py tests/test_config.py tests/test_phase_l_review.py`,
   `-m render tests/test_music.py`.
+
+## Step 148 — Music that follows the video
+
+What was built
+- **`src/vidgen/musicfit.py`** (new; DESIGN.md §84): a `compose:` cue without `bars` is composed
+  in `mix.plan_music` for the combined timings. `cue_inputs` (config + timings → `Slot`s per
+  scene at its start or mid-transition, reveal times, `Pause`s), `plan_sections` (pure: whole
+  bars per scene at the tempo nearest the mood's within `TEMPO_LIMIT` ±8 %; beyond it a *hold*,
+  the last bar slowing into a held chord; a scene shorter than one bar joins the next; the last
+  section closes with a ritardando and the tonic held 1.3 beats per beat), `TempoMap`,
+  `fit_music` (pure: one `compose_piece` per run of equal settings, swells, pauses, score sections
+  carrying every tempo change), `FittedMusic.summary` / `closing_seconds`, `sting_score`,
+  `composed_stings`, `Settings`, `cue_settings`, `scene_settings`, `is_fitted`.
+- **Composer**: `compose_piece(..., ending="loop" | "cadence" | "open")`; non-looping pieces take
+  any bar count (whole phrases, then a tag repeating an answer's last bars); `_Bar.closing` (held
+  tonic in melody / chords / bass, one kick + cymbal); a cadence puts V7 before the last I when
+  needed. Looping pieces are unchanged (Step 147's tests pass unchanged).
+- **Config**: `SceneMusic` gains `mood`, `key`, `tempo`, `instruments`, `seed` (`compose_keys`,
+  `instrument_settings`), checked by `VideoConfig._scene_compose_problems` (only under a fitted
+  cue; must compose); `BeatConfig.music_pause: bool | None`; `ComposeConfig.bars` now means "a
+  looping piece of this length" (default none: fitted).
+- **Mix**: `Source(..., fitted=score)` plays once from the cue's start; `Placement.fit` → the
+  cue's summary gains `fit {sections, swells, pauses, closing}`; the fade-out never starts before
+  the closing chord; `music.cue_scene_range`.
+- **Stings**: `join_scenes` calls `musicfit.composed_stings` and passes the result to
+  `sfx.write_track(..., replaced)` (`sfx.placed(..., audio)`): a built-in sting under composed
+  music (with the extra) is a 1-2 bar phrase in the scene's key, tempo and instruments, at the
+  built-in sting's loudness; `gain`, `at` and ducking unchanged.
+- Fingerprints: `musicfit.py` in `NOT_RENDER_INPUTS`; a beat's `music_pause` left out.
+
+Files
+- New: `src/vidgen/musicfit.py`, `tests/test_musicfit.py`.
+- Changed: `src/vidgen/composer.py`, `config.py`, `music.py`, `mix.py`, `sfx.py`,
+  `render/pipeline.py`, `render/fingerprint.py`, `docs/CONFIG.md` (scene `music`, beat
+  `music_pause`, `compose` / `bars` rows, new "Music that follows the video", stings),
+  `DESIGN.md` (tree, §84), `tasklist.md`.
+
+Public interfaces added/changed (`vidgen.api` unchanged)
+- Config: scene `music: {mood, key, tempo, instruments, seed}`, beat `music_pause`; a `compose:`
+  cue without `bars` is now fitted to the video instead of looping the mood's 16/24 bars.
+- `compose_piece` / `music.Source` / `sfx.write_track` / `sfx.placed` gain optional arguments.
+- Mix summary (`timings.json` `mix.music[]`) gains `fit` for fitted cues.
+
+Decisions / deviations
+- `bars` decides: given, the Step 147 loop; absent, the fitted piece (no new key). `start` and
+  `loop` do not apply to a fitted piece.
+- A scene's compose settings apply to that scene only (like its `volume`); another mood starts
+  from its defaults with the cue's seed.
+- Beyond ±8 %: a hold (ritardando into a held chord at the scene change), not a bridge.
+- Scene changes are taken at the scene's start plus half its transition's overlap.
+- Automatic pauses, conservative: before a `card` scene (not the cue's first) until its first
+  line ends; before the cue's last line when it has ≤ 8 words and its scene has a line before
+  it, the closing chord then struck as the line ends (a *button*, ≥ 0.3 s left; under 0.8 s in
+  4/4 it runs past the cue end and is cut). `music_pause: false` turns either off.
+- Reveal moments come from the config (type `reveal_steps` via `layout.distribute`, as host
+  directing; written `reveal`; `sting_reveal` events), not from the scenes' renders, so cached
+  renders keep working. `_type_reveal_beats` calls `extensions.load_builtins()`.
+- Stings use the nominal tempo of the scene's settings, not the fitted section's.
+- Multi-mood scores export one key / time signature to MIDI (the first); the audio is right.
+- The swell's held note avoids pitches the part strikes on that beat (a harp re-striking the
+  same string).
+- Searched first: nothing planned bars from timings; reused `layout.distribute`, `reveal_steps`,
+  `composer` internals (`_pitches`, `_voicing`, `fit_range`), `sfx.stereo`, `loudness`.
+
+Verification (scratch copies in the scratchpad `s148/`, not committed)
+- `host-explainer` + `music: {compose: curious}` + Step 144's real Kokoro audio, preview,
+  `--jobs auto`: 66.1 s, −16.1 LUFS, −1.9 dBTP; 5 sections (tempo −8 % + hold, +0.6, −4.4, 0,
+  −8 % + hold), 6 swells; scene changes vs bar lines: 0.00 ms in the plan, ≤ 0.01 ms in
+  symusic's own tempo map, note onsets in the render ≤ 3.3 ms (`s148/measure.py`).
+- `cartoon-rain-check` + `compose: playful` (volume −2) + `storm: {mood: tense}`, no MP3s
+  (word-count timing), preview: 75.9 s; 4 sections + the button (tempos −0.5, +1.4, −1.4
+  tense, −3.7 %); ≤ 0.02 ms (plan, symusic), onsets within 45 ms (coarse detector, near fills);
+  pause before "It rained for the rest of the week." and the closing chord after it; the comic
+  sting rendered with the playful instruments.
+- MP3s (60 s each, 128 kbps): `/mnt/user-data/outputs/composed_fit_host_explainer.mp3` (the
+  final mix, 6.1-66.1 s) and `composed_fit_rain_check.mp3` (music render + SFX track, no
+  narration, 15.9-75.9 s, loudness-normalised to −18 LUFS). Nobody has listened yet (owner).
+- Note: recomputing the plan from the rounded `timings.json` gives a score differing in the
+  last float digits (another cache file); the render itself is deterministic.
+
+Known gaps / TODOs
+- Step 149: `validate` warning without the extra, storyboard / animatic / draft, MCP, author guide
+  (AGENTS.md unchanged), CHANGELOG, README.
+- Reveals are not taken from stage actions (a prop appearing) nor from `video_clip`; swells under
+  narration are mostly hidden by the ducking.
+- No bridge between moods (a run ends on its own cadence, the next starts on its tonic).
+
+How to test
+- `pytest tests/test_musicfit.py tests/test_composer.py tests/test_score.py` (28 + 53 + 34,
+  ~20 s with `VIDGEN_TEST_SOUNDFONT=<GeneralUser-GS.sf2>`; without it 3 real renders skip).
+- Also: `-m "not render" tests/test_docs.py tests/test_music.py tests/test_sfx.py
+  tests/test_schema.py tests/test_guide.py tests/test_config.py`, `-m render tests/test_music.py
+  tests/test_sfx.py`.
