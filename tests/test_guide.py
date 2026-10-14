@@ -15,6 +15,7 @@ import pytest
 import yaml
 
 from vidgen import cli, config, extensions, registry
+from vidgen.composer import MOODS
 from vidgen.errors import VidgenError
 from vidgen.gallery import sample_asset
 from vidgen.guide import GUIDE_FILE, find_topic, guide_text, guide_topics
@@ -222,8 +223,10 @@ def test_presets_actions_rules_and_sounds_are_real_and_complete() -> None:
         assert f"`{sound}`" in audio, sound
     for bed in BEDS:
         assert f"`{bed}`" in audio, bed
+    for mood in MOODS:
+        assert f"`{mood}` (" in audio, mood
     for name in re.findall(r"`(\w+)` \(", audio):   # "`whoosh` (something moves in)"
-        assert name in BUILTIN_SOUNDS or name in BEDS, name
+        assert name in BUILTIN_SOUNDS or name in BEDS or name in MOODS, name
 
 
 # ----- YAML snippets -----------------------------------------------------------------------------

@@ -36,7 +36,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -417,13 +417,15 @@ def validate_warnings(project: Project) -> list[str]:
     poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
     character that lacks the parts they need (§69.11), front views asked of SVG characters
     (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
-    line of their own voice (§69.34) and dubbed voices that lose their kind or merge (§80)."""
+    line of their own voice (§69.34), dubbed voices that lose their kind or merge (§80) and
+    composed music without the ``music`` extra or the SoundFont (§85)."""
     from vidgen.carry import carry_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
     from vidgen.cartoon.host import host_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.dubbing import dub_warnings
     from vidgen.imagegen import imagegen_warnings
+    from vidgen.music import music_warnings
     from vidgen.overlap import overlap_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
@@ -449,6 +451,7 @@ def validate_warnings(project: Project) -> list[str]:
         + host_warnings(project.config)
         + overlap_warnings(project.config)
         + dub_warnings(project)
+        + music_warnings(project.config)
     )
 
 
@@ -475,6 +478,8 @@ def _invalid_project(project: Project, problems: list[Problem]) -> VidgenError:
 
 def cmd_validate(args: argparse.Namespace) -> CommandResult:
     """Load the project (and every variant), check it and print a short summary."""
+    from vidgen.music import music_summary, music_summary_line
+
     if args.json:
         return _validate_json(args.project)
     project = Project.load(args.project)
@@ -503,6 +508,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
         print(line)
     for line in images_summary_lines(project, variants):
         print(line)
+    for entry in music_summary(config):
+        print(f"music:     {music_summary_line(entry)}")
     print("ok")
     return 0
 
@@ -517,8 +524,10 @@ def _validate_json(path: str) -> dict[str, Any]:
     problems, variants = validate_all(project, keep_going=True)
     log_validate_warnings(project, variants)
     error = _invalid_project(project, problems) if problems else None
+    from vidgen.music import music_summary
+
     images = [jsonout.images_json(p, found) for p, found in variant_images(project, variants)]
-    return jsonout.validate_document(project, problems, variants, error, images=images)
+    return jsonout.validate_document(project, problems, variants, error, images=images, music=music_summary(project.config))
 
 
 def language_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
@@ -1296,7 +1305,7 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
-def cmd_music(args: argparse.Namespace) -> int:
+def cmd_music(args: argparse.Namespace) -> CommandResult:
     """``preview``: compose a piece (the project's first ``compose:`` cue, changed by the options)
     and write it as ``<mood>-seed<N>.wav`` (one pass and the reverb's tail) and ``.mid`` (§83)."""
     import math
@@ -1327,6 +1336,9 @@ def cmd_music(args: argparse.Namespace) -> int:
     write_wav(wav, audio)
     write_midi(piece.score, mid)
     peak = float(loudness.peak_envelope(audio.astype("float64")).max())
+    if args.json:
+        lufs = loudness.integrated_loudness(audio)
+        return jsonout.music_preview_document(piece, wav, mid, len(audio) / RATE, lufs, 20 * math.log10(max(peak, 1e-9)))
     print(f"mood: {piece.mood.name} ({piece.mood.family}), seed {piece.seed}: {piece.key.name}, {piece.tempo:g} BPM, {piece.mood.meter}/4, "
           f"{piece.bars} bars = {piece.seconds:.1f} s (loops; the WAV adds {synth.TAIL_SECONDS:g} s of tail)")
     print("parts: " + ", ".join(f"{v.role} {v.instrument.name} ({v.volume:+g} dB)" for v in piece.voices))

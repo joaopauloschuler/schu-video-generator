@@ -126,13 +126,15 @@ def validate_document(
     warnings: Iterable[Mapping[str, Any]] = (),
     *,
     images: Iterable[Mapping[str, Any]] = (),
+    music: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """The ``vidgen validate --json`` document.
 
     ``project`` is ``None`` when the base config could not be loaded (then the summary fields
     are ``null``); ``variants`` maps every variant name to its loaded project (``None`` if it
     could not be loaded). ``error`` is the error to report when there are problems. ``images``:
-    :func:`images_json` of the base config and of each variant whose pictures differ.
+    :func:`images_json` of the base config and of each variant whose pictures differ;
+    ``music``: what each music cue plays (``vidgen.music.music_summary``).
     """
     ok = not problems and error is None
     summary: dict[str, Any] = {
@@ -177,6 +179,7 @@ def validate_document(
             ],
         )
     summary["images"] = [dict(i) for i in images]
+    summary["music"] = [dict(m) for m in music]
     doc = envelope("validate", ok, warnings, **summary, problems=[p.to_json() for p in problems])
     if error is not None:
         doc["error"] = error_json("error", str(error), problems, error.details)
@@ -636,6 +639,39 @@ def list_music_document(
         moods=[dict(m) for m in moods],
         instruments=[dict(i) for i in instruments],
         symusic=synth.symusic_status(),
+    )
+
+
+def music_preview_document(
+    piece: Any, wav: Path, mid: Path, seconds: float, lufs: float, true_peak: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen music preview --json`` document: the files written and what the piece is
+    (``piece`` a ``vidgen.composer.Piece``; ``seconds`` the WAV's length with its tail)."""
+    import math
+
+    return envelope(
+        "music",
+        True,
+        warnings,
+        action="preview",
+        wav=_path(wav),
+        midi=_path(mid),
+        mood=piece.mood.name,
+        family=piece.mood.family,
+        seed=piece.seed,
+        key=piece.key.name,
+        tempo=piece.tempo,
+        meter=f"{piece.mood.meter}/4",
+        bars=piece.bars,
+        piece_seconds=round(piece.seconds, 3),
+        seconds=round(seconds, 3),
+        parts=[{"role": v.role, "instrument": v.instrument.name, "volume": v.volume} for v in piece.voices],
+        phrases=[
+            {"bars": [4 * k + 1, 4 * k + 4], "phrase": phrase, "chords": [list(c) for c in piece.chords[4 * k : 4 * k + 4]]}
+            for k, phrase in enumerate(piece.phrases)
+        ],
+        loudness=round(lufs, 2) if math.isfinite(lufs) else None,
+        true_peak=round(true_peak, 2),
     )
 
 

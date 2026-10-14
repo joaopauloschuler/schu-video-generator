@@ -34,6 +34,11 @@ def _check(ok: bool, message: str) -> None:
         raise VidgenError(f"score: {message}")
 
 
+def _check_time_signature(time_signature: tuple[int, ...]) -> None:
+    numerator, denominator = time_signature
+    _check(1 <= numerator <= 32 and denominator in (1, 2, 4, 8, 16, 32), f"time signature {numerator}/{denominator} is not valid")
+
+
 @dataclass(frozen=True)
 class Note:
     """One note: ``start`` and ``length`` in beats, ``pitch`` a MIDI key (a drum part: the GM
@@ -88,15 +93,24 @@ class Part:
 @dataclass(frozen=True)
 class Section:
     """A named stretch of the score from beat ``start`` (to the next section or the end);
-    ``tempo`` (quarter notes per minute) changes the tempo from there on."""
+    ``tempo`` (quarter notes per minute), ``key`` and ``time_signature`` change the score's from
+    there on (the key and time signature only in the exported MIDI file: the notes carry the
+    music)."""
 
     name: str
     start: float
     tempo: float | None = None
+    key: str | None = None
+    time_signature: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         _check(self.start >= 0, f"section {self.name!r}: start {self.start} must be 0 or more beats")
         _check(self.tempo is None or 20 <= self.tempo <= 300, f"section {self.name!r}: tempo {self.tempo} must be 20-300")
+        if self.key is not None:
+            key_signature(self.key)
+        if self.time_signature is not None:
+            object.__setattr__(self, "time_signature", tuple(self.time_signature))
+            _check_time_signature(self.time_signature)
 
 
 @dataclass(frozen=True)
@@ -121,8 +135,7 @@ class Score:
         object.__setattr__(self, "sections", tuple(sorted(self.sections, key=lambda s: s.start)))
         object.__setattr__(self, "time_signature", tuple(self.time_signature))
         _check(20 <= self.tempo <= 300, f"tempo {self.tempo} must be 20-300 quarter notes per minute")
-        numerator, denominator = self.time_signature
-        _check(1 <= numerator <= 32 and denominator in (1, 2, 4, 8, 16, 32), f"time signature {numerator}/{denominator} is not valid")
+        _check_time_signature(self.time_signature)
         self.key_signature()  # checks the key
         names = [p.name for p in self.parts]
         _check(len(set(names)) == len(names), f"part names must differ: {names}")
@@ -226,7 +239,8 @@ def midi_pan(pan: float) -> int:
 
 def to_symusic(score: Score, parts: tuple[Part, ...] | None = None, controls: bool = True) -> Any:
     """A ``symusic.Score`` (ticks, :data:`TICKS_PER_BEAT` per beat) of ``score`` with ``parts``
-    (default all): tempo changes, time and key signature, section markers, one track per part.
+    (default all): tempo changes, time and key signatures (the score's, then each section's
+    changes), section markers, one track per part.
     ``controls`` adds each part's volume, pan and reverb send as MIDI controllers 7, 10 and 91
     (symusic's own render ignores them; :mod:`vidgen.synth` applies them itself)."""
     from vidgen.synth import require_symusic
@@ -235,12 +249,18 @@ def to_symusic(score: Score, parts: tuple[Part, ...] | None = None, controls: bo
     out = symusic.Score(TICKS_PER_BEAT)
     for beat, tempo in score.tempo_changes():
         out.tempos.append(symusic.Tempo(_ticks(beat), qpm=tempo))
-    numerator, denominator = score.time_signature
-    out.time_signatures.append(symusic.TimeSignature(0, numerator, denominator))
-    sharps, minor = score.key_signature()
-    out.key_signatures.append(symusic.KeySignature(0, sharps, int(minor)))
+    meters, keys = [(0, score.time_signature)], [(0, score.key)]
     for section in score.sections:
-        out.markers.append(symusic.TextMeta(_ticks(section.start), section.name))
+        tick = _ticks(section.start)
+        out.markers.append(symusic.TextMeta(tick, section.name))
+        for changes, value in ((meters, section.time_signature), (keys, section.key)):
+            if value is not None and value != changes[-1][1]:
+                changes[:] = [c for c in changes if c[0] != tick] + [(tick, value)]
+    for tick, (numerator, denominator) in meters:
+        out.time_signatures.append(symusic.TimeSignature(tick, numerator, denominator))
+    for tick, key in keys:
+        sharps, minor = key_signature(key)
+        out.key_signatures.append(symusic.KeySignature(tick, sharps, int(minor)))
     for part in score.parts if parts is None else parts:
         track = symusic.Track(part.name, program=part.program, is_drum=part.drums)
         if controls:

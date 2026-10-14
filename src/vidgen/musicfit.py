@@ -467,6 +467,7 @@ def fit_music(sections: Sequence[FitSection], reveals: Sequence[float] = (), pau
     blocks = _blocks(sections)
     parts: dict[tuple[Any, ...], tuple[str, list[Note]]] = {}
     first_piece: Piece | None = None
+    block_keys: dict[float, tuple[str, int]] = {}  # beat where a piece starts -> its key and meter
     offset = 0.0
     for k, block in enumerate(blocks):
         settings = block[0].settings
@@ -475,6 +476,7 @@ def fit_music(sections: Sequence[FitSection], reveals: Sequence[float] = (), pau
             settings.mood, settings.key, settings.tempo, dict(settings.instruments), settings.seed, bars, "cadence" if k == len(blocks) - 1 else "open"
         )
         first_piece = first_piece or piece
+        block_keys[offset] = (piece.key.name, settings.meter)
         span = bars * settings.meter
         local = [b - offset for b in swells if offset <= b < offset + span]
         holder = next((role for role in _SWELL_ROLES if any(v.role == role for v in piece.voices)), None)
@@ -495,13 +497,14 @@ def fit_music(sections: Sequence[FitSection], reveals: Sequence[float] = (), pau
     )
     score = Score(
         tempo=tempo_map.changes[0][1], parts=score_parts, time_signature=(sections[0].meter, 4), key=first_piece.key.name,
-        sections=_score_sections(sections), length=float(total), balance=True,
+        sections=_score_sections(sections, block_keys), length=float(total), balance=True,
     )
     return FittedMusic(score, tuple(sections), tempo_map, tuple(swells), tuple(windows))
 
 
-def _score_sections(sections: Sequence[FitSection]) -> tuple[Section, ...]:
-    """A marker with the tempo at each section's start (its scene ids) and at each tempo change
+def _score_sections(sections: Sequence[FitSection], block_keys: dict[float, tuple[str, int]]) -> tuple[Section, ...]:
+    """A marker with the tempo at each section's start (its scene ids; where a piece starts,
+    ``block_keys`` beat -> (key, meter), also its key and time signature) and at each tempo change
     inside (``hold`` where it slows, ``a tempo`` where it comes back)."""
     out: list[Section] = []
     beat = 0.0
@@ -510,7 +513,8 @@ def _score_sections(sections: Sequence[FitSection]) -> tuple[Section, ...]:
         for k, stretch in enumerate(section.stretch):
             tempo = section.tempo / stretch
             if k == 0:
-                out.append(Section(" ".join(section.scenes), beat, tempo))
+                key, meter = block_keys.get(beat, (None, None))
+                out.append(Section(" ".join(section.scenes), beat, tempo, key, None if meter is None else (meter, 4)))
             elif previous is not None and abs(tempo - previous) > 1e-9:
                 out.append(Section("hold" if stretch > 1 else "a tempo", beat + k, tempo))
             previous = tempo

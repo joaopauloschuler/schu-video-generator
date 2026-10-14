@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–144)
+## 0.3.0 (Steps 61–149)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -13,10 +13,11 @@ indoors and outdoors, with weather, props, vehicles, sound and music, written as
 screenplay. It also adds two narration providers (OpenRouter, and Kokoro running free on your
 own computer), OpenRouter pictures including SVG, an `output/` folder and `--jobs auto`; a
 cartoon host beside any explainer scene, lines spoken with feeling, drafts and animatics,
-ready-made sets, drawing styles, word-level readback flags and dubbing.
+ready-made sets, drawing styles, word-level readback flags and dubbing, and music composed for
+each video and played with real instruments.
 
-0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–144
-(Phase M in `tasklist.md`) is part of this release rather than an "Unreleased" section.
+0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–149
+(Phases M and N in `tasklist.md`) is part of this release rather than an "Unreleased" section.
 
 ### Behaviour changes and possible breaks
 
@@ -178,6 +179,16 @@ matters only for projects made with development builds between Steps 67 and 131)
   `thunder`, `beep`, `creak`, `knock`, `splash`.
 - Ambience beds: rain, fire, birdsong, city, room tone (105, 121, 128).
 - New music beds: `cartoon` and `lullaby` (129).
+- Composed music: `music: {compose: MOOD}` writes an original piece as notes and plays it with
+  real instruments (the optional `music` extra, symusic 0.5.9, and the GeneralUser GS SoundFont,
+  downloaded once and checked: `vidgen soundfont fetch`, or `soundfont: PATH` for your own) (145,
+  146). Eight moods: `calm`, `focused`, `curious`, `upbeat` for explainers, `playful`, `sleepy`,
+  `tense`, `triumphant` for cartoons, with instruments per part and a seed (147). The piece is
+  composed for the video's timings: scene changes on bar lines, a mood per scene, swells on
+  reveals, pauses before punchlines, a closing cadence, and stings played by the music's own
+  instruments (148). Without the extra the mood's built-in bed plays and `vidgen validate` warns;
+  drafts and animatics play it too; `vidgen music preview` (MCP `music_preview`) writes a piece
+  as WAV and MIDI (147, 149). `examples/host-explainer` and `examples/cartoon-rain-check` use it.
 
 ### Narration and pictures
 
@@ -217,11 +228,12 @@ matters only for projects made with development builds between Steps 67 and 131)
 - Examples: `examples/cartoon`, `cartoon_series`, `screenplay`, `svg_character`,
   `cartoon-music-box`, `cartoon-rain-check`, `cartoon-muffin-mystery`, `cartoon-rainbow-ride`,
   `host-explainer`.
-- Reviews 63, 88, 102, 116, 130 and 144, and full test suite runs (131, 144), fixed what they
-  found (4042 tests pass).
+- Reviews 63, 88, 102, 116, 130, 144 and 149, and full test suite runs (131, 144), fixed what
+  they found (4042 tests passed in Step 144's full run).
 
 ### Known gaps
 
-- No human has listened to the generated sounds, beds and music. Windows and macOS were not run
+- No human has listened to the generated sounds and beds; the composed music was chosen by a
+  listening test of the renderer, but the moods and fitted pieces await one. Windows and macOS were not run
   here: see `docs/WINDOWS-CHECK.md`. The open items are listed under "Backlog" in
   `tasklist.md`.

@@ -523,9 +523,28 @@ def build_server(root: Path) -> Any:
     async def list_sfx(ctx: Context, project: OptionalProject = None) -> Any:
         return answer(await call(ctx, args_of(["list-sfx"], [str(where(project))] if project else [])))
 
-    @tool("Background music beds (built-in and the project's assets/music) with what they sound like.", read_only)
+    @tool("Background music: the built-in beds and the project's assets/music files, and composed music's moods "
+          "(music: {compose: MOOD}; explainers: calm, focused, curious, upbeat; cartoons: playful, sleepy, tense, "
+          "triumphant) and instrument names, each described in words, with whether the music extra is installed.", read_only)
     async def list_music(ctx: Context, project: OptionalProject = None) -> Any:
         return answer(await call(ctx, args_of(["list-music"], [str(where(project))] if project else [])))
+
+    @tool("Compose a piece of music in a mood (the project's first compose: cue, changed by the options, or mood "
+          "alone) and write it as a WAV and a MIDI file to listen to; returns its key, tempo, parts, chords per "
+          "phrase and loudness. Needs the music extra (and downloads the SoundFont, 32 MB, on first use).", writes)
+    async def music_preview(
+        ctx: Context,
+        project: OptionalProject = None,
+        mood: Annotated[str | None, Field(description="the mood (list_music); default the project's compose: mood")] = None,
+        seed: Annotated[int | None, Field(ge=0, description="another seed gives another piece in the mood")] = None,
+        bars: Annotated[int | None, Field(ge=4, le=128, description="length in bars, a multiple of 4 (default: the mood's)")] = None,
+        key: Annotated[str | None, Field(description="e.g. E, 'Eb major', 'F# minor' (default: the mood's)")] = None,
+        tempo: Annotated[float | None, Field(ge=40, le=200, description="quarter notes per minute (default: the mood's)")] = None,
+        out: Annotated[str, Field(description="folder for <mood>-seed<N>.wav and .mid, relative to the root")] = str(WORK_DIR / "music"),
+    ) -> Any:
+        options = {"mood": mood, "seed": seed, "bars": bars, "key": key, "tempo": tempo, "out": str(where(out, "out"))}
+        positionals = ["preview", *([str(where(project))] if project else [])]
+        return answer(await call(ctx, args_of(["music"], positionals, options), heavy=True))
 
     # ----- outputs ---------------------------------------------------------------------------------
 

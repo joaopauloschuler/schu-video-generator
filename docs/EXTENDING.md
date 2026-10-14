@@ -735,7 +735,11 @@ draws nothing: the sound is recorded in `self.sfx_log` (`SfxEvent`s, written to 
 timings) and mixed into the video by `vidgen render`, sample-exact (not with `--no-audio`).
 Unknown sounds and bad values raise `VidgenError`. `self.sting(sting, time)` plays a music sting
 (`"reveal"`, `"comic"`, `"sad"` or a `StingCue(kind, gain=)`) at scene time `time`, ducked under the
-narration like a beat's `sting:` (the `card` scene's `sting` param uses it). `self.sounds` is the scene's `SoundLibrary`
+narration like a beat's `sting:` (the `card` scene's `sting` param uses it); under composed music
+(`music: {compose: ...}`) the music's own instruments play it in its key, as for a beat's
+`sting:`. Composed music that follows the video swells where your type's `reveal_steps` (the
+host's pointing uses them too) show a step, and on `reveal` actions; nothing else in a scene type
+is needed for it (docs/CONFIG.md "Music that follows the video"). `self.sounds` is the scene's `SoundLibrary`
 (`names()`, `knows(name)`); `synthesize(name, duration, pitch, intensity)` returns a built-in
 sound's samples (48 kHz mono float32) if you want to analyse or mix one yourself. A scene type
 that should make a sound when it starts with `sfx: {auto: true}` sets the class attribute

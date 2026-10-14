@@ -2823,7 +2823,9 @@ way). Between two cues the first fades out at the end of its last scene and the 
 - **Mixing.** Music is applied when the scenes are joined (it is not in the scenes' renders or
   the storyboard, and changing it re-renders nothing): the narration (with clip sound), the
   sound effects and the music are summed, 48 kHz, into `build/.../padded/mix.wav` (24-bit),
-  which the final MP4 encodes. `--no-audio` renders have no music.
+  which the final MP4 encodes. `--no-audio` renders have no music. Drafts (`render --draft`) and
+  animatics mix the music like the video (composed music too: a draft's timings differ a little
+  from the preview's, so its piece is composed for them; each render is cached in `build/music/`).
 - **Checks.** `vidgen validate` reports a source that is neither a bed nor an existing file, and
   cues naming unknown scenes, out of order or overlapping.
 - `timings.json` gains `mix` (below) with each cue's span (`music: [{source, kind, from, to,
@@ -2835,8 +2837,12 @@ way). Between two cues the first fades out at the end of its last scene and the 
 Music written as notes for the video and played with real instruments (a SoundFont), in a mood:
 an original piece every time (never a known tune), the same piece for the same settings. It
 needs the optional extra (`pip install "schu-video-generator[music]"`) and a
-[SoundFont](#soundfont-soundfont-vidgen-soundfont); without the extra, `vidgen render` warns and
-plays the built-in bed named for the mood below.
+[SoundFont](#soundfont-soundfont-vidgen-soundfont); without the extra, `vidgen validate` and
+`vidgen render` warn and the built-in bed named for the mood below plays (scenes' compose settings
+are then ignored), so a project still renders. `vidgen validate` also warns while the default
+SoundFont is not downloaded yet (the first render downloads it) and prints a `music:` line per cue
+(`compose: playful, composed for the video; scenes storm: mood`, or `compose: playful -> bed
+cartoon (no music extra)`).
 
 ```yaml
 music: {compose: playful}              # a mood with its defaults
@@ -2930,7 +2936,8 @@ scenes:
   replace the cue's and `instruments` are added to the cue's. Each run of scenes with the same
   settings is one piece in the form above (phrases may cross scene changes); a run that does not
   end the cue ends on its own cadence. Only under a `compose:` cue without `bars`: elsewhere
-  `vidgen validate` reports it. (The `.mid` export has one key and time signature: the first.)
+  `vidgen validate` reports it. (In the score's MIDI export each mood's piece carries its own key
+  and time signature from its first bar.)
 - **Swells on reveals.** Where a beat reveals something — a step of the scene's own reveal
   (bullets, chart bars, code steps: as the host's pointing sees them), a written `reveal` action,
   a `sting: reveal` — the notes of the two beats before it grow up to 20 % louder and a held chord
@@ -2962,7 +2969,9 @@ composes the project's first `compose:` cue (the options change it; another `--m
 that mood's defaults), or `--mood M` outside a project, renders it with the project's SoundFont and
 writes `DIR/<mood>-seed<S>.wav` (one pass plus the 3 s reverb tail, at −28 LUFS) and `.mid`
 (type 1, a track per part, section markers). It prints the key, tempo, parts, the chords of each
-phrase and the measured loudness and true peak. Needs the `music` extra.
+phrase and the measured loudness and true peak. Needs the `music` extra. `--json`: see
+[below](#vidgen-music---json); MCP tool `music_preview` (its `out` defaults to `build/mcp/music`
+under the server's root).
 
 ### Loudness of the final mix (`audio`)
 
@@ -3005,7 +3014,9 @@ recorded instruments:
 
 - **The extra**: `pip install "schu-video-generator[music]"` installs symusic 0.5.9 (MIT, ~3 MB
   of wheels for Windows, macOS and Linux; the exact version because 0.6.0 cannot render with a
-  SoundFont). Without it, composed music stops with an error naming this command.
+  SoundFont). Without it, `vidgen validate` and `vidgen render` warn (naming this command) and
+  each `compose:` cue plays its mood's built-in bed instead; `vidgen music preview` stops with an
+  error naming it.
 - **The SoundFont**: by default **GeneralUser GS 2.0.3** (32.3 MB, General MIDI instruments and
   drum kits). vidgen does not ship it: the first composed render (or `vidgen soundfont fetch`)
   downloads it from
@@ -7986,7 +7997,8 @@ The server calls itself `schu-video-generator`; configuration snippets (server k
 **Tools** (each returns the command's `--json` document below as JSON text; `ok` false comes
 back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `music_preview` (`vidgen music preview`: `mood`, `seed`, `bars`, `key`, `tempo`,
+`out`), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `cast` (`count`
 for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`). Their parameters are the command's
@@ -8097,6 +8109,7 @@ and the other variants are still checked (the human output does the same since S
 | `problems` | list | `{location, message, variant, file}` (as in `error.problems`); empty when the project is valid |
 | `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
 | `images` | list | the [generated pictures](#generated-images-imagegen-vidgen-imagegen) of the base config, plus each variant whose pictures differ (none without `generate:` params): `{variant, generated, missing, pictures}`, `pictures` listing each distinct request once as `{key, scenes, path, exists, prompt}` |
+| `music` | list | the base config's music cues: `{source, kind, plays, fitted, from, to, scenes}` — `source` the bed, file or `compose: <mood>`; `kind` `bed`, `file` or `composed`; `plays` what will play (`composed`, `file`, or `bed <name>`: a bed, or a composed cue's bed without the `music` extra); `fitted` composed for the video's timings; `scenes` scene id → the compose settings it changes (`["mood"]`...) |
 
 `warnings` include the theme contrast warnings (`theme contrast: ...`, prefixed `[variant] `
 for a variant's own; they do not make `ok` false). When there are problems, `error` is
@@ -8196,6 +8209,23 @@ difference between two palette colours).
 | `moods` | list | composed music's moods: `{name, family, description, use, key, tempo, meter, bars, loop_seconds, instruments, fallback_bed}` (`family` `explainer` or `cartoon`; `instruments` part → instrument name; `fallback_bed` the bed played without the extra) |
 | `instruments` | list | `{name, program, drums, low, high, description}`: General MIDI program (a drum kit's number when `drums`), range as note names (`null` for drum kits) |
 | `symusic` | str | the installed symusic version, or how to install the extra |
+
+### `vidgen music --json`
+
+`vidgen music preview --json` ([`vidgen music preview`](#vidgen-music-preview)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `preview` |
+| `wav`, `midi` | str | the files written |
+| `mood`, `family` | str | the mood and `explainer` / `cartoon` |
+| `seed`, `bars` | int | |
+| `key`, `meter` | str | e.g. `F major`, `3/4` |
+| `tempo` | float | quarter notes per minute |
+| `piece_seconds`, `seconds` | float | one pass of the piece; the WAV (with the 3 s tail) |
+| `parts` | list | `{role, instrument, volume}` |
+| `phrases` | list | `{bars: [first, last], phrase, chords}` (`phrase` e.g. `A question`; `chords` per bar, a list of chord names) |
+| `loudness`, `true_peak` | float | of the WAV: LUFS integrated, dBTP |
 
 ### `vidgen schema --json`
 

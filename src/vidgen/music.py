@@ -722,6 +722,76 @@ def config_problems(config: VideoConfig, root: Path | None) -> list[tuple[str, s
     return found
 
 
+def music_warnings(config: VideoConfig) -> list[str]:
+    """``vidgen validate`` warnings about composed music (DESIGN.md §83, §85): without the
+    ``music`` extra the moods' beds play instead (named, with the install command); with it, the
+    default SoundFont not downloaded yet (the first render downloads it)."""
+    from vidgen import soundfont
+    from vidgen.synth import symusic_status
+
+    cues = [c for c in config.music_cues if c.compose is not None]
+    if not cues:
+        return []
+    beds = [(cue.label, fallback_bed(cue)) for cue in cues]
+    if any(bed is not None for _, bed in beds):
+        plays = ", ".join(f"{label} plays the bed '{bed}'" for label, bed in beds if bed is not None)
+        scene_moods = " (scenes' compose settings are not played)" if any(_compose_keys(s.music) for s in config.scenes) else ""
+        return [f"music: composed music needs the music extra (symusic {symusic_status()}); until then {plays}{scene_moods}"]
+    if config.soundfont is None and not soundfont.default_path().is_file():
+        return [
+            f"music: composed music plays with the {soundfont.NAME} SoundFont, not downloaded yet: run `vidgen soundfont "
+            f"fetch` ({soundfont.SIZE_BYTES / 1e6:.1f} MB, once) or the first render downloads it; offline, set soundfont: PATH"
+        ]
+    return []
+
+
+def music_summary(config: VideoConfig) -> list[dict[str, Any]]:
+    """What each music cue plays, for ``vidgen validate``: ``{source, kind, plays, fitted, from,
+    to, scenes}`` (``plays``: ``composed``, ``bed <name>`` or ``file``; ``fitted``: composed for
+    the video's timings; ``scenes``: scene id → the compose settings it changes)."""
+    from vidgen.musicfit import is_fitted
+
+    out = []
+    ids = [s.id for s in config.scenes]
+    for cue in config.music_cues:
+        kind = source_kind(cue)
+        bed = cue.source if kind == "bed" else fallback_bed(cue)
+        first, last = cue_scene_range(cue, ids)
+        changes = {}
+        if is_fitted(cue) and bed is None:
+            changes = {s.id: _compose_keys(s.music) for s in config.scenes[first : last + 1] if _compose_keys(s.music)}
+        out.append(
+            {
+                "source": cue.label,
+                "kind": kind,
+                "plays": f"bed {bed}" if bed is not None else kind,
+                "fitted": is_fitted(cue) and bed is None,
+                "from": cue.from_,
+                "to": cue.to,
+                "scenes": changes,
+            }
+        )
+    return out
+
+
+def _compose_keys(scene_music: Any) -> list[str]:
+    """The compose settings a scene's ``music:`` changes (none for ``true`` / ``false``)."""
+    keys = getattr(scene_music, "compose_keys", None)
+    return list(keys) if keys else []
+
+
+def music_summary_line(entry: dict[str, Any]) -> str:
+    """One :func:`music_summary` entry as ``vidgen validate`` prints it."""
+    text = entry["source"]
+    if entry["kind"] == "composed":
+        text += ", composed for the video" if entry["fitted"] else (", looped" if entry["plays"] == "composed" else "")
+        if entry["plays"] != "composed":
+            text += f" -> {entry['plays']} (no music extra)"
+    span = f" ({entry['from'] or 'start'} to {entry['to'] or 'end'})" if entry["from"] or entry["to"] else ""
+    scenes = "; ".join(f"{sid}: {', '.join(keys)}" for sid, keys in entry["scenes"].items())
+    return text + span + (f"; scenes {scenes}" if scenes else "")
+
+
 def project_music(root: Path | None) -> list[Path]:
     """The audio files under the project's ``assets/music`` (sorted)."""
     folder = None if root is None else root / PROJECT_MUSIC_DIR

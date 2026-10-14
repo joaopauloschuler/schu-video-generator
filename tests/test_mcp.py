@@ -204,7 +204,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
-    "character_sheet", "direct", "screenplay", "cast", "animatic",
+    "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview",
 }
 
 
@@ -288,6 +288,8 @@ def test_server_tools_guide_and_resources(tmp_path: Path) -> None:
         assert "did you mean" in error_text(await client.call_tool("guide", {"topic": "pacng"}))
         assert "may not start with '-'" in error_text(await client.call_tool("guide", {"topic": "--list"}))
         assert "scene=TYPE" in error_text(await client.call_tool("schema", {}))  # the whole schema only on request
+        assert "did you mean 'calm'" in error_text(await client.call_tool("music_preview", {"mood": "calmm"}))
+        assert "outside the folder" in error_text(await client.call_tool("music_preview", {"mood": "calm", "out": "../x"}))
         stat = doc_of(await client.call_tool("schema", {"scene": "stat"}))
         assert stat["schema"]["properties"]["value"] and len(json.dumps(stat)) < 50_000
 

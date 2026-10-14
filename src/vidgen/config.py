@@ -1521,6 +1521,12 @@ def _compose_shorthand(value: Any) -> Any:
     return {"mood": value} if isinstance(value, str) else value
 
 
+def _mood_name_schema(schema: dict[str, Any]) -> None:
+    """JSON Schema of ``compose:``: also a mood's name alone (``compose: playful``), which
+    :func:`_compose_shorthand` reads but the generated schema does not list."""
+    schema.setdefault("anyOf", []).insert(0, {"type": "string", "minLength": 1})
+
+
 class ComposeConfig(_Strict):
     """Music composed for the video from a mood (``compose:``; DESIGN.md §83), played with real
     instruments (needs the ``music`` extra; without it a built-in bed plays)."""
@@ -1560,7 +1566,7 @@ class MusicCue(_Strict):
 
     source: str | None = Field(default=None, min_length=1)
     """A built-in bed (calm, pulse, bright, cartoon, lullaby; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3); give this or compose."""
-    compose: Annotated[ComposeConfig | None, BeforeValidator(_compose_shorthand)] = None
+    compose: Annotated[ComposeConfig | None, BeforeValidator(_compose_shorthand)] = Field(default=None, json_schema_extra=_mood_name_schema)
     """Music composed from a mood instead of a source: a mood name or {mood, key, tempo, instruments, seed, bars}; needs the music extra."""
     volume: float = Field(default=0.0, ge=-60, le=12)
     """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""

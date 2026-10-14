@@ -231,7 +231,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   measured loudness and `vidgen list-music` describes the beds in words ([reference](docs/CONFIG.md#background-music-music)).
   With the `music` extra, `music: {compose: {mood: calm}}` composes original music in one of eight
   moods (calm, focused, curious, upbeat for explainers; playful, sleepy, tense, triumphant for
-  cartoons), played with real instruments ([reference](docs/CONFIG.md#composed-music-compose)).
+  cartoons), played with real instruments ([reference](docs/CONFIG.md#composed-music-compose)):
+  composed for the video's timings, every scene change on a bar line, a mood per scene
+  (`music: {mood: tense}`), swells on reveals, a pause before a punchline and a closing cadence
+  ([follows the video](docs/CONFIG.md#music-that-follows-the-video)). Without the extra the mood's
+  bed plays and `vidgen validate` says so.
 - **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
   `crossfade` (the scenes overlap, the video gets shorter by it), `fade_color` through a theme
   colour (`{type: fade_color, color: surface, duration: 1.2}`), `push` (the next scene slides in
@@ -267,7 +271,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 `vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `music_preview`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast` — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).
@@ -482,7 +486,7 @@ narration.
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
-| `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to (needs the `music` extra) |
+| `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to (needs the `music` extra) |
 | `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
@@ -608,7 +612,8 @@ my_video/
   its screenplay (`rain_check.md`) after hand editing: a picnic basket, a napkin handed over and
   blown away, an umbrella opened too late and lost to a gust, visible wind, rain that stops at the
   ground and under the tree with a rain sound bed, puddles, light from day to storm grey to night
-  with stars, an overlap, an interruption, a comic sting and a pull-back, two music beds; about
+  with stars, an overlap, an interruption, a comic sting and a pull-back, composed music
+  (`playful`, `tense` for the storm, `sleepy` at night, a pause before the last line); about
   94 s with Kokoro narration (no audio committed).
 - [examples/cartoon-muffin-mystery](examples/cartoon-muffin-mystery) — "The Muffin Mystery", an
   indoor cartoon from its screenplay (`muffin_mystery.md`) after hand editing: a title card and an
@@ -628,7 +633,8 @@ my_video/
   an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
   points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven
   with a pointer line, crosses to the other side (the content slides over) and walks off; lines
-  said with feeling (`emotion:`); about 66 s with Kokoro narration (no audio committed).
+  said with feeling (`emotion:`), composed music in the `curious` mood; about 66 s with Kokoro
+  narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -655,7 +661,9 @@ my_video/
   domain), sound effects and music beds may be used in your videos, including commercially. No
   attribution is required in a video (the OFL and ISC notices apply to redistributing the files
   themselves; Natural Earth asks for none, though "Made with Natural Earth" is appreciated).
-  Details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+  So may composed music played with the default GeneralUser GS SoundFont (no attribution
+  required; suggested credit in step 12 of the Windows install). Details:
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Working on schu-video-generator
 

@@ -10379,7 +10379,8 @@ Reference: docs/CONFIG.md "Composed music (`compose`)" and "`vidgen music previe
   - The score is `balance=True`, its `length` exactly the bars (notes are cut at the end), its
     sections named `A1 question`, `B1 question`...
 - **`Score.balance`** (new field, default false): `synth.mix_parts` first sets each part's dry
-  render to `BALANCE_LEVEL` (−28 LUFS integrated), then applies its `volume`. GeneralUser GS's
+  render to `BALANCE_LEVEL` (−28 LUFS integrated; measured from its first to its last sample
+  above −120 dBFS since Step 149, §85), then applies its `volume`. GeneralUser GS's
   instruments differ by up to ~40 dB as symusic renders them (pizzicato −59 LUFS, horn −13 LUFS
   for the same note), so the moods' volumes are levels against the other parts. Render time
   of a 16-bar mood: ~4.5 s (2 cores; ~2 s without the per-part loudness measurement).
@@ -10448,7 +10449,8 @@ Reference: docs/CONFIG.md "Music that follows the video".
   on V7 if it did not end on V. Parts are merged by (role, program, drums, volume, pan, reverb);
   another instrument for a role becomes `"<role> 2"`. Score sections: one per fit section (named
   by its scenes) and one per tempo change inside (`hold` / `a tempo`); `length` the total beats;
-  `time_signature` and `key` the first run's (MIDI only: the audio follows the notes).
+  `time_signature` and `key` the first run's, and each run's first section carries its own
+  (`Section.key` / `time_signature`, Step 149; MIDI only: the audio follows the notes).
 - **Swells**: each reveal at the nearest beat (`_swell_beats`: not before beat 1, not in the
   closing bar, not in or one beat before a pause, `SWELL_BEATS` 2 apart); notes in the 2 beats
   before grow to `SWELL_GAIN` ×1.2 velocity, the beat on it ×1.2, and a chord tone near E5 (not
@@ -10482,3 +10484,57 @@ Reference: docs/CONFIG.md "Music that follows the video".
   `storm` `{mood: tense}`, word-count timing (75.9 s): within 0.02 ms (plan, symusic), onsets
   within 45 ms (a coarse onset detector), a pause and button before the last line, the comic
   sting played by the playful instruments.
+
+## 85. Composed music, part 5: tooling, examples and the review of Phase N (Step 149)
+
+- **`vidgen validate`** (`music.music_warnings(config)`, in `cli.validate_warnings`): with a
+  `compose:` cue and no usable symusic, one warning naming the extra (`synth.symusic_status()`)
+  and the bed each composed cue plays instead (and that scenes' compose settings are not
+  played); with the extra but no `soundfont:` and the default SoundFont not in the cache, one
+  warning that the first render downloads it (32.3 MB) or `vidgen soundfont fetch` does it now.
+  A missing SoundFont still downloads (or errors offline) at render time: only the extra's
+  absence falls back to the beds (§83), so a final render never silently loses its music for a
+  network problem. `music.music_summary(config)` (`{source, kind, plays, fitted, from, to,
+  scenes}` per cue) is printed as `music:` lines (`music_summary_line`) and is `validate
+  --json`'s new `music` key.
+- **Drafts, animatics, storyboards.** No code: `render --draft` and `vidgen animatic` mix through
+  `pipeline.prepare_join` like the video, so composed music (fitted to their own timings, which
+  differ from the preview's by up to a frame or two of 8 fps per beat) plays in both; the render
+  is cached in `build/music/` (shared by preview, draft and final). Measured on scratch copies:
+  host-explainer's draft (65.9 s) and animatic (66.1 s, 22 s) carry `compose: curious`;
+  composing rain-check's three-mood 93.9 s piece takes 2.0 s and rendering it 18.7 s without
+  the cache (21.8 s before the balance fix below), once per timing change, so no cheaper path for
+  drafts. Storyboards have no sound.
+- **MCP**: `list_music`'s description names the moods; new tool `music_preview` (`vidgen music
+  preview --json`, `music` added to `cli.JSON_COMMANDS`, `jsonout.music_preview_document`; `out`
+  confined, default `build/mcp/music`, a heavy call); `render` / `animatic` documents carry
+  `mix.music[].fit` as before.
+- **MIDI export of several moods** (`score.Section.key` / `time_signature`, optional, checked;
+  `to_symusic` writes a key or time signature change at a section that changes them;
+  `musicfit._score_sections` sets them at the first section of each run of settings).
+- **Fix: balance measured where a part sounds** (`synth._sounding`): `mix_parts` measured each
+  part's loudness over the whole piece; in a piece of several moods most parts play in one
+  stretch, so ~80 % of that time measured silence (13 parts × 94 s for rain-check). Only the
+  stretch from the first to the last sample above −120 dBFS is measured now; the gated loudness
+  differs only by the half-silent 400 ms blocks at its edges (≤ 0.34 dB on a 2 s tone, less on
+  real parts). `RENDERER_VERSION` 2, so cached renders are made again.
+- **Fix: `compose: MOOD` in the JSON Schema** (`config._mood_name_schema`): the short form
+  (Step 147) passed `vidgen validate` but not `vidgen schema`'s schema (`BeforeValidator` does not
+  reach the generated schema); `compose` now also accepts a string there, like `shot:`'s words.
+  Found by `tests/test_schema.py` once the examples used the short form.
+- **Examples**: `examples/host-explainer` `music: {compose: curious}`; `examples/cartoon-rain-check`
+  `music: {compose: playful, volume: -2}` with `storm` `{mood: tense, volume: -3}` (under the rain
+  bed) and `night` `{mood: sleepy, volume: -3}` (the two beds replaced); both validate and lint
+  with 0 findings on real Kokoro audio.
+- **Measured** (scratch copies with real Kokoro narration, 1280x720 @ 30, `--jobs auto`, outside
+  the repository in `/home/claude/work/phase-n-review/`): `host_explainer.mp4` 66.13 s, 3.7 MB,
+  −16.1 LUFS, −1.8 dBTP; music alone −33.0 LUFS under speech and −25.6 LUFS in the pauses (the mix
+  in speech −15.2 LUFS: the music ~18 dB under the voice, ~10 dB under it between lines); 5
+  sections (−8 % with a hold, +0.6, −4.2, 0, −8 % with a hold), 6 swells. `rain_check.mp4`
+  93.93 s, 11.4 MB, −16.1 LUFS, −1.8 dBTP; music −38.2 LUFS under speech, −29.0 LUFS in pauses
+  (plus the rain bed); sections playful −1.3 / −2.5 %, tense +2.2 %, sleepy (3/4) −3.9 %, the
+  button bar; the pause before "It rained for the rest of the week." (88.9-92.7 s) and its
+  closing chord. Scene changes on bar lines within 0.06 ms (plan and symusic's tempo map); every
+  note of the new section starts exactly there (onset detector within 3.3 ms for host-explainer;
+  for rain-check it picks an earlier woodblock pickup or the tense strings 70-78 ms before, while
+  the 5 ms levels rise at the change).

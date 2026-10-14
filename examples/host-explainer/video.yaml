@@ -1,7 +1,9 @@
 # A short explainer with a cartoon host (host:, DESIGN.md §71): Mo, an original mouse baker, walks
 # in, points at each new item and bar (auto_direct), cheers as the dough rises, points at the oven
 # with a pointer line, crosses to the other side (the content slides over) and leaves at the end.
-# Beats say their lines with feeling (emotion:, §72). No audio committed: run `vidgen tts` (Kokoro, free).
+# Beats say their lines with feeling (emotion:, §72). Music composed for the video in the `curious`
+# mood (compose:, §84; needs the music extra, else the `bright` bed plays).
+# No audio committed: run `vidgen tts` (Kokoro, free).
 title: Why Bread Rises
 format: {width: 1280, height: 720, fps: 30}
 preview: {width: 640, height: 360, fps: 15}
@@ -14,6 +16,7 @@ characters:
     look: {species: mouse, eyes: round, outfit: apron, seed: 4}
     colors: {skin: "#A89A8C", clothes: "#C8553D", trim: "#F3EDE2"}
 host: {character: mo, side: right}
+music: {compose: curious}
 scenes:
   - id: hello
     type: title

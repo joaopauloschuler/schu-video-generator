@@ -34,7 +34,7 @@ INSTALL_COMMAND = f'pip install "{DIST_NAME}[music]"'
 #: The symusic release the extra pins; 0.6.0's SoundFont render fails (TypeError in ``render``).
 SYMUSIC_VERSION = "0.5.9"
 #: Bumped when the mixing below changes, so cached renders are made again.
-RENDERER_VERSION = 1
+RENDERER_VERSION = 2
 #: Seconds added after the score's end for the notes' release and the reverb to die away.
 TAIL_SECONDS = 3.0
 #: The generated reverb: impulse length, decay time to -60 dB, pre-delay (seconds) and the
@@ -132,6 +132,14 @@ def convolve(x: np.ndarray, impulse: np.ndarray) -> np.ndarray:
     return out[:n]
 
 
+def _sounding(audio: np.ndarray) -> np.ndarray:
+    """``audio`` from its first to its last sample above -120 dBFS: what a part's loudness is
+    measured on. A part of a piece with several moods plays only in its mood's scenes; the
+    silence around it would not change its gated loudness, only the time to measure it."""
+    loud = np.flatnonzero(np.abs(audio).max(axis=1) > 1e-6)
+    return audio[loud[0] : loud[-1] + 1] if len(loud) else audio
+
+
 def mix_parts(score: Score, rendered: Iterable[np.ndarray | None]) -> np.ndarray:
     """The parts' dry renders (``rendered``: float ``(n, 2)`` at 48 kHz from the score's start,
     in ``score.parts`` order, ``None`` for a part without notes) mixed: each at its ``volume``
@@ -151,7 +159,7 @@ def mix_parts(score: Score, rendered: Iterable[np.ndarray | None]) -> np.ndarray
         take = min(total, len(audio))
         gain_db = part.volume
         if score.balance:
-            level = integrated_loudness(audio[:take])
+            level = integrated_loudness(_sounding(audio[:take]))
             gain_db += BALANCE_LEVEL - level if math.isfinite(level) else 0.0
         x = audio[:take] * (10 ** (gain_db / 20) * np.array(pan_gains(part.pan)))
         dry[:take] += x

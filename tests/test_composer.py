@@ -263,6 +263,34 @@ def test_without_the_extra_the_moods_bed_plays(tmp_path: Path, monkeypatch: pyte
     }
 
 
+def test_validate_says_what_plays_without_the_extra_or_the_soundfont(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("VIDGEN_CACHE_DIR", str(tmp_path / "cache"))  # no SoundFont downloaded
+    monkeypatch.setattr(synth, "symusic_version", lambda: None)
+    config = _config([{"compose": {"mood": "sleepy"}, "to": "a"}, {"source": "calm", "from": "b"}])
+    (warning,) = music.music_warnings(config)
+    assert "needs the music extra (symusic not installed: pip install" in warning and "compose: sleepy plays the bed 'lullaby'" in warning
+    summary = music.music_summary(config)
+    assert summary[0] == {"source": "compose: sleepy", "kind": "composed", "plays": "bed lullaby", "fitted": False, "from": None, "to": "a", "scenes": {}}
+    assert music.music_summary_line(summary[0]) == "compose: sleepy -> bed lullaby (no music extra) (start to a)"
+    assert music.music_summary_line(summary[1]) == "calm (b to end)"
+
+    monkeypatch.setattr(synth, "symusic_version", lambda: synth.SYMUSIC_VERSION)
+    (warning,) = music.music_warnings(config)
+    assert "SoundFont, not downloaded yet: run `vidgen soundfont fetch` (32.3 MB" in warning
+    assert music.music_warnings(config.model_copy(update={"soundfont": "bank.sf2"})) == []
+    assert music.music_summary(config)[0]["plays"] == "composed" and music.music_summary(config)[0]["fitted"]
+
+    fitted = _project(tmp_path, {"compose": "playful"})
+    assert main(["validate", str(fitted.root)]) == 0
+    captured = capsys.readouterr()
+    assert "music:     compose: playful, composed for the video\n" in captured.out and "not downloaded yet" in captured.err
+    assert main(["validate", str(fitted.root), "--json"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["music"][0]["plays"] == "composed" and any("not downloaded yet" in w["message"] for w in doc["warnings"])
+
+
 def test_composed_start_wraps_and_plays_once_without_loop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_render(score: Score, soundfont: Path, cache_dir: Path | None = None) -> np.ndarray:
         n = round((score.length_seconds + synth.TAIL_SECONDS) * RATE)
@@ -324,6 +352,12 @@ def test_music_preview_writes_wav_and_mid(tmp_path: Path, monkeypatch: pytest.Mo
     assert "bars   1-4   A question" in text
     assert main(["music", "preview", str(project.root), "--mood", "calm", "--out", str(out)]) == 0  # another mood: its defaults
     assert calls[-1] == compose("calm") and (out / "calm-seed1.mid").is_file()
+    capsys.readouterr()
+    assert main(["music", "preview", "--mood", "sleepy", "--bars", "4", "--out", str(out), "--json"]) == 0  # MCP music_preview
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["ok"] and doc["command"] == "music" and doc["wav"] == str(out / "sleepy-seed1.wav") and doc["midi"].endswith(".mid")
+    assert doc["meter"] == "3/4" and doc["bars"] == 4 and doc["phrases"][0]["chords"][0] == ["F"]
+    assert {p["role"] for p in doc["parts"]} >= {"melody", "bass"} and doc["loudness"] is not None
 
 
 # ----- one real render ------------------------------------------------------------------------------

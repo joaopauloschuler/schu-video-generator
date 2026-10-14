@@ -13943,3 +13943,97 @@ How to test
 - Also: `-m "not render" tests/test_docs.py tests/test_music.py tests/test_sfx.py
   tests/test_schema.py tests/test_guide.py tests/test_config.py`, `-m render tests/test_music.py
   tests/test_sfx.py`.
+
+## Step 149 — Tooling, docs, example and review of Phase N
+
+What was built
+- **`vidgen validate` and composed music** (`music.music_warnings`, `music_summary`,
+  `music_summary_line`; DESIGN §85): without symusic 0.5.9 one warning naming `pip install
+  "schu-video-generator[music]"` and the bed each `compose:` cue plays instead (scenes' compose
+  settings not played); with the extra but no SoundFont cached and no `soundfont:`, a warning
+  naming `vidgen soundfont fetch` (the first render downloads it). A `music:` line per cue
+  (`compose: playful, composed for the video; scenes storm: mood; night: mood`, or `compose:
+  playful -> bed cartoon (no music extra)`) and `validate --json` key `music`.
+- **MCP**: `list_music` description names the moods; new tool `music_preview` over new
+  `vidgen music preview --json` (`jsonout.music_preview_document`; `music` in `JSON_COMMANDS`).
+- **MIDI export of several moods**: `score.Section` gains optional `key` and `time_signature`;
+  `to_symusic` writes their changes; `musicfit._score_sections` sets them where each mood's piece
+  starts.
+- **Examples**: `examples/host-explainer` `music: {compose: curious}`;
+  `examples/cartoon-rain-check` `music: {compose: playful, volume: -2}`, `storm` `{mood: tense,
+  volume: -3}`, `night` `{mood: sleepy, volume: -3}` (the two beds replaced). 3.1 / 6.3 KB.
+- **Docs**: guide "Composed music" in the audio topic (moods for explainers and cartoons, it
+  follows the video, a mood per scene, pauses, stings, the fallback, drafts / animatics), the
+  cartoon sound bullet, the licence note, MCP tool list (+ `AGENTS.md`); CONFIG (the extra's
+  fallback, which CONFIG described as an error; validate warnings and `music` JSON; drafts and
+  animatics; MIDI keys; `vidgen music --json`; MCP tool); EXTENDING (stings and swells for scene
+  types); README (feature, examples, MCP list, credit note); CHANGELOG (Steps 145–149 folded into
+  the untagged 0.3.0, as Step 144 did); THIRD_PARTY_NOTICES checked, unchanged.
+
+Fixed
+- **Balance measured silence** (`synth._sounding`): `mix_parts` measured each part's loudness
+  over the whole piece; in a piece of several moods most parts sound in one stretch only. Now
+  measured from the first to the last sample above −120 dBFS: rain-check's 94 s, 13-part piece
+  renders in 18.7 s instead of 21.8 s (cProfile: 17.6 of 23.6 s were `integrated_loudness`;
+  symusic itself 1.2 s). The gated level differs only by the edge blocks. `RENDERER_VERSION` 2.
+  Test `test_score.py::test_balance_measures_a_part_only_where_it_sounds`.
+- **JSON Schema refused `compose: MOOD`** (Step 147's short form passed `validate`, not the
+  schema): `config._mood_name_schema` adds the string form. Found by
+  `test_schema.py::test_examples_validate_against_their_schema` once the examples used it.
+- Not a code bug: CONFIG.md said composed music without the extra "stops with an error"; it
+  plays the beds (Step 147).
+
+Review (scratch copies `scratchpad/s149/host_explainer`, `rain`; Step 148's / an earlier
+session's real Kokoro MP3s, all 11 / 20 beats `ok`; SoundFont from `s147/cache`)
+- validate (also in the Kokoro venv without symusic: the bed warning and line), lint 0 findings
+  each, `render --draft` (host 65.9 s, music fitted to the draft's timings), `animatic --json`
+  (22 s, `mix.music[0].fit` present), MCP over stdio (`s149/mcp_e2e.py`: `list_music` 8 moods 47
+  instruments, `validate` `music`, `render` draft, `music_preview`), all ok.
+- Final 1280x720 @ 30, `--jobs auto`, `/home/claude/work/phase-n-review/`:
+  `host_explainer.mp4` 66.13 s, 3.7 MB, −16.1 LUFS, −1.8 dBTP (scenes 11.8–23.5 s each);
+  `rain_check.mp4` 93.93 s, 11.4 MB, −16.1 LUFS, −1.8 dBTP (meadow 42.5, picnic 57.6, storm
+  108.9, night 42.0 s).
+- Levels (`s149/measure.py`: the music as mixed, ducked, times the normalisation gain): host
+  music −33.0 LUFS under speech, −25.6 LUFS in pauses, the mix in speech −15.2 LUFS; rain
+  −38.2 / −29.0 LUFS (plus the rain bed), speech −15.2 LUFS.
+- Bar lines: every scene change within 0.06 ms of a bar line (plan and symusic's tempo map);
+  every new section's notes start exactly there (`s149/onsets.py`). The coarse onset detector:
+  ≤ 3.3 ms for host; −78 / −70 ms at rain's storm and night (it picks a woodblock pickup and the
+  tense tremolo before; the 5 ms levels rise at the change).
+- Rain-check plan: playful 12 + 13 bars (−1.3, −2.5 %), tense 13 bars (+2.2 %), sleepy 3/4 6 bars
+  (−3.9 %) + the button bar; pause 88.9–92.7 s before "It rained for the rest of the week.",
+  closing chord as it ends; no swells (stage scenes reveal nothing). Host: 5 sections, 6 swells.
+- MP3 excerpts (60 s, 128 kbps, the final mix): `/mnt/user-data/outputs/phaseN_host_explainer.mp3`
+  (6.1–66.1 s), `phaseN_rain_check.mp3` (33.9–93.9 s: picnic's end, storm, night, ending).
+
+Files touched
+- `src/vidgen/music.py`, `cli.py`, `jsonout.py`, `mcp_server.py`, `score.py`, `musicfit.py`,
+  `synth.py`, `config.py`, `data/guide/AGENTS.md`; `AGENTS.md`, `docs/CONFIG.md`,
+  `docs/EXTENDING.md`, `README.md`, `CHANGELOG.md`, `DESIGN.md` (§82 balance line, §84 MIDI
+  line, new §85), `tasklist.md`, `HANDOFF.md`; `examples/host-explainer/video.yaml`,
+  `examples/cartoon-rain-check/video.yaml`; tests `test_composer.py`, `test_musicfit.py`,
+  `test_score.py`, `test_mcp.py`, `test_guide.py`.
+
+Public interfaces added/changed (`vidgen.api` unchanged)
+- `vidgen music preview --json`; MCP tool `music_preview`; `validate --json` key `music`;
+  `score.Section(key=, time_signature=)`; `jsonout.validate_document(music=)`.
+
+Decisions
+- A missing SoundFont is a warning in `validate`, not a fallback to beds at render (Step 147's
+  rule kept: an offline final render should not silently lose its music).
+- Drafts get no cheaper music path: composing takes ~2 s and the render (cached) ~19 s for a
+  94 s three-mood piece. The rain-check scenes' `volume: -3` under the rain bed is a judgment
+  call for the owner's ear (Backlog).
+
+Not done
+- Nobody listened (owner). The full suite was not run (not asked).
+
+How to test
+- `VIDGEN_TEST_SOUNDFONT=<GeneralUser-GS.sf2> pytest -m "not render" tests/test_soundfont.py
+  tests/test_score.py tests/test_composer.py tests/test_musicfit.py tests/test_music.py
+  tests/test_sfx.py tests/test_docs.py tests/test_guide.py` (383 passed, 70 s); `-m "not render"
+  tests/test_schema.py tests/test_mcp.py tests/test_json_output.py tests/test_animatic.py
+  tests/test_draft.py tests/test_host_acting.py` (136 passed with 2 schema failures before the
+  fix; `test_schema.py` again: 61 passed, 110 s); `test_docs.py test_config.py` 81 passed;
+  render: `test_music test_sfx` 9 passed (54 s), `test_animatic test_draft` 4 (34 s), `test_mcp
+  test_json_output` 4 (51 s), the rest of the files' render tests 1 (5 s).

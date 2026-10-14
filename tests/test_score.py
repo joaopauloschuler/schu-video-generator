@@ -200,6 +200,27 @@ def test_balance_sets_the_parts_to_one_loudness_before_their_volume() -> None:
     assert 20 * math.log10(ratio(True)) == pytest.approx(-6.0, abs=0.3)  # same loudness, then -6 dB
 
 
+def test_balance_measures_a_part_only_where_it_sounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    late = np.zeros((6 * RATE, 2))
+    late[4 * RATE :] = _tone(2, 300.0, 0.01)  # a mood's part: silent until its scene
+    parts = [Part("late", [Note(8, 4, 60)], volume=-6, reverb=0), Part("ref", [Note(0, 12, 60)], reverb=0)]
+    score = Score(tempo=120, parts=parts, balance=True)
+    full = loudness.integrated_loudness(late)
+    measured: list[int] = []
+    real = loudness.integrated_loudness
+
+    def spy(x: np.ndarray) -> float:
+        measured.append(len(x))
+        return real(x)
+
+    monkeypatch.setattr(loudness, "integrated_loudness", spy)
+    out = synth.mix_parts(score, [late, _tone(6, 400.0, 0.5)])
+    assert abs(measured[0] - 2 * RATE) <= 2  # the silent 4 s are not measured (the tone starts at 0)
+    assert 0 <= real(late[4 * RATE :]) - full < 0.5  # gated: only the half-silent blocks at its start are gone
+    spectrum = np.abs(np.fft.rfft(out[4 * RATE : 6 * RATE, 0]))
+    assert 20 * math.log10(float(spectrum[600] / spectrum[800])) == pytest.approx(-6.0, abs=0.3)
+
+
 def test_silent_mix_is_an_error() -> None:
     score = Score(tempo=120, parts=[Part("a", [Note(0, 1, 60)])])
     with pytest.raises(VidgenError, match="the rendered music is silent"):

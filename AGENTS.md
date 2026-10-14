@@ -173,9 +173,9 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 
 **Through MCP.** When your client has the vidgen MCP server (`vidgen mcp --root DIR`), the same
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
-`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
+`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `storyboard`, `lint`,
 `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast` (options in snake_case: `per_beat`,
+`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic` (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
@@ -1075,7 +1075,9 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   names the street sounds instead (or `birdsong`, `room_tone`, a list), `ambience: false` none.
   `foley: false` (top level or a stage) turns all of them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
-  voice. One or two per cartoon, on the real punchline, or they stop being funny.
+  voice; under composed music the music's own instruments play it, in its key. One or two per
+  cartoon, on the real punchline, or they stop being funny. For music that follows the story
+  (a mood per scene, a pause before the punchline) see *Composed music* in `vidgen guide audio`.
 - **Voice sounds**: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`, `[beep]` in a line
   (`text: "[gasp] The box is open! [laugh]"`) are made by the voice at that point (`Ha ha ha!`,
   `Hmm.`; a gasp or sigh at the line's start or end is a generated breath, a beep a generated
@@ -1390,6 +1392,47 @@ scenes:
     beats: [{text: "A calm bed sits under the voice."}]
 ```
 
+**Composed music** (`music: {compose: MOOD}`) is written as notes for this video and played with
+real instruments: an original piece in a mood, the same piece for the same settings. Prefer it to
+a bed when the music should follow the video. Moods for explainers: `calm` (piano and harp, no
+drums: serious topics, long narration), `focused` (vibraphone, guitar, brushes: tech, data,
+walkthroughs), `curious` (staccato flute, harp: science, "how does it work"), `upbeat` (marimba,
+pop drums: launches, tutorials). For cartoons: `playful` (clarinet, marimba, tuba oom-pah),
+`sleepy` (celesta lullaby in 3/4: night, bedtime, endings), `tense` (low clarinet, tremolo
+strings, a heartbeat drum: storms, chases, suspense), `triumphant` (trumpet fanfare, march: the
+win). `vidgen list-music` describes each mood and instrument in words.
+- **It follows the video.** Without `bars` the piece is composed for the real timings when the
+  video is joined: every scene starts on a bar line (tempo within 8 % of the mood's), the music
+  swells a little when a bullet, chart bar or code step appears, and it ends on a held chord
+  instead of fading mid-phrase. After a script change the next render composes it again.
+- **A mood per scene.** `music: {mood: tense}` on a scene changes the music for that scene only
+  (the next scene returns to the cue's mood); add `volume: -3` under rain or a busy scene. Use it
+  where the story turns (calm → tense at the storm, sleepy at night), not on every scene.
+- **Pauses before punchlines.** `music_pause: true` on a beat stops the music just before the
+  line, until the next bar line after it; vidgen does this by itself before a `card` scene and
+  before a short last line (≤ 8 words), whose closing chord then lands as the line ends.
+  `music_pause: false` turns either off.
+- **Stings** (`sting: reveal | comic | sad`) are played by the music's own instruments, in its key.
+- **Without the extra.** Composed music needs `pip install "schu-video-generator[music]"`; the first
+  render downloads the SoundFont (32 MB, once; `vidgen soundfont fetch` does it now). Without the
+  extra `vidgen validate` warns and the mood's built-in bed plays instead (`calm` → calm,
+  `focused` / `tense` → pulse, `curious` / `upbeat` / `triumphant` → bright, `playful` → cartoon,
+  `sleepy` → lullaby), so the video still renders. `vidgen music preview --mood M` writes a piece
+  as WAV and MIDI to listen to (MCP `music_preview`). Drafts and animatics play it too; storyboards
+  have no sound.
+
+```yaml
+music: {compose: playful, volume: -2}
+scenes:
+  - id: storm
+    type: stage
+    music: {mood: tense, volume: -3}
+    beats:
+      - text: "Then the cloud did what clouds do."
+      - text: "The umbrella left without him."
+        music_pause: true
+```
+
 <!-- topic: examples (also: good-bad, before-after, patterns, antipatterns) -->
 ## Good vs bad: before and after
 
@@ -1642,7 +1685,9 @@ scenes:
 - The built-in fonts (SIL OFL), Lucide icons (ISC), Natural Earth map data, sound effects and
   music beds may be used in your videos, including commercially, with no attribution required
   in the video (Natural Earth asks for none; the OFL and ISC notices concern redistributing the
-  files themselves).
+  files themselves). So may composed music played with the default GeneralUser GS SoundFont (no
+  attribution required; a credit in the description is welcome: `vidgen soundfont info` prints
+  one); with your own `soundfont:` its licence applies.
 
 <!-- topic: troubleshooting (also: errors, fixes, lint, validate, problems) -->
 ## Troubleshooting: messages and fixes

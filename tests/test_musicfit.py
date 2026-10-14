@@ -132,6 +132,21 @@ def test_a_scenes_mood_starts_at_its_first_bar() -> None:
     assert fit_music(waltz).score.seconds_at(waltz[0].beats) == pytest.approx(10.0)
 
 
+def test_each_moods_key_and_time_signature_reach_the_midi_export() -> None:
+    sections = _sections([0.0, 10.0, 22.0], 32.0, [CURIOUS, SLEEPY, TENSE])
+    score = fit_music(sections).score
+    starts = _section_beats(sections)
+    marked = [(s.start, s.key, s.time_signature) for s in score.sections if s.key is not None]
+    assert marked == [(starts[0], "F major", (4, 4)), (starts[1], "F major", (3, 4)), (starts[2], "D minor", (4, 4))]
+    if not HAS_SYMUSIC:
+        return
+    from vidgen.score import TICKS_PER_BEAT, to_symusic
+
+    midi = to_symusic(score)
+    assert [(t.time, t.numerator) for t in midi.time_signatures] == [(0, 4), (starts[1] * TICKS_PER_BEAT, 3), (starts[2] * TICKS_PER_BEAT, 4)]
+    assert [(k.time, k.key, k.tonality) for k in midi.key_signatures] == [(0, -1, 0), (starts[2] * TICKS_PER_BEAT, -1, 1)]
+
+
 def test_swells_on_reveals() -> None:
     sections = _sections([0.0], 20.0)
     plain, swelled = fit_music(sections), fit_music(sections, reveals=[0.1, 6.0, 6.5, 19.0])

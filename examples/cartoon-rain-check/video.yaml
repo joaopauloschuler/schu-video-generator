@@ -1,4 +1,6 @@
 # A weather cartoon: picnic, wind, rain, night (rain_check.md via `vidgen screenplay`, hand-edited).
+# Composed music (compose:, §84): playful, tense for the storm, sleepy at night; scene changes on
+# bar lines, a pause before the last line. Needs the music extra, else the moods' beds play.
 # No audio committed: run `vidgen tts` (Kokoro, free).
 title: Rain Check
 format: {width: 1280, height: 720, fps: 30}
@@ -89,6 +91,7 @@ scenes:
   - id: storm
     type: stage
     set: meadow
+    music: {mood: tense, volume: -3}                    # under the rain bed (-32 LUFS)
     params:
       wind: windy
       props:
@@ -130,6 +133,7 @@ scenes:
   - id: night
     type: stage
     set: meadow
+    music: {mood: sleepy, volume: -3}
     params:
       light: night
       props: [{prop: basket, at: 0.66}]
@@ -150,6 +154,4 @@ scenes:
         actions: [{particles: rain, at: 0.5, keep: true}]
 output: rain_check
 overlays: [{type: captions, speakers: color}]
-music:
-  - {source: bright, to: picnic, volume: -2}
-  - {source: calm, from: storm, volume: -6}             # under the rain bed (-32 LUFS)
+music: {compose: playful, volume: -2}
