@@ -282,7 +282,7 @@ def _stage(beats: list[dict[str, Any]], **params: Any) -> dict[str, Any]:
 def test_no_reaction_in_a_pause_that_an_overlap_removes(make_project, tmp_path: Path) -> None:
     def reactions(second: dict[str, Any], folder: str) -> list[str]:
         beats = [{"text": "Is the box really empty?", "voice": "pip_voice"}, second]
-        project = Project.load(make_project(minimal_config(scenes=[_stage(beats)], characters=CAST, voices=VOICES, auto_direct={"looks": False, "reactions": True, "gestures": False, "closeups": False}), folder=folder))
+        project = Project.load(make_project(minimal_config(scenes=[_stage(beats)], characters=CAST, voices=VOICES, auto_direct={"looks": False, "reactions": True, "gestures": False, "closeups": False, "effects": False}), folder=folder))
         with extensions.project_session(project):
             directed = project_directions(project).get("yard", [])
         return [f"{d.beat}:{a.action}" for d in directed for a in d.actions]

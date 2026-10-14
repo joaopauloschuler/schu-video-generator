@@ -690,8 +690,8 @@ Same rules as Phases H–L. The owner approved every item (after Step 130), incl
 test-suite run.
 
 ### Step 131 — Full test suite
-- [ ] Run the whole suite (owner asked), in file groups so each command stays under the memory cap and 300 s timeout (non-render groups, then render groups, one at a time); record every failure, its cause and the step that introduced it; fix them (code or out-of-date tests, with reasons); re-run the failing groups; record per-group times and the total in HANDOFF; flag tests slower than 10 s
-- [ ] Any test that cannot run here (missing optional extras, network) listed with the reason
+- [x] Run the whole suite (owner asked), in file groups so each command stays under the memory cap and 300 s timeout (non-render groups, then render groups, one at a time); record every failure, its cause and the step that introduced it; fix them (code or out-of-date tests, with reasons); re-run the failing groups; record per-group times and the total in HANDOFF; flag tests slower than 10 s
+- [x] Any test that cannot run here (missing optional extras, network) listed with the reason
 
 ### Step 132 — Release 0.3.0
 - [ ] Version 0.3.0 everywhere it is stated (package metadata, `vidgen --version`, docs); `CHANGELOG.md` summarising 0.2.0 → 0.3.0 by theme (cartoons, characters, stages, acting, directing, screenplays, weather, sound, music, jobs, …) with breaking or behaviour changes listed first (e.g. default ambience, generated legs part, interrupt timing); wheel and sdist build, installed into a fresh venv, `vidgen --version` / `validate` / a tiny render there

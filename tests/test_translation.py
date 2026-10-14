@@ -227,6 +227,7 @@ BOX = [0.1, 0.1, 0.2, 0.2]
 SAMPLES: dict[str, list[dict[str, Any]]] = {
     "bar_chart": [{"title": "T:title", "labels": ["T:a", "T:b"], "values": [1, 2], "unit": "T:unit", "caption": "T:caption", "highlight": "T:b"}],
     "bullets": [{"heading": "T:heading", "items": ["T:one", {"text": "T:two", "icon": "pencil"}]}],
+    "card": [{"text": "T:text", "subtitle": "T:sub"}],
     "chapter": [{"title": "T:chapter", "number": "T:Part II", "subtitle": "T:sub"}],
     "code": [{"code": "print('hi')", "language": "python", "title": "T:title"}],
     "code_walkthrough": [{"code": "a = 1\nb = 2\n", "title": "T:title", "steps": ["1", {"lines": "2", "note": "T:note"}]}],

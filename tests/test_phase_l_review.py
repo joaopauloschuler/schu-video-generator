@@ -83,6 +83,7 @@ def test_a_random_cast_of_robots_and_animals_and_the_music_beds(tmp_path: Path, 
     assert '"cartoon"' in beds and '"lullaby"' in beds
 
 
+@pytest.mark.slow   # about 12 s: a `vidgen mcp` server process and three validations (Step 131)
 def test_mcp_screenplay_validate_and_list_music_of_the_example(tmp_path: Path) -> None:
     from test_mcp import doc_of, run_session
 

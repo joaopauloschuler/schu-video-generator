@@ -12399,3 +12399,86 @@ How to test
   failed before the quoted `"on"`); render: `tests/test_cartoon_[a-l]*.py` (27 passed, 34 s),
   `[m-z]` (36 passed, 27 s), `test_jobs test_music test_sfx test_random_cast test_screenplay` (9
   passed, 34 s), the phase reviews (6 passed, 34 s). The full suite was not run (not asked).
+
+## Step 131 — Full test suite
+
+The whole suite (owner asked), on this 2-CPU box with `/home/claude/bin/capped` (1500 MB cgroup,
+300 s timeout; the stand-in for guide rule 7's `systemd-run`), one command at a time, no `-n`:
+`capped python -m pytest -q -p no:cacheprovider --durations=15 -m "not render" <files>`, then
+`-m render` on the files that have render tests. No group came near the cap or the timeout
+(longest 128 s), so none had to be split.
+
+Groups (135 test files, alphabetical; first pass)
+
+| Group | Files | Result | Wall |
+|---|---|---|---|
+| not render 1 | `test_actions` … `test_cartoon_motion` (27) | 701 passed | 52 s |
+| not render 2 | `test_cartoon_motion_effects` … `test_chapter_export` (27) | 574 passed | 44 s |
+| not render 3 | `test_chapters_progress` … `test_layout` (27) | 695 passed | 29 s |
+| not render 4 | `test_lint` … `test_review3` (27) | 536 passed, 2 failed | 117 s |
+| not render 5 | `test_review4` … `test_world_map` (27) | 733 passed, 1 failed, 2 skipped | 101 s |
+| render 1 | `test_actions` | 7 passed | 5 s |
+| render 2 | `test_actions_coverage` | 64 passed | 27 s |
+| render 3 | `test_builtin_scenes` | 72 passed | 31 s |
+| render 4 | `test_callout_action` … `test_cartoon_small_props` (34) | 60 passed | 68 s |
+| render 5 | `test_cartoon_snow_fog` … `test_code_walkthrough` (12) | 43 passed | 65 s |
+| render 6 | `test_comparison_table` … `test_gallery` (7) | 58 passed | 103 s |
+| render 7 | `test_icon_scenes` … `test_phase_f_review` (14) | 60 passed | 128 s |
+| render 8 | `test_phase_h_review` … `test_push_wipe_carry` (7) | 55 passed | 119 s |
+| render 9 | `test_regions` … `test_scene` (6) | 44 passed | 58 s |
+| render 10 | `test_screenshot` … `test_storyboard` (5) | 60 passed | 59 s |
+| render 11 | `test_thumbnail_export` … `test_world_map` (10) | 56 passed | 67 s |
+
+Totals: first pass 3818 passed, 3 failed, 2 skipped (3239 + 579 render) in 1073 s of wall time
+(343 s not render, 730 s render; about 18 minutes, against guide rule 9's 5-minute target; each
+group also pays collection of its files, 2-5 s). After the fixes: 3822 passed, 0 failed,
+2 skipped (the card sample adds one parametrized case).
+
+Failures, causes and fixes (each checked in a detached `git worktree` of the commit and its
+parent: fails at the step, passes before it). All three were out-of-date tests, no code bug.
+- `tests/test_overlap.py::test_no_reaction_in_a_pause_that_an_overlap_removes` — Step 107
+  (`7faf60e`, effect symbols) added the `effects` kind to `auto_direct`, on by default, so the
+  listener's "thinking" reaction to the question now also gets a `?` effect. The test is about
+  reactions only: it now turns `effects` off like the other kinds.
+- `tests/test_registry.py::test_unknown_type_suggests_close_matches` and
+  `tests/test_translation.py::test_every_builtin_type_has_a_sample` — Step 112 (`095b596`)
+  added the built-in scene type `card`. The expected "known types" list now has `card`, and
+  `SAMPLES` has a `card` sample using both translatable params (`text`, `subtitle`), so
+  `test_every_translatable_param_is_listed[card]` checks them too.
+- Re-runs: the three files (105 passed, 3 s); not render 4 (538 passed, 112 s); not render 5
+  (735 passed, 2 skipped, 93 s).
+
+Tests slower than 10 s (all already `slow` except one, now marked)
+- not render: `test_phase_l_review::test_mcp_screenplay_validate_and_list_music_of_the_example`
+  12.4 s (a `vidgen mcp` server and three validations; was not `slow`, now marked),
+  `test_overlays::test_schema_checks_overlay_types_and_options` 11.0 s.
+- render: `test_chapter_export::test_rendered_chapters_metadata_and_youtube_list` 22.6 s,
+  `test_frames::test_frames_with_variant_scene_and_cli` 18.2 s,
+  `test_phase_h_review::test_example_storyboard_lint_sheets_and_render` 15.6 s,
+  `test_comparison_table::test_table_too_big_for_the_frame_warns` 14.7 s,
+  `test_storyboard::test_storyboard_json_reuse_and_staleness` 13.2 s,
+  `test_frames::test_stills_at_beat_ends_match_the_video` 12.9 s,
+  `test_music::test_render_reports_and_reaches_the_target_loudness` 10.3 s (fixture setup).
+- Just under 10 s: `test_callout_action` lint (10.0 s), `test_transitions` rendered times (setup
+  10.0 s), `test_world_map` lint (9.8 s), `test_icon_scenes` 12-icon portrait grid (9.6 s),
+  `test_review4` scene reuse (9.1 s), `test_label_callouts_on_a_crowded_bar_chart` (9.0 s),
+  `test_presets` contrast lint per preset (8 s each, 7 presets).
+
+Tests that cannot run here (the 2 skips)
+- `tests/test_tts.py::test_kphi3_hash_files_are_accepted`: the original reference project
+  `/home/claude/work/kphi3_paper_video` is not in this workspace.
+- `tests/test_tts_kokoro.py::test_real_kokoro_synthesis`: needs the `kokoro` extra, not in the
+  main venv. Run separately in the Kokoro venv (`scratchpad/kvenv312`, Python 3.12) under a
+  2500 MB cap: `test_tts_kokoro.py` 34 passed, 1 skipped (the "no extra" branch, which skips
+  there by design) in 134 s; the real synthesis took 111 s.
+- Nothing else skipped: ffmpeg, LaTeX, Playwright's Chromium, `pypdf` / `fpdf2`, `mcp` and
+  `jsonschema` are all present, so their conditional skips did not trigger. No test uses the
+  network (API calls are mocked).
+
+Files touched
+- `tests/test_overlap.py`, `tests/test_registry.py`, `tests/test_translation.py`,
+  `tests/test_phase_l_review.py`; `tasklist.md`, `HANDOFF.md`. No source changes.
+
+How to test
+- The same groups (file lists above), one command at a time under the cap; the fixed files:
+  `pytest -m "not render" tests/test_overlap.py tests/test_registry.py tests/test_translation.py`.
