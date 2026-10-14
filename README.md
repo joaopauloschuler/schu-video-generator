@@ -97,6 +97,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
 - **Cartoon series**: `include: [../shared/cast.yaml, ../shared/sets.yaml]` shares characters,
   voices and named stage sets between episodes; a scene's `set: meadow` starts from the set and
   overrides what it needs ([example](examples/cartoon_series)).
+- **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
+  scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
+  mouth follows the narration ([docs](docs/CONFIG.md#a-host-beside-any-scene-host)).
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
   look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,

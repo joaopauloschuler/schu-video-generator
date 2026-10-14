@@ -1113,6 +1113,30 @@ scenes:
 A complete two-scene cartoon (under a minute, a wide stage, `follow` on a flying prop, a close-up
 punchline) is `examples/cartoon/` in the schu-video-generator repository.
 
+**A host for an explainer.** `host: NAME` (a character of `characters:`) puts that character
+beside the content of every scene: bullets, charts, code, diagrams... Each scene lays its content
+out in the room left (a column beside it; in 9:16 a band below it), so nothing needs moving by
+hand. Its mouth follows the narration (`speaks: narrator`, the default; `own`: only beats in its
+own voice), it blinks and breathes, and a scene can change it (`host: {expression: thinking}`) or
+drop it (`host: false`; a title or end card often looks better without). `stage` and `card`
+scenes never show it. Keep the host small next to dense content (`size: 0.4`), and check the
+storyboard: lint's `host_overlap` reports anything drawn over it.
+
+```yaml
+characters: [{name: dot, look: {body: bean, hair: bun, accessories: [glasses]}}]
+host: {character: dot, side: right}        # size, place (beside / below), floor, facing, pose, expression
+scenes:
+  - id: steps
+    type: bullets
+    params: {heading: "How it works", items: ["Write the beats", "Render a preview"]}
+    beats: [{text: "First, you write the narration as short beats."}]
+  - id: chart
+    type: bar_chart
+    host: {expression: happy}
+    params: {title: "Render minutes", labels: ["480p", "1080p"], values: [0.4, 2.6]}
+    beats: [{text: "Previews are the fast way to iterate."}]
+```
+
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->
 ## Overlays, transitions and continuity
 
@@ -1576,6 +1600,7 @@ install; `vidgen validate` warns when it is missing.
 | `label_spacing` | a callout label touches other text (a value, the title) | another `side:`, an `arrow` instead of a `label`, a shorter label |
 | `contrast` | text hard to read on its background | theme tokens instead of custom colours; another preset |
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
+| `host_overlap` | the host overlaps the content, a caption or an overlay | a smaller host (`size`), another `side` / `place`, or `host: false` on that scene |
 | `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
 | `off_stage` | a character is cut by the edge of the view (in a `shot`: a character it frames is out of it) | another mark or x inside the view, or `pan` to it; in a shot, keep it from walking out or frame another shot |
 | `character_overlap` | two characters stand on each other (at about the same depth) | marks further apart, or `walk_to` one away (across, or in depth) |

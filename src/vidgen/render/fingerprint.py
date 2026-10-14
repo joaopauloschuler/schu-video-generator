@@ -141,6 +141,13 @@ def _overlay_inputs(project: Project) -> Any:
     return {"scenes": scenes, "voices": cfg.model_dump(mode="json", include={"voices", "subtitles"})}
 
 
+def _next_scene(project: Project, scene_id: str) -> Any:
+    """The scene after ``scene_id`` (``None`` for the last)."""
+    scenes = project.config.scenes
+    i = [s.id for s in scenes].index(scene_id)
+    return scenes[i + 1] if i + 1 < len(scenes) else None
+
+
 def _next_transition(project: Project, scene_id: str) -> Any:
     """The transition into the scene after ``scene_id`` with what limits its length (that
     scene's duration, beats and MP3s); a cut alone, and ``None`` for the last scene."""
@@ -199,6 +206,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # colour, or held longer (DESIGN.md §49)
         "next_transition": _next_transition(project, scene_id),
     }
+    after = _next_scene(project, scene_id)
+    if after is not None and (project.config.host is not None or spec.host is not None or after.host is not None):
+        # a host the next scene shows unchanged stays in this scene's fade-out (DESIGN.md §71)
+        data["next_host"] = [after.type, after.model_dump(mode="json", include={"host"})]
     named = [path for path in project.files_named_by_includes if not path.resolve().is_relative_to(assets.resolve())]
     if named:
         # SVGs and pictures an include: file names outside assets/, e.g. a shared folder's (§69.35)

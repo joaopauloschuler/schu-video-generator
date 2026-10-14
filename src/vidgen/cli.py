@@ -254,13 +254,15 @@ def project_problems(project: Project) -> list[Problem]:
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
     the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), a designed
     ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours,
-    SVG files (§69) and the shapes of their own poses (§69.3). Each problem points where its
+    SVG files (§69) and the shapes of their own poses (§69.3), and the host's floor colour and a
+    scene's own ``host:`` on a type that draws none (§71). Each problem points where its
     value is written: an ``include:`` file, a set (§69.35).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
     from vidgen.carry import carry_problems
     from vidgen.cartoon.cast import character_color_problems, character_look_problems, character_pose_problems
+    from vidgen.cartoon.host import host_color_problems
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.imagegen import imagegen_problems
     from vidgen.music import config_problems as music_problems
@@ -290,6 +292,8 @@ def project_problems(project: Project) -> list[Problem]:
                 beat_problem = entry.cls.check_beat_count(len(scene.beats))
                 if beat_problem is not None:
                     problems.append(Problem(f"scenes[{i}].beats", f"type '{scene.type}' {beat_problem}"))
+                if scene.host not in (None, False) and not entry.cls.takes_host:
+                    problems.append(Problem(f"scenes[{i}].host", f"type '{scene.type}' draws no host (remove host: here; the video's host: skips it)"))
                 try:
                     params = entry.cls.validate_params(scene.params, theme)
                 except ValidationError as exc:
@@ -306,6 +310,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(overlay_problems(project, theme))
             problems.extend(voice_color_problems(project.config, theme))
             problems.extend(character_color_problems(project.config, theme))
+            problems.extend(host_color_problems(project.config, theme))
             problems.extend(character_look_problems(project.config, project.root))
             problems.extend(character_pose_problems(project.config, project.root))
             problems.extend(transition_color_problems(project.config, theme))
@@ -408,10 +413,11 @@ def validate_warnings(project: Project) -> list[str]:
     characters' unavailable actions and part warnings (§69.2), parts the characters' own
     poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
     character that lacks the parts they need (§69.11), front views asked of SVG characters
-    (§69.44), and lines that overlap a line of their own voice
-    (§69.34)."""
+    (§69.44), a host speaking only in its own voice without one (§71), and lines that overlap a
+    line of their own voice (§69.34)."""
     from vidgen.carry import carry_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
+    from vidgen.cartoon.host import host_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.overlap import overlap_warnings
@@ -436,6 +442,7 @@ def validate_warnings(project: Project) -> list[str]:
         + shared_voice_warnings(project.config)
         + acting_warnings(project)
         + front_view_warnings(project.config)
+        + host_warnings(project.config)
         + overlap_warnings(project.config)
     )
 

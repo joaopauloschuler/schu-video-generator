@@ -90,6 +90,8 @@ src/vidgen/
                           # Walk, Gesture, Jump, §69.12; KeyedMotion, §69.14),
                           # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
                           # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
+                          # host.py (host: which host a scene has, its column / band, who speaks, checks,
+                          # §71; no manim), host_drawing.py (HostFigure: the host and its floor line, §71),
                           # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
                           # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
                           # svg_prop: props from primitives or an SVG, §69.8), acting.py (where a
@@ -9538,3 +9540,93 @@ without them renders as before.
 - **Unchanged**: Kokoro `vidgen tts` has no `--jobs` and runs alone (the MCP server already runs
   heavy tools one at a time); the Python functions (`render_project(jobs=...)` and the others)
   take an int.
+
+
+## 71. A cartoon host beside any scene (Step 133)
+
+A character of `characters:` presents an explainer: `host:` draws it beside the content of every
+scene type that lays out in the safe area. Part 1 (this step): placement, the region split,
+speaking, idle life, layout dump and lint. Pointing, reacting, walking between sides and
+entering / leaving are Step 134. Reference: docs/CONFIG.md "A host beside any scene".
+
+- **Config** (`config.py`): `VideoConfig.host: Identifier | HostConfig | None` (a name is
+  `{character: name}`); `HostConfig(character, side left|right = right, size (0, 0.9] | None,
+  place auto|beside|below = auto, floor = true, floor_color = dim, facing auto|left|right|front =
+  auto, speaks narrator|own = narrator, pose, expression)`. `SceneConfig.host: SceneHost | None`
+  with `SceneHost = bool | Identifier | HostOverride`: `false` none, `true` / unset the video's, a
+  name (the video's settings with that character), or `HostOverride` (every key optional; the
+  keys written, `model_fields_set`, replace the video's). Variants deep-merge as usual.
+- **Which host** (`cartoon/host.py`, no manim): `video_host(config)`, `scene_host(config, scene)`
+  (`ValueError` for `true` or a mapping without a character when the video has none).
+  `host_problems(config)` runs in `parse_config` (next to the voice references, so variants and
+  every command reject them): those two, an unknown character (did-you-mean), a pose /
+  expression the character does not know (`cast.pose_name_problem`); a scene's are checked for
+  the keys it writes (`scenes[i].host.pose`). `cli.project_problems`: `floor_color` not a theme
+  colour (`host_color_problems`) and a scene's own `host:` on a type with `takes_host = False`;
+  `validate_warnings`: `speaks: own` for a character without a voice (`host_warnings`).
+- **Which scene types**: `NarratedScene.takes_host: ClassVar[bool] = True`; `stage` (its
+  characters stand on the set) and `card` (a full-frame title card) set `False` and ignore the
+  video's host. Every other built-in lays out in `self.safe_area`; `text_card` centred its text
+  on the frame's origin and now centres it on the safe area (equal without reserved room).
+- **Geometry** (`host_layout(area, frame_width, frame_height, host, width_ratio) -> HostLayout`,
+  pure; `area` = the scene's safe area after the overlays' reserves, as a tuple): `below` when
+  `place: below`, or `auto` in a portrait frame (9:16; 16:9 and 1:1 stand beside). Height =
+  `size` or `HOST_SIZES` (landscape 0.5, square 0.42, portrait 0.36) x the shorter side (8
+  units), capped at `BESIDE_MAX_HEIGHT` 0.95 / `BELOW_MAX_HEIGHT` 0.4 of the area's height and,
+  beside, so the column is at most `BESIDE_MAX_WIDTH` 0.4 of the area's width. The column is the
+  figure's width (`width_ratio` x height, measured from the posed character) x (1 + 2 x
+  `FLOOR_OVERHANG` 0.25) with a floor, else the figure's width. **Reserve**: beside, the
+  full-height column at the area's `side`; below, the full-width band at the area's bottom (the
+  figure at its `side` end) — the whole column / band, so `overlays.avoid` always keeps the
+  content on the intended side. Feet on the area's bottom edge; `facing: auto` looks at the
+  content (`left` on the right side). `HostLayout(height, feet, figure, floor, reserve, facing,
+  below)`.
+- **Drawing** (`cartoon/host_drawing.py`): `build_host(host, entry, *, theme, area, frame_width,
+  frame_height, root, motion) -> HostFigure`: `build_character` (the theme's colours, idle per the
+  entry's `idle`) at `REFERENCE_HEIGHT` with the facing, pose and expression to measure
+  `width / REFERENCE_HEIGHT`, then built again at the layout's height (so its outline has the
+  width of a character that tall, §69.1) and shifted so its drawing's middle is on the column's
+  middle and its feet on the area's bottom (an arm held out does not push it out of its column).
+  The floor is a `Line` across the column in `floor_color`, `OUTLINE_WIDTH x height /
+  REFERENCE_HEIGHT` wide (at least a pixel). `HostFigure(VGroup)`: `floor`, `character`, `layout`,
+  `config`, `host_name`. No stage code is used (`stage_layout`, grounds, shadows untouched).
+- **In the scene** (`scene.py`): `__init__` builds the overlays, then `_build_host()`: the host in
+  `self.safe_area` (overlays already reserved, so a bottom caption band stays below it), its
+  reserve appended to `_reserved` (§41's mechanism: `safe_area` = the margins' area cut by
+  `avoid(area, box, gap=0.2)` per reserved box), so every named region and `place()` call lays
+  out beside it, unchanged scene code. `self.host` (`None` without one). `setup()` adds it with
+  `add_foreground_mobject`: Manim keeps foreground mobjects last, so while it idles or speaks
+  (time-based updaters) Manim redraws only the host each frame over a static image of the rest
+  (`get_moving_mobjects` returns the list from the first moving mobject on). Measured at preview
+  854x480: a bullets scene of 15.5 s renders in 6.4 s with the host, 5.4 s without; a bar chart
+  of 8.1 s in 5.2 s / 4.6 s.
+- **Who speaks**: `host_speaks(config, host, voice)`: the host's own voice always; with `speaks:
+  narrator` also any voice no other character owns (the narrator's, a named voice nobody
+  has); `own`: only its own. `NarratedScene.narrate` calls `_host_speak(beat)` right after the beat
+  starts (`self.speak(host.character)`: the beat's viseme track on the scene clock, §69.11) and
+  `end_lip_sync` after the beat (on under an overlapping next beat, §69.34), like
+  `Stage.narrate`. A beat in another character's voice leaves the mouth at rest.
+- **Between scenes**: on screen from frame 0. `host_continues(config, index, takes_host)`: the
+  next scene shows an equal `HostConfig` (and both types take hosts) → `finish()` keeps it out
+  of the outro's `clear_all` (as carried targets are), so it stands still across a cut. The
+  fingerprint gains `next_host` (the next scene's type and `host:`) when the video or either
+  scene sets a host.
+- **Layout dump**: `HostFigure` → one object of kind `host` named after the character, its box
+  covering the floor line; `_character_keys` (`facing`, `speaking`, `face`, `viseme`...) plus
+  `side` and `below`. Cartoon rules read kind `character` only, so they do not see the host.
+- **Lint** `host_overlap` (layout rule after `overlay_overlap`, default warning, `min_overlap`
+  0.02 of the smaller box): the host's box against every scene object and overlay object, except
+  particles, motion effects, and scene objects whose box holds the whole host box (a backdrop:
+  full-frame image, band); findings on one overlay group together. `covered_text` skips the host
+  (this rule's finding). `describe` names it `host 'dot'`.
+- **Checked by eye** (scratch project, preview, `vidgen storyboard`): bullets, bar chart, code and
+  text_card in 16:9 (also with bottom captions), 9:16 (plain: the host in a band below the
+  chart / list / listing; with karaoke captions: above the caption band), 1:1 (beside), a left
+  host facing front, happy, without floor; the code scene with `pose: thinking`. `vidgen lint`:
+  0 findings in 16:9, 16:9 captions and 9:16 karaoke. Mid-beat stills: the mouth moves in the
+  narrator's beats (`speaking: true`, visemes) and rests in a guest's.
+- **Not done** (Step 134 and later): pointing at targets, reacting, walking to the other side,
+  entering / exiting, `auto_direct` for hosts; the host is not an action target yet. A `zoom` /
+  `pan` moves it with the scene (it is a scene mobject, not an overlay: Step 134 needs scene
+  targets). A scene type that draws outside `self.safe_area` can overlap it (`host_overlap`
+  reports it). The host's idle motion counts as change for `dead_air` (as a stage's characters).

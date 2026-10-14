@@ -34,6 +34,7 @@ class TextCard(NarratedScene):
         p = self.params
         width = self.safe_width * (1.0 if self.is_portrait else 0.86)
         card = fit_text(p.text, width, self.safe_height * 0.8, size=p.size, color=p.color)
+        card.move_to(self.safe_area.center)   # not the frame's: reserved room (a host, captions) moves it
         if not self.beats:
             self.play(FadeIn(card), run_time=min(0.8, self.spec.duration or 0.8))
             return

@@ -402,7 +402,11 @@ away, given to someone not next to the giver, a seat taken, a walk of a characte
 - `self.safe_area` — the frame minus the scene's `margin_x` / `margin_y` (0.6 / 0.5 units). It
   is the rectangle the layout dump records and `vidgen lint`'s `safe_area` rule checks.
   `self.safe_width` / `self.safe_height` are its size. Without a scene: `safe_area()`;
-  `frame_region()` is the whole frame.
+  `frame_region()` is the whole frame. It also leaves out the room that `reserve`d overlays and
+  the video's [host](CONFIG.md#a-host-beside-any-scene-host) (a cartoon character beside the
+  content, `self.host`) take, so lay out in it, not on the frame's centre. A scene type that
+  fills the frame itself (a full-frame design, its own characters) sets the class attribute
+  `takes_host = False` (as `stage` and `card` do); it then gets no host.
 - `self.region(name)` (or `region(name, area=None)`; `area` is a `Region` or another region's
   name, e.g. `region("left", "body")`) — named parts of the safe area:
 

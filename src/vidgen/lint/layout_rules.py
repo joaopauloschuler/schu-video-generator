@@ -15,6 +15,7 @@ import numpy as np
 from vidgen.config import (
     ContrastRule,
     CoveredTextRule,
+    HostOverlapRule,
     LabelSpacingRule,
     MaxWordsRule,
     MinFontRule,
@@ -84,7 +85,7 @@ def describe(obj: dict[str, Any]) -> str:
         return f"{obj['kind']} '{text}'"
     if obj["kind"] == "icon":
         return f"icon '{obj.get('icon')}'"
-    if obj["kind"] in ("character", "prop", "particles"):
+    if obj["kind"] in ("character", "prop", "particles", "host"):
         return f"{obj['kind']} '{obj.get('name')}'"
     if obj["kind"] == "effect":
         return f"effect '{obj.get('effect')}' of character '{obj.get('effect_of')}'"
@@ -278,9 +279,10 @@ def _distance(rgb: np.ndarray, colors: list[np.ndarray]) -> np.ndarray:
 @rule("covered_text")
 def covered_text(ctx: StillContext, settings: CoveredTextRule) -> Iterator[Issue]:
     """A shape or image is drawn on top of text (an overlay's over the scene's text is
-    ``overlay_overlap``'s finding; a motion effect passes in a moment and is not reported)."""
+    ``overlay_overlap``'s finding, the host's ``host_overlap``'s; a motion effect passes in a
+    moment and is not reported)."""
     texts = [obj for obj in ctx.objects if is_text(obj)]
-    others = [obj for obj in ctx.objects if not is_text(obj) and obj["kind"] != "motion_effect"]
+    others = [obj for obj in ctx.objects if not is_text(obj) and obj["kind"] not in ("motion_effect", "host")]
     for text in texts:
         for shape in others:
             if shape["order"] <= text["order"]:
@@ -487,4 +489,43 @@ def overlay_overlap(ctx: StillContext, settings: OverlayOverlapRule) -> Iterator
                 value=round(fraction, 3),
                 limit=settings.min_overlap,
                 group=("overlay", overlay),
+            )
+
+
+#: Objects that cross a host on purpose (they pass in a moment or fill the frame).
+_PASSING_KINDS = frozenset({"host", "particles", "motion_effect"})
+
+
+def _contains(outer: Bbox, inner: Bbox) -> bool:
+    return outer[0] <= inner[0] and outer[1] <= inner[1] and outer[2] >= inner[2] and outer[3] >= inner[3]
+
+
+@rule("host_overlap")
+def host_overlap(ctx: StillContext, settings: HostOverlapRule) -> Iterator[Issue]:
+    """The cartoon host (``host:``, DESIGN.md §71) overlaps the scene's content (text, shapes,
+    pictures, characters), a caption or another overlay (a scene object whose box holds the
+    host's whole box is a backdrop behind it: a full-frame picture, a band)."""
+    for host in (obj for obj in ctx.objects if obj["kind"] == "host"):
+        hbox = object_box(host)
+        for obj in ctx.objects:
+            if obj["kind"] in _PASSING_KINDS:
+                continue
+            box = object_box(obj)
+            if not is_overlay(obj) and _contains(box, hbox):
+                continue
+            shared = intersection(hbox, box)
+            if shared is None:
+                continue
+            fraction = area(shared) / max(min(area(hbox), area(box)), 1e-9)
+            if fraction < settings.min_overlap:
+                continue
+            where = f"overlay '{obj['overlay']}' ({describe(obj)})" if is_overlay(obj) else describe(obj)
+            yield Issue(
+                f"host '{host.get('name')}' overlaps {where} ({fraction:.0%} of the smaller box); make the host "
+                "smaller (size), move it (side, place) or turn it off in this scene (host: false)",
+                shared,
+                (host, obj),
+                value=round(fraction, 3),
+                limit=settings.min_overlap,
+                group=("host", obj["overlay"]) if is_overlay(obj) else None,
             )

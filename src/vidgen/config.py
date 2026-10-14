@@ -472,6 +472,67 @@ class CharacterEntry(_Strict):
     """Animation principles for this character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; wins over the scene's and the video's; default lively."""
 
 
+#: A host's height as a fraction of the frame's shorter side (DESIGN.md §71).
+HostSize = Annotated[float, Field(gt=0, le=0.9)]
+
+
+class HostConfig(_Strict):
+    """``host:`` (DESIGN.md §71): a character of ``characters:`` drawn beside the content of any
+    scene type (bullets, charts, code...), whose region shrinks to make room."""
+
+    character: Identifier
+    """The character (a name from characters:)."""
+    side: Literal["left", "right"] = "right"
+    """Which side of the content it stands on (in 9:16, below the content: the side of the band it stands on)."""
+    size: HostSize | None = None
+    """Its height as a fraction of the frame's shorter side; default 0.5 in 16:9, 0.42 in 1:1, 0.36 in 9:16."""
+    place: Literal["auto", "beside", "below"] = "auto"
+    """beside: a column next to the content; below: a band under it; auto: below in a vertical (9:16) frame, else beside."""
+    floor: bool = True
+    """A plain line it stands on; false: no floor."""
+    floor_color: ColorRef = "dim"
+    """Colour of the floor line (a theme token or hex)."""
+    facing: Literal["auto", "left", "right", "front"] = "auto"
+    """Which way it looks; auto: towards the content; front: at the viewer (an SVG character keeps its side)."""
+    speaks: Literal["narrator", "own"] = "narrator"
+    """Whose lines move its mouth (lip sync): narrator: every beat except those in another character's voice (the host speaks for the narrator); own: only beats in its own voice."""
+    pose: Identifier | None = None
+    """Its pose (stand, thinking, arms_crossed... or its own); none: standing."""
+    expression: Identifier | None = None
+    """Its expression (happy, neutral... or its own); none: its rest face."""
+
+
+class HostOverride(_Strict):
+    """A scene's ``host:`` as a mapping: the keys of the video's ``host:`` that change in this
+    scene (``character`` is required when the video has no host)."""
+
+    character: Identifier | None = None
+    """The character (a name from characters:)."""
+    side: Literal["left", "right"] | None = None
+    """left or right."""
+    size: HostSize | None = None
+    """Height as a fraction of the frame's shorter side."""
+    place: Literal["auto", "beside", "below"] | None = None
+    """auto, beside or below."""
+    floor: bool | None = None
+    """A floor line or not."""
+    floor_color: ColorRef | None = None
+    """Colour of the floor line."""
+    facing: Literal["auto", "left", "right", "front"] | None = None
+    """auto, left, right or front."""
+    speaks: Literal["narrator", "own"] | None = None
+    """narrator or own."""
+    pose: Identifier | None = None
+    """Its pose in this scene."""
+    expression: Identifier | None = None
+    """Its expression in this scene."""
+
+
+#: A scene's ``host:``: false (none in this scene), true or unset (the video's), a character
+#: name (the video's host settings with that character), or a mapping of :class:`HostOverride`.
+SceneHost = bool | Identifier | HostOverride
+
+
 class PronunciationEntry(_Strict):
     """The long form of a ``pronunciation:`` entry (DESIGN.md §45): how the narrator says a
     term. Applied to the text sent to the TTS only; subtitles and captions keep the term."""
@@ -579,6 +640,7 @@ LINT_RULES: tuple[str, ...] = (
     "contrast",
     "max_words",
     "overlay_overlap",
+    "host_overlap",
     "walk_overlap",
     "off_stage",
     "character_overlap",
@@ -605,6 +667,7 @@ RuleName = Literal[
     "contrast",
     "max_words",
     "overlay_overlap",
+    "host_overlap",
     "walk_overlap",
     "off_stage",
     "character_overlap",
@@ -710,6 +773,13 @@ class OverlayOverlapRule(RuleConfig):
 
     min_overlap: Fraction = 0.05
     """Part of a scene object's box an overlay must cover to be reported."""
+
+
+class HostOverlapRule(RuleConfig):
+    """``host_overlap``: the cartoon host (``host:``) overlapping the scene's content, a caption or another overlay."""
+
+    min_overlap: Fraction = 0.02
+    """Part of the smaller of the two boxes they must share to be reported."""
 
 
 class WalkOverlapRule(RuleConfig):
@@ -856,6 +926,8 @@ class LintRules(_Strict):
     """Too many words on screen (default: warning)."""
     overlay_overlap: OverlayOverlapRule = Field(default_factory=OverlayOverlapRule)
     """Overlays covering scene text or icons (default: warning)."""
+    host_overlap: HostOverlapRule = Field(default_factory=HostOverlapRule)
+    """The cartoon host overlapping the scene's content, captions or other overlays (default: warning)."""
     walk_overlap: WalkOverlapRule = Field(default_factory=WalkOverlapRule)
     """A character ending its walk on another character (default: warning)."""
     off_stage: OffStageRule = Field(default_factory=OffStageRule)
@@ -1671,6 +1743,8 @@ class SceneConfig(_Strict):
     """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
     set: Identifier | None = None
     """A stage scene's set: a name from sets: whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
+    host: SceneHost | None = None
+    """The cartoon host beside this scene's content: false for none, a character name, or {character, side, size, place, floor, facing, speaks, pose, expression} changing the video's host here; default the video's host."""
 
     @model_validator(mode="before")
     @classmethod
@@ -1752,7 +1826,9 @@ class VideoConfig(_Strict):
     """Named voices for dialogue (name: {voice_id, settings, label, color, ...}), each the base voice with what it sets changed; scenes and beats pick one with voice: NAME."""
     characters: list[CharacterEntry] = Field(default_factory=list)
     """Cartoon characters ({name, voice, look, colors}), declared once and used by any scene; names unique."""
-    subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
+    host: Identifier | HostConfig | None = None
+    """A cartoon host drawn beside the content of every scene (not stage or card scenes): a character name, or {character, side, size, place, floor, floor_color, facing, speaks, pose, expression}; a scene's host: wins (false: none there)."""
+    subtitles:SubtitlesConfig = Field(default_factory=SubtitlesConfig)
     """What the SRT shows besides the narration (speaker names)."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)
     """Beat padding and duration estimate."""
@@ -2004,10 +2080,11 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:
         raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None
+    from vidgen.cartoon.host import host_problems
     from vidgen.includes import set_reference_problems
     from vidgen.voices import voice_provider_problems, voice_reference_problems
 
-    problems = voice_reference_problems(config) + voice_provider_problems(config) + set_reference_problems(config)
+    problems = voice_reference_problems(config) + voice_provider_problems(config) + set_reference_problems(config) + host_problems(config)
     if problems:
         lines = [f"{source}: invalid config", *(f"  {problem}" for problem in problems)]
         raise VidgenError("\n".join(lines), problems=problems)

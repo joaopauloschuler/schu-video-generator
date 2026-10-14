@@ -533,6 +533,7 @@ class Stage(NarratedScene):
     """
 
     outro = 0.5
+    takes_host = False   # its characters are on the set already (DESIGN.md §71)
     target_patterns = ("<character>", "<prop>", "<character>.<part>")
     uses_cartoon_style = True
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).

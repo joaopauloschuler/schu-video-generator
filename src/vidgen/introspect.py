@@ -13,7 +13,9 @@ one object of kind ``icon`` with its name in ``icon``, a vector picture
 (``vidgen.vector_mobject.VectorPicture``, an SVG) one object of kind ``vector``, and a cartoon
 character (``vidgen.cartoon.character.Character``) one object of kind ``character`` named after
 the character (its box covers every part; plus ``facing``, ``speaking``, ``face`` and the other
-keys the cartoon lint rules read, :func:`_character_keys`), the objects of a speech bubble carry
+keys the cartoon lint rules read, :func:`_character_keys`), a host
+(``vidgen.cartoon.host_drawing.HostFigure``) one object of kind ``host`` named after its
+character (its box covers the floor line too; the same keys plus ``side`` and ``below``), the objects of a speech bubble carry
 ``bubble`` (the speaker's name), and a stage prop (``vidgen.cartoon.props.Prop``) one
 object of kind ``prop`` named after the prop (a held one also ``held_by`` and ``hand``; its box
 is not part of its holder's; one with shapes also ``shape``, an umbrella's ``closed`` or
@@ -250,6 +252,7 @@ class LayoutRecorder:
 
         from vidgen.cartoon.character import Character
         from vidgen.cartoon.effect_symbols import EffectSymbol
+        from vidgen.cartoon.host_drawing import HostFigure
         from vidgen.cartoon.living_drawing import PropGlow, PropSteam
         from vidgen.cartoon.motion_effect_shapes import MotionEffect
         from vidgen.cartoon.nature_drawing import FallenFruit, Flock
@@ -279,6 +282,11 @@ class LayoutRecorder:
             return
         if isinstance(mob, Icon):
             self._emit_parts(walk, mob, path, name, "icon", [m for m in mob.get_family() if _drawn(m)], icon=mob.icon_name)
+            return
+        if isinstance(mob, HostFigure):  # the host and its floor line: one object (DESIGN.md §71)
+            self._emit_parts(walk, mob, path, mob.host_name, "host", [m for m in mob.get_family() if _drawn(m)])
+            if walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                walk.objects[-1].update({**_character_keys(walk, mob.character), "side": mob.config.side, "below": mob.layout.below})
             return
         if isinstance(mob, Character):  # one figure, not one object per part
             self._emit_parts(walk, mob, path, name or mob.name, "character", [m for m in mob.get_family() if _drawn(m)])

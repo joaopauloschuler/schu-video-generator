@@ -38,6 +38,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
 | `characters` | `[]` | cartoon characters `{name, voice, look, colors}`, declared once and used by any scene; see [characters](#characters-characters) |
+| `host` | none | a cartoon host beside the content of every scene (not `stage` or `card` scenes): a character name, or `{character, side, size, place, floor, floor_color, facing, speaks, pose, expression}`; see [a host beside any scene](#a-host-beside-any-scene-host) |
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
@@ -120,6 +121,7 @@ scenes:
 | `transition` | the video's `transition` | how the video passes into this scene from the one before it, see [transitions](#transitions-transition) |
 | `carry` | `[]` | objects of the scene before that this scene starts with, where they ended (a match cut), then moves into its own targets: target names, or `"NAME -> NAME"`; see [continuity](#continuity-carrying-objects-into-the-next-scene-carry) |
 | `set` | none | a `stage` scene's set: a name from [`sets:`](#shared-casts-and-sets-include-and-sets) whose params this scene starts from; its own `params` win |
+| `host` | the video's | the [host](#a-host-beside-any-scene-host) beside this scene's content: `false` for none, a character name, or a mapping of the keys that change here (`{side: left}`, `{expression: thinking}`; with `character` when the video has no host) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. `*word*` in it marks a
@@ -1470,6 +1472,74 @@ the `image` scene) and splits it into parts by **element ids**:
 - Keep the file under `assets/`: editing it then renders the scenes again.
 - `vidgen character NAME` lists the parts and shapes found; `--png` shows a still.
   `examples/svg_character` has a small example (`assets/sprout.svg`).
+
+### A host beside any scene (`host:`)
+
+A character of `characters:` can present an explainer: `host:` draws it beside the content of
+every scene type (bullets, charts, code, diagrams, images...), and each scene lays its content
+out in the room left, so the host never covers it. Its mouth follows the narration (lip sync),
+and it breathes, sways and blinks like any character (its `idle:`).
+
+```yaml
+characters:
+  - name: dot
+    look: {body: bean, hair: bun, accessories: [glasses]}
+host: dot                       # or a mapping, as below
+scenes:
+  - id: steps
+    type: bullets
+    params: {heading: "How a video is made", items: ["Write the beats", "Render a preview"]}
+    beats: [{text: "First, you write the narration as short beats."}]
+  - id: listing
+    type: code
+    host: {pose: thinking, expression: thinking}   # this scene changes these keys
+    params: {path: assets/moving_average.py}
+    beats: [{text: "Code listings are syntax highlighted."}]
+  - id: thanks
+    type: end_card
+    host: false                 # no host here
+    params: {title: "Thanks for watching"}
+    beats: [{text: "Thanks for watching."}]
+```
+
+| key | default | |
+|---|---|---|
+| `character` | required | the character (a name from `characters:`) |
+| `side` | `right` | the side of the content it stands on: `left` or `right` |
+| `size` | by format | its height as a fraction of the frame's shorter side (0 to 0.9): 0.5 in 16:9, 0.42 in 1:1, 0.36 in 9:16; made smaller when it would take more than 95 % of the room's height beside the content (40 % below it) or a column wider than 40 % of the room |
+| `place` | `auto` | `beside`: in a column next to the content, standing at its bottom; `below`: at its side of a band under the content; `auto`: below in a vertical (9:16) frame, else beside |
+| `floor` | `true` | a plain line under its feet (a little wider than it); `false`: no floor |
+| `floor_color` | `dim` | the floor line's colour: a theme token or hex |
+| `facing` | `auto` | `auto` (towards the content: `left` on the right side), `left`, `right`, or `front` (at the viewer; an SVG character keeps its side) |
+| `speaks` | `narrator` | whose lines move its mouth: `narrator` — every beat except those in another character's voice (the host speaks for the narrator, whatever voice says it); `own` — only beats in its own `voice` |
+| `pose` | none | its pose (`thinking`, `arms_crossed`... or its own; none: standing) |
+| `expression` | none | its expression (`happy`, `thinking`... or its own; none: its rest face) |
+
+- **The room it takes.** The host's column (beside) or band (below) is *reserved* like an
+  overlay's `reserve: true`: the scene's safe area (`self.safe_area`, every named region and
+  `place()`) shrinks to the rest, a gap of 0.2 units away. Overlays that reserve room (bottom or
+  top captions, a reserved lower third) are taken out first, so the host stands above a bottom
+  caption band. Content therefore re-flows: lists wrap, code listings wrap long lines, charts get
+  narrower.
+- **Which scenes.** Every scene type built on the safe area (all built-ins except `stage`, whose
+  characters stand on the set already, and `card`, a full-frame title card; both ignore the video's
+  `host:`, and a scene's own `host:` on them is a problem). A project's scene type takes a host
+  unless it sets `takes_host = False` ([EXTENDING.md](EXTENDING.md)).
+- **Between scenes.** The host is on screen from a scene's first frame. When the next scene shows
+  the same host unchanged (same character, side, size, pose, ...), it stays in this scene's
+  fade-out, so it stands still across the cut; otherwise it fades out with the content.
+- **Speaking.** With `speaks: narrator`, a beat in the narrator's voice (or any voice no other
+  character owns) moves its mouth; a beat in another character's voice (a guest's line) leaves it
+  silent. The mouth follows the beat's viseme track (stored by `vidgen tts`, else built from the
+  text), timed from the scene's clock like a stage's characters. `vidgen validate` warns about
+  `speaks: own` for a character without a voice.
+- **Checks.** `vidgen validate`: an unknown character, pose or expression; a scene's mapping
+  without `character` and no video host; `host: true` without a video host; `floor_color` not a
+  theme colour. `vidgen lint`: the layout dump records the host as one object of kind `host`
+  (floor line included), and `host_overlap` reports it over the scene's content, a caption or
+  another overlay.
+- **Not yet** (Step 134): pointing at targets, reacting, walking between sides, entering and
+  leaving. A `zoom` or `pan` moves the host with the rest of the scene.
 
 ## Narration (`narration:`)
 
@@ -6839,7 +6909,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part), `prop` (a prop on a stage, built-in or SVG: one object named after it), `particles` (a field of [particles](#particles): one object named after its kind), `motion_effect` (dust, speed lines, impact stars or a whoosh of a [motion effect](#motion-effects-motion_effects): one object named after its kind, with `motion_effect` and `effect_of`) |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part), `host` (the [host](#a-host-beside-any-scene-host) beside the content: one object named after its character, its box covering the floor line too), `prop` (a prop on a stage, built-in or SVG: one object named after it), `particles` (a field of [particles](#particles): one object named after its kind), `motion_effect` (dust, speed lines, impact stars or a whoosh of a [motion effect](#motion-effects-motion_effects): one object named after its kind, with `motion_effect` and `effect_of`) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |
@@ -6862,6 +6932,7 @@ Each object:
 | `character` only: `holding` | the props in its hands, `{hand: prop}` (`{"left": "ball"}`); absent while it holds nothing ([Props in hands](#props-in-hands)) |
 | `character` only: `sitting_on`, `leaning_on` | the prop it sits or leans on; absent while it stands ([Sitting and leaning](#sitting-and-leaning)) |
 | `character` only: `riding` | the vehicle it rides; absent while it is on foot ([Vehicles](#vehicles-get_in-ride_to-get_out)) |
+| `host` only | the [host](#a-host-beside-any-scene-host): `facing`, `speaking`, `face`, `viseme` as for a character, plus `side` (`left` / `right`) and `below` (`true` when it stands under the content) |
 | `prop` only: `held_by`, `hand` | the character holding it and which hand; absent while it stands somewhere. A held prop is its own object, drawn right after its holder (an open umbrella right before it); its box is not part of the character's |
 | `prop` only: `shape` | the shape a prop with several shows: an umbrella's `closed` or `open`; absent for other props |
 | `prop` only: `prop`, `depth`, `raised`, `flat` | its kind (a built-in prop's name, or `svg`); how far back it stands (0..1, absent at the front); `raised: true` when it is lifted (`lift`) or hangs on a wall, `flat: true` when it lies on the floor (a rug), each absent otherwise; read by `prop_overlap` |
@@ -6978,6 +7049,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
 | `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
+| `host_overlap` | warning | the [host](#a-host-beside-any-scene-host) (its figure and floor line) sharing at least `min_overlap` of the smaller of two boxes with a scene object (text, shape, picture, character...) or an overlay's object (a caption, a lower third). Not reported: a scene object whose box holds the host's whole box (a backdrop: a full-frame picture, a band), particles and motion effects. `covered_text` leaves the host over text to this rule. Scenes lay out beside the host, so a finding means something was drawn outside the scene's regions (a project scene type that ignores `self.safe_area`, a `zoom`): make the host smaller (`size`), move it (`side`, `place`) or `host: false` on that scene |
 | `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`), and not two 0.15 or more apart in depth (one behind the other); see [Moving](#moving) |
 | `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. In a [shot](#shots-shot) (other than `wide`) only the characters it frames are checked, wholly outside too: their face in a `medium`, `over_shoulder` or `closeup` shot, their whole box in a `two_shot`; the near character of an `over_shoulder` shot and characters the shot does not frame may be cut. Fix: put it on a mark inside the view, or pan to it (in a shot: keep it from walking out, or frame another shot) |
 | `character_overlap` | warning | two characters at rest whose boxes share at least `min_overlap` of the narrower one's width, at depths less than 0.15 apart (further apart one stands behind the other: [walking in depth](#walking-in-depth-and-the-front-view)). A character that walked in the still's beat is `walk_overlap`'s. Fix: marks further apart, or walk one away (across, or in depth) |
@@ -7010,6 +7082,7 @@ lint:
     contrast: {min_ratio: 4.5, large_ratio: 3.0, large_size: 0.045, dimmed_ratio: 2.0}
     max_words: {max_words: 40}
     overlay_overlap: {min_overlap: 0.05}    # fraction of the scene object's box
+    host_overlap: {min_overlap: 0.02}       # fraction of the smaller box
     walk_overlap: {min_overlap: 0.25}       # fraction of the narrower character's width
     off_stage: {min_hidden: 0.05}           # fraction of the character's box outside the view
     character_overlap: {min_overlap: 0.25}  # fraction of the narrower character's width

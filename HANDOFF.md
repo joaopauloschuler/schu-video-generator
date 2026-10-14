@@ -12536,3 +12536,97 @@ Known gaps
 How to test
 - `pytest tests/test_packaging.py tests/test_docs.py tests/test_cli.py tests/test_json_output.py
   tests/test_guide.py` (137 passed, 15 s, under the cap).
+
+
+## Step 133 — A cartoon host for explainers, part 1: on any scene
+
+What was built
+- `host:` (top level) and a scene's `host:`: a character of `characters:` drawn beside the content
+  of every scene type that lays out in `self.safe_area` (all built-ins except `stage` and `card`,
+  which set the new class attribute `NarratedScene.takes_host = False`). Top level: a name or
+  `HostConfig {character, side left|right, size, place auto|beside|below, floor, floor_color,
+  facing auto|left|right|front, speaks narrator|own, pose, expression}`. Scene: `false` (none),
+  `true` / unset (the video's), a name (that character, the video's settings), or a mapping of
+  the keys that change (`HostOverride`; `character` required when the video has no host).
+- Pure module `cartoon/host.py` (no manim): `video_host`, `scene_host` (merging), `host_layout`
+  (where it stands: a full-height column on its side in 16:9 / 1:1, a full-width band at the
+  bottom in 9:16 (`place: auto`), height `size` or 0.5 / 0.42 / 0.36 of the shorter side, capped
+  to the room), `host_speaks`, `host_continues`, `host_problems` (in `parse_config`),
+  `host_color_problems`, `host_warnings`.
+- Drawing `cartoon/host_drawing.py`: `build_host(...) -> HostFigure` (the character from
+  `build_character`, measured in its pose, rebuilt at the layout's height, centred in its column,
+  feet on the room's bottom; a floor `Line` in `floor_color`). No stage code used.
+- `NarratedScene`: `_build_host()` in `__init__` after the overlays: the host is placed in the
+  safe area the overlays leave, and its column / band is appended to `_reserved`, so
+  `self.safe_area`, every region and `place()` shrink (the existing §41 `avoid` mechanism; no new
+  layout code). `self.host`; `setup()` adds it as a foreground mobject (only it is redrawn each
+  frame while it idles). `narrate()` lip-syncs it (`self.speak`, scene-clock visemes) when
+  `host_speaks` says so and ends it after the beat like `Stage.narrate`. `finish()` keeps it out
+  of the outro fade when the next scene shows the same host (`host_continues`).
+- Layout dump kind `host` (one object, floor included; character keys + `side`, `below`); lint
+  rule `host_overlap` (warning, `min_overlap` 0.02 of the smaller box; content, captions, other
+  overlays; backdrops holding the host's box, particles and motion effects skipped);
+  `covered_text` skips the host.
+- Validate: unknown character / pose / expression, mapping without character and no video host,
+  `host: true` without a video host (config errors); `floor_color` token and a scene `host:` on
+  `stage` / `card` (project problems); `speaks: own` without a voice (warning).
+- Fingerprint: `next_host` (the next scene's type and `host:`) when the video or either scene
+  sets a host.
+- Fix found on the way: `text_card` centred its text on the frame origin; now on
+  `self.safe_area.center` (equal without reserved room).
+
+Decisions
+- **Speaks**: `speaks: narrator` (default) = the host moves its mouth for every beat except those
+  in another character's voice (an explainer host *is* the narrator, whichever voice is used);
+  `own` = only its own voice's beats.
+- **A scene mobject, not an overlay**: lip sync runs on the scene clock and Step 134 needs it to
+  point at scene targets; a `zoom` moves it with the scene (documented).
+- **Reserve the whole column / band**, not the figure's box, so `avoid` always cuts the content on
+  the intended side (with the figure's box alone, a short host in 16:9 could leave the content
+  above it).
+- 9:16: below the content (`place: auto`), as the task list suggested; `place: beside` forces a
+  column.
+
+Evidence
+- Stills checked by eye (scratch project `scratchpad/s133/proj`, preview, `vidgen storyboard`):
+  bullets, bar_chart, code, text_card in 16:9 (also with bottom captions), 9:16 (plain and with
+  karaoke captions: the host above the caption band), 1:1, a left host facing front with
+  `expression: happy` and no floor, the code scene with `pose: thinking`. `vidgen lint`: 0
+  findings in 16:9, 16:9 captions, 9:16 karaoke. Mid-beat layout dump: `speaking: true` with
+  visemes in narrator beats, at rest in a guest's beat. Render cost at preview: bullets 15.5 s of
+  video in 6.4 s (5.4 s without host), bar chart 8.1 s in 5.2 s (4.6 s).
+
+Files touched
+- New: `src/vidgen/cartoon/host.py`, `src/vidgen/cartoon/host_drawing.py`, `tests/test_host.py`.
+- `src/vidgen/config.py` (HostConfig, HostOverride, SceneHost, `VideoConfig.host`,
+  `SceneConfig.host`, HostOverlapRule, LINT_RULES, `parse_config`), `src/vidgen/scene.py`,
+  `src/vidgen/introspect.py`, `src/vidgen/lint/layout_rules.py`, `src/vidgen/cli.py`,
+  `src/vidgen/render/fingerprint.py`, `src/vidgen/scenes/stage.py`, `src/vidgen/scenes/card.py`,
+  `src/vidgen/scenes/text_card.py`, `tests/test_docs.py` (models list).
+- Docs: `docs/CONFIG.md` (top-level and scene rows, "A host beside any scene", layout dump kind,
+  lint rule and config block), `docs/EXTENDING.md` (`takes_host`), `DESIGN.md` (§2, new §71),
+  guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (host paragraph and snippet, lint
+  table row), `README.md` (feature line), `tasklist.md`.
+
+Public interfaces
+- Config keys `host:` (top level and scene); lint rule `host_overlap`; layout kind `host`.
+- `NarratedScene.takes_host` (class attribute), `NarratedScene.host` (a `HostFigure` or `None`).
+  Nothing added to `vidgen.api`.
+
+Known gaps / TODOs (Step 134 and later)
+- No pointing, reacting, walking between sides, entering / exiting, `auto_direct` for hosts; the
+  host is not an action target. It appears from a scene's first frame (no entrance) and its idle
+  clock restarts each scene. A scene type drawing outside `self.safe_area` can overlap it (lint
+  reports it). Idle motion counts as change for `dead_air`. No CHANGELOG entry (no release yet).
+
+How to test
+- `pytest -m "not render" tests/test_host.py` (14 passed, 2 s); `pytest -m render
+  tests/test_host.py` (1 passed, 2 s); `tests/test_docs.py tests/test_lint.py tests/test_guide.py`
+  non-render (with test_host: 141 passed + after the guide fix 121 passed, 3 s);
+  `tests/test_guide.py tests/test_config.py tests/test_schema.py tests/test_introspect.py`
+  non-render (144 passed, 66 s); `tests/test_scene.py tests/test_overlays.py
+  tests/test_captions.py tests/test_cartoon_stage.py tests/test_cartoon_cards.py
+  tests/test_cartoon_lint.py` non-render (93 passed, 13 s); render:
+  `test_captions.py -k test_lint_sees_captions_over_scene_text` (2 passed, 6 s, text_card moved),
+  `test_cartoon_acting.py -k test_a_dialogue_on_a_stage` (1 passed, 2 s). The full suite was not
+  run.
