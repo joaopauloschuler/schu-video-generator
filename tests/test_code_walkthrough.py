@@ -260,6 +260,43 @@ def test_vertical_listing_wraps_with_its_numbers(make_project, media: Path) -> N
     assert longest >= 26                                      # not the ~20 columns the requested size gave
 
 
+#: A Free Pascal excerpt whose comment wrapped into pieces that were lexed apart (an apostrophe
+#: opened a string on the continuation line).
+PASCAL = (
+    "program P;\n"
+    "begin\n"
+    "  Options := DefaultChatOptions();          // int8 weights, model's sampling defaults\n"
+    "  Options.ModelDir := 'q';                  // git clone of Qwen/Qwen2.5-0.5B-Instruct\n"
+    "  Options.CtxLen := 2048;                   // keeps the KV cache small\n"
+    "end.\n"
+)
+
+
+@pytest.mark.render
+def test_wrapped_lines_keep_colours_targets_and_notes_do_not_overlap(make_project, media: Path) -> None:
+    steps = [{"lines": 3, "note": "Int8 weights"}, {"lines": "/ModelDir/-/CtxLen/", "note": "One reply"}]
+    spec = {"id": "w", "type": "code_walkthrough",
+            "params": {"code": PASCAL, "language": "delphi", "excerpt": "2-5", "steps": steps},
+            "beats": [{"text": "one two"}, {"text": "three four"}]}
+    scene = render(load(make_project, [spec], format={"width": 1080, "height": 1920}), "w", media, size=(90, 160))
+    groups = scene._groups
+    assert len(groups) == 4 and len(groups[1]) > 1                      # source lines 2-5; line 3 wrapped
+    assert set(scene._views[0].chosen) == set(groups[1])                 # the step addresses source line 3
+    assert set(scene._views[1].chosen) == set(groups[2] + groups[3])
+    assert [len(scene._numbers[j]) > 0 for j in groups[1]] == [True] + [False] * (len(groups[1]) - 1)
+    assert set(scene.find_targets("line3")[0].mobject.submobjects) >= {scene._lines[j] for j in groups[1]}
+    # every glyph from "//" on, across the pieces, has the comment's colour
+    texts = scene._paragraphs[0][2]
+    glyphs = [g for j in groups[1] for g in scene._lines[j]]
+    chars = [ch for j in groups[1] for ch in texts[j] if not ch.isspace()]
+    comment = glyphs[chars.index("/")].get_fill_color().to_hex()
+    assert {g.get_fill_color().to_hex() for g in glyphs[chars.index("/") :]} == {comment}
+    # the next step's note appears only after the previous one is gone (they share the bar)
+    fade_out, fade_in = scene._go(scene._views[0])[-2:]
+    assert type(fade_out).__name__ == "FadeOut" and type(fade_in).__name__ == "FadeIn"
+    assert fade_out.rate_func(0.5) == pytest.approx(1) and fade_in.rate_func(0.5) == pytest.approx(0)
+
+
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 @pytest.mark.slow

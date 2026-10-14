@@ -14037,3 +14037,33 @@ How to test
   fix; `test_schema.py` again: 61 passed, 110 s); `test_docs.py test_config.py` 81 passed;
   render: `test_music test_sfx` 9 passed (54 s), `test_animatic test_draft` 4 (34 s), `test_mcp
   test_json_output` 4 (51 s), the rest of the files' render tests 1 (5 s).
+
+## Fix — code scenes: colour code before wrapping, wrap at token boundaries
+
+Found in a Free Pascal short (9:16): `code` / `code_walkthrough` wrapped long lines first and then
+let Manim's `Code` lex the wrapped text, so every piece was lexed as its own line. A `//` comment's
+continuation (`model's sampling defaults`) became a string literal at the apostrophe, and
+`Qwen/Qwen2.5-0.5B-Instruct` was hard-cut (`...-Instr` / `uct`) because the breaker saw no space.
+- `scenes/code.py`: `lex_code` lexes the whole text with Pygments into runs per source line;
+  `wrap_runs` (replaces `wrap_code`) breaks the run stream (spaces and `,`/`;` outside strings,
+  opening brackets outside strings and comments, spaces inside strings, then `/ - . _` inside a
+  word, then hard), continuation pieces keep their token types; `paint_code` colours the glyphs of
+  a `Code` built with `language="text"` from those runs (`token_colors` reads the Pygments style
+  as Manim does). `lexer_name` is the language choice both scenes had inline.
+  `code_walkthrough` lexes the whole file before taking the `excerpt`. Groups (source line ->
+  rows) are unchanged, so highlights, `focus`, actions, `line<N>` / `lines:<a-b>` targets and the
+  line numbers (first piece only) still address source lines.
+- Second symptom (a faint "weights" behind "One reply" at 26–30 s of the preview): a vidgen bug.
+  `CodeWalkthrough._go` faded the old note out and the new one in at the same time; in the bottom
+  bar they share one place, so both were half visible for the whole change. Now the old note
+  fades out in the first half (`pie.window(0, 0.5)`) and the new one in the second half.
+- `mono_metrics` builds its sample under `text_canvas` (it failed at a 90x160 test canvas when it
+  ran first in a process).
+- A word longer than a continuation line (here 26 characters after a 6-space hanging indent in
+  ~30 columns) is still cut, now after `-` or `/`.
+- Docs: `docs/CONFIG.md` (`code` wrapping, walkthrough notes), `DESIGN.md` (both code sections).
+
+How to test: `-m "not render" tests/test_regions.py` (31), `tests/test_code_walkthrough.py`
+(45 incl. render), `tests/test_regions.py` (48 incl. render), `-k code tests/test_builtin_scenes.py
+tests/test_review4.py` (18), `tests/test_review2.py -k walkthrough` (1), `tests/test_presets.py -k
+"contrast_lint_with_every_preset and (light or warm)"` (2), `test_docs.py` (60), `test_guide.py` (51).

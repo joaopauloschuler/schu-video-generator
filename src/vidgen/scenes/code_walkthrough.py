@@ -16,15 +16,20 @@ from .code import (
     MIN_COLUMNS,
     NUMBER_GAP,
     TARGET_COLUMNS,
+    Run,
+    lex_code,
+    lexer_name,
     line_centers,
     line_runs,
     mono_metrics,
+    paint_code,
     renumber,
     size_for_columns,
     style_names,
     text_canvas,
-    wrap_code,
+    wrap_runs,
 )
+from .pie import window as during
 
 log = logging.getLogger("vidgen.scenes")
 
@@ -400,7 +405,10 @@ class CodeWalkthrough(NarratedScene):
             title = chart_title(p.title, size="heading", area=self.safe_area)   # header band, 1.3x in a vertical frame
             body = body.below(title, gap=0.45)
         notes = [step.note for step in p.steps]
-        self._build(source, first, body, notes)
+        # the whole file is lexed, so an excerpt that starts inside a comment or string colours it so
+        whole = text.rstrip("\n").expandtabs(4).split("\n")
+        lexed = lex_code(whole, lexer_name(p.language, p.path))[first - 1 : first - 1 + len(source)]
+        self._build(source, lexed, first, body, notes)
         self._register(source, first, title, picks)
         self._views = self._place_notes(self._plan(picks, first))
         heading = self.find_targets("title")[0] if title is not None else None
@@ -449,9 +457,9 @@ class CodeWalkthrough(NarratedScene):
         chars = min(longest, columns) if columns else longest
         return (chars + digits) * advance * size + (NUMBER_GAP if digits else 0.0) + 2 * PAD_X
 
-    def _build(self, source: list[str], first: int, body: Region, notes: list[str]) -> None:
-        """Choose size, wrapping and note placement, build the listing, the window and the notes'
-        text, and put the lines at offset 0."""
+    def _build(self, source: list[str], lexed: list[list[Run]], first: int, body: Region, notes: list[str]) -> None:
+        """Choose size, wrapping and note placement, build the listing (``source`` lexed as
+        ``lexed``), the window and the notes' text, and put the lines at offset 0."""
         p, font = self.params, self._font
         digits = len(str(first + len(source) - 1)) if p.line_numbers else 0
         self._mode: Literal["side", "bottom"] | None = None
@@ -482,26 +490,20 @@ class CodeWalkthrough(NarratedScene):
         self._note_w, self._bar_h = note_w, bar_h
 
         # the listing, built once at its final size
-        shown, groups = wrap_code(source, columns) if columns else (source, [[i] for i in range(len(source))])
-        language = p.language
-        if language is None and p.path is not None:
-            from pygments.lexers import get_lexer_for_filename
-            from pygments.util import ClassNotFound
-
-            try:
-                language = get_lexer_for_filename(p.path).aliases[0]
-            except ClassNotFound:
-                language = "text"
+        rows_lexed, groups = wrap_runs(lexed, columns) if columns else (lexed, [[i] for i in range(len(source))])
+        shown = ["".join(t for t, _ in row) for row in rows_lexed]
+        style = p.style or self.theme.code_style
         with text_canvas(shown, size):
             listing = Code(
                 code_string="\n".join(shown),
-                language=language or "python",
-                formatter_style=p.style or self.theme.code_style,
+                language="text",  # coloured by paint_code: Manim would lex the wrapped pieces apart
+                formatter_style=style,
                 add_line_numbers=p.line_numbers,
                 line_numbers_from=first,
                 background="rectangle",
                 paragraph_config={"font": font, "font_size": size},
             )
+        paint_code(listing.code_lines, rows_lexed, style)
         wrapped = len(shown) != len(source)
         if wrapped and p.line_numbers:
             renumber(self, listing, groups, size, font, first)
@@ -850,10 +852,14 @@ class CodeWalkthrough(NarratedScene):
             anims.append(_ViewChange(self, now, view))
         if view.note != now.note:
             old, new = self._notes.get(now.note), self._notes.get(view.note)
-            if old is not None and self.on_screen_parts(old):
-                anims.append(FadeOut(old))
+            leaving = old is not None and bool(self.on_screen_parts(old))
+            # notes share the bar (or overlap beside the window): the old one is gone before the
+            # new one appears, never both half-faded on top of each other
+            if leaving:
+                anims.append(FadeOut(old, rate_func=during(0.0, 0.5)))
             if new is not None and not self.on_screen_parts(new):
-                anims.append(FadeIn(new, shift=(LEFT if self._mode == "side" else UP) * 0.12))
+                rate = during(0.5, 1.0) if leaving else smooth
+                anims.append(FadeIn(new, shift=(LEFT if self._mode == "side" else UP) * 0.12, rate_func=rate))
         if view.camera != getattr(self, "_camera_at", None):
             width, center = view.camera or (float(config.frame_width), (0.0, 0.0))
             anims.append(MoveCamera(self, width, np.array([*center, 0.0])))

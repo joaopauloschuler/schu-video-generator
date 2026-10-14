@@ -35,7 +35,7 @@ from vidgen.regions import (
 )
 from vidgen.render.fingerprint import scene_fingerprint
 from vidgen.render.worker import frame_size
-from vidgen.scenes.code import MIN_COLUMNS, wrap_code
+from vidgen.scenes.code import MIN_COLUMNS, lex_code, wrap_runs
 
 SIZES = {"landscape": (160, 90), "portrait": (90, 160), "square": (100, 100)}
 
@@ -280,6 +280,80 @@ def test_scene_safe_area_is_what_the_layout_dump_records(make_project) -> None:
 
 
 # ----- code wrapping -------------------------------------------------------------------------------
+
+
+def wrap_code(lines: list[str], columns: int, language: str | None = None) -> tuple[list[str], list[list[int]]]:
+    rows, groups = wrap_runs(lex_code(lines, language), columns)
+    return ["".join(t for t, _ in row) for row in rows], groups
+
+
+#: Lines 13-14 of a Free Pascal listing whose wrapped comment lost its colour (an apostrophe in a
+#: ``//`` comment opened a string on the continuation line) and whose identifier was cut mid-word.
+PASCAL = [
+    "begin",
+    "  Options := DefaultChatOptions();          // int8 weights, model's sampling defaults",
+    "  Options.ModelDir := 'q';                  // git clone of Qwen/Qwen2.5-0.5B-Instruct",
+    "end.",
+]
+
+
+def pieces_of(rows: list[Any], group: list[int]) -> list[list[tuple[str, Any]]]:
+    """The characters (with their token types) of each wrapped piece of a line."""
+    return [[(ch, ttype) for text, ttype in rows[j] for ch in text] for j in group]
+
+
+def test_wrapped_comment_keeps_its_token_type_past_an_apostrophe() -> None:
+    from pygments.token import Comment
+
+    rows, groups = wrap_runs(lex_code(PASCAL, "delphi"), 30)
+    assert len(groups) == 4 and groups[0] == [0] and groups[3] == [groups[2][-1] + 1]   # source lines kept
+    pieces = pieces_of(rows, groups[1])
+    assert len(pieces) >= 3 and all(len(p) <= 30 for p in pieces)
+    chars = [c for p in pieces for c in p]
+    start = "".join(ch for ch, _ in chars).index("//")
+    assert all(ttype in Comment for ch, ttype in chars[start:] if ch != " ")   # "model's ..." stays comment
+    texts = ["".join(ch for ch, _ in p) for p in pieces]
+    assert any("model's" in t for t in texts) and texts[1].startswith(" " * 6)   # hanging indent 2 + 4
+
+
+def test_long_identifier_moves_whole_to_the_next_line() -> None:
+    out, groups = wrap_code(PASCAL, 32, "delphi")
+    pieces = [out[j] for j in groups[2]]
+    assert any(p.strip() == "Qwen/Qwen2.5-0.5B-Instruct" for p in pieces), pieces   # not cut mid-word
+    assert all(len(p) <= 32 for p in pieces)
+    out, _ = wrap_code(["    x = 'Qwen/Qwen2.5-0.5B-Instruct-and-much-more'"], 24, "python")
+    assert out[1].strip()[-1] in "/-._"   # too long for a line: cut after punctuation inside it
+
+
+def test_wrapped_string_with_spaces_stays_a_string() -> None:
+    from pygments.token import String
+
+    rows, groups = wrap_runs(lex_code(['print("alpha beta gamma delta epsilon zeta")'], "python"), 22)
+    pieces = pieces_of(rows, groups[0])
+    assert len(pieces) >= 2
+    chars = [c for p in pieces for c in p]
+    text = "".join(ch for ch, _ in chars)
+    inside = chars[text.index('"') : text.rindex('"') + 1]
+    assert all(ttype in String for ch, ttype in inside if ch != " ")
+    assert next(t for ch, t in pieces[1] if ch != " ") in String   # the continuation starts as a string
+
+
+def test_paint_code_colours_continuations_like_their_token() -> None:
+    from manim import Code
+    from pygments.token import Comment, String
+
+    from vidgen.scenes.code import paint_code, token_colors
+
+    rows, groups = wrap_runs(lex_code(PASCAL[:2], "delphi"), 30)
+    listing = Code(code_string="\n".join("".join(t for t, _ in row) for row in rows), language="text",
+                   formatter_style="one-dark", paragraph_config={"font_size": 12})
+    paint_code(listing.code_lines, rows, "one-dark")
+    color = token_colors("one-dark")
+    assert color(Comment.Single) != color(String)
+    commented = [j for j in groups[1] if any(t in Comment for _, t in rows[j])]
+    assert len(commented) >= 2   # "// int8 weights," / "model's sampling" / "defaults"
+    for j in commented:
+        assert {g.get_fill_color().to_hex().upper() for g in listing.code_lines[j]} == {color(Comment.Single).upper()}
 
 
 def test_wrap_code_keeps_short_lines_and_maps_groups() -> None:

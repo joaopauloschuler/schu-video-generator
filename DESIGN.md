@@ -1632,10 +1632,14 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   and rows are spaced 0.8 x the line pitch (0.55 in landscape). `code` — title in `header`,
   listing scaled into the rest (up to 1.5x, as before); new param `wrap: bool = True`: while
   the listing is width-bound and would end below `max(size, readable_size(font))`, long lines
-  are wrapped (`scenes/code.py` `wrap_code(lines, columns)`: break after the last space/comma
-  outside a string literal if past half the line, else after an opening bracket, else any
-  space, else hard; continuation lines indented 4 more; never narrower than `MIN_COLUMNS` 20)
-  and the listing rebuilt. Wrapped listings number original lines only (continuation numbers
+  are wrapped (`scenes/code.py`: `lex_code` lexes the whole text with Pygments into runs per
+  line, `wrap_runs(rows, columns)` breaks the run stream after the last space or `,`/`;`
+  outside a string literal if past half the line, else after an opening bracket (not in a
+  string or comment), else a space inside a string, else after `/ - . _` inside a word, else
+  hard; continuation lines indented 4 more and keeping their tokens' types; never narrower
+  than `MIN_COLUMNS` 20) and the listing rebuilt. Manim's `Code` gets the wrapped text as
+  `language="text"` and `paint_code` colours its glyphs from the runs (Manim would lex each
+  wrapped piece as a separate line: an apostrophe in a `//` comment then opened a string). Wrapped listings number original lines only (continuation numbers
   replaced by empty groups; the dumped `text` of the number column is still Manim's string)
   and highlights map original lines to all their wrapped lines. Landscape output of both is
   unchanged except the title/heading now centered in `header` (a few px lower).
@@ -2659,7 +2663,10 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   by `validate_project` for a `path` (problems prefixed `steps[k].lines`).
 - **Sizing** (`_fit`, analytic, no trial builds: a listing costs ~0.1 s per line): `size` if
   the longest line fits the window width, else smaller down to `max(readable x 1.05, size giving
-  TARGET_COLUMNS)`, else wrapped (`code.wrap_code`) at that size. Notes: `side` (16:9 / square,
+  TARGET_COLUMNS)`, else wrapped (`code.wrap_runs` on the whole file's `lex_code` runs, so an
+  excerpt starting inside a comment keeps its colour) at that size. A note replacing another
+  fades in during the second half of the change, after the old one has faded out in the first
+  half (they share the bottom bar). Notes: `side` (16:9 / square,
   when the code fits beside a column of `0.3 x body` (3.4–4.8 units) without wrapping) or
   `bottom` (bar as tall as the tallest note; always in portrait). The window holds `visible` /
   as many rows as fit; window chrome (title bar with three theme-coloured dots, padding, scroll

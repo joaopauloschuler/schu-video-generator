@@ -90,7 +90,8 @@ def readable_band(scene: NarratedScene, rows: list[Mobject], band_color: str, op
 def mono_metrics(font: str) -> tuple[float, float]:
     """``(advance, pitch)`` of a code listing in ``font`` per point of font size, in units: the
     width of one character and the distance between two lines (``Code``'s line spacing)."""
-    sample = Paragraph("M" * 10, "M" * 30, font=font, font_size=48, line_spacing=0.5, disable_ligatures=True)
+    with text_canvas(["M" * 30, "M" * 10], 48):
+        sample = Paragraph("M" * 10, "M" * 30, font=font, font_size=48, line_spacing=0.5, disable_ligatures=True)
     advance = (sample[1].width - sample[0].width) / 20 / 48
     return float(advance), float(abs(sample[0].get_y() - sample[1].get_y()) / 48)
 
@@ -118,55 +119,157 @@ def size_for_columns(font: str, columns: int, width: float, digits: int = 0, pad
     return max(width - gap - padding, 0.0) / ((columns + digits) * advance)
 
 
-def wrap_code(lines: list[str], columns: int) -> tuple[list[str], list[list[int]]]:
-    """Wrap code lines longer than ``columns`` characters; continuation lines are indented by
-    :data:`HANGING_INDENT` more than the line. Returns the new lines and, for each original
-    line, the indices of the lines it became (so highlights still address original lines)."""
-    out: list[str] = []
+#: A run of a code line: its text and its Pygments token type.
+Run = tuple[str, Any]
+
+
+def lex_code(lines: list[str], language: str | None) -> list[list[Run]]:
+    """The Pygments runs of every line, lexed as one text (so a comment or string keeps its
+    token type on every piece the line is later wrapped into). ``None`` or ``text``: plain."""
+    from pygments import lex
+    from pygments.lexers import get_lexer_by_name
+    from pygments.token import Text
+
+    def plain(line: str) -> list[Run]:
+        return [(line, Text)] if line else []
+
+    if language is None or language == "text":
+        return [plain(line) for line in lines]
+    rows: list[list[Run]] = [[]]
+    for ttype, value in lex("\n".join(lines) + "\n", get_lexer_by_name(language, stripnl=False, ensurenl=True)):
+        for k, part in enumerate(value.split("\n")):
+            if k:
+                rows.append([])
+            if part:
+                rows[-1].append((part, ttype))
+    rows += [[] for _ in range(len(lines) - len(rows))]
+    # a lexer that changed the text (rare) would shift the colours: that line stays plain
+    return [row if "".join(t for t, _ in row) == line else plain(line) for row, line in zip(rows, lines)]
+
+
+def lexer_name(language: str | None, path: str | None) -> str:
+    """The Pygments lexer of a listing: ``language``, else from the ``path`` file name (``text``
+    when unknown), else python."""
+    if language is None and path is not None:
+        from pygments.lexers import get_lexer_for_filename
+        from pygments.util import ClassNotFound
+
+        try:
+            return get_lexer_for_filename(path).aliases[0]
+        except ClassNotFound:
+            return "text"
+    return language or "python"
+
+
+def wrap_runs(lines: list[list[Run]], columns: int) -> tuple[list[list[Run]], list[list[int]]]:
+    """Wrap lexed code lines longer than ``columns`` characters at token boundaries; continuation
+    lines are indented by :data:`HANGING_INDENT` more than the line and keep their pieces' token
+    types. Returns the new lines and, for each original line, the indices of the lines it became
+    (so highlights still address original lines)."""
+    out: list[list[Run]] = []
     groups: list[list[int]] = []
-    for line in lines:
-        pieces = _wrap_code_line(line, columns)
+    for runs in lines:
+        pieces = _wrap_line(runs, columns)
         groups.append(list(range(len(out), len(out) + len(pieces))))
         out.extend(pieces)
     return out, groups
 
 
-def _wrap_code_line(line: str, columns: int) -> list[str]:
-    if len(line) <= columns:
-        return [line]
-    lead = len(line) - len(line.lstrip(" "))
-    prefix = " " * min(lead + HANGING_INDENT, columns // 2)
-    pieces: list[str] = []
-    rest = line
+def _wrap_line(runs: list[Run], columns: int) -> list[list[Run]]:
+    from pygments.token import Text
+
+    chars = [(ch, ttype, k) for k, (text, ttype) in enumerate(runs) for ch in text]
+    if len(chars) <= columns:
+        return [runs]
+    lead = next((k for k, c in enumerate(chars) if c[0] != " "), len(chars))
+    prefix = [(" ", Text, -1)] * min(lead + HANGING_INDENT, columns // 2)
+    pieces = []
+    rest = chars
     while len(rest) > columns:
         cut = _break_at(rest, columns)
-        pieces.append(rest[:cut].rstrip())
-        rest = prefix + rest[cut:].lstrip()
-    return pieces + [rest]
+        head = rest[:cut]
+        while head and head[-1][0] == " ":
+            head = head[:-1]
+        tail = rest[cut:]
+        while tail and tail[0][0] == " ":
+            tail = tail[1:]
+        pieces.append(head)
+        rest = prefix + tail
+    pieces.append(rest)
+    return [_runs_of(piece) for piece in pieces]
 
 
-def _break_at(text: str, columns: int) -> int:
-    """Where to cut ``text`` (at most ``columns`` characters kept): after the last space or
-    comma outside a string literal (if past half the line), else after the last opening
-    bracket, else at any space, else hard at ``columns``."""
-    start = len(text) - len(text.lstrip(" ")) + 1
-    space = bracket = loose = 0
-    quote = ""
-    for k, ch in enumerate(text[:columns], start=1):
-        if k > start and ch == " ":
-            loose = k
-        if quote:
-            if ch == quote and text[k - 2 : k - 1] != "\\":
-                quote = ""
-        elif ch in "\"'":
-            quote = ch
-        elif k > start and ch in " ,":
+def _runs_of(chars: list[tuple[str, Any, int]]) -> list[Run]:
+    runs: list[Run] = []
+    last = None
+    for ch, ttype, k in chars:
+        if runs and k == last:
+            runs[-1] = (runs[-1][0] + ch, ttype)
+        else:
+            runs.append((ch, ttype))
+        last = k
+    return runs
+
+
+def _break_at(chars: list[tuple[str, Any, int]], columns: int) -> int:
+    """Where to cut a lexed line (at most ``columns`` characters kept): after the last space or
+    ``,``/``;`` outside a string literal (if past half the line), else after the last of those
+    or of an opening bracket (not in a string or comment), else at a space inside a string, else
+    after a ``/ - . _`` inside a word, else hard at ``columns``. So a word is cut only when no
+    space or punctuation comes before it on the line."""
+    from pygments.token import Comment, String
+
+    start = next((k for k, c in enumerate(chars) if c[0] != " "), len(chars)) + 1
+    space = bracket = loose = inword = 0
+    for k in range(1, min(columns, len(chars)) + 1):
+        ch, ttype, _ = chars[k - 1]
+        if k <= start:
+            continue
+        quoted = ttype in String
+        if ch == " ":
+            if quoted:
+                loose = k
+            else:
+                space = k
+        elif ch in ",;" and not quoted:
             space = k
-        elif k > start and ch in "([{":
+        elif ch in "([{" and not quoted and ttype not in Comment:
             bracket = k
+        elif ch in "/-._" and k < len(chars) and chars[k][0] != " ":
+            inword = k
     if space >= columns / 2:
         return space
-    return max(space, bracket) or loose or columns
+    return max(space, bracket) or loose or inword or columns
+
+
+def token_colors(style: str) -> Callable[[Any], str]:
+    """The colour (``#rrggbb``) Pygments ``style`` gives a token type, as Manim's ``Code`` reads
+    it: the style's colour for the type, else its default text colour (black without one)."""
+    from pygments.styles import get_style_by_name
+    from pygments.token import Text
+
+    pygments_style = get_style_by_name(style)
+    default = pygments_style.style_for_token(Text).get("color")
+    default = f"#{default}" if default else "#000000"
+
+    @lru_cache(maxsize=None)
+    def color(ttype: Any) -> str:
+        ink = pygments_style.style_for_token(ttype).get("color")
+        return f"#{ink}" if ink else default
+
+    return color
+
+
+def paint_code(paragraph: VGroup, rows: list[list[Run]], style: str) -> None:
+    """Colour the glyphs of ``paragraph`` (a ``Code``'s ``code_lines``, one line per row of
+    ``rows``) by the token types of ``rows``: whitespace has no glyph."""
+    color = token_colors(style)
+    for line, runs in zip(paragraph, rows, strict=True):
+        inks = [color(ttype) for text, ttype in runs for ch in text if not ch.isspace()]
+        glyphs = line.submobjects
+        if len(glyphs) == len(inks):
+            for glyph, ink in zip(glyphs, inks):
+                glyph.set_color(ink)
 
 
 def style_names() -> list[str]:
@@ -304,21 +407,12 @@ class CodeListing(NarratedScene):
             raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
         text = p.code if p.code is not None else self.project.asset(p.path).read_text(encoding="utf-8")
         text = text.rstrip("\n")
-        language = p.language
-        if language is None and p.path is not None:
-            from pygments.lexers import get_lexer_for_filename
-            from pygments.util import ClassNotFound
-
-            try:
-                language = get_lexer_for_filename(p.path).aliases[0]
-            except ClassNotFound:
-                language = "text"
         body = self.safe_area
         title = None
         if p.title:
             title = chart_title(p.title, size="heading", area=self.safe_area)   # header band, 1.3x in a vertical frame
             body = body.below(title, gap=0.45)
-        listing, groups = self._fit_listing(text.expandtabs(4).split("\n"), language or "python", body)
+        listing, groups = self._fit_listing(text.expandtabs(4).split("\n"), lexer_name(p.language, p.path), body)
         place(listing, body, fit="none", align="center")
         wrapped = len(groups) != len(listing.code_lines)
 
@@ -417,9 +511,11 @@ class CodeListing(NarratedScene):
         narrow = body.width * size / (padding + (TARGET_COLUMNS + digits) * advance * size)
         floor = max(min(size, narrow), readable_size(self._font))
         columns: int | None = None
+        lexed = lex_code(lines, language)
         while True:
-            shown, groups = wrap_code(lines, columns) if columns else (lines, [[i] for i in range(len(lines))])
-            listing = self._listing("\n".join(shown), language, size)
+            rows, groups = wrap_runs(lexed, columns) if columns else (lexed, [[i] for i in range(len(lines))])
+            shown = ["".join(t for t, _ in row) for row in rows]
+            listing = self._listing(shown, rows, size)
             by_width, by_height = body.width / listing.width, body.height / listing.height
             scale = min(1.5, by_width, by_height)
             longest = max(len(line) for line in shown)
@@ -430,16 +526,20 @@ class CodeListing(NarratedScene):
             renumber(self, listing, groups, size, self._font)
         return listing.scale(scale), groups
 
-    def _listing(self, text: str, language: str, size: float) -> Code:
-        with text_canvas(text.split("\n"), size):
-            return self._code(text, language, size)
+    def _listing(self, shown: list[str], rows: list[list[Run]], size: float) -> Code:
+        """The listing of the (wrapped) lines ``shown``, coloured by their lexed ``rows``."""
+        style = self.params.style or self.theme.code_style
+        with text_canvas(shown, size):
+            listing = self._code("\n".join(shown), style, size)
+        paint_code(listing.code_lines, rows, style)
+        return listing
 
-    def _code(self, text: str, language: str, size: float) -> Code:
+    def _code(self, text: str, style: str, size: float) -> Code:
         p = self.params
         return Code(
             code_string=text,
-            language=language,
-            formatter_style=p.style or self.theme.code_style,
+            language="text",  # coloured by paint_code: Manim would lex the wrapped pieces apart
+            formatter_style=style,
             add_line_numbers=p.line_numbers,
             background="window",
             background_config={

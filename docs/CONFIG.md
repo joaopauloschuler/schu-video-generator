@@ -4257,7 +4257,10 @@ entry. Highlighting dims the other lines and puts a soft band behind the selecte
 Manim's `Code` (Pygments highlighting); the listing is scaled to fill the space below the
 title. When its width would make it smaller than `size` (typical for long lines in a vertical
 video), long lines are wrapped with a hanging indent (`wrap`); wrapped lines keep their line
-number and highlights still count original lines. Wrapping aims for at least 32 characters per
+number (on the first piece only) and highlights, `focus`, actions and `line<N>` targets still
+count original lines. Each line is highlighted whole before it is wrapped, so a piece keeps the
+colour of the token it continues (a `//` comment stays a comment past an apostrophe); lines break
+at spaces and punctuation, and a word is cut only when it is longer than a line. Wrapping aims for at least 32 characters per
 line: where `size` would leave fewer (a vertical frame, especially with the `large` type scale),
 the listing is set smaller instead, down to the readable minimum (`lint` `min_font`), and wraps
 there. For code longer than the frame holds, use [`code_walkthrough`](#code_walkthrough).
@@ -4326,7 +4329,9 @@ fainter on themes where it would cost contrast.
 lines and pointing at them; `bottom` puts it in a bar under the window (as tall as the tallest
 note, so the window does not change size). `auto` uses `side` in 16:9 when the code fits beside
 the notes without wrapping (lines up to about 40 characters at `caption`), else `bottom`; a
-vertical frame always uses `bottom`. A note belongs to its step and goes with it.
+vertical frame always uses `bottom`. A note belongs to its step and goes with it: the next step's
+note fades in only after it has faded out (in the first and second half of the step's change),
+so two notes never show on top of each other.
 
 **Focus.** `focus: true` moves the camera in on the step's lines (as close as they fit, at most
 `focus_scale`; a number sets the magnification) while the other lines fade out, and shows the
