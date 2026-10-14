@@ -13683,3 +13683,80 @@ How to test
 - Also run: `-m "not render" tests/test_docs.py tests/test_guide.py tests/test_packaging.py
   tests/test_config.py tests/test_project.py tests/test_schema.py tests/test_cli.py
   tests/test_imagegen.py tests/test_music.py`.
+
+## Step 146 — Score and renderer
+
+What was built
+- **`src/vidgen/score.py`** (new, pure; DESIGN.md §82): frozen dataclasses `Score(tempo, parts,
+  time_signature=(4, 4), key="C major", sections=(), length=None)`, `Part(name, notes, program=0,
+  drums=False, volume=0.0, pan=0.0, reverb=0.2)`, `Note(start, length, pitch, velocity=90)`,
+  `Section(name, start, tempo=None)`; checked on creation (`VidgenError` "score: ..."). A beat is a
+  quarter note; `bar_beats`, `length_beats` (default: last note's end rounded up to a bar),
+  `length_seconds`, `tempo_changes()`, `seconds_at(beat)`, `key_signature()` (sharps, minor),
+  `tonic`, `fingerprint()`. `to_symusic(score, parts, controls)` and `write_midi(score, path)`
+  (ticks 480 per beat, tempo changes, time / key signature, section markers, CC 7 / 10 / 91;
+  `midi_volume`, `midi_pan`).
+- **`src/vidgen/synth.py`** (extended): `render_score(score, soundfont, cache_dir)` renders each part
+  alone with symusic (48 kHz, stereo), `mix_parts` mixes in float64: volume, `pan_gains`
+  (constant power), a per-part send to one reverb (`reverb_impulse()`: seeded noise per channel,
+  5 kHz low-pass, 12 ms pre-delay, RT60 1.6 s, 2 s, unit energy; `convolve`: overlap-add FFT),
+  `TAIL_SECONDS` 3 s, 20 ms end fade, `MUSIC_LEVEL` (−28 LUFS) and `mix.limit` only above
+  `TRUE_PEAK_CEILING` (−1 dBTP). Cache `cache_dir/score-<render_key>.wav` (16-bit; the result is
+  always the 16-bit value, so cached = fresh); `render_key` = score fingerprint + symusic version
+  + SoundFont SHA-256 + `RENDERER_VERSION` + rate.
+- **`soundfont.content_sha256(path)`**: the default file's known hash once checked, others hashed
+  once per process (size + mtime).
+- **Music pipeline**: `music.SCORES` (name → Score) is the internal hook; `music.source_kind`
+  (bed / score / file); `Source(cue, root, soundfont, cache_dir)` plays a score like a music file
+  (start, loop with the crossfade seam, fades, ducking, scene volumes unchanged);
+  `mix.plan_music` passes `config.soundfont` and `build/music/`; summaries say `kind: score`;
+  `config_problems` accepts score names.
+- `score.py`, `synth.py`, `soundfont.py` added to `fingerprint.NOT_RENDER_INPUTS` (audio only).
+- **Credit fix (Step 145)**: the GeneralUser GS credit names its author as its licence / README
+  suggest: `soundfont.AUTHOR`, `CREDIT` = "Music rendered with the GeneralUser GS SoundFont by
+  S. Christian Collins (https://www.schristiancollins.com/generaluser)." in THIRD_PARTY_NOTICES,
+  CONFIG.md, README, `vidgen soundfont info` (the "no personal names" rule protects the owner,
+  not third-party authors; coordinator's instruction).
+- **Test isolation fix**: `tests/test_render.py::test_ffmpeg_missing` loads the built-in scenes
+  (manim, click) before patching `sys.platform` to `win32`; it now passes when the file runs alone.
+
+Files
+- New: `src/vidgen/score.py`, `tests/test_score.py`.
+- Changed: `src/vidgen/synth.py`, `music.py`, `mix.py`, `soundfont.py`, `render/fingerprint.py`,
+  `tests/test_render.py`, `THIRD_PARTY_NOTICES.md`, `README.md`, `docs/CONFIG.md` (credit),
+  `DESIGN.md` (tree, §81 credit line, §82), `tasklist.md`.
+
+Public interfaces added/changed (`vidgen.api` unchanged; no config key added)
+- New modules / functions above; `music.Source` gains optional `soundfont`, `cache_dir`.
+
+Decisions / deviations
+- Score sources are reached only through `music.SCORES` for now (the brief: a minimal internal
+  hook; `music: {compose: ...}` is Step 147). A name there shadows a file path, never a bed.
+- A score plays like a music file: with `loop: true` the render (score + 3 s tail) repeats with
+  the cue's cross-fade; Step 148 will fit the piece to the video instead.
+- Volume / pan / reverb are written as MIDI controllers only in the exported `.mid`; the render
+  never uses them (symusic 0.5.9 ignores them; `controls=False`).
+- Renders are cached in the project's `build/music/` (cleared with the build), not in vidgen's
+  global cache folder.
+- Searched first: no reverb or convolution helper existed; `sfx._filtered` / `_lowpass`,
+  `loudness`, `mix.limit`, `sfx.write_wav`, `fileio.replace_file` are reused.
+
+Verification
+- symusic 0.5.9 keeps a part's leading silence (a flute entering at beat 16 at 100 BPM sounds at
+  9.602 s; expected 9.600 s) and stops at the last note's end (38.40 s), hence the tail.
+- Manual sample (scratchpad `s146/out/sample.wav` + `.mid`, not committed): 5 parts (piano,
+  strings, bass, flute, brushes), 16 bars at 100 BPM: 41.4 s, render 2.12 s, cached read 0.08 s
+  (identical), −28.00 LUFS, −15.57 dBTP, tail −42.9 dBFS RMS, last sample 0, peak RSS 376 MB.
+- Through `mix.mix_audio` (scratchpad project, 36 s, `soundfont:` absolute path, a 20 s score
+  looped): −28.23 LUFS, −16.19 dBTP, `kind: score`; second mix 1.6 s (cache hit) vs 4.0 s.
+
+Known gaps / TODOs
+- No YAML for scores (Step 147), no fitting to the video (Step 148), no `validate` warning without
+  the extra (Step 149). Pitch bends are not supported (symusic 0.5.9 ignores them).
+- Nobody has listened to the sample yet (owner).
+
+How to test
+- `pytest tests/test_score.py` (33 tests, ~4.5 s; the real render runs only with symusic 0.5.9 and
+  `VIDGEN_TEST_SOUNDFONT=<path to an SF2>` or the downloaded default SoundFont, else 1 skipped).
+- Also: `tests/test_soundfont.py`, `-m "not render" tests/test_music.py tests/test_docs.py
+  tests/test_packaging.py tests/test_render.py`, `-m render tests/test_music.py`.

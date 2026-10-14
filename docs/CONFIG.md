@@ -2889,7 +2889,7 @@ licence line, and whether symusic is installed.
 your own music, private or commercial; no attribution is required. A credit is welcome, for
 example in the video's description:
 
-> Music rendered with the GeneralUser GS SoundFont (https://www.schristiancollins.com/generaluser).
+> Music rendered with the GeneralUser GS SoundFont by S. Christian Collins (https://www.schristiancollins.com/generaluser).
 
 ## Transitions (`transition`)
 

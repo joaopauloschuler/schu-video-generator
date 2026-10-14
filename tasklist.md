@@ -762,10 +762,10 @@ dropped (owner). The numpy beds stay as the fallback. Same rules as Phases H–M
 - [x] Tests: missing extra, hash check, override path (no download in tests) (`tests/test_soundfont.py`, 17 tests, `file://` URLs of a fake SoundFont, ~3 s)
 
 ### Step 146 — Score and renderer
-- [ ] `vidgen/score.py` (pure): tempo, time signature, key, parts (GM program or drum kit, notes in beats with velocity, volume, pan), sections; `.mid` export
-- [ ] `vidgen/synth.py`: each part rendered with symusic, mixed in numpy with volume and pan, a light generated reverb, a tail; normalised to the music level (−28 LUFS, like the beds) and never clipping; cached by score hash + symusic version + SoundFont hash
-- [ ] Plugged into the existing music pipeline as a source (cues, loops, fades, ducking, per-scene volume unchanged)
-- [ ] Tests: score maths and MIDI export without rendering; one real render test skipped when the extra or the SoundFont is absent
+- [x] `vidgen/score.py` (pure): tempo, time signature, key, parts (GM program or drum kit, notes in beats with velocity, volume, pan), sections; `.mid` export (frozen dataclasses `Score` / `Part` / `Note` / `Section`, a beat = a quarter note, per-section tempo changes, `seconds_at`, key signatures, `fingerprint`; `to_symusic` / `write_midi` with CC 7 / 10 / 91 and section markers)
+- [x] `vidgen/synth.py`: each part rendered with symusic, mixed in numpy with volume and pan, a light generated reverb, a tail; normalised to the music level (−28 LUFS, like the beds) and never clipping; cached by score hash + symusic version + SoundFont hash (`render_score`, `mix_parts`: constant-power pan, seeded noise reverb 1.6 s with a per-part send, 3 s tail, −1 dBTP ceiling via `mix.limit`; `build/music/score-<key>.wav`; manual 41.4 s sample: 2.1 s render, −28.00 LUFS, −15.6 dBTP)
+- [x] Plugged into the existing music pipeline as a source (cues, loops, fades, ducking, per-scene volume unchanged) (`music.SCORES` internal hook until Step 147's `compose:`; `source_kind` bed / score / file; played like a music file with the project's `soundfont:`)
+- [x] Tests: score maths and MIDI export without rendering; one real render test skipped when the extra or the SoundFont is absent (`tests/test_score.py`, 33 tests, ~4.5 s; the real one runs with `VIDGEN_TEST_SOUNDFONT` or the downloaded default). Also: the GeneralUser GS credit names its author; `tests/test_render.py::test_ffmpeg_missing` passes when the file runs alone
 
 ### Step 147 — Composer and moods
 - [ ] `music: {compose: {mood, key, tempo, instruments, seed}}`: moods for explainers (calm, focused, curious, upbeat) and cartoons (playful, sleepy, tense, triumphant), each with chord progressions, rhythms, drum patterns and default instruments; original melodies from chord tones and seeded motifs (never a known tune); the same seed gives the same music

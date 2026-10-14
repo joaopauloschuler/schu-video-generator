@@ -1,5 +1,5 @@
-"""Background music (DESIGN.md §48, §69.63): five procedurally generated beds, the project's
-own music files, and the sources the mix reads from.
+"""Background music (DESIGN.md §48, §69.63, §82): five procedurally generated beds, the project's
+own music files, composed scores (:mod:`vidgen.synth`), and the sources the mix reads from.
 
 A *bed* is a seamless loop made of a chord progression (numpy only, no recordings, no samples,
 deterministic): sustained pads are built with the PADsynth method (Nasca Octavian
@@ -33,6 +33,7 @@ from vidgen.sfx import RATE, _band, _filtered, _highpass, _lowpass, decode_audio
 
 if TYPE_CHECKING:
     from vidgen.config import MusicCue, VideoConfig
+    from vidgen.score import Score
 
 log = logging.getLogger("vidgen.music")
 
@@ -532,9 +533,22 @@ def bed_loop(name: str) -> np.ndarray:
 # ----- sources -------------------------------------------------------------------------------------
 
 
+#: Composed scores usable as a cue's ``source`` by name (DESIGN.md §82). Step 146 leaves this as
+#: an internal hook for tests and manual checks (``music: {compose: ...}`` comes in Step 147);
+#: a name here shadows a file of the same path, never a bed.
+SCORES: dict[str, Score] = {}
+
+
 def is_bed(source: str) -> bool:
-    """Whether ``source`` names a built-in bed (else it is a file path)."""
+    """Whether ``source`` names a built-in bed (else it is a score or a file path)."""
     return source in BUILTIN_BEDS
+
+
+def source_kind(source: str) -> str:
+    """``bed`` (a built-in bed), ``score`` (in :data:`SCORES`) or ``file``."""
+    if is_bed(source):
+        return "bed"
+    return "score" if source in SCORES else "file"
 
 
 @lru_cache(maxsize=4)
@@ -555,35 +569,46 @@ def file_audio(path: Path) -> tuple[np.ndarray, float]:
 
 class Source:
     """The samples of a music cue's source as the cue plays them: from ``start`` seconds on, looped
-    (a file with a cross-faded seam, a bed seamlessly) or ending, at :data:`MUSIC_LEVEL`."""
+    (a file or a score with a cross-faded seam, a bed seamlessly) or ending, at
+    :data:`MUSIC_LEVEL`. A score is rendered with the SoundFont ``soundfont`` (the project's
+    ``soundfont:`` setting, relative to ``root``) and its render kept in ``cache_dir``."""
 
-    def __init__(self, cue: MusicCue, root: Path) -> None:
-        if is_bed(cue.source):
+    def __init__(self, cue: MusicCue, root: Path, soundfont: str | None = None, cache_dir: Path | None = None) -> None:
+        kind = source_kind(cue.source)
+        if kind == "bed":
             data = bed_loop(cue.source)
             self.seamless = True
             self.data = data
             self.offset = round(cue.start * RATE) % len(data)
             self.loop = True
+            self.length = len(data)
+            return
+        if kind == "score":
+            from vidgen import soundfont as soundfonts
+            from vidgen.synth import render_score
+
+            audio = render_score(SCORES[cue.source], soundfonts.resolve(soundfont, root), cache_dir)
+            gain = 1.0  # render_score sets the music level
         else:
             path = root / cue.source
             if not path.is_file():
                 raise VidgenError(f"music file not found: {cue.source} (looked for {path})")
             audio, level = file_audio(path)
-            first = round(cue.start * RATE)
-            if first >= len(audio):
-                raise VidgenError(f"music: start {cue.start:g} s is past the end of {cue.source} ({len(audio) / RATE:.1f} s)")
             gain = 10 ** ((MUSIC_LEVEL - level) / 20) if math.isfinite(level) else 1.0
-            body = audio[first:] * np.float32(gain)
-            self.seamless = False
-            self.offset = 0
-            self.loop = cue.loop
-            fade = min(round(cue.crossfade * RATE), len(body) // 3)
-            if self.loop and fade > 0:
-                self.data = _crossfaded_loop(body, fade)
-                self.head = body[: len(body) - fade]  # the first pass, without the seam's tail
-            else:
-                self.data = body
-                self.head = body
+        first = round(cue.start * RATE)
+        if first >= len(audio):
+            raise VidgenError(f"music: start {cue.start:g} s is past the end of {cue.source} ({len(audio) / RATE:.1f} s)")
+        body = audio[first:] * np.float32(gain)
+        self.seamless = False
+        self.offset = 0
+        self.loop = cue.loop
+        fade = min(round(cue.crossfade * RATE), len(body) // 3)
+        if self.loop and fade > 0:
+            self.data = _crossfaded_loop(body, fade)
+            self.head = body[: len(body) - fade]  # the first pass, without the seam's tail
+        else:
+            self.data = body
+            self.head = body
         self.length = len(self.data)
 
     @property
@@ -625,13 +650,13 @@ def _crossfaded_loop(body: np.ndarray, fade: int) -> np.ndarray:
 
 
 def config_problems(config: VideoConfig, root: Path | None) -> list[tuple[str, str]]:
-    """``(location, message)`` problems of the ``music:`` cues: a source that is neither a bed nor
-    a file under the project."""
+    """``(location, message)`` problems of the ``music:`` cues: a source that is neither a bed, a
+    score nor a file under the project."""
     found: list[tuple[str, str]] = []
     cues = config.music_cues
     for k, cue in enumerate(cues):
         where = "music" if not isinstance(config.music, list) else f"music[{k}]"
-        if is_bed(cue.source) or root is None:
+        if source_kind(cue.source) != "file" or root is None:
             continue
         path = root / cue.source
         if not path.is_file():

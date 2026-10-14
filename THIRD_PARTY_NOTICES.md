@@ -107,8 +107,9 @@ their own licences. Notably:
   programs from the abcMIDI package, `abc2midi` and `midi2abc` (in `symusic/bin/`; their licence
   was not verified and is believed to be the GPL); vidgen never runs them, and redistributing a
   bundled application that includes symusic's wheels should check their terms.
-- **GeneralUser GS 2.0.3** (the SoundFont composed music is played with by default), by its
-  author (https://www.schristiancollins.com/generaluser), **GeneralUser GS License v2.0**: it may
+- **GeneralUser GS 2.0.3** (the SoundFont composed music is played with by default), by
+  S. Christian Collins (https://www.schristiancollins.com/generaluser), **GeneralUser GS License
+  v2.0**: it may
   be used "without restriction for your own music creation, private or commercial", the samples
   allow full use in music production including profit from the recordings, and no attribution is
   required. It is **not bundled**: vidgen downloads it on first use from the author's GitHub
@@ -116,7 +117,7 @@ their own licences. Notably:
   `9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe`) into vidgen's cache folder
   and checks it before use. The author asks that websites featuring it link to his website, not to
   his download files. Suggested courtesy credit for a video: "Music rendered with the GeneralUser
-  GS SoundFont (https://www.schristiancollins.com/generaluser)."
+  GS SoundFont by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
 
 ## Online services (optional, your own account)
 

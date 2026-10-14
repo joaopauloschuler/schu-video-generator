@@ -39,7 +39,7 @@ from vidgen import loudness
 from vidgen.ambience import AMBIENCE_BEDS, BEDS, LoopSource, ambience_spans
 from vidgen.config import DuckConfig, MusicCue, SceneMusic
 from vidgen.errors import VidgenError
-from vidgen.music import Source, is_bed
+from vidgen.music import Source, source_kind
 from vidgen.sfx import RATE
 
 if TYPE_CHECKING:
@@ -181,7 +181,7 @@ class Placement:
         """``{source, kind, from, to, start, end, volume, duck}`` (times in seconds)."""
         return {
             "source": self.cue.source,
-            "kind": "bed" if is_bed(self.cue.source) else "file",
+            "kind": source_kind(self.cue.source),
             "from": self.scenes[0],
             "to": self.scenes[-1],
             "start": round(self.start / RATE, 6),
@@ -317,7 +317,7 @@ def plan_music(project: Project, timings: dict[str, Any], total: int) -> list[Pl
         last = order.index(cue.to) if cue.to else len(order) - 1
         start = round(scenes[first]["start"] * RATE)
         end = total if last == len(order) - 1 else round((scenes[last]["start"] + scenes[last]["duration"]) * RATE)
-        source = Source(cue, project.root)
+        source = Source(cue, project.root, cfg.soundfont, project.build_dir / "music")
         stop = end if source.ends_at is None else min(end, start + source.ends_at)
         spans = speech
         if cue.duck.clips and cue.duck.depth > 0:

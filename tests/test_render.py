@@ -363,6 +363,9 @@ def test_keep_going_reports_failures_at_end(small: Callable[..., Path], capsys: 
 
 
 def test_ffmpeg_missing(make_project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from vidgen.extensions import load_builtins
+
+    load_builtins()  # imports manim now: under the patched platform, click would import msvcrt
     monkeypatch.setattr(ff.shutil, "which", lambda name: None)
     monkeypatch.setattr(ff.sys, "platform", "win32")
     assert main(["render", str(make_project())]) == 1

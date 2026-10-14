@@ -28,7 +28,8 @@ LICENCE = (
     "GeneralUser GS License v2.0: free to use without restriction for your own music, private or "
     "commercial; no attribution required (a credit is welcome)"
 )
-CREDIT = f"Music rendered with the GeneralUser GS SoundFont ({HOME_PAGE})."
+AUTHOR = "S. Christian Collins"
+CREDIT = f"Music rendered with the GeneralUser GS SoundFont by {AUTHOR} ({HOME_PAGE})."
 #: Environment variable that moves vidgen's cache folder.
 CACHE_ENV = "VIDGEN_CACHE_DIR"
 #: Seconds the download may wait for data before it fails.
@@ -65,6 +66,25 @@ def file_sha256(path: Path) -> str:
         while chunk := handle.read(1 << 20):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+#: SHA-256 of SoundFont files hashed in this process: path -> (size, mtime_ns, sha256).
+_hashes: dict[Path, tuple[int, int, str]] = {}
+
+
+def content_sha256(path: Path) -> str:
+    """The SHA-256 of a SoundFont file (the default one: :data:`SHA256` once checked; others
+    hashed once per process while their size and mtime stay the same)."""
+    if path == default_path():
+        _check_default(path)
+        return SHA256
+    stat = path.stat()
+    known = _hashes.get(path)
+    if known is not None and known[:2] == (stat.st_size, stat.st_mtime_ns):
+        return known[2]
+    digest = file_sha256(path)
+    _hashes[path] = (stat.st_size, stat.st_mtime_ns, digest)
+    return digest
 
 
 def _override_hint() -> str:

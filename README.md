@@ -373,7 +373,7 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
     `%LOCALAPPDATA%\vidgen\soundfonts` and checked against its SHA-256; `vidgen soundfont fetch`
     downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
     Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
-    (https://www.schristiancollins.com/generaluser)."
+    by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows

@@ -226,9 +226,10 @@ src/vidgen/
   dubbing.py              # each voice's voice in the video's language (dub:, automatic Kokoro picks), --all-languages (§80; no manim)
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
-  music.py                # background music: generated beds, music files as looping sources (§48; no manim)
+  music.py                # background music: generated beds, music files and composed scores as looping sources (§48, §82; no manim)
+  score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
   soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
-  synth.py                # composed music played with symusic (optional extra music): the install check (§81; no manim)
+  synth.py                # composed music played with symusic (optional extra music): install check, per-part render, numpy mix, reverb, cache (§81, §82; no manim)
   mix.py                  # the final mix: music placement, ducking, normalisation, limiter (§48; no manim)
   loudness.py             # BS.1770-4 integrated loudness and true peak, block by block (§48; no manim)
   transitions.py          # scene transitions: effective transition, frame math, colour fade and irises (§69.45), voice track, xfade names (§49-50; no manim)
@@ -10276,4 +10277,48 @@ listening test after Step 144); this section covers what has to be installed and
 - **Licences**: THIRD_PARTY_NOTICES lists symusic (MIT), Prestosynth (MIT), symusic's bundled
   `abc2midi` / `midi2abc` (not run by vidgen; licence unverified) and GeneralUser GS (licence
   v2.0: free use in music, private or commercial; no attribution required). Suggested credit
-  (`soundfont.CREDIT`) in CONFIG.md and the README.
+  (`soundfont.CREDIT`, naming the SoundFont's author, S. Christian Collins, as its licence and
+  README suggest) in THIRD_PARTY_NOTICES, CONFIG.md, the README and `vidgen soundfont info`.
+
+## 82. Composed music, part 2: the score and its renderer (Step 146)
+
+- **Score** (`vidgen/score.py`, pure dataclasses, frozen, checked on creation with `VidgenError`
+  "score: ..."): `Score(tempo, parts, time_signature=(4, 4), key="C major", sections=(), length=None)`,
+  `Part(name, notes, program=0, drums=False, volume=0.0 dB, pan=0.0, reverb=0.2)`,
+  `Note(start, length, pitch, velocity=90)`, `Section(name, start, tempo=None)`. A *beat* is a
+  quarter note (`tempo` in quarter notes per minute; a 6/8 bar is 3 beats). A drum part's
+  `program` is the GM drum kit (0 standard, 40 brushes...). `length_beats` defaults to the last
+  note's end rounded up to a whole bar; a section's `tempo` changes the tempo from its start
+  (`tempo_changes()`, `seconds_at(beat)`); `key` is `"<tonic> major|minor"` with a standard
+  signature (`key_signature()` → sharps, minor; `tonic` pitch class). `fingerprint()` hashes the
+  content and `FORMAT_VERSION`.
+- **MIDI export**: `to_symusic(score, parts, controls)` builds a symusic score in ticks (480 per
+  beat): tempo changes, time and key signature, section markers, one track per part, and (with
+  `controls`) volume / pan / reverb as CC 7 (`midi_volume`: 40 log10(v/127) dB), 10 and 91.
+  `write_midi(score, path)` writes a type-1 SMF. Both need the extra.
+- **Renderer** (`synth.render_score(score, soundfont, cache_dir)`): symusic 0.5.9 ignores CC 7 / 10 /
+  91 and pitch bends, ends at the last note and returns floats above 1, so each part with notes is
+  rendered alone (48 kHz stereo, quality 0, leading silence kept) and `mix_parts` mixes them in
+  float64: gain `10^(volume/20)`, constant-power pan (`pan_gains`: √2·cos, √2·sin of (pan+1)·π/4,
+  1 and 1 at the centre), `reverb` × the part sent to one reverb bus; the bus is convolved
+  (overlap-add FFT, 2^18-sample blocks) with `reverb_impulse()`: per channel its own seeded noise
+  (`crc32("vidgen:reverb")`), low-passed at 5 kHz, 12 ms pre-delay, 60 dB decay over 1.6 s,
+  2 s long, unit energy. The mix is cut or padded to the score's length + `TAIL_SECONDS` (3 s),
+  the last 20 ms faded, set to `MUSIC_LEVEL` (−28 LUFS integrated) and, only if its true peak
+  would pass `TRUE_PEAK_CEILING` (−1 dBTP), limited by `mix.limit`. Silence is an error.
+- **Cache**: `cache_dir / "score-<render_key>.wav"` (16-bit; the returned array is always the
+  16-bit value, so a cached and a fresh render are identical); `render_key` hashes the score's
+  fingerprint, the symusic version, the SoundFont's SHA-256 (`soundfont.content_sha256`: the
+  default file's known hash once checked, others hashed once per process by size + mtime),
+  `RENDERER_VERSION` and the rate. Written to a temporary file, then moved into place. The mix
+  passes `build/music/`; the symusic `Synthesizer` is kept per SoundFont (lru 1).
+- **As a music source**: `music.SCORES` (name → Score) is Step 146's internal hook (tests, manual
+  checks); Step 147's `music: {compose: ...}` replaces it. `source_kind(source)` gives `bed`,
+  `score` or `file`; a score source is rendered with the project's `soundfont:` (else the default
+  SoundFont, downloaded if missing) and then played like a music file: `start`, `loop` with the
+  `crossfade` seam, fades, ducking, scene volumes unchanged; `Placement.summary()` says
+  `kind: score`; `config_problems` accepts it.
+- `score.py`, `synth.py` and `soundfont.py` are in `NOT_RENDER_INPUTS` (audio only: no scene
+  re-render when they change).
+- Measured (manual, GeneralUser GS, 2 cores): a 5-part, 16-bar score at 100 BPM (38.4 s + 3 s
+  tail) renders in 2.1 s (cached read 0.08 s, identical), −28.00 LUFS, −15.6 dBTP, 376 MB peak RSS.
