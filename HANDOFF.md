@@ -13139,3 +13139,65 @@ How to test
 - By hand: a scratch project with the five sets, two characters on `stand_left` / `stand_right`:
   `vidgen validate` ok, `vidgen lint --jobs auto` at preview 0 findings (after moving edge trees,
   pines and flowers in), each scene ~5 s to render; stills checked by eye. Full suite not run.
+
+## Step 140 — Ready-made sets, part 2: indoors
+
+What was built
+- Five built-in rooms in `src/vidgen/data/sets/indoors.yaml`, found by Step 139's lookup unchanged
+  (`includes._read_builtin_sets` reads every `*.yaml` there, sorted: the rooms come first in
+  validate's "built-in sets:" list): `classroom` (blackboard, the teacher's `desk`, two pupils'
+  `school_desk`s facing left towards the board), `kitchen` (fridge, counter with a kettle lifted
+  onto it, clock, table with two chairs facing each other), `shop` (two `shelf_with_goods` at the
+  wall, a counter in front at depth 0.2 with a `till` on it, a wide shop window, a ceiling),
+  `living_room` (lamp on, sofa under a picture, tv under the window, armchair, rug), `bedroom`
+  (bedside lamp on, bed under a window with curtains, wardrobe, rug). Each: one door (`door`, also
+  a mark), a window, `light: indoor`, `ambience: room_tone`, marks `stand_left` / `stand_right`
+  (two characters at depth 0, clear of the props) and a mark at each seat (`teacher`, `pupil`,
+  `pupil_2`, `chair`, `chair_2`, `sofa`, `armchair`, `bed`...). Furniture is `against: wall`
+  (depth 0.4); a character walks there before sitting or leaning (validate asks for the walk).
+- 5 new props (`INDOOR_PROPS` in `cartoon/props.py`, original simple shapes, theme colours plus
+  fixed chalk and goods colours): `blackboard` (hangs, `PROP_HANGS` 0.42), `school_desk` (seat
+  (−0.63, 0.35) = 0.14 of a character, `SEAT_BACKS`), `shelf_with_goods` and `wardrobe` (lean
+  edges), `till`. Searched first: table, chair (the kitchen chair), desk (the teacher's), counter
+  (kitchen and shop), fridge, kettle, sofa, armchair, tv, lamp (the lamp post, scaled down), rug,
+  picture, clock and bed are reused.
+- Gallery: `docs/gallery/media/sets_indoors.png` (27 KB, `tools/make_sets_gallery.py`, docstring
+  updated) and `indoor_props.png` (11 KB, `write_props_png(kinds=INDOOR_PROPS, columns=3)`);
+  `write_props_png`'s default leaves `INDOOR_PROPS` out (props.png unchanged, not regenerated).
+
+Files touched
+- New: `src/vidgen/data/sets/indoors.yaml`, `docs/gallery/media/sets_indoors.png`, `indoor_props.png`.
+- `src/vidgen/cartoon/props.py`, `cartoon/seating.py`, `cartoon/still.py`, `config.py` (`set`
+  docstring), `scenes/stage.py` (docstrings), `tools/make_sets_gallery.py` (docstring).
+- Docs: `docs/CONFIG.md` (`set` row, new "Ready-made rooms", the unknown-set message, Props text,
+  table and gallery, sit / lean lists), `DESIGN.md` (§2 layout, new §77), guide
+  (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: "Ready-made rooms").
+- Tests: `tests/test_builtin_sets.py` (extended to all ten sets), `test_cartoon_props.py` (67
+  props), `test_cartoon_seating.py` (seats set and the "has no seat" list).
+
+Public interfaces
+- Config: `set: NAME` also takes the five room names; new prop kinds (schema enum). `vidgen.api`
+  unchanged (`INDOOR_PROPS` is in `vidgen.cartoon.props` only).
+
+Decisions / deviations
+- `light: indoor` in every room as the brief asked (warm lamplight, evening sky in the windows),
+  also in the classroom and the shop; `light: day` overrides it. `ambience: room_tone` written out
+  (what `auto` picks in a room).
+- The stand marks sit in front of low or bare wall (a door, a window, gaps), so the characters hide
+  little; the furniture stays at the default wall depth.
+- The test of marks and prop boxes now uses `Params.stage_props()` (doors, wall depth) and also
+  checks every standing prop lies inside the stage; the outdoor sets pass it unchanged.
+
+Known gaps / TODOs
+- 16:9 only, like Step 139; the kettle's and till's `lift` are frame fractions (off in 9:16). No
+  shop or classroom sounds. `vidgen screenplay` has no words for the new props (chalkboard, cash
+  register) and does not look up built-in sets.
+
+How to test
+- `pytest tests/test_builtin_sets.py` (41 not-render in 3.3 s; 12 render in 8.1 s).
+- Ran (not render): `test_builtin_sets test_cartoon_props test_cartoon_seating test_includes
+  test_phase_i_review test_guide test_docs test_schema test_cartoon_furniture test_cartoon_room
+  test_screenplay test_cartoon_lint` (418 passed, 126 s); render: `test_cartoon_props
+  test_cartoon_seating test_builtin_sets` (15 passed, 9.2 s).
+- By hand: a scratch project with the five rooms and two characters on their marks: `vidgen lint
+  --jobs auto` at preview 0 findings, ~3.5 s per scene; stills checked by eye. Full suite not run.

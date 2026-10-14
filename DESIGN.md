@@ -258,7 +258,7 @@ src/vidgen/
   data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
-  data/sets/              # outdoors.yaml: the built-in stage sets `set: NAME` falls back to (§76)
+  data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
                           # make_gallery_clip.py (data/gallery/clip.webm, §60),
@@ -10004,3 +10004,49 @@ Reference: docs/CONFIG.md "Ready-made sets". `set: NAME` on a stage scene works 
   may overlap the characters' marks);
   `vidgen screenplay`'s `set:` line does not look up built-in sets (a screenplay `set: park; ...`
   keeps meaning a default sky with those props). Tests: `tests/test_builtin_sets.py`.
+
+## 77. Ready-made sets, part 2: indoors (Step 140)
+
+Reference: docs/CONFIG.md "Ready-made rooms". Five built-in sets are rooms (§69.42), read with the
+outdoor ones by §76's lookup unchanged.
+
+- **Library** (`src/vidgen/data/sets/indoors.yaml`): `classroom`, `kitchen`, `shop`,
+  `living_room`, `bedroom`. `_read_builtin_sets` reads the files sorted by name, so the rooms come
+  first in `builtin_sets()` and in validate's "built-in sets:" list. Each is a `room:` (wall
+  colour, wallpaper, flooring, one door named `door`, one window; the shop a ceiling and a wide
+  shop window without curtains), `light: indoor`, `ambience: room_tone` (what `auto` picks in a
+  room, written out), marks `stand_left` / `stand_right` (two characters at depth 0, clear of
+  every prop within 0.15 of their depth; checked by `test_marks_are_inside_the_stage_and_clear_of_the_props`,
+  which now counts doors and furniture at the wall's depth through `Params.stage_props()` and checks
+  every standing prop is inside the stage) and a mark at each seat. Furniture stands `against:
+  wall` (depth 0.4, the default wall depth; nothing stands deeper, so the wall stays there);
+  pupils' desks at 0.25, the kitchen table and chairs and the shop counter at 0.2: 0.15 or more
+  from the wall's furniture, so `prop_overlap` never compares them. Things on furniture are lifted
+  (kettle 0.18, till 0.2: the counter's height × the depth scale × `size`, 16:9); the blackboard
+  and pictures hang (§69.43). The layout puts the stand marks where the wall behind is low or bare
+  (a door, a window, between furniture), so the characters hide little of the set.
+- **Props** (`cartoon/props.py`, `INDOOR_PROPS`, 5 new, primitives and two colours like every
+  built-in prop): `blackboard` 0.5 (in `PROP_HANGS` at 0.42: hangs above desks; a fixed dark-green
+  board, chalk `CHALK` lines: a triangle and three wavy lines of writing), `school_desk` 0.4 (side on
+  like `desk`, a sloping lid on metal legs, its chair on the left as drawn: seat (−0.63, 0.35) =
+  0.14 of a character, in `SEAT_BACKS`, so the sitter faces the desk; the classroom's face left,
+  towards the board), `shelf_with_goods` 0.95 (three shelves of boxes, tins and jars in the fixed
+  `GOODS_COLORS`, the same in every theme like a tree's fruit; leans ±0.45), `till` 0.26 (a cash
+  drawer, a sloping key top, a display on a stalk), `wardrobe` 1.1 (two panelled doors, a cornice;
+  leans ±0.3). Searched first: the existing `table`, `chair`, `desk` (the teacher's), `counter`
+  (kitchen and shop, recoloured), `fridge`, `kettle`, `sofa`, `armchair`, `tv`, `lamp` (the lamp
+  post, `scale` 0.5–0.6, `on`), `rug`, `picture`, `clock` and `bed` are reused; a kitchen chair is
+  the `chair`. `write_props_png` leaves `INDOOR_PROPS` out of its default (props.png unchanged);
+  `docs/gallery/media/indoor_props.png` (11 KB) shows them.
+- **Gallery**: `tools/make_sets_gallery.py ... classroom kitchen shop living_room bedroom` →
+  `docs/gallery/media/sets_indoors.png` (27 KB).
+- **Checked**: a scratch project with the five rooms, two characters on their marks, at preview
+  854x480: `vidgen lint` 0 findings; each scene renders in about 3.5 s (2 s of video); stills
+  checked by eye. Tests: each room validates with two characters, every seat is sat on (both
+  places of a sofa or bed) and every lean leaned on after a walk to its depth, sitting without the
+  walk is refused, overrides (light, room key by key, a prop changed by name), lint rules on a
+  tiny render of each, two tiny renders of characters sitting (sofa, school desk).
+- **Not done**: like §76, laid out for 16:9 only; the lifts of the kettle and the till are frame
+  fractions, so in 9:16 they float or sink (give them another `lift`); no shop bell or classroom
+  sounds; `vidgen screenplay` does not know the rooms or the new props' other words (chalkboard,
+  cash register, closet).

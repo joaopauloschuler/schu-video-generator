@@ -121,7 +121,7 @@ scenes:
 | `music` | `true` | the [background music](#background-music-music) during this scene: `false` for none, `{volume: dB}` to change its level here |
 | `transition` | the video's `transition` | how the video passes into this scene from the one before it, see [transitions](#transitions-transition) |
 | `carry` | `[]` | objects of the scene before that this scene starts with, where they ended (a match cut), then moves into its own targets: target names, or `"NAME -> NAME"`; see [continuity](#continuity-carrying-objects-into-the-next-scene-carry) |
-| `set` | none | a `stage` scene's set: a name from [`sets:`](#shared-casts-and-sets-include-and-sets) or a [built-in set](#ready-made-sets-set-city_street) (`city_street`, `park`, `beach`, `forest`, `snowy_hills`) whose params this scene starts from; its own `params` win |
+| `set` | none | a `stage` scene's set: a name from [`sets:`](#shared-casts-and-sets-include-and-sets) or a [built-in set](#ready-made-sets-set-city_street) (`city_street`, `park`, `beach`, `forest`, `snowy_hills`; rooms: `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`) whose params this scene starts from; its own `params` win |
 | `host` | the video's | the [host](#a-host-beside-any-scene-host) beside this scene's content: `false` for none, a character name, or a mapping of the keys that change here (`{side: left}`, `{expression: thinking}`; with `character` when the video has no host) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
@@ -631,8 +631,50 @@ forest's: `pine`, `pine_2`, `tree`, `tree_2`, `pine_3`, `tree_3`, `bush`, `log`,
 `mushroom_2`); `src/vidgen/data/sets/outdoors.yaml` in the package lists every set. Their props
 are shown under [Props](#props). `vidgen validate` reports an unknown set with the project's and the
 built-in names (`unknown set 'beech'; did you mean 'beach'? sets: none (...); built-in sets:
-city_street, park, beach, forest, snowy_hills`). A built-in set is part of the scene's params, so
-a newer vidgen that changes a set renders the scenes using it again.
+classroom, kitchen, shop, living_room, bedroom, city_street, park, beach, forest, snowy_hills`). A
+built-in set is part of the scene's params, so a newer vidgen that changes a set renders the
+scenes using it again.
+
+### Ready-made rooms (`set: classroom`)
+
+Five built-in sets are [rooms](#rooms-room): a wall, a floor, a door (`door`, a mark too: `enter`
+/ `exit` with `door: door`), windows, furniture against the wall, `light: indoor` (lamplight;
+the windows show the evening sky) and `ambience: room_tone`. They work like the outdoor sets
+above, with the same two clear marks `stand_left` and `stand_right` at depth 0. The room merges
+key by key (`room: {wallpaper: dots}` keeps the set's door and windows; `room: {windows: []}`
+removes the windows), `light: day` makes it daytime, and a `background` / `image` / `generate`
+replaces the room (its `against: wall` props then need a room of the scene's own).
+
+The furniture against the wall stands at the wall's depth, 0.4: a character on `stand_left` sits
+or leans on it after walking there (`- walk_to: pip, to: {mark: sofa, depth: 0.4}`, then `-
+sit_on: pip, to: sofa`; `vidgen validate` says so when the walk is missing). Each seat has a mark
+of its own at its x.
+
+```yaml
+- id: lesson
+  type: stage
+  set: classroom
+  params:
+    characters: [{name: pip, at: stand_left}, {name: kit, at: stand_right}]
+  beats:
+    - text: "Kit takes a seat."
+      actions:
+        - {walk_to: kit, to: {mark: pupil, depth: 0.25}}
+        - {sit_on: kit, to: school_desk, at: 0.6}
+```
+
+![The indoor sets with two characters on stand_left and stand_right](gallery/media/sets_indoors.png)
+
+| set | what is in it | seats and leans (depth) | own marks |
+|---|---|---|---|
+| `classroom` | a `blackboard` on the wall, the teacher's `desk` (with its chair), two pupils' `school_desk`s facing the board, a window, the door on the right; boards | `desk` (0.4), `school_desk` and `school_desk_2` (0.25, the pupils face left) | `stand_left` 0.27, `stand_right` 0.69, `blackboard` 0.47, `teacher` 0.12, `pupil` 0.6, `pupil_2` 0.8 |
+| `kitchen` | a `fridge`, a `counter` with a `kettle` on it (`lift: 0.18`), a `clock`, a window over a `table` with two `chair`s facing each other; striped wall, tiles | `chair`, `chair_2` (0.2); lean on `fridge`, `counter` (0.4) | `stand_left` 0.27, `stand_right` 0.73, `counter` 0.3, `table` 0.5, `chair` 0.395, `chair_2` 0.605 |
+| `shop` | two `shelf_with_goods` at the wall, a `counter` in front (depth 0.2) with a `till` on it, a wide shop window; tiles, a ceiling | lean on `shelf_with_goods`, `shelf_with_goods_2` (0.4), `counter` (0.2); a shopkeeper stands behind the counter at depth 0.3 | `stand_left` 0.27, `stand_right` 0.8, `counter` 0.55, `behind_counter` 0.5 |
+| `living_room` | a `lamp` (on), a `sofa` under a `picture`, the door in the middle, a `tv` under the window, an `armchair` (depth 0.25), a `rug`; striped wall, boards | `sofa` (two places, 0.4), `armchair` (0.25) | `stand_left` 0.38, `stand_right` 0.66, `sofa` 0.21, `tv` 0.8, `armchair` 0.93 |
+| `bedroom` | a bedside `lamp` (on), a `bed` under a window with curtains, the door, a `wardrobe`, a `rug`; dotted wall, boards | `bed` (two places, 0.4); lean on `wardrobe` (0.4) | `stand_left` 0.42, `stand_right` 0.72, `bed` 0.24, `wardrobe` 0.86 |
+
+Every door is a lean too. `src/vidgen/data/sets/indoors.yaml` in the package lists the rooms; their
+new props are shown under [Props](#props).
 
 ## Theme
 
@@ -5005,7 +5047,7 @@ or an SVG file of your own. A prop stands on a mark or x position like a charact
 same depth a character is drawn in front of a prop. Its size follows the stage's `size`: each
 prop has a usual height next to a character (a `tree` is 1.7 characters tall, a `table` 0.42, a
 `cup` 0.09, an SVG prop 0.5), times its own `scale`. `cloud`, `sun` and `moon` hang in the sky
-(`lift: 0.5`); `picture` and `clock` hang on a wall; other props stand on the ground unless given
+(`lift: 0.5`); `picture`, `clock` and `blackboard` hang on a wall; other props stand on the ground unless given
 a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 
 ![Every built-in prop in the default theme](gallery/media/props.png)
@@ -5020,9 +5062,18 @@ put one at a `depth` between the characters and what stands behind it.
 
 ![The outdoor props in the default theme](gallery/media/outdoor_props.png)
 
+The indoor props of the [ready-made rooms](#ready-made-rooms-set-classroom), besides the
+furniture: a `blackboard` (0.5 characters tall, twice as wide; it hangs on a wall like a
+`picture`, its bottom 0.42 of a character above the floor), a `school_desk` (0.4, side on with its
+chair, like a `desk`: a character sits on the chair facing the desk), a `shelf_with_goods` (0.95,
+three shelves of boxes, tins and jars; lean on its sides), a `till` (0.26; put it on a `counter`
+with a `lift`) and a `wardrobe` (1.1; lean on its sides).
+
+![The indoor props in the default theme](gallery/media/indoor_props.png)
+
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -5466,8 +5517,8 @@ character is the target; `to` names the prop:
 
 | action | options | |
 |---|---|---|
-| `sit_on` | `to` (required: a prop with a seat: `chair`, `rock`, `box`, `sofa`, `armchair`, `bed`, `desk`, `bench`, `log`, or an SVG prop with `data-seat`) | the character moves onto the seat, its body lowers until its hips are on the seat line and its hips and knees bend: the feet on the ground in front (the built-in seats are lower than any generated character's hips), or hanging when an SVG prop's seat is higher than its legs are long (legs in one piece turn forward to the ground, or stick out). On a `chair` or at a `desk` it faces the way the prop faces (its back to the chair's back); on the others it keeps its facing. 1.0 s. It must stand next to the prop (within 0.75 of its heights). One character per seat; a `sofa`, a `bed`, a `bench` and a `log` seat two side by side (each takes the free place nearer to it). |
-| `lean_on` | `to` (required: a prop with lean edges: `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter`, `fridge`, `pine`, `bus_stop`, `shop`, or an SVG prop with `data-lean`) | the character turns its back to the prop (on the side of it where it stands), steps against its edge (the trunk, the door's frame, the sign's board, the lamp's or bus stop's post, the wall, the furniture's side) and leans back 12°, the feet forward on the ground. 0.8 s. It must stand within 1.0 of its heights of the prop. Several characters may lean on one prop. |
+| `sit_on` | `to` (required: a prop with a seat: `chair`, `rock`, `box`, `sofa`, `armchair`, `bed`, `desk`, `bench`, `log`, `school_desk`, or an SVG prop with `data-seat`) | the character moves onto the seat, its body lowers until its hips are on the seat line and its hips and knees bend: the feet on the ground in front (the built-in seats are lower than any generated character's hips), or hanging when an SVG prop's seat is higher than its legs are long (legs in one piece turn forward to the ground, or stick out). On a `chair` or at a `desk` or `school_desk` it faces the way the prop faces (its back to the chair's back); on the others it keeps its facing. 1.0 s. It must stand next to the prop (within 0.75 of its heights). One character per seat; a `sofa`, a `bed`, a `bench` and a `log` seat two side by side (each takes the free place nearer to it). |
+| `lean_on` | `to` (required: a prop with lean edges: `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter`, `fridge`, `pine`, `bus_stop`, `shop`, `shelf_with_goods`, `wardrobe`, or an SVG prop with `data-lean`) | the character turns its back to the prop (on the side of it where it stands), steps against its edge (the trunk, the door's frame, the sign's board, the lamp's or bus stop's post, the wall, the furniture's side) and leans back 12°, the feet forward on the ground. 0.8 s. It must stand within 1.0 of its heights of the prop. Several characters may lean on one prop. |
 | `stand_up` | none | the character stands up from where it sits or leans, over its feet: its body and legs go back to how they were before. 0.8 s. |
 
 While a character sits or leans it keeps its place and its facing: it cannot `walk_to`, `exit`,

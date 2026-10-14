@@ -1,5 +1,6 @@
-"""Make a gallery still of built-in sets (``docs/gallery/media/sets_outdoors.png``): each set as a
-small thumbnail, two characters on its ``stand_left`` / ``stand_right`` marks, its name below.
+"""Make a gallery still of built-in sets (``docs/gallery/media/sets_outdoors.png``,
+``sets_indoors.png``): each set as a small thumbnail, two characters on its ``stand_left`` /
+``stand_right`` marks, its name below.
 
 Not shipped with vidgen; a maintainer tool. It writes a project with one stage scene per set into
 ``--work`` (a scratch folder), renders its storyboard stills at preview size with ``vidgen
@@ -8,6 +9,8 @@ tiles each scene's first still into one 64-colour PNG. Run from the repository r
 
     python tools/make_sets_gallery.py --work /tmp/sets --out docs/gallery/media/sets_outdoors.png \\
         city_street park beach forest snowy_hills
+    python tools/make_sets_gallery.py --work /tmp/rooms --out docs/gallery/media/sets_indoors.png \\
+        classroom kitchen shop living_room bedroom
 """
 
 from __future__ import annotations

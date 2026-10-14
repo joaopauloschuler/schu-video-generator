@@ -882,6 +882,13 @@ asks for one, say vidgen makes original characters and offer one with the same r
   sunset`, `props: [{name: shop_2, color: tertiary}]`, `props: []`). Their props work on any
   stage: `shop`, `bench` and `log` (sit two), `bus_stop`, `fountain`, `flowers`, `fence`,
   `beach_umbrella`, `shell`, `pine`, `mushroom`, and flat `road` / `path` bands.
+- **Ready-made rooms**: `set: classroom`, `kitchen`, `shop`, `living_room` or `bedroom` gives a
+  furnished room (a door, windows, `light: indoor`, a room tone) with the same `stand_left` /
+  `stand_right` marks. Furniture stands at the wall (depth 0.4): to sit or lean, walk there first
+  (`- walk_to: pip, to: {mark: sofa, depth: 0.4}`, then `- sit_on: pip, to: sofa`); pupils' desks
+  are at depth 0.25 (marks `pupil`, `pupil_2`), the kitchen table and chairs at 0.2. `light: day`
+  for a daytime room. New props: `blackboard` (hangs on the wall), `school_desk` (with its chair:
+  sit at it), `shelf_with_goods` and `wardrobe` (lean on them), `till` (`lift` it onto a counter).
 
 **Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
 key cuts the camera to a framing of the characters for that beat; the next beat without one cuts
