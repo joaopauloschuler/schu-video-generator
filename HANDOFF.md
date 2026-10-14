@@ -13386,3 +13386,101 @@ How to test
   test_host test_cartoon_outfits test_extensions test_builtin_sets` (178 passed, 23 s); render:
   `test_cartoon_stage test_cartoon_lighting test_draft test_host test_drawing_style` (9 passed,
   21 s). Full suite not run.
+
+## Step 143 — Dubbing
+
+What was built
+- **`dub:`** on `voice:` and on every `voices:` entry (`dict[LanguageTag, str | DubVoice] | None`):
+  the voice in another language, as the provider's voice (Kokoro / OpenRouter `voice`, ElevenLabs
+  `voice_id`) or a mapping of the keys a named voice may set (`{voice: pm_alex, speed: 0.9}`). The
+  most specific tag matching the video's `language` wins (`pt-BR` before `pt`).
+- **Automatic dubbing** (`src/vidgen/dubbing.py`, no manim, `voice_dubs(config)`): a named voice
+  that keeps the base voice follows the base voice's dub; a Kokoro voice of another language
+  (no `lang` written) gets a Kokoro voice of the video's language of the same kind (`f` / `m`,
+  the name's second letter), the least used so far (given dubs counted first), best grade on a
+  tie, never `*_santa`; one source voice gets one target everywhere; a language without the kind
+  (French: only `ff_siwis`) takes another and says so. ElevenLabs and OpenRouter voices are kept.
+- **Applied in `voices.resolve_voice`** (`_merge_voice`, `DUB_FIELDS`): the dubbed voice is the
+  effective voice, so the variant's `audio/<variant>/`, hashes, `vidgen tts`, viseme tracks (lip
+  sync from that language's audio and phonemes) and every timing (VideoPlan, overlaps,
+  interrupts) follow without other changes. A base voice without a dub resolves to the same
+  object as before.
+- **Checks**: config problems for dub keys of another provider and malformed blends
+  (`_dub_problems`); `vidgen validate` warnings (`dubbing.dub_warnings`) for voices that differ in
+  their language but share one voice in the dubbed one (a blend suggested for Kokoro) and for a
+  kind not kept; a `dub [pt]: default bf_emma -> pf_dora+bf_emma:0.4 (given), ...` line under
+  the language line. `kokoro_voices.voice_warnings` no longer warns about a blend's later voices
+  being of another language (the first gives the language).
+- **`--all-languages`** on `vidgen tts`, `render` and `lint` (`cli.each_language`,
+  `dubbing.language_variants`): the base config, then every variant whose `language` differs
+  from it, in turn; a `== pt (pt-BR) ==` heading before each; worst exit code; `--json` an
+  envelope with `languages: [documents]`; refused with `--variant`. MCP `render` / `lint` take
+  `all_languages`.
+- **Example**: `examples/cartoon-music-box` variant `pt` (pt-BR, `translations/pt.yaml`, 12 texts
+  written by hand, `[gasp]` / `[laugh]` and `*nada*` kept); narrator `dub: {pt:
+  pf_dora+bf_emma:0.4}` and Gus `dub: {pt: pm_santa}` given, Fen (`pf_dora`) and Bram (`pm_alex`)
+  automatic, so the four speakers stay distinct. `video.yaml` 4.5 KB.
+
+Files
+- New: `src/vidgen/dubbing.py`, `tests/test_dubbing.py`, `examples/cartoon-music-box/translations/pt.yaml`.
+- Changed: `src/vidgen/config.py` (`DubVoice`, `DubSetting`, `dub` on `VoiceConfig` / `VoiceEntry`;
+  `VoiceSettingsOverride` moved above them), `voices.py`, `kokoro_voices.py`, `cli.py`,
+  `mcp_server.py`, `examples/cartoon-music-box/video.yaml`, docs/CONFIG.md (voice block, voices
+  table, new "Dubbing (`dub`, `--all-languages`)", JSON "Every language"), DESIGN.md (tree, §80),
+  `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md` ("Dubbing a cartoon"), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- Config: `voice.dub`, `voices.<name>.dub`. CLI: `--all-languages` on `tts`, `render`, `lint`;
+  JSON: the `languages` envelope. MCP: `all_languages` on `render`, `lint`.
+- Internal: `vidgen.dubbing` (`Dub`, `voice_dubs`, `dub_setting`, `dub_fields`, `voice_kind`,
+  `config_dub_warnings`, `dub_warnings`, `dub_summary`, `language_variants`), `voices.DUB_FIELDS`,
+  `cli.each_language`.
+- The config dump gains `dub: null`, so scene fingerprints change once (re-render).
+
+Decisions / deviations
+- **`dub` on voices, not `characters[].voices`** (the task list's example): beats name voices, a
+  character speaks only through its `voice`, and the narrator and a host need dubbing too.
+- **Automatic for Kokoro only**: its voices speak one language each; ElevenLabs' and OpenRouter's
+  speak many (keeping the voice keeps the character's timbre). Automatic dubbing is on whenever a
+  Kokoro voice's language is not the video's: before, such a config read the text with the wrong
+  pronunciation and only warned. A written `lang` keeps the voice (an accent on purpose).
+- **Not `screenplay.assign_voices`** (searched, guide rule 3): it leaves the narrator's voice out
+  and, in a language with one voice of a kind (pt, es), gives a character the other kind; dubbing
+  keeps the kind and warns about the merge instead.
+- **Lint per language is the existing lint per variant**: its timing rules (`talked_over`,
+  `rushed_animation`, `narration_speed`, dead air) already read each variant's audio.
+- A Kokoro voice was fetched for the real check: `pm_alex` and `pm_santa` from huggingface.co
+  (now reachable), SHA-256 checked against the model repository's LFS ids, put in the scratchpad's
+  HF cache.
+
+Verification
+- `vidgen validate examples/cartoon-music-box`: ok (only the existing "kokoro extra" warning on
+  Python 3.13), the `dub [pt]` line above. `vidgen lint examples/cartoon-music-box --all-languages`
+  (preview, no audio): base 0 findings; pt first had 2 `rushed_animation` + 1 `narration_speed`
+  (word-count timing of two short translations), fixed by fuller translations: 0 findings.
+- Real Kokoro (3.12 venv, 2500 MB cgroup, scratch copy): `vidgen tts --variant pt` voiced 11 beats
+  (then 2 re-voiced after the text change) into `audio/pt/` with viseme tracks from Kokoro's
+  phonemes (source `kokoro`); lengths 3.7–6.6 s per beat; `vidgen lint --variant pt` on the real
+  audio 0 findings; `vidgen render --preview --all-languages`: base 51.1 s (no audio), pt 58.7 s,
+  −16.2 LUFS. Stills of `yard` checked by eye: Fen's and Bram's mouths change shape through their
+  Portuguese lines (round O, open, small), Portuguese captions, the `[gasp]` mark on its beat.
+
+Known gaps / TODOs
+- No per-language `overlap` / `interrupt` values (a variant would have to replace the scene); a
+  value that hides words in one language is reported by lint there only.
+- OpenRouter voices named after a language (Voxtral `fr_marie_*`, MAI `es-MX-*`) are not swapped
+  automatically; voice labels (`Fen:`) are not translatable; Kokoro gives word timings only for
+  English, so a dubbed interrupt without `overlap` starts `INTERRUPT_LEAD` before the line ends.
+- `vidgen tts --all-languages` through MCP is not offered (its paid-cost check is per variant).
+
+How to test
+- `pytest tests/test_dubbing.py` (14 tests, ~2 s, no rendering).
+- Also run: `-m "not render" tests/test_voices.py tests/test_tts_kokoro.py tests/test_translation.py
+  tests/test_tts.py tests/test_emotions.py tests/test_emotions_providers.py tests/test_tts_openrouter.py
+  tests/test_config.py tests/test_json_output.py tests/test_docs.py tests/test_guide.py tests/test_mcp.py
+  tests/test_jobs.py tests/test_lint.py tests/test_captions.py tests/test_cartoon_visemes.py
+  tests/test_host.py tests/test_includes.py tests/test_overlap.py tests/test_overlap_pinned.py
+  tests/test_random_cast.py tests/test_schema.py tests/test_screenplay.py tests/test_subtitles.py`.
+- Manual: `vidgen validate examples/cartoon-music-box`, `vidgen lint examples/cartoon-music-box
+  --all-languages`; with the Kokoro extra `vidgen tts examples/cartoon-music-box --all-languages`
+  and `vidgen render examples/cartoon-music-box --preview --all-languages`.

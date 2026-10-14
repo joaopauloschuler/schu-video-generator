@@ -912,6 +912,7 @@ voice:
   lang: null                        # kokoro: language letter (a, b, e, f, h, i, j, p, z); null: from voice / language
   device: cpu                       # kokoro: cpu, cuda or auto
   emotion: null                     # how this voice's beats feel (excited, sad, whisper...); every provider
+  dub: null                         # this voice in other languages, {pt: pf_dora}: see "Dubbing"
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
@@ -1278,6 +1279,7 @@ scenes:
 | `label` | the name (`dr_ana` → `Dr ana`) | the speaker's name in subtitles and captions; not inherited from `voice.label` |
 | `color` | palette colour by position | the speaker's colour in captions (`speakers: color` / `both` / the `name` tag); not inherited |
 | `emotion` | none | how this speaker's beats feel unless a beat says otherwise ([voices with feeling](#voices-with-feeling-emotion)); not inherited from `voice.emotion` |
+| `dub` | none | this speaker's voice in other languages (`{pt: pf_dora}`); without one: the base voice's when this voice keeps it, else chosen automatically ([dubbing](#dubbing-dub---all-languages)) |
 
 - **Names**: letters, digits and `_`; `default` is reserved for the base voice. An unknown name in
   a scene or beat is a config error with a suggestion (`scenes[2].beats[1].voice: unknown voice
@@ -2408,6 +2410,65 @@ localised (give a country an explicit `label`); a `map` arc written `"A -> B"` n
 label, `lint_ignore` patterns and `point:<series>@<label>` targets naming a translated point
 label are not followed; text in scripts without spaces (Chinese, Japanese) is cut into cues
 only at punctuation.
+
+### Dubbing (`dub`, `--all-languages`)
+
+A cartoon (or any video with `voices:`) in another language is the same variant: a `language:`
+and a translation file. Each speaker then speaks with a voice of that language:
+
+```yaml
+voice: {provider: kokoro, voice: bf_emma, dub: {pt: pf_dora+bf_emma:0.4}}   # the narrator, given
+voices:
+  fen_voice: {voice: af_heart}                  # automatic: a feminine Portuguese voice (pf_dora)
+  bram_voice: {voice: bm_fable}                 # automatic: pm_alex
+  gus_voice: {voice: am_fenrir, dub: {pt: pm_santa}}   # given
+variants:
+  pt: {language: pt-BR, translations: translations/pt.yaml}
+```
+
+**`dub`** (on `voice:` and on each `voices:` entry; default none) maps a language tag to the
+voice in that language: the provider's voice name as a string (Kokoro / OpenRouter `voice`,
+ElevenLabs `voice_id`), or a mapping of the keys a named voice may set (`voice`, `speed`, `lang`
+for Kokoro; `voice_id`, `model_id`, `settings` for ElevenLabs; `model`, `voice`, `instructions`,
+`speed` for OpenRouter), e.g. `{pt: {voice: pm_alex, speed: 0.9}}`. In a video (variant) whose
+`language` it matches, those keys replace the voice's own; the most specific tag wins (`pt-BR`
+before `pt`). The dub sits on the voice, not on `characters:`, because beats name voices: the
+narrator and a [host](#a-host-beside-any-scene-host) are voices too, and a character speaks with
+its `voice`.
+
+**Automatic** (no `dub` for the language):
+
+| the voice | in a video of another language |
+|---|---|
+| a named voice that keeps the base voice (no `voice` / `voice_id` of its own) | takes the base voice's dub |
+| Kokoro, a voice of another language and no `lang` written | a Kokoro voice of the video's language of the **same kind** (the name's second letter: `f` feminine, `m` masculine): the one used least so far, best grade first; never `?m_santa` (name it in a `dub` if you want it); one source voice gets one voice everywhere |
+| Kokoro with `lang` written | kept (an accent on purpose) |
+| ElevenLabs, OpenRouter | kept: their voices speak many languages (ElevenLabs gets the `language_code` the model takes) |
+
+Kokoro speaks few voices in some languages (Brazilian Portuguese and Spanish one feminine and one
+masculine besides the novelty `*_santa`, French one feminine voice only), so two speakers can end
+up with one voice. `vidgen validate` warns then (`dub (pt-BR): the base voice (bf_emma) and
+voices.fen_voice (af_heart) speak with pf_dora here; give one a dub: {pt-BR: ...} (another voice,
+or a blend such as pf_dora+af_heart:0.3)`) and when no voice of the kind exists, and prints what
+each voice became: `dub [pt]: default bf_emma -> pf_dora+bf_emma:0.4 (given), fen_voice af_heart
+-> pf_dora (auto), ...`. A Kokoro blend takes its language from its first voice; the others only
+lend their timbre (no warning for them).
+
+What follows from the variant, as for any translated variant: the dubbed beats get their own
+`audio/<variant>/` (hashed with the dubbed voice); [lip sync](#lip-sync) is built from that
+language's audio (Kokoro's phonemes per chunk for languages other than English, else the
+text's phonemes through misaki / espeak-ng or the letters); speech bubbles (`say` with
+`bubble: true` shows the translated line, a `bubble:` text is translatable), [`card`](#card)
+texts and burned-in captions follow the translation file; each beat's timing comes from its
+language's audio, so `overlap` and `interrupt` start against the dubbed line (a seconds value is
+kept: lint says when it hides words in a language).
+
+**One command for every language**: `vidgen tts --all-languages`, `vidgen render --all-languages`
+(with `--preview`, `--draft`...) and `vidgen lint --all-languages` run the base config and then
+every variant whose `language` differs from the base config's, one after the other (a heading
+line `== pt (pt-BR) ==` before each; not with `--variant`). The exit code is the worst one;
+`--json` prints one document `{command, ok, languages: [...]}` whose `languages` are each
+language's own document. The MCP tools `render` and `lint` take `all_languages`.
 
 ## Sound effects (`sfx`)
 
@@ -7820,6 +7881,11 @@ or `null` when the problem is not about one value, e.g. an extension that fails 
 `file` is the [`include:` file](#shared-casts-and-sets-include-and-sets) the value is written in,
 relative to the project, `null` for the project's own config file).
 `details` is an object, empty unless stated below.
+
+**Every language.** `vidgen tts`, `render` and `lint` with `--all-languages`
+([dubbing](#dubbing-dub---all-languages)) print one envelope whose only other key is
+`languages`: the documents of the base config and of each variant in another language, in that
+order, each as the command prints it for one variant; `ok` is true when every one is.
 
 ```json
 {"version": 1, "vidgen": "0.3.0", "command": "render", "ok": false, "warnings": [],

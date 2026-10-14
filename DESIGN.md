@@ -223,6 +223,7 @@ src/vidgen/
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
   languages.py            # language tags and per-language rules: cue words, speech rate, TTS / MP4 codes (§54; no manim)
   translation.py          # translation files: text markers, keys, extracting, applying, merging, warnings (§54; no manim)
+  dubbing.py              # each voice's voice in the video's language (dub:, automatic Kokoro picks), --all-languages (§80; no manim)
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
   music.py                # background music: generated beds, music files as looping sources (§48; no manim)
@@ -10176,3 +10177,58 @@ background prompts; it is not reused.
   pointer line keep their width; bubbles and particles are not left out of the outline weight
   (one rule for the stage's camera); the grain is in screen space (it does not pan with the
   camera); `vidgen character --png`, character sheets and the props galleries draw plain.
+
+
+## 80. Dubbing: `dub:` and `--all-languages` (Step 143)
+
+Reference: docs/CONFIG.md "Dubbing (`dub`, `--all-languages`)". A dubbed video is the translated
+variant of §54 (a `language:` and a translation file); this section adds the voices, the checks
+and one command for every language.
+
+- **Setting**: `dub: {LANG: VOICE | {voice, voice_id, model_id, model, instructions, speed, lang,
+  settings}}` (`DubVoice`; default none) on `VoiceConfig` and `VoiceEntry`. A string is the
+  provider's voice key (`voice_id` for ElevenLabs, else `voice`). `dub_setting` picks the most
+  specific key that `language_matches` the video's language. It sits on voices, not on
+  `characters:` (the task list's example), because beats name voices: the narrator and a host
+  are voices too, and a character speaks only through its `voice`.
+- **Rules** (`dubbing.voice_dubs(config) -> {name | None: Dub}`, no manim, nothing without a
+  `language`): a given dub wins; a named voice with no `voice` / `voice_id` (and no `lang`) of its
+  own follows the base voice's dub (`how: base`); a Kokoro voice whose language letter is not the
+  video's (`a` / `b` count as one) and that has no `lang` written gets `auto`: a voice of the
+  video's Kokoro language of the same kind (`voice_kind`: second letter `f` / `m`, the
+  `voice_kind` of §69.25 screenplays), the least used so far counting the given ones (ties: best
+  grade), never a novelty voice (`NOVELTY_VOICES`: `santa`); one source voice maps to one target
+  (`chosen`), so two named voices of one speaker stay one voice. A language without the kind
+  takes any of its voices (`kind_kept: false`). ElevenLabs and OpenRouter voices are kept (both
+  speak many languages; ElevenLabs' `language_code` already follows the language, §54).
+  `screenplay.assign_voices` was not reused: it leaves out the narrator's voice and, in a language
+  with one voice of a kind, hands a character the other kind.
+- **Applied** in `voices.resolve_voice`: the dub's fields go over the named voice's (`_merge_voice`,
+  the same rule as a named voice over the base: a Kokoro `voice` without `lang` takes its own
+  language); the resolved voice has no `dub` (`DUB_FIELDS`), so `audio_fields`, hashes and the
+  provider see only the effective voice. A base voice without a dub is returned as before (the
+  same object). So the dubbed beats differ from the base config's: the variant gets
+  `audio/<variant>/` (`has_own_audio`), `vidgen tts --variant` voices them, the viseme tracks
+  (§69.4) are written from that audio and language, and every timing (VideoPlan, overlaps,
+  interrupts, §69.34) comes from those MP3s.
+- **Checks**: `voice_provider_problems` adds `_dub_problems` (keys the provider does not use, a
+  malformed Kokoro blend). `vidgen validate` warns (`dubbing.dub_warnings`) about a voice dubbed
+  without its kind and about voices that differ in their own language but speak with one voice in
+  this one (only voices the beats use; a Kokoro blend `target+source:0.3` suggested), and prints
+  `dub [pt]: default bf_emma -> pf_dora+bf_emma:0.4 (given), ...` under the language line.
+  `kokoro_voices.voice_warnings` no longer warns about the later voices of a blend (they lend
+  timbre; the first gives the language).
+- **Every language** (`cli.each_language`): `--all-languages` on `tts`, `render` and `lint` runs
+  the command for the base config and then each `dubbing.language_variants(project)` (variants
+  whose loaded `language` differs from the base config's), sequentially, a heading line before
+  each; exit code the worst; `--json` an envelope with `languages: [documents]`. Not with
+  `--variant`. MCP `render` / `lint` pass `all_languages`. Lint per language is the existing lint
+  of each variant: its timing rules (`talked_over`, `rushed_animation`, `narration_speed`, dead
+  air) see that language's lines.
+- **Example**: `examples/cartoon-music-box` variant `pt` (pt-BR; `translations/pt.yaml`, 12 texts;
+  narrator `pf_dora+bf_emma:0.4` and Gus `pm_santa` given, Fen `pf_dora` and Bram `pm_alex`
+  automatic).
+- **Not done**: no per-language `overlap` / `interrupt` values (a variant would have to replace the
+  scene); OpenRouter voices named after a language (Voxtral `fr_marie_*`) are not swapped; voice
+  labels (`Fen:`) are not translatable; Kokoro gives word timings only for English, so a dubbed
+  interrupt without `overlap` starts `INTERRUPT_LEAD` before the line's end.

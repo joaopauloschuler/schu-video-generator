@@ -33,6 +33,9 @@ DISPLAY_FIELDS = frozenset({"label", "color"})
 RUNTIME_FIELDS = frozenset({"device"})
 #: Fields of a voice that belong to that speaker: a named voice does not inherit them.
 SPEAKER_FIELDS = frozenset({"emotion"})
+#: Fields of a voice that name other voices (``dub``, DESIGN.md §80): applied while resolving,
+#: never part of the resolved voice.
+DUB_FIELDS = frozenset({"dub"})
 
 
 def voice_names(config: VideoConfig) -> list[str]:
@@ -113,6 +116,33 @@ def voice_provider_problems(config: VideoConfig) -> list[Problem]:
                 kokoro_voices.blend_weights(entry.voice or "")
             except ValueError as exc:
                 problems.append(Problem(f"voices.{name}.voice", str(exc)))
+    return problems + _dub_problems(config)
+
+
+def _dub_problems(config: VideoConfig) -> list[Problem]:
+    """``dub:`` entries (DESIGN.md §80) with keys the video's provider does not use, or a
+    malformed Kokoro blend."""
+    from vidgen.dubbing import dub_fields
+
+    base = config.voice.provider
+    owners: list[tuple[str, Any]] = [("voice", config.voice), *((f"voices.{n}", e) for n, e in config.voices.items())]
+    problems = []
+    for where, owner in owners:
+        for language, setting in (owner.dub or {}).items():
+            fields = dub_fields(setting, base)
+            for key in fields:
+                if key not in NAMED_VOICE_KEYS[base]:
+                    name = PROVIDER_NAMES[base]
+                    problems.append(Problem(
+                        f"{where}.dub.{language}.{key}",
+                        f"{key} is not {'an' if name[:1] in 'AEIOU' else 'a'} {name} setting (this video's voices use {base}): "
+                        f"a dub sets {', '.join(NAMED_VOICE_KEYS[base])}",
+                    ))
+            if base == "kokoro" and isinstance(fields.get("voice"), str):
+                try:
+                    kokoro_voices.blend_weights(fields["voice"])
+                except ValueError as exc:
+                    problems.append(Problem(f"{where}.dub.{language}", str(exc)))
     return problems
 
 
@@ -139,21 +169,37 @@ def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
     """The effective voice called ``name`` (``None`` / ``default``: the base voice): the base
     voice's audio settings with the named voice's given values over them; ``label`` / ``color``
     only from the named voice. Its ``language_code`` is the one actually sent (DESIGN.md §54): the
-    configured code, else the video's ``language`` for a model that accepts one, else ``None``."""
-    if name is None or name == DEFAULT_VOICE:
-        return _with_language(config.voice, config.language)
-    entry = config.voices.get(name)
-    if entry is None:
-        raise VidgenError(unknown_voice_message(name, voice_names(config)))
-    data: dict[str, Any] = config.voice.model_dump(exclude=set(DISPLAY_FIELDS | SPEAKER_FIELDS))
-    given = entry.model_dump(exclude_none=True)
+    configured code, else the video's ``language`` for a model that accepts one, else ``None``.
+    In a video whose language another voice speaks, the voice's dub replaces it (DESIGN.md §80,
+    :func:`vidgen.dubbing.voice_dubs`); the result has no ``dub``."""
+    from vidgen.dubbing import voice_dubs
+
+    key = None if name is None or name == DEFAULT_VOICE else name
+    if key is not None and key not in config.voices:
+        raise VidgenError(unknown_voice_message(key, voice_names(config)))
+    dub = voice_dubs(config).get(key)
+    if key is None and dub is None:
+        base = config.voice.model_copy(update={"dub": None}) if config.voice.dub is not None else config.voice
+        return _with_language(base, config.language)
+    if key is None:
+        data: dict[str, Any] = config.voice.model_dump(exclude=set(DUB_FIELDS))
+    else:
+        data = config.voice.model_dump(exclude=set(DISPLAY_FIELDS | SPEAKER_FIELDS | DUB_FIELDS))
+        _merge_voice(data, config.voices[key].model_dump(exclude_none=True, exclude=set(DUB_FIELDS)))
+    if dub is not None:
+        _merge_voice(data, dict(dub.fields))
+    return _with_language(VoiceConfig.model_validate(data), config.language)
+
+
+def _merge_voice(data: dict[str, Any], given: dict[str, Any]) -> None:
+    """Put the voice keys ``given`` (a named voice's, a dub's) over ``data``: ``settings`` value
+    by value; a Kokoro ``voice`` without a ``lang`` takes its own language (its first letter)."""
     settings = given.pop("settings", None)
     if data["provider"] == "kokoro" and "voice" in given and "lang" not in given:
-        data["lang"] = None  # the named voice's own language: its voice's first letter
+        data["lang"] = None
     data.update(given)
     if settings:
         data["settings"] = {**data["settings"], **settings}
-    return _with_language(VoiceConfig.model_validate(data), config.language)
 
 
 def _with_language(voice: VoiceConfig, language: str | None) -> VoiceConfig:

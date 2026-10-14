@@ -139,7 +139,7 @@ def voice_warnings(voice: str | None, lang: str | None, language: str | None, ti
     out: list[str] = []
     known = catalog()["voices"]
     date = catalog()["date"]
-    for part in voice_parts(voice or ""):
+    for k, part in enumerate(voice_parts(voice or "")):
         if part.endswith(".pt"):
             continue  # a voice file of the user's own
         if part not in known:
@@ -152,7 +152,7 @@ def voice_warnings(voice: str | None, lang: str | None, language: str | None, ti
             )
             continue
         own = part[:1]
-        if lang is not None and own != lang:
+        if lang is not None and own != lang and k == 0:   # a blend's later voices lend their timbre only
             out.append(
                 f"{where}.voice: '{part}' is a {lang_name(own)} voice but lang is {lang} ({lang_name(lang)}): the text is "
                 f"read with {lang_name(lang)} pronunciation; set lang: {own} or a voice starting with {lang}"

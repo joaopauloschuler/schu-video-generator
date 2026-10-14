@@ -413,12 +413,13 @@ def validate_warnings(project: Project) -> list[str]:
     characters' unavailable actions and part warnings (§69.2), parts the characters' own
     poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
     character that lacks the parts they need (§69.11), front views asked of SVG characters
-    (§69.44), a host speaking only in its own voice without one (§71), and lines that overlap a
-    line of their own voice (§69.34)."""
+    (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
+    line of their own voice (§69.34) and dubbed voices that lose their kind or merge (§80)."""
     from vidgen.carry import carry_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
     from vidgen.cartoon.host import host_warnings
     from vidgen.chapter_export import chapter_warnings
+    from vidgen.dubbing import dub_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.overlap import overlap_warnings
     from vidgen.transitions import transition_warnings
@@ -444,6 +445,7 @@ def validate_warnings(project: Project) -> list[str]:
         + front_view_warnings(project.config)
         + host_warnings(project.config)
         + overlap_warnings(project.config)
+        + dub_warnings(project)
     )
 
 
@@ -518,7 +520,10 @@ def _validate_json(path: str) -> dict[str, Any]:
 
 def language_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
     """``language: pt-BR (translations/pt.yaml: 40 translated, 2 stale)`` for the base config
-    and each variant with a language or a translation file (DESIGN.md §54)."""
+    and each variant with a language or a translation file (DESIGN.md §54), each followed by
+    ``dub [pt]: default bf_emma -> pf_dora (auto), ...`` when its voices are dubbed (§80)."""
+    from vidgen.dubbing import dub_summary
+
     lines = []
     for p in [project, *(v for v in variants.values() if v is not None)]:
         report = p.translation
@@ -531,6 +536,10 @@ def language_summary_lines(project: Project, variants: dict[str, Project | None]
             what += f" ({report.file}: {len(report.applied)} translated" + (f", {len(report.stale)} stale" if report.stale else "") + ")"
         label = "language:" if p.variant is None else f"language [{p.variant}]:"
         lines.append(f"{label:<10} {what}" if p.variant is None else f"{label} {what}")
+        dubbed = dub_summary(p)
+        if dubbed is not None:
+            label = "dub:" if p.variant is None else f"dub [{p.variant}]:"
+            lines.append(f"{label:<10} {dubbed}" if p.variant is None else f"{label} {dubbed}")
     return lines
 
 
@@ -599,13 +608,41 @@ def cmd_imagegen(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def each_language(args: argparse.Namespace, command: str, run: Callable[[str | None], CommandResult]) -> CommandResult:
+    """``run(variant)`` for ``--variant`` alone, or with ``--all-languages`` for the base config
+    and every variant in another language (:func:`vidgen.dubbing.language_variants`, DESIGN.md
+    §80) in turn: a heading line before each, the worst exit code, or with ``--json`` one document
+    whose ``languages`` lists each one's."""
+    if not getattr(args, "all_languages", False):
+        return run(args.variant)
+    from vidgen.dubbing import language_variants
+
+    if args.variant:
+        raise VidgenError("--all-languages makes the base config and every variant in another language: leave out --variant")
+    base = Project.load(args.project)
+    results: list[CommandResult] = []
+    for variant, language in [(None, base.config.language), *language_variants(base)]:
+        if not args.json:
+            print(f"== {variant or 'base config'} ({language or 'no language'}) ==", flush=True)
+        results.append(run(variant))
+    if args.json:
+        docs = [r for r in results if isinstance(r, dict)]
+        return jsonout.envelope(command, all(d.get("ok", True) for d in docs), languages=docs)
+    return max((r for r in results if isinstance(r, int)), default=0)
+
+
 def cmd_tts(args: argparse.Namespace) -> CommandResult:
-    """Generate narration audio for beats whose MP3 is missing or stale."""
+    """Generate narration audio for beats whose MP3 is missing or stale (``--all-languages``: for
+    every language, :func:`each_language`)."""
+    return each_language(args, "tts", lambda variant: _tts(args, variant))
+
+
+def _tts(args: argparse.Namespace, variant: str | None) -> CommandResult:
     from vidgen import extensions
     from vidgen.tts.run import run_tts
 
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant)
+    project = Project.load(args.project, variant=variant)
     with extensions.project_session(project):
         plan = run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run, voices=args.voice)
     if args.json:
@@ -657,16 +694,20 @@ def cmd_translate_template(args: argparse.Namespace) -> CommandResult:
 
 def cmd_render(args: argparse.Namespace) -> CommandResult:
     """Render what changed (every scene with ``--force``, or the ``--scene`` ones), join the
-    scenes and write the MP4 and SRT."""
-    from vidgen.render.pipeline import render_project
-
+    scenes and write the MP4 and SRT (``--all-languages``: of every language, :func:`each_language`)."""
     if args.jobs < 1:
         raise VidgenError("--jobs must be at least 1")
     if args.frames_per_beat is not None and args.frames_per_beat < 1:
         raise VidgenError("--frames-per-beat must be at least 1")
+    return each_language(args, "render", lambda variant: _render(args, variant))
+
+
+def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
+    from vidgen.render.pipeline import render_project
+
     frames = args.frames_per_beat or (1 if args.frames else 0)
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir, draft=args.draft)
+    project = Project.load(args.project, variant=variant, output_dir=args.output_dir, draft=args.draft)
     result = render_project(
         project,
         preview=args.preview or args.draft,
@@ -1010,11 +1051,16 @@ def cmd_export(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_lint(args: argparse.Namespace) -> CommandResult:
-    """Check the layout of every beat-end still (rendering what is needed) and report problems."""
+    """Check the layout of every beat-end still (rendering what is needed) and report problems
+    (``--all-languages``: in every language, :func:`each_language`)."""
+    return each_language(args, "lint", lambda variant: _lint(args, variant))
+
+
+def _lint(args: argparse.Namespace, variant: str | None) -> CommandResult:
     from vidgen.lint import lint_project, report_lines
 
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant)
+    project = Project.load(args.project, variant=variant)
     if (not args.rule or "contrast" in args.rule) and project.config.lint.rules.contrast.severity != "off":
         for message in theme_warnings(project):  # the theme itself, as `vidgen validate` does
             logging.getLogger("vidgen").warning(message)
@@ -1360,6 +1406,13 @@ def build_parser() -> argparse.ArgumentParser:
             "default: output_dir: in video.yaml, else <project>/output)",
         )
 
+    def all_languages_arg(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--all-languages", action="store_true",
+            help="the base config and then every variant whose language: differs from it (a dubbed video per language), "
+            "one after the other; not with --variant",
+        )
+
     p = sub.add_parser("init", help="scaffold a new project")
     p.add_argument("dir", help="directory to create (must not exist or be empty)")
     examples = sorted(d.name for d in TEMPLATES_DIR.iterdir() if d.is_dir())
@@ -1444,6 +1497,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--beat", action="append", default=[], metavar="ID", help="only this beat (repeatable)")
     p.add_argument("--voice", action="append", default=[], metavar="NAME", help="only the beats of this voice (a voices: name or default; repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (may have its own voice)")
+    all_languages_arg(p)
     p.set_defaults(func=cmd_tts)
 
     p = sub.add_parser("readback", help="transcribe the narration (speech to text) and compare it with the beat texts: misheard, missing or extra words, unclear words and pauses")
@@ -1488,6 +1542,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
     output_dir_arg(p)
+    all_languages_arg(p)
     p.set_defaults(func=cmd_render)
 
     p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")
@@ -1628,6 +1683,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--readback", action="store_true",
         help="also run the unclear_speech rule: transcribe the narration (as `vidgen readback`, cached) and flag unclear words (slow)",
     )
+    all_languages_arg(p)
     p.set_defaults(func=cmd_lint)
 
     p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")

@@ -236,6 +236,46 @@ PROVIDER_VOICE_KEYS: dict[str, tuple[str, ...]] = {
 KokoroLang = Literal["a", "b", "e", "f", "h", "i", "j", "p", "z"]
 
 
+class VoiceSettingsOverride(_Strict):
+    """``voice_settings`` of a named voice: what is not given comes from ``voice.settings``."""
+
+    stability: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs stability (0-1); default the base voice's."""
+    similarity_boost: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs similarity boost (0-1); default the base voice's."""
+    style: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs style exaggeration (0-1); default the base voice's."""
+    use_speaker_boost: bool | None = None
+    """ElevenLabs speaker boost; default the base voice's."""
+
+
+class DubVoice(_Strict):
+    """A voice in one language of ``dub:`` (DESIGN.md §80) as a mapping: the keys given replace
+    the voice's own in videos of that language."""
+
+    voice: str | None = Field(default=None, min_length=1)
+    """kokoro / openrouter: the voice in this language (pf_dora, pm_alex...; a Kokoro blend such as pf_dora+af_heart:0.3)."""
+    voice_id: str | None = Field(default=None, min_length=1)
+    """elevenlabs: the voice id in this language."""
+    model_id: str | None = Field(default=None, min_length=1)
+    """elevenlabs: the model id in this language."""
+    model: str | None = Field(default=None, min_length=1)
+    """openrouter: the TTS model in this language."""
+    instructions: str | None = Field(default=None, min_length=1)
+    """openrouter: how to speak in this language."""
+    speed: float | None = Field(default=None, ge=0.25, le=4.0)
+    """kokoro / openrouter: speaking speed multiplier in this language (0.25-4)."""
+    lang: KokoroLang | None = None
+    """kokoro: the voice's language letter; default the first letter of voice."""
+    settings: VoiceSettingsOverride | None = None
+    """elevenlabs: voice_settings changed in this language."""
+
+
+#: A ``dub:`` value: the provider's voice (Kokoro / OpenRouter ``voice``, ElevenLabs ``voice_id``)
+#: or a mapping of voice keys (:class:`DubVoice`).
+DubSetting = Union[Annotated[str, Field(min_length=1)], DubVoice]
+
+
 class VoiceConfig(_Strict):
     """Text-to-speech voice: ElevenLabs (default), OpenRouter (DESIGN.md §66) or local Kokoro (§68)."""
 
@@ -269,6 +309,8 @@ class VoiceConfig(_Strict):
     """kokoro only: where the model runs: cpu, cuda (an NVIDIA GPU) or auto (a GPU if PyTorch sees one); does not change the audio hash."""
     emotion: EmotionSetting | None = None
     """How this voice's beats feel unless a beat says otherwise: a built-in emotion (excited, sad, whisper...) or {like, speed, pitch, gain, pauses}; ElevenLabs and OpenRouter models with instructions use only its name; not inherited by voices:."""
+    dub: dict[LanguageTag, DubSetting] | None = None
+    """This voice in other languages, by language tag: {pt: pf_dora} or {pt: {voice: pm_alex, speed: 0.9}}; used in videos (variants) of that language; without one, a Kokoro voice of another language is replaced by one of the video's language of the same kind (feminine / masculine)."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
@@ -292,19 +334,6 @@ class VoiceConfig(_Strict):
         if "/" not in self.model.strip("/"):
             raise ValueError(f"OpenRouter model ids look like author/name (e.g. mistralai/voxtral-mini-tts-2603), not {self.model!r}")
         return self
-
-
-class VoiceSettingsOverride(_Strict):
-    """``voice_settings`` of a named voice: what is not given comes from ``voice.settings``."""
-
-    stability: float | None = Field(default=None, ge=0, le=1)
-    """ElevenLabs stability (0-1); default the base voice's."""
-    similarity_boost: float | None = Field(default=None, ge=0, le=1)
-    """ElevenLabs similarity boost (0-1); default the base voice's."""
-    style: float | None = Field(default=None, ge=0, le=1)
-    """ElevenLabs style exaggeration (0-1); default the base voice's."""
-    use_speaker_boost: bool | None = None
-    """ElevenLabs speaker boost; default the base voice's."""
 
 
 class VoiceEntry(_Strict):
@@ -339,6 +368,8 @@ class VoiceEntry(_Strict):
     """kokoro: language of this speaker's voice (a, b, e, f, h, i, j, p, z); default the first letter of its voice, else the base voice's."""
     emotion: EmotionSetting | None = None
     """How this speaker's beats feel unless a beat says otherwise (excited, sad, whisper... or {like, speed, pitch, gain, pauses}); not inherited from the base voice."""
+    dub: dict[LanguageTag, DubSetting] | None = None
+    """This speaker's voice in other languages, by language tag ({pt: pf_dora}); default: the base voice's dub when this voice keeps the base voice, else chosen automatically (Kokoro: a voice of the video's language of the same kind)."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None

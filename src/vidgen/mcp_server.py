@@ -281,6 +281,9 @@ def build_server(root: Path) -> Any:
     ]
     Variant = Annotated[str | None, Field(description="apply this named variant of video.yaml (e.g. vertical)")]
     Scenes = Annotated[list[str] | None, Field(description="only these scene ids")]
+    AllLanguages = Annotated[
+        bool, Field(description="the base config, then every variant in another language (dubbed videos); not with variant")
+    ]
     Jobs = Annotated[
         Annotated[int, Field(ge=1, le=16)] | Literal["auto"],
         Field(description="scenes rendered in parallel; auto: as many as the available memory and CPU cores allow"),
@@ -432,6 +435,7 @@ def build_server(root: Path) -> Any:
         force: Annotated[bool, Field(description="render again even if current")] = False,
         readback: Annotated[bool, Field(description="also run unclear_speech: speech to text of the narration (slow)")] = False,
         confirm_cost: Annotated[bool, Field(description="readback with a paid STT provider: the user accepted the cost")] = False,
+        all_languages: AllLanguages = False,
     ) -> Any:
         path = where(project)
         if (readback or (rule and "unclear_speech" in rule)) and not confirm_cost and stt_provider(path, variant) in PAID_STT:
@@ -441,7 +445,7 @@ def build_server(root: Path) -> Any:
             )
         options = {
             "variant": variant, "scene": scene, "rule": rule, "final": final, "fail-on": fail_on, "jobs": jobs, "force": force,
-            "readback": readback,
+            "readback": readback, "all-languages": all_languages,
         }
         return answer(await call(ctx, args_of(["lint"], [str(path)], options), heavy=True))
 
@@ -541,10 +545,11 @@ def build_server(root: Path) -> Any:
         jobs: Jobs = 1,
         frames: Annotated[bool, Field(description="also save a still per beat end")] = False,
         force: Annotated[bool, Field(description="render every scene again, even unchanged ones")] = False,
+        all_languages: AllLanguages = False,
     ) -> Any:
         options = {
             "preview": preview and not draft, "draft": draft, "scene": scene, "variant": variant, "no-audio": no_audio,
-            "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force,
+            "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force, "all-languages": all_languages,
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 

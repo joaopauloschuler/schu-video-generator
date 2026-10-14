@@ -1586,6 +1586,12 @@ scenes:
   translations run longer), `vidgen validate` (lists what is still untranslated),
   `vidgen tts --variant pt` (voices only translated beats), then storyboard and lint the
   variant: longer text can overflow where the source fit.
+- **Dubbing a cartoon**: the same variant. With Kokoro every speaker gets a voice of the
+  language of the same kind automatically (`vidgen validate` prints `dub [pt]: ...` and warns
+  when two speakers end up with one voice); name one with `dub: {pt: pm_alex}` on that voice in
+  `voices:` (or on `voice:` for the narrator). Then `vidgen tts --all-languages`, `vidgen lint
+  --all-languages` (timings, overlaps and text are checked in each language) and `vidgen render
+  --preview --all-languages`. Example: `examples/cartoon-music-box` (variant `pt`).
 
 ```yaml
 variants:
