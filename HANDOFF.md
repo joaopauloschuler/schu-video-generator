@@ -13041,3 +13041,32 @@ How to test
   passed), `test_transitions.py` (20 passed), `test_draft.py` (18 passed), `test_mcp.py -m render`
   (2 passed), `test_json_output.py -m render` (2 passed), `test_sfx.py` (109 passed, 1 failed:
   the HEAD failure above). The full suite was not run.
+
+## Step 138 follow-up — animatic still timing per beat, test_extending_example
+
+What changed
+- Animatic timing (`animatic.hold_plan`): each still is now shown up to its own capture time,
+  from the time of the scene's still before it. Within a beat the stills split the beat's time
+  in order (a mid-action still from the beat's start or the still before it, up to half-way
+  through its action) and the beat-end still covers the rest until the beat's end, so what a beat
+  reveals is on screen during that beat (before, a beat-end still showed through the FOLLOWING
+  beat). A scene's first still from the scene's start, the video's first from 0; a scene's last
+  still stays through the scene's tail until the next scene; in overlapping scenes a still is cut
+  at the next scene's start and one that would start at or after it is dropped; zero-frame holds
+  dropped. No beat start times are needed: a beat starts where the previous still was captured.
+  Replaces the "Decisions" note of Step 138 on still timing.
+- `test_sfx.py::test_extending_example` (failing since d33ebb3, Step 134; checked in a scratchpad
+  worktree: passes at 874f796, fails at d33ebb3): Step 134 inserted the automatic-directing /
+  `reveal_steps` paragraph and its snippet between the "Sound effects" text of docs/EXTENDING.md
+  and its `countdown` example, so the test's regex (first ```python block after "**Sound
+  effects**") took the `reveal_steps` snippet. Fixed in the docs (the out-of-date part): the
+  `countdown` example moved back right after the Sound effects text, before the
+  automatic-directing paragraph. Code unchanged.
+
+Files: `src/vidgen/animatic.py`, `tests/test_animatic.py`, `docs/CONFIG.md` ("Animatic" timing),
+`DESIGN.md` §75, `docs/EXTENDING.md`, `HANDOFF.md`.
+
+How to test
+- `pytest tests/test_animatic.py` (non-render 7 passed, render 1 passed); `tests/test_sfx.py`
+  (non-render with test_docs/test_guide: 213 passed; render: 5 passed, including
+  `test_extending_example`).

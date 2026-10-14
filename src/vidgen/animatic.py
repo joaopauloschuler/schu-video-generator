@@ -4,9 +4,9 @@
 storyboard``, only the scenes whose stills are missing or stale; current stills at any count per
 beat are reused), then joins them with ffmpeg alone, no Manim:
 
-- :func:`hold_plan`: each still is shown from its time in the video until the next still's
-  (beat-end stills from their beat's end, mid-action stills from half-way through their action);
-  a scene's first still from the scene's start, the video's first from 0;
+- :func:`hold_plan`: each still is shown up to its own time in the video, from the scene's still
+  before it (a beat's stills split the beat in order, its beat-end still covering it to the
+  beat's end); a scene's first still from the scene's start, the video's first from 0;
 - :func:`with_captions`: the holds cut where the subtitle cues start and end, each piece with the
   cue texts shown then, drawn onto the still by :func:`draw_captions` (Pillow);
 - the audio of the video as ``vidgen render`` makes it (:func:`vidgen.render.pipeline.prepare_join`:
@@ -60,21 +60,26 @@ def hold_plan(scenes: Sequence[tuple[float, Sequence[AnimaticStill]]], frames: i
     """The holds of a video of ``frames`` frames at ``fps`` whose scenes (config order) start at
     the given times (seconds in the video) with the given stills.
 
-    Each still is held from its time until the next still's; a scene's first still from the
-    scene's start (so a scene never opens on the scene before it), the video's first from frame
-    0, the last until the end. A still of a scene at or after the next scene's start (it can only
-    happen where scenes overlap, DESIGN.md §49) is left out. Times are rounded to frames; a still
-    that would be held no frame is left out.
+    Each still is shown up to its own time, from the time of the scene's still before it: the
+    stills of a beat split the beat's time in order and its last (beat-end) still covers it until
+    the beat's end, so what a beat shows is on screen during that beat. A scene's first still is
+    held from the scene's start (so a scene never opens on the scene before it), the video's
+    first from frame 0; a scene's last still stays until the next scene's first starts (a tail or
+    pause shows the scene's end), the video's last until the end. Where scenes overlap (DESIGN.md
+    §49) a still is cut at the next scene's start, and one that would start there or later is left
+    out. Times are rounded to frames; a still that would be held no frame is left out.
     """
     if fps <= 0:
         raise ValueError("fps must be positive")
     starts: list[tuple[int, int, int, AnimaticStill]] = []
     for i, (scene_start, stills) in enumerate(scenes):
         next_start = scenes[i + 1][0] if i + 1 < len(scenes) else math.inf
-        for j, still in enumerate(sorted(stills, key=lambda s: s.time)):
-            if j and still.time >= next_start:
+        ordered = sorted(stills, key=lambda s: s.time)
+        for j, still in enumerate(ordered):
+            begin = scene_start if j == 0 else ordered[j - 1].time
+            if j and begin >= next_start:
                 continue
-            frame = min(max(round((scene_start if j == 0 else still.time) * fps), 0), frames)
+            frame = min(max(round(begin * fps), 0), frames)
             starts.append((frame, i, j, still))
     starts.sort(key=lambda entry: entry[:3])
     holds: list[Hold] = []

@@ -29,25 +29,27 @@ def spans(holds: list[Hold]) -> list[tuple[str, float, int, int]]:
 # ----- the plan (no rendering) ---------------------------------------------------------------------
 
 
-def test_each_still_is_held_until_the_next_one() -> None:
-    # beat ends at 2.0 and 5.0, a mid-action still at 3.5; 10 fps, 6 s
+def test_each_still_is_held_up_to_its_own_time() -> None:
+    # beat ends at 2.0 and 5.0, a mid-action still at 3.5 in the second beat; 10 fps, 6 s: each
+    # beat's stills are shown during that beat, the beat-end still until the beat's end
     holds = hold_plan([(0.0, [still("a", 5.0), still("a", 2.0), still("a", 3.5, mid="walk_to pip")])], 60, 10)
-    assert spans(holds) == [("a", 2.0, 0, 35), ("a", 3.5, 35, 50), ("a", 5.0, 50, 60)]
+    assert spans(holds) == [("a", 2.0, 0, 20), ("a", 3.5, 20, 35), ("a", 5.0, 35, 60)]
     assert holds[1].still.mid == "walk_to pip"
 
 
 def test_a_scene_opens_on_its_own_first_still() -> None:
     holds = hold_plan([(0.0, [still("a", 1.0), still("a", 2.0)]), (3.0, [still("b", 4.5), still("b", 6.0)])], 70, 10)
-    # b's first still is shown from b's start (3.0 s), not after a's last still runs on to 4.5 s
-    assert spans(holds) == [("a", 1.0, 0, 20), ("a", 2.0, 20, 30), ("b", 4.5, 30, 60), ("b", 6.0, 60, 70)]
+    # b's first still is shown from b's start (3.0 s); a's last stays through a's tail (2.0-3.0 s)
+    assert spans(holds) == [("a", 1.0, 0, 10), ("a", 2.0, 10, 30), ("b", 4.5, 30, 45), ("b", 6.0, 45, 70)]
 
 
 def test_overlapping_scenes_and_shared_frames() -> None:
-    # b starts at 2.5 s (a crossfade): a's still at 2.8 s would show inside b and is left out;
-    # two stills on one frame: the later one wins
+    # b starts at 2.5 s (a crossfade): a's still at 2.6 s is cut there, the one at 2.8 s (from
+    # 2.6 s) would start inside b and is left out; stills less than a frame apart: those held no
+    # frame are dropped
     b_stills = [still("b", 3.0), still("b", 3.01), still("b", 3.02), still("b", 4.0)]
-    holds = hold_plan([(0.0, [still("a", 1.0), still("a", 2.8)]), (2.5, b_stills)], 50, 10)
-    assert spans(holds) == [("a", 1.0, 0, 25), ("b", 3.0, 25, 30), ("b", 3.02, 30, 40), ("b", 4.0, 40, 50)]
+    holds = hold_plan([(0.0, [still("a", 1.0), still("a", 2.6), still("a", 2.8)]), (2.5, b_stills)], 50, 10)
+    assert spans(holds) == [("a", 1.0, 0, 10), ("a", 2.6, 10, 25), ("b", 3.0, 25, 30), ("b", 4.0, 30, 50)]
     # a silent scene's single still (beat None) and a video with one still
     assert spans(hold_plan([(0.0, [still("q", 0.8, beat=None)])], 9, 10)) == [("q", 0.8, 0, 9)]
     assert hold_plan([], 10, 10) == []
@@ -120,7 +122,9 @@ def test_tiny_animatic(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> No
     assert [(s["scene"], s["beat"]) for s in stills] == [("m", "m_b1"), ("m", "m_b2"), ("q", None)]
     assert stills[0]["start"] == 0 and stills[-1]["end"] == pytest.approx(doc["duration"])
     assert all(a["end"] == b["start"] for a, b in zip(stills, stills[1:]))
-    assert stills[1]["start"] == pytest.approx(stills[1]["time"], abs=0.2)  # held from its time
+    # each still is held up to its time: the second beat's still from the first beat's end
+    assert stills[0]["end"] == pytest.approx(stills[0]["time"], abs=0.2)
+    assert stills[1]["start"] == pytest.approx(stills[0]["time"], abs=0.2)
     info = streams(output)
     assert info["types"] == ["video", "audio"] and (info["width"], info["height"]) == (96, 54)
     with av.open(str(output)) as container:

@@ -7408,10 +7408,12 @@ current it takes seconds, because ffmpeg alone makes it (no Manim).
   stills at any count are reused; a scene without current stills (never storyboarded, edited
   since, another format) is rendered first, with one still per beat, like `vidgen storyboard`
   would (`--jobs` as there).
-- **Timing.** Each still is shown from its time in the video until the next still's: a beat's end
-  still from the end of the beat (so through the next beat, until that beat's mid-action or end
-  still), a mid-action still from half-way through its action. A scene's first still is shown
-  from the scene's start, the video's first from 0:00. The times are those of `vidgen render`:
+- **Timing.** Each beat's stills are shown during that beat: within a beat the stills split its
+  time in order, each shown up to the moment it was captured, so a mid-action still (captured
+  half-way through its action) from the beat's start or the still before it, and the beat-end
+  still from there until the beat's end. What a beat reveals is on screen while the beat is
+  spoken, not after it. A scene's first still is shown from the scene's start, the video's first
+  from 0:00; a scene's last still stays through the scene's tail until the next scene. The times are those of `vidgen render`:
   the narration's MP3s, else the word-count timing; scenes overlapping in a
   [transition](#transitions-transition) cut to the next scene where it starts (no crossfade, no
   fades between stills).

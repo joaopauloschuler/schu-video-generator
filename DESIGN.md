@@ -9905,12 +9905,16 @@ ffmpeg alone once the stills are current.
   every scene current nothing is rendered and the scenes are not checked again (they were, from
   this config, when rendered). No Manim render is added: the animatic uses no still the storyboard
   does not make, and `animatic.py` is left out of the render fingerprint.
-- **Timing** (pure `hold_plan(scenes, frames, fps)`): a still is held from its time in the video
-  (scene start + its scene time) until the next still's, in whole frames; a scene's first still
-  from the scene's start, the video's first from frame 0, the last to the end; a still of a scene
-  at or after the next scene's start (overlapping scenes, §49) is left out, and a still held no
-  frame is dropped. Chosen as asked: the picture is the latest captured moment, so a beat-end
-  still shows through the following beat (a reveal shows at its beat's end, not during it). The
+- **Timing** (pure `hold_plan(scenes, frames, fps)`): a still is held up to its time in the video
+  (scene start + its scene time), from the time of the scene's still before it, in whole frames:
+  within a beat the stills split the beat's time in order and the last (beat-end) still covers it
+  until the beat's end (the gap between beats goes to the next beat's stills, as its beat-start
+  is the previous beat's end); a scene's first still from the scene's start, the video's first
+  from frame 0; a scene's last still until the next scene's first starts (through the scene's
+  tail), the video's last to the end. Where scenes overlap (§49) a still is cut at the next
+  scene's start and one that would start at or after it is left out; a still held no frame is
+  dropped. So each beat's picture is on screen during the beat it belongs to (Step 138 first held
+  each still from its own time, which showed a beat-end still through the following beat). The
   scene starts and the length are those of the combined timings, so beat overlaps (§69.34) and
   word-count timing (no MP3s) need nothing of their own. No crossfade between stills or scenes:
   the concat demuxer cannot blend, and a blend would need the filter graph `ff.join` uses for

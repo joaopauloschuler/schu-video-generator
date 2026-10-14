@@ -766,6 +766,25 @@ the `thunder` sound (`thunder_cue`, `thunder_delay`, `thunder_pan`); the `rainbo
 stage's sun and moon as `SkyBody`s along the sky's path (`PathMove`, `path_point`, `place_for`),
 the `StageShadows` cast away from them (`shadow_cast`, `set_cast`; docs/CONFIG.md "Lightning and
 thunder", "Rainbows", "Light and shadows").
+
+```python
+@scene("countdown")
+class Countdown(NarratedScene):
+    outro = 0.5
+
+    def construct(self):
+        dots = VGroup(*[Dot(radius=0.2) for _ in range(4)]).arrange(RIGHT, buff=0.6)
+        for i, d in self.timeline():
+            if i == 0:
+                self.sfx("whoosh", duration=0.5)            # now: with the next play
+                self.play(FadeIn(dots[0], shift=RIGHT), run_time=0.5)
+                for k, dot in enumerate(dots[1:], start=1):
+                    self.sfx("tick", pitch=2 * k)           # rising ticks, one per dot
+                    self.play(FadeIn(dot, scale=0.5), run_time=0.3)
+                self.sfx("success", at=self.renderer.time + 0.2, gain=-3)
+        self.finish()
+```
+
 A scene type that adds beat actions of its own (automatic directing) overrides the class method
 `auto_actions(cls, project, spec, params)` and returns `DirectedBeat(beat, actions)` items, each
 action made with `ActionConfig.automatic({...})`; they are appended after each beat's written
@@ -785,24 +804,6 @@ none, and the host then only looks at written highlights.
 @classmethod
 def reveal_steps(cls, params):
     return [RevealStep(f"item{i}") for i in range(1, len(params.items) + 1)]
-```
-
-```python
-@scene("countdown")
-class Countdown(NarratedScene):
-    outro = 0.5
-
-    def construct(self):
-        dots = VGroup(*[Dot(radius=0.2) for _ in range(4)]).arrange(RIGHT, buff=0.6)
-        for i, d in self.timeline():
-            if i == 0:
-                self.sfx("whoosh", duration=0.5)            # now: with the next play
-                self.play(FadeIn(dots[0], shift=RIGHT), run_time=0.5)
-                for k, dot in enumerate(dots[1:], start=1):
-                    self.sfx("tick", pitch=2 * k)           # rising ticks, one per dot
-                    self.play(FadeIn(dot, scale=0.5), run_time=0.3)
-                self.sfx("success", at=self.renderer.time + 0.2, gain=-3)
-        self.finish()
 ```
 
 **Timing.** Beat-driven reveals without arithmetic:
