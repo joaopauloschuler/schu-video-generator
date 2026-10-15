@@ -323,18 +323,26 @@ pronunciation:
 
 ## 9. Music and loudness
 
+Use one of vidgen's built-in generated beds (synthesised, not MIDI), chosen by the video's tone:
+
 ```yaml
-music: {compose: curious, volume: -6}   # or focused / calm; composed for the video's timings
+music: {source: pulse, volume: -2}    # discovery, documentaries: "look what this code does"
+music: {source: bright, volume: -2}   # calm, cinematic scenes
 ```
 
-- `curious` (staccato flute, harp) for "how does it work"; `focused` (vibraphone, soft drums) for
-  a tutorial; `calm` for a slower piece. Keep it low: at `volume: -6` the music measured about
-  −42 LUFS momentary in the pauses, well under the voice.
+- `pulse`: 96 BPM, A minor, a soft plucked arpeggio over a muted pad and a gentle thump on every
+  beat; forward-moving without being dramatic. The default for a coding Short.
+- `bright`: 120 BPM, C major, a light pad, a plucked arpeggio and a sparse soft bell melody;
+  warm and open, for calmer, more cinematic pieces.
+- `volume: -2` sits well under the voice, and vidgen ducks the bed by 12 dB while the voice
+  speaks. Both beds loop without a seam, so they fit a video of any length.
+- Prefer the beds to composed music (`music: {compose: <mood>}`): on narrated Shorts the beds
+  sounded clearly better. Beds need no SoundFont and no music credit.
 - The final mix is normalised to **−16 LUFS** integrated with a **true peak ≤ −1 dBTP** (vidgen's
-  defaults: `audio: {target_lufs: -16, true_peak: -1.5}`). The example Short: −16.1 LUFS, true
-  peak −1.9 dBTP, loudness range 2.6 LU. `vidgen render` prints these numbers.
-- Composed music needs the `music` extra and a SoundFont (`vidgen soundfont fetch`); credit the
-  SoundFont in the description if its licence asks for it.
+  defaults: `audio: {target_lufs: -16, true_peak: -1.5}`). The example Short with `pulse`:
+  −16.0 LUFS, true peak −1.9 dBTP. `vidgen render` prints these numbers.
+- Changing only the music re-renders no scenes (the mix happens at the join), so trying both beds
+  takes seconds.
 
 ## 10. Honesty checklist
 
@@ -427,7 +435,7 @@ pronunciation:
 
 stt: {provider: faster_whisper, model: base.en}   # vidgen readback: local and free
 
-music: {compose: curious, volume: -6}
+music: {source: pulse, volume: -2}   # or bright, for a calmer, cinematic piece
 transition: {type: crossfade, duration: 0.4}
 
 overlays:
