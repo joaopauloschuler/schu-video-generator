@@ -638,6 +638,9 @@ my_video/
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
+- [docs/COOKBOOK.md](docs/COOKBOOK.md) — craft notes from real videos (hooks, pacing, sound, QA);
+  [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
+  YouTube Short about code: layout, phone-readable code, narration, checks.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

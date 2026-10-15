@@ -4,7 +4,8 @@ Practical lessons from making long-form videos and vertical shorts with vidgen: 
 paper explainer (narrated with ElevenLabs), a ~3-minute software showcase (Kokoro), and a series
 of 9:16 shorts cut from them. The author guide (`AGENTS.md`, also printed by `vidgen guide`) and
 the config reference (`docs/CONFIG.md`) say what vidgen *can* do. This cookbook is about what made the
-videos *work*: hooks, pacing, sound, credits, labels, voice, and the QA loop.
+videos *work*: hooks, pacing, sound, credits, labels, voice, and the QA loop. For a YouTube Short
+that shows source code, see [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 
@@ -462,6 +463,9 @@ Short-form craft:
   0–0.05 s keeps gaps short.
 - QA: check 15+ frames per short, specifically for the safe zones, overlaps with the captions, and
   caption legibility.
+- **A short about code**: phone-readable code sizes, the frame layout, wrapping and a
+  `code_focus` scene skeleton are in
+  [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md).
 
 ## 16. Known issues and version notes
 
