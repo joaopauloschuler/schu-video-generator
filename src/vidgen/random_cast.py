@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
 from vidgen.cartoon.contrast import MIN_CONTRAST, LookFeatures, look_features, min_contrast
-from vidgen.config import ROBOT_OWN_KEYS, SPECIES_OWN_KEYS, RobotLook, Species
+from vidgen.config import ROBOT_OWN_KEYS, SHELLED_SPECIES, SPECIES_OWN_KEYS, RobotLook, Species
 from vidgen.errors import VidgenError
 from vidgen.screenplay import VOICE_KINDS, assign_voices
 
@@ -70,12 +70,13 @@ SKIN_COLORS: tuple[str, ...] = (
 )
 FUR_COLORS: tuple[str, ...] = ("#B5652E", "#8A8A8A", "#F2EDE4", "#3A3A3A", "#C8A27A", "#6E4B32", "#E0B860", "#5C6F8A")
 #: Natural colours of the species whose fur, feathers or skin differ from :data:`FUR_COLORS`
-#: (a turtle's shell is its ``hair`` colour: :data:`SHELL_COLORS`; a robot's: its plating).
+#: (a turtle's or a snail's shell is its ``hair`` colour: :data:`SHELL_COLORS`; a robot's: its plating).
 SPECIES_COLORS: dict[str, tuple[str, ...]] = {
     "fox": ("#C8642B", "#B5532E", "#D98A4E", "#8A8A8A", "#F2EDE4", "#6E4B32"),
     "owl": ("#8A6E52", "#B39B7A", "#6E5A48", "#C9C2B6", "#5C6F8A"),
     "frog": ("#6FA84A", "#4E8F3A", "#9BBF4C", "#3F8F7A", "#C9B04A", "#7A9A5A"),
     "turtle": ("#9DB06B", "#7FA05A", "#A7A27A", "#6E8F6A", "#B8B07A"),
+    "snail": ("#C9B79C", "#B8A88A", "#D7C7A8", "#9FA88A", "#C7A9B8"),
     "penguin": ("#2F3440", "#3A3A3A", "#3B4A5F", "#4A4F5A", "#5C6F8A"),
     "robot": ("#A7B4C2", "#C9CED6", "#8A9BA8", "#E9E4D8", "#F0AD4E", "#8FA35A", "#6C8EBF", "#D96B5B"),
 }
@@ -147,7 +148,7 @@ def random_look(rng: random.Random, kind: str, species: Sequence[str] = ("human"
     look = {key: value for key, value in look.items() if defaults.get(key) != value}
     colors = {
         "skin": _pick(rng, SKIN_COLORS if animal == "human" else SPECIES_COLORS.get(animal, FUR_COLORS)), "clothes": _pick(rng, CLOTHES_COLORS),
-        "hair": _pick(rng, SHELL_COLORS if animal == "turtle" else HAIR_COLORS), "accessory": _pick(rng, ACCESSORY_COLORS),
+        "hair": _pick(rng, SHELL_COLORS if animal in SHELLED_SPECIES else HAIR_COLORS), "accessory": _pick(rng, ACCESSORY_COLORS),
         "trim": _pick(rng, TRIM_COLORS),
     }
     return {"look": look, "colors": colors, "voice_kind": kind}

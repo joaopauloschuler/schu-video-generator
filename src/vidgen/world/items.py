@@ -5,7 +5,7 @@ A coin or a star is written on the map (:data:`ITEM_SYMBOLS`) and floats in the 
 cell; a key, a door and a blocker are things standing on the stage (a prop or a character) that
 the level's ``locks`` and ``blockers`` give a part in its rules. The rules that change them are in
 :mod:`vidgen.world.moves` (pickups on the way, closed doors and blockers in the way) and
-:mod:`vidgen.world.props` (opening doors, stepping aside, who holds a key).
+:mod:`vidgen.world.story_props` (opening doors, stepping aside, who holds a key).
 """
 
 from __future__ import annotations

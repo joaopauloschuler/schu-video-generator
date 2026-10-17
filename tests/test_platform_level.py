@@ -95,7 +95,8 @@ def test_bodies_stand_on_spots_and_tiles() -> None:
 
 
 def test_world_and_rules_modules_do_not_import_manim() -> None:
-    code = "import sys, vidgen.world, vidgen.cartoon.level_stage, vidgen.cartoon.level_drawing; print('manim' in sys.modules)"
+    code = ("import sys, vidgen.world, vidgen.world.moves, vidgen.world.story_props, vidgen.cartoon.level_stage, "
+            "vidgen.cartoon.level_drawing, vidgen.camera, vidgen.cartoon.foley; print('manim' in sys.modules)")   # the camera and foley too (Step 155)
     out = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True).stdout
     assert out.strip() == "False"
 

@@ -1,13 +1,14 @@
 """Original animal characters of the generator (DESIGN.md §69.48, §69.57): ``look.species``
 ``cat``, ``dog``, ``bird``, ``bear``, ``rabbit``, ``mouse`` and (Step 123) ``fox``, ``owl``,
-``frog``, ``turtle``, ``penguin``.
+``frog``, ``turtle``, ``penguin`` and (Step 155) ``snail``.
 
 A species changes the head (its shape, ears, a crest or tufts, a muzzle, snout or beak, a nose and
 whiskers, a frog's eye bulges, an owl's face discs, a penguin's face patch), the hands (round paws,
 a bird's or owl's wings, a penguin's flippers), the shins and feet (a bird's or owl's thin shins
 with toes, a frog's or penguin's flat feet), some proportions (:data:`SPECIES_PROPORTIONS`), where
 the mouth sits (on the muzzle, under the snout; birds, owls and penguins talk with their beaks),
-adds a ``tail`` part behind the body (not a frog) and a turtle's shell on its back. Everything else
+adds a ``tail`` part behind the body (not a frog or a snail), a turtle's shell or a snail's spiral
+shell on its back and a snail's two feelers. Everything else
 (bodies, outfits, hair, accessories, poses, lip sync) is the human generator's. Each design is a
 plain generic animal built from circles, ellipses and polygons in the look's own colours (fur,
 feathers or skin: ``colors.skin``; a turtle's shell: ``colors.hair``; a muzzle, inner ear or
@@ -42,15 +43,18 @@ PINK = "#E39AA2"
 HEAD_SHAPES: dict[str, tuple[float, float]] = {
     "cat": (1.08, 0.95), "dog": (1.0, 0.98), "bird": (1.0, 1.0), "bear": (1.06, 1.0), "rabbit": (0.95, 1.04), "mouse": (0.98, 0.96),
     "fox": (1.0, 0.92), "owl": (1.06, 1.0), "frog": (1.32, 0.8), "turtle": (0.95, 0.86), "penguin": (0.98, 0.98),
+    "snail": (0.94, 1.0),
 }
 #: Factors on the proportions (:class:`~vidgen.cartoon.generator.Proportions` fields) of the
 #: species that differ from a person's build: a frog's long legs and wide mouth, an owl's big eyes
-#: set apart, a penguin's short legs and flippers, a turtle's short legs and small head.
+#: set apart, a penguin's short legs and flippers, a turtle's short legs and small head, a snail's
+#: shorter legs and arms.
 SPECIES_PROPORTIONS: dict[str, dict[str, float]] = {
     "frog": {"leg_length": 1.3, "mouth_width": 2.2},
     "owl": {"eye_size": 1.4, "eye_gap": 1.2},
     "penguin": {"leg_length": 0.6, "arm_length": 0.85, "body_width": 1.08},
     "turtle": {"leg_length": 0.85, "head_radius": 0.92},
+    "snail": {"leg_length": 0.75, "arm_length": 0.9},
 }
 #: Species that talk with a beak (:func:`beak_mouth`), and those whose arms are wings.
 BEAKED: frozenset[str] = frozenset({"bird", "owl", "penguin"})
@@ -76,11 +80,13 @@ MOUTH_PLACES: dict[str, tuple[float, float, float]] = {
     "cat": (0.33, -0.16, 0.55), "rabbit": (0.3, -0.16, 0.5), "bear": (0.33, -0.18, 0.6),
     "dog": (0.72, -0.21, 0.6), "mouse": (0.72, -0.3, 0.45),
     "fox": (0.85, -0.2, 0.5), "frog": (0.32, 0.15, 0.9), "turtle": (0.42, -0.2, 0.6),
+    "snail": (0.4, -0.22, 0.55),
 }
 #: The same from the front (x is 0).
 FRONT_MOUTH_PLACES: dict[str, tuple[float, float]] = {
     "cat": (-0.16, 0.55), "rabbit": (-0.16, 0.5), "bear": (-0.18, 0.6), "dog": (-0.21, 0.6), "mouse": (-0.24, 0.45),
     "fox": (-0.26, 0.5), "frog": (0.15, 0.9), "turtle": (-0.22, 0.6),
+    "snail": (-0.24, 0.55),
 }
 #: How far a bird's beak opens for each mouth shape (degrees, side view): ``open`` for a
 #: surprised face, the visemes of DESIGN.md §69.4; ``M`` is closed.
@@ -93,6 +99,13 @@ TAIL_LINES: dict[str, tuple[tuple[Point, ...], float, float]] = {
     "mouse": (((0.0, 0.0), (-0.1, -0.04), (-0.2, -0.06), (-0.29, -0.03), (-0.34, 0.04), (-0.35, 0.11)), 0.03, 0.012),
     "turtle": (((0.0, 0.0), (-0.05, -0.02), (-0.1, -0.025)), 0.045, 0.012),   # short, from under the shell
 }
+#: A snail's feelers: where they leave the head's rim (degrees, from the side and from the front),
+#: how far they lean (degrees, forward from the side, outward from the front), their length and
+#: the knob's radius (head radii).
+FEELERS = ((72.0, 98.0), (62.0, 118.0), 14.0, 0.85, 0.15)
+#: A snail's shell from the side: its centre (body widths behind the middle, body heights above
+#: the body's bottom), its radius (body heights) and how many turns its spiral makes.
+SNAIL_SHELL = (-0.5, 0.62, 0.6, 2.25)
 #: A bird's tail feathers: directions (degrees, side view), length and widths.
 TAIL_FEATHERS = ((200.0, 215.0, 230.0), 0.24, 0.07, 0.04)
 #: A fox's bushy tail from the side: its centre line, its widest (character units) and the share
@@ -245,6 +258,14 @@ def ears(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[
             for outward, length in ((4.0, 0.5), (22.0, 0.4)):   # leaning out, away from the middle
                 tip = point_at(base[0], base[1], length * r, angle + lean * outward)
                 pieces.append(trailing(outlined(polygon(tapered_band([base, tip], 0.17 * r, 0.04 * r)), shade, ink, w), base, "pointy"))
+    elif species == "snail":   # two feelers with round knobs, swaying in the wind
+        sides, fronts, lean, length, knob = FEELERS
+        for angle, out in zip(_ear_angles(f.front, sides, fronts), (-1.0, 1.0)):
+            base = point_at(cx, cy, 0.86 * r, angle)
+            tip = point_at(base[0], base[1], length * r, 90.0 + (out * lean if f.front else -lean))
+            stalk = outlined(polygon(tapered_band([base, tip], 0.16 * r, 0.09 * r)), skin, ink, w * 0.8)
+            ball = outlined(Circle(radius=knob * r).move_to([tip[0], tip[1], 0]), fur_shade(skin), ink, w * 0.8)
+            pieces.append(trailing(VGroup(stalk, ball), base, "pointy"))
     return [outer_hair(piece) for piece in pieces]
 
 
@@ -574,6 +595,30 @@ def shell(f: Frame, c: Mapping[str, str], w: float) -> VGroup:
     )
 
 
+def snail_shell(f: Frame, c: Mapping[str, str], w: float) -> VGroup:
+    """A snail's shell (``colors.hair``) for the back of the ``body`` part, drawn behind the body:
+    from the side a round shell high on the back (:data:`SNAIL_SHELL`) with a light rim and a
+    spiral line winding in to its middle; from the front its rim showing round the shoulders."""
+    p, ink = f.p, c["outline"]
+    color, shade = c["hair"], fur_shade(c["hair"])
+    dx, dy, radius, turns = SNAIL_SHELL
+    r = radius * p.body_height
+    if f.front:
+        centre = (0.0, f.body_bottom + (dy + 0.12) * p.body_height)
+        return VGroup(outlined(Circle(radius=1.08 * r).move_to([*centre, 0]), fur_tint(color), ink, w),
+                      outlined(Circle(radius=0.96 * r).move_to([*centre, 0]), color, ink, w * 0.6))
+    centre = (dx * p.body_width, f.body_bottom + dy * p.body_height)
+    rim = outlined(Circle(radius=1.06 * r).move_to([*centre, 0]), fur_tint(color), ink, w)
+    dome = outlined(Circle(radius=0.95 * r).move_to([centre[0] + 0.01, centre[1], 0]), color, ink, w * 0.6)
+    samples = 72
+    spiral = VMobject().set_points_smoothly([
+        [centre[0] + 0.8 * r * (1 - k / samples) * math.cos(math.pi / 2 + 2 * math.pi * turns * k / samples),
+         centre[1] + 0.8 * r * (1 - k / samples) * math.sin(math.pi / 2 + 2 * math.pi * turns * k / samples), 0]
+        for k in range(samples + 1)
+    ])
+    return VGroup(rim, dome, spiral.set_fill(opacity=0).set_stroke(shade, width=w * 0.8))
+
+
 def _fox_tail(root: Point, side: float, c: Mapping[str, str], w: float) -> list[VMobject]:
     """A fox's bushy tail (:data:`FOX_TAIL`): a band widest in its middle, its tip light."""
     line, widest, tip_share = FOX_TAIL
@@ -633,11 +678,13 @@ __all__ = [
     "BEAK_LAUGH_OPENING",
     "BEAK_OPENINGS",
     "BEAK_TONGUE_OPENING",
+    "FEELERS",
     "FOX_TAIL",
     "FROG_EYE_RISE",
     "HEAD_SHAPES",
     "MOUTH_PLACES",
     "PINK",
+    "SNAIL_SHELL",
     "SPECIES_PROPORTIONS",
     "TAIL_LINES",
     "WINGED",
@@ -656,6 +703,7 @@ __all__ = [
     "paw",
     "proportion_factors",
     "shell",
+    "snail_shell",
     "species_frame",
     "tail_part",
     "wing",

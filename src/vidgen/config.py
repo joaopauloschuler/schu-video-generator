@@ -420,13 +420,15 @@ Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
 ClothesPattern = Literal["none", "stripes", "dots"]
 ShoeStyle = Literal["none", "shoes", "boots"]
 FacialHair = Literal["none", "moustache", "beard"]
-Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin", "robot"]
+Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin", "snail", "robot"]
 #: Look keys an animal or a robot (``species`` other than ``human``) draws its own way, so they
 #: are not given with it (DESIGN.md §69.48); a robot has no hair either (§69.58).
 SPECIES_OWN_KEYS: tuple[str, ...] = ("ears", "nose", "facial_hair")
 ROBOT_OWN_KEYS: tuple[str, ...] = (*SPECIES_OWN_KEYS, "hair")
 #: Species drawn without a ``tail`` part (DESIGN.md §69.57, §69.58).
-SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "robot"})
+SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "snail", "robot"})
+#: Species with a shell on the back in ``colors.hair`` (a turtle's domed one, a snail's spiral).
+SHELLED_SPECIES: frozenset[str] = frozenset({"turtle", "snail"})
 #: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1,
 #: the costume pieces §69.58).
 HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat"})
@@ -486,7 +488,7 @@ class CharacterLook(_Strict):
     facial_hair: FacialHair = "none"
     """none, moustache or beard (with a moustache; colour: colors.hair; hair: none for bald)."""
     species: Species = "human"
-    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin (its own head, ears, muzzle or beak, paws, wings or flippers, a tail but a frog's, a turtle's shell; fur colour: colors.skin, a shell: colors.hair); or robot (see robot; plating: colors.skin)."""
+    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin, snail (its own head, ears, muzzle or beak, paws, wings or flippers, a tail but a frog's or a snail's, a turtle's or a snail's shell, a snail's feelers; fur colour: colors.skin, a shell: colors.hair); or robot (see robot; plating: colors.skin)."""
     robot: RobotLook | None = None
     """species robot only: {head: box | round, face: eyes | screen, antenna: true | false, moves_on: legs | wheels}; default a box head, eyes, an antenna, legs."""
     seed: int | None = None

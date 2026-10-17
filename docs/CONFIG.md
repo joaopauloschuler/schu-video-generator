@@ -1363,7 +1363,7 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
 | `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
 | `shoes` | `none` | `none`, `shoes`, `boots` (colour `colors.accessory`) |
-| `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it; or `robot` ([Robots and costumes](#robots-and-costumes); no `hair` either) |
+| `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin`, `snail` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it; or `robot` ([Robots and costumes](#robots-and-costumes); no `hair` either) |
 | `robot` | none | `species: robot` only: `{head: box \| round, face: eyes \| screen, antenna: true \| false, moves_on: legs \| wheels}`; default a box head, eyes, an antenna, legs |
 | `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
 | `svg` | none | an SVG file (relative to the project folder) drawn instead of the generator, split into parts by element ids ([below](#characters-from-svg-files)); the other `look` keys and `colors` do not apply |
@@ -1431,7 +1431,7 @@ characters:
 
 ![The six animals from the side and the front](gallery/media/animals.png)
 
-Five more species have bodies and moves of their own:
+Six more species have bodies and moves of their own:
 
 - **`fox`**: tall pointed ears with a light lining, a long snout with a dark nose at its tip (from
   the front a light muzzle and cheek ruffs), a bushy tail with a light tip.
@@ -1448,6 +1448,11 @@ Five more species have bodies and moves of their own:
 - **`penguin`**: a light face patch, a beak it talks with, flippers for arms, short legs with flat
   orange feet. It waddles, rocking from foot to foot with short quick steps, at 0.7 of the usual
   speed.
+- **`snail`** (Step 155): two feelers with round knobs on top of the head (they sway in the
+  wind), shorter legs and arms, and a round spiral shell high on its back (`colors.hair`, drawn
+  behind the body: a spiral from the side, its rim round the shoulders from the front); no tail.
+  It is the slowest walker: 0.35 of the usual speed, with short gliding steps. A good grumpy
+  [blocker](#story-props-on-a-level-keys-doors-coins-stars-blockers) on a platform level.
 
 A `speed` or `height` you give is used as it is. Lip sync, expressions, effect symbols (above the
 ears, tufts or eye bulges), sitting, the front view and the wind work on all of them (a fox's
@@ -5106,9 +5111,9 @@ with air on the right; the blank lines around the map are ignored.
 ```yaml
 - id: meadow
   type: stage
-  set: park            # the set's sky and hills move behind the level
+  set: park            # the set's sky, hills, light and birdsong; not its props
   params:
-    props: []          # a set's props stand at a depth: not on a level
+    props: [{prop: tree, at: 0.7}]   # the stage's own props stand on the tiles
     level:
       map: |
         ...............~~~~...........
@@ -5148,7 +5153,10 @@ with air on the right; the blank lines around the map are ignored.
   the [drawing style](#drawing-style-drawing)'s outline width applies.
 - Errors name the map's row and column, counted from the top left from 1: `level: map row 2,
   column 7: unknown symbol '@'`, `map row 1, column 3: spot 'a' has nothing below it to stand on`.
-- Not yet: rain, snow and fog on the tiles, and a set's props.
+- **A set** (`set: park`) gives a level its sky, `layers`, light, ambience, particles and marks;
+  its props (they stand at depths), its `water` and a room are left out on a level, and the
+  stage's own `props` stand on the tiles.
+- Not yet: rain, snow and fog on the tiles (they stop at the plain stage's ground line).
 
 ##### The camera on a level (`follow`)
 
@@ -5319,7 +5327,7 @@ beat order, and names the beat and what to write when one does not work.
 - **The key** is the built-in `key` prop (0.3 of a character tall, gold; held by its bow), or any
   other prop named in `locks`.
 - **Blockers** (`blockers: [tobble]`) are characters of the stage in the way like a closed door
-  (any character: a grumpy turtle, a sleepy fox). `- step_aside: tobble` moves one out of the way
+  (any character: a grumpy snail, a sleepy fox). `- step_aside: tobble` moves one out of the way
   after the line that asks it nicely: it steps back off the path (a little smaller, its feet 0.3
   tiles higher, drawn behind the others, 1 s), or with `to:` (a spot, a mark, an x or a tile)
   walks there along the tiles. From then on it is not in the way. Refused while it is: `'tobble' is
@@ -6312,6 +6320,9 @@ unknown name, and a shot on a scene that is not a `stage`. A shot zooms in from 
 close-up of `large` characters zooms in less than one of `small` ones. On a platform level a
 shot can frame a character high above the frame's resting view, and the next beat gives the
 camera back to a [`follow`](#the-camera-on-a-level-follow).
+In a portrait (9:16) frame a `closeup` is never narrower than 0.55 of the character's height
+and a `medium` (and `over_shoulder`) than 0.7 (Step 155: framed by height alone, a portrait
+close-up cut a snout or a beak off the face), so it shows a little more of the figure.
 
 ```yaml
 beats:
@@ -6514,6 +6525,7 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   the speaker as subject. Each sentence (or clause after `and`) is matched against a small
   grammar: `X walks / goes / runs to Y` (`walk_to`: a mark, an x, or beside a prop or character,
   on the other side or a little further out when someone already stands there; `runs` twice as fast), `X enters [from the left]`, `X exits / leaves [left]`, `X jumps`,
+  on a [platform level](#platform-levels-level) `X jumps / hops / leaps [up / down / across / over] to / onto Y` (`jump` with `to`: a spot or a mark; Step 155),
   `X looks at Y` (a character, prop, mark or the camera; `look at each other`), `X points at Y`
   (`look_at`, then `gesture: point`), `X waves [at Y]`, `nods`, `shrugs`, `shakes his head`, and
   an [effect symbol](#effect-symbols-effect) over X's head for `X has / gets an idea` or `lights up`
@@ -6552,6 +6564,12 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   speakers get generated looks and voices), and a `set:` line that starts with one of its set
   names (`set: meadow; props: ball at 0.4`) writes `set: meadow` on the scene: no default sky, the
   set's marks, props and character places count for the directions.
+- **Sets in the front matter** (Step 155): a `set:` line may also start with a set of the front
+  matter's `sets:`. That is how a screenplay gets a [platform level](#platform-levels-level): a
+  set with a `level:` (its multi-line `map: |` is written back as it is); the level's spots are
+  marks for `set:` lines and directions (`characters: nutmeg at start`, `[Nutmeg walks to
+  brink.]`, `[Nutmeg jumps onto over.]`). `vidgen validate` then replays the moves on the tiles;
+  the directions' `at` times are estimated as on a plain stage.
 
 A sample is `examples/screenplay/humming_box.md`.
 
@@ -6567,9 +6585,9 @@ and `voices`; default `cast.yaml`), chosen to be told apart at a glance. Use it 
   accessories; adult proportions; hex colours, so the cast looks the same in every theme). For
   each character 48 random looks are drawn and the one least like the characters before it is
   kept (the highest lowest contrast). `--species` draws from those species (`human`, `cat`, `dog`,
-  `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin`, `robot`; several: a mix;
-  default `human`; a fox, owl, frog, turtle or penguin gets fur or skin in its own natural tones,
-  a turtle a shell colour, a robot a plating colour and a random `look.robot`). Costume pieces are
+  `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin`, `snail`, `robot`; several: a mix;
+  default `human`; a fox, owl, frog, turtle, penguin or snail gets fur or skin in its own natural tones,
+  a turtle or a snail a shell colour, a robot a plating colour and a random `look.robot`). Costume pieces are
   never drawn at random.
 - **Voice kinds and voices**: the kinds go round feminine, masculine and neutral (each round of
   three shuffled); a look suits its kind (facial hair only masculine; no dress or bow for a

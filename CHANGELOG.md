@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–149)
+## 0.3.0 (Steps 61–155)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -13,11 +13,12 @@ indoors and outdoors, with weather, props, vehicles, sound and music, written as
 screenplay. It also adds two narration providers (OpenRouter, and Kokoro running free on your
 own computer), OpenRouter pictures including SVG, an `output/` folder and `--jobs auto`; a
 cartoon host beside any explainer scene, lines spoken with feeling, drafts and animatics,
-ready-made sets, drawing styles, word-level readback flags and dubbing, and music composed for
-each video and played with real instruments.
+ready-made sets, drawing styles, word-level readback flags and dubbing, music composed for
+each video and played with real instruments, and side-view platform stories (levels written as
+small maps, planned walks and jumps, keys, doors, coins and friendly blockers).
 
-0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–149
-(Phases M and N in `tasklist.md`) is part of this release rather than an "Unreleased" section.
+0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–155
+(Phases M, N and O in `tasklist.md`) is part of this release rather than an "Unreleased" section.
 
 ### Behaviour changes and possible breaks
 
@@ -129,6 +130,25 @@ matters only for projects made with development builds between Steps 67 and 131)
 - A drawing style for the whole video: `drawing: {outline: thin | normal | bold, shading: flat |
   soft, texture: none | paper | storybook}` (142); the default draws exactly as before.
 
+### Platform stories (Phase O)
+
+- A `stage` scene with a `level:`: a side view written as a small ASCII map (ground, floating
+  planks, one-way clouds, ladders, gaps, spots by letter), drawn once into tiles in the cartoon
+  look, with the background and layers moving behind by parallax (150).
+- Walks along the tiles (steps, ladders, stopping at edges) and jumps planned from the author's
+  intent (`jump: pip, to: cloud`): a crouch, a slow arc checked against the tiles, a squash and
+  a wobble on landing; `vidgen validate` replays every move and says why one cannot be made (151).
+- Story props: coins and stars picked up on the way and in the air, a `key` prop and locked
+  `door`s (`level.locks`), friendly blockers (`level.blockers`, `step_aside`), reactions on the
+  move (`react: {when: pickup | land | arrive}`) (152); their sounds (`coin`, `twinkle`,
+  `unlock`, a soft landing) through the foley (153).
+- A camera that follows the hero gently (`level.follow`), up and down on tall levels; a short
+  map in 9:16 sits on more ground; `character_size: small | medium | large` for the video, a
+  variant or a scene (also on plain stages); lint `small_speaker` (154).
+- A `snail` species; a set's sky, layers and light on a level (not its props); `vidgen
+  screenplay` with a level from a front-matter set and `jumps onto` directions; portrait
+  close-ups no narrower than a face; the example `examples/platform-story` (155).
+
 ### Explainer hosts
 
 - `host:` puts a cartoon character beside the content of any explainer scene (bullets, charts,
@@ -227,8 +247,8 @@ matters only for projects made with development builds between Steps 67 and 131)
   video's audio and captions, joined by ffmpeg in seconds (138).
 - Examples: `examples/cartoon`, `cartoon_series`, `screenplay`, `svg_character`,
   `cartoon-music-box`, `cartoon-rain-check`, `cartoon-muffin-mystery`, `cartoon-rainbow-ride`,
-  `host-explainer`.
-- Reviews 63, 88, 102, 116, 130, 144 and 149, and full test suite runs (131, 144), fixed what
+  `host-explainer`, `platform-story`.
+- Reviews 63, 88, 102, 116, 130, 144, 149 and 155, and full test suite runs (131, 144), fixed what
   they found (4042 tests passed in Step 144's full run).
 
 ### Known gaps

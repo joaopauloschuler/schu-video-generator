@@ -89,6 +89,9 @@ STAGE_SIZE = 0.45
 LEVEL_PICTURE_FACTOR = 0.2
 LEVEL_OVERSAMPLE = 1.25
 LEVEL_MAX_PIXELS = 24_000_000
+#: On a level the camera rises over (DESIGN.md §86.11): the night's stars fill this top share of
+#: the view and stay there as the camera moves (they are as far as the sky).
+LEVEL_STAR_SKY = 0.45
 #: A blocker stepping back off a level's path (``step_aside`` without ``to``, DESIGN.md §86.8):
 #: it walks to this depth (a little smaller), its feet this many tiles higher (behind the path).
 ASIDE_DEPTH = 0.3
@@ -526,7 +529,7 @@ class StageLevel(SceneParams):
     locks: dict[Identifier, Identifier] = {}
     """Locked doors: {door: key}, a door prop of the stage and the prop that is its key (a key prop); the door opens only by a character holding the key and standing next to it (- open: gate, by: pip). Every closed door prop on a level is in the way of walks and jumps until it opens."""
     blockers: list[Identifier] = []
-    """Characters of the stage in the way of walks and jumps (a grumpy turtle on the path) until they move aside (- step_aside: name)."""
+    """Characters of the stage in the way of walks and jumps (a grumpy snail on the path) until they move aside (- step_aside: name)."""
     follow: Identifier | None = None
     """The hero the camera follows from the start: a character of the stage; the camera starts on it and follows it gently sideways, and up and down when it climbs or jumps high (a written pan stops it, a follow action follows another; a shot frames its beat and gives the camera back); default: the camera stays at camera_at."""
 
@@ -798,7 +801,7 @@ class Stage(NarratedScene):
             for k, prop in enumerate(self.props):
                 if prop.depth != 0.0 or prop.against is not None:
                     raise ValueError(f"props[{k}]: on a level everything stands on the tiles at depth 0; remove its depth / against "
-                                     "(scenery behind the level goes in layers; a set's props: clear them with props: [])")
+                                     "(scenery behind the level goes in layers)")
             for k, member in enumerate(self.characters):
                 if member.depth != 0.0:
                     raise ValueError(f"characters[{k}]: on a level everything stands on the tiles at depth 0; remove its depth")
@@ -2534,12 +2537,19 @@ class Stage(NarratedScene):
             if self.camera_bounds()[3] > fh / 2 + 1e-9:   # a tall level: the camera rises, the sky stays with it (§86.10)
                 self._move_by_parallax(sky, 0.0)
         if self._starry and not p.has_picture():  # in the sky, behind the layers (§69.31)
-            sky_share = STAR_SKY * (1.0 - top)
-            if heads is not None:   # not beside the characters' heads
-                sky_share = min(sky_share, max(fh / 2 - heads - STAR_HEAD_ROOM * fh, 0.0) / fh)
-            stars = night_stars(fw / self.frame_width * sky_share, preview=self.is_preview)
-            box = (-fw / 2, fh / 2 - sky_share * fh, fw / 2, fh / 2)
+            rises = p.level is not None and self.camera_bounds()[3] > fh / 2 + 1e-9
+            width = self.frame_width if rises else fw
+            if rises:   # a tall level: the stars stay in the top of the view, with the sky (§86.11)
+                sky_share = LEVEL_STAR_SKY
+            else:
+                sky_share = STAR_SKY * (1.0 - top)
+                if heads is not None:   # not beside the characters' heads
+                    sky_share = min(sky_share, max(fh / 2 - heads - STAR_HEAD_ROOM * fh, 0.0) / fh)
+            stars = night_stars(width / self.frame_width * sky_share, preview=self.is_preview)
+            box = (-width / 2, fh / 2 - sky_share * fh, width / 2, fh / 2)
             self.stars = StarField(stars, box, min(self.frame_width, self.frame_height))
+            if rises:
+                self._move_by_parallax(self.stars, 0.0)
             parts.append(self.stars)
         self._sky_end = len(parts)
         parts += layers

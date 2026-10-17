@@ -824,9 +824,9 @@ cartoon style; the hero and the story are original. Same rules as Phases H–N.
 - [x] Tests: size resolution, camera follow geometry, the lint rule (`tests/test_platform_camera.py`: incl. two tiny renders: a hero followed across and up a tall level with a close-up, and a large hero in 9:16 with the same sound schedule as at medium)
 
 ### Step 155 — Example story, docs and review of Phase O
-- [ ] A short kids' story (2–3 min) using only Phase O's features, original hero and story
-- [ ] Author guide (+ `AGENTS.md`), CONFIG, DESIGN, README, CHANGELOG; gallery if applicable
-- [ ] Review of Phase O; fix what it finds; gaps to the Backlog
+- [x] A short kids' story (2–3 min) using only Phase O's features, original hero and story (`examples/platform-story`, "Nutmeg and the Moon Picnic": three levels, a ladder, planks, gaps, clouds, coins and stars (two caught in mid-air), a key and a locked gate, a grumpy snail who steps aside when asked nicely (new `snail` species), reactions, the automatic sounds, `level.follow`, close-ups and two-shots, the `cartoon` bed, a 9:16 variant with `character_size: large`; validates, lints with 0 errors; 2:50 at 854x480; storyboards 16:9 and 9:16 checked by eye)
+- [x] Author guide (+ `AGENTS.md`), CONFIG, DESIGN, README, CHANGELOG; gallery if applicable (guide topic `platform`; CONFIG: snail, a set on a level, screenplay with a level; DESIGN §86.11; README feature + example; CHANGELOG Phase O in the untagged 0.3.0; the gallery is per scene type: the stage page's params table regenerated; `vidgen screenplay` with a level: front-matter sets, spots as marks, `jumps onto`)
+- [x] Review of Phase O; fix what it finds; gaps to the Backlog (fixed: a set's props on a level, the screenplay's multi-line YAML round-trip crash, no night stars over a tall level, a refusal's wording, a docstring's module name, portrait close-ups narrower than a face (`SHOT_MIN_WIDTHS`); the no-manim test covers the camera and foley; `tests/test_mcp.py` run in full; 9 Backlog lines)
 
 ---
 
@@ -910,8 +910,17 @@ Quality (what an agent's video looks like)
 - [ ] Dubbing: no per-language `overlap` / `interrupt`; OpenRouter voices named after a language (Voxtral `fr_marie_*`) are not swapped; voice labels (`Fen:`) are not translatable; a dubbed Kokoro interrupt has no word timings outside English; no `tts --all-languages` over MCP (Step 143)
 - [ ] Readback flags: a beat's first word often comes out doubtful; two words heard as one ("Ever wondered" → "everwandered", probability 0.68) count as an unclear 2-word difference; no per-word audio clip to listen to; the `readback` lint rule reads only the cache (Steps 141, 144)
 - [ ] A narration-only video stays at its narration's level (`audio.normalize: auto`): the host-explainer with Kokoro measured −22.3 LUFS integrated; an explainer for publishing wants `audio: {normalize: true}` or music, which the guide does not say (Step 144)
+- [ ] Platform levels: a gap shows the parallax hills behind it, so it can read as a valley rather than a hole; draw a gap's sides or a darker depth (Step 155)
+- [ ] Platform levels: rain, snow and fog stop at the plain stage's ground line, not on the tiles (Step 150)
+- [ ] Platform levels: a move's `react` effect symbol and a `react` expression `surprised` during a move play no sound (an `effect` / `react` action's do) (Step 153)
+- [ ] Platform levels: `enter` / `exit` pick up no coins or stars; a blocker that stepped back off the path is not followed by the replay any more (a later walk of it fails only at render); `close` on a door with someone standing in it is not refused (Step 152)
+- [ ] Platform levels: climbing uses the front walk cycle (no hands on the rungs); walking through a low cloud shows the character inside it (Step 151)
+- [ ] Platform camera: a `level.follow` hero waiting off stage for its `enter` puts the camera at the level's edge until it enters; the follow does not look ahead; `vidgen direct` and the reframe replay plan the camera's x only (Step 154)
+- [ ] `small_speaker` measures a `head` part: an SVG character without one is not checked (Step 154)
+- [ ] `vidgen screenplay` on a level: the directions' `at` times are estimated as on a plain stage (a wide level's walks take longer), no `climbs` verb, a level only through a front-matter or `--cast` set (Step 155)
 
 Nice-to-have / performance
+- [ ] Platform levels that the camera rises over render at about 2.4x real time at 854x480 (sky of the platform example: 47.9 s in 113 s): most of it is Manim's PIL transform of each tile chunk in view on every frame; draw the chunks in view into one picture per frame, or cut chunks by rows (Step 155)
 - [ ] Drafts: beat starts are rounded to whole frames per beat (a draft drifts up to ~0.2 s from the final over a scene); a light change still redraws the whole draft frame; animatics have no crossfade and no `--final` (Steps 137, 138)
 - [ ] `--jobs auto`: a cgroup CPU quota (`cpu.max`) is not read; one per-job figure (1.5 GB) whatever the format (a 4K render needs about 2.5 GB); the Windows and macOS memory readings are tested with mocks only (Step 117)
 - [ ] Stage: `follow` tracks x only, no vertical pan, layers are not action targets, a near image layer zoomed at the bottom can show a sliver; no `on: <prop>` (a prop's `lift` worked out by hand); particles have no `place: behind`, wind or ground stop; no per-scene opt-out of `cartoon_style` (Steps 74–77)

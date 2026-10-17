@@ -10581,8 +10581,9 @@ lip sync, acting and walking, props, shots, the camera's `pan` / `follow` / `zoo
 parallax `layers`, light, foley and `sfx`; a new scene type would duplicate or re-plumb all of it.
 With a level the stage changes only where the ground is: the tiles replace the ground line and
 band, the stage is as wide as the map, and things stand on the tiles at depth 0. Sets (`set:`)
-apply as on any stage (their sky and layers; their props stand at depths, so a level asks for
-`props: []`).
+apply as on any stage (their sky, layers, light, ambience and marks); since Step 155 a level takes
+none of a set's props (they stand at depths), water or room (`includes.LEVEL_DROPPED_KEYS`), so
+the stage's own props can stand on the tiles beside a set.
 
 ### 86.3 The map (Step 150)
 
@@ -10952,3 +10953,50 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
   chunks) — the Step 152 gap.
 - Measured: the 30 x 8 test level at 160x90 with two jumps up, a close-up and a follow renders
   in about a second; a scratch 42 x 8 level with `set: park` at 854x480 (11.6 s of video) in 23.6 s.
+
+### 86.11 The example, the guide and the review of the phase (Step 155)
+
+- **The example** (`examples/platform-story`, "Nutmeg and the Moon Picnic", 9.8 KB): three levels
+  (a meadow: a ladder up to a plank with the key, a jump down and one over a gap with a coin in
+  the air; a garden: a locked gate opened with the key, a grumpy snail on the path who steps
+  aside when asked nicely, close-ups and a two-shot for the dialogue, a jump catching a star, a
+  run through coins; the sky: cloud steps, a star caught in mid-air, the hero's granny on a
+  plank, a pan to the picnic, night falling), `level.follow`, the `cartoon` music bed,
+  `set: park` on two levels, a 9:16 variant with `character_size: large`. Word-count timing
+  (no audio committed, as every example): 2:50 at preview.
+- **A `snail` species** (decided: cheap, on the turtle's machinery): two feelers with knobs
+  (`FEELERS`, swaying in the wind like a rabbit's ears), a round shell high on the back with a
+  spiral (`snail_shell`, `SNAIL_SHELL`, `colors.hair`; `SHELLED_SPECIES` in the config for the
+  contrast and the random cast), shorter legs and arms, no tail (`SPECIES_WITHOUT_TAIL`), the
+  slowest walk (`SpeciesMotion` speed 0.35); `turtle` and `snail` are one contrast family
+  ("shelled"). The Step 123 drawings are unchanged (pinned digests).
+- **A set on a level** (Step 150 gap): a stage with a `level` takes none of the set's
+  `LEVEL_DROPPED_KEYS` (props, water, room, ground_color) in `includes.apply_set`; the sky,
+  layers, light, ambience, particles and marks stay. Why drop rather than refuse: a set's props
+  stand at depths, which a level refuses, so a set with props could not be used on a level at all
+  (the scene had to write `props: []` and could then add none of its own).
+- **`vidgen screenplay` with a level** (cheap enough to do): a `set:` line may name a set of the
+  front matter's `sets:` (before: only `--cast`'s); `screenplay.stage_marks` adds a level's spots
+  to the marks the set line and the directions place by; `X jumps / hops / leaps [up / down /
+  across / over] to / onto Y` is a `jump` with `to` on a level (elsewhere a `# TODO:`). A bug on
+  the way: `plan_yaml._literal` wrote every multi-line string as `|-`, so a map's final line break
+  was lost and `commented_yaml`'s round-trip check raised `AssertionError` (a traceback from the
+  CLI); now `|`, `|-` or `|+` by the string's ending.
+- **Stars over a tall level**: the night's stars were kept clear of the heads at the start, which
+  on a level the camera rises over can be above the frame (no stars at all), and they stayed in
+  the stage while the camera rose. With a raised top the stars fill the top `LEVEL_STAR_SKY` 0.45
+  of the view and move with the camera (parallax factor 0, like the colour sky).
+- **Portrait shots** (found by the example's 9:16 lint, not a Phase O bug): `frame_shot` framed a
+  one-character shot by its height span only, so a portrait close-up was 0.41 of the character's
+  height wide and cut a snout or a beak. `SHOT_MIN_WIDTHS` keeps a close-up at least 0.55 and a
+  medium / over-the-shoulder 0.7 of its height wide (landscape views are wider anyway: unchanged).
+  The kid mouse's head with its big ears is 0.78 wide: its portrait close-up still cuts an ear, so
+  the example frames its line as a two-shot.
+- **Review** (the whole phase's code and docs; HANDOFF Step 155): the three layers hold
+  (`vidgen.world`, `level_stage`, `level_drawing`, `vidgen.camera` and `cartoon.foley` import no
+  manim, now all in the test); a refusal said `(a blockers: ...)` (now `(blockers: ...)`);
+  `items.py` named a module `vidgen.world.props` that is `story_props`.
+- Measured (854x480 @ 15, no audio): meadow 55.9 s of video in 63 s, garden 60.6 s in 49 s, sky
+  (40 x 11, the camera rising) 47.9 s in 113 s: 85 of 131 profiled seconds are Manim's PIL
+  transform drawing the tile chunks (about 0.05 s per chunk per frame). Backlog: draw the chunks
+  in view into one picture per frame, or cut chunks by rows too.

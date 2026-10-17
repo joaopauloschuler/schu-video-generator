@@ -38,6 +38,9 @@ INCLUDABLE_KEYS: tuple[str, ...] = ("include", "characters", "voices", "sets")
 BACKGROUND_KEYS = frozenset({"image", "generate", "background"})
 #: A stage's indoor set (DESIGN.md §69.42): another choice of backdrop, see :func:`apply_set`.
 ROOM_KEY = "room"
+#: Set params a stage with a platform ``level`` does not take from its set (DESIGN.md §86.2): what
+#: stands at a depth (props), the water and a room; everything on a level stands on its tiles.
+LEVEL_DROPPED_KEYS = frozenset({"props", "water", ROOM_KEY, "ground_color"})
 #: Set params whose lists combine with the stage's (the set's entries first).
 COMBINED_LISTS: tuple[str, ...] = ("characters", "props", "layers", "particles")
 #: The built-in sets (DESIGN.md §76): every ``*.yaml`` file here holds ``sets:``.
@@ -272,10 +275,12 @@ def apply_set(set_params: Mapping[str, Any], params: Mapping[str, Any]) -> SetMe
       stage's; a stage entry named like a set entry (a character's name; a prop's or layer's
       ``name:`` equal to the set entry's own or default name, ``tree``, ``tree_2``) changes that
       entry instead (its keys win); an empty list clears the set's;
-    - anything else is replaced.
+    - anything else is replaced;
+    - a stage with a platform ``level`` takes none of :data:`LEVEL_DROPPED_KEYS` (its own props
+      stand on the tiles; the set gives the sky, the layers, the light, the ambience, the marks).
     """
     own = dict(params)
-    dropped: set[str] = set()
+    dropped: set[str] = set(LEVEL_DROPPED_KEYS) if "level" in own else set()
     if BACKGROUND_KEYS & own.keys():
         dropped |= BACKGROUND_KEYS | {ROOM_KEY}
     if ROOM_KEY in own:

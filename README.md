@@ -102,6 +102,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   set with props, light, ambience and marks for two characters and every seat
   ([docs](docs/CONFIG.md#ready-made-sets-set-city_street)); `drawing: {outline: bold, shading: soft, texture:
   storybook}` changes how the whole video is drawn ([docs](docs/CONFIG.md#drawing-style-drawing)).
+- **Platform stories**: a stage's `level:` is a side view written as a small ASCII map (ground,
+  planks, clouds, ladders, gaps, coins, stars); `walk_to` and `jump: pip, to: cloud` are planned
+  on the tiles and checked by `vidgen validate`, a key opens a locked gate, a grumpy snail steps
+  aside when asked nicely, the camera follows the hero, `character_size: large` for Shorts
+  ([docs](docs/CONFIG.md#platform-levels-level), [example](examples/platform-story)).
 - **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
   scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
   mouth follows the narration; it points at items, reacts, walks to the other side, enters and
@@ -629,6 +634,13 @@ my_video/
   fireplace, a steaming kettle, a running clock, a knock at the door, a gift opened (blushing) and a
   lamp switched on at nightfall; birdsong, rain, fire and room-tone beds, the `cartoon` music bed;
   about 94 s with Kokoro narration (no audio committed).
+- [examples/platform-story](examples/platform-story) — "Nutmeg and the Moon Picnic", a platform
+  story on three levels written as small maps: a little mouse skips along collecting coins,
+  climbs a ladder to a plank for a golden key, jumps over gaps, opens a locked garden gate, asks a
+  grumpy snail nicely to let her pass, catches stars in mid-air and hops up the clouds to her
+  granny's picnic; the camera follows her, close-ups for the dialogue, the automatic jump, coin
+  and door sounds, the `cartoon` music bed and a 9:16 variant with `character_size: large`;
+  about 2:50 at preview (no audio committed).
 - [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
   an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
   points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven

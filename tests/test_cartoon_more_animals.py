@@ -23,7 +23,7 @@ from vidgen.cartoon.contrast import contrast_score, look_features, species_diffe
 from vidgen.cartoon.effect_symbols import crown_top
 from vidgen.cartoon.generator import resolve_proportions
 from vidgen.cartoon.transition import SIDE_ROCK, Walk, walking_state
-from vidgen.config import CharacterEntry, CharacterLook
+from vidgen.config import SPECIES_WITHOUT_TAIL, CharacterEntry, CharacterLook
 from vidgen.project import Project
 from vidgen.random_cast import SHELL_COLORS, SPECIES_COLORS, random_look
 from vidgen.theme import Theme
@@ -44,7 +44,7 @@ def built(species: str, **look: Any) -> Any:
 def test_each_new_species_builds_poses_and_talks(species: str) -> None:
     c = animal(species, height=2.0, outfit="shorts")
     assert set(REQUIRED_PARTS) <= set(c.parts)
-    assert c.has_part("tail") == (species != "frog")
+    assert c.has_part("tail") == (species not in SPECIES_WITHOUT_TAIL)
     assert c.get_bottom()[1] == pytest.approx(0.0, abs=1e-6) and c.get_top()[1] == pytest.approx(2.0)
     entry = CharacterEntry(name="t", look={"species": species, "outfit": "shorts"})
     assert {part: c.shape_names(part) for part in c.parts} == character_part_shapes(entry, Path("."))

@@ -14583,3 +14583,120 @@ How to test
   medium) and linted: the camera rises with the hero and comes back, a 1-row map in 9:16 sits
   four rows up with the park's hills behind it, `small_speaker` reported a `small` speaker, no
   `off_frame` on the tiles.
+
+## Step 155 — Example story, docs and review of Phase O
+
+What was built
+- **The example** `examples/platform-story/video.yaml` ("Nutmeg and the Moon Picnic", 9.8 KB, an
+  original story and cast): Nutmeg, a little mouse, is invited to her granny's moon picnic at the
+  top of Clover Hill; she skips along collecting sun pennies, climbs a ladder to a plank for the
+  golden garden key, jumps down and over a gap (a coin in mid-air), opens the locked gate with the
+  key, asks Mister Mossby, the grumpiest snail in the garden, nicely to let her pass (close-ups,
+  two-shots; he blushes and steps aside), jumps a gap catching a star, runs through coins, hops up
+  three clouds (a star in mid-air) to Granny Bramble's plank, and night falls over the picnic.
+  Three levels (32 x 8, 34 x 6, 40 x 11), `set: park` on two, `level.follow`, locks, a blocker,
+  `react` on pickups / landings / arrivals, the automatic sounds (footsteps, boing, thud, coin,
+  twinkle, unlock, creak, swoosh), the `cartoon` bed at -2, a pan and the night at the end, a
+  `short` variant (1080x1920, `character_size: large`). No audio committed (word-count timing;
+  Kokoro voices named as in the other examples).
+- **`snail` species** (`cartoon/animals.py` `FEELERS`, `SNAIL_SHELL`, `snail_shell`, feelers in
+  `ears`; `config.SHELLED_SPECIES`, `SPECIES_WITHOUT_TAIL` + snail; `acting.SPECIES_MOTIONS`
+  snail 0.35; `random_cast` colours; contrast family "shelled"; CLI help).
+- **A set on a level**: `includes.LEVEL_DROPPED_KEYS` — a stage with a `level` takes no props,
+  water, room or ground colour from its set (before, any set with props made a level invalid).
+- **`vidgen screenplay` with a level**: front-matter `sets:` usable by `set:` lines,
+  `screenplay.stage_marks` (spots are marks), the `jumps onto <spot>` verb (`jump_to`, on a level
+  only), `StageState.level`.
+- **Docs**: guide topic `platform` ("Platform stories: levels, jumps and story props", with a
+  snippet the guide test validates; topic list; snail in the species line) + `AGENTS.md`; CONFIG
+  (snail row and bullet, a set on a level, screenplay with a level and its verb, the random cast's
+  species, the level example with a set and a prop); DESIGN §86.2 and new §86.11; README feature
+  and example entries; CHANGELOG (Phase O in the untagged 0.3.0, Steps 61–155); tasklist (Step
+  155 ticked, 9 Backlog lines); `docs/gallery/stage.md` params table regenerated (it predated the
+  phase; samples unchanged).
+
+Review of Phase O (all of `vidgen/world/`, `cartoon/level_*.py`, `camera.py`, the stage's level
+code, the moving / handling actions' level paths, foley's level cues, the docs of Steps 150–154)
+- Three layers: `vidgen.world` (level, world, items, moves, story_props) and
+  `cartoon/level_stage.py`, `level_drawing.py`, `vidgen.camera`, `cartoon/foley.py` import no manim;
+  the test now imports all of them (it had only the first three).
+- Fixed: (1) a set's props on a level were refused (depth), so `set: park` on a level needed
+  `props: []` and could have no props of its own (Step 150 gap): dropped on a level; (2) `vidgen
+  screenplay` crashed with an `AssertionError` traceback on any multi-line string ending in a
+  line break (a level's `map: |`): `plan_yaml._literal` always wrote `|-`; now `|` / `|-` / `|+`;
+  (3) no night stars on a level the camera rises over (they were kept below the heads at the
+  start, above the frame there) and they would have stayed behind as the camera rose: now in the
+  top `LEVEL_STAR_SKY` 0.45 of the view, moving with the camera; (4) `story_props._kind` said
+  `(a blockers: none)`: now `(blockers: none)`; (5) `items.py` named `vidgen.world.props`;
+  (6) found by the 9:16 lint: a portrait close-up, framed by height alone, was 0.41 of the
+  character's height wide and cut snouts and beaks (48 % of the mouse's face outside):
+  `shots.SHOT_MIN_WIDTHS` (close-up 0.55, medium / over-the-shoulder 0.7 of its height); a
+  landscape frame's views were wider already (unchanged).
+- Checked and right: CONFIG's flight times (0.87 s hop, 1.4 s 3 up, 1.9 s 8 down) and walking
+  speed (1.39 tiles/s at medium) against `flight_seconds` / `level_pace`; the 16:9 / 9:16 tile
+  counts; error messages name map rows / columns from the top left and the beat; the moves'
+  refusals say what to write.
+- Not changed (judgment): a gap shows the layers behind it (reads as a valley in the park set);
+  tall-level renders are slow (DESIGN §86.11: Manim's PIL transform of the tile chunks): both in
+  the Backlog with the earlier steps' open gaps.
+
+Files touched
+- New: `examples/platform-story/video.yaml`, `tests/test_cartoon_snail.py`,
+  `tests/test_phase_o_review.py`.
+- Changed: `src/vidgen/cartoon/animals.py`, `generator.py`, `acting.py`, `contrast.py`,
+  `config.py`, `random_cast.py`, `cli.py` (help), `includes.py`, `plan_yaml.py`, `screenplay.py`,
+  `scenes/stage.py` (stars, a docstring, a message), `cartoon/shots.py`, `world/items.py`, `world/story_props.py`,
+  `data/guide/AGENTS.md`, `AGENTS.md`, `docs/CONFIG.md`, `docs/gallery/stage.md`, `README.md`,
+  `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`; tests `test_cartoon_more_animals.py`
+  (tail check by `SPECIES_WITHOUT_TAIL`), `test_platform_level.py` (no-manim imports).
+
+Public interfaces (`vidgen.api` unchanged)
+- `look.species: snail`; `includes.LEVEL_DROPPED_KEYS`; `screenplay.stage_marks`; screenplay
+  verb `jumps / hops / leaps ... to / onto <spot>`; `config.SHELLED_SPECIES`;
+  `stage.LEVEL_STAR_SKY`; `shots.SHOT_MIN_WIDTHS`; guide topic `platform` (aliases level, levels, platformer, jumping,
+  story-props).
+
+Decisions
+- The snail was cheap on the turtle's machinery (a shell behind the body, short legs, a slow
+  gait), so it was added rather than casting a turtle as the "grumpy snail".
+- A level drops its set's depth things instead of refusing them; a set that itself defines a
+  level keeps its props (they are the level's own then).
+- Screenplay levels come through sets (a map is multi-line; a `set:` line is one line).
+- The example's `at` times and texts were tuned until lint reported no squeezed moves; 9:16
+  shots were added where the portrait frame lost the second character (two-shots for the snail,
+  a close-up for Granny's call, a pan to the picnic).
+
+Known gaps (in the Backlog)
+- The 9:16 variant lints with 2 warnings, both judged acceptable: the snail half at the view's
+  edge as Nutmeg walks up to him (the camera follows her; the next beat is his close-up) and
+  Nutmeg's tail tip outside two two-shots. The 16:9 version lints with no finding.
+- The kid mouse's head (big ears, snout) is 0.78 of its height wide: a portrait close-up of it
+  still cuts an ear; the example uses two-shots for her lines.
+- A gap shows the layers behind it (reads as a valley in the park set); tall levels render slowly
+  (2.4x real time at 854x480); the earlier steps' open gaps (rain on tiles, react sounds, enter /
+  exit pickups, climbing hands, the follow's look-ahead, vertical moves in `vidgen direct`,
+  `small_speaker` without a head part, the screenplay's time estimates on a level).
+- Nobody listened to the preview (music and sounds mixed; no narration: word-count timing).
+
+How to test
+- One file at a time under the 1500 MB cap: `tests/test_platform_level.py` (30),
+  `test_platform_moves` (23), `test_platform_props` (24), `test_platform_sounds` (8),
+  `test_platform_camera` (18), `test_phase_o_review` (8), `test_cartoon_snail` (13),
+  `test_cartoon_more_animals` (21), `test_cartoon_animals` (57), `test_cartoon_robots` (40, the
+  pinned drawings), `test_cartoon_outfits` (57), `test_random_cast` (15), `test_cartoon_shots`
+  (14), `test_cartoon_reframe` (11), `test_cartoon_directing` (34), `test_includes` (24),
+  `test_builtin_sets` (53), `test_screenplay` (20), `test_plan` (68), `test_phase_l_review` (7),
+  `test_guide` (52), `test_docs` (60), `test_gallery` (12), `test_cartoon_stage` (24),
+  `test_cartoon_parallax` (50), `test_cartoon_lighting` (8), `test_cartoon_lint` (10), `test_lint`
+  (23), `test_config` (21), `test_cartoon_moving` (16), `test_cartoon_foley` (7),
+  `test_cartoon_props` (90), `test_cartoon_holding` (16), `test_cartoon_fire_nature` (20),
+  `test_cartoon_room` (28), `test_cartoon_storm` (15), `test_phase_i_review` (20),
+  `test_phase_k_review` (8), `test_actions` (28), `test_timing_lint` (10), `test_cartoon_sounds`
+  (15), `test_layout` (44), `test_schema` (62, 78 s): all passed (render tests included).
+- `tests/test_mcp.py` in full (`timeout 1500`, the same memory cap without `capped`'s 300 s
+  limit): 17 passed in 47 s.
+- Manual: `vidgen validate examples/platform-story` ok (the base and the `short` variant);
+  `vidgen lint` 0 findings (16:9), 0 errors / 2 warnings (`--variant short`); `vidgen render
+  examples/platform-story --preview` 2:50 (170.0 s), music and sounds in the mix (timings.json:
+  meadow 37 footsteps, 4 coins, 2 boings, 2 thuds; garden unlock, creak, swoosh, twinkle, 3 coins;
+  sky 4 boings, 4 thuds, 2 twinkles); storyboards 16:9 (two stills a beat) and 9:16 checked by eye.

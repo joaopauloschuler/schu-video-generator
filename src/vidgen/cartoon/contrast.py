@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from typing import TYPE_CHECKING, Any
 
-from vidgen.config import HEX_COLOR_PATTERN, CharacterColors, CharacterLook, LookAlikeRule
+from vidgen.config import HEX_COLOR_PATTERN, SHELLED_SPECIES, CharacterColors, CharacterLook, LookAlikeRule
 from vidgen.errors import VidgenError
 from vidgen.lint.color import delta_e, hex_rgb, lab
 
@@ -60,7 +60,8 @@ _FIXES: dict[str, str] = {
 
 #: Species whose outlines are alike (a beak and a round head; tall pointed ears): two of one
 #: family differ in ``species`` by :data:`SPECIES_FAMILY_DIFFERENCE`, not 1.
-SPECIES_FAMILIES: dict[str, str] = {"bird": "beaked", "owl": "beaked", "penguin": "beaked", "cat": "pointed ears", "fox": "pointed ears"}
+SPECIES_FAMILIES: dict[str, str] = {"bird": "beaked", "owl": "beaked", "penguin": "beaked", "cat": "pointed ears", "fox": "pointed ears",
+                                   "turtle": "shelled", "snail": "shelled"}
 SPECIES_FAMILY_DIFFERENCE = 0.5
 
 #: Silhouette values not named as shared in :func:`compare`'s advice (most characters have them).
@@ -101,8 +102,8 @@ def look_features(look: CharacterLook | Mapping[str, Any], colors: CharacterColo
         robot = look.robot_look()
         details |= {f"robot head {robot.head}", f"robot face {robot.face}", f"robot on {robot.moves_on}", *(["antenna"] if robot.antenna else [])}
     resolved = {key: _resolve(getattr(colors, key), theme) for key in ("clothes", "skin", "hair", "accessory")}
-    if look.hair == "none" and look.facial_hair == "none" and look.species != "turtle":
-        resolved["hair"] = resolved["skin"]          # a bald head shows skin (a turtle's shell is in the hair colour)
+    if look.hair == "none" and look.facial_hair == "none" and look.species not in SHELLED_SPECIES:
+        resolved["hair"] = resolved["skin"]          # a bald head shows skin (a shell is in the hair colour)
     if not worn and look.shoes == "none":
         resolved["accessory"] = resolved["clothes"]  # no accessory colour is drawn
     labs = {key: lab(hex_rgb(value)) if _is_hex(value) else None for key, value in resolved.items()}

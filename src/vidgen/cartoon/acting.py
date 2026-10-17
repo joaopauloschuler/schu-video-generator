@@ -233,11 +233,13 @@ class SpeciesMotion:
         return gait if not self.gait.waddle else replace(gait, waddle=self.gait.waddle)
 
 
-#: The species that move their own way: a turtle plods slowly with short steps, a penguin
+#: The species that move their own way: a turtle plods slowly with short steps (a snail even
+#: more slowly, gliding with a smaller bob), a penguin
 #: waddles with short quick steps, a frog jumps higher, a robot walks with stiff knees and
 #: elbows. Every other look moves like a person.
 SPECIES_MOTIONS: dict[str, SpeciesMotion] = {
     "turtle": SpeciesMotion(Gait(stride=0.7, swing=0.7, knee=0.6, elbow=0.6, bob=0.5), speed=0.4),
+    "snail": SpeciesMotion(Gait(stride=0.6, swing=0.6, knee=0.5, elbow=0.6, bob=0.35), speed=0.35),
     "penguin": SpeciesMotion(Gait(stride=0.55, swing=0.45, knee=0.35, elbow=0.3, bob=1.5, waddle=9.0), speed=0.7),
     "frog": SpeciesMotion(jump=1.8),
     "robot": SpeciesMotion(Gait(knee=0.5, elbow=0.4)),

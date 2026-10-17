@@ -24,7 +24,7 @@ def _kind(world: World, name: str, kind: str, what: str) -> Item:
     item = world.item(name)
     if item is None or item.kind != kind:
         known = ", ".join(i.name for i in world.items if i.kind == kind) or "none"
-        raise VidgenError(f"'{name}' is not {what} of the level ({what}s: {known})")
+        raise VidgenError(f"'{name}' is not {what} of the level ({kind}s: {known})")
     return item
 
 
