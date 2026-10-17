@@ -1021,6 +1021,8 @@ class RushedAnimationRule(RuleConfig):
 
     min_run_time: PositiveFloat = 0.5
     """Shortest acceptable run time (seconds) of an animation `play_steps` had to shorten."""
+    max_speedup: float = Field(default=1.5, ge=1.0)
+    """Fastest acceptable speed-up of a walk or a jump on a platform level squeezed into its beat (its own time over the time it got)."""
 
 
 class TalkedOverRule(RuleConfig):

@@ -14159,3 +14159,109 @@ How to test
 - Manual: a scratch level with `set: park` (42 x 6) at 854x480: validate ok, lint 0 errors
   (a look-alike warning from the scratch cast), storyboard and preview render (5.9 s of video in
   6.8 s), a 9:16 storyboard; stills checked by eye.
+
+## Step 151 — Walking and jumping on a level, timed to the narration
+
+What was built
+- **Rules** (`src/vidgen/world/moves.py`, no manim; exported by `vidgen.world`): `walk_route`
+  (cheapest path over (column, height) states: one-tile steps up / down eased across the column
+  edge, ladders up and down incl. a hatch through the tile over a ladder, room for the body's
+  height, never across a gap), `plan_jump` (take-off on the body's own floor, the lowest clear
+  parabola from 0.75 tiles over the higher end, limits 5 across / 3 up / 8 down, landing on the
+  goal's height or the highest reachable floor in that column), `Route`, `Leg`, `JumpPlan`,
+  `arc_point`, `flight_seconds` (gravity 8 tiles/s², at most 4 tiles/s across, at least 0.7 s),
+  `surface_under`, `is_floor`, `map_cell`, `reversed_route`, `walk_body` / `jump_body` (on a
+  `World`; `World.moved` added). Refusals are `VidgenError`s saying where the way stops (a gap, a
+  drop, a wall, no room under the tiles, another height) or why a jump fails (too far / high /
+  deep, the tile the arc hits, a cloud it would land on first), from the nearest take-off.
+- **Clouds are one-way** (DESIGN §86.7 says why): stand on top, walk through, jump up through;
+  a fall onto a cloud lands there.
+- **Goals and validation** (`cartoon/level_stage.py`): `level_goal` (a spot, a mark / x, or a map
+  tile `{column, row}`), `LevelFrame.world_point`, `LevelStep`, `level_move_problems` (the replay
+  of a scene's `walk_to`, `run_to`, `jump` with `to`, `enter`, `exit` in beat / `at` order) —
+  `Stage._level_move_problems` feeds it from `action_sequence_problems`, so `vidgen validate`
+  (and a render) refuses `beat 'x': 'pip' cannot walk to spot 'home': ...; jump there instead
+  (- jump: pip, to: home)`.
+- **Renderer** (`cartoon/level_motion.py`): `RouteWalk(Walk)` (a `_place` hook added to
+  `Walk.interpolate_mobject`; facing per leg, front on a ladder, last side when stopped) and
+  `ArcJump(Jump)` (faces the landing, longer crouch, arc, squash, landing wobble;
+  `LEVEL_JUMP_CROUCH_SECONDS`, `LEVEL_JUMP_LAND_SECONDS`, `LANDING_WOBBLE_DEGREES` in
+  `cartoon/motion.py`, whose `jump_phases` / `jump_motion_seconds` take the crouch / landing
+  seconds as keyword arguments). Both keep `ground_y` on the floor under the character.
+- **Stage** (`scenes/stage.py`): `on_level`, `level_pace`, `level_walk`, `level_enter`,
+  `level_exit`, `level_jump` (a `Succession(RouteWalk, ArcJump)` when it needs a run-up),
+  `level_moved` (`grounds` = the end floor: `keyframes` y 0), `level_homes`; `STAGE_SIZE` 0.45;
+  `feet_y_at` raises on a level; `_timed_parts` splits a Succession for foley and motion effects.
+- **Actions** (`scenes/moving.py`): `walk_to`, `run_to`, `enter`, `exit` go through the stage's
+  level methods when `on_level` (default speeds × `level_pace`); `jump` gained `to` (`JumpTile`
+  `{column, row}`, a spot, a mark or an x; refused without a level or together with `height`);
+  `walk_to` `depth` refused on a level; run times the rules refuse while a batch is planned fall
+  back to the default (apply raises with scene and beat).
+- **Timing / tools**: `rushed_animation.max_speedup` (1.5) reports a `RouteWalk` / `ArcJump`
+  play sped up beyond it; automatic directing (`_follow_written`, `_jumps_somewhere`: a jump to a
+  place moves the character, changes its look, blocks close-ups) and the prop-handling replay
+  (`holding.py`) follow jumps; storyboards show jumps half-way as before.
+- Docs: CONFIG "Walking and jumping on a level" (and the Moving table, `run_time`, lint rows),
+  DESIGN §86.7, the guide's `jump` row (+ `AGENTS.md`), `tasklist.md`.
+
+YAML
+```yaml
+actions:
+  - {walk_to: pip, to: high}                         # a spot / mark / x: along tiles and ladders
+  - {jump: pip, to: cloud, at: 0.2}                   # a spot on the cloud (up through it)
+  - {jump: pip, to: {column: 15, row: 3}}             # a tile of the map (from the top left, from 1)
+  - {enter: kit, side: left}                          # walks in along the tiles to its own place
+```
+
+Files touched
+- New: `src/vidgen/world/moves.py`, `src/vidgen/cartoon/level_motion.py`, `tests/test_platform_moves.py`.
+- Changed: `src/vidgen/world/__init__.py`, `world/world.py`, `cartoon/level_stage.py`,
+  `cartoon/transition.py` (`Walk._place`), `cartoon/motion.py`, `cartoon/directing.py`,
+  `cartoon/holding.py`, `scenes/moving.py`, `scenes/stage.py`, `config.py`
+  (`RushedAnimationRule.max_speedup`), `lint/timing_rules.py`, `docs/CONFIG.md`, `DESIGN.md`,
+  `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces (`vidgen.api` unchanged)
+- `jump` option `to`; lint setting `rushed_animation.max_speedup`; `vidgen.world` exports
+  `walk_route`, `plan_jump`, `walk_body`, `jump_body`, `surface_under`, `Route`, `Leg`,
+  `JumpPlan`; the stage methods above (duck-typed by the moving actions).
+
+Decisions
+- One-way clouds (above). Steps of one tile are walked; higher ones need a jump. A jump's run-up
+  is on foot without ladders (a climb and a jump are two actions). Default walking speeds on a
+  level scale with `size` (otherwise every default walk was "fast": speed lines). The speed-up
+  lint only counts level moves so plain-stage lint results do not change. `enter` / `exit` ways
+  depend on the camera's view and are checked at render time only.
+- Searched first: walks (`Walk`, `walk_seconds`, `enter_path`), jump motion (`jump_phases`,
+  `jump_stretch`, `settle_wobble`), timing (`ActionRunner`, `rushed_animation`), replays
+  (`holding_problems`, `_follow_written`) are reused; no path-finding or arc code existed.
+
+Known gaps for Step 152 and later
+- Props (key / door, coins / stars, friendly blockers) are not world items yet: the rules know
+  only tiles and bodies; a body never blocks another (two characters can stand in one place).
+- A jump's arc can rise above the frame's top (the camera moves sideways only; a cloud on the
+  top used row with a character on it touches the edge); a mid-air pick-up or reaction is not
+  possible; no jump sound distinct from the stage's boing and no landing sound (Step 153).
+- `enter` of a character that waits off stage, then `exit` before its `enter`, is refused ("not
+  standing on a tile"); `walk_to` to a tile `{column, row}` is not offered (only `jump`);
+  `vidgen direct` does not know the x of a jump to a tile; `vidgen screenplay` has no "jumps onto"
+  verb; climbing uses the front walk cycle (no arms on rungs); walking through a low cloud shows
+  the character inside it.
+- Level moves of characters that keyframes / rides moved are not replayed by `vidgen validate`
+  (checked at render). The camera follow and `character_size` are Step 154.
+
+How to test
+- `tests/test_platform_moves.py` (23 passed incl. 1 render, 2.5 s); `tests/test_platform_moves.py
+  tests/test_platform_level.py` (52 passed, 3.6 s); `-m "not render"` of `test_cartoon_moving`,
+  `test_cartoon_motion`, `test_cartoon_motion_effects`, `test_cartoon_foley`,
+  `test_cartoon_holding`, `test_cartoon_directing`, `test_timing_lint`, `test_cartoon_depth`,
+  `test_cartoon_acting`, `test_cartoon_stage`, `test_docs`, `test_guide` (268 passed, 9 s); render
+  tests of `test_cartoon_moving`, `_depth`, `_motion_effects`, `_foley`, `_stage`, `_directing`
+  (11 passed, ~30 s, one file at a time); `-m "not render"` `test_actions`, `test_actions_coverage`,
+  `test_cartoon_lint`, `test_lint`, `test_phase_k_review` (72 passed, 12 s); `test_schema` (61
+  passed, 75 s).
+- Manual: a 47 x 6 scratch level (`set: park`; a jump with a run-up over a gap, a walk over steps,
+  a ladder climb to a plank, a jump up onto a cloud, a gesture) at 854x480: validate ok (and the
+  refusals while the map was wrong), storyboard with mid-action stills, lint (squeezed moves
+  reported until the beats had narration enough, then none), preview render 31.2 s of video in
+  35.5 s; stills and frame sheets of the run-up, crouch, arc, landing and climb checked by eye.

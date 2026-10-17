@@ -175,9 +175,15 @@ def animation_overrun(ctx: SceneContext, settings: AnimationOverrunRule) -> Iter
 # ----- rushed_animation -------------------------------------------------------------------------
 
 
+#: The animations of a walk or a jump on a platform level (DESIGN.md §86.7), as the play log names them.
+LEVEL_MOVES = ("RouteWalk", "ArcJump")
+
+
 @rule("rushed_animation", scope="scene")
 def rushed_animation(ctx: SceneContext, settings: RushedAnimationRule) -> Iterator[Issue]:
-    """Animations ``play_steps`` shortened below ``min_run_time`` to fit a short beat."""
+    """Animations ``play_steps`` shortened below ``min_run_time`` to fit a short beat; walks and
+    jumps on a platform level sped up more than ``max_speedup`` times to fit theirs."""
+    yield from _rushed_moves(ctx, settings)
     rushed: dict[str | None, list[dict[str, Any]]] = {}
     for play in ctx.activity["plays"]:
         if play["requested"] is not None and play["end"] - play["start"] < settings.min_run_time - 1e-6:
@@ -196,6 +202,29 @@ def rushed_animation(ctx: SceneContext, settings: RushedAnimationRule) -> Iterat
             limit=settings.min_run_time,
             beat=beat_id,
             time=plays[0]["start"],
+        )
+
+
+def _rushed_moves(ctx: SceneContext, settings: RushedAnimationRule) -> Iterator[Issue]:
+    for play in ctx.activity["plays"]:
+        seconds = play["end"] - play["start"]
+        names = "+".join(play["animations"])
+        if play["requested"] is None or seconds <= 0 or not any(move in names for move in LEVEL_MOVES):
+            continue
+        speedup = play["requested"] / seconds
+        if speedup <= settings.max_speedup + 1e-6:
+            continue
+        beat = next((b for b in ctx.beats if b["id"] == play["beat"]), None)
+        length = f"the beat ({beat['end'] - beat['start']:.1f} s of narration)" if beat else "the scene"
+        yield Issue(
+            f"a walk or jump on the level plays {speedup:.1f} times as fast as its own pace ({names}: {seconds:.1f} s instead of "
+            f"{play['requested']:.1f} s): {length} is too short for it; give the beat more narration, start the move earlier (at), "
+            "or split the way over two beats",
+            None,
+            value=round(speedup, 3),
+            limit=settings.max_speedup,
+            beat=play["beat"],
+            time=play["start"],
         )
 
 

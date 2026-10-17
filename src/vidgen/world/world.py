@@ -8,7 +8,7 @@ and give the next one; renderers only draw worlds. No manim.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from vidgen.errors import VidgenError
 from vidgen.world.level import Level
@@ -54,6 +54,11 @@ class World:
             if body.name == name:
                 return body
         raise VidgenError(f"nothing named '{name}' is in the level (bodies: {', '.join(b.name for b in self.bodies) or 'none'})")
+
+    def moved(self, name: str, x: float, y: float) -> World:
+        """The world with the body ``name`` standing at (``x``, ``y``) instead."""
+        self.body(name)
+        return World(self.level, tuple(replace(b, x=x, y=y) if b.name == name else b for b in self.bodies))
 
 
 def place_bodies(level: Level, placings: Sequence[Placing]) -> World:

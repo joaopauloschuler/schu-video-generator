@@ -1,6 +1,7 @@
 """Moving beat actions (DESIGN.md §69.12): ``walk_to``, ``run_to`` (§69.41), ``enter``, ``exit``,
 ``gesture`` and ``jump`` on the characters of a scene. Written against ``vidgen.api`` only, like
-project actions.
+project actions; on a stage's platform level the stage plans the walks and jumps with its rules
+(``level_walk``, ``level_enter``, ``level_exit``, ``level_jump``, DESIGN.md §86.7).
 
 The motion is worked out without manim in :mod:`vidgen.cartoon.acting` (walk times, the walk
 cycle, where an entrance starts and an exit ends, gestures, jumps) and played with the
@@ -64,6 +65,31 @@ def _speed(options: ActionOptions, character: Character) -> float:
     return options.speed * character.species_motion.speed
 
 
+def _on_level(scene: NarratedScene) -> bool:
+    """Whether the scene is a stage with a platform level (DESIGN.md §86.7): walks and jumps
+    follow its tiles (the stage's ``level_walk``, ``level_jump``...)."""
+    return bool(getattr(scene, "on_level", False))
+
+
+def _pace(scene: NarratedScene, options: ActionOptions, character: Character) -> float:
+    """:func:`_speed`; on a level a default speed is scaled by the level's smaller characters
+    (``level_pace``), so they walk as many of their heights per second as on a plain stage."""
+    speed = _speed(options, character)
+    if _on_level(scene) and "speed" not in options.model_fields_set:
+        speed *= scene.level_pace
+    return speed
+
+
+def _level_seconds(make: Any) -> float | None:
+    """The run time of the level animation ``make()`` builds, or ``None`` when the rules refuse it
+    now (its batch may start after another move of the same character: :meth:`Action.apply`
+    plans it again then, and raises)."""
+    try:
+        return float(make().run_time)
+    except VidgenError:
+        return None
+
+
 def _carried(scene: NarratedScene, character: Character) -> list[Mobject]:
     """The props ``character`` holds (they grow with a walk in depth and fade through a door)."""
     return [p for p in getattr(scene, "props", {}).values() if getattr(p, "held_by", None) == character.name]
@@ -100,6 +126,8 @@ def _walk_problems(params: Any, to: Any, depth: float | None) -> list[tuple[str,
         return [("to", "give the place a mark and / or a depth: {mark: right, depth: 0.4}")]
     if inner is not None and depth is not None:
         return [("depth", "give the depth once: in to ({mark, depth}) or as depth, not both")]
+    if getattr(params, "level", None) is not None and (inner is not None or depth is not None):
+        return [("depth", "a level has no depth: walks go along its tiles; remove depth (and give to: a spot, a mark or an x)")]
     wall = params.wall_depth() if hasattr(params, "wall_depth") else None
     going = inner if inner is not None else depth
     if wall is not None and going is not None and going > wall + SAME_DEPTH:
@@ -148,6 +176,11 @@ class WalkTo(_Moving):
         return x, depth
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        if _on_level(scene):
+            place = self._destination()[0]
+            found = [_level_seconds(lambda c=c: scene.level_walk(c, place, speed=_pace(scene, self.options, c), gait=self.gait))
+                     for c in _characters(scene, targets, self.label)]
+            return max((t for t in found if t is not None), default=None)
         times = []
         for c in _characters(scene, targets, self.label):
             x, depth = self._goal(scene, c)
@@ -160,8 +193,17 @@ class WalkTo(_Moving):
     gait = WALKING
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """A :class:`Walk` to the place (and depth) for each character not there yet."""
+        """A :class:`Walk` to the place (and depth) for each character not there yet; on a level
+        along its tiles and ladders (the stage's ``level_walk``)."""
         anims: list[Animation] = []
+        if _on_level(scene):
+            for character in _characters(scene, targets, self.label):
+                walk = scene.level_walk(character, self._destination()[0], speed=_pace(scene, self.options, character), gait=self.gait)
+                if walk.route.effort > 1e-6:
+                    anims.append(walk)
+                    scene.level_moved(character, walk)
+                    _ended_walk(scene, character)
+            return anims
         for character in _characters(scene, targets, self.label):
             x, depth = self._goal(scene, character)
             deeper = depth is not None and abs(depth - character.stage_depth) > SAME_DEPTH
@@ -262,7 +304,15 @@ class Enter(_Moving):
         walk = _walk_time(character, end - start, _speed(self.options, character))
         return max(walk, 2 * DOOR_FADE_SECONDS) if self.options.door is not None else walk
 
+    def _level_walk(self, scene: NarratedScene, character: Character) -> Animation:
+        """On a level: in from beyond the view's edge along the tiles (the stage's ``level_enter``)."""
+        side, start, _ = self._path(scene, character)
+        return scene.level_enter(character, side, start, self.options.to, speed=_pace(scene, self.options, character))
+
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        if _on_level(scene):
+            found = [_level_seconds(lambda c=c: self._level_walk(scene, c)) for c in _characters(scene, targets, "enter")]
+            return max((t for t in found if t is not None), default=None)
         times = []
         for character in _characters(scene, targets, "enter"):
             _, start, end = self._path(scene, character)
@@ -271,8 +321,15 @@ class Enter(_Moving):
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Put each character just beyond the view's edge, or in the open door, and walk it in
-        (fading in at the door)."""
+        (fading in at the door); on a level along the tiles."""
         anims: list[Animation] = []
+        if _on_level(scene):
+            for character in _characters(scene, targets, "enter"):
+                walk = self._level_walk(scene, character)
+                anims.append(walk)
+                scene.level_moved(character, walk)
+                _ended_walk(scene, character)
+            return anims
         for character in _characters(scene, targets, "enter"):
             closed = _door_closed(scene, self.options.door)
             _, start, end = self._path(scene, character, opening=True)
@@ -315,18 +372,32 @@ class Exit(_Moving):
         walk = _walk_time(character, end - _feet_x(character), _speed(self.options, character))
         return max(walk, 2 * DOOR_FADE_SECONDS) if self.options.door is not None else walk
 
+    def _level_walk(self, scene: NarratedScene, character: Character) -> Animation:
+        """On a level: out beyond the view's edge along the tiles (the stage's ``level_exit``),
+        then beyond the stage's edge."""
+        left, right = scene.camera_bounds()[:2]
+        side, end = self._end(scene, character)
+        park = offstage_x(side, left, right, character.width / 2)
+        return scene.level_exit(character, side, end, park, speed=_pace(scene, self.options, character))
+
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        if _on_level(scene):
+            found = [_level_seconds(lambda c=c: self._level_walk(scene, c)) for c in _characters(scene, targets, "exit")]
+            return max((t for t in found if t is not None), default=None)
         times = [self._seconds(c, self._end(scene, c)[1]) for c in _characters(scene, targets, "exit")]
         return max(times, default=None)
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Walk each character out of the view or into the door (fading away there); then put it
-        beyond the stage's edge."""
+        beyond the stage's edge. On a level along the tiles."""
         left, right = scene.camera_bounds()[:2]
         anims: list[Animation] = []
         for character in _characters(scene, targets, "exit"):
             if getattr(scene.camera_following, "followed", None) is character:
                 scene.follow_with_camera(None)
+            if _on_level(scene):
+                anims.append(self._level_walk(scene, character))
+                continue
             half = character.width / 2
             closed = _door_closed(scene, self.options.door)
             side, end = self._end(scene, character, opening=True)
@@ -367,14 +438,33 @@ class GestureAction(_Moving):
         return [Gesture(c, self.options.to) for c in _characters(scene, targets, "gesture")]
 
 
+class JumpTile(ActionOptions):
+    """A tile of a level's map to jump onto, as the author reads the map (DESIGN.md §86.7)."""
+
+    column: int = Field(ge=1)
+    """Its column, from 1 at the map's left."""
+    row: int = Field(ge=1)
+    """Its row, from 1 at the map's top line."""
+
+
 @action("jump")
 class JumpAction(_Moving):
     """The target character jumps up (``height`` in character heights) and lands where it stood.
-    Without a ``height`` a frog jumps higher (its species' factor, DESIGN.md §69.57)."""
+    Without a ``height`` a frog jumps higher (its species' factor, DESIGN.md §69.57). On a
+    platform level, ``to`` (a spot, a mark, an x or a tile ``{column, row}``) jumps it there: it
+    walks to the best take-off point, crouches, flies an arc clear of the tiles and lands with a
+    squash and a wobble (DESIGN.md §86.7); ``vidgen validate`` says why a jump cannot be made."""
 
     class Options(ActionOptions):
         height: float = Field(JUMP_HEIGHT, gt=0.0, le=2.0)
         """How high it jumps, in its own heights (0.4: a hop; 1: its own height); default 0.4 (a frog 0.72)."""
+        to: JumpTile | Place | None = None
+        """On a platform level: where it jumps to: a spot, a mark or an x 0..1 of the stage (onto the highest tile there a jump reaches), or a tile {column, row} of the map (from 1 at the top left); default: up where it stands."""
+
+    def _place(self) -> Any:
+        """``to`` as the stage's ``level_jump`` takes it (a tile as ``{column, row}``)."""
+        to = self.options.to
+        return to.model_dump() if isinstance(to, JumpTile) else to
 
     def _height(self, character: Character) -> float:
         if "height" in self.options.model_fields_set:
@@ -384,12 +474,30 @@ class JumpAction(_Moving):
     run_time = JUMP_SECONDS
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
-        return self._target_characters(scene_cls, params)[1]
+        to = self.options.to
+        problems = self._place_problems(scene_cls, params, None if to is None or isinstance(to, JumpTile) else to)
+        if to is not None and getattr(params, "level", None) is None:
+            problems.append(("to", "jumping to a place needs a platform level (params.level); without one a character jumps up where it stands"))
+        if to is not None and "height" in self.options.model_fields_set:
+            problems.append(("height", "give height (a jump where it stands) or to (a jump to a place on the level), not both"))
+        return problems
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        if self.options.to is not None and _on_level(scene):
+            found = [_level_seconds(lambda c=c: scene.level_jump(c, self._place())) for c in _characters(scene, targets, "jump")]
+            return max((t for t in found if t is not None), default=None)
         times = [jump_motion_seconds(JUMP_SECONDS, c.motion_strength) for c in _characters(scene, targets, "jump")]
         return max(times, default=None)
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """A :class:`Jump` on each character."""
-        return [Jump(c, self._height(c)) for c in _characters(scene, targets, "jump")]
+        """A :class:`Jump` on each character; with ``to`` on a level, the planned run-up and arc
+        (the stage's ``level_jump``)."""
+        if self.options.to is None or not _on_level(scene):
+            return [Jump(c, self._height(c)) for c in _characters(scene, targets, "jump")]
+        anims: list[Animation] = []
+        for character in _characters(scene, targets, "jump"):
+            jump = scene.level_jump(character, self._place())
+            anims.append(jump)
+            scene.level_moved(character, jump)
+            _ended_walk(scene, character)
+        return anims

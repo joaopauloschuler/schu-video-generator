@@ -10675,3 +10675,75 @@ apply as on any stage (their sky and layers; their props stand at depths, so a l
   too small to read. Not named `characters:` (the cast list and the stage's placement list).
 - **Step 155**: a 2–3 minute original kids' story using only these features, the guide and docs,
   and the review of the phase.
+
+### 86.7 Walking and jumping (Step 151)
+
+Reference: docs/CONFIG.md "Walking and jumping on a level".
+
+- **Rules** (`vidgen/world/moves.py`, no manim): a body is a box `BODY_WIDTH` 0.4 of its height
+  wide on its feet. `SOLID` = ground and platform (they block from the side and from below); a
+  *floor* (`is_floor`) is the top of a ground, platform or cloud tile or of a ladder. A body stands
+  at a height in a column when a floor is there with room for its height above (no solid cell).
+  Walking is a cheapest-path search (Dijkstra, deterministic ties) over (column, height) states:
+  to the next column at most `STEP_TILES` 1 up or down (a flat way costs 1, a step 1.05), up a
+  ladder at its feet to the ladder's top (or onto the tile over it: a hatch) and down one under
+  it, at `CLIMB_SLOWNESS` 2 per tile. `walk_route` turns the states into a `Route` of `Leg`s
+  (`walk`, `step`: half a tile across the column edge, eased; `climb`: at the column's middle);
+  its `effort` (tiles walked, climbs doubled) sets the time. No way there: `VidgenError` naming
+  where the way stops (a gap, a drop, a wall, no room under the tiles, or the column reached only
+  at another height) and suggesting a jump.
+- **Clouds are one-way** (decided here): a body stands on a cloud's top, walks through a cloud at
+  its own height and jumps up through it from below; a falling arc that crosses a cloud's top
+  lands there, so `plan_jump` refuses one that would cross a cloud before its landing. Why: it is
+  the usual platform-game reading of a cloud, it makes "jump up onto the cloud" work from right
+  under it, and solid platforms (`=`) remain for a ceiling. Walking through a low cloud shows the
+  character inside the drawing; levels put clouds high, so this was left.
+- **Jumps** (`plan_jump`): the landing is the goal's height (a spot, a tile) or, for a mark or x,
+  the highest floor in that column a jump reaches. Take-off candidates are the states the body can
+  walk to (no ladders) at the column's middle and 0.3 towards the landing (and where it stands);
+  each is tried with the arc `y(u) = y0 + (y1 − y0) u + 4 b u (1 − u)` (x moving evenly) peaking
+  `JUMP_CLEARANCE` 0.75 over the higher end, then 0.25 higher up to `MAX_JUMP_UP` +
+  `JUMP_HEADROOM` over the take-off. An arc is clear when the body's box overlaps no solid cell at
+  samples 0.05 tiles apart and crosses no cloud top on the way down. Limits: `MAX_JUMP_ACROSS` 5,
+  `MAX_JUMP_UP` 3, `MAX_JUMP_DOWN` 8 tiles (a character is 2 tiles). The best candidate is the
+  shortest jump (at least a tile across beats straight up), then the shortest run-up, then the
+  lowest arc. No candidate: `VidgenError` with the reason from the nearest take-off. The flight
+  takes `flight_seconds`: rising and falling under `JUMP_GRAVITY` 8 tiles/s² (about half a real
+  gravity for a character two tiles tall, so arcs read slower than in a game), at most
+  `JUMP_AIR_SPEED` 4 tiles/s across, at least 0.7 s. `walk_body` / `jump_body` apply a rule to a
+  `World` (`World.moved`); a game could feed them a player's inputs.
+- **Goals and the replay** (`cartoon/level_stage.py`, no manim): `level_goal` reads a place (a
+  spot, a mark or x, a map tile `{column, row}` from the top left, from 1). `vidgen validate`
+  replays the scene's `walk_to`, `run_to`, `jump` (with `to`), `enter` and `exit` in beat and `at`
+  order (`Stage.action_sequence_problems` → `level_move_problems`) and reports each refusal at
+  `beats[j].actions[k].to` with the beat's id; a character is not followed after a refusal, an
+  exit or a keyframed / ridden move (until it enters again). `enter` / `exit` depend on the
+  camera's view, so their ways are checked when the scene renders.
+- **Renderer** (`cartoon/level_motion.py`): `RouteWalk` is a `Walk` whose `_place` hook (a small
+  refactor of `Walk.interpolate_mobject`: where the feet are and the facing at a share of the
+  distance) follows the route: facing each walking leg's way, the front on a ladder (front-view
+  walk cycle), the last side once stopped; footsteps and motion effects read its route length.
+  `ArcJump` is a `Jump` along the planned arc: it faces the landing, crouches
+  `LEVEL_JUMP_CROUCH_SECONDS` 0.32, stretches, squashes on landing and leans forward and back
+  (`settle_wobble`, `LANDING_WOBBLE_DEGREES` 7) over `LEVEL_JUMP_LAND_SECONDS` 0.55, all scaled by
+  `cartoon_motion` (`jump_phases` / `jump_motion_seconds` take the crouch and landing seconds).
+  A jump with a run-up is one `Succession(RouteWalk, ArcJump)`; foley and motion effects take its
+  parts in turn (`_timed_parts`: the run-up as a `walk_to`). Both set the character's `ground_y`
+  to the floor under it every frame (the shadow; far below over a gap), and the stage records the
+  end floor in `grounds` (`keyframes` y 0, `level_moved`).
+- **Stage** (`scenes/stage.py`): `on_level`, `level_pace` (`size / STAGE_SIZE`: default walking
+  and running speeds, and a jump's run-up, scale with the level's smaller characters, so they walk
+  as many of their heights per second as on a plain stage), `level_walk`, `level_enter`,
+  `level_exit`, `level_jump`, `level_moved`, `level_homes`. The moving actions (`scenes/moving.py`)
+  call these when `on_level`; a run time asked for while a batch is planned that the rules refuse
+  then gives the default (the batch may start after another move of the character; `apply` plans
+  again and raises naming the scene and beat). `feet_y_at` raises on a level; `walk_to` `depth`
+  is refused there.
+- **Timing**: moves keep the beat action timing (start at `at`, natural run time, sped up when
+  the beat is short). `rushed_animation` has `max_speedup` (1.5): a `RouteWalk` or `ArcJump` play
+  sped up more than that is reported (only level moves, so lint results on plain stages are as
+  before). Automatic directing (`_follow_written`, `_jumps_somewhere`) and the prop-handling
+  replay treat a jump to a spot or mark like a walk there (to a tile: the x is unknown).
+- Measured: the 47 x 6 scratch level at 854x480 renders 31 s of video (a jump with a run-up, a
+  walk over steps, a ladder climb, a jump up onto a cloud) in about 40 s; `plan_jump` takes a few
+  milliseconds per jump.

@@ -170,14 +170,23 @@ JUMP_SQUASH = 0.22
 JUMP_STRETCH = 0.15
 
 
-def jump_motion_seconds(flight_seconds: float, strength: float) -> float:
-    """How long a jump whose flight lasts ``flight_seconds`` takes with its crouch and landing."""
-    return flight_seconds + strength * (JUMP_CROUCH_SECONDS + JUMP_LAND_SECONDS)
+#: A jump between a level's platforms (DESIGN.md §86.7) crouches longer and lands softer, a
+#: small wobble after the squash (kid-friendly, slower than a game's): its seconds at strength 1,
+#: and the wobble's lean (degrees, forward first).
+LEVEL_JUMP_CROUCH_SECONDS = 0.32
+LEVEL_JUMP_LAND_SECONDS = 0.55
+LANDING_WOBBLE_DEGREES = 7.0
 
 
-def jump_phases(flight_seconds: float, strength: float) -> Phases:
+def jump_motion_seconds(flight_seconds: float, strength: float, crouch: float = JUMP_CROUCH_SECONDS, land: float = JUMP_LAND_SECONDS) -> float:
+    """How long a jump whose flight lasts ``flight_seconds`` takes with its crouch and landing
+    (``crouch`` / ``land``: their seconds at strength 1)."""
+    return flight_seconds + strength * (crouch + land)
+
+
+def jump_phases(flight_seconds: float, strength: float, crouch: float = JUMP_CROUCH_SECONDS, land: float = JUMP_LAND_SECONDS) -> Phases:
     """The crouch and landing shares of a jump."""
-    return Phases.of(strength * JUMP_CROUCH_SECONDS, flight_seconds, strength * JUMP_LAND_SECONDS)
+    return Phases.of(strength * crouch, flight_seconds, strength * land)
 
 
 def landing_bounce(v: float) -> float:
@@ -281,6 +290,9 @@ def follow_angles(forward: float, up: float, strength: float) -> dict[str, float
 
 __all__ = [
     "DEFAULT_MOTION",
+    "LANDING_WOBBLE_DEGREES",
+    "LEVEL_JUMP_CROUCH_SECONDS",
+    "LEVEL_JUMP_LAND_SECONDS",
     "MOTION_LEVELS",
     "BodyAccent",
     "Phases",

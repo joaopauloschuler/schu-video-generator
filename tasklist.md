@@ -803,10 +803,10 @@ cartoon style; the hero and the story are original. Same rules as Phases H–N.
 - [x] Tests: parsing, errors with row / column, placement, geometry, drawing (chunks join without a seam), params, validate, one tiny render (`tests/test_platform_level.py`)
 
 ### Step 151 — Walking and jumping, timed to the narration
-- [ ] Rules (no Manim): walking along platforms and stopping at edges; jumps between platforms from the author's intent ("jump to the cloud"): take-off, height and landing planned, the arc checked against the tiles, a clear `VidgenError` when impossible; fixed paths and simple arcs only (no physics engine)
-- [ ] Kid-friendly feel: a crouch before the jump, slower arcs, squash and wobble on landing (the existing cartoon motion)
-- [ ] Each step (walk, jump) timed to its narration line
-- [ ] Tests: rules without rendering (reachable / unreachable jumps, edges, blocked arcs), timing, one tiny render
+- [x] Rules (no Manim): walking along platforms and stopping at edges; jumps between platforms from the author's intent ("jump to the cloud"): take-off, height and landing planned, the arc checked against the tiles, a clear `VidgenError` when impossible; fixed paths and simple arcs only (no physics engine) (`vidgen/world/moves.py`: `walk_route` with steps of one tile and ladders, `plan_jump`, one-way clouds, `walk_body` / `jump_body`; `vidgen validate` replays a scene's moves and names the beat and why)
+- [x] Kid-friendly feel: a crouch before the jump, slower arcs, squash and wobble on landing (the existing cartoon motion) (`cartoon/level_motion.py`: `RouteWalk`, `ArcJump`; ladders climbed facing front)
+- [x] Each step (walk, jump) timed to its narration line (the beat's `at` and natural run times; default speeds scaled with `size`; `rushed_animation` `max_speedup` for level moves; `vidgen direct`, storyboards and the prop replay follow jumps)
+- [x] Tests: rules without rendering (reachable / unreachable jumps, edges, blocked arcs), timing, one tiny render (`tests/test_platform_moves.py`)
 
 ### Step 152 — Story props and reactions
 - [ ] Key and door, coins or stars to collect, friendly blockers (a grumpy snail that moves when asked nicely), as world items with rules (pickups, doors that open, blockers that move)

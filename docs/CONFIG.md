@@ -5097,8 +5097,68 @@ with air on the right; the blank lines around the map are ignored.
   the [drawing style](#drawing-style-drawing)'s outline width applies.
 - Errors name the map's row and column, counted from the top left from 1: `level: map row 2,
   column 7: unknown symbol '@'`, `map row 1, column 3: spot 'a' has nothing below it to stand on`.
-- Not yet: walking along and jumping between the tiles (walks on a level keep the walker's
-  height), rain, snow and fog on the tiles, and a set's props.
+- Not yet: rain, snow and fog on the tiles, and a set's props.
+
+##### Walking and jumping on a level
+
+On a level the moving actions follow the tiles. The author says where a character goes; vidgen
+plans the way (DESIGN.md §86.7) and `vidgen validate` refuses a move that cannot be made, naming
+the beat and why.
+
+```yaml
+beats:
+  - text: "Pip climbs the ladder up to the long plank."
+    actions:
+      - {walk_to: pip, to: high}                 # a spot: along the tiles, up the ladder on the way
+  - text: "Then Pip hops over the gap."
+    actions:
+      - {jump: pip, to: {column: 15, row: 3}, at: 0.2}   # a tile of the map (from the top left, from 1)
+  - text: "And jumps up onto the fluffy cloud!"
+    actions:
+      - {jump: pip, to: cloud}                   # a spot on the cloud: up through it from below
+      - {walk_to: kit, to: 0.8, at: 0.5}         # a mark or an x: any floor in that column it can walk to
+```
+
+- **Walking** (`walk_to`, `run_to`, `enter`, `exit`): along the tops of the tiles, stepping up or
+  down one tile at a time (a step is eased across the edge of two columns), up and down ladders on
+  the way, never across a gap and never off an edge. A character needs room for its height over
+  the tiles (two tiles); the shortest way wins. `to` is a spot (its tile), a mark or an x (any
+  floor in that column it can walk to). A walk that cannot get there on foot is refused with where
+  the way stops: `beat 'hills_b2': 'pip' cannot walk to spot 'home': the way stops at map column
+  10: a gap at column 11; jump there instead (- jump: pip, to: home)`. `depth` is refused (a level
+  has none). `enter` walks in from beyond the view's edge along the tiles to the character's own
+  place (or `to`), `exit` out beyond the edge; when no way on foot leads there, the render stops
+  with the side to use instead.
+- **Ladders** (`|`) are climbed facing the camera, legs and arms stepping, at half the walking
+  pace; a ladder's top is a place to stand, and a ladder ending under a tile (a hatch) climbs
+  through onto it.
+- **Clouds** (`~`) are one-way: a character stands on top, walks through a cloud at its own height
+  and jumps up through it from below, but a jump that falls onto a cloud lands there (an arc that
+  would cross a cloud's top on the way down is refused). Ground (`#`) and platforms (`=`) are solid.
+- **Jumping** (`jump` with `to`: a spot, a mark or an x, or a tile `{column, row}`): vidgen first
+  walks the character to the best take-off point on its own floor (the shortest jump, at least a
+  tile across when it can, then the shortest walk), then it crouches, flies an arc that clears the
+  tiles (the lowest of a few heights tried, from 0.75 tiles over the higher end), lands, squashes
+  and wobbles a little. Slower than a game: about 0.9 s in the air for a small hop, 1.4 s for a
+  jump 3 tiles up, up to 2 s for a long drop. At most 5 tiles across, 3 up and 8 down (a character is 2 tiles tall). To a mark or an
+  x it lands on the highest floor there that a jump reaches. An impossible jump is refused with
+  why, from the nearest take-off: `'kit' cannot jump to spot 'home': from map column 10 it is 11.7
+  tiles across, at most 5; walk closer first or put a platform in between`, `... it is 4 tiles up,
+  at most 3; add a step or a ladder on the way`, `... the arc hits the tile at map row 2, column
+  3 (also on higher arcs)`, `... it would land on the cloud at map row 2, column 6 first`. Without
+  `to`, `jump` jumps up where the character stands (`height`), as on any stage; `to` needs a level
+  and is given instead of `height`.
+- **Timing**: each move starts at its `at` in the beat and takes as long as its way needs: the
+  default walking and running speeds scale with the level's smaller characters (at `size: 0.25`
+  a walk goes 1.4 units, about 1.4 tiles, a second), a climbed tile counts as two, a jump adds its
+  run-up, crouch, flight and landing. A beat too short for its move speeds it up; `vidgen lint`
+  warns (`rushed_animation`) when a walk or jump on a level plays more than 1.5 times as fast as
+  its own pace: give the beat more narration, start the move earlier, or split the way over two
+  beats (a walk to the ladder in one, the climb in the next). The shadow follows the floor under
+  the character (none over a gap); `keyframes` `y: 0` is the floor it last walked or jumped to.
+- `vidgen storyboard` shows each walk and jump half-way; `vidgen direct` (automatic directing)
+  knows where a walk or a jump to a spot or a mark ends (not one to a tile); footsteps, the jump's
+  boing, dust and impact stars play as on any stage.
 
 #### Rooms (`room`)
 
@@ -5608,12 +5668,12 @@ as targets and the new state as an option:
 
 | action | options | |
 |---|---|---|
-| `walk_to` | `to` (a mark or an x 0–1 of the stage, or `{mark, depth}`), `depth` (0 front .. 1 back; default: its depth now), `speed` (`2.5`); `to` or `depth` | walks along the ground to that place (and depth: [walking in depth](#walking-in-depth-and-the-front-view)), facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. |
+| `walk_to` | `to` (a mark or an x 0–1 of the stage, or `{mark, depth}`), `depth` (0 front .. 1 back; default: its depth now), `speed` (`2.5`); `to` or `depth` | walks along the ground to that place (and depth: [walking in depth](#walking-in-depth-and-the-front-view)), facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. On a [platform level](#walking-and-jumping-on-a-level) it walks along the tiles, steps and ladders (the default speed scaled with `size`). |
 | `run_to` | `to`, `depth` (as `walk_to`), `speed` (`6`) | runs there: a `walk_to` at running speed with steps 1.6 times as long, legs and arms swinging 1.5 times as far, knees and elbows bending more and the body leaning forward 12° at full speed (also with `cartoon_motion: none`). About 1.4 s from `left` to `right` of a 16:9 stage, plus the wind-up and settle. Footsteps follow the longer strides; with [motion effects](#motion-effects-motion_effects) dust puffs up where it sets off and stops and speed lines trail it. |
 | `enter` | `side` (`left` \| `right`; default: the edge nearer where it goes), `door` (instead of `side`: a [room](#rooms-room)'s door by name), `to` (a mark or x; default its own `at`), `speed` | walks in from just beyond that edge of what the camera shows, or through the door (it opens; the character fades in in the doorway over 0.35 s, with what it holds). A character with an `enter` action waits off stage (beyond the stage's edge) from the start of the scene until then. |
 | `exit` | `to` (`left` \| `right`; default: the nearer edge), `door` (instead of `to`: a room's door by name), `speed` | walks out beyond that edge of what the camera shows, or to the door (it opens) where it fades out over 0.35 s with what it holds, then waits off stage (an `enter` brings it back). A camera `follow`ing it stops (and stays). |
 | `gesture` | `to` (required: `point`, `wave`, `shrug`, `nod`, `shake_head`), `big` (`false`) | `big: true`: a sweeping gesture, a whoosh arc trailing the hand of a `point`, `wave` or `shrug` ([motion effects](#motion-effects-motion_effects)). The gesture, then back to its pose: `point` raises the near arm forward, `wave` raises it and waves three times, `shrug` raises both arms, `nod` dips the head twice, `shake_head` moves the head (and eyes) side to side twice. 1.2 s (`point`), 1.6 (`wave`), 1.0 (`shrug`), 0.9 (`nod`), 1.1 (`shake_head`). |
-| `jump` | `height` (`0.4`: its own heights, up to 2) | jumps up and lands where it stood (0.6 s in the air; with `cartoon_motion` a crouch before and a squash after, [below](#animation-principles-cartoon_motion)). |
+| `jump` | `height` (`0.4`: its own heights, up to 2); on a [platform level](#walking-and-jumping-on-a-level) `to` (a spot, a mark or an x, or a tile `{column, row}`) instead | jumps up and lands where it stood (0.6 s in the air; with `cartoon_motion` a crouch before and a squash after, [below](#animation-principles-cartoon_motion)). With `to` on a level: walks to the take-off point, jumps a planned arc there and lands with a squash and a wobble. |
 
 A walk's time comes from its distance and `speed`; `run_time:` sets the time instead (and so the
 speed). An action never makes its beat longer: a walk longer than the time left in the beat is
@@ -7053,7 +7113,7 @@ the one key that names an action).
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6), `let_go` by how far the balloons rise (1–6), `pour` 2.0; a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6 (with `to` on a level: its run-up, crouch, flight and landing), `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6), `let_go` by how far the balloons rise (1–6), `pour` 2.0; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -7768,7 +7828,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` (or, when the next beat [overlaps](#overlapping-lines-overlap-interrupt) it, than the time until that beat) by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
-| `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
+| `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps; a walk or a jump on a [platform level](#walking-and-jumping-on-a-level) sped up more than `max_speedup` times to fit its beat |
 | `talked_over` | warning | a beat with [`overlap`](#overlapping-lines-overlap-interrupt) that starts speaking before whole words of the line before it are said: those words are spoken entirely under the new line (word times from the alignment, else estimated). The message names the words and the largest overlap that keeps them clear. With `interrupt`: words of a line with audio that the cut removes before they start (the interrupt should cut at most the end of the last word). Fix: a shorter `overlap`, or `interrupt: true`; for an interrupt, a shorter `overlap` or none |
 | `readback` | warning | a beat whose MP3, transcribed by [`vidgen readback`](#readback-vidgen-readback), differs from its spoken text by a word error rate above `max_wer`; the message quotes the first differences and a suggested fix. Reads only the transcripts `vidgen readback` cached for the beats' current MP3s and the `stt:` settings (it never runs speech to text): nothing is reported until that command has run |
 | `unclear_speech` | warning; info for doubtful words | only with `--readback`: each [word to check](#readback-vidgen-readback) of `vidgen readback` — a word heard with a probability below `min_probability` (info: below `doubtful_probability`), after a pause longer than `max_gap` seconds inside a sentence, or differently from the text — at its time (the beat's start + the word's time in the MP3), with the fix (a respelling in `pronunciation:`, another voice, speed or emotion). `value` / `limit` are the probability or the pause and its threshold |
@@ -7802,7 +7862,7 @@ lint:
     narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range
     dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
     animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
-    rushed_animation: {min_run_time: 0.5}   # seconds
+    rushed_animation: {min_run_time: 0.5, max_speedup: 1.5}   # seconds; times its own pace (walks and jumps on a level)
     talked_over: {}
     readback: {max_wer: 0.1}                # word error rate; also `vidgen readback`'s threshold
     unclear_speech: {min_probability: 0.5, doubtful_probability: 0.75, max_gap: 0.5}   # also `vidgen readback`'s word flags

@@ -17,8 +17,21 @@ import numpy as np
 
 from vidgen.api import *
 from vidgen.cartoon.level_drawing import CHUNK_COLUMNS, LevelColors, draw_columns, drawn_rows, level_shapes
-from vidgen.cartoon.level_stage import LEVEL_SIZE, LevelFrame, level_fit_problems, level_frame, level_layout, level_world
-from vidgen.world import Level, parse_level
+from vidgen.cartoon.level_motion import ArcJump, RouteWalk
+from vidgen.cartoon.level_stage import (
+    LEVEL_SIZE,
+    LEVEL_UNTRACKED,
+    LevelFrame,
+    LevelStep,
+    level_fit_problems,
+    level_frame,
+    level_goal,
+    level_layout,
+    level_move_problems,
+    level_world,
+)
+from vidgen.world import Level, parse_level, plan_jump, walk_route
+from vidgen.world.moves import reversed_route
 
 from .image import check_image, is_vector, load_image
 
@@ -43,6 +56,9 @@ KNOCK_GAIN = -3.0
 BOLT_WIDTH = 4.0
 BOLT_SPREAD = 0.12
 SKY_TOP_ROOM = 0.14
+#: A character's height on a stage when the scene gives no ``size`` (a fraction of the frame's
+#: shorter side); a level's default is smaller (:data:`LEVEL_SIZE`).
+STAGE_SIZE = 0.45
 #: A platform level (DESIGN.md §86): the parallax factor of the background picture behind it,
 #: how much finer than the frame its tiles are drawn (for shots that zoom in), and the most
 #: pixels its pictures hold together.
@@ -554,7 +570,8 @@ class Stage(NarratedScene):
     the sky, the shadows lengthening and turning away from the sun. ``level`` makes it a side
     view for platform stories: a small map of tiles (ground, floating platforms, clouds,
     ladders, gaps) is the ground, its letters are spots to stand at, and the background and
-    layers move behind it by parallax.
+    layers move behind it by parallax; walks follow its tiles and ladders and ``jump`` with
+    ``to`` jumps a planned arc between its platforms.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -622,7 +639,7 @@ class Stage(NarratedScene):
         """Own marks: name -> x from 0 (left edge) to 1 (right edge), besides far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9 (and a room's doors, each a mark of its name)."""
         characters: list[StageCharacter] = []
         """The characters on the stage: a name, or {name, at, depth, scale, facing, pose, expression}."""
-        size: float = Field(0.45, gt=0.0, le=1.0)
+        size: float = Field(STAGE_SIZE, gt=0.0, le=1.0)
         """Height of a character at depth 0, as a fraction of the frame's shorter side."""
         idle: bool = True
         """false: the characters do not breathe, sway or blink in this scene."""
@@ -935,7 +952,7 @@ class Stage(NarratedScene):
         down, a prop or spot too far without a walk, giving to someone not next to the giver, a
         seat taken, a walk of a character that sits, leans or rides, a full vehicle or one too far
         to get in (§69.52). Needs the active project (the video's frame); none without one."""
-        fruit = cls._fruit_count_problems(params, uses)
+        fruit = cls._fruit_count_problems(params, uses) + cls._level_move_problems(spec, params, uses)
         try:
             project = current_project()
         except VidgenError:
@@ -966,6 +983,31 @@ class Stage(NarratedScene):
             kinds={name: p.prop for name, p in zip(params.prop_names(), params.stage_props())},
         )
         return fruit + problems + cls._calm_blow_problems(params, ordered)
+
+    @staticmethod
+    def _level_move_problems(spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
+        """On a level, the walks and jumps replayed in order with the rules (DESIGN.md §86.7,
+        :func:`level_move_problems`): one that cannot get there on foot, or a jump that cannot be
+        made, naming the beat and why."""
+        if params.level is None:
+            return []
+        names = [c.name for c in params.characters]
+        beats = [b.id for b in spec.beats]
+        ordered = [u for _, u in sorted(enumerate(uses), key=lambda iu: (beats.index(iu[1].beat), iu[1].config.at, iu[0]))]
+        steps = []
+        for use in ordered:
+            action = use.config.action
+            if action not in ("walk_to", "run_to", "jump", "enter", "exit") and action not in LEVEL_UNTRACKED:
+                continue
+            moved = tuple(n for n in names if any(fnmatchcase(n, pattern) for pattern in use.config.targets()))
+            place = use.config.options.get("to")
+            if action in ("walk_to", "run_to"):
+                place = use.action._destination()[0]
+            elif action == "exit":
+                place = None
+            steps.append(LevelStep(use.location, use.beat, action, moved, place))
+        entering = [n for step in steps if step.action == "enter" for n in step.names]
+        return level_move_problems(params.level.parsed(), params.items(), steps, params.stage_marks(), entering=entering)
 
     @staticmethod
     def _fruit_count_problems(params: Any, uses: list[Any]) -> list[tuple[str, str]]:
@@ -1024,8 +1066,8 @@ class Stage(NarratedScene):
         if not self._foley_on():
             return
         wet_from = min(getattr(self, "_puddles_from", []), default=None)
-        for anim in animations:
-            for cue in wet_steps(foley_cues(_played(action, options, anim, start, seconds)), wet_from):
+        for part, anim, part_start, part_seconds in _timed_parts(action, animations, start, seconds):
+            for cue in wet_steps(foley_cues(_played(part, options, anim, part_start, part_seconds)), wet_from):
                 params = {} if self.sounds.file(cue.sound) is not None else cue.params
                 self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)
 
@@ -1047,15 +1089,16 @@ class Stage(NarratedScene):
         if not on or self.is_draft:
             return
         movers = {id(m): name for name, m in [*self.cast.items(), *self.props.items()]}
-        figure = next((a.mobject for a in animations if isinstance(a.mobject, Character)), None)
-        for anim in animations:
+        parts = _timed_parts(action, animations, start, seconds)
+        figure = next((a.mobject for _, a, _, _ in parts if isinstance(a.mobject, Character)), None)
+        for part, anim, part_start, part_seconds in parts:
             mover = anim.mobject
             strength = getattr(anim, "strength", None)
             if strength is None:   # a prop's move: its thrower's cartoon_motion, else the scene's
                 setting = figure.motion if figure is not None else resolve_motion(self.params.cartoon_motion, self.project.config.cartoon_motion)
                 strength = motion_strength(setting)
             name = movers.get(id(mover))
-            for cue in motion_effect_cues(_played(action, options, anim, start, seconds), strength):
+            for cue in motion_effect_cues(_played(part, options, anim, part_start, part_seconds), strength):
                 effect = MotionEffect(
                     cue, mover, delay=cue.time - start, seed=motion_seed(self.spec.id, name, cue.kind, round(cue.time, 3), cue.arm),
                     scale=effect_scale(strength), star_color=self.theme.color("highlight"), effect_of=name,
@@ -1094,7 +1137,10 @@ class Stage(NarratedScene):
     # ----- walking in depth, the front view (DESIGN.md §69.44) -------------------------------------
 
     def feet_y_at(self, depth: float) -> float:
-        """The y (Manim units) of the ground line at ``depth``: where feet stand there."""
+        """The y (Manim units) of the ground line at ``depth``: where feet stand there. Not on a
+        level (its floors are tiles, §86.7; depth is refused there)."""
+        if self.on_level:
+            raise VidgenError(f"scene '{self.spec.id}': a level has no depth: things stand on its tiles")
         return feet_point(0.5, depth, self.params.ground, self.frame_width, self.frame_height)[1]
 
     def walk_in_depth(self, character: Character, walk: Walk) -> None:
@@ -1514,6 +1560,9 @@ class Stage(NarratedScene):
         self.homes: dict[str, float] = {}
         #: the y of the ground line at each character's and prop's depth (``keyframes`` y 0, §69.14)
         self.grounds: dict[str, float] = {}
+        #: on a level, each character's own place in tile units, where ``enter`` walks it (§86.7)
+        self.level_homes: dict[str, tuple[float, float]] = {}
+        level_at = p.level_frame(self.frame_width, self.frame_height)
         entering = self._entering()
         living = self._living_names()
         left, right = self.camera_bounds()[:2]
@@ -1550,6 +1599,8 @@ class Stage(NarratedScene):
                 figure.stop_idle()
             figure.shift(np.array([*place_at.feet, 0.0]) - figure.feet())
             self.homes[member.name] = place_at.feet[0]
+            if level_at is not None:
+                self.level_homes[member.name] = level_at.world_point(*place_at.feet)
             if member.name in entering:  # waits beyond the stage's edge until its enter (§69.12)
                 side = entering[member.name] or nearer_side(place_at.feet[0], left, right)
                 figure.shift([offstage_x(side, left, right, figure.width / 2) - place_at.feet[0], 0.0, 0.0])
@@ -2499,6 +2550,105 @@ class Stage(NarratedScene):
 
     # ----- platform levels (DESIGN.md §86) ---------------------------------------------------------
 
+    @property
+    def on_level(self) -> bool:
+        """Whether the stage is a platform level: walks and jumps follow its tiles (§86.7)."""
+        return self.params.level is not None
+
+    @property
+    def level_pace(self) -> float:
+        """How much slower (in Manim units) the default walking speeds are on this stage: its
+        characters' size over a plain stage's default :data:`STAGE_SIZE`."""
+        return self.params.size / STAGE_SIZE
+
+    def _level_and_frame(self) -> tuple[Level, LevelFrame]:
+        p = self.params
+        assert p.level is not None
+        frame = p.level_frame(self.frame_width, self.frame_height)
+        assert frame is not None
+        return p.level.parsed(), frame
+
+    def _level_error(self, exc: VidgenError) -> VidgenError:
+        """``exc`` (a rule's refusal) naming this scene and the beat playing."""
+        beat = self.current_beat
+        return VidgenError(f"scene '{self.spec.id}'" + (f" beat '{beat.id}'" if beat is not None else "") + f": {exc}")
+
+    def _on_tiles(self, character: Character) -> tuple[tuple[float, float], float]:
+        """Where ``character``'s feet are and how tall it is, in tile units."""
+        _, frame = self._level_and_frame()
+        feet = character.feet()
+        return frame.world_point(float(feet[0]), float(feet[1])), character.character_height / frame.tile
+
+    def level_walk(self, character: Character, place: Any, *, speed: float, gait: Gait) -> RouteWalk:
+        """``character`` walking on the level to ``place`` (a spot, a mark or an x; ``None``:
+        where it stands) along the tiles and ladders (:func:`~vidgen.world.moves.walk_route`);
+        :class:`VidgenError` naming the scene, the beat and where the way stops."""
+        level, frame = self._level_and_frame()
+        start, height = self._on_tiles(character)
+        try:
+            goal = level_goal(level, place, self.params.stage_marks()) if place is not None else None
+            route = walk_route(level, start, height, goal.x if goal else start[0], goal.y if goal else start[1],
+                               who=f"'{character.name}'", where=goal.label if goal else "where it stands")
+        except VidgenError as exc:
+            raise self._level_error(exc) from None
+        return RouteWalk(character, route, frame, level, speed=speed, gait=gait)
+
+    def level_enter(self, character: Character, side: str, start_x: float, place: Any, *, speed: float) -> RouteWalk:
+        """``character`` coming in on the level from ``start_x`` (Manim units, beyond the ``side``
+        edge of the view) along the tiles to ``place`` (``None``: its own place)."""
+        level, frame = self._level_and_frame()
+        _, height = self._on_tiles(character)
+        try:
+            if place is None:
+                goal_x, goal_y = self.level_homes[character.name]
+            else:
+                goal = level_goal(level, place, self.params.stage_marks())
+                goal_x, goal_y = goal.x, goal.y if goal.y is not None else level.top_surface(level.column_at(goal.x)) or 0.0
+            out = walk_route(level, (goal_x, goal_y), height, frame.world_point(start_x, 0.0)[0], who=f"'{character.name}'",
+                             where=f"the {side} edge of the view", hint=f"it cannot enter from the {side}: enter from the other side (side:)")
+        except VidgenError as exc:
+            raise self._level_error(exc) from None
+        return RouteWalk(character, reversed_route(out), frame, level, speed=speed, entering=True)
+
+    def level_exit(self, character: Character, side: str, end_x: float, park_x: float, *, speed: float) -> RouteWalk:
+        """``character`` leaving the view on the level along the tiles to ``end_x`` (Manim units,
+        beyond its ``side`` edge), then moved to ``park_x``."""
+        level, frame = self._level_and_frame()
+        start, height = self._on_tiles(character)
+        try:
+            route = walk_route(level, start, height, frame.world_point(end_x, 0.0)[0], who=f"'{character.name}'",
+                               where=f"the {side} edge of the view", hint=f"it cannot exit to the {side}: exit by the other side (to:)")
+        except VidgenError as exc:
+            raise self._level_error(exc) from None
+        return RouteWalk(character, route, frame, level, speed=speed, park_x=park_x)
+
+    def level_jump(self, character: Character, place: Any) -> Animation:
+        """``character`` jumping on the level to ``place`` (a spot, a mark or an x, or ``{column,
+        row}``): a walk (at the default pace) to the take-off point if it needs one, then the arc
+        (:func:`~vidgen.world.moves.plan_jump`), as one animation; :class:`VidgenError` naming the
+        scene, the beat and why the jump cannot be made."""
+        level, frame = self._level_and_frame()
+        start, height = self._on_tiles(character)
+        try:
+            goal = level_goal(level, place, self.params.stage_marks())
+            plan = plan_jump(level, start, height, goal.x, goal.y, who=f"'{character.name}'", where=goal.label)
+        except VidgenError as exc:
+            raise self._level_error(exc) from None
+        jump = ArcJump(character, plan, frame, level)
+        if not plan.run_up.legs:
+            return jump
+        pace = WALK_SPEED * character.species_motion.speed * self.level_pace   # a walk's default pace on this level
+        return Succession(RouteWalk(character, plan.run_up, frame, level, speed=pace), jump)
+
+    def level_moved(self, character: Character, animation: Animation) -> None:
+        """Record where ``character`` stands once ``animation`` (from :meth:`level_walk`,
+        :meth:`level_jump`...) is over: the floor there is its ground (its shadow, ``keyframes``
+        y 0)."""
+        last = animation.animations[-1] if isinstance(animation, Succession) else animation
+        _, frame = self._level_and_frame()
+        x, y = last.end
+        self.grounds[character.name] = frame.point(x, y)[1]
+
     def _level_tiles(self) -> LevelTiles:
         """The level's tiles (named ``level``), drawn once into pictures of :data:`CHUNK_COLUMNS`
         columns each (``level_1``, ``level_2``...); only the chunks in view are drawn on each frame."""
@@ -2594,6 +2744,22 @@ def _box(mob: Mobject) -> tuple[float, float, float, float] | None:
     if len(points) == 0:
         return None
     return float(points[:, 0].min()), float(points[:, 1].min()), float(points[:, 0].max()), float(points[:, 1].max())
+
+
+def _timed_parts(action: str, animations: Any, start: float, seconds: float) -> list[tuple[str, Animation, float, float]]:
+    """Each of an action's animations as ``(action, animation, scene start, seconds)`` as they
+    play from ``start`` for ``seconds``; a :class:`Succession` (a jump's run-up, then its arc on a
+    level, DESIGN.md §86.7) as its parts in turn, the run-up as a ``walk_to`` (its footsteps)."""
+    parts: list[tuple[str, Animation, float, float]] = []
+    for anim in animations:
+        if not isinstance(anim, Succession) or anim.max_end_time <= 0:
+            parts.append((action, anim, start, seconds))
+            continue
+        scale = seconds / anim.max_end_time
+        for row in anim.anims_with_timings:
+            part = "walk_to" if isinstance(row["anim"], Walk) and action == "jump" else action
+            parts.append((part, row["anim"], start + float(row["start"]) * scale, float(row["end"] - row["start"]) * scale))
+    return parts
 
 
 def _played(action: str, options: Any, anim: Animation, start: float, seconds: float) -> PlayedAction:

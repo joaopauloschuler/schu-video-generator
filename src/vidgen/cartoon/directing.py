@@ -635,6 +635,11 @@ def _closeup_shot(state: _SceneState, beat: _Beat, name: str) -> tuple[ShotView,
     return None if _adds_finding(_still(state, beat), after) else framed
 
 
+def _jumps_somewhere(act: ActionConfig) -> bool:
+    """Whether ``act`` is a jump to a place on a level (it moves and turns the character, §86.7)."""
+    return act.action == "jump" and act.options.get("to") is not None
+
+
 def _plan_closeups(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
     """A close-up for a short line right after a long one: a ``zoom`` on the speaker moving in
     and back when both moves fit the narration (after the speaker's look), else a ``shot:
@@ -646,7 +651,7 @@ def _plan_closeups(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
     if len(beat.input.text.split()) > SHORT_LINE_WORDS or state.words_before < LONG_LINE_WORDS:
         return []
     written = beat.input.actions
-    if any(a.action in MOVING_ACTIONS or (a.action == "say" and a.options.get("bubble")) for a in written):
+    if any(a.action in MOVING_ACTIONS or _jumps_somewhere(a) or (a.action == "say" and a.options.get("bubble")) for a in written):
         return []
     speaker = beat.speakers[0]
     if speaker in state.gestured_now:
@@ -801,11 +806,12 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
                 _enter(state, name, options)
         elif act.action == "exit":
             state.present -= targets
-        elif act.action in ("walk_to", "run_to"):
+        elif act.action in ("walk_to", "run_to") or _jumps_somewhere(act):
             place = walk_destination(options)[0]
+            onto_tile = _jumps_somewhere(act) and isinstance(options.get("to"), Mapping)   # a tile {column, row}: x not known here
             for name in targets:
                 to_x = state.x.get(name) if place is None else state.frame.place_x(place) if state.frame is not None else None
-                _walk(state, name, to_x)
+                _walk(state, name, None if onto_tile else to_x)
         elif act.action in ("move_along", "keyframes"):
             for name in _named([p for p in act.targets() if "." not in p], names):
                 state.x[name] = None
@@ -835,7 +841,7 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
             for name in targets:
                 state.looking[name] = to if isinstance(to, str) else None
                 _turn_to(state, name, to)
-        elif act.action in LOOK_CHANGING:
+        elif act.action in LOOK_CHANGING or _jumps_somewhere(act):
             for name in targets:
                 state.looking[name] = None
 
