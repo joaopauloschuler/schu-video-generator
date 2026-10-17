@@ -65,7 +65,7 @@ def test_surfaces_runs_and_padding() -> None:
         ("", {}, "the map is empty"),
         ("....\n....", {}, "nothing to stand on"),
         ("..?.\n####", {}, "map row 1, column 3: unknown symbol '\\?'"),
-        ("a.\n#*", {}, "map row 2, column 2: unknown symbol '\\*'"),
+        ("a.\n#%", {}, "map row 2, column 2: unknown symbol '%'"),   # * is a star since Step 152
         ("a..a\n####", {}, "map row 1, column 4: spot 'a' is already at row 1, column 1"),
         ("..a.\n##..", {}, "map row 1, column 3: spot 'a' has nothing below it to stand on"),
         ("a...\n####", {"b": "home"}, "spots: letter 'b' is not on the map"),

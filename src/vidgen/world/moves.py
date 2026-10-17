@@ -6,17 +6,21 @@ This is the rules layer: pure functions in tile units, no manim and no physics e
 paths and parabolic arcs). The stage renders the plans; a game could feed them a player's inputs
 instead of a script. A body is a box :data:`BODY_WIDTH` of its height wide standing on its feet;
 ground and platforms are solid, a cloud is one-way (a body stands on its top, walks through it and
-jumps up through it from below), a ladder is climbed and its top is a place to stand.
+jumps up through it from below), a ladder is climbed and its top is a place to stand. A closed
+door and a blocker are :class:`Obstacle` s (DESIGN.md §86.8): they shut their column from their
+feet up to the tile above them. A coin or a star the body's box touches on the way is picked up
+(:func:`route_pickups`, :func:`jump_pickups`).
 """
 
 from __future__ import annotations
 
 import heapq
 import math
-from collections.abc import Iterator
-from dataclasses import dataclass
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, replace
 
 from vidgen.errors import VidgenError
+from vidgen.world.items import COLLECTIBLES, Item
 from vidgen.world.level import CLOUD, GROUND, LADDER, PLATFORM, STANDABLE, Level
 from vidgen.world.world import World
 
@@ -47,8 +51,13 @@ MIN_FLIGHT_SECONDS = 0.7
 #: Kinds of :class:`Leg`.
 WALK, STEP, CLIMB = "walk", "step", "climb"
 _EPS = 1e-6
-#: How finely an arc is checked against the tiles (tiles between samples).
+#: How finely an arc is checked against the tiles, and a way against the coins, stars and
+#: obstacles (tiles between samples).
 _ARC_SAMPLE = 0.05
+#: A coin or a star is picked up when the body's box comes this close to the middle of its cell.
+PICKUP_RADIUS = 0.3
+#: An obstacle with no solid tile above it shuts its column this high (rows; far above any jump).
+_OPEN_SKY_ROWS = 1000
 
 Point = tuple[float, float]
 _State = tuple[int, int]   # (column, the height its feet stand at)
@@ -190,19 +199,54 @@ def map_cell(level: Level, column: int, row: int) -> str:
     return f"map row {level.rows - row}, column {column + 1}"
 
 
-class _Ground:
-    """Where a body ``height`` tiles tall stands and goes in ``level`` (per column, memoised)."""
+@dataclass(frozen=True)
+class Obstacle:
+    """A story prop in the way (a closed door, a blocker): it shuts map ``column`` from row
+    ``bottom`` (its feet) up to row ``top`` (the first solid tile above it, not included), so no
+    walk or jump passes it there; ``item`` is the prop (its :attr:`~vidgen.world.items.Item.label`
+    and :attr:`~vidgen.world.items.Item.hint` name it in messages)."""
 
-    def __init__(self, level: Level, height: float) -> None:
+    column: int
+    bottom: int
+    top: int
+    item: Item
+
+    def covers(self, column: int, row: int) -> bool:
+        return column == self.column and self.bottom <= row < self.top
+
+
+def obstacle_of(level: Level, item: Item) -> Obstacle:
+    """The :class:`Obstacle` ``item`` makes, standing where it stands in ``level``."""
+    column, bottom = level.column_at(item.x), math.floor(item.y + _EPS)
+    top = next((row for row in range(bottom, level.rows) if level.tile(column, row) in SOLID), _OPEN_SKY_ROWS)
+    return Obstacle(column, bottom, top, item)
+
+
+def obstacles_in(world: World, *, besides: str | None = None) -> tuple[Obstacle, ...]:
+    """The obstacles of ``world``'s items that are in the way (:attr:`Item.blocks`), but the item
+    ``besides`` (the body moving: a blocker is not in its own way)."""
+    return tuple(obstacle_of(world.level, item) for item in world.items if item.blocks and item.name != besides)
+
+
+class _Ground:
+    """Where a body ``height`` tiles tall stands and goes in ``level`` with its ``obstacles``
+    (per column, memoised)."""
+
+    def __init__(self, level: Level, height: float, obstacles: Sequence[Obstacle] = ()) -> None:
         self.level = level
         self.height = height
+        self.obstacles = tuple(obstacles)
         self.half_width = BODY_WIDTH * height / 2
         self.cells_tall = max(1, math.ceil(height - _EPS))
         self._heights: dict[int, tuple[int, ...]] = {}
 
+    def solid(self, column: int, row: int) -> bool:
+        """Whether a body cannot be in this cell: a solid tile, or an obstacle there."""
+        return self.level.tile(column, row) in SOLID or any(o.covers(column, row) for o in self.obstacles)
+
     def clear(self, column: int, y: int) -> bool:
         """Whether nothing solid fills the cells a body standing at ``y`` in ``column`` takes."""
-        return all(self.level.tile(column, row) not in SOLID for row in range(y, y + self.cells_tall))
+        return all(not self.solid(column, row) for row in range(y, y + self.cells_tall))
 
     def heights(self, column: int) -> tuple[int, ...]:
         """The heights a body can stand at in ``column`` (a floor with room above), bottom up."""
@@ -247,13 +291,18 @@ class _Ground:
             for y2 in self.climbs(column, y):
                 yield (column, y2), CLIMB, abs(y2 - y) * CLIMB_SLOWNESS
 
-    def box_hit(self, x: float, y: float) -> tuple[int, int] | None:
-        """The first solid cell (column, row) a body with its feet at (``x``, ``y``) overlaps."""
+    def _box_cells(self, x: float, y: float) -> Iterator[tuple[int, int]]:
         for column in range(math.floor(x - self.half_width + _EPS), math.floor(x + self.half_width - _EPS) + 1):
             for row in range(math.floor(y + _EPS), math.floor(y + self.height - _EPS) + 1):
-                if self.level.tile(column, row) in SOLID:
-                    return column, row
-        return None
+                yield column, row
+
+    def box_hit(self, x: float, y: float) -> tuple[int, int] | None:
+        """The first solid cell (column, row) a body with its feet at (``x``, ``y``) overlaps."""
+        return next((cell for cell in self._box_cells(x, y) if self.solid(*cell)), None)
+
+    def obstacle_hit(self, x: float, y: float) -> Obstacle | None:
+        """The first obstacle a body with its feet at (``x``, ``y``) overlaps."""
+        return next((o for cell in self._box_cells(x, y) for o in self.obstacles if o.covers(*cell)), None)
 
 
 def _standing(ground: _Ground, point: Point, who: str) -> _State:
@@ -329,6 +378,21 @@ def _surface_row(level: Level, y: int) -> int:
     return level.rows - (y - 1)
 
 
+def _edge(best: dict[_State, tuple[float, _State | None, str]], start: _State, column: int) -> tuple[_State, int]:
+    """The farthest state towards ``column`` a walk from ``start`` reaches, and the column after it."""
+    side = 1 if column > start[0] else -1
+    edge = max(best, key=lambda s: (side * s[0], -best[s][0], s[1]))
+    return edge, edge[0] + side
+
+
+def _edge_obstacle(ground: _Ground, best: dict[_State, tuple[float, _State | None, str]], start: _State, column: int) -> Obstacle | None:
+    """The obstacle standing right after where a walk from ``start`` towards ``column`` stops."""
+    if any(c == column for c, _ in best):
+        return None
+    (_, y), other = _edge(best, start, column)
+    return next((o for o in ground.obstacles if o.column == other and o.bottom < y + ground.cells_tall and y < o.top), None)
+
+
 def _why_not(ground: _Ground, best: dict[_State, tuple[float, _State | None, str]], start: _State, column: int, goal_y: int | None) -> str:
     """Why no walk from ``start`` gets to ``column`` (at ``goal_y``): where the way stops."""
     level = ground.level
@@ -337,10 +401,7 @@ def _why_not(ground: _Ground, best: dict[_State, tuple[float, _State | None, str
         rows = " or ".join(str(_surface_row(level, y)) for y in there)
         wanted = f", not on row {_surface_row(level, goal_y)}" if goal_y is not None else ""
         return f"on foot it gets to map column {column + 1} only standing on map row {rows}{wanted}"
-    side = 1 if column > start[0] else -1
-    edge = max(best, key=lambda s: (side * s[0], -best[s][0], s[1]))
-    here, y = edge
-    other = here + side
+    (here, y), other = _edge(best, start, column)
     heights = ground.heights(other)
     where = f"the way stops at map column {here + 1}"
     if not any(is_floor(level, other, row) for row in range(level.rows)):
@@ -354,20 +415,57 @@ def _why_not(ground: _Ground, best: dict[_State, tuple[float, _State | None, str
     return f"{where}: {' and '.join(parts)} at column {other + 1} (a walk steps up or down at most {STEP_TILES} tile)"
 
 
+def _route_points(route: Route) -> Iterator[tuple[float, Point]]:
+    """Points along ``route`` every :data:`_ARC_SAMPLE` tiles walked or so, with their share
+    (0..1) of its :attr:`Route.effort`; the start first."""
+    count = max(1, math.ceil(route.effort / _ARC_SAMPLE))
+    for i in range(count + 1):
+        share = i / count
+        yield share, route.at(share * route.effort)[0]
+
+
+def _arc_points(plan: JumpPlan) -> Iterator[tuple[float, Point]]:
+    """Points along ``plan``'s arc with their share (0..1) of the flight."""
+    span = abs(plan.landing[0] - plan.take_off[0]) + 2 * (plan.apex - min(plan.take_off[1], plan.landing[1]))
+    count = max(16, math.ceil(span / _ARC_SAMPLE))
+    for i in range(count + 1):
+        yield i / count, plan.point(i / count)
+
+
+def _in_the_way(ground: _Ground, points: Iterator[tuple[float, Point]]) -> Obstacle | None:
+    """The first obstacle of ``ground`` a body passing ``points`` runs into."""
+    return next((hit for _, (x, y) in points if (hit := ground.obstacle_hit(x, y)) is not None), None)
+
+
+def _blocked(who: str, verb: str, where: str, obstacle: Obstacle) -> VidgenError:
+    return VidgenError(f"{who} cannot {verb} to {where}: {obstacle.item.label} is in the way at map column {obstacle.column + 1}; "
+                       f"{obstacle.item.hint}")
+
+
 def walk_route(level: Level, start: Point, height: float, goal_x: float, goal_y: float | None = None, *,
-               who: str = "it", where: str = "there", hint: str = "jump there instead") -> Route:
+               who: str = "it", where: str = "there", hint: str = "jump there instead",
+               obstacles: Sequence[Obstacle] = ()) -> Route:
     """The route on foot of a body ``height`` tiles tall standing at ``start`` to ``goal_x``
     (tile units; ``goal_y``: standing at that height, else at any height in that column): along
     the tiles, stepping up or down at most :data:`STEP_TILES`, up and down ladders, never across a
-    gap. The cheapest way wins (:attr:`Route.effort`). :class:`VidgenError` naming where the way
-    stops (``who`` and ``where`` name the body and the goal, ``hint`` ends it) when none gets there."""
-    ground = _Ground(level, height)
+    gap nor through ``obstacles``. The cheapest way wins (:attr:`Route.effort`).
+    :class:`VidgenError` naming where the way stops (``who`` and ``where`` name the body and the
+    goal, ``hint`` ends it), or the obstacle in the way and what clears it, when none gets there."""
+    ground = _Ground(level, height, obstacles)
     state = _standing(ground, start, who)
     best = _reach(ground, state)
     column = level.column_at(goal_x)
     wanted = None if goal_y is None else round(goal_y)
     found = [s for s in best if s[0] == column and (wanted is None or s[1] == wanted)]
     if not found:
+        if obstacles:
+            try:
+                free = walk_route(level, start, height, goal_x, goal_y, who=who, where=where, hint=hint)
+            except VidgenError:
+                free = None
+            obstacle = _in_the_way(ground, _route_points(free)) if free is not None else _edge_obstacle(ground, best, state, column)
+            if obstacle is not None:
+                raise _blocked(who, "walk", where, obstacle)
         raise VidgenError(f"{who} cannot walk to {where}: {_why_not(ground, best, state, column, wanted)}; {hint}")
     goal = min(found, key=lambda s: (best[s][0], abs(s[1] - state[1]), s[1]))
     return _route(start, best, goal, goal_x)
@@ -409,16 +507,36 @@ def _apexes(y0: float, y1: float) -> Iterator[float]:
 
 
 def plan_jump(level: Level, start: Point, height: float, goal_x: float, goal_y: float | None = None, *,
-              who: str = "it", where: str = "there") -> JumpPlan:
+              who: str = "it", where: str = "there", obstacles: Sequence[Obstacle] = ()) -> JumpPlan:
     """A jump of a body ``height`` tiles tall standing at ``start`` to ``goal_x`` (tile units;
     ``goal_y``: landing at that height, else on the highest floor in that column a jump reaches).
 
     It may first walk (on foot, no ladders) to a better take-off point: the one giving the
     shortest jump (at least a tile across when it can), then the shortest walk. The arc is the
-    lowest of :func:`_apexes` whose path is clear of solid tiles and lands on no cloud on the way;
-    at most :data:`MAX_JUMP_ACROSS` across, :data:`MAX_JUMP_UP` up and :data:`MAX_JUMP_DOWN` down.
-    :class:`VidgenError` naming why, from the nearest take-off, when no jump gets there."""
-    ground = _Ground(level, height)
+    lowest of :func:`_apexes` whose path is clear of solid tiles and ``obstacles`` and lands on no
+    cloud on the way; at most :data:`MAX_JUMP_ACROSS` across, :data:`MAX_JUMP_UP` up and
+    :data:`MAX_JUMP_DOWN` down. :class:`VidgenError` naming why, from the nearest take-off, or the
+    obstacle in the way and what clears it, when no jump gets there."""
+    try:
+        return _plan_jump(level, start, height, goal_x, goal_y, who=who, where=where, obstacles=obstacles)
+    except VidgenError:
+        if not obstacles:
+            raise
+        try:
+            free = _plan_jump(level, start, height, goal_x, goal_y, who=who, where=where, obstacles=())
+        except VidgenError:
+            free = None
+        if free is not None:
+            ground = _Ground(level, height, obstacles)
+            obstacle = _in_the_way(ground, _route_points(free.run_up)) or _in_the_way(ground, _arc_points(free))
+            if obstacle is not None:
+                raise _blocked(who, "jump", where, obstacle) from None
+        raise
+
+
+def _plan_jump(level: Level, start: Point, height: float, goal_x: float, goal_y: float | None, *,
+               who: str, where: str, obstacles: Sequence[Obstacle]) -> JumpPlan:
+    ground = _Ground(level, height, obstacles)
     state = _standing(ground, start, who)
     best = _reach(ground, state, climbing=False)
     column = level.column_at(goal_x)
@@ -468,20 +586,63 @@ def plan_jump(level: Level, start: Point, height: float, goal_x: float, goal_y: 
     raise VidgenError(f"{who} cannot jump to {where}: {reason}")
 
 
+def _touches(x: float, y: float, half_width: float, height: float, item: Item) -> bool:
+    """Whether a body's box (feet at (``x``, ``y``)) comes within :data:`PICKUP_RADIUS` of the
+    middle of ``item``."""
+    dx = max(abs(item.x - x) - half_width, 0.0)
+    dy = max(y - item.y, item.y - (y + height), 0.0)
+    return dx * dx + dy * dy <= PICKUP_RADIUS * PICKUP_RADIUS + _EPS
+
+
+def _pickups(points: Iterator[tuple[float, Point]], height: float, items: Sequence[Item]) -> list[tuple[Item, float]]:
+    waiting = [item for item in items if item.kind in COLLECTIBLES and item.holder is None]
+    found: list[tuple[Item, float]] = []
+    half = BODY_WIDTH * height / 2
+    for share, (x, y) in points:
+        for item in [i for i in waiting if _touches(x, y, half, height, i)]:
+            found.append((item, share))
+            waiting.remove(item)
+    return found
+
+
+def route_pickups(route: Route, height: float, items: Sequence[Item]) -> list[tuple[Item, float]]:
+    """The coins and stars not yet picked up among ``items`` that a body ``height`` tiles tall
+    walking ``route`` touches, in the order it does, each with the share (0..1) of the route's
+    :attr:`~Route.effort` walked when it does."""
+    return _pickups(_route_points(route), height, items) if route.legs else []
+
+
+def jump_pickups(plan: JumpPlan, height: float, items: Sequence[Item]) -> tuple[list[tuple[Item, float]], list[tuple[Item, float]]]:
+    """The coins and stars a jump picks up (:func:`route_pickups`): on its run-up (shares of the
+    run-up's effort), then in the air (shares of the flight, mid-jump)."""
+    on_foot = route_pickups(plan.run_up, height, items)
+    taken = {item.name for item, _ in on_foot}
+    return on_foot, _pickups(_arc_points(plan), height, [i for i in items if i.name not in taken])
+
+
+def _picked_up(world: World, name: str, found: Sequence[tuple[Item, float]]) -> World:
+    return world.with_items(*(replace(item, holder=name) for item, _ in found))
+
+
 def walk_body(world: World, name: str, goal_x: float, goal_y: float | None = None, *, where: str = "there") -> tuple[World, Route]:
     """The rule for ``walk to``: the world once the body ``name`` has walked to the goal
-    (:func:`walk_route`) and its route."""
+    (:func:`walk_route`, around nothing: the world's :func:`obstacles_in` its way stop it), with
+    the coins and stars it touched on the way picked up (:func:`route_pickups`), and its route."""
     body = world.body(name)
-    route = walk_route(world.level, (body.x, body.y), body.height, goal_x, goal_y, who=f"'{name}'", where=where)
-    return world.moved(name, *route.end), route
+    route = walk_route(world.level, (body.x, body.y), body.height, goal_x, goal_y, who=f"'{name}'", where=where,
+                       obstacles=obstacles_in(world, besides=name))
+    return _picked_up(world.moved(name, *route.end), name, route_pickups(route, body.height, world.items)), route
 
 
 def jump_body(world: World, name: str, goal_x: float, goal_y: float | None = None, *, where: str = "there") -> tuple[World, JumpPlan]:
     """The rule for ``jump to``: the world once the body ``name`` has jumped to the goal
-    (:func:`plan_jump`) and its plan."""
+    (:func:`plan_jump`, not through the world's :func:`obstacles_in`), with the coins and stars
+    it touched on the run-up and in the air picked up (:func:`jump_pickups`), and its plan."""
     body = world.body(name)
-    plan = plan_jump(world.level, (body.x, body.y), body.height, goal_x, goal_y, who=f"'{name}'", where=where)
-    return world.moved(name, *plan.landing), plan
+    plan = plan_jump(world.level, (body.x, body.y), body.height, goal_x, goal_y, who=f"'{name}'", where=where,
+                     obstacles=obstacles_in(world, besides=name))
+    on_foot, flying = jump_pickups(plan, body.height, world.items)
+    return _picked_up(world.moved(name, *plan.landing), name, [*on_foot, *flying]), plan
 
 
 __all__ = [
@@ -492,20 +653,26 @@ __all__ = [
     "MAX_JUMP_ACROSS",
     "MAX_JUMP_DOWN",
     "MAX_JUMP_UP",
+    "PICKUP_RADIUS",
     "SOLID",
     "STEP",
     "STEP_TILES",
     "WALK",
     "JumpPlan",
     "Leg",
+    "Obstacle",
     "Route",
     "arc_point",
     "flight_seconds",
     "is_floor",
     "jump_body",
+    "jump_pickups",
     "map_cell",
+    "obstacle_of",
+    "obstacles_in",
     "plan_jump",
     "reversed_route",
+    "route_pickups",
     "surface_under",
     "walk_body",
     "walk_route",

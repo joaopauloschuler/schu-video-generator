@@ -14,7 +14,8 @@ umbrella are held by a grip (:data:`PROP_GRIPS`, :meth:`Prop.grip_point`), DESIG
 The :data:`FURNITURE` furnishes a room (§69.43); a picture and a clock hang on its wall
 (:data:`PROP_HANGS`). The :data:`SMALL_PROPS` are everyday things to hold (§69.56): a book, a
 letter and a gift open too. The :data:`OUTDOOR_PROPS` furnish the built-in outdoor sets (§76),
-the :data:`INDOOR_PROPS` the built-in rooms with the furniture (§77).
+the :data:`INDOOR_PROPS` the built-in rooms with the furniture (§77); the :data:`STORY_PROPS`
+play a part in a platform level's rules (a key that opens a locked door, §86.8).
 """
 
 from __future__ import annotations
@@ -87,11 +88,13 @@ OUTDOOR_PROPS: tuple[str, ...] = (
 )
 #: The indoor props the built-in rooms add to the furniture (DESIGN.md §77): a classroom, a shop, a bedroom.
 INDOOR_PROPS: tuple[str, ...] = ("blackboard", "school_desk", "shelf_with_goods", "till", "wardrobe")
+#: The story props of a platform level (DESIGN.md §86.8): a key (to hold, give, and open a locked door with).
+STORY_PROPS: tuple[str, ...] = ("key",)
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
     "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin", "kettle",
-    *SMALL_PROPS, *FURNITURE, *OUTDOOR_PROPS, *INDOOR_PROPS, *VEHICLE_KINDS,
+    *SMALL_PROPS, *FURNITURE, *OUTDOOR_PROPS, *INDOOR_PROPS, *STORY_PROPS, *VEHICLE_KINDS,
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
@@ -104,7 +107,7 @@ PROP_HEIGHTS: dict[str, float] = {
     "watering_can": 0.22,
     "shop": 1.7, "bench": 0.32, "bus_stop": 1.35, "road": 0.12, "path": 0.08, "fountain": 0.75, "flowers": 0.28,
     "fence": 0.42, "beach_umbrella": 1.3, "shell": 0.06, "pine": 1.9, "mushroom": 0.13, "log": 0.16,
-    "blackboard": 0.5, "school_desk": 0.4, "shelf_with_goods": 0.95, "till": 0.26, "wardrobe": 1.1,
+    "blackboard": 0.5, "school_desk": 0.4, "shelf_with_goods": 0.95, "till": 0.26, "wardrobe": 1.1, "key": 0.3,
     **{kind: spec.height for kind, spec in VEHICLES.items()},
 }
 #: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
@@ -130,7 +133,7 @@ WATERING_SPOUT = (0.7, 0.64)
 #: watering can by its handle.
 PROP_GRIPS: dict[tuple[str, str | None], tuple[float, float]] = {
     ("basket", None): (0.0, 0.94), ("umbrella", "open"): (0.0, 0.16),
-    ("balloons", None): BALLOON_KNOT, ("watering_can", None): WATERING_GRIP,
+    ("balloons", None): BALLOON_KNOT, ("watering_can", None): WATERING_GRIP, ("key", None): (0.0, 0.8),
 }
 #: Height of an SVG prop relative to a character's, before its own ``scale``.
 SVG_PROP_HEIGHT = 0.5
@@ -163,7 +166,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "shell": ("#F7D9C4", "#D9967A"), "pine": ("tertiary", "secondary"), "mushroom": ("accent", "#F4F6FA"),
     "log": ("secondary", "highlight"),
     "blackboard": ("secondary", "#2F5A46"), "school_desk": ("secondary", "dim"), "shelf_with_goods": ("secondary", "accent"),
-    "till": ("accent", "highlight"), "wardrobe": ("secondary", "highlight"),
+    "till": ("accent", "highlight"), "wardrobe": ("secondary", "highlight"), "key": ("#E0B33A", "#6B4E1E"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
@@ -1450,6 +1453,20 @@ def _wardrobe(p: _Paint) -> list[VMobject]:
     ]
 
 
+def _key(p: _Paint) -> list[VMobject]:
+    """An old-fashioned key standing on its tip: a round bow with a hole on top, the shaft, two
+    teeth on its right and a shine."""
+    return [
+        _rect(-0.05, 0.0, 0.05, 0.66, p.main, p, radius=0.02),
+        _rect(0.05, 0.04, 0.2, 0.12, p.main, p),
+        _rect(0.05, 0.19, 0.16, 0.27, p.main, p),
+        _circle(0.0, 0.8, 0.19, p.main, p),
+        _circle(0.0, 0.8, 0.075, p.detail, p),
+        _rect(-0.08, 0.58, 0.08, 0.63, p.dark(p.main), p, outline=False),
+        _ellipse(-0.09, 0.88, 0.06, 0.035, p.light(p.main), p, angle=0.6, outline=False),
+    ]
+
+
 _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]]]] = {
     "table": _table, "chair": _chair, "tree": _tree, "bush": _bush, "house": _house, "door": _door,
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
@@ -1464,7 +1481,7 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
     "flowers": _flowers, "fence": _fence, "beach_umbrella": _beach_umbrella, "shell": _shell, "pine": _pine,
     "mushroom": _mushroom, "log": _log,
     "blackboard": _blackboard, "school_desk": _school_desk, "shelf_with_goods": _shelf_with_goods, "till": _till,
-    "wardrobe": _wardrobe,
+    "wardrobe": _wardrobe, "key": _key,
 }
 
 

@@ -14265,3 +14265,131 @@ How to test
   refusals while the map was wrong), storyboard with mid-action stills, lint (squeezed moves
   reported until the beats had narration enough, then none), preview render 31.2 s of video in
   35.5 s; stills and frame sheets of the run-up, crouch, arc, landing and climb checked by eye.
+
+## Step 152 — Story props and reactions on a level
+
+What was built
+- **World items** (`src/vidgen/world/items.py`, no manim): `Item` (key, door, coin, star, blocker;
+  `blocks`, `label`, `hint`), `World.items` / `item` / `with_items` (`moved` moves a blocker's
+  item too); the map's `$` coins and `*` stars (`Level.items`, named `coin_1`, `star_1`... in map
+  order, floating in the middle of an air cell).
+- **Rules**: `moves.py` `Obstacle` / `obstacle_of` / `obstacles_in` (a closed door or a blocker
+  shuts its column from its feet up to the solid tile above it), `walk_route` / `plan_jump` take
+  `obstacles` and name the one in the way with what clears it; `route_pickups` / `jump_pickups`
+  (shares of the walk or the flight: mid-jump pickups); `walk_body` / `jump_body` apply both.
+  `story_props.py`: `open_door` (locked: only by the key's holder within 1.6 tiles on its floor),
+  `close_door`, `step_aside`, `hold_key`. Exported by `vidgen.world`.
+- **Stage params**: `level.locks: {door: key}`, `level.blockers: [character]`, `level.colors`
+  `coin` / `star`; checks (a door prop, a key prop, characters, no prop or character named like
+  a coin or star); every closed `door` prop on a level is in the way. New built-in prop `key`
+  (`STORY_PROPS`, 0.3 tall, held by its bow).
+- **Actions**: `open` gained `by` (the opener turns to the door and reaches for its edge with the
+  key's hand; on a level the rules check it); `close` puts a door back in the way; new
+  `step_aside` (a blocker steps back off the path: a walk in depth to 0.3, feet 0.3 tiles higher,
+  drawn behind; or walks `to` a place); `walk_to` / `run_to` / `jump` gained `react: {when:
+  pickup | land | arrive, expression, effect}`; `walk_to` / `run_to` take a tile `{column, row}`
+  (`MapTile`, renamed from `JumpTile`).
+- **Validation**: `level_move_problems(..., props=LevelProps)` follows the key (pick_up, hold,
+  give, put_down, throw, let_go, blow_away), doors (open with `by`, close), blockers
+  (step_aside) and the moves with obstacles and pickups; refusals at `.to`, `.by`, `.target`,
+  `.react` naming the beat.
+- **Renderer**: `cartoon/level_items.py` `Collectible` (bobbing, a coin turning; `collect()` pops
+  it: grows, rises, fades in 0.35 s), added after the shadows (not graded by the light).
+  `level_motion.py`: `Reaction` and a `_Cues` mixin on `RouteWalk` / `ArcJump` (`pickups`,
+  `reaction`): pickups pop on the frame the feet get there; a reaction eases the face to its
+  expression from its moment by changing the base state the walk / jump draws from (lip sync and
+  motion go on) and starts its effect symbol (added hidden by `Stage.level_moved`).
+- **Stage**: `level_state` (`_level_now` reads key holders from the props), `level_pickups`,
+  `level_walk` / `level_jump` (`react`, obstacles, pickups, `.picked`), `level_enter` /
+  `level_exit` (obstacles), `level_moved` (pickups collected, effect symbol), `level_open`,
+  `level_close`, `level_step_aside`. Directing: `StageFrame.columns` (a tile's x).
+- Docs: CONFIG "Story props on a level (keys, doors, coins, stars, blockers)", the Moving table
+  (`step_aside`, `react`, tiles), `open` `by`, the level row and symbols, the action lists; DESIGN
+  §86.8; the guide's `jump`, `step_aside`, `open` rows (+ `AGENTS.md`).
+
+YAML
+```yaml
+params:
+  props: [{prop: door, name: gate, at: gate_spot}, {prop: key, name: gold_key, at: key_spot}]
+  level:
+    map: |
+      ...............*..........
+      ..a...k..$$$.d.......t..h.
+      ##############....########
+    spots: {a: start, k: key_spot, d: gate_spot, t: path, h: home}
+    locks: {gate: gold_key}
+    blockers: [tobble]
+beats:
+  - actions: [{walk_to: lumo, to: key_spot}, {pick_up: lumo, to: gold_key, at: 0.6}]
+  - actions: [{walk_to: lumo, to: {column: 13, row: 3}, react: {when: pickup, expression: happy, effect: sparkle}}]
+  - actions: [{open: gate, by: lumo}]
+  - actions: [{jump: lumo, to: {column: 19, row: 3}, react: {when: land, expression: laughing}}]
+  - actions: [{step_aside: tobble, at: 0.6}]
+```
+
+Files touched
+- New: `src/vidgen/world/items.py`, `world/story_props.py`, `src/vidgen/cartoon/level_items.py`,
+  `tests/test_platform_props.py`.
+- Changed: `world/__init__.py`, `world/level.py`, `world/world.py`, `world/moves.py`,
+  `cartoon/level_stage.py`, `cartoon/level_motion.py`, `cartoon/props.py` (key), `cartoon/stage.py`
+  (`walk_destination` keeps a tile), `cartoon/directing.py` (`StageFrame.columns`),
+  `cartoon/holding.py`, `scenes/stage.py`, `scenes/moving.py`, `scenes/handling.py`,
+  `scenes/__init__.py` (docstring), `docs/CONFIG.md`, `DESIGN.md`, `src/vidgen/data/guide/AGENTS.md`,
+  `AGENTS.md`, `tasklist.md`, `HANDOFF.md`; tests `test_actions.py` (action lists),
+  `test_cartoon_props.py` (68 props), `test_platform_level.py` (`*` is a star: the unknown-symbol
+  case uses `%`), `test_platform_moves.py` (directing now knows a tile's x).
+
+Public interfaces (`vidgen.api` unchanged)
+- Action `step_aside`; options `open.by`, `walk_to` / `run_to` / `jump` `react`, `walk_to` /
+  `run_to` `to: {column, row}`; params `level.locks`, `level.blockers`, `level.colors.coin` /
+  `star`; prop `key`; map symbols `$`, `*`. `vidgen.world` exports above.
+
+Decisions
+- Coins and stars are map symbols (many, never named in a beat); key, door and blocker are the
+  stage's props and characters standing at spots, given their parts by `level.locks` /
+  `level.blockers` (DESIGN §86.8 says why). Letters stay spots only.
+- An obstacle shuts its column up to the tile above it, so a jump cannot hop a closed door or a
+  small blocker ("blocks walks and jumps"), while a path over its head stays open.
+- `react` lives on the move (not a separate timed action): the runner plays an action changing
+  the same character after the one playing, and a pickup's time is known only once the move is
+  planned. Key `when`, not `on` (YAML 1.1 reads `on:` as `true`).
+- No snail species was added: a blocker is any cast member (the scratch story used a turtle);
+  a new species is a much larger job.
+- Reused: `door` prop shapes and `open` / `close`, `pick_up` / `give` / holdings for the key,
+  `_reach_low` for the opener, `Walk` in depth and the depth draw order for stepping aside,
+  `EffectSymbol` / `show_symbol` / `effect_color` for the reaction's symbol, `blend_poses` /
+  `kind_parts` for the face. Nothing for pickups or obstacles existed (searched).
+
+Known gaps for Step 153 and later
+- **Sounds (Step 153)**: no sound yet for a pickup (the `Collectible.collect` frame), a door
+  opening on a level (`level_open`; the room door creak exists as foley), a key turning, a
+  blocker stepping aside, a landing (`ArcJump` settle start) or a reaction's effect symbol (an
+  `effect` action plays one with foley; the move's symbol does not). The pickup shares are in
+  `walk.pickups` / `jump.pickups` (path shares, not times: map them through the walk's phases or
+  record the frame in `collect`).
+- `enter` / `exit` on a level pick up nothing (the replay does not follow their ways); a blocker
+  that stepped back off the path is not followed any more (a later walk of it fails at render:
+  "not standing on a tile"); `close` on a door with someone standing in it is not refused.
+- A move's reaction expression is kept (like `emote`), not undone at the next beat; a jump's
+  `when: arrive` starts on its last frame.
+- `vidgen lint` `off_frame` reports the level's tile chunks (`level_3`...) cut at the frame edge
+  when a following camera happens to rest at the stage's centre (seen on the scratch story at
+  `meadow_b5`; not from this step's code, the chunks are Step 150's): Step 154 (camera) should
+  exempt them.
+- A `set:` with props cannot be used with a story prop list (its props stand at depths: Step 150).
+
+How to test
+- `tests/test_platform_props.py` (24 passed incl. 1 render, 3.4 s); with `test_platform_moves.py`
+  and `test_platform_level.py`: 77 passed, 4.8 s; `-m "not render"` of `test_cartoon_holding`,
+  `_directing`, `_moving`, `_motion`, `_motion_effects`, `_foley`, `_acting`, `test_timing_lint`,
+  `_depth`, `_stage`, `test_builtin_sets` (244 passed, 9 s); `test_cartoon_props.py`,
+  `test_cartoon_small_props.py` (108 passed incl. render, 7.3 s); render tests of
+  `test_cartoon_holding`, `_moving`, `_stage`, `_small_props`, `_room` (7 passed, one file at a
+  time, ~13 s); `test_actions`, `test_guide`, `test_docs` (132 passed, 3.3 s); `test_cartoon_lint`,
+  `test_lint`, `test_screenplay` (51 passed, 2.6 s); `test_schema` (61 passed, 77 s).
+- Manual: a 50 x 5 scratch story (a key, coins, a locked gate, a jump over a gap catching a star,
+  a turtle stepping aside; `when: pickup` and `when: land` reactions) at 854x480: validate ok (and
+  the refusals naming the beat when the walk to `home` comes first), preview render 31.5 s of
+  video in 26.8 s, lint 0 errors (two `rushed_animation` warnings from short text-timed beats, the
+  `off_frame` above); frame sheets of the coin pops, the door opening with the key in hand, the
+  mid-air star pop, the landing reaction and the turtle stepping back checked by eye.

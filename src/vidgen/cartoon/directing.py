@@ -168,7 +168,8 @@ class StageFrame:
     prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28), how
     many sit side by side on each prop that seats more than one (§69.43), the depth each
     character and prop starts at (§69.44), each vehicle's kind, height and facing (§69.52), and
-    the x from and to which the stage's water goes (§69.53; ``None``: no water)."""
+    the x from and to which the stage's water goes (§69.53; ``None``: no water), and on a
+    platform level how many columns its map has (§86; ``None``: no level)."""
 
     frame_width: float
     frame_height: float
@@ -182,6 +183,7 @@ class StageFrame:
     depths: Mapping[str, float] = field(default_factory=dict)
     vehicles: Mapping[str, tuple[str, float, str]] = field(default_factory=dict)
     water: tuple[float, float] | None = None
+    columns: int | None = None
 
     @property
     def bounds(self) -> Bounds:
@@ -189,8 +191,10 @@ class StageFrame:
         return (-self.stage_width / 2, self.stage_width / 2, -self.frame_height / 2, self.frame_height / 2)
 
     def place_x(self, place: Any) -> float | None:
-        """A mark or an x (0..1) of the stage in Manim units, or a walk's ``{mark, depth}``'s mark
-        (``None``: none of these)."""
+        """A mark or an x (0..1) of the stage in Manim units, a walk's ``{mark, depth}``'s mark,
+        or on a level the middle of a map tile ``{column, row}`` (``None``: none of these)."""
+        if isinstance(place, Mapping) and "column" in place:
+            return None if self.columns is None else ((int(place["column"]) - 0.5) / self.columns - 0.5) * self.stage_width
         if isinstance(place, Mapping):
             place = place.get("mark")
         if not isinstance(place, (str, int, float)) or isinstance(place, bool):
@@ -808,10 +812,9 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
             state.present -= targets
         elif act.action in ("walk_to", "run_to") or _jumps_somewhere(act):
             place = walk_destination(options)[0]
-            onto_tile = _jumps_somewhere(act) and isinstance(options.get("to"), Mapping)   # a tile {column, row}: x not known here
             for name in targets:
                 to_x = state.x.get(name) if place is None else state.frame.place_x(place) if state.frame is not None else None
-                _walk(state, name, None if onto_tile else to_x)
+                _walk(state, name, to_x)
         elif act.action in ("move_along", "keyframes"):
             for name in _named([p for p in act.targets() if "." not in p], names):
                 state.x[name] = None
@@ -1004,7 +1007,9 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     depths = {placed.name: placed.depth for placed in placements}
     span = params.water_span() if hasattr(params, "water_span") else None
     water = None if span is None else ((span[0] - 0.5) * stage_width, (span[1] - 0.5) * stage_width)
-    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths, vehicles, water)
+    columns = params.level.parsed().columns if getattr(params, "level", None) is not None else None
+    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths,
+                      vehicles, water, columns)
 
 
 def stage_reframes(project: Project, params: Any) -> bool:

@@ -809,9 +809,9 @@ cartoon style; the hero and the story are original. Same rules as Phases H–N.
 - [x] Tests: rules without rendering (reachable / unreachable jumps, edges, blocked arcs), timing, one tiny render (`tests/test_platform_moves.py`)
 
 ### Step 152 — Story props and reactions
-- [ ] Key and door, coins or stars to collect, friendly blockers (a grumpy snail that moves when asked nicely), as world items with rules (pickups, doors that open, blockers that move)
-- [ ] Reactions (surprise, joy, landing wobble) with vidgen's existing actions and lip sync; pick-up steps timed to their lines
-- [ ] Tests: item rules without rendering, one tiny render
+- [x] Key and door, coins or stars to collect, friendly blockers (a grumpy snail that moves when asked nicely), as world items with rules (pickups, doors that open, blockers that move) (`vidgen/world/items.py`, `story_props.py`, obstacles and pickups in `moves.py`: `$` coins and `*` stars on the map picked up on the way and mid-jump; `door` props in the way until opened, `level.locks` (a locked door opens only `by` the key's holder next to it, new `key` prop); `level.blockers` (any character) until `step_aside`; `vidgen validate` replays them naming the beat; the snail is any cast member, e.g. a turtle: no snail species)
+- [x] Reactions (surprise, joy, landing wobble) with vidgen's existing actions and lip sync; pick-up steps timed to their lines (`react: {when: pickup | land | arrive, expression, effect}` on `walk_to` / `run_to` / `jump`: the expression eases on during the move, an effect symbol pops; `pick_up`, `open`, `step_aside` keep the beat `at` timing; the landing wobble is Step 151's)
+- [x] Tests: item rules without rendering, one tiny render (`tests/test_platform_props.py`); Step 151 gaps closed: `walk_to` / `run_to` to a tile, `vidgen direct` and the prop replay place a tile
 
 ### Step 153 — Sound effects
 - [ ] Jump, land, pickup and door sounds through the existing `sfx` system (docs/CONFIG.md "Sound effects (sfx)"); new sounds only where missing, synthesised (no licensed assets)

@@ -719,7 +719,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `enter` | on a `stage`: a character walks in from an edge (`side:`) or through a room's door (`door: door`) to its mark (or `to:`) | it waits off stage until then |
 | `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) or through a room's door (`door: door`) | an `enter` brings it back |
 | `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head`; `big: true` adds a whoosh arc | on the word it goes with (`at`) |
-| `jump` | on a `stage`: a character jumps (`height`); on a platform `level`, `to:` a spot, mark or tile jumps it there on a planned arc | joy or surprise; getting onto a platform |
+| `jump` | on a `stage`: a character jumps (`height`); on a platform `level`, `to:` a spot, mark or tile jumps it there on a planned arc, picking up coins and stars on the way (`react: {on: land, expression: happy}`) | joy or surprise; getting onto a platform |
+| `step_aside` | on a platform `level`: a blocker (`level.blockers`) moves out of the way (`- step_aside: tobble`; `to:` a place to walk to) | after the line that asks it nicely |
 | `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
 | `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating |
 | `pick_up` | on a `stage`: a character reaches for a prop and holds it (`to: ball`; `hand`); it goes along with the hand | `walk_to` next to the prop first (`vidgen validate` says where) |
@@ -727,7 +728,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front) | within reach |
 | `give` | on a `stage`: the held prop goes to another character (`to: kit`) | the two stand next to each other |
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
-| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head | `open: true` in `props` starts it open |
+| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head; `by: pip` reaches for it (a locked door on a `level` opens only by whoever holds its key) | `open: true` in `props` starts it open |
 | `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand | |
 | `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |

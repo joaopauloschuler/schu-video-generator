@@ -202,10 +202,12 @@ SAME_DEPTH = 1e-6
 
 
 def walk_destination(options: Mapping[str, object]) -> tuple[object, float | None]:
-    """``(place, depth)`` a ``walk_to`` / ``run_to`` goes to, from its options as written: ``to``
-    a mark or an x, or ``{mark, depth}``, and ``depth``; ``None``: where it is (that x, or that
-    depth)."""
+    """``(place, depth)`` a ``walk_to`` / ``run_to`` (or a ``jump``) goes to, from its options as
+    written: ``to`` a mark or an x, ``{mark, depth}`` or a level's tile ``{column, row}`` (kept as
+    the place), and ``depth``; ``None``: where it is (that x, or that depth)."""
     to, depth = options.get("to"), options.get("depth")
+    if isinstance(to, Mapping) and "column" in to:
+        return to, None
     if isinstance(to, Mapping):
         to, depth = to.get("mark"), to.get("depth", depth)
     return to, None if depth is None else float(depth)  # type: ignore[arg-type]

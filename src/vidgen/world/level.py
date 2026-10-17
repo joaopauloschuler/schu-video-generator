@@ -2,7 +2,8 @@
 
 A *level* is a grid of *tiles* seen from the side. The map is written top row first, one text
 line per row; inside the model rows count from the bottom (row 0 is the lowest) and a tile's
-cell spans ``column .. column + 1`` and ``row .. row + 1`` in *tile units*. Symbols are tiles,
+cell spans ``column .. column + 1`` and ``row .. row + 1`` in *tile units*. Symbols are tiles
+or items (a coin ``$`` or a star ``*`` floating in an air cell, :mod:`vidgen.world.items`),
 letters are *spots*: named places that something stands on (the top of the first tile below the
 letter). Messages name cells as the author wrote them: rows from the top, both from 1.
 """
@@ -14,6 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from vidgen.errors import VidgenError
+from vidgen.world.items import ITEM_SYMBOLS, Item
 
 AIR = "air"
 GROUND = "ground"
@@ -27,7 +29,7 @@ STANDABLE: frozenset[str] = frozenset({GROUND, PLATFORM, CLOUD})
 #: The largest map: wider or taller maps are refused (render time and memory grow with the size).
 MAX_COLUMNS = 400
 MAX_ROWS = 40
-_SYMBOL_WORDS = ". air, # ground, = platform, ~ cloud, | ladder, a letter: a spot"
+_SYMBOL_WORDS = ". air, # ground, = platform, ~ cloud, | ladder, $ a coin, * a star, a letter: a spot"
 
 
 @dataclass(frozen=True)
@@ -57,11 +59,13 @@ class Run:
 
 @dataclass(frozen=True)
 class Level:
-    """A parsed level: ``cells[row][column]`` holds the tile kind (row 0 at the bottom) and
-    ``spots`` the named places in map order."""
+    """A parsed level: ``cells[row][column]`` holds the tile kind (row 0 at the bottom),
+    ``spots`` the named places and ``items`` the coins and stars on the map (``coin_1``,
+    ``star_1``... in map order: the top row first, left to right; each in the middle of its cell)."""
 
     cells: tuple[tuple[str, ...], ...]
     spots: tuple[Spot, ...] = ()
+    items: tuple[Item, ...] = ()
 
     @property
     def columns(self) -> int:
@@ -152,6 +156,7 @@ def parse_level(text: str, names: Mapping[str, str] | None = None) -> Level:
         raise VidgenError(f"the map is {len(lines[0])} columns wide; at most {MAX_COLUMNS}")
     cells: list[tuple[str, ...]] = []
     letters: dict[str, tuple[int, int]] = {}   # letter -> (row from the top, column), both from 0
+    found: list[tuple[str, int, int]] = []     # (item kind, row from the top, column)
     for top_row, line in enumerate(lines):
         kinds = []
         for column, symbol in enumerate(line):
@@ -165,6 +170,9 @@ def parse_level(text: str, names: Mapping[str, str] | None = None) -> Level:
                 kinds.append(AIR)
             elif symbol in TILE_SYMBOLS:
                 kinds.append(TILE_SYMBOLS[symbol])
+            elif symbol in ITEM_SYMBOLS:
+                found.append((ITEM_SYMBOLS[symbol], top_row, column))
+                kinds.append(AIR)
             else:
                 raise VidgenError(f"map {where}: unknown symbol '{symbol}' (symbols: {_SYMBOL_WORDS})")
         cells.append(tuple(kinds))
@@ -188,7 +196,12 @@ def parse_level(text: str, names: Mapping[str, str] | None = None) -> Level:
             raise VidgenError(f"map row {top_row + 1}, column {column + 1}: spot '{name}' has nothing below it to stand on; "
                               "put ground (#), a platform (=) or a cloud (~) under it")
         spots.append(Spot(name, letter, column, row, column + 0.5, y))
-    return Level(level.cells, tuple(spots))
+    counts: dict[str, int] = {}
+    items = []
+    for kind, top_row, column in found:
+        counts[kind] = counts.get(kind, 0) + 1
+        items.append(Item(f"{kind}_{counts[kind]}", kind, column + 0.5, len(lines) - 1 - top_row + 0.5))
+    return Level(level.cells, tuple(spots), tuple(items))
 
 
 __all__ = [

@@ -8,7 +8,7 @@ and the sun and moon moving across the sky (§69.61)."""
 import math
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fnmatch import fnmatchcase
 from functools import lru_cache
 from typing import Annotated, Any, ClassVar, Literal
@@ -17,11 +17,15 @@ import numpy as np
 
 from vidgen.api import *
 from vidgen.cartoon.level_drawing import CHUNK_COLUMNS, LevelColors, draw_columns, drawn_rows, level_shapes
-from vidgen.cartoon.level_motion import ArcJump, RouteWalk
+from vidgen.cartoon.level_items import COIN_COLOR, STAR_COLOR, Collectible
+from vidgen.cartoon.level_motion import LANDED, SETTLED, ArcJump, Reaction, RouteWalk
 from vidgen.cartoon.level_stage import (
+    LEVEL_MOVES,
+    LEVEL_PROP_ACTIONS,
     LEVEL_SIZE,
     LEVEL_UNTRACKED,
     LevelFrame,
+    LevelProps,
     LevelStep,
     level_fit_problems,
     level_frame,
@@ -30,9 +34,25 @@ from vidgen.cartoon.level_stage import (
     level_move_problems,
     level_world,
 )
-from vidgen.world import Level, parse_level, plan_jump, walk_route
+from vidgen.world import (
+    COIN,
+    KEY,
+    Level,
+    World,
+    close_door,
+    hold_key,
+    jump_pickups,
+    obstacles_in,
+    open_door,
+    parse_level,
+    plan_jump,
+    route_pickups,
+    step_aside,
+    walk_route,
+)
 from vidgen.world.moves import reversed_route
 
+from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
@@ -65,6 +85,10 @@ STAGE_SIZE = 0.45
 LEVEL_PICTURE_FACTOR = 0.2
 LEVEL_OVERSAMPLE = 1.25
 LEVEL_MAX_PIXELS = 24_000_000
+#: A blocker stepping back off a level's path (``step_aside`` without ``to``, DESIGN.md §86.8):
+#: it walks to this depth (a little smaller), its feet this many tiles higher (behind the path).
+ASIDE_DEPTH = 0.3
+ASIDE_RISE_TILES = 0.3
 
 IDENTIFIER_PATTERN = r"^[A-Za-z0-9_]+$"
 Identifier = Annotated[str, Field(pattern=IDENTIFIER_PATTERN)]
@@ -108,7 +132,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; indoors: blackboard, school_desk, shelf_with_goods, till, wardrobe; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; indoors: blackboard, school_desk, shelf_with_goods, till, wardrobe; on a platform level: key (opens a locked door, level.locks); vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -490,11 +514,15 @@ class StageLevel(SceneParams):
     """A platform level seen from the side (DESIGN.md §86), written as a small map."""
 
     map: str
-    """The level, one line per row, top row first: . air, # ground, = a floating platform, ~ a cloud to stand on, | a ladder, a letter: a spot (whatever stands there stands on the first tile below it)."""
+    """The level, one line per row, top row first: . air, # ground, = a floating platform, ~ a cloud to stand on, | a ladder, $ a coin, * a star (picked up when a walk or a jump touches it; named coin_1, star_1... in map order), a letter: a spot (whatever stands there stands on the first tile below it)."""
     spots: dict[Annotated[str, Field(pattern=r"^[A-Za-z]$")], Identifier] = {}
     """Names for the map's letters, e.g. {a: start, b: cloud}; a letter without one is named by itself. Spots are marks: characters stand at them (at: start), walks go to them."""
-    colors: dict[Literal["ground", "grass", "platform", "cloud", "ladder"], ThemeColor] = {}
-    """Tile colours (theme tokens or #hex): ground, grass (on top of the ground), platform, cloud, ladder; default a brown earth with green grass, wooden platforms and ladders, white clouds."""
+    colors: dict[Literal["ground", "grass", "platform", "cloud", "ladder", "coin", "star"], ThemeColor] = {}
+    """Colours (theme tokens or #hex): ground, grass (on top of the ground), platform, cloud, ladder, coin, star; default a brown earth with green grass, wooden platforms and ladders, white clouds, gold coins and yellow stars."""
+    locks: dict[Identifier, Identifier] = {}
+    """Locked doors: {door: key}, a door prop of the stage and the prop that is its key (a key prop); the door opens only by a character holding the key and standing next to it (- open: gate, by: pip). Every closed door prop on a level is in the way of walks and jumps until it opens."""
+    blockers: list[Identifier] = []
+    """Characters of the stage in the way of walks and jumps (a grumpy turtle on the path) until they move aside (- step_aside: name)."""
 
     @model_validator(mode="after")
     def _parses(self) -> "StageLevel":
@@ -762,6 +790,35 @@ class Stage(NarratedScene):
                 level_world(self.level.parsed(), self.items(), marks)
             except VidgenError as exc:
                 raise ValueError(f"level: {exc}") from None
+            self._check_level_props()
+
+        def _check_level_props(self) -> None:
+            """The level's locks name a door prop and the prop that is its key, its blockers
+            characters of the stage; the map's coins and stars are not named like anything else."""
+            assert self.level is not None
+            kinds = dict(zip(self.prop_names(), (p.prop for p in self.stage_props())))
+            characters = [c.name for c in self.characters]
+            for door, key in self.level.locks.items():
+                if kinds.get(door) != "door":
+                    doors = ", ".join(n for n, kind in kinds.items() if kind == "door") or "none"
+                    raise ValueError(f"level.locks: '{door}' is not a door prop of the stage (doors: {doors})")
+                if key not in kinds or kinds[key] == "door":
+                    raise ValueError(f"level.locks: the key '{key}' of '{door}' is not a prop of the stage; add one (- {{prop: key, name: {key}, at: ...}})")
+            for k, name in enumerate(self.level.blockers):
+                if name not in characters:
+                    raise ValueError(f"level.blockers[{k}]: '{name}' is not a character on the stage (characters: {', '.join(characters) or 'none'})")
+            taken = set(kinds) | set(characters)
+            for item in self.level.parsed().items:
+                if item.name in taken:
+                    raise ValueError(f"level: '{item.name}' is the name of a {item.kind} on the map; give the prop or character another name")
+
+        def level_props(self) -> LevelProps | None:
+            """The story props of the stage's level (``None``: no level): its door props, locks and
+            blockers (DESIGN.md §86.8)."""
+            if self.level is None:
+                return None
+            doors = {name: prop.open for name, prop in zip(self.prop_names(), self.stage_props()) if prop.prop == "door"}
+            return LevelProps(doors, dict(self.level.locks), tuple(self.level.blockers))
 
         def water_span(self) -> tuple[float, float] | None:
             """The water's left and right x (0..1 of the stage; ``None``: no water)."""
@@ -986,28 +1043,32 @@ class Stage(NarratedScene):
 
     @staticmethod
     def _level_move_problems(spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
-        """On a level, the walks and jumps replayed in order with the rules (DESIGN.md §86.7,
-        :func:`level_move_problems`): one that cannot get there on foot, or a jump that cannot be
-        made, naming the beat and why."""
+        """On a level, the walks and jumps replayed in order with the rules and the level's story
+        props (DESIGN.md §86.7, §86.8, :func:`level_move_problems`): one that cannot get there on
+        foot, a jump that cannot be made, a closed door or a blocker in the way, a locked door
+        opened without its key, naming the beat and why."""
         if params.level is None:
             return []
-        names = [c.name for c in params.characters]
+        characters = [c.name for c in params.characters]
         beats = [b.id for b in spec.beats]
         ordered = [u for _, u in sorted(enumerate(uses), key=lambda iu: (beats.index(iu[1].beat), iu[1].config.at, iu[0]))]
         steps = []
         for use in ordered:
             action = use.config.action
-            if action not in ("walk_to", "run_to", "jump", "enter", "exit") and action not in LEVEL_UNTRACKED:
+            if action not in LEVEL_MOVES | LEVEL_PROP_ACTIONS | LEVEL_UNTRACKED:
                 continue
+            names = params.prop_names() if action in ("open", "close", "blow_away") else characters
             moved = tuple(n for n in names if any(fnmatchcase(n, pattern) for pattern in use.config.targets()))
-            place = use.config.options.get("to")
-            if action in ("walk_to", "run_to"):
+            if action in ("walk_to", "run_to", "step_aside"):
                 place = use.action._destination()[0]
-            elif action == "exit":
-                place = None
-            steps.append(LevelStep(use.location, use.beat, action, moved, place))
+            elif action == "jump":
+                place = use.action._place()
+            else:
+                place = use.config.options.get("to") if action == "enter" else None
+            steps.append(LevelStep(use.location, use.beat, action, moved, place, use.config.options))
         entering = [n for step in steps if step.action == "enter" for n in step.names]
-        return level_move_problems(params.level.parsed(), params.items(), steps, params.stage_marks(), entering=entering)
+        return level_move_problems(params.level.parsed(), params.items(), steps, params.stage_marks(), entering=entering,
+                                   props=params.level_props())
 
     @staticmethod
     def _fruit_count_problems(params: Any, uses: list[Any]) -> list[tuple[str, str]]:
@@ -1628,6 +1689,7 @@ class Stage(NarratedScene):
         self._start_living(living)
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
+        backdrop += self._level_story()   # coins and stars float in front of the tiles, not graded by the light
         self._start_sky_path()
         # register back to front, so the fade-ins add them (and draw them) in that order
         targets = [self.target(name, mob) for name, mob in on_stage]
@@ -2579,19 +2641,62 @@ class Stage(NarratedScene):
         feet = character.feet()
         return frame.world_point(float(feet[0]), float(feet[1])), character.character_height / frame.tile
 
-    def level_walk(self, character: Character, place: Any, *, speed: float, gait: Gait) -> RouteWalk:
-        """``character`` walking on the level to ``place`` (a spot, a mark or an x; ``None``:
-        where it stands) along the tiles and ladders (:func:`~vidgen.world.moves.walk_route`);
+    def _level_story(self) -> list[Mobject]:
+        """Start the level's story props (DESIGN.md §86.8): :attr:`level_state`, the world with
+        its coins, stars, doors, keys and blockers as the rules see them, and the coins and stars
+        drawn (:attr:`level_pickups`, by name), returned to go in front of the tiles."""
+        p = self.params
+        #: the level's world as the rules see it now (``None``: no level); the scene's actions change it
+        self.level_state: World | None = None
+        #: the coins and stars on the level, by name (DESIGN.md §86.8)
+        self.level_pickups: dict[str, Collectible] = {}
+        if p.level is None:
+            return []
+        level, frame = self._level_and_frame()
+        self.level_state = level_world(level, p.items(), p.stage_marks(), p.level_props())
+        colors = {"coin": COIN_COLOR, "star": STAR_COLOR, **{k: resolve_color(v, self.theme) for k, v in p.level.colors.items()}}
+        bobbing = p.idle and not self.is_draft
+        for k, item in enumerate(level.items):
+            self.level_pickups[item.name] = Collectible(item.kind, item.name, frame.point(item.x, item.y), frame.tile,
+                                                        colors[COIN if item.kind == COIN else "star"], bobbing=bobbing, phase=(0.37 * k) % 1.0)
+        return list(self.level_pickups.values())
+
+    def _level_now(self) -> World:
+        """:attr:`level_state` with each key held by whoever holds its prop now."""
+        state = self.level_state
+        assert state is not None
+        for item in state.items:
+            if item.kind == KEY and item.name in self.props:
+                state = hold_key(state, item.name, self.props[item.name].held_by)
+        return state
+
+    def _level_reaction(self, react: Any, at: float) -> Reaction | None:
+        """A move's ``react`` option (a :class:`~vidgen.scenes.moving.MoveReaction`) as a
+        :class:`Reaction` starting at ``at``; its effect symbol is added by :meth:`level_moved`."""
+        return None if react is None else Reaction(at, react.expression, react.effect)
+
+    def level_walk(self, character: Character, place: Any, *, speed: float, gait: Gait, react: Any = None) -> RouteWalk:
+        """``character`` walking on the level to ``place`` (a spot, a mark, an x or ``{column,
+        row}``; ``None``: where it stands) along the tiles and ladders
+        (:func:`~vidgen.world.moves.walk_route`), not through a closed door or a blocker, popping
+        the coins and stars it touches; ``react`` on its first pickup or as it stops.
         :class:`VidgenError` naming the scene, the beat and where the way stops."""
         level, frame = self._level_and_frame()
         start, height = self._on_tiles(character)
+        state = self._level_now()
         try:
             goal = level_goal(level, place, self.params.stage_marks()) if place is not None else None
             route = walk_route(level, start, height, goal.x if goal else start[0], goal.y if goal else start[1],
-                               who=f"'{character.name}'", where=goal.label if goal else "where it stands")
+                               who=f"'{character.name}'", where=goal.label if goal else "where it stands",
+                               obstacles=obstacles_in(state, besides=character.name))
         except VidgenError as exc:
             raise self._level_error(exc) from None
-        return RouteWalk(character, route, frame, level, speed=speed, gait=gait)
+        found = route_pickups(route, height, state.items)
+        at = found[0][1] if react is not None and react.when == "pickup" and found else LANDED
+        walk = RouteWalk(character, route, frame, level, speed=speed, gait=gait, reaction=self._level_reaction(react, at),
+                         pickups=[(share, self.level_pickups[item.name]) for item, share in found])
+        walk.picked = [item.name for item, _ in found]
+        return walk
 
     def level_enter(self, character: Character, side: str, start_x: float, place: Any, *, speed: float) -> RouteWalk:
         """``character`` coming in on the level from ``start_x`` (Manim units, beyond the ``side``
@@ -2605,7 +2710,8 @@ class Stage(NarratedScene):
                 goal = level_goal(level, place, self.params.stage_marks())
                 goal_x, goal_y = goal.x, goal.y if goal.y is not None else level.top_surface(level.column_at(goal.x)) or 0.0
             out = walk_route(level, (goal_x, goal_y), height, frame.world_point(start_x, 0.0)[0], who=f"'{character.name}'",
-                             where=f"the {side} edge of the view", hint=f"it cannot enter from the {side}: enter from the other side (side:)")
+                             where=f"the {side} edge of the view", hint=f"it cannot enter from the {side}: enter from the other side (side:)",
+                             obstacles=obstacles_in(self._level_now(), besides=character.name))
         except VidgenError as exc:
             raise self._level_error(exc) from None
         return RouteWalk(character, reversed_route(out), frame, level, speed=speed, entering=True)
@@ -2617,37 +2723,106 @@ class Stage(NarratedScene):
         start, height = self._on_tiles(character)
         try:
             route = walk_route(level, start, height, frame.world_point(end_x, 0.0)[0], who=f"'{character.name}'",
-                               where=f"the {side} edge of the view", hint=f"it cannot exit to the {side}: exit by the other side (to:)")
+                               where=f"the {side} edge of the view", hint=f"it cannot exit to the {side}: exit by the other side (to:)",
+                               obstacles=obstacles_in(self._level_now(), besides=character.name))
         except VidgenError as exc:
             raise self._level_error(exc) from None
         return RouteWalk(character, route, frame, level, speed=speed, park_x=park_x)
 
-    def level_jump(self, character: Character, place: Any) -> Animation:
+    def level_jump(self, character: Character, place: Any, *, react: Any = None) -> Animation:
         """``character`` jumping on the level to ``place`` (a spot, a mark or an x, or ``{column,
         row}``): a walk (at the default pace) to the take-off point if it needs one, then the arc
-        (:func:`~vidgen.world.moves.plan_jump`), as one animation; :class:`VidgenError` naming the
+        (:func:`~vidgen.world.moves.plan_jump`), as one animation, not through a closed door or a
+        blocker, popping the coins and stars it touches on the way and in the air; ``react`` on
+        its first pickup, as it lands or once it stands still. :class:`VidgenError` naming the
         scene, the beat and why the jump cannot be made."""
         level, frame = self._level_and_frame()
         start, height = self._on_tiles(character)
+        state = self._level_now()
         try:
             goal = level_goal(level, place, self.params.stage_marks())
-            plan = plan_jump(level, start, height, goal.x, goal.y, who=f"'{character.name}'", where=goal.label)
+            plan = plan_jump(level, start, height, goal.x, goal.y, who=f"'{character.name}'", where=goal.label,
+                             obstacles=obstacles_in(state, besides=character.name))
         except VidgenError as exc:
             raise self._level_error(exc) from None
-        jump = ArcJump(character, plan, frame, level)
+        on_foot, flying = jump_pickups(plan, height, state.items)
+        when = None if react is None else react.when or "land"
+        run_up_reaction = self._level_reaction(react, on_foot[0][1]) if when == "pickup" and on_foot else None
+        at = flying[0][1] if when == "pickup" and flying else LANDED if when in ("land", "pickup") else SETTLED
+        jump = ArcJump(character, plan, frame, level, pickups=[(share, self.level_pickups[item.name]) for item, share in flying],
+                       reaction=None if run_up_reaction is not None else self._level_reaction(react, at))
+        jump.picked = [item.name for item, _ in [*on_foot, *flying]]
         if not plan.run_up.legs:
             return jump
         pace = WALK_SPEED * character.species_motion.speed * self.level_pace   # a walk's default pace on this level
-        return Succession(RouteWalk(character, plan.run_up, frame, level, speed=pace), jump)
+        run_up = RouteWalk(character, plan.run_up, frame, level, speed=pace, reaction=run_up_reaction,
+                           pickups=[(share, self.level_pickups[item.name]) for item, share in on_foot])
+        return Succession(run_up, jump)
 
     def level_moved(self, character: Character, animation: Animation) -> None:
         """Record where ``character`` stands once ``animation`` (from :meth:`level_walk`,
         :meth:`level_jump`...) is over: the floor there is its ground (its shadow, ``keyframes``
-        y 0)."""
-        last = animation.animations[-1] if isinstance(animation, Succession) else animation
+        y 0), its place and the coins and stars it picked up in :attr:`level_state`; a reaction's
+        effect symbol is added, hidden until its moment."""
+        parts = list(animation.animations) if isinstance(animation, Succession) else [animation]
+        last = parts[-1]
         _, frame = self._level_and_frame()
         x, y = last.end
         self.grounds[character.name] = frame.point(x, y)[1]
+        state = self.level_state
+        if state is not None:
+            state = state.moved(character.name, x, y) if any(b.name == character.name for b in state.bodies) else state
+            picked = [state.item(name) for name in getattr(last, "picked", [])]
+            self.level_state = state.with_items(*(replace(item, holder=character.name) for item in picked if item is not None))
+        for part in parts:
+            reaction = getattr(part, "reaction", None)
+            if reaction is not None and reaction.effect is not None and reaction.symbol is None:
+                symbol, _ = show_symbol(self, character, reaction.effect, effect_color(reaction.effect, None, self.theme.color))
+                symbol.age = -1e9   # hidden until the reaction starts it
+                self.add(symbol)
+                reaction.symbol = symbol
+
+    def level_open(self, door: str, by: str | None) -> None:
+        """The rules' check that ``by`` can open ``door`` now (a locked one with its key, next to
+        it, DESIGN.md §86.8), recorded in :attr:`level_state`; :class:`VidgenError` naming the scene
+        and the beat otherwise."""
+        state = self._level_now()
+        if by is not None and by in self.cast:
+            _, frame = self._level_and_frame()
+            feet = self.cast[by].feet()
+            state = state.moved(by, *frame.world_point(float(feet[0]), float(feet[1])))
+        try:
+            self.level_state = open_door(state, door, by)
+        except VidgenError as exc:
+            raise self._level_error(exc) from None
+
+    def level_close(self, door: str) -> None:
+        """Record that ``door`` is closed (in the way again)."""
+        self.level_state = close_door(self._level_now(), door)
+
+    def level_step_aside(self, character: Character, place: Any, *, speed: float) -> Animation:
+        """The blocker ``character`` moving out of the way (DESIGN.md §86.8): along the tiles to
+        ``place`` (:meth:`level_walk`), or with none, back off the path (a walk in depth to
+        :data:`ASIDE_DEPTH`, a little smaller, its feet :data:`ASIDE_RISE_TILES` higher, drawn
+        behind the others). :attr:`level_state` has it out of the way from now on."""
+        try:
+            stepped = step_aside(self._level_now(), character.name)
+        except VidgenError as exc:
+            raise self._level_error(exc) from None
+        if place is not None:
+            walk = self.level_walk(character, place, speed=speed, gait=WALKING)
+            self.level_state = stepped
+            self.level_moved(character, walk)
+            return walk
+        _, frame = self._level_and_frame()
+        feet = character.feet()
+        ground, rise = float(feet[1]), ASIDE_RISE_TILES * frame.tile
+        walk = Walk(character, float(feet[0]), speed=speed, depth=ASIDE_DEPTH, feet_y=lambda depth: ground + rise * depth / ASIDE_DEPTH)
+        self.level_state = stepped
+        self.grounds[character.name] = ground + rise
+        self._depth_walks.append((character, walk))
+        self._watch_draw_order()
+        return walk
 
     def _level_tiles(self) -> LevelTiles:
         """The level's tiles (named ``level``), drawn once into pictures of :data:`CHUNK_COLUMNS`

@@ -5,8 +5,8 @@ and ``@scene``); a module here is registered as "builtin" because it lives insid
 Importing this package imports every scene module (add new modules to the import list below)
 the built-in per-beat actions (``actions``: reveal, dim, highlight, zoom, pan, follow,
 transform; ``callout_action``: callout; ``sfx_action``: sfx;
-``particles_action``: particles; ``acting``: say, look_at, turn, emote, pose, react; ``moving``: walk_to, enter,
-exit, gesture, jump; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
+``particles_action``: particles; ``acting``: say, look_at, turn, emote, pose, react; ``moving``: walk_to, run_to, enter,
+exit, gesture, jump, step_aside; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
 put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_in, ride_to, get_out;
 ``shot_action``: shot;
 ``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``switch_action``:

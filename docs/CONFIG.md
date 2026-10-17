@@ -5017,7 +5017,7 @@ never leaves the stage.
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds`, `fog` or outdoor particles |
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
-| `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
+| `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -5050,8 +5050,9 @@ camera view inside the stage (a zoom up to 8x included) shows its edge.
 
 A side view for platform stories: the ground is a small map of **tiles** written in the YAML,
 one line per row, top row first. Symbols: `.` (or a space) air, `#` ground (earth with grass on
-top), `=` a floating wooden platform, `~` a cloud to stand on, `|` a ladder; a **letter** marks a
-**spot**: whatever stands there stands on the first tile below the letter. Short rows are filled
+top), `=` a floating wooden platform, `~` a cloud to stand on, `|` a ladder, `$` a coin and `*` a
+star to pick up ([story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)); a
+**letter** marks a **spot**: whatever stands there stands on the first tile below the letter. Short rows are filled
 with air on the right; the blank lines around the map are ignored.
 
 ```yaml
@@ -5156,9 +5157,92 @@ beats:
   its own pace: give the beat more narration, start the move earlier, or split the way over two
   beats (a walk to the ladder in one, the climb in the next). The shadow follows the floor under
   the character (none over a gap); `keyframes` `y: 0` is the floor it last walked or jumped to.
+- `walk_to` and `run_to` also take a tile `{column, row}` (Step 152), like `jump`.
 - `vidgen storyboard` shows each walk and jump half-way; `vidgen direct` (automatic directing)
-  knows where a walk or a jump to a spot or a mark ends (not one to a tile); footsteps, the jump's
+  knows where a walk or a jump to a spot, a mark or a tile ends; footsteps, the jump's
   boing, dust and impact stars play as on any stage.
+
+##### Story props on a level (keys, doors, coins, stars, blockers)
+
+A level's story props have parts in its rules (DESIGN.md §86.8): coins and stars to pick up, doors
+that are in the way until they open (a locked one only with its key), and friendly blockers that
+are in the way until they step aside. `vidgen validate` replays them with the walks and jumps, in
+beat order, and names the beat and what to write when one does not work.
+
+```yaml
+- id: meadow
+  type: stage
+  params:
+    background: ["#9FD8F5", "#E6F6FF"]
+    props:
+      - {prop: door, name: gate, at: gate_spot}     # a closed door: in the way until it opens
+      - {prop: key, name: gold_key, at: key_spot}
+    level:
+      map: |
+        ..................................................
+        ...............*....................*.............
+        ..a...k..$$$.d........$$.....t...............h....
+        ##############....################################
+        ##############....################################
+      spots: {a: start, k: key_spot, d: gate_spot, t: path, h: home}
+      locks: {gate: gold_key}       # gate opens only by whoever holds gold_key
+      blockers: [tobble]            # tobble is in the way until it steps aside
+    characters: [{name: lumo, at: start}, {name: tobble, at: path, facing: left, expression: angry}]
+  beats:
+    - text: "Lumo spots something shiny in the grass. A key!"
+      actions: [{walk_to: lumo, to: key_spot, at: 0.2}]
+    - text: "Lumo picks it up and skips along, collecting coins on the way."
+      actions:
+        - {pick_up: lumo, to: gold_key}
+        - {walk_to: lumo, to: {column: 13, row: 4}, at: 0.3, react: {when: pickup, expression: happy, effect: sparkle}}
+    - text: "Click! The golden key opens the little gate."
+      actions: [{open: gate, by: lumo, at: 0.3}]
+    - text: "Then Lumo takes a big jump over the gap and catches a star in the air!"
+      actions: [{jump: lumo, to: {column: 19, row: 4}, at: 0.2, react: {when: land, expression: laughing, effect: stars}}]
+    - text: "Please, Tobble, may I pass? Tobble smiles and steps aside."
+      actions: [{emote: tobble, to: happy, at: 0.5}, {step_aside: tobble, at: 0.7}]
+    - text: "And Lumo walks on, home at last."
+      actions: [{walk_to: lumo, to: home}]
+```
+
+- **Coins and stars** are map symbols (`$` a coin, `*` a star) floating in the middle of their
+  cell, bobbing gently (a coin turns too; not with `idle: false` or in a draft). They are named
+  `coin_1`, `coin_2`... and `star_1`... in map order (the top row first, left to right; no prop or
+  character may take those names). A walk or a jump picks one up when the character's box (two
+  tiles tall, 0.8 wide) comes within 0.3 tiles of its middle, on the way or in the air: it pops
+  (grows, rises and fades in 0.35 s) on the frame the character gets there. `colors` takes `coin`
+  and `star` (default gold and yellow). Letters stay spots: symbols are tiles or items.
+- **Doors** are `door` props standing at a spot or an x. On a level every closed door is in the
+  way: it shuts its column from its feet up to the tile above it (the sky: all the way up), so no
+  walk or jump passes it. `- open: gate` opens it (`by: lumo`: lumo turns to it and reaches for
+  its edge); `close` puts it back in the way. A door in `locks` (`{door: key}`) is **locked**: it
+  opens only `by` a character who holds the key prop then (picked up, held or given to it) and
+  stands within 1.6 tiles of it on its floor. Refusals: `beat 'meadow_b1': 'lumo' cannot walk to
+  spot 'home': the locked door 'gate' is in the way at map column 14; open it first with its key
+  'gold_key' (- open: gate, by: <who holds gold_key>)`, `the door 'gate' is locked: say who opens
+  it with its key`, `'lumo' cannot open the door 'gate': it is locked and 'lumo' does not hold its
+  key 'gold_key'; pick it up first (- pick_up: lumo, to: gold_key)`, `'lumo' is too far from the
+  door 'gate' to open it (3.0 tiles; at most 1.6); walk_to next to it first`. The key stays in the
+  hand afterwards.
+- **The key** is the built-in `key` prop (0.3 of a character tall, gold; held by its bow), or any
+  other prop named in `locks`.
+- **Blockers** (`blockers: [tobble]`) are characters of the stage in the way like a closed door
+  (any character: a grumpy turtle, a sleepy fox). `- step_aside: tobble` moves one out of the way
+  after the line that asks it nicely: it steps back off the path (a little smaller, its feet 0.3
+  tiles higher, drawn behind the others, 1 s), or with `to:` (a spot, a mark, an x or a tile)
+  walks there along the tiles. From then on it is not in the way. Refused while it is: `'tobble' is
+  in the way at map column 30; ask it to move first (- step_aside: tobble)`.
+- **Reactions** during or after a move: `react: {when, expression, effect}` on `walk_to`,
+  `run_to` and `jump` (with `to`) on a level. `when: pickup` starts it as the character picks up
+  the first coin or star on the way, `land` as a jump lands (the default for a jump), `arrive` as
+  it stops (the default for a walk; for a jump once its landing wobble is over). The face eases to
+  the `expression` in 0.3 s and keeps it (like `emote`); the `effect` symbol (`sparkle`, `stars`,
+  `hearts`, `exclaim`...: the [effect](#effect-symbols-effect) symbols) pops over its head for
+  1.4 s. Lip sync goes on while it reacts. A reaction after the move is also a plain `emote`,
+  `react` or `effect` action at a later `at` (it waits for the move to end). `vidgen validate`
+  refuses `when: pickup` on a move that picks up nothing and `when: land` on a walk.
+- Sounds for the pickups, the door and the landing are Step 153's; the effect symbols play no
+  sound here.
 
 #### Rooms (`room`)
 
@@ -5487,7 +5571,7 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -5663,17 +5747,18 @@ beats:
 
 #### Moving
 
-Six more actions move the characters of a `stage`; like the acting actions they take characters
+Seven more actions move the characters of a `stage`; like the acting actions they take characters
 as targets and the new state as an option:
 
 | action | options | |
 |---|---|---|
-| `walk_to` | `to` (a mark or an x 0–1 of the stage, or `{mark, depth}`), `depth` (0 front .. 1 back; default: its depth now), `speed` (`2.5`); `to` or `depth` | walks along the ground to that place (and depth: [walking in depth](#walking-in-depth-and-the-front-view)), facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. On a [platform level](#walking-and-jumping-on-a-level) it walks along the tiles, steps and ladders (the default speed scaled with `size`). |
-| `run_to` | `to`, `depth` (as `walk_to`), `speed` (`6`) | runs there: a `walk_to` at running speed with steps 1.6 times as long, legs and arms swinging 1.5 times as far, knees and elbows bending more and the body leaning forward 12° at full speed (also with `cartoon_motion: none`). About 1.4 s from `left` to `right` of a 16:9 stage, plus the wind-up and settle. Footsteps follow the longer strides; with [motion effects](#motion-effects-motion_effects) dust puffs up where it sets off and stops and speed lines trail it. |
+| `walk_to` | `to` (a mark or an x 0–1 of the stage, or `{mark, depth}`; on a level also a tile `{column, row}`), `depth` (0 front .. 1 back; default: its depth now), `speed` (`2.5`); `to` or `depth`; on a level `react` | walks along the ground to that place (and depth: [walking in depth](#walking-in-depth-and-the-front-view)), facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. On a [platform level](#walking-and-jumping-on-a-level) it walks along the tiles, steps and ladders (the default speed scaled with `size`), picks up the coins and stars it touches and cannot pass a closed door or a blocker; `react: {when, expression, effect}` reacts on a pickup or as it stops ([story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)). |
+| `run_to` | `to`, `depth`, `react` (as `walk_to`), `speed` (`6`) | runs there: a `walk_to` at running speed with steps 1.6 times as long, legs and arms swinging 1.5 times as far, knees and elbows bending more and the body leaning forward 12° at full speed (also with `cartoon_motion: none`). About 1.4 s from `left` to `right` of a 16:9 stage, plus the wind-up and settle. Footsteps follow the longer strides; with [motion effects](#motion-effects-motion_effects) dust puffs up where it sets off and stops and speed lines trail it. |
 | `enter` | `side` (`left` \| `right`; default: the edge nearer where it goes), `door` (instead of `side`: a [room](#rooms-room)'s door by name), `to` (a mark or x; default its own `at`), `speed` | walks in from just beyond that edge of what the camera shows, or through the door (it opens; the character fades in in the doorway over 0.35 s, with what it holds). A character with an `enter` action waits off stage (beyond the stage's edge) from the start of the scene until then. |
 | `exit` | `to` (`left` \| `right`; default: the nearer edge), `door` (instead of `to`: a room's door by name), `speed` | walks out beyond that edge of what the camera shows, or to the door (it opens) where it fades out over 0.35 s with what it holds, then waits off stage (an `enter` brings it back). A camera `follow`ing it stops (and stays). |
 | `gesture` | `to` (required: `point`, `wave`, `shrug`, `nod`, `shake_head`), `big` (`false`) | `big: true`: a sweeping gesture, a whoosh arc trailing the hand of a `point`, `wave` or `shrug` ([motion effects](#motion-effects-motion_effects)). The gesture, then back to its pose: `point` raises the near arm forward, `wave` raises it and waves three times, `shrug` raises both arms, `nod` dips the head twice, `shake_head` moves the head (and eyes) side to side twice. 1.2 s (`point`), 1.6 (`wave`), 1.0 (`shrug`), 0.9 (`nod`), 1.1 (`shake_head`). |
-| `jump` | `height` (`0.4`: its own heights, up to 2); on a [platform level](#walking-and-jumping-on-a-level) `to` (a spot, a mark or an x, or a tile `{column, row}`) instead | jumps up and lands where it stood (0.6 s in the air; with `cartoon_motion` a crouch before and a squash after, [below](#animation-principles-cartoon_motion)). With `to` on a level: walks to the take-off point, jumps a planned arc there and lands with a squash and a wobble. |
+| `jump` | `height` (`0.4`: its own heights, up to 2); on a [platform level](#walking-and-jumping-on-a-level) `to` (a spot, a mark or an x, or a tile `{column, row}`) instead | jumps up and lands where it stood (0.6 s in the air; with `cartoon_motion` a crouch before and a squash after, [below](#animation-principles-cartoon_motion)). With `to` on a level: walks to the take-off point, jumps a planned arc there and lands with a squash and a wobble, picking up the coins and stars it touches on the way and in the air; `react: {when, expression, effect}` reacts on a pickup, as it lands (default) or once it stands still. |
+| `step_aside` | `to` (a spot, a mark, an x or a tile; default: a step back off the path), `speed` | on a [platform level](#story-props-on-a-level-keys-doors-coins-stars-blockers), one of its `blockers` moves out of the way: back off the path (smaller, behind the others; 1 s) or along the tiles to `to`. |
 
 A walk's time comes from its distance and `speed`; `run_time:` sets the time instead (and so the
 speed). An action never makes its beat longer: a walk longer than the time left in the beat is
@@ -5829,7 +5914,7 @@ the prop is the target:
 
 | action | options | |
 |---|---|---|
-| `open` | — | the umbrella opens half-way through (0.6 s). Held, it goes up overhead: the holder's arm comes up and the hand holds the shaft in front of the chest, the canopy above the head (0.85 of the holder's height tall in the hand, not the 0.4 limit above), the shaft drawn behind the head. Standing, it opens where it stands. |
+| `open` | `by` (a character who opens it: it reaches for it; on a level it must stand next to a door, and hold the key of a locked one) | the umbrella opens half-way through (0.6 s). Held, it goes up overhead: the holder's arm comes up and the hand holds the shaft in front of the chest, the canopy above the head (0.85 of the holder's height tall in the hand, not the 0.4 limit above), the shaft drawn behind the head. Standing, it opens where it stands. |
 | `close` | — | the umbrella closes (0.6 s). Held, it comes back to the hold point in front of the holder, at most 0.4 of its height; standing, it closes where it stands. |
 
 An open umbrella stays open when it is picked up, held, given (the receiver holds it overhead),
@@ -7109,7 +7194,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -7153,7 +7238,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -7180,10 +7265,10 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`) and `lightning` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
-| `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
+| `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
-| `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes |
+| `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |
 | `switch_on`, `switch_off` | as the target: the prop (`- switch_on: tv`) | on a `stage`: a `tv`, a `lamp`, a `fireplace`, a `kettle` or a `phone` (ringing) goes on or off at `at` (at once, with a click; a fire lights with a whoosh, a phone starts ringing); see [Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on) and [small props](#everyday-small-props-let_go-pour). No `until`. |
 | `knock` | as the target: the door (`- knock: front`) | on a `stage`: someone knocks three times on a door (a room's door or a `door` prop) at `at`, with foley; draws nothing (a knock from outside); see [Ambience and door sounds](#ambience-and-door-sounds-ambience-knock). No `until`. |
 | `let_go` | as the target: the character (`- let_go: pip`); `prop` | on a `stage`: the character lets go of the balloons it holds and they float away out of the frame, drifting with the wind ([small props](#everyday-small-props-let_go-pour)). No `until`. |

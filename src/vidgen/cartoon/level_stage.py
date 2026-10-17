@@ -10,12 +10,29 @@ them and the level grows around them.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from vidgen.cartoon.stage import StageItem, StagePlacement, mark_x
 from vidgen.errors import VidgenError
-from vidgen.world import CHARACTER_TILES, Level, Placing, World, jump_body, place_bodies, walk_body
+from vidgen.world import (
+    BLOCKER,
+    CHARACTER_TILES,
+    COLLECTIBLES,
+    DOOR,
+    KEY,
+    Item,
+    Level,
+    Placing,
+    World,
+    close_door,
+    hold_key,
+    jump_body,
+    open_door,
+    place_bodies,
+    step_aside,
+    walk_body,
+)
 from vidgen.world.moves import is_floor
 
 #: A character's height (fraction of the frame's shorter side) on a level when the scene gives
@@ -74,9 +91,22 @@ def level_fit_problems(level: Level, size: float, frame_width: float, frame_heig
     return problems
 
 
-def level_world(level: Level, items: Sequence[StageItem], marks: Mapping[str, float] | None = None) -> World:
+@dataclass(frozen=True)
+class LevelProps:
+    """The stage's props and characters that are story props of its level (DESIGN.md §86.8): its
+    door props (name -> whether it starts open), the level's ``locks`` (door -> the prop that is
+    its key) and ``blockers`` (characters in the way until they step aside)."""
+
+    doors: Mapping[str, bool] = field(default_factory=dict)
+    locks: Mapping[str, str] = field(default_factory=dict)
+    blockers: Sequence[str] = ()
+
+
+def level_world(level: Level, items: Sequence[StageItem], marks: Mapping[str, float] | None = None,
+                props: LevelProps | None = None) -> World:
     """The world with each stage item standing where its ``at`` says: a spot of the level by
-    name, else a mark or an x (fraction of the stage) on the highest tile there."""
+    name, else a mark or an x (fraction of the stage) on the highest tile there; with ``props``,
+    its doors, keys and blockers as the world's items too (after the map's coins and stars)."""
     spots = set(level.spot_names())
     placings = []
     for item in items:
@@ -88,7 +118,18 @@ def level_world(level: Level, items: Sequence[StageItem], marks: Mapping[str, fl
         except ValueError as exc:
             raise VidgenError(f"'{item.name}': {exc}") from None
         placings.append(Placing(item.name, item.kind, x=fraction * level.columns, scale=item.scale))
-    return place_bodies(level, placings)
+    world = place_bodies(level, placings)
+    if props is None:
+        return world
+    found = []
+    for body in world.bodies:
+        if body.name in props.doors:
+            found.append(Item(body.name, DOOR, body.x, body.y, body.height, key=props.locks.get(body.name), open=props.doors[body.name]))
+        elif body.name in props.locks.values():
+            found.append(Item(body.name, KEY, body.x, body.y, body.height))
+        elif body.name in props.blockers:
+            found.append(Item(body.name, BLOCKER, body.x, body.y, body.height))
+    return world.with_items(*found)
 
 
 def level_layout(
@@ -151,19 +192,24 @@ def level_goal(level: Level, place: Any, marks: Mapping[str, float] | None = Non
 
 @dataclass(frozen=True)
 class LevelStep:
-    """One moving action of a scene as ``vidgen validate`` replays it on a level: its location
-    (``beats[1].actions[0]``) and beat id, the action, the characters it moves and its place
-    (``to``; ``None``: none given)."""
+    """One action of a scene as ``vidgen validate`` replays it on a level: its location
+    (``beats[1].actions[0]``) and beat id, the action, the characters (or props: a door, a key)
+    it acts on, its place (``to``; ``None``: none given) and its other ``options`` as written."""
 
     location: str
     beat: str
     action: str
     names: tuple[str, ...]
     place: Any = None
+    options: Mapping[str, Any] = field(default_factory=dict)
 
 
 #: Actions after which the replay no longer knows where a character stands on the level.
 LEVEL_UNTRACKED = frozenset({"keyframes", "move_along", "get_in", "ride_to", "get_out"})
+#: The moves the replay plans with the rules, and the actions on the level's story props it
+#: follows (who holds a key, doors, blockers; DESIGN.md §86.8).
+LEVEL_MOVES = frozenset({"walk_to", "run_to", "jump", "enter", "exit"})
+LEVEL_PROP_ACTIONS = frozenset({"pick_up", "hold", "give", "put_down", "throw", "let_go", "blow_away", "open", "close", "step_aside"})
 
 
 @dataclass
@@ -175,19 +221,69 @@ class _Replay:
 
 
 def level_move_problems(level: Level, items: Sequence[StageItem], steps: Sequence[LevelStep], marks: Mapping[str, float] | None = None,
-                        *, entering: Sequence[str] = ()) -> list[tuple[str, str]]:
+                        *, entering: Sequence[str] = (), props: LevelProps | None = None) -> list[tuple[str, str]]:
     """The walks and jumps of a scene replayed in order on its level with the rules
-    (:func:`~vidgen.world.moves.walk_body`, :func:`~vidgen.world.moves.jump_body`): a walk that
-    cannot get there on foot, a jump that cannot be made, as ``(location.to, message naming the
-    beat)``. ``entering``: characters off stage until their ``enter`` (it brings them to its
-    ``to``, else their own place). A character is no longer followed after a problem, an ``exit``
-    or a :data:`LEVEL_UNTRACKED` action (until it enters again)."""
-    start = level_world(level, items, marks)
+    (:func:`~vidgen.world.moves.walk_body`, :func:`~vidgen.world.moves.jump_body`), with its
+    story ``props`` (:func:`~vidgen.world.story_props.open_door`...): a walk that cannot get there
+    on foot, a jump that cannot be made, a closed door or a blocker in the way, a locked door
+    opened without its key, a reaction on a pickup with nothing to pick up, as ``(location.option,
+    message naming the beat)``. ``entering``: characters off stage until their ``enter`` (it brings
+    them to its ``to``, else their own place). A character is no longer followed after a problem,
+    an ``exit`` or a :data:`LEVEL_UNTRACKED` action (until it enters again)."""
+    start = level_world(level, items, marks, props)
     replay = _Replay(start, marks, set(entering))
     for step in steps:
+        if step.action in LEVEL_PROP_ACTIONS:
+            _replay_prop_step(replay, start, step)
+            continue
         for name in step.names:
             _replay_step(replay, start, step, name)
     return replay.problems
+
+
+def _keys_let_go(world: World, step: LevelStep, holder: str) -> list[str]:
+    """The keys ``holder`` lets go of with ``step`` (its ``prop`` option, else whatever key it holds)."""
+    chosen = step.options.get("prop")
+    held = [i.name for i in world.items if i.kind == KEY and i.holder == holder]
+    return [name for name in held if chosen is None or name == chosen]
+
+
+def _replay_prop_step(replay: _Replay, start: World, step: LevelStep) -> None:
+    """A step on the level's story props: who holds a key, a door opening or closing, a blocker
+    stepping aside (and walking off, with ``to``)."""
+    world, o = replay.world, step.options
+    try:
+        if step.action in ("pick_up", "hold"):
+            for name in step.names:
+                replay.world = hold_key(replay.world, str(o.get("to")), name)
+        elif step.action == "give":
+            for name in step.names:
+                for key in _keys_let_go(world, step, name):
+                    replay.world = hold_key(replay.world, key, str(o.get("to")))
+        elif step.action in ("put_down", "throw", "let_go"):
+            for name in step.names:
+                for key in _keys_let_go(world, step, name):
+                    replay.world = hold_key(replay.world, key, None)
+        elif step.action == "blow_away":
+            for name in step.names:
+                replay.world = hold_key(replay.world, name, None)
+        elif step.action == "open":
+            by = o.get("by")
+            for name in step.names:
+                replay.world = open_door(replay.world, name, by, reach=by is not None and by not in replay.away)
+        elif step.action == "close":
+            for name in step.names:
+                replay.world = close_door(replay.world, name)
+        elif step.action == "step_aside":
+            for name in step.names:
+                replay.world = step_aside(replay.world, name)
+                if step.place is None:
+                    replay.away.add(name)   # it stepped back off the path: no longer followed
+                else:
+                    _replay_step(replay, start, replace(step, action="walk_to"), name)
+    except VidgenError as exc:
+        option = "by" if step.action == "open" and o.get("by") is not None else "target"
+        replay.problems.append((f"{step.location}.{option}", f"beat '{step.beat}': {exc}"))
 
 
 def _replay_step(replay: _Replay, start: World, step: LevelStep, name: str) -> None:
@@ -209,11 +305,23 @@ def _replay_step(replay: _Replay, start: World, step: LevelStep, name: str) -> N
     try:
         goal = level_goal(start.level, step.place, replay.marks)
         move = jump_body if step.action == "jump" else walk_body
+        before = replay.world
         replay.world = move(replay.world, name, goal.x, goal.y, where=goal.label)[0]
     except VidgenError as exc:
         hint = f" (- jump: {name}, to: {_place_text(step.place)})" if step.action != "jump" and "jump there instead" in str(exc) else ""
         replay.problems.append((f"{step.location}.to", f"beat '{step.beat}': {exc}{hint}"))
         replay.away.add(name)
+        return
+    react = step.options.get("react")
+    if isinstance(react, Mapping) and react.get("when") == "pickup" and not _picked(before, replay.world):
+        replay.problems.append((f"{step.location}.react", f"beat '{step.beat}': '{name}' picks up nothing on the way there, "
+                                                          "so a reaction when: pickup never plays; react when: arrive (or land) instead"))
+
+
+def _picked(before: World, after: World) -> bool:
+    """Whether a coin or a star was picked up between ``before`` and ``after``."""
+    return any(item.holder is not None and before.item(item.name) is not None and before.item(item.name).holder is None
+               for item in after.items if item.kind in COLLECTIBLES)
 
 
 def _place_text(place: Any) -> str:
@@ -223,10 +331,13 @@ def _place_text(place: Any) -> str:
 
 
 __all__ = [
+    "LEVEL_MOVES",
+    "LEVEL_PROP_ACTIONS",
     "LEVEL_SIZE",
     "LEVEL_UNTRACKED",
     "LevelFrame",
     "LevelGoal",
+    "LevelProps",
     "LevelStep",
     "level_fit_problems",
     "level_frame",

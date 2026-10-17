@@ -1,7 +1,9 @@
 """Moving beat actions (DESIGN.md §69.12): ``walk_to``, ``run_to`` (§69.41), ``enter``, ``exit``,
-``gesture`` and ``jump`` on the characters of a scene. Written against ``vidgen.api`` only, like
-project actions; on a stage's platform level the stage plans the walks and jumps with its rules
-(``level_walk``, ``level_enter``, ``level_exit``, ``level_jump``, DESIGN.md §86.7).
+``gesture``, ``jump`` and ``step_aside`` on the characters of a scene. Written against
+``vidgen.api`` only, like project actions; on a stage's platform level the stage plans the walks
+and jumps with its rules (``level_walk``, ``level_enter``, ``level_exit``, ``level_jump``,
+DESIGN.md §86.7), with its story props in the way and coins and stars picked up on the way, a
+reaction (``react``) during or after the move and a blocker stepping aside (§86.8).
 
 The motion is worked out without manim in :mod:`vidgen.cartoon.acting` (walk times, the walk
 cycle, where an entrance starts and an exit ends, gestures, jumps) and played with the
@@ -23,6 +25,33 @@ log = logging.getLogger("vidgen.actions")
 Place = str | Annotated[float, Field(ge=0.0, le=1.0)]
 #: How far back a walk goes on the stage (0 front .. 1 back).
 Depth = Annotated[float, Field(ge=0.0, le=1.0)]
+#: The seconds a blocker takes to step back off a level's path (``step_aside`` without ``to``).
+STEP_ASIDE_SECONDS = 1.0
+
+
+class MapTile(ActionOptions):
+    """A tile of a level's map to walk or jump onto, as the author reads the map (DESIGN.md §86.7)."""
+
+    column: int = Field(ge=1)
+    """Its column, from 1 at the map's left."""
+    row: int = Field(ge=1)
+    """Its row, from 1 at the map's top line."""
+
+
+class MoveReaction(ActionOptions):
+    """A reaction during or after a move on a platform level (DESIGN.md §86.8)."""
+
+    when: Literal["pickup", "land", "arrive"] | None = None
+    """When it reacts: pickup (as it picks up the first coin or star on the way), land (as a jump lands) or arrive (as it stops); default: land for a jump, else arrive."""
+    expression: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_]+$")
+    """The expression it changes to then (happy, surprised, laughing... or its own); it keeps it, like emote."""
+    effect: Literal[EFFECT_KINDS] | None = None  # type: ignore[valid-type]
+    """A symbol popping over its head then for a moment: sweat, anger, idea, question, exclaim, sleep, hearts, stars, sparkle or tear."""
+
+
+def _tile_place(to: Any) -> Any:
+    """``to`` as the stage's level methods take it (a tile as ``{column, row}``)."""
+    return to.model_dump() if isinstance(to, MapTile) else to
 
 
 class WalkPlace(ActionOptions):
@@ -103,10 +132,14 @@ def _ended_walk(scene: NarratedScene, character: Character) -> None:
 
 class _Moving(_Acting):
     """A moving action: its targets must be characters; ``to`` (when it is a place) must be a
-    mark of the scene or an x."""
+    mark of the scene or an x, or on a level a tile of its map; a ``react`` is for a level."""
 
-    def _place_problems(self, scene_cls: type[NarratedScene], params: Any, place: str | float | None) -> list[tuple[str, str]]:
+    def _place_problems(self, scene_cls: type[NarratedScene], params: Any, place: Any) -> list[tuple[str, str]]:
         problems = self._target_characters(scene_cls, params)[1]
+        if isinstance(place, (MapTile, dict)):
+            if getattr(params, "level", None) is None:
+                problems.append(("to", "a tile {column, row} is a place on a platform level (params.level); give a mark or an x"))
+            return problems
         if place is None:
             return problems
         try:
@@ -114,6 +147,24 @@ class _Moving(_Acting):
         except ValueError as exc:
             problems.append(("to", str(exc)))
         return problems
+
+    def character_needs(self) -> str | None:
+        react = getattr(self.options, "react", None)
+        return "emote" if react is not None and react.expression is not None else self.needs
+
+    def _react_problems(self, scene_cls: type[NarratedScene], params: Any, *, jumps: bool) -> list[tuple[str, str]]:
+        """A ``react`` names an expression or an effect, lands only on a jump, and is for a level."""
+        react = getattr(self.options, "react", None)
+        if react is None:
+            return []
+        if getattr(params, "level", None) is None:
+            return [("react", "react is for moves on a platform level (params.level); use emote, react or effect actions on a plain stage")]
+        if react.expression is None and react.effect is None:
+            return [("react", "say how it reacts: an expression and / or an effect")]
+        if react.when == "land" and not jumps:
+            return [("react", "when: land is for a jump; a walk reacts when: pickup or when: arrive")]
+        named = self._named_problems(scene_cls, params, "expression", react.expression, "expression")
+        return [("react", text) for key, text in named if key == "expression"]
 
 
 def _walk_problems(params: Any, to: Any, depth: float | None) -> list[tuple[str, str]]:
@@ -143,28 +194,35 @@ class WalkTo(_Moving):
     from (larger) the camera too: it grows or shrinks, its shadow with it, and passes in front of
     or behind the others on the way; walking only in depth it keeps its facing (``facing: front``:
     it steps towards the camera). It takes as long as the distance needs (``run_time`` sets it
-    instead); a beat shorter than that speeds it up. It stays there."""
+    instead); a beat shorter than that speeds it up. It stays there. On a platform level it walks
+    along the tiles (``to`` may be a tile ``{column, row}`` of the map), picks up the coins and
+    stars it touches and cannot pass a closed door or a blocker; ``react`` changes its expression
+    and / or pops an effect when it picks one up or arrives (DESIGN.md §86.8)."""
 
     class Options(ActionOptions):
-        to: WalkPlace | Place | None = None
-        """Where it walks: a mark (left, centre, right, ... or the stage's own), an x from 0 (left edge) to 1 (right edge) of the stage, or {mark, depth}; default: where it is (with depth)."""
+        to: MapTile | WalkPlace | Place | None = None
+        """Where it walks: a mark (left, centre, right, ... or the stage's own), an x from 0 (left edge) to 1 (right edge) of the stage, or {mark, depth}; on a platform level also a tile {column, row} of the map (from 1 at the top left); default: where it is (with depth)."""
         depth: Depth | None = None
         """How far back it walks to: 0 = the front (the ground line, full size) .. 1 = the back of the stage, smaller; default: its depth now."""
         speed: float = Field(WALK_SPEED, gt=0.0, le=20.0)
         """Walking speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall); default 2.5 (a turtle 1, a penguin 1.75)."""
+        react: MoveReaction | None = None
+        """On a platform level: {when: pickup | arrive, expression, effect}: how it reacts as it picks up the first coin or star on the way, or as it arrives (default)."""
 
     run_time = 2.0
 
     def _destination(self) -> tuple[Any, float | None]:
-        """Where it goes (a mark or an x; ``None``: its x now) and to what depth (``None``: its own)."""
+        """Where it goes (a mark or an x, a tile as ``{column, row}``; ``None``: its x now) and to
+        what depth (``None``: its own)."""
         to = self.options.to
         if isinstance(to, WalkPlace):
             return to.mark, to.depth if to.depth is not None else self.options.depth
-        return to, self.options.depth
+        return _tile_place(to), self.options.depth
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
         place = self._destination()[0]
-        return self._place_problems(scene_cls, params, place) + _walk_problems(params, self.options.to, self.options.depth)
+        return (self._place_problems(scene_cls, params, place) + _walk_problems(params, self.options.to, self.options.depth)
+                + self._react_problems(scene_cls, params, jumps=False))
 
     def _goal(self, scene: NarratedScene, character: Character) -> tuple[float, float | None]:
         """The x it walks to and its depth there (``None``: no walk in depth on this scene)."""
@@ -178,7 +236,8 @@ class WalkTo(_Moving):
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
         if _on_level(scene):
             place = self._destination()[0]
-            found = [_level_seconds(lambda c=c: scene.level_walk(c, place, speed=_pace(scene, self.options, c), gait=self.gait))
+            found = [_level_seconds(lambda c=c: scene.level_walk(c, place, speed=_pace(scene, self.options, c), gait=self.gait,
+                                                                 react=self.options.react))
                      for c in _characters(scene, targets, self.label)]
             return max((t for t in found if t is not None), default=None)
         times = []
@@ -198,7 +257,8 @@ class WalkTo(_Moving):
         anims: list[Animation] = []
         if _on_level(scene):
             for character in _characters(scene, targets, self.label):
-                walk = scene.level_walk(character, self._destination()[0], speed=_pace(scene, self.options, character), gait=self.gait)
+                walk = scene.level_walk(character, self._destination()[0], speed=_pace(scene, self.options, character), gait=self.gait,
+                                        react=self.options.react)
                 if walk.route.effort > 1e-6:
                     anims.append(walk)
                     scene.level_moved(character, walk)
@@ -228,12 +288,14 @@ class RunTo(WalkTo):
     it sets off and stops and speed lines trail it."""
 
     class Options(ActionOptions):
-        to: WalkPlace | Place | None = None
-        """Where it runs: a mark (left, centre, right, ... or the stage's own), an x from 0 (left edge) to 1 (right edge) of the stage, or {mark, depth}; default: where it is (with depth)."""
+        to: MapTile | WalkPlace | Place | None = None
+        """Where it runs: a mark (left, centre, right, ... or the stage's own), an x from 0 (left edge) to 1 (right edge) of the stage, or {mark, depth}; on a platform level also a tile {column, row} of the map; default: where it is (with depth)."""
         depth: Depth | None = None
         """How far back it runs to: 0 = the front (the ground line, full size) .. 1 = the back of the stage, smaller; default: its depth now."""
         speed: float = Field(RUN_SPEED, gt=0.0, le=20.0)
         """Running speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall); default 6 (a turtle 2.4, a penguin 4.2)."""
+        react: MoveReaction | None = None
+        """On a platform level: {when: pickup | arrive, expression, effect}: how it reacts as it picks up the first coin or star on the way, or as it arrives (default)."""
 
     run_time = 1.2
     label = "run_to"
@@ -438,33 +500,28 @@ class GestureAction(_Moving):
         return [Gesture(c, self.options.to) for c in _characters(scene, targets, "gesture")]
 
 
-class JumpTile(ActionOptions):
-    """A tile of a level's map to jump onto, as the author reads the map (DESIGN.md §86.7)."""
-
-    column: int = Field(ge=1)
-    """Its column, from 1 at the map's left."""
-    row: int = Field(ge=1)
-    """Its row, from 1 at the map's top line."""
-
-
 @action("jump")
 class JumpAction(_Moving):
     """The target character jumps up (``height`` in character heights) and lands where it stood.
     Without a ``height`` a frog jumps higher (its species' factor, DESIGN.md §69.57). On a
     platform level, ``to`` (a spot, a mark, an x or a tile ``{column, row}``) jumps it there: it
     walks to the best take-off point, crouches, flies an arc clear of the tiles and lands with a
-    squash and a wobble (DESIGN.md §86.7); ``vidgen validate`` says why a jump cannot be made."""
+    squash and a wobble (DESIGN.md §86.7), picking up the coins and stars it touches on the way
+    (mid-jump too), never through a closed door or a blocker; ``react`` changes its expression
+    and / or pops an effect as it picks one up, lands or stops (§86.8). ``vidgen validate`` says
+    why a jump cannot be made."""
 
     class Options(ActionOptions):
         height: float = Field(JUMP_HEIGHT, gt=0.0, le=2.0)
         """How high it jumps, in its own heights (0.4: a hop; 1: its own height); default 0.4 (a frog 0.72)."""
-        to: JumpTile | Place | None = None
+        to: MapTile | Place | None = None
         """On a platform level: where it jumps to: a spot, a mark or an x 0..1 of the stage (onto the highest tile there a jump reaches), or a tile {column, row} of the map (from 1 at the top left); default: up where it stands."""
+        react: MoveReaction | None = None
+        """With to, on a platform level: {when: pickup | land | arrive, expression, effect}: how it reacts as it picks up the first coin or star on the way, as it lands (default) or once it stands still."""
 
     def _place(self) -> Any:
         """``to`` as the stage's ``level_jump`` takes it (a tile as ``{column, row}``)."""
-        to = self.options.to
-        return to.model_dump() if isinstance(to, JumpTile) else to
+        return _tile_place(self.options.to)
 
     def _height(self, character: Character) -> float:
         if "height" in self.options.model_fields_set:
@@ -475,16 +532,20 @@ class JumpAction(_Moving):
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
         to = self.options.to
-        problems = self._place_problems(scene_cls, params, None if to is None or isinstance(to, JumpTile) else to)
+        problems = self._place_problems(scene_cls, params, None if isinstance(to, MapTile) else to)
+        problems += self._react_problems(scene_cls, params, jumps=True)
         if to is not None and getattr(params, "level", None) is None:
             problems.append(("to", "jumping to a place needs a platform level (params.level); without one a character jumps up where it stands"))
         if to is not None and "height" in self.options.model_fields_set:
             problems.append(("height", "give height (a jump where it stands) or to (a jump to a place on the level), not both"))
+        if to is None and self.options.react is not None:
+            problems.append(("react", "react goes with a jump to a place (to) on a platform level"))
         return problems
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
         if self.options.to is not None and _on_level(scene):
-            found = [_level_seconds(lambda c=c: scene.level_jump(c, self._place())) for c in _characters(scene, targets, "jump")]
+            found = [_level_seconds(lambda c=c: scene.level_jump(c, self._place(), react=self.options.react))
+                     for c in _characters(scene, targets, "jump")]
             return max((t for t in found if t is not None), default=None)
         times = [jump_motion_seconds(JUMP_SECONDS, c.motion_strength) for c in _characters(scene, targets, "jump")]
         return max(times, default=None)
@@ -496,8 +557,54 @@ class JumpAction(_Moving):
             return [Jump(c, self._height(c)) for c in _characters(scene, targets, "jump")]
         anims: list[Animation] = []
         for character in _characters(scene, targets, "jump"):
-            jump = scene.level_jump(character, self._place())
+            jump = scene.level_jump(character, self._place(), react=self.options.react)
             anims.append(jump)
             scene.level_moved(character, jump)
             _ended_walk(scene, character)
         return anims
+
+
+@action("step_aside")
+class StepAside(_Moving):
+    """On a platform level, the target character, one of the level's ``blockers`` (a grumpy
+    turtle on the path), moves out of the way, as when it is asked nicely in the beat's line: it
+    steps back off the path (a little smaller, drawn behind the others), or with ``to`` walks
+    there along the tiles. From then on walks and jumps pass where it stood (DESIGN.md §86.8)."""
+
+    class Options(ActionOptions):
+        to: MapTile | Place | None = None
+        """Where it walks out of the way: a spot, a mark, an x 0..1 of the stage or a tile {column, row} of the map; default: a step back off the path."""
+        speed: float = Field(WALK_SPEED, gt=0.0, le=20.0)
+        """Walking speed in units per second; default 2.5 (a turtle 1)."""
+
+    run_time = STEP_ASIDE_SECONDS
+
+    def _destination(self) -> tuple[Any, None]:
+        return _tile_place(self.options.to), None
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        names, problems = self._target_characters(scene_cls, params)
+        level = getattr(params, "level", None)
+        if level is None:
+            return problems + [("action", "step_aside is for the blockers of a platform level (params.level.blockers)")]
+        for name in names:
+            if name not in level.blockers:
+                problems.append(("target", f"'{name}' is not one of the level's blockers ({', '.join(level.blockers) or 'none'}); "
+                                           "list it in level.blockers"))
+        to = self.options.to
+        return problems + ([] if isinstance(to, MapTile) else self._place_problems(scene_cls, params, to))
+
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        place = self._destination()[0]
+        if place is None or not _on_level(scene):
+            return None
+        found = [_level_seconds(lambda c=c: scene.level_walk(c, place, speed=_pace(scene, self.options, c), gait=WALKING))
+                 for c in _characters(scene, targets, "step_aside")]
+        return max((t for t in found if t is not None), default=None)
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Each blocker moves out of the way (the stage's ``level_step_aside``)."""
+        if not _on_level(scene):
+            return []
+        place = self._destination()[0]
+        return [scene.level_step_aside(c, place, speed=_pace(scene, self.options, c)) for c in _characters(scene, targets, "step_aside")]

@@ -10747,3 +10747,76 @@ Reference: docs/CONFIG.md "Walking and jumping on a level".
 - Measured: the 47 x 6 scratch level at 854x480 renders 31 s of video (a jump with a run-up, a
   walk over steps, a ladder climb, a jump up onto a cloud) in about 40 s; `plan_jump` takes a few
   milliseconds per jump.
+
+### 86.8 Story props and reactions (Step 152)
+
+Reference: docs/CONFIG.md "Story props on a level (keys, doors, coins, stars, blockers)".
+
+- **World data** (`vidgen/world/items.py`, no manim): an `Item` (name, kind `key` / `door` /
+  `coin` / `star` / `blocker`, where it is in tile units, its height; a door's `key` and `open`, a
+  blocker's `aside`, the `holder` of a key or of a picked-up coin or star; `blocks`, `label`,
+  `hint`). `World.items` holds them (`item`, `with_items`; `moved` moves a blocker's item with its
+  body).
+- **Symbols versus named placements** (decided here): what a map has many of and nobody names in
+  a beat (coins, stars) is a map symbol, `$` and `*`, floating in the middle of an air cell and
+  named `coin_1`, `star_1`... in map order (the top row first). What a beat names and acts on
+  (`pick_up: gold_key`, `open: gate`, `step_aside: tobble`) is a prop or a character of the stage
+  standing at a spot like any other: its part in the rules is data on the level, `locks: {door:
+  key}` and `blockers: [name]`. This keeps Step 150's rule (letters are only spots, symbols only
+  tiles or items), reuses the stage's props (`door` with its open / closed shapes, a new `key`
+  prop held by its bow), its characters and every prop action, and puts no second placement
+  syntax into the map. Every closed `door` prop on a level is in the way (a door is a way through;
+  a free-standing door drawn shut that one walks through looked wrong); `locks` only adds the key.
+- **Rules** (`vidgen/world/moves.py`, `vidgen/world/story_props.py`, pure functions): an item
+  that `blocks` is an `Obstacle` shutting its column from its feet up to the first solid tile
+  above it (`_OPEN_SKY_ROWS` with none), so a walk or a jump never passes it but a way over the
+  tiles above it still does. `walk_route` / `plan_jump` take `obstacles`; when they refuse, the
+  same move without them is planned and the first obstacle its way runs into (or the one right
+  after where the walk stops) is named with what clears it: `the locked door 'gate' is in the way
+  at map column 14; open it first with its key 'gold_key' (- open: gate, by: <who holds
+  gold_key>)`. `route_pickups` / `jump_pickups` sample the way (every `_ARC_SAMPLE` 0.05 tiles)
+  and give each coin or star whose middle the body's box comes within `PICKUP_RADIUS` 0.3 of, in
+  order, with its share of the walk or of the flight (mid-jump). `walk_body` / `jump_body` apply
+  both (the body is never in its own way). `open_door` (a locked door only by the key's holder,
+  within `DOOR_REACH` 1.6 tiles across and `DOOR_REACH_UP` 0.5 up or down), `close_door`,
+  `step_aside`, `hold_key`.
+- **Validation** (`level_move_problems` with `LevelProps`): the replay follows the key through
+  `pick_up`, `hold`, `give`, `put_down`, `throw`, `let_go` and `blow_away`, doors through `open`
+  (with `by`) and `close`, blockers through `step_aside`, and the moves with the obstacles and the
+  pickups; each refusal names the beat (`beats[j].actions[k].to`, `.by`, `.target`, `.react`). A
+  blocker that stepped back off the path is no longer followed (it stands behind the path).
+  `StageLevel` checks that `locks` names a door prop and a prop for its key, `blockers`
+  characters, and that no prop or character takes a coin's or star's name.
+- **Renderer**: `cartoon/level_items.py` `Collectible` (a coin: a disc, a ring and a shine; a star:
+  a rounded five-point star), drawn from an updater counting its own seconds: it bobs (a coin
+  turns) while it waits, and pops (grows 1.6×, rises 0.8 tiles, fades in `POP_SECONDS` 0.35)
+  from `collect()`. The coins and stars go in the backdrop after the shadows, not graded by the
+  light (they shine at night). `RouteWalk` and `ArcJump` (a `_Cues` mixin) take `pickups`
+  (share, collectible) and call `collect()` on the frame the move's progress passes the share.
+- **Reactions** (`react: {when, expression, effect}` on `walk_to`, `run_to` and `jump` on a
+  level): a move's progress is its walk (or flight) share 0..1, then 1..2 over its settle;
+  `Reaction(at, expression, effect)` starts when the progress passes `at` (the first pickup's
+  share, `LANDED` 1, `SETTLED` 2), eases the face parts (`kind_parts("expression")`) to the
+  expression over `REACTION_BLEND_SECONDS` 0.3 by changing the base state the walk cycle or the
+  jump is drawn from (so the walk, the squash and the lip sync go on), and starts the effect
+  symbol: an `EffectSymbol` the stage adds when the move is applied (`level_moved`), hidden with
+  a very negative age until then, shrinking away by itself after `REACTION_EFFECT_SECONDS` 1.4.
+  The expression is kept (as `emote`). A run-up's pickup puts the reaction on the run-up walk.
+  The key `when` (not `on`): YAML 1.1 reads a bare `on:` key as `true`. Why inside the move, not
+  a second action at a time: the runner plays an action that changes the same character after
+  the one playing (`_changed` batches), so a separate `emote` cannot start mid-walk, and the
+  pickup's time is only known once the move is planned.
+- **Stage** (`scenes/stage.py`): `level_state` (the world as the rules see it now; `_level_now`
+  reads each key's holder from its prop), `level_pickups`, `level_walk` / `level_jump` with
+  `react`, obstacles and pickups (`walk.picked`), `level_enter` / `level_exit` with obstacles (no
+  pickups, as in the replay), `level_moved` records the pickups and adds the effect symbol,
+  `level_open` / `level_close` (called by `open` / `close` on a door), `level_step_aside` (a walk
+  to `to`, else a `Walk` in depth to `ASIDE_DEPTH` 0.3 with its feet `ASIDE_RISE_TILES` 0.3
+  higher, its draw order kept by the depth walks). `open` gained `by` (the opener turns to the
+  door and reaches for its edge with the key's hand, `_reach_low`; `alters` keeps the opener out
+  of other batches); `step_aside` is a new moving action.
+- **Step 151 gaps closed**: `walk_to` / `run_to` take a tile `{column, row}` (`MapTile`, was
+  `JumpTile`); `StageFrame.columns` lets `place_x` place a tile, so `vidgen direct` and the
+  prop-handling replay know where a walk or a jump to a tile ends.
+- Measured: the 50 x 5 scratch story at 854x480 (a key, two coin runs, a locked gate, a jump
+  over a gap catching a star, a turtle stepping aside) renders 31.5 s of video in 27 s.

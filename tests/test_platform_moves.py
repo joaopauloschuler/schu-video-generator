@@ -276,7 +276,7 @@ def test_directing_follows_a_jump(make_project) -> None:
              ActionConfig.model_validate({"action": "jump", "target": "kit", "to": {"column": 15, "row": 3}})]
     _follow_written(state, BeatInput("hills_b1", "Pip jumps.", (), tuple(jumps)), ["pip", "kit"])
     assert state.x["pip"] == pytest.approx(frame.place_x("home")) and state.facing["pip"] == "right"
-    assert state.x["kit"] is None   # a tile: not a mark the planner knows
+    assert state.x["kit"] == pytest.approx(frame.place_x(14.5 / 24))   # a tile: its column's middle (Step 152)
 
 
 def test_lint_reports_level_moves_squeezed_into_their_beat() -> None:
