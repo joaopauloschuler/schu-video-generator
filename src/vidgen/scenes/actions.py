@@ -601,7 +601,7 @@ class Follow(Action):
     """Keep the camera on a character (its feet) as it moves, at the camera's zoom, inside the
     stage: from this beat to the end of the scene, or until ``until: <beat>`` starts (the camera
     then stays where it is). The camera first pans to it (``run_time``). A ``pan`` or another
-    ``follow`` ends it."""
+    ``follow`` ends it. On a platform level it follows gently, up and down too (DESIGN.md §86.10)."""
 
     run_time = 1.0
     reversible = True
@@ -617,7 +617,8 @@ class Follow(Action):
         """Pan to the first target, then follow it (ending a ``shot``)."""
         scene.follow_with_camera(None)
         end_shot(scene)
-        self.x_of = _x_of(targets[0].mobject)
+        follower = getattr(scene, "camera_follower", None)   # a stage's own way of following (a level's)
+        self.x_of = (follower(targets[0].mobject) if follower is not None else None) or _x_of(targets[0].mobject)
         center = _sideways(scene, self.x_of())
         if center is None:
             scene.follow_with_camera(self.x_of)

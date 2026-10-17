@@ -14,7 +14,17 @@ import yaml
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, draft_format, parse_config
 from vidgen.emotions import Prosody, named_cues, prosody
 from vidgen.errors import Problem, VidgenError
-from vidgen.includes import ConfigSource, Origin, after_variant, attributed, attributed_error, expand_sets, project_relative, read_project_config
+from vidgen.includes import (
+    ConfigSource,
+    Origin,
+    after_variant,
+    attributed,
+    attributed_error,
+    expand_character_size,
+    expand_sets,
+    project_relative,
+    read_project_config,
+)
 from vidgen.kokoro_voices import voice_parts
 from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
@@ -241,7 +251,7 @@ class Project:
         included = read_project_config(config_file, Path(confine) if confine else None)
         data = included.data
         _confine(data, root, source)
-        base_data, base_origins = expand_sets(data, included.origins)
+        base_data, base_origins = expand_character_size(*expand_sets(data, included.origins))
         base, base_source, base_report = _translated(base_data, root, source, base_origins)
         if variant is None:
             return cls(root, config_file, base, None, base, base_source, base_report, included, base_origins)
@@ -249,7 +259,7 @@ class Project:
             known = ", ".join(sorted(base.variants)) or "(none defined)"
             raise VidgenError(f"{source}: unknown variant '{variant}'; available variants: {known}")
         override = base.variants[variant]
-        data, origins = expand_sets(deep_merge(data, override), after_variant(included.origins, data, override))
+        data, origins = expand_character_size(*expand_sets(deep_merge(data, override), after_variant(included.origins, data, override)))
         where = f"{source} (variant '{variant}')"
         try:
             config, merged, report = _translated(data, root, where, origins)

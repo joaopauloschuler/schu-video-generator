@@ -10610,14 +10610,14 @@ apply as on any stage (their sky and layers; their props stand at depths, so a l
   `size × shorter side / 2` and the characters keep the size the scene gives them. A level's
   default `size` is `LEVEL_SIZE` 0.25 (a `mode="before"` validator fills it when the scene gives
   none): about 8 rows by 14.2 columns in 16:9, 14.2 rows by 8 columns in 9:16. Step 154's
-  `character_size` replaces this default (small / medium / large → sizes; `size` keeps winning
-  when written).
+  `character_size` sets this default (§86.10; `size` keeps winning when written).
 - `level_frame`: the stage is exactly as wide as the map (`Stage.stage_width`; `width` is refused
   with a level, reframing does not change it), centred, the map's bottom edge on the frame's
   bottom edge. Spots are stage marks at `(column + 0.5) / columns` (frame-independent, so `pan`
   / `walk_to` / `camera_at` validate without a frame). `level_fit_problems` (in `vidgen validate`
-  and before a render): a map narrower than the frame (the camera would see past its ends), or
-  tiles above the frame's top (the camera moves sideways only; Step 154 keeps that).
+  and before a render): a map narrower than the frame (the camera would see past its ends). Until
+  Step 154 also tiles above the frame's top; since then the camera rises with its hero (§86.10)
+  and a portrait frame raises a short map.
 - `level_layout` replaces `stage_layout` (`Params.layout`, used by the scene, `stage_frame` and
   `stage_reframes`): `level_world` resolves each item's `at` (a spot by name, else a mark or x
   → tile column), `place_bodies` stands it, and the feet come out in Manim units raised by the
@@ -10869,3 +10869,86 @@ Reference: docs/CONFIG.md "Story props on a level", **Sounds**; "Foley and music
   normalises and limits as before).
 - Not done: a move's `react` effect symbol plays no sound (an `effect` action's does), nor does a
   `react` expression `surprised` during a move.
+
+### 86.10 The camera and `character_size` (Step 154)
+
+Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a level
+(`follow`)", lint `small_speaker`.
+
+- **`character_size: small | medium | large`** (`config.CharacterSize`; `VideoConfig` and the
+  stage's param): the stage's default `size` times `CHARACTER_SIZE_FACTORS` 0.7 / 1 / 1.4 of its
+  medium (`STAGE_SIZE` 0.45, a level's `LEVEL_SIZE` 0.25), by the stage's `mode="before"`
+  validator (`_default_size`, which replaced `_level_size`). The scene's wins, then the video's,
+  then medium: the video's reaches the scenes as data, like a set — `includes.expand_character_size`
+  (after `expand_sets`, also after a variant's merge, so a 9:16 variant can say `large`) copies it
+  into each `type: stage` scene whose params (after its set) give neither `character_size` nor
+  `size`, with its origin at the video's key. Why data, not a lookup at render: `params.size` is
+  read by validation, `stage_frame`, `stage_reframes`, directing and lint without a scene, and
+  every one of them now sees the same number. Writing both in one scene is refused. Medium gives
+  exactly the sizes of before (tests unchanged).
+- **On a plain stage (decided)**: applied, consistently, as the named form of `size`: characters
+  and props scale (as `size` always did); the stage's width and marks, the ground line, the
+  background and the layers stay framed, and walking times between marks stay (speeds are in
+  frame units there). Why not restrict it to levels: a Short with a host on a plain stage needs
+  `large` as much (in 9:16 a size is a fraction of the frame's *width*), and one video-level
+  knob that silently skipped half the stage scenes would surprise.
+- **On a level** everything in front scales with `size`: the tile (`size × short side / 2`), the
+  props, coins and stars; `level_pace` (`size / STAGE_SIZE`) scales the default speeds, so every
+  walk, climb and jump takes the same seconds at every size (the rules plan in tiles; the foley
+  cues follow; a render test compares the SFX schedule at medium and large). The sky, the
+  background picture and the layers are *not* scaled: they are the distance (as for a camera
+  move, far things do not grow with the near ones) and a set's layers are given in frame
+  fractions; scaling them would push a set's horizon out of the frame at `large` and leave
+  gaps at `small`. Captions, on-screen text, speech bubbles, effect symbols and overlays are
+  screen-sized as before. Shots (`shot_view`) frame by the characters' size on screen, so they
+  zoom in from the base size (`MAX_SHOT_SCALE`, scale ≥ 1 as before).
+- **The following camera** (`vidgen/camera.py`, no manim): `SmoothFollow` — a dead zone of
+  `FOLLOW_DEAD_ZONE` 0.08 of the view's width either side of its centre, then `smooth_damp`
+  (a critically damped spring, `FOLLOW_SECONDS` 0.45, stable for any `dt`: a skipped animation
+  is one long step) towards the nearest view that has the hero at the zone's edge, then a hard
+  limit `FOLLOW_MAX_OFFSET` 0.3 of the width, then the bounds. Vertically it keeps
+  `FOLLOW_HEAD_ROOM` 0.08 of the view's height over the head and `FOLLOW_FEET_ROOM` 0.2 under the
+  feet, moving only to keep them (a target clamped to the bounds before smoothing, so the
+  velocity never winds up against an edge), and never lets the head within
+  `FOLLOW_MIN_HEAD_ROOM` 0.02 of the top. `NarratedScene.follow_with_camera` accepts such a
+  follower (duck-typed: `view_center(center, dt, width, height, bounds)`, `restart()`; a plain
+  `x_of` keeps the old hard follow, so plain stages and other scenes render as before);
+  `_camera_step` passes the frame's `dt`. The `follow` action asks the scene for
+  `camera_follower(mob)` (`Stage`: a `SmoothFollow` on a level, `None` elsewhere). Searched
+  first: `cartoon/spring.py`'s `Spring.follow` integrates a target known as a function of time,
+  not one read frame by frame; nothing else smoothed the camera.
+- **`level.follow: <character>`**: the hero; `Stage._follow_hero` puts the camera on it (the
+  follower's settled view, so a hero on a high plank starts in frame) and follows from the first
+  frame. A `pan` stops it, a `follow` replaces it, a `shot` stores and gives it back
+  (`shot_home`), an `exit` of the hero stops it, as for the action. `camera_at` is refused with
+  it. Directing knows it: `StageFrame.follows` (the start view is the hero's, the replay's
+  `camera_x` is `None` as after a `follow`), `reframe_path(following=True)` leaves the camera
+  alone. Not a default: without a named hero the camera stays at `camera_at` (and `reframe`),
+  since guessing the hero among the cast would move cameras of existing levels.
+- **Vertical room**: `LevelFrame.top` = max(the frame's top, the map's bottom + its used rows +
+  `CHARACTER_TILES` + `LEVEL_HEAD_ROOM` 2 tiles); `Stage.camera_bounds` uses it (the bottom stays
+  the frame's bottom). So a level taller than the frame is no longer refused, and shots can frame a
+  character high up. With a raised top: the colour / gradient sky moves with the camera
+  (parallax factor 0: it looks the same from every height); `layer_half_extent(stage_top=...)`
+  makes the background picture and the layers cover every view up to it (`reach_y = top −
+  frame_height / 2z`; without `stage_top` the old formula, so plain stages are unchanged); the
+  tiles are drawn up to their used rows (no longer cut at the frame's height).
+- **A short map in a portrait frame** (decided: portrait only, so every landscape level renders as
+  before): `level_raise` raises it by whole rows until the empty sky over its used rows and a
+  character is at most `PORTRAIT_SKY_SHARE` 0.4 of the frame, by at most `PORTRAIT_MAX_RAISE` 0.3
+  of it. `LevelFrame.below` rows of ground are drawn under the map (`level_shapes(below=)`: the
+  bottom row's ground cells run on down, with pebbles; gaps stay open; `draw_columns(below=)`), and
+  `LevelFrame.bottom` rises by them, so every placement, goal and replay follows. The background
+  picture and the layers rise with it (`Stage._level_lift`, and their cover extends down by as
+  much), so the hills stand behind the raised ground as behind a landscape level's. Why rows of
+  ground rather than a camera rule: the camera's bounds stay the map's frame, and nothing
+  "under" the map needed inventing.
+- **Lint**: `small_speaker` (cartoon still rule, default warning, `min_face` 0.075 of the shorter
+  side): a speaking character in view whose head box (as seen, so a shot counts) is smaller; it
+  suggests `shot: closeup <name>` / `medium` or `character_size: large`. Measured: the head is
+  about 0.38 of a character's height, so a level character is 0.095 at medium, 0.067–0.07 at
+  small (always reported), 0.13 at large; a plain stage's 0.17. `off_frame` skips objects with
+  `scenery: true` in the layout dump: an `ImageMobject` with `scenery = True` (the level's tile
+  chunks) — the Step 152 gap.
+- Measured: the 30 x 8 test level at 160x90 with two jumps up, a close-up and a follow renders
+  in about a second; a scratch 42 x 8 level with `set: park` at 854x480 (11.6 s of video) in 23.6 s.

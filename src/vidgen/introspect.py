@@ -281,6 +281,8 @@ class LayoutRecorder:
             return
         if isinstance(mob, AbstractImageMobject):
             self._emit_parts(walk, mob, path, name, "image", [mob])
+            if getattr(mob, "scenery", False) and walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                walk.objects[-1]["scenery"] = True   # a piece of the set (a level's tiles, §86.10): cut by the frame on purpose
             return
         if isinstance(mob, Icon):
             self._emit_parts(walk, mob, path, name, "icon", [m for m in mob.get_family() if _drawn(m)], icon=mob.icon_name)

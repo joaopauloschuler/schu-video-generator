@@ -118,10 +118,10 @@ def test_level_frame_and_layout() -> None:
 def test_level_must_fit_the_frame() -> None:
     narrow = parse_level("#" * 10)
     assert level_fit_problems(narrow, LEVEL_SIZE, FW, FH) == [
-        "the map is 10 columns wide, narrower than the frame (14.2 columns at size 0.25); add columns or make the characters larger (size)"]
+        "the map is 10 columns wide, narrower than the frame (14.2 columns at size 0.25); add columns or make the characters "
+        "larger (character_size: large, or a larger size)"]
     tall = parse_level("\n".join(["#" + "." * 19] * 9 + ["#" * 20]))
-    assert "reach 10 rows up, above the frame's top (8.0 rows" in level_fit_problems(tall, LEVEL_SIZE, FW, FH)[0]
-    assert level_fit_problems(tall, 0.2, FW, FH) == []   # smaller characters, smaller tiles: 10 rows fit
+    assert level_fit_problems(tall, LEVEL_SIZE, FW, FH) == []   # taller than the frame: the camera rises with its hero (Step 154)
     assert level_fit_problems(parse_level("." * 9 + "\n" + "#" * 9), LEVEL_SIZE, 4.5, 8.0) == []   # 9:16: 8 columns are enough
 
 
@@ -195,7 +195,7 @@ def test_validate_checks_the_level_fits_the_frame(make_project) -> None:
     cls = registry.get("stage").cls
     problems = cls.validate_project(cls.validate_params(spec.params), project)
     assert problems == ["level: the map is 10 columns wide, narrower than the frame (14.2 columns at size 0.25); "
-                        "add columns or make the characters larger (size)"]
+                        "add columns or make the characters larger (character_size: large, or a larger size)"]
 
 
 # ----- render -------------------------------------------------------------------------------------

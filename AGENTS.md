@@ -266,7 +266,9 @@ scenes:
   camera moves to whoever speaks (`reframe: speaker`, on by itself when the characters do not
   fit in one view; a short reply holds the view; your own `pan` / `follow` / `zoom` / `shot`
   win). `reframe: none` (top level or a stage's param) squeezes the whole stage into the frame
-  instead. `vidgen direct --variant social` lists the camera's moves.
+  instead. `vidgen direct --variant social` lists the camera's moves. Give the 9:16 variant
+  `character_size: large` (top level, or a stage's param; `small` / `medium` / `large`, default
+  `medium`): characters measured against the narrow width are small on a phone; text keeps its size.
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
@@ -690,7 +692,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
 | `zoom` | look closer at a detail, then come back | at most one per scene |
 | `pan` | on a `stage`: move the camera to a character or a mark (`to: right`) | on a stage wider than the frame (`width: 2`) |
-| `follow` | on a `stage`: keep the camera on a character as it moves | one at a time |
+| `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start) | one at a time |
 | `reveal` | bring a later element in early | rarely: the default order is usually right |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
@@ -1103,7 +1105,8 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
    through a walk, gesture, jump or path. Ask: is it clear who speaks? Are both faces visible,
    facing each other? Does the reaction read without the words? Is anything cut by the edge?
 4. `vidgen lint --json`: the cartoon rules `off_stage`, `character_overlap`, `walk_overlap`,
-   `prop_overlap`, `bubble_overlap`, `facing_away`, `hidden_speaker`, `mouth_without_voice` and `look_alike` (fixes in
+   `prop_overlap`, `bubble_overlap`, `facing_away`, `hidden_speaker`, `small_speaker` (a face too small to read: a
+   `shot: closeup` or `character_size: large`), `mouth_without_voice` and `look_alike` (fixes in
    `vidgen guide troubleshooting`).
 5. Voices: with Kokoro (`vidgen guide audio`) `vidgen tts` is free and writes the lip sync
    tracks; then storyboard and lint again, since real lines change the timing.
@@ -1736,6 +1739,7 @@ install; `vidgen validate` warns when it is missing.
 | `bubble_overlap` | a speech bubble covers a face, another bubble or an effect symbol | a shorter `bubble` text, characters further apart, or the lines (or the line and the effect) in different beats |
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
+| `small_speaker` | a speaking face too small on screen to read it and its lip sync | `shot: closeup <name>` (or `medium`) for that beat, or `character_size: large` |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

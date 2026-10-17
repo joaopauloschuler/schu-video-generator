@@ -1138,7 +1138,12 @@ class NarratedScene(MovingCameraScene):
     def follow_with_camera(self, x_of: Callable[[], float] | None) -> None:
         """Keep the camera's centre on the x that ``x_of()`` gives (Manim units) on every frame,
         inside :meth:`camera_bounds` at the view's current size; ``None`` stops following (the
-        camera stays where it is). A later call replaces the earlier one."""
+        camera stays where it is). A later call replaces the earlier one. An ``x_of`` with a
+        ``view_center(center, dt, width, height, bounds)`` method (a
+        :class:`~vidgen.camera.SmoothFollow`) places the view itself, from rest (``restart``)."""
+        restart = getattr(x_of, "restart", None)
+        if restart is not None:
+            restart()
         self._camera_follow = x_of
         self._sync_camera_updater()
 
@@ -1166,8 +1171,13 @@ class NarratedScene(MovingCameraScene):
         """Scene updater (run after every mobject updater and animation of the frame): follow,
         then tell the listeners."""
         frame = self.camera.frame
-        if self._camera_follow is not None:
-            x, y = view_center_within(self.camera_bounds(), (self._camera_follow(), frame.get_center()[1]), frame.width, frame.height)
+        follow = self._camera_follow
+        if follow is not None:
+            smooth = getattr(follow, "view_center", None)
+            if smooth is not None:
+                x, y = smooth(frame.get_center()[:2], dt, frame.width, frame.height, self.camera_bounds())
+            else:
+                x, y = view_center_within(self.camera_bounds(), (follow(), frame.get_center()[1]), frame.width, frame.height)
             frame.move_to([x, y, 0.0])
         for callback in self._camera_listeners:
             callback()

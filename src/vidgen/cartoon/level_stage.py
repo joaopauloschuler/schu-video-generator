@@ -1,19 +1,22 @@
 """A platform level on a ``stage`` (DESIGN.md §86): from the world's tile units to Manim units.
 No manim.
 
-The level's bottom edge is the frame's bottom edge and the stage is exactly as wide as the
-level. A tile is ``size`` (a character's height as a fraction of the frame's shorter side)
-divided by :data:`~vidgen.world.CHARACTER_TILES`, so characters keep the size the scene gives
-them and the level grows around them.
+The level's bottom edge is the frame's bottom edge (in a portrait frame a short level sits a few
+rows higher, on more ground: :func:`level_raise`) and the stage is exactly as wide as the level.
+A tile is ``size`` (a character's height as a fraction of the frame's shorter side) divided by
+:data:`~vidgen.world.CHARACTER_TILES`, so characters keep the size the scene gives them and the
+level grows around them; ``character_size`` (:data:`CHARACTER_SIZE_FACTORS`) sets that size.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
 from vidgen.cartoon.stage import StageItem, StagePlacement, mark_x
+from vidgen.config import CharacterSize
 from vidgen.errors import VidgenError
 from vidgen.world import (
     BLOCKER,
@@ -38,17 +41,38 @@ from vidgen.world.moves import is_floor
 #: A character's height (fraction of the frame's shorter side) on a level when the scene gives
 #: no ``size``: about eight rows of tiles fit in a 16:9 frame.
 LEVEL_SIZE = 0.25
+#: ``character_size`` (DESIGN.md §86.10): the default ``size`` of a stage (a plain stage's
+#: ``STAGE_SIZE``, a level's :data:`LEVEL_SIZE`) times this.
+CHARACTER_SIZE_FACTORS: dict[str, float] = {"small": 0.7, "medium": 1.0, "large": 1.4}
+#: Room (tile units) above a character standing on the level's highest tile that the camera may
+#: rise to show: a jump's arc over it (:data:`~vidgen.world.moves.JUMP_CLEARANCE` and more).
+LEVEL_HEAD_ROOM = 2.0
+#: In a portrait frame a short level is raised (on more ground drawn below the map) until the
+#: empty sky over its tiles and a character on them is at most this share of the frame's height...
+PORTRAIT_SKY_SHARE = 0.4
+#: ... but by at most this share of the frame's height.
+PORTRAIT_MAX_RAISE = 0.3
+
+
+def character_size_default(character_size: CharacterSize | None, base: float) -> float:
+    """The ``size`` that ``character_size`` (``None``: medium) gives a stage whose medium size is
+    ``base``."""
+    return base * CHARACTER_SIZE_FACTORS[character_size or "medium"]
 
 
 @dataclass(frozen=True)
 class LevelFrame:
     """Where a level lies in the scene: ``tile`` (Manim units per tile), the stage's width (the
-    level's), and the scene x and y of the level's left and bottom edges."""
+    level's), the scene x and y of the level's left and bottom edges, the highest y the camera
+    may show (``top``: the frame's top, or higher for a tall level) and how many rows of ground
+    are drawn under the map (``below``: a raised level, :func:`level_raise`)."""
 
     tile: float
     stage_width: float
     left: float
     bottom: float
+    top: float = math.inf
+    below: int = 0
 
     def point(self, x: float, y: float) -> tuple[float, float]:
         """A world point (tile units) in Manim units."""
@@ -67,27 +91,37 @@ class LevelFrame:
         return ((x - self.left) / self.tile, (y - self.bottom) / self.tile)
 
 
+def level_raise(level: Level, frame_rows: float) -> int:
+    """How many rows a short ``level`` is raised in a portrait frame ``frame_rows`` tiles high:
+    enough that the empty sky over its tiles and a character standing on them is at most
+    :data:`PORTRAIT_SKY_SHARE` of the frame, at most :data:`PORTRAIT_MAX_RAISE` of it."""
+    sky = frame_rows - level.used_rows() - CHARACTER_TILES
+    return max(0, math.floor(min(sky - PORTRAIT_SKY_SHARE * frame_rows, PORTRAIT_MAX_RAISE * frame_rows) + 1e-9))
+
+
 def level_frame(level: Level, size: float, frame_width: float, frame_height: float) -> LevelFrame:
     """How ``level`` lies in a frame ``frame_width`` x ``frame_height`` (Manim units) for
-    characters ``size`` tall (fraction of the shorter side)."""
+    characters ``size`` tall (fraction of the shorter side): its bottom on the frame's bottom
+    edge (raised by :func:`level_raise` in a portrait frame), centred; the camera may rise up to
+    a character's height and :data:`LEVEL_HEAD_ROOM` over its highest tile."""
     tile = size * min(frame_width, frame_height) / CHARACTER_TILES
     width = level.columns * tile
-    return LevelFrame(tile, width, -width / 2, -frame_height / 2)
+    below = level_raise(level, frame_height / tile) if frame_height > frame_width else 0
+    bottom = -frame_height / 2 + below * tile
+    top = max(frame_height / 2, bottom + (level.used_rows() + CHARACTER_TILES + LEVEL_HEAD_ROOM) * tile)
+    return LevelFrame(tile, width, -width / 2, bottom, top, below)
 
 
 def level_fit_problems(level: Level, size: float, frame_width: float, frame_height: float) -> list[str]:
     """Why ``level`` does not fit the frame at ``size``: narrower than the frame (the camera would
-    see past its ends), or tiles above the frame's top edge (the camera follows sideways only)."""
+    see past its ends). A level taller than the frame fits: the camera rises with the character
+    it follows (DESIGN.md §86.10)."""
     frame = level_frame(level, size, frame_width, frame_height)
     problems = []
     columns = frame_width / frame.tile
     if level.columns < columns - 1e-9:
         problems.append(f"the map is {level.columns} columns wide, narrower than the frame ({columns:.1f} columns at size {size:g}); "
-                        "add columns or make the characters larger (size)")
-    rows = frame_height / frame.tile
-    if level.used_rows() > rows + 1e-9:
-        problems.append(f"the map's tiles reach {level.used_rows()} rows up, above the frame's top ({rows:.1f} rows at size {size:g}); "
-                        "lower them or make the characters smaller (size)")
+                        "add columns or make the characters larger (character_size: large, or a larger size)")
     return problems
 
 
@@ -331,18 +365,24 @@ def _place_text(place: Any) -> str:
 
 
 __all__ = [
+    "CHARACTER_SIZE_FACTORS",
+    "LEVEL_HEAD_ROOM",
     "LEVEL_MOVES",
     "LEVEL_PROP_ACTIONS",
     "LEVEL_SIZE",
     "LEVEL_UNTRACKED",
+    "PORTRAIT_MAX_RAISE",
+    "PORTRAIT_SKY_SHARE",
     "LevelFrame",
     "LevelGoal",
     "LevelProps",
     "LevelStep",
+    "character_size_default",
     "level_fit_problems",
     "level_frame",
     "level_goal",
     "level_layout",
     "level_move_problems",
+    "level_raise",
     "level_world",
 ]

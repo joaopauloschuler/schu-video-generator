@@ -58,6 +58,22 @@ Measured on the final 1080x1920 frames (vidgen's frame is 8 units wide, 135 px p
   span the safe width and centre the window + note between the title band and the captions.
 - At the end of every beat, nothing should be half-built: a list that appears one item at a
   time leaves a mostly empty still. Bring all items in by ~60 % of the beat.
+- **Cartoon characters in a Short** (a host who explains the code on a `stage`, a mascot in a
+  platform `level`): set **`character_size: large`** for the Short (in its 9:16 variant if the
+  video also has a 16:9 one). In 9:16 a character's size is measured against the frame's width,
+  so at the default `medium` a character is only about a quarter of the frame's height and its
+  face is hard to read on a phone; `large` makes it 1.4 times bigger (on a level the tiles and
+  props grow with it, about 6 tiles across and 10 up). Captions, code and other text keep their
+  size. `vidgen lint`'s `small_speaker` warns when a speaking face is still too small; a beat's
+  `shot: closeup <name>` fixes one line. On a level, `level: {follow: <name>}` keeps the hero in
+  the narrow frame as it walks and jumps. See CONFIG.md "Character size (`character_size`)".
+
+  ```yaml
+  variants:
+    short:
+      format: {width: 1080, height: 1920, fps: 30}
+      character_size: large
+  ```
 
 ## 4. Showing the source code
 

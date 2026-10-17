@@ -776,6 +776,7 @@ LINT_RULES: tuple[str, ...] = (
     "bubble_overlap",
     "facing_away",
     "hidden_speaker",
+    "small_speaker",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -804,6 +805,7 @@ RuleName = Literal[
     "bubble_overlap",
     "facing_away",
     "hidden_speaker",
+    "small_speaker",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -958,6 +960,13 @@ class HiddenSpeakerRule(RuleConfig):
     """Share of the face's box covered by things drawn in front from which it is reported."""
 
 
+class SmallSpeakerRule(RuleConfig):
+    """``small_speaker``: a speaking character too small on screen to read its face and lip sync."""
+
+    min_face: Fraction = 0.075
+    """Smallest acceptable height of a speaking character's head on screen (its box, fraction of the frame's shorter side: 0.075 is 36 px at 480p, 81 px at 1080p; a character on a level has about 0.07 at character_size small, 0.095 at medium)."""
+
+
 class MouthWithoutVoiceRule(RuleConfig):
     """``mouth_without_voice``: a character's lip sync showing a speech shape while no narration is heard."""
 
@@ -1091,6 +1100,8 @@ class LintRules(_Strict):
     """A speaking character facing away from its listener (default: warning)."""
     hidden_speaker: HiddenSpeakerRule = Field(default_factory=HiddenSpeakerRule)
     """A speaking character whose face is hidden by something in front of it (default: warning)."""
+    small_speaker: SmallSpeakerRule = Field(default_factory=SmallSpeakerRule)
+    """A speaking character too small on screen to read its face and lip sync (default: warning)."""
     mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
     """A mouth moving with lip sync while no narration is heard (default: warning)."""
     look_alike: LookAlikeRule = Field(default_factory=LookAlikeRule)
@@ -1462,6 +1473,10 @@ AutoDirectSetting = Union[bool, AutoDirect]
 #: whoever speaks in view on a stage wider than the frame) or ``none``; not given: ``speaker``
 #: when the stage's characters do not fit in one view.
 ReframeSetting = Literal["speaker", "none"]
+#: ``character_size:`` on the video or a stage scene (DESIGN.md §86.10): the base size of the
+#: characters and of the world they stand in (``small``: a wide landscape, for cinema; ``medium``:
+#: TV / YouTube, the default; ``large``: big characters, for phones and Shorts).
+CharacterSize = Literal["small", "medium", "large"]
 
 
 def directing_kinds(*settings: AutoDirectSetting | None) -> frozenset[str]:
@@ -2119,6 +2134,8 @@ class VideoConfig(_Strict):
     """A sound bed chosen from each stage scene's set while foley is on: a room tone in a room, birdsong outdoors while the light is day or morning and it does not rain; false: none unless a stage's ambience param names one."""
     auto_direct: AutoDirectSetting = False
     """Automatic directing on stage scenes: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups, effects}); a stage's or a beat's setting wins; actions written in a beat always win."""
+    character_size: CharacterSize | None = None
+    """How big the characters are on stage scenes: small (a wide landscape, for cinema), medium (TV / YouTube) or large (big characters, for phones and Shorts); on a platform level the tiles, props, coins and stars scale with them; captions, on-screen text and speech bubbles keep their size; a stage's character_size or size param wins; default medium."""
     reframe: ReframeSetting | None = None
     """On stage scenes wider than the frame (a 9:16 variant crops the landscape stage): speaker moves the camera to whoever speaks, easing between speakers and holding during short replies; none: only the beats' own pan / follow / zoom / shot move it; default: speaker when the characters do not fit in one view (a stage's reframe param wins)."""
     cartoon_motion: MotionSetting | None = None

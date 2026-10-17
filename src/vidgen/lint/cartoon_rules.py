@@ -25,6 +25,7 @@ from vidgen.config import (
     MouthWithoutVoiceRule,
     OffStageRule,
     PropOverlapRule,
+    SmallSpeakerRule,
     WalkOverlapRule,
 )
 from vidgen.lint.layout_rules import area, describe, intersection, is_text, object_box
@@ -352,6 +353,31 @@ def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[I
             (speaker, front),
             value=round(share, 3),
             limit=settings.min_hidden,
+        )
+
+
+@rule("small_speaker")
+def small_speaker(ctx: StillContext, settings: SmallSpeakerRule) -> Iterator[Issue]:
+    """A speaking character's face is too small on screen to read it and its lip sync (as seen,
+    so a shot that frames it closer counts; DESIGN.md §86.10): a closer shot or larger characters
+    (``character_size``) fix it."""
+    limit = settings.min_face * ctx.short_side
+    for speaker in _figures(ctx):
+        if not speaker.get("speaking") or not speaker.get("face") or not _in_view(ctx, speaker):
+            continue
+        face = tuple(float(v) for v in speaker["face"])
+        height = face[3] - face[1]
+        if height >= limit:
+            continue
+        name = speaker.get("name")
+        yield Issue(
+            f"{describe(speaker)} speaks with its face {height / ctx.short_side:.2%} of the frame's shorter side tall "
+            f"(below {settings.min_face:.2%}): too small to read its face and lip sync; frame it closer for the beat "
+            f"(shot: closeup {name}, or medium {name}) or make the characters larger (character_size: large)",
+            face,
+            (speaker,),
+            value=round(height / ctx.short_side, 4),
+            limit=settings.min_face,
         )
 
 

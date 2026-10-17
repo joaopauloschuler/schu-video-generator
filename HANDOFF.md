@@ -14464,3 +14464,122 @@ How to test
   `test_cartoon_stage` (24), `test_schema` (61, 79 s): all passed, one file at a time.
 - `vidgen list-sfx` lists the three new sounds with their descriptions.
 
+
+## Step 154 — Camera follow and `character_size`
+
+What was built
+- **`character_size: small | medium | large`** (`config.CharacterSize`): a top-level key and a
+  `stage` param; the default `size` × 0.7 / 1 / 1.4 (`level_stage.CHARACTER_SIZE_FACTORS`,
+  `character_size_default`; the stage's `_default_size` before-validator, which replaced
+  `_level_size`): plain stage 0.315 / 0.45 / 0.63, level 0.175 / 0.25 / 0.35. Scene wins, then
+  video, then medium; a written `size` wins over the video's; both in one scene is refused.
+  The video's value reaches the stage scenes as data (`includes.expand_character_size`, called by
+  `Project._load` after `expand_sets`, also after a variant's merge). Medium = the old sizes.
+- **Plain stage (decided, DESIGN §86.10)**: applied as the named `size`: characters and props
+  scale; stage width, marks, ground line, background, layers and walking times stay.
+- **Level**: tiles, props, coins, stars scale with `size`; default speeds scale too
+  (`level_pace`), so moves and their foley take the same seconds at every size (render test
+  compares the SFX schedule medium vs large). Sky, background picture and layers keep their
+  framing (the distance; deliberate, DESIGN says why).
+- **Camera** (`vidgen/camera.py`, no manim): `smooth_damp`, `SmoothFollow` (dead zone 0.08 of
+  the width, ease 0.45 s, hard limit 0.3, bounds; vertical: head room 0.08, feet room 0.2, head
+  never within 0.02 of the top). `NarratedScene.follow_with_camera` / `_camera_step` use a
+  follower's `view_center(center, dt, w, h, bounds)` and `restart()` when it has them (plain
+  `x_of` unchanged). `Stage.camera_follower(mob)` gives a `SmoothFollow` on a level; the `follow`
+  action uses it. **`level.follow: <character>`**: `Stage._follow_hero` starts the camera on the
+  hero (settled view) and follows from the first frame; refused with `camera_at`; must name a
+  stage character. `StageFrame.follows`, `_start_state` (camera_x `None`), `reframe_path(following=)`.
+- **Vertical**: `LevelFrame.top` (map bottom + used rows + 2 + `LEVEL_HEAD_ROOM` 2 tiles, at least
+  the frame's top) → `Stage.camera_bounds`; tall levels no longer refused (`level_fit_problems`
+  only checks the width; its hint names `character_size: large`). With a raised top the colour /
+  gradient sky moves with the camera (factor 0), `layer_half_extent(stage_top=)` covers the views
+  up there; tiles are drawn to their used rows.
+- **Portrait raise**: `level_raise` (sky over the tiles + a character ≤ 0.4 of the frame, raise ≤
+  0.3 of it; whole rows; portrait frames only) → `LevelFrame.below` / `bottom`; `level_shapes(below=)`
+  and `draw_columns(below=)` draw ground under the map (gaps stay open); `Stage._level_lift` raises
+  the background picture and the layers with it.
+- **Lint**: new rule `small_speaker` (`SmallSpeakerRule.min_face` 0.075, warning): a speaking
+  character in view whose head box is smaller; suggests a closeup / medium shot or
+  `character_size: large`. `off_frame` skips layout objects with `scenery: true` (introspect sets
+  it for an `ImageMobject` with `scenery = True`: the level's tile chunks).
+- Docs: CONFIG (top-level row, stage rows, new "Character size (`character_size`)", "The camera
+  on a level (`follow`)", the level Size bullet, Shots note, `follow` action row, lint rows and
+  settings example); Shorts cookbook §3 (recommend `large`); the guide (+ `AGENTS.md`): 9:16
+  cartoons bullet, `follow` row, cartoon lint list, troubleshooting row; DESIGN §86.10 (+ §86.4
+  edits); stage docstrings.
+
+YAML
+```yaml
+character_size: medium            # video (default); a 9:16 variant: character_size: large
+scenes:
+  - id: meadow
+    type: stage
+    set: park
+    params:
+      props: []
+      character_size: large       # this scene (wins over the video's); or size: 0.3, not both
+      level:
+        follow: lumo              # the hero: the camera starts on it and follows it gently
+        map: |
+          ...
+lint:
+  rules:
+    small_speaker: {min_face: 0.075}
+```
+
+Files touched
+- New: `tests/test_platform_camera.py`.
+- Changed: `src/vidgen/camera.py`, `scene.py`, `config.py`, `includes.py`, `project.py`,
+  `introspect.py`, `lint/cartoon_rules.py`, `lint/layout_rules.py`, `cartoon/level_stage.py`,
+  `cartoon/level_drawing.py`, `cartoon/stage.py` (`layer_half_extent` `stage_top`),
+  `cartoon/directing.py`, `cartoon/reframe.py`, `scenes/actions.py` (`Follow`), `scenes/stage.py`,
+  `tests/test_platform_level.py` (fit messages), `docs/CONFIG.md`,
+  `docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md`, `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`,
+  `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces (`vidgen.api` unchanged)
+- Config: top-level `character_size`; stage params `character_size`, `level.follow`; lint rule
+  `small_speaker` (`min_face`). `NarratedScene.follow_with_camera` accepts a follower with
+  `view_center` / `restart` (duck-typed; documented in DESIGN §86.10). `vidgen.camera` exports
+  `SmoothFollow`, `smooth_damp`, `FOLLOW_*`. Layout dump: `scenery: true` on a level's tile chunks.
+
+Decisions
+- `character_size` applies to plain stages too (above); the video's value is expanded into the
+  scene params at load (like sets) so every consumer of `params.size` agrees.
+- Background picture, sky and layers do not scale with `character_size` (distance; set layers
+  are frame fractions). The brief listed "backgrounds/parallax scale together": what scales
+  together is the near world; parallax keeps working because the camera moves more units per
+  tile at larger sizes.
+- Smooth following only on levels (plain stages keep the hard follow: unchanged renders).
+- The hero follow is opt-in (`level.follow`), not guessed.
+- The portrait raise is portrait-only, so landscape levels (and all existing tests) are unchanged.
+- Searched first: `Spring.follow` (time-function targets, not frame-by-frame), `view_center_within`,
+  `layer_half_extent`, `layer_transform`, `_move_by_parallax` (reused, factor 0 for the sky),
+  `shot_home` (gives the follow back after a shot), the lint `hidden_speaker` pattern.
+
+Known gaps for Step 155
+- Night stars stay in the stage when the camera rises on a tall level (they scroll down a bit);
+  rain / snow / fog still end at the `ground` line, not on the tiles (Step 150 gap).
+- A `level.follow` hero that waits off stage (`enter`) puts the camera at the level's edge until
+  it enters; the follow does not look ahead in the walking direction.
+- `vidgen direct` / the reframe replay do not know the camera's vertical moves (they plan x only).
+- `small_speaker` measures the head's box; an SVG character without a `head` part is not checked.
+- The guide has no platform-level section yet (Step 155: the example story and the guide).
+- `tests/test_mcp.py` was run only with `-k` (validate, resources, lint: 5 passed); the whole
+  file was not run.
+
+How to test
+- `tests/test_platform_camera.py` (18 passed incl. 3 renders, ~4.5 s); `test_platform_level`,
+  `_moves`, `_props`, `_sounds` (85 passed); `test_cartoon_parallax` (50), `_reframe` (11),
+  `_shots` (14), `_stage` (24), `_lint` (10), `test_lint` (23), `test_docs` (60), `test_guide`
+  (51), `test_cartoon_directing` (34), `test_config` (21), `test_includes` (24), `test_layout`
+  (44), `test_actions` (28), `test_cartoon_moving` (16), `test_cartoon_props` (90),
+  `test_builtin_sets` (53), `test_schema` (61, 80 s), `test_cartoon_holding` (16),
+  `test_timing_lint` (10), `test_cartoon_motion_effects` (13), `test_cartoon_foley` (7),
+  `test_screenplay` (20), `test_phase_k_review` (8); `test_mcp -k "resources or validate_paths or
+  human_validate or validate_json or lint_return_pictures"` (5): all passed, one file at a time.
+- Manual: a scratch 42 x 8 level (`set: park`, a hero jumping up two planks to row 7,
+  `level.follow`, `character_size: large`) storyboarded at 854x480 and 270x480 (9:16, large and
+  medium) and linted: the camera rises with the hero and comes back, a 1-row map in 9:16 sits
+  four rows up with the park's hills behind it, `small_speaker` reported a `small` speaker, no
+  `off_frame` on the tiles.

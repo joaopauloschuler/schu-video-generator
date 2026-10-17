@@ -341,6 +341,30 @@ def expand_sets(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str
     return {**data, "scenes": scenes}, updated
 
 
+#: The video's ``character_size`` values that :func:`expand_character_size` passes to the stage
+#: scenes (any other value is left for the config check to report at ``character_size``).
+_CHARACTER_SIZES = ("small", "medium", "large")
+
+
+def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str, Origin]]:
+    """``data`` with the video's ``character_size`` (DESIGN.md §86.10) given to every ``stage``
+    scene whose params (after its set) give neither ``character_size`` nor ``size``, and
+    ``origins`` pointing those at the video's key; the scene's own setting wins."""
+    updated = dict(origins)
+    named = data.get("character_size") if isinstance(data, Mapping) else None
+    if named not in _CHARACTER_SIZES or not isinstance(data.get("scenes"), list):
+        return data, updated
+    scenes: list[Any] = []
+    for i, scene in enumerate(data["scenes"]):
+        params = scene.get("params", {}) if isinstance(scene, Mapping) else None
+        if not isinstance(params, Mapping) or scene.get("type") != "stage" or "character_size" in params or "size" in params:
+            scenes.append(scene)
+            continue
+        scenes.append({**scene, "params": {**params, "character_size": named}})
+        updated[f"scenes[{i}].params.character_size"] = origin_of("character_size", origins)
+    return {**data, "scenes": scenes}, updated
+
+
 def set_reference_problems(config: Any) -> list[Problem]:
     """Scenes whose ``set`` names neither a set of ``sets:`` nor a built-in set (with a
     did-you-mean and the known names of both)."""

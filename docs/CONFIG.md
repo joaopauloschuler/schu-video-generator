@@ -67,6 +67,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `ambience` | `true` | a sound bed chosen from each `stage` scene's set while foley is on: a room tone in a room, birdsong outdoors while the light is `day` or `morning` and it does not rain; `false`: none unless a stage's `ambience` param names one; see [ambience](#ambience-and-door-sounds-ambience-knock) |
 | `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
 | `reframe` | none | on `stage` scenes wider than the frame: `speaker` moves the camera to whoever speaks (a 9:16 frame then crops the stage laid out as wide as the 16:9 one), `none` leaves the camera to the beats' own camera actions; none: `speaker` when a stage's characters do not fit in one view; a stage's `reframe` wins; see [vertical cartoons](#vertical-cartoons-reframe) |
+| `character_size` | none (`medium`) | how big the characters are on `stage` scenes: `small` (a wide landscape, for cinema), `medium` (TV / YouTube) or `large` (big characters, for phones and Shorts); on a platform level the tiles and props scale with them; captions, on-screen text and speech bubbles keep their size; a stage's `character_size` or `size` wins; a variant may change it; see [character size](#character-size-character_size) |
 | `scenes` | required | the scenes in order, at least one |
 
 ### Output folder (`output_dir`, `--output-dir`)
@@ -5002,7 +5003,8 @@ never leaves the stage.
 | `ground_color` | color \| `false` | none | fill below the ground line, up to where the deepest character or prop on the ground (no `lift`) stands, so things at a `depth` stand on it; none: `surface` on a colour background, nothing on a picture; `false`: nothing |
 | `marks` | mapping | `{}` | own marks, name -> x from 0 to 1 (`{door: 0.85}`); a built-in name moves that mark |
 | `characters` | list | `[]` | the characters on the stage: a name, or a mapping (below); each at most once |
-| `size` | float | `0.45` (`0.25` on a `level`) | height of a character at depth 0, as a fraction of the frame's shorter side |
+| `size` | float | `0.45` (`0.25` on a `level`) | height of a character at depth 0, as a fraction of the frame's shorter side; default from `character_size` |
+| `character_size` | `small` \| `medium` \| `large` | none (the video's, else `medium`) | [character size](#character-size-character_size): the default `size` times 0.7, 1 or 1.4 (a level's tiles and props with it); give it or `size`, not both |
 | `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
 | `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
 | `motion_effects` | bool | none (the video's `motion_effects`: on) | dust, speed lines, impact stars and whoosh arcs in this scene ([motion effects](#motion-effects-motion_effects)); `false`: none |
@@ -5011,7 +5013,7 @@ never leaves the stage.
 | `auto_direct` | bool \| mapping | none (the video's `auto_direct`: off) | [automatic directing](#automatic-directing-auto_direct) in this scene: `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a beat's own `auto_direct` wins |
 | `reframe` | `speaker` \| `none` | none (the video's, else `speaker` when the characters do not fit in one view) | [vertical cartoons](#vertical-cartoons-reframe): the camera keeps whoever speaks in view on a stage wider than the frame |
 | `width` | float 1–4 | `1` | width of the stage in frame widths (16:9 frame widths while it [reframes](#vertical-cartoons-reframe) in a narrower frame); wider than 1: the camera pans across it (`pan`, `follow`) |
-| `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
+| `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame); not with a level's `follow` |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
@@ -5023,7 +5025,7 @@ never leaves the stage.
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds`, `fog` or outdoor particles |
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
-| `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
+| `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -5051,6 +5053,46 @@ and `height` (`0.2`) as fractions of the frame's shorter side, and `color` (`sec
 `hills`: a row of rounded hills across the whole layer, each `width` wide and `height` high, their
 foot at `y`, filled down to the bottom. A layer is drawn larger than the frame, so that no
 camera view inside the stage (a zoom up to 8x included) shows its edge.
+
+#### Character size (`character_size`)
+
+How big the characters are, named instead of a number: set it for the whole video (a variant can
+change it, e.g. `large` for a 9:16 Short) or per stage scene; the scene's wins, then the video's,
+then `medium`. It sets the scene's default `size` (a `size` written in the scene wins over the
+video's `character_size`; a scene gives one or the other).
+
+| `character_size` | `size` on a stage | on a level | a 16:9 frame shows (level) | for |
+|---|---|---|---|---|
+| `small` | `0.315` | `0.175` | about 20 x 11 tiles | cinema: a wide landscape, small characters |
+| `medium` (default) | `0.45` | `0.25` | about 14 x 8 tiles (9:16: 8 x 14) | TV and YouTube: as before `character_size` existed |
+| `large` | `0.63` | `0.35` | about 10 x 6 tiles (9:16: 6 x 10) | phones and Shorts: big characters, faces easy to read |
+
+- **What scales.** On a stage: the characters and the props (as `size` always did); the stage,
+  its marks, the ground line, the background and the layers stay framed as they are, and a walk
+  from mark to mark takes as long. On a [platform level](#platform-levels-level) the whole world
+  in front scales together: the tiles (a character is two tiles tall), the props, coins and stars;
+  the default walking speeds scale with them, so every walk, climb and jump takes as long in
+  seconds at every size (its sounds with it), while the level shows more or fewer tiles. The sky,
+  the background picture and the parallax layers are the distance: they keep their framing.
+- **What does not scale**: captions, on-screen text, speech bubbles, effect symbols over heads
+  and overlays keep their size.
+- **Shots zoom in from it**: a beat's [`shot:`](#shots-shot) frames characters by their size on
+  screen, so a `closeup` of a `large` character zooms in less than one of a `small` character.
+- **Lint**: [`small_speaker`](#lint-vidgen-lint) warns when a character speaks with its face smaller
+  than `min_face` of the frame's shorter side (a `small` character on a level, a child far
+  back): give that beat a `shot: closeup <name>` (or `medium`), or make the characters larger.
+
+```yaml
+character_size: medium          # the video (the default)
+variants:
+  short:
+    format: {width: 1080, height: 1920}
+    character_size: large       # the 9:16 Short: big characters
+scenes:
+  - id: valley
+    type: stage
+    params: {character_size: small, level: {...}}   # this scene: a wide landscape
+```
 
 #### Platform levels (`level`)
 
@@ -5082,12 +5124,14 @@ with air on the right; the blank lines around the map are ignored.
 ```
 
 - **Size.** A tile is half a character of scale 1 (a character is two tiles tall), so the tile
-  size follows `size`, which is `0.25` on a level unless the scene gives one: about 8 rows and 14
-  columns fill a 16:9 frame, 14 rows and 8 columns a 9:16 one. The map's bottom row sits on the
-  frame's bottom edge; the stage is exactly as wide as the map (`width` is not used), and
-  `camera_at`, `pan` and `follow` move across it. `vidgen validate` refuses a map narrower than the
-  frame or whose tiles reach above the frame's top (the camera moves sideways only), with the
-  number of columns or rows that fit.
+  size follows `size`, which is `0.25` on a level unless the scene gives one or a
+  [`character_size`](#character-size-character_size): about 8 rows and 14 columns fill a 16:9
+  frame, 14 rows and 8 columns a 9:16 one. The map's bottom row sits on the frame's bottom edge
+  (in a portrait frame a short map sits higher, on more ground: [camera](#the-camera-on-a-level-follow));
+  the stage is exactly as wide as the map (`width` is not used), and `camera_at`, `pan` and
+  `follow` move across it. `vidgen validate` refuses a map narrower than the frame, with the
+  number of columns that fit. A map taller than the frame is fine: the camera rises with the
+  character it follows.
 - **Spots** are marks: `at: start`, `pan: {to: home}`, `walk_to: c`. `spots` names a letter
   (`{a: start}`); a letter without a name is named by itself (`at: b`). Each letter once; a spot
   must have a tile under it. A character or prop `at` a mark or an x instead stands on the
@@ -5105,6 +5149,47 @@ with air on the right; the blank lines around the map are ignored.
 - Errors name the map's row and column, counted from the top left from 1: `level: map row 2,
   column 7: unknown symbol '@'`, `map row 1, column 3: spot 'a' has nothing below it to stand on`.
 - Not yet: rain, snow and fog on the tiles, and a set's props.
+
+##### The camera on a level (`follow`)
+
+`level.follow` names the hero: the camera starts on it and follows it through the whole scene,
+side-scrolling across the level.
+
+```yaml
+params:
+  character_size: large
+  level:
+    map: |
+      ...
+    follow: lumo          # a character of the stage
+  characters: [{name: lumo, at: start}, {name: tobble, at: home}]
+```
+
+- **Gently**: the hero may move a little either side of the view's middle (8 % of its width)
+  before the camera moves; then the camera eases after it (about half a second to catch up, no
+  jerk when the hero starts, stops or jumps) and never lets it get further than 30 % of the
+  width from the middle. At the level's ends the camera stops at the edge: it never shows past
+  the map.
+- **Up and down**: when the hero climbs or jumps high (a tall level, a high plank, a big jump at
+  `large`), the camera rises to keep room over its head (8 % of the view) and comes back down
+  when there is room under its feet again; its head never leaves the frame. The camera may rise
+  up to a character's height and two tiles over the map's highest tile; it never goes below the
+  map's bottom. The sky stays with the camera, the background and the layers move behind by
+  parallax.
+- **A short map in a portrait frame** (9:16) sits higher, on more ground drawn under the map
+  (the bottom row's earth runs on down; a gap goes on down too), so the empty sky over the tiles
+  and a character on them is at most 40 % of the frame (raised by at most 30 % of the frame's
+  height); the background and the layers rise with it. A landscape frame keeps the map on its
+  bottom edge.
+- **Beat camera actions still work**: a `shot:` frames its beat (it can frame a hero high up)
+  and the next beat gives the camera back to the follow; a written `pan` stops following (the
+  camera stays there), a `follow` action follows another character (also gently, on a level);
+  an `exit` of the hero stops the camera. `camera_at` is not given with `follow`. While the camera
+  follows, `reframe` leaves it alone.
+- Without `follow`, the camera stays at `camera_at` (and `reframe` moves it to whoever speaks);
+  `- follow: <name>` in a beat starts the same gentle follow from that beat.
+- `vidgen lint`'s `off_frame` never reports the level's tiles cut by the frame (the camera crops
+  them on purpose).
 
 ##### Walking and jumping on a level
 
@@ -6222,7 +6307,11 @@ stills (the beat's end and half-way through its moves) show the shot. The layout
 `shot: {kind, subjects, near}` on the frames in a shot, and lint `off_stage` then checks only the
 characters the shot frames (the near character of an over-the-shoulder shot may be cut).
 `vidgen validate` reports a shot naming no character or the wrong number of them, a prop or
-unknown name, and a shot on a scene that is not a `stage`.
+unknown name, and a shot on a scene that is not a `stage`. A shot zooms in from the scene's
+[`character_size`](#character-size-character_size): the framing is the same on screen, so a
+close-up of `large` characters zooms in less than one of `small` ones. On a platform level a
+shot can frame a character high above the frame's resting view, and the next beat gives the
+camera back to a [`follow`](#the-camera-on-a-level-follow).
 
 ```yaml
 beats:
@@ -7271,7 +7360,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
 | `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. |
 | `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in. Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
-| `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. |
+| `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
 | `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
@@ -7909,7 +7998,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 
 | rule | default severity | finds |
 |---|---|---|
-| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in or looks away from the frame's centre (`zoom`, `pan`, `follow`, a wide `stage`); never [particles](#particles), which cross the edges on purpose, nor characters (`off_stage`'s) |
+| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in or looks away from the frame's centre (`zoom`, `pan`, `follow`, a wide `stage`); never [particles](#particles), which cross the edges on purpose, nor a [level's tiles](#the-camera-on-a-level-follow) (the camera crops them), nor characters (`off_stage`'s) |
 | `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in or moved (`pan`, `follow`), nor for [overlays](#overlays) (their place is deliberate) |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
@@ -7926,6 +8015,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too), of the smaller of two bubbles, or of an [effect symbol](#effect-symbols-effect)'s box. Fix: a shorter `bubble` text, the characters further apart, or the two lines (or the line and the effect) in different beats |
 | `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
+| `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared. Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
@@ -7960,6 +8050,7 @@ lint:
     bubble_overlap: {min_overlap: 0.1}      # fraction of the face's (or smaller bubble's, or symbol's) box
     facing_away: {}
     hidden_speaker: {min_hidden: 0.5}       # fraction of the speaker's face box
+    small_speaker: {min_face: 0.075}        # a speaker's face height, fraction of the shorter side
     mouth_without_voice: {}
     look_alike: {min_contrast: 0.35}        # contrast score of two characters, 0 to 1
     narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range

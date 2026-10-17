@@ -167,7 +167,7 @@ def _upcoming_speaker(beats: Sequence[ReframeBeat], first: ReframeBeat) -> Refra
 
 
 def reframe_path(
-    beats: Sequence[ReframeBeat], *, frame_width: float, bounds: tuple[float, float], start_x: float,
+    beats: Sequence[ReframeBeat], *, frame_width: float, bounds: tuple[float, float], start_x: float, following: bool = False,
 ) -> list[CameraMove]:
     """The camera's moves that keep each speaker in view (DESIGN.md §69.30), from the view
     centred on ``start_x`` on a stage from ``bounds`` (left, right), the view ``frame_width`` wide.
@@ -175,11 +175,12 @@ def reframe_path(
     eases to it at the beat's start (a cut in the first beat and in a beat with a speech
     bubble); before the first line, the first beat cuts to the scene's first speaker when the start
     view does not show it. Beats with a written camera move get nothing, and a ``follow`` leaves
-    the camera alone until a ``pan`` whose view is known."""
+    the camera alone until a ``pan`` whose view is known; ``following``: the camera follows a
+    character from the start (a level's hero, DESIGN.md §86.10), as after a ``follow``."""
     low, high = bounds[0] + frame_width / 2, bounds[1] - frame_width / 2
     if low > high:
         return []
-    camera: float | None = min(max(start_x, low), high)
+    camera: float | None = None if following else min(max(start_x, low), high)
     moves: list[CameraMove] = []
     for k, beat in enumerate(beats):
         if beat.camera == "pan":

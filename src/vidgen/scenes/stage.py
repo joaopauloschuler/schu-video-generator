@@ -19,7 +19,9 @@ from vidgen.api import *
 from vidgen.cartoon.level_drawing import CHUNK_COLUMNS, LevelColors, draw_columns, drawn_rows, level_shapes
 from vidgen.cartoon.level_items import COIN_COLOR, STAR_COLOR, Collectible
 from vidgen.cartoon.level_motion import LANDED, SETTLED, ArcJump, Reaction, RouteWalk
+from vidgen.camera import SmoothFollow
 from vidgen.cartoon.level_stage import (
+    CHARACTER_SIZE_FACTORS,
     LEVEL_MOVES,
     LEVEL_PROP_ACTIONS,
     LEVEL_SIZE,
@@ -32,8 +34,10 @@ from vidgen.cartoon.level_stage import (
     level_goal,
     level_layout,
     level_move_problems,
+    character_size_default,
     level_world,
 )
+from vidgen.config import CharacterSize
 from vidgen.world import (
     COIN,
     KEY,
@@ -523,6 +527,8 @@ class StageLevel(SceneParams):
     """Locked doors: {door: key}, a door prop of the stage and the prop that is its key (a key prop); the door opens only by a character holding the key and standing next to it (- open: gate, by: pip). Every closed door prop on a level is in the way of walks and jumps until it opens."""
     blockers: list[Identifier] = []
     """Characters of the stage in the way of walks and jumps (a grumpy turtle on the path) until they move aside (- step_aside: name)."""
+    follow: Identifier | None = None
+    """The hero the camera follows from the start: a character of the stage; the camera starts on it and follows it gently sideways, and up and down when it climbs or jumps high (a written pan stops it, a follow action follows another; a shot frames its beat and gives the camera back); default: the camera stays at camera_at."""
 
     @model_validator(mode="after")
     def _parses(self) -> "StageLevel":
@@ -599,7 +605,9 @@ class Stage(NarratedScene):
     view for platform stories: a small map of tiles (ground, floating platforms, clouds,
     ladders, gaps) is the ground, its letters are spots to stand at, and the background and
     layers move behind it by parallax; walks follow its tiles and ladders and ``jump`` with
-    ``to`` jumps a planned arc between its platforms.
+    ``to`` jumps a planned arc between its platforms; its ``follow`` hero is followed by the
+    camera, gently, sideways and up and down. ``character_size`` (``small``, ``medium``,
+    ``large``) sets how big the characters (and a level's tiles and props) are.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -668,7 +676,9 @@ class Stage(NarratedScene):
         characters: list[StageCharacter] = []
         """The characters on the stage: a name, or {name, at, depth, scale, facing, pose, expression}."""
         size: float = Field(STAGE_SIZE, gt=0.0, le=1.0)
-        """Height of a character at depth 0, as a fraction of the frame's shorter side."""
+        """Height of a character at depth 0, as a fraction of the frame's shorter side; default from character_size (0.45 on a stage, 0.25 on a level for medium)."""
+        character_size: CharacterSize | None = None
+        """How big the characters are: small (x0.7, a wide landscape, for cinema), medium or large (x1.4, for phones and Shorts): the default size; on a level the tiles, props, coins and stars scale with them; captions, on-screen text and speech bubbles keep their size; beat shots zoom in from it; give it or size, not both; default the video's character_size (medium)."""
         idle: bool = True
         """false: the characters do not breathe, sway or blink in this scene."""
         foley: bool | None = None
@@ -710,15 +720,25 @@ class Stage(NarratedScene):
         drawing: DrawingConfig | None = None
         """How this scene is drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: the keys given win over the video's drawing."""
         level: StageLevel | None = None
-        """A platform level instead of the ground line: {map, spots, colors}; the map's tiles are the ground (its bottom row at the frame's bottom edge), the stage is as wide as the map, the background picture or colour and the layers move behind it by parallax, and characters and props stand on the tiles at the level's spots (or at a mark or x, on the highest tile there); default size 0.25 (a character is two tiles tall)."""
+        """A platform level instead of the ground line: {map, spots, colors, locks, blockers, follow}; the map's tiles are the ground (its bottom row at the frame's bottom edge; a short map in a portrait frame sits higher, on more ground), the stage is as wide as the map, the background picture or colour and the layers move behind it by parallax, and characters and props stand on the tiles at the level's spots (or at a mark or x, on the highest tile there); default size 0.25 at character_size medium (a character is two tiles tall); follow: the hero the camera follows gently, sideways and up and down."""
 
         @model_validator(mode="before")
         @classmethod
-        def _level_size(cls, data: Any) -> Any:
-            """On a level the characters are smaller by default (:data:`LEVEL_SIZE`)."""
-            if isinstance(data, dict) and data.get("level") is not None and "size" not in data:
-                return {**data, "size": LEVEL_SIZE}
-            return data
+        def _default_size(cls, data: Any) -> Any:
+            """The default ``size`` from ``character_size`` (DESIGN.md §86.10); on a level the
+            characters are smaller (:data:`LEVEL_SIZE` for medium)."""
+            if not isinstance(data, dict):
+                return data
+            named = data.get("character_size")
+            if "size" in data:
+                if named is not None:
+                    raise ValueError("give character_size (small, medium or large) or size (a fraction of the frame's shorter side), not both")
+                return data
+            if named is not None and named not in CHARACTER_SIZE_FACTORS:
+                return data   # the field's own check names the choices
+            if named is None and data.get("level") is None:
+                return data
+            return {**data, "size": character_size_default(named, LEVEL_SIZE if data.get("level") is not None else STAGE_SIZE)}
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -782,6 +802,12 @@ class Stage(NarratedScene):
             for k, member in enumerate(self.characters):
                 if member.depth != 0.0:
                     raise ValueError(f"characters[{k}]: on a level everything stands on the tiles at depth 0; remove its depth")
+            if self.level.follow is not None:
+                characters = [c.name for c in self.characters]
+                if self.level.follow not in characters:
+                    raise ValueError(f"level.follow: '{self.level.follow}' is not a character on the stage (characters: {', '.join(characters) or 'none'})")
+                if "camera_at" in self.model_fields_set:
+                    raise ValueError("level.follow starts the camera on its character: remove camera_at (or the follow)")
             spots = self.level.parsed().spot_names()
             clash = [name for name in spots if name in self.marks]
             if clash:
@@ -1576,9 +1602,39 @@ class Stage(NarratedScene):
         return mark_x(place, params.stage_marks())
 
     def camera_bounds(self) -> tuple[float, float, float, float]:
-        """The stage: ``width`` frames wide, the frame's height."""
+        """The stage: ``width`` frames wide, the frame's height; a level's up to its top (a
+        character on its highest tile and room for a jump, DESIGN.md §86.10)."""
         half = self.stage_width / 2
-        return (-half, half, -self.frame_height / 2, self.frame_height / 2)
+        frame = self.params.level_frame(self.frame_width, self.frame_height)
+        top = self.frame_height / 2 if frame is None else frame.top
+        return (-half, half, -self.frame_height / 2, top)
+
+    def _follow_hero(self, hero: Character) -> None:
+        """``level.follow``: the camera starts on ``hero`` (as a follow that has settled there)
+        and follows it from the first frame (DESIGN.md §86.10)."""
+        follower = self.camera_follower(hero)
+        assert follower is not None
+        frame = self.camera.frame
+        frame.move_to([*view_center_within(self.camera_bounds(), (follower(), float(frame.get_center()[1])), frame.width, frame.height), 0.0])
+        frame.move_to([*follower.view_center(frame.get_center()[:2], 60.0, frame.width, frame.height, self.camera_bounds()), 0.0])
+        self.follow_with_camera(follower)
+
+    def camera_follower(self, mob: Mobject) -> SmoothFollow | None:
+        """How the camera follows ``mob`` (the ``follow`` action, ``level.follow``): on a level
+        gently, with a dead zone, up and down too (:class:`~vidgen.camera.SmoothFollow`,
+        DESIGN.md §86.10); ``None`` elsewhere (the camera keeps its centre on it)."""
+        if not self.on_level:
+            return None
+        if isinstance(mob, Character):
+            def x_of() -> float:
+                return float(mob.feet()[0])
+
+            def span_of() -> tuple[float, float]:
+                tops = [mob.parts[part].get_top()[1] for part in ("head", "accessory") if mob.has_part(part)]
+                return float(mob.feet()[1]), float(max(tops) if tops else mob.get_top()[1])
+
+            return SmoothFollow(x_of, span_of, followed=mob)
+        return SmoothFollow(lambda: float(mob.get_center()[0]), followed=mob)
 
     @property
     def stage_width(self) -> float:
@@ -1673,6 +1729,8 @@ class Stage(NarratedScene):
             outward = 1.0 if figure.feet()[0] > (left + right) / 2 else -1.0
             figure.shift([outward * (figure.width / 2 + item.width), 0.0, 0.0])
             item.shift([float(figure.feet()[0] - item.feet()[0]), 0.0, 0.0])
+        if p.level is not None and p.level.follow is not None:
+            self._follow_hero(self.cast[p.level.follow])
         #: the stage's water (``None``: none): its band over the ground, its front strip in front of
         #: everything, the boats bobbing on it (DESIGN.md §69.53)
         self.water = self._water()
@@ -2473,6 +2531,8 @@ class Stage(NarratedScene):
             sky.set_sheen_direction(DOWN)  # a gradient runs from the first colour at the top
             sky.name = "background"
             parts.append(sky)
+            if self.camera_bounds()[3] > fh / 2 + 1e-9:   # a tall level: the camera rises, the sky stays with it (§86.10)
+                self._move_by_parallax(sky, 0.0)
         if self._starry and not p.has_picture():  # in the sky, behind the layers (§69.31)
             sky_share = STAR_SKY * (1.0 - top)
             if heads is not None:   # not beside the characters' heads
@@ -2564,8 +2624,8 @@ class Stage(NarratedScene):
         if factor == 1.0:
             picture.scale_to_fit_width(max(self.stage_width, self.frame_height * aspect)).move_to(ORIGIN)
         else:
-            half_w, half_h = layer_half_extent(factor, stage_width=self.stage_width, frame_width=self.frame_width, frame_height=self.frame_height)
-            picture.scale_to_fit_width(max(2 * half_w, 2 * half_h * aspect)).move_to(ORIGIN)
+            half_w, half_h = self._layer_extent(factor)
+            picture.scale_to_fit_width(max(2 * half_w, 2 * half_h * aspect)).move_to(UP * self._level_lift)
             self._move_by_parallax(picture, factor)
         picture.name = "background"
         return picture
@@ -2592,12 +2652,31 @@ class Stage(NarratedScene):
         made: list[Mobject] = []
         for k, (layer, name) in enumerate(zip(p.layers, p.layer_names())):
             factor = layer.resolved_factor()
-            half_w, half_h = layer_half_extent(factor, stage_width=self.stage_width, frame_width=self.frame_width, frame_height=self.frame_height)
+            half_w, half_h = self._layer_extent(factor)
             mob = self._layer_picture(layer, k, half_w) if layer.image is not None else self._layer_shapes(layer, half_w, half_h)
             mob.name = name
+            mob.shift(UP * self._level_lift)   # on a raised level's ground, as on the frame's bottom (§86.10)
             made.append(mob)
             self._move_by_parallax(mob, factor)
         return made
+
+    @property
+    def _level_lift(self) -> float:
+        """How far a raised level (in a portrait frame, DESIGN.md §86.10) stands above the frame's
+        bottom edge (Manim units; 0: not raised, or no level): the layers and the background
+        picture are raised with it, so they stand behind its ground as behind a level's that is not."""
+        frame = self.params.level_frame(self.frame_width, self.frame_height)
+        return 0.0 if frame is None else frame.below * frame.tile
+
+    def _layer_extent(self, factor: float) -> tuple[float, float]:
+        """Half the width and height a layer of parallax ``factor`` covers
+        (:func:`~vidgen.cartoon.stage.layer_half_extent`), for every view inside
+        :meth:`camera_bounds` (up to a tall level's top too), and down to the frame's bottom once
+        raised with a raised level (:attr:`_level_lift`)."""
+        top = self.camera_bounds()[3]
+        half_w, half_h = layer_half_extent(factor, stage_width=self.stage_width, frame_width=self.frame_width, frame_height=self.frame_height,
+                                           stage_top=top if top > self.frame_height / 2 + 1e-9 else None)
+        return half_w, half_h + self._level_lift
 
     def _move_by_parallax(self, mob: Mobject, factor: float) -> None:
         """Move ``mob`` (drawn for the camera's home view) by ``factor`` when the camera moves; a
@@ -2837,22 +2916,24 @@ class Stage(NarratedScene):
         frame = p.level_frame(self.frame_width, self.frame_height)
         assert frame is not None
         colors = LevelColors(**{key: resolve_color(value, self.theme) for key, value in p.level.colors.items()})
-        shapes = level_shapes(level, colors, self.drawing.outline_factor)
-        rows = min(drawn_rows(level), self.frame_height / frame.tile)
+        below = frame.below   # a raised level: ground under the map (§86.10)
+        shapes = level_shapes(level, colors, self.drawing.outline_factor, below)
+        rows = drawn_rows(level)
         density = 1.0 if self.is_draft else LEVEL_OVERSAMPLE
         tile_pixels = max(round(frame.tile * config.pixel_height / self.frame_height * density), 4)
-        while tile_pixels > 4 and level.columns * rows * tile_pixels**2 > LEVEL_MAX_PIXELS:
+        while tile_pixels > 4 and level.columns * (rows + below) * tile_pixels**2 > LEVEL_MAX_PIXELS:
             tile_pixels -= 1
         chunks = []
         for first in range(0, level.columns, CHUNK_COLUMNS):
             # one column more, under the next chunk: the resampled edge of a picture is half
             # transparent and showed a seam between two chunks
             last = min(first + CHUNK_COLUMNS, level.columns - 1)
-            picture = ImageMobject(np.array(draw_columns(shapes, first, last, rows, tile_pixels)))
+            picture = ImageMobject(np.array(draw_columns(shapes, first, last, rows, tile_pixels, below)))
             picture.scale_to_fit_width((last - first + 1) * frame.tile)
-            left, bottom = frame.point(first, 0.0)
+            left, bottom = frame.point(first, -below)
             picture.move_to([left + picture.width / 2, bottom + picture.height / 2, 0.0])
             picture.name = f"level_{len(chunks) + 1}"
+            picture.scenery = True   # the camera crops it on purpose (lint off_frame, §86.10)
             chunks.append(picture)
         tiles = LevelTiles(chunks)
         tiles.name = "level"

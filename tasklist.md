@@ -818,10 +818,10 @@ cartoon style; the hero and the story are original. Same rules as Phases H–N.
 - [x] Tests: the sounds are placed at the rules' events (`tests/test_platform_sounds.py`: the schedule without manim, the new sounds' level, a tiny render checking each pickup sound against the frame its coin pops, the landing in the jump's beat, foley off per scene, the SFX track's peak and loudness)
 
 ### Step 154 — Camera follow and `character_size`
-- [ ] The camera follows the hero sideways across the level
-- [ ] `character_size: small | medium | large` (small: wide landscape, for cinema; medium: TV / YouTube, the default; large: phones / Shorts) at video level, overridden per scene (scene, then video, then medium); captions and on-screen text keep their size; the beat `shot:` zooms in from that base size; not named `characters:`
-- [ ] Lint warns when a talking character is too small to read; the Shorts cookbook recommends `large`
-- [ ] Tests: size resolution, camera follow geometry, the lint rule
+- [x] The camera follows the hero sideways across the level (`level.follow: <hero>`, and the `follow` action on a level: `SmoothFollow` in `vidgen/camera.py` with a dead zone, a critically damped ease and a hard limit, clamped to the level's ends; up and down to keep the head in frame on a tall level or a high jump; a short map in a portrait frame is raised on more ground; `reframe` and directing leave a followed hero's camera alone; DESIGN §86.10)
+- [x] `character_size: small | medium | large` (small: wide landscape, for cinema; medium: TV / YouTube, the default; large: phones / Shorts) at video level, overridden per scene (scene, then video, then medium); captions and on-screen text keep their size; the beat `shot:` zooms in from that base size; not named `characters:` (×0.7 / 1 / 1.4 of the default `size`; a level's tiles, props, coins and stars scale with it, walking and jump times and their sounds stay; on a plain stage characters and props scale; `size` written wins; the video's value reaches the stage scenes like a set, after variants)
+- [x] Lint warns when a talking character is too small to read (`small_speaker`, `min_face` 0.075); the Shorts cookbook recommends `large`; `off_frame` no longer reports a level's tile chunks (Step 152 gap)
+- [x] Tests: size resolution, camera follow geometry, the lint rule (`tests/test_platform_camera.py`: incl. two tiny renders: a hero followed across and up a tall level with a close-up, and a large hero in 9:16 with the same sound schedule as at medium)
 
 ### Step 155 — Example story, docs and review of Phase O
 - [ ] A short kids' story (2–3 min) using only Phase O's features, original hero and story

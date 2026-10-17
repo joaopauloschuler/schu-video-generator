@@ -74,18 +74,19 @@ def _outlined(shapes: Sequence[Shape], ink: str, width: float) -> list[Shape]:
     return [*(Shape(s.kind, s.box, ink, s.radius) for s in shapes), *(s.shrunk(width, s.fill) for s in shapes)]
 
 
-def _ground(level: Level, colors: LevelColors, width: float) -> list[Shape]:
+def _ground(level: Level, colors: LevelColors, width: float, below: int = 0) -> list[Shape]:
     """The ground as one mass: ink cells, fills inset on their open sides (and ink in the inner
-    corners), grass with a scalloped edge on top, and a few pebbles."""
+    corners), grass with a scalloped edge on top, and a few pebbles; the ground of the map's
+    bottom row runs on ``below`` rows under it (a raised level, DESIGN.md §86.10)."""
     def solid(column: int, row: int) -> bool:
-        return level.tile(column, row) == GROUND
+        return row >= -below and level.tile(column, max(row, 0)) == GROUND
 
-    cells = [(c, r) for r in range(level.rows) for c in range(level.columns) if solid(c, r)]
+    cells = [(c, r) for r in range(-below, level.rows) for c in range(level.columns) if solid(c, r)]
     ink, fills, corners, grass, pebbles = [], [], [], [], []
     pebble = mix(colors.ground, "#000000", 0.18)
     for c, r in cells:
         left, right, up = not solid(c - 1, r), not solid(c + 1, r), not solid(c, r + 1)
-        down = not solid(c, r - 1) and r > 0   # the map's bottom edge runs on below the frame
+        down = not solid(c, r - 1) and r > -below   # the map's bottom edge runs on below the frame
         ink.append(Shape("rect", (c, r, c + 1, r + 1), colors.ink))
         x0, x1 = c + (width if left else 0.0), c + 1 - (width if right else 0.0)
         fills.append(Shape("rect", (x0, r + (width if down else 0.0), x1, r + 1 - (width if up else 0.0)), colors.ground))
@@ -149,11 +150,12 @@ def _ladders(level: Level, colors: LevelColors, width: float) -> list[Shape]:
     return _outlined(parts, colors.ink, width)
 
 
-def level_shapes(level: Level, colors: LevelColors = LevelColors(), outline: float = 1.0) -> list[Shape]:
+def level_shapes(level: Level, colors: LevelColors = LevelColors(), outline: float = 1.0, below: int = 0) -> list[Shape]:
     """Every shape of the level's tiles, back to front: ladders, ground, platforms, clouds.
-    ``outline`` multiplies :data:`OUTLINE` (the drawing style's outline factor)."""
+    ``outline`` multiplies :data:`OUTLINE` (the drawing style's outline factor); the ground of
+    the bottom row runs on ``below`` rows under the map (row ``-below`` up)."""
     width = OUTLINE * outline
-    return [*_ladders(level, colors, width), *_ground(level, colors, width), *_platforms(level, colors, width), *_clouds(level, colors, width)]
+    return [*_ladders(level, colors, width), *_ground(level, colors, width, below), *_platforms(level, colors, width), *_clouds(level, colors, width)]
 
 
 def drawn_rows(level: Level) -> float:
@@ -161,18 +163,19 @@ def drawn_rows(level: Level) -> float:
     return level.used_rows() + TOP_ROOM
 
 
-def draw_columns(shapes: Sequence[Shape], first: int, last: int, rows: float, tile_pixels: int) -> Image.Image:
+def draw_columns(shapes: Sequence[Shape], first: int, last: int, rows: float, tile_pixels: int, below: int = 0) -> Image.Image:
     """An RGBA picture of ``shapes`` from column ``first`` to ``last`` (inclusive), ``rows``
-    rows high from the bottom, ``tile_pixels`` pixels per tile; transparent where there is no
-    tile. Drawn :data:`SUPERSAMPLE` times larger and reduced with a box filter, so chunks drawn
-    side by side join without a seam."""
+    rows high from the bottom (and ``below`` rows under it), ``tile_pixels`` pixels per tile;
+    transparent where there is no tile. Drawn :data:`SUPERSAMPLE` times larger and reduced with
+    a box filter, so chunks drawn side by side join without a seam."""
     scale = tile_pixels * SUPERSAMPLE
-    width, height = (last - first + 1) * tile_pixels, math.ceil(rows * tile_pixels)
+    width, height = (last - first + 1) * tile_pixels, math.ceil((rows + below) * tile_pixels)
     big = Image.new("RGBA", (width * SUPERSAMPLE, height * SUPERSAMPLE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(big)
     top = height * SUPERSAMPLE
     for shape in shapes:
         x0, y0, x1, y1 = shape.box
+        y0, y1 = y0 + below, y1 + below
         if x1 < first or x0 > last + 1 or x1 <= x0 or y1 <= y0:
             continue
         box = [(x0 - first) * scale, top - y1 * scale, (x1 - first) * scale - 1, top - y0 * scale - 1]

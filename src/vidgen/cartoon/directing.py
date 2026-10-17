@@ -169,7 +169,8 @@ class StageFrame:
     many sit side by side on each prop that seats more than one (§69.43), the depth each
     character and prop starts at (§69.44), each vehicle's kind, height and facing (§69.52), and
     the x from and to which the stage's water goes (§69.53; ``None``: no water), and on a
-    platform level how many columns its map has (§86; ``None``: no level)."""
+    platform level how many columns its map has (§86; ``None``: no level) and the hero the
+    camera follows from the start (``follows``, §86.10; ``None``: none)."""
 
     frame_width: float
     frame_height: float
@@ -184,6 +185,7 @@ class StageFrame:
     vehicles: Mapping[str, tuple[str, float, str]] = field(default_factory=dict)
     water: tuple[float, float] | None = None
     columns: int | None = None
+    follows: str | None = None
 
     @property
     def bounds(self) -> Bounds:
@@ -856,7 +858,7 @@ def _start_state(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: 
     entering = {n for b in beats for act in b.actions if act.action == "enter" for n in _named(act.targets(), names)}
     state = _SceneState(cast={m.name: m for m in cast}, present=set(names) - entering, frame=stage)
     if stage is not None:
-        state.camera_x = stage.view_x(stage.camera_x)
+        state.camera_x = None if stage.follows is not None else stage.view_x(stage.camera_x)   # following the hero (§86.10)
         for name in names:
             place = stage.places.get(name)
             state.x[name] = None if place is None or name in entering else place.x
@@ -943,7 +945,7 @@ def plan_reframe(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: 
     state = _start_state(cast, beats, stage)
     inputs = [_reframe_beat(state, beat, names) for beat in beats]
     left, right = stage.bounds[:2]
-    moves = reframe_path(inputs, frame_width=stage.frame_width, bounds=(left, right), start_x=stage.camera_x)
+    moves = reframe_path(inputs, frame_width=stage.frame_width, bounds=(left, right), start_x=stage.camera_x, following=stage.follows is not None)
     found = []
     for move in moves:
         timing = {"run_time": move.seconds} if move.seconds > 0 else {"cut": True}
@@ -1007,9 +1009,13 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     depths = {placed.name: placed.depth for placed in placements}
     span = params.water_span() if hasattr(params, "water_span") else None
     water = None if span is None else ((span[0] - 0.5) * stage_width, (span[1] - 0.5) * stage_width)
-    columns = params.level.parsed().columns if getattr(params, "level", None) is not None else None
+    level_params = getattr(params, "level", None)
+    columns = level_params.parsed().columns if level_params is not None else None
+    follows = level_params.follow if level_params is not None else None
+    if follows is not None and follows in places:   # the camera starts on the hero (§86.10)
+        camera_x = places[follows].x
     return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths,
-                      vehicles, water, columns)
+                      vehicles, water, columns, follows)
 
 
 def stage_reframes(project: Project, params: Any) -> bool:

@@ -280,18 +280,21 @@ def layer_transform(factor: float, camera_center: Sequence[float], zoom: float) 
 
 
 def layer_half_extent(
-    factor: float, *, stage_width: float, frame_width: float, frame_height: float, max_zoom: float = MAX_ZOOM
+    factor: float, *, stage_width: float, frame_width: float, frame_height: float, max_zoom: float = MAX_ZOOM,
+    stage_top: float | None = None,
 ) -> tuple[float, float]:
     """Half the width and height (Manim units, about the origin) a layer must cover so that no
-    camera view inside the stage (``stage_width`` x ``frame_height``, zoom 1 to ``max_zoom``)
-    shows past its edges. A layer seen at zoom ``z`` from a centre ``c`` shows ``|b| <= half
-    view / z ** factor + factor * |c|``; the largest over ``z`` is found on a fine grid."""
+    camera view inside the stage (``stage_width`` x ``frame_height`` about the origin, its top
+    raised to ``stage_top`` for a tall level; zoom 1 to ``max_zoom``) shows past its edges. A
+    layer seen at zoom ``z`` from a centre ``c`` shows ``|b| <= half view / z ** factor + factor
+    * |c|``; the largest over ``z`` is found on a fine grid."""
+    top = frame_height / 2 if stage_top is None else max(stage_top, frame_height / 2)
     best_x = best_y = 0.0
     steps = 64
     for i in range(steps + 1):
         z = 1.0 + (max_zoom - 1.0) * i / steps
         reach_x = max(stage_width - frame_width / z, 0.0) / 2  # the farthest a view's centre gets
-        reach_y = max(frame_height - frame_height / z, 0.0) / 2
+        reach_y = max(frame_height - frame_height / z, 0.0) / 2 if stage_top is None else max(top - frame_height / (2 * z), 0.0)
         best_x = max(best_x, frame_width / 2 / z**factor + factor * reach_x)
         best_y = max(best_y, frame_height / 2 / z**factor + factor * reach_y)
     return (math.ceil(best_x * 1000) / 1000, math.ceil(best_y * 1000) / 1000)
