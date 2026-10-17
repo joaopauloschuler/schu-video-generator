@@ -965,17 +965,18 @@ def _resolved_actions(beat: BeatConfig, known: Sequence[str]) -> tuple[ActionCon
 def stage_frame(project: Project, params: Any) -> StageFrame:
     """The geometry of a ``stage`` scene with validated ``params`` (its characters, props, marks,
     ground, size, width and ``camera_at``) in the video's frame, placed by
-    :func:`~vidgen.cartoon.stage.stage_layout` as the stage places them (no rendering)."""
-    from vidgen.cartoon.stage import facing_towards_centre, stage_layout
+    the params' ``layout`` as the stage places them (no rendering)."""
+    from vidgen.cartoon.stage import facing_towards_centre
     from vidgen.render.worker import frame_size
 
     fmt = project.config.format
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
-    stage_width = params.width * stage_base_width(frame_width, frame_height, stage_reframes(project, params))
-    placements = stage_layout(
-        params.items(), marks=params.stage_marks(), ground=params.ground, size=params.size,
-        frame_width=frame_width, frame_height=frame_height, stage_width=stage_width,
-    )
+    level = params.level_frame(frame_width, frame_height)
+    if level is not None:   # a platform level is as wide as its map (DESIGN.md §86)
+        stage_width = level.stage_width
+    else:
+        stage_width = params.width * stage_base_width(frame_width, frame_height, stage_reframes(project, params))
+    placements = params.layout(frame_width=frame_width, frame_height=frame_height, stage_width=stage_width)
     facings = {c.name: c.facing for c in params.characters}
     seat_facings = {name: p.facing for name, p in zip(params.prop_names(), params.stage_props()) if p.prop in SEAT_BACKS}
     seat_places = {name: len(SEAT_PLACES[p.prop]) for name, p in zip(params.prop_names(), params.stage_props()) if p.prop in SEAT_PLACES}
@@ -1005,7 +1006,6 @@ def stage_reframes(project: Project, params: Any) -> bool:
     ``params`` (DESIGN.md §69.30): its ``reframe``, else the video's, else ``speaker`` when its
     characters, where they start on the stage as wide as :func:`stage_base_width` lays it out
     while reframing, are wider together than the frame."""
-    from vidgen.cartoon.stage import stage_layout
     from vidgen.render.worker import frame_size
 
     setting: ReframeSetting | None = params.reframe if params.reframe is not None else project.config.reframe
@@ -1013,10 +1013,9 @@ def stage_reframes(project: Project, params: Any) -> bool:
         return setting == "speaker"
     fmt = project.config.format
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
-    placements = stage_layout(
-        params.items(), marks=params.stage_marks(), ground=params.ground, size=params.size, frame_width=frame_width,
-        frame_height=frame_height, stage_width=params.width * stage_base_width(frame_width, frame_height, True),
-    )
+    level = params.level_frame(frame_width, frame_height)   # a level is laid out as wide as its map (§86)
+    stage_width = level.stage_width if level is not None else params.width * stage_base_width(frame_width, frame_height, True)
+    placements = params.layout(frame_width=frame_width, frame_height=frame_height, stage_width=stage_width)
     boxes = [(p.feet[0] - FIGURE_HALF_WIDTH * p.height, p.feet[0] + FIGURE_HALF_WIDTH * p.height) for p in placements if p.kind == "character"]
     return reframe_needed(boxes, frame_width)
 

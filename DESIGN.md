@@ -10545,3 +10545,133 @@ Reference: docs/CONFIG.md "Music that follows the video".
   note of the new section starts exactly there (onset detector within 3.3 ms for host-explainer;
   for rain-check it picks an earlier woodblock pickup or the tense strings 70-78 ms before, while
   the 5 ms levels rise at the change).
+
+## 86. Platform worlds (Phase O, Steps 150–155)
+
+Reference: docs/CONFIG.md "Platform levels (`level`)". Side-view platform scenes for kids'
+stories: a level written as a small ASCII map, walking along it and jumping between its
+platforms from the author's intent, story props, sounds, and a camera that follows the hero.
+Designed so that simple computer games could reuse the world and its rules later; games are not
+in scope.
+
+### 86.1 Three layers
+
+1. **World model** (`vidgen/world/`, plain frozen dataclasses): a `Level` (a grid of tile kinds,
+   its `Spot`s), `Body`s (characters and props: feet `x`, `y` and `height` in *tile units*),
+   a `World` (a level and its bodies). Step 152 adds items (keys, doors, coins, stars, friendly
+   blockers) as world data beside the bodies.
+2. **Rules** (`vidgen/world/`, from Step 151; pure functions): take a world and a scripted
+   input (`walk to c`, `jump to cloud`, `pick up key`) and give the next world plus the planned
+   motion (paths, arcs, events such as take-off, landing, pickup), deterministic, with a
+   `VidgenError` when the input is impossible. A player's inputs could replace the script later;
+   no physics engine, fixed paths and simple arcs only.
+3. **Renderers**: vidgen / Manim now (`vidgen/cartoon/level_stage.py` maps tile units to Manim
+   units, `vidgen/cartoon/level_drawing.py` draws the tiles, `scenes/stage.py` shows them).
+
+`vidgen.world` never imports Manim (a test imports it, `level_stage` and `level_drawing` in a
+fresh interpreter and checks `manim` is not loaded); the drawing uses Pillow only.
+
+### 86.2 A `stage` with a `level`, not a new scene type
+
+A level is the `stage` scene's new `level:` param. The stage already has the characters, their
+lip sync, acting and walking, props, shots, the camera's `pan` / `follow` / `zoom`, reframing,
+parallax `layers`, light, foley and `sfx`; a new scene type would duplicate or re-plumb all of it.
+With a level the stage changes only where the ground is: the tiles replace the ground line and
+band, the stage is as wide as the map, and things stand on the tiles at depth 0. Sets (`set:`)
+apply as on any stage (their sky and layers; their props stand at depths, so a level asks for
+`props: []`).
+
+### 86.3 The map (Step 150)
+
+- One text line per row, top row first; `.` or a space air, `#` ground, `=` platform, `~` cloud,
+  `|` ladder; a letter (ASCII, either case, each once) is a *spot*: an air cell with a name
+  (`spots: {a: start}`, else the letter itself). Symbols are tiles and (from Step 152) items;
+  letters are only ever spots. Blank lines around the map are dropped, tabs expand to 4, short
+  rows are padded with air on the right (editors strip trailing spaces). At most `MAX_COLUMNS`
+  400 by `MAX_ROWS` 40.
+- Inside the model row 0 is the bottom; a cell spans `column .. column + 1`, `row .. row + 1`.
+  `STANDABLE` = ground, platform, cloud: a body stands on the tile's top edge. Ladders are drawn
+  and parsed; climbing is Step 151's to decide. Outside the map is air (a gap goes down forever).
+- A spot stands on the first standable tile below its letter (`Level.surface_below`), so a spot
+  under a platform stands on the ground beneath it. A body asked to stand at an x instead stands
+  on the highest tile of that column (`Level.top_surface`).
+- Errors (`parse_level`, `VidgenError`) name the map's row and column from the top left, both
+  from 1, as the author reads the YAML: unknown symbol (with the symbol list), a letter twice
+  (both places), a spot with nothing below it, a map with nothing to stand on, a `spots` letter
+  not on the map, one name for two letters, too large. `StageLevel` turns them into validation
+  errors at `scenes[i].params.level`.
+
+### 86.4 Geometry on the stage (Step 150)
+
+- `CHARACTER_TILES` = 2: a character of scale 1 is two tiles tall, so the tile is
+  `size × shorter side / 2` and the characters keep the size the scene gives them. A level's
+  default `size` is `LEVEL_SIZE` 0.25 (a `mode="before"` validator fills it when the scene gives
+  none): about 8 rows by 14.2 columns in 16:9, 14.2 rows by 8 columns in 9:16. Step 154's
+  `character_size` replaces this default (small / medium / large → sizes; `size` keeps winning
+  when written).
+- `level_frame`: the stage is exactly as wide as the map (`Stage.stage_width`; `width` is refused
+  with a level, reframing does not change it), centred, the map's bottom edge on the frame's
+  bottom edge. Spots are stage marks at `(column + 0.5) / columns` (frame-independent, so `pan`
+  / `walk_to` / `camera_at` validate without a frame). `level_fit_problems` (in `vidgen validate`
+  and before a render): a map narrower than the frame (the camera would see past its ends), or
+  tiles above the frame's top (the camera moves sideways only; Step 154 keeps that).
+- `level_layout` replaces `stage_layout` (`Params.layout`, used by the scene, `stage_frame` and
+  `stage_reframes`): `level_world` resolves each item's `at` (a spot by name, else a mark or x
+  → tile column), `place_bodies` stands it, and the feet come out in Manim units raised by the
+  item's `lift` (frame heights) and `hang`. `Stage.grounds[name]` is the tile's top, so shadows lie
+  on the tiles. Depth is refused (characters and props) as are `room` and `water`; `ground` and
+  `ground_color` are not used.
+
+### 86.5 Drawing (Step 150)
+
+- `level_shapes(level, colors, outline)`: filled shapes in tile units, back to front: ladders,
+  ground, platforms, clouds. The ground is one mass: every cell in ink, then its fill inset by the
+  outline width on its open sides (an ink square in each inner corner), grass (`GRASS_DEPTH` 0.2,
+  scalloped) on every open top, a pebble in one cell of three placed by `crc32` of the cell. A
+  run of platforms is one rounded wooden slab (`PLATFORM_THICKNESS` 0.38) under the tiles' top,
+  with plank seams and a light edge; a run of clouds is one puffy cloud whose bumps reach the
+  tiles' top; other forms are drawn ink-then-shrunk-fill so the outline follows their union.
+  Outline `OUTLINE` 0.04 tile × the drawing style's `outline_factor`; ink is `CHARACTER_INK`.
+  Colours `LevelColors` (`colors:` theme tokens or #hex).
+- `draw_columns` paints columns `first..last` at `tile_pixels` per tile, `SUPERSAMPLE` 2 and a
+  box filter, so chunks drawn separately are byte-identical to one drawing (tested). The scene
+  (`Stage._level_tiles`) draws `CHUNK_COLUMNS` 8 columns per `ImageMobject` (plus one column
+  under the next chunk: the resampled edge of a picture is half transparent and showed a seam),
+  at `LEVEL_OVERSAMPLE` 1.25 × the frame's pixel density (1 in a draft; fewer pixels when the
+  pictures would pass `LEVEL_MAX_PIXELS` 24 M), up to the used rows + `TOP_ROOM` 0.25. No disk
+  cache: drawing a level takes tens of milliseconds and the scene render itself is cached.
+- `LevelTiles` (a `Group`, named `level`; chunks `level_1`...) keeps as members only the chunks
+  that overlap the camera's view (a camera listener), because Manim transforms every
+  `ImageMobject` on every frame whether it is in view or not. In the layout dump each chunk in
+  view is an `image`.
+- Behind the level: a background picture is drawn larger (`layer_half_extent`) and moves by
+  `LEVEL_PICTURE_FACTOR` 0.2 (`_move_by_parallax`, shared with `layers`); a colour or gradient
+  sky is as before (it looks the same from any camera position); `layers` as on any stage. The
+  light grades the tiles (they are in the backdrop, `mark_lit`).
+- Measured: the 42 x 6 scratch level at 854x480 renders 5.9 s of video (a pan across it) in
+  6.8 s, like a plain stage.
+
+### 86.6 The rest of the phase (plan)
+
+- **Step 151, walking and jumping.** Rules: `walk` along a run of standable tiles to a spot or x,
+  stopping at an edge (a gap or a wall) with a clear error naming where it stops; `jump to <spot
+  or x>`: take-off at the edge nearest the target, an arc whose height clears the tiles between
+  (sampled against the cells, the body's height in tiles), landing on the target's surface;
+  `VidgenError` when no arc within a kid's reach (a few tiles across and up) clears. Output: a
+  path in tile units and events (`take_off`, `land`) that the renderer maps to the existing
+  `Walk` / `Jump` motion (crouch first, slower arcs, squash and wobble on landing) and the beat's
+  narration timing (a step starts at its `at` in the beat and lasts what the walking speed or the
+  arc gives).
+- **Step 152, props and reactions.** Items on the map (symbols, never letters) or listed by
+  spot: key, door, coins / stars, a friendly blocker that moves when asked; rules for pickups,
+  doors opening with the key, blockers stepping aside; reactions with the existing `react`,
+  `emote` and `effect` actions.
+- **Step 153, sounds.** The rules' events (take-off, landing, pickup, door) placed through the
+  existing `sfx` system; new synthesised sounds only where none fits.
+- **Step 154, camera and `character_size`.** The camera follows the hero sideways (the existing
+  `follow`, held inside the stage); `character_size: small | medium | large` at video level and
+  per scene (scene, then video, then medium) sets the base `size` (and so the tile size); shots
+  zoom from it; captions and on-screen text keep their size; a lint rule for a talking character
+  too small to read. Not named `characters:` (the cast list and the stage's placement list).
+- **Step 155**: a 2–3 minute original kids' story using only these features, the guide and docs,
+  and the review of the phase.

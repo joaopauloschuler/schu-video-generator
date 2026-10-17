@@ -784,6 +784,52 @@ dropped (owner). The numpy beds stay as the fallback. Same rules as Phases H–M
 
 ---
 
+## Phase O — Platform worlds
+
+Goal: side-view platform scenes for kids' stories first (a level written as a small ASCII map,
+walking and jumping planned from the author's intent, story props, sounds, a camera that follows
+the hero), designed so that simple computer games could reuse the world and its rules later
+(games are not in scope). Three layers kept apart: the world model (levels, characters, items as
+plain data), the rules (movement, jumps, collisions, pickups: deterministic, driven by scripted
+inputs) and the renderers (vidgen / Manim now); the world and the rules never import Manim. Built
+on the cartoon `stage` (a `level:` param, not a new scene type; DESIGN §86), in vidgen's flat
+cartoon style; the hero and the story are original. Same rules as Phases H–N.
+
+### Step 150 — Phase plan, world model, ASCII levels and static rendering
+- [x] Phase O plan here and DESIGN §86 (the whole phase, the three layers, `stage` + `level:` rather than a new scene type)
+- [x] World model, no Manim: levels (tiles: ground, floating platforms, clouds, ladders, gaps), spots, bodies (characters and props) in tile units (`vidgen/world/`: `Level`, `Spot`, `Run`, `Body`, `Placing`, `World`, `place_bodies`; a character is `CHARACTER_TILES` 2 tiles tall)
+- [x] ASCII map parsing and validation with clear `VidgenError` messages naming the map's row and column (`parse_level`: `.` air, `#` ground, `=` platform, `~` cloud, `|` ladder, a letter a spot standing on the first tile below it; unknown symbols, a letter twice, a spot over a gap, nothing to stand on, unused / duplicate spot names, at most 400 x 40; `stage` checks: no depth, room, water or width; nothing over a gap; spot names vs marks; `vidgen validate`: the map narrower than the frame or above its top)
+- [x] Static rendering on a `stage`: the tiles drawn once into pictures (8-column chunks, only those in view drawn per frame), the background picture as a parallax layer (factor 0.2), colours / gradients and `layers` behind the level, characters and props standing on the tiles with their shadows (`cartoon/level_drawing.py` (Pillow), `cartoon/level_stage.py`; `level: {map, spots, colors}`, default `size` 0.25 on a level; spots are marks; `directing.stage_frame` / `stage_reframes` use the level's layout)
+- [x] Tests: parsing, errors with row / column, placement, geometry, drawing (chunks join without a seam), params, validate, one tiny render (`tests/test_platform_level.py`)
+
+### Step 151 — Walking and jumping, timed to the narration
+- [ ] Rules (no Manim): walking along platforms and stopping at edges; jumps between platforms from the author's intent ("jump to the cloud"): take-off, height and landing planned, the arc checked against the tiles, a clear `VidgenError` when impossible; fixed paths and simple arcs only (no physics engine)
+- [ ] Kid-friendly feel: a crouch before the jump, slower arcs, squash and wobble on landing (the existing cartoon motion)
+- [ ] Each step (walk, jump) timed to its narration line
+- [ ] Tests: rules without rendering (reachable / unreachable jumps, edges, blocked arcs), timing, one tiny render
+
+### Step 152 — Story props and reactions
+- [ ] Key and door, coins or stars to collect, friendly blockers (a grumpy snail that moves when asked nicely), as world items with rules (pickups, doors that open, blockers that move)
+- [ ] Reactions (surprise, joy, landing wobble) with vidgen's existing actions and lip sync; pick-up steps timed to their lines
+- [ ] Tests: item rules without rendering, one tiny render
+
+### Step 153 — Sound effects
+- [ ] Jump, land, pickup and door sounds through the existing `sfx` system (docs/CONFIG.md "Sound effects (sfx)"); new sounds only where missing, synthesised (no licensed assets)
+- [ ] Tests: the sounds are placed at the rules' events
+
+### Step 154 — Camera follow and `character_size`
+- [ ] The camera follows the hero sideways across the level
+- [ ] `character_size: small | medium | large` (small: wide landscape, for cinema; medium: TV / YouTube, the default; large: phones / Shorts) at video level, overridden per scene (scene, then video, then medium); captions and on-screen text keep their size; the beat `shot:` zooms in from that base size; not named `characters:`
+- [ ] Lint warns when a talking character is too small to read; the Shorts cookbook recommends `large`
+- [ ] Tests: size resolution, camera follow geometry, the lint rule
+
+### Step 155 — Example story, docs and review of Phase O
+- [ ] A short kids' story (2–3 min) using only Phase O's features, original hero and story
+- [ ] Author guide (+ `AGENTS.md`), CONFIG, DESIGN, README, CHANGELOG; gallery if applicable
+- [ ] Review of Phase O; fix what it finds; gaps to the Backlog
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,

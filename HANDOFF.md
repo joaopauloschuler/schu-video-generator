@@ -14067,3 +14067,95 @@ How to test: `-m "not render" tests/test_regions.py` (31), `tests/test_code_walk
 (45 incl. render), `tests/test_regions.py` (48 incl. render), `-k code tests/test_builtin_scenes.py
 tests/test_review4.py` (18), `tests/test_review2.py -k walkthrough` (1), `tests/test_presets.py -k
 "contrast_lint_with_every_preset and (light or warm)"` (2), `test_docs.py` (60), `test_guide.py` (51).
+
+## Step 150 — Phase plan, world model, ASCII levels and static rendering
+
+What was built
+- **Phase O plan**: `tasklist.md` Phase O (Steps 150–155 with their boxes) and DESIGN §86 (the
+  whole phase: the three layers, why a `level:` on `stage` rather than a new scene type, the map,
+  geometry, drawing, and the plan for Steps 151–155).
+- **World model** (`src/vidgen/world/`, no Manim; a test checks): `level.py` (`parse_level`,
+  `Level` with `tile`, `surface_below`, `top_surface`, `column_at`, `spot`, `spot_names`,
+  `used_rows`, `runs`; `Spot`, `Run`; tile kinds `AIR GROUND PLATFORM CLOUD LADDER`,
+  `TILE_SYMBOLS`, `STANDABLE`, `MAX_COLUMNS` 400, `MAX_ROWS` 40) and `world.py` (`Body`,
+  `Placing`, `World`, `place_bodies`, `CHARACTER_TILES` 2). Tile units, row 0 at the bottom.
+- **Map syntax**: `.`/space air, `#` ground, `=` platform, `~` cloud, `|` ladder, a letter a spot
+  (stands on the first tile below it). Errors name `map row R, column C` from the top left.
+- **Stage** (`scenes/stage.py`): `level: {map, spots, colors}` (`StageLevel`, parsed once per
+  text by `_parsed_level`); default `size` 0.25 on a level; spots are marks; refused with a level:
+  `width`, `room`, `water`, any `depth` / `against`, a spot name equal to an own mark, anything
+  standing over a gap; `validate_project` and `construct` refuse a map narrower than the frame or
+  above its top. `Params.level_frame`, `Params.layout` (the level's or `stage_layout`) are used by
+  the scene, `directing.stage_frame` and `stage_reframes`. No ground band on a level; a background
+  picture moves by parallax factor 0.2 (`_picture(factor)`, `_move_by_parallax` shared with the
+  layers); the tiles (`_level_tiles`, `LevelTiles`) come last in the backdrop.
+- **Drawing** (`cartoon/level_drawing.py`, Pillow): `level_shapes`, `draw_columns`,
+  `LevelColors`, `drawn_rows`; 8-column chunks, supersampled ×2 with a box filter (chunks join
+  byte-exactly); each chunk drawn one column wider under the next (a seam showed at the
+  resampled edge otherwise); only chunks in view are members of `LevelTiles`.
+- **Geometry** (`cartoon/level_stage.py`, no Manim): `LevelFrame`, `level_frame`,
+  `level_fit_problems`, `level_world`, `level_layout`, `LEVEL_SIZE`.
+- Docs: CONFIG `stage` table (`level` row, `size` default) and new "Platform levels (`level`)";
+  the `stage` docstring.
+
+YAML as it stands
+```yaml
+- id: meadow
+  type: stage
+  set: park                 # optional: sky + hills behind the level
+  params:
+    props: []               # a set's props stand at depths; clear them on a level
+    level:
+      map: |
+        ...............~~~~...........
+        ..........b...................
+        ..a......=====.........c......
+        ##########....################
+      spots: {a: start, b: high, c: home}     # optional; unnamed letters are named by themselves
+      colors: {grass: accent}                 # ground, grass, platform, cloud, ladder
+    camera_at: start
+    characters: [{name: pip, at: start}, {name: kit, at: high}]
+```
+
+Files touched
+- New: `src/vidgen/world/__init__.py`, `world/level.py`, `world/world.py`,
+  `src/vidgen/cartoon/level_stage.py`, `cartoon/level_drawing.py`, `tests/test_platform_level.py`.
+- Changed: `src/vidgen/scenes/stage.py`, `src/vidgen/cartoon/directing.py`, `docs/CONFIG.md`,
+  `DESIGN.md` (§86), `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces (`vidgen.api` unchanged)
+- Scene param `stage.level`; `Stage.Params.level_frame`, `layout`; packages `vidgen.world`,
+  `vidgen.cartoon.level_stage`, `vidgen.cartoon.level_drawing` (internal, not in `vidgen.api`).
+
+Decisions
+- `stage` + `level:` instead of a new scene type (DESIGN §86.2). Letters are only spots, symbols
+  only tiles / items, so Step 152 can add item symbols without clashing; the ladder is `|` (not
+  `H`, a letter).
+- The tile size follows `size` (2 tiles per character) rather than the frame: the characters
+  keep their size and the level grows around them; Step 154's `character_size` sets `size`.
+- No disk cache for the tile pictures (tens of ms per scene; the scene render is cached).
+- Searched for existing code first: parallax (`layer_half_extent`, `layer_transform`), marks
+  (`mark_x`), placements (`StagePlacement`) and Pillow drawing helpers are reused; no tile or
+  grid code existed.
+
+Known gaps for Step 151 and later
+- Walking and jumping on a level: today `walk_to` / `run_to` keep the walker's height (they cross
+  gaps in the air) and `jump` is the stage's jump in place; `enter` / `exit` too. `feet_y_at`,
+  `walk_in_depth` and keyframes' y 0 still use the ground line on a level.
+- Ladders are drawn but not climbable; clouds are solid like platforms (one-way platforms not
+  decided).
+- Rain / snow / fog / puddles end at the `ground` line, not on the tiles; `set:` props are
+  refused (depth); a 9:16 frame shows much sky over a low level (Step 154's `large`).
+- `vidgen screenplay` and the author guide do not know levels yet (Step 155).
+
+How to test
+- `-m "not render" tests/test_platform_level.py` (29 tests, 2.2 s);
+  `tests/test_platform_level.py tests/test_cartoon_parallax.py tests/test_cartoon_stage.py`
+  (104 passed with render tests, 3.2 s); `-m "not render" tests/test_cartoon_stage.py
+  tests/test_cartoon_parallax.py tests/test_builtin_sets.py tests/test_cartoon_directing.py
+  tests/test_docs.py tests/test_guide.py` (+ this file: 284 passed, 5.4 s); render tests of
+  stage / parallax / sets / directing (17 passed, 13.6 s); `-m "not render" tests/test_schema.py
+  tests/test_includes.py` (85 passed, 75 s).
+- Manual: a scratch level with `set: park` (42 x 6) at 854x480: validate ok, lint 0 errors
+  (a look-alike warning from the scratch cast), storyboard and preview render (5.9 s of video in
+  6.8 s), a 9:16 storyboard; stills checked by eye.

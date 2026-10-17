@@ -4996,7 +4996,7 @@ never leaves the stage.
 | `ground_color` | color \| `false` | none | fill below the ground line, up to where the deepest character or prop on the ground (no `lift`) stands, so things at a `depth` stand on it; none: `surface` on a colour background, nothing on a picture; `false`: nothing |
 | `marks` | mapping | `{}` | own marks, name -> x from 0 to 1 (`{door: 0.85}`); a built-in name moves that mark |
 | `characters` | list | `[]` | the characters on the stage: a name, or a mapping (below); each at most once |
-| `size` | float | `0.45` | height of a character at depth 0, as a fraction of the frame's shorter side |
+| `size` | float | `0.45` (`0.25` on a `level`) | height of a character at depth 0, as a fraction of the frame's shorter side |
 | `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
 | `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
 | `motion_effects` | bool | none (the video's `motion_effects`: on) | dust, speed lines, impact stars and whoosh arcs in this scene ([motion effects](#motion-effects-motion_effects)); `false`: none |
@@ -5017,6 +5017,7 @@ never leaves the stage.
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds`, `fog` or outdoor particles |
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
+| `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -5044,6 +5045,60 @@ and `height` (`0.2`) as fractions of the frame's shorter side, and `color` (`sec
 `hills`: a row of rounded hills across the whole layer, each `width` wide and `height` high, their
 foot at `y`, filled down to the bottom. A layer is drawn larger than the frame, so that no
 camera view inside the stage (a zoom up to 8x included) shows its edge.
+
+#### Platform levels (`level`)
+
+A side view for platform stories: the ground is a small map of **tiles** written in the YAML,
+one line per row, top row first. Symbols: `.` (or a space) air, `#` ground (earth with grass on
+top), `=` a floating wooden platform, `~` a cloud to stand on, `|` a ladder; a **letter** marks a
+**spot**: whatever stands there stands on the first tile below the letter. Short rows are filled
+with air on the right; the blank lines around the map are ignored.
+
+```yaml
+- id: meadow
+  type: stage
+  set: park            # the set's sky and hills move behind the level
+  params:
+    props: []          # a set's props stand at a depth: not on a level
+    level:
+      map: |
+        ...............~~~~...........
+        ..........b...................
+        ..a......=====.........c......
+        ##########....################
+        ##########....################
+      spots: {a: start, b: high, c: home}
+      colors: {grass: "#6DBE45"}
+    characters:
+      - {name: pip, at: start}
+      - {name: kit, at: high}
+```
+
+- **Size.** A tile is half a character of scale 1 (a character is two tiles tall), so the tile
+  size follows `size`, which is `0.25` on a level unless the scene gives one: about 8 rows and 14
+  columns fill a 16:9 frame, 14 rows and 8 columns a 9:16 one. The map's bottom row sits on the
+  frame's bottom edge; the stage is exactly as wide as the map (`width` is not used), and
+  `camera_at`, `pan` and `follow` move across it. `vidgen validate` refuses a map narrower than the
+  frame or whose tiles reach above the frame's top (the camera moves sideways only), with the
+  number of columns or rows that fit.
+- **Spots** are marks: `at: start`, `pan: {to: home}`, `walk_to: c`. `spots` names a letter
+  (`{a: start}`); a letter without a name is named by itself (`at: b`). Each letter once; a spot
+  must have a tile under it. A character or prop `at` a mark or an x instead stands on the
+  highest tile in that column (never over a gap). Everything stands at depth 0 on a level:
+  scenery behind it goes in `layers`.
+- **Behind the level**: the background picture (`image` / `generate`) is drawn larger and moves
+  by a parallax factor of `0.2`; a colour or gradient fills the sky; `layers` move by their
+  factors as on any stage. There is no ground band (`ground` and `ground_color` are not used):
+  a gap shows the sky and the layers.
+- **Tiles** are drawn once, when the scene renders, into pictures of 8 columns each (finer than
+  the frame, for shots that zoom in), in the cartoon look: the characters' outline ink, grass on
+  every open top, wooden planks, puffy clouds. `colors` changes `ground`, `grass`, `platform`,
+  `cloud` and `ladder` (theme tokens or #hex). The light grades them like the rest of the set;
+  the [drawing style](#drawing-style-drawing)'s outline width applies.
+- Errors name the map's row and column, counted from the top left from 1: `level: map row 2,
+  column 7: unknown symbol '@'`, `map row 1, column 3: spot 'a' has nothing below it to stand on`.
+- Not yet: walking along and jumping between the tiles (walks on a level keep the walker's
+  height), rain, snow and fog on the tiles, and a set's props.
 
 #### Rooms (`room`)
 
