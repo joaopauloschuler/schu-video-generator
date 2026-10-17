@@ -460,9 +460,10 @@ class _Reshape(Action):
                     problems.append(("target", f"'{name}' cannot {action} (props that can: {', '.join(able)})"))
         return problems
 
-    def _on_level(self, scene: NarratedScene, prop: Prop) -> None:
+    def _on_level(self, scene: NarratedScene, prop: Prop) -> bool:
         """On a platform level, the rules' record (and check) of a door opening or closing
-        (DESIGN.md §86.8); nothing elsewhere."""
+        (DESIGN.md §86.8); nothing elsewhere. Whether a key unlocked it (foley, §86.9)."""
+        return False
 
     def _opener(self, scene: NarratedScene, prop: Prop) -> list[Animation]:
         """The animations of whoever opens or closes ``prop`` (none)."""
@@ -475,12 +476,13 @@ class _Reshape(Action):
         for prop in [t.mobject for t in targets if isinstance(t.mobject, Prop)]:
             if self.shape not in prop.shapes or prop.shape == self.shape:
                 continue
-            if getattr(scene, "on_level", False) and prop.kind == "door":
-                self._on_level(scene, prop)
+            unlocks = getattr(scene, "on_level", False) and prop.kind == "door" and self._on_level(scene, prop)
             held = _held(scene).get(prop.name)
             if held is None:
                 anims += self._opener(scene, prop)
-                anims.append(PropReshape(prop, self.shape, at=RESHAPE_SHARE))
+                reshape = PropReshape(prop, self.shape, at=RESHAPE_SHARE)
+                reshape.unlocks = unlocks   # a locked door opened with its key: foley clicks the lock (DESIGN.md §86.9)
+                anims.append(reshape)
                 continue
             character, hand, overhead = held.character, held.hand, is_overhead(prop, self.shape)
             anims.append(ArmMove(character, [(1.0, _carry(character, hand, overhead))]))
@@ -516,8 +518,8 @@ class Open(_Reshape):
         by = getattr(scene, "cast", {}).get(self.options.by) if self.options.by is not None else None
         return [by] if by is not None else []
 
-    def _on_level(self, scene: NarratedScene, prop: Prop) -> None:
-        scene.level_open(prop.name, self.options.by)
+    def _on_level(self, scene: NarratedScene, prop: Prop) -> bool:
+        return scene.level_open(prop.name, self.options.by)
 
     def _opener(self, scene: NarratedScene, prop: Prop) -> list[Animation]:
         """``by`` turns to the door and reaches for its edge (with the hand holding the door's key
@@ -548,8 +550,9 @@ class Close(_Reshape):
 
     shape = "closed"
 
-    def _on_level(self, scene: NarratedScene, prop: Prop) -> None:
+    def _on_level(self, scene: NarratedScene, prop: Prop) -> bool:
         scene.level_close(prop.name)
+        return False
 
 
 #: A prop blown off stage ends this many frame heights above where it started (up and away), and

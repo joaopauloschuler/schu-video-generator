@@ -14393,3 +14393,74 @@ How to test
   video in 26.8 s, lint 0 errors (two `rushed_animation` warnings from short text-timed beats, the
   `off_frame` above); frame sheets of the coin pops, the door opening with the key in hand, the
   mid-air star pop, the landing reaction and the turtle stepping back checked by eye.
+
+## Step 153 — Sound effects on a level
+
+What was built
+- **Level sounds as stage foley** (`cartoon/foley.py`, no manim): `PlayedAction.pickups`
+  (`(share, kind)` of the coins / stars a move picks up) and `.unlocks`; `lands` also marks a level
+  jump's touch-down. `pickup_cues` (a `coin` / `twinkle` per pickup, the share mapped through the
+  walk's easing and wind-up or the jump's crouch; each further one of a kind +1 semitone, at most
+  +5), `landing_cues` (a soft short `thud` + a `footstep`, louder after a longer drop),
+  `door_cues` (`unlock` then the creak 0.3 s later for a locked door opened with its key),
+  `step_aside` (a soft low `swoosh` and heavier, softer footsteps). Constants
+  `LEVEL_LANDING_THUD`, `LEVEL_LANDING_STEP`, `LANDING_INTENSITY*`, `PICKUP_SOUNDS`,
+  `PICKUP_PITCH_STEP` / `_MAX`, `UNLOCK_GAIN`, `UNLOCK_SECONDS`, `ASIDE_STEP`, `ASIDE_SWOOSH`.
+- **Hooks**: `Stage._played` reads an `ArcJump`'s landing (`1 − phases.after`) and the `pickups` of
+  `RouteWalk` / `ArcJump` (`_picked_kinds`); `Stage.level_open` returns whether a key unlocked the
+  door, `_Reshape._on_level` passes it on and `Open.apply` marks the `PropReshape` `unlocks`.
+- **New built-in sounds** (`sfx.py`, numpy): `unlock`, `coin`, `twinkle` (descriptions in
+  `vidgen list-sfx`; levels set by the library: −27 LUFS, peaks ≤ −9 dBFS).
+- Docs: CONFIG sfx table (3 rows), the foley paragraph, the level's **Sounds** bullet (replacing
+  the Step 153 placeholder), the walking section; the stage's `foley` param docstring; DESIGN §86.9
+  and the §6 API note; the guide's sound list and cartoon **Sound** bullet (+ `AGENTS.md`), where
+  the `jump` row's `react: {on: land}` (a Step 152 slip) now reads `when`.
+
+YAML: nothing new; sounds follow the actions. Controls as for all foley:
+```yaml
+foley: false              # the whole video: no foley (level sounds included)
+sfx: {gain: -3}           # every effect 3 dB softer
+scenes:
+  - id: meadow
+    type: stage
+    params: {foley: false, level: {...}}   # this scene only
+# assets/sfx/coin.wav (or twinkle, unlock, thud, ...) replaces a sound with your own
+```
+
+Files touched
+- New: `tests/test_platform_sounds.py`.
+- Changed: `src/vidgen/sfx.py`, `src/vidgen/cartoon/foley.py`, `src/vidgen/scenes/stage.py`,
+  `src/vidgen/scenes/handling.py`, `docs/CONFIG.md`, `DESIGN.md`, `src/vidgen/data/guide/AGENTS.md`,
+  `AGENTS.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api.PlayedAction` gains `pickups` and `unlocks` (defaults keep old cues); built-in sounds
+  `unlock`, `coin`, `twinkle`; `Stage.level_open` returns a bool.
+
+Decisions
+- Reused the foley path (no new config key): the times come from the rules' plan when the action
+  starts, as all foley; `foley: false` / `sfx.gain` / `assets/sfx` control them. Take-off keeps the
+  stage's `boing`; landing and stepping aside reuse `thud`, `footstep`, `swoosh`. Only a lock, a
+  coin and a star sound were missing.
+- The landing sound plays only for `ArcJump` (level jumps), so plain stages sound as before.
+- The pickup's time uses the same share → time mapping the collectible's pop uses (checked in the
+  render test against the frame each coin pops).
+- Searched first: `foley_cues`, `door_cues`, `_walk_time_share`, `_timed_parts`, the sound
+  library's `_notes` / `_bell` / `_finish` are reused.
+
+Known gaps for Step 154 and later
+- A move's `react` effect symbol and a `react` `surprised` during a move play no sound (an
+  `effect` / `react` action's do). `enter` / `exit` on a level still pick up nothing (Step 152).
+- Step 154 (camera follow, `character_size`): no sound depends on the camera or size; a pan by the
+  following camera will not add a whoosh (auto sfx is for `zoom` only). With `character_size` the
+  tile size changes, so walking times change and the cues move with them automatically. The
+  `off_frame` lint on level tile chunks (Step 152 gap) is still open.
+
+How to test
+- `tests/test_platform_sounds.py` (8 passed incl. 1 render, 6 s); `tests/test_sfx.py` (119
+  passed, 23 s), `test_cartoon_foley` (7), `test_platform_props` (24), `test_platform_moves`
+  (23), `test_cartoon_sounds` (15), `test_guide` (51), `test_docs` (60), `test_cartoon_props`
+  (90), `test_cartoon_holding` (16), `test_cartoon_motion_effects` (13), `test_voice_sounds` (8),
+  `test_cartoon_stage` (24), `test_schema` (61, 79 s): all passed, one file at a time.
+- `vidgen list-sfx` lists the three new sounds with their descriptions.
+

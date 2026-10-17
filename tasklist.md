@@ -814,8 +814,8 @@ cartoon style; the hero and the story are original. Same rules as Phases H–N.
 - [x] Tests: item rules without rendering, one tiny render (`tests/test_platform_props.py`); Step 151 gaps closed: `walk_to` / `run_to` to a tile, `vidgen direct` and the prop replay place a tile
 
 ### Step 153 — Sound effects
-- [ ] Jump, land, pickup and door sounds through the existing `sfx` system (docs/CONFIG.md "Sound effects (sfx)"); new sounds only where missing, synthesised (no licensed assets)
-- [ ] Tests: the sounds are placed at the rules' events
+- [x] Jump, land, pickup and door sounds through the existing `sfx` system (docs/CONFIG.md "Sound effects (sfx)"); new sounds only where missing, synthesised (no licensed assets) (stage foley: the take-off `boing`, a soft `thud` + step on landing, new `coin` / `twinkle` at each pickup timed through the move's easing, new `unlock` before a locked door's creak, a soft `swoosh` and heavy steps for `step_aside`; `foley: false`, `sfx: {gain}`, `assets/sfx/` control them; DESIGN §86.9)
+- [x] Tests: the sounds are placed at the rules' events (`tests/test_platform_sounds.py`: the schedule without manim, the new sounds' level, a tiny render checking each pickup sound against the frame its coin pops, the landing in the jump's beat, foley off per scene, the SFX track's peak and loudness)
 
 ### Step 154 — Camera follow and `character_size`
 - [ ] The camera follows the hero sideways across the level

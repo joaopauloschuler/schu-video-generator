@@ -672,7 +672,7 @@ class Stage(NarratedScene):
         idle: bool = True
         """false: the characters do not breathe, sway or blink in this scene."""
         foley: bool | None = None
-        """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols), and the ambience: false for none in this scene; default: the video's foley (on)."""
+        """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols; on a level also landings, coins and stars picked up, a key unlocking a door, a blocker stepping aside), and the ambience: false for none in this scene; default: the video's foley (on)."""
         ambience: bool | Literal["auto", "birdsong", "city", "room_tone"] | list[Literal["birdsong", "city", "room_tone"]] | None = None
         """A sound bed under the whole scene while foley is on: birdsong, city (street sounds), room_tone, or a list of them; auto (or true): chosen from the set: room_tone in a room, birdsong outdoors while the light is day or morning and it does not rain; false: none; default: the video's ambience (auto). Rain and a burning fire play their own beds whatever this says."""
         auto_direct: AutoDirectSetting | None = None
@@ -2782,11 +2782,14 @@ class Stage(NarratedScene):
                 self.add(symbol)
                 reaction.symbol = symbol
 
-    def level_open(self, door: str, by: str | None) -> None:
+    def level_open(self, door: str, by: str | None) -> bool:
         """The rules' check that ``by`` can open ``door`` now (a locked one with its key, next to
         it, DESIGN.md §86.8), recorded in :attr:`level_state`; :class:`VidgenError` naming the scene
-        and the beat otherwise."""
+        and the beat otherwise. Whether it was a locked door that ``by``'s key opened (foley plays
+        the key's ``unlock``, §86.9)."""
         state = self._level_now()
+        item = state.item(door)
+        unlocks = item is not None and item.key is not None and not item.open
         if by is not None and by in self.cast:
             _, frame = self._level_and_frame()
             feet = self.cast[by].feet()
@@ -2795,6 +2798,7 @@ class Stage(NarratedScene):
             self.level_state = open_door(state, door, by)
         except VidgenError as exc:
             raise self._level_error(exc) from None
+        return unlocks
 
     def level_close(self, door: str) -> None:
         """Record that ``door`` is closed (in the way again)."""
@@ -2943,14 +2947,16 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     if isinstance(anim, Walk):
         through_door = anim.fade_in > 0 or anim.fade_out > 0   # a fade in a doorway (§69.42)
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length, rolls=anim.gait.rolls,
-                            through_door=through_door, opens_door=anim.opens_door)
+                            through_door=through_door, opens_door=anim.opens_door, pickups=_picked_kinds(anim))
     if isinstance(anim, PropReshape):
-        return PlayedAction(action, start, seconds, prop=getattr(anim.mobject, "kind", None))
+        return PlayedAction(action, start, seconds, prop=getattr(anim.mobject, "kind", None), unlocks=getattr(anim, "unlocks", False))
     if isinstance(anim, WaterFlow):
         return PlayedAction(action, start, seconds, pours=True)
     if isinstance(anim, Ride):
         lands = 1.0 if anim.flies and anim.course.land else None   # a balloon or a toy rocket touching down (§69.53)
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind, lands=lands)
+    if isinstance(anim, ArcJump):   # on a level: it lands as its settle starts (DESIGN.md §86.9)
+        return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift, lands=1.0 - anim.phases.after, pickups=_picked_kinds(anim))
     if isinstance(anim, Jump):
         return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift)
     if isinstance(anim, PropMove):
@@ -2961,6 +2967,11 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     expression = options.to if action == "emote" else getattr(options, "expression", None) if action == "react" else None
     effect = options.to if action == "effect" and options.sound else None
     return PlayedAction(action, start, seconds, expression=expression, effect=effect)
+
+
+def _picked_kinds(anim: Animation) -> tuple[tuple[float, str], ...]:
+    """The coins and stars a level move picks up: ``(share of its walk or flight, kind)``."""
+    return tuple((share, item.kind) for share, item in getattr(anim, "pickups", ()))
 
 
 def hill_outline(half_width: float, foot: float, low: float, hill_width: float, hill_height: float) -> list[list[float]]:

@@ -2534,6 +2534,9 @@ writes them as WAV files to listen to):
 | `thunder` | 3 s (1–8) | thunder: a crack of bright noise around 1.8 kHz (stronger with `intensity`: a near strike), then a deep rumble below ~120 Hz rolling in three to five swells, dying away | after [lightning](#lightning-and-thunder-lightning) (played for it: later, quieter, longer and lower the farther the strike) |
 | `creak` | 0.9 s (0.3–3) | a door's hinge creaking: a rough, buzzy squeak (stick-slip pulses gliding ~45 → ~110 → ~70 Hz) coloured by a wooden body (~550 Hz, ~1.3 kHz, ~2.6 kHz) | a door opening or closing ([foley](#foley-and-music-stings)), an old chair |
 | `knock` | 0.75 s (0.3–2) | "knock-knock-knock": three knuckle raps on a wooden door 190 ms apart, a dull hollow thump (~190 and ~410 Hz) with a short tap | someone at the door ([`knock`](#ambience-and-door-sounds-ambience-knock)) |
+| `unlock` | 0.3 s (0.15–0.8) | a key turning in a lock: a small metallic tick (~2.2 kHz, a ~1.7 kHz ping), then 90 ms later a rounder clack of the bolt (~620 Hz, a soft ~170 Hz knock); low-passed, not sharp | a locked door opened with its key on a [level](#story-props-on-a-level-keys-doors-coins-stars-blockers) (foley), a chest unlocking |
+| `coin` | 0.45 s (0.2–1.5) | a coin picked up, "pling-ling": two quick soft bell notes rising a fourth, B5 then E6, 70 ms apart | each coin a walk or a jump picks up on a level (foley), a point scored |
+| `twinkle` | 0.8 s (0.3–2.5) | a star picked up: a quick rising arpeggio of soft bell notes C6 E6 G6 C7, 50 ms apart, with a faint airy glitter | each star picked up on a level (foley), something magic |
 | `splash` | 0.6 s (0.2–3) | something dropping into water: a bright noise burst (~2.5 kHz) with a low "plunk" (~250 → ~600 Hz), then droplets falling back; at low `intensity` mostly droplets | a boat setting off, a watering can's water, steps in puddles ([foley](#foley-and-music-stings)) |
 | `gasp` | 0.35 s (0.15–1) | a sharp breath in, "hah": breath noise around 1.1, 1.75 and 2.9 kHz, loudest after ~50 ms, cut off | surprise ([`[gasp]`](#voice-sounds) at a line's start or end) |
 | `sigh` | 0.9 s (0.4–2.5) | a long breath out, "haaah": breathy "ah" noise with a faint hum falling ~190 → ~130 Hz, trailing off | tiredness, relief ([`[sigh]`](#voice-sounds) at a line's start or end) |
@@ -2594,7 +2597,10 @@ closes (`open` / `close`, an `enter` / `exit` through a closed room door, which 
 whoosh or swoosh: the character fades in the doorway) and a `thud` as it shuts, a `knock` for the
 [`knock`](#ambience-and-door-sounds-ambience-knock) action; a `splash` as a boat sets off, where a
 watering can's water lands (`pour`) and, softly, under every step once
-[puddles](#rain-on-the-ground) lie on the ground. Other
+[puddles](#rain-on-the-ground) lie on the ground; on a [platform
+level](#story-props-on-a-level-keys-doors-coins-stars-blockers) a jump's soft landing, a `coin`
+or a `twinkle` at each coin or star picked up, a key's `unlock` before a locked door creaks open,
+and a blocker's soft shuffle as it steps aside. Other
 actions are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
@@ -5160,7 +5166,8 @@ beats:
 - `walk_to` and `run_to` also take a tile `{column, row}` (Step 152), like `jump`.
 - `vidgen storyboard` shows each walk and jump half-way; `vidgen direct` (automatic directing)
   knows where a walk or a jump to a spot, a mark or a tile ends; footsteps, the jump's
-  boing, dust and impact stars play as on any stage.
+  boing, dust and impact stars play as on any stage, and a jump lands with a soft thud (see
+  [Sounds](#story-props-on-a-level-keys-doors-coins-stars-blockers)).
 
 ##### Story props on a level (keys, doors, coins, stars, blockers)
 
@@ -5241,8 +5248,19 @@ beat order, and names the beat and what to write when one does not work.
   1.4 s. Lip sync goes on while it reacts. A reaction after the move is also a plain `emote`,
   `react` or `effect` action at a later `at` (it waits for the move to end). `vidgen validate`
   refuses `when: pickup` on a move that picks up nothing and `when: land` on a walk.
-- Sounds for the pickups, the door and the landing are Step 153's; the effect symbols play no
-  sound here.
+- **Sounds** ([foley](#foley-and-music-stings), Step 153), each on the frame its event happens
+  (also when a short beat speeds the move up): a jump takes off with a `boing` (after its crouch)
+  and lands with a soft, short `thud` and a footstep (a little louder after a long drop); each coin
+  plays a `coin` "pling-ling" (each further coin of the same walk or jump a semitone higher, up to
+  5), each star a `twinkle`, on the way or in the air; `open` of a locked door `by` its key's
+  holder clicks the key (`unlock`), then the door creaks (0.3 s later; any other door just creaks,
+  `close` creaks and thuds shut); `step_aside` plays a soft low `swoosh` and slow, heavy
+  footsteps. Walks on a level have their footsteps as anywhere. The times come from the rules'
+  plan (where on its way a move picks a coin up, when its flight ends), so they are known before
+  any frame is drawn and listed in `timings.json` `sfx` like every sound. `foley: false` (the
+  video's, or a stage's) turns them off with the other foley; `sfx: {gain}` sets their level;
+  `assets/sfx/coin.wav` (or `twinkle`, `unlock`, `thud`...) replaces one with your own. A move's
+  `react` effect symbol plays no sound (an `effect` action's does).
 
 #### Rooms (`room`)
 

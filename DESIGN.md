@@ -997,6 +997,9 @@ Step 142 (§79) adds `DrawingConfig`, `DrawingStyle` and `mark_shaded`; the top-
 stage param `drawing`; `NarratedScene.uses_drawing_style` (class attribute, `False`; `stage`
 sets it), `NarratedScene.drawing_settings()` and the attribute `drawing`. Compatible: a video
 without `drawing` renders the same frames as before.
+Step 153 (§86.9) adds the `PlayedAction` fields `pickups` and `unlocks` (`lands` also marks a
+level jump's touch-down) and the built-in sounds `unlock`, `coin`, `twinkle`. Compatible: a
+`PlayedAction` without them gives the same cues; a stage without a level sounds as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -10820,3 +10823,49 @@ Reference: docs/CONFIG.md "Story props on a level (keys, doors, coins, stars, bl
   prop-handling replay know where a walk or a jump to a tile ends.
 - Measured: the 50 x 5 scratch story at 854x480 (a key, two coin runs, a locked gate, a jump
   over a gap catching a star, a turtle stepping aside) renders 31.5 s of video in 27 s.
+
+### 86.9 Sounds on a level (Step 153)
+
+Reference: docs/CONFIG.md "Story props on a level", **Sounds**; "Foley and music stings".
+
+- **Through foley, not a new system.** A level's sounds are stage foley (§69.19): the action
+  runner calls `Stage.action_foley` with each action as it played (scene start, seconds after any
+  speed-up); `_timed_parts` splits a jump with a run-up; `_played` turns each animation into a
+  `PlayedAction`; `foley_cues` (no manim) gives the cues; `NarratedScene.sfx` records them
+  (`timings.json` `sfx`, the SFX track, the final mix with its loudness normalisation and
+  limiter). So `foley: false` (video or stage), `sfx: {gain}` and `assets/sfx/<name>.wav` control
+  them as every other foley sound, and nothing new reaches the config.
+- **Events and their times.** The rules' plan, not the frames, gives every time, so the cues are
+  known when the action starts (before any frame of it is drawn):
+  - take-off: the existing `boing` at the end of the crouch (`phases.before`), unchanged;
+  - landing: `_played` gives an `ArcJump` `lands = 1 − phases.after` (its settle starts as it
+    touches down); `landing_cues` plays a short, soft, higher `thud` and a `footstep` there, their
+    intensity 0.35 + 0.1 per character height fallen (`lift`), at most 0.7. A jump in place (a
+    plain `Jump`, also on a plain stage) keeps its boing only;
+  - pickups: `RouteWalk.pickups` / `ArcJump.pickups` hold (share of the walk's distance or of the
+    flight, collectible); `_played` passes `(share, kind)` as `PlayedAction.pickups`, and
+    `pickup_cues` maps a walk's share through the inverse of `walk_progress` (`_walk_time_share`,
+    as the footfalls) and the wind-up, a flight's linearly through the crouch: the same mapping
+    `_Cues._cue` uses to pop the collectible, so the sound falls on the frame it pops (the render
+    test checks within a frame). Coins play `coin`, stars `twinkle`; each further one of a kind in
+    one move is a semitone higher (at most 5), the usual rising run of a coin trail;
+  - door: `level_open` now returns whether a key unlocked the door (it had a `key` and was
+    closed); `Open.apply` marks its `PropReshape` `unlocks`, and `door_cues` plays `unlock` at the
+    action's start and the creak `UNLOCK_SECONDS` 0.3 later (never after the door swings at
+    `RESHAPE_SHARE`). Other doors creak as before (§69.62);
+  - a blocker stepping aside (`step_aside`, a `Walk` in depth or a `RouteWalk`): a soft low
+    `swoosh` (−12 dB, 7 semitones down) and footsteps 3 semitones lower and 3 dB softer than a
+    walk's. Not in `WALKING_ACTIONS`, so motion effects do not change.
+- **New sounds** (`sfx.py`, numpy only, through the library's `_finish`: −27 LUFS loudest 400 ms,
+  peaks at most −9 dBFS): `unlock` (a small metallic tick, then a rounder clack, low-passed at
+  5 kHz), `coin` (two soft bell notes B5 → E6), `twinkle` (a soft bell arpeggio C6–C7 with a faint
+  glitter, low-passed at 8 kHz). Bells with the soft partials of `success`, nothing above ~8 kHz
+  of note: kid-friendly, not shrill. Missing before: no lock, no coin, no star sound. The landing
+  and the blocker reuse `thud`, `footstep` and `swoosh`.
+- **Loudness.** Gains follow the foley table: pickups −4 dB (like a boing), the unlock −6, the
+  landing thud −8 with its step −5. A coin trail may overlap its sounds when run through (a coin a tile
+  apart is about 0.7 s at walking pace, 0.45 s long); the render test writes the story's SFX track and checks its peak stays
+  under −3 dBFS and its loudest 400 ms under −20 LUFS (narration is about −20; the final mix
+  normalises and limits as before).
+- Not done: a move's `react` effect symbol plays no sound (an `effect` action's does), nor does a
+  `react` expression `surprised` during a move.

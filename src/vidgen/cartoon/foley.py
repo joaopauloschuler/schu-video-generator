@@ -10,7 +10,10 @@ launch as a vehicle sets off, its brakes as it stops, and a soft thud where a ba
 lands (``ride_to``, :data:`RIDE_SOUNDS`); a door's creak as it opens or closes (``open`` /
 ``close``, an ``enter`` / ``exit`` through a closed door) and its thud as it shuts, a splash as a
 boat sets off and where a watering can's water lands (``pour``), and a splash under each step on
-wet ground (:func:`wet_steps`) (DESIGN.md §69.62).
+wet ground (:func:`wet_steps`) (DESIGN.md §69.62). On a platform level (DESIGN.md §86.9) a jump
+also lands with a soft thud and step, a walk or a jump plays a coin's or a star's sound at each one
+it picks up (:func:`pickup_cues`), a locked door opened with its key clicks open before it creaks,
+and a blocker stepping aside shuffles off.
 
 Footfalls follow the walk cycle of :func:`~vidgen.cartoon.acting.walk_cycle`: a foot lands each
 time the legs are furthest apart (half a step, :data:`~vidgen.cartoon.acting.STEP_LENGTH`
@@ -90,6 +93,29 @@ POUR_SPLASH: tuple[float, float, float] = (-10.0, 7.0, 0.15)
 POUR_FALL_SECONDS = 0.25
 #: A step on wet ground (puddles): a tiny splash under the footstep (gain dB, params).
 WET_STEP: tuple[float, dict[str, float]] = (-14.0, {"duration": 0.25, "pitch": 4.0, "intensity": 0.2})
+#: A jump on a platform level landing (DESIGN.md §86.9): a short, soft, higher thud and a footstep
+#: (gain dB, params); both louder (``intensity``) after a longer drop, from
+#: :data:`LANDING_INTENSITY` by :data:`LANDING_INTENSITY_PER_HEIGHT` per character height fallen,
+#: at most :data:`LANDING_INTENSITY_MAX`.
+LEVEL_LANDING_THUD: tuple[float, dict[str, float]] = (-8.0, {"duration": 0.3, "pitch": 4.0})
+LEVEL_LANDING_STEP: tuple[float, dict[str, float]] = (-5.0, {"pitch": -2.0})
+LANDING_INTENSITY = 0.35
+LANDING_INTENSITY_PER_HEIGHT = 0.1
+LANDING_INTENSITY_MAX = 0.7
+#: The sound of each kind of thing a level move picks up, and its gain (dB); each further one of a
+#: kind in the same move is :data:`PICKUP_PITCH_STEP` semitones higher, up to
+#: :data:`PICKUP_PITCH_MAX`.
+PICKUP_SOUNDS: dict[str, tuple[str, float]] = {"coin": ("coin", -4.0), "star": ("twinkle", -4.0)}
+PICKUP_PITCH_STEP = 1.0
+PICKUP_PITCH_MAX = 5.0
+#: A locked door opened with its key: the key's ``unlock`` (gain dB), then the creak this many
+#: seconds later.
+UNLOCK_GAIN = -6.0
+UNLOCK_SECONDS = 0.3
+#: A blocker stepping aside (``step_aside``): its footsteps (gain dB, pitch: a heavier, slower
+#: tread) and a soft low swoosh as it sets off (gain dB, params).
+ASIDE_STEP: tuple[float, float] = (-8.0, -3.0)
+ASIDE_SWOOSH: tuple[float, dict[str, float]] = (-12.0, {"duration": 0.6, "pitch": -7.0, "intensity": 0.3})
 
 
 @dataclass(frozen=True)
@@ -108,7 +134,8 @@ class PlayedAction:
     heights: float = 0.0
     phases: Phases = field(default_factory=Phases)
     lands: float | None = None
-    """The share of its time at which a prop it moved lands on the ground (a ``throw``)."""
+    """The share of its time at which a prop it moved lands on the ground (a ``throw``), or at
+    which a jump on a platform level touches down."""
     effect: str | None = None
     """The symbol an ``effect`` put up (``None``: none, or its ``sound: false``)."""
     step_length: float = STEP_LENGTH
@@ -132,6 +159,11 @@ class PlayedAction:
     """... and it opened that door, closed until then (a creak)."""
     pours: bool = False
     """The water of a ``pour`` (it lands on the ground: a splash)."""
+    pickups: tuple[tuple[float, str], ...] = ()
+    """The coins and stars a move on a platform level picks up, in order: ``(share, kind)``, the
+    share of the walk's distance or of the jump's flight at which it gets there (DESIGN.md §86.8)."""
+    unlocks: bool = False
+    """An ``open`` of a locked door with its key on a platform level (the key clicks first)."""
 
 
 @dataclass(frozen=True)
@@ -203,13 +235,49 @@ def ride_cues(played: PlayedAction) -> list[FoleyCue]:
 
 
 def door_cues(played: PlayedAction) -> list[FoleyCue]:
-    """A door's ``open`` (its creak from the start) or ``close`` (a shorter, higher creak, then a
-    thud when it shuts, at :data:`~vidgen.cartoon.holding.RESHAPE_SHARE` of the action)."""
+    """A door's ``open`` (its creak from the start; after the key's ``unlock`` when it
+    ``unlocks``) or ``close`` (a shorter, higher creak, then a thud when it shuts, at
+    :data:`~vidgen.cartoon.holding.RESHAPE_SHARE` of the action)."""
     if played.action == "open":
+        if played.unlocks:
+            creak = played.start + min(UNLOCK_SECONDS, RESHAPE_SHARE * played.seconds)
+            return [FoleyCue(played.start, "unlock", UNLOCK_GAIN), FoleyCue(creak, "creak", DOOR_OPEN_CREAK[0], DOOR_OPEN_CREAK[1])]
         return [FoleyCue(played.start, "creak", DOOR_OPEN_CREAK[0], DOOR_OPEN_CREAK[1])]
     return [
         FoleyCue(played.start, "creak", DOOR_CLOSE_CREAK[0], DOOR_CLOSE_CREAK[1]),
         FoleyCue(played.start + RESHAPE_SHARE * played.seconds, "thud", DOOR_SHUT[0], DOOR_SHUT[1]),
+    ]
+
+
+def pickup_cues(played: PlayedAction) -> list[FoleyCue]:
+    """A ``coin`` or a ``twinkle`` (:data:`PICKUP_SOUNDS`) on the frame a level move gets to each
+    coin or star it picks up (``played.pickups``): a share of a walk's distance is turned into its
+    time with the walk's easing and wind-up (:func:`footfall_shares`' mapping), a share of a jump's
+    flight with its crouch; each further one of a kind a little higher."""
+    move = 1.0 - played.phases.before - played.phases.after
+    walks = played.action != "jump"
+    cues, counts = [], dict.fromkeys(PICKUP_SOUNDS, 0)
+    for share, kind in played.pickups:
+        if kind not in PICKUP_SOUNDS:
+            continue
+        sound, gain = PICKUP_SOUNDS[kind]
+        pitch = min(PICKUP_PITCH_STEP * counts[kind], PICKUP_PITCH_MAX)
+        counts[kind] += 1
+        when = played.phases.before + move * (_walk_time_share(share) if walks else min(max(share, 0.0), 1.0))
+        cues.append(FoleyCue(played.start + when * played.seconds, sound, gain, {"pitch": pitch} if pitch else {}))
+    return cues
+
+
+def landing_cues(played: PlayedAction) -> list[FoleyCue]:
+    """A jump on a platform level touching down (``played.lands``): a soft thud and a footstep,
+    louder after a longer drop (``played.lift``)."""
+    if played.lands is None:
+        return []
+    time = played.start + played.lands * played.seconds
+    intensity = round(min(LANDING_INTENSITY + LANDING_INTENSITY_PER_HEIGHT * max(played.lift, 0.0), LANDING_INTENSITY_MAX), 3)
+    return [
+        FoleyCue(time, "thud", LEVEL_LANDING_THUD[0], {**LEVEL_LANDING_THUD[1], "intensity": intensity}),
+        FoleyCue(time, "footstep", LEVEL_LANDING_STEP[0], {**LEVEL_LANDING_STEP[1], "intensity": intensity}),
     ]
 
 
@@ -227,7 +295,14 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
     seconds it took): none for actions without foley."""
     start, seconds = played.start, played.seconds
     cues: list[FoleyCue] = []
-    if played.action in WALKING_ACTIONS:
+    if played.action == "step_aside":
+        cues.append(FoleyCue(start, "swoosh", ASIDE_SWOOSH[0], ASIDE_SWOOSH[1]))
+        gain, pitch = ASIDE_STEP
+        footfalls = [] if played.rolls else footfall_shares(played.heights, played.phases, played.step_length)
+        for k, (share, last) in enumerate(footfalls):
+            foot_pitch, intensity = FEET[k % 2]
+            cues.append(FoleyCue(start + share * seconds, "footstep", gain, {"pitch": pitch + foot_pitch, "intensity": LAST_STEP_INTENSITY if last else intensity}))
+    elif played.action in WALKING_ACTIONS:
         if played.opens_door:
             cues.append(FoleyCue(start, "creak", DOOR_OPEN_CREAK[0], DOOR_OPEN_CREAK[1]))
         if played.action == "enter" and not played.through_door:
@@ -248,6 +323,7 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
         cues.append(FoleyCue(start + flow_start + POUR_FALL_SECONDS, "splash", gain, {"duration": round(length, 3), "pitch": pitch, "intensity": intensity}))
     elif played.action == "jump":
         cues.append(FoleyCue(start + played.phases.before * seconds, "boing", BOING_GAIN))
+        cues += landing_cues(played)
     elif played.action == "ride_to" and played.vehicle in RIDE_SOUNDS:
         cues += ride_cues(played)
     elif played.lands is not None:
@@ -257,4 +333,5 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
         cues.append(FoleyCue(start, sound, gain, params))
     elif played.action in ("emote", "react") and played.expression == POP_EXPRESSION:
         cues.append(FoleyCue(start, "pop", POP_GAIN))
+    cues += pickup_cues(played)
     return sorted(cues, key=lambda cue: cue.time)

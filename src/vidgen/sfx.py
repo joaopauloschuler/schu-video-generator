@@ -515,6 +515,41 @@ def _knock(s: Synth) -> np.ndarray:
     return out
 
 
+def _unlock(s: Synth) -> np.ndarray:
+    # a key turning in a lock: a small metallic tick as the key catches (noise around 2.2 kHz with
+    # a ~1.7 kHz ping, ~5 ms), then 90 ms later the bolt sliding back, a rounder clack (~620 Hz
+    # with a soft ~170 Hz knock), low-passed so neither is sharp
+    scale = s.duration / 0.3
+    out = np.zeros(s.n)
+    for start, ping, body, amp in ((0.0, 1700.0, 0.0, 0.55), (0.09, 620.0, 170.0, 1.0)):
+        a = int(start * scale * RATE)
+        m = s.n - a
+        t = np.arange(m) / RATE
+        tick = _normalized(_filtered(s.rng.standard_normal(m), lambda f: _band(f, 2200 * s.ratio * 2 ** (s.intensity - 0.5), 0.5))) * _decay(t, 0.0003, 0.005)
+        ring = 0.6 * np.sin(_tone(ping * s.ratio, m)) * _decay(t, 0.0005, 0.018)
+        knock = 0.7 * np.sin(_tone(body * s.ratio, m)) * _decay(t, 0.001, 0.03) if body else 0.0
+        out[a:] += amp * ((0.3 + 0.3 * s.intensity) * tick + ring + knock)
+    return _filtered(out, lambda f: _lowpass(f, 5000 * s.ratio, 2))
+
+
+def _coin(s: Synth) -> np.ndarray:
+    # a coin picked up, "pling-ling": two quick soft bell notes rising a fourth, B5 then E6, 70 ms
+    # apart, the second held a little longer, with a faint shimmer
+    scale = s.duration / 0.45
+    tone = _notes(s, ((0.0, 987.77, 0.7), (0.07 * scale, 1318.51, 1.0)), 0.22 * s.duration, _SOFT_BELL)
+    return tone * (1 + 0.12 * np.sin(2 * np.pi * 14 * s.t))
+
+
+def _twinkle(s: Synth) -> np.ndarray:
+    # a star picked up: a quick rising arpeggio of four soft bell notes (C6 E6 G6 C7), 50 ms apart,
+    # ringing on together, with a faint airy glitter around 6 kHz fading away
+    scale = s.duration / 0.8
+    notes = tuple((k * 0.05 * scale, freq, 0.6 + 0.12 * k) for k, freq in enumerate((1046.5, 1318.51, 1567.98, 2093.0)))
+    tone = _notes(s, notes, 0.25 * s.duration, _SOFT_BELL)
+    glitter = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 6000 * s.ratio, 0.4))) * _decay(s.t, 0.05, 0.12 * scale)
+    return _filtered(tone + (0.03 + 0.05 * s.intensity) * glitter, lambda f: _lowpass(f, 8000 * s.ratio, 2))
+
+
 def _splash(s: Synth) -> np.ndarray:
     # something dropping into water: a burst of bright noise (around 2.5 kHz, ~70 ms) with a low
     # "plunk" gliding up from ~250 to ~600 Hz, then droplets falling back (tiny rising blips at
@@ -778,6 +813,30 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "Knock-knock-knock: three knuckle raps on a wooden door 190 ms apart, each a dull hollow "
             "thump (~190 and ~410 Hz, ringing ~30 ms) with a short bright tap around 1.5 kHz.",
             "someone at the door (a stage's knock action plays it: foley)",
+        ),
+        BuiltinSound(
+            "unlock", _unlock, 0.3, (0.15, 0.8),
+            "A key turning in a lock: a small metallic tick as the key catches (noise around 2.2 kHz "
+            "with a ~1.7 kHz ping, ~5 ms), then 90 ms later a rounder clack of the bolt sliding back "
+            "(~620 Hz with a soft ~170 Hz knock); low-passed, not sharp.",
+            "a key opening a lock (a locked door opened with its key on a platform level plays it, "
+            "before the creak: foley), a box or a chest unlocking",
+        ),
+        BuiltinSound(
+            "coin", _coin, 0.45, (0.2, 1.5),
+            "A coin picked up, 'pling-ling': two quick soft bell notes rising a fourth, B5 (~990 Hz) "
+            "then E6 (~1.3 kHz) 70 ms apart, the second ringing a little longer, with a faint "
+            "14 Hz shimmer.",
+            "a coin collected (walks and jumps on a platform level play it at each coin, a little "
+            "higher for each further coin of the same move: foley), a point scored",
+        ),
+        BuiltinSound(
+            "twinkle", _twinkle, 0.8, (0.3, 2.5),
+            "A star picked up: a quick rising arpeggio of four soft bell notes, C6 E6 G6 C7 (~1 to "
+            "~2.1 kHz) 50 ms apart, ringing on together, with a faint airy glitter around 6 kHz "
+            "fading away.",
+            "a star or something magic collected (walks and jumps on a platform level play it at "
+            "each star: foley), a wish, a sparkle",
         ),
         BuiltinSound(
             "splash", _splash, 0.6, (0.2, 3.0),
