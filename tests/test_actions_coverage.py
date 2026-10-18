@@ -47,6 +47,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "equation": {"latex": ["(a+b)^2", "a^2 + 2ab + b^2"], "terms": ["2ab"], "caption": "c"},
     "equation_derivation": {"title": "T", "steps": ["{{ a }} + b = c", {"tex": "{{ a }} = c - b", "note": "n"}], "terms": ["c"]},
     "code": {"code": "a = 1\nb = 2\nc = 3", "title": "T"},
+    "code_morph": {"versions": ["a = 1", {"code": "a = 1\nb = 2", "highlight": "changed"}], "title": "T"},
     "code_walkthrough": {"code": "a = 1\nb = 2\nc = 3", "title": "T", "steps": [{"lines": 1}, {"lines": "2-3", "note": "n"}]},
     "end_card": {"title": "Thanks", "lines": ["one", "two"], "icon": "rocket", "logo": "assets/pic.png"},
     "chapter": {"number": 2, "title": "Results", "subtitle": "Sub", "icon": "rocket"},
@@ -206,6 +207,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     assert registered == sorted(type(scene).target_names(scene.params))
     hidden = [t.name for t in scene.targets if not scene.is_shown(t)]
     expected = {"equation": ["step1"],                                  # an equation step morphs into the next
+                "code_morph": ["version1", "version1.line1"],           # version 1 morphed into version 2
                 "equation_derivation": ["term:c", "term:a"]}            # term: means the current step's part
     assert hidden == expected.get(kind, [])
 

@@ -3303,13 +3303,13 @@ its params. Conventions shared by all built-ins:
   a `map` with the `world` view keeps only the longitudes of its countries, pins and arcs.
 - **Header band.** The line at the top of the frame is `heading` in `bullets`, `icon_grid`,
   `comparison`, `timeline`, `diagram`, `process`, `network` and `title` in the charts, `table`,
-  `map`, `code`, `code_walkthrough`, `equation_derivation`, `screenshot`, `video_clip`. Every
+  `map`, `code`, `code_morph`, `code_walkthrough`, `equation_derivation`, `screenshot`, `video_clip`. Every
   one of these types accepts **both names** (also `heading_size` / `title_size`,
   `heading_color` / `title_color`; `vidgen list-scenes` shows `(also: title)`), and the target
   `title` selects a `heading` and the reverse. Not in `title`, `chapter` and `end_card`, whose
   `title` is their main text.
 - **Per-beat content** is a `steps` list in `code_walkthrough`, `equation_derivation`,
-  `screenshot`, `video_clip` and `map`: step *i* plays at beat *i*. Elsewhere the scene splits
+  `screenshot`, `video_clip` and `map` (`versions` in `code_morph`): step *i* plays at beat *i*. Elsewhere the scene splits
   its content into steps itself (`reveal`); `diagram`'s explicit `steps` are such reveal steps.
   A `highlight` param adds a last step that marks something and dims the rest; where it takes a
   list, one item may be written alone (`highlight: Lint`).
@@ -4357,6 +4357,73 @@ those lines.
     - text: "We load the data."
     - text: "Define the loss."
     - text: "And train."
+```
+
+### `code_morph`
+
+Code that changes on screen: version 1 of a listing shows with beat 1, and at beat *i* it morphs
+into version *i*. vidgen finds what changed (Python's `difflib`, line by line, then token by
+token within an edited line), so you write only the versions: what both versions share
+(unchanged lines, and the unchanged tokens of an edited line) glides to its new place, new
+lines grow in from their left end, new tokens of an edited line fade in, removed lines and
+tokens fade out, and the window resizes. A line that is only re-indented (wrapped in a new
+`for`) or moved elsewhere glides too. With more versions than beats they are spread evenly;
+extra beats hold.
+
+- **On a word**: `{reveal: version2, at: "@cache"}` in a beat morphs to version 2 as the
+  narrator says "cache" ([Actions on a spoken word](#actions-on-a-spoken-word)); a version an
+  action reveals is left to that action (its beat does not morph at its start).
+  `run_time: 1.5` gives the action's morph the time the scene's own takes (up to 1.5 s).
+- **`highlight`** of a version marks its lines once it shows (the others dim, a soft band marks
+  them): a line spec as in [`code`](#code), or `changed`: the lines that are new or differ from
+  the version before (moved and re-indented ones included).
+- **Readability** as in [`code`](#code): one font size for every version (the largest version
+  fits the frame, up to 1.5x `size`); long lines wrap at the same width in every version, so a
+  vertical frame keeps at least 32 characters per line at the readable minimum. The versions
+  share the top of the window and are centred across the frame.
+- **Checks** (`vidgen validate`): at least two versions; a version that repeats the one before
+  (nothing would change); a `highlight` past its version's last line; a missing `path`.
+- [Action targets](#beat-actions): `title`, `listing` (the window, whichever version shows),
+  `version<N>` (revealing it morphs to it) and `version<N>.line<K>` (line K of version N, with
+  its number; all its pieces when wrapped).
+
+| param | type | default | |
+|---|---|---|---|
+| `versions` | list | — | at least two, in order: each the code (a string) or `{code, path, highlight}` (exactly one of `code` / `path`, a file in the project); version *i* shows at beat *i* |
+| `language` | str | from the first file name, else `python` | a Pygments lexer name |
+| `title` | str | `""` | |
+| `line_numbers` | bool | `true` | |
+| `style` | str | theme `code_style` | a Pygments style |
+| `font` | str | role `code` (`font_mono`) | font family of the listing |
+| `size` | size | `caption` | starting font size (the largest version scaled to fill the frame, up to 1.5x) |
+| `highlight_color` | color | `highlight` | |
+| `wrap` | bool | `true` | wrap long lines instead of shrinking the listing below `size` / the readable minimum |
+
+```yaml
+- id: faster
+  type: code_morph
+  params:
+    title: "Make it faster"
+    versions:
+      - |
+        def fib(n):
+            if n < 2:
+                return n
+            return fib(n - 1) + fib(n - 2)
+      - code: |
+          from functools import cache
+
+          @cache
+          def fib(n: int) -> int:
+              if n < 2:
+                  return n
+              return fib(n - 1) + fib(n - 2)
+        highlight: changed
+  beats:
+    - text: "Here is the slow recursive version."
+    - text: "Add a cache, and every value is computed once."
+      actions:
+        - {reveal: version2, at: "@cache", run_time: 1.5}
 ```
 
 ### `code_walkthrough`
@@ -7404,6 +7471,7 @@ a title card, a `transform` of a bar).
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
 | `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
+| `code_morph` | `title`, `listing`, `version<N>`, `version<N>.line<K>` | reveal, highlight, dim | `{reveal: version2, at: "@word"}` morphs to version 2 on that word (the scene then leaves that morph to the action); `listing` is whichever version shows; `version2.line3` is line 3 of version 2 (with its number) |
 | `code_walkthrough` | `title`, `listing`, `line<N>`, `lines:<a-b>`, `note<N>` | reveal, dim, highlight | `reveal: line40` scrolls it into view; `lines:<a-b>`: every range up to 40 lines, else the steps' ranges; `note2` is step 2's note (revealing it plays the step); the next step resets line opacities |
 | `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |
 | `chapter` | `icon`, `number`, `title`, `subtitle` | reveal, dim, highlight | those present |
@@ -7548,7 +7616,8 @@ narrator begins that word.
   `callout`, `sfx`, `particles`, the stage's actions (`walk_to`, `jump`, `emote`, `gesture`,
   `react`, ...) and the host's. The `lower_third` overlay's `at` takes one too (table in
   [Overlays](#overlays)). A scene's `sfx:` list stays in seconds; for a sound on a word use the
-  beat's `sfx` action.
+  beat's `sfx` action. A scene's own step can wait for a word too where the scene leaves it to
+  a `reveal` action: [`code_morph`](#code_morph) morphs to `version2` on `{reveal: version2, at: "@word"}`.
 - **Where the time comes from**: the beat's MP3 once `vidgen tts` has made it (the word timings
   the TTS gives, as ElevenLabs and Kokoro do; else the words spread over the speech in the MP3,
   by syllables), the same timings as the karaoke captions. Before there is any audio, an

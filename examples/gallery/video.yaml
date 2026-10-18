@@ -14,6 +14,7 @@
 #   vidgen storyboard examples/gallery --scene reach --per-beat 3   # a map: countries, then pins and an arc
 #   vidgen storyboard examples/gallery --scene derive --per-beat 3  # an equation derivation, step by step
 #   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step; chapter 4 starts here
+#   vidgen storyboard examples/gallery --scene morph --per-beat 3   # code morphing from a loop to a comprehension, on a word
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
 #   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
@@ -428,4 +429,25 @@ scenes:
       - text: "Then it scrolls down to the loss function."
       - text: "Focus enlarges a line: here, the prediction error."
       - text: "And the update itself is plain gradient descent."
+
+  - id: morph
+    type: code_morph         # version i at beat i; vidgen diffs the versions: shared tokens glide, new lines grow in
+    params:
+      title: "From a loop to a comprehension"
+      versions:
+        - |
+          def squares(numbers):
+              result = []
+              for n in numbers:
+                  result.append(n * n)
+              return result
+        - code: |
+            def squares(numbers: list[int]) -> list[int]:
+                return [n * n for n in numbers]
+          highlight: changed  # mark the lines that differ from the version before
+    beats:
+      - text: "A code morph shows how code changes. Here, a loop that fills a list."
+      - text: "The same function as a list comprehension: the loop folds into one line."
+        actions:
+          - {reveal: version2, at: "@comprehension", run_time: 1.5}   # morph on the spoken word
 

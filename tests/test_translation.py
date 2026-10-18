@@ -230,6 +230,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "card": [{"text": "T:text", "subtitle": "T:sub"}],
     "chapter": [{"title": "T:chapter", "number": "T:Part II", "subtitle": "T:sub"}],
     "code": [{"code": "print('hi')", "language": "python", "title": "T:title"}],
+    "code_morph": [{"versions": ["a = 1", {"code": "a = 2", "highlight": "changed"}], "title": "T:title"}],
     "code_walkthrough": [{"code": "a = 1\nb = 2\n", "title": "T:title", "steps": ["1", {"lines": "2", "note": "T:note"}]}],
     "comparison": [
         {

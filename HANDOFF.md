@@ -14871,3 +14871,76 @@ How to test
   coloured in TeX, the `loss` series red, captions coloured on a more opaque plate, nothing in the
   opted-out scene); `vidgen lint` reported the three planted conflicts.
 
+
+## Step 158 — Code that morphs between versions
+
+What was built
+- **`code_morph`**, a new scene type (`src/vidgen/scenes/code_morph.py`, DESIGN §87.4):
+  `versions` (at least two; each the code as a string, or `{code | path, highlight}`), plus
+  `code`'s `language`, `title`, `line_numbers`, `style`, `font`, `size`, `highlight_color`,
+  `wrap`. Version 1 shows with beat 1; at beat *i* the listing morphs into version *i*: kept
+  glyphs and line numbers glide, the window resizes, removed lines / tokens fade out, new tokens
+  of an edited line fade in, new lines grow from their left end. A version's `highlight` (a line
+  spec, or `changed`: new, edited, re-indented or moved lines) dims the others and lays `code`'s
+  band. Chosen over a mode of `code` because `code`'s beats follow its `highlight` entries and its
+  targets are one listing's lines.
+- **The diff** (`diff_code`, `difflib`, pure): lines by text without indentation; within a
+  replaced block, lines paired in order by token similarity (>= 0.5, a small DP) so an edited line
+  stays one line; a line moved unchanged is found; shared tokens keep their characters. A glyph
+  is (line, n-th non-space character), which is how Manim's `Code` draws them, wrapped or not.
+- **On a word** (Step 156): targets `version<N>` / `version<N>.line<K>` have the morph as their
+  entrance, so `{reveal: version2, at: "@cache", run_time: 1.5}` morphs on the word; a version a
+  `reveal` action shows is left out of the scene's own steps (else its beat would morph at its
+  start). Morphs only go forward; skipped versions are diffed away directly.
+- **Phone readability**: `CodeListing._fit_listing` became `_fit_listings` (one font size, scale
+  and wrap width for several listings; `code` passes one), so `code`'s rules (wrap to >= 32
+  columns at >= the readable size) hold for every version. Versions are centred across the body
+  and share the top of the tallest. `code`'s band drawing moved to a shared `listing_bands`.
+- **After a morph** the scene holds the new version as one `Code` (`_Morph.clean_up_from_scene`
+  removes whole families: playing the group had lifted unanimated parts, e.g. a wrapped line's
+  empty number label, into the scene), so the layout dump, lint and `is_shown` see one listing.
+- **Checks** (`vidgen validate`): fewer than two versions; a version equal to the one before;
+  a `highlight` past its version's last line (or an invalid spec); code and path both / neither;
+  a missing `path` file.
+- **Docs and examples**: CONFIG `code_morph` section, targets-table row, the header-band and
+  per-beat lists, a sentence in "Actions on a spoken word"; the guide's chooser row, per-beat
+  note and a snippet (+ `AGENTS.md`); `examples/gallery` scene `morph` (a loop becoming a
+  comprehension, morphing on "comprehension"); `docs/gallery/code_morph.md` + stills / GIFs
+  (`vidgen gallery --types code_morph`); README's scene list.
+
+Files touched
+- New: `src/vidgen/scenes/code_morph.py`, `tests/test_code_morph.py`, `docs/gallery/code_morph.md`,
+  `docs/gallery/media/code_morph-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/scenes/code.py` (`_fit_listings`, `listing_bands`), `scenes/__init__.py`,
+  `examples/gallery/video.yaml`, `docs/CONFIG.md`, `docs/gallery/README.md`, `README.md`,
+  `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`,
+  `tests/test_builtin_scenes.py`, `tests/test_actions_coverage.py`, `tests/test_translation.py`
+  (samples for the new type).
+
+Public interfaces
+- YAML: scene type `code_morph` (params above); targets `title`, `listing`, `version<N>`,
+  `version<N>.line<K>`; `highlight: changed`.
+- No `vidgen.api` change (the diff lives in the scene module; built-ins import only the API).
+
+Decisions
+- Opacity animations, not `FadeOut`, for what leaves: a remover would dissolve the old listing's
+  group in the scene's mobject list.
+- No lint rule: the code scenes' layout rules read the beat-end stills (one `Code` there), and a
+  no-op version is a validate error.
+
+Known gaps (Backlog, Quality)
+- `code_walkthrough` does not morph; a token moving to another line fades out and in; a
+  `reveal` action's morph runs for the action's `run_time` (default 0.8 s; docs write 1.5).
+
+How to test
+- One file at a time under `capped`: `tests/test_code_morph.py` (16, incl. 2 tiny renders: 16:9
+  + 9:16, and on a word; 7 s), `test_code_walkthrough` (45), `test_builtin_scenes` (190, 55 s),
+  `test_actions_coverage` (77, 47 s), `test_translation` (67), `test_docs` (62), `test_guide`
+  (53), `test_gallery` (12), `test_word_anchors` (31), `test_review2` (14), `test_review4` (11),
+  `test_terms` (21), `test_api` (10), `test_presets` (64, 97 s), `test_regions` (48),
+  `test_fonts` (19); `test_schema` (62, capped3g, 109 s): all pass.
+- Manual: a scratchpad project (recursive fib -> cached fib on "@cache" -> iterative fib with
+  `highlight: "2-4"`): storyboards at 4 stills per beat in 16:9, 9:16 and `light_academic` checked
+  by eye (glides, growing lines, wrapped lines in 9:16, bands); `vidgen lint` 0 findings in both
+  formats; `examples/gallery --scene morph` storyboards 16:9 and 9:16; `vidgen validate
+  examples/gallery` ok.

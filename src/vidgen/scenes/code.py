@@ -422,10 +422,6 @@ class CodeListing(NarratedScene):
         lines.set_z_index(2)
         if numbers is not None:
             numbers.set_z_index(2)
-        ys = line_centers(lines, None if wrapped else numbers)
-        pitch = abs(ys[0] - ys[1]) if len(ys) > 1 else lines.height
-        x_left = (numbers.get_left()[0] if numbers is not None else lines.get_left()[0]) - 0.12
-        x_right = listing.background.get_right()[0] - 0.15
         state: dict[str, Any] = {"band": VGroup()}
         band_color = self.theme.color(p.highlight_color)
         band_opacity = readable_band(self, list(lines), band_color) if p.highlight else BAND_OPACITIES[0]
@@ -434,13 +430,7 @@ class CodeListing(NarratedScene):
             return {j for k in parse_line_spec(spec) for j in groups[k - 1]}
 
         def bands_for(chosen: set[int]) -> VGroup:
-            bands = VGroup()
-            for run in line_runs(sorted(chosen)):
-                hi, lo = ys[run[0]] + pitch / 2, ys[run[-1]] - pitch / 2
-                band = RoundedRectangle(width=x_right - x_left, height=hi - lo, corner_radius=0.06, stroke_width=0)
-                band.set_fill(band_color, opacity=band_opacity)
-                bands.add(band.move_to([(x_left + x_right) / 2, (hi + lo) / 2, 0]))
-            return bands.set_z_index(1)
+            return listing_bands(listing, chosen, band_color, band_opacity, numbered=p.line_numbers, wrapped=wrapped)
 
         def opacities(chosen: set[int]) -> list[tuple[Mobject, float]]:
             pairs = [(line, 1.0 if i in chosen else 0.35) for i, line in enumerate(lines)]
@@ -501,9 +491,16 @@ class CodeListing(NarratedScene):
         """The listing scaled to fill ``body`` (up to 1.5x the requested size, never
         overflowing), wrapped narrower while its width makes it smaller than the requested size
         (and at least the readable size). Returns it and, per original line, its lines."""
+        listings, groups = self._fit_listings([lines], language, body)
+        return listings[0], groups[0]
+
+    def _fit_listings(self, versions: list[list[str]], language: str, body: Region) -> tuple[list[Code], list[list[list[int]]]]:
+        """:meth:`_fit_listing` for several listings shown in turn (``code_morph``): one font
+        size, scale and wrap width for all, so the largest fits ``body``. Returns the listings
+        and, per listing, the lines each original line became."""
         p = self.params
         size = float(self.theme.size(p.size))
-        digits = len(str(len(lines))) if p.line_numbers else 0
+        digits = max(len(str(len(lines))) for lines in versions) if p.line_numbers else 0
         # the listing is scaled as a whole, so its padding scales with it: solve for the font
         # size that fits TARGET_COLUMNS into the width (in a vertical frame: smaller than size)
         padding = 2 * CODE_PADDING + (NUMBER_GAP if digits else 0.0)
@@ -511,20 +508,27 @@ class CodeListing(NarratedScene):
         narrow = body.width * size / (padding + (TARGET_COLUMNS + digits) * advance * size)
         floor = max(min(size, narrow), readable_size(self._font))
         columns: int | None = None
-        lexed = lex_code(lines, language)
+        lexed = [lex_code(lines, language) for lines in versions]
         while True:
-            rows, groups = wrap_runs(lexed, columns) if columns else (lexed, [[i] for i in range(len(lines))])
-            shown = ["".join(t for t, _ in row) for row in rows]
-            listing = self._listing(shown, rows, size)
-            by_width, by_height = body.width / listing.width, body.height / listing.height
+            listings, groups, longest = [], [], 0
+            for rows_lexed, lines in zip(lexed, versions):
+                rows, rows_of = wrap_runs(rows_lexed, columns) if columns else (rows_lexed, [[i] for i in range(len(lines))])
+                shown = ["".join(t for t, _ in row) for row in rows]
+                listings.append((self._listing(shown, rows, size), shown))
+                groups.append(rows_of)
+                longest = max(longest, max(len(line) for line in shown))
+            by_width = body.width / max(listing.width for listing, _ in listings)
+            by_height = body.height / max(listing.height for listing, _ in listings)
             scale = min(1.5, by_width, by_height)
-            longest = max(len(line) for line in shown)
             if not p.wrap or size * scale >= floor or by_width > by_height or longest <= MIN_COLUMNS:
                 break
             columns = max(MIN_COLUMNS, min(longest - 1, int(longest * size * scale / floor)))
-        if len(shown) != len(lines) and p.line_numbers:
-            renumber(self, listing, groups, size, self._font)
-        return listing.scale(scale), groups
+        out = []
+        for (listing, shown), lines, rows_of in zip(listings, versions, groups):
+            if len(shown) != len(lines) and p.line_numbers:
+                renumber(self, listing, rows_of, size, self._font)
+            out.append(listing.scale(scale))
+        return out, groups
 
     def _listing(self, shown: list[str], rows: list[list[Run]], size: float) -> Code:
         """The listing of the (wrapped) lines ``shown``, coloured by their lexed ``rows``."""
@@ -565,6 +569,24 @@ def renumber(scene: NarratedScene, listing: Code, groups: list[list[int]], size:
         numbers.submobjects[head] = label
         for j in rest:
             numbers.submobjects[j] = VGroup()
+
+
+def listing_bands(listing: Code, rows: set[int], color: str, opacity: float, *, numbered: bool, wrapped: bool) -> VGroup:
+    """The highlight bands (z-index 1) behind the physical ``rows`` of a placed ``listing``: one
+    rounded band per run of rows, from the line numbers (``numbered``) to the window's right edge."""
+    lines = listing.code_lines
+    numbers = listing.line_numbers if numbered else None
+    ys = line_centers(lines, None if wrapped else numbers)
+    pitch = abs(ys[0] - ys[1]) if len(ys) > 1 else lines.height
+    x_left = (numbers.get_left()[0] if numbers is not None else lines.get_left()[0]) - 0.12
+    x_right = listing.background.get_right()[0] - 0.15
+    bands = VGroup()
+    for run in line_runs(sorted(rows)):
+        hi, lo = ys[run[0]] + pitch / 2, ys[run[-1]] - pitch / 2
+        band = RoundedRectangle(width=x_right - x_left, height=hi - lo, corner_radius=0.06, stroke_width=0)
+        band.set_fill(color, opacity=opacity)
+        bands.add(band.move_to([(x_left + x_right) / 2, (hi + lo) / 2, 0]))
+    return bands.set_z_index(1)
 
 
 def line_centers(lines: VGroup, numbers: VGroup | None) -> list[float]:

@@ -308,6 +308,7 @@ project's own scene types, in its theme).
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
+| code that changes: before / after, a refactor, a fix | `code_morph` | `title`, `versions` (each the code, or code / path / highlight) |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
 | characters on a set (a cartoon) | `stage` | `characters`, `props`, `background`, `image`, `generate`, `marks`, `ground`, `layers`, `width`, `particles`, `light`, `wind` |
 | a cartoon's title card, "Later that day…", "The End" | `card` | `text`, `subtitle`, `style`, `color`, `sting` |
@@ -316,7 +317,8 @@ project's own scene types, in its theme).
 How beats drive scenes: each type splits its content into **reveal steps** and plays step *i*
 at beat *i* (more steps than beats: spread evenly; more beats: the last ones hold). Types with
 per-beat data (`code_walkthrough`, `equation_derivation`, `screenshot`, `video_clip`, `map`)
-take a `steps` list, entry *i* for beat *i*: write as many steps as beats. A `highlight` param
+take a `steps` list, entry *i* for beat *i*: write as many steps as beats (`code_morph`:
+one of its `versions` per beat). A `highlight` param
 adds a last step that marks one thing and dims the rest, so give it its own beat. Silent
 scenes have a `duration` instead of beats (chapter cards: 2–3 s). Every header-band type
 accepts `heading` and `title` alike.
@@ -586,6 +588,17 @@ Minimal snippets (copy, then adapt):
   beats:
     - text: "We load the data."
     - text: "Then fit and save the model."
+- id: faster
+  type: code_morph       # version i at beat i; the diff is computed for you: shared tokens glide, new lines grow in
+  params:
+    title: "Cache it"
+    versions:
+      - "def fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)"
+      - {code: "@cache\ndef fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)", highlight: changed}
+  beats:
+    - text: "This version recomputes the same values again and again."
+    - text: "One decorator, a cache, and each value is computed once."
+      actions: [{reveal: version2, at: "@cache", run_time: 1.5}]   # morph on the word
 - id: walk
   type: code_walkthrough
   params:

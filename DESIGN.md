@@ -11014,7 +11014,7 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
 
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
-Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)" (more
+Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph` (more
 sections as the steps land). Help AI
 authors make clearer and better-looking presentation videos: coding Shorts, science and maths
 explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
@@ -11139,3 +11139,51 @@ rules as Phases H–O: cheap tests, new public extension surface only through `v
 - **`vidgen.api`** adds `Term`, `active_terms`, `find_term`, `term_spans` and `using_terms`
   (for a project's `MarkupText`, picture or equation, or to narrow the terms on a plate of its
   own); `T`, `fit_text` and `readable_text` take `terms=False`.
+
+### 87.4 Code that morphs between versions (Step 158)
+
+- **A scene type, `code_morph`** (`scenes/code_morph.py`), not a mode of `code`: `code`'s beats
+  follow its `highlight` entries and its targets are the lines of one listing; here the beats
+  follow `versions` and every version has its own lines. `CodeMorph` subclasses `CodeListing`
+  to share the window, the colouring and the fitting. Params: `versions` (at least two; each
+  the code as a string, or `{code | path, highlight}`), and `code`'s `language`, `title`,
+  `line_numbers`, `style`, `font`, `size`, `highlight_color`, `wrap`.
+- **The diff is vidgen's** (`diff_code`, `difflib`, no manim): lines are matched by their text
+  without indentation (`SequenceMatcher`, no autojunk); within a replaced block, lines are paired
+  in order by a small dynamic programme maximising their token similarity (each pair at least
+  `PAIR_RATIO` 0.5), so an edited line is one line, not one removed and one added; a line that
+  disappears in one place and appears unchanged elsewhere is a move. Within a pair, the shared
+  tokens (`\w+` or one other character) keep their characters. A glyph is addressed as (line,
+  n-th non-space character): Manim's `Code` draws exactly one glyph per such character, and
+  wrapping drops or adds only spaces, so a wrapped line's glyphs are its rows' glyphs in order.
+  `changed` (for `highlight: changed`) = new, edited (text differs, indentation included) or
+  moved lines.
+- **One size for all versions**: `CodeListing._fit_listing` became `_fit_listings` (one font
+  size, scale and wrap width for several listings, so the largest fits; `code` passes one). The
+  phone rules of `code` hold unchanged (wrap to at least `TARGET_COLUMNS` at no less than the
+  readable size). Placement: every version centred across the body, all with the top of the
+  tallest when centred, so lines a change keeps move only sideways (if the window's width
+  changes) or down (below inserted lines).
+- **The morph** (`_Morph`, an `AnimationGroup`): kept glyphs and line-number labels `Transform`
+  into copies of the new version's (`GLIDE` 0.1–0.9 of the run time), the window background
+  transforms into the new one, removed glyphs and bands fade to 0 (`FADE_OUT` 0–0.45; opacity,
+  not `FadeOut`: a remover would dissolve the old listing's group), new tokens of an edited line
+  fade in from 0.6x, a new line grows from its left end (`GROW_IN` 0.5–1), the new bands fade
+  in. At its end `_Morph` removes the whole families of everything it played (playing the group
+  lifts unanimated parts of the old listing, e.g. a wrapped line's empty number, into the scene
+  on their own) and adds the new version as one `Code` (with its bands), so the layout dump and
+  lint read a code listing at every beat end and `is_shown` tells which version shows.
+- **Timing**: the scene's reveal plays version *i* at beat *i* (`cap` 1.5 s). Targets
+  `version<N>` (and `version<N>.line<K>`) have the morph to N as their entrance, so `{reveal:
+  version2, at: "@word"}` morphs on a spoken word (§87.2); a version some `reveal` action shows
+  is left out of the scene's own steps (`action_uses("reveal")` resolved through
+  `find_targets`), else the beat would morph at its start and the action find it done. Morphs
+  only go forward: revealing an earlier version than the one shown does nothing; a skipped
+  version is diffed away directly (A to C).
+- **Highlights**: a version's `highlight` (a line spec of that version, or `changed`) dims the
+  other rows to 0.35 and lays `code`'s band (`listing_bands`, now shared) before the morph, so
+  the morph carries the dimming. `readable_band` runs once over every version's glyphs.
+- **Not done**: morphing in `code_walkthrough` (a scrolling window; a later step if wanted);
+  tokens moving between lines (a line split in two: the second half fades and grows); no lint
+  rule (the code scenes' rules apply to the stills; `validate` refuses a version equal to the one
+  before).

@@ -27,6 +27,7 @@ from vidgen.scenes import (  # noqa: F401
     card,
     chapter,
     code,
+    code_morph,
     code_walkthrough,
     comparison,
     diagram,
