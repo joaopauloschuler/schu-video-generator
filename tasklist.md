@@ -845,10 +845,10 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Tests: syntax, matching, the estimate, the config's language and rate, the audio's alignment, pronunciation, translations, the overlay, every kind of action validating, one tiny render on the word (`tests/test_word_anchors.py`)
 
 ### Step 157 — One colour per concept
-- [ ] A video-level `terms:` map (`{loss: accent, gradient: "#E07A5F"}`, theme colour names or hex) applied wherever the terms are on-screen text: equations (TeX parts), bullets, text cards, titles, captions / karaoke, chart and diagram labels, callout labels (code comments only if sensible); per-scene opt-out
-- [ ] Lint: too many concept colours (about 5), poor contrast on the theme background, a term coloured differently by a scene-level colour setting
-- [ ] Cookbook (docs/COOKBOOK.md §12): the rule "same term, same colour" next to the exact-wording rules
-- [ ] Tests
+- [x] A video-level `terms:` map (`{loss: accent, gradient: "#E07A5F"}`, theme colour names or hex, or `{color, tex}`) applied wherever the terms are on-screen text: equations (the `tex` parts, `equation` and `equation_derivation`), bullets, text cards, titles, captions / karaoke (where the colour reads on the plate, raised in opacity for it), chart and diagram labels (all text through `T` / `fit_text`; a `line_chart` series named a term takes its colour), callouts (a label saying a term: the callout in its colour); code comments not coloured (decided: they would clash with the syntax colours); per-scene opt-out `terms: false` (`vidgen/terms.py`, DESIGN §87.3)
+- [x] Lint `concept_colors`: more than `max_colors` (5) colours, a colour below `min_contrast` (4.5) on the theme background, a term coloured otherwise by a scene setting (title `highlight_color`, series `color`, derivation `colors`, a callout's `color`); `vidgen validate` checks the colours are theme colours
+- [x] Cookbook (docs/COOKBOOK.md §12): the rule "same term, same colour" next to the exact-wording rules
+- [x] Tests (`tests/test_terms.py`: matching, config, validate, fit_text / T / callout / series / TeX colours, lint, one tiny render with the opt-out)
 
 ### Step 158 — Code that morphs between versions
 - [ ] In the code scene(s): version A, then a morph to version B (unchanged tokens glide into place, new lines grow in, removed lines fade out), timed to beats and words (Step 156); the diff computed by vidgen (`difflib`), not the author

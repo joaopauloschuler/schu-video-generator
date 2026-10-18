@@ -15,6 +15,7 @@ from manim import NORMAL, Animation, Dot, Group, Line, MarkupText, Mobject, Text
 
 from vidgen.fonts import register_bundled_fonts
 from vidgen.runtime import current_theme
+from vidgen.terms import active_terms, term_t2c
 from vidgen.theme import Theme
 
 register_bundled_fonts()  # Pango only sees fonts registered before the first text is laid out
@@ -30,14 +31,30 @@ def resolve_color(color: Any, theme: Theme | None = None) -> Any:
 
 
 def styled(
-    cls: type[M], theme: Theme, s: str, size: str | float, color: Any, weight: str, *, role: str | None = None, **kwargs: Any
+    cls: type[M],
+    theme: Theme,
+    s: str,
+    size: str | float,
+    color: Any,
+    weight: str,
+    *,
+    role: str | None = None,
+    terms: bool = True,
+    **kwargs: Any,
 ) -> M:
     """Build ``cls`` (``Text`` or ``MarkupText``) with the theme's font, size and color tokens.
 
     The font is ``font`` if given, else the theme's family for the font ``role`` (``heading``,
-    ``quote``, ``code``...; :meth:`Theme.font_for`), else the theme font."""
+    ``quote``, ``code``...; :meth:`Theme.font_for`), else the theme font. A ``Text`` draws the
+    video's terms in their colours (:func:`vidgen.terms.active_terms`; an explicit ``t2c`` wins
+    where both colour a letter) unless ``terms=False`` (text on a coloured plate)."""
     if not kwargs.get("font"):
         kwargs["font"] = theme.font_for(role) if role else theme.font
+    concepts = active_terms() if terms and cls is Text else ()
+    if concepts:
+        colored = term_t2c(s, concepts, kwargs.get("t2c"))
+        if colored:
+            kwargs["t2c"] = {**colored, **(kwargs.get("t2c") or {})}
     return cls(s, font_size=theme.size(size), color=resolve_color(color, theme), weight=weight, **kwargs)
 
 
@@ -45,7 +62,8 @@ def T(
     s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, *, role: str | None = None, **kwargs: Any
 ) -> Text:
     """``Text`` in the current theme: ``T("Hello", "title", "accent", weight=BOLD)``;
-    ``role="heading"`` uses the theme's heading family (``font=`` names a family directly)."""
+    ``role="heading"`` uses the theme's heading family (``font=`` names a family directly).
+    The video's terms are drawn in their colours (``terms=False``: not)."""
     return styled(Text, current_theme(), s, size, color, weight, role=role, **kwargs)
 
 

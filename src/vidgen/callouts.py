@@ -357,15 +357,16 @@ def callout_label(
 ) -> VGroup:
     """A callout's label: ``text`` (bold, wrapped to ``max_width``, default about a third of a
     16:9 frame's width, more in portrait; never below the readable size) on a rounded plate
-    filled with ``color``, written in the theme colour that reads best on it. ``scale`` shrinks
-    it for a zoomed-in camera. Its parts: ``.plate`` and ``.text``."""
+    filled with ``color``, written in the theme colour that reads best on it (terms keep that
+    colour: the callout itself takes a term's colour, see the ``callout`` action). ``scale``
+    shrinks it for a zoomed-in camera. Its parts: ``.plate`` and ``.text``."""
     theme = theme or current_theme()
     fill = resolve_color(color, theme)
     ink = text_color_on(fill, theme=theme)
     frame = frame_region()
     if max_width is None:
         max_width = frame.width * (0.6 if orientation() == "portrait" else 0.3)
-    words = readable_text(" ".join(text.split()), Region(0, 0, max_width, frame.height * 0.3), size=size, color=ink, weight=BOLD, theme=theme)
+    words = readable_text(" ".join(text.split()), Region(0, 0, max_width, frame.height * 0.3), size=size, color=ink, weight=BOLD, theme=theme, terms=False)
     pad_x, pad_y = 0.16, 0.1
     plate = RoundedRectangle(width=words.width + 2 * pad_x, height=words.height + 2 * pad_y, corner_radius=min(0.14, (words.height + 2 * pad_y) / 2))
     plate.set_fill(fill, opacity=1).set_stroke(width=0).move_to(words)

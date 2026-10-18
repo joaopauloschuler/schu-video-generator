@@ -141,6 +141,12 @@ def contains(tex: str, term: str) -> bool:
     return bool(needle) and any(hay[i : i + len(needle)] == needle for i in range(len(hay) - len(needle) + 1))
 
 
+def term_tex_colors(tex: str, terms: Sequence[Term]) -> dict[str, str]:
+    """TeX part -> colour for the ``tex`` parts of the video's terms (``terms:``, one colour per
+    concept) that occur in ``tex`` as whole tokens."""
+    return {part: term.color for term in terms for part in term.tex if contains(tex, part)}
+
+
 def break_lines(tex: str, every: bool) -> str | None:
     """``tex`` with line breaks before its top-level relations (``align*``: ``a &= b \\\\ &= c``):
     before every relation but the first, or (``every``) before the first too. ``None`` when
@@ -508,7 +514,7 @@ class EquationDerivation(NarratedScene):
 
     def _isolated_terms(self, k: int) -> list[str]:
         p = self.params
-        terms = list(p.terms) + list(p.colors) + list(p.steps[k].match)
+        terms = list(p.terms) + list(p.colors) + list(term_tex_colors(p.steps[k].tex, active_terms())) + list(p.steps[k].match)
         if k + 1 < len(p.steps):
             terms += p.steps[k + 1].match
         if p.align_at.strip():
@@ -529,7 +535,8 @@ class EquationDerivation(NarratedScene):
             ) from None
         formula.tex_string = plain(p.steps[k].tex)  # what the layout dump and lint show: the step as written
         parts = [(key, formula.id_to_vgroup_dict[g]) for key, g in groups if g in formula.id_to_vgroup_dict]
-        colors = {term_key(t): resolve_color(c, self.theme) for t, c in p.colors.items()}
+        concepts = {term_key(t): c for t, c in term_tex_colors(p.steps[k].tex, active_terms()).items()}
+        colors = concepts | {term_key(t): resolve_color(c, self.theme) for t, c in p.colors.items()}
         for key, group in parts:
             if key in colors:
                 group.set_color(colors[key])
@@ -644,7 +651,7 @@ class EquationDerivation(NarratedScene):
                 self.spec.id, 100 * (1 - scale / f_min), "" if p.mode == "replace" or p.keep else " or set keep:",
             )
         self._rows = rows
-        inks = [p.color, p.note_color, *p.colors.values()]
+        inks = [p.color, p.note_color, *p.colors.values(), *(c for step in p.steps for c in term_tex_colors(step.tex, active_terms()).values())]
         self._dim = readable_opacity([resolve_color(c, self.theme) for c in inks], self.theme.background, p.dim_opacity)
         for line in lines:
             line.formula.scale(scale)

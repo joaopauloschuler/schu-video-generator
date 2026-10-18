@@ -794,6 +794,7 @@ LINT_RULES: tuple[str, ...] = (
     "talked_over",
     "readback",
     "unclear_speech",
+    "concept_colors",
 )
 RuleName = Literal[
     "off_frame",
@@ -823,6 +824,7 @@ RuleName = Literal[
     "talked_over",
     "readback",
     "unclear_speech",
+    "concept_colors",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -986,6 +988,15 @@ class LookAlikeRule(RuleConfig):
     """Lowest acceptable contrast score of two characters (0 the same look, 1 fully different: silhouette, colours, accessories)."""
 
 
+class ConceptColorsRule(RuleConfig):
+    """``concept_colors``: the video's ``terms:`` colours (one colour per concept, DESIGN.md §87.3): too many, too faint on the background, or a scene colouring a term otherwise."""
+
+    max_colors: PositiveInt = 5
+    """Most different concept colours a video should use (more and none stands out)."""
+    min_contrast: float = Field(default=4.5, ge=1, le=21)
+    """Lowest acceptable WCAG contrast of a concept colour on the theme background (4.5: AA for normal text)."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1128,6 +1139,8 @@ class LintRules(_Strict):
     """Audio heard differently from its text, from the transcripts `vidgen readback` stored (default: warning; nothing without them)."""
     unclear_speech: UnclearSpeechRule = Field(default_factory=UnclearSpeechRule)
     """Words heard with low confidence or after an unusual pause; runs only with `vidgen lint --readback` (default: warning; info for doubtful words)."""
+    concept_colors: ConceptColorsRule = Field(default_factory=ConceptColorsRule)
+    """The terms: colours: more than max_colors, below min_contrast on the background, or a scene setting colouring a term otherwise (default: warning)."""
 
 
 class LintConfig(_Strict):
@@ -2028,6 +2041,38 @@ class BeatConfig(_Strict):
         return len(self.text.split()) / words_per_second
 
 
+class TermConfig(_Strict):
+    """A concept of ``terms:`` with more than a colour (DESIGN.md §87.3)."""
+
+    color: ColorRef
+    """The concept's colour: a theme colour token (accent, primary...) or hex."""
+    tex: str | list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    """TeX parts of equations that stand for the concept (e.g. 'L' or '\\nabla L'), coloured in equation and equation_derivation scenes; each whole TeX tokens with balanced braces."""
+
+    @field_validator("tex")
+    @classmethod
+    def _balanced(cls, value: str | list[str]) -> str | list[str]:
+        for part in [value] if isinstance(value, str) else value:
+            if not part.strip():
+                raise ValueError("a TeX part cannot be empty")
+            depth = 0
+            for char in part:
+                depth += 1 if char == "{" else -1 if char == "}" else 0
+                if depth < 0:
+                    break
+            if depth != 0:
+                raise ValueError(f"the braces of {part!r} do not balance")
+        return value
+
+    def tex_parts(self) -> list[str]:
+        """``tex`` as a list."""
+        return [self.tex] if isinstance(self.tex, str) else list(self.tex)
+
+
+#: A ``terms:`` value: a colour (theme token or hex), or {color, tex}.
+TermSetting = ColorRef | TermConfig
+
+
 class SceneConfig(_Strict):
     """A scene: a registered scene ``type`` plus its params and narrated beats.
 
@@ -2064,6 +2109,8 @@ class SceneConfig(_Strict):
     """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
     set: Identifier | None = None
     """A stage scene's set: a name from sets:, or a built-in set (city_street, park, beach, forest, snowy_hills; rooms: classroom, kitchen, shop, living_room, bedroom), whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
+    terms: bool = True
+    """false: this scene draws the video's terms (one colour per concept) in their usual colours."""
     host: SceneHost | None = None
     """The cartoon host beside this scene's content: false for none, a character name, or {character, side, size, place, floor, facing, speaks, pose, expression, auto_direct} changing the video's host here; default the video's host."""
 
@@ -2157,6 +2204,8 @@ class VideoConfig(_Strict):
     """Beat padding and duration estimate."""
     pronunciation: PronunciationMap = Field(default_factory=dict)
     """How the narrator says terms (term: spoken form, or {say, case_sensitive, whole_word, regex}); TTS text only, subtitles keep the written words."""
+    terms: dict[Annotated[str, Field(min_length=1)], TermSetting] = Field(default_factory=dict)
+    """One colour per concept: {term: colour} (theme token or hex), or {term: {color, tex}}; the term is drawn in its colour wherever it is on-screen text (bullets, cards, titles, captions, chart and diagram labels, callout plates) and its tex parts in equations; whole words, any case, plurals too; a scene's terms: false turns it off there."""
     pronunciation_file: str | list[str] | None = None
     """YAML/JSON file(s) (relative to the project) with more pronunciation entries; `pronunciation:` entries win over them."""
     language: LanguageTag | None = None
@@ -2268,6 +2317,19 @@ class VideoConfig(_Strict):
         """``pronunciation_file`` as a list (empty when unset)."""
         value = self.pronunciation_file
         return [] if value is None else [value] if isinstance(value, str) else list(value)
+
+    @field_validator("terms")
+    @classmethod
+    def _check_terms(cls, value: dict[str, Any]) -> dict[str, Any]:
+        seen: dict[str, str] = {}
+        for term in value:
+            if not re.search(r"\w", term):
+                raise ValueError(f"{term!r} has no word in it (write the word as it is on screen, e.g. loss or 'learning rate')")
+            key = " ".join(term.casefold().split())
+            if key in seen:
+                raise ValueError(f"{seen[key]!r} and {term!r} are the same term (case and spaces are ignored)")
+            seen[key] = term
+        return value
 
     @model_validator(mode="after")
     def _check_unique_ids(self) -> VideoConfig:

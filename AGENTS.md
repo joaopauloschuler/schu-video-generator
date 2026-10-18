@@ -661,6 +661,23 @@ label their series, `stat` chips carry an arrow. Every preset passes WCAG AA and
 colour-blind-safe palette (except `dark_tech`'s blue and purple for deuteranopes: pick another
 preset if that matters).
 
+**One colour per concept.** Give the few concepts an explainer keeps coming back to a colour of
+their own, once, at the top of `video.yaml`; vidgen then draws those words in that colour
+wherever they are written (titles, bullets, cards, chart and diagram labels, captions, a
+callout naming one, a `line_chart` series named after one) and their TeX parts in equations:
+
+```yaml
+terms:
+  loss: accent
+  gradient: "#E07A5F"
+  learning rate: {color: secondary, tex: '\eta'}   # also η in equation scenes
+```
+
+Whole words, any case, plurals too. At most about 5 colours, each readable on the background
+(lint `concept_colors` checks both). Do not colour the same word otherwise in a scene (a
+title's `highlight_color`, a series' `color`, an `equation_derivation`'s `colors`, a callout's
+`color`): lint warns. `terms: false` on a scene turns it off there (a recap in plain colours).
+
 **Icons.** 200 line icons in one style. Find them by concept:
 `vidgen list-icons --search growth`, `vidgen list-icons --category data`, and look at them in
 your theme with `vidgen list-icons --search money --sheet icons.png --theme`. Use icons for
@@ -1834,6 +1851,7 @@ install; `vidgen validate` warns when it is missing.
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
 | `small_speaker` | a speaking face too small on screen to read it and its lip sync | `shot: closeup <name>` (or `medium`) for that beat, or `character_size: large` |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
+| `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |

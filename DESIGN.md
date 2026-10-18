@@ -11014,7 +11014,8 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
 
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
-Reference: docs/CONFIG.md "Actions on a spoken word" (more sections as the steps land). Help AI
+Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)" (more
+sections as the steps land). Help AI
 authors make clearer and better-looking presentation videos: coding Shorts, science and maths
 explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
 checked by `vidgen validate` with a `VidgenError` that says what to write, covered by `vidgen
@@ -11086,3 +11087,55 @@ rules as Phases H–O: cheap tests, new public extension surface only through `v
   `locate_word_anchor` (an overlay or scene of a project that starts something on a word; the
   built-in `lower_third` uses them, as built-ins import only `vidgen.api`). Actions need none of
   them: they get word timing through `at` without code of their own.
+
+### 87.3 One colour per concept (Step 157)
+
+- **Config**: `VideoConfig.terms: dict[str, ColorRef | TermConfig]` (`TermConfig`: `color`,
+  `tex: str | list[str]`, braces checked); keys must hold a word and differ beyond case and
+  spaces. `SceneConfig.terms: bool = True` (`false`: the scene's text, captions included, keeps
+  the usual colours). `vidgen validate` checks the colours against the theme
+  (`terms.term_color_problems`, located `terms.<term>`).
+- **Matching** (`vidgen/terms.py`, no manim): `term_spans` finds whole words in any case with an
+  optional plural `s` / `es`, a phrase's words across any whitespace; longer terms first, no
+  overlaps. No accent folding: the spans must index the text as drawn.
+- **Where the colours go: the text helpers, not each scene.** `helpers.styled` (so `T`, a
+  scene's `self.text`, chart labels and legends, captions) and `layout.fit_text_sized` (so
+  `fit_text`, `readable_text` and every scene and overlay built on them) add Manim `t2c` slices
+  for the *active terms*; an explicit `t2c` / `highlights` keeps the letters it colours (explicit
+  scene settings win). `terms=False` opts a call out (a callout's text on its plate). `MarkupText`
+  (`MT`) is not coloured (its markup indexes differ), nor `Code` listings: syntax colours would
+  clash with concept colours, so code comments stay as they are (decided; the brief allowed it
+  "only if sensible").
+- **Active terms**: `NarratedScene.__init__` sets them (`set_active_terms(scene_terms(...))`)
+  before it builds anything (its overlays are built in `__init__`), `tear_down` clears them, and
+  `runtime.set_context` / `clear_context` reset them, so a later thumbnail or a test never sees a
+  scene's terms. A module global rather than a parameter: every text helper reads it without each
+  of the ~40 call sites passing it (the theme works the same way, `current_theme()`).
+  `using_terms(...)` narrows them for a block.
+- **Beyond words**: a `line_chart` series whose whole name is a term (not `training loss`: two
+  series would share a colour) defaults to the term's colour; a `callout` without its own `color`
+  takes the colour of the first term its label says (mark and plate; the label's text keeps its
+  readable ink); `equation` and `equation_derivation` isolate the `tex` parts present in a step as
+  whole tokens (`equation_derivation.isolated_source`, the derivation's own machinery; the
+  `equation` scene switches to it only when a step contains one, so other equations compile as
+  before) and colour them; a derivation's own `colors` wins, and its dimmed history keeps the
+  term colours readable (`readable_opacity` includes them).
+- **Captions**: a term colour is used only where it keeps the `contrast` rule's `min_ratio` on the
+  plate; the plate's opacity is raised (0.05 steps, up to 1) until the term colours read, and a
+  colour that does not read even on an opaque plate stays in the text colour with a warning.
+  Without a plate, against the theme background (the outline). The karaoke highlight still
+  paints the spoken word.
+- **Lint** `concept_colors` (scene scope, from the config like `look_alike`;
+  `vidgen/lint/term_rule.py`): more than `max_colors` (5) different colours and a colour below
+  `min_contrast` (4.5, WCAG AA for normal text; every preset's accents pass) on the theme
+  background, both reported once on the first scene with terms; and per scene
+  (`terms.term_conflicts`) a setting that colours a term otherwise: `title.highlight_color`, a
+  `line_chart` series' `color`, an `equation_derivation` `colors` entry for a term's `tex`
+  (compared without spaces), a `callout`'s explicit `color` on a label that says a term (on its
+  beat).
+- **Not coloured** (gaps): thumbnails (no scene is active), `MarkupText` (the `progress`
+  overlay), code, bar / pie / icon-grid categories' bar colours (only their label text), text
+  inside pictures; a translated variant must give its own `terms:`.
+- **`vidgen.api`** adds `Term`, `active_terms`, `find_term`, `term_spans` and `using_terms`
+  (for a project's `MarkupText`, picture or equation, or to narrow the terms on a plate of its
+  own); `T`, `fit_text` and `readable_text` take `terms=False`.

@@ -1359,6 +1359,15 @@ scene that shows the narration its own way):
   (beat_id, seconds)` finds it in a scene's beats (`beats`: `(id, narration seconds or None)`,
   e.g. from `self.context.scene.beats` as `(b.id, b.end - b.start)`; a `ValueError` naming the
   beat and the words like it when no beat says it), timed as the captions are.
+- **One colour per concept** (docs/CONFIG.md "One colour per concept"): text a scene builds with
+  `T`, `fit_text` or `readable_text` draws the video's `terms:` in their colours by itself (an
+  explicit `t2c` / `highlights` wins where both colour a letter); pass `terms=False` for text on
+  a coloured plate (it stays in its readable ink). `active_terms()` gives the scene's terms
+  (`Term(name, color, tex)`, colours as `#RRGGBB`; empty with `terms: false` on the scene),
+  `term_spans(text, terms) -> [(start, end, term)]` and `find_term(text, terms)` find them as
+  vidgen does (whole words, any case, plurals; for `MarkupText` or a picture of your own), and
+  `with using_terms(terms):` changes them for the text built inside (e.g. only those that read
+  on your plate). An equation of your own colours `term.tex` parts itself.
 - `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
   max_lines=2, max_words=None, until=None, prefix="", prefix_width=None) -> [CaptionCue(start,
   end, lines, words, prefix)]`: the text cut at phrase boundaries into cues (`segment_cues`, costs

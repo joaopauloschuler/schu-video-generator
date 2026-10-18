@@ -184,6 +184,12 @@ def _timing_findings(
 
         theme = Theme.for_format(project.config.theme, project.config.format)
         ctx.character_pairs = [pair for where, pair in character_pairs(project.config, theme) if where == scene_id]
+    if "concept_colors" in names and lint.rules.concept_colors.severity != "off" and project.config.terms:
+        from vidgen.lint.term_rule import term_issues
+        from vidgen.theme import Theme
+
+        theme = Theme.for_format(project.config.theme, project.config.format)
+        ctx.term_issues = term_issues(project.config, theme, scene_id, lint.rules.concept_colors)
     ignores = project.scene(scene_id).lint_ignores()
     findings: list[Finding] = []
     groups: dict[tuple[Any, ...], Finding] = {}

@@ -50,7 +50,7 @@ class CalloutAction(Action):
         units: Literal["fraction", "px"] = "fraction"
         """area in fractions, or in pixels (of the target's picture, or of the output frame)."""
         color: ThemeColor = "highlight"
-        """Colour of the mark and the label plate (theme token or hex)."""
+        """Colour of the mark and the label plate (theme token or hex); default: the colour of the video's term the label names (terms:), else highlight."""
         label_size: ThemeSize = "caption"
         """Size of the label (never below the readable size)."""
         side: Literal["auto", "top", "bottom", "left", "right"] = "auto"
@@ -119,6 +119,13 @@ class CalloutAction(Action):
         """The next beat, unless ``keep``."""
         return None if self.options.keep else super().default_until(later)
 
+    def color(self) -> str:
+        """The callout's colour: ``color`` when given, else the colour of the first of the
+        video's terms its label says (one colour per concept), else ``highlight``."""
+        o = self.options
+        term = find_term(o.label, active_terms()) if "color" not in o.model_fields_set and o.label else None
+        return term.color if term is not None else o.color
+
     # ----- apply / revert ----------------------------------------------------------------------
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
@@ -134,7 +141,7 @@ class CalloutAction(Action):
             raise VidgenError(f"scene '{scene.spec.id}' {self.config.describe()}: {exc}") from None
         avoid = label_avoid(scene, view, scale, targets, area)
         common: dict[str, Any] = {
-            "color": o.color, "label_size": o.label_size, "side": o.side, "bounds": bounds, "avoid": avoid, "scale": scale, "theme": scene.theme,
+            "color": self.color(), "label_size": o.label_size, "side": o.side, "bounds": bounds, "avoid": avoid, "scale": scale, "theme": scene.theme,
         }
         if o.kind == "magnifier":
             if picture is None or isinstance(picture, ClipMobject):

@@ -44,6 +44,7 @@ from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
 from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.speech import audio_duration
+from vidgen.terms import scene_terms, set_active_terms
 from vidgen.theme import Theme
 from vidgen.transitions import IRIS_HEAD_SCALE, ColorFade, IrisPoint, effective, has_transitions, resolve_color
 from vidgen.videoplan import TransitionSlot, VideoPlan
@@ -275,6 +276,8 @@ class NarratedScene(MovingCameraScene):
             active = runtime.has_context() and runtime.current_project() is self.project
             theme = runtime.current_theme() if active else Theme.for_format(self.project.config.theme, self.project.config.format)
         self.theme = theme
+        # one colour per concept (DESIGN.md §87.3): text built from here on draws the terms
+        set_active_terms(scene_terms(self.project.config, spec, theme))
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
         spec = with_auto_actions(spec, type(self).auto_actions(self.project, spec, self.params))
         self.spec = spec  # with the actions automatic directing adds (DESIGN.md §69.23)
@@ -979,6 +982,7 @@ class NarratedScene(MovingCameraScene):
             self.wait_seconds(self.transition_out.hold / config.frame_rate)
         self._stop_lingering()
         self._record_carry()
+        set_active_terms(())
         narrated = {entry.beat_id for entry in self.beat_log}
         missing = [b.id for b in self.beats if b.id not in narrated]
         if missing:

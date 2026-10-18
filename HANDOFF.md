@@ -14790,3 +14790,84 @@ How to test
   "down" in beat 2); storyboard and lint with the audio ran (lint: 3 narration-speed warnings,
   Kokoro's pace). `vidgen validate examples/minimal` ok; all its variants load, `pt` pins the
   translated beat's anchor.
+
+## Step 157 — One colour per concept
+
+What was built
+- **Regression fix first** (own commit 14375776): `scenes/stage.py` imported `vidgen.world`,
+  `cartoon.level_*`, `vidgen.camera` and `vidgen.config` directly, failing
+  `test_builtins_use_only_the_public_api`. `vidgen.api` now exports what the stage needs (the
+  world model and rules, `level_stage`, `level_drawing`, `level_items`, `level_motion`,
+  `SmoothFollow`, `CharacterSize`; none shadows a manim name); recorded in DESIGN §86.11, the
+  Backlog item ticked. `test_builtin_scenes` 186 passed, `test_platform_*` 96 + 7 render passed.
+- **`terms:`** (DESIGN §87.3, `src/vidgen/terms.py`, no manim): `terms: {loss: accent, gradient:
+  "#E07A5F", "learning rate": {color: secondary, tex: '\eta'}}`; scene `terms: false` opts out.
+  Matching: whole words, any case, plural `s` / `es`, phrases across whitespace, longest first.
+- **Where**: `helpers.styled` (`T`, `self.text`, chart labels / legends, captions) and
+  `layout.fit_text_sized` (`fit_text`, `readable_text`: nearly every scene and overlay) add `t2c`
+  slices for the active terms; explicit `t2c` / `highlights` win; `terms=False` opts a call out.
+  `NarratedScene.__init__` sets the active terms (before overlays are built), `tear_down` and
+  `runtime.set_context` / `clear_context` clear them.
+  Beyond text: `line_chart` series named exactly a term default to its colour; a `callout`
+  without `color` takes the colour of the first term its label says (plate text stays readable
+  ink, `callout_label` passes `terms=False`); `equation` / `equation_derivation` colour the
+  `tex` parts present in a step (whole tokens via `isolated_source`; `equation` uses that path
+  only when a step has one; derivation `colors` win; the dimmed history's opacity accounts for
+  the term colours). Captions use a term colour only where it reads on the plate, raising the
+  plate's opacity for it (dark_tech: 0.8 -> about 0.9), else keep the text colour with a warning.
+- **Validation**: unknown colour token `terms.loss: unknown theme color 'acent'; known colors:
+  ...`; `'loss' and 'LOSS' are the same term`; `has no word in it`; unbalanced `tex` braces.
+- **Lint `concept_colors`** (`src/vidgen/lint/term_rule.py`, scene scope from the config, last in
+  `LINT_RULES`): > `max_colors` 5 distinct colours, contrast < `min_contrast` 4.5 on the theme
+  background (both once, first scene with terms), and per scene a setting colouring a term
+  otherwise: title `highlight_color`, a `line_chart` series `color`, an `equation_derivation`
+  `colors` entry for a term's `tex`, a callout's explicit `color` (on its beat).
+- **Docs**: CONFIG "One colour per concept (`terms`)" (new section before Icons), the top-level
+  and scene `terms` rows, the `concept_colors` rule row and default, the line_chart `series` and
+  callout `color` defaults; the guide's design topic + troubleshooting rule row (+ `AGENTS.md`);
+  COOKBOOK §12 "Same term, same colour"; EXTENDING "One colour per concept"; DESIGN §87.3.
+
+Files touched
+- New: `src/vidgen/terms.py`, `src/vidgen/lint/term_rule.py`, `tests/test_terms.py`.
+- Changed: `src/vidgen/config.py` (`TermConfig`, `TermSetting`, `VideoConfig.terms` + check,
+  `SceneConfig.terms`, `ConceptColorsRule`, `LINT_RULES` / `RuleName` / `LintRules`),
+  `helpers.py`, `layout.py`, `runtime.py`, `scene.py`, `callouts.py`, `cli.py`, `api.py`,
+  `lint/__init__.py`, `lint/rules.py` (`SceneContext.term_issues`), `lint/run.py`,
+  `scenes/callout_action.py`, `scenes/captions.py`, `scenes/equation.py`,
+  `scenes/equation_derivation.py` (`term_tex_colors`), `scenes/line_chart.py`, docs above,
+  `tests/test_docs.py` (models).
+
+Public interfaces
+- YAML: `terms:` (video), `terms: false` (scene), `lint.rules.concept_colors: {max_colors,
+  min_contrast}`.
+- `vidgen.api` adds `Term`, `active_terms`, `find_term`, `term_spans`, `using_terms`; `T`,
+  `styled`, `fit_text`, `fit_text_sized` and `readable_text` take `terms=False`.
+
+Decisions
+- One hook in the two text helpers instead of per-scene code: every built-in and project scene
+  gets it for free; a module-level "active terms" like `current_theme()`.
+- Explicit scene colours win at render; lint reports the clash rather than validate refusing it.
+- Callouts take the term's colour for the whole callout (text on a coloured plate cannot be
+  term-coloured and stay readable).
+- Code listings and code comments are not coloured (syntax colours would clash).
+
+Known gaps
+- Not coloured: thumbnails, `MarkupText` (`MT`, the `progress` overlay), bar / pie / icon-grid
+  bar colours (only their labels), text in pictures; a translated variant gives its own `terms:`.
+- `concept_colors`' video-level findings appear only when the first scene with terms is linted
+  (`--scene` of another scene misses them).
+
+How to test
+- One file at a time under `capped`: `tests/test_terms.py` (21, incl. one tiny render and one
+  LaTeX build), `test_docs` (62), `test_guide` (53), `test_lint` (23), `test_layout` (44),
+  `test_api` (10), `test_config` (21), `test_captions` (20), `test_callout_action` (15),
+  `test_equation_derivation` (43), `test_charts` (76), `test_overlays` (26),
+  `test_builtin_scenes` (186), `test_timing_lint` (10), `test_cartoon_lint` (10),
+  `test_word_anchors` (31), `test_actions` (28), `test_actions_coverage` (76),
+  `test_translation` (66), `test_project` (24), `test_schema` (62, capped3g, 111 s): all pass.
+- Manual (scratchpad project: title, bullets with callouts, equation, line_chart,
+  equation_derivation, an opted-out text_card, karaoke captions): storyboards in 16:9 and 9:16
+  checked by eye (terms coloured in every text, the callout plate in the term colour, `w` / `η`
+  coloured in TeX, the `loss` series red, captions coloured on a more opaque plate, nothing in the
+  opted-out scene); `vidgen lint` reported the three planted conflicts.
+

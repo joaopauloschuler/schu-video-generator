@@ -43,6 +43,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
+| `terms` | `{}` | one colour per concept: `{loss: accent, gradient: "#E07A5F"}` (theme colour tokens or hex), or `{term: {color, tex}}`; the term is drawn in its colour wherever it is on-screen text, its `tex` parts in equations; see [one colour per concept](#one-colour-per-concept-terms) |
 | `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
 | `language` | none (English rules) | the video's language, a BCP-47 tag (`en`, `pt-BR`, `es-419`): caption and SRT line breaks, the `narration_speed` lint, ElevenLabs `language_code`, the MP4's audio language; see [languages and translations](#languages-and-translations) |
 | `translations` | none | a translation file (YAML, `vidgen translate-template`) whose texts replace beat texts and on-screen texts, usually in a variant; see [languages and translations](#languages-and-translations) |
@@ -126,6 +127,7 @@ scenes:
 | `carry` | `[]` | objects of the scene before that this scene starts with, where they ended (a match cut), then moves into its own targets: target names, or `"NAME -> NAME"`; see [continuity](#continuity-carrying-objects-into-the-next-scene-carry) |
 | `set` | none | a `stage` scene's set: a name from [`sets:`](#shared-casts-and-sets-include-and-sets) or a [built-in set](#ready-made-sets-set-city_street) (`city_street`, `park`, `beach`, `forest`, `snowy_hills`; rooms: `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`) whose params this scene starts from; its own `params` win |
 | `host` | the video's | the [host](#a-host-beside-any-scene-host) beside this scene's content: `false` for none, a character name, or a mapping of the keys that change here (`{side: left}`, `{expression: thinking}`; with `character` when the video has no host) |
+| `terms` | `true` | `false`: this scene draws the video's [terms](#one-colour-per-concept-terms) in their usual colours (its captions too) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. `*word*` in it marks a
@@ -841,6 +843,56 @@ failing pair), the palette's smallest colour difference and for which vision, an
 scales. `--swatches PNG` (alias `--sheet`, as in `list-icons`) also writes a picture of all presets (one row each: name and
 description in its text colours, accent chips, a `surface` panel, the palette as bars), so an
 AI author can compare them by opening one image. JSON shape: [below](#vidgen-list-themes---json).
+
+## One colour per concept (`terms`)
+
+A concept the video talks about keeps one colour wherever it is written: the viewer learns that
+red means *loss* and finds it again in the next scene, the equation and the chart.
+
+```yaml
+terms:
+  loss: accent                      # a theme colour token...
+  gradient: "#E07A5F"               # ...or hex
+  learning rate: {color: secondary, tex: '\eta'}   # TeX parts that stand for it in equations
+  weights: {color: primary, tex: [w, W]}
+scenes:
+  - id: recap
+    type: text_card
+    terms: false                    # this scene keeps the usual colours
+    params: {text: "The loss is not the gradient."}
+    beats: [{text: "A recap in plain colours."}]
+```
+
+| key | | |
+|---|---|---|
+| `terms.<term>` | colour | the term's colour: a theme colour token (`accent`, `primary`...) or hex |
+| `terms.<term>.color` | colour | the same, in the long form |
+| `terms.<term>.tex` | str \| list | TeX parts of equations that stand for the term (`L`, `'\nabla L'`), each whole TeX tokens with balanced braces; coloured in [`equation`](#equation) and [`equation_derivation`](#equation_derivation) steps that contain them |
+
+- **Where**: all text the scenes write with vidgen's text helpers: titles, bullets, cards,
+  quotes, tables, chart titles, axis labels, legends and category labels, diagram and process
+  labels, timeline entries, captions (karaoke too: the spoken word still takes the highlight
+  while it is said), lower thirds; a `line_chart` series whose whole name is a term is drawn in
+  its colour (unless the series has its own `color`); a `callout` whose label says a term takes
+  its colour for the mark and the plate (unless the callout has its own `color`; the label's text
+  keeps the colour that reads on the plate). Code listings are not coloured (their syntax
+  colours would clash), nor text inside pictures.
+- **Matching**: whole words, any case, a plural `s` / `es` included (`loss` also colours
+  `Losses`, not `glossy`); a term of several words matches them with any spaces or a line break
+  between; a longer term wins over a shorter one inside it. Words are matched as written on
+  screen: a [translated](#languages-and-translations) variant gives its own `terms:` in its
+  language.
+- **What wins**: a scene's own colour for a part of its text (a title's `highlight`, a chart's
+  `highlight`, an `equation_derivation`'s `colors`, a `highlight` action) wins over the term's
+  colour; `vidgen lint` warns when they differ ([`concept_colors`](#lint-vidgen-lint)).
+- **Captions**: a term's colour is used when it keeps the `contrast` rule's ratio on the caption
+  plate; the plate is made more opaque (up to 1) for it, and a colour that still does not read
+  stays in the caption's text colour (a warning in the render log).
+- **Checks**: `vidgen validate` names a colour that is not a theme colour (`terms.loss: unknown
+  theme color 'acent'`), two keys that are one term (`loss` and `Loss`) and unbalanced braces in
+  `tex`; `vidgen lint`'s `concept_colors` rule warns about more than 5 different colours (none
+  stands out), a colour below 4.5:1 contrast on the theme background, and a scene setting that
+  colours a term otherwise.
 
 ## Icons
 
@@ -3459,7 +3511,7 @@ and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
 | param | type | default | |
 |---|---|---|---|
 | `x` | list[float] \| list[str] | required | numbers (increasing) or category names |
-| `series` | `{name: [values]}` or list of `{name, values, color}` | required | one value per `x` |
+| `series` | `{name: [values]}` or list of `{name, values, color}` | required | one value per `x`; a series' `color` defaults to the colour of the [term](#one-colour-per-concept-terms) its name is, else the palette's |
 | `title`, `caption` | str | `""` | |
 | `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
 | `title_size`, `title_color` | size, color | `heading`, `text` | |
@@ -7380,7 +7432,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in. Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
-| `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
+| `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`; a label that says one of the video's [terms](#one-colour-per-concept-terms): its colour), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
 | `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
 | `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
@@ -8074,6 +8126,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
 | `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
+| `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
 | `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared. Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
@@ -8117,6 +8170,7 @@ lint:
     talked_over: {}
     readback: {max_wer: 0.1}                # word error rate; also `vidgen readback`'s threshold
     unclear_speech: {min_probability: 0.5, doubtful_probability: 0.75, max_gap: 0.5}   # also `vidgen readback`'s word flags
+    concept_colors: {max_colors: 5, min_contrast: 4.5}   # the terms: colours
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The

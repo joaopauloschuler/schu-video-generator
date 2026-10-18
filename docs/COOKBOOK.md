@@ -365,6 +365,14 @@ loose everyday word:
 Name the measure when the source does ("Earth's mean radius, about 6,371 km"), and give the unit
 in the narration and on screen. Check the narration, the on-screen text and the captions.
 
+**Same term, same colour.** Once a concept has a colour, it keeps it everywhere: the word in a
+bullet, a chart's series, the symbol in the equation and the caption all wear the same one, and
+no other concept wears it. Set it once in `terms:` (`terms: {loss: accent, gradient: "#E07A5F"}`,
+with `tex:` for the symbol that stands for it, docs/CONFIG.md "One colour per concept") instead
+of colouring scene by scene; give a colour to at most about five concepts, and do not colour the
+same word otherwise in one scene (`vidgen lint`'s `concept_colors` rule warns about all three).
+Like the wording, the colour is part of the term: never vary it for style.
+
 **Established facts vs reported results.** Textbook facts can be stated plainly. A result that
 comes from specific papers and is not settled (not independently validated) always carries its
 reference:

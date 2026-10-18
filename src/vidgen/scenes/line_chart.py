@@ -18,7 +18,7 @@ class Series(SceneParams):
     values: list[float]
     """One value per x."""
     color: ThemeColor | None = None
-    """Line color; default: the theme.palette color at the series' position."""
+    """Line color; default: the colour of the video's term the name is (terms:), else the theme.palette color at the series' position."""
 
 
 @scene("line_chart")
@@ -124,10 +124,18 @@ class LineChart(NarratedScene):
                 return [Series(name=k, values=v) for k, v in self.series.items()]
             return list(self.series)
 
+    @staticmethod
+    def _term_color(name: str) -> str | None:
+        """The colour of the video's term that is the series' whole name (one colour per
+        concept), else ``None``: ``training loss`` and ``test loss`` keep their own colours."""
+        text = name.strip()
+        spans = term_spans(text, active_terms())
+        return spans[0][2].color if len(spans) == 1 and spans[0][:2] == (0, len(text)) else None
+
     def construct(self) -> None:
         p = self.params
         series = p.series_list()
-        colors = [self.theme.color(s.color) if s.color else self.theme.palette_color(i) for i, s in enumerate(series)]
+        colors = [self.theme.color(s.color) if s.color else self._term_color(s.name) or self.theme.palette_color(i) for i, s in enumerate(series)]
         fmt = p.value_format or auto_format([v for s in series for v in s.values])
         body = self.safe_area
         frame = VGroup()

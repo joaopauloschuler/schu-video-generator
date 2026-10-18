@@ -271,6 +271,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.sfx import config_problems as sfx_problems
     from vidgen.soundfont import soundfont_problems
     from vidgen.thumbnail import thumbnail_problems
+    from vidgen.terms import term_color_problems
     from vidgen.transitions import color_problems as transition_color_problems
     from vidgen.transitions import iris_problems
     from vidgen.voices import voice_color_problems
@@ -316,6 +317,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(character_look_problems(project.config, project.root))
             problems.extend(character_pose_problems(project.config, project.root))
             problems.extend(transition_color_problems(project.config, theme))
+            problems.extend(Problem(loc, message) for loc, message in term_color_problems(project.config, theme))
             problems.extend(iris_problems(project.config))
             problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))

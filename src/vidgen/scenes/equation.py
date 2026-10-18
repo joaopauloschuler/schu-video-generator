@@ -9,6 +9,8 @@ from typing import Any
 
 from vidgen.api import *
 
+from .equation_derivation import isolated_source, term_key, term_tex_colors
+
 log = logging.getLogger("vidgen.scenes.equation")
 
 
@@ -102,7 +104,7 @@ class Equation(NarratedScene):
         cap_t = self.target("caption", caption, entrance=lambda: [FadeIn(caption, shift=UP * 0.12)]) if caption is not None else None
         for f in formulas:
             for term in p.terms:
-                part = f.get_part_by_tex(term)  # its first occurrence
+                part = self._term_part(f, term)  # its first occurrence
                 if part is not None and len(part):  # a term is no step of its own: not revealed alone
                     self.target(f"term:{term}", part, entrance=lambda: [])
 
@@ -117,8 +119,15 @@ class Equation(NarratedScene):
         self.finish()
 
     def _tex(self, latex: str, size: float) -> MathTex:
+        """The step typeset; the TeX parts of the video's terms in it in their colours (then
+        built with :func:`isolated_source`, whole tokens, like ``equation_derivation``)."""
+        color = resolve_color(self.params.color, self.theme)
+        concepts = term_tex_colors(latex, active_terms())
         try:
-            return MathTex(latex, font_size=size, color=resolve_color(self.params.color, self.theme), substrings_to_isolate=self.params.terms or None)
+            if not concepts:
+                return MathTex(latex, font_size=size, color=color, substrings_to_isolate=self.params.terms or None)
+            source, groups = isolated_source(latex, [*self.params.terms, *concepts])
+            formula = MathTex(source, font_size=size, color=color)
         except Exception as exc:  # Manim raises plain exceptions for LaTeX errors
             detail = str(exc).strip().splitlines()
             raise VidgenError(
@@ -126,3 +135,20 @@ class Equation(NarratedScene):
                 + (f": {detail[0]}" if detail else "")
                 + " (check the formula; it is typeset in a LaTeX math environment)"
             ) from None
+        formula.tex_string = latex  # what the layout dump and lint show
+        keyed = {term_key(tex): c for tex, c in concepts.items()}
+        formula.term_parts = {}
+        for key, group_id in groups:
+            group = formula.id_to_vgroup_dict.get(group_id)
+            if group is None:
+                continue
+            formula.term_parts.setdefault(key, group)
+            if key in keyed:
+                group.set_color(keyed[key])
+        return formula
+
+    @staticmethod
+    def _term_part(formula: MathTex, term: str) -> VMobject | None:
+        """The first occurrence of the TeX ``term`` in ``formula``."""
+        parts = getattr(formula, "term_parts", None)
+        return formula.get_part_by_tex(term) if parts is None else parts.get(term_key(term))
