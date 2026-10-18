@@ -16,45 +16,6 @@ from typing import Annotated, Any, ClassVar, Literal
 import numpy as np
 
 from vidgen.api import *
-from vidgen.cartoon.level_drawing import CHUNK_COLUMNS, LevelColors, draw_columns, drawn_rows, level_shapes
-from vidgen.cartoon.level_items import COIN_COLOR, STAR_COLOR, Collectible
-from vidgen.cartoon.level_motion import LANDED, SETTLED, ArcJump, Reaction, RouteWalk
-from vidgen.camera import SmoothFollow
-from vidgen.cartoon.level_stage import (
-    CHARACTER_SIZE_FACTORS,
-    LEVEL_MOVES,
-    LEVEL_PROP_ACTIONS,
-    LEVEL_SIZE,
-    LEVEL_UNTRACKED,
-    LevelFrame,
-    LevelProps,
-    LevelStep,
-    level_fit_problems,
-    level_frame,
-    level_goal,
-    level_layout,
-    level_move_problems,
-    character_size_default,
-    level_world,
-)
-from vidgen.config import CharacterSize
-from vidgen.world import (
-    COIN,
-    KEY,
-    Level,
-    World,
-    close_door,
-    hold_key,
-    jump_pickups,
-    obstacles_in,
-    open_door,
-    parse_level,
-    plan_jump,
-    route_pickups,
-    step_aside,
-    walk_route,
-)
-from vidgen.world.moves import reversed_route
 
 from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image

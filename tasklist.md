@@ -893,7 +893,7 @@ Not done in the roadmap; each is one line, with where it came from. Bugs first, 
 then nice-to-have.
 
 Bugs / correctness
-- [ ] `tests/test_builtin_scenes.py::test_builtins_use_only_the_public_api` fails: `scenes/stage.py` imports `vidgen.cartoon.level_*`, `vidgen.camera`, `vidgen.world`, `vidgen.config` directly (Phase O, Steps 150–154; found in Step 156) — export what a stage needs through `vidgen.api` or exempt the stage in the test with a reason
+- [x] (Fixed in Step 157: `vidgen.api` exports the level layers, DESIGN §86.11) `tests/test_builtin_scenes.py::test_builtins_use_only_the_public_api` fails: `scenes/stage.py` imports `vidgen.cartoon.level_*`, `vidgen.camera`, `vidgen.world`, `vidgen.config` directly (Phase O, Steps 150–154; found in Step 156) — export what a stage needs through `vidgen.api` or exempt the stage in the test with a reason
 - [ ] Word anchors (Step 156): with `overlap` / `interrupt` the runner scales `at` by the beat's shorter body, so a word-timed action lands a little early; an offset like `@mid-20s` reads as the word `mid` minus 20 s (write `"@mid-20s+0s"`)
 - [ ] MCP: large documents (a long video's `lint` / `storyboard` JSON, `schema full=true`) are not trimmed and can exceed a client's tool-output limit (Step 59) — page or summarise them
 - [ ] MCP on Windows: process-tree kill on cancel is untested; no session with a real client (Claude Desktop / Code) was possible here (Step 59)

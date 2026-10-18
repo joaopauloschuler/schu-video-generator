@@ -11000,6 +11000,17 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
   (40 x 11, the camera rising) 47.9 s in 113 s: 85 of 131 profiled seconds are Manim's PIL
   transform drawing the tile chunks (about 0.05 s per chunk per frame). Backlog: draw the chunks
   in view into one picture per frame, or cut chunks by rows too.
+- **`vidgen.api` exports the level layers** (fixed in Step 157: `scenes/stage.py` imported them
+  directly, against §6.4, and `test_builtins_use_only_the_public_api` failed): the world model
+  and rules (`Level`, `World`, `COIN`, `KEY`, `parse_level`, `walk_route`, `plan_jump`,
+  `reversed_route`, `route_pickups`, `jump_pickups`, `obstacles_in`, `step_aside`, `open_door`,
+  `close_door`, `hold_key`), the stage geometry (`level_stage`: `LevelFrame`, `LevelProps`,
+  `LevelStep`, `LEVEL_MOVES`, `LEVEL_PROP_ACTIONS`, `LEVEL_SIZE`, `LEVEL_UNTRACKED`,
+  `CHARACTER_SIZE_FACTORS`, `character_size_default`, `level_frame`, `level_layout`,
+  `level_world`, `level_goal`, `level_fit_problems`, `level_move_problems`), the drawing
+  (`CHUNK_COLUMNS`, `LevelColors`, `draw_columns`, `drawn_rows`, `level_shapes`, `COIN_COLOR`,
+  `STAR_COLOR`, `Collectible`), the motion (`ArcJump`, `RouteWalk`, `Reaction`, `LANDED`,
+  `SETTLED`), `SmoothFollow` and the config's `CharacterSize`. None shadows a manim name.
 
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
