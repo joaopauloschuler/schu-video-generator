@@ -882,9 +882,9 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Tests (`tests/test_narration_rule.py`: stems, mentions, labels from dumps, action narrowing, both rules, config, the runner on faked renders with a word anchor and `lint_ignore`)
 
 ### Step 164 — Examples, docs and review of Phase P
-- [ ] One example project showing the new features (a short science or coding explainer, 16:9 with a 9:16 variant)
-- [ ] Guide / CONFIG / CHANGELOG / README / gallery as the repo's conventions require; the Shorts cookbook (docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) for word timing, concept colours, code morphing and the terminal
-- [ ] Review of the whole phase with fixes, in HANDOFF like earlier phase reviews; the phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
+- [x] One example project showing the new features (a short science or coding explainer, 16:9 with a 9:16 variant) (`examples/gradient-descent`: function plots with a traced dot, tangent and area, a number line, plane vectors with a right-angle mark, the update rule with its symbols in the concepts' colours, `code_morph`, a `terminal` beside the code, a `line_chart` with `changes` and a cursor, 18 actions on spoken words, karaoke captions; validate and lint clean in 16:9 and 9:16; voiced with Kokoro, readback 0.0 % word error rate, rendered at 1080p outside the repo)
+- [x] Guide / CONFIG / CHANGELOG / README / gallery as the repo's conventions require; the Shorts cookbook (docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) for word timing, concept colours, code morphing and the terminal (CHANGELOG "Presentation toolkit (Phase P)" in the untagged 0.3.0; README feature and example; CONFIG / guide colour advice; the gallery pages needed no new type)
+- [x] Review of the whole phase with fixes, in HANDOFF like earlier phase reviews; the phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout (`tests/test_phase_p_review.py`)
 
 ---
 
@@ -910,10 +910,11 @@ Bugs / correctness
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
 
 Quality (what an agent's video looks like)
-- [ ] Charts that change (Step 162): no caption or title per change; bars cannot enter or leave a race (labels fixed), `x` cannot change; no guide line from a line chart's cursor to the axes; `pie` / `heatmap` / `scatter` do not change; the gallery example shows no change (`examples/gallery` holds each newer type once, and `bar_chart` / `line_chart` belong to `examples/minimal`): Step 164's example
+- [ ] Charts that change (Step 162): no caption or title per change; bars cannot enter or leave a race (labels fixed), `x` cannot change; no guide line from a line chart's cursor to the axes; `pie` / `heatmap` / `scatter` do not change; no example re-sorts bars (`examples/gradient-descent` shows a line chart's changes and cursor); a rescaled axis' ticks keep the decimals of the unlabelled ticks (`5.0`, `10.0`)
 - [ ] `function_plot` (Step 160): a function of a parameter animated over beats (`a` in `a x^2`); parametric / polar curves; LaTeX labels; a dot's label plate does not avoid other curves; `trace` moves in x only
-- [ ] `terminal` (Step 159): no general split with another scene type (only the `code` pane); a long session does not scroll (`clear` starts a new page); one colour per output; `code_morph`'s `reveal` of a version could use `entrance_time` (its morph's 1.5 s) instead of the action's 0.8 s
-- [ ] `code_morph` (Step 158): `code_walkthrough` does not morph between versions; a token moving to another line (a line split in two) fades out and in instead of gliding; a `reveal` action's morph takes the action's `run_time` (default 0.8 s; the guide writes 1.5)
+- [ ] `terminal` (Step 159): no general split with another scene type (only the `code` pane); a long session does not scroll (`clear` starts a new page); one colour per output (`code_morph`'s `reveal` uses `entrance_time` since Step 164)
+- [ ] `code_morph` (Step 158): `code_walkthrough` does not morph between versions; a token moving to another line (a line split in two) fades out and in instead of gliding (a `reveal` action's morph takes 1.5 s since Step 164)
+- [ ] Phase P review (Step 164): a term in `accent` colours like the default tangents, jump arcs, angle marks and terminal prompt (documented, not linted); a number line or function plot in 9:16 under karaoke captions leaves a tall empty band (the plot keeps its aspect); the karaoke band reserves two lines in 16:9 (`max_lines: 1` frees one); readback's single letters ("w") and short words come out "doubtful" with Kokoro
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
 - [ ] 9:16 stills: `code_walkthrough` listing small (a 5-line file wraps a line), `image` `fit: contain` leaves bands, a `world` map view spanning most longitudes is a strip (Step 57)
 - [ ] `reserve` is per whole scene: several reserving overlays + captions shrink content until `min_font` fires (Step 48)

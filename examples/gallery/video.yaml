@@ -487,7 +487,7 @@ scenes:
       - text: "A code morph shows how code changes. Here, a loop that fills a list."
       - text: "The same function as a list comprehension: the loop folds into one line."
         actions:
-          - {reveal: version2, at: "@comprehension", run_time: 1.5}   # morph on the spoken word
+          - {reveal: version2, at: "@comprehension"}   # morph on the spoken word (1.5 s)
 
   - id: shell
     type: terminal           # step i at beat i: the command is typed, then its output appears; vidgen runs nothing

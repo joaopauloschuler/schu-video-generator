@@ -36,9 +36,11 @@ _CAP = 0.73
 _X_HEIGHT = 0.55
 _DESCENDER = 0.76
 _SMALL = 0.15
+_SCRIPT = 0.4
 _GLYPH_EM: dict[str, float] = {
     **dict.fromkeys("acemnorsuvwxz", _X_HEIGHT),
     **dict.fromkeys("=+<>≤≥×÷~", _X_HEIGHT),  # operators sit low, like the lowercase letters
+    **dict.fromkeys("₀₁₂₃₄₅₆₇₈₉⁰¹²³⁴⁵⁶⁷⁸⁹", _SCRIPT),  # sub- and superscript digits (w₁, x²)
     **dict.fromkeys("gpqy", _DESCENDER),
     "j": 0.95,
     **dict.fromkeys(".,:;·•-–—−_'\"`‘’“”", _SMALL),

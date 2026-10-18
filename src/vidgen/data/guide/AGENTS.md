@@ -680,7 +680,7 @@ Minimal snippets (copy, then adapt):
   beats:
     - text: "This version recomputes the same values again and again."
     - text: "One decorator, a cache, and each value is computed once."
-      actions: [{reveal: version2, at: "@cache", run_time: 1.5}]   # morph on the word
+      actions: [{reveal: version2, at: "@cache"}]   # morph on the word (1.5 s)
 - id: shell
   type: terminal         # step i at beat i: the command is typed, then its output appears (you write it: nothing runs)
   params:
@@ -775,7 +775,7 @@ callout naming one, a `line_chart` series named after one) and their TeX parts i
 
 ```yaml
 terms:
-  loss: accent
+  loss: tertiary
   gradient: "#E07A5F"
   learning rate: {color: secondary, tex: '\eta'}   # also η in equation scenes
 ```
@@ -784,6 +784,10 @@ Whole words, any case, plurals too. At most about 5 colours, each readable on th
 (lint `concept_colors` checks both). Do not colour the same word otherwise in a scene (a
 title's `highlight_color`, a series' `color`, an `equation_derivation`'s `colors`, a plotted
 function's or area's `color`, a callout's `color`): lint warns. `terms: false` on a scene turns it off there (a recap in plain colours).
+Prefer colours the scenes do not use for something else: `accent` is also the default of
+tangent lines, number-line jumps, angle marks and the terminal's prompt, and `highlight` is the
+spoken word in karaoke captions and the code highlight; `examples/gradient-descent` uses
+`primary`, `secondary` and `tertiary`.
 
 **Icons.** 200 line icons in one style. Find them by concept:
 `vidgen list-icons --search growth`, `vidgen list-icons --category data`, and look at them in
@@ -898,7 +902,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
   (`callout`, `sfx`, the stage's moves and acting too), and so does `lower_third`'s `at`
   (`"@Ada"`). Actions never make a beat longer. Show a label when the narration names it:
   lint's `said_before_shown` warns when a node, callout or stage is named seconds before it
-  appears.
+  appears. A whole explainer timed this way: `examples/gradient-descent`.
 - The `stage` actions (`say` to `throw`) take the character as the target and the new
   state as `to:` (`- emote: kit` + `to: happy`). How to use them together for a cartoon:
   `vidgen guide cartoons`.

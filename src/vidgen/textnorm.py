@@ -161,6 +161,7 @@ _SYMBOL_WORDS: dict[str, dict[str, tuple[str, ...]]] = {
     "pt": {"&": ("e",), "+": ("mais",), "=": ("igual",), "×": ("vezes",), "%": ("por", "cento"), "@": ("arroba",)},
 }
 _CURRENCY = {"$": "dollars", "€": "euros", "£": "pounds"}
+_MINUS = {"en": "minus", "pt": "menos"}
 _PT_CURRENCY = {"$": "dólares", "€": "euros", "£": "libras"}
 
 _NUMBER = re.compile(r"(?P<cur>[$€£])?(?P<num>\d+(?:[.,]\d+)*)(?P<ord>st|nd|rd|th)?(?P<pct>%)?", re.IGNORECASE)
@@ -221,6 +222,8 @@ def _word_tokens(word: str, language: str | None) -> list[tuple[str, bool]]:
     currency = _PT_CURRENCY if code == "pt" else _CURRENCY
     word = unicodedata.normalize("NFC", word).translate(_APOSTROPHES)
     core = word.strip(".,;:!?\"'()[]{}…“”«»¿¡")
+    if len(core) > 1 and core[0] in "-−" and core[1].isdigit():   # a transcript's "-3": minus three
+        return [(_MINUS.get(code, "minus"), False), *_word_tokens(core[1:], language)]
     if _DOTTED_ACRONYM.fullmatch(core) or _DOTTED_ACRONYM.fullmatch(core + "."):
         letters = core.replace(".", "")
         return [(fold(letters), False)] if len(letters) > 1 else [(fold(letters), True)]
@@ -246,12 +249,27 @@ def _word_tokens(word: str, language: str | None) -> list[tuple[str, bool]]:
     return out
 
 
+def _decimals_joined(words: Sequence[str], language: str | None) -> list[tuple[int, str]]:
+    """``(index, word)`` of ``words`` with a decimal part a transcript gives as its own word
+    joined to the number before it (faster-whisper writes "1.5" as "1" ".5")."""
+    code = primary_language(language)
+    rules = _NUMBERS.get(code)
+    decimal = rules.decimal_mark if rules else ("." if code in _POINT_DECIMAL else ",")
+    out: list[tuple[int, str]] = []
+    for index, word in enumerate(words):
+        if out and len(word) > 1 and word[0] == decimal and word[1].isdigit() and out[-1][1][-1:].isdigit():
+            out[-1] = (out[-1][0], out[-1][1] + word)
+        else:
+            out.append((index, word))
+    return out
+
+
 def normalize_words(words: Sequence[str], language: str | None = None) -> list[Token]:
     """The normalised tokens of ``words`` (a text split at spaces, or a transcript's words), each
     with the index of its word. Runs of two or more single capital or dotted letters are joined
     (``G P U`` → ``gpu``, the way ``GPU`` is written)."""
     raw: list[tuple[str, bool, int]] = []
-    for index, word in enumerate(words):
+    for index, word in _decimals_joined(words, language):
         raw += [(text, letter, index) for text, letter in _word_tokens(word, language) if text]
     out: list[Token] = []
     i = 0

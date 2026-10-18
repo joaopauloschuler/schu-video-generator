@@ -7,6 +7,7 @@ view, with arrow tips, ticks and plain ``Text`` labels (no LaTeX). The ``trace``
 moves a dot (or an area's right end) to a new x (DESIGN §87.6).
 """
 
+from collections.abc import Callable
 from typing import Any, Literal
 
 import numpy as np
@@ -406,6 +407,9 @@ class FunctionPlot(NarratedScene):
         avoid = np.vstack([*curve_points, axes.line_points()] if p.axes else [*curve_points, np.zeros((0, 3))])
         geometry = PlaneGeometry(self, axes, p, size, obstacles, avoid, len(names))
         self.geometry = geometry
+        for dot in dots:  # dot labels keep clear of the figure's labels too, wherever they move
+            dot.more_obstacles = geometry.label_boxes
+            dot.place(dot.x)
 
         chain = ChainedTargets(self)
         revealed, add = chain.revealed, chain.add
@@ -647,6 +651,7 @@ class _Dot:
     ) -> None:
         self.scene, self.axes, self.spec, self.expr, self.name, self.size = scene, axes, spec, expr, name, size
         self.obstacles = obstacles
+        self.more_obstacles: Callable[[], list[tuple[float, float, float, float]]] = list
         theme = scene.theme
         self.dot = Dot(radius=DOT_RADIUS, color=theme.color(spec.color)).set_z_index(3)
         self.template = spec.label if spec.label is not None else "{name}({x}) = {y}"
@@ -717,7 +722,8 @@ class _Dot:
 
     def _label(self, content: str, point: np.ndarray, direction: np.ndarray) -> None:
         self.live.show(content)
-        self.label.move_to(dot_label_spot(point, direction, self.label.width, self.label.height, self.axes.plot, self.obstacles))
+        obstacles = self.obstacles + self.more_obstacles()
+        self.label.move_to(dot_label_spot(point, direction, self.label.width, self.label.height, self.axes.plot, obstacles))
 
 
 class _Area:

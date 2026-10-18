@@ -29,7 +29,7 @@ From the author guide (`vidgen guide scenes`):
   beats:
     - text: "This version recomputes the same values again and again."
     - text: "One decorator, a cache, and each value is computed once."
-      actions: [{reveal: version2, at: "@cache", run_time: 1.5}]   # morph on the word
+      actions: [{reveal: version2, at: "@cache"}]   # morph on the word (1.5 s)
 ```
 
 ## Params

@@ -112,6 +112,13 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   on the tiles and checked by `vidgen validate`, a key opens a locked gate, a grumpy snail steps
   aside when asked nicely, the camera follows the hero, `character_size: large` for Shorts
   ([docs](docs/CONFIG.md#platform-levels-level), [example](examples/platform-story)).
+- **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
+  morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
+  colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
+  chart and caption), code that morphs between versions, a terminal typing commands, function
+  plots and plane geometry, number lines, charts whose values change between beats, and a lint
+  rule for narration that names a label before it is on screen
+  ([docs](docs/CONFIG.md#actions-on-a-spoken-word), [example](examples/gradient-descent)).
 - **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
   scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
   mouth follows the narration; it points at items, reacts, walks to the other side, enters and
@@ -646,6 +653,14 @@ my_video/
   granny's picnic; the camera follows her, close-ups for the dialogue, the automatic jump, coin
   and door sounds, the `cartoon` music bed and a 9:16 variant with `character_size: large`;
   about 2:50 at preview (no audio committed).
+- [examples/gradient-descent](examples/gradient-descent) — "Gradient descent, one step at a
+  time", a maths-and-code explainer: a dot tracing a loss curve with its tangent and a live
+  gradient label, the update rule with its symbols in the concepts' colours, the first steps as
+  jumps on a number line, the signed area under the gradient equal to the change in loss, the
+  gradient as a vector at a right angle to the dashed contour line, a loop morphing into a loop
+  with a tolerance, a Python session beside the code, and a loss chart changing with the
+  learning rate (the axis rescales as it diverges); actions on spoken words and karaoke captions
+  in the concepts' colours, a 9:16 variant; about 3:00 with Kokoro narration (no audio committed).
 - [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
   an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
   points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven

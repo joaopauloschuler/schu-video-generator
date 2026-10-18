@@ -237,7 +237,9 @@ def math_axes(
     axes.labels = labels
     for m in labels:  # numbers stay readable where a curve crosses them
         m.set_z_index(1)
-    axes.group = VGroup(lines, x_axis, y_axis, marks, *labels)
+    # plates under the numbers but over the grid and shaded areas (z -1), under the curves (z 0)
+    plates = VGroup(*[label_plate(m, (0.03, 0.03)) for m in labels]).set_z_index(LABEL_PLATE_Z)   # tight: an end number may touch the frame's edge
+    axes.group = VGroup(lines, x_axis, y_axis, marks, plates, *labels)
     return axes
 
 
@@ -309,10 +311,15 @@ def clip_segment(a: np.ndarray, b: np.ndarray, region: Region) -> tuple[np.ndarr
     return a + d * lo, a + d * hi
 
 
-def label_plate(text: Mobject) -> Mobject:
-    """A plate in the background colour behind ``text`` (so grid lines and curves do not cross it)."""
+#: z index of the plates behind the axes' numbers: over the grid (-2) and areas (-1), under curves (0).
+LABEL_PLATE_Z = -0.5
+
+
+def label_plate(text: Mobject, pad: tuple[float, float] = (0.1, 0.07)) -> Mobject:
+    """A plate in the background colour behind ``text`` (so grid lines and curves do not cross
+    it), ``pad`` wider and taller on each side."""
     return RoundedRectangle(
-        width=text.width + 0.2, height=text.height + 0.14, corner_radius=0.06, stroke_width=0,
+        width=text.width + 2 * pad[0], height=text.height + 2 * pad[1], corner_radius=min(0.06, *pad) if min(pad) > 0 else 0, stroke_width=0,
         fill_color=current_theme().background, fill_opacity=PLATE_OPACITY,
     ).move_to(text)
 

@@ -611,6 +611,10 @@ class PlaneGeometry:
         """Everything that may change when the figure moves."""
         return [m for item in self.items for m in item.group]
 
+    def label_boxes(self) -> list[tuple[float, float, float, float]]:
+        """The frame boxes of the points', vectors' and marks' labels where they are now."""
+        return [_box(item.label.group) for item in self.items if item.label is not None and item.label.content]
+
     def traced(self, kind: str, k: int) -> TracedFigureItem:
         """Point or vector ``k`` as the ``trace`` action moves it."""
         return TracedFigureItem(self, kind, k)

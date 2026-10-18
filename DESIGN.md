@@ -11525,3 +11525,38 @@ Built as planned in §87.7; the changes and the details:
 - **Not done**: other languages' stemming and stop words; a mention in an earlier *scene*;
   labels inside pictures, maths (`MathTex` parts) and code; "shown but long gone" (a label that
   left the screen before it is named).
+
+### 87.11 Example, docs and the review of the phase (Step 164)
+
+- **The example** `examples/gradient-descent` ("Gradient descent, one step at a time", 10 scenes,
+  29 beats, about 3:00 voiced): every Phase P feature where the explanation needs it, not a
+  catalogue. Facts are checked in the file's header (the loss `(w − 3)²/2 + 1`, the steps from
+  `w = 0` at learning rate 0.5, the signed areas, divergence above a learning rate of 2, the
+  terminal's outputs from a real run). Base config voiced by Kokoro (`speed: 0.88`, under lint's
+  3.5 words/s); a 9:16 `short` variant. No audio committed.
+- **`code_morph`'s `reveal`** (Steps 158 / 159 gap): `CodeMorph.entrance_time` returns
+  `MORPH_SECONDS` (1.5 s, also the `cap` of the scene's own steps) for a `version<N>` /
+  `version<N>.line<K>` target, so `{reveal: version2, at: "@word"}` morphs at the scene's pace
+  without a `run_time` (the action's `run_time` still wins).
+- **`diagram`, a node on a word** (Step 163 observation): a node target's entrance is
+  `Diagram._node_entrance`: the node appears, then the edges between it and the nodes on screen
+  grow (not those a `steps` entry names: they keep their step). Inside the scene's own waves and
+  an edge's entrance (`_in_step`) a node only appears, as before, so no edge grows twice.
+- **Labels on the plane**: a `function_plot` dot's live label avoids the points', vectors' and
+  marks' labels (`PlaneGeometry.label_boxes`, read by `_Dot` on every move); `math_axes` puts a
+  background-coloured plate behind every axis number at z `LABEL_PLATE_Z` (−0.5: over the grid
+  and areas, under curves), so numbers read on a shaded area (lint `contrast` found 2.9:1 on a
+  negative area). A `number_line`'s jump label shows the decimals its ends need
+  (`ends_places`: `+0.375`, not `+0.4`) and `lift_clear` lifts a label that would meet an
+  earlier one or a point's label (seen in 9:16).
+- **Lint `min_font`**: sub- and superscript digits (`w₁`, `x²`) count as glyphs 0.4 em tall
+  (`_SCRIPT`), measured in Inter; an axis title `w₁` measured 9 % under the floor before.
+- **Readback** (found voicing the example): faster-whisper writes "1.5" as the words `1` `.5`,
+  which became "one five" against "one point five"; `textnorm._decimals_joined` joins a word
+  starting with the language's decimal mark to a number before it. A transcript's `-3` is now
+  "minus three" (`_MINUS`). Together they took the example's readback from 5.4 % to 0.0 % word
+  error rate without changing any audio.
+- **Colour advice, not a rule**: a term in `accent` looks like the default tangent, jump arc,
+  angle mark and terminal prompt; CONFIG and the guide say which tokens the scenes use, and the
+  doc examples use `tertiary` for `loss`. A lint check of "a default colour equal to a term's"
+  was not added (it would fire on every bullets marker in `primary`).

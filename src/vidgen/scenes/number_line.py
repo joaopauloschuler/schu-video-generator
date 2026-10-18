@@ -157,8 +157,14 @@ class LineJump(SceneParams):
         return {"anyOf": [{"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, handler(core_schema)]}
 
 
+def ends_places(*values: float, most: int = 3) -> int:
+    """The decimal places (up to ``most``) that show ``values`` exactly: 2 for 2.25."""
+    return max(len(f"{abs(float(v)):.{most}f}".rstrip("0").partition(".")[2]) for v in values)
+
+
 def signed(value: float, decimals: int = 1) -> str:
-    """``+3``, ``−2``, ``+0.5``: a step with its sign (whole numbers without decimals)."""
+    """``+3``, ``−2``, ``+0.5``: a step with its sign (whole numbers without decimals; trailing
+    zeros dropped)."""
     text = f"{abs(value):.0f}" if float(value).is_integer() else f"{abs(value):.{decimals}f}".rstrip("0").rstrip(".")
     return ("+" if value > 0 else "−") + text
 
@@ -324,6 +330,7 @@ class NumberLine(NarratedScene):
         jumps = [self._jump(spec, jump_frames[k], rises[k], jump_labels[k]) for k, spec in enumerate(p.jumps)]
         jump_ends = {round(v, 9) for j in p.jumps for v in (j.start, j.to)}
         self.points = [_LinePoint(self, spec, size, round(spec.at, 9) in jump_ends, low_y) for spec in p.points]
+        lift_clear([m for m in jump_labels if m is not None], [pt.live.group for pt in self.points if pt.live is not None and not pt.under])
 
         chain = ChainedTargets(self)
         base: list[Target] = []
@@ -394,7 +401,8 @@ class NumberLine(NarratedScene):
         if not template:
             return None
         by = spec.to - spec.start
-        content = fill_label(template, {"by": signed(by), "from": float(spec.start), "to": float(spec.to)}, 1)
+        places = ends_places(spec.start, spec.to)
+        content = fill_label(template, {"by": signed(by, places), "from": float(spec.start), "to": float(spec.to)}, places)
         return self.text(content, size=size, color=self._item_color(spec.color, template, self.theme.color("accent")))
 
     def _jump(self, spec: LineJump, frames: tuple[float, float], rise: float, label: Mobject | None) -> tuple[VGroup, Any]:
@@ -416,6 +424,23 @@ class NumberLine(NarratedScene):
             return LaggedStart(Create(arc), *([FadeIn(label)] if label is not None else []), lag_ratio=0.6)
 
         return group, entrance
+
+
+def lift_clear(labels: list[Mobject], fixed: list[Mobject], gap: float = 0.06) -> None:
+    """Lift each of ``labels`` (in order) just above the ``fixed`` ones and the labels before it
+    that it would overlap (short jumps side by side, a point's label beside a jump)."""
+    def box(m: Mobject) -> tuple[float, float, float, float]:
+        return (m.get_left()[0], m.get_bottom()[1], m.get_right()[0], m.get_top()[1])
+
+    placed = [box(m) for m in fixed]
+    for label in labels:
+        for _ in range(len(placed) + 1):
+            a = box(label)
+            hit = [b for b in placed if a[0] < b[2] + gap and b[0] < a[2] + gap and a[1] < b[3] + gap and b[1] < a[3] + gap]
+            if not hit:
+                break
+            label.shift(UP * (max(b[3] for b in hit) + gap - a[1]))
+        placed.append(box(label))
 
 
 class _LinePoint:

@@ -25,7 +25,7 @@ workflow` give the rules at a glance. This page is about what is special to **co
 |---|---|---|---|
 | hook | 0–3 s | one true, surprising number or claim in big type ("10 / lines of Python") | `stat`, or a project scene with the whole file as a dim backdrop |
 | code steps | 3–30 s | one key line or block per beat, large, with a 2–4 word note | `code_focus` (project, §4) or `code` / `code_walkthrough` |
-| payoff | ~5 s | the output, in a terminal; labelled **example output** when it is illustrative | `code` with `language: console`, or a project `terminal` |
+| payoff | ~5 s | the output, in a terminal; labelled **example output** when it is illustrative | `terminal` (the command typed, then the output you write) |
 | what you skip | ~4 s | 3 big icon rows: what the reader does not need ("No installs") | `icon_grid` (`reveal: all`) or a project scene |
 | call to action | ~4 s | one big icon, a short bold line, the URL large (split it over two lines if long) | `end_card` or a project `cta` |
 
@@ -245,9 +245,38 @@ class CodeFocus(NarratedScene):
 
 Easy additions in the same file: a window bar with three dots and "file · line N", a gold bar
 beside the highlighted rows, a `self.target("listing", ...)` for beat actions, the whole file as
-a dim backdrop for the hook, a terminal that types the command and then shows the output. See
-[EXTENDING.md](EXTENDING.md) for the scene API. Editing any file in `extensions/` re-renders every
-scene, so batch your edits.
+a dim backdrop for the hook. See [EXTENDING.md](EXTENDING.md) for the scene API. Editing any file
+in `extensions/` re-renders every scene, so batch your edits.
+
+**Code that changes: `code_morph`.** To show a fix, a refactor or an optimisation, write the
+versions and let vidgen find the difference: what both share glides into place, new lines grow
+in, removed lines fade out. Mark the new lines with `highlight: changed` and morph on the word
+that names the change:
+
+```yaml
+- id: faster
+  type: code_morph
+  params:
+    title: "fib.py"
+    versions:
+      - "def fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)"
+      - code: "@cache\ndef fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)"
+        highlight: changed
+  beats:
+    - text: "This version computes the same values again and again."
+    - text: "One decorator, a cache, and each value is computed once."
+      actions: [{reveal: version2, at: "@cache"}]   # the morph starts on the word (1.5 s)
+```
+
+The versions share one font size and wrap width (`code`'s phone rules), so keep each version
+short: a morph reads best when 1–3 lines change. Write every version as real code (§10).
+
+**The output: `terminal`.** A terminal window types each step's command at a prompt and then
+shows the output **you** write (vidgen runs nothing): step *i* at beat *i*, or the output on a
+word (`{reveal: output1, at: "@prints"}`). `code: {path: ..., highlight: 7}` shows the listing
+above it in 9:16; after a `code` or `code_morph` scene, `carry: ["listing -> code"]` with
+`transition: cut` glides the listing into place. Keep a session to a few rows: one command and
+its output fill a phone frame best. Label output that is not from a real run (§7).
 
 ## 5. Colours and type
 
@@ -263,6 +292,13 @@ scene, so batch your edits.
   text (`contrast`: 4.5:1, 3:1 for large text).
 - **Type**: Inter for words, JetBrains Mono for code (the defaults). Headings ~78 px, labels in
   the benefits list bold.
+- **One colour per concept**: give the two or three ideas the Short is about a colour each, once,
+  in `terms:` (`terms: {cache: primary, recursion: secondary}`). vidgen paints those words
+  in every title, note, chart label and caption (karaoke too), so the viewer links "blue" to
+  *cache* across scenes; code listings keep their syntax colours. Use colours other than the
+  `highlight` gold (that is the "look here" colour and the spoken word in the captions), and at
+  most about five; `vidgen lint`'s `concept_colors` warns otherwise
+  ([COOKBOOK.md](COOKBOOK.md) §12, "Same term, same colour").
 
 ## 6. Captions
 
@@ -279,6 +315,8 @@ voice: {timestamps: true} # exact word times (ElevenLabs, same price); Kokoro En
   `highlight`, so it matches the code highlight.
 - Captions show the **written** words; `pronunciation:` changes only what the voice says.
 - A cue can split a multi-word name ("Visual | Studio Code"): reword the beat if that reads badly.
+- The words of `terms:` keep their colour in the captions (the spoken word still turns gold
+  while it is said); the plate is made more opaque when a colour needs it to read.
 
 ## 7. Output, benefits, call to action, thumbnail
 
@@ -333,6 +371,13 @@ pronunciation:
 - **Count before paying**: `vidgen tts --dry-run` prints each beat, the spoken text (`says: ...`)
   and the characters (the example Short: 11 beats, 618 characters; the example below: 8 beats,
   434 characters).
+- **Time the picture to the words**: a beat action's `at` can name a word of the beat, `at:
+  "@cache"` (its first time), `"@cache#2"`, `"@cache+0.2s"`. The highlight, the morph or the output
+  then lands as the voice says it, from the TTS word timings after `vidgen tts` and from an
+  estimate before, so the storyboard is already close. In a Short, where a beat is 3–4 s, this is
+  the difference between a picture that answers the sentence and one that arrives a second late.
+  `vidgen lint`'s `said_before_shown` warns when the narration names a label more than 1.5 s
+  before it is on screen.
 - `narration_speed` counts **spoken** words, so a respelled acronym ("A P I" = 3 words) can push a
   beat over 3.5 words/s while the written text runs at ~3. Check the real rate, then add a
   `lint_ignore: [{rule: narration_speed, beat: ID}]` with a comment saying why.
@@ -384,7 +429,7 @@ vidgen tts                         # voices new or changed beats
 vidgen readback                    # what the voice said vs the text
 vidgen lint --readback             # unclear words; fix, re-voice those beats, repeat
 vidgen render --preview            # now timed by the real audio
-vidgen lint --fail-on warning      # 0 findings (or each ignore justified)
+vidgen lint --fail-on warning      # 0 findings (or each ignore justified), said_before_shown included
 vidgen render                      # final 1080x1920, 30 fps, loudness printed
 vidgen lint --final                # on the real frames
 vidgen thumbnail                   # if you changed only the thumbnail
@@ -451,6 +496,8 @@ pronunciation:
 
 stt: {provider: faster_whisper, model: base.en}   # vidgen readback: local and free
 
+terms: {words: primary}            # one colour per concept: "words" in every text and caption
+
 music: {source: pulse, volume: -2}   # or bright, for a calmer, cinematic piece
 transition: {type: crossfade, duration: 0.4}
 
@@ -499,20 +546,20 @@ scenes:
         text: "Then loop over the top five and print each count."
 
   - id: output
-    type: code
+    type: terminal                 # types the command, then shows the output written here
     params:
       title: "example output"
-      language: console
-      line_numbers: false
-      size: title
-      code: |
-        $ python top_words.py notes.txt
-             the 41
-             and 27
-              to 19
+      steps:
+        - command: "python top_words.py notes.txt"
+          output: |
+                 the 41
+                 and 27
+                  to 19
     beats:
       - id: output_b1
         text: "Run it on any text file, and you get a ranked list."
+        actions:
+          - {reveal: output1, at: "@ranked"}   # the output appears on the spoken word
 
   - id: why
     type: icon_grid

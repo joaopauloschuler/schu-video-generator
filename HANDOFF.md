@@ -15388,3 +15388,94 @@ How to test
   "@cache", a bar race with `sort` and a change on a word, a line chart with a change and a
   cursor, bullets with a callout late in the beat): `vidgen lint` in 16:9 and 9:16 reported
   exactly the database and the callout ("learning rate" 5.9 s before it shows); stills looked at.
+
+## Step 164 — Example, docs and review of Phase P
+
+What was built
+- **The example** `examples/gradient-descent/video.yaml` ("Gradient descent, one step at a time",
+  10 scenes, 29 beats, 3:18 voiced): a title; a `function_plot` of the loss `(w − 3)²/2 + 1` with a
+  dot, its tangent and a live `gradient {slope}` label traced on "@against", the minimum revealed
+  on "@minimum"; the update rule as an `equation` (η and ∇L in the concepts' colours through
+  `terms.tex`); a `number_line` with the first three steps as jumps revealed on "@1.5", "@0.75",
+  "@0.375" and w sliding on "@halves"; the gradient `w − 3` plotted with the signed area equal to
+  the change in loss (−3.375, then traced to −4.5); two weights on a plane (a point, the gradient
+  and step vectors, a dashed contour tangent, a 90° angle mark, the step scaled ×2 on "@Double");
+  a `code_morph` from a fixed loop to a loop with a tolerance (on "@tolerance"); a `terminal`
+  (`>>>` prompt) beside the code, carried in from the morph, with outputs from a real run; a
+  `line_chart` of the loss per step for learning rates 0.5, 0.1 and 2.1 (`changes` on words, the
+  axis rescaling as it diverges, a cursor on "@falls"); a recap. `terms:` loss / gradient /
+  learning rate in `primary` / `secondary` / `tertiary`; karaoke captions (`max_lines: 1` in
+  16:9); Kokoro `af_heart` at `speed: 0.88`; `pronunciation:` for the decimals; a `short` 9:16
+  variant; the facts in the file's header. 18 actions on spoken words. No audio committed.
+- **Voiced and rendered outside the repo** (`/home/claude/work/phase-p-example-voiced`): Kokoro
+  `vidgen tts` (29 beats, 2.6 k characters), `vidgen readback` 0.0 % word error rate (after the
+  fixes below; 5.4 % before), `vidgen lint` with the audio 0 findings (12 `narration_speed`
+  warnings at Kokoro's default speed: `speed: 0.88` and two recap beats with a pause fixed them;
+  `plane_b1` reworded to "the direction of steepest ascent", the exact term, after Whisper heard
+  extra words after "fastest" in two takes), final render 1920x1080 3:18, −16.0 LUFS, true peak
+  −1.9 dBTP: `/home/claude/work/phase-p-example-voiced/output/gradient_descent.mp4`. A contact
+  sheet (one frame per 6 s) was checked by eye; the intro's subtitle lost an orphan word.
+- **Docs**: CHANGELOG "Presentation toolkit (Phase P)" in the untagged 0.3.0 (now Steps 61–164)
+  and a "New lint warnings" entry under behaviour changes; README feature bullet and example
+  entry; the Shorts cookbook (`code_morph` and `terminal` in §4, one colour per concept in §5,
+  terms in captions §6, word timing and `said_before_shown` in §8, §2's payoff row, §11, and the
+  §12 example's output as a `terminal` with a word-timed output and `terms:`, validated and linted
+  with `--fail-on info`: 0 findings); CONFIG (diagram node reveal, jump labels, tick plates and dot
+  labels, readback normalisation, "Choosing colours" for terms; the doc examples' `loss` in
+  `tertiary`); guide colour advice and the example's name (+ `AGENTS.md`); DESIGN §87.11;
+  `docs/gallery` code_morph page and function_plot media regenerated.
+
+Review of Phase P (Steps 156–163: word anchors, terms, code_morph, terminal, function_plot and
+geometry, number_line, chart changes, the narration rule, their docs and tests)
+- Fixed, known: (1) a `code_morph` version revealed by an action morphed in the action's 0.8 s:
+  `CodeMorph.entrance_time` gives `MORPH_SECONDS` 1.5 s (the guide, CONFIG and the gallery no
+  longer write `run_time: 1.5`); (2) a `diagram` node revealed on a word appeared without its
+  incoming edge until the next step: `Diagram._node_entrance` grows the edges to the nodes on
+  screen (not those a `steps` entry names).
+- Fixed, found by the example: (3) a dot's live label ran into a point's label as it moved
+  (`PlaneGeometry.label_boxes` are obstacles for `_Dot`); (4) axis numbers on a shaded area had
+  2.9:1 contrast (lint): tight background plates behind them at z −0.5 (`LABEL_PLATE_Z`); (5)
+  number-line jump labels rounded to one decimal (`+0.4` for 0.375): `ends_places`; (6) small jumps'
+  labels overlapped each other and a point's label in 9:16: `lift_clear`; (7) lint `min_font`
+  measured `w₁` 9 % too small: sub- and superscript digits are 0.4 em glyphs; (8) readback
+  counted "1.5" as "one five" because faster-whisper writes `1` `.5`, and lost "minus" in `-3`
+  (`textnorm._decimals_joined`, `_MINUS`); (9) a term in `accent` looks like the default tangent,
+  jump, angle mark and prompt colours: documented (CONFIG, guide), doc examples use `tertiary`.
+- Checked and right: word anchors on decimals (`"@1.5"` finds "1.5,"), anchors on words respelled
+  by `pronunciation:`, anchors re-timed from the Kokoro alignment; terms in karaoke captions;
+  `said_before_shown` silent on the example in both formats before and after audio; validate's
+  messages for the new scene types (read in the tests); `vidgen.api` unchanged by this step.
+- Not changed (judgment, Backlog): karaoke captions reserve two lines in 16:9; plots keep their
+  aspect and leave an empty band in 9:16; no example re-sorts bars; a rescaled line chart's ticks
+  keep the decimals of unlabelled ticks (`5.0`, `10.0`).
+
+Files touched
+- New: `examples/gradient-descent/video.yaml`, `tests/test_phase_p_review.py`.
+- Changed: `src/vidgen/scenes/code_morph.py`, `diagram.py`, `function_plot.py`,
+  `plane_geometry.py`, `math_axes.py`, `number_line.py`, `src/vidgen/lint/layout_rules.py`,
+  `src/vidgen/textnorm.py`, `examples/gallery/video.yaml` (no `run_time` on the morph),
+  `docs/CONFIG.md`, `docs/COOKBOOK.md`, `docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md`,
+  `docs/gallery/code_morph.md`, `docs/gallery/media/function_plot-*`, `src/vidgen/data/guide/AGENTS.md`,
+  `AGENTS.md`, `README.md`, `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- No `vidgen.api` change. New module names: `code_morph.MORPH_SECONDS`, `math_axes.LABEL_PLATE_Z`,
+  `label_plate(text, pad=)`, `number_line.ends_places`, `lift_clear`,
+  `PlaneGeometry.label_boxes`. Readback normalisation: `-3` = "minus three", split decimals joined.
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `tests/test_phase_p_review.py` (10, incl. 3
+  tiny renders), `test_word_anchors` (31), `test_terms` (21), `test_code_morph` (16),
+  `test_terminal` (16), `test_function_plot` (58), `test_geometry` (43), `test_chart_changes` (22),
+  `test_narration_rule` (12), `test_diagram` (45), `test_lint` (23), `test_timing_lint` (10),
+  `test_docs` (62), `test_guide` (53), `test_api` (10), `test_gallery` (12), `test_review2` (14),
+  `test_review4` (11), `test_translation` (70), `test_config` (21), `test_captions` (20),
+  `test_callout_action` (15), `test_readback` (27), `test_speech_flags` (19), `test_actions` (28),
+  `test_layout` (44), `test_builtin_scenes` (202, 60 s), `test_actions_coverage` (83, 53 s),
+  `test_charts` (76), `test_extensions` (25); `test_schema` (63, capped3g, 121 s);
+  `tests/test_mcp.py` in full (capped3g, `timeout 1500`): 17 passed in 68 s. All pass.
+- Manual: `vidgen validate` / `lint` of `examples/gradient-descent` in 16:9 and `--variant short`:
+  0 errors, 0 warnings, 2 info (`narration_speed` estimates of beats full of decimals, whose
+  respelled words count; with the Kokoro audio the same lint has 0 findings); storyboards at 2
+  stills a beat in both formats checked by eye; the voiced copy's readback, lint and final render
+  as above.

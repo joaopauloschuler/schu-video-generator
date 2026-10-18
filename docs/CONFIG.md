@@ -43,7 +43,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
-| `terms` | `{}` | one colour per concept: `{loss: accent, gradient: "#E07A5F"}` (theme colour tokens or hex), or `{term: {color, tex}}`; the term is drawn in its colour wherever it is on-screen text, its `tex` parts in equations; see [one colour per concept](#one-colour-per-concept-terms) |
+| `terms` | `{}` | one colour per concept: `{loss: tertiary, gradient: "#E07A5F"}` (theme colour tokens or hex), or `{term: {color, tex}}`; the term is drawn in its colour wherever it is on-screen text, its `tex` parts in equations; see [one colour per concept](#one-colour-per-concept-terms) |
 | `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
 | `language` | none (English rules) | the video's language, a BCP-47 tag (`en`, `pt-BR`, `es-419`): caption and SRT line breaks, the `narration_speed` lint, ElevenLabs `language_code`, the MP4's audio language; see [languages and translations](#languages-and-translations) |
 | `translations` | none | a translation file (YAML, `vidgen translate-template`) whose texts replace beat texts and on-screen texts, usually in a variant; see [languages and translations](#languages-and-translations) |
@@ -851,7 +851,7 @@ red means *loss* and finds it again in the next scene, the equation and the char
 
 ```yaml
 terms:
-  loss: accent                      # a theme colour token...
+  loss: tertiary                    # a theme colour token...
   gradient: "#E07A5F"               # ...or hex
   learning rate: {color: secondary, tex: '\eta'}   # TeX parts that stand for it in equations
   weights: {color: primary, tex: [w, W]}
@@ -891,6 +891,11 @@ scenes:
 - **Captions**: a term's colour is used when it keeps the `contrast` rule's ratio on the caption
   plate; the plate is made more opaque (up to 1) for it, and a colour that still does not read
   stays in the caption's text colour (a warning in the render log).
+- **Choosing colours**: prefer colours the scenes do not already use for another role. `accent`
+  is also the default colour of `function_plot` tangents and angle marks, `number_line` jumps
+  and the `terminal` prompt; `highlight` is the spoken word of karaoke captions and the code
+  highlight band; `primary` is the bullets' marker. A term in `accent` makes a tangent look like
+  that concept (give the tangent its own `tangent_color`, or the term another colour).
 - **Checks**: `vidgen validate` names a colour that is not a theme colour (`terms.loss: unknown
   theme color 'acent'`), two keys that are one term (`loss` and `Loss`) and unbalanced braces in
   `tex`; `vidgen lint`'s `concept_colors` rule warns about more than 5 different colours (none
@@ -2076,8 +2081,9 @@ writing are not counted as differences in speech: case and punctuation; accents 
 `voce`: STT models drop them now and then); hyphens, dashes and slashes split words
 (`one-by-one` = `one by one`); numbers become words in English and Portuguese (`2.58` = `two
 point five eight`, `1,57` in pt = `um vírgula cinquenta e sete`, `77%` = `seventy seven
-percent`, `1st` = `first`, `$5` = `five dollars`; the language's decimal and thousands marks)
-and keep their digits in other languages (`1.000,5` → `1000 5`); `&`, `+`, `=`, `×`, `@` become
+percent`, `1st` = `first`, `$5` = `five dollars`, `-3` = `minus three`; the language's decimal
+and thousands marks; a decimal part the transcript gives as a word of its own, `1` `.5`, is
+joined to its number) and keep their digits in other languages (`1.000,5` → `1000 5`); `&`, `+`, `=`, `×`, `@` become
 words; spelled acronyms are joined (`G.P.U.` = `G P U` = `GPU`). The normalised words are
 aligned (fewest substitutions, deletions and insertions); differences are grouped into whole
 written words. A difference that disappears when the words are joined (`overparameterized` /
@@ -4414,7 +4420,10 @@ with arrow tips, round ticks and plain-text labels (no LaTeX needed).
   an area's `label` is a template whose fields are filled in as they move: a dot's `{x}`, `{y}`,
   `{slope}`, `{name}` (default `'{name}({x}) = {y}'`), an area's `{area}` (its signed size, the
   integral), `{from}`, `{to}`, `{name}`; `decimals` sets the places, or a field its own format
-  (`{y:.3f}`). The labels and the tick numbers use `label_size` (never below the readable minimum).
+  (`{y:.3f}`). The labels and the tick numbers use `label_size` (never below the readable minimum);
+  the tick numbers sit on small plates in the background colour, so they read on a shaded area
+  and the grid (curves pass over the plates). A dot's label keeps clear of the labels of points,
+  vectors and marks as it moves.
 - **Steps** (`reveal: per_beat`): the axes and function 1 at beat 1, then each further function,
   then each dot (with its tangent and guides), then each area, one per beat (spread evenly when
   there are more than beats; extra beats hold). `reveal: all`: everything in beat 1. A `reveal`
@@ -4426,7 +4435,7 @@ with arrow tips, round ticks and plain-text labels (no LaTeX needed).
   there; `until: <beat>` moves it back when that beat starts. A dot or area not on screen yet
   appears first.
 - **Colours**: a function's `color`, else the colour of the video's [term](#one-colour-per-concept-terms)
-  that its name or label is (`{expr: "x^2", name: loss}` with `terms: {loss: accent}`), else the
+  that its name or label is (`{expr: "x^2", name: loss}` with `terms: {loss: tertiary}`), else the
   theme palette in order. An area takes its own `color`, else the colour of the first term its
   label says, else its function's. Dots are `highlight`, tangents `accent` unless set.
 - **Shape**: `aspect: auto` fills the space (a vertical frame: at most 1.5x as tall as wide);
@@ -4607,8 +4616,9 @@ are thinned to fit) with points, intervals and jumps.
   closed end, a ring at an open one, an arrow at an infinite end; overlapping intervals stack
   above each other. Colours from the theme palette in order (or a term's).
 - **Jumps**: `[from, to]` or `{from, to, label, color}`: an arc above the line with an arrow, its
-  label above it (default `'{by}'`: `+3`, `−2`; `{from}`, `{to}` too); a jump over an earlier one
-  goes higher. Colour `accent` (or a term's).
+  label above it (default `'{by}'`: `+3`, `−2`, with the decimals its ends need: `+0.375`;
+  `{from}`, `{to}` too); a jump over an earlier one goes higher, and a label that would meet an
+  earlier one (or a point's label) is lifted clear. Colour `accent` (or a term's).
 - **Ticks**: round numbers (every 2nd or 5th one labelled when they would crowd); `step: 1` puts
   a tick at every whole number.
 - **Steps** (`reveal: per_beat`): the line with the first item at beat 1, then each point, each
@@ -4708,8 +4718,8 @@ extra beats hold.
 
 - **On a word**: `{reveal: version2, at: "@cache"}` in a beat morphs to version 2 as the
   narrator says "cache" ([Actions on a spoken word](#actions-on-a-spoken-word)); a version an
-  action reveals is left to that action (its beat does not morph at its start).
-  `run_time: 1.5` gives the action's morph the time the scene's own takes (up to 1.5 s).
+  action reveals is left to that action (its beat does not morph at its start). The action's
+  morph takes 1.5 s, the longest the scene's own takes (`run_time` sets another).
 - **`highlight`** of a version marks its lines once it shows (the others dim, a soft band marks
   them): a line spec as in [`code`](#code), or `changed`: the lines that are new or differ from
   the version before (moved and re-indented ones included).
@@ -4759,7 +4769,7 @@ extra beats hold.
     - text: "Here is the slow recursive version."
     - text: "Add a cache, and every value is computed once."
       actions:
-        - {reveal: version2, at: "@cache", run_time: 1.5}
+        - {reveal: version2, at: "@cache"}
 ```
 
 ### `code_walkthrough`
@@ -5250,7 +5260,9 @@ tint, icon, line; labels keep their colour) and everything else dims — list a 
 edges as `"a->b"`.
 [Action targets](#beat-actions): `heading`, `node<N>` (1-based, in the order of `nodes`),
 `node:<id>` and `edge:<from>-><to>` (`edge:check->ship`; patterns such as `edge:check->*`
-select every edge leaving a node). Revealing an edge early brings its nodes too.
+select every edge leaving a node). Revealing an edge early brings its nodes too; revealing a
+node (`{reveal: "node:cache", at: "@cache"}`) grows the edges between it and the nodes on screen
+after it, as its own step would (an edge a `steps` entry names waits for that step).
 
 **Nodes** are written as their id (`- Load data`: the id is also the label) or as
 `{id, label, shape, icon, color}`: `id` (letters, digits, spaces, `_`, `.`, `-`), `label` (the

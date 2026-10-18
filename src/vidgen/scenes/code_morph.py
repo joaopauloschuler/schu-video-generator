@@ -34,6 +34,8 @@ DIMMED = 0.35
 #: Parts of a morph (fractions of its run time): removed glyphs fade out, kept ones glide, new
 #: ones grow in.
 FADE_OUT, GLIDE, GROW_IN = (0.0, 0.45), (0.1, 0.9), (0.5, 1.0)
+#: Longest morph of the scene's own steps (seconds), and the run time of a ``reveal`` action's.
+MORPH_SECONDS = 1.5
 
 
 @dataclass(frozen=True)
@@ -329,7 +331,7 @@ class CodeMorph(CodeListing):
 
             return build
 
-        self.reveal([step(k) for k in range(len(versions))], fraction=0.6, cap=1.5)
+        self.reveal([step(k) for k in range(len(versions))], fraction=0.6, cap=MORPH_SECONDS)
         self.finish()
 
     def _place(self, listings: list[Code], body: Region) -> None:
@@ -383,7 +385,14 @@ class CodeMorph(CodeListing):
                 parts = [listing.code_lines[j] for j in rows] + ([listing.line_numbers[j] for j in rows] if self.params.line_numbers else [])
                 own.append(self.target(f"version{k + 1}.line{line + 1}", VGroup(*parts), entrance=show))
             out.append(own)
+        self._morph_targets = {id(t) for own in out for t in own}
         return out
+
+    def entrance_time(self, target: Target) -> float | None:
+        """A ``reveal`` action morphs to a version (or a line of one) in :data:`MORPH_SECONDS`."""
+        if id(target) in getattr(self, "_morph_targets", ()):
+            return MORPH_SECONDS
+        return super().entrance_time(target)
 
     def _revealed_by_actions(self, version_targets: list[list[Target]]) -> set[int]:
         """The versions (0-based) a ``reveal`` action shows: the scene leaves their morph to it."""
