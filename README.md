@@ -69,7 +69,8 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     insets, a spotlight; in a browser, window or phone frame; a caption), `video_clip` (B-roll, screen
     recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
-    notes), `code`, `code_morph` (one version of the code morphing into the next: vidgen diffs
+    notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
+    and a live value, the area under a curve growing), `code`, `code_morph` (one version of the code morphing into the next: vidgen diffs
     them), `code_walkthrough` (a long file scrolling to the lines each beat explains),
     `terminal` (commands typed at a prompt and the output you write appearing, beside the code);
   - cartoons: `stage` (the video's `characters:` on a set: a picture, a generated picture or a

@@ -154,7 +154,8 @@ def _flat_tex(tex: str) -> str:
 def term_conflicts(config: VideoConfig, theme: Theme) -> list[tuple[str, str | None, str]]:
     """``(scene id, beat id or None, message)`` for each scene setting that colours one of the
     video's terms otherwise than ``terms:`` does: a title's ``highlight`` (``highlight_color``),
-    an ``equation_derivation``'s ``colors``, a ``line_chart`` series' ``color`` and a
+    an ``equation_derivation``'s ``colors``, a ``line_chart`` series' ``color``, a
+    ``function_plot`` function's or area's ``color`` (its name or label naming the term) and a
     ``callout``'s ``color`` on a label naming the term. Scenes with ``terms: false`` are skipped.
     Colours that are not theme colours are left to ``vidgen validate``."""
     from vidgen.errors import VidgenError
@@ -188,6 +189,12 @@ def term_conflicts(config: VideoConfig, theme: Theme) -> list[tuple[str, str | N
             for entry in params["series"]:
                 if isinstance(entry, dict) and entry.get("color"):
                     check(scene.id, None, entry.get("name"), entry["color"], f"series '{entry.get('name')}' color")
+        if scene.type == "function_plot":
+            for key, kind in (("functions", "function"), ("areas", "area")):
+                for entry in params.get(key) or []:
+                    if isinstance(entry, dict) and entry.get("color"):
+                        for text in (entry.get("name"), entry.get("label")):
+                            check(scene.id, None, text, entry["color"], f"{kind} '{entry.get('name') or entry.get('label') or entry.get('expr')}' color")
         if scene.type == "equation_derivation" and isinstance(params.get("colors"), dict):
             for tex, color in params["colors"].items():
                 for term in terms:

@@ -861,9 +861,10 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Tests (`tests/test_terminal.py`: session rows, params and checks, targets, the code file, tiny renders in 16:9 and 9:16, on words, `clear`; the builtin / coverage / translation samples; the gallery page)
 
 ### Step 160 — Maths toolkit, part 1: function plots
-- [ ] Axes with f(x) from expressions evaluated safely (no `eval`; a small whitelisted parser, or sympy only if already a dependency: check), several functions
-- [ ] A dot moving along a curve with a live value label, a tangent line at a point moving with the dot, shaded area under a curve between bounds, labels; driven by beat actions
-- [ ] Tests
+- [x] Axes with f(x) from expressions evaluated safely (no `eval`; a small whitelisted parser, or sympy only if already a dependency: check), several functions (sympy is not a dependency: `vidgen/mathexpr.py`, a recursive-descent parser to numpy closures, exported by `vidgen.api`; a new scene type `function_plot` with maths axes crossing at the origin, `functions` as `x^2` / `f(x) = ...` / `{expr, name, label, color, domain, dashed}`, a later one using an earlier one; asymptotes break the curve; DESIGN §87.6)
+- [x] A dot moving along a curve with a live value label, a tangent line at a point moving with the dot, shaded area under a curve between bounds, labels; driven by beat actions (`dots: {on, x, label: '{name}({x}) = {y}', tangent, guides}`, `areas: {under, over, between, label: 'A = {area}'}`, curve labels placed clear of curves and labels; the new `trace` action moves a dot along its curve or an area's right end, on a word with `at: "@word"`; `reveal` of `dot<N>` / `tangent<N>` / `area<N>` on a word; terms colour a function named after a term and an area whose label says one; lint `concept_colors` checks their `color`)
+- [x] Step 161's plan recorded (DESIGN §87.7: points, vectors and marks as additions to `function_plot`, a `number_line` scene type beside it)
+- [x] Tests (`tests/test_function_plot.py`: the parser, labels, layout helpers, params and checks, `trace` checks, term conflicts, tiny renders in 16:9 and 9:16 on words and with `until`; the builtin / coverage / translation samples; the gallery page)
 
 ### Step 161 — Maths toolkit, part 2: geometry basics
 - [ ] Braces with labels, angle arcs with labels, dimension lines
@@ -909,6 +910,7 @@ Bugs / correctness
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
 
 Quality (what an agent's video looks like)
+- [ ] `function_plot` (Step 160): a function of a parameter animated over beats (`a` in `a x^2`); parametric / polar curves; LaTeX labels; a dot's label plate does not avoid other curves; `trace` moves in x only
 - [ ] `terminal` (Step 159): no general split with another scene type (only the `code` pane); a long session does not scroll (`clear` starts a new page); one colour per output; `code_morph`'s `reveal` of a version could use `entrance_time` (its morph's 1.5 s) instead of the action's 0.8 s
 - [ ] `code_morph` (Step 158): `code_walkthrough` does not morph between versions; a token moving to another line (a line split in two) fades out and in instead of gliding; a `reveal` action's morph takes the action's `run_time` (default 0.8 s; the guide writes 1.5)
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)

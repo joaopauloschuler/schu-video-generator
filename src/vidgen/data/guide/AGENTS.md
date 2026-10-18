@@ -307,6 +307,7 @@ project's own scene types, in its theme).
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
+| a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
 | code that changes: before / after, a refactor, a fix | `code_morph` | `title`, `versions` (each the code, or code / path / highlight) |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
@@ -583,6 +584,21 @@ Minimal snippets (copy, then adapt):
     - text: "Two x plus three is eleven."
     - text: "Take three from both sides."
     - text: "So x is four."
+- id: slope
+  type: function_plot    # f(x) written as maths (parsed safely: x^2, 2x + 1, sin(x), exp(-x^2/2)); one item per beat
+  params:
+    title: "The slope of x²"
+    functions: ["f(x) = x^2"]
+    x_range: [-3, 3]
+    dots: [{x: -2, tangent: true, label: "slope {slope}"}]   # a live label: {x}, {y}, {slope}
+    areas: [{between: [0, 1], label: "A = {area}"}]           # the area under f, its size filled in
+  beats:
+    - text: "Here is the parabola, f of x equals x squared."
+    - text: "A dot on the curve, with its tangent."
+    - text: "As the dot moves right, the slope grows steeper."
+      actions: [{trace: dot1, to: 2, at: "@moves"}]   # the dot travels along the curve on the word
+    - text: "The area under the curve grows as its end moves out."
+      actions: [{trace: area1, to: 2.5, at: "@grows"}]
 - id: snippet
   type: code
   params: {title: "Load and train", code: "data = load()\nmodel = fit(data)\nsave(model)", highlight: ["1", "2-3"]}
@@ -701,8 +717,8 @@ terms:
 
 Whole words, any case, plurals too. At most about 5 colours, each readable on the background
 (lint `concept_colors` checks both). Do not colour the same word otherwise in a scene (a
-title's `highlight_color`, a series' `color`, an `equation_derivation`'s `colors`, a callout's
-`color`): lint warns. `terms: false` on a scene turns it off there (a recap in plain colours).
+title's `highlight_color`, a series' `color`, an `equation_derivation`'s `colors`, a plotted
+function's or area's `color`, a callout's `color`): lint warns. `terms: false` on a scene turns it off there (a recap in plain colours).
 
 **Icons.** 200 line icons in one style. Find them by concept:
 `vidgen list-icons --search growth`, `vidgen list-icons --category data`, and look at them in
@@ -739,6 +755,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start) | one at a time |
 | `reveal` | bring a later element in early | rarely: the default order is usually right |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
+| `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow) or an area's right end | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |

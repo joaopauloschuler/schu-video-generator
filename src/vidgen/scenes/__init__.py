@@ -9,7 +9,7 @@ transform; ``callout_action``: callout; ``sfx_action``: sfx;
 exit, gesture, jump, step_aside; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
 put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_in, ride_to, get_out;
 ``shot_action``: shot;
-``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``switch_action``:
+``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``function_plot``: trace; ``switch_action``:
 switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: lightning,
 rainbow; ``knock_action``: knock; ``host_actions``: host_point, host_look, host_react, host_move,
 host_enter, host_exit) and the
@@ -35,6 +35,7 @@ from vidgen.scenes import (  # noqa: F401
     end_card,
     equation,
     equation_derivation,
+    function_plot,
     handling,
     heatmap,
     histogram,

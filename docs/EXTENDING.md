@@ -1371,6 +1371,13 @@ scene that shows the narration its own way):
   vidgen does (whole words, any case, plurals; for `MarkupText` or a picture of your own), and
   `with using_terms(terms):` changes them for the text built inside (e.g. only those that read
   on your plate). An equation of your own colours `term.tex` parts itself.
+- **Maths expressions** (docs/CONFIG.md `function_plot`): `parse_expression(text, known=None)
+  -> MathExpression` parses f(x) as `function_plot` does (whitelisted, never `eval`; a
+  `ValueError` naming the problem and its column); `expr(xs)` evaluates a numpy array (`nan`
+  where undefined), `expr.at(x)`, `expr.slope(x)`; `known` maps names to earlier
+  `MathExpression`s it may call. `split_definition("f(x) = x^2") -> ("f", "x^2")`,
+  `pretty_expression("x^2")` -> `"x²"` (for a label); `MATH_FUNCTIONS`, `MATH_CONSTANTS` and
+  `MATH_NAMES` list what an expression knows.
 - `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
   max_lines=2, max_words=None, until=None, prefix="", prefix_width=None) -> [CaptionCue(start,
   end, lines, words, prefix)]`: the text cut at phrase boundaries into cues (`segment_cues`, costs

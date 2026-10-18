@@ -233,6 +233,8 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "code_morph": [{"versions": ["a = 1", {"code": "a = 2", "highlight": "changed"}], "title": "T:title"}],
     "code_walkthrough": [{"code": "a = 1\nb = 2\n", "title": "T:title", "steps": ["1", {"lines": "2", "note": "T:note"}]}],
     "terminal": [{"steps": ["ls", {"command": "cat a", "output": "x"}], "title": "T:title"}],
+    "function_plot": [{"functions": ["x^2", {"expr": "2x", "label": "T:line"}], "x_range": [0, 1], "title": "T:title", "x_label": "T:x", "y_label": "T:y",
+                       "dots": [{"x": 0.5, "label": "T:{y}"}], "areas": [{"between": [0, 1], "label": "T:area"}]}],
     "comparison": [
         {
             "columns": [{"heading": "T:left", "points": ["T:p1", {"text": "T:p2"}]}, {"heading": "T:right", "points": ["T:p3"]}],

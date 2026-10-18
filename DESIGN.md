@@ -11014,7 +11014,7 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
 
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
-Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal` (more
+Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot` (more
 sections as the steps land). Help AI
 authors make clearer and better-looking presentation videos: coding Shorts, science and maths
 explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
@@ -11240,3 +11240,104 @@ rules as Phases H–O: cheap tests, new public extension surface only through `v
 - **Not done**: a terminal in a split with a scene of another type (there is no general split;
   the `code` pane covers the coding case); scrolling a long session (use `clear`); colours
   inside the output (one colour per step); a blinking cursor (it would redraw every frame).
+
+### 87.6 Maths, part 1: function plots (Step 160)
+
+- **A scene type, `function_plot`** (`scenes/function_plot.py`), not a mode of `line_chart`:
+  a chart plots the author's data points on chart axes at the plot's edges; here the author
+  writes functions, the axes are maths axes, and dots and areas move with beat actions. Params:
+  `functions` (an expression string, `f(x) = ...`, or `{expr, name, label, color, domain,
+  dashed}`), `x_range`, `y_range` (default from the values), `dots` (`{on, x, label, tangent,
+  guides, color, tangent_color, decimals}`), `areas` (`{under, over, between, label, color,
+  opacity, decimals}`), `x_label`, `y_label`, `grid`, `aspect` (`auto` | `equal`), `reveal`,
+  `title`, `title_size`, `title_color`, `label_size`.
+- **Expressions, never `eval`** (`vidgen/mathexpr.py`, no manim; sympy is not a dependency,
+  checked): a tokenizer and a recursive-descent parser compile the text into numpy closures.
+  Grammar: `+ -`, `* /` and implicit products (`2x`, `3(x + 1)`, `x sin(x)`, `(x+1)(x-1)`),
+  unary minus below `^` (`-x^2` is `-(x^2)`), `^` / `**` right-associative (`2^-x`), brackets,
+  numbers (`2e3`), `x`, `pi` / `e` / `tau`, the whitelisted functions `MATH_FUNCTIONS` (numpy:
+  trig, hyperbolic, `exp`, `ln` / `log`, `log10`, `log2`, `sqrt`, `abs`, `floor`, `ceil`, `sign`,
+  `min`, `max`) and functions defined before (`g(x) = f(x) + 1`; only earlier ones, so no
+  cycles). Unicode maths (`−`, `×`, `·`, `π`, `²`) is read too. Any other character or name is
+  a `ValueError` naming it, its column and the closest known names (`difflib`). Values are
+  evaluated under `np.errstate(all="ignore")`; non-finite values become `nan` (a gap).
+  `MathExpression.slope` is a central difference. `pretty_expression` writes the default curve
+  label (`x^2` -> `x²`, `2*x` -> `2x`, `-` -> `−`). Exported by `vidgen.api`: `MathExpression`,
+  `parse_expression`, `pretty_expression`, `split_definition`, `MATH_FUNCTIONS`,
+  `MATH_CONSTANTS`, `MATH_NAMES` (a project's own maths scene parses the same way).
+- **Axes** (`math_axes` -> `MathAxes`, in the scene module, for Step 161 to share): they cross
+  at the origin when it is in view, else run along the bottom / left edge; arrow tips; ticks from
+  `axis_ticks` within the range, labels thinned to every k-th (aligned on 0), negative numbers
+  with U+2212, one `0` at an inner origin; faint grid lines at the ticks; axis titles by the tips.
+  The plot region leaves room for labels next to an axis on (or near) an edge (iterated), half
+  an end tick label at both sides, and the tips. `aspect: equal` shrinks one side to a common
+  unit; `auto` fills the body, at most `MAX_TALL` (1.5) times as tall as wide (9:16). Draw order
+  by `z_index`: grid -2, areas -1, curves 0, tick / curve labels 1, tangents 1, dots and their
+  labels 3 (the layout dump sorts by it, so lint's `covered_text` sees what is drawn).
+- **Curves** (`curve_runs`): samples (90 per unit of plot width, at least 240), split where
+  undefined, where they leave the y range (ending on its edge by interpolation) and at a jump of
+  more than 1.5 ranges (an asymptote such as `tan`); each run a polyline (`DashedVMobject` when
+  `dashed`). `auto_y_range` drops the 3 % tails when the full span is 4x the trimmed one (an
+  asymptote), reaches 0 when it is within 0.6 spans, and adds 6 %.
+- **Labels**: a curve's label (`place_label`) goes beside a point of its curve on the side of
+  the normal, above or below, the first place (shares 0.88, 0.72, ... then every 5 %) inside
+  the plot that covers no axis or curve point and no other label; else the free spot nearest the
+  curve's right part on a 0.12-unit grid. A dot's label (`dot_label_spot`) sits on the side above
+  the curve (up-left of a rising curve), else another corner, clear of the curve labels and tick
+  labels, on a plate in the background colour; an area's (`area_label_spot`) inside the area
+  where it fits (from the middle outwards), else just above it, else anywhere clear.
+  Templates: `{x}`, `{y}`, `{slope}`, `{name}` (dot), `{area}`, `{from}`, `{to}`, `{name}`
+  (area), with `decimals` or a field's own format; checked by `label_problem`.
+- **Moving items**: `_Dot.place(x)` / `_Area.place(end)` move everything from the state (dot,
+  tangent clipped to the plot, guides, label text rebuilt only when it changes, keeping a dimmed
+  opacity; `become` resets `z_index`, so it is set again). The **`trace` action** (`to`; 2 s,
+  `smooth`; reversible with `until`) plays `_Trace` (an `Animation` on the dot or the area's
+  shape whose `interpolate_mobject` calls `place`) plus a no-op `_Moved` on each other shown part,
+  so Manim counts them as moving and redraws them (else they would be frozen in the static
+  background image). `scene_problems`: a `function_plot` only, a dot or an area only, `to`
+  inside the function's drawn range and where it has a value.
+- **Reveal**: each target has its own entrance and the targets it needs first (title, axes,
+  its function, its dot); an entrance brings that chain (each part once), so `{reveal: dot1}`
+  before its function draws the function too, and a step never plays a part twice. Steps:
+  functions, then dots, then areas, one per beat (`distribute`); an item a `reveal` action shows
+  keeps its slot, empty, so the others keep their beats; a dot's tangent comes with the dot
+  unless an action reveals `tangent<N>`.
+- **Terms** (§87.3): a function whose name or whole label is a term takes its colour
+  (`LineChart._term_color`); an area without `color` takes the first term its label says; all
+  labels are `self.text`, so terms in them are coloured. `terms.term_conflicts` reports a
+  function's or area's explicit `color` on a name / label that says a term.
+- **Lint**: `cap_height` counts U+2212 as a small glyph (like `-`), so `−3` measures as `-3`.
+- **Not done** (Backlog): a function of a parameter animated over beats (`a` in `a x^2`);
+  parametric and polar curves; a label that follows a curve's moving end; LaTeX labels; a dot
+  label's plate does not avoid other curves; `trace` moves in x only (a dot does not leave its
+  curve).
+
+### 87.7 Maths, part 2: the plan for geometry basics (Step 161)
+
+Decided in Step 160 so that Step 161 extends the same scene where the things live on a
+coordinate system and sits beside it where they do not:
+
+- **On the plane: additions to `function_plot`.** `functions` becomes optional (at least one of
+  `functions`, `points`, `vectors`), so a coordinate plane is a `function_plot` with
+  `aspect: equal` (the default when there are vectors). New lists, revealed after the areas in
+  this order, each item a target: `points` (`point<N>`: a labelled dot at `[x, y]`), `vectors`
+  (`vector<N>`: an arrow `{from: [x, y] (default the origin), to | components, label, color}`),
+  and `marks` (`brace<N>`, `angle<N>`, `dimension<N>`): a brace under / beside a segment with a
+  label, an angle arc between three points with a label (and a right-angle square at 90°), a
+  dimension line with end ticks and a label, all in data coordinates on `MathAxes`. `axes:
+  false` hides the axes for pure geometry (the mapping stays). Vector sums are an item `{sum:
+  [vector1, vector2]}` (tip to tail, then the resultant); scaling is the `trace` action
+  generalised to points and vectors (`{trace: vector1, to: [2, 1]}` moves the tip, `{trace:
+  vector1, scale: 2}` scales it), so one action moves everything on the plane.
+- **The mark builders** (brace, angle arc, dimension line) go in a shared module exported by
+  `vidgen.api` (e.g. `vidgen/geometry_marks.py`), so `diagram`, `screenshot`-style scenes and
+  project scenes can draw the same marks in frame coordinates.
+- **Beside it: a `number_line` scene type** (1-D): one axis across the width (a vertical frame:
+  still horizontal, with fewer ticks), `points`, `intervals` (open / closed ends, shaded),
+  `jumps` (arcs from a to b with a label, e.g. `+3`), the same tick labels (factor the tick
+  and label part of `math_axes` into a helper both use), the same `reveal` and `trace` (a point
+  moving along the line). Its params of a 2-D plot (functions, `y_range`, `aspect`) would not
+  apply, so it is its own type rather than an `axes: x` mode.
+- **Terms and words** as in Step 160: every label through `self.text`, an item's colour from
+  the first term its label says, `{reveal: vector2, at: "@sum"}` / `{trace: ..., at: "@word"}`
+  on spoken words.

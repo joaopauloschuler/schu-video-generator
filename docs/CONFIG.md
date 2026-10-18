@@ -875,7 +875,9 @@ scenes:
   while it is said), lower thirds; a `line_chart` series whose whole name is a term is drawn in
   its colour (unless the series has its own `color`); a `callout` whose label says a term takes
   its colour for the mark and the plate (unless the callout has its own `color`; the label's text
-  keeps the colour that reads on the plate). Code listings are not coloured (their syntax
+  keeps the colour that reads on the plate); a `function_plot` function whose name or label is a
+  term is drawn in its colour, and an area whose label says one is filled with it (unless they
+  have their own `color`). Code listings are not coloured (their syntax
   colours would clash), nor text inside pictures.
 - **Matching**: whole words, any case, a plural `s` / `es` included (`loss` also colours
   `Losses`, not `glossy`); a term of several words matches them with any spaces or a line break
@@ -3303,7 +3305,7 @@ its params. Conventions shared by all built-ins:
   a `map` with the `world` view keeps only the longitudes of its countries, pins and arcs.
 - **Header band.** The line at the top of the frame is `heading` in `bullets`, `icon_grid`,
   `comparison`, `timeline`, `diagram`, `process`, `network` and `title` in the charts, `table`,
-  `map`, `code`, `code_morph`, `code_walkthrough`, `terminal`, `equation_derivation`, `screenshot`, `video_clip`. Every
+  `map`, `code`, `code_morph`, `code_walkthrough`, `terminal`, `equation_derivation`, `function_plot`, `screenshot`, `video_clip`. Every
   one of these types accepts **both names** (also `heading_size` / `title_size`,
   `heading_color` / `title_color`; `vidgen list-scenes` shows `(also: title)`), and the target
   `title` selects a `heading` and the reverse. Not in `title`, `chapter` and `end_card`, whose
@@ -4312,6 +4314,120 @@ jumps ahead; the steps in between are skipped and the result still gets its box.
     - text: "Eleven minus three is eight."
     - text: "Divide both sides by two."
     - text: "And x is four."
+```
+
+### `function_plot`
+
+Maths axes with functions f(x): curves, dots that travel along a curve with a live value label
+(and a tangent that turns with them), and shaded areas under a curve. The axes are maths style:
+they cross at the origin when it is in view (else they run along the bottom and left edges),
+with arrow tips, round ticks and plain-text labels (no LaTeX needed).
+
+- **Functions** are written as maths, as text: `x^2 - 1`, `2x + 1` (a number before a letter or a
+  bracket multiplies), `3(x + 1)`, `sin(x)^2`, `exp(-x^2/2)`, `sqrt(x)`, `abs(x)`, `1/x`, with
+  `^` (or `**`) for powers, the constants `pi`, `e`, `tau` and the functions `sin`, `cos`,
+  `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `exp`, `ln` / `log` (natural), `log10`,
+  `log2`, `sqrt`, `abs`, `floor`, `ceil`, `sign`, `min(a, b)`, `max(a, b)`. The variable is `x`.
+  vidgen parses them with its own small parser: nothing is run as code. `f(x) = x^2` names the
+  function (else they are `f`, `g`, `h`, ... in order); a later function may use an earlier one
+  (`g(x) = f(x) + 1`). Where a function is undefined (`sqrt` of a negative, `1/x` at 0) or leaves
+  the y range, the curve breaks: asymptotes are drawn as separate pieces.
+- **Labels**: each curve has a label by it (default `f(x) = x²`, written from the name and the
+  expression; `label: ''` for none), placed where it covers no other curve or label. A dot's and
+  an area's `label` is a template whose fields are filled in as they move: a dot's `{x}`, `{y}`,
+  `{slope}`, `{name}` (default `'{name}({x}) = {y}'`), an area's `{area}` (its signed size, the
+  integral), `{from}`, `{to}`, `{name}`; `decimals` sets the places, or a field its own format
+  (`{y:.3f}`). The labels and the tick numbers use `label_size` (never below the readable minimum).
+- **Steps** (`reveal: per_beat`): the axes and function 1 at beat 1, then each further function,
+  then each dot (with its tangent and guides), then each area, one per beat (spread evenly when
+  there are more than beats; extra beats hold). `reveal: all`: everything in beat 1. A `reveal`
+  action shows an item on a word instead (`{reveal: dot1, at: "@slope"}`, `{reveal: tangent1,
+  at: "@tangent"}`); the scene then leaves it to the action (its own beat for it holds).
+- **Moving**: the `trace` action moves a dot along its curve to x = `to`, its label, guides and
+  tangent following (`{trace: dot1, to: 2.5, at: "@steeper"}`), or an area's right end
+  (`{trace: area1, to: 4}`: the area and its value grow); it takes 2 s (`run_time`) and stays
+  there; `until: <beat>` moves it back when that beat starts. A dot or area not on screen yet
+  appears first.
+- **Colours**: a function's `color`, else the colour of the video's [term](#one-colour-per-concept-terms)
+  that its name or label is (`{expr: "x^2", name: loss}` with `terms: {loss: accent}`), else the
+  theme palette in order. An area takes its own `color`, else the colour of the first term its
+  label says, else its function's. Dots are `highlight`, tangents `accent` unless set.
+- **Shape**: `aspect: auto` fills the space (a vertical frame: at most 1.5x as tall as wide);
+  `aspect: equal` gives both axes the same unit, so slopes and angles look true. `y_range`
+  defaults to the functions' values over `x_range` (without the far ends of an asymptote,
+  reaching 0 when it is near).
+- **Checks** (`vidgen validate`): an expression that does not parse (`functions[0]: 'x^': expected
+  a number, x, a function or '(' at character 3, found the end`), an unknown name (with the
+  closest known ones), a function used before it is defined, a function with no value on the x
+  range, two functions with one name, a dot or an area bound outside its function's range or
+  where it has no value, an unknown field in a label, a `trace` whose `to` is outside the range,
+  a `trace` of something other than a dot or an area.
+- [Action targets](#beat-actions): `title`, `axes`, `function<N>` and `function:<name>` (a curve
+  with its label), `dot<N>` (the dot, its label and guides), `tangent<N>` (dot N's tangent, when
+  it has one), `area<N>`.
+
+| param | type | default | |
+|---|---|---|---|
+| `functions` | list | — | at least one: an expression (`x^2`, `f(x) = sin(x)`) or `{expr, name, label, color, domain, dashed}` |
+| `functions[].expr` | str | — | f(x) as maths; `f(x) = ...` names it |
+| `functions[].name` | str | from `expr`, else `f`, `g`, `h`... | for `on`, `under`, `over` and labels |
+| `functions[].label` | str | `f(x) = <expr>` | the label by the curve; `''` for none |
+| `functions[].color` | color | term colour, else palette | |
+| `functions[].domain` | `[from, to]` | the x range | draw it only there |
+| `functions[].dashed` | bool | `false` | a dashed curve |
+| `x_range` | `[from, to]` | — | the x axis |
+| `y_range` | `[from, to]` | from the values | the y axis |
+| `dots` | list | `[]` | `{on, x, label, tangent, guides, color, tangent_color, decimals}` |
+| `dots[].on` | str | the first function | the function it sits on |
+| `dots[].x` | number | — | where it starts (`trace` moves it) |
+| `dots[].label` | str | `'{name}({x}) = {y}'` | live label: `{x}`, `{y}`, `{slope}`, `{name}`; `''` for none |
+| `dots[].tangent` | bool | `false` | the tangent line at the dot, turning as it moves |
+| `dots[].guides` | bool | `false` | dashed lines from the dot to both axes |
+| `dots[].color` | color | `highlight` | |
+| `dots[].tangent_color` | color | `accent` | |
+| `dots[].decimals` | int 0–4 | `1` | places of the label's numbers |
+| `areas` | list | `[]` | `{under, over, between, label, color, opacity, decimals}` |
+| `areas[].under` | str | the first function | the curve above the area |
+| `areas[].over` | str | the x axis | a curve below the area (the area between two curves) |
+| `areas[].between` | `[from, to]` | — | its ends on the x axis (`trace` moves the right one) |
+| `areas[].label` | str | `''` | in the area: `{area}`, `{from}`, `{to}`, `{name}` (`'A = {area}'`) |
+| `areas[].color` | color | term colour, else the function's | |
+| `areas[].opacity` | number (0–1] | `0.3` | fill opacity |
+| `areas[].decimals` | int 0–4 | `2` | |
+| `x_label` | str | `x` | at the end of the x axis (`''` for none) |
+| `y_label` | str | `y` | at the top of the y axis (`''` for none) |
+| `grid` | bool | `true` | faint lines at the ticks |
+| `aspect` | `auto` \| `equal` | `auto` | `equal`: one unit is as long on both axes |
+| `reveal` | `per_beat` \| `all` | `per_beat` | |
+| `title` | str | `""` | in the header band |
+| `title_size` | size | `heading` | 1.3x in a vertical frame |
+| `title_color` | color | `text` | |
+| `label_size` | size | `caption` | tick, axis, curve, dot and area labels |
+
+```yaml
+- id: slope
+  type: function_plot
+  params:
+    title: "The slope of x²"
+    functions: ["f(x) = x^2"]
+    x_range: [-3, 3]
+    dots: [{x: -2, tangent: true, guides: true, label: "slope {slope}"}]
+  beats:
+    - text: "Here is the parabola, f of x equals x squared."
+    - text: "A dot on the curve, with its tangent line."
+    - text: "As the dot moves right, the slope grows steeper."
+      actions: [{trace: dot1, to: 2, at: "@moves"}]
+- id: area
+  type: function_plot
+  params:
+    functions: ["sin(x) + 1.2"]
+    x_range: [0, 6.5]
+    areas: [{between: [1, 2], label: "A = {area}"}]
+  beats:
+    - text: "Take this wave."
+    - text: "The area under it from one to two."
+    - text: "Sweep the right end out to five and the area grows."
+      actions: [{trace: area1, to: 5, at: "@Sweep"}]
 ```
 
 ### `code`
@@ -7548,6 +7664,7 @@ a title card, a `transform` of a bar).
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
+| `function_plot` | `title`, `axes`, `function<N>`, `function:<name>`, `dot<N>`, `tangent<N>`, `area<N>` | reveal, dim, highlight, zoom, trace | a function is its curve and label, a dot its dot, label and guides; `{trace: dot1, to: 2}` moves a dot along its curve (label and tangent follow), `{trace: area1, to: 4}` an area's right end; `{reveal: tangent1, at: "@word"}` draws a tangent on that word |
 | `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
 | `code_morph` | `title`, `listing`, `version<N>`, `version<N>.line<K>` | reveal, highlight, dim | `{reveal: version2, at: "@word"}` morphs to version 2 on that word (the scene then leaves that morph to the action); `listing` is whichever version shows; `version2.line3` is line 3 of version 2 (with its number) |
 | `terminal` | `title`, `terminal`, `code`, `code.line<K>`, `command<N>`, `output<N>`, `output<N>.line<K>` | reveal, dim, highlight | `{reveal: output2, at: "@word"}` shows step 2's output on that word, `command2` types the command then (the scene leaves them to the action); `terminal` is the window; `code` the listing beside it |
@@ -7590,6 +7707,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |
+| `trace` | `to` (required: an x of the axis) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following. 2 s; it stays there (`until: <beat>`: back when that beat starts). |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |
@@ -7697,7 +7815,9 @@ narrator begins that word.
   [Overlays](#overlays)). A scene's `sfx:` list stays in seconds; for a sound on a word use the
   beat's `sfx` action. A scene's own step can wait for a word too where the scene leaves it to
   a `reveal` action: [`code_morph`](#code_morph) morphs to `version2` on `{reveal: version2, at: "@word"}`,
-  [`terminal`](#terminal) shows `output2` (or types `command2`) on `{reveal: output2, at: "@word"}`.
+  [`terminal`](#terminal) shows `output2` (or types `command2`) on `{reveal: output2, at: "@word"}`,
+  [`function_plot`](#function_plot) draws a tangent on `{reveal: tangent1, at: "@word"}` and moves a dot on
+  `{trace: dot1, to: 2, at: "@word"}`.
 - **Where the time comes from**: the beat's MP3 once `vidgen tts` has made it (the word timings
   the TTS gives, as ElevenLabs and Kokoro do; else the words spread over the speech in the MP3,
   by syllables), the same timings as the karaoke captions. Before there is any audio, an
@@ -8275,7 +8395,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
 | `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
-| `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
+| `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's or area's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
 | `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared. Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |

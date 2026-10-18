@@ -40,7 +40,7 @@ _GLYPH_EM: dict[str, float] = {
     **dict.fromkeys("acemnorsuvwxz", _X_HEIGHT),
     **dict.fromkeys("gpqy", _DESCENDER),
     "j": 0.95,
-    **dict.fromkeys(".,:;·•-–—_'\"`‘’“”", _SMALL),
+    **dict.fromkeys(".,:;·•-–—−_'\"`‘’“”", _SMALL),
 }
 
 

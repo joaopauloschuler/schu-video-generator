@@ -13,6 +13,7 @@
 #   vidgen storyboard examples/gallery --scene share --scene busy --per-beat 3  # a donut sweeping in; a heatmap
 #   vidgen storyboard examples/gallery --scene reach --per-beat 3   # a map: countries, then pins and an arc
 #   vidgen storyboard examples/gallery --scene derive --per-beat 3  # an equation derivation, step by step
+#   vidgen storyboard examples/gallery --scene slope --per-beat 3   # a function plot: a dot tracing its curve, an area growing
 #   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step; chapter 4 starts here
 #   vidgen storyboard examples/gallery --scene morph --per-beat 3   # code morphing from a loop to a comprehension, on a word
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
@@ -412,6 +413,25 @@ scenes:
       - text: "Eleven minus three is eight."
       - text: "Then divide both sides by two."
       - text: "And x is four, the result, in a box."
+
+  - id: slope
+    type: function_plot   # f(x) written as maths and parsed safely (nothing runs); one item per beat
+    params:
+      title: "How steep is x²?"
+      functions: ["f(x) = x^2"]
+      x_range: [-3, 3]
+      dots: [{x: -2, tangent: true, guides: true, label: "slope {slope}"}]   # a live label
+      areas: [{between: [0, 1], label: "A = {area}"}]
+    beats:
+      - text: "A function plot draws f of x equals x squared on maths axes."
+      - text: "A dot on the curve carries its tangent line, and a label with the slope."
+      - text: "As the dot travels to the right, the slope grows steeper."
+        actions:
+          - {trace: dot1, to: 2, at: "@travels"}   # the dot moves along the curve on the spoken word
+      - text: "Now the area under the curve, from zero to one, grows as its end moves out to two."
+        actions:
+          - {reveal: area1, at: "@area"}           # the scene leaves the area to this action
+          - {trace: area1, to: 2, at: "@grows"}
 
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about

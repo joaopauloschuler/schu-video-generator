@@ -15022,3 +15022,96 @@ How to test
   on words): storyboards in 16:9, 9:16 and `light_academic` checked by eye; `vidgen lint` 0
   findings in all three; `examples/gallery --scene shell` storyboard (the morph's listing glides
   in); `vidgen gallery --types terminal`.
+
+## Step 160 — Maths toolkit, part 1: function plots
+
+What was built
+- **`function_plot`**, a new scene type (`src/vidgen/scenes/function_plot.py`, DESIGN §87.6):
+  maths axes (crossing at the origin when it is in view, arrow tips, round ticks, one `0`,
+  faint grid, plain-text labels) with `functions` written as maths (`x^2`, `2x + 1`,
+  `f(x) = sin(x)`, `{expr, name, label, color, domain, dashed}`; a later one may call an
+  earlier one: `g(x) = f(x) + 1`), `x_range`, `y_range` (default from the values, an asymptote's
+  far ends left out), `dots` (`{on, x, label, tangent, guides, color, tangent_color, decimals}`:
+  a live label `'{name}({x}) = {y}'` / `'slope {slope}'`, a tangent that turns with the dot,
+  dashed guides to the axes), `areas` (`{under, over, between, label, color, opacity,
+  decimals}`: `'A = {area}'` is the signed integral), `x_label`, `y_label`, `grid`, `aspect`
+  (`auto` / `equal`), `reveal` (`per_beat`: functions, then dots, then areas, one per beat; `all`).
+  Undefined values and asymptotes break a curve into pieces (`curve_runs`).
+- **Safe expressions** (`src/vidgen/mathexpr.py`, no manim): sympy is not a dependency
+  (checked), so a small tokenizer + recursive-descent parser compiles to numpy closures;
+  implicit products, `^` / `**`, unary minus, `pi` / `e` / `tau`, a whitelist of numpy functions,
+  Unicode maths; anything else is a `ValueError` naming it, its column and close names.
+  Nothing is ever `eval`ed.
+- **The `trace` action** (`to`): a dot travels along its curve (its label, guides and tangent
+  follow), or an area's right end moves (its value follows); 2 s, `until:` moves it back; on a
+  word with `at: "@word"` (Step 156). `reveal` of `dot<N>`, `tangent<N>`, `area<N>`,
+  `function<N>` on a word works; such an item's own beat holds.
+- **Labels placed by vidgen**: curve labels where they cover no curve, axis, tick label or other
+  label (else the nearest free spot); dot labels on the side above the curve, clear of the
+  others; area labels inside the area where they fit, else above it. Curve, dot and area labels
+  sit on a plate in the background colour (readable on the grid and on area fills).
+- **Concept colours** (Step 157): a function named after a term (or whose label is one) takes the
+  term's colour; an area takes the colour of the first term its label says; every label goes
+  through `self.text`, so terms in labels are coloured. `terms.term_conflicts` (lint
+  `concept_colors`) reports a function's or area's own `color` on a term.
+- **Lint fix**: `cap_height` counts U+2212 (the minus of the tick labels) as a small glyph, like
+  `-`; before, `−3` measured 3 % under `min_font`.
+- **Docs and examples**: CONFIG `function_plot` section, targets-table row, `trace` in the
+  actions table, "Actions on a spoken word", the terms "Where" list, `concept_colors` row, the
+  header-band list; guide chooser row, a snippet and the `trace` action row (+ `AGENTS.md`);
+  EXTENDING (maths expressions); README's scene list; `examples/gallery` scene `slope` (a dot
+  tracing on "travels", the area revealed on "area" and growing on "grows");
+  `docs/gallery/function_plot.md` + stills / GIFs (`vidgen gallery --types function_plot`).
+- **Step 161 plan** in DESIGN §87.7: points, vectors (sums, `trace` generalised to move / scale
+  them) and marks (braces, angle arcs, dimension lines; builders in a shared module exported by
+  `vidgen.api`) as additions to `function_plot` (`functions` becomes optional; `axes: false` for
+  pure geometry); a separate `number_line` scene type sharing the tick code.
+
+Files touched
+- New: `src/vidgen/mathexpr.py`, `src/vidgen/scenes/function_plot.py`,
+  `tests/test_function_plot.py`, `docs/gallery/function_plot.md`,
+  `docs/gallery/media/function_plot-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `src/vidgen/terms.py`,
+  `src/vidgen/lint/layout_rules.py`, `examples/gallery/video.yaml`, `docs/CONFIG.md`,
+  `docs/EXTENDING.md`, `docs/gallery/README.md`, `README.md`, `src/vidgen/data/guide/AGENTS.md`,
+  `AGENTS.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`, `tests/test_builtin_scenes.py`,
+  `tests/test_actions_coverage.py`, `tests/test_translation.py` (samples for the new type).
+
+Public interfaces
+- YAML: scene type `function_plot` (params above); targets `title`, `axes`, `function<N>`,
+  `function:<name>`, `dot<N>`, `tangent<N>`, `area<N>`; action `trace` (`to`).
+- `vidgen.api`: `MathExpression`, `parse_expression`, `pretty_expression`, `split_definition`,
+  `MATH_FUNCTIONS`, `MATH_CONSTANTS`, `MATH_NAMES` (DESIGN §87.6, EXTENDING).
+
+Decisions
+- A scene type, not a `line_chart` mode: chart axes sit at the plot's edges and plot the
+  author's data; maths axes cross at the origin and plot expressions.
+- Own parser rather than `ast` + whitelist: maths syntax (`2x`, `x^2`, `π`) is what authors write.
+- `trace` plays an animation on the dot (or the area's shape) plus a no-op animation on each
+  other shown part: Manim then redraws them every frame instead of freezing them in the static
+  background, and no wrapper group is added to the scene.
+- An item a `reveal` action shows keeps its slot in the scene's steps (empty), as in the other
+  scenes, so the other items keep their beats.
+- The axes builder (`math_axes`, `MathAxes`) stays in the scene module (Step 161's additions
+  live in the same scene; `number_line` can import it as a sibling, like `terminal` imports
+  `code`).
+
+Known gaps (Backlog, Quality)
+- A function of a parameter animated over beats (`a` in `a x^2`); parametric / polar curves;
+  LaTeX labels; a dot's label plate may cover another curve; `trace` moves in x only.
+- Step 163's narration check will see the live labels' current text (the dump reads it), not
+  every value they pass through.
+
+How to test
+- One file at a time under `capped`: `tests/test_function_plot.py` (58, incl. 2 tiny renders:
+  16:9 + 9:16 on words, per beat with `until`; 7 s), `test_builtin_scenes` (198, 65 s),
+  `test_actions_coverage` (81, 56 s), `test_translation` (69), `test_gallery`, `test_docs`,
+  `test_guide`, `test_api`, `test_terms`, `test_lint` (181 together, 22 s), `test_review2` (14),
+  `test_review4` (11), `test_word_anchors` (31); `test_schema` (62, capped3g, 112 s): all pass.
+- Manual: a scratchpad project (a parabola with a dashed line, a dot tracing with tangent,
+  guides and a `slope {slope}` label on words; `sin(x) + 1.2` and half of it with an area
+  sweeping out; `1/x` and `tan(x)` with `aspect: equal`), `terms: {slope: accent, area: ...}`:
+  storyboards in 16:9, 9:16 and `light_academic` checked by eye; `vidgen lint` 0 findings in
+  16:9 and 9:16 (light: only the scratch project's own low-contrast term colour, as it should);
+  `examples/gallery --scene slope` storyboards and lint (0 findings) in both formats;
+  `vidgen validate examples/gallery`; `vidgen gallery --types function_plot`.
