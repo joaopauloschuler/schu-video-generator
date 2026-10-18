@@ -11014,7 +11014,7 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
 
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
-Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph` (more
+Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal` (more
 sections as the steps land). Help AI
 authors make clearer and better-looking presentation videos: coding Shorts, science and maths
 explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
@@ -11187,3 +11187,56 @@ rules as Phases H–O: cheap tests, new public extension surface only through `v
   tokens moving between lines (a line split in two: the second half fades and grows); no lint
   rule (the code scenes' rules apply to the stills; `validate` refuses a version equal to the one
   before).
+
+### 87.5 Terminal scene (Step 159)
+
+- **A scene type, `terminal`** (`scenes/terminal.py`), subclassing `CodeListing` for the window,
+  colouring and fitting. `steps` (step *i* at beat *i*): `{command, output, clear,
+  output_color}` or a string (a command). vidgen never runs a command: the output is the
+  author's. Params `prompt` (`$`), `language` (`bash`, the commands' lexer), `typing_speed`
+  (18 characters/s), `code` (`{code | path, language, highlight}`: a listing beside it),
+  `title`, `prompt_color` (`accent`) and `code`'s `line_numbers`, `style`, `font`, `size`,
+  `highlight_color`, `wrap`.
+- **The session as rows** (`session_pages`, no manim): a command's first line after the prompt
+  (`typed_from` = where typing starts), its other lines as typed, the output's lines (tabs
+  expanded, Pygments `Generic.Output`), and the prompt again after the last step when it has a
+  command (an output-only step is a program still running). `clear` starts a new page.
+  A blank last row would be dropped by Manim's `Code`, so a prompt-less end row is a space.
+- **Fitting**: the pages go through `code`'s `_fit_listings` (now with `lexed=` rows coloured by
+  the caller and `numbered=`; every listing keeps `fit_scale` and `shown_lines`), so the phone
+  rules of `code` hold (wrap to 32 columns at no less than the readable size, up to 1.5x).
+  With `code`, the terminal and the listing are fitted side by side and, in a landscape frame,
+  also one above the other; the layout giving the larger text wins (portrait: always stacked),
+  and both are set to the smaller of their two scales (one font size).
+- **One window**: a listing of `"M" * columns` over the tallest page's rows, its text removed,
+  so the window keeps its size when the screen clears; every page is placed at its top-left.
+- **Segments**: each prompt, each wrapped row of a command and of an output is its own one-line
+  `Paragraph` (Pango's space dots dropped, as `Code` does), moved onto the page listing's glyphs
+  and coloured like them, then the page listings are dropped. So a target (`command<N>`,
+  `output<N>`, `output<N>.line<K>`) is in the scene only once shown (`is_shown`, `entrance`
+  work unchanged), and the layout dump reads exactly the text on screen. Once shown, a segment
+  is moved into the window (a `Code`), so the dump reads it as `code`. A cell's position comes
+  from the monospace advance and a line fitted through the rows' centres.
+- **Timing**: the scene plays its own steps with `play_steps` (cap: the beat's longest step;
+  the run time recomputed with `play_steps`' formula), each step one `_Show` animation that
+  shows glyphs at fractions of its run time (printing, not fading), moves the block cursor and,
+  at its end, puts the texts into the window; the window's opening (0.5 s) is an
+  `AnimationGroup` with a windowed rate function. A step: prompt (if not already there), 0.25 s,
+  typing (`max(0.3, characters / typing_speed)`), Enter (0.3 s), output rows (0.06 s each,
+  0.1–0.8 s), then the next prompt (same page) or the end prompt. Too long for its slot, it is
+  shortened in proportion. `clear` hides the old page at once (its texts leave the window)
+  and the new one starts 0.3 s later.
+- **Actions**: a `reveal` of `command<N>` / `output<N>` (any of its line targets) leaves that
+  item to the action (`action_uses("reveal")`); a command an action types brings its output
+  unless an action shows that too. What comes before on the same page and is not shown appears
+  at once (`_schedule`'s catch-up). A first command left to an action still shows its prompt
+  with the window. **`NarratedScene.entrance_time(target)`** (new, public, default `None`):
+  the seconds a target's own entrance wants; `Reveal.run_time_for` returns the longest for the
+  targets not on screen, so `{reveal: command2, at: "@run"}` types for the typing time (an
+  explicit `run_time` still wins).
+- **Beside code / after code**: `code` and `code.line<K>` are targets, so `carry: ["listing ->
+  code"]` after a `code` / `code_morph` scene of the same code makes the listing glide into place
+  (the carry machinery, §50; the highlight band fades in after it).
+- **Not done**: a terminal in a split with a scene of another type (there is no general split;
+  the `code` pane covers the coding case); scrolling a long session (use `clear`); colours
+  inside the output (one colour per step); a blinking cursor (it would redraw every frame).

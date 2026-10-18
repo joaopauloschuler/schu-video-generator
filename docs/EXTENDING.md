@@ -1091,6 +1091,9 @@ as the built-ins (every built-in scene type, e.g. `bullets`/`bar_chart`, and
   already on screen, so an item a `reveal` action showed early is not revealed twice. Also:
   `self.is_shown(t)`, `self.find_targets("bar:*")`, `self.on_screen_parts(t)` (the target's
   largest parts that are in the scene), `self.targets`.
+- A `reveal` action plays a target's entrance for 0.8 s (or its `run_time`). When an entrance
+  has a natural length (a `terminal` typing a command), override `entrance_time(self, target)`
+  to return its seconds (`None` for the default); `reveal` then plays it that long.
 - Actions run inside the scene's **waits** (`self.reveal`, `self.play_steps`, `self.wait`,
   `self.wait_seconds` and the end of `narrate`): leave time in each beat. A beat that animates
   until its very end gets its actions applied without animation (and a warning).

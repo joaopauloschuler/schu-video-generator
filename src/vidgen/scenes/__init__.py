@@ -65,6 +65,7 @@ from vidgen.scenes import (  # noqa: F401
     storm_action,
     switch_action,
     table,
+    terminal,
     text_card,
     timeline,
     title,

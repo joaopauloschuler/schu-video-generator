@@ -14944,3 +14944,81 @@ How to test
   by eye (glides, growing lines, wrapped lines in 9:16, bands); `vidgen lint` 0 findings in both
   formats; `examples/gallery --scene morph` storyboards 16:9 and 9:16; `vidgen validate
   examples/gallery` ok.
+
+## Step 159 — Terminal scene
+
+What was built
+- **`terminal`**, a new scene type (`src/vidgen/scenes/terminal.py`, DESIGN §87.5): a terminal
+  window in which step *i*'s command is typed at beat *i* (a block cursor moving along,
+  `typing_speed` 18 characters/s, faster when the beat is short), then its output appears row by
+  row and the prompt comes back. The output is the author's: vidgen runs nothing. `steps`: a
+  command (a string) or `{command, output, clear, output_color}`; an output-only step is a
+  program still printing (no prompt before it); `clear` starts a new page in the same window.
+  `prompt` (`$`, `""`, `>>>`), `language` (`bash`; `pycon`...), `prompt_color` (`accent`), and
+  the code scenes' `style`, `font`, `size`, `wrap`.
+- **On a word** (Step 156): targets `command<N>`, `output<N>`, `output<N>.line<K>`; `{reveal:
+  output2, at: "@fails"}` shows the output on the word, `command2` types the command then (with
+  its output unless an action shows that). The scene leaves what an action reveals to it;
+  what comes before it on the page appears at once. A first command left to an action still
+  shows its prompt with the window.
+- **`NarratedScene.entrance_time(target)`** (new public hook, default `None`): seconds a target's
+  own entrance wants; `Reveal.run_time_for` uses it, so a `reveal` of a command types for its
+  typing time instead of 0.8 s (an explicit `run_time` wins). EXTENDING mentions it.
+- **Beside code / after code**: `code: {code | path, language, highlight}` puts a listing
+  beside the terminal, left or above (whichever gives larger text in 16:9; above in 9:16), one
+  font size for both; targets `code`, `code.line<K>`. After a `code` / `code_morph` scene,
+  `carry: ["listing -> code"]` glides the listing into place (the carry machinery; checked by
+  eye, see below).
+- **Look and readability**: `code`'s window, Pygments colouring and fitting (`_fit_listings`
+  gained `lexed=` and `numbered=`, and records `fit_scale` / `shown_lines` on each listing), so
+  `code`'s phone rules hold. One window for the session, sized for the largest page.
+- **Layout dump**: every prompt / command row / output row is its own one-line `Paragraph`
+  placed on the page listing's glyphs, added to the window (a `Code`) once shown, so the dump
+  and lint read exactly the text on screen, as `code`.
+- **Docs and examples**: CONFIG `terminal` section, targets-table row, header-band and per-beat
+  lists, "Actions on a spoken word"; guide chooser row, per-beat note and a snippet (+
+  `AGENTS.md`); `examples/gallery` scene `shell` (after the morph, carrying its listing, the
+  output on "pass"); `docs/gallery/terminal.md` + stills / GIFs; README's scene list; DESIGN
+  §87.5. The Shorts cookbook is Step 164's.
+
+Files touched
+- New: `src/vidgen/scenes/terminal.py`, `tests/test_terminal.py`, `docs/gallery/terminal.md`,
+  `docs/gallery/media/terminal-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/scenes/code.py` (`_fit_listings` / `_listing` / `_code` keywords),
+  `src/vidgen/scene.py` (`entrance_time`), `src/vidgen/scenes/actions.py` (`Reveal.run_time_for`),
+  `src/vidgen/scenes/__init__.py`, `examples/gallery/video.yaml`, `docs/CONFIG.md`,
+  `docs/EXTENDING.md`, `docs/gallery/README.md`, `README.md`, `src/vidgen/data/guide/AGENTS.md`,
+  `AGENTS.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`, `tests/test_builtin_scenes.py`,
+  `tests/test_actions_coverage.py`, `tests/test_translation.py` (samples for the new type).
+
+Public interfaces
+- YAML: scene type `terminal` (params above); targets `title`, `terminal`, `code`,
+  `code.line<K>`, `command<N>`, `output<N>`, `output<N>.line<K>`.
+- `NarratedScene.entrance_time(target) -> float | None` (through `vidgen.api`'s
+  `NarratedScene`; DESIGN §87.5).
+
+Decisions
+- A scene type with an optional code pane rather than a general split of two scene types:
+  there is no split mechanism, and the coding case (code + terminal) is what Shorts need.
+- Segments as separate texts (not one listing with hidden glyphs), so targets are in the scene
+  only once shown and the dump never reports text not on screen yet.
+- Glyphs appear (printing), they do not fade; the cursor does not blink (a blink would make
+  Manim redraw every frame of every wait).
+- No lint rule: the code scenes' layout rules read the beat-end stills (`min_font` etc.).
+
+Known gaps (Backlog, Quality)
+- No split with other scene types; a long session does not scroll (`clear`); one colour per
+  output; `code_morph`'s `reveal` could now use `entrance_time` for its 1.5 s morph.
+
+How to test
+- One file at a time under `capped`: `tests/test_terminal.py` (16, incl. 3 tiny renders; 9 s),
+  `test_code_morph` (16), `test_code_walkthrough` (45), `test_actions` (28),
+  `test_builtin_scenes` (194, 60 s), `test_actions_coverage` (79, 49 s), `test_translation`
+  (68), `test_docs` (62), `test_guide` (53), `test_gallery` (12), `test_review2` (14),
+  `test_word_anchors` (31), `test_api` (10), `test_review4` (11), `test_fonts` (19);
+  `test_schema` (62, capped3g, 112 s): all pass.
+- Manual: scratchpad projects (a test run with an error output on "@fails", a `pycon` session
+  beside code with `clear`; a `code` scene carried into a terminal with the command and output
+  on words): storyboards in 16:9, 9:16 and `light_academic` checked by eye; `vidgen lint` 0
+  findings in all three; `examples/gallery --scene shell` storyboard (the morph's listing glides
+  in); `vidgen gallery --types terminal`.

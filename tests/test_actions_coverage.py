@@ -49,6 +49,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "code": {"code": "a = 1\nb = 2\nc = 3", "title": "T"},
     "code_morph": {"versions": ["a = 1", {"code": "a = 1\nb = 2", "highlight": "changed"}], "title": "T"},
     "code_walkthrough": {"code": "a = 1\nb = 2\nc = 3", "title": "T", "steps": [{"lines": 1}, {"lines": "2-3", "note": "n"}]},
+    "terminal": {"steps": ["ls", {"command": "cat a", "output": "x\ny"}], "title": "T", "code": {"code": "a = 1"}},
     "end_card": {"title": "Thanks", "lines": ["one", "two"], "icon": "rocket", "logo": "assets/pic.png"},
     "chapter": {"number": 2, "title": "Results", "subtitle": "Sub", "icon": "rocket"},
     "card": {"text": "Later that day", "subtitle": "Sub"},
@@ -216,7 +217,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
 @pytest.mark.parametrize(
     ("kind", "target"),
     [("title", "authors"), ("quote", ["author", "source"]), ("end_card", "line*"), ("icon_grid", "item2"),
-     ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("code_walkthrough", "note2"), ("text_card", "text"),
+     ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("code_walkthrough", "note2"), ("terminal", "output2"), ("text_card", "text"),
      ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
      ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"]), ("scatter", ["series2", "trend"]), ("histogram", ["mean", "median", "compare"]),
      ("pie", "slice2"), ("heatmap", "row2"), ("equation_derivation", "note2"),

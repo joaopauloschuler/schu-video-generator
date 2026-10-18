@@ -3303,12 +3303,12 @@ its params. Conventions shared by all built-ins:
   a `map` with the `world` view keeps only the longitudes of its countries, pins and arcs.
 - **Header band.** The line at the top of the frame is `heading` in `bullets`, `icon_grid`,
   `comparison`, `timeline`, `diagram`, `process`, `network` and `title` in the charts, `table`,
-  `map`, `code`, `code_morph`, `code_walkthrough`, `equation_derivation`, `screenshot`, `video_clip`. Every
+  `map`, `code`, `code_morph`, `code_walkthrough`, `terminal`, `equation_derivation`, `screenshot`, `video_clip`. Every
   one of these types accepts **both names** (also `heading_size` / `title_size`,
   `heading_color` / `title_color`; `vidgen list-scenes` shows `(also: title)`), and the target
   `title` selects a `heading` and the reverse. Not in `title`, `chapter` and `end_card`, whose
   `title` is their main text.
-- **Per-beat content** is a `steps` list in `code_walkthrough`, `equation_derivation`,
+- **Per-beat content** is a `steps` list in `code_walkthrough`, `terminal`, `equation_derivation`,
   `screenshot`, `video_clip` and `map` (`versions` in `code_morph`): step *i* plays at beat *i*. Elsewhere the scene splits
   its content into steps itself (`reveal`); `diagram`'s explicit `steps` are such reveal steps.
   A `highlight` param adds a last step that marks something and dims the rest; where it takes a
@@ -4521,6 +4521,84 @@ step.
 
 Building a long listing takes about 0.1 s per line (Manim draws every character); `excerpt`
 keeps a big file's walkthrough to the part it talks about.
+
+### `terminal`
+
+A terminal window in which commands are typed and their output appears. **You write the
+output**: vidgen never runs a command. Step *i* of `steps` plays at beat *i* (the window comes
+in with step 1): the command is typed at the prompt, a block cursor moving along
+(`typing_speed` characters per second; faster when the beat is too short for it), a moment
+later its output appears row by row and the prompt comes back, the cursor waiting after it.
+With more steps than beats they are spread evenly; extra beats hold. The look is the code
+scenes': the theme's window, font and Pygments style; the commands are coloured by `language`
+(a Pygments lexer, `bash` by default; `pycon` for a Python prompt), the output by the style's
+colour for program output (or the step's `output_color`), the prompt by `prompt_color`.
+
+- **Steps**: `{command, output, clear, output_color}`, or a string (a command alone). A step with
+  only an `output` is a program still running and printing (no prompt before it); the prompt
+  comes back after the last step unless that step is such an output. A command may take several
+  lines (typed one after the other). `clear: true` clears the screen before the step: its
+  page starts at the top of the same window (the window is as large as the largest page).
+- **On a word**: `{reveal: output2, at: "@fails"}` shows step 2's output as the narrator says
+  "fails", `{reveal: command2, at: "@run"}` types the command then (with its output, unless an
+  action shows that); a `reveal` of a command takes its typing time ([Actions on a spoken
+  word](#actions-on-a-spoken-word)). The scene leaves what an action shows to it; what comes
+  before it on the screen and is not shown yet appears at once.
+- **Beside code**: `code: {code | path, language, highlight}` puts a code listing (with line
+  numbers, a `highlight` band) beside the terminal: on the left, or above it when that gives
+  larger text (always above in a vertical frame); both use one font size. After a `code` or
+  `code_morph` scene of the same code, `carry: ["listing -> code"]` (with `transition: cut`)
+  makes the listing glide from where it was into place ([continuity](#continuity-carrying-objects-into-the-next-scene-carry)).
+- **Readability** as in [`code`](#code): the text fills the window's space up to 1.5x `size`;
+  long lines wrap (hanging indent) rather than shrink below the readable minimum, which keeps a
+  vertical frame readable. Keep a session short (about 10 rows per page; `clear` starts a new
+  one) and the output to the lines that matter.
+- **Checks** (`vidgen validate`): a step needs a command or an output; `clear` on step 1; an
+  unknown `language`; `code` with both or neither of `code` / `path`, a missing file, a
+  `highlight` past its end.
+- [Action targets](#beat-actions): `title`, `terminal` (the window), `command<N>` (step N's
+  command; revealing it types it), `output<N>` and `output<N>.line<K>` (line K of step N's
+  output; blank lines are not targets), `code` and `code.line<K>` (the listing beside it).
+
+| param | type | default | |
+|---|---|---|---|
+| `steps` | list | — | at least one, in order: a command (a string) or `{command, output, clear, output_color}`; step *i* plays at beat *i* |
+| `steps[].command` | str | none | what is typed at the prompt (several lines: typed one after the other) |
+| `steps[].output` | str | none | what it prints, written by you |
+| `steps[].clear` | bool | `false` | clear the screen before this step (not on step 1) |
+| `steps[].output_color` | color | style's output colour | e.g. an error in `secondary` |
+| `prompt` | str | `"$"` | `""` for none, `">>>"`, `"PS C:\\>"` |
+| `language` | str | `bash` | Pygments lexer of the commands |
+| `typing_speed` | number (0–200] | `18` | characters typed per second |
+| `code` | `{code, path, language, highlight}` | none | a code listing beside the terminal (above it in a vertical frame) |
+| `title` | str | `""` | above the window(s) |
+| `prompt_color` | color | `accent` | |
+| `line_numbers` | bool | `true` | of the code beside the terminal |
+| `style` | str | theme `code_style` | a Pygments style, for the terminal and the code |
+| `font` | str | role `code` (`font_mono`) | |
+| `size` | size | `caption` | starting font size (scaled to fill the space, up to 1.5x); one size for the terminal and the code |
+| `highlight_color` | color | `highlight` | band behind the code's `highlight` |
+| `wrap` | bool | `true` | wrap long lines instead of shrinking the text below `size` / the readable minimum |
+
+```yaml
+- id: tests
+  type: terminal
+  params:
+    title: "Run the tests"
+    code: {path: assets/stats.py, highlight: 4}
+    steps:
+      - command: "pytest -q"
+        output: |
+          ..F
+          FAILED test_stats.py::test_mean - ZeroDivisionError
+          1 failed, 2 passed in 0.03s
+        output_color: secondary
+      - {command: "python -c 'import stats; print(stats.mean([2, 4]))'", output: "3.0", clear: true}
+  beats:
+    - text: "We run the tests, and one of them fails."
+      actions: [{reveal: output1, at: "@fails"}]
+    - text: "By hand, the mean of two and four is three."
+```
 
 ### `stat`
 
@@ -7472,6 +7550,7 @@ a title card, a `transform` of a bar).
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
 | `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
 | `code_morph` | `title`, `listing`, `version<N>`, `version<N>.line<K>` | reveal, highlight, dim | `{reveal: version2, at: "@word"}` morphs to version 2 on that word (the scene then leaves that morph to the action); `listing` is whichever version shows; `version2.line3` is line 3 of version 2 (with its number) |
+| `terminal` | `title`, `terminal`, `code`, `code.line<K>`, `command<N>`, `output<N>`, `output<N>.line<K>` | reveal, dim, highlight | `{reveal: output2, at: "@word"}` shows step 2's output on that word, `command2` types the command then (the scene leaves them to the action); `terminal` is the window; `code` the listing beside it |
 | `code_walkthrough` | `title`, `listing`, `line<N>`, `lines:<a-b>`, `note<N>` | reveal, dim, highlight | `reveal: line40` scrolls it into view; `lines:<a-b>`: every range up to 40 lines, else the steps' ranges; `note2` is step 2's note (revealing it plays the step); the next step resets line opacities |
 | `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |
 | `chapter` | `icon`, `number`, `title`, `subtitle` | reveal, dim, highlight | those present |
@@ -7617,7 +7696,8 @@ narrator begins that word.
   `react`, ...) and the host's. The `lower_third` overlay's `at` takes one too (table in
   [Overlays](#overlays)). A scene's `sfx:` list stays in seconds; for a sound on a word use the
   beat's `sfx` action. A scene's own step can wait for a word too where the scene leaves it to
-  a `reveal` action: [`code_morph`](#code_morph) morphs to `version2` on `{reveal: version2, at: "@word"}`.
+  a `reveal` action: [`code_morph`](#code_morph) morphs to `version2` on `{reveal: version2, at: "@word"}`,
+  [`terminal`](#terminal) shows `output2` (or types `command2`) on `{reveal: output2, at: "@word"}`.
 - **Where the time comes from**: the beat's MP3 once `vidgen tts` has made it (the word timings
   the TTS gives, as ElevenLabs and Kokoro do; else the words spread over the speech in the MP3,
   by syllables), the same timings as the karaoke captions. Before there is any audio, an

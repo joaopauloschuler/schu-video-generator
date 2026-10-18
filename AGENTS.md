@@ -310,13 +310,14 @@ project's own scene types, in its theme).
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
 | code that changes: before / after, a refactor, a fix | `code_morph` | `title`, `versions` (each the code, or code / path / highlight) |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
+| running a command: install, tests, a REPL (output written by you) | `terminal` | `title`, `steps` (each a command, or command / output / clear), `prompt`, `language`, `code` |
 | characters on a set (a cartoon) | `stage` | `characters`, `props`, `background`, `image`, `generate`, `marks`, `ground`, `layers`, `width`, `particles`, `light`, `wind` |
 | a cartoon's title card, "Later that day…", "The End" | `card` | `text`, `subtitle`, `style`, `color`, `sting` |
 | thanks, links, call to action | `end_card` | `title`, `lines`, `icon`, `logo` |
 
 How beats drive scenes: each type splits its content into **reveal steps** and plays step *i*
 at beat *i* (more steps than beats: spread evenly; more beats: the last ones hold). Types with
-per-beat data (`code_walkthrough`, `equation_derivation`, `screenshot`, `video_clip`, `map`)
+per-beat data (`code_walkthrough`, `terminal`, `equation_derivation`, `screenshot`, `video_clip`, `map`)
 take a `steps` list, entry *i* for beat *i*: write as many steps as beats (`code_morph`:
 one of its `versions` per beat). A `highlight` param
 adds a last step that marks one thing and dims the rest, so give it its own beat. Silent
@@ -599,6 +600,18 @@ Minimal snippets (copy, then adapt):
     - text: "This version recomputes the same values again and again."
     - text: "One decorator, a cache, and each value is computed once."
       actions: [{reveal: version2, at: "@cache", run_time: 1.5}]   # morph on the word
+- id: shell
+  type: terminal         # step i at beat i: the command is typed, then its output appears (you write it: nothing runs)
+  params:
+    title: "Run the tests"
+    code: {code: "def mean(xs):\n    return sum(xs) / len(xs)", highlight: 2}   # optional: the code beside it
+    steps:
+      - {command: "pytest -q", output: "..F\n1 failed, 2 passed in 0.03s"}
+      - {command: "python -c 'print(mean([]))'", output: "ZeroDivisionError: division by zero", output_color: secondary}
+  beats:
+    - text: "We run the tests, and one of them fails."
+      actions: [{reveal: output1, at: "@fails"}]   # the output on the word
+    - text: "An empty list divides by zero."
 - id: walk
   type: code_walkthrough
   params:

@@ -451,3 +451,23 @@ scenes:
         actions:
           - {reveal: version2, at: "@comprehension", run_time: 1.5}   # morph on the spoken word
 
+  - id: shell
+    type: terminal           # step i at beat i: the command is typed, then its output appears; vidgen runs nothing
+    transition: cut
+    carry: ["listing -> code"]   # the morph's listing (the same code) glides into the code beside the terminal
+    params:
+      title: "Run the tests"
+      code: {code: "def squares(numbers: list[int]) -> list[int]:\n    return [n * n for n in numbers]", highlight: 2}
+      steps:
+        - command: "pytest -q"
+          output: |
+            ...
+            3 passed in 0.02s
+        - command: "python -c 'from sq import squares; print(squares([1, 2, 3]))'"
+          output: "[1, 4, 9]"
+    beats:
+      - text: "A terminal types a command beside the code and shows what it printed: the tests pass."
+        actions:
+          - {reveal: output1, at: "@pass"}   # the output appears on the spoken word
+      - text: "And a quick check by hand gives one, four and nine."
+

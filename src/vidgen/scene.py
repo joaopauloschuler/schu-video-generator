@@ -1312,6 +1312,12 @@ class NarratedScene(MovingCameraScene):
                     anims += list(t.entrance()) if t.entrance is not None else [FadeIn(t.mobject)]
         return anims
 
+    def entrance_time(self, target: Target) -> float | None:
+        """Seconds the scene's own entrance of ``target`` wants when a ``reveal`` action plays it
+        without a ``run_time`` (a ``terminal`` types a command at its typing speed), or ``None``
+        for the action's default. Default: ``None``."""
+        return None
+
     def _apply_now(self, animations: Sequence[Animation]) -> None:
         """Jump ``animations`` to their end state without writing frames."""
         self.add_mobjects_from_animations(list(animations))

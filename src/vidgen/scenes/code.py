@@ -494,13 +494,25 @@ class CodeListing(NarratedScene):
         listings, groups = self._fit_listings([lines], language, body)
         return listings[0], groups[0]
 
-    def _fit_listings(self, versions: list[list[str]], language: str, body: Region) -> tuple[list[Code], list[list[list[int]]]]:
+    def _fit_listings(
+        self,
+        versions: list[list[str]],
+        language: str | None,
+        body: Region,
+        *,
+        lexed: list[list[list[Run]]] | None = None,
+        numbered: bool | None = None,
+    ) -> tuple[list[Code], list[list[list[int]]]]:
         """:meth:`_fit_listing` for several listings shown in turn (``code_morph``): one font
         size, scale and wrap width for all, so the largest fits ``body``. Returns the listings
-        and, per listing, the lines each original line became."""
+        and, per listing, the lines each original line became. ``lexed``: the lines' runs when
+        the caller colours them itself (``terminal``), instead of lexing them as ``language``;
+        ``numbered``: line numbers (default: the ``line_numbers`` param). Each listing keeps its
+        scale in ``fit_scale`` and its (wrapped) lines in ``shown_lines``."""
         p = self.params
+        numbered = p.line_numbers if numbered is None else numbered
         size = float(self.theme.size(p.size))
-        digits = max(len(str(len(lines))) for lines in versions) if p.line_numbers else 0
+        digits = max(len(str(len(lines))) for lines in versions) if numbered else 0
         # the listing is scaled as a whole, so its padding scales with it: solve for the font
         # size that fits TARGET_COLUMNS into the width (in a vertical frame: smaller than size)
         padding = 2 * CODE_PADDING + (NUMBER_GAP if digits else 0.0)
@@ -508,13 +520,13 @@ class CodeListing(NarratedScene):
         narrow = body.width * size / (padding + (TARGET_COLUMNS + digits) * advance * size)
         floor = max(min(size, narrow), readable_size(self._font))
         columns: int | None = None
-        lexed = [lex_code(lines, language) for lines in versions]
+        lexed = lexed if lexed is not None else [lex_code(lines, language) for lines in versions]
         while True:
             listings, groups, longest = [], [], 0
             for rows_lexed, lines in zip(lexed, versions):
                 rows, rows_of = wrap_runs(rows_lexed, columns) if columns else (rows_lexed, [[i] for i in range(len(lines))])
                 shown = ["".join(t for t, _ in row) for row in rows]
-                listings.append((self._listing(shown, rows, size), shown))
+                listings.append((self._listing(shown, rows, size, numbered=numbered), shown))
                 groups.append(rows_of)
                 longest = max(longest, max(len(line) for line in shown))
             by_width = body.width / max(listing.width for listing, _ in listings)
@@ -525,26 +537,27 @@ class CodeListing(NarratedScene):
             columns = max(MIN_COLUMNS, min(longest - 1, int(longest * size * scale / floor)))
         out = []
         for (listing, shown), lines, rows_of in zip(listings, versions, groups):
-            if len(shown) != len(lines) and p.line_numbers:
+            if len(shown) != len(lines) and numbered:
                 renumber(self, listing, rows_of, size, self._font)
+            listing.fit_scale, listing.shown_lines = scale, shown
             out.append(listing.scale(scale))
         return out, groups
 
-    def _listing(self, shown: list[str], rows: list[list[Run]], size: float) -> Code:
+    def _listing(self, shown: list[str], rows: list[list[Run]], size: float, *, numbered: bool | None = None) -> Code:
         """The listing of the (wrapped) lines ``shown``, coloured by their lexed ``rows``."""
         style = self.params.style or self.theme.code_style
         with text_canvas(shown, size):
-            listing = self._code("\n".join(shown), style, size)
+            listing = self._code("\n".join(shown), style, size, numbered=numbered)
         paint_code(listing.code_lines, rows, style)
         return listing
 
-    def _code(self, text: str, style: str, size: float) -> Code:
+    def _code(self, text: str, style: str, size: float, *, numbered: bool | None = None) -> Code:
         p = self.params
         return Code(
             code_string=text,
             language="text",  # coloured by paint_code: Manim would lex the wrapped pieces apart
             formatter_style=style,
-            add_line_numbers=p.line_numbers,
+            add_line_numbers=p.line_numbers if numbered is None else numbered,
             background="window",
             background_config={
                 "fill_color": self.theme.color("surface"),

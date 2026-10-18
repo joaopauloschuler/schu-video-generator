@@ -70,7 +70,8 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `code`, `code_morph` (one version of the code morphing into the next: vidgen diffs
-    them), `code_walkthrough` (a long file scrolling to the lines each beat explains);
+    them), `code_walkthrough` (a long file scrolling to the lines each beat explains),
+    `terminal` (commands typed at a prompt and the output you write appearing, beside the code);
   - cartoons: `stage` (the video's `characters:` on a set: a picture, a generated picture or a
     gradient, a ground line, marks and depth, or a room with furniture, windows and doors;
     characters (people or animals) walk, run, walk towards the camera and face it, sit, lean,

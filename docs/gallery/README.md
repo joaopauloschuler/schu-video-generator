@@ -59,6 +59,7 @@ params, the action targets and a GIF of the whole scene. Regenerate with `vidgen
 | [`equation_derivation`](equation_derivation.md) | <a href="equation_derivation.md"><img src="media/equation_derivation-16x9.png" height="180" alt="equation_derivation at 16:9"> <img src="media/equation_derivation-9x16.png" height="180" alt="equation_derivation at 9:16"></a> | a derivation with reasons |
 | [`code`](code.md) | <a href="code.md"><img src="media/code-16x9.png" height="180" alt="code at 16:9"> <img src="media/code-9x16.png" height="180" alt="code at 9:16"></a> | a short listing (≤ 15 lines) |
 | [`code_morph`](code_morph.md) | <a href="code_morph.md"><img src="media/code_morph-16x9.png" height="180" alt="code_morph at 16:9"> <img src="media/code_morph-9x16.png" height="180" alt="code_morph at 9:16"></a> | code that changes: before / after, a refactor, a fix |
+| [`terminal`](terminal.md) | <a href="terminal.md"><img src="media/terminal-16x9.png" height="180" alt="terminal at 16:9"> <img src="media/terminal-9x16.png" height="180" alt="terminal at 9:16"></a> | running a command: install, tests, a REPL (output written by you) |
 | [`code_walkthrough`](code_walkthrough.md) | <a href="code_walkthrough.md"><img src="media/code_walkthrough-16x9.png" height="180" alt="code_walkthrough at 16:9"> <img src="media/code_walkthrough-9x16.png" height="180" alt="code_walkthrough at 9:16"></a> | a long file, explained part by part |
 
 ## Cartoons

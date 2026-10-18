@@ -137,6 +137,11 @@ class Reveal(Action):
     run_time = 0.8
     needs_visible = False
 
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        """The longest :meth:`NarratedScene.entrance_time` of the targets not on screen yet."""
+        times = [t for t in (scene.entrance_time(x) for x in targets if not scene.is_shown(x)) if t is not None]
+        return max(times) if times else None
+
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """The entrances of the targets not on screen yet."""
         return [anim for target in targets for anim in scene.entrance(target)]

@@ -856,9 +856,9 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Tests (`tests/test_code_morph.py`: the diff, params and checks, targets, files, tiny renders in 16:9 and 9:16 and on a word; the builtin / coverage / translation samples; the gallery page)
 
 ### Step 159 — Terminal scene
-- [ ] A terminal window with commands typed (typing effect) and their output appearing, timed to beats / words; the output is the author's (vidgen never runs commands)
-- [ ] The code scenes' look and themes; works beside code (a split) or after a code scene (a carry / match cut if cheap)
-- [ ] Tests
+- [x] A terminal window with commands typed (typing effect) and their output appearing, timed to beats / words; the output is the author's (vidgen never runs commands) (a new scene type `terminal`: `steps` (a command, or `{command, output, clear, output_color}`), step i at beat i, a block cursor, `typing_speed`, `prompt`, `language`; `{reveal: output2, at: "@word"}` / `command2` on a word, a `reveal` of a command typing for its typing time (`NarratedScene.entrance_time`); `clear` starts a new page in the same window; DESIGN §87.5)
+- [x] The code scenes' look and themes; works beside code (a split) or after a code scene (a carry / match cut if cheap) (`code`'s window, font, Pygments style and fitting; `code: {code | path, language, highlight}` beside it, left or above, whichever gives larger text (above in 9:16), one font size; `carry: ["listing -> code"]` after a `code` / `code_morph` scene glides the listing into place; no split with other scene types: Backlog)
+- [x] Tests (`tests/test_terminal.py`: session rows, params and checks, targets, the code file, tiny renders in 16:9 and 9:16, on words, `clear`; the builtin / coverage / translation samples; the gallery page)
 
 ### Step 160 — Maths toolkit, part 1: function plots
 - [ ] Axes with f(x) from expressions evaluated safely (no `eval`; a small whitelisted parser, or sympy only if already a dependency: check), several functions
@@ -909,6 +909,7 @@ Bugs / correctness
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
 
 Quality (what an agent's video looks like)
+- [ ] `terminal` (Step 159): no general split with another scene type (only the `code` pane); a long session does not scroll (`clear` starts a new page); one colour per output; `code_morph`'s `reveal` of a version could use `entrance_time` (its morph's 1.5 s) instead of the action's 0.8 s
 - [ ] `code_morph` (Step 158): `code_walkthrough` does not morph between versions; a token moving to another line (a line split in two) fades out and in instead of gliding; a `reveal` action's morph takes the action's `run_time` (default 0.8 s; the guide writes 1.5)
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
 - [ ] 9:16 stills: `code_walkthrough` listing small (a 5-line file wraps a line), `image` `fit: contain` leaves bands, a `world` map view spanning most longitudes is a strip (Step 57)

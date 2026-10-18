@@ -232,6 +232,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "code": [{"code": "print('hi')", "language": "python", "title": "T:title"}],
     "code_morph": [{"versions": ["a = 1", {"code": "a = 2", "highlight": "changed"}], "title": "T:title"}],
     "code_walkthrough": [{"code": "a = 1\nb = 2\n", "title": "T:title", "steps": ["1", {"lines": "2", "note": "T:note"}]}],
+    "terminal": [{"steps": ["ls", {"command": "cat a", "output": "x"}], "title": "T:title"}],
     "comparison": [
         {
             "columns": [{"heading": "T:left", "points": ["T:p1", {"text": "T:p2"}]}, {"heading": "T:right", "points": ["T:p3"]}],
