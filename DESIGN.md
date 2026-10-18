@@ -11014,7 +11014,7 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
 
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
-Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot` (more
+Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot`, `number_line` (more
 sections as the steps land). Help AI
 authors make clearer and better-looking presentation videos: coding Shorts, science and maths
 explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
@@ -11341,3 +11341,81 @@ coordinate system and sits beside it where they do not:
 - **Terms and words** as in Step 160: every label through `self.text`, an item's colour from
   the first term its label says, `{reveal: vector2, at: "@sum"}` / `{trace: ..., at: "@word"}`
   on spoken words.
+
+### 87.8 Maths, part 2: geometry basics (Step 161)
+
+Built as planned in §87.7; the changes and the details:
+
+- **Shared parts** (`scenes/math_axes.py`, a sibling module of the maths scenes): `MathAxes` /
+  `math_axes` (now with `visible=False`: the mapping only, for `axes: false`), `tick_label`,
+  `ticks_within`, `thinned_labels` (the tick part the number line shares), `fill_label` /
+  `label_problem`, `place_label`, `clip_segment`, `LiveLabel` / `label_plate`,
+  `ChainedTargets` (the "an entrance brings what the target stands on, each part once" machinery
+  and the one-item-per-beat steps that leave an item a `reveal` action shows to it, moved out of
+  `function_plot`), and the **`trace` action** with its animations. `trace` is generic: a scene
+  type that has it defines `trace_problem(params, name, options)` (the checks for
+  `vidgen validate`) and `traced_item(target)`, which returns a `Traced` (`state`, `place(state)`,
+  `driver`, `parts`, optionally `goal(to, scale)`); `TraceMove` interpolates the state (a number
+  or an `[x, y]` array). `Options`: `to: float | [x, y]` or `scale` (exactly one; not 0).
+- **The plane** (`scenes/plane_geometry.py`): `PlotPoint` (`[x, y]` or `{at, name, label,
+  color, decimals}`), `PlotVector` (`[x, y]` or `{from, to | components | sum, name, label,
+  color, decimals}`), `PlotMark` (one of `segment`, `brace`, `angle`, `dimension`, with `label`,
+  `side`, `color`, `closed`, `dashed`, `decimals`). **Added beyond the plan**: `segment` marks
+  (a figure needs its sides; a polyline or, `closed`, a polygon), `side` for braces and
+  dimensions, and label templates (`{x}`, `{y}`, `{length}`, `{angle}`) that follow movement.
+  `PlaneFigure` (no manim) resolves positions: `[x, y]`, a point's name or `point<N>`, a vector's
+  name or `vector<N>` (its tip; in a vector only earlier ones, so no cycles); a vector's state is
+  its tip (`to: [x, y]`) or its components, a vector `to` a point name follows the point, a sum
+  is derived (its chain: the summands tip to tail from the first one's tail). `move` sets a
+  point or a vector's state and everything derived follows. Names: no spaces or brackets, not
+  `point3` / `vector2` (they would shadow the numbered targets), unique across points and vectors.
+- **Defaults**: without `x_range` / `y_range` (`x_range` is still required with functions) the
+  plot spans the figure's positions with a margin (`geometry_range`: 12 % or 0.5, on whole
+  numbers beyond a span of 3) and the origin while the axes show; with functions too, the y
+  range grows to the positions. `aspect` defaults to `equal` with vectors or angle marks or
+  without functions, else `auto` (so plots of Step 160 keep their look). Every position must be
+  inside the plot (`validate`), and so must a `trace` goal (`trace_problem`: the default ranges
+  do not grow to fit actions; the message says to widen them).
+- **Drawing** (`PlaneGeometry.layout`, called at build and on every frame of a `trace`): arrows
+  (`Arrow`, buff 0; a vector scaled through 0 keeps a 1e-3 length), a sum's copies of the
+  summands at `GHOST_OPACITY` 0.45 (entrance: `TransformFromCopy` from each summand, then the
+  resultant grows), marks through the `geometry_marks` builders, then labels: marks' where their
+  builder puts them, points' in the first free of 8 directions starting away from the figure's
+  middle and kept while it moves (`point_label_spot`), vectors' with `place_label` along the
+  shaft. Obstacles: tick and curve labels, labels placed before; points to keep off: curves, axes,
+  every shaft and mark. `_renew` (`become` keeping a dimmed opacity) redraws each part. Colours:
+  an item's own, else the first term its label says, else points `text`, vectors the palette after
+  the functions, segments and braces `text`, angles `accent`, dimensions `dim`.
+- **Steps**: after functions, dots and areas, each point, vector and mark (in list order) one per
+  beat; a vector, sum or mark brings the points and vectors it names first (`needs`).
+- **The mark builders** (`vidgen/geometry_marks.py`, exported by `vidgen.api`: `GeometryMark`,
+  `brace_mark`, `angle_mark`, `dimension_mark`, `segment_normal`, `angle_between`), in frame
+  coordinates, the label a mobject the caller made: a brace is Manim's `BraceBetweenPoints` (no
+  LaTeX), its label beyond the tip; an angle is the smaller one, an `Arc` of radius 0.55 (at most
+  40 % of the shorter ray) or a square within 0.5° of 90°, its label outside on the bisector; a
+  dimension line sits 0.35 beside the segment with end bars and faint extension lines, its label
+  beside its middle. `segment_normal(a, b, away_from)` picks the side away from the figure
+  (default down / left). Marks are drawn in frame space, so with `aspect: auto` an arc shows the
+  drawn angle while `{angle}` is the angle in data units.
+- **`number_line`** (`scenes/number_line.py`): `range`, `step`, `points` (a number or `{at, name,
+  label, color, decimals}`), `intervals` (interval notation `"[-1, 3)"`, `"(-inf, 0]"`, `∞`,
+  or `{from, to, ends, label, color}`; `from` / `to` take `inf` as text, so the JSON Schema
+  allows a string), `jumps` (`[from, to]` or `{from, to, label, color}`; label `'{by}'` =
+  `+3` / `−2`, a preformatted field, so `{by:...}` is refused), `reveal`, title and label sizes.
+  Layout: the line across the body (arrow tips both ends), ticks from `ticks_within(…, 13)` with
+  labels thinned (so a vertical frame shows every 2nd number rather than 2.5 steps); jumps arc
+  above the line (both directions; an arc's rise `0.42 x` its length up to 1.1, `+0.32` per earlier
+  overlapping jump), intervals as a thick band with filled dots (closed), rings (open) or a
+  triangle (infinite), stacked in lanes when they overlap; labels: point labels above the dot,
+  or under the numbers where a jump starts or lands; interval labels above the band, or in a row
+  below the point labels where a jump arcs over it. The line sits so that this content is centred
+  in the body. Targets `title`, `line`, `point<N>`, `point:<name>`, `interval<N>`, `jump<N>`;
+  `trace` moves a point (`to`: a number in the range).
+- **Terms**: the colour rules above; `terms.term_conflicts` reports an explicit `color` on any
+  `function_plot` point, vector or mark and any `number_line` point, interval or jump whose label
+  (or name) says a term.
+- **Lint**: `cap_height` counts the operators `= + < > ≤ ≥ × ÷ ~` as x-height glyphs (a live
+  label `x = −3` measured 0.4 % under `min_font` at the readable size).
+- **Not done** (Backlog): reflex angles; a mark on a curve (a tangent's angle with the axis);
+  arcs of jumps below the line; a vertical number line; the default ranges growing to fit
+  `trace` goals; point labels avoiding dot labels of functions; vectors from a function's dot.

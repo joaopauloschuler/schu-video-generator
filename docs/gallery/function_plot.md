@@ -41,15 +41,15 @@ From the author guide (`vidgen guide scenes`):
 | param | type | default | notes |
 |---|---|---|---|
 | `title` | `str` |  | Title (in the header band at the top). (also: heading) |
-| `functions` | `list[str \| PlotFunction]` | required | The functions: 'x^2', 'f(x) = sin(x)' or {expr, name, label, color, domain, dashed}; a later one may use an earlier one (g(x) = f(x) + 1). |
+| `functions` | `list[str \| PlotFunction]` |  | The functions: 'x^2', 'f(x) = sin(x)' or {expr, name, label, color, domain, dashed}; a later one may use an earlier one (g(x) = f(x) + 1). |
 | `functions.expr` | `str` | required | f(x) written as maths: x^2 - 1, 2x + 1, sin(x), exp(-x^2/2), sqrt(x), abs(x); or 'f(x) = x^2' (the name in front). |
 | `functions.name` | `str \| None` |  | Its name (in labels and for on / under / trace); default: the name in expr, else f, g, h... in order. |
 | `functions.label` | `str \| None` |  | The label by the curve; default: 'f(x) = x²' from the name and expr; '' for none. |
 | `functions.color` | `color \| None` |  | Curve colour; default: the colour of the video's term the name or label is (terms:), else the theme palette in order. |
 | `functions.domain` | `tuple[float, float] \| None` |  | [from, to]: draw it only there (default: the whole x range). |
 | `functions.dashed` | `bool` | `False` | Draw the curve dashed (e.g. an approximation). |
-| `x_range` | `tuple[float, float]` | required | [from, to]: the x axis. |
-| `y_range` | `tuple[float, float] \| None` |  | [from, to]: the y axis; default: from the functions' values. |
+| `x_range` | `tuple[float, float] \| None` |  | [from, to]: the x axis; needed with functions; default (geometry only): around the points, vectors and marks. |
+| `y_range` | `tuple[float, float] \| None` |  | [from, to]: the y axis; default: from the functions' values (and the points, vectors and marks). |
 | `dots` | `list[PlotDot]` |  | Dots on the curves: {on, x, label, tangent, guides}; moved by the trace action. |
 | `dots.on` | `str \| None` |  | The function it sits on (its name); default: the first. |
 | `dots.x` | `float` | required | Where it starts; the trace action moves it. |
@@ -67,18 +67,45 @@ From the author guide (`vidgen guide scenes`):
 | `areas.color` | `color \| None` |  | Fill colour; default: the colour of the function above it. |
 | `areas.opacity` | `float` | `0.3` | Fill opacity. |
 | `areas.decimals` | `int` | `2` | Decimal places of the numbers in its label. |
+| `points` | `list[list \| PlotPoint]` |  | Points on the plane: [x, y] or {at, name, label, color}; moved by the trace action. |
+| `points.at` | `tuple[float, float]` | required | [x, y]: where it is; the trace action moves it. |
+| `points.name` | `str \| None` |  | Its name (A, B, P): marks and vectors may refer to it, and it is its label by default. |
+| `points.label` | `str \| None` |  | Its label: {x}, {y} and {name} are filled in as it moves ('P({x}, {y})'); default: its name; '' for none. |
+| `points.color` | `color \| None` |  | Dot colour; default: the colour of the first term its label says, else text. |
+| `points.decimals` | `int` | `1` | Decimal places of the numbers in its label. |
+| `vectors` | `list[list \| PlotVector]` |  | Arrows: [x, y] (from the origin) or {from, to \| components \| sum, name, label, color}; sum: [a, b] adds earlier vectors tip to tail; trace moves or scales them. |
+| `vectors.from` | `str \| tuple[float, float] \| None` |  | Its tail: [x, y], a point's name or another vector (its tip); default: the origin. |
+| `vectors.to` | `str \| tuple[float, float] \| None` |  | Its tip: [x, y] (trace moves it) or a point's name (it follows the point). |
+| `vectors.components` | `tuple[float, float] \| None` |  | [dx, dy] from its tail, instead of to (trace scales or turns it). |
+| `vectors.sum` | `list[str] \| None` |  | [a, b, ...]: earlier vectors (names or vector<N>) added tip to tail; this arrow is their resultant, drawn from the first one's tail. |
+| `vectors.name` | `str \| None` |  | Its name (a, v): sums, marks and labels may use it; its label by default. |
+| `vectors.label` | `str \| None` |  | Its label: {x} and {y} (its components), {length} and {name} are filled in as it changes; default: its name; '' for none. |
+| `vectors.color` | `color \| None` |  | Arrow colour; default: the colour of the first term its label says, else the theme palette in order (after the functions). |
+| `vectors.decimals` | `int` | `1` | Decimal places of the numbers in its label. |
+| `marks` | `list[PlotMark]` |  | {segment: [A, B, ...]}, {brace: [A, B]}, {angle: [A, V, B]}, {dimension: [A, B]}, with label; a position is a point's or a vector's name or [x, y]. |
+| `marks.segment` | `list[str \| tuple[float, float]] \| None` |  | [A, B, ...]: straight lines through these positions (closed: back to the first: a polygon). |
+| `marks.brace` | `list[str \| tuple[float, float]] \| None` |  | [A, B]: a curly brace beside the segment A-B, its label beyond it. |
+| `marks.angle` | `list[str \| tuple[float, float]] \| None` |  | [A, V, B]: the angle at V between V-A and V-B (the smaller one): an arc, a square at 90°. |
+| `marks.dimension` | `list[str \| tuple[float, float]] \| None` |  | [A, B]: a dimension line beside A-B with end bars, its label beside it. |
+| `marks.label` | `str \| None` |  | Its label: {length} (segment, brace, dimension: in axis units) or {angle} (degrees, '{angle}°') are filled in as things move; default: '{length}' on a dimension, none on the others. |
+| `marks.side` | `'auto' \| 'above' \| 'below' \| 'left' \| 'right'` | `'auto'` | Brace and dimension: which side of the segment; auto: away from the middle of the figure. |
+| `marks.color` | `color \| None` |  | Its colour; default: the colour of the first term its label says, else text (accent for an angle, dim for a dimension). |
+| `marks.closed` | `bool` | `False` | Segment: join the last position back to the first. |
+| `marks.dashed` | `bool` | `False` | Segment: draw it dashed. |
+| `marks.decimals` | `int \| None` |  | Decimal places of the numbers in its label (default 1; 0 for an angle). |
+| `axes` | `bool` | `True` | false: no axes, ticks or grid (pure geometry; positions keep their place). |
 | `x_label` | `str` | `'x'` | Name at the end of the x axis ('' for none). |
 | `y_label` | `str` | `'y'` | Name at the top of the y axis ('' for none). |
 | `grid` | `bool` | `True` | Faint lines at the ticks. |
-| `aspect` | `'auto' \| 'equal'` | `'auto'` | auto: the plot fills the space; equal: one unit is as long on both axes (true angles and slopes). |
-| `reveal` | `'per_beat' \| 'all'` | `'per_beat'` | per_beat: function 1 with the axes at beat 1, then one function, dot or area per beat; all: everything in beat 1. |
+| `aspect` | `'auto' \| 'equal' \| None` |  | auto: the plot fills the space; equal: one unit is as long on both axes (true angles and slopes); default: equal with vectors or angle marks or without functions, else auto. |
+| `reveal` | `'per_beat' \| 'all'` | `'per_beat'` | per_beat: function 1 with the axes at beat 1, then one function, dot, area, point, vector or mark per beat; all: everything in beat 1. |
 | `title_size` | `size` | `'heading'` | Title size (1.3x in a portrait frame). (also: heading_size) |
 | `title_color` | `color` | `'text'` | Title colour. (also: heading_color) |
-| `label_size` | `size` | `'caption'` | Size of the tick, axis, curve, dot and area labels (never below the readable minimum). |
+| `label_size` | `size` | `'caption'` | Size of the tick, axis, curve, dot, area, point, vector and mark labels (never below the readable minimum). |
 
 ## Targets
 
-`title`, `axes`, `function<N>`, `function:<name>`, `dot<N>`, `tangent<N>`, `area<N>`
+`title`, `axes`, `function<N>`, `function:<name>`, `dot<N>`, `tangent<N>`, `area<N>`, `point<N>`, `point:<name>`, `vector<N>`, `vector:<name>`, `segment<N>`, `brace<N>`, `angle<N>`, `dimension<N>`
 
 ## Beats
 

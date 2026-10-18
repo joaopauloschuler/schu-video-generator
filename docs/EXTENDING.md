@@ -1378,6 +1378,15 @@ scene that shows the narration its own way):
   `MathExpression`s it may call. `split_definition("f(x) = x^2") -> ("f", "x^2")`,
   `pretty_expression("x^2")` -> `"x²"` (for a label); `MATH_FUNCTIONS`, `MATH_CONSTANTS` and
   `MATH_NAMES` list what an expression knows.
+- **Geometry marks** (docs/CONFIG.md `function_plot` "Geometry on the plane"), in frame
+  coordinates: `brace_mark(start, end, *, label=None, normal=None, color="text")`,
+  `angle_mark(vertex, start, end, *, label=None, radius=0.55, color="text", right_angle=None)`
+  (the smaller angle; a square at 90°) and `dimension_mark(start, end, *, label=None,
+  normal=None, offset=0.35, color="dim")` each return a `GeometryMark(shape, label, group)` with
+  the label (a mobject you made, e.g. `T("4")`) moved outside the mark;
+  `segment_normal(start, end, away_from=None)` is the side away from a point (the middle of your
+  figure), `angle_between(vertex, start, end)` the `(start angle, sweep)` in radians. Draw them on
+  a diagram, a picture or your own scene.
 - `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
   max_lines=2, max_words=None, until=None, prefix="", prefix_width=None) -> [CaptionCue(start,
   end, lines, words, prefix)]`: the text cut at phrase boundaries into cues (`segment_cues`, costs

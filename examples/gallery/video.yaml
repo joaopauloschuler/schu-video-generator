@@ -14,6 +14,7 @@
 #   vidgen storyboard examples/gallery --scene reach --per-beat 3   # a map: countries, then pins and an arc
 #   vidgen storyboard examples/gallery --scene derive --per-beat 3  # an equation derivation, step by step
 #   vidgen storyboard examples/gallery --scene slope --per-beat 3   # a function plot: a dot tracing its curve, an area growing
+#   vidgen storyboard examples/gallery --scene hops --per-beat 3    # a number line: an interval, jumps, a point sliding on a word
 #   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step; chapter 4 starts here
 #   vidgen storyboard examples/gallery --scene morph --per-beat 3   # code morphing from a loop to a comprehension, on a word
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
@@ -432,6 +433,23 @@ scenes:
         actions:
           - {reveal: area1, at: "@area"}           # the scene leaves the area to this action
           - {trace: area1, to: 2, at: "@grows"}
+
+  - id: hops
+    type: number_line   # one line across the frame: points, intervals (interval notation), jumps
+    params:
+      title: "Adding on the number line"
+      range: [-2, 9]
+      step: 1
+      points: [{at: 2, name: start}]
+      intervals: [{from: 5, to: inf, ends: "[)", label: "x ≥ 5"}]   # closed at 5, on to infinity
+      jumps: [[2, 5], [5, 7]]                                         # arcs labelled +3 and +2
+    beats:
+      - text: "A number line, and a point that starts at two."
+      - text: "Every number from five on is shaded: the interval from five to infinity."
+      - text: "From two, jump three to land on five."
+      - text: "Two more lands on seven, and the point slides along to meet it."
+        actions:
+          - {trace: "point:start", to: 7, at: "@slides"}   # the point moves on the spoken word
 
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about

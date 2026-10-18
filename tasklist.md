@@ -867,10 +867,10 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Tests (`tests/test_function_plot.py`: the parser, labels, layout helpers, params and checks, `trace` checks, term conflicts, tiny renders in 16:9 and 9:16 on words and with `until`; the builtin / coverage / translation samples; the gallery page)
 
 ### Step 161 — Maths toolkit, part 2: geometry basics
-- [ ] Braces with labels, angle arcs with labels, dimension lines
-- [ ] A number line (points, intervals, jumps); a coordinate plane with vectors (add, scale)
-- [ ] A scene type or additions to Step 160's scene: decided and recorded in DESIGN §87
-- [ ] Tests
+- [x] Braces with labels, angle arcs with labels, dimension lines (`function_plot` `marks`: `{brace: [A, B]}`, `{angle: [A, V, B]}` (a square at 90°, `{angle}` in degrees), `{dimension: [A, B]}` (`{length}`), and `{segment: [A, B, ...], closed}` for the figure's sides; outside the figure by default, `side:`; the builders `brace_mark`, `angle_mark`, `dimension_mark` in `vidgen/geometry_marks.py`, exported by `vidgen.api`; DESIGN §87.8)
+- [x] A number line (points, intervals, jumps); a coordinate plane with vectors (add, scale) (a new scene type `number_line`: points, intervals in interval notation `"[-1, 3)"` / to `inf`, jumps `[2, 5]` labelled `+3`; `function_plot` `points` and `vectors` (`{from, to | components}`, `{sum: [a, b]}` tip to tail); the `trace` action moves points (`to: [x, y]`), vectors (`to`, `scale`) and a number line's points, everything drawn from them following)
+- [x] A scene type or additions to Step 160's scene: decided and recorded in DESIGN §87 (as planned in §87.7: additions to `function_plot` on the plane, `functions` optional, `axes: false`; `number_line` its own type; shared parts in `scenes/math_axes.py`; DESIGN §87.8)
+- [x] Tests (`tests/test_geometry.py`: the mark builders, the figure's references, sums and trace goals, params and checks, trace checks, terms, the number line, tiny renders in 16:9 and 9:16 on words and with `until`; the builtin / coverage / translation samples; the gallery page and example scene `hops`)
 
 ### Step 162 — Charts that change between beats
 - [ ] The chart scenes (bar, line, ...) take values per beat and animate between them: bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line chart, the axis rescaling when needed; values stay the author's

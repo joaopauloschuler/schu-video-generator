@@ -308,6 +308,8 @@ project's own scene types, in its theme).
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
+| geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
+| a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
 | code that changes: before / after, a refactor, a fix | `code_morph` | `title`, `versions` (each the code, or code / path / highlight) |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
@@ -599,6 +601,43 @@ Minimal snippets (copy, then adapt):
       actions: [{trace: dot1, to: 2, at: "@moves"}]   # the dot travels along the curve on the word
     - text: "The area under the curve grows as its end moves out."
       actions: [{trace: area1, to: 2.5, at: "@grows"}]
+- id: triangle
+  type: function_plot    # geometry on the same plane: points, vectors and marks, no functions needed
+  params:
+    axes: false          # pure geometry; keep the axes for vectors on a grid
+    points: [{at: [0, 0], name: A}, {at: [4, 0], name: B}, {at: [4, 3], name: C}]
+    marks:
+      - {segment: [A, B, C], closed: true}
+      - {brace: [A, B], label: "4"}               # outside the triangle by itself
+      - {angle: [B, A, C], label: "{angle}°"}     # the angle at A; a square at 90°
+      - {dimension: [A, C], label: "c = {length}"}
+  beats:
+    - text: "A right triangle with sides four and three."
+    - text: "Move C up and the angle at A opens."
+      actions: [{trace: "point:C", to: [4, 4], at: "@Move"}]   # marks and labels follow
+- id: vectors
+  type: function_plot
+  params:
+    x_range: [-1, 6]
+    y_range: [-1, 5]
+    vectors: [{to: [3, 1], name: a}, {to: [1, 3], name: b}, {sum: [a, b], label: "a + b"}]   # b slides to a's tip
+  beats:
+    - text: "Vector a, and vector b."
+    - text: "Put b at the tip of a: the sum runs from start to end."
+    - text: "Double a and the sum follows."
+      actions: [{trace: "vector:a", scale: 2, at: "@Double"}]
+- id: hops
+  type: number_line
+  params:
+    range: [-2, 8]
+    points: [{at: 2, name: a}]
+    intervals: ["[4, inf)"]                        # interval notation: [ ] closed, ( ) open, inf
+    jumps: [[2, 5], [5, 7]]                        # arcs labelled +3, +2
+  beats:
+    - text: "Start at two."
+    - text: "Every number from four on."
+    - text: "Jump three to five."
+    - text: "And two more to seven."
 - id: snippet
   type: code
   params: {title: "Load and train", code: "data = load()\nmodel = fit(data)\nsave(model)", highlight: ["1", "2-3"]}
@@ -755,7 +794,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start) | one at a time |
 | `reveal` | bring a later element in early | rarely: the default order is usually right |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
-| `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow) or an area's right end | one movement per beat, timed to the word that says it |
+| `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |

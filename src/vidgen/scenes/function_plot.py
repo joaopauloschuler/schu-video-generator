@@ -7,10 +7,6 @@ view, with arrow tips, ticks and plain ``Text`` labels (no LaTeX). The ``trace``
 moves a dot (or an area's right end) to a new x (DESIGN §87.6).
 """
 
-import string
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
-from fnmatch import fnmatchcase
 from typing import Any, Literal
 
 import numpy as np
@@ -18,6 +14,8 @@ import numpy as np
 from vidgen.api import *
 
 from .line_chart import LineChart
+from .math_axes import ChainedTargets, LiveLabel, MathAxes, clip_segment, fill_label, label_plate, label_problem, math_axes, place_label
+from .plane_geometry import PlaneFigure, PlaneGeometry, PlotMark, PlotPoint, PlotVector, check_figure, geometry_range, mark_numbers
 
 #: Names given to functions written without one, in order.
 DEFAULT_NAMES = ("f", "g", "h", "p", "q", "r", "s", "u", "v", "w")
@@ -27,58 +25,9 @@ SAMPLES_PER_UNIT, MIN_SAMPLES = 90, 240
 CURVE_WIDTH, DOT_RADIUS, AREA_OPACITY = 5.0, 0.1, 0.3
 #: A tangent's length as a share of the plot's width, at most :data:`TANGENT_MAX` units.
 TANGENT_SHARE, TANGENT_MAX = 0.4, 4.5
-#: Opacity of the plate behind a dot's value label (the theme background colour).
-PLATE_OPACITY = 0.8
-#: Opacity of the grid lines.
-GRID_OPACITY = 0.2
-#: Space kept free beyond the arrow tips (units) and the length of a tick mark either side.
-TIP_ROOM, TICK = 0.3, 0.07
-#: In an ``auto`` aspect, the plot is at most this many times as tall as it is wide (9:16).
-MAX_TALL = 1.5
 #: The fields a dot's and an area's ``label`` may use.
 DOT_FIELDS = ("x", "y", "slope", "name")
 AREA_FIELDS = ("area", "from", "to", "name")
-
-
-# ----- labels with live values (no manim) ------------------------------------------------------
-
-
-def _number(value: float, decimals: int, spec: str = "") -> str:
-    """``value`` as a label shows it: with ``spec`` (``.3f``) or ``decimals`` places, never
-    ``-0``, a typographic minus."""
-    text = format(value, spec) if spec else f"{value:.{decimals}f}"
-    if text.startswith("-") and float(text) == 0:
-        text = text[1:]
-    return text.replace("-", "−")
-
-
-def fill_label(template: str, values: dict[str, float | str], decimals: int) -> str:
-    """``template`` with its ``{field}`` / ``{field:.2f}`` replaced from ``values`` (numbers with
-    :func:`_number`)."""
-    out = []
-    for literal, name, spec, _ in string.Formatter().parse(template):
-        out.append(literal)
-        if name is None:
-            continue
-        value = values[name]
-        out.append(_number(value, decimals, spec or "") if isinstance(value, float) else format(value, spec or ""))
-    return "".join(out)
-
-
-def label_problem(template: str, fields: Sequence[str]) -> str | None:
-    """Why ``template`` is not a label with ``fields`` (``None`` when it is)."""
-    try:
-        names = [name for _, name, _, _ in string.Formatter().parse(template) if name is not None]
-    except ValueError as exc:
-        return f"label {template!r}: {exc} (write {{ and }} as {{{{ and }}}})"
-    bad = [n for n in names if n not in fields]
-    if bad:
-        return f"label {template!r}: unknown field {{{bad[0]}}}; it may use {', '.join('{' + f + '}' for f in fields)}"
-    try:
-        fill_label(template, {f: (1.0 if f != "name" else "f") for f in fields}, 1)
-    except ValueError as exc:
-        return f"label {template!r}: {exc}"
-    return None
 
 
 # ----- params --------------------------------------------------------------------------------
@@ -188,6 +137,13 @@ class PlotArea(SceneParams):
         return self
 
 
+def _outside(x: float, y: float, x_range: tuple[float, float], y_range: tuple[float, float]) -> str | None:
+    """Why ``(x, y)`` is not on the plot (``None`` when it is)."""
+    if x_range[0] - 1e-9 <= x <= x_range[1] + 1e-9 and y_range[0] - 1e-9 <= y <= y_range[1] + 1e-9:
+        return None
+    return f"({x:g}, {y:g}) is outside the plot (x {x_range[0]:g} to {x_range[1]:g}, y {y_range[0]:g} to {y_range[1]:g}); widen x_range / y_range"
+
+
 def auto_y_range(values: np.ndarray) -> tuple[float, float]:
     """A y range for sampled function ``values`` (``nan`` ignored): their span without a few
     extreme values when those would squash the rest (an asymptote), reaching 0 when it is near,
@@ -226,52 +182,71 @@ class FunctionPlot(NarratedScene):
     """
 
     outro = 0.5
-    target_patterns = ("title", "axes", "function<N>", "function:<name>", "dot<N>", "tangent<N>", "area<N>")
+    target_patterns = (
+        "title", "axes", "function<N>", "function:<name>", "dot<N>", "tangent<N>", "area<N>", "point<N>", "point:<name>", "vector<N>",
+        "vector:<name>", "segment<N>", "brace<N>", "angle<N>", "dimension<N>",
+    )
 
     class Params(SceneParams):
         title: TranslatableStr = ""
         """Title (in the header band at the top)."""
-        functions: list[PlotFunction] = Field(min_length=1)
+        functions: list[PlotFunction] = []
         """The functions: 'x^2', 'f(x) = sin(x)' or {expr, name, label, color, domain, dashed}; a later one may use an earlier one (g(x) = f(x) + 1)."""
-        x_range: tuple[float, float]
-        """[from, to]: the x axis."""
+        x_range: tuple[float, float] | None = None
+        """[from, to]: the x axis; needed with functions; default (geometry only): around the points, vectors and marks."""
         y_range: tuple[float, float] | None = None
-        """[from, to]: the y axis; default: from the functions' values."""
+        """[from, to]: the y axis; default: from the functions' values (and the points, vectors and marks)."""
         dots: list[PlotDot] = []
         """Dots on the curves: {on, x, label, tangent, guides}; moved by the trace action."""
         areas: list[PlotArea] = []
         """Shaded areas: {under, over, between, label}."""
+        points: list[PlotPoint] = []
+        """Points on the plane: [x, y] or {at, name, label, color}; moved by the trace action."""
+        vectors: list[PlotVector] = []
+        """Arrows: [x, y] (from the origin) or {from, to | components | sum, name, label, color}; sum: [a, b] adds earlier vectors tip to tail; trace moves or scales them."""
+        marks: list[PlotMark] = []
+        """{segment: [A, B, ...]}, {brace: [A, B]}, {angle: [A, V, B]}, {dimension: [A, B]}, with label; a position is a point's or a vector's name or [x, y]."""
+        axes: bool = True
+        """false: no axes, ticks or grid (pure geometry; positions keep their place)."""
         x_label: TranslatableStr = "x"
         """Name at the end of the x axis ('' for none)."""
         y_label: TranslatableStr = "y"
         """Name at the top of the y axis ('' for none)."""
         grid: bool = True
         """Faint lines at the ticks."""
-        aspect: Literal["auto", "equal"] = "auto"
-        """auto: the plot fills the space; equal: one unit is as long on both axes (true angles and slopes)."""
+        aspect: Literal["auto", "equal"] | None = None
+        """auto: the plot fills the space; equal: one unit is as long on both axes (true angles and slopes); default: equal with vectors or angle marks or without functions, else auto."""
         reveal: Literal["per_beat", "all"] = "per_beat"
-        """per_beat: function 1 with the axes at beat 1, then one function, dot or area per beat; all: everything in beat 1."""
+        """per_beat: function 1 with the axes at beat 1, then one function, dot, area, point, vector or mark per beat; all: everything in beat 1."""
         title_size: ThemeSize = "heading"
         """Title size (1.3x in a portrait frame)."""
         title_color: ThemeColor = "text"
         """Title colour."""
         label_size: ThemeSize = "caption"
-        """Size of the tick, axis, curve, dot and area labels (never below the readable minimum)."""
+        """Size of the tick, axis, curve, dot, area, point, vector and mark labels (never below the readable minimum)."""
 
         @model_validator(mode="after")
         def _check(self) -> "FunctionPlot.Params":
-            for name, (lo, hi) in (("x_range", self.x_range), ("y_range", self.y_range or (0.0, 1.0))):
+            if not (self.functions or self.points or self.vectors or self.marks):
+                raise ValueError("give at least one of functions, points, vectors or marks")
+            if self.functions and self.x_range is None:
+                raise ValueError("x_range: give the x axis's [from, to] (needed with functions)")
+            if not self.functions and (self.dots or self.areas):
+                raise ValueError(f"{'dots' if self.dots else 'areas'} sit on a function: add functions")
+            for name, (lo, hi) in (("x_range", self.x_range or (0.0, 1.0)), ("y_range", self.y_range or (0.0, 1.0))):
                 if hi <= lo:
                     raise ValueError(f"{name} [{lo:g}, {hi:g}]: the second end must be greater than the first")
-            expressions = self.expressions()
-            xs = np.linspace(*self.x_range, 401)
-            for k, (name, expr) in enumerate(expressions.items()):
-                spec = self.functions[k]
-                lo, hi = spec.domain or self.x_range
-                if not np.isfinite(expr(np.linspace(max(lo, self.x_range[0]), min(hi, self.x_range[1]), 401))).any():
-                    raise ValueError(f"functions[{k}] {name}(x) = {expr.text} has no value on the x range {list(self.x_range)}")
-            if self.y_range is None:
-                auto_y_range(np.concatenate([e(xs) for e in expressions.values()]))
+            figure = check_figure(self.points, self.vectors, self.marks)
+            for k, (name, expr) in enumerate(self.expressions().items()):
+                x_range = self.x_range or (0.0, 1.0)
+                lo, hi = self.functions[k].domain or x_range
+                if not np.isfinite(expr(np.linspace(max(lo, x_range[0]), min(hi, x_range[1]), 401))).any():
+                    raise ValueError(f"functions[{k}] {name}(x) = {expr.text} has no value on the x range {list(x_range)}")
+            x_range, y_range = self.plot_ranges(figure)
+            for x, y in figure.coordinates(self.marks):
+                problem = _outside(x, y, x_range, y_range)
+                if problem:
+                    raise ValueError(f"points, vectors and marks: {problem}")
             for k, dot in enumerate(self.dots):
                 where = f"dots[{k}]"
                 fn = self.function_of(dot.on, where)
@@ -283,6 +258,32 @@ class FunctionPlot(NarratedScene):
                     for end in area.between:
                         self.check_x(name, end, f"{where}.between")
             return self
+
+        def figure(self) -> PlaneFigure:
+            """The points and vectors, resolved."""
+            return check_figure(self.points, self.vectors, self.marks)
+
+        def plot_ranges(self, figure: PlaneFigure | None = None) -> tuple[tuple[float, float], tuple[float, float]]:
+            """The x and y ranges: the given ones, else from the functions' values and the
+            figure's positions."""
+            figure = figure or self.figure()
+            spots = figure.coordinates(self.marks)
+            x_range = self.x_range or geometry_range(spots[:, 0], self.axes)
+            if self.y_range is not None:
+                return x_range, self.y_range
+            if not self.functions:
+                return x_range, geometry_range(spots[:, 1], self.axes)
+            values = np.concatenate([e(np.linspace(*x_range, 801)) for e in self.expressions().values()])
+            lo, hi = auto_y_range(values)
+            if len(spots):
+                lo, hi = min(lo, float(spots[:, 1].min()) - 0.3), max(hi, float(spots[:, 1].max()) + 0.3)
+            return x_range, (lo, hi)
+
+        def shape(self) -> str:
+            """The aspect: the given one, else ``equal`` with vectors or angle marks or without functions."""
+            if self.aspect is not None:
+                return self.aspect
+            return "equal" if self.vectors or any(m.kind == "angle" for m in self.marks) or not self.functions else "auto"
 
         def function_names(self) -> list[str]:
             """Every function's name: its own, else the next free one of :data:`DEFAULT_NAMES`."""
@@ -321,7 +322,7 @@ class FunctionPlot(NarratedScene):
 
         def x_problem(self, name: str, x: float) -> str | None:
             """Why a point at ``x`` on function ``name`` cannot be shown (``None`` when it can)."""
-            lo, hi = self.x_range
+            lo, hi = self.plot_ranges()[0]
             spec = self.functions[self.function_names().index(name)]
             if spec.domain is not None:
                 lo, hi = max(lo, spec.domain[0]), min(hi, spec.domain[1])
@@ -338,26 +339,37 @@ class FunctionPlot(NarratedScene):
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
-        """``title`` (if any), ``axes``, ``function<N>`` and ``function:<name>``, ``dot<N>`` (and
-        ``tangent<N>`` for a dot with a tangent), ``area<N>``."""
-        names = (["title"] if params.title else []) + ["axes"]
+        """``title`` (if any), ``axes`` (if shown), ``function<N>`` and ``function:<name>``,
+        ``dot<N>`` (and ``tangent<N>`` for a dot with a tangent), ``area<N>``, ``point<N>`` and
+        ``point:<name>``, ``vector<N>`` and ``vector:<name>``, then each mark's kind numbered
+        (``segment1``, ``brace1``, ``angle1``, ``dimension1``)."""
+        names = (["title"] if params.title else []) + (["axes"] if params.axes else [])
         for k, name in enumerate(params.function_names(), start=1):
             names += [f"function{k}", f"function:{name}"]
         for k, dot in enumerate(params.dots, start=1):
             names += [f"dot{k}"] + ([f"tangent{k}"] if dot.tangent else [])
-        return names + [f"area{k}" for k in range(1, len(params.areas) + 1)]
+        names += [f"area{k}" for k in range(1, len(params.areas) + 1)]
+        for kind, items in (("point", params.points), ("vector", params.vectors)):
+            for k, item in enumerate(items, start=1):
+                names += [f"{kind}{k}"] + ([f"{kind}:{item.name}"] if item.name else [])
+        return names + mark_numbers(params.marks)
+
+    @classmethod
+    def item_names(cls, params: Any) -> list[str]:
+        """The main name of each item the scene reveals one by one, in order."""
+        return ([f"function{k}" for k in range(1, len(params.functions) + 1)] + [f"dot{k}" for k in range(1, len(params.dots) + 1)]
+                + [f"area{k}" for k in range(1, len(params.areas) + 1)] + [f"point{k}" for k in range(1, len(params.points) + 1)]
+                + [f"vector{k}" for k in range(1, len(params.vectors) + 1)] + mark_numbers(params.marks))
 
     @classmethod
     def reveal_steps(cls, params: Any) -> list[RevealStep]:
-        """One step per function (rising or falling over the x range), dot and area."""
+        """One step per function (rising or falling over the x range), dot, area, point, vector and mark."""
         expressions = params.expressions()
-        xs = np.linspace(*params.x_range, 9)
-        steps = []
+        xs = np.linspace(*params.plot_ranges()[0], 9)
+        trends = {}
         for k, expr in enumerate(expressions.values(), start=1):
-            values = [float(v) for v in expr(xs) if np.isfinite(v)]
-            steps.append(RevealStep(f"function{k}", value_trend(values)))
-        steps += [RevealStep(f"dot{k}") for k in range(1, len(params.dots) + 1)]
-        steps += [RevealStep(f"area{k}") for k in range(1, len(params.areas) + 1)]
+            trends[f"function{k}"] = value_trend([float(v) for v in expr(xs) if np.isfinite(v)])
+        steps = [RevealStep(name, trends.get(name)) for name in cls.item_names(params)]
         return steps[:1] if params.reveal == "all" else steps
 
     # ----- building -----------------------------------------------------------------------------
@@ -372,12 +384,11 @@ class FunctionPlot(NarratedScene):
             title = chart_title(p.title, size=p.title_size, color=p.title_color, area=self.safe_area)
             body = body.below(title, gap=0.45)
         size = chart_label_size(p.label_size)
-        sample_x = np.linspace(*p.x_range, 801)
-        y_range = p.y_range or auto_y_range(np.concatenate([expressions[n](sample_x) for n in names]))
+        x_range, y_range = p.plot_ranges()
         axes = math_axes(
-            body, p.x_range, y_range, label=lambda s: self.text(s, size=size, color="dim"), aspect=p.aspect,
-            grid=p.grid, x_title=self.text(p.x_label, size=size, color="dim") if p.x_label else None,
-            y_title=self.text(p.y_label, size=size, color="dim") if p.y_label else None,
+            body, x_range, y_range, label=lambda s: self.text(s, size=size, color="dim"), aspect=p.shape(),
+            grid=p.grid, x_title=self.text(p.x_label, size=size, color="dim") if p.x_label and p.axes else None,
+            y_title=self.text(p.y_label, size=size, color="dim") if p.y_label and p.axes else None, visible=p.axes,
         )
         self.axes = axes
         colors = [self._function_color(k, name) for k, name in enumerate(names)]
@@ -391,25 +402,18 @@ class FunctionPlot(NarratedScene):
             for spec in p.areas
         ]
         dots = [_Dot(self, axes, spec, expressions[p.function_of(spec.on, "")], p.function_of(spec.on, ""), size, obstacles) for spec in p.dots]
+        curve_points = [c.get_all_points() for c in curves if len(c)]
+        avoid = np.vstack([*curve_points, axes.line_points()] if p.axes else [*curve_points, np.zeros((0, 3))])
+        geometry = PlaneGeometry(self, axes, p, size, obstacles, avoid, len(names))
+        self.geometry = geometry
 
-        revealed = self._revealed_by_actions()
-        # each target's own entrance, and the targets it needs on screen first (in order)
-        bare: dict[int, Callable[[], list[Animation]]] = {}
-        needs: dict[int, list[Target]] = {}
-
-        def bring(chain: Sequence[Target]) -> list[Animation]:
-            return [a for t in dict.fromkeys(chain) if not self.is_shown(t) for a in bare[id(t)]()]
-
-        def add(names: str | list[str], mobject: Mobject, own: Callable[[], list[Animation]], before: list[Target]) -> Target:
-            target = self.target(names, mobject, entrance=lambda: bring([*needs[id(target)], target]))
-            bare[id(target)], needs[id(target)] = own, before
-            return target
-
+        chain = ChainedTargets(self)
+        revealed, add = chain.revealed, chain.add
         base: list[Target] = []
         if title is not None:
             base.append(add("title", title, lambda: [FadeIn(title)], []))
-        axes_target = add("axes", axes.group, lambda: [FadeIn(axes.group)], list(base))
-        base.append(axes_target)
+        if p.axes:
+            base.append(add("axes", axes.group, lambda: [FadeIn(axes.group)], list(base)))
         function_targets = []
         for k, name in enumerate(names):
             group = VGroup(curves[k], labels[k]) if labels[k] is not None else VGroup(curves[k])
@@ -432,23 +436,59 @@ class FunctionPlot(NarratedScene):
         for k, area in enumerate(areas):
             owner = function_targets[names.index(area.name)]
             area_targets.append(add(f"area{k + 1}", area.group, lambda area=area: [area.entrance()], [*base, owner]))
+        by_name: dict[str, Target] = {}
+        for item in geometry.items:
+            before = [*base, *(by_name[n] for n in item.needs)]
+            by_name[item.names[0]] = add(item.names, item.group, lambda item=item: [item.entrance()], before)
         self.dots, self.areas = dots, areas
-        self._dot_targets, self._area_targets = dot_targets, area_targets
+        self._traced: list[tuple[Target, Any]] = [
+            *zip(dot_targets, dots), *zip(area_targets, areas),
+            *((by_name[f"point{k + 1}"], geometry.traced("point", k)) for k in range(len(geometry.points))),
+            *((by_name[f"vector{k + 1}"], geometry.traced("vector", k)) for k in range(len(geometry.vectors))),
+        ]
 
-        # an item a reveal action shows keeps its slot, empty: the others keep their beats
-        items = [[] if revealed.intersection(t.names) else [t] for t in [*function_targets, *dot_targets, *area_targets]]
-
-        def step(targets: list[Target]) -> Callable[[], list[Animation]]:
-            return lambda: bring([*base, *(d for t in targets for d in [*needs[id(t)], t])])
-
-        steps = [step([t for own in items for t in own])] if p.reveal == "all" else [step(own) for own in items]
-        self.reveal(steps, fraction=0.8, cap=2.0)
+        chain.reveal(base, [*function_targets, *dot_targets, *area_targets, *(by_name[item.names[0]] for item in geometry.items)], p.reveal == "all")
         self.finish()
 
-    def _revealed_by_actions(self) -> set[str]:
-        """Target names a ``reveal`` action shows: the scene leaves them to it."""
-        names = type(self).target_names(self.params)
-        return {name for action in self.action_uses("reveal") for pattern in action.config.targets() for name in names if fnmatchcase(name, pattern)}
+    @classmethod
+    def trace_problem(cls, params: Any, name: str, options: Any) -> tuple[str, str] | None:
+        """``(option, message)`` when the ``trace`` action cannot move target ``name`` as asked."""
+        to, scale = options.to, options.scale
+        kind, _, own = name.partition(":")
+        if own and kind in ("point", "vector"):
+            number = next(k for k, item in enumerate(params.points if kind == "point" else params.vectors) if item.name == own)
+        else:
+            kind = name.rstrip("0123456789")
+            number = int(name[len(kind):]) - 1 if name[len(kind):] else -1
+        if kind not in ("dot", "area", "point", "vector") or number < 0:
+            return ("target", f"{name}: trace moves a dot<N>, an area<N>, a point<N> or a vector<N>")
+        if scale is not None and kind != "vector":
+            return ("scale", f"{name}: scale is for a vector; move a {kind} with to")
+        if kind in ("dot", "area"):
+            if not isinstance(to, float):
+                return ("to", f"{name}: to is an x (a number) for a {kind}, e.g. to: 2")
+            if kind == "dot":
+                problem = params.x_problem(params.function_of(params.dots[number].on, ""), to)
+            else:
+                area = params.areas[number]
+                problem = params.x_problem(params.function_of(area.under, ""), to)
+                if problem is None and area.over is not None:
+                    problem = params.x_problem(area.over, to)
+            return ("to", f"{name}: {problem}") if problem else None
+        if to is not None and not isinstance(to, tuple):
+            return ("to", f"{name}: to is a position [x, y] for a {kind}, e.g. to: [2, 1]")
+        figure = params.figure()
+        problem = figure.trace_problem(kind, number)
+        if problem:
+            return ("target", problem)
+        goal = figure.goal(kind, number, to, scale)
+        spot = goal if kind == "point" or params.vectors[number].components is None else figure.ends(number)[0] + goal
+        problem = _outside(float(spot[0]), float(spot[1]), *params.plot_ranges(figure))
+        return ("scale" if scale is not None else "to", f"{name}: {problem}") if problem else None
+
+    def traced_item(self, target: Target) -> Any:
+        """What the ``trace`` action moves for ``target`` (``None``: nothing)."""
+        return next((item for own, item in self._traced if own is target), None)
 
     def _function_color(self, k: int, name: str) -> str:
         spec = self.params.functions[k]
@@ -489,174 +529,11 @@ class FunctionPlot(NarratedScene):
             words = self.text(text, size=size, color=colors[k])
             if words.width > axes.plot.width * 0.6:
                 words.scale_to_fit_width(axes.plot.width * 0.6)
-            label = VGroup(_plate(words), words).set_z_index(1)  # readable on an area or the grid
+            label = VGroup(label_plate(words), words).set_z_index(1)  # readable on an area or the grid
             box = place_label(label, curves[k].get_all_points(), axes.plot, obstacles, curve_points)
             obstacles.append(box)
             out.append(label)
         return out
-
-
-# ----- axes (no scene) --------------------------------------------------------------------------
-
-
-@dataclass
-class MathAxes:
-    """Maths axes laid out by :func:`math_axes`: ``plot`` (the region the ranges map to),
-    ``x_range`` / ``y_range``, where the axes cross (``origin``, data units), ``group`` (grid,
-    axis lines with tips, ticks, labels), ``labels`` (the tick and axis labels)."""
-
-    plot: Region
-    x_range: tuple[float, float]
-    y_range: tuple[float, float]
-    origin: tuple[float, float]
-    group: VGroup = field(default_factory=VGroup)
-    labels: list[Mobject] = field(default_factory=list)
-
-    def x_pos(self, x: float) -> float:
-        """Frame x of a data x."""
-        lo, hi = self.x_range
-        return self.plot.x0 + (x - lo) / (hi - lo) * self.plot.width
-
-    def y_pos(self, y: float) -> float:
-        """Frame y of a data y."""
-        lo, hi = self.y_range
-        return self.plot.y0 + (y - lo) / (hi - lo) * self.plot.height
-
-    def point(self, x: float, y: float) -> np.ndarray:
-        """The frame point of a data point."""
-        return np.array([self.x_pos(x), self.y_pos(y), 0.0])
-
-    @property
-    def units(self) -> tuple[float, float]:
-        """Frame units per data unit along x and y."""
-        return self.plot.width / (self.x_range[1] - self.x_range[0]), self.plot.height / (self.y_range[1] - self.y_range[0])
-
-    def line_points(self, step: float = 0.1) -> np.ndarray:
-        """Frame points along both axis lines, ``step`` apart (for labels to keep off them)."""
-        ax, ay = self.x_pos(self.origin[0]), self.y_pos(self.origin[1])
-        xs = np.arange(self.plot.x0, self.plot.x1 + step, step)
-        ys = np.arange(self.plot.y0, self.plot.y1 + step, step)
-        return np.vstack([np.column_stack([xs, np.full_like(xs, ay), np.zeros_like(xs)]), np.column_stack([np.full_like(ys, ax), ys, np.zeros_like(ys)])])
-
-    @staticmethod
-    def label_box(m: Mobject) -> tuple[float, float, float, float]:
-        """``(x0, y0, x1, y1)`` of a mobject."""
-        return (m.get_left()[0], m.get_bottom()[1], m.get_right()[0], m.get_top()[1])
-
-
-def _ticks(lo: float, hi: float, count: int) -> list[float]:
-    return [t for t in axis_ticks(lo, hi, count) if lo - 1e-9 <= t <= hi + 1e-9]
-
-
-def _every(positions: list[float], extents: list[float], gap: float, keep: float | None) -> list[int]:
-    """Indices of evenly spaced labels to keep (every k-th, aligned on the one at ``keep``)."""
-    n = len(positions)
-    anchor = positions.index(keep) if keep in positions else 0
-    for k in range(1, n + 1):
-        kept = [i for i in range(n) if (i - anchor) % k == 0]
-        if all(abs(positions[b] - positions[a]) >= (extents[a] + extents[b]) / 2 + gap for a, b in zip(kept, kept[1:])):
-            return kept
-    return [anchor]
-
-
-def math_axes(
-    area: Region,
-    x_range: tuple[float, float],
-    y_range: tuple[float, float],
-    *,
-    label: Callable[[str], Mobject],
-    aspect: str = "auto",
-    grid: bool = True,
-    x_title: Mobject | None = None,
-    y_title: Mobject | None = None,
-    color: Any = "dim",
-) -> MathAxes:
-    """Maths axes in ``area``: crossing at the origin when it is in view (else along the bottom /
-    left edge), arrow tips at the positive ends, round ticks with labels made by ``label``
-    (a single ``0`` at the origin), faint grid lines, the axis titles by the tips; ``aspect``
-    ``equal`` gives both axes the same unit."""
-    dim = resolve_color(color)
-    portrait = area.height > area.width
-    x_ticks = _ticks(*x_range, 5 if portrait else 8)
-    y_ticks = _ticks(*y_range, 8 if portrait else 6)
-    ox = min(max(0.0, x_range[0]), x_range[1])
-    oy = min(max(0.0, y_range[0]), y_range[1])
-    both_inside = x_range[0] < 0 < x_range[1] and y_range[0] < 0 < y_range[1]
-    x_texts = {t: label(tick_texts([t])[0].replace("-", "−")) for t in x_ticks if not (both_inside and t == 0) and not (t == ox and oy != 0 and y_range[0] < 0 < y_range[1])}
-    y_texts = {t: label(tick_texts([t])[0].replace("-", "−")) for t in y_ticks if not (t == oy and x_range[0] < 0 < x_range[1])}
-    gap = 0.14
-    tick_w = max((m.width for m in y_texts.values()), default=0.0)
-    tick_h = max((m.height for m in x_texts.values()), default=0.0)
-    half_x = max((m.width for m in x_texts.values()), default=0.0) / 2  # an end tick's label is centred on the end
-
-    def layout(left: float, bottom: float) -> Region:
-        region = Region(area.x0 + max(left, half_x), area.y0 + bottom, area.x1 - max(TIP_ROOM, half_x), area.y1 - TIP_ROOM)
-        if aspect == "equal":
-            unit = min(region.width / (x_range[1] - x_range[0]), region.height / (y_range[1] - y_range[0]))
-            w, h = unit * (x_range[1] - x_range[0]), unit * (y_range[1] - y_range[0])
-        else:
-            w, h = region.width, min(region.height, region.width * MAX_TALL)
-        cx, cy = region.center[0], region.center[1]
-        return Region(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-
-    left = bottom = 0.0
-    plot = layout(left, bottom)
-    for _ in range(3):  # room for the labels beside an axis near (or on) an edge
-        axes = MathAxes(plot, x_range, y_range, (ox, oy))
-        need_left = max(0.0, tick_w + 2 * gap - (axes.x_pos(ox) - plot.x0))
-        need_bottom = max(0.0, tick_h + 2 * gap - (axes.y_pos(oy) - plot.y0))
-        if need_left < 1e-3 and need_bottom < 1e-3:
-            break
-        left, bottom = left + need_left, bottom + need_bottom
-        plot = layout(left, bottom)
-    axes = MathAxes(plot, x_range, y_range, (ox, oy))
-    ax, ay = axes.x_pos(ox), axes.y_pos(oy)
-
-    lines = VGroup()
-    if grid:
-        for t in x_ticks:
-            if abs(t - ox) > 1e-9:
-                lines.add(Line([axes.x_pos(t), plot.y0, 0], [axes.x_pos(t), plot.y1, 0], stroke_width=1, color=dim, stroke_opacity=GRID_OPACITY))
-        for t in y_ticks:
-            if abs(t - oy) > 1e-9:
-                lines.add(Line([plot.x0, axes.y_pos(t), 0], [plot.x1, axes.y_pos(t), 0], stroke_width=1, color=dim, stroke_opacity=GRID_OPACITY))
-    lines.set_z_index(-2)
-    tip = dict(tip_length=0.18, tip_width=0.16)
-    x_axis = Line([plot.x0, ay, 0], [plot.x1 + TIP_ROOM * 0.7, ay, 0], color=dim, stroke_width=2.5)
-    y_axis = Line([ax, plot.y0, 0], [ax, plot.y1 + TIP_ROOM * 0.7, 0], color=dim, stroke_width=2.5)
-    x_axis.add_tip(**tip)
-    y_axis.add_tip(**tip)
-    marks = VGroup(
-        *[Line([axes.x_pos(t), ay - TICK, 0], [axes.x_pos(t), ay + TICK, 0], color=dim, stroke_width=2) for t in x_ticks if abs(t - ox) > 1e-9 or ay == plot.y0],
-        *[Line([ax - TICK, axes.y_pos(t), 0], [ax + TICK, axes.y_pos(t), 0], color=dim, stroke_width=2) for t in y_ticks if abs(t - oy) > 1e-9 or ax == plot.x0],
-    )
-    xs = sorted(x_texts)
-    keep_x = _every([axes.x_pos(t) for t in xs], [x_texts[t].width for t in xs], 0.3, axes.x_pos(0.0) if 0.0 in xs else None)
-    ys = sorted(y_texts)
-    keep_y = _every([axes.y_pos(t) for t in ys], [y_texts[t].height for t in ys], 0.25, None)
-    labels: list[Mobject] = []
-    for i in keep_x:
-        t = xs[i]
-        labels.append(x_texts[t].move_to([axes.x_pos(t), ay - TICK - gap - x_texts[t].height / 2, 0]))
-    for i in keep_y:
-        t = ys[i]
-        labels.append(y_texts[t].move_to([ax - TICK - gap - y_texts[t].width / 2, axes.y_pos(t), 0]))
-    if both_inside:
-        zero = label("0")
-        labels.append(zero.move_to([ax - gap - zero.width / 2, ay - gap - zero.height / 2, 0]))
-    if x_title is not None:
-        below = ay > plot.y1 - 1e-6
-        x_title.move_to([plot.x1 + TIP_ROOM * 0.7 - x_title.width / 2, ay + (-1 if below else 1) * (gap + x_title.height / 2 + TICK), 0])
-        labels.append(x_title)
-    if y_title is not None:
-        on_left = ax > plot.x1 - 1e-6
-        y_title.move_to([ax + (-1 if on_left else 1) * (gap + TICK + y_title.width / 2), plot.y1 + TIP_ROOM * 0.7 - y_title.height / 2, 0])
-        labels.append(y_title)
-    axes.labels = labels
-    for m in labels:  # numbers stay readable where a curve crosses them
-        m.set_z_index(1)
-    axes.group = VGroup(lines, x_axis, y_axis, marks, *labels)
-    return axes
 
 
 def curve_runs(expr: MathExpression, lo: float, hi: float, y_range: tuple[float, float], count: int) -> list[np.ndarray]:
@@ -698,74 +575,6 @@ def curve_runs(expr: MathExpression, lo: float, hi: float, y_range: tuple[float,
     if current:
         runs.append(current)
     return [np.array(r) for r in runs if len(r) >= 2]
-
-
-def place_label(
-    label: Mobject, curve: np.ndarray, plot: Region, obstacles: list[tuple[float, float, float, float]], avoid: np.ndarray
-) -> tuple[float, float, float, float]:
-    """Move ``label`` beside a point of ``curve`` (frame points), above it or below, the first
-    place inside ``plot`` that covers no ``obstacles`` box and no ``avoid`` point; returns its box."""
-    w, h = label.width, label.height
-    pad = 0.06
-
-    def free(cx: float, cy: float) -> bool:
-        box = (cx - w / 2 - pad, cy - h / 2 - pad, cx + w / 2 + pad, cy + h / 2 + pad)
-        if box[0] < plot.x0 or box[2] > plot.x1 or box[1] < plot.y0 or box[3] > plot.y1:
-            return False
-        if any(box[0] < o[2] and o[0] < box[2] and box[1] < o[3] and o[1] < box[3] for o in obstacles):
-            return False
-        inside = (avoid[:, 0] > box[0]) & (avoid[:, 0] < box[2]) & (avoid[:, 1] > box[1]) & (avoid[:, 1] < box[3])
-        return not bool(inside.any())
-
-    def put(cx: float, cy: float) -> tuple[float, float, float, float]:
-        label.move_to([cx, cy, 0])
-        return (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-
-    n = len(curve)
-    shares = [0.88, 0.72, 0.56, 0.4, 0.97, 0.24, 0.1, *np.linspace(0.05, 0.95, 19)]
-    for share in shares:
-        i = min(n - 1, max(1, int(share * (n - 1))))
-        a, b = curve[i - 1], curve[min(n - 1, i + 1)]
-        tangent = b[:2] - a[:2]
-        normal = np.array([-tangent[1], tangent[0]])
-        normal = normal / (np.linalg.norm(normal) or 1.0)
-        if normal[1] < 0:
-            normal = -normal
-        for side in (1, -1):
-            d = normal * side
-            reach = 0.16 + 0.5 * (abs(d[0]) * w + abs(d[1]) * h)
-            cx, cy = curve[i][0] + d[0] * reach, curve[i][1] + d[1] * reach
-            if free(cx, cy):
-                return put(cx, cy)
-    # anywhere free in the plot, nearest to the curve's right part
-    near = curve[min(n - 1, int(0.88 * (n - 1)))]
-    grid_x = np.arange(plot.x0 + w / 2 + pad, plot.x1 - w / 2 - pad, 0.12)
-    grid_y = np.arange(plot.y0 + h / 2 + pad, plot.y1 - h / 2 - pad, 0.12)
-    spots = sorted(((x, y) for x in grid_x for y in grid_y), key=lambda q: (q[0] - near[0]) ** 2 + (q[1] - near[1]) ** 2)
-    for cx, cy in spots:
-        if free(cx, cy):
-            return put(cx, cy)
-    end = curve[-1]
-    return put(min(max(end[0] - w / 2, plot.x0 + w / 2), plot.x1 - w / 2), min(max(end[1] + h, plot.y0 + h / 2), plot.y1 - h / 2))
-
-
-def clip_segment(a: np.ndarray, b: np.ndarray, region: Region) -> tuple[np.ndarray, np.ndarray]:
-    """The part of the segment ``a`` -> ``b`` inside ``region`` (Liang-Barsky); a point when none is."""
-    lo, hi = 0.0, 1.0
-    d = b - a
-    for p, q in ((-d[0], a[0] - region.x0), (d[0], region.x1 - a[0]), (-d[1], a[1] - region.y0), (d[1], region.y1 - a[1])):
-        if abs(p) < 1e-12:
-            if q < 0:
-                return a, a
-            continue
-        t = q / p
-        if p < 0:
-            lo = max(lo, t)
-        else:
-            hi = min(hi, t)
-    if lo > hi:
-        return a, a
-    return a + d * lo, a + d * hi
 
 
 def dot_label_spot(point: np.ndarray, direction: np.ndarray, w: float, h: float, plot: Region, obstacles: list[tuple[float, float, float, float]]) -> np.ndarray:
@@ -830,41 +639,6 @@ def area_label_spot(
 # ----- dots and areas that move -----------------------------------------------------------------
 
 
-def _plate(text: Mobject) -> Mobject:
-    """A plate in the background colour behind ``text`` (so grid lines and curves do not cross it)."""
-    return RoundedRectangle(
-        width=text.width + 0.2, height=text.height + 0.14, corner_radius=0.06, stroke_width=0,
-        fill_color=current_theme().background, fill_opacity=PLATE_OPACITY,
-    ).move_to(text)
-
-
-class _LiveLabel:
-    """Text on a plate (``group``) whose text changes as its item moves; :meth:`show` rebuilds it
-    only when the text changes, keeping a dimmed opacity."""
-
-    def __init__(self, scene: FunctionPlot, size: float, z: int) -> None:
-        self.scene, self.size, self.z = scene, size, z
-        self.text = scene.text(" ", size=size)
-        self.plate = _plate(self.text)
-        self.group = VGroup(self.plate, self.text).set_z_index(z)
-        self.content: str | None = None
-
-    def show(self, content: str) -> None:
-        """Write ``content``."""
-        if content == self.content:
-            return
-        opacity = self.text.get_fill_opacity() if self.content is not None else 1.0
-        text = self.scene.text(content, size=self.size)
-        text.set_fill(opacity=opacity)
-        self.text.become(text)
-        self.text.original_text = text.original_text  # what the layout dump reads
-        plate = _plate(self.text)
-        plate.set_fill(opacity=PLATE_OPACITY * opacity)
-        self.plate.become(plate)
-        self.group.set_z_index(self.z)  # become() brought parts at z 0, under the plate
-        self.content = content
-
-
 class _Dot:
     """A dot on a curve with its live value label, guides and tangent; :meth:`place` moves them."""
 
@@ -876,15 +650,21 @@ class _Dot:
         theme = scene.theme
         self.dot = Dot(radius=DOT_RADIUS, color=theme.color(spec.color)).set_z_index(3)
         self.template = spec.label if spec.label is not None else "{name}({x}) = {y}"
-        self.live = _LiveLabel(scene, size, 3)
+        self.live = LiveLabel(scene, size, 3)
         self.label = self.live.group
         self.guides = VGroup(DashedLine(ORIGIN, RIGHT), DashedLine(ORIGIN, RIGHT)) if spec.guides else None
         self.tangent = Line(ORIGIN, RIGHT, color=theme.color(spec.tangent_color), stroke_width=4).set_z_index(1) if spec.tangent else None
         self.group = VGroup(*([self.guides] if self.guides is not None else []), self.dot, *([self.label] if self.template else []))
         self.x = spec.x
+        self.driver = self.dot
         self.placed = False
         self.place(spec.x)
         self.placed = True
+
+    @property
+    def state(self) -> float:
+        """Its x (what ``trace`` moves)."""
+        return self.x
 
     @property
     def parts(self) -> list[Mobject]:
@@ -951,13 +731,19 @@ class _Area:
         self.scene, self.axes, self.spec, self.top, self.bottom, self.name, self.size = scene, axes, spec, top, bottom, name, size
         self.color, self.obstacles = color, obstacles
         self.shape = VMobject().set_z_index(-1)
-        self.live = _LiveLabel(scene, size, 2)
+        self.live = LiveLabel(scene, size, 2)
         self.label = self.live.group
         self.group = VGroup(self.shape, *([self.label] if spec.label else []))
         self.start, self.end = spec.between
+        self.driver = self.shape
         self.placed = False
         self.place(self.end)
         self.placed = True
+
+    @property
+    def state(self) -> float:
+        """Its right end (what ``trace`` moves)."""
+        return self.end
 
     @property
     def shown_text(self) -> str | None:
@@ -1003,92 +789,3 @@ class _Area:
         if len(xs) >= 2:
             edges = np.column_stack([[axes.x_pos(float(x)) for x in xs], [axes.y_pos(float(y)) for y in bottom], [axes.y_pos(float(y)) for y in top]])
             self.label.move_to(area_label_spot(edges, self.label.width, self.label.height, axes.plot, self.obstacles))
-
-
-class _Trace(Animation):
-    """Moves a dot or an area's right end from ``start`` to ``end`` (data x)."""
-
-    def __init__(self, item: _Dot | _Area, start: float, end: float, **kwargs: Any) -> None:
-        mobject = item.dot if isinstance(item, _Dot) else item.shape
-        super().__init__(mobject, **kwargs)
-        self.item, self.start, self.end = item, start, end
-
-    def interpolate_mobject(self, alpha: float) -> None:
-        self.item.place(self.start + (self.end - self.start) * self.rate_func(alpha))
-
-
-class _Moved(Animation):
-    """Marks a part another animation moves, so Manim redraws it on every frame."""
-
-    def interpolate_mobject(self, alpha: float) -> None:
-        pass
-
-
-@action("trace")
-class Trace(Action):
-    """On a function_plot: a dot (dot<N>) travels along its curve to x = `to`, its value label,
-    guides and tangent following; an area (area<N>) grows or shrinks to end at x = `to`, its
-    value following. `until: <beat>` moves it back."""
-
-    class Options(ActionOptions):
-        to: float
-        """The x it ends at (data units of the x axis)."""
-
-    run_time = 2.0
-    reversible = True
-
-    def __init__(self, options: ActionOptions, config: Any) -> None:
-        super().__init__(options, config)
-        self.saved: list[tuple[_Dot | _Area, float]] = []
-
-    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
-        """A function_plot's dots and areas only; ``to`` where the dot's function has a value."""
-        if not issubclass(scene_cls, FunctionPlot):
-            return [("target", "trace moves the dots and areas of a function_plot")]
-        names = scene_cls.target_names(params)
-        matched = [n for pattern in self.config.targets() for n in names if fnmatchcase(n, pattern)]
-        problems: list[tuple[str, str]] = []
-        for name in dict.fromkeys(matched):
-            if name.startswith("dot"):
-                dot = params.dots[int(name[3:]) - 1]
-                problem = params.x_problem(params.function_of(dot.on, ""), self.options.to)
-            elif name.startswith("area"):
-                area = params.areas[int(name[4:]) - 1]
-                problem = params.x_problem(params.function_of(area.under, ""), self.options.to)
-                if problem is None and area.over is not None:
-                    problem = params.x_problem(area.over, self.options.to)
-            else:
-                problem = "trace moves a dot<N> or an area<N>"
-            if problem:
-                problems.append(("to", f"{name}: {problem}"))
-        return problems
-
-    def _items(self, scene: NarratedScene, targets: list[Target]) -> list[_Dot | _Area]:
-        items: list[_Dot | _Area] = []
-        for target in targets:
-            for k, own in enumerate(scene._dot_targets):
-                if own is target:
-                    items.append(scene.dots[k])
-            for k, own in enumerate(scene._area_targets):
-                if own is target:
-                    items.append(scene.areas[k])
-        return items
-
-    def _moves(self, scene: NarratedScene, item: _Dot | _Area, end: float) -> list[Animation]:
-        start = item.x if isinstance(item, _Dot) else item.end
-        moving = _Trace(item, start, end, rate_func=smooth)
-        shown = [m for m in item.parts if scene.on_screen_parts(m) and m is not moving.mobject]
-        return [moving, *[_Moved(m) for m in shown]]
-
-    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Each dot / area moves to ``to``."""
-        anims: list[Animation] = []
-        for item in self._items(scene, targets):
-            self.saved.append((item, item.x if isinstance(item, _Dot) else item.end))
-            anims += self._moves(scene, item, self.options.to)
-        return anims
-
-    def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Back to where they were."""
-        saved, self.saved = self.saved, []
-        return [a for item, x in saved for a in self._moves(scene, item, x)]

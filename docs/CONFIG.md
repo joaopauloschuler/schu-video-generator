@@ -876,8 +876,9 @@ scenes:
   its colour (unless the series has its own `color`); a `callout` whose label says a term takes
   its colour for the mark and the plate (unless the callout has its own `color`; the label's text
   keeps the colour that reads on the plate); a `function_plot` function whose name or label is a
-  term is drawn in its colour, and an area whose label says one is filled with it (unless they
-  have their own `color`). Code listings are not coloured (their syntax
+  term is drawn in its colour, and an area whose label says one is filled with it, as are a
+  `function_plot` point, vector or mark and a `number_line` point, interval or jump whose label
+  says one (unless they have their own `color`). Code listings are not coloured (their syntax
   colours would clash), nor text inside pictures.
 - **Matching**: whole words, any case, a plural `s` / `es` included (`loss` also colours
   `Losses`, not `glossy`); a term of several words matches them with any spaces or a line break
@@ -3305,7 +3306,7 @@ its params. Conventions shared by all built-ins:
   a `map` with the `world` view keeps only the longitudes of its countries, pins and arcs.
 - **Header band.** The line at the top of the frame is `heading` in `bullets`, `icon_grid`,
   `comparison`, `timeline`, `diagram`, `process`, `network` and `title` in the charts, `table`,
-  `map`, `code`, `code_morph`, `code_walkthrough`, `terminal`, `equation_derivation`, `function_plot`, `screenshot`, `video_clip`. Every
+  `map`, `code`, `code_morph`, `code_walkthrough`, `terminal`, `equation_derivation`, `function_plot`, `number_line`, `screenshot`, `video_clip`. Every
   one of these types accepts **both names** (also `heading_size` / `title_size`,
   `heading_color` / `title_color`; `vidgen list-scenes` shows `(also: title)`), and the target
   `title` selects a `heading` and the reverse. Not in `title`, `chapter` and `end_card`, whose
@@ -4362,21 +4363,56 @@ with arrow tips, round ticks and plain-text labels (no LaTeX needed).
   range, two functions with one name, a dot or an area bound outside its function's range or
   where it has no value, an unknown field in a label, a `trace` whose `to` is outside the range,
   a `trace` of something other than a dot or an area.
+- **Geometry on the plane** (no function needed): `points` (`[x, y]` or `{at, name, label, color,
+  decimals}`; the label defaults to the name, `{x}`, `{y}` are filled in as it moves), `vectors`
+  (arrows: `[x, y]` from the origin, or `{from, to | components, name, label, color}` where `from`
+  and `to` are `[x, y]`, a point's name or another vector's name (its tip); `{sum: [a, b]}` adds
+  earlier vectors tip to tail: copies of b, c... slide to the tip of the one before, then the
+  resultant grows from a's tail; labels may use `{x}`, `{y}` (components), `{length}`, `{name}`)
+  and `marks`: `{segment: [A, B, C], closed: true, dashed}` (lines through positions; `closed`: a
+  polygon), `{brace: [A, B], label}` (a curly brace beside A-B, its label beyond it),
+  `{angle: [A, V, B], label}` (the angle at V, the smaller one: an arc, a small square at 90°; its
+  label outside on the bisector; `{angle}` is its size in degrees) and `{dimension: [A, B], label}`
+  (a dimension line beside A-B with end bars; label `{length}` by default). A brace or dimension
+  goes on the side away from the middle of the figure (outside a triangle); `side: above`,
+  `below`, `left`, `right` picks one. A position in a mark is a point's or vector's name,
+  `point<N>`, `vector<N>` or `[x, y]`. Marks are drawn in `text` (an angle `accent`, a
+  dimension `dim`), points in `text`, vectors in the palette after the functions; each takes the
+  colour of a term its label says, unless it has its own `color`. `axes: false` hides the axes,
+  ticks and grid (the plane keeps its mapping). Without `x_range` / `y_range` the plot spans the
+  geometry with some room (and the origin while the axes show); `aspect` defaults to `equal`
+  with vectors or angle marks or without functions, so angles look true.
+- **Steps** of the geometry: after the functions, dots and areas, each point, then each vector,
+  then each mark, one per beat (`reveal: all`, or `reveal` actions on words, often read better
+  for a figure: `{reveal: angle1, at: "@angle"}`). A vector, sum or mark brings the points and
+  vectors it is drawn from first.
+- **Moving the geometry**: `{trace: "point:C", to: [4, 4]}` moves a point; `{trace: "vector:a",
+  to: [2, 3]}` moves a vector's tip and `{trace: "vector:a", scale: 2}` scales it (its tail
+  stays; `-1` turns it round). Everything drawn from them follows: vectors from or to the point,
+  sums, marks, and labels with `{x}`, `{y}`, `{length}`, `{angle}`. A sum, or a vector ending at a
+  point's name, follows others and cannot be traced itself (`vidgen validate` names what to trace
+  instead); `to` must stay inside the plot.
+- **Checks** of the geometry: an unknown name in a position (with the names there are), a vector
+  in `sum` or `from` that is not an earlier one, two items with one name, a name that is also a
+  numbered target, a vector of no length, an angle with a ray of no length, a mark with the wrong
+  number of positions, a label field the item does not have, a position outside the plot.
 - [Action targets](#beat-actions): `title`, `axes`, `function<N>` and `function:<name>` (a curve
   with its label), `dot<N>` (the dot, its label and guides), `tangent<N>` (dot N's tangent, when
-  it has one), `area<N>`.
+  it has one), `area<N>`, `point<N>` and `point:<name>` (a dot and its label), `vector<N>` and
+  `vector:<name>` (an arrow, a sum's copies, its label), `segment<N>`, `brace<N>`, `angle<N>`,
+  `dimension<N>` (numbered by kind in `marks`).
 
 | param | type | default | |
 |---|---|---|---|
-| `functions` | list | — | at least one: an expression (`x^2`, `f(x) = sin(x)`) or `{expr, name, label, color, domain, dashed}` |
+| `functions` | list | `[]` | an expression (`x^2`, `f(x) = sin(x)`) or `{expr, name, label, color, domain, dashed}`; at least one of `functions`, `points`, `vectors`, `marks` |
 | `functions[].expr` | str | — | f(x) as maths; `f(x) = ...` names it |
 | `functions[].name` | str | from `expr`, else `f`, `g`, `h`... | for `on`, `under`, `over` and labels |
 | `functions[].label` | str | `f(x) = <expr>` | the label by the curve; `''` for none |
 | `functions[].color` | color | term colour, else palette | |
 | `functions[].domain` | `[from, to]` | the x range | draw it only there |
 | `functions[].dashed` | bool | `false` | a dashed curve |
-| `x_range` | `[from, to]` | — | the x axis |
-| `y_range` | `[from, to]` | from the values | the y axis |
+| `x_range` | `[from, to]` | — (with functions); around the geometry | the x axis |
+| `y_range` | `[from, to]` | from the values (and the geometry) | the y axis |
 | `dots` | list | `[]` | `{on, x, label, tangent, guides, color, tangent_color, decimals}` |
 | `dots[].on` | str | the first function | the function it sits on |
 | `dots[].x` | number | — | where it starts (`trace` moves it) |
@@ -4394,15 +4430,36 @@ with arrow tips, round ticks and plain-text labels (no LaTeX needed).
 | `areas[].color` | color | term colour, else the function's | |
 | `areas[].opacity` | number (0–1] | `0.3` | fill opacity |
 | `areas[].decimals` | int 0–4 | `2` | |
+| `points` | list | `[]` | `[x, y]` or `{at, name, label, color, decimals}` |
+| `points[].name` | str | — | `A`, `P`, `a'`: for positions, targets (`point:A`) and its label |
+| `points[].label` | str | the name | `{x}`, `{y}`, `{name}` filled in as it moves (`'P({x}, {y})'`); `''` for none |
+| `points[].color` | color | term colour, else `text` | |
+| `vectors` | list | `[]` | `[x, y]` (from the origin) or `{from, to, components, sum, name, label, color, decimals}` |
+| `vectors[].from` | position | the origin | `[x, y]`, a point's name or a vector's (its tip) |
+| `vectors[].to` | position | — | its tip: `[x, y]` or a point's name (it follows the point) |
+| `vectors[].components` | `[dx, dy]` | — | instead of `to` |
+| `vectors[].sum` | list | — | `[a, b, ...]`: earlier vectors added tip to tail; this arrow is the resultant |
+| `vectors[].label` | str | the name | `{x}`, `{y}` (components), `{length}`, `{name}` |
+| `vectors[].color` | color | term colour, else palette | |
+| `marks` | list | `[]` | each one of `segment`, `brace`, `angle`, `dimension` with its positions |
+| `marks[].segment` | positions | — | `[A, B, ...]`; with `closed: true` a polygon, `dashed: true` dashed |
+| `marks[].brace` | `[A, B]` | — | a curly brace beside A-B |
+| `marks[].angle` | `[A, V, B]` | — | the angle at V (the smaller one); a square at 90° |
+| `marks[].dimension` | `[A, B]` | — | a dimension line with end bars |
+| `marks[].label` | str | `'{length}'` on a dimension, else none | `{length}` (segment, brace, dimension) or `{angle}` (degrees: `'{angle}°'`) |
+| `marks[].side` | `auto` \| `above` \| `below` \| `left` \| `right` | `auto` | brace and dimension: the side of the segment (`auto`: away from the figure's middle) |
+| `marks[].color` | color | term colour, else `text` (angle `accent`, dimension `dim`) | |
+| `marks[].decimals` | int 0–4 | `1` (`0` for an angle) | |
+| `axes` | bool | `true` | `false`: no axes, ticks or grid |
 | `x_label` | str | `x` | at the end of the x axis (`''` for none) |
 | `y_label` | str | `y` | at the top of the y axis (`''` for none) |
 | `grid` | bool | `true` | faint lines at the ticks |
-| `aspect` | `auto` \| `equal` | `auto` | `equal`: one unit is as long on both axes |
+| `aspect` | `auto` \| `equal` | `equal` with vectors, angle marks or no functions, else `auto` | `equal`: one unit is as long on both axes |
 | `reveal` | `per_beat` \| `all` | `per_beat` | |
 | `title` | str | `""` | in the header band |
 | `title_size` | size | `heading` | 1.3x in a vertical frame |
 | `title_color` | color | `text` | |
-| `label_size` | size | `caption` | tick, axis, curve, dot and area labels |
+| `label_size` | size | `caption` | tick, axis, curve, dot, area, point, vector and mark labels |
 
 ```yaml
 - id: slope
@@ -4428,6 +4485,93 @@ with arrow tips, round ticks and plain-text labels (no LaTeX needed).
     - text: "The area under it from one to two."
     - text: "Sweep the right end out to five and the area grows."
       actions: [{trace: area1, to: 5, at: "@Sweep"}]
+- id: triangle
+  type: function_plot
+  params:
+    axes: false
+    points: [{at: [0, 0], name: A}, {at: [4, 0], name: B}, {at: [4, 3], name: C}]
+    marks:
+      - {segment: [A, B, C], closed: true}
+      - {brace: [A, B], label: "4"}
+      - {brace: [B, C], label: "3"}
+      - {angle: [B, A, C], label: "{angle}°"}
+      - {dimension: [A, C], label: "c = {length}"}
+    reveal: all
+  beats:
+    - text: "A right triangle: four along, three up."
+    - text: "Lift C and the hypotenuse and the angle grow."
+      actions: [{trace: "point:C", to: [4, 4.5], at: "@Lift"}]
+- id: adding
+  type: function_plot
+  params:
+    x_range: [-1, 7]
+    y_range: [-1, 5]
+    vectors:
+      - {to: [3, 1], name: a}
+      - {to: [1, 3], name: b}
+      - {sum: [a, b], label: "a + b = ({x}, {y})", decimals: 0}
+  beats:
+    - text: "Vector a: three right, one up."
+    - text: "Vector b: one right, three up."
+    - text: "Slide b to the tip of a; the sum goes from start to end."
+    - text: "Scale a by one and a half and the sum follows."
+      actions: [{trace: "vector:a", scale: 1.5, at: "@Scale"}]
+```
+
+### `number_line`
+
+One number line across the frame (horizontal in 16:9 and 9:16; in a vertical frame the numbers
+are thinned to fit) with points, intervals and jumps.
+
+- **Points**: a number or `{at, name, label, color, decimals}`; the label (default: the name)
+  sits above the point, or under the numbers where a jump starts or lands; `{x}`, `{name}` are
+  filled in as it moves. Colour `highlight` unless set (or a term's).
+- **Intervals**: interval notation as text, `"[-1, 3)"`, `"(2, inf)"`, `"(-inf, 0]"` (`∞` works
+  too), or `{from, to, ends: "[)", label, color}`: a thick band on the line, a filled dot at a
+  closed end, a ring at an open one, an arrow at an infinite end; overlapping intervals stack
+  above each other. Colours from the theme palette in order (or a term's).
+- **Jumps**: `[from, to]` or `{from, to, label, color}`: an arc above the line with an arrow, its
+  label above it (default `'{by}'`: `+3`, `−2`; `{from}`, `{to}` too); a jump over an earlier one
+  goes higher. Colour `accent` (or a term's).
+- **Ticks**: round numbers (every 2nd or 5th one labelled when they would crowd); `step: 1` puts
+  a tick at every whole number.
+- **Steps** (`reveal: per_beat`): the line with the first item at beat 1, then each point, each
+  interval and each jump, one per beat; `reveal: all`: everything in beat 1; a `reveal` action
+  shows an item on a word (`{reveal: jump2, at: "@back"}`).
+- **Moving**: `{trace: point1, to: 4}` slides a point along the line (its label follows).
+- **Checks**: a number outside `range`, an interval written otherwise than `[a, b)`, an interval
+  or jump of no length, a label field it does not have, a `step` that gives over 60 ticks.
+- [Action targets](#beat-actions): `title`, `line`, `point<N>`, `point:<name>`, `interval<N>`,
+  `jump<N>`.
+
+| param | type | default | |
+|---|---|---|---|
+| `range` | `[from, to]` | — | the numbers the line shows |
+| `step` | number | a round step | distance between ticks |
+| `points` | list | `[]` | a number or `{at, name, label, color, decimals}` |
+| `intervals` | list | `[]` | `"[-1, 3)"` or `{from, to, ends, label, color}`; `ends`: `[]`, `[)`, `(]`, `()` |
+| `jumps` | list | `[]` | `[from, to]` or `{from, to, label, color}`; label default `'{by}'` |
+| `reveal` | `per_beat` \| `all` | `per_beat` | |
+| `title` | str | `""` | in the header band |
+| `title_size` | size | `heading` | 1.3x in a vertical frame |
+| `title_color` | color | `text` | |
+| `label_size` | size | `caption` | numbers and labels |
+
+```yaml
+- id: hops
+  type: number_line
+  params:
+    title: "Adding on the number line"
+    range: [-2, 9]
+    step: 1
+    points: [{at: 2, name: start}]
+    intervals: [{from: 5, to: inf, ends: "[)", label: "x ≥ 5"}]
+    jumps: [[2, 5], [5, 7]]
+  beats:
+    - text: "Start at two."
+    - text: "Every number from five on."
+    - text: "Jump three to five."
+    - text: "And two more, to seven."
 ```
 
 ### `code`
@@ -7664,7 +7808,8 @@ a title card, a `transform` of a bar).
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
-| `function_plot` | `title`, `axes`, `function<N>`, `function:<name>`, `dot<N>`, `tangent<N>`, `area<N>` | reveal, dim, highlight, zoom, trace | a function is its curve and label, a dot its dot, label and guides; `{trace: dot1, to: 2}` moves a dot along its curve (label and tangent follow), `{trace: area1, to: 4}` an area's right end; `{reveal: tangent1, at: "@word"}` draws a tangent on that word |
+| `function_plot` | `title`, `axes`, `function<N>`, `function:<name>`, `dot<N>`, `tangent<N>`, `area<N>`, `point<N>`, `point:<name>`, `vector<N>`, `vector:<name>`, `segment<N>`, `brace<N>`, `angle<N>`, `dimension<N>` | reveal, dim, highlight, zoom, trace | a function is its curve and label, a dot its dot, label and guides; `{trace: dot1, to: 2}` moves a dot along its curve (label and tangent follow), `{trace: area1, to: 4}` an area's right end, `{trace: "point:C", to: [4, 4]}` a point, `{trace: "vector:a", scale: 2}` a vector (`to: [x, y]` moves its tip), everything drawn from them following; `{reveal: tangent1, at: "@word"}` draws a tangent on that word; marks are numbered by kind (`brace2` is the second brace) |
+| `number_line` | `title`, `line`, `point<N>`, `point:<name>`, `interval<N>`, `jump<N>` | reveal, dim, highlight, zoom, trace | a point is its dot and label, an interval its band, ends and label, a jump its arc and label; `{trace: point1, to: 4}` moves a point along the line |
 | `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
 | `code_morph` | `title`, `listing`, `version<N>`, `version<N>.line<K>` | reveal, highlight, dim | `{reveal: version2, at: "@word"}` morphs to version 2 on that word (the scene then leaves that morph to the action); `listing` is whichever version shows; `version2.line3` is line 3 of version 2 (with its number) |
 | `terminal` | `title`, `terminal`, `code`, `code.line<K>`, `command<N>`, `output<N>`, `output<N>.line<K>` | reveal, dim, highlight | `{reveal: output2, at: "@word"}` shows step 2's output on that word, `command2` types the command then (the scene leaves them to the action); `terminal` is the window; `code` the listing beside it |
@@ -7707,7 +7852,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |
-| `trace` | `to` (required: an x of the axis) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following. 2 s; it stays there (`until: <beat>`: back when that beat starts). |
+| `trace` | `to` (an x, or `[x, y]` for a point or a vector's tip) or `scale` (a vector only) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following; a point (`point<N>`, `point:A`) moves to `to: [x, y]`; a vector (`vector<N>`, `vector:a`) moves its tip to `to: [x, y]` or is multiplied by `scale` (2: twice as long, -1: turned round; its tail stays). Vectors, sums, marks and live labels drawn from a moved point or vector follow it. On a [`number_line`](#number_line): a point moves to `to` (a number). 2 s; it stays there (`until: <beat>`: back when that beat starts). |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |
@@ -7817,7 +7962,7 @@ narrator begins that word.
   a `reveal` action: [`code_morph`](#code_morph) morphs to `version2` on `{reveal: version2, at: "@word"}`,
   [`terminal`](#terminal) shows `output2` (or types `command2`) on `{reveal: output2, at: "@word"}`,
   [`function_plot`](#function_plot) draws a tangent on `{reveal: tangent1, at: "@word"}` and moves a dot on
-  `{trace: dot1, to: 2, at: "@word"}`.
+  `{trace: dot1, to: 2, at: "@word"}` (a point, a vector and the [`number_line`](#number_line)'s points too).
 - **Where the time comes from**: the beat's MP3 once `vidgen tts` has made it (the word timings
   the TTS gives, as ElevenLabs and Kokoro do; else the words spread over the speech in the MP3,
   by syllables), the same timings as the karaoke captions. Before there is any audio, an
@@ -8395,7 +8540,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
 | `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
-| `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's or area's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
+| `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's, area's, point's, vector's or mark's `color` or a `number_line` point's, interval's or jump's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
 | `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared. Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |

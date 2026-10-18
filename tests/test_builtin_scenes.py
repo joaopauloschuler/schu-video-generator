@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "card", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "line_chart", "map", "network", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["bar_chart", "bullets", "card", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "line_chart", "map", "network", "number_line", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -46,6 +46,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "terminal": {"steps": ["ls", {"command": "python a.py", "output": "3\nok"}], "title": "Shell", "code": {"code": "print(1 + 2)", "highlight": 1}},
     "function_plot": {"title": "Plot", "functions": ["f(x) = x^2", {"expr": "f(x) / 2 + 1", "dashed": True}], "x_range": [-2, 2],
                       "dots": [{"x": 1, "tangent": True, "guides": True}], "areas": [{"between": [0, 1], "label": "{area}"}]},
+    "number_line": {"title": "Line", "range": [-3, 5], "points": [1, {"at": 3, "name": "a"}], "intervals": ["[-1, 2)", "(3, inf)"], "jumps": [[1, 4]]},
     "code_walkthrough": {"code": "\n".join(f"x{k} = {k}" for k in range(1, 13)), "title": "Walk", "visible": 4,
                          "steps": [{"lines": "2-3", "note": "Two lines."}, {"lines": "/x11/", "focus": True}, {"note": "Kept."}]},
     "end_card": {"title": "Thanks", "lines": ["example.com"], "logo": "assets/pic.png", "icon": "heart"},

@@ -15115,3 +15115,94 @@ How to test
   16:9 and 9:16 (light: only the scratch project's own low-contrast term colour, as it should);
   `examples/gallery --scene slope` storyboards and lint (0 findings) in both formats;
   `vidgen validate examples/gallery`; `vidgen gallery --types function_plot`.
+
+## Step 161 — Maths toolkit, part 2: geometry basics
+
+What was built
+- **Geometry on `function_plot`'s plane** (as planned in DESIGN §87.7; details §87.8):
+  `functions` became optional (at least one of `functions`, `points`, `vectors`, `marks`),
+  `axes: false` hides axes, ticks and grid, and the ranges default to the figure. New lists:
+  `points` (`[x, y]` or `{at, name, label, color, decimals}`), `vectors` (`[x, y]` from the
+  origin or `{from, to | components, name, label, color}`, positions as `[x, y]`, a point's or
+  vector's name; `{sum: [a, b]}` draws copies of b... sliding tip to tail, then the resultant)
+  and `marks`: `{segment: [A, B, C], closed, dashed}`, `{brace: [A, B]}`, `{angle: [A, V, B]}`
+  (a square at 90°), `{dimension: [A, B]}`; braces and dimensions go outside the figure
+  (`side:` to choose). Labels are live templates: `{x}`, `{y}`, `{name}`, `{length}`, `{angle}`.
+  `aspect` defaults to `equal` with vectors or angle marks or without functions.
+- **`trace` generalised**: `{trace: "point:C", to: [4, 4]}` moves a point,
+  `{trace: "vector:a", to: [x, y]}` / `{trace: "vector:a", scale: 2}` moves / scales a vector
+  (tail fixed); vectors, sums, marks and labels drawn from them follow on every frame. A sum or
+  a vector ending at a point's name cannot be traced (the message says what to trace instead).
+- **`number_line`**, a new scene type: `range`, `step`, `points` (a number or `{at, name, label}`;
+  `trace` slides them), `intervals` in interval notation (`"[-1, 3)"`, `"(2, inf)"`, or
+  `{from, to, ends, label}`; dots, rings, an arrow at infinity, stacked lanes when overlapping),
+  `jumps` (`[2, 5]`: an arc above the line labelled `+3`; higher over an earlier one), one item
+  per beat (`reveal: all` / `reveal` actions on words). Horizontal in 9:16 too, numbers thinned.
+- **Mark builders for everyone**: `vidgen/geometry_marks.py` (`brace_mark`, `angle_mark`,
+  `dimension_mark`, `segment_normal`, `angle_between`, `GeometryMark`), exported by `vidgen.api`.
+- **Shared maths parts** moved out of `function_plot.py` into `scenes/math_axes.py` (axes, tick
+  labels, live labels, label placement, `ChainedTargets` (entrances that bring what an item
+  stands on), the `trace` action and `TraceMove`); `function_plot.py` shrank accordingly.
+- **Concept colours**: points, vectors, marks, number-line items take the colour of a term their
+  label says; `terms.term_conflicts` (lint `concept_colors`) reports their explicit `color` on one.
+- **Lint fix**: `cap_height` counts `= + < > ≤ ≥ × ÷ ~` as x-height glyphs (`x = −3` was 0.4 %
+  under `min_font` at the readable size).
+- **Docs and examples**: CONFIG (`function_plot` geometry bullets, params rows and two examples;
+  a `number_line` section; targets table, `trace` row, terms "Where", `concept_colors`, word
+  anchors, header band), guide chooser rows + snippets (triangle, vectors, number line) + `trace`
+  row (and `AGENTS.md`), EXTENDING (geometry marks), README scene list, `examples/gallery` scene
+  `hops` (a number line, a point sliding on a word), `docs/gallery/number_line.md` + media,
+  `docs/gallery/function_plot.md` params table regenerated.
+
+Files touched
+- New: `src/vidgen/geometry_marks.py`, `src/vidgen/scenes/math_axes.py`,
+  `src/vidgen/scenes/plane_geometry.py`, `src/vidgen/scenes/number_line.py`,
+  `tests/test_geometry.py`, `docs/gallery/number_line.md`, `docs/gallery/media/number_line-*`.
+- Changed: `src/vidgen/scenes/function_plot.py`, `src/vidgen/scenes/__init__.py`,
+  `src/vidgen/api.py`, `src/vidgen/terms.py`, `src/vidgen/lint/layout_rules.py`, `docs/CONFIG.md`,
+  `docs/EXTENDING.md`, `README.md`, `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`,
+  `examples/gallery/video.yaml`, `docs/gallery/README.md`, `docs/gallery/function_plot.md`,
+  `DESIGN.md`, `tasklist.md`, `HANDOFF.md`, tests `test_function_plot.py` (messages, the
+  animation's new name), `test_builtin_scenes.py`, `test_actions_coverage.py`,
+  `test_translation.py` (samples).
+
+Public interfaces
+- YAML: `function_plot` `points`, `vectors`, `marks`, `axes`; `functions` / `x_range` optional
+  (geometry only); targets `point<N>`, `point:<name>`, `vector<N>`, `vector:<name>`,
+  `segment<N>`, `brace<N>`, `angle<N>`, `dimension<N>`; scene type `number_line` (targets
+  `title`, `line`, `point<N>`, `point:<name>`, `interval<N>`, `jump<N>`); `trace` takes `to:
+  [x, y]` and `scale`.
+- `vidgen.api`: `GeometryMark`, `brace_mark`, `angle_mark`, `dimension_mark`,
+  `segment_normal`, `angle_between` (DESIGN §87.8, EXTENDING).
+- A scene type can support `trace` by defining `trace_problem(params, name, options)` and
+  `traced_item(target)` (built-ins only for now; not documented for extensions).
+
+Decisions / deviations
+- As planned: geometry is part of `function_plot` (one plane, one `trace`), `number_line` its own
+  type. Added `segment` marks (a triangle needs sides), `side`, and live label templates.
+- Marks are numbered by kind (`brace2` = the second brace), not by position in `marks`, so a
+  target name stays put when another kind of mark is added.
+- The default ranges do not grow to fit `trace` goals; `validate` names the goal outside the plot.
+- Number-line jumps all arc above the line (the arrow shows the direction); labels that would
+  meet an arc move under the numbers.
+
+Known gaps (Backlog)
+- Reflex angles; a mark on a curve (e.g. a tangent's angle); a vertical number line; jumps below
+  the line; point labels do not avoid function dots' labels; interval labels in lanes above the
+  line can meet jump arcs; ranges growing to fit trace goals.
+- Step 163's narration check will read live labels' current text (as for Step 160).
+
+How to test
+- One file at a time under `capped`: `tests/test_geometry.py` (43, incl. 2 tiny renders, both
+  formats; 12 s), `tests/test_function_plot.py` (58), `test_builtin_scenes` (202, 62 s),
+  `test_actions_coverage` (83, 52 s), `test_translation`, `test_lint`, `test_review2`,
+  `test_review4`, `test_word_anchors` (with the two above: 249, 65 s), `test_guide`,
+  `test_gallery`, `test_docs`, `test_api`, `test_terms` (158), `test_callout_action`,
+  `test_regions`, `test_scales` (78), `test_thumbnail_export`, `test_world_map` (90);
+  `test_schema` (62, capped3g, 122 s): all pass.
+- Manual: a scratchpad project (a right triangle with `axes: false`, braces, a dimension, angle
+  marks and C traced up; vectors a, b and their sum with a scaled on a word; an overloaded number
+  line), storyboards in 16:9, 9:16 and `light_academic` checked by eye; `vidgen lint` in all
+  three: only the expected `dead_air` (`reveal: all`) and the scratch project's own low-contrast
+  term colour; `examples/gallery --scene hops` storyboards (both formats) and lint 0 findings;
+  `vidgen validate examples/gallery`; `vidgen gallery --types function_plot,number_line`.

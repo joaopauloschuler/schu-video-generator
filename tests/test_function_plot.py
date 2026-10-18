@@ -165,10 +165,10 @@ def test_trace_is_checked(make_project) -> None:
     beats = [{"text": "one two three", "actions": [{"trace": "dot1", "to": 5}, {"trace": "function1", "to": 1}, {"trace": "area1", "to": -3}]}]
     problems = check_project(load(make_project, [plot_scene(beats, dots=[{"x": 0}], areas=[{"between": [0, 1]}])]))
     assert any("dot1: x = 5 is outside f's drawn range [-2, 2]" in p for p in problems)
-    assert any("function1: trace moves a dot<N> or an area<N>" in p for p in problems)
+    assert any("function1: trace moves a dot<N>, an area<N>, a point<N> or a vector<N>" in p for p in problems)
     assert any("area1: x = -3 is outside" in p for p in problems)
     other = {"id": "b", "type": "bullets", "params": {"items": ["a"]}, "beats": [{"text": "one", "actions": [{"trace": "item1", "to": 1}]}]}
-    assert any("trace moves the dots and areas of a function_plot" in p for p in check_project(load(make_project, [other])))
+    assert any("trace moves the dots, areas, points and vectors of a function_plot" in p for p in check_project(load(make_project, [other])))
 
 
 def test_a_term_coloured_otherwise_by_a_function_or_area_is_a_conflict() -> None:
@@ -213,7 +213,7 @@ def test_per_beat_reveal_and_trace_back(make_project, media: Path) -> None:
     assert float(scene.renderer.time) == pytest.approx(beat_total(scene), abs=1.5 / FPS)
     plays = {b: [p.animations for p in scene.play_log if p.beat == b and not p.wait] for b in ("p_b1", "p_b2", "p_b3", "p_b4")}
     assert plays["p_b1"] and plays["p_b2"]   # f with the axes, then g
-    assert [sum("_Trace" in a for a in plays[b]) for b in ("p_b3", "p_b4")] == [1, 1]   # the dot appears and moves; back in beat 4
+    assert [sum("TraceMove" in a for a in plays[b]) for b in ("p_b3", "p_b4")] == [1, 1]   # the dot appears and moves; back in beat 4
     assert scene.dots[0].x == pytest.approx(1)
     ux, uy = scene.axes.units
     assert ux == pytest.approx(uy)

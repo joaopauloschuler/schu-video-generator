@@ -100,6 +100,7 @@ from vidgen.config import SfxParams, StingCue, StingSetting  # noqa: E402
 from vidgen.sfx import SfxEvent, SoundLibrary, sound_library, synthesize  # noqa: E402
 from vidgen.speech import WordTime, beat_word_times, estimate_word_times, map_word_times, speech_bounds, spoken_words, syllables  # noqa: E402
 from vidgen.word_anchors import WordAnchor, is_word_anchor, locate_word_anchor, parse_word_anchor  # noqa: E402
+from vidgen.geometry_marks import GeometryMark, angle_between, angle_mark, brace_mark, dimension_mark, segment_normal  # noqa: E402
 from vidgen.mathexpr import MATH_CONSTANTS, MATH_FUNCTIONS, MATH_NAMES, MathExpression, parse_expression, pretty_expression, split_definition  # noqa: E402
 from vidgen.terms import Term, active_terms, find_term, term_spans, using_terms  # noqa: E402
 from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
@@ -744,6 +745,12 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "parse_expression",
     "pretty_expression",
     "split_definition",
+    "GeometryMark",
+    "angle_between",
+    "angle_mark",
+    "brace_mark",
+    "dimension_mark",
+    "segment_normal",
     "Term",
     "active_terms",
     "find_term",
