@@ -355,6 +355,34 @@ Use -10 and below for repeated sounds (ticks, typing).
 - [ ] Before rendering, grep the yaml, the extensions and the SRT for anything that shouldn't be
       there (placeholders, TODOs, stray names).
 
+**Exact scientific wording.** In a scientific video, use the term a scientist would use, never a
+loose everyday word:
+
+- "the atmosphere of Jupiter", not "the air in Jupiter";
+- "Earth's radius" or "Earth's diameter", not "Earth's width";
+- likewise mass vs weight, heat vs temperature, speed vs velocity, "a theory" vs "a guess".
+
+Name the measure when the source does ("Earth's mean radius, about 6,371 km"), and give the unit
+in the narration and on screen. Check the narration, the on-screen text and the captions.
+
+**Same term, same colour.** Once a concept has a colour, it keeps it everywhere: the word in a
+bullet, a chart's series, the symbol in the equation and the caption all wear the same one, and
+no other concept wears it. Set it once in `terms:` (`terms: {loss: tertiary, gradient: "#E07A5F"}`,
+with `tex:` for the symbol that stands for it, docs/CONFIG.md "One colour per concept") instead
+of colouring scene by scene; give a colour to at most about five concepts, and do not colour the
+same word otherwise in one scene (`vidgen lint`'s `concept_colors` rule warns about all three).
+Like the wording, the colour is part of the term: never vary it for style.
+
+**Established facts vs reported results.** Textbook facts can be stated plainly. A result that
+comes from specific papers and is not settled (not independently validated) always carries its
+reference:
+
+- in the narration, with the year: "According to Smith and colleagues, in a 2023 study, …";
+- on screen, as a small source tag in that scene ("Smith et al. 2023, Nature 615:123");
+- on the sources card (§11).
+
+Never present such a result as settled fact.
+
 ## 13. Editorial options (example style choices)
 
 These are choices, not rules. Pick a stance per video and apply it consistently.
@@ -495,6 +523,10 @@ Short-form craft:
 - [ ] Labels say what each thing is; pictures say what to notice and why it matters; charts have
       legends.
 - [ ] Every claim attributed; source tags on evidence scenes; a sources card.
+- [ ] Exact scientific terms ("atmosphere", not "air"; "radius" or "diameter", not "width"), with
+      the measure and unit named (§12).
+- [ ] Results not yet validated say who reported them and when ("according to … in 2023"), in the
+      narration and on screen (§12).
 - [ ] Image credits in captions and on the credits card; licences checked; restricted figures
       recreated.
 - [ ] The editorial stance you chose (§13) applied consistently.

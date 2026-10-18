@@ -102,12 +102,17 @@ def _flow(value: Any) -> str | None:
 
 
 def _literal(text: str, indent: int) -> list[str]:
-    """A multi-line string as a literal block (``|-``) at ``indent`` spaces, two more than its key
-    or list dash (the indentation indicator, needed when the first line starts with a space,
-    counts from there)."""
+    """A multi-line string as a literal block at ``indent`` spaces, two more than its key or list
+    dash (the indentation indicator, needed when the first line starts with a space, counts from
+    there): ``|-`` without a final line break, ``|`` with one (a platform level's ``map: |``),
+    ``|+`` with more."""
     pad = " " * indent
-    marker = "|2-" if text[:1] in (" ", "\t") else "|-"
-    return [marker, *(f"{pad}{line}" if line else "" for line in text.split("\n"))]
+    indicator = "2" if text[:1] in (" ", "\t") else ""
+    body, chomp = text, "-"
+    if text.endswith("\n"):
+        body = text[:-1]
+        chomp = "+" if body.endswith("\n") or not body else ""
+    return [f"|{indicator}{chomp}", *(f"{pad}{line}" if line else "" for line in body.split("\n"))]
 
 
 def _block(value: Any, indent: int) -> list[str]:

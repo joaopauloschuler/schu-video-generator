@@ -230,7 +230,15 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "card": [{"text": "T:text", "subtitle": "T:sub"}],
     "chapter": [{"title": "T:chapter", "number": "T:Part II", "subtitle": "T:sub"}],
     "code": [{"code": "print('hi')", "language": "python", "title": "T:title"}],
+    "code_morph": [{"versions": ["a = 1", {"code": "a = 2", "highlight": "changed"}], "title": "T:title"}],
     "code_walkthrough": [{"code": "a = 1\nb = 2\n", "title": "T:title", "steps": ["1", {"lines": "2", "note": "T:note"}]}],
+    "terminal": [{"steps": ["ls", {"command": "cat a", "output": "x"}], "title": "T:title"}],
+    "function_plot": [{"functions": ["x^2", {"expr": "2x", "label": "T:line"}], "x_range": [0, 1], "title": "T:title", "x_label": "T:x", "y_label": "T:y",
+                       "dots": [{"x": 0.5, "label": "T:{y}"}], "areas": [{"between": [0, 1], "label": "T:area"}],
+                       "points": [{"at": [0, 1], "label": "T:point"}, [1, 1]], "vectors": [{"to": [1, 0], "label": "T:vector"}],
+                       "marks": [{"angle": [[1, 0], [0, 0], [0, 1]], "label": "T:{angle}"}]}],
+    "number_line": [{"title": "T:title", "range": [0, 5], "points": [{"at": 1, "label": "T:p"}, 2], "intervals": [{"from": 0, "to": 1, "label": "T:i"}, "(1, 2]"],
+                     "jumps": [{"from": 1, "to": 2, "label": "T:{by}"}, [2, 3]]}],
     "comparison": [
         {
             "columns": [{"heading": "T:left", "points": ["T:p1", {"text": "T:p2"}]}, {"heading": "T:right", "points": ["T:p3"]}],

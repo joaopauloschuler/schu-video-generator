@@ -4,7 +4,7 @@
 
 **Use it for:** categories compared by size.
 
-`horizontal` defaults to vertical bars, or horizontal ones in a portrait frame with more than 5 bars. `reveal: all` (default) grows every bar in beat 1; `per_beat` grows bar *i* at beat *i* (spread evenly when there are more bars than beats). With `highlight` set, one more step dims the other bars (it gets its own beat when there is one left).
+`horizontal` defaults to vertical bars, or horizontal ones in a portrait frame with more than 5 bars. `reveal: all` (default) grows every bar in beat 1; `per_beat` grows bar *i* at beat *i* (spread evenly when there are more bars than beats). Each of `changes` is a step of its own: the bars grow or shrink to its values (and re-sort with `sort`), or on a word with `{reveal: change<N>, at: "@word"}`. With `highlight` set, one more step dims the other bars (it gets its own beat when there is one left).
 
 Last beat, 16:9 and 9:16:
 
@@ -35,6 +35,8 @@ From the author guide (`vidgen guide scenes`):
 | `title` | `str` |  | Chart title (in the header band at the top). (also: heading) |
 | `labels` | `list[str]` | required | Bar labels. |
 | `values` | `list[float]` | required | One value per label; negatives allowed. |
+| `changes` | `list[list[float]]` |  | Values the bars change to, one list per change (one value per label): change N plays in its own step after the bars grow (before the highlight), or on a word with {reveal: changeN, at: '@word'}. One scale for every change, so heights compare. |
+| `sort` | `bool` | `False` | Order the bars by value, largest first (at the top when horizontal); they re-sort at each change. |
 | `unit` | `str` |  | Appended to every value label, e.g. '%' or ' ms'. |
 | `value_format` | `str \| None` |  | Python format for value labels, e.g. '{:.1f}'; default: the decimals the values need. |
 | `colors` | `'palette' \| color \| list[color]` | `'primary'` | One color, one color per bar, or 'palette' (theme.palette). |
@@ -53,7 +55,7 @@ From the author guide (`vidgen guide scenes`):
 
 ## Targets
 
-`title`, `bar<N>`, `bar:<label>`
+`title`, `bar<N>`, `bar:<label>`, `change<N>`
 
 ## Beats
 

@@ -44,6 +44,7 @@ from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
 from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.speech import audio_duration
+from vidgen.terms import scene_terms, set_active_terms
 from vidgen.theme import Theme
 from vidgen.transitions import IRIS_HEAD_SCALE, ColorFade, IrisPoint, effective, has_transitions, resolve_color
 from vidgen.videoplan import TransitionSlot, VideoPlan
@@ -275,6 +276,8 @@ class NarratedScene(MovingCameraScene):
             active = runtime.has_context() and runtime.current_project() is self.project
             theme = runtime.current_theme() if active else Theme.for_format(self.project.config.theme, self.project.config.format)
         self.theme = theme
+        # one colour per concept (DESIGN.md §87.3): text built from here on draws the terms
+        set_active_terms(scene_terms(self.project.config, spec, theme))
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
         spec = with_auto_actions(spec, type(self).auto_actions(self.project, spec, self.params))
         self.spec = spec  # with the actions automatic directing adds (DESIGN.md §69.23)
@@ -979,6 +982,7 @@ class NarratedScene(MovingCameraScene):
             self.wait_seconds(self.transition_out.hold / config.frame_rate)
         self._stop_lingering()
         self._record_carry()
+        set_active_terms(())
         narrated = {entry.beat_id for entry in self.beat_log}
         missing = [b.id for b in self.beats if b.id not in narrated]
         if missing:
@@ -1138,7 +1142,12 @@ class NarratedScene(MovingCameraScene):
     def follow_with_camera(self, x_of: Callable[[], float] | None) -> None:
         """Keep the camera's centre on the x that ``x_of()`` gives (Manim units) on every frame,
         inside :meth:`camera_bounds` at the view's current size; ``None`` stops following (the
-        camera stays where it is). A later call replaces the earlier one."""
+        camera stays where it is). A later call replaces the earlier one. An ``x_of`` with a
+        ``view_center(center, dt, width, height, bounds)`` method (a
+        :class:`~vidgen.camera.SmoothFollow`) places the view itself, from rest (``restart``)."""
+        restart = getattr(x_of, "restart", None)
+        if restart is not None:
+            restart()
         self._camera_follow = x_of
         self._sync_camera_updater()
 
@@ -1166,8 +1175,13 @@ class NarratedScene(MovingCameraScene):
         """Scene updater (run after every mobject updater and animation of the frame): follow,
         then tell the listeners."""
         frame = self.camera.frame
-        if self._camera_follow is not None:
-            x, y = view_center_within(self.camera_bounds(), (self._camera_follow(), frame.get_center()[1]), frame.width, frame.height)
+        follow = self._camera_follow
+        if follow is not None:
+            smooth = getattr(follow, "view_center", None)
+            if smooth is not None:
+                x, y = smooth(frame.get_center()[:2], dt, frame.width, frame.height, self.camera_bounds())
+            else:
+                x, y = view_center_within(self.camera_bounds(), (follow(), frame.get_center()[1]), frame.width, frame.height)
             frame.move_to([x, y, 0.0])
         for callback in self._camera_listeners:
             callback()
@@ -1297,6 +1311,12 @@ class NarratedScene(MovingCameraScene):
                 else:
                     anims += list(t.entrance()) if t.entrance is not None else [FadeIn(t.mobject)]
         return anims
+
+    def entrance_time(self, target: Target) -> float | None:
+        """Seconds the scene's own entrance of ``target`` wants when a ``reveal`` action plays it
+        without a ``run_time`` (a ``terminal`` types a command at its typing speed), or ``None``
+        for the action's default. Default: ``None``."""
+        return None
 
     def _apply_now(self, animations: Sequence[Animation]) -> None:
         """Jump ``animations`` to their end state without writing frames."""

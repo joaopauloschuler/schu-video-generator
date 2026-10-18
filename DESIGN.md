@@ -997,6 +997,9 @@ Step 142 (§79) adds `DrawingConfig`, `DrawingStyle` and `mark_shaded`; the top-
 stage param `drawing`; `NarratedScene.uses_drawing_style` (class attribute, `False`; `stage`
 sets it), `NarratedScene.drawing_settings()` and the attribute `drawing`. Compatible: a video
 without `drawing` renders the same frames as before.
+Step 153 (§86.9) adds the `PlayedAction` fields `pickups` and `unlocks` (`lands` also marks a
+level jump's touch-down) and the built-in sounds `unlock`, `coin`, `twinkle`. Compatible: a
+`PlayedAction` without them gives the same cues; a stage without a level sounds as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -10545,3 +10548,1015 @@ Reference: docs/CONFIG.md "Music that follows the video".
   note of the new section starts exactly there (onset detector within 3.3 ms for host-explainer;
   for rain-check it picks an earlier woodblock pickup or the tense strings 70-78 ms before, while
   the 5 ms levels rise at the change).
+
+## 86. Platform worlds (Phase O, Steps 150–155)
+
+Reference: docs/CONFIG.md "Platform levels (`level`)". Side-view platform scenes for kids'
+stories: a level written as a small ASCII map, walking along it and jumping between its
+platforms from the author's intent, story props, sounds, and a camera that follows the hero.
+Designed so that simple computer games could reuse the world and its rules later; games are not
+in scope.
+
+### 86.1 Three layers
+
+1. **World model** (`vidgen/world/`, plain frozen dataclasses): a `Level` (a grid of tile kinds,
+   its `Spot`s), `Body`s (characters and props: feet `x`, `y` and `height` in *tile units*),
+   a `World` (a level and its bodies). Step 152 adds items (keys, doors, coins, stars, friendly
+   blockers) as world data beside the bodies.
+2. **Rules** (`vidgen/world/`, from Step 151; pure functions): take a world and a scripted
+   input (`walk to c`, `jump to cloud`, `pick up key`) and give the next world plus the planned
+   motion (paths, arcs, events such as take-off, landing, pickup), deterministic, with a
+   `VidgenError` when the input is impossible. A player's inputs could replace the script later;
+   no physics engine, fixed paths and simple arcs only.
+3. **Renderers**: vidgen / Manim now (`vidgen/cartoon/level_stage.py` maps tile units to Manim
+   units, `vidgen/cartoon/level_drawing.py` draws the tiles, `scenes/stage.py` shows them).
+
+`vidgen.world` never imports Manim (a test imports it, `level_stage` and `level_drawing` in a
+fresh interpreter and checks `manim` is not loaded); the drawing uses Pillow only.
+
+### 86.2 A `stage` with a `level`, not a new scene type
+
+A level is the `stage` scene's new `level:` param. The stage already has the characters, their
+lip sync, acting and walking, props, shots, the camera's `pan` / `follow` / `zoom`, reframing,
+parallax `layers`, light, foley and `sfx`; a new scene type would duplicate or re-plumb all of it.
+With a level the stage changes only where the ground is: the tiles replace the ground line and
+band, the stage is as wide as the map, and things stand on the tiles at depth 0. Sets (`set:`)
+apply as on any stage (their sky, layers, light, ambience and marks); since Step 155 a level takes
+none of a set's props (they stand at depths), water or room (`includes.LEVEL_DROPPED_KEYS`), so
+the stage's own props can stand on the tiles beside a set.
+
+### 86.3 The map (Step 150)
+
+- One text line per row, top row first; `.` or a space air, `#` ground, `=` platform, `~` cloud,
+  `|` ladder; a letter (ASCII, either case, each once) is a *spot*: an air cell with a name
+  (`spots: {a: start}`, else the letter itself). Symbols are tiles and (from Step 152) items;
+  letters are only ever spots. Blank lines around the map are dropped, tabs expand to 4, short
+  rows are padded with air on the right (editors strip trailing spaces). At most `MAX_COLUMNS`
+  400 by `MAX_ROWS` 40.
+- Inside the model row 0 is the bottom; a cell spans `column .. column + 1`, `row .. row + 1`.
+  `STANDABLE` = ground, platform, cloud: a body stands on the tile's top edge. Ladders are drawn
+  and parsed; climbing is Step 151's to decide. Outside the map is air (a gap goes down forever).
+- A spot stands on the first standable tile below its letter (`Level.surface_below`), so a spot
+  under a platform stands on the ground beneath it. A body asked to stand at an x instead stands
+  on the highest tile of that column (`Level.top_surface`).
+- Errors (`parse_level`, `VidgenError`) name the map's row and column from the top left, both
+  from 1, as the author reads the YAML: unknown symbol (with the symbol list), a letter twice
+  (both places), a spot with nothing below it, a map with nothing to stand on, a `spots` letter
+  not on the map, one name for two letters, too large. `StageLevel` turns them into validation
+  errors at `scenes[i].params.level`.
+
+### 86.4 Geometry on the stage (Step 150)
+
+- `CHARACTER_TILES` = 2: a character of scale 1 is two tiles tall, so the tile is
+  `size × shorter side / 2` and the characters keep the size the scene gives them. A level's
+  default `size` is `LEVEL_SIZE` 0.25 (a `mode="before"` validator fills it when the scene gives
+  none): about 8 rows by 14.2 columns in 16:9, 14.2 rows by 8 columns in 9:16. Step 154's
+  `character_size` sets this default (§86.10; `size` keeps winning when written).
+- `level_frame`: the stage is exactly as wide as the map (`Stage.stage_width`; `width` is refused
+  with a level, reframing does not change it), centred, the map's bottom edge on the frame's
+  bottom edge. Spots are stage marks at `(column + 0.5) / columns` (frame-independent, so `pan`
+  / `walk_to` / `camera_at` validate without a frame). `level_fit_problems` (in `vidgen validate`
+  and before a render): a map narrower than the frame (the camera would see past its ends). Until
+  Step 154 also tiles above the frame's top; since then the camera rises with its hero (§86.10)
+  and a portrait frame raises a short map.
+- `level_layout` replaces `stage_layout` (`Params.layout`, used by the scene, `stage_frame` and
+  `stage_reframes`): `level_world` resolves each item's `at` (a spot by name, else a mark or x
+  → tile column), `place_bodies` stands it, and the feet come out in Manim units raised by the
+  item's `lift` (frame heights) and `hang`. `Stage.grounds[name]` is the tile's top, so shadows lie
+  on the tiles. Depth is refused (characters and props) as are `room` and `water`; `ground` and
+  `ground_color` are not used.
+
+### 86.5 Drawing (Step 150)
+
+- `level_shapes(level, colors, outline)`: filled shapes in tile units, back to front: ladders,
+  ground, platforms, clouds. The ground is one mass: every cell in ink, then its fill inset by the
+  outline width on its open sides (an ink square in each inner corner), grass (`GRASS_DEPTH` 0.2,
+  scalloped) on every open top, a pebble in one cell of three placed by `crc32` of the cell. A
+  run of platforms is one rounded wooden slab (`PLATFORM_THICKNESS` 0.38) under the tiles' top,
+  with plank seams and a light edge; a run of clouds is one puffy cloud whose bumps reach the
+  tiles' top; other forms are drawn ink-then-shrunk-fill so the outline follows their union.
+  Outline `OUTLINE` 0.04 tile × the drawing style's `outline_factor`; ink is `CHARACTER_INK`.
+  Colours `LevelColors` (`colors:` theme tokens or #hex).
+- `draw_columns` paints columns `first..last` at `tile_pixels` per tile, `SUPERSAMPLE` 2 and a
+  box filter, so chunks drawn separately are byte-identical to one drawing (tested). The scene
+  (`Stage._level_tiles`) draws `CHUNK_COLUMNS` 8 columns per `ImageMobject` (plus one column
+  under the next chunk: the resampled edge of a picture is half transparent and showed a seam),
+  at `LEVEL_OVERSAMPLE` 1.25 × the frame's pixel density (1 in a draft; fewer pixels when the
+  pictures would pass `LEVEL_MAX_PIXELS` 24 M), up to the used rows + `TOP_ROOM` 0.25. No disk
+  cache: drawing a level takes tens of milliseconds and the scene render itself is cached.
+- `LevelTiles` (a `Group`, named `level`; chunks `level_1`...) keeps as members only the chunks
+  that overlap the camera's view (a camera listener), because Manim transforms every
+  `ImageMobject` on every frame whether it is in view or not. In the layout dump each chunk in
+  view is an `image`.
+- Behind the level: a background picture is drawn larger (`layer_half_extent`) and moves by
+  `LEVEL_PICTURE_FACTOR` 0.2 (`_move_by_parallax`, shared with `layers`); a colour or gradient
+  sky is as before (it looks the same from any camera position); `layers` as on any stage. The
+  light grades the tiles (they are in the backdrop, `mark_lit`).
+- Measured: the 42 x 6 scratch level at 854x480 renders 5.9 s of video (a pan across it) in
+  6.8 s, like a plain stage.
+
+### 86.6 The rest of the phase (plan)
+
+- **Step 151, walking and jumping.** Rules: `walk` along a run of standable tiles to a spot or x,
+  stopping at an edge (a gap or a wall) with a clear error naming where it stops; `jump to <spot
+  or x>`: take-off at the edge nearest the target, an arc whose height clears the tiles between
+  (sampled against the cells, the body's height in tiles), landing on the target's surface;
+  `VidgenError` when no arc within a kid's reach (a few tiles across and up) clears. Output: a
+  path in tile units and events (`take_off`, `land`) that the renderer maps to the existing
+  `Walk` / `Jump` motion (crouch first, slower arcs, squash and wobble on landing) and the beat's
+  narration timing (a step starts at its `at` in the beat and lasts what the walking speed or the
+  arc gives).
+- **Step 152, props and reactions.** Items on the map (symbols, never letters) or listed by
+  spot: key, door, coins / stars, a friendly blocker that moves when asked; rules for pickups,
+  doors opening with the key, blockers stepping aside; reactions with the existing `react`,
+  `emote` and `effect` actions.
+- **Step 153, sounds.** The rules' events (take-off, landing, pickup, door) placed through the
+  existing `sfx` system; new synthesised sounds only where none fits.
+- **Step 154, camera and `character_size`.** The camera follows the hero sideways (the existing
+  `follow`, held inside the stage); `character_size: small | medium | large` at video level and
+  per scene (scene, then video, then medium) sets the base `size` (and so the tile size); shots
+  zoom from it; captions and on-screen text keep their size; a lint rule for a talking character
+  too small to read. Not named `characters:` (the cast list and the stage's placement list).
+- **Step 155**: a 2–3 minute original kids' story using only these features, the guide and docs,
+  and the review of the phase.
+
+### 86.7 Walking and jumping (Step 151)
+
+Reference: docs/CONFIG.md "Walking and jumping on a level".
+
+- **Rules** (`vidgen/world/moves.py`, no manim): a body is a box `BODY_WIDTH` 0.4 of its height
+  wide on its feet. `SOLID` = ground and platform (they block from the side and from below); a
+  *floor* (`is_floor`) is the top of a ground, platform or cloud tile or of a ladder. A body stands
+  at a height in a column when a floor is there with room for its height above (no solid cell).
+  Walking is a cheapest-path search (Dijkstra, deterministic ties) over (column, height) states:
+  to the next column at most `STEP_TILES` 1 up or down (a flat way costs 1, a step 1.05), up a
+  ladder at its feet to the ladder's top (or onto the tile over it: a hatch) and down one under
+  it, at `CLIMB_SLOWNESS` 2 per tile. `walk_route` turns the states into a `Route` of `Leg`s
+  (`walk`, `step`: half a tile across the column edge, eased; `climb`: at the column's middle);
+  its `effort` (tiles walked, climbs doubled) sets the time. No way there: `VidgenError` naming
+  where the way stops (a gap, a drop, a wall, no room under the tiles, or the column reached only
+  at another height) and suggesting a jump.
+- **Clouds are one-way** (decided here): a body stands on a cloud's top, walks through a cloud at
+  its own height and jumps up through it from below; a falling arc that crosses a cloud's top
+  lands there, so `plan_jump` refuses one that would cross a cloud before its landing. Why: it is
+  the usual platform-game reading of a cloud, it makes "jump up onto the cloud" work from right
+  under it, and solid platforms (`=`) remain for a ceiling. Walking through a low cloud shows the
+  character inside the drawing; levels put clouds high, so this was left.
+- **Jumps** (`plan_jump`): the landing is the goal's height (a spot, a tile) or, for a mark or x,
+  the highest floor in that column a jump reaches. Take-off candidates are the states the body can
+  walk to (no ladders) at the column's middle and 0.3 towards the landing (and where it stands);
+  each is tried with the arc `y(u) = y0 + (y1 − y0) u + 4 b u (1 − u)` (x moving evenly) peaking
+  `JUMP_CLEARANCE` 0.75 over the higher end, then 0.25 higher up to `MAX_JUMP_UP` +
+  `JUMP_HEADROOM` over the take-off. An arc is clear when the body's box overlaps no solid cell at
+  samples 0.05 tiles apart and crosses no cloud top on the way down. Limits: `MAX_JUMP_ACROSS` 5,
+  `MAX_JUMP_UP` 3, `MAX_JUMP_DOWN` 8 tiles (a character is 2 tiles). The best candidate is the
+  shortest jump (at least a tile across beats straight up), then the shortest run-up, then the
+  lowest arc. No candidate: `VidgenError` with the reason from the nearest take-off. The flight
+  takes `flight_seconds`: rising and falling under `JUMP_GRAVITY` 8 tiles/s² (about half a real
+  gravity for a character two tiles tall, so arcs read slower than in a game), at most
+  `JUMP_AIR_SPEED` 4 tiles/s across, at least 0.7 s. `walk_body` / `jump_body` apply a rule to a
+  `World` (`World.moved`); a game could feed them a player's inputs.
+- **Goals and the replay** (`cartoon/level_stage.py`, no manim): `level_goal` reads a place (a
+  spot, a mark or x, a map tile `{column, row}` from the top left, from 1). `vidgen validate`
+  replays the scene's `walk_to`, `run_to`, `jump` (with `to`), `enter` and `exit` in beat and `at`
+  order (`Stage.action_sequence_problems` → `level_move_problems`) and reports each refusal at
+  `beats[j].actions[k].to` with the beat's id; a character is not followed after a refusal, an
+  exit or a keyframed / ridden move (until it enters again). `enter` / `exit` depend on the
+  camera's view, so their ways are checked when the scene renders.
+- **Renderer** (`cartoon/level_motion.py`): `RouteWalk` is a `Walk` whose `_place` hook (a small
+  refactor of `Walk.interpolate_mobject`: where the feet are and the facing at a share of the
+  distance) follows the route: facing each walking leg's way, the front on a ladder (front-view
+  walk cycle), the last side once stopped; footsteps and motion effects read its route length.
+  `ArcJump` is a `Jump` along the planned arc: it faces the landing, crouches
+  `LEVEL_JUMP_CROUCH_SECONDS` 0.32, stretches, squashes on landing and leans forward and back
+  (`settle_wobble`, `LANDING_WOBBLE_DEGREES` 7) over `LEVEL_JUMP_LAND_SECONDS` 0.55, all scaled by
+  `cartoon_motion` (`jump_phases` / `jump_motion_seconds` take the crouch and landing seconds).
+  A jump with a run-up is one `Succession(RouteWalk, ArcJump)`; foley and motion effects take its
+  parts in turn (`_timed_parts`: the run-up as a `walk_to`). Both set the character's `ground_y`
+  to the floor under it every frame (the shadow; far below over a gap), and the stage records the
+  end floor in `grounds` (`keyframes` y 0, `level_moved`).
+- **Stage** (`scenes/stage.py`): `on_level`, `level_pace` (`size / STAGE_SIZE`: default walking
+  and running speeds, and a jump's run-up, scale with the level's smaller characters, so they walk
+  as many of their heights per second as on a plain stage), `level_walk`, `level_enter`,
+  `level_exit`, `level_jump`, `level_moved`, `level_homes`. The moving actions (`scenes/moving.py`)
+  call these when `on_level`; a run time asked for while a batch is planned that the rules refuse
+  then gives the default (the batch may start after another move of the character; `apply` plans
+  again and raises naming the scene and beat). `feet_y_at` raises on a level; `walk_to` `depth`
+  is refused there.
+- **Timing**: moves keep the beat action timing (start at `at`, natural run time, sped up when
+  the beat is short). `rushed_animation` has `max_speedup` (1.5): a `RouteWalk` or `ArcJump` play
+  sped up more than that is reported (only level moves, so lint results on plain stages are as
+  before). Automatic directing (`_follow_written`, `_jumps_somewhere`) and the prop-handling
+  replay treat a jump to a spot or mark like a walk there (to a tile: the x is unknown).
+- Measured: the 47 x 6 scratch level at 854x480 renders 31 s of video (a jump with a run-up, a
+  walk over steps, a ladder climb, a jump up onto a cloud) in about 40 s; `plan_jump` takes a few
+  milliseconds per jump.
+
+### 86.8 Story props and reactions (Step 152)
+
+Reference: docs/CONFIG.md "Story props on a level (keys, doors, coins, stars, blockers)".
+
+- **World data** (`vidgen/world/items.py`, no manim): an `Item` (name, kind `key` / `door` /
+  `coin` / `star` / `blocker`, where it is in tile units, its height; a door's `key` and `open`, a
+  blocker's `aside`, the `holder` of a key or of a picked-up coin or star; `blocks`, `label`,
+  `hint`). `World.items` holds them (`item`, `with_items`; `moved` moves a blocker's item with its
+  body).
+- **Symbols versus named placements** (decided here): what a map has many of and nobody names in
+  a beat (coins, stars) is a map symbol, `$` and `*`, floating in the middle of an air cell and
+  named `coin_1`, `star_1`... in map order (the top row first). What a beat names and acts on
+  (`pick_up: gold_key`, `open: gate`, `step_aside: tobble`) is a prop or a character of the stage
+  standing at a spot like any other: its part in the rules is data on the level, `locks: {door:
+  key}` and `blockers: [name]`. This keeps Step 150's rule (letters are only spots, symbols only
+  tiles or items), reuses the stage's props (`door` with its open / closed shapes, a new `key`
+  prop held by its bow), its characters and every prop action, and puts no second placement
+  syntax into the map. Every closed `door` prop on a level is in the way (a door is a way through;
+  a free-standing door drawn shut that one walks through looked wrong); `locks` only adds the key.
+- **Rules** (`vidgen/world/moves.py`, `vidgen/world/story_props.py`, pure functions): an item
+  that `blocks` is an `Obstacle` shutting its column from its feet up to the first solid tile
+  above it (`_OPEN_SKY_ROWS` with none), so a walk or a jump never passes it but a way over the
+  tiles above it still does. `walk_route` / `plan_jump` take `obstacles`; when they refuse, the
+  same move without them is planned and the first obstacle its way runs into (or the one right
+  after where the walk stops) is named with what clears it: `the locked door 'gate' is in the way
+  at map column 14; open it first with its key 'gold_key' (- open: gate, by: <who holds
+  gold_key>)`. `route_pickups` / `jump_pickups` sample the way (every `_ARC_SAMPLE` 0.05 tiles)
+  and give each coin or star whose middle the body's box comes within `PICKUP_RADIUS` 0.3 of, in
+  order, with its share of the walk or of the flight (mid-jump). `walk_body` / `jump_body` apply
+  both (the body is never in its own way). `open_door` (a locked door only by the key's holder,
+  within `DOOR_REACH` 1.6 tiles across and `DOOR_REACH_UP` 0.5 up or down), `close_door`,
+  `step_aside`, `hold_key`.
+- **Validation** (`level_move_problems` with `LevelProps`): the replay follows the key through
+  `pick_up`, `hold`, `give`, `put_down`, `throw`, `let_go` and `blow_away`, doors through `open`
+  (with `by`) and `close`, blockers through `step_aside`, and the moves with the obstacles and the
+  pickups; each refusal names the beat (`beats[j].actions[k].to`, `.by`, `.target`, `.react`). A
+  blocker that stepped back off the path is no longer followed (it stands behind the path).
+  `StageLevel` checks that `locks` names a door prop and a prop for its key, `blockers`
+  characters, and that no prop or character takes a coin's or star's name.
+- **Renderer**: `cartoon/level_items.py` `Collectible` (a coin: a disc, a ring and a shine; a star:
+  a rounded five-point star), drawn from an updater counting its own seconds: it bobs (a coin
+  turns) while it waits, and pops (grows 1.6×, rises 0.8 tiles, fades in `POP_SECONDS` 0.35)
+  from `collect()`. The coins and stars go in the backdrop after the shadows, not graded by the
+  light (they shine at night). `RouteWalk` and `ArcJump` (a `_Cues` mixin) take `pickups`
+  (share, collectible) and call `collect()` on the frame the move's progress passes the share.
+- **Reactions** (`react: {when, expression, effect}` on `walk_to`, `run_to` and `jump` on a
+  level): a move's progress is its walk (or flight) share 0..1, then 1..2 over its settle;
+  `Reaction(at, expression, effect)` starts when the progress passes `at` (the first pickup's
+  share, `LANDED` 1, `SETTLED` 2), eases the face parts (`kind_parts("expression")`) to the
+  expression over `REACTION_BLEND_SECONDS` 0.3 by changing the base state the walk cycle or the
+  jump is drawn from (so the walk, the squash and the lip sync go on), and starts the effect
+  symbol: an `EffectSymbol` the stage adds when the move is applied (`level_moved`), hidden with
+  a very negative age until then, shrinking away by itself after `REACTION_EFFECT_SECONDS` 1.4.
+  The expression is kept (as `emote`). A run-up's pickup puts the reaction on the run-up walk.
+  The key `when` (not `on`): YAML 1.1 reads a bare `on:` key as `true`. Why inside the move, not
+  a second action at a time: the runner plays an action that changes the same character after
+  the one playing (`_changed` batches), so a separate `emote` cannot start mid-walk, and the
+  pickup's time is only known once the move is planned.
+- **Stage** (`scenes/stage.py`): `level_state` (the world as the rules see it now; `_level_now`
+  reads each key's holder from its prop), `level_pickups`, `level_walk` / `level_jump` with
+  `react`, obstacles and pickups (`walk.picked`), `level_enter` / `level_exit` with obstacles (no
+  pickups, as in the replay), `level_moved` records the pickups and adds the effect symbol,
+  `level_open` / `level_close` (called by `open` / `close` on a door), `level_step_aside` (a walk
+  to `to`, else a `Walk` in depth to `ASIDE_DEPTH` 0.3 with its feet `ASIDE_RISE_TILES` 0.3
+  higher, its draw order kept by the depth walks). `open` gained `by` (the opener turns to the
+  door and reaches for its edge with the key's hand, `_reach_low`; `alters` keeps the opener out
+  of other batches); `step_aside` is a new moving action.
+- **Step 151 gaps closed**: `walk_to` / `run_to` take a tile `{column, row}` (`MapTile`, was
+  `JumpTile`); `StageFrame.columns` lets `place_x` place a tile, so `vidgen direct` and the
+  prop-handling replay know where a walk or a jump to a tile ends.
+- Measured: the 50 x 5 scratch story at 854x480 (a key, two coin runs, a locked gate, a jump
+  over a gap catching a star, a turtle stepping aside) renders 31.5 s of video in 27 s.
+
+### 86.9 Sounds on a level (Step 153)
+
+Reference: docs/CONFIG.md "Story props on a level", **Sounds**; "Foley and music stings".
+
+- **Through foley, not a new system.** A level's sounds are stage foley (§69.19): the action
+  runner calls `Stage.action_foley` with each action as it played (scene start, seconds after any
+  speed-up); `_timed_parts` splits a jump with a run-up; `_played` turns each animation into a
+  `PlayedAction`; `foley_cues` (no manim) gives the cues; `NarratedScene.sfx` records them
+  (`timings.json` `sfx`, the SFX track, the final mix with its loudness normalisation and
+  limiter). So `foley: false` (video or stage), `sfx: {gain}` and `assets/sfx/<name>.wav` control
+  them as every other foley sound, and nothing new reaches the config.
+- **Events and their times.** The rules' plan, not the frames, gives every time, so the cues are
+  known when the action starts (before any frame of it is drawn):
+  - take-off: the existing `boing` at the end of the crouch (`phases.before`), unchanged;
+  - landing: `_played` gives an `ArcJump` `lands = 1 − phases.after` (its settle starts as it
+    touches down); `landing_cues` plays a short, soft, higher `thud` and a `footstep` there, their
+    intensity 0.35 + 0.1 per character height fallen (`lift`), at most 0.7. A jump in place (a
+    plain `Jump`, also on a plain stage) keeps its boing only;
+  - pickups: `RouteWalk.pickups` / `ArcJump.pickups` hold (share of the walk's distance or of the
+    flight, collectible); `_played` passes `(share, kind)` as `PlayedAction.pickups`, and
+    `pickup_cues` maps a walk's share through the inverse of `walk_progress` (`_walk_time_share`,
+    as the footfalls) and the wind-up, a flight's linearly through the crouch: the same mapping
+    `_Cues._cue` uses to pop the collectible, so the sound falls on the frame it pops (the render
+    test checks within a frame). Coins play `coin`, stars `twinkle`; each further one of a kind in
+    one move is a semitone higher (at most 5), the usual rising run of a coin trail;
+  - door: `level_open` now returns whether a key unlocked the door (it had a `key` and was
+    closed); `Open.apply` marks its `PropReshape` `unlocks`, and `door_cues` plays `unlock` at the
+    action's start and the creak `UNLOCK_SECONDS` 0.3 later (never after the door swings at
+    `RESHAPE_SHARE`). Other doors creak as before (§69.62);
+  - a blocker stepping aside (`step_aside`, a `Walk` in depth or a `RouteWalk`): a soft low
+    `swoosh` (−12 dB, 7 semitones down) and footsteps 3 semitones lower and 3 dB softer than a
+    walk's. Not in `WALKING_ACTIONS`, so motion effects do not change.
+- **New sounds** (`sfx.py`, numpy only, through the library's `_finish`: −27 LUFS loudest 400 ms,
+  peaks at most −9 dBFS): `unlock` (a small metallic tick, then a rounder clack, low-passed at
+  5 kHz), `coin` (two soft bell notes B5 → E6), `twinkle` (a soft bell arpeggio C6–C7 with a faint
+  glitter, low-passed at 8 kHz). Bells with the soft partials of `success`, nothing above ~8 kHz
+  of note: kid-friendly, not shrill. Missing before: no lock, no coin, no star sound. The landing
+  and the blocker reuse `thud`, `footstep` and `swoosh`.
+- **Loudness.** Gains follow the foley table: pickups −4 dB (like a boing), the unlock −6, the
+  landing thud −8 with its step −5. A coin trail may overlap its sounds when run through (a coin a tile
+  apart is about 0.7 s at walking pace, 0.45 s long); the render test writes the story's SFX track and checks its peak stays
+  under −3 dBFS and its loudest 400 ms under −20 LUFS (narration is about −20; the final mix
+  normalises and limits as before).
+- Not done: a move's `react` effect symbol plays no sound (an `effect` action's does), nor does a
+  `react` expression `surprised` during a move.
+
+### 86.10 The camera and `character_size` (Step 154)
+
+Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a level
+(`follow`)", lint `small_speaker`.
+
+- **`character_size: small | medium | large`** (`config.CharacterSize`; `VideoConfig` and the
+  stage's param): the stage's default `size` times `CHARACTER_SIZE_FACTORS` 0.7 / 1 / 1.4 of its
+  medium (`STAGE_SIZE` 0.45, a level's `LEVEL_SIZE` 0.25), by the stage's `mode="before"`
+  validator (`_default_size`, which replaced `_level_size`). The scene's wins, then the video's,
+  then medium: the video's reaches the scenes as data, like a set — `includes.expand_character_size`
+  (after `expand_sets`, also after a variant's merge, so a 9:16 variant can say `large`) copies it
+  into each `type: stage` scene whose params (after its set) give neither `character_size` nor
+  `size`, with its origin at the video's key. Why data, not a lookup at render: `params.size` is
+  read by validation, `stage_frame`, `stage_reframes`, directing and lint without a scene, and
+  every one of them now sees the same number. Writing both in one scene is refused. Medium gives
+  exactly the sizes of before (tests unchanged).
+- **On a plain stage (decided)**: applied, consistently, as the named form of `size`: characters
+  and props scale (as `size` always did); the stage's width and marks, the ground line, the
+  background and the layers stay framed, and walking times between marks stay (speeds are in
+  frame units there). Why not restrict it to levels: a Short with a host on a plain stage needs
+  `large` as much (in 9:16 a size is a fraction of the frame's *width*), and one video-level
+  knob that silently skipped half the stage scenes would surprise.
+- **On a level** everything in front scales with `size`: the tile (`size × short side / 2`), the
+  props, coins and stars; `level_pace` (`size / STAGE_SIZE`) scales the default speeds, so every
+  walk, climb and jump takes the same seconds at every size (the rules plan in tiles; the foley
+  cues follow; a render test compares the SFX schedule at medium and large). The sky, the
+  background picture and the layers are *not* scaled: they are the distance (as for a camera
+  move, far things do not grow with the near ones) and a set's layers are given in frame
+  fractions; scaling them would push a set's horizon out of the frame at `large` and leave
+  gaps at `small`. Captions, on-screen text, speech bubbles, effect symbols and overlays are
+  screen-sized as before. Shots (`shot_view`) frame by the characters' size on screen, so they
+  zoom in from the base size (`MAX_SHOT_SCALE`, scale ≥ 1 as before).
+- **The following camera** (`vidgen/camera.py`, no manim): `SmoothFollow` — a dead zone of
+  `FOLLOW_DEAD_ZONE` 0.08 of the view's width either side of its centre, then `smooth_damp`
+  (a critically damped spring, `FOLLOW_SECONDS` 0.45, stable for any `dt`: a skipped animation
+  is one long step) towards the nearest view that has the hero at the zone's edge, then a hard
+  limit `FOLLOW_MAX_OFFSET` 0.3 of the width, then the bounds. Vertically it keeps
+  `FOLLOW_HEAD_ROOM` 0.08 of the view's height over the head and `FOLLOW_FEET_ROOM` 0.2 under the
+  feet, moving only to keep them (a target clamped to the bounds before smoothing, so the
+  velocity never winds up against an edge), and never lets the head within
+  `FOLLOW_MIN_HEAD_ROOM` 0.02 of the top. `NarratedScene.follow_with_camera` accepts such a
+  follower (duck-typed: `view_center(center, dt, width, height, bounds)`, `restart()`; a plain
+  `x_of` keeps the old hard follow, so plain stages and other scenes render as before);
+  `_camera_step` passes the frame's `dt`. The `follow` action asks the scene for
+  `camera_follower(mob)` (`Stage`: a `SmoothFollow` on a level, `None` elsewhere). Searched
+  first: `cartoon/spring.py`'s `Spring.follow` integrates a target known as a function of time,
+  not one read frame by frame; nothing else smoothed the camera.
+- **`level.follow: <character>`**: the hero; `Stage._follow_hero` puts the camera on it (the
+  follower's settled view, so a hero on a high plank starts in frame) and follows from the first
+  frame. A `pan` stops it, a `follow` replaces it, a `shot` stores and gives it back
+  (`shot_home`), an `exit` of the hero stops it, as for the action. `camera_at` is refused with
+  it. Directing knows it: `StageFrame.follows` (the start view is the hero's, the replay's
+  `camera_x` is `None` as after a `follow`), `reframe_path(following=True)` leaves the camera
+  alone. Not a default: without a named hero the camera stays at `camera_at` (and `reframe`),
+  since guessing the hero among the cast would move cameras of existing levels.
+- **Vertical room**: `LevelFrame.top` = max(the frame's top, the map's bottom + its used rows +
+  `CHARACTER_TILES` + `LEVEL_HEAD_ROOM` 2 tiles); `Stage.camera_bounds` uses it (the bottom stays
+  the frame's bottom). So a level taller than the frame is no longer refused, and shots can frame a
+  character high up. With a raised top: the colour / gradient sky moves with the camera
+  (parallax factor 0: it looks the same from every height); `layer_half_extent(stage_top=...)`
+  makes the background picture and the layers cover every view up to it (`reach_y = top −
+  frame_height / 2z`; without `stage_top` the old formula, so plain stages are unchanged); the
+  tiles are drawn up to their used rows (no longer cut at the frame's height).
+- **A short map in a portrait frame** (decided: portrait only, so every landscape level renders as
+  before): `level_raise` raises it by whole rows until the empty sky over its used rows and a
+  character is at most `PORTRAIT_SKY_SHARE` 0.4 of the frame, by at most `PORTRAIT_MAX_RAISE` 0.3
+  of it. `LevelFrame.below` rows of ground are drawn under the map (`level_shapes(below=)`: the
+  bottom row's ground cells run on down, with pebbles; gaps stay open; `draw_columns(below=)`), and
+  `LevelFrame.bottom` rises by them, so every placement, goal and replay follows. The background
+  picture and the layers rise with it (`Stage._level_lift`, and their cover extends down by as
+  much), so the hills stand behind the raised ground as behind a landscape level's. Why rows of
+  ground rather than a camera rule: the camera's bounds stay the map's frame, and nothing
+  "under" the map needed inventing.
+- **Lint**: `small_speaker` (cartoon still rule, default warning, `min_face` 0.075 of the shorter
+  side): a speaking character in view whose head box (as seen, so a shot counts) is smaller; it
+  suggests `shot: closeup <name>` / `medium` or `character_size: large`. Measured: the head is
+  about 0.38 of a character's height, so a level character is 0.095 at medium, 0.067–0.07 at
+  small (always reported), 0.13 at large; a plain stage's 0.17. `off_frame` skips objects with
+  `scenery: true` in the layout dump: an `ImageMobject` with `scenery = True` (the level's tile
+  chunks) — the Step 152 gap.
+- Measured: the 30 x 8 test level at 160x90 with two jumps up, a close-up and a follow renders
+  in about a second; a scratch 42 x 8 level with `set: park` at 854x480 (11.6 s of video) in 23.6 s.
+
+### 86.11 The example, the guide and the review of the phase (Step 155)
+
+- **The example** (`examples/platform-story`, "Nutmeg and the Moon Picnic", 9.8 KB): three levels
+  (a meadow: a ladder up to a plank with the key, a jump down and one over a gap with a coin in
+  the air; a garden: a locked gate opened with the key, a grumpy snail on the path who steps
+  aside when asked nicely, close-ups and a two-shot for the dialogue, a jump catching a star, a
+  run through coins; the sky: cloud steps, a star caught in mid-air, the hero's granny on a
+  plank, a pan to the picnic, night falling), `level.follow`, the `cartoon` music bed,
+  `set: park` on two levels, a 9:16 variant with `character_size: large`. Word-count timing
+  (no audio committed, as every example): 2:50 at preview.
+- **A `snail` species** (decided: cheap, on the turtle's machinery): two feelers with knobs
+  (`FEELERS`, swaying in the wind like a rabbit's ears), a round shell high on the back with a
+  spiral (`snail_shell`, `SNAIL_SHELL`, `colors.hair`; `SHELLED_SPECIES` in the config for the
+  contrast and the random cast), shorter legs and arms, no tail (`SPECIES_WITHOUT_TAIL`), the
+  slowest walk (`SpeciesMotion` speed 0.35); `turtle` and `snail` are one contrast family
+  ("shelled"). The Step 123 drawings are unchanged (pinned digests).
+- **A set on a level** (Step 150 gap): a stage with a `level` takes none of the set's
+  `LEVEL_DROPPED_KEYS` (props, water, room, ground_color) in `includes.apply_set`; the sky,
+  layers, light, ambience, particles and marks stay. Why drop rather than refuse: a set's props
+  stand at depths, which a level refuses, so a set with props could not be used on a level at all
+  (the scene had to write `props: []` and could then add none of its own).
+- **`vidgen screenplay` with a level** (cheap enough to do): a `set:` line may name a set of the
+  front matter's `sets:` (before: only `--cast`'s); `screenplay.stage_marks` adds a level's spots
+  to the marks the set line and the directions place by; `X jumps / hops / leaps [up / down /
+  across / over] to / onto Y` is a `jump` with `to` on a level (elsewhere a `# TODO:`). A bug on
+  the way: `plan_yaml._literal` wrote every multi-line string as `|-`, so a map's final line break
+  was lost and `commented_yaml`'s round-trip check raised `AssertionError` (a traceback from the
+  CLI); now `|`, `|-` or `|+` by the string's ending.
+- **Stars over a tall level**: the night's stars were kept clear of the heads at the start, which
+  on a level the camera rises over can be above the frame (no stars at all), and they stayed in
+  the stage while the camera rose. With a raised top the stars fill the top `LEVEL_STAR_SKY` 0.45
+  of the view and move with the camera (parallax factor 0, like the colour sky).
+- **Portrait shots** (found by the example's 9:16 lint, not a Phase O bug): `frame_shot` framed a
+  one-character shot by its height span only, so a portrait close-up was 0.41 of the character's
+  height wide and cut a snout or a beak. `SHOT_MIN_WIDTHS` keeps a close-up at least 0.55 and a
+  medium / over-the-shoulder 0.7 of its height wide (landscape views are wider anyway: unchanged).
+  The kid mouse's head with its big ears is 0.78 wide: its portrait close-up still cuts an ear, so
+  the example frames its line as a two-shot.
+- **Review** (the whole phase's code and docs; HANDOFF Step 155): the three layers hold
+  (`vidgen.world`, `level_stage`, `level_drawing`, `vidgen.camera` and `cartoon.foley` import no
+  manim, now all in the test); a refusal said `(a blockers: ...)` (now `(blockers: ...)`);
+  `items.py` named a module `vidgen.world.props` that is `story_props`.
+- Measured (854x480 @ 15, no audio): meadow 55.9 s of video in 63 s, garden 60.6 s in 49 s, sky
+  (40 x 11, the camera rising) 47.9 s in 113 s: 85 of 131 profiled seconds are Manim's PIL
+  transform drawing the tile chunks (about 0.05 s per chunk per frame). Backlog: draw the chunks
+  in view into one picture per frame, or cut chunks by rows too.
+- **`vidgen.api` exports the level layers** (fixed in Step 157: `scenes/stage.py` imported them
+  directly, against §6.4, and `test_builtins_use_only_the_public_api` failed): the world model
+  and rules (`Level`, `World`, `COIN`, `KEY`, `parse_level`, `walk_route`, `plan_jump`,
+  `reversed_route`, `route_pickups`, `jump_pickups`, `obstacles_in`, `step_aside`, `open_door`,
+  `close_door`, `hold_key`), the stage geometry (`level_stage`: `LevelFrame`, `LevelProps`,
+  `LevelStep`, `LEVEL_MOVES`, `LEVEL_PROP_ACTIONS`, `LEVEL_SIZE`, `LEVEL_UNTRACKED`,
+  `CHARACTER_SIZE_FACTORS`, `character_size_default`, `level_frame`, `level_layout`,
+  `level_world`, `level_goal`, `level_fit_problems`, `level_move_problems`), the drawing
+  (`CHUNK_COLUMNS`, `LevelColors`, `draw_columns`, `drawn_rows`, `level_shapes`, `COIN_COLOR`,
+  `STAR_COLOR`, `Collectible`), the motion (`ArcJump`, `RouteWalk`, `Reaction`, `LANDED`,
+  `SETTLED`), `SmoothFollow` and the config's `CharacterSize`. None shadows a manim name.
+
+## 87. Presentation toolkit (Phase P, Steps 156–164)
+
+Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot`, `number_line`, `bar_chart` / `line_chart` "Values that
+change between beats", the lint rules `said_before_shown` / `unsaid_reveal` (more sections as the steps land). Help AI
+authors make clearer and better-looking presentation videos: coding Shorts, science and maths
+explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
+checked by `vidgen validate` with a `VidgenError` that says what to write, covered by `vidgen
+lint` where a rule helps, documented in docs/CONFIG.md and the author guide
+(`src/vidgen/data/guide/AGENTS.md`, copied to `AGENTS.md`), and work in 16:9 and 9:16. Same
+rules as Phases H–O: cheap tests, new public extension surface only through `vidgen.api`.
+
+### 87.1 The plan
+
+| step | what | design intent |
+|---|---|---|
+| 156 | Actions timed to a spoken word | `at: "@word"` on any beat action and on `lower_third`; times from the beat's audio, else the estimate (§87.2) |
+| 157 | One colour per concept | a video-level `terms: {loss: accent, gradient: "#E07A5F"}` (theme colour names or hex) painting those words wherever they are on-screen text (TeX parts of equations, bullets, text cards, titles, captions / karaoke, chart and diagram labels, callout labels); per-scene opt-out; lint: too many concept colours (about 5), poor contrast on the theme background, a term coloured otherwise by a scene setting; cookbook §12 rule "same term, same colour" |
+| 158 | Code that morphs between versions | in the code scene(s) version A morphs to version B: unchanged tokens glide, new lines grow in, removed lines fade out; the diff is vidgen's (`difflib`), timed to beats and words (§87.2); the phone readability rules of the code scenes still apply |
+| 159 | Terminal scene | a terminal window typing commands and showing their output, given by the author (vidgen never runs a command), timed to beats / words; the code scenes' look and themes; usable beside code (a split) or after it (a carry / match cut if cheap) |
+| 160 | Maths, part 1: function plots | axes with f(x) from expressions evaluated safely (a small whitelisted parser, or sympy only if already a dependency; never `eval`), several functions, a dot moving along a curve with a live value, a tangent following the dot, shaded area between bounds, labels; driven by beat actions |
+| 161 | Maths, part 2: geometry basics | braces and angle arcs with labels, dimension lines, a number line (points, intervals, jumps), a coordinate plane with vectors (add, scale); a scene type or additions to Step 160's scene, decided and recorded there |
+| 162 | Charts that change between beats | the chart scenes take values per beat and animate between them (bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line, the axis rescaling); values stay the author's |
+| 163 | Narration–picture check in lint | deterministic rules on the layout dump / plan: a beat naming an on-screen label or term that only appears in a later beat; optionally a reveal the narration never mentions; stemming, case, stop words and a threshold keep false positives low; a setting tunes or turns it off |
+| 164 | Example, docs and review | a short science or coding explainer (16:9 and a 9:16 variant), guide / CONFIG / CHANGELOG / README / gallery, the Shorts cookbook (word timing, concept colours, code morphing, the terminal), a review of the phase with fixes in HANDOFF |
+
+### 87.2 Actions on a spoken word (Step 156)
+
+- **Syntax** (`vidgen/word_anchors.py`, no manim): `at: "@WORDS[#N][±S s]"`. `WORDS` is one word
+  or a few in a row, matched against the beat's text split at spaces (the words the word timings
+  are of) without case, accents (`textnorm.fold`) and the punctuation around them; `#N` is the
+  N-th time the beat says them (from 1); the offset needs its `s` so a hyphenated word
+  (`@K-Phi-3`) stays a word. `parse_word_anchor` refuses `@`, `#0`, a second `@` and, on an
+  action, a beat id before `@` (an action's word is in its own beat), each with an example.
+- **The field**: `ActionConfig.at` is `float (0 ≤ at < 1) | str (^\s*@)`. A `mode="before"`
+  validator checks the anchor's syntax (and gives a range error that mentions the word form);
+  the written anchor is kept in the private `_anchor` (`ActionConfig.anchor`), and `at` itself
+  is set to the anchor's fraction of the beat (`set_fraction`) once resolved. So every consumer
+  of `at` (the runner `ActionRunner.start_beat`, the stage's move ordering, `musicfit`'s
+  reveals, automatic directing, the host's looks) keeps reading a float and none had to change.
+  `shorthand()` and `model_dump` write the anchor back (a `field_serializer`), so `vidgen
+  direct --json` and a dumped config re-validate to the same anchor; `resolved()` (shorthand keys
+  sorted by a tool) keeps the fraction.
+- **Three resolutions, each refining the one before**:
+  1. `BeatConfig` (an after-validator): the beat must say the word (else `ValueError`, placed at
+     `scenes[i].beats[j]`, naming the beat, the action and "words like it" by `difflib`, or "its
+     words" when none is close, or "says X 2 times, so there is no #3"); `at` = the word's start
+     in `estimate_word_times` over the word-count length at the default rate.
+  2. `VideoConfig` (after its checks): the same estimate in the video's `language` and
+     `narration.words_per_second` (it matters only for syllables and for an offset's share).
+  3. `Project.__init__` (`retime_project_anchors`): a beat with an MP3 is re-timed from
+     `beat_word_times` over the MP3's length with the beat's spoken form (`Project.spoken`:
+     pronunciation, voice sounds, an emotion tag), i.e. the stored TTS alignment when it is the
+     MP3's, else the estimate within the MP3's speech: the same timings the karaoke captions use.
+     The render worker loads the project per scene, after `vidgen tts`, so renders, storyboards,
+     `lint` and `direct` all see the audio's times; before any audio they see the estimate.
+- **Fraction, not seconds**: the anchor resolves to `word start + offset` over the narration's
+  length, clamped to `0 .. MAX_FRACTION` 0.999, and the runner multiplies by the beat's body as
+  for any `at`. With an `overlap` / `interrupt` the body is shorter than the narration, so the
+  moment moves a little earlier in proportion (accepted: rare, and a fraction of the beat is what
+  `at` has always meant).
+- **Translations**: a translated beat says other words. `_translated` calls
+  `pin_translated_anchors` on the translated raw config before validating it: an anchor of a beat
+  whose text changed becomes the source config's fraction (rounded to 4 places); untranslated
+  beats keep their anchor (and its audio timing).
+- **`lower_third`**: its `at` also takes `"@Ada"` (the anchor scene's first beat that says it;
+  `#N` counts over the scene) or `"intro_b2@Ada"` (that beat). `locate_word_anchor` gives the
+  beat and the seconds into it from the planned beat (`BeatSlot`: its narration length) or, in
+  `validate_project` (no plan), the MP3's or estimated length.
+- **Not word-timed**: a scene's `sfx:` list (seconds from the scene's start, before any beat; an
+  anchor there is refused with a pointer to the beat's `sfx` action), `keyframes` keys (`t`:
+  seconds from the action's start or a share), the thumbnail's `at`, `sting` (`start` / `end`).
+- **`vidgen.api`** adds `WordAnchor`, `is_word_anchor`, `parse_word_anchor` and
+  `locate_word_anchor` (an overlay or scene of a project that starts something on a word; the
+  built-in `lower_third` uses them, as built-ins import only `vidgen.api`). Actions need none of
+  them: they get word timing through `at` without code of their own.
+
+### 87.3 One colour per concept (Step 157)
+
+- **Config**: `VideoConfig.terms: dict[str, ColorRef | TermConfig]` (`TermConfig`: `color`,
+  `tex: str | list[str]`, braces checked); keys must hold a word and differ beyond case and
+  spaces. `SceneConfig.terms: bool = True` (`false`: the scene's text, captions included, keeps
+  the usual colours). `vidgen validate` checks the colours against the theme
+  (`terms.term_color_problems`, located `terms.<term>`).
+- **Matching** (`vidgen/terms.py`, no manim): `term_spans` finds whole words in any case with an
+  optional plural `s` / `es`, a phrase's words across any whitespace; longer terms first, no
+  overlaps. No accent folding: the spans must index the text as drawn.
+- **Where the colours go: the text helpers, not each scene.** `helpers.styled` (so `T`, a
+  scene's `self.text`, chart labels and legends, captions) and `layout.fit_text_sized` (so
+  `fit_text`, `readable_text` and every scene and overlay built on them) add Manim `t2c` slices
+  for the *active terms*; an explicit `t2c` / `highlights` keeps the letters it colours (explicit
+  scene settings win). `terms=False` opts a call out (a callout's text on its plate). `MarkupText`
+  (`MT`) is not coloured (its markup indexes differ), nor `Code` listings: syntax colours would
+  clash with concept colours, so code comments stay as they are (decided; the brief allowed it
+  "only if sensible").
+- **Active terms**: `NarratedScene.__init__` sets them (`set_active_terms(scene_terms(...))`)
+  before it builds anything (its overlays are built in `__init__`), `tear_down` clears them, and
+  `runtime.set_context` / `clear_context` reset them, so a later thumbnail or a test never sees a
+  scene's terms. A module global rather than a parameter: every text helper reads it without each
+  of the ~40 call sites passing it (the theme works the same way, `current_theme()`).
+  `using_terms(...)` narrows them for a block.
+- **Beyond words**: a `line_chart` series whose whole name is a term (not `training loss`: two
+  series would share a colour) defaults to the term's colour; a `callout` without its own `color`
+  takes the colour of the first term its label says (mark and plate; the label's text keeps its
+  readable ink); `equation` and `equation_derivation` isolate the `tex` parts present in a step as
+  whole tokens (`equation_derivation.isolated_source`, the derivation's own machinery; the
+  `equation` scene switches to it only when a step contains one, so other equations compile as
+  before) and colour them; a derivation's own `colors` wins, and its dimmed history keeps the
+  term colours readable (`readable_opacity` includes them).
+- **Captions**: a term colour is used only where it keeps the `contrast` rule's `min_ratio` on the
+  plate; the plate's opacity is raised (0.05 steps, up to 1) until the term colours read, and a
+  colour that does not read even on an opaque plate stays in the text colour with a warning.
+  Without a plate, against the theme background (the outline). The karaoke highlight still
+  paints the spoken word.
+- **Lint** `concept_colors` (scene scope, from the config like `look_alike`;
+  `vidgen/lint/term_rule.py`): more than `max_colors` (5) different colours and a colour below
+  `min_contrast` (4.5, WCAG AA for normal text; every preset's accents pass) on the theme
+  background, both reported once on the first scene with terms; and per scene
+  (`terms.term_conflicts`) a setting that colours a term otherwise: `title.highlight_color`, a
+  `line_chart` series' `color`, an `equation_derivation` `colors` entry for a term's `tex`
+  (compared without spaces), a `callout`'s explicit `color` on a label that says a term (on its
+  beat).
+- **Not coloured** (gaps): thumbnails (no scene is active), `MarkupText` (the `progress`
+  overlay), code, bar / pie / icon-grid categories' bar colours (only their label text), text
+  inside pictures; a translated variant must give its own `terms:`.
+- **`vidgen.api`** adds `Term`, `active_terms`, `find_term`, `term_spans` and `using_terms`
+  (for a project's `MarkupText`, picture or equation, or to narrow the terms on a plate of its
+  own); `T`, `fit_text` and `readable_text` take `terms=False`.
+
+### 87.4 Code that morphs between versions (Step 158)
+
+- **A scene type, `code_morph`** (`scenes/code_morph.py`), not a mode of `code`: `code`'s beats
+  follow its `highlight` entries and its targets are the lines of one listing; here the beats
+  follow `versions` and every version has its own lines. `CodeMorph` subclasses `CodeListing`
+  to share the window, the colouring and the fitting. Params: `versions` (at least two; each
+  the code as a string, or `{code | path, highlight}`), and `code`'s `language`, `title`,
+  `line_numbers`, `style`, `font`, `size`, `highlight_color`, `wrap`.
+- **The diff is vidgen's** (`diff_code`, `difflib`, no manim): lines are matched by their text
+  without indentation (`SequenceMatcher`, no autojunk); within a replaced block, lines are paired
+  in order by a small dynamic programme maximising their token similarity (each pair at least
+  `PAIR_RATIO` 0.5), so an edited line is one line, not one removed and one added; a line that
+  disappears in one place and appears unchanged elsewhere is a move. Within a pair, the shared
+  tokens (`\w+` or one other character) keep their characters. A glyph is addressed as (line,
+  n-th non-space character): Manim's `Code` draws exactly one glyph per such character, and
+  wrapping drops or adds only spaces, so a wrapped line's glyphs are its rows' glyphs in order.
+  `changed` (for `highlight: changed`) = new, edited (text differs, indentation included) or
+  moved lines.
+- **One size for all versions**: `CodeListing._fit_listing` became `_fit_listings` (one font
+  size, scale and wrap width for several listings, so the largest fits; `code` passes one). The
+  phone rules of `code` hold unchanged (wrap to at least `TARGET_COLUMNS` at no less than the
+  readable size). Placement: every version centred across the body, all with the top of the
+  tallest when centred, so lines a change keeps move only sideways (if the window's width
+  changes) or down (below inserted lines).
+- **The morph** (`_Morph`, an `AnimationGroup`): kept glyphs and line-number labels `Transform`
+  into copies of the new version's (`GLIDE` 0.1–0.9 of the run time), the window background
+  transforms into the new one, removed glyphs and bands fade to 0 (`FADE_OUT` 0–0.45; opacity,
+  not `FadeOut`: a remover would dissolve the old listing's group), new tokens of an edited line
+  fade in from 0.6x, a new line grows from its left end (`GROW_IN` 0.5–1), the new bands fade
+  in. At its end `_Morph` removes the whole families of everything it played (playing the group
+  lifts unanimated parts of the old listing, e.g. a wrapped line's empty number, into the scene
+  on their own) and adds the new version as one `Code` (with its bands), so the layout dump and
+  lint read a code listing at every beat end and `is_shown` tells which version shows.
+- **Timing**: the scene's reveal plays version *i* at beat *i* (`cap` 1.5 s). Targets
+  `version<N>` (and `version<N>.line<K>`) have the morph to N as their entrance, so `{reveal:
+  version2, at: "@word"}` morphs on a spoken word (§87.2); a version some `reveal` action shows
+  is left out of the scene's own steps (`action_uses("reveal")` resolved through
+  `find_targets`), else the beat would morph at its start and the action find it done. Morphs
+  only go forward: revealing an earlier version than the one shown does nothing; a skipped
+  version is diffed away directly (A to C).
+- **Highlights**: a version's `highlight` (a line spec of that version, or `changed`) dims the
+  other rows to 0.35 and lays `code`'s band (`listing_bands`, now shared) before the morph, so
+  the morph carries the dimming. `readable_band` runs once over every version's glyphs.
+- **Not done**: morphing in `code_walkthrough` (a scrolling window; a later step if wanted);
+  tokens moving between lines (a line split in two: the second half fades and grows); no lint
+  rule (the code scenes' rules apply to the stills; `validate` refuses a version equal to the one
+  before).
+
+### 87.5 Terminal scene (Step 159)
+
+- **A scene type, `terminal`** (`scenes/terminal.py`), subclassing `CodeListing` for the window,
+  colouring and fitting. `steps` (step *i* at beat *i*): `{command, output, clear,
+  output_color}` or a string (a command). vidgen never runs a command: the output is the
+  author's. Params `prompt` (`$`), `language` (`bash`, the commands' lexer), `typing_speed`
+  (18 characters/s), `code` (`{code | path, language, highlight}`: a listing beside it),
+  `title`, `prompt_color` (`accent`) and `code`'s `line_numbers`, `style`, `font`, `size`,
+  `highlight_color`, `wrap`.
+- **The session as rows** (`session_pages`, no manim): a command's first line after the prompt
+  (`typed_from` = where typing starts), its other lines as typed, the output's lines (tabs
+  expanded, Pygments `Generic.Output`), and the prompt again after the last step when it has a
+  command (an output-only step is a program still running). `clear` starts a new page.
+  A blank last row would be dropped by Manim's `Code`, so a prompt-less end row is a space.
+- **Fitting**: the pages go through `code`'s `_fit_listings` (now with `lexed=` rows coloured by
+  the caller and `numbered=`; every listing keeps `fit_scale` and `shown_lines`), so the phone
+  rules of `code` hold (wrap to 32 columns at no less than the readable size, up to 1.5x).
+  With `code`, the terminal and the listing are fitted side by side and, in a landscape frame,
+  also one above the other; the layout giving the larger text wins (portrait: always stacked),
+  and both are set to the smaller of their two scales (one font size).
+- **One window**: a listing of `"M" * columns` over the tallest page's rows, its text removed,
+  so the window keeps its size when the screen clears; every page is placed at its top-left.
+- **Segments**: each prompt, each wrapped row of a command and of an output is its own one-line
+  `Paragraph` (Pango's space dots dropped, as `Code` does), moved onto the page listing's glyphs
+  and coloured like them, then the page listings are dropped. So a target (`command<N>`,
+  `output<N>`, `output<N>.line<K>`) is in the scene only once shown (`is_shown`, `entrance`
+  work unchanged), and the layout dump reads exactly the text on screen. Once shown, a segment
+  is moved into the window (a `Code`), so the dump reads it as `code`. A cell's position comes
+  from the monospace advance and a line fitted through the rows' centres.
+- **Timing**: the scene plays its own steps with `play_steps` (cap: the beat's longest step;
+  the run time recomputed with `play_steps`' formula), each step one `_Show` animation that
+  shows glyphs at fractions of its run time (printing, not fading), moves the block cursor and,
+  at its end, puts the texts into the window; the window's opening (0.5 s) is an
+  `AnimationGroup` with a windowed rate function. A step: prompt (if not already there), 0.25 s,
+  typing (`max(0.3, characters / typing_speed)`), Enter (0.3 s), output rows (0.06 s each,
+  0.1–0.8 s), then the next prompt (same page) or the end prompt. Too long for its slot, it is
+  shortened in proportion. `clear` hides the old page at once (its texts leave the window)
+  and the new one starts 0.3 s later.
+- **Actions**: a `reveal` of `command<N>` / `output<N>` (any of its line targets) leaves that
+  item to the action (`action_uses("reveal")`); a command an action types brings its output
+  unless an action shows that too. What comes before on the same page and is not shown appears
+  at once (`_schedule`'s catch-up). A first command left to an action still shows its prompt
+  with the window. **`NarratedScene.entrance_time(target)`** (new, public, default `None`):
+  the seconds a target's own entrance wants; `Reveal.run_time_for` returns the longest for the
+  targets not on screen, so `{reveal: command2, at: "@run"}` types for the typing time (an
+  explicit `run_time` still wins).
+- **Beside code / after code**: `code` and `code.line<K>` are targets, so `carry: ["listing ->
+  code"]` after a `code` / `code_morph` scene of the same code makes the listing glide into place
+  (the carry machinery, §50; the highlight band fades in after it).
+- **Not done**: a terminal in a split with a scene of another type (there is no general split;
+  the `code` pane covers the coding case); scrolling a long session (use `clear`); colours
+  inside the output (one colour per step); a blinking cursor (it would redraw every frame).
+
+### 87.6 Maths, part 1: function plots (Step 160)
+
+- **A scene type, `function_plot`** (`scenes/function_plot.py`), not a mode of `line_chart`:
+  a chart plots the author's data points on chart axes at the plot's edges; here the author
+  writes functions, the axes are maths axes, and dots and areas move with beat actions. Params:
+  `functions` (an expression string, `f(x) = ...`, or `{expr, name, label, color, domain,
+  dashed}`), `x_range`, `y_range` (default from the values), `dots` (`{on, x, label, tangent,
+  guides, color, tangent_color, decimals}`), `areas` (`{under, over, between, label, color,
+  opacity, decimals}`), `x_label`, `y_label`, `grid`, `aspect` (`auto` | `equal`), `reveal`,
+  `title`, `title_size`, `title_color`, `label_size`.
+- **Expressions, never `eval`** (`vidgen/mathexpr.py`, no manim; sympy is not a dependency,
+  checked): a tokenizer and a recursive-descent parser compile the text into numpy closures.
+  Grammar: `+ -`, `* /` and implicit products (`2x`, `3(x + 1)`, `x sin(x)`, `(x+1)(x-1)`),
+  unary minus below `^` (`-x^2` is `-(x^2)`), `^` / `**` right-associative (`2^-x`), brackets,
+  numbers (`2e3`), `x`, `pi` / `e` / `tau`, the whitelisted functions `MATH_FUNCTIONS` (numpy:
+  trig, hyperbolic, `exp`, `ln` / `log`, `log10`, `log2`, `sqrt`, `abs`, `floor`, `ceil`, `sign`,
+  `min`, `max`) and functions defined before (`g(x) = f(x) + 1`; only earlier ones, so no
+  cycles). Unicode maths (`−`, `×`, `·`, `π`, `²`) is read too. Any other character or name is
+  a `ValueError` naming it, its column and the closest known names (`difflib`). Values are
+  evaluated under `np.errstate(all="ignore")`; non-finite values become `nan` (a gap).
+  `MathExpression.slope` is a central difference. `pretty_expression` writes the default curve
+  label (`x^2` -> `x²`, `2*x` -> `2x`, `-` -> `−`). Exported by `vidgen.api`: `MathExpression`,
+  `parse_expression`, `pretty_expression`, `split_definition`, `MATH_FUNCTIONS`,
+  `MATH_CONSTANTS`, `MATH_NAMES` (a project's own maths scene parses the same way).
+- **Axes** (`math_axes` -> `MathAxes`, in the scene module, for Step 161 to share): they cross
+  at the origin when it is in view, else run along the bottom / left edge; arrow tips; ticks from
+  `axis_ticks` within the range, labels thinned to every k-th (aligned on 0), negative numbers
+  with U+2212, one `0` at an inner origin; faint grid lines at the ticks; axis titles by the tips.
+  The plot region leaves room for labels next to an axis on (or near) an edge (iterated), half
+  an end tick label at both sides, and the tips. `aspect: equal` shrinks one side to a common
+  unit; `auto` fills the body, at most `MAX_TALL` (1.5) times as tall as wide (9:16). Draw order
+  by `z_index`: grid -2, areas -1, curves 0, tick / curve labels 1, tangents 1, dots and their
+  labels 3 (the layout dump sorts by it, so lint's `covered_text` sees what is drawn).
+- **Curves** (`curve_runs`): samples (90 per unit of plot width, at least 240), split where
+  undefined, where they leave the y range (ending on its edge by interpolation) and at a jump of
+  more than 1.5 ranges (an asymptote such as `tan`); each run a polyline (`DashedVMobject` when
+  `dashed`). `auto_y_range` drops the 3 % tails when the full span is 4x the trimmed one (an
+  asymptote), reaches 0 when it is within 0.6 spans, and adds 6 %.
+- **Labels**: a curve's label (`place_label`) goes beside a point of its curve on the side of
+  the normal, above or below, the first place (shares 0.88, 0.72, ... then every 5 %) inside
+  the plot that covers no axis or curve point and no other label; else the free spot nearest the
+  curve's right part on a 0.12-unit grid. A dot's label (`dot_label_spot`) sits on the side above
+  the curve (up-left of a rising curve), else another corner, clear of the curve labels and tick
+  labels, on a plate in the background colour; an area's (`area_label_spot`) inside the area
+  where it fits (from the middle outwards), else just above it, else anywhere clear.
+  Templates: `{x}`, `{y}`, `{slope}`, `{name}` (dot), `{area}`, `{from}`, `{to}`, `{name}`
+  (area), with `decimals` or a field's own format; checked by `label_problem`.
+- **Moving items**: `_Dot.place(x)` / `_Area.place(end)` move everything from the state (dot,
+  tangent clipped to the plot, guides, label text rebuilt only when it changes, keeping a dimmed
+  opacity; `become` resets `z_index`, so it is set again). The **`trace` action** (`to`; 2 s,
+  `smooth`; reversible with `until`) plays `_Trace` (an `Animation` on the dot or the area's
+  shape whose `interpolate_mobject` calls `place`) plus a no-op `_Moved` on each other shown part,
+  so Manim counts them as moving and redraws them (else they would be frozen in the static
+  background image). `scene_problems`: a `function_plot` only, a dot or an area only, `to`
+  inside the function's drawn range and where it has a value.
+- **Reveal**: each target has its own entrance and the targets it needs first (title, axes,
+  its function, its dot); an entrance brings that chain (each part once), so `{reveal: dot1}`
+  before its function draws the function too, and a step never plays a part twice. Steps:
+  functions, then dots, then areas, one per beat (`distribute`); an item a `reveal` action shows
+  keeps its slot, empty, so the others keep their beats; a dot's tangent comes with the dot
+  unless an action reveals `tangent<N>`.
+- **Terms** (§87.3): a function whose name or whole label is a term takes its colour
+  (`LineChart._term_color`); an area without `color` takes the first term its label says; all
+  labels are `self.text`, so terms in them are coloured. `terms.term_conflicts` reports a
+  function's or area's explicit `color` on a name / label that says a term.
+- **Lint**: `cap_height` counts U+2212 as a small glyph (like `-`), so `−3` measures as `-3`.
+- **Not done** (Backlog): a function of a parameter animated over beats (`a` in `a x^2`);
+  parametric and polar curves; a label that follows a curve's moving end; LaTeX labels; a dot
+  label's plate does not avoid other curves; `trace` moves in x only (a dot does not leave its
+  curve).
+
+### 87.7 Maths, part 2: the plan for geometry basics (Step 161)
+
+Decided in Step 160 so that Step 161 extends the same scene where the things live on a
+coordinate system and sits beside it where they do not:
+
+- **On the plane: additions to `function_plot`.** `functions` becomes optional (at least one of
+  `functions`, `points`, `vectors`), so a coordinate plane is a `function_plot` with
+  `aspect: equal` (the default when there are vectors). New lists, revealed after the areas in
+  this order, each item a target: `points` (`point<N>`: a labelled dot at `[x, y]`), `vectors`
+  (`vector<N>`: an arrow `{from: [x, y] (default the origin), to | components, label, color}`),
+  and `marks` (`brace<N>`, `angle<N>`, `dimension<N>`): a brace under / beside a segment with a
+  label, an angle arc between three points with a label (and a right-angle square at 90°), a
+  dimension line with end ticks and a label, all in data coordinates on `MathAxes`. `axes:
+  false` hides the axes for pure geometry (the mapping stays). Vector sums are an item `{sum:
+  [vector1, vector2]}` (tip to tail, then the resultant); scaling is the `trace` action
+  generalised to points and vectors (`{trace: vector1, to: [2, 1]}` moves the tip, `{trace:
+  vector1, scale: 2}` scales it), so one action moves everything on the plane.
+- **The mark builders** (brace, angle arc, dimension line) go in a shared module exported by
+  `vidgen.api` (e.g. `vidgen/geometry_marks.py`), so `diagram`, `screenshot`-style scenes and
+  project scenes can draw the same marks in frame coordinates.
+- **Beside it: a `number_line` scene type** (1-D): one axis across the width (a vertical frame:
+  still horizontal, with fewer ticks), `points`, `intervals` (open / closed ends, shaded),
+  `jumps` (arcs from a to b with a label, e.g. `+3`), the same tick labels (factor the tick
+  and label part of `math_axes` into a helper both use), the same `reveal` and `trace` (a point
+  moving along the line). Its params of a 2-D plot (functions, `y_range`, `aspect`) would not
+  apply, so it is its own type rather than an `axes: x` mode.
+- **Terms and words** as in Step 160: every label through `self.text`, an item's colour from
+  the first term its label says, `{reveal: vector2, at: "@sum"}` / `{trace: ..., at: "@word"}`
+  on spoken words.
+
+### 87.8 Maths, part 2: geometry basics (Step 161)
+
+Built as planned in §87.7; the changes and the details:
+
+- **Shared parts** (`scenes/math_axes.py`, a sibling module of the maths scenes): `MathAxes` /
+  `math_axes` (now with `visible=False`: the mapping only, for `axes: false`), `tick_label`,
+  `ticks_within`, `thinned_labels` (the tick part the number line shares), `fill_label` /
+  `label_problem`, `place_label`, `clip_segment`, `LiveLabel` / `label_plate`,
+  `ChainedTargets` (the "an entrance brings what the target stands on, each part once" machinery
+  and the one-item-per-beat steps that leave an item a `reveal` action shows to it, moved out of
+  `function_plot`), and the **`trace` action** with its animations. `trace` is generic: a scene
+  type that has it defines `trace_problem(params, name, options)` (the checks for
+  `vidgen validate`) and `traced_item(target)`, which returns a `Traced` (`state`, `place(state)`,
+  `driver`, `parts`, optionally `goal(to, scale)`); `TraceMove` interpolates the state (a number
+  or an `[x, y]` array). `Options`: `to: float | [x, y]` or `scale` (exactly one; not 0).
+- **The plane** (`scenes/plane_geometry.py`): `PlotPoint` (`[x, y]` or `{at, name, label,
+  color, decimals}`), `PlotVector` (`[x, y]` or `{from, to | components | sum, name, label,
+  color, decimals}`), `PlotMark` (one of `segment`, `brace`, `angle`, `dimension`, with `label`,
+  `side`, `color`, `closed`, `dashed`, `decimals`). **Added beyond the plan**: `segment` marks
+  (a figure needs its sides; a polyline or, `closed`, a polygon), `side` for braces and
+  dimensions, and label templates (`{x}`, `{y}`, `{length}`, `{angle}`) that follow movement.
+  `PlaneFigure` (no manim) resolves positions: `[x, y]`, a point's name or `point<N>`, a vector's
+  name or `vector<N>` (its tip; in a vector only earlier ones, so no cycles); a vector's state is
+  its tip (`to: [x, y]`) or its components, a vector `to` a point name follows the point, a sum
+  is derived (its chain: the summands tip to tail from the first one's tail). `move` sets a
+  point or a vector's state and everything derived follows. Names: no spaces or brackets, not
+  `point3` / `vector2` (they would shadow the numbered targets), unique across points and vectors.
+- **Defaults**: without `x_range` / `y_range` (`x_range` is still required with functions) the
+  plot spans the figure's positions with a margin (`geometry_range`: 12 % or 0.5, on whole
+  numbers beyond a span of 3) and the origin while the axes show; with functions too, the y
+  range grows to the positions. `aspect` defaults to `equal` with vectors or angle marks or
+  without functions, else `auto` (so plots of Step 160 keep their look). Every position must be
+  inside the plot (`validate`), and so must a `trace` goal (`trace_problem`: the default ranges
+  do not grow to fit actions; the message says to widen them).
+- **Drawing** (`PlaneGeometry.layout`, called at build and on every frame of a `trace`): arrows
+  (`Arrow`, buff 0; a vector scaled through 0 keeps a 1e-3 length), a sum's copies of the
+  summands at `GHOST_OPACITY` 0.45 (entrance: `TransformFromCopy` from each summand, then the
+  resultant grows), marks through the `geometry_marks` builders, then labels: marks' where their
+  builder puts them, points' in the first free of 8 directions starting away from the figure's
+  middle and kept while it moves (`point_label_spot`), vectors' with `place_label` along the
+  shaft. Obstacles: tick and curve labels, labels placed before; points to keep off: curves, axes,
+  every shaft and mark. `_renew` (`become` keeping a dimmed opacity) redraws each part. Colours:
+  an item's own, else the first term its label says, else points `text`, vectors the palette after
+  the functions, segments and braces `text`, angles `accent`, dimensions `dim`.
+- **Steps**: after functions, dots and areas, each point, vector and mark (in list order) one per
+  beat; a vector, sum or mark brings the points and vectors it names first (`needs`).
+- **The mark builders** (`vidgen/geometry_marks.py`, exported by `vidgen.api`: `GeometryMark`,
+  `brace_mark`, `angle_mark`, `dimension_mark`, `segment_normal`, `angle_between`), in frame
+  coordinates, the label a mobject the caller made: a brace is Manim's `BraceBetweenPoints` (no
+  LaTeX), its label beyond the tip; an angle is the smaller one, an `Arc` of radius 0.55 (at most
+  40 % of the shorter ray) or a square within 0.5° of 90°, its label outside on the bisector; a
+  dimension line sits 0.35 beside the segment with end bars and faint extension lines, its label
+  beside its middle. `segment_normal(a, b, away_from)` picks the side away from the figure
+  (default down / left). Marks are drawn in frame space, so with `aspect: auto` an arc shows the
+  drawn angle while `{angle}` is the angle in data units.
+- **`number_line`** (`scenes/number_line.py`): `range`, `step`, `points` (a number or `{at, name,
+  label, color, decimals}`), `intervals` (interval notation `"[-1, 3)"`, `"(-inf, 0]"`, `∞`,
+  or `{from, to, ends, label, color}`; `from` / `to` take `inf` as text, so the JSON Schema
+  allows a string), `jumps` (`[from, to]` or `{from, to, label, color}`; label `'{by}'` =
+  `+3` / `−2`, a preformatted field, so `{by:...}` is refused), `reveal`, title and label sizes.
+  Layout: the line across the body (arrow tips both ends), ticks from `ticks_within(…, 13)` with
+  labels thinned (so a vertical frame shows every 2nd number rather than 2.5 steps); jumps arc
+  above the line (both directions; an arc's rise `0.42 x` its length up to 1.1, `+0.32` per earlier
+  overlapping jump), intervals as a thick band with filled dots (closed), rings (open) or a
+  triangle (infinite), stacked in lanes when they overlap; labels: point labels above the dot,
+  or under the numbers where a jump starts or lands; interval labels above the band, or in a row
+  below the point labels where a jump arcs over it. The line sits so that this content is centred
+  in the body. Targets `title`, `line`, `point<N>`, `point:<name>`, `interval<N>`, `jump<N>`;
+  `trace` moves a point (`to`: a number in the range).
+- **Terms**: the colour rules above; `terms.term_conflicts` reports an explicit `color` on any
+  `function_plot` point, vector or mark and any `number_line` point, interval or jump whose label
+  (or name) says a term.
+- **Lint**: `cap_height` counts the operators `= + < > ≤ ≥ × ÷ ~` as x-height glyphs (a live
+  label `x = −3` measured 0.4 % under `min_font` at the readable size).
+- **Not done** (Backlog): reflex angles; a mark on a curve (a tangent's angle with the axis);
+  arcs of jumps below the line; a vertical number line; the default ranges growing to fit
+  `trace` goals; point labels avoiding dot labels of functions; vectors from a function's dot.
+
+### 87.9 Charts that change between beats (Step 162)
+
+- **Which charts**: the existing chart types were checked one by one. `bar_chart` and
+  `line_chart` take `changes` (a bar race and a morphing line are what "a chart that changes"
+  means in an explainer). Not done, and why: `pie` (shares that change would need the slice
+  labels re-placed every frame, and a pie compares parts of one whole, not states), `histogram`
+  (raw values are binned; changing counts is a bar chart), `scatter` (points that move are a
+  different feature: trajectories), `heatmap` (cells could recolour, but no request names it),
+  `stat` (already counts from `count_from` / a `before` comparison). Charts without `changes`
+  are built exactly as before (the gallery stills and clips of both types re-rendered byte for
+  byte).
+- **YAML**: `changes` lists the later states, each the values the chart changes to; the first
+  state is the existing `values` / `series`, so a one-state chart is unchanged and `changes`
+  never repeats the first state. `bar_chart`: `changes: [[...], ...]` (one value per label) and
+  `sort: true` (largest first, re-sorted at each change). `line_chart`: `changes: [{name:
+  [values]}, ...]` (series left out keep theirs; with one series a plain list), `x` fixed, and
+  `rescale` (default `true`). The change keys are `TextRef`s, so they follow a translated series
+  name. `vidgen validate` names the change, the series and the counts (`changes[0].loss has 2
+  values but x has 4`, `'los' is not a series (series: loss, acc)`, a list with several series).
+- **Steps and words**: each change is one step after the chart's own reveal steps (the bar
+  chart's `highlight` step stays last), so with enough beats change N lands on its own beat.
+  `change<N>` is a target (`scenes/chart_changes.py`, mixin `ChangingChart`): revealing it plays
+  that change (`{reveal: change2, at: "@word"}`), and the scene leaves that change's step empty,
+  as `code_morph` does with its versions. Its mobject is the whole chart (bars; axes and lines),
+  so `dim` / `highlight` on it act on the chart; `is_shown` is overridden for these targets to
+  mean "the chart has reached state N" (a target whose mobject is always on screen would never
+  be revealed), and `entrance_time` gives a `reveal` 1.2 s (`CHANGE_TIME`) instead of 0.8 s.
+  Changes only go forward: a later state shown already makes an earlier change a no-op. A change
+  before a bar or line is on screen sets its new shape at once (it grows / draws to the new
+  values later). `reveal_steps` adds one step per change, rising or falling as the bars' sum or
+  the lines' last values do, for host reactions and music cues.
+- **Bars**: one value scale over every state (the bar chart has no value axis, so rescaling
+  would hide the change: doubled values would look the same); the value labels are sized and the
+  room beside negative bars kept for every value any state shows. Bars keep their colour,
+  targets and highlight box (the `outline` rectangle is updated in place). A change animates each
+  shown bar with one `UpdateFromAlphaFunc` (value and slot interpolated: the layout functions
+  take a fractional slot), the value label counting and the category label sliding; with
+  `sort`, a bar's labels fade by up to 75 % half way (`SWAP_FADE`) while it changes slot, so two
+  labels passing never read as one. Labels are rebuilt with `become`, keeping the shown opacity
+  (`keep_opacity`, not `match_style`: after a `become` from a longer text the old label holds
+  padding glyphs, and copying their style glyph by glyph hid digits).
+- **Lines**: every state's points, end labels and y axis are computed up front. The y axis
+  rescales when the new values leave the current axis or span less than half of it
+  (`needs_rescale`, `RESCALE_SHARE` 0.5; `state_axes` keeps the same axis object otherwise, and
+  `y_min` / `y_max` pin an end); `rescale: false` makes one axis over every state. All axes
+  share one plot: `chart_axes` takes a new `tick_width` (the least room for the y tick labels,
+  default 0, so nothing else changes), set to the widest tick label of all the axes. A change
+  interpolates each line's frame points (so it morphs with the axis), its markers, end label
+  (counting) and cursor; on a rescale the old gridlines and tick labels slide to where their
+  values lie on the new axis while fading (first 60 % of the change), the new ones slide in from
+  their old-axis places (last 60 %). The `axes` target's group stays one group on screen: the
+  swap happens in `_SwapAtEnd.clean_up_from_scene` (an `Animation`, not an `AnimationGroup`,
+  whose group Manim would add to the scene, dissolving the group whose parts it animates).
+- **Cursor**: the `trace` action (Step 160) also takes a `line_chart` series: `trace_problem`
+  checks `to` (an x inside the data; on categories a position from 1), `traced_item` makes a
+  `_Cursor` on first use: a dot with a background ring and a `LiveLabel` with the line's value
+  (linear between points) above it, or below at the top of the plot. It sweeps over 2 s like any
+  trace, stays, follows the line through a change, and `until:` takes it back.
+- **Concept colours**: labels still go through `self.text` / `fit_text`, and a series named
+  after a term keeps the term's colour through changes; nothing new to lint.
+- **Not done** (Backlog): per-state notes (a caption or a title per change); changing labels
+  (bars entering or leaving a race); `x` changing between states; a line chart's cursor that
+  shows a guide line to the axes; `pie` / `heatmap` changes.
+
+### 87.10 Narration–picture check in lint (Step 163)
+
+- **Rules** (`src/vidgen/lint/narration_rule.py`, scene scope, last in `LINT_RULES`):
+  `said_before_shown` (warning) — the narration names an on-screen *label* more than `min_lead`
+  (1.5 s) before the label is on screen, and does not name it again in the beat that shows it;
+  `unsaid_reveal` (default severity `off`, `info` when given one) — a beat other than the
+  scene's first brings new labels and the scene's narration names none of them.
+- **Deterministic inputs**: the layout dump (every frame it holds: beat-end stills, plus the
+  mid-beat stills of a storyboard), the activity file's beat times, the beats' word times
+  (`word_anchors.beat_words`: the alignment of the MP3, else the estimate, so the rule works
+  before `vidgen tts`) and the config's actions. The runner reads them into
+  `SceneContext.narration` (a `NarrationPicture`) only when one of the two rules runs; the rules
+  are pure functions of it (tested without renders).
+- **A label** is a scene text (kind `text`; not an overlay — captions repeat the narration —,
+  not a speech bubble, not maths or code) of at most `max_words` (4) words with at least one
+  content word (not a stop word, not a single letter, not a number). Labels with the same
+  content words are one label, so a live label (`slope 0.50` → `slope 1.20`) or a value label
+  that counts is never "new". Its arrival is bounded by the frame before the first frame showing
+  it (`hidden_until`), narrowed to the time of a `reveal` / `callout` / `transform` of that beat
+  that shows it: a callout whose `label` has the same content words, or an action on a word
+  (Step 156) the label says. So a reveal on a word is timed to the word, not to the beat.
+- **Matching**: words folded (case, accents; NFKC so `x²` is `x 2`), English stems (plural,
+  `-ing`, `-ed`, final `e`, doubled consonant; other languages only a plural `s`), stop words
+  (English, Portuguese) dropped. A label of several words is named where all its content words
+  are said within `len + 1` content words of one beat. The mention's time is its first word's.
+- **Keeping false positives low**: `min_lead`; nothing within a beat unless an action pins the
+  label's arrival (one beat-end still cannot tell when in the beat it came); a label whose words
+  another text on screen already says (before or as it arrives: a heading, a legend) is not
+  "unseen"; a label named again in the beat that shows it means the early word was in passing
+  ("A render starts..." before a `Render` stage). Charts: the dump holds every category label and
+  series name from the beat the chart shows (Step 162's `changes` only change numbers), and
+  numbers are no content words, so changing values, rescaled ticks and the cursor's value never
+  count as reveals.
+- **Measured** on the repo's examples (existing dumps and fresh `vidgen lint`; numbers in
+  HANDOFF Step 163): `said_before_shown` reports a handful of findings, each a label named in an
+  earlier beat; `unsaid_reveal` reports about one beat in eight of the gallery, mostly labels
+  that need no narration (a map's cities, a quote's author, a terminal's command), hence off by
+  default.
+- **Not done**: other languages' stemming and stop words; a mention in an earlier *scene*;
+  labels inside pictures, maths (`MathTex` parts) and code; "shown but long gone" (a label that
+  left the screen before it is named).
+
+### 87.11 Example, docs and the review of the phase (Step 164)
+
+- **The example** `examples/gradient-descent` ("Gradient descent, one step at a time", 10 scenes,
+  29 beats, about 3:00 voiced): every Phase P feature where the explanation needs it, not a
+  catalogue. Facts are checked in the file's header (the loss `(w − 3)²/2 + 1`, the steps from
+  `w = 0` at learning rate 0.5, the signed areas, divergence above a learning rate of 2, the
+  terminal's outputs from a real run). Base config voiced by Kokoro (`speed: 0.88`, under lint's
+  3.5 words/s); a 9:16 `short` variant. No audio committed.
+- **`code_morph`'s `reveal`** (Steps 158 / 159 gap): `CodeMorph.entrance_time` returns
+  `MORPH_SECONDS` (1.5 s, also the `cap` of the scene's own steps) for a `version<N>` /
+  `version<N>.line<K>` target, so `{reveal: version2, at: "@word"}` morphs at the scene's pace
+  without a `run_time` (the action's `run_time` still wins).
+- **`diagram`, a node on a word** (Step 163 observation): a node target's entrance is
+  `Diagram._node_entrance`: the node appears, then the edges between it and the nodes on screen
+  grow (not those a `steps` entry names: they keep their step). Inside the scene's own waves and
+  an edge's entrance (`_in_step`) a node only appears, as before, so no edge grows twice.
+- **Labels on the plane**: a `function_plot` dot's live label avoids the points', vectors' and
+  marks' labels (`PlaneGeometry.label_boxes`, read by `_Dot` on every move); `math_axes` puts a
+  background-coloured plate behind every axis number at z `LABEL_PLATE_Z` (−0.5: over the grid
+  and areas, under curves), so numbers read on a shaded area (lint `contrast` found 2.9:1 on a
+  negative area). A `number_line`'s jump label shows the decimals its ends need
+  (`ends_places`: `+0.375`, not `+0.4`) and `lift_clear` lifts a label that would meet an
+  earlier one or a point's label (seen in 9:16).
+- **Lint `min_font`**: sub- and superscript digits (`w₁`, `x²`) count as glyphs 0.4 em tall
+  (`_SCRIPT`), measured in Inter; an axis title `w₁` measured 9 % under the floor before.
+- **Readback** (found voicing the example): faster-whisper writes "1.5" as the words `1` `.5`,
+  which became "one five" against "one point five"; `textnorm._decimals_joined` joins a word
+  starting with the language's decimal mark to a number before it. A transcript's `-3` is now
+  "minus three" (`_MINUS`). Together they took the example's readback from 5.4 % to 0.0 % word
+  error rate without changing any audio.
+- **Colour advice, not a rule**: a term in `accent` looks like the default tangent, jump arc,
+  angle mark and terminal prompt; CONFIG and the guide say which tokens the scenes use, and the
+  doc examples use `tertiary` for `loss`. A lint check of "a default colour equal to a term's"
+  was not added (it would fire on every bullets marker in `primary`).

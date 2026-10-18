@@ -184,6 +184,25 @@ class Captions(Overlay):
             out[name] = resolve_color(color)
         return out, opacity
 
+    def _readable_terms(self, opacity: float) -> tuple[list[Term], float]:
+        """The video's terms drawn in their colours in the captions, and the plate opacity: the
+        plate is made more opaque (up to 1) until their colours keep lint's contrast ratio on
+        it; a colour that does not read even then (or, without a plate, on the theme background
+        of the outline) stays in the text colour."""
+        plate = self.options.background
+        minimum = self.context.project.config.lint.rules.contrast.min_ratio
+        terms = list(active_terms())
+        if plate is None:
+            behind = current_theme().background
+            return [t for t in terms if plate_contrast(t.color, behind) >= minimum], opacity
+        readable = [t for t in terms if plate_contrast(t.color, plate) >= minimum]
+        while opacity < 1 and any(plate_contrast(t.color, plate, opacity) < minimum for t in readable):
+            opacity = min(1.0, round(opacity + 0.05, 2))
+        for term in terms:
+            if term not in readable:
+                log.warning(f"captions: the term '{term.name}' ({term.color}) is hard to read on the plate {plate}; it keeps the text colour there")
+        return readable, opacity
+
     def _colors(self) -> tuple[str, str, float]:
         """Text colour, highlight colour and plate opacity that keep lint's contrast ratio (and
         the speakers' colours, ``self._speaker_color``)."""
@@ -269,7 +288,8 @@ class Captions(Overlay):
     def _lines(self, lines: Sequence[str], size: float, weight: str, colors: Sequence[str], max_width: float, pitch: float) -> list[Mobject]:
         """The lines as ``Text``s (each in its colour) centred on x = 0, their baselines
         ``pitch`` apart (shrunk together when a word is wider than ``max_width``)."""
-        mobs = [T(line, size, color, weight, disable_ligatures=True) for line, color in zip(lines, colors)]
+        with using_terms(self._terms):
+            mobs = [T(line, size, color, weight, disable_ligatures=True) for line, color in zip(lines, colors)]
         if self.options.background is None:
             for mob in mobs:
                 mob.set_stroke(current_theme().background, width=max(size / 8, 2), background=True)
@@ -296,6 +316,7 @@ class Captions(Overlay):
         share = 1.0 if orientation() == "portrait" else self._setting("max_width")
         max_width = max(share * area.width - 2 * pad_x, 1.0)
         color, self._highlight, opacity = self._colors()
+        self._terms, opacity = self._readable_terms(opacity)
         lines_max = self._setting("max_lines")
         probe = T("Hxgy", size, color, weight)   # a line's full height, descenders included
         pitch = probe.height * (1 + LINE_GAP)

@@ -150,7 +150,7 @@ def _scene_findings(
                 elif finding.beat not in first.beats:
                     first.beats.append(finding.beat)
     findings = _group_similar(list(merged.values()))
-    timing, skipped = _timing_findings(project, preview, scene_id, start, rules, beat_stills, speech_flags)
+    timing, skipped = _timing_findings(project, preview, scene_id, start, rules, beat_stills, speech_flags, layout)
     return findings + timing, stills, ignored + skipped
 
 
@@ -162,10 +162,11 @@ def _timing_findings(
     rules: list[str],
     beat_stills: dict[str | None, Path],
     speech_flags: dict[str, list[Any]] | None = None,
+    layout: dict[str, Any] | None = None,
 ) -> tuple[list[Finding], int]:
     """Findings of the ``scene`` (timing) rules for one scene, findings ignored. Issues sharing
     a ``group`` become one finding listing their beats. ``speech_flags``: the word flags of
-    ``unclear_speech`` by beat."""
+    ``unclear_speech`` by beat; ``layout`` the scene's layout dump (the narration rules)."""
     names = [name for name in rules if RULES[name].scope == "scene"]
     if not names:
         return [], 0
@@ -184,6 +185,18 @@ def _timing_findings(
 
         theme = Theme.for_format(project.config.theme, project.config.format)
         ctx.character_pairs = [pair for where, pair in character_pairs(project.config, theme) if where == scene_id]
+    if "concept_colors" in names and lint.rules.concept_colors.severity != "off" and project.config.terms:
+        from vidgen.lint.term_rule import term_issues
+        from vidgen.theme import Theme
+
+        theme = Theme.for_format(project.config.theme, project.config.format)
+        ctx.term_issues = term_issues(project.config, theme, scene_id, lint.rules.concept_colors)
+    narration_rules = [n for n in ("said_before_shown", "unsaid_reveal") if n in names and getattr(lint.rules, n).severity != "off"]
+    if narration_rules and layout is not None and activity["beats"]:
+        from vidgen.lint.narration_rule import narration_picture
+
+        max_words = max(getattr(lint.rules, n).max_words for n in narration_rules)
+        ctx.narration = narration_picture(project, layout, activity, max_words)
     ignores = project.scene(scene_id).lint_ignores()
     findings: list[Finding] = []
     groups: dict[tuple[Any, ...], Finding] = {}
@@ -204,6 +217,7 @@ def _timing_findings(
                 message=issue.message,
                 bbox=issue.bbox,
                 still=beat_stills.get(issue.beat),
+                objects=issue.objects,
                 value=issue.value,
                 limit=issue.limit,
                 beats=[issue.beat],

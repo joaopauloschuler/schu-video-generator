@@ -168,7 +168,9 @@ class StageFrame:
     prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28), how
     many sit side by side on each prop that seats more than one (§69.43), the depth each
     character and prop starts at (§69.44), each vehicle's kind, height and facing (§69.52), and
-    the x from and to which the stage's water goes (§69.53; ``None``: no water)."""
+    the x from and to which the stage's water goes (§69.53; ``None``: no water), and on a
+    platform level how many columns its map has (§86; ``None``: no level) and the hero the
+    camera follows from the start (``follows``, §86.10; ``None``: none)."""
 
     frame_width: float
     frame_height: float
@@ -182,6 +184,8 @@ class StageFrame:
     depths: Mapping[str, float] = field(default_factory=dict)
     vehicles: Mapping[str, tuple[str, float, str]] = field(default_factory=dict)
     water: tuple[float, float] | None = None
+    columns: int | None = None
+    follows: str | None = None
 
     @property
     def bounds(self) -> Bounds:
@@ -189,8 +193,10 @@ class StageFrame:
         return (-self.stage_width / 2, self.stage_width / 2, -self.frame_height / 2, self.frame_height / 2)
 
     def place_x(self, place: Any) -> float | None:
-        """A mark or an x (0..1) of the stage in Manim units, or a walk's ``{mark, depth}``'s mark
-        (``None``: none of these)."""
+        """A mark or an x (0..1) of the stage in Manim units, a walk's ``{mark, depth}``'s mark,
+        or on a level the middle of a map tile ``{column, row}`` (``None``: none of these)."""
+        if isinstance(place, Mapping) and "column" in place:
+            return None if self.columns is None else ((int(place["column"]) - 0.5) / self.columns - 0.5) * self.stage_width
         if isinstance(place, Mapping):
             place = place.get("mark")
         if not isinstance(place, (str, int, float)) or isinstance(place, bool):
@@ -635,6 +641,11 @@ def _closeup_shot(state: _SceneState, beat: _Beat, name: str) -> tuple[ShotView,
     return None if _adds_finding(_still(state, beat), after) else framed
 
 
+def _jumps_somewhere(act: ActionConfig) -> bool:
+    """Whether ``act`` is a jump to a place on a level (it moves and turns the character, §86.7)."""
+    return act.action == "jump" and act.options.get("to") is not None
+
+
 def _plan_closeups(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
     """A close-up for a short line right after a long one: a ``zoom`` on the speaker moving in
     and back when both moves fit the narration (after the speaker's look), else a ``shot:
@@ -646,7 +657,7 @@ def _plan_closeups(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
     if len(beat.input.text.split()) > SHORT_LINE_WORDS or state.words_before < LONG_LINE_WORDS:
         return []
     written = beat.input.actions
-    if any(a.action in MOVING_ACTIONS or (a.action == "say" and a.options.get("bubble")) for a in written):
+    if any(a.action in MOVING_ACTIONS or _jumps_somewhere(a) or (a.action == "say" and a.options.get("bubble")) for a in written):
         return []
     speaker = beat.speakers[0]
     if speaker in state.gestured_now:
@@ -801,7 +812,7 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
                 _enter(state, name, options)
         elif act.action == "exit":
             state.present -= targets
-        elif act.action in ("walk_to", "run_to"):
+        elif act.action in ("walk_to", "run_to") or _jumps_somewhere(act):
             place = walk_destination(options)[0]
             for name in targets:
                 to_x = state.x.get(name) if place is None else state.frame.place_x(place) if state.frame is not None else None
@@ -835,7 +846,7 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
             for name in targets:
                 state.looking[name] = to if isinstance(to, str) else None
                 _turn_to(state, name, to)
-        elif act.action in LOOK_CHANGING:
+        elif act.action in LOOK_CHANGING or _jumps_somewhere(act):
             for name in targets:
                 state.looking[name] = None
 
@@ -847,7 +858,7 @@ def _start_state(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: 
     entering = {n for b in beats for act in b.actions if act.action == "enter" for n in _named(act.targets(), names)}
     state = _SceneState(cast={m.name: m for m in cast}, present=set(names) - entering, frame=stage)
     if stage is not None:
-        state.camera_x = stage.view_x(stage.camera_x)
+        state.camera_x = None if stage.follows is not None else stage.view_x(stage.camera_x)   # following the hero (§86.10)
         for name in names:
             place = stage.places.get(name)
             state.x[name] = None if place is None or name in entering else place.x
@@ -934,7 +945,7 @@ def plan_reframe(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: 
     state = _start_state(cast, beats, stage)
     inputs = [_reframe_beat(state, beat, names) for beat in beats]
     left, right = stage.bounds[:2]
-    moves = reframe_path(inputs, frame_width=stage.frame_width, bounds=(left, right), start_x=stage.camera_x)
+    moves = reframe_path(inputs, frame_width=stage.frame_width, bounds=(left, right), start_x=stage.camera_x, following=stage.follows is not None)
     found = []
     for move in moves:
         timing = {"run_time": move.seconds} if move.seconds > 0 else {"cut": True}
@@ -965,17 +976,18 @@ def _resolved_actions(beat: BeatConfig, known: Sequence[str]) -> tuple[ActionCon
 def stage_frame(project: Project, params: Any) -> StageFrame:
     """The geometry of a ``stage`` scene with validated ``params`` (its characters, props, marks,
     ground, size, width and ``camera_at``) in the video's frame, placed by
-    :func:`~vidgen.cartoon.stage.stage_layout` as the stage places them (no rendering)."""
-    from vidgen.cartoon.stage import facing_towards_centre, stage_layout
+    the params' ``layout`` as the stage places them (no rendering)."""
+    from vidgen.cartoon.stage import facing_towards_centre
     from vidgen.render.worker import frame_size
 
     fmt = project.config.format
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
-    stage_width = params.width * stage_base_width(frame_width, frame_height, stage_reframes(project, params))
-    placements = stage_layout(
-        params.items(), marks=params.stage_marks(), ground=params.ground, size=params.size,
-        frame_width=frame_width, frame_height=frame_height, stage_width=stage_width,
-    )
+    level = params.level_frame(frame_width, frame_height)
+    if level is not None:   # a platform level is as wide as its map (DESIGN.md §86)
+        stage_width = level.stage_width
+    else:
+        stage_width = params.width * stage_base_width(frame_width, frame_height, stage_reframes(project, params))
+    placements = params.layout(frame_width=frame_width, frame_height=frame_height, stage_width=stage_width)
     facings = {c.name: c.facing for c in params.characters}
     seat_facings = {name: p.facing for name, p in zip(params.prop_names(), params.stage_props()) if p.prop in SEAT_BACKS}
     seat_places = {name: len(SEAT_PLACES[p.prop]) for name, p in zip(params.prop_names(), params.stage_props()) if p.prop in SEAT_PLACES}
@@ -997,7 +1009,13 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     depths = {placed.name: placed.depth for placed in placements}
     span = params.water_span() if hasattr(params, "water_span") else None
     water = None if span is None else ((span[0] - 0.5) * stage_width, (span[1] - 0.5) * stage_width)
-    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths, vehicles, water)
+    level_params = getattr(params, "level", None)
+    columns = level_params.parsed().columns if level_params is not None else None
+    follows = level_params.follow if level_params is not None else None
+    if follows is not None and follows in places:   # the camera starts on the hero (§86.10)
+        camera_x = places[follows].x
+    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths,
+                      vehicles, water, columns, follows)
 
 
 def stage_reframes(project: Project, params: Any) -> bool:
@@ -1005,7 +1023,6 @@ def stage_reframes(project: Project, params: Any) -> bool:
     ``params`` (DESIGN.md §69.30): its ``reframe``, else the video's, else ``speaker`` when its
     characters, where they start on the stage as wide as :func:`stage_base_width` lays it out
     while reframing, are wider together than the frame."""
-    from vidgen.cartoon.stage import stage_layout
     from vidgen.render.worker import frame_size
 
     setting: ReframeSetting | None = params.reframe if params.reframe is not None else project.config.reframe
@@ -1013,10 +1030,9 @@ def stage_reframes(project: Project, params: Any) -> bool:
         return setting == "speaker"
     fmt = project.config.format
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
-    placements = stage_layout(
-        params.items(), marks=params.stage_marks(), ground=params.ground, size=params.size, frame_width=frame_width,
-        frame_height=frame_height, stage_width=params.width * stage_base_width(frame_width, frame_height, True),
-    )
+    level = params.level_frame(frame_width, frame_height)   # a level is laid out as wide as its map (§86)
+    stage_width = level.stage_width if level is not None else params.width * stage_base_width(frame_width, frame_height, True)
+    placements = params.layout(frame_width=frame_width, frame_height=frame_height, stage_width=stage_width)
     boxes = [(p.feet[0] - FIGURE_HALF_WIDTH * p.height, p.feet[0] + FIGURE_HALF_WIDTH * p.height) for p in placements if p.kind == "character"]
     return reframe_needed(boxes, frame_width)
 

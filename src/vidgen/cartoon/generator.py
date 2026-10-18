@@ -9,7 +9,7 @@ the same parts and shapes with the face in the middle of the head, the pupils lo
 symmetric nose, hair and body, and temples on both sides of glasses. What is worn on the body
 (the outfit, its pattern, shoes, scarf, bag, backpack, necklace) is drawn by
 :mod:`vidgen.cartoon.clothes`; an animal's head, paws, wings or flippers, its feet, the tail,
-a turtle's shell and the species' proportions (``species``) by :mod:`vidgen.cartoon.animals`; a
+a turtle's or a snail's shell, a snail's feelers and the species' proportions (``species``) by :mod:`vidgen.cartoon.animals`; a
 robot's head, antenna, joints, hands, feet or wheels and chest panel by
 :mod:`vidgen.cartoon.robots`; the costume pieces (crown, wizard hat, party hat, cape) by
 :mod:`vidgen.cartoon.costumes`; the Step 125 expressions' eye and mouth shapes and the ``cheeks``
@@ -39,7 +39,7 @@ from vidgen.cartoon.primitives import (
     polygon,
     trailing,
 )
-from vidgen.config import SPECIES_WITHOUT_TAIL, CharacterLook
+from vidgen.config import SHELLED_SPECIES, SPECIES_WITHOUT_TAIL, CharacterLook
 
 #: Colour keys :func:`generate_parts` needs (the fields of ``characters[].colors``).
 COLOR_KEYS: tuple[str, ...] = ("skin", "clothes", "outline", "features", "hair", "accessory", "trim")
@@ -513,9 +513,10 @@ def generate_parts(
     f = animals.species_frame(look, Frame.of(resolve_proportions(look), front))
     w = outline_width
     body = body_shapes(look, f, _body_shape(look, f), colors, w)
-    if look.species == "turtle":   # its shell on its back, behind the body and clothes
+    if look.species in SHELLED_SPECIES:   # its shell on its back, behind the body and clothes
+        drawn = animals.shell if look.species == "turtle" else animals.snail_shell
         for shape in body.values():
-            shape.add_to_back(animals.shell(f, colors, w))
+            shape.add_to_back(drawn(f, colors, w))
     over_body = [*(robots.chest_panel(f, colors, w) if robots.is_robot(look) else []),
                  *(costumes.cape_clasp(f, colors, w) if "cape" in look.accessories else [])]
     if over_body:   # a robot's chest panel, a cape's ties and clasp (§69.58)

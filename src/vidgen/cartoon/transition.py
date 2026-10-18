@@ -408,16 +408,23 @@ class Walk(Animation):
         """How far it has walked (character heights) ``seconds`` into the walk."""
         return walk_progress(self._phases.split(seconds / self.run_time)[1]) * self._heights
 
+    def _place(self, share: float, done: bool) -> tuple[float, float, str]:
+        """Where its feet are (x, y) and the way it faces at ``share`` (0..1) of the distance
+        (``done``: its feet have stopped). A walk along a level's tiles overrides it
+        (:class:`~vidgen.cartoon.level_motion.RouteWalk`)."""
+        x = float(self._from[0]) + share * (self.to_x - float(self._from[0]))
+        y = float(self._from[1]) if self.to_depth is None else self._to_depth_now(share)
+        return x, y, self._facing
+
     def interpolate_mobject(self, alpha: float) -> None:
         t = self.rate_func(alpha)
         figure = self.mobject
         move = self._phases.split(t)[1]
         share = walk_progress(move)
-        walked = share * (self.to_x - float(self._from[0]))
-        feet_y = self._from[1] if self.to_depth is None else self._to_depth_now(share)
+        x, feet_y, facing = self._place(share, move >= 1.0)
         cycle = walk_cycle(share * self._path / self._step if self._step > 0 else 0.0, walk_amplitude(move), self.gait)
-        state = walking_state(self._base, cycle, self._facing)
-        sideways = self._facing != "front"   # leaning and trailing turn parts sideways from the front
+        state = walking_state(self._base, cycle, facing)
+        sideways = facing != "front"   # leaning and trailing turn parts sideways from the front
         if self.gait.lean and sideways:
             state = accented_state(state, -self.gait.lean * walk_amplitude(move))
         if self.strength > 0:
@@ -427,7 +434,7 @@ class Walk(Animation):
                 state = accented_state(state, accent.lean, follow_angles(trail, 0.0, self.strength))
             figure.set_squash(*squash_scale(accent.stretch))
         figure.set_state(state if self._ground is None else figure.grounded(state, self._ground))
-        figure.shift([self._from[0] + walked - figure.feet()[0], feet_y - figure.feet()[1], 0.0])
+        figure.shift([x - figure.feet()[0], feet_y - figure.feet()[1], 0.0])
         figure.sync_mouth()  # Manim pauses the character's updaters: keep lip sync in step
         if self._alphas:
             self._show_at(passage_fade(t * self.run_time, self.run_time, self.fade_in, self.fade_out))

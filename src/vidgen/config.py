@@ -26,6 +26,7 @@ from pydantic import (
     PrivateAttr,
     ValidationError,
     WithJsonSchema,
+    field_serializer,
     field_validator,
     model_validator,
 )
@@ -33,6 +34,7 @@ from pydantic import (
 from vidgen.errors import Problem, VidgenError
 from vidgen.languages import LANGUAGE_TAG_PATTERN, normalize_language
 from vidgen.voicesounds import VoiceSound, take_out_sounds
+from vidgen.word_anchors import ACTION_ANCHOR_PATTERN, is_word_anchor, parse_word_anchor, time_beat_anchors, time_config_anchors
 
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
@@ -420,13 +422,15 @@ Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
 ClothesPattern = Literal["none", "stripes", "dots"]
 ShoeStyle = Literal["none", "shoes", "boots"]
 FacialHair = Literal["none", "moustache", "beard"]
-Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin", "robot"]
+Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin", "snail", "robot"]
 #: Look keys an animal or a robot (``species`` other than ``human``) draws its own way, so they
 #: are not given with it (DESIGN.md §69.48); a robot has no hair either (§69.58).
 SPECIES_OWN_KEYS: tuple[str, ...] = ("ears", "nose", "facial_hair")
 ROBOT_OWN_KEYS: tuple[str, ...] = (*SPECIES_OWN_KEYS, "hair")
 #: Species drawn without a ``tail`` part (DESIGN.md §69.57, §69.58).
-SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "robot"})
+SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "snail", "robot"})
+#: Species with a shell on the back in ``colors.hair`` (a turtle's domed one, a snail's spiral).
+SHELLED_SPECIES: frozenset[str] = frozenset({"turtle", "snail"})
 #: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1,
 #: the costume pieces §69.58).
 HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat"})
@@ -486,7 +490,7 @@ class CharacterLook(_Strict):
     facial_hair: FacialHair = "none"
     """none, moustache or beard (with a moustache; colour: colors.hair; hair: none for bald)."""
     species: Species = "human"
-    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin (its own head, ears, muzzle or beak, paws, wings or flippers, a tail but a frog's, a turtle's shell; fur colour: colors.skin, a shell: colors.hair); or robot (see robot; plating: colors.skin)."""
+    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin, snail (its own head, ears, muzzle or beak, paws, wings or flippers, a tail but a frog's or a snail's, a turtle's or a snail's shell, a snail's feelers; fur colour: colors.skin, a shell: colors.hair); or robot (see robot; plating: colors.skin)."""
     robot: RobotLook | None = None
     """species robot only: {head: box | round, face: eyes | screen, antenna: true | false, moves_on: legs | wheels}; default a box head, eyes, an antenna, legs."""
     seed: int | None = None
@@ -684,12 +688,16 @@ PronunciationValue = str | PronunciationEntry | None
 PronunciationMap = dict[Annotated[str, Field(min_length=1)], PronunciationValue]
 
 
+#: The speech rate a beat's length is estimated with when it has no audio (``narration.words_per_second``).
+DEFAULT_WORDS_PER_SECOND = 2.6
+
+
 class NarrationConfig(_Strict):
     """Timing of narrated beats."""
 
     pad: float = Field(default=0.35, ge=0)
     """Seconds of silence after each beat."""
-    words_per_second: PositiveFloat = 2.6
+    words_per_second: PositiveFloat = DEFAULT_WORDS_PER_SECOND
     """Speech rate used to estimate a beat's duration when it has no audio yet."""
 
 
@@ -776,6 +784,7 @@ LINT_RULES: tuple[str, ...] = (
     "bubble_overlap",
     "facing_away",
     "hidden_speaker",
+    "small_speaker",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -785,6 +794,9 @@ LINT_RULES: tuple[str, ...] = (
     "talked_over",
     "readback",
     "unclear_speech",
+    "concept_colors",
+    "said_before_shown",
+    "unsaid_reveal",
 )
 RuleName = Literal[
     "off_frame",
@@ -804,6 +816,7 @@ RuleName = Literal[
     "bubble_overlap",
     "facing_away",
     "hidden_speaker",
+    "small_speaker",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -813,6 +826,9 @@ RuleName = Literal[
     "talked_over",
     "readback",
     "unclear_speech",
+    "concept_colors",
+    "said_before_shown",
+    "unsaid_reveal",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -958,6 +974,13 @@ class HiddenSpeakerRule(RuleConfig):
     """Share of the face's box covered by things drawn in front from which it is reported."""
 
 
+class SmallSpeakerRule(RuleConfig):
+    """``small_speaker``: a speaking character too small on screen to read its face and lip sync."""
+
+    min_face: Fraction = 0.075
+    """Smallest acceptable height of a speaking character's head on screen (its box, fraction of the frame's shorter side: 0.075 is 36 px at 480p, 81 px at 1080p; a character on a level has about 0.07 at character_size small, 0.095 at medium)."""
+
+
 class MouthWithoutVoiceRule(RuleConfig):
     """``mouth_without_voice``: a character's lip sync showing a speech shape while no narration is heard."""
 
@@ -967,6 +990,33 @@ class LookAlikeRule(RuleConfig):
 
     min_contrast: float = Field(default=0.35, ge=0, le=1)
     """Lowest acceptable contrast score of two characters (0 the same look, 1 fully different: silhouette, colours, accessories)."""
+
+
+class ConceptColorsRule(RuleConfig):
+    """``concept_colors``: the video's ``terms:`` colours (one colour per concept, DESIGN.md §87.3): too many, too faint on the background, or a scene colouring a term otherwise."""
+
+    max_colors: PositiveInt = 5
+    """Most different concept colours a video should use (more and none stands out)."""
+    min_contrast: float = Field(default=4.5, ge=1, le=21)
+    """Lowest acceptable WCAG contrast of a concept colour on the theme background (4.5: AA for normal text)."""
+
+
+class SaidBeforeShownRule(RuleConfig):
+    """``said_before_shown``: the narration names an on-screen label clearly before the label shows (DESIGN.md §87.10)."""
+
+    min_lead: PositiveFloat = 1.5
+    """Seconds the word may come before its label shows unflagged (the label's arrival is known to the beat-end still before it, or to the action that shows it)."""
+    max_words: PositiveInt = 4
+    """Texts of more words are sentences, not labels, and are not checked."""
+
+
+class UnsaidRevealRule(RuleConfig):
+    """``unsaid_reveal``: a beat brings new labels the scene's narration never names (DESIGN.md §87.10)."""
+
+    severity: Severity | None = "off"
+    """Severity of its findings (default: off; set info or warning to turn it on)."""
+    max_words: PositiveInt = 4
+    """Texts of more words are sentences, not labels, and are not checked."""
 
 
 class NarrationSpeedRule(RuleConfig):
@@ -1021,6 +1071,8 @@ class RushedAnimationRule(RuleConfig):
 
     min_run_time: PositiveFloat = 0.5
     """Shortest acceptable run time (seconds) of an animation `play_steps` had to shorten."""
+    max_speedup: float = Field(default=1.5, ge=1.0)
+    """Fastest acceptable speed-up of a walk or a jump on a platform level squeezed into its beat (its own time over the time it got)."""
 
 
 class TalkedOverRule(RuleConfig):
@@ -1089,6 +1141,8 @@ class LintRules(_Strict):
     """A speaking character facing away from its listener (default: warning)."""
     hidden_speaker: HiddenSpeakerRule = Field(default_factory=HiddenSpeakerRule)
     """A speaking character whose face is hidden by something in front of it (default: warning)."""
+    small_speaker: SmallSpeakerRule = Field(default_factory=SmallSpeakerRule)
+    """A speaking character too small on screen to read its face and lip sync (default: warning)."""
     mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
     """A mouth moving with lip sync while no narration is heard (default: warning)."""
     look_alike: LookAlikeRule = Field(default_factory=LookAlikeRule)
@@ -1107,6 +1161,12 @@ class LintRules(_Strict):
     """Audio heard differently from its text, from the transcripts `vidgen readback` stored (default: warning; nothing without them)."""
     unclear_speech: UnclearSpeechRule = Field(default_factory=UnclearSpeechRule)
     """Words heard with low confidence or after an unusual pause; runs only with `vidgen lint --readback` (default: warning; info for doubtful words)."""
+    concept_colors: ConceptColorsRule = Field(default_factory=ConceptColorsRule)
+    """The terms: colours: more than max_colors, below min_contrast on the background, or a scene setting colouring a term otherwise (default: warning)."""
+    said_before_shown: SaidBeforeShownRule = Field(default_factory=SaidBeforeShownRule)
+    """The narration naming an on-screen label more than min_lead seconds before it shows (default: warning)."""
+    unsaid_reveal: UnsaidRevealRule = Field(default_factory=UnsaidRevealRule)
+    """A beat bringing new labels the narration never names (default: off; info when turned on)."""
 
 
 class LintConfig(_Strict):
@@ -1155,9 +1215,8 @@ class ActionConfig(BaseModel):
     """Action type: reveal, dim, highlight, or a project action (`vidgen list-scenes`)."""
     target: TargetPattern | list[TargetPattern] | None = Field(default=None, min_length=1)
     """Target name(s) of the scene (item3, bar:<label>, ...); * and ? match several."""
-    at: float = Field(default=0.0, ge=0, lt=1)
-    """When in the beat, as a fraction of its narration (0 = start); the action waits for the
-    scene's own animation running then."""
+    at: Annotated[float, Field(ge=0, lt=1)] | Annotated[str, Field(pattern=ACTION_ANCHOR_PATTERN)] = 0.0
+    """When in the beat: a fraction of its narration (0 = start), or a spoken word of the beat ("@gradient", "@gradient#2" its second time, "@gradient+0.3s" moved by seconds); the action waits for the scene's own animation running then."""
     until: Identifier | None = None
     """A later beat of the scene at whose start the action is undone (dim, highlight)."""
     run_time: PositiveFloat | None = None
@@ -1165,6 +1224,44 @@ class ActionConfig(BaseModel):
 
     _shorthand: dict[str, Any] | None = PrivateAttr(default=None)
     _auto: bool = PrivateAttr(default=False)
+    _anchor: str | None = PrivateAttr(default=None)
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _word_or_fraction(cls, value: Any) -> Any:
+        """A word anchor's syntax is checked here (its word against the beat's text by
+        :class:`BeatConfig`); a number must be a fraction 0 <= at < 1."""
+        if isinstance(value, str) and is_word_anchor(value):
+            parse_word_anchor(value)
+            return value.strip()
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and not 0 <= value < 1:
+            raise ValueError(f"at {value:g}: a fraction of the beat's narration, 0 <= at < 1 (0.5 is its middle), or a word it says: \"@word\"")
+        return value
+
+    @model_validator(mode="after")
+    def _keep_anchor(self) -> ActionConfig:
+        if isinstance(self.at, str):
+            self._anchor = self.at
+        return self
+
+    @property
+    def anchor(self) -> str | None:
+        """The word anchor ``at`` was written as (``"@gradient#2"``), else ``None``; ``at``
+        itself is its fraction of the beat once resolved (DESIGN.md §87.2)."""
+        return self._anchor
+
+    @property
+    def fraction(self) -> float:
+        """``at`` as a fraction of the beat (a word anchor not resolved yet: 0)."""
+        return self.at if isinstance(self.at, float | int) else 0.0
+
+    def set_fraction(self, fraction: float) -> None:
+        """Set ``at`` to the fraction a word anchor resolves to (the anchor is kept)."""
+        self.at = fraction
+
+    @field_serializer("at")
+    def _written_at(self, value: float | str) -> float | str:
+        return self._anchor if self._anchor is not None else value
 
     @classmethod
     def automatic(cls, data: dict[str, Any]) -> ActionConfig:
@@ -1216,7 +1313,9 @@ class ActionConfig(BaseModel):
         names = [k for k in self._shorthand if k in known and k not in ACTION_KEYS]
         if len(names) != 1:
             return self
-        return ActionConfig.model_validate(_unshorten(self._shorthand, names[0]))
+        made = ActionConfig.model_validate(_unshorten(self._shorthand, names[0]))
+        made.at = self.at
+        return made
 
     @property
     def options(self) -> dict[str, Any]:
@@ -1238,8 +1337,8 @@ class ActionConfig(BaseModel):
         ``until`` and ``run_time`` only when set)."""
         data: dict[str, Any] = {self.action: self.target} if self.target is not None else {"action": self.action}
         data.update(self.options)
-        if self.at:
-            data["at"] = self.at
+        if self._anchor is not None or self.at:
+            data["at"] = self._anchor if self._anchor is not None else self.at
         for key in ("until", "run_time"):
             if getattr(self, key) is not None:
                 data[key] = getattr(self, key)
@@ -1322,6 +1421,13 @@ class SfxCue(_Strict):
     """start: the sound starts at `at`; end: it ends there (a riser landing on a reveal)."""
     params: SfxParams = Field(default_factory=SfxParams)
     """duration, pitch, intensity of a built-in sound."""
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _no_word(cls, value: Any) -> Any:
+        if is_word_anchor(value):
+            raise ValueError(f"{value!r}: a scene's sfx list is timed in seconds; for a sound on a spoken word use the beat's sfx action: actions: [{{sfx: NAME, at: \"@word\"}}]")
+        return value
 
 
 def _cue(value: str | SfxCue) -> SfxCue:
@@ -1460,6 +1566,10 @@ AutoDirectSetting = Union[bool, AutoDirect]
 #: whoever speaks in view on a stage wider than the frame) or ``none``; not given: ``speaker``
 #: when the stage's characters do not fit in one view.
 ReframeSetting = Literal["speaker", "none"]
+#: ``character_size:`` on the video or a stage scene (DESIGN.md §86.10): the base size of the
+#: characters and of the world they stand in (``small``: a wide landscape, for cinema; ``medium``:
+#: TV / YouTube, the default; ``large``: big characters, for phones and Shorts).
+CharacterSize = Literal["small", "medium", "large"]
 
 
 def directing_kinds(*settings: AutoDirectSetting | None) -> frozenset[str]:
@@ -1943,9 +2053,50 @@ class BeatConfig(_Strict):
             raise ValueError("interrupt: true with overlap: 0 cuts nothing; give the seconds it starts before the line ends (or leave overlap out: 0.5)")
         return self
 
+    @model_validator(mode="after")
+    def _time_word_anchors(self) -> BeatConfig:
+        """Actions at a spoken word (``at: "@gradient"``): the beat must say it; ``at`` becomes
+        its estimated fraction (the video's language and speech rate, then the beat's audio,
+        refine it: DESIGN.md §87.2)."""
+        if any(act.anchor is not None for act in self.actions):
+            time_beat_anchors(self, None, self.estimated_duration(DEFAULT_WORDS_PER_SECOND))
+        return self
+
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
         return len(self.text.split()) / words_per_second
+
+
+class TermConfig(_Strict):
+    """A concept of ``terms:`` with more than a colour (DESIGN.md §87.3)."""
+
+    color: ColorRef
+    """The concept's colour: a theme colour token (accent, primary...) or hex."""
+    tex: str | list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    """TeX parts of equations that stand for the concept (e.g. 'L' or '\\nabla L'), coloured in equation and equation_derivation scenes; each whole TeX tokens with balanced braces."""
+
+    @field_validator("tex")
+    @classmethod
+    def _balanced(cls, value: str | list[str]) -> str | list[str]:
+        for part in [value] if isinstance(value, str) else value:
+            if not part.strip():
+                raise ValueError("a TeX part cannot be empty")
+            depth = 0
+            for char in part:
+                depth += 1 if char == "{" else -1 if char == "}" else 0
+                if depth < 0:
+                    break
+            if depth != 0:
+                raise ValueError(f"the braces of {part!r} do not balance")
+        return value
+
+    def tex_parts(self) -> list[str]:
+        """``tex`` as a list."""
+        return [self.tex] if isinstance(self.tex, str) else list(self.tex)
+
+
+#: A ``terms:`` value: a colour (theme token or hex), or {color, tex}.
+TermSetting = ColorRef | TermConfig
 
 
 class SceneConfig(_Strict):
@@ -1984,6 +2135,8 @@ class SceneConfig(_Strict):
     """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
     set: Identifier | None = None
     """A stage scene's set: a name from sets:, or a built-in set (city_street, park, beach, forest, snowy_hills; rooms: classroom, kitchen, shop, living_room, bedroom), whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
+    terms: bool = True
+    """false: this scene draws the video's terms (one colour per concept) in their usual colours."""
     host: SceneHost | None = None
     """The cartoon host beside this scene's content: false for none, a character name, or {character, side, size, place, floor, facing, speaks, pose, expression, auto_direct} changing the video's host here; default the video's host."""
 
@@ -2077,6 +2230,8 @@ class VideoConfig(_Strict):
     """Beat padding and duration estimate."""
     pronunciation: PronunciationMap = Field(default_factory=dict)
     """How the narrator says terms (term: spoken form, or {say, case_sensitive, whole_word, regex}); TTS text only, subtitles keep the written words."""
+    terms: dict[Annotated[str, Field(min_length=1)], TermSetting] = Field(default_factory=dict)
+    """One colour per concept: {term: colour} (theme token or hex), or {term: {color, tex}}; the term is drawn in its colour wherever it is on-screen text (bullets, cards, titles, captions, chart and diagram labels, callout plates) and its tex parts in equations; whole words, any case, plurals too; a scene's terms: false turns it off there."""
     pronunciation_file: str | list[str] | None = None
     """YAML/JSON file(s) (relative to the project) with more pronunciation entries; `pronunciation:` entries win over them."""
     language: LanguageTag | None = None
@@ -2117,6 +2272,8 @@ class VideoConfig(_Strict):
     """A sound bed chosen from each stage scene's set while foley is on: a room tone in a room, birdsong outdoors while the light is day or morning and it does not rain; false: none unless a stage's ambience param names one."""
     auto_direct: AutoDirectSetting = False
     """Automatic directing on stage scenes: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups, effects}); a stage's or a beat's setting wins; actions written in a beat always win."""
+    character_size: CharacterSize | None = None
+    """How big the characters are on stage scenes: small (a wide landscape, for cinema), medium (TV / YouTube) or large (big characters, for phones and Shorts); on a platform level the tiles, props, coins and stars scale with them; captions, on-screen text and speech bubbles keep their size; a stage's character_size or size param wins; default medium."""
     reframe: ReframeSetting | None = None
     """On stage scenes wider than the frame (a 9:16 variant crops the landscape stage): speaker moves the camera to whoever speaks, easing between speakers and holding during short replies; none: only the beats' own pan / follow / zoom / shot move it; default: speaker when the characters do not fit in one view (a stage's reframe param wins)."""
     cartoon_motion: MotionSetting | None = None
@@ -2187,6 +2344,19 @@ class VideoConfig(_Strict):
         value = self.pronunciation_file
         return [] if value is None else [value] if isinstance(value, str) else list(value)
 
+    @field_validator("terms")
+    @classmethod
+    def _check_terms(cls, value: dict[str, Any]) -> dict[str, Any]:
+        seen: dict[str, str] = {}
+        for term in value:
+            if not re.search(r"\w", term):
+                raise ValueError(f"{term!r} has no word in it (write the word as it is on screen, e.g. loss or 'learning rate')")
+            key = " ".join(term.casefold().split())
+            if key in seen:
+                raise ValueError(f"{seen[key]!r} and {term!r} are the same term (case and spaces are ignored)")
+            seen[key] = term
+        return value
+
     @model_validator(mode="after")
     def _check_unique_ids(self) -> VideoConfig:
         scene_seen: dict[str, int] = {}
@@ -2220,6 +2390,7 @@ class VideoConfig(_Strict):
             problems.append("scenes[0].carry: the first scene has no scene before it to carry objects from")
         if problems:
             raise ValueError("; ".join(problems))
+        time_config_anchors(self)
         return self
 
     def thumbnail_problems(self, thumb: ThumbnailConfig) -> list[str]:

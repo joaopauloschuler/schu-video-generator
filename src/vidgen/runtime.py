@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from vidgen.errors import VidgenError
+from vidgen.terms import set_active_terms
 from vidgen.theme import Theme
 
 if TYPE_CHECKING:
@@ -29,14 +30,16 @@ def set_context(project: Project, theme: Theme | None = None) -> Theme:
     global _project, _theme
     _project = project
     _theme = theme if theme is not None else Theme.for_format(project.config.theme, project.config.format)
+    set_active_terms(())  # a scene of the project sets its own (DESIGN.md §87.3)
     return _theme
 
 
 def clear_context() -> None:
-    """Unset the current project and theme."""
+    """Unset the current project and theme (and the terms of its scene)."""
     global _project, _theme
     _project = None
     _theme = None
+    set_active_terms(())
 
 
 def current_project() -> Project:

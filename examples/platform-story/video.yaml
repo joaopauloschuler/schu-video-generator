@@ -1,0 +1,203 @@
+# A platform story (Phase O, DESIGN §86): three levels written as ASCII maps; walking, ladders,
+# jumps over gaps and up onto clouds timed to the narration; a key and a locked gate, coins and
+# stars, a grumpy snail who moves when asked nicely; the camera follows the hero.
+# Original story and characters. No audio committed: run `vidgen tts` (Kokoro, free), or render
+# as it is (the beats are timed by their word count; music and sounds still play).
+# The Short: vidgen render examples/platform-story --variant short (9:16, character_size: large).
+title: Nutmeg and the Moon Picnic
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+theme: {preset: soft_pastel}
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}
+narration: {pad: 0.6}
+music: {source: cartoon, volume: -2}
+character_size: medium
+voices:
+  nutmeg_voice: {voice: af_bella, label: Nutmeg, speed: 0.85, color: primary}
+  mossby_voice: {voice: bm_george, label: Mossby, speed: 0.75, color: secondary}
+  bramble_voice: {voice: af_heart, label: Granny Bramble, speed: 0.75, color: accent}
+characters:
+  - name: nutmeg
+    voice: nutmeg_voice
+    look: {species: mouse, proportions: kid, eyes: round, outfit: overalls, accessories: [backpack]}
+    colors: {skin: "#C8A27A", clothes: "#E07A5F", trim: "#F4F6FA", accessory: "#F2C14E"}
+  - name: mossby
+    voice: mossby_voice
+    look: {species: snail, eyes: oval, accessories: [glasses]}
+    colors: {skin: "#9FA88A", hair: "#B5652E", clothes: "#6C8EBF", accessory: "#3A3A3A"}
+  - name: bramble
+    voice: bramble_voice
+    look: {species: owl, body: round, eyes: round, outfit: dress, accessories: [scarf]}
+    colors: {skin: "#8A6E52", clothes: "#B48EAD", accessory: "#E8C547"}
+variants:
+  short:
+    format: {width: 1080, height: 1920, fps: 30}
+    preview: {width: 270, height: 480, fps: 15}
+    character_size: large
+scenes:
+  - id: title
+    type: card
+    params: {text: "Nutmeg and the Moon Picnic"}
+    duration: 2.5
+
+  - id: meadow
+    type: stage
+    set: park
+    transition: iris_in
+    params:
+      props:
+        - {prop: house, at: home, scale: 0.8}
+        - {prop: key, name: garden_key, at: key_spot}
+        - {prop: flowers, at: 0.9}
+      level:
+        map: |
+          ................................
+          ................................
+          ............p.k.................
+          ...........|=======.............
+          .h.a..$$$.l|............$.......
+          ...........|.........d....f.....
+          ######################....######
+          ######################....######
+        spots: {h: home, a: start, l: ladder, p: plank, k: key_spot, d: landing, f: far_side}
+        follow: nutmeg
+      characters: [{name: nutmeg, at: start}]
+    beats:
+      - text: "At the bottom of Clover Hill, in a snug little house, lived a mouse called Nutmeg."
+      - text: "Tonight, Granny Bramble was having a moon picnic at the very top of the hill. And Nutmeg was invited!"
+        actions: [{emote: nutmeg, to: happy, at: 0.6}]
+      - text: "I'm on my way, Granny!"
+        voice: nutmeg_voice
+        actions: [{gesture: nutmeg, to: wave}]
+      - text: "She skipped along the grass, picking up shiny sun pennies as she went. One, two, three!"
+        actions:
+          - {walk_to: nutmeg, to: ladder, react: {when: pickup, expression: happy, effect: sparkle}}
+      - text: "Then she climbed the old wooden ladder, one rung at a time, all the way up to the long plank."
+        actions: [{walk_to: nutmeg, to: plank, at: 0.05}]
+      - text: "Up on the plank, something glittered in the evening sun."
+        actions: [{walk_to: nutmeg, to: key_spot, at: 0.2, react: {when: arrive, expression: surprised, effect: exclaim}}]
+      - text: "Granny's golden garden key! I will need this."
+        voice: nutmeg_voice
+        actions: [{pick_up: nutmeg, to: garden_key, at: 0.3}]
+      - text: "Nutmeg took a deep breath, ran to the end of the plank, and jumped all the way down to the grass."
+        actions: [{jump: nutmeg, to: landing, at: 0.1}]
+      - text: "Oh no, a gap in the path! But Nutmeg was brave. One, two, three, hop!"
+        actions: [{jump: nutmeg, to: far_side, at: 0.55, react: {when: land, expression: laughing, effect: stars}}]
+
+  - id: garden
+    type: stage
+    set: park
+    transition: crossfade
+    params:
+      props:
+        - {prop: door, name: gate, at: gate_spot}
+        - {prop: key, name: garden_key, at: start}
+        - {prop: flowers, at: 0.03}
+        - {prop: mushroom, at: 0.97}
+      level:
+        map: |
+          ..................................
+          ..................................
+          ...................*..............
+          ..a..gd..s.m....b....l..$$$...e...
+          #################....#############
+          #################....#############
+        spots: {a: start, g: near_gate, d: gate_spot, s: stop, m: path, b: brink, l: over, e: end}
+        locks: {gate: garden_key}
+        blockers: [mossby]
+        follow: nutmeg
+      characters: [{name: nutmeg, at: start}, {name: mossby, at: path, facing: left, expression: angry}]
+    beats:
+      - text: "Behind the meadow was Granny's garden. And the garden gate was locked, shut tight."
+        actions:
+          - {hold: nutmeg, to: garden_key, at: 0}
+          - {walk_to: nutmeg, to: near_gate, at: 0.3}
+      - text: "Click, went the golden key. And creak, went the little gate."
+        actions: [{open: gate, by: nutmeg, at: 0.15}]
+      - text: "But right in the middle of the path sat Mister Mossby, the grumpiest snail in the garden."
+        actions:
+          - {walk_to: nutmeg, to: stop, at: 0.05}
+          - {react: nutmeg, expression: surprised, at: 0.75}
+      - text: "Hmph. This is my path. I am resting."
+        voice: mossby_voice
+        shot: closeup mossby
+        actions: [{react: mossby, pose: arms_crossed, expression: angry}]
+      - text: "Good evening, Mister Mossby. Could you please let me pass? Granny is waiting for me."
+        voice: nutmeg_voice
+        shot: two_shot
+      - text: "Please? Nobody has said please to me all week."
+        voice: mossby_voice
+        shot: closeup mossby
+        actions: [{emote: mossby, to: surprised, at: 0.2}]
+      - text: "Well. Since you asked so nicely, little one."
+        voice: mossby_voice
+        shot: two_shot
+        actions:
+          - {emote: mossby, to: happy, at: 0.1}
+          - {step_aside: mossby, at: 0.55}
+      - text: "Thank you, Mister Mossby! Your shell is very shiny, you know."
+        voice: nutmeg_voice
+        shot: two_shot
+        actions: [{react: mossby, expression: blushing, at: 0.6}]
+      - text: "Nutmeg hurried on, past the snail, to the very edge of the garden."
+        actions: [{run_to: nutmeg, to: brink, at: 0.1}]
+      - text: "Then she took a big jump, and caught a twinkly star in the air!"
+        actions: [{jump: nutmeg, to: over, at: 0.2, react: {when: land, expression: laughing, effect: sparkle}}]
+      - text: "And off she ran, collecting pennies, pennies and more pennies, all the way to the end of the path."
+        actions: [{run_to: nutmeg, to: end, at: 0.05}]
+
+  - id: sky
+    type: stage
+    transition: crossfade
+    params:
+      background: ["#AFC3EC", "#FBDCC4"]
+      props:
+        - {prop: basket, at: picnic}
+        - {prop: cake, at: cake_spot}
+        - {prop: moon, at: 0.8, lift: 0.3}
+      level:
+        map: |
+          ............................n..g.pq.....
+          ....................*....*.=========....
+          .....................d..................
+          ....................~~~~................
+          .................c......................
+          ...............~~~~.....................
+          ...........b............................
+          ..........~~~~..........................
+          ..a.....................................
+          #########...............................
+          #########...............................
+        spots: {a: start, b: cloud_1, c: cloud_2, d: cloud_3, n: top, g: granny_spot, p: picnic, q: cake_spot}
+        colors: {cloud: "#FFF4EA"}
+        follow: nutmeg
+      characters: [{name: nutmeg, at: start}, {name: bramble, at: granny_spot, facing: left}]
+    beats:
+      - text: "At last, Nutmeg came to the fluffy cloud steps that lead up to the top of the hill."
+        actions: [{walk_to: nutmeg, to: 0.2, at: 0.3}]
+      - text: "Hop, up onto the first cloud."
+        actions: [{jump: nutmeg, to: cloud_1, at: 0.1}]
+      - text: "Hop! Up onto the second cloud, as soft as a pillow."
+        actions: [{jump: nutmeg, to: cloud_2, at: 0.05}]
+      - text: "And one more hop, with a star to catch on the way!"
+        actions: [{jump: nutmeg, to: cloud_3, at: 0.2, react: {when: land, expression: happy, effect: sparkle}}]
+      - text: "Just one more big jump, Nutmeg. You can do it!"
+        voice: bramble_voice
+        shot: closeup bramble
+        actions: [{gesture: bramble, to: wave}]
+      - text: "Nutmeg jumped as high as a little mouse can jump."
+        actions: [{jump: nutmeg, to: top, at: 0.2, react: {when: land, expression: laughing, effect: stars}}]
+      - text: "Granny! I brought your key, and I said please to Mister Mossby!"
+        voice: nutmeg_voice
+        actions: [{walk_to: nutmeg, to: 0.74, at: 0.1}]
+      - text: "Then you are just in time for cake, my brave little Nutmeg."
+        voice: bramble_voice
+        shot: two_shot
+        actions: [{emote: bramble, to: happy, at: 0.1}]
+      - text: "And so they sat on top of Clover Hill, eating cake, as the moon came up and the stars came out."
+        actions: [{emote: nutmeg, to: happy, at: 0.05}, {action: pan, to: 0.8, at: 0.05}, {light: night, at: 0.1, run_time: 4}]
+
+  - id: end
+    type: end_card
+    params: {title: "The End", lines: ["Be kind, and say please."]}
+    duration: 3

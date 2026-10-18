@@ -99,6 +99,10 @@ from vidgen.pronunciation import Pronunciation, Spoken  # noqa: E402
 from vidgen.config import SfxParams, StingCue, StingSetting  # noqa: E402
 from vidgen.sfx import SfxEvent, SoundLibrary, sound_library, synthesize  # noqa: E402
 from vidgen.speech import WordTime, beat_word_times, estimate_word_times, map_word_times, speech_bounds, spoken_words, syllables  # noqa: E402
+from vidgen.word_anchors import WordAnchor, is_word_anchor, locate_word_anchor, parse_word_anchor  # noqa: E402
+from vidgen.geometry_marks import GeometryMark, angle_between, angle_mark, brace_mark, dimension_mark, segment_normal  # noqa: E402
+from vidgen.mathexpr import MATH_CONSTANTS, MATH_FUNCTIONS, MATH_NAMES, MathExpression, parse_expression, pretty_expression, split_definition  # noqa: E402
+from vidgen.terms import Term, active_terms, find_term, term_spans, using_terms  # noqa: E402
 from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
 from vidgen.carry import carry_move  # noqa: E402
 from vidgen.voices import speaker_color, speaker_label, speaker_prefix  # noqa: E402
@@ -518,6 +522,45 @@ from vidgen.cartoon.room import (  # noqa: E402
     window_sky,
 )
 from vidgen.cartoon.room_drawing import RoomColors, RoomDrawing, WindowLook, WindowViews, draw_room, room_colors  # noqa: E402
+from vidgen.camera import SmoothFollow  # noqa: E402
+from vidgen.config import CharacterSize  # noqa: E402
+from vidgen.world import (  # noqa: E402
+    COIN,
+    KEY,
+    Level,
+    World,
+    close_door,
+    hold_key,
+    jump_pickups,
+    obstacles_in,
+    open_door,
+    parse_level,
+    plan_jump,
+    route_pickups,
+    step_aside,
+    walk_route,
+)
+from vidgen.world.moves import reversed_route  # noqa: E402
+from vidgen.cartoon.level_drawing import CHUNK_COLUMNS, LevelColors, draw_columns, drawn_rows, level_shapes  # noqa: E402
+from vidgen.cartoon.level_items import COIN_COLOR, STAR_COLOR, Collectible  # noqa: E402
+from vidgen.cartoon.level_motion import LANDED, SETTLED, ArcJump, Reaction, RouteWalk  # noqa: E402
+from vidgen.cartoon.level_stage import (  # noqa: E402
+    CHARACTER_SIZE_FACTORS,
+    LEVEL_MOVES,
+    LEVEL_PROP_ACTIONS,
+    LEVEL_SIZE,
+    LEVEL_UNTRACKED,
+    LevelFrame,
+    LevelProps,
+    LevelStep,
+    character_size_default,
+    level_fit_problems,
+    level_frame,
+    level_goal,
+    level_layout,
+    level_move_problems,
+    level_world,
+)
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -691,6 +734,28 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "spoken_words",
     "syllables",
     "map_word_times",
+    "WordAnchor",
+    "is_word_anchor",
+    "locate_word_anchor",
+    "parse_word_anchor",
+    "MATH_CONSTANTS",
+    "MATH_FUNCTIONS",
+    "MATH_NAMES",
+    "MathExpression",
+    "parse_expression",
+    "pretty_expression",
+    "split_definition",
+    "GeometryMark",
+    "angle_between",
+    "angle_mark",
+    "brace_mark",
+    "dimension_mark",
+    "segment_normal",
+    "Term",
+    "active_terms",
+    "find_term",
+    "term_spans",
+    "using_terms",
     "Pronunciation",
     "Spoken",
     "speaker_color",
@@ -1196,6 +1261,51 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "RevealStep",
     "has_error_text",
     "value_trend",
+    "SmoothFollow",
+    "CharacterSize",
+    "COIN",
+    "KEY",
+    "Level",
+    "World",
+    "close_door",
+    "hold_key",
+    "jump_pickups",
+    "obstacles_in",
+    "open_door",
+    "parse_level",
+    "plan_jump",
+    "route_pickups",
+    "step_aside",
+    "walk_route",
+    "reversed_route",
+    "CHUNK_COLUMNS",
+    "LevelColors",
+    "draw_columns",
+    "drawn_rows",
+    "level_shapes",
+    "COIN_COLOR",
+    "STAR_COLOR",
+    "Collectible",
+    "LANDED",
+    "SETTLED",
+    "ArcJump",
+    "Reaction",
+    "RouteWalk",
+    "CHARACTER_SIZE_FACTORS",
+    "LEVEL_MOVES",
+    "LEVEL_PROP_ACTIONS",
+    "LEVEL_SIZE",
+    "LEVEL_UNTRACKED",
+    "LevelFrame",
+    "LevelProps",
+    "LevelStep",
+    "character_size_default",
+    "level_fit_problems",
+    "level_frame",
+    "level_goal",
+    "level_layout",
+    "level_move_problems",
+    "level_world",
     "Field",
     "field_validator",
     "model_validator",

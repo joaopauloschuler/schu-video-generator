@@ -62,14 +62,19 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   - flows: `diagram` (alias `flowchart`; laid out automatically from `edges: ["a -> b: label"]`,
     and `layered_layout` is there for project scenes), `process` (a token travelling through a
     pipeline), `network` (a neural network with forward-pass pulses);
-  - data: `bar_chart`, `line_chart`, `scatter`, `histogram`, `pie` (and donut), `heatmap` (colour
+  - data: `bar_chart`, `line_chart` (both can change their values between beats: bars re-sort, lines
+    morph, the axis rescales, a cursor sweeps a line), `scatter`, `histogram`, `pie` (and donut), `heatmap` (colour
     scales from the theme), `stat` (a counting number with a comparison), `map` (countries step by
     step, choropleths, pins and flight-path arcs; Natural Earth data bundled);
   - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified
     insets, a spotlight; in a browser, window or phone frame; a caption), `video_clip` (B-roll, screen
     recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
-    notes), `code`, `code_walkthrough` (a long file scrolling to the lines each beat explains);
+    notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
+    and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
+    braces, angle arcs and dimension lines), `number_line` (points, intervals, jumps such as +3), `code`, `code_morph` (one version of the code morphing into the next: vidgen diffs
+    them), `code_walkthrough` (a long file scrolling to the lines each beat explains),
+    `terminal` (commands typed at a prompt and the output you write appearing, beside the code);
   - cartoons: `stage` (the video's `characters:` on a set: a picture, a generated picture or a
     gradient, a ground line, marks and depth, or a room with furniture, windows and doors;
     characters (people or animals) walk, run, walk towards the camera and face it, sit, lean,
@@ -102,6 +107,18 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   set with props, light, ambience and marks for two characters and every seat
   ([docs](docs/CONFIG.md#ready-made-sets-set-city_street)); `drawing: {outline: bold, shading: soft, texture:
   storybook}` changes how the whole video is drawn ([docs](docs/CONFIG.md#drawing-style-drawing)).
+- **Platform stories**: a stage's `level:` is a side view written as a small ASCII map (ground,
+  planks, clouds, ladders, gaps, coins, stars); `walk_to` and `jump: pip, to: cloud` are planned
+  on the tiles and checked by `vidgen validate`, a key opens a locked gate, a grumpy snail steps
+  aside when asked nicely, the camera follows the hero, `character_size: large` for Shorts
+  ([docs](docs/CONFIG.md#platform-levels-level), [example](examples/platform-story)).
+- **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
+  morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
+  colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
+  chart and caption), code that morphs between versions, a terminal typing commands, function
+  plots and plane geometry, number lines, charts whose values change between beats, and a lint
+  rule for narration that names a label before it is on screen
+  ([docs](docs/CONFIG.md#actions-on-a-spoken-word), [example](examples/gradient-descent)).
 - **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
   scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
   mouth follows the narration; it points at items, reacts, walks to the other side, enters and
@@ -629,6 +646,21 @@ my_video/
   fireplace, a steaming kettle, a running clock, a knock at the door, a gift opened (blushing) and a
   lamp switched on at nightfall; birdsong, rain, fire and room-tone beds, the `cartoon` music bed;
   about 94 s with Kokoro narration (no audio committed).
+- [examples/platform-story](examples/platform-story) — "Nutmeg and the Moon Picnic", a platform
+  story on three levels written as small maps: a little mouse skips along collecting coins,
+  climbs a ladder to a plank for a golden key, jumps over gaps, opens a locked garden gate, asks a
+  grumpy snail nicely to let her pass, catches stars in mid-air and hops up the clouds to her
+  granny's picnic; the camera follows her, close-ups for the dialogue, the automatic jump, coin
+  and door sounds, the `cartoon` music bed and a 9:16 variant with `character_size: large`;
+  about 2:50 at preview (no audio committed).
+- [examples/gradient-descent](examples/gradient-descent) — "Gradient descent, one step at a
+  time", a maths-and-code explainer: a dot tracing a loss curve with its tangent and a live
+  gradient label, the update rule with its symbols in the concepts' colours, the first steps as
+  jumps on a number line, the signed area under the gradient equal to the change in loss, the
+  gradient as a vector at a right angle to the dashed contour line, a loop morphing into a loop
+  with a tolerance, a Python session beside the code, and a loss chart changing with the
+  learning rate (the axis rescales as it diverges); actions on spoken words and karaoke captions
+  in the concepts' colours, a 9:16 variant; about 3:00 with Kokoro narration (no audio committed).
 - [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
   an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
   points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven

@@ -14,10 +14,21 @@ import yaml
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, draft_format, parse_config
 from vidgen.emotions import Prosody, named_cues, prosody
 from vidgen.errors import Problem, VidgenError
-from vidgen.includes import ConfigSource, Origin, after_variant, attributed, attributed_error, expand_sets, project_relative, read_project_config
+from vidgen.includes import (
+    ConfigSource,
+    Origin,
+    after_variant,
+    attributed,
+    attributed_error,
+    expand_character_size,
+    expand_sets,
+    project_relative,
+    read_project_config,
+)
 from vidgen.kokoro_voices import voice_parts
 from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
+from vidgen.word_anchors import pin_translated_anchors, retime_project_anchors
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
 from vidgen.voicesounds import is_tagged_voice, voiced_spoken
 
@@ -166,6 +177,7 @@ def _translated(
         return config, source, TranslationReport(rel, None, missing=True)
     doc = read_translation_file(root / rel, rel)
     translated, report = apply_translations(data, doc, rel)
+    pin_translated_anchors(translated, data, config)
     return _parsed(translated, f"{where} with the translations of {rel}", origins), source, report
 
 
@@ -214,6 +226,7 @@ class Project:
         self.draft = False
         #: The ``--output-dir`` folder (absolute); it wins over ``output_dir:`` (see :attr:`output_dir`).
         self.output_dir_override: Path | None = None
+        retime_project_anchors(self)   # actions at a spoken word, timed by the beats' audio (§87.2)
 
     @classmethod
     def load(
@@ -241,7 +254,7 @@ class Project:
         included = read_project_config(config_file, Path(confine) if confine else None)
         data = included.data
         _confine(data, root, source)
-        base_data, base_origins = expand_sets(data, included.origins)
+        base_data, base_origins = expand_character_size(*expand_sets(data, included.origins))
         base, base_source, base_report = _translated(base_data, root, source, base_origins)
         if variant is None:
             return cls(root, config_file, base, None, base, base_source, base_report, included, base_origins)
@@ -249,7 +262,7 @@ class Project:
             known = ", ".join(sorted(base.variants)) or "(none defined)"
             raise VidgenError(f"{source}: unknown variant '{variant}'; available variants: {known}")
         override = base.variants[variant]
-        data, origins = expand_sets(deep_merge(data, override), after_variant(included.origins, data, override))
+        data, origins = expand_character_size(*expand_sets(deep_merge(data, override), after_variant(included.origins, data, override)))
         where = f"{source} (variant '{variant}')"
         try:
             config, merged, report = _translated(data, root, where, origins)

@@ -495,6 +495,8 @@ def holding_problems(
                     if place is not None:
                         where.x[who] = place_x(place)
                     where.walk_depth(who, depth)
+                elif step.action == "jump" and o.get("to") is not None:   # to a place on a level (DESIGN.md §86.7)
+                    where.x[who] = place_x(o["to"])
                 elif step.action in ("move_along", "keyframes"):
                     where.x[who] = None
                 elif step.action in ("pick_up", "hold"):

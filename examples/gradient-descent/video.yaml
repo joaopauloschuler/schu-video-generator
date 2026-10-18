@@ -1,0 +1,264 @@
+# Gradient descent, one step at a time: a short maths-and-code explainer that uses the
+# presentation toolkit (docs/CONFIG.md; DESIGN §87):
+#   - actions on a spoken word: at: "@word" (a dot tracing, a vector scaling, a morph, an output)
+#   - one colour per concept: terms: (loss, gradient, learning rate) in every text, the
+#     equation's symbols, the chart's series and the karaoke captions
+#   - function_plot: a dot with its tangent and a live label, traced; a signed area, traced
+#   - plane geometry: a point, vectors, a dashed segment and a right-angle mark; number_line jumps
+#   - code_morph (a fixed loop becomes a loop with a tolerance), then a terminal beside the code
+#   - line_chart changes (the y axis rescales) and a cursor on the line
+#
+#   vidgen validate examples/gradient-descent [--variant short]
+#   vidgen lint examples/gradient-descent [--variant short]       # incl. said_before_shown
+#   vidgen storyboard examples/gradient-descent --per-beat 3 [--variant short]
+#   vidgen tts examples/gradient-descent                          # Kokoro: local and free (the kokoro extra)
+#   vidgen readback examples/gradient-descent                     # what the voice said (faster-whisper, local)
+#   vidgen render examples/gradient-descent [--preview] [--variant short]
+#
+# Facts (checked): the loss is L(w) = (w - 3)^2 / 2 + 1, so its gradient is L'(w) = w - 3 and its
+# minimum is L(3) = 1. With learning rate 0.5 from w = 0 each step halves the distance to 3:
+# 0 -> 1.5 -> 2.25 -> 2.625. The signed area under L' from 0 to 1.5 is -3.375 = L(1.5) - L(0),
+# and from 0 to 3 it is -4.5 = L(3) - L(0) (fundamental theorem of calculus). The chart's values
+# are L after each of six steps for learning rates 0.5, 0.1 and 2.1; on this loss (curvature 1)
+# gradient descent diverges for a learning rate above 2. The terminal's outputs are a real run of
+# the second version of `descend` (Python 3.13). No audio is committed: before `vidgen tts`
+# beats are timed from their word count.
+title: "Gradient descent, one step at a time"
+output: gradient_descent
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  short:                          # a 9:16 Short of the same video
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+    overlays: [{type: captions, style: karaoke}]   # up to two lines of big words in the tall frame
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart, speed: 0.88}   # local and free, word timings; 0.88: under 3.5 words/s
+stt: {provider: faster_whisper, model: base.en}
+
+pronunciation:                    # decimals said digit by digit after "point", as in maths
+  "0.1": zero point one
+  "0.5": zero point five
+  "0.75": zero point seven five
+  "0.375": zero point three seven five
+  "1.5": one point five
+  "1.07": one point zero seven
+  "2.1": two point one
+  "3.375": three point three seven five
+  "4.5": four point five
+  "5.5": five point five
+
+terms:                            # one colour per concept, everywhere it is written
+  loss: primary
+  gradient: {color: secondary, tex: '\nabla L'}
+  learning rate: {color: tertiary, tex: '\eta'}
+
+music: {source: bright, volume: -2}
+transition: {type: crossfade, duration: 0.4}
+
+overlays:
+  - type: captions
+    style: karaoke                # the spoken word in highlight, the terms in their colours
+    max_lines: 1                  # 16:9: one line of three words keeps more room for the plots
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "MACHINE LEARNING BASICS"
+      title: "Gradient descent"
+      subtitle: "How a model lowers its loss"
+    beats:
+      - text: "Most neural networks learn with gradient descent, or with a close variant of it."
+
+  - id: curve
+    type: function_plot
+    params:
+      title: "Walking downhill on the loss"
+      functions: [{expr: "(x - 3)^2/2 + 1", name: loss, label: "loss"}]
+      x_range: [0, 6.5]
+      x_label: "w"
+      y_label: "L"
+      dots: [{x: 0, tangent: true, label: "gradient {slope}", decimals: 2}]
+      points: [{at: [3, 1], name: minimum}]
+    beats:
+      - text: "This curve is the loss of a model with a single weight, w: how wrong the model is for each value of w."
+      - text: "We start at w equals zero. The tangent line there has a slope of minus three, and in one dimension, that slope is the gradient."
+      - text: "Gradient descent moves w against the gradient, here to the right, and the loss goes down."
+        actions:
+          - {trace: dot1, to: 2.625, at: "@against", run_time: 3}
+      - text: "The slope flattens as w closes in on three, the minimum of the loss."
+        actions:
+          - {reveal: point1, at: "@minimum"}
+
+  - id: update
+    type: equation
+    params:
+      latex:
+        - 'w_{\text{new}} = w - \eta \, \nabla L(w)'
+        - 'w_{\text{new}} = w - \eta \, (w - 3)'
+        - 'w_{\text{new}} = 0 - 0.5 \cdot (0 - 3) = 1.5'
+      caption: "The update rule of gradient descent"
+    beats:
+      - text: "As a rule: the new weight is the old one, minus the learning rate times the gradient."
+      - text: "For our loss, the gradient is w minus three."
+      - text: "With a learning rate of 0.5, the first step from zero lands at 1.5."
+
+  - id: halving
+    type: number_line
+    params:
+      title: "The first three steps"
+      range: [-0.5, 3.5]
+      step: 0.5
+      points: [{at: 0, name: w}, {at: 3, name: minimum}]
+      jumps: [[0, 1.5], [1.5, 2.25], [2.25, 2.625]]
+    beats:
+      - text: "On a number line, w starts at zero."
+      - text: "The first jump is 1.5, the next 0.75, then 0.375: each one half the one before."
+        actions:
+          - {reveal: jump1, at: "@1.5"}
+          - {reveal: jump2, at: "@0.75"}
+          - {reveal: jump3, at: "@0.375"}
+      - text: "The distance to the minimum halves with every step, so w gets ever closer, but never lands exactly on it."
+        actions:
+          - {reveal: point2, at: "@minimum"}
+          - {trace: "point:w", to: 2.625, at: "@halves"}
+
+  - id: slope_area
+    type: function_plot
+    params:
+      title: "The gradient, and what it adds up to"
+      functions: [{expr: "x - 3", name: gradient, label: "gradient"}]
+      x_range: [-0.5, 4]
+      x_label: "w"
+      y_label: "dL/dw"
+      areas: [{between: [0, 1.5], label: "loss change {area}", decimals: 3}]
+    beats:
+      - text: "Now plot the gradient itself: for this loss, it is the straight line w minus three."
+      - text: "The signed area under it, from zero to 1.5, is minus 3.375: exactly how much the loss fell in that first step."
+      - text: "Stretch the area to three, and it is minus 4.5: the loss fell from 5.5 all the way to its minimum, one."
+        actions:
+          - {trace: area1, to: 3, at: "@Stretch"}
+
+  - id: plane
+    type: function_plot
+    params:
+      title: "Two weights: the gradient is a vector"
+      x_range: [-0.5, 4.5]
+      y_range: [-0.5, 3.5]
+      x_label: "w₁"
+      y_label: "w₂"
+      points: [{at: [2, 2], name: w}]
+      vectors:
+        - {from: w, components: [2, 1], name: g, label: "gradient"}
+        - {from: w, components: [-1, -0.5], name: s, label: "step", color: "#C792EA"}   # not the gradient's colour
+      marks:
+        - {segment: [[1.4, 3.2], [2.6, 0.8]], dashed: true}
+        - {angle: [g, w, [1.4, 3.2]], label: "{angle}°"}
+    beats:
+      - text: "With two weights, the gradient becomes a vector. It points in the direction of steepest ascent of the loss."
+        actions:
+          - {reveal: "vector:g", at: "@vector"}
+      - text: "Gradient descent goes the other way: each step is minus the learning rate times the gradient."
+        actions:
+          - {reveal: "vector:s", at: "@step"}
+      - text: "Along the dashed line the loss does not change, to first order, and the gradient is perpendicular to it."
+        actions:
+          - {reveal: segment1, at: "@dashed"}
+          - {reveal: angle1, at: "@perpendicular"}
+      - text: "Double the learning rate, and the step doubles too."
+        actions:
+          - {trace: "vector:s", scale: 2, at: "@Double"}
+
+  - id: code
+    type: code_morph
+    params:
+      title: "gradient descent in Python"
+      versions:
+        - |
+          def descend(grad, w, lr=0.5, steps=3):
+              for _ in range(steps):
+                  w = w - lr * grad(w)
+              return w
+        - code: |
+            def descend(grad, w, lr=0.5, tol=1e-3):
+                g = grad(w)
+                while abs(g) > tol:
+                    w = w - lr * g
+                    g = grad(w)
+                return w
+          highlight: changed
+    beats:
+      - text: "In Python, the whole method is a short loop: three steps of the update rule."
+      - text: "Better to stop once the gradient is tiny: a tolerance replaces the fixed number of steps."
+        actions:
+          - {reveal: version2, at: "@tolerance"}
+
+  - id: run
+    type: terminal
+    transition: cut
+    carry: ["listing -> code"]
+    params:
+      title: "Run it on our loss"
+      prompt: ">>>"
+      language: python
+      code:
+        code: |
+          def descend(grad, w, lr=0.5, tol=1e-3):
+              g = grad(w)
+              while abs(g) > tol:
+                  w = w - lr * g
+                  g = grad(w)
+              return w
+      steps:
+        - {command: "descend(lambda w: w - 3, w=0.0)", output: "2.999267578125"}
+        - {command: "descend(lambda w: w - 3, w=0.0, lr=0.1)", output: "2.999001031090405"}
+    beats:
+      - text: "Give it our gradient, w minus three, and start from zero. It stops just below three."
+        actions:
+          - {reveal: output1, at: "@stops"}
+      - text: "With a smaller learning rate it also stops near three, but it needs many more steps to get there."
+
+  - id: rates
+    type: line_chart
+    params:
+      title: "The loss, step by step"
+      caption: "L(w) = (w − 3)²/2 + 1, starting at w = 0"
+      x: [0, 1, 2, 3, 4, 5, 6]
+      x_label: "step"
+      series:
+        loss: [5.5, 2.125, 1.281, 1.07, 1.018, 1.004, 1.001]
+      changes:
+        - [5.5, 4.645, 3.952, 3.391, 2.937, 2.569, 2.271]
+        - [5.5, 6.445, 7.588, 8.972, 10.646, 12.672, 15.123]
+      reveal: all
+    beats:
+      - text: "With a learning rate of 0.5, the loss falls from 5.5 to about 1.07 in just three steps."
+        actions:
+          - {trace: "series:loss", to: 3, at: "@falls", run_time: 2.5}   # a cursor with the line's value
+      - text: "At 0.1, every step is small, and after six steps the loss is still above two."
+        actions:
+          - {reveal: change1, at: "@small"}
+      - text: "At 2.1, every step overshoots the minimum, and the loss grows: gradient descent diverges."
+        actions:
+          - {reveal: change2, at: "@overshoots"}
+
+  - id: recap
+    type: bullets
+    params:
+      heading: "Gradient descent in four lines"
+      items:
+        - "The loss measures how wrong the model is"
+        - "The gradient points uphill: step against it"
+        - "The learning rate sets the size of each step"
+        - "Too large a learning rate makes it diverge"
+    beats:
+      - text: "To recap: the loss measures how wrong the model is."
+      - text: "The gradient points uphill, so each step goes against it."
+      - text: "Third: the learning rate sets how far each step goes."
+      - text: "And last: too large a learning rate makes the loss grow, instead of fall."

@@ -45,7 +45,7 @@ class LowerThird(Overlay):
         scene: str | None = None
         """The scene it belongs to (its time `at` is counted from that scene's start); default the first scene the overlay is drawn on."""
         at: float | str = 0.5
-        """When it starts: seconds after its scene's start, or a beat id of that scene (the beat's start)."""
+        """When it starts: seconds after its scene's start, a beat id of that scene (the beat's start), or a word its narration says ("@Ada", "intro_b2@Ada#2", "@Ada-0.2s": the scene's first beat that says it, or the beat named before @)."""
         duration: float = Field(5.0, gt=0)
         """Seconds it is shown, its slide in and out included."""
         across_cuts: bool = False
@@ -76,16 +76,19 @@ class LowerThird(Overlay):
         @field_validator("at")
         @classmethod
         def _at(cls, value: float | str) -> float | str:
+            if is_word_anchor(value):
+                parse_word_anchor(str(value), beat_allowed=True)
+                return str(value).strip()
             if isinstance(value, str):
                 if not value or not all(ch.isalnum() or ch == "_" for ch in value):
-                    raise ValueError(f"at: a number of seconds or a beat id, got {value!r}")
+                    raise ValueError(f"at: a number of seconds, a beat id or a spoken word (\"@word\"), got {value!r}")
             elif value < 0:
                 raise ValueError("at must not be negative")
             return value
 
     @classmethod
     def validate_project(cls, options: Any, project: Any, scenes: Sequence[str]) -> list[str]:
-        """``scene`` must be a scene the overlay is drawn on; ``at`` a beat of it."""
+        """``scene`` must be a scene the overlay is drawn on; ``at`` a beat of it or a word one says."""
         ids = [s.id for s in project.config.scenes]
         if options.scene is not None and options.scene not in ids:
             return [f"scene: unknown scene '{options.scene}' (scenes: {', '.join(ids)})"]
@@ -93,6 +96,13 @@ class LowerThird(Overlay):
             return [f"scene: the overlay is not drawn on scene '{options.scene}' (see its scenes / exclude, or the scene's overlays)"]
         anchor = options.scene or (scenes[0] if scenes else None)
         if anchor is None or not isinstance(options.at, str):
+            return []
+        if is_word_anchor(options.at):
+            spec = project.scene(anchor)
+            try:
+                locate_word_anchor(project, anchor, parse_word_anchor(options.at, beat_allowed=True), [(b.id, None) for b in spec.beats])
+            except ValueError as exc:
+                return [str(exc)]
             return []
         beats = [b.id for b in project.scene(anchor).beats]
         if options.at not in beats:
@@ -105,10 +115,21 @@ class LowerThird(Overlay):
         o = self.options
         anchor = o.scene or (self.scenes[0] if self.scenes else self.context.scene_id)
         slot = self.context.plan.scene(anchor)
-        at = next((b.start for b in slot.beats if b.id == o.at), 0.0) if isinstance(o.at, str) else float(o.at)
-        start = slot.start + at
+        start = slot.start + self._start_in_scene(anchor, slot)
         end = start + o.duration
         return start, end if o.across_cuts else min(end, slot.cut)
+
+    def _start_in_scene(self, anchor: str, slot: Any) -> float:
+        """Seconds from its scene's start: ``at``'s number, its beat's start or its word's."""
+        o = self.options
+        if not isinstance(o.at, str):
+            return float(o.at)
+        if not is_word_anchor(o.at):
+            return next((b.start for b in slot.beats if b.id == o.at), 0.0)
+        starts = {b.id: b.start for b in slot.beats}
+        beat_id, seconds = locate_word_anchor(
+            self.context.project, anchor, parse_word_anchor(o.at, beat_allowed=True), [(b.id, b.end - b.start) for b in slot.beats])
+        return starts[beat_id] + seconds
 
     def build(self) -> Mobject:
         o = self.options

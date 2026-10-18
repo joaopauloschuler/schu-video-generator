@@ -21,6 +21,7 @@ from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
 from vidgen.icon_mobject import scale_icon_strokes
 from vidgen.runtime import current_theme
+from vidgen.terms import active_terms, term_t2c
 from vidgen.theme import Theme
 
 # ----- text wrapping -------------------------------------------------------------------------
@@ -103,6 +104,7 @@ def fit_text(
     font: str | None = None,
     role: str | None = None,
     balance: bool = False,
+    terms: bool = True,
 ) -> Paragraph:
     """Text in the theme font, word-wrapped to ``max_width`` and fitted into ``max_height``.
 
@@ -117,13 +119,15 @@ def fit_text(
     ``font`` is a family name; without it, ``role`` picks the theme's family for a font role
     (``heading``, ``quote``... as ``theme.font_for(role)``), else the theme font is used.
     With ``balance``, wrapped lines are evened out: the text is wrapped at the narrowest width
-    that keeps its number of lines (no lone last word). Returns a Manim ``Paragraph`` (one
-    submobject per line).
+    that keeps its number of lines (no lone last word). The video's terms (``terms:``, one colour
+    per concept) are drawn in their colours where ``highlights`` does not colour them, unless
+    ``terms=False`` (text on a coloured plate). Returns a Manim ``Paragraph`` (one submobject per
+    line).
     """
     block, _ = fit_text_sized(
         text, max_width, max_height, size=size, color=color, weight=weight, slant=slant, align=align,
         min_size=min_size, highlights=highlights, line_spacing=line_spacing, squeeze=squeeze, theme=theme,
-        font=font, role=role, balance=balance,
+        font=font, role=role, balance=balance, terms=terms,
     )
     return block
 
@@ -146,6 +150,7 @@ def fit_text_sized(
     font: str | None = None,
     role: str | None = None,
     balance: bool = False,
+    terms: bool = True,
 ) -> tuple[Paragraph, float]:
     """:func:`fit_text` that also returns the font size the text ends up at (points, after
     any final scaling), e.g. to tell whether it was shrunk below ``min_size``."""
@@ -167,6 +172,11 @@ def fit_text_sized(
         kwargs["t2c"] = _highlight_ranges(
             normalized, {k: resolve_color(v, theme) for k, v in highlights.items()}
         )
+    concepts = active_terms() if terms else ()
+    if concepts:
+        colored = term_t2c(normalized.replace("\n", " "), concepts, kwargs.get("t2c"))
+        if colored:
+            kwargs["t2c"] = {**colored, **(kwargs.get("t2c") or {})}
 
     if squeeze > 1.0 and "\n" not in normalized:
         line = Paragraph(normalized, font_size=font_size, **kwargs)

@@ -19,7 +19,8 @@ narrates on the computer itself at no cost (see `vidgen guide audio`).
 
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
-`actions` (pointing at things), `cartoons` (characters on a stage), `overlays` (overlays,
+`actions` (pointing at things), `cartoons` (characters on a stage), `platform` (platform
+stories: levels, jumps, keys and doors), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
 thumbnail, GIFs, translations, rights to your content), `troubleshooting` (validate and lint messages).
@@ -266,7 +267,9 @@ scenes:
   camera moves to whoever speaks (`reframe: speaker`, on by itself when the characters do not
   fit in one view; a short reply holds the view; your own `pan` / `follow` / `zoom` / `shot`
   win). `reframe: none` (top level or a stage's param) squeezes the whole stage into the frame
-  instead. `vidgen direct --variant social` lists the camera's moves.
+  instead. `vidgen direct --variant social` lists the camera's moves. Give the 9:16 variant
+  `character_size: large` (top level, or a stage's param; `small` / `medium` / `large`, default
+  `medium`): characters measured against the narrow width are small on a phone; text keeps its size.
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
@@ -291,8 +294,8 @@ project's own scene types, in its theme).
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
-| categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption` |
-| change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label` |
+| categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
+| change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
 | a relationship between two measures | `scatter` | `title`, `series`, `trend`, `highlight`, `x_label`, `y_label` |
 | how values are distributed | `histogram` | `title`, `values`, `bins`, `mean`, `median`, `highlight` |
 | parts of a whole (≤ 6 parts) | `pie` | `title`, `labels`, `values`, `donut`, `highlight`, `other_below` |
@@ -304,16 +307,22 @@ project's own scene types, in its theme).
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
+| a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
+| geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
+| a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
+| code that changes: before / after, a refactor, a fix | `code_morph` | `title`, `versions` (each the code, or code / path / highlight) |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
+| running a command: install, tests, a REPL (output written by you) | `terminal` | `title`, `steps` (each a command, or command / output / clear), `prompt`, `language`, `code` |
 | characters on a set (a cartoon) | `stage` | `characters`, `props`, `background`, `image`, `generate`, `marks`, `ground`, `layers`, `width`, `particles`, `light`, `wind` |
 | a cartoon's title card, "Later that day…", "The End" | `card` | `text`, `subtitle`, `style`, `color`, `sting` |
 | thanks, links, call to action | `end_card` | `title`, `lines`, `icon`, `logo` |
 
 How beats drive scenes: each type splits its content into **reveal steps** and plays step *i*
 at beat *i* (more steps than beats: spread evenly; more beats: the last ones hold). Types with
-per-beat data (`code_walkthrough`, `equation_derivation`, `screenshot`, `video_clip`, `map`)
-take a `steps` list, entry *i* for beat *i*: write as many steps as beats. A `highlight` param
+per-beat data (`code_walkthrough`, `terminal`, `equation_derivation`, `screenshot`, `video_clip`, `map`)
+take a `steps` list, entry *i* for beat *i*: write as many steps as beats (`code_morph`:
+one of its `versions` per beat). A `highlight` param
 adds a last step that marks one thing and dims the rest, so give it its own beat. Silent
 scenes have a `duration` instead of beats (chapter cards: 2–3 s). Every header-band type
 accepts `heading` and `title` alike.
@@ -472,6 +481,32 @@ Minimal snippets (copy, then adapt):
   beats:
     - text: "The baseline improves steadily."
     - text: "The sparse model starts slower, but ends lower."
+- id: ranking
+  type: bar_chart
+  params:
+    title: "Most loved languages"
+    labels: [Python, Rust, Go]
+    values: [62, 48, 31]
+    changes: [[58, 66, 30], [55, 72, 41]]   # the values at each later step; bars grow / shrink
+    sort: true                              # and re-sort, largest first
+    unit: "%"
+  beats:
+    - text: "In the first survey, Python led."
+    - text: "A year later Rust overtook it."
+    - text: "Then Go climbed as well."
+      actions: [{reveal: change2, at: "@climbed"}]   # change 2 on that word
+- id: training
+  type: line_chart
+  params:
+    title: "Training loss"
+    x: [1, 2, 3, 4]
+    series: {loss: [2.4, 1.8, 1.4, 1.2], accuracy: [0.3, 0.5, 0.6, 0.65]}
+    changes: [{loss: [1.0, 0.5, 0.3, 0.2]}]   # series left out keep their values; the y axis rescales
+    reveal: all
+  beats:
+    - text: "Here is the loss over four epochs."
+      actions: [{trace: "series:loss", to: 3, at: "@four"}]   # a cursor dot with the value sweeps the line
+    - text: "With pretraining it starts far lower."
 - id: size_vs_accuracy
   type: scatter
   params:
@@ -577,12 +612,87 @@ Minimal snippets (copy, then adapt):
     - text: "Two x plus three is eleven."
     - text: "Take three from both sides."
     - text: "So x is four."
+- id: slope
+  type: function_plot    # f(x) written as maths (parsed safely: x^2, 2x + 1, sin(x), exp(-x^2/2)); one item per beat
+  params:
+    title: "The slope of x²"
+    functions: ["f(x) = x^2"]
+    x_range: [-3, 3]
+    dots: [{x: -2, tangent: true, label: "slope {slope}"}]   # a live label: {x}, {y}, {slope}
+    areas: [{between: [0, 1], label: "A = {area}"}]           # the area under f, its size filled in
+  beats:
+    - text: "Here is the parabola, f of x equals x squared."
+    - text: "A dot on the curve, with its tangent."
+    - text: "As the dot moves right, the slope grows steeper."
+      actions: [{trace: dot1, to: 2, at: "@moves"}]   # the dot travels along the curve on the word
+    - text: "The area under the curve grows as its end moves out."
+      actions: [{trace: area1, to: 2.5, at: "@grows"}]
+- id: triangle
+  type: function_plot    # geometry on the same plane: points, vectors and marks, no functions needed
+  params:
+    axes: false          # pure geometry; keep the axes for vectors on a grid
+    points: [{at: [0, 0], name: A}, {at: [4, 0], name: B}, {at: [4, 3], name: C}]
+    marks:
+      - {segment: [A, B, C], closed: true}
+      - {brace: [A, B], label: "4"}               # outside the triangle by itself
+      - {angle: [B, A, C], label: "{angle}°"}     # the angle at A; a square at 90°
+      - {dimension: [A, C], label: "c = {length}"}
+  beats:
+    - text: "A right triangle with sides four and three."
+    - text: "Move C up and the angle at A opens."
+      actions: [{trace: "point:C", to: [4, 4], at: "@Move"}]   # marks and labels follow
+- id: vectors
+  type: function_plot
+  params:
+    x_range: [-1, 6]
+    y_range: [-1, 5]
+    vectors: [{to: [3, 1], name: a}, {to: [1, 3], name: b}, {sum: [a, b], label: "a + b"}]   # b slides to a's tip
+  beats:
+    - text: "Vector a, and vector b."
+    - text: "Put b at the tip of a: the sum runs from start to end."
+    - text: "Double a and the sum follows."
+      actions: [{trace: "vector:a", scale: 2, at: "@Double"}]
+- id: hops
+  type: number_line
+  params:
+    range: [-2, 8]
+    points: [{at: 2, name: a}]
+    intervals: ["[4, inf)"]                        # interval notation: [ ] closed, ( ) open, inf
+    jumps: [[2, 5], [5, 7]]                        # arcs labelled +3, +2
+  beats:
+    - text: "Start at two."
+    - text: "Every number from four on."
+    - text: "Jump three to five."
+    - text: "And two more to seven."
 - id: snippet
   type: code
   params: {title: "Load and train", code: "data = load()\nmodel = fit(data)\nsave(model)", highlight: ["1", "2-3"]}
   beats:
     - text: "We load the data."
     - text: "Then fit and save the model."
+- id: faster
+  type: code_morph       # version i at beat i; the diff is computed for you: shared tokens glide, new lines grow in
+  params:
+    title: "Cache it"
+    versions:
+      - "def fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)"
+      - {code: "@cache\ndef fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)", highlight: changed}
+  beats:
+    - text: "This version recomputes the same values again and again."
+    - text: "One decorator, a cache, and each value is computed once."
+      actions: [{reveal: version2, at: "@cache"}]   # morph on the word (1.5 s)
+- id: shell
+  type: terminal         # step i at beat i: the command is typed, then its output appears (you write it: nothing runs)
+  params:
+    title: "Run the tests"
+    code: {code: "def mean(xs):\n    return sum(xs) / len(xs)", highlight: 2}   # optional: the code beside it
+    steps:
+      - {command: "pytest -q", output: "..F\n1 failed, 2 passed in 0.03s"}
+      - {command: "python -c 'print(mean([]))'", output: "ZeroDivisionError: division by zero", output_color: secondary}
+  beats:
+    - text: "We run the tests, and one of them fails."
+      actions: [{reveal: output1, at: "@fails"}]   # the output on the word
+    - text: "An empty list divides by zero."
 - id: walk
   type: code_walkthrough
   params:
@@ -658,6 +768,27 @@ label their series, `stat` chips carry an arrow. Every preset passes WCAG AA and
 colour-blind-safe palette (except `dark_tech`'s blue and purple for deuteranopes: pick another
 preset if that matters).
 
+**One colour per concept.** Give the few concepts an explainer keeps coming back to a colour of
+their own, once, at the top of `video.yaml`; vidgen then draws those words in that colour
+wherever they are written (titles, bullets, cards, chart and diagram labels, captions, a
+callout naming one, a `line_chart` series named after one) and their TeX parts in equations:
+
+```yaml
+terms:
+  loss: tertiary
+  gradient: "#E07A5F"
+  learning rate: {color: secondary, tex: '\eta'}   # also η in equation scenes
+```
+
+Whole words, any case, plurals too. At most about 5 colours, each readable on the background
+(lint `concept_colors` checks both). Do not colour the same word otherwise in a scene (a
+title's `highlight_color`, a series' `color`, an `equation_derivation`'s `colors`, a plotted
+function's or area's `color`, a callout's `color`): lint warns. `terms: false` on a scene turns it off there (a recap in plain colours).
+Prefer colours the scenes do not use for something else: `accent` is also the default of
+tangent lines, number-line jumps, angle marks and the terminal's prompt, and `highlight` is the
+spoken word in karaoke captions and the code highlight; `examples/gradient-descent` uses
+`primary`, `secondary` and `tertiary`.
+
 **Icons.** 200 line icons in one style. Find them by concept:
 `vidgen list-icons --search growth`, `vidgen list-icons --category data`, and look at them in
 your theme with `vidgen list-icons --search money --sheet icons.png --theme`. Use icons for
@@ -690,9 +821,10 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
 | `zoom` | look closer at a detail, then come back | at most one per scene |
 | `pan` | on a `stage`: move the camera to a character or a mark (`to: right`) | on a stage wider than the frame (`width: 2`) |
-| `follow` | on a `stage`: keep the camera on a character as it moves | one at a time |
+| `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start) | one at a time |
 | `reveal` | bring a later element in early | rarely: the default order is usually right |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
+| `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |
@@ -719,7 +851,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `enter` | on a `stage`: a character walks in from an edge (`side:`) or through a room's door (`door: door`) to its mark (or `to:`) | it waits off stage until then |
 | `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) or through a room's door (`door: door`) | an `enter` brings it back |
 | `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head`; `big: true` adds a whoosh arc | on the word it goes with (`at`) |
-| `jump` | on a `stage`: a character jumps (`height`) | joy or surprise |
+| `jump` | on a `stage`: a character jumps (`height`); on a platform `level`, `to:` a spot, mark or tile jumps it there on a planned arc, picking up coins and stars on the way (`react: {when: land, expression: happy}`) | joy or surprise; getting onto a platform |
+| `step_aside` | on a platform `level`: a blocker (`level.blockers`) moves out of the way (`- step_aside: tobble`; `to:` a place to walk to) | after the line that asks it nicely |
 | `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
 | `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating |
 | `pick_up` | on a `stage`: a character reaches for a prop and holds it (`to: ball`; `hand`); it goes along with the hand | `walk_to` next to the prop first (`vidgen validate` says where) |
@@ -727,7 +860,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front) | within reach |
 | `give` | on a `stage`: the held prop goes to another character (`to: kit`) | the two stand next to each other |
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
-| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head | `open: true` in `props` starts it open |
+| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head; `by: pip` reaches for it (a locked door on a `level` opens only by whoever holds its key) | `open: true` in `props` starts it open |
 | `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand | |
 | `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
@@ -758,11 +891,18 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
         - callout: "bar:Preview"
           kind: arrow
           label: "Use this while editing"
-          at: 0.3
+          at: "@iterate"           # on that word (or a fraction of the beat: 0.3)
 ```
 
-- `at` (0–1, a fraction of the beat) times the action to the word it belongs to; actions never
-  make a beat longer.
+- `at` times the action to the word it belongs to: name the word, `at: "@gradient"` (quoted;
+  `"@gradient#2"` its second time in the beat, `"@gradient-0.2s"` a moment before it,
+  `"@learning rate"` a phrase), or give a fraction of the beat (0–1). A word is timed by the
+  beat's audio once `vidgen tts` made it, by an estimate from the text before; a word the beat
+  does not say is a `vidgen validate` error that lists the words like it. Every action takes it
+  (`callout`, `sfx`, the stage's moves and acting too), and so does `lower_third`'s `at`
+  (`"@Ada"`). Actions never make a beat longer. Show a label when the narration names it:
+  lint's `said_before_shown` warns when a node, callout or stage is named seconds before it
+  appears. A whole explainer timed this way: `examples/gradient-descent`.
 - The `stage` actions (`say` to `throw`) take the character as the target and the new
   state as `to:` (`- emote: kit` + `to: happy`). How to use them together for a cartoon:
   `vidgen guide cartoons`.
@@ -792,9 +932,9 @@ asks for one, say vidgen makes original characters and offer one with the same r
   maybe a `pattern` (`stripes`, `dots`) or `shoes`. A good test: would the two silhouettes,
   filled black, still differ? A child: `proportions: kid` (or `tall_kid`) and a smaller `scale`
   on the stage (about 0.7). An animal: `species: cat | dog | bird | bear | rabbit | mouse |
-  fox | owl | frog | turtle | penguin` (fur colour `colors.skin`: natural tones or theme tokens,
-  different for each; a turtle's shell `colors.hair`; it gets a `tail`, not a frog; a turtle
-  walks slowly, a penguin waddles, a frog jumps higher). A robot: `species: robot` with `robot:
+  fox | owl | frog | turtle | penguin | snail` (fur colour `colors.skin`: natural tones or theme
+  tokens, different for each; a turtle's or a snail's shell `colors.hair`; it gets a `tail`, not a
+  frog or a snail; a turtle walks slowly, a snail more slowly still, a penguin waddles, a frog jumps higher). A robot: `species: robot` with `robot:
   {head: box | round, face: eyes | screen, antenna: true | false, moves_on: legs | wheels}` (no
   hair; plating `colors.skin`; a screen face shows its mouth shapes; on wheels it rolls; a
   `[beep]` in its lines). Costume pieces for anyone: `crown`, `wizard_hat`, `party_hat` (one
@@ -1069,7 +1209,7 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   `toy_rocket` (nobody rides it) launches with smoke and floats down under a parachute to `to`.
   `land: false` flies a balloon or a rocket out of the top of the frame, gone for the scene.
 - **Sound**: walks, entrances, exits, jumps, a `surprised` face and most effect symbols make their own sounds
-  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes, a balloon's burner roars, a toy rocket fizzes off; a door creaks as it opens or closes; water splashes), timed to the action,
+  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes, a balloon's burner roars, a toy rocket fizzes off; a door creaks as it opens or closes; water splashes; on a platform `level` a jump lands softly, each coin goes `coin` and each star `twinkle`, a key `unlock`s a locked door, a blocker shuffles aside), timed to the action,
   and rain plays a rain sound bed. Each stage also plays a quiet bed of its set: birdsong
   outdoors by day (not at night, not in rain), a room tone in a room; `ambience: city` on a stage
   names the street sounds instead (or `birdsong`, `room_tone`, a list), `ambience: false` none.
@@ -1102,7 +1242,8 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
    through a walk, gesture, jump or path. Ask: is it clear who speaks? Are both faces visible,
    facing each other? Does the reaction read without the words? Is anything cut by the edge?
 4. `vidgen lint --json`: the cartoon rules `off_stage`, `character_overlap`, `walk_overlap`,
-   `prop_overlap`, `bubble_overlap`, `facing_away`, `hidden_speaker`, `mouth_without_voice` and `look_alike` (fixes in
+   `prop_overlap`, `bubble_overlap`, `facing_away`, `hidden_speaker`, `small_speaker` (a face too small to read: a
+   `shot: closeup` or `character_size: large`), `mouth_without_voice` and `look_alike` (fixes in
    `vidgen guide troubleshooting`).
 5. Voices: with Kokoro (`vidgen guide audio`) `vidgen tts` is free and writes the lip sync
    tracks; then storyboard and lint again, since real lines change the timing.
@@ -1200,6 +1341,93 @@ scenes:
       - text: "Then into the oven."
         actions: [{host_point: stage3, line: true, at: 0.5}]
 ```
+
+<!-- topic: platform (also: level, levels, platformer, jumping, story-props) -->
+## Platform stories: levels, jumps and story props
+
+**When to make one.** A children's adventure where the hero *goes somewhere*: skips along the
+grass, climbs a ladder, hops over a gap and up onto the clouds, finds a key for a locked gate,
+meets someone grumpy in the way and asks nicely. It is a `stage` scene with a `level:` (a side
+view drawn from a small map), so everything of `vidgen guide cartoons` still works: lip sync,
+expressions, shots, the camera, sets, light, music. Keep a level to one part of the journey
+(30–60 s, 8–12 beats) and use a few scenes for a 2–3 minute story.
+
+**The map.** One line per row, top row first: `.` air, `#` ground, `=` a floating plank, `~` a
+cloud (stand on it, jump up through it), `|` a ladder, `$` a coin and `*` a star (picked up when
+the hero touches them, in the air too), and a **letter** for a *spot*: a place to stand, on the
+first tile below the letter. Name the spots (`spots: {a: start, k: key_spot}`) and send every
+move to a spot: it reads better than numbers and survives map edits. A character is two tiles
+tall: leave two rows of air under a plank to walk under it.
+
+**Moves.** `walk_to` / `run_to` go along the tiles (steps of one tile, ladders on the way,
+never across a gap); `jump` with `to:` plans the arc itself (a crouch, the flight, a squash and a
+little wobble on landing), at most 5 tiles across, 3 up and 8 down. `vidgen validate` replays
+every move and says why one fails and what to write (`'nutmeg' cannot walk to spot 'far_side':
+the way stops at map column 22: a gap at column 23; jump there instead`). A walk goes about 1.4
+tiles a second (a ladder rung counts double): give each move a beat whose line lasts as long, or
+`vidgen lint` warns `rushed_animation`; split a long way over two beats, or `run_to`.
+
+**Story props.** A `door` prop is in the way until it opens; `locks: {gate: garden_key}` locks it
+until the holder of the key prop stands next to it (`- open: gate, by: nutmeg`). `blockers:
+[mossby]` puts a character in the way until `- step_aside: mossby` (after the line that asks it
+nicely). `react: {when: pickup | land | arrive, expression, effect}` on a move puts the joy or
+the surprise on the right frame. The sounds come by themselves (a boing, a soft landing, a coin's
+pling, a star's twinkle, the unlock and the creak, the shuffle aside).
+
+**Camera and size.** `level: {follow: nutmeg}` keeps the camera on the hero, gently, up and down
+too. `character_size: small | medium | large` (top level or per scene) sets how big everyone is:
+`medium` shows about 14 x 8 tiles in 16:9; use `large` for a 9:16 Short (a variant), whose
+narrow frame shows about 6 x 10. A map must be at least as wide as the frame. For a dialogue,
+cut to `shot: closeup <name>` or `two_shot`: small level characters' faces are hard to read
+(`small_speaker` warns).
+
+```yaml
+characters:
+  - {name: nutmeg, look: {species: mouse, proportions: kid, outfit: overalls}}
+  - {name: mossby, look: {species: snail, eyes: oval}}
+scenes:
+  - id: garden
+    type: stage
+    set: park                       # its sky, hills, light and birdsong; not its props
+    params:
+      props:
+        - {prop: door, name: gate, at: gate_spot}
+        - {prop: key, name: garden_key, at: start}
+      level:
+        map: |
+          ..............................
+          ...................*..........
+          ..a..gd..s..m...b....l...$$.e.
+          #################....#########
+        spots: {a: start, g: near_gate, d: gate_spot, s: stop, m: path, b: brink, l: over, e: end}
+        locks: {gate: garden_key}
+        blockers: [mossby]
+        follow: nutmeg
+      characters: [{name: nutmeg, at: start}, {name: mossby, at: path, facing: left, expression: angry}]
+    beats:
+      - text: "Nutmeg carried the golden key to the garden gate."
+        actions: [{hold: nutmeg, to: garden_key, at: 0}, {walk_to: nutmeg, to: near_gate, at: 0.3}]
+      - text: "Click, went the key. And creak, went the little gate."
+        actions: [{open: gate, by: nutmeg, at: 0.2}]
+      - text: "But Mister Mossby, the grumpiest snail in the garden, sat on the path."
+        actions: [{walk_to: nutmeg, to: stop, at: 0.1}, {react: nutmeg, expression: surprised, at: 0.8}]
+      - text: "Please, Mister Mossby, may I pass?"
+        shot: closeup nutmeg
+      - text: "Well, since you asked so nicely, he smiled, and shuffled aside."
+        actions: [{emote: mossby, to: happy, at: 0.2}, {step_aside: mossby, at: 0.5}]
+      - text: "Nutmeg ran to the edge, then jumped, and caught a star in the air!"
+        actions:
+          - {run_to: nutmeg, to: brink, at: 0.05}
+          - {jump: nutmeg, to: over, at: 0.5, react: {when: land, expression: laughing, effect: sparkle}}
+```
+
+**From a screenplay**: put the level in a set of the front matter (`sets: {meadow: {level:
+{map: ..., spots: ...}}}`) and start the scene's `set:` line with it (`set: meadow; characters:
+nutmeg at start`); spots are marks there, and `[Nutmeg jumps onto over.]` is a jump.
+
+A whole story: `examples/platform-story` (three levels, a key and a gate, coins and stars, a
+grumpy snail, clouds up to a picnic, a 9:16 variant). Every key: `docs/CONFIG.md` "Platform levels
+(`level`)" and the sections after it.
 
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->
 ## Overlays, transitions and continuity
@@ -1361,7 +1589,7 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `splash` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `unlock`, `coin`, `twinkle`, `splash` and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 
@@ -1735,7 +1963,11 @@ install; `vidgen validate` warns when it is missing.
 | `bubble_overlap` | a speech bubble covers a face, another bubble or an effect symbol | a shorter `bubble` text, characters further apart, or the lines (or the line and the effect) in different beats |
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
+| `small_speaker` | a speaking face too small on screen to read it and its lip sync | `shot: closeup <name>` (or `medium`) for that beat, or `character_size: large` |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
+| `said_before_shown` | the narration names a label on screen (a node, a callout, a stage) seconds before it appears, and not again when it does | show it on the word: `{reveal: node:database, at: "@database"}` (or the callout's `at`); or name it in the beat that shows it |
+| `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |
+| `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |

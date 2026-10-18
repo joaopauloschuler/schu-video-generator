@@ -36,11 +36,14 @@ _CAP = 0.73
 _X_HEIGHT = 0.55
 _DESCENDER = 0.76
 _SMALL = 0.15
+_SCRIPT = 0.4
 _GLYPH_EM: dict[str, float] = {
     **dict.fromkeys("acemnorsuvwxz", _X_HEIGHT),
+    **dict.fromkeys("=+<>≤≥×÷~", _X_HEIGHT),  # operators sit low, like the lowercase letters
+    **dict.fromkeys("₀₁₂₃₄₅₆₇₈₉⁰¹²³⁴⁵⁶⁷⁸⁹", _SCRIPT),  # sub- and superscript digits (w₁, x²)
     **dict.fromkeys("gpqy", _DESCENDER),
     "j": 0.95,
-    **dict.fromkeys(".,:;·•-–—_'\"`‘’“”", _SMALL),
+    **dict.fromkeys(".,:;·•-–—−_'\"`‘’“”", _SMALL),
 }
 
 
@@ -123,8 +126,8 @@ def _is_ancestor(path: str, of: str) -> bool:
 @rule("off_frame", default="error")
 def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
     """An object is cut off by the frame edge (not checked while the camera is zoomed in or
-    moved away from the frame's centre; particles and motion effects cross the edges on purpose;
-    characters are ``off_stage``'s)."""
+    moved away from the frame's centre; particles, motion effects and a level's tiles cross the
+    edges on purpose; characters are ``off_stage``'s)."""
     if ctx.camera_moved:
         return
     width, height = ctx.width, ctx.height
@@ -134,6 +137,8 @@ def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
             continue  # they cross the edges on purpose (rain falling out of the frame, speed lines of an exit)
         if obj["kind"] == "character":
             continue  # off_stage's finding (it knows entrances and exits)
+        if obj.get("scenery"):
+            continue  # a piece of the set the camera crops (a platform level's tiles, DESIGN.md §86.10)
         x0, y0, x1, y1 = object_box(obj)
         if x1 <= 0 or y1 <= 0 or x0 >= width or y0 >= height:
             continue  # wholly outside: not seen at all (e.g. waiting to slide in)

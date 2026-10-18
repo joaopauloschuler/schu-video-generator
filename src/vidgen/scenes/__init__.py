@@ -5,11 +5,11 @@ and ``@scene``); a module here is registered as "builtin" because it lives insid
 Importing this package imports every scene module (add new modules to the import list below)
 the built-in per-beat actions (``actions``: reveal, dim, highlight, zoom, pan, follow,
 transform; ``callout_action``: callout; ``sfx_action``: sfx;
-``particles_action``: particles; ``acting``: say, look_at, turn, emote, pose, react; ``moving``: walk_to, enter,
-exit, gesture, jump; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
+``particles_action``: particles; ``acting``: say, look_at, turn, emote, pose, react; ``moving``: walk_to, run_to, enter,
+exit, gesture, jump, step_aside; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
 put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_in, ride_to, get_out;
 ``shot_action``: shot;
-``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``switch_action``:
+``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``math_axes``: trace; ``switch_action``:
 switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: lightning,
 rainbow; ``knock_action``: knock; ``host_actions``: host_point, host_look, host_react, host_move,
 host_enter, host_exit) and the
@@ -27,6 +27,7 @@ from vidgen.scenes import (  # noqa: F401
     card,
     chapter,
     code,
+    code_morph,
     code_walkthrough,
     comparison,
     diagram,
@@ -34,6 +35,7 @@ from vidgen.scenes import (  # noqa: F401
     end_card,
     equation,
     equation_derivation,
+    function_plot,
     handling,
     heatmap,
     histogram,
@@ -47,6 +49,7 @@ from vidgen.scenes import (  # noqa: F401
     moving,
     nature_action,
     network,
+    number_line,
     overlays,
     particles_action,
     pie,
@@ -64,6 +67,7 @@ from vidgen.scenes import (  # noqa: F401
     storm_action,
     switch_action,
     table,
+    terminal,
     text_card,
     timeline,
     title,

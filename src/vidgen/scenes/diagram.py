@@ -584,11 +584,13 @@ class Diagram(NarratedScene):
         self._nodes: dict[str, Target] = {}
         for i, node in enumerate(p.nodes, start=1):
             mob = d.nodes[node.id]
-            self._nodes[node.id] = self.target([f"node{i}", f"node:{node.id}"], mob, outline=mob[0], entrance=lambda mob=mob: [FadeIn(mob, scale=0.85)])
+            self._nodes[node.id] = self.target([f"node{i}", f"node:{node.id}"], mob, outline=mob[0], entrance=lambda node_id=node.id: self._node_entrance(node_id))
         self._edges: dict[str, Target] = {}
         for k, edge in enumerate(p.edges):
             self._edges[edge.ref()] = self.target(f"edge:{edge.ref()}", d.edges[k].group, entrance=lambda k=k: self._edge_entrance(k))
         groups = self._step_groups(plan.layout)
+        self._named_edges = {ref for _, refs in groups for ref in refs}
+        self._in_step = False
         steps: list[Any] = []
         for i, (node_ids, edge_refs) in enumerate(groups):
             later = {ref for _, refs in groups[i + 1 :] for ref in refs}
@@ -653,6 +655,7 @@ class Diagram(NarratedScene):
             if anims:
                 chain.append(LaggedStart(*anims, lag_ratio=0.15) if len(anims) > 1 else anims[0])
 
+        self._in_step = True
         while nodes or edges:
             waiting = {e.to for e in edges}
             ready = [n for n in nodes if n not in waiting]
@@ -665,13 +668,29 @@ class Diagram(NarratedScene):
             growing = [e for e in edges if e.source in appeared]
             wave([self._grow(p.edges.index(e)) for e in growing])
             edges = [e for e in edges if e not in growing]
+        self._in_step = False
         return chain
+
+    def _node_entrance(self, node_id: str) -> list[Animation]:
+        """A node's entrance. As a target (a ``reveal`` action) the edges between it and the
+        nodes on screen grow after it, as in the scene's own steps (an edge a step names waits
+        for its step); within a step or an edge's entrance the node only appears."""
+        appear = FadeIn(self._drawing.nodes[node_id], scale=0.85)
+        if self._in_step:
+            return [appear]
+        p = self.params
+        others = {n.id for n in p.nodes if n.id != node_id and self.is_shown(self._nodes[n.id])}
+        edges = [k for k, e in enumerate(p.edges) if node_id in (e.source, e.to) and ({e.source, e.to} - {node_id}) <= others
+                 and e.ref() not in self._named_edges and not self.is_shown(self._edges[e.ref()])]
+        return [Succession(appear, AnimationGroup(*[self._grow(k) for k in edges]))] if edges else [appear]
 
     def _edge_entrance(self, k: int) -> list[Animation]:
         """An edge's entrance as a target (the ``reveal`` action): its ends not on screen yet
         appear, then it grows."""
         edge = self.params.edges[k]
+        self._in_step = True
         ends = [a for end in dict.fromkeys((edge.source, edge.to)) for a in self.entrance(self._nodes[end])]
+        self._in_step = False
         return [Succession(LaggedStart(*ends, lag_ratio=0.15), self._grow(k))] if ends else [self._grow(k)]
 
     def _grow(self, k: int) -> Animation:

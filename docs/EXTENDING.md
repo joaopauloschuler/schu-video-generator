@@ -553,11 +553,12 @@ scales like them (docs/CONFIG.md "Charts: common to all chart types"):
   `short_number(v)`). Build a `ChartAxis` yourself for other ticks (categories: positions 0..n-1
   with their names as labels).
 - `chart_axes(area, x, y, size="caption", grid="y"|"x"|"both"|"none", lines="x"|"xy",
-  right=0, top=0)` → `ChartAxes`: tick labels left and below, axis titles, dashed gridlines,
+  right=0, top=0, tick_width=0)` → `ChartAxes`: tick labels left and below, axis titles, dashed gridlines,
   axis lines, colliding labels thinned; `axes.plot` (the data `Region`), `axes.point(x, y)`,
   `x_pos`, `y_pos`, `axes.group` (everything, not yet added) and its parts (`lines`, `grid`,
   `x_labels`, `y_labels`, `x_title`, `y_title`). `right` / `top` keep room for end labels or a
-  legend.
+  legend; `tick_width` is the least room for the y tick labels, so axes that replace each other
+  (a y axis before and after it rescales) share one plot.
 - `chart_label_size(size)` — points for a size token, never below `readable_size()`.
 - `chart_legend(entries, max_width, stack=False)` with entries `(name, color, swatch)` (`line`,
   `box` or a marker shape); `auto_legend(entries, axes.plot, points, max_width)` puts it in a
@@ -1091,6 +1092,9 @@ as the built-ins (every built-in scene type, e.g. `bullets`/`bar_chart`, and
   already on screen, so an item a `reveal` action showed early is not revealed twice. Also:
   `self.is_shown(t)`, `self.find_targets("bar:*")`, `self.on_screen_parts(t)` (the target's
   largest parts that are in the scene), `self.targets`.
+- A `reveal` action plays a target's entrance for 0.8 s (or its `run_time`). When an entrance
+  has a natural length (a `terminal` typing a command), override `entrance_time(self, target)`
+  to return its seconds (`None` for the default); `reveal` then plays it that long.
 - Actions run inside the scene's **waits** (`self.reveal`, `self.play_steps`, `self.wait`,
   `self.wait_seconds` and the end of `narrate`): leave time in each beat. A beat that animates
   until its very end gets its actions applied without animation (and a warning).
@@ -1350,6 +1354,40 @@ scene that shows the narration its own way):
   written words timed by their spoken form (`map_word_times(spoken, times)` does that mapping for
   times of the spoken words). `project.spoken_texts()` gives what the TTS says per beat;
   `beat.voice_sounds` lists a beat's sounds (their markers are not in `beat.text`).
+- **A word of the narration** (docs/CONFIG.md "Actions on a spoken word"): an action's `at:
+  "@word"` reaches a project action already resolved (`self.config.at` is the fraction,
+  `self.config.anchor` the text as written). For an option of your own that names a word,
+  `is_word_anchor(value)` tells the form, `parse_word_anchor(text, beat_allowed=True)` reads
+  `"intro_b2@Ada#2-0.2s"` into a `WordAnchor(words, occurrence, offset, beat)` (a `ValueError`
+  with an example on bad syntax), and `locate_word_anchor(project, scene_id, anchor, beats) ->
+  (beat_id, seconds)` finds it in a scene's beats (`beats`: `(id, narration seconds or None)`,
+  e.g. from `self.context.scene.beats` as `(b.id, b.end - b.start)`; a `ValueError` naming the
+  beat and the words like it when no beat says it), timed as the captions are.
+- **One colour per concept** (docs/CONFIG.md "One colour per concept"): text a scene builds with
+  `T`, `fit_text` or `readable_text` draws the video's `terms:` in their colours by itself (an
+  explicit `t2c` / `highlights` wins where both colour a letter); pass `terms=False` for text on
+  a coloured plate (it stays in its readable ink). `active_terms()` gives the scene's terms
+  (`Term(name, color, tex)`, colours as `#RRGGBB`; empty with `terms: false` on the scene),
+  `term_spans(text, terms) -> [(start, end, term)]` and `find_term(text, terms)` find them as
+  vidgen does (whole words, any case, plurals; for `MarkupText` or a picture of your own), and
+  `with using_terms(terms):` changes them for the text built inside (e.g. only those that read
+  on your plate). An equation of your own colours `term.tex` parts itself.
+- **Maths expressions** (docs/CONFIG.md `function_plot`): `parse_expression(text, known=None)
+  -> MathExpression` parses f(x) as `function_plot` does (whitelisted, never `eval`; a
+  `ValueError` naming the problem and its column); `expr(xs)` evaluates a numpy array (`nan`
+  where undefined), `expr.at(x)`, `expr.slope(x)`; `known` maps names to earlier
+  `MathExpression`s it may call. `split_definition("f(x) = x^2") -> ("f", "x^2")`,
+  `pretty_expression("x^2")` -> `"x²"` (for a label); `MATH_FUNCTIONS`, `MATH_CONSTANTS` and
+  `MATH_NAMES` list what an expression knows.
+- **Geometry marks** (docs/CONFIG.md `function_plot` "Geometry on the plane"), in frame
+  coordinates: `brace_mark(start, end, *, label=None, normal=None, color="text")`,
+  `angle_mark(vertex, start, end, *, label=None, radius=0.55, color="text", right_angle=None)`
+  (the smaller angle; a square at 90°) and `dimension_mark(start, end, *, label=None,
+  normal=None, offset=0.35, color="dim")` each return a `GeometryMark(shape, label, group)` with
+  the label (a mobject you made, e.g. `T("4")`) moved outside the mark;
+  `segment_normal(start, end, away_from=None)` is the side away from a point (the middle of your
+  figure), `angle_between(vertex, start, end)` the `(start angle, sweep)` in radians. Draw them on
+  a diagram, a picture or your own scene.
 - `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
   max_lines=2, max_words=None, until=None, prefix="", prefix_width=None) -> [CaptionCue(start,
   end, lines, words, prefix)]`: the text cut at phrase boundaries into cues (`segment_cues`, costs

@@ -28,6 +28,10 @@ SHOT_KINDS: tuple[str, ...] = tuple(SHOT_NAMES)
 #: head: (below the top, above the top). A close-up shows the head and shoulders, a medium shot
 #: the figure from about the hips up; an over-the-shoulder shot frames its subject like a medium.
 SHOT_SPANS: dict[str, tuple[float, float]] = {"closeup": (0.62, 0.1), "medium": (1.0, 0.12), "over_shoulder": (1.0, 0.12)}
+#: The narrowest view (in the subject's heights) a one-character framing keeps: in a portrait
+#: frame a close-up framed by height alone was narrower than the head with its snout or beak
+#: (the face cut in half; Step 155). A landscape frame's views are wider anyway.
+SHOT_MIN_WIDTHS: dict[str, float] = {"closeup": 0.55, "medium": 0.7, "over_shoulder": 0.7}
 #: Share of the view's width a one-character framing leaves more in front of the face than
 #: behind it (the subject is moved this much away from the side it faces).
 LOOK_ROOM = 0.1
@@ -105,9 +109,11 @@ def _sign(facing: str) -> float:
 
 
 def _one(subject: ShotFigure, kind: str, frame_width: float, frame_height: float) -> tuple[float, float, float]:
-    """``(scale, centre y, view width)`` framing ``subject`` by its span (:data:`SHOT_SPANS`)."""
+    """``(scale, centre y, view width)`` framing ``subject`` by its span (:data:`SHOT_SPANS`), no
+    narrower than :data:`SHOT_MIN_WIDTHS`."""
     below, above = SHOT_SPANS[kind]
-    scale = _clamp(frame_height / ((below + above) * subject.height), 1.0, MAX_SHOT_SCALE)
+    tightest = min(frame_height / ((below + above) * subject.height), frame_width / (SHOT_MIN_WIDTHS[kind] * subject.height))
+    scale = _clamp(tightest, 1.0, MAX_SHOT_SCALE)
     view_height = frame_height / scale
     return scale, subject.head_top + above * subject.height - view_height / 2, frame_width / scale
 
@@ -211,6 +217,7 @@ __all__ = [
     "LOOK_ROOM",
     "MAX_SHOT_SCALE",
     "SHOT_KINDS",
+    "SHOT_MIN_WIDTHS",
     "SHOT_MOVE_SECONDS",
     "SHOT_SPANS",
     "SUBJECT_AT",

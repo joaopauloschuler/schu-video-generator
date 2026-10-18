@@ -784,12 +784,118 @@ dropped (owner). The numpy beds stay as the fallback. Same rules as Phases H–M
 
 ---
 
+## Phase O — Platform worlds
+
+Goal: side-view platform scenes for kids' stories first (a level written as a small ASCII map,
+walking and jumping planned from the author's intent, story props, sounds, a camera that follows
+the hero), designed so that simple computer games could reuse the world and its rules later
+(games are not in scope). Three layers kept apart: the world model (levels, characters, items as
+plain data), the rules (movement, jumps, collisions, pickups: deterministic, driven by scripted
+inputs) and the renderers (vidgen / Manim now); the world and the rules never import Manim. Built
+on the cartoon `stage` (a `level:` param, not a new scene type; DESIGN §86), in vidgen's flat
+cartoon style; the hero and the story are original. Same rules as Phases H–N.
+
+### Step 150 — Phase plan, world model, ASCII levels and static rendering
+- [x] Phase O plan here and DESIGN §86 (the whole phase, the three layers, `stage` + `level:` rather than a new scene type)
+- [x] World model, no Manim: levels (tiles: ground, floating platforms, clouds, ladders, gaps), spots, bodies (characters and props) in tile units (`vidgen/world/`: `Level`, `Spot`, `Run`, `Body`, `Placing`, `World`, `place_bodies`; a character is `CHARACTER_TILES` 2 tiles tall)
+- [x] ASCII map parsing and validation with clear `VidgenError` messages naming the map's row and column (`parse_level`: `.` air, `#` ground, `=` platform, `~` cloud, `|` ladder, a letter a spot standing on the first tile below it; unknown symbols, a letter twice, a spot over a gap, nothing to stand on, unused / duplicate spot names, at most 400 x 40; `stage` checks: no depth, room, water or width; nothing over a gap; spot names vs marks; `vidgen validate`: the map narrower than the frame or above its top)
+- [x] Static rendering on a `stage`: the tiles drawn once into pictures (8-column chunks, only those in view drawn per frame), the background picture as a parallax layer (factor 0.2), colours / gradients and `layers` behind the level, characters and props standing on the tiles with their shadows (`cartoon/level_drawing.py` (Pillow), `cartoon/level_stage.py`; `level: {map, spots, colors}`, default `size` 0.25 on a level; spots are marks; `directing.stage_frame` / `stage_reframes` use the level's layout)
+- [x] Tests: parsing, errors with row / column, placement, geometry, drawing (chunks join without a seam), params, validate, one tiny render (`tests/test_platform_level.py`)
+
+### Step 151 — Walking and jumping, timed to the narration
+- [x] Rules (no Manim): walking along platforms and stopping at edges; jumps between platforms from the author's intent ("jump to the cloud"): take-off, height and landing planned, the arc checked against the tiles, a clear `VidgenError` when impossible; fixed paths and simple arcs only (no physics engine) (`vidgen/world/moves.py`: `walk_route` with steps of one tile and ladders, `plan_jump`, one-way clouds, `walk_body` / `jump_body`; `vidgen validate` replays a scene's moves and names the beat and why)
+- [x] Kid-friendly feel: a crouch before the jump, slower arcs, squash and wobble on landing (the existing cartoon motion) (`cartoon/level_motion.py`: `RouteWalk`, `ArcJump`; ladders climbed facing front)
+- [x] Each step (walk, jump) timed to its narration line (the beat's `at` and natural run times; default speeds scaled with `size`; `rushed_animation` `max_speedup` for level moves; `vidgen direct`, storyboards and the prop replay follow jumps)
+- [x] Tests: rules without rendering (reachable / unreachable jumps, edges, blocked arcs), timing, one tiny render (`tests/test_platform_moves.py`)
+
+### Step 152 — Story props and reactions
+- [x] Key and door, coins or stars to collect, friendly blockers (a grumpy snail that moves when asked nicely), as world items with rules (pickups, doors that open, blockers that move) (`vidgen/world/items.py`, `story_props.py`, obstacles and pickups in `moves.py`: `$` coins and `*` stars on the map picked up on the way and mid-jump; `door` props in the way until opened, `level.locks` (a locked door opens only `by` the key's holder next to it, new `key` prop); `level.blockers` (any character) until `step_aside`; `vidgen validate` replays them naming the beat; the snail is any cast member, e.g. a turtle: no snail species)
+- [x] Reactions (surprise, joy, landing wobble) with vidgen's existing actions and lip sync; pick-up steps timed to their lines (`react: {when: pickup | land | arrive, expression, effect}` on `walk_to` / `run_to` / `jump`: the expression eases on during the move, an effect symbol pops; `pick_up`, `open`, `step_aside` keep the beat `at` timing; the landing wobble is Step 151's)
+- [x] Tests: item rules without rendering, one tiny render (`tests/test_platform_props.py`); Step 151 gaps closed: `walk_to` / `run_to` to a tile, `vidgen direct` and the prop replay place a tile
+
+### Step 153 — Sound effects
+- [x] Jump, land, pickup and door sounds through the existing `sfx` system (docs/CONFIG.md "Sound effects (sfx)"); new sounds only where missing, synthesised (no licensed assets) (stage foley: the take-off `boing`, a soft `thud` + step on landing, new `coin` / `twinkle` at each pickup timed through the move's easing, new `unlock` before a locked door's creak, a soft `swoosh` and heavy steps for `step_aside`; `foley: false`, `sfx: {gain}`, `assets/sfx/` control them; DESIGN §86.9)
+- [x] Tests: the sounds are placed at the rules' events (`tests/test_platform_sounds.py`: the schedule without manim, the new sounds' level, a tiny render checking each pickup sound against the frame its coin pops, the landing in the jump's beat, foley off per scene, the SFX track's peak and loudness)
+
+### Step 154 — Camera follow and `character_size`
+- [x] The camera follows the hero sideways across the level (`level.follow: <hero>`, and the `follow` action on a level: `SmoothFollow` in `vidgen/camera.py` with a dead zone, a critically damped ease and a hard limit, clamped to the level's ends; up and down to keep the head in frame on a tall level or a high jump; a short map in a portrait frame is raised on more ground; `reframe` and directing leave a followed hero's camera alone; DESIGN §86.10)
+- [x] `character_size: small | medium | large` (small: wide landscape, for cinema; medium: TV / YouTube, the default; large: phones / Shorts) at video level, overridden per scene (scene, then video, then medium); captions and on-screen text keep their size; the beat `shot:` zooms in from that base size; not named `characters:` (×0.7 / 1 / 1.4 of the default `size`; a level's tiles, props, coins and stars scale with it, walking and jump times and their sounds stay; on a plain stage characters and props scale; `size` written wins; the video's value reaches the stage scenes like a set, after variants)
+- [x] Lint warns when a talking character is too small to read (`small_speaker`, `min_face` 0.075); the Shorts cookbook recommends `large`; `off_frame` no longer reports a level's tile chunks (Step 152 gap)
+- [x] Tests: size resolution, camera follow geometry, the lint rule (`tests/test_platform_camera.py`: incl. two tiny renders: a hero followed across and up a tall level with a close-up, and a large hero in 9:16 with the same sound schedule as at medium)
+
+### Step 155 — Example story, docs and review of Phase O
+- [x] A short kids' story (2–3 min) using only Phase O's features, original hero and story (`examples/platform-story`, "Nutmeg and the Moon Picnic": three levels, a ladder, planks, gaps, clouds, coins and stars (two caught in mid-air), a key and a locked gate, a grumpy snail who steps aside when asked nicely (new `snail` species), reactions, the automatic sounds, `level.follow`, close-ups and two-shots, the `cartoon` bed, a 9:16 variant with `character_size: large`; validates, lints with 0 errors; 2:50 at 854x480; storyboards 16:9 and 9:16 checked by eye)
+- [x] Author guide (+ `AGENTS.md`), CONFIG, DESIGN, README, CHANGELOG; gallery if applicable (guide topic `platform`; CONFIG: snail, a set on a level, screenplay with a level; DESIGN §86.11; README feature + example; CHANGELOG Phase O in the untagged 0.3.0; the gallery is per scene type: the stage page's params table regenerated; `vidgen screenplay` with a level: front-matter sets, spots as marks, `jumps onto`)
+- [x] Review of Phase O; fix what it finds; gaps to the Backlog (fixed: a set's props on a level, the screenplay's multi-line YAML round-trip crash, no night stars over a tall level, a refusal's wording, a docstring's module name, portrait close-ups narrower than a face (`SHOT_MIN_WIDTHS`); the no-manim test covers the camera and foley; `tests/test_mcp.py` run in full; 9 Backlog lines)
+
+## Phase P — Presentation toolkit
+
+Goal: help AI authors make clearer, more beautiful presentation videos (coding Shorts, science and
+maths explainers). Every feature is easy to write correctly in YAML, validated with clear
+`VidgenError` messages, covered by lint where useful, documented in docs/CONFIG.md and the author
+guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as Phases H–O.
+
+### Step 156 — Actions timed to a spoken word
+- [x] Phase P plan here and DESIGN §87 (the whole phase; §87.2 word anchors)
+- [x] `at: "@gradient"` on any beat action: the first time the beat says the word; `"@gradient#2"` a later time, `"@gradient+0.3s"` / `"-0.2s"` an offset, `"@learning rate"` a phrase; matched without case, accents or punctuation (`vidgen/word_anchors.py`; `ActionConfig.at` float or anchor, `ActionConfig.anchor`; written back as written by `shorthand()` / `model_dump`)
+- [x] Times from the beat's audio (the TTS alignment, else the estimate within the MP3's speech, with the spoken form: pronunciation, voice sounds), the same as the karaoke captions; before any audio, the estimate from the text over the word-count length, so drafts, storyboards, `vidgen direct` and lint work before `vidgen tts` (resolved by `BeatConfig`, `VideoConfig`, then `Project`)
+- [x] An unknown word, or `#N` past the last time, is a `vidgen validate` error naming the beat and listing words like it
+- [x] Every action that takes `at`: scene actions, `callout`, `sfx`, `particles`, the stage's moves and acting, the host's; `lower_third`'s `at` (`"@Ada"`, `"intro_b2@Ada#2"`); a scene's `sfx:` list (seconds) refuses an anchor and points to the `sfx` action; a translated beat keeps the source word's moment
+- [x] Docs: CONFIG "Actions on a spoken word", the action / sfx / lower_third `at` rows; the author guide (+ `AGENTS.md`)
+- [x] Tests: syntax, matching, the estimate, the config's language and rate, the audio's alignment, pronunciation, translations, the overlay, every kind of action validating, one tiny render on the word (`tests/test_word_anchors.py`)
+
+### Step 157 — One colour per concept
+- [x] A video-level `terms:` map (`{loss: accent, gradient: "#E07A5F"}`, theme colour names or hex, or `{color, tex}`) applied wherever the terms are on-screen text: equations (the `tex` parts, `equation` and `equation_derivation`), bullets, text cards, titles, captions / karaoke (where the colour reads on the plate, raised in opacity for it), chart and diagram labels (all text through `T` / `fit_text`; a `line_chart` series named a term takes its colour), callouts (a label saying a term: the callout in its colour); code comments not coloured (decided: they would clash with the syntax colours); per-scene opt-out `terms: false` (`vidgen/terms.py`, DESIGN §87.3)
+- [x] Lint `concept_colors`: more than `max_colors` (5) colours, a colour below `min_contrast` (4.5) on the theme background, a term coloured otherwise by a scene setting (title `highlight_color`, series `color`, derivation `colors`, a callout's `color`); `vidgen validate` checks the colours are theme colours
+- [x] Cookbook (docs/COOKBOOK.md §12): the rule "same term, same colour" next to the exact-wording rules
+- [x] Tests (`tests/test_terms.py`: matching, config, validate, fit_text / T / callout / series / TeX colours, lint, one tiny render with the opt-out)
+
+### Step 158 — Code that morphs between versions
+- [x] In the code scene(s): version A, then a morph to version B (unchanged tokens glide into place, new lines grow in, removed lines fade out), timed to beats and words (Step 156); the diff computed by vidgen (`difflib`), not the author (a new scene type `code_morph`: `versions` (code strings or `{code | path, highlight}`), version i at beat i, `{reveal: version2, at: "@word"}` on a word; `diff_code`: lines by text without indentation, edited lines paired by token similarity, moved and re-indented lines glide; `highlight: changed`; DESIGN §87.4; `code_walkthrough` does not morph: Backlog)
+- [x] The phone readability rules of the existing code scenes still apply (one size and wrap width for every version through `code`'s fitting, `_fit_listings`)
+- [x] Tests (`tests/test_code_morph.py`: the diff, params and checks, targets, files, tiny renders in 16:9 and 9:16 and on a word; the builtin / coverage / translation samples; the gallery page)
+
+### Step 159 — Terminal scene
+- [x] A terminal window with commands typed (typing effect) and their output appearing, timed to beats / words; the output is the author's (vidgen never runs commands) (a new scene type `terminal`: `steps` (a command, or `{command, output, clear, output_color}`), step i at beat i, a block cursor, `typing_speed`, `prompt`, `language`; `{reveal: output2, at: "@word"}` / `command2` on a word, a `reveal` of a command typing for its typing time (`NarratedScene.entrance_time`); `clear` starts a new page in the same window; DESIGN §87.5)
+- [x] The code scenes' look and themes; works beside code (a split) or after a code scene (a carry / match cut if cheap) (`code`'s window, font, Pygments style and fitting; `code: {code | path, language, highlight}` beside it, left or above, whichever gives larger text (above in 9:16), one font size; `carry: ["listing -> code"]` after a `code` / `code_morph` scene glides the listing into place; no split with other scene types: Backlog)
+- [x] Tests (`tests/test_terminal.py`: session rows, params and checks, targets, the code file, tiny renders in 16:9 and 9:16, on words, `clear`; the builtin / coverage / translation samples; the gallery page)
+
+### Step 160 — Maths toolkit, part 1: function plots
+- [x] Axes with f(x) from expressions evaluated safely (no `eval`; a small whitelisted parser, or sympy only if already a dependency: check), several functions (sympy is not a dependency: `vidgen/mathexpr.py`, a recursive-descent parser to numpy closures, exported by `vidgen.api`; a new scene type `function_plot` with maths axes crossing at the origin, `functions` as `x^2` / `f(x) = ...` / `{expr, name, label, color, domain, dashed}`, a later one using an earlier one; asymptotes break the curve; DESIGN §87.6)
+- [x] A dot moving along a curve with a live value label, a tangent line at a point moving with the dot, shaded area under a curve between bounds, labels; driven by beat actions (`dots: {on, x, label: '{name}({x}) = {y}', tangent, guides}`, `areas: {under, over, between, label: 'A = {area}'}`, curve labels placed clear of curves and labels; the new `trace` action moves a dot along its curve or an area's right end, on a word with `at: "@word"`; `reveal` of `dot<N>` / `tangent<N>` / `area<N>` on a word; terms colour a function named after a term and an area whose label says one; lint `concept_colors` checks their `color`)
+- [x] Step 161's plan recorded (DESIGN §87.7: points, vectors and marks as additions to `function_plot`, a `number_line` scene type beside it)
+- [x] Tests (`tests/test_function_plot.py`: the parser, labels, layout helpers, params and checks, `trace` checks, term conflicts, tiny renders in 16:9 and 9:16 on words and with `until`; the builtin / coverage / translation samples; the gallery page)
+
+### Step 161 — Maths toolkit, part 2: geometry basics
+- [x] Braces with labels, angle arcs with labels, dimension lines (`function_plot` `marks`: `{brace: [A, B]}`, `{angle: [A, V, B]}` (a square at 90°, `{angle}` in degrees), `{dimension: [A, B]}` (`{length}`), and `{segment: [A, B, ...], closed}` for the figure's sides; outside the figure by default, `side:`; the builders `brace_mark`, `angle_mark`, `dimension_mark` in `vidgen/geometry_marks.py`, exported by `vidgen.api`; DESIGN §87.8)
+- [x] A number line (points, intervals, jumps); a coordinate plane with vectors (add, scale) (a new scene type `number_line`: points, intervals in interval notation `"[-1, 3)"` / to `inf`, jumps `[2, 5]` labelled `+3`; `function_plot` `points` and `vectors` (`{from, to | components}`, `{sum: [a, b]}` tip to tail); the `trace` action moves points (`to: [x, y]`), vectors (`to`, `scale`) and a number line's points, everything drawn from them following)
+- [x] A scene type or additions to Step 160's scene: decided and recorded in DESIGN §87 (as planned in §87.7: additions to `function_plot` on the plane, `functions` optional, `axes: false`; `number_line` its own type; shared parts in `scenes/math_axes.py`; DESIGN §87.8)
+- [x] Tests (`tests/test_geometry.py`: the mark builders, the figure's references, sums and trace goals, params and checks, trace checks, terms, the number line, tiny renders in 16:9 and 9:16 on words and with `until`; the builtin / coverage / translation samples; the gallery page and example scene `hops`)
+
+### Step 162 — Charts that change between beats
+- [x] The chart scenes (bar, line, ...) take values per beat and animate between them: bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line chart, the axis rescaling when needed; values stay the author's (`bar_chart` and `line_chart` take `changes`, one step each after their own, or on a word with `{reveal: change<N>, at: "@word"}`; bars keep one scale and `sort: true` re-sorts them; lines morph and the y axis rescales when the values leave it or would span less than half of it (`rescale`); `{trace: series1, to: 4}` sweeps a cursor dot with the line's value; pie, histogram, scatter, heatmap and stat not, with the reasons in DESIGN §87.9; `scenes/chart_changes.py`; `chart_axes(tick_width=)`)
+- [x] Tests (`tests/test_chart_changes.py`: states, checks, the rescale rule, sorting, targets and steps, trace checks, tiny renders in 16:9 and 9:16, on a word, concept colours)
+
+### Step 163 — Narration–picture check in lint
+- [x] A deterministic rule on the layout dump / plan: a beat whose narration names an on-screen label or term not visible yet (it appears in a later beat); optionally a reveal the narration never mentions (`said_before_shown`: from every frame of the layout dump, the beats' word times and the `reveal` / `callout` / `transform` actions of the beat, so a reveal on a word is timed to the word; `unsaid_reveal`, off by default; `src/vidgen/lint/narration_rule.py`, DESIGN §87.10)
+- [x] Low false positives (stemming, case, stop words, a threshold); a setting to tune or turn it off (`min_lead` 1.5 s, `max_words` 4, numbers / overlays / bubbles / maths / code left out, a label another text already says, a label named again as it shows; `severity`, `lint_ignore` with `object`; measured on every example's dumps: 2 findings in 118 scenes)
+- [x] Tests (`tests/test_narration_rule.py`: stems, mentions, labels from dumps, action narrowing, both rules, config, the runner on faked renders with a word anchor and `lint_ignore`)
+
+### Step 164 — Examples, docs and review of Phase P
+- [x] One example project showing the new features (a short science or coding explainer, 16:9 with a 9:16 variant) (`examples/gradient-descent`: function plots with a traced dot, tangent and area, a number line, plane vectors with a right-angle mark, the update rule with its symbols in the concepts' colours, `code_morph`, a `terminal` beside the code, a `line_chart` with `changes` and a cursor, 18 actions on spoken words, karaoke captions; validate and lint clean in 16:9 and 9:16; voiced with Kokoro, readback 0.0 % word error rate, rendered at 1080p outside the repo)
+- [x] Guide / CONFIG / CHANGELOG / README / gallery as the repo's conventions require; the Shorts cookbook (docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) for word timing, concept colours, code morphing and the terminal (CHANGELOG "Presentation toolkit (Phase P)" in the untagged 0.3.0; README feature and example; CONFIG / guide colour advice; the gallery pages needed no new type)
+- [x] Review of the whole phase with fixes, in HANDOFF like earlier phase reviews; the phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout (`tests/test_phase_p_review.py`)
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
 then nice-to-have.
 
 Bugs / correctness
+- [x] (Fixed in Step 157: `vidgen.api` exports the level layers, DESIGN §86.11) `tests/test_builtin_scenes.py::test_builtins_use_only_the_public_api` fails: `scenes/stage.py` imports `vidgen.cartoon.level_*`, `vidgen.camera`, `vidgen.world`, `vidgen.config` directly (Phase O, Steps 150–154; found in Step 156) — export what a stage needs through `vidgen.api` or exempt the stage in the test with a reason
+- [ ] Word anchors (Step 156): with `overlap` / `interrupt` the runner scales `at` by the beat's shorter body, so a word-timed action lands a little early; an offset like `@mid-20s` reads as the word `mid` minus 20 s (write `"@mid-20s+0s"`)
 - [ ] MCP: large documents (a long video's `lint` / `storyboard` JSON, `schema full=true`) are not trimmed and can exceed a client's tool-output limit (Step 59) — page or summarise them
 - [ ] MCP on Windows: process-tree kill on cancel is untested; no session with a real client (Claude Desktop / Code) was possible here (Step 59)
 - [ ] `equation_derivation`: a `highlight` colour on a step is not carried into its dimmed copy; `code`'s own highlight steps reset opacities a `dim` action set (Step 37)
@@ -804,6 +910,11 @@ Bugs / correctness
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
 
 Quality (what an agent's video looks like)
+- [ ] Charts that change (Step 162): no caption or title per change; bars cannot enter or leave a race (labels fixed), `x` cannot change; no guide line from a line chart's cursor to the axes; `pie` / `heatmap` / `scatter` do not change; no example re-sorts bars (`examples/gradient-descent` shows a line chart's changes and cursor); a rescaled axis' ticks keep the decimals of the unlabelled ticks (`5.0`, `10.0`)
+- [ ] `function_plot` (Step 160): a function of a parameter animated over beats (`a` in `a x^2`); parametric / polar curves; LaTeX labels; a dot's label plate does not avoid other curves; `trace` moves in x only
+- [ ] `terminal` (Step 159): no general split with another scene type (only the `code` pane); a long session does not scroll (`clear` starts a new page); one colour per output (`code_morph`'s `reveal` uses `entrance_time` since Step 164)
+- [ ] `code_morph` (Step 158): `code_walkthrough` does not morph between versions; a token moving to another line (a line split in two) fades out and in instead of gliding (a `reveal` action's morph takes 1.5 s since Step 164)
+- [ ] Phase P review (Step 164): a term in `accent` colours like the default tangents, jump arcs, angle marks and terminal prompt (documented, not linted); a number line or function plot in 9:16 under karaoke captions leaves a tall empty band (the plot keeps its aspect); the karaoke band reserves two lines in 16:9 (`max_lines: 1` frees one); readback's single letters ("w") and short words come out "doubtful" with Kokoro
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
 - [ ] 9:16 stills: `code_walkthrough` listing small (a 5-line file wraps a line), `image` `fit: contain` leaves bands, a `world` map view spanning most longitudes is a strip (Step 57)
 - [ ] `reserve` is per whole scene: several reserving overlays + captions shrink content until `min_font` fires (Step 48)
@@ -864,8 +975,17 @@ Quality (what an agent's video looks like)
 - [ ] Dubbing: no per-language `overlap` / `interrupt`; OpenRouter voices named after a language (Voxtral `fr_marie_*`) are not swapped; voice labels (`Fen:`) are not translatable; a dubbed Kokoro interrupt has no word timings outside English; no `tts --all-languages` over MCP (Step 143)
 - [ ] Readback flags: a beat's first word often comes out doubtful; two words heard as one ("Ever wondered" → "everwandered", probability 0.68) count as an unclear 2-word difference; no per-word audio clip to listen to; the `readback` lint rule reads only the cache (Steps 141, 144)
 - [ ] A narration-only video stays at its narration's level (`audio.normalize: auto`): the host-explainer with Kokoro measured −22.3 LUFS integrated; an explainer for publishing wants `audio: {normalize: true}` or music, which the guide does not say (Step 144)
+- [ ] Platform levels: a gap shows the parallax hills behind it, so it can read as a valley rather than a hole; draw a gap's sides or a darker depth (Step 155)
+- [ ] Platform levels: rain, snow and fog stop at the plain stage's ground line, not on the tiles (Step 150)
+- [ ] Platform levels: a move's `react` effect symbol and a `react` expression `surprised` during a move play no sound (an `effect` / `react` action's do) (Step 153)
+- [ ] Platform levels: `enter` / `exit` pick up no coins or stars; a blocker that stepped back off the path is not followed by the replay any more (a later walk of it fails only at render); `close` on a door with someone standing in it is not refused (Step 152)
+- [ ] Platform levels: climbing uses the front walk cycle (no hands on the rungs); walking through a low cloud shows the character inside it (Step 151)
+- [ ] Platform camera: a `level.follow` hero waiting off stage for its `enter` puts the camera at the level's edge until it enters; the follow does not look ahead; `vidgen direct` and the reframe replay plan the camera's x only (Step 154)
+- [ ] `small_speaker` measures a `head` part: an SVG character without one is not checked (Step 154)
+- [ ] `vidgen screenplay` on a level: the directions' `at` times are estimated as on a plain stage (a wide level's walks take longer), no `climbs` verb, a level only through a front-matter or `--cast` set (Step 155)
 
 Nice-to-have / performance
+- [ ] Platform levels that the camera rises over render at about 2.4x real time at 854x480 (sky of the platform example: 47.9 s in 113 s): most of it is Manim's PIL transform of each tile chunk in view on every frame; draw the chunks in view into one picture per frame, or cut chunks by rows (Step 155)
 - [ ] Drafts: beat starts are rounded to whole frames per beat (a draft drifts up to ~0.2 s from the final over a scene); a light change still redraws the whole draft frame; animatics have no crossfade and no `--final` (Steps 137, 138)
 - [ ] `--jobs auto`: a cgroup CPU quota (`cpu.max`) is not read; one per-job figure (1.5 GB) whatever the format (a 4K render needs about 2.5 GB); the Windows and macOS memory readings are tested with mocks only (Step 117)
 - [ ] Stage: `follow` tracks x only, no vertical pan, layers are not action targets, a near image layer zoomed at the bottom can show a sliver; no `on: <prop>` (a prop's `lift` worked out by hand); particles have no `place: behind`, wind or ground stop; no per-scene opt-out of `cartoon_style` (Steps 74–77)

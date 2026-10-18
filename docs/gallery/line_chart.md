@@ -4,7 +4,7 @@
 
 **Use it for:** change over time, trends.
 
-`reveal: per_beat` (default): series *i* is drawn at beat *i* (the axes appear with the first one; spread evenly when there are more series than beats). `all`: every series is drawn in the first beat. Each series ends with a `name value` label.
+`reveal: per_beat` (default): series *i* is drawn at beat *i* (the axes appear with the first one; spread evenly when there are more series than beats). `all`: every series is drawn in the first beat. Each series ends with a `name value` label. Each of `changes` is a step of its own: the lines morph to its values and the y axis rescales when they leave it or would look flat (`rescale`), or on a word with `{reveal: change<N>, at: "@word"}`. `{trace: series<N>, to: x}` sweeps a cursor dot with the line's value along it.
 
 Last beat, 16:9 and 9:16:
 
@@ -40,7 +40,7 @@ From the author guide (`vidgen guide scenes`):
 | `series` | `dict[str, list[float]] \| list[Series]` | required | {name: [values]} or a list of {name, values, color}; one value per x. |
 | `series.name` | `str` | required | Series name (end label / legend). |
 | `series.values` | `list[float]` | required | One value per x. |
-| `series.color` | `color \| None` |  | Line color; default: the theme.palette color at the series' position. |
+| `series.color` | `color \| None` |  | Line color; default: the colour of the video's term the name is (terms:), else the theme.palette color at the series' position. |
 | `x_label` | `str` |  | X axis label. |
 | `y_label` | `str` |  | Y axis label. |
 | `y_min` | `float \| None` |  | Lower end of the y axis; default: from the data. |
@@ -49,6 +49,8 @@ From the author guide (`vidgen guide scenes`):
 | `x_format` | `str` | `'{:g}'` | Python format for numeric x tick labels. |
 | `unit` | `str` |  | Appended to y values. |
 | `reveal` | `'per_beat' \| 'all'` | `'per_beat'` | per_beat: series i is drawn at beat i; all: every series in beat 1. |
+| `changes` | `list[dict[str, list[float]] \| list[float]]` |  | Values the lines change to, one entry per change: {series name: [values]} (series left out keep theirs) or, with one series, just [values]; change N plays in its own step after the series are drawn, or on a word with {reveal: changeN, at: '@word'}. |
+| `rescale` | `bool` | `True` | At a change the y axis rescales when the new values leave it or span less than half of it (y_min / y_max stay fixed); false: one y axis covering every change. |
 | `annotate` | `bool` | `True` | Label the end of each line with its name and value. |
 | `dots` | `bool \| None` |  | Markers at the data points; default: when there are at most 12 points. |
 | `caption` | `str` |  | Note under the chart (e.g. the data source). |
@@ -60,7 +62,7 @@ From the author guide (`vidgen guide scenes`):
 
 ## Targets
 
-`title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>`
+`title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>`, `change<N>`
 
 ## Beats
 

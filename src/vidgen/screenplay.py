@@ -185,6 +185,7 @@ _VERBS: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(p, re.IGNORE
      r"(?:over\s+|back\s+|up\s+|across\s+)?(?:to(?:wards)?|toward|up to)\s+(?P<obj>.+)$", "walk"),
     (r"^(?P<verb>enters?|comes? in|walks? in|runs? in|arrives?|steps? in)" + _SIDE + "$", "enter"),
     (r"^(?P<verb>exits?|leaves?|walks? (?:off|out|away)|goes (?:off|out|away)|runs? (?:off|out|away))" + _SIDE + "$", "exit"),
+    (r"^(?:jumps?|hops?|leaps?)\s+(?:up\s+|down\s+|across\s+|over\s+)?(?:on(?:to)?|to|on to)\s+(?P<obj>.+)$", "jump_to"),
     (r"^(?:jumps?|hops?|leaps?)(?:\s+(?:up|for joy|with joy|in the air|high|up and down))?$", "jump"),
     (r"^(?:looks?|glances?|stares?|turns?|peeks?|peers?)\s+(?:over\s+|up\s+|back\s+|round\s+|around\s+)?(?:at|to(?:wards)?|toward)\s+(?P<obj>.+)$", "look"),
     (r"^points?\s+(?:at|to(?:wards)?|toward)\s+(?P<obj>.+)$", "point"),
@@ -418,6 +419,23 @@ class SetDesign:
         return apply_set(self.set_params, self.params).params if self.set_name else self.params
 
 
+def stage_marks(params: Mapping[str, Any]) -> dict[str, float]:
+    """A stage's marks (x 0..1) as a screenplay places and walks by them: its ``marks`` and, on a
+    platform ``level``, its spots (DESIGN.md §86.3; a map that does not parse adds none: validate
+    reports it)."""
+    from vidgen.world import parse_level
+
+    marks = dict(params.get("marks") or {})
+    level = params.get("level")
+    if isinstance(level, Mapping) and isinstance(level.get("map"), str):
+        try:
+            parsed = parse_level(level["map"], level.get("spots") if isinstance(level.get("spots"), Mapping) else None)
+        except VidgenError:
+            return marks
+        marks.update({spot.name: spot.x / parsed.columns for spot in parsed.spots})
+    return marks
+
+
 def _place(text: str) -> str | float:
     """A mark name or an x position."""
     try:
@@ -567,7 +585,7 @@ def parse_set(text: str, known_characters: Mapping[str, str], sets: Mapping[str,
         if prop.get("against") and not indoors:
             prop.pop("against")
             design.todos.append(f"set: {prop['prop']} against the wall needs a room (room: ...)")
-    marks = design.stage_params().get("marks")
+    marks = stage_marks(design.stage_params())
     for name, at in design.placed.items():
         try:
             mark_x(at, marks)
@@ -598,6 +616,7 @@ class StageState:
     marks: dict[str, float]
     names: dict[str, str]
     width: float = 14.22
+    level: bool = False
     last: list[str] = field(default_factory=list)
     last_object: str | float | None = None
 
@@ -767,6 +786,13 @@ def _predicate(text: str, who: list[str], state: StageState) -> list[dict[str, A
             return [{kind: target, **side, **speed, "_seconds": seconds}]
         if kind == "jump":
             return [{"jump": target, "_seconds": jump_motion_seconds(JUMP_SECONDS, 1.0) + MARGIN}]
+        if kind == "jump_to":   # on a platform level only: to a spot or a mark (DESIGN.md §86.7)
+            obj = _object(obj_text or "", state, camera=False)
+            if not state.level or obj is None or obj[0] != "mark":
+                return None
+            for name in who:
+                state.x[name] = mark_x(obj[1], state.marks)
+            return [{"jump": name, "to": obj[1], "_seconds": jump_motion_seconds(JUMP_SECONDS, 1.0) + MARGIN} for name in who]
         if kind == "look":
             if obj_text and obj_text.strip().lower() in ("each other", "one another") and len(who) == 2:
                 return [_look(who[0], who[1]), _look(who[1], who[0])]
@@ -1049,7 +1075,7 @@ def screenplay_project(
     config["scenes"] = []
     used: dict[str, int] = {}
     voice_of = {str(c["name"]): c.get("voice") for c in [*from_cast, *characters]}
-    sets = cast.get("sets") if isinstance(cast.get("sets"), Mapping) else {}
+    sets = {**(config["sets"] if isinstance(config.get("sets"), Mapping) else {}), **(cast.get("sets") if isinstance(cast.get("sets"), Mapping) else {})}
     for k, scene in enumerate(play.scenes):
         if scene.card:
             _add_card(project, scene, voice_of, used)
@@ -1121,7 +1147,7 @@ def _add_scene(
     scene_id = _scene_id(scene.name, used)
     design = parse_set(scene.set_text, names, sets)
     stage = design.stage_params()
-    marks = dict(stage.get("marks") or {})
+    marks = stage_marks(stage)
     cast = _scene_cast(scene, names, design)
     taken = [mark_x(at, marks) for at in design.placed.values() if _valid_place(at, marks)]
     free = [m for m in PLACES.get(len(cast), ()) if all(abs(MARKS[m] - x) >= SPACING for x in taken)]
@@ -1141,7 +1167,7 @@ def _add_scene(
     home = {p["name"]: mark_x(p["at"], marks) for p in placed if _valid_place(p["at"], marks)}
     fmt = project.config.get("format") or {}
     width, height = (fmt.get("width", 16), fmt.get("height", 9)) if isinstance(fmt, dict) else (16, 9)
-    state = StageState(dict(home), home, props, kinds, marks, {**names}, FRAME_UNITS * max(width / height, 1.0))
+    state = StageState(dict(home), home, props, kinds, marks, {**names}, FRAME_UNITS * max(width / height, 1.0), level=isinstance(stage.get("level"), Mapping))
     narration = project.config.get("narration")
     words_per_second = float(narration.get("words_per_second", WORDS_PER_SECOND)) if isinstance(narration, dict) else WORDS_PER_SECOND
     beats: list[dict[str, Any]] = []

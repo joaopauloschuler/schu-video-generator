@@ -38,6 +38,9 @@ INCLUDABLE_KEYS: tuple[str, ...] = ("include", "characters", "voices", "sets")
 BACKGROUND_KEYS = frozenset({"image", "generate", "background"})
 #: A stage's indoor set (DESIGN.md §69.42): another choice of backdrop, see :func:`apply_set`.
 ROOM_KEY = "room"
+#: Set params a stage with a platform ``level`` does not take from its set (DESIGN.md §86.2): what
+#: stands at a depth (props), the water and a room; everything on a level stands on its tiles.
+LEVEL_DROPPED_KEYS = frozenset({"props", "water", ROOM_KEY, "ground_color"})
 #: Set params whose lists combine with the stage's (the set's entries first).
 COMBINED_LISTS: tuple[str, ...] = ("characters", "props", "layers", "particles")
 #: The built-in sets (DESIGN.md §76): every ``*.yaml`` file here holds ``sets:``.
@@ -272,10 +275,12 @@ def apply_set(set_params: Mapping[str, Any], params: Mapping[str, Any]) -> SetMe
       stage's; a stage entry named like a set entry (a character's name; a prop's or layer's
       ``name:`` equal to the set entry's own or default name, ``tree``, ``tree_2``) changes that
       entry instead (its keys win); an empty list clears the set's;
-    - anything else is replaced.
+    - anything else is replaced;
+    - a stage with a platform ``level`` takes none of :data:`LEVEL_DROPPED_KEYS` (its own props
+      stand on the tiles; the set gives the sky, the layers, the light, the ambience, the marks).
     """
     own = dict(params)
-    dropped: set[str] = set()
+    dropped: set[str] = set(LEVEL_DROPPED_KEYS) if "level" in own else set()
     if BACKGROUND_KEYS & own.keys():
         dropped |= BACKGROUND_KEYS | {ROOM_KEY}
     if ROOM_KEY in own:
@@ -338,6 +343,30 @@ def expand_sets(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str
                 updated[f"{here}.{at}"] = origin_of(f"sets.{name}.{written}", origins)
         for at, written in merge.from_stage.items():
             updated[f"{here}.{at}"] = origin_of(f"{here}.{written}", origins)
+    return {**data, "scenes": scenes}, updated
+
+
+#: The video's ``character_size`` values that :func:`expand_character_size` passes to the stage
+#: scenes (any other value is left for the config check to report at ``character_size``).
+_CHARACTER_SIZES = ("small", "medium", "large")
+
+
+def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str, Origin]]:
+    """``data`` with the video's ``character_size`` (DESIGN.md §86.10) given to every ``stage``
+    scene whose params (after its set) give neither ``character_size`` nor ``size``, and
+    ``origins`` pointing those at the video's key; the scene's own setting wins."""
+    updated = dict(origins)
+    named = data.get("character_size") if isinstance(data, Mapping) else None
+    if named not in _CHARACTER_SIZES or not isinstance(data.get("scenes"), list):
+        return data, updated
+    scenes: list[Any] = []
+    for i, scene in enumerate(data["scenes"]):
+        params = scene.get("params", {}) if isinstance(scene, Mapping) else None
+        if not isinstance(params, Mapping) or scene.get("type") != "stage" or "character_size" in params or "size" in params:
+            scenes.append(scene)
+            continue
+        scenes.append({**scene, "params": {**params, "character_size": named}})
+        updated[f"scenes[{i}].params.character_size"] = origin_of("character_size", origins)
     return {**data, "scenes": scenes}, updated
 
 

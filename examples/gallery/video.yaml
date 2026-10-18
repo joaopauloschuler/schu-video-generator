@@ -13,7 +13,10 @@
 #   vidgen storyboard examples/gallery --scene share --scene busy --per-beat 3  # a donut sweeping in; a heatmap
 #   vidgen storyboard examples/gallery --scene reach --per-beat 3   # a map: countries, then pins and an arc
 #   vidgen storyboard examples/gallery --scene derive --per-beat 3  # an equation derivation, step by step
+#   vidgen storyboard examples/gallery --scene slope --per-beat 3   # a function plot: a dot tracing its curve, an area growing
+#   vidgen storyboard examples/gallery --scene hops --per-beat 3    # a number line: an interval, jumps, a point sliding on a word
 #   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step; chapter 4 starts here
+#   vidgen storyboard examples/gallery --scene morph --per-beat 3   # code morphing from a loop to a comprehension, on a word
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
 #   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
@@ -412,6 +415,42 @@ scenes:
       - text: "Then divide both sides by two."
       - text: "And x is four, the result, in a box."
 
+  - id: slope
+    type: function_plot   # f(x) written as maths and parsed safely (nothing runs); one item per beat
+    params:
+      title: "How steep is x²?"
+      functions: ["f(x) = x^2"]
+      x_range: [-3, 3]
+      dots: [{x: -2, tangent: true, guides: true, label: "slope {slope}"}]   # a live label
+      areas: [{between: [0, 1], label: "A = {area}"}]
+    beats:
+      - text: "A function plot draws f of x equals x squared on maths axes."
+      - text: "A dot on the curve carries its tangent line, and a label with the slope."
+      - text: "As the dot travels to the right, the slope grows steeper."
+        actions:
+          - {trace: dot1, to: 2, at: "@travels"}   # the dot moves along the curve on the spoken word
+      - text: "Now the area under the curve, from zero to one, grows as its end moves out to two."
+        actions:
+          - {reveal: area1, at: "@area"}           # the scene leaves the area to this action
+          - {trace: area1, to: 2, at: "@grows"}
+
+  - id: hops
+    type: number_line   # one line across the frame: points, intervals (interval notation), jumps
+    params:
+      title: "Adding on the number line"
+      range: [-2, 9]
+      step: 1
+      points: [{at: 2, name: start}]
+      intervals: [{from: 5, to: inf, ends: "[)", label: "x ≥ 5"}]   # closed at 5, on to infinity
+      jumps: [[2, 5], [5, 7]]                                         # arcs labelled +3 and +2
+    beats:
+      - text: "A number line, and a point that starts at two."
+      - text: "Every number from five on is shaded: the interval from five to infinity."
+      - text: "From two, jump three to land on five."
+      - text: "Two more lands on seven, and the point slides along to meet it."
+        actions:
+          - {trace: "point:start", to: 7, at: "@slides"}   # the point moves on the spoken word
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)
@@ -428,4 +467,45 @@ scenes:
       - text: "Then it scrolls down to the loss function."
       - text: "Focus enlarges a line: here, the prediction error."
       - text: "And the update itself is plain gradient descent."
+
+  - id: morph
+    type: code_morph         # version i at beat i; vidgen diffs the versions: shared tokens glide, new lines grow in
+    params:
+      title: "From a loop to a comprehension"
+      versions:
+        - |
+          def squares(numbers):
+              result = []
+              for n in numbers:
+                  result.append(n * n)
+              return result
+        - code: |
+            def squares(numbers: list[int]) -> list[int]:
+                return [n * n for n in numbers]
+          highlight: changed  # mark the lines that differ from the version before
+    beats:
+      - text: "A code morph shows how code changes. Here, a loop that fills a list."
+      - text: "The same function as a list comprehension: the loop folds into one line."
+        actions:
+          - {reveal: version2, at: "@comprehension"}   # morph on the spoken word (1.5 s)
+
+  - id: shell
+    type: terminal           # step i at beat i: the command is typed, then its output appears; vidgen runs nothing
+    transition: cut
+    carry: ["listing -> code"]   # the morph's listing (the same code) glides into the code beside the terminal
+    params:
+      title: "Run the tests"
+      code: {code: "def squares(numbers: list[int]) -> list[int]:\n    return [n * n for n in numbers]", highlight: 2}
+      steps:
+        - command: "pytest -q"
+          output: |
+            ...
+            3 passed in 0.02s
+        - command: "python -c 'from sq import squares; print(squares([1, 2, 3]))'"
+          output: "[1, 4, 9]"
+    beats:
+      - text: "A terminal types a command beside the code and shows what it printed: the tests pass."
+        actions:
+          - {reveal: output1, at: "@pass"}   # the output appears on the spoken word
+      - text: "And a quick check by hand gives one, four and nine."
 
