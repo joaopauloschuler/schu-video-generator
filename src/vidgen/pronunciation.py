@@ -11,8 +11,12 @@ re-voices only the beats it changes; a beat no entry matches keeps its hash.
   written words by the spoken ones.
 - All entries are matched against the original text in one pass (a replacement is never
   matched again). Where matches overlap, the one starting first wins, then the longest, then
-  the entry written first; :func:`pronunciation_warnings` reports entries that never match and
-  entries that collide.
+  the entry written first (a project's entries before built-in ones);
+  :func:`pronunciation_warnings` reports entries that never match and entries that collide.
+- Built-in lists (DESIGN.md §88): ``data/pronunciation/<engine>-<dialect>.yaml`` files shipped
+  with vidgen, one per TTS engine and language (:func:`builtin_list_name`: ``kokoro-en-us`` for
+  Kokoro's American English voices); :func:`build_pronunciation` puts a project's entries over
+  them (``null`` removes one).
 
 No manim import (``vidgen.project`` uses it).
 """
@@ -20,10 +24,12 @@ No manim import (``vidgen.project`` uses it).
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
+from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -31,7 +37,7 @@ from vidgen.config import PronunciationEntry, PronunciationMap, PronunciationVal
 from vidgen.errors import Problem, VidgenError
 
 if TYPE_CHECKING:
-    from vidgen.config import VideoConfig
+    from vidgen.config import VideoConfig, VoiceConfig
 
 _WORD = re.compile(r"\S+")
 
@@ -39,20 +45,22 @@ _WORD = re.compile(r"\S+")
 @dataclass(frozen=True)
 class Rule:
     """One compiled entry: ``term`` as written in the config, its spoken form ``say``, the
-    ``pattern`` that finds it and its position ``index`` (ties between equal matches)."""
+    ``pattern`` that finds it, its position ``index`` (ties between equal matches) and whether
+    it comes from a built-in list (``builtin``)."""
 
     term: str
     say: str
     pattern: re.Pattern[str]
     regex: bool
     index: int
+    builtin: bool = False
 
 
 def _entry(value: str | PronunciationEntry) -> PronunciationEntry:
     return PronunciationEntry(say=value) if isinstance(value, str) else value
 
 
-def compile_rule(term: str, value: str | PronunciationEntry, index: int = 0) -> Rule:
+def compile_rule(term: str, value: str | PronunciationEntry, index: int = 0, builtin: bool = False) -> Rule:
     """The :class:`Rule` of one entry; ``ValueError`` for a regex that does not compile, that
     matches the empty string or whose ``say`` refers to a group it does not have."""
     entry = _entry(value)
@@ -76,7 +84,7 @@ def compile_rule(term: str, value: str | PronunciationEntry, index: int = 0) -> 
             raise ValueError(f"'{term}': say {entry.say!r} is not a valid replacement: {exc}") from None
         if pattern.fullmatch(""):
             raise ValueError(f"'{term}' matches the empty string")
-    return Rule(term, entry.say, pattern, entry.regex, index)
+    return Rule(term, entry.say, pattern, entry.regex, index, builtin)
 
 
 def form_problems(data: Mapping[object, object]) -> list[str]:
@@ -115,13 +123,14 @@ def entry_problems(entries: Mapping[str, PronunciationValue]) -> list[str]:
 @dataclass(frozen=True)
 class Replacement:
     """A term replaced in a text: ``text[start:end]`` (the original) became
-    ``spoken[spoken_start:spoken_end]``."""
+    ``spoken[spoken_start:spoken_end]``; ``builtin``: by an entry of a built-in list."""
 
     term: str
     start: int
     end: int
     spoken_start: int
     spoken_end: int
+    builtin: bool = False
 
 
 @dataclass(frozen=True)
@@ -155,6 +164,11 @@ class Spoken:
         """True when the TTS gets something else than the written text."""
         return self.spoken != self.text
 
+    @property
+    def builtin_terms(self) -> tuple[str, ...]:
+        """The terms of built-in entries replaced in the text (each once, in order)."""
+        return tuple(dict.fromkeys(r.term for r in self.replacements if r.builtin))
+
     def _spoken_pos(self, pos: int, end: bool) -> int:
         """Where original character ``pos`` is in the spoken text (``end``: the position after
         it). Inside a replacement: the replacement's start / end."""
@@ -172,17 +186,17 @@ class Spoken:
         of :attr:`text` (between words) but not written; it belongs to no written word
         (:meth:`word_groups`). Voice sounds use it (DESIGN.md §69.33)."""
         events = sorted(
-            [(r.start, 1, r.end, r.term, self.spoken[r.spoken_start : r.spoken_end]) for r in self.replacements]
-            + [(position, 0, position, term, said) for position, said, term in inserts]
+            [(r.start, 1, r.end, r.term, self.spoken[r.spoken_start : r.spoken_end], r.builtin) for r in self.replacements]
+            + [(position, 0, position, term, said, False) for position, said, term in inserts]
         )
         pieces: list[str] = []
         replacements = []
         pos = length = 0
-        for start, _, end, term, said in events:
+        for start, _, end, term, said, builtin in events:
             start = max(start, pos)   # an insert inside a replacement goes after it
             pieces.append(self.text[pos:start])
             length += start - pos
-            replacements.append(Replacement(term, start, max(end, start), length, length + len(said)))
+            replacements.append(Replacement(term, start, max(end, start), length, length + len(said), builtin))
             pieces.append(said)
             length += len(said)
             pos = max(end, start)
@@ -202,10 +216,12 @@ class Spoken:
 
 
 class Pronunciation:
-    """The compiled pronunciation entries of a project (empty: every text is said as written)."""
+    """The compiled pronunciation entries of a project (empty: every text is said as written),
+    with those of the built-in list ``builtin_list`` (``None``: none) under them."""
 
-    def __init__(self, rules: Sequence[Rule] = ()) -> None:
+    def __init__(self, rules: Sequence[Rule] = (), builtin_list: str | None = None) -> None:
         self.rules: tuple[Rule, ...] = tuple(rules)
+        self.builtin_list = builtin_list
 
     def __bool__(self) -> bool:
         return bool(self.rules)
@@ -242,7 +258,7 @@ class Pronunciation:
             pieces.append(text[pos:start])
             length += start - pos
             say = match.expand(rule.say) if rule.regex else rule.say
-            replacements.append(Replacement(rule.term, start, end, length, length + len(say)))
+            replacements.append(Replacement(rule.term, start, end, length, length + len(say), rule.builtin))
             pieces.append(say)
             length += len(say)
             pos = end
@@ -288,17 +304,39 @@ def read_pronunciation_file(path: Path, rel: str) -> dict[str, PronunciationValu
     return entries
 
 
-def load_pronunciation(config: VideoConfig, root: Path) -> Pronunciation:
-    """The project's entries: those of its ``pronunciation_file``(s) in order, then its
-    ``pronunciation:`` map over them (a ``null`` value removes a term); entries with a
-    ``language`` other than the video's are left out (DESIGN.md §54)."""
+def project_entries(config: VideoConfig, root: Path) -> dict[str, PronunciationValue]:
+    """The project's own entries: those of its ``pronunciation_file``(s) in order, then its
+    ``pronunciation:`` map over them; a ``null`` value is kept (it removes a built-in entry)."""
     entries: dict[str, PronunciationValue] = {}
     for rel in config.pronunciation_files:
         entries.update(read_pronunciation_file(root / rel, rel))
     entries.update(config.pronunciation)
-    used = [(t, v) for t, v in entries.items() if v is not None and applies_to(v, config.language)]
+    return entries
+
+
+def build_pronunciation(
+    entries: Mapping[str, PronunciationValue],
+    language: str | None,
+    builtin_list: str | None = None,
+) -> Pronunciation:
+    """The :class:`Pronunciation` of a project's ``entries`` over the built-in list
+    ``builtin_list`` (DESIGN.md §88): a project entry replaces the built-in entry of the same
+    term, ``null`` removes it; entries with a ``language`` other than the video's are left out
+    (DESIGN.md §54) and do not replace a built-in entry. The project's rules come first, so
+    they win a tie with a built-in rule matching the same text."""
+    own = {t: v for t, v in entries.items() if v is None or applies_to(v, language)}
+    used = [(t, v) for t, v in own.items() if v is not None]
     rules = [compile_rule(term, value, i) for i, (term, value) in enumerate(used)]
-    return Pronunciation(rules)
+    defaults = builtin_entries(builtin_list) if builtin_list is not None else {}
+    extra = [(t, v) for t, v in defaults.items() if t not in own and v is not None and applies_to(v, language)]
+    rules += [compile_rule(term, value, len(rules) + j, builtin=True) for j, (term, value) in enumerate(extra)]
+    return Pronunciation(rules, builtin_list if defaults else None)
+
+
+def load_pronunciation(config: VideoConfig, root: Path, builtin_list: str | None = None) -> Pronunciation:
+    """:func:`build_pronunciation` of the project's entries (:func:`project_entries`) for the
+    video's language, over the built-in list ``builtin_list`` (default: none)."""
+    return build_pronunciation(project_entries(config, root), config.language, builtin_list)
 
 
 def applies_to(value: str | PronunciationEntry, language: str | None) -> bool:
@@ -312,21 +350,91 @@ def applies_to(value: str | PronunciationEntry, language: str | None) -> bool:
     return any(language_matches(tag, language) for tag in wanted)
 
 
+# ----- built-in lists (DESIGN.md §88) -----------------------------------------------------------
+
+#: Kokoro language letter -> the language part of its built-in list's name.
+KOKORO_DIALECTS: dict[str, str] = {
+    "a": "en-us", "b": "en-gb", "e": "es", "f": "fr", "h": "hi", "i": "it", "j": "ja", "p": "pt-br", "z": "zh",
+}
+_BUILTIN_DIR = "data/pronunciation"
+
+
+def builtin_list_name(voice: VoiceConfig, language: str | None) -> str:
+    """The built-in list a voice's text goes through, ``<engine>-<language>``: for Kokoro the
+    language its G2P reads with (the voice's ``lang``, else its first letter, else the video's
+    language: ``kokoro-en-us`` for ``af_heart``), for other providers the video's language
+    (``elevenlabs-en`` without one). A name whose files do not exist has no entries."""
+    if voice.provider == "kokoro":
+        from vidgen import kokoro_voices
+
+        lang = kokoro_voices.resolve(voice.voice, voice.lang, language)[1] or "a"
+        return f"kokoro-{KOKORO_DIALECTS.get(lang, lang)}"
+    return f"{voice.provider}-{(language or 'en').lower()}"
+
+
+def builtin_files(name: str) -> list[str]:
+    """The shipped files of the built-in list ``name``, general first: ``kokoro-en-us`` reads
+    ``kokoro-en.yaml`` (every English Kokoro voice), then ``kokoro-en-us.yaml`` over it."""
+    folder = resources.files("vidgen").joinpath(_BUILTIN_DIR)
+    parts = name.split("-")
+    stems = ["-".join(parts[:k]) for k in range(2, len(parts) + 1)]
+    return [f"{stem}.yaml" for stem in stems if folder.joinpath(f"{stem}.yaml").is_file()]
+
+
+@lru_cache(maxsize=None)
+def builtin_entries(name: str) -> dict[str, PronunciationValue]:
+    """The entries of the built-in list ``name`` (its :func:`builtin_files` merged in order;
+    empty when none ships). A broken shipped file is a :class:`VidgenError` (a vidgen bug)."""
+    import yaml
+
+    folder = resources.files("vidgen").joinpath(_BUILTIN_DIR)
+    entries: dict[str, PronunciationValue] = {}
+    for file in builtin_files(name):
+        data = yaml.safe_load(folder.joinpath(file).read_text(encoding="utf-8")) or {}
+        if not isinstance(data, dict):
+            raise VidgenError(f"built-in pronunciation list {file} must be a mapping of term: spoken form")
+        messages = form_problems(data)
+        checked: dict[str, PronunciationValue] = {} if messages else _MAP.validate_python(data)
+        messages = messages or entry_problems(checked)
+        if messages:
+            raise VidgenError(f"built-in pronunciation list {file} is invalid: " + "; ".join(messages))
+        entries.update(checked)
+    return entries
+
+
+def builtin_list_names() -> list[str]:
+    """The built-in lists that have entries: every Kokoro language's and every other shipped
+    ``<engine>-<language>`` file's, sorted."""
+    folder = resources.files("vidgen").joinpath(_BUILTIN_DIR)
+    stems = {Path(f.name).stem for f in folder.iterdir() if f.name.endswith(".yaml")}
+    names = {f"kokoro-{d}" for d in KOKORO_DIALECTS.values()} | {s for s in stems if not s.startswith("kokoro-")}
+    return sorted(n for n in names if builtin_entries(n))
+
+
 # ----- validate warnings ------------------------------------------------------------------------
 
 
-def pronunciation_warnings(pronunciation: Pronunciation, beats: Iterable[tuple[str, str]]) -> list[str]:
+def pronunciation_warnings(
+    pronunciation: Pronunciation,
+    beats: Iterable[tuple[str, str]],
+    beat_pronunciation: Callable[[str], Pronunciation] | None = None,
+) -> list[str]:
     """Warnings for ``vidgen validate`` over ``(beat id, text)`` pairs: entries that match no
     beat, entries that never apply because longer ones always cover them, and entries whose
-    matches collide (cross or share a span) with another's."""
-    if not pronunciation:
-        return []
+    matches collide (cross or share a span) with another's. ``beat_pronunciation`` (beat id ->
+    its pronunciation, built-in list included) replaces ``pronunciation`` per beat. Built-in
+    entries are never reported (most match no beat), nor a built-in match a project entry
+    replaces on the same text."""
     matched: set[str] = set()
     applied: set[str] = set()
     inside: dict[str, set[str]] = {}
     collisions: dict[tuple[str, str], tuple[str, str, str]] = {}
+    rules: dict[str, Rule] = {rule.term: rule for rule in pronunciation.rules}
     for beat_id, text in beats:
-        spoken = pronunciation.apply(text)
+        used = beat_pronunciation(beat_id) if beat_pronunciation is not None else pronunciation
+        for rule in used.rules:
+            rules.setdefault(rule.term, rule)
+        spoken = used.apply(text)
         matched |= spoken.matched
         applied |= {r.term for r in spoken.replacements}
         for c in spoken.conflicts:
@@ -334,14 +442,56 @@ def pronunciation_warnings(pronunciation: Pronunciation, beats: Iterable[tuple[s
                 inside.setdefault(c.term, set()).add(c.winner)
             else:
                 collisions.setdefault((c.winner, c.term), (beat_id, c.matched, c.kind))
+    builtin = {term for term, rule in rules.items() if rule.builtin}
     out = []
-    for rule in pronunciation.rules:
+    for rule in rules.values():
+        if rule.builtin:
+            continue
         if rule.term not in matched:
             out.append(f"pronunciation: '{rule.term}' matches no beat's text")
         elif rule.term not in applied and rule.term in inside:
             longer = ", ".join(f"'{t}'" for t in sorted(inside[rule.term]))
             out.append(f"pronunciation: '{rule.term}' never applies: every match is inside a longer entry ({longer})")
     for (winner, loser), (beat_id, text, kind) in collisions.items():
+        if loser in builtin:
+            continue
         how = "match the same text" if kind == "same" else "overlap"
         out.append(f"pronunciation: '{winner}' and '{loser}' {how} in beat {beat_id} ({text!r}); '{winner}' is used there")
     return out
+
+
+# ----- listing (vidgen list-pronunciation) -----------------------------------------------------
+
+
+def builtin_listing(
+    name: str,
+    own: Mapping[str, PronunciationValue] | None = None,
+    changes: Mapping[str, Sequence[str]] | None = None,
+) -> dict[str, Any]:
+    """The built-in list ``name`` as ``{name, files, entries: [{term, say, case_sensitive,
+    whole_word, regex, state, own, beats}]}``: ``state`` ``used``, ``replaced`` (``own``: the
+    project's entry of the same term, its spoken form) or ``removed`` (``term: null``) against
+    a project's entries ``own``; ``beats`` the beats whose text the entry changes (from
+    ``changes``: beat id -> built-in terms, :meth:`vidgen.project.Project.builtin_changes`)."""
+    own = own or {}
+    changes = changes or {}
+    entries = []
+    for term, value in builtin_entries(name).items():
+        if value is None:
+            continue
+        entry = _entry(value)
+        state = "used" if term not in own else "removed" if own[term] is None else "replaced"
+        mine = own.get(term)
+        entries.append(
+            {
+                "term": term,
+                "say": entry.say,
+                "case_sensitive": entry.case_sensitive,
+                "whole_word": entry.whole_word,
+                "regex": entry.regex,
+                "state": state,
+                "own": None if mine is None else _entry(mine).say,
+                "beats": [beat_id for beat_id, terms in changes.items() if term in terms],
+            }
+        )
+    return {"name": name, "files": builtin_files(name), "entries": entries}

@@ -1574,6 +1574,10 @@ how it is **said** with `pronunciation:` (applied to the TTS text only). Run
 what the voice still gets wrong, and the words it says unclearly (`unclear`: probability below
 0.5 or a pause over 0.5 s inside a sentence; `doubtful`: below 0.75). For an unclear name or
 term, respell it in `pronunciation:`; for another word, try another voice, speed or `emotion:`.
+vidgen already respells some words for some voices (built-in lists, e.g. Kokoro's American
+voices say `epoch` as `E pock`, `README` as `readme`, `JSON` as `Jason`): `vidgen list-pronunciation`
+shows them; `vidgen validate` prints the beats they change (`pronounce: ...`). Your entry for the
+same term wins, `term: null` drops one, `pronunciation_defaults: false` turns them off.
 
 ```yaml
 pronunciation:

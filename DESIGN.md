@@ -3390,6 +3390,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   dictionaries (`pronunciation_dictionary_locators`); no per-beat `say:` override; matching is
   per beat (a term split across two beats never matches); `whole_word` uses Python's `\w`
   (Unicode letters and digits).
+- Built-in lists under the project's entries, per TTS engine and language: §88 (Step 165).
 
 
 ## 46. Refinements (Step 43, multiple voices)
@@ -11560,3 +11561,84 @@ Built as planned in §87.7; the changes and the details:
   angle mark and terminal prompt; CONFIG and the guide say which tokens the scenes use, and the
   doc examples use `tertiary` for `loss`. A lint check of "a default colour equal to a term's"
   was not added (it would fire on every bullets marker in `primary`).
+
+
+## 88. Built-in pronunciation lists (Step 165)
+
+Reference: docs/CONFIG.md "Built-in pronunciation lists". §45's dictionary was per project only;
+some words are read wrong by one engine in every project (Kokoro's American G2P, misaki, says
+"epoch" as /ˈɛpək/, like "epic"), so vidgen ships entries that every project uses.
+
+- **Data**: `src/vidgen/data/pronunciation/<engine>-<language>.yaml`, the format of a
+  `pronunciation_file` (package data `data/pronunciation/*`). A list name is layered by its
+  dashes: `kokoro-en-us` merges `kokoro-en.yaml` (every English Kokoro voice) then
+  `kokoro-en-us.yaml` over it (`builtin_files`); a name with no files has no entries
+  (`builtin_entries`, cached; a broken shipped file is a `VidgenError`). Shipped: `kokoro-en`
+  (21 entries) and `kokoro-en-us` (+3: `epoch`, `epochs`, `VS Code`); lists today
+  `builtin_list_names()` = `kokoro-en-gb`, `kokoro-en-us`. Each entry's file comment holds misaki's
+  phonemes before and after.
+- **Which list a beat uses** (`builtin_list_name(voice, language)`): the beat's **effective
+  voice** (§46, after a dub §80), because beats can have different voices and a dub changes the
+  voice. Kokoro: the language its G2P reads with, `kokoro_voices.resolve(voice, lang, language)`
+  (the voice's `lang`, else its first letter, else the video's `language`), mapped by
+  `KOKORO_DIALECTS` (`a` → `en-us`, `b` → `en-gb`, `p` → `pt-br`, ...). An `af_*` voice in a
+  Portuguese video still reads English with the American G2P, so it gets `kokoro-en-us`; a
+  dubbed `pf_dora` gets `kokoro-pt-br` (none ships). Other providers: `<provider>-<video
+  language, lower case, default en>` (`elevenlabs-en`, `openrouter-pt-br`); none ships, on
+  purpose: ElevenLabs reads "epoch" right and a respelling could make it worse. Decision: the
+  key is the engine's reading rules, not the video's language alone.
+- **Order** (`build_pronunciation(entries, language, builtin_list)`): the project's entries
+  (`project_entries`: the `pronunciation_file`s in order, then `pronunciation:`, `null` values
+  kept) go over the list's: the same term replaces the built-in entry, `null` removes it. A project
+  entry with another `language` is left out and does not replace the built-in one. The project's
+  rules get the lower `index`, so on the same span (`Epoch` and `epoch`) the project's wins.
+  `Rule.builtin`, `Replacement.builtin`, `Spoken.builtin_terms`, `Pronunciation.builtin_list`.
+  `load_pronunciation(config, root, builtin_list=None)` keeps its old result by default.
+- **Opt-out**: `pronunciation_defaults: bool = True` (top level, so per variant); left out of
+  the render fingerprint's config part like `pronunciation` (audio only).
+- **Project** (`vidgen/project.py`): `pronunciation_entries` (read at load, so a bad file is
+  still a load error), `builtin_list(voice)`, `pronunciation_for(voice)` (cached per list name),
+  `beat_pronunciation(beat_id)`, `pronounced(beat)` (no voice sounds or emotion tag),
+  `builtin_changes()` (beat id → built-in terms that changed it). `Project.pronunciation` is now
+  a property: the base voice's (project entries over its list). Every reader of a beat's spoken
+  form goes through the beat's own: `spoken` (TTS, hash, dry run, lint, captions, word anchors),
+  the SRT (`pipeline.video_cues` passes `pronounced` for every beat), the overlay fingerprint,
+  readback and its word flags.
+- **Hash and staleness**: unchanged formula (§7, §45): the hash covers the spoken text, so a
+  beat whose text has no list word keeps its hash, and a beat with one is stale after the update
+  and is the only one `vidgen tts` regenerates. A project entry for the same term (as the owner's
+  projects already had for `epoch`, `README`, `RMSProp`, `neural-api`) keeps the project's text,
+  so its audio stays valid. A variant's own audio folder (§7) follows from the spoken texts as
+  before.
+- **Visible**: `vidgen validate` prints `pronounce: built-in kokoro-en-us changes N beat(s): epoch
+  (2), JSON (1) (vidgen list-pronunciation)` (base config only; `cli.pronunciation_summary_lines`)
+  and its JSON has `pronunciation_defaults` (beat → terms). `pronunciation_warnings(p, beats,
+  beat_pronunciation)` checks each beat with its own pronunciation and never reports a built-in
+  entry (unused, inside a longer one, or losing a collision); a project entry hidden by a longer
+  built-in one is still reported. `vidgen tts --dry-run` adds `  (built-in: epoch)` to the
+  `says:` line, a run `, built-in pronunciation: epoch` to the `generated` line, `tts --json`
+  `builtin_pronunciation` per beat (`TTSPlan.builtin`). `vidgen list-pronunciation [PROJECT]
+  [--json]` (`builtin_listing`): all lists, or in a project the lists its beats use, with each
+  entry's state (`used`, `replaced`, `removed`) and the beats it changes.
+- **Readback**: `readback.entry_hint` (also used by `speech_flags`): a word of a built-in entry
+  heard wrong says to write the project's own entry or `term: null`; `TermReport` of a built-in
+  entry says the same, and a term misheard in two or more beats without any entry adds "(other
+  videos with it can share a pronunciation_file)". `Edit.builtin` is not in the JSON.
+- **Choosing entries** (Step 165): every candidate was phonemized with misaki as Kokoro runs it
+  (`en.G2P(trf=False, british=…, fallback=espeak.EspeakFallback(...))`), alone and in sentences,
+  for American and British, and kept only when the default is clearly wrong and the respelling
+  clearly better. Kept: README(s) → `readme(s)` (not "read me": misaki says ɹˈɛd, "red", after
+  "each"), JSON(s) → `Jason(s)`, YAML(s) → `yammel(s)`, ReLU(s) → `ray loo(s)`, RMSProp → `R M S
+  prop` (not in misaki's dictionary; only espeak-ng's guess), neural-api → `neural A.P.I.`,
+  Jupyter → `Jupiter`, ResNet → `Rez net`, C# / F# → `C sharp` / `F sharp` (said "C hash"), BERT →
+  `Burt` (spelled out in some sentences), NaN → `nan`, TeX → `tek`, tanh → `tanch` (said "tan"),
+  enum(s) → `E num(s)`, Cauchy → `Koh shee`; American only: epoch(s) → `E pock(s)` (British
+  already ˈiːpɒk), VS Code → `V S Code` (said "veez code"). Dropped: SGD (already ˌɛsʤˌidˈi),
+  and every term the defaults read acceptably (GPU, CUDA, PyTorch and NumPy through espeak-ng,
+  LaTeX, SQL, API, CLI, softmax, sigmoid, Adam, Hessian, Jacobian, Euler, Gaussian, Pascal,
+  Lazarus, GitHub, macOS, Linux, cache, tuple, sudo, Django, nginx, ...) or where usage is split
+  (regex, char, GIF, logits, Fourier, MNIST, CIFAR, GAN, Keras); Poisson has no respelling misaki
+  reads as "pwah-son". No project-specific readings (decimals).
+- **Not done**: no lists for ElevenLabs, OpenRouter or other Kokoro languages; a user-level
+  shared list (outside a project) is only possible as a `pronunciation_file` path; no MCP tool
+  for `list-pronunciation`; the checks are of phonemes, not of listening to Kokoro's audio.

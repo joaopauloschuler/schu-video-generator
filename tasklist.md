@@ -886,6 +886,19 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Guide / CONFIG / CHANGELOG / README / gallery as the repo's conventions require; the Shorts cookbook (docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) for word timing, concept colours, code morphing and the terminal (CHANGELOG "Presentation toolkit (Phase P)" in the untagged 0.3.0; README feature and example; CONFIG / guide colour advice; the gallery pages needed no new type)
 - [x] Review of the whole phase with fixes, in HANDOFF like earlier phase reviews; the phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout (`tests/test_phase_p_review.py`)
 
+## After Phase P
+
+Owner's request after Phase P: pronunciation fixes that every project needs (Kokoro's American
+voices say "epoch" like "epic") should ship with vidgen instead of being copied into each project.
+
+### Step 165 — Built-in pronunciation dictionary
+- [x] Default lists as data files in the `pronunciation_file` format, per engine and language (`src/vidgen/data/pronunciation/kokoro-en.yaml` for every English Kokoro voice, `kokoro-en-us.yaml` over it); the list of a beat follows its effective voice (Kokoro: the language its G2P reads with; other providers: the video's language; dubbed voices their own); DESIGN §88
+- [x] Order: built-in, then `pronunciation_file`(s), then `pronunciation:`; a project entry replaces the built-in one, `term: null` removes it, the project's wins a tie on the same text; opt-out `pronunciation_defaults: false`
+- [x] Visible: `vidgen list-pronunciation [PROJECT] [--json]`; `vidgen validate` prints `pronounce: built-in ... changes N beat(s)` (JSON `pronunciation_defaults`) and never warns about built-in entries; `tts --dry-run` / a run / `tts --json` name the built-in entries that changed a beat; readback hints point to overriding a built-in entry, and to a shared `pronunciation_file` for a term misheard in several beats
+- [x] Audio: only beats whose spoken text the lists change go stale and are regenerated (CHANGELOG behaviour change, CONFIG); no example in the repo changes (no beat of theirs has a list word)
+- [x] Entries checked with misaki in the Kokoro venv (phonemes before / after, American and British), kept only when clearly better: 21 English + 3 American (SGD dropped: already right)
+- [x] Docs (CONFIG, guide + `AGENTS.md`, README, CHANGELOG, DESIGN §88) and tests (`tests/test_pronunciation_defaults.py`)
+
 ---
 
 ## Backlog (after Step 60)
@@ -914,6 +927,7 @@ Quality (what an agent's video looks like)
 - [ ] `function_plot` (Step 160): a function of a parameter animated over beats (`a` in `a x^2`); parametric / polar curves; LaTeX labels; a dot's label plate does not avoid other curves; `trace` moves in x only
 - [ ] `terminal` (Step 159): no general split with another scene type (only the `code` pane); a long session does not scroll (`clear` starts a new page); one colour per output (`code_morph`'s `reveal` uses `entrance_time` since Step 164)
 - [ ] `code_morph` (Step 158): `code_walkthrough` does not morph between versions; a token moving to another line (a line split in two) fades out and in instead of gliding (a `reveal` action's morph takes 1.5 s since Step 164)
+- [ ] Built-in pronunciation (Step 165): lists for ElevenLabs, OpenRouter and other Kokoro languages; no MCP tool for `list-pronunciation`; the respellings were checked as misaki phonemes, not by listening to Kokoro's audio
 - [ ] Phase P review (Step 164): a term in `accent` colours like the default tangents, jump arcs, angle marks and terminal prompt (documented, not linted); a number line or function plot in 9:16 under karaoke captions leaves a tall empty band (the plot keeps its aspect); the karaoke band reserves two lines in 16:9 (`max_lines: 1` frees one); readback's single letters ("w") and short words come out "doubtful" with Kokoro
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
 - [ ] 9:16 stills: `code_walkthrough` listing small (a 5-line file wraps a line), `image` `fit: contain` leaves bands, a `world` map view spanning most longitudes is a strip (Step 57)

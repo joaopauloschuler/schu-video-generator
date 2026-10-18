@@ -15479,3 +15479,81 @@ How to test
   respelled words count; with the Kokoro audio the same lint has 0 findings); storyboards at 2
   stills a beat in both formats checked by eye; the voiced copy's readback, lint and final render
   as above.
+
+## Step 165 — Built-in pronunciation dictionary
+
+What was built
+- **Built-in lists** shipped with vidgen (DESIGN §88): `src/vidgen/data/pronunciation/kokoro-en.yaml`
+  (every English Kokoro voice, 21 entries) and `kokoro-en-us.yaml` (American voices, +3), in the
+  `pronunciation_file` format, each entry commented with misaki's phonemes before and after.
+  The list a beat uses follows its effective voice: Kokoro by the language its G2P reads with
+  (`kokoro-en-us` for `a` voices, `kokoro-en-gb` for `b`, `kokoro-pt-br` for a dubbed `pf_dora`,
+  which has no file), other providers by the video's language (`elevenlabs-en`: no file).
+- **Order**: built-in list, then `pronunciation_file`(s), then `pronunciation:`; same term replaces,
+  `term: null` removes, the project's rule wins a tie on the same span; a project entry for
+  another `language` does not replace the built-in one. Opt-out `pronunciation_defaults: false`.
+- **Visible**: `vidgen list-pronunciation [PROJECT] [--json]`; `vidgen validate` line `pronounce:
+  built-in kokoro-en-us changes N beat(s): epoch (2), JSON (1) (vidgen list-pronunciation)` and
+  JSON `pronunciation_defaults`; no validate warning for built-in entries; `tts --dry-run` adds
+  `  (built-in: epoch)` to `says:`, a run `, built-in pronunciation: epoch` to the `generated`
+  line, `tts --json` `builtin_pronunciation`; readback / word-flag hints for a built-in entry say
+  to write the project's own entry or `term: null`; a term misheard in 2+ beats without an entry
+  adds "(other videos with it can share a pronunciation_file)".
+- **Audio**: the hash formula is unchanged (spoken text), so only beats whose spoken text a list
+  changes go stale; `vidgen tts` regenerates only those (tested). CHANGELOG "Behaviour changes"
+  and CONFIG say so, with the way to keep old audio.
+- **Entries** (misaki in the Kokoro venv, `fallback=espeak.EspeakFallback`, as `KPipeline` runs
+  it; American and British, alone and in sentences): README(s) → readme(s), JSON(s) → Jason(s),
+  YAML(s) → yammel(s), ReLU(s) → ray loo(s), RMSProp → R M S prop, neural-api → neural A.P.I. (any
+  case), Jupyter → Jupiter, ResNet → Rez net, C# → C sharp, F# → F sharp, BERT → Burt, NaN → nan,
+  TeX → tek, tanh → tanch, enum(s) → E num(s) (any case), Cauchy → Koh shee; American only:
+  epoch(s) → E pock(s) (any case), VS Code → V S Code. Deviations from the request: README is
+  `readme`, not `read me` (misaki reads "read" as ɹˈɛd after "each" and in "read me.md"; `readme`
+  is ɹˈidmi everywhere); SGD dropped (misaki already says ˌɛsʤˌidˈi, the same letters as "S G D").
+  Full phoneme table in DESIGN §88 and the files' comments.
+
+Files touched
+- New: `src/vidgen/data/pronunciation/kokoro-en.yaml`, `kokoro-en-us.yaml`,
+  `tests/test_pronunciation_defaults.py`.
+- Changed: `src/vidgen/pronunciation.py`, `config.py` (`pronunciation_defaults`), `project.py`,
+  `cli.py` (`list-pronunciation`, validate line, warnings per beat), `jsonout.py`, `tts/run.py`,
+  `readback.py`, `speech_flags.py`, `render/fingerprint.py`, `render/pipeline.py`,
+  `pyproject.toml` (package data), `docs/CONFIG.md`, `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`,
+  `README.md`, `CHANGELOG.md`, `DESIGN.md` (§88, pointer in §45), `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- Config: top-level `pronunciation_defaults: bool = true`.
+- CLI: `vidgen list-pronunciation [PROJECT] [--json]`; JSON keys: validate `pronunciation_defaults`,
+  tts `beats[].builtin_pronunciation`, the list-pronunciation document.
+- `vidgen.api` names unchanged; `Pronunciation(rules, builtin_list=None)`, `Replacement.builtin`,
+  `Spoken.builtin_terms` added with defaults (backward compatible). `vidgen.pronunciation`:
+  `project_entries`, `build_pronunciation`, `builtin_list_name`, `builtin_files`,
+  `builtin_entries`, `builtin_list_names`, `builtin_listing`, `KOKORO_DIALECTS`;
+  `load_pronunciation(config, root, builtin_list=None)`; `pronunciation_warnings(..., beat_pronunciation=None)`.
+  `Project`: `pronunciation` is now a property (the base voice's), new `pronunciation_entries`,
+  `builtin_list`, `pronunciation_for`, `beat_pronunciation`, `pronounced`, `builtin_changes`.
+  `readback.entry_hint`, `Edit.builtin`, `TermReport.builtin`.
+
+Effect on the examples
+- `vidgen validate` on every Kokoro example (platform-story, cartoon-rainbow-ride, host-explainer,
+  minimal, cartoon-rain-check, cartoon_series episodes 1 and 2, gradient-descent, cartoon,
+  cartoon-music-box, cartoon-muffin-mystery) and a script over every example and variant:
+  **no beat changes**, no `pronounce:` line, no new stale audio (none of them has committed audio;
+  kphi3's committed MP3s are ElevenLabs: unaffected). `minimal`'s `JSON: jay-son` replaces the
+  built-in entry. Outside the repo, `/home/claude/work/neural-optimizers` (voiced, its own entries
+  for epoch, README, SGD, RMSProp, neural-api) stays `37 ok`, and the voiced gradient-descent copy
+  `29 ok`.
+
+Known gaps
+- No lists for ElevenLabs, OpenRouter or other Kokoro languages; no MCP tool for
+  `list-pronunciation`; the `pronounce:` validate line is the base config's only; the respellings
+  were checked as phonemes, not by listening to Kokoro audio; BERT is spelled out only in some
+  sentences (the entry makes it consistent).
+
+How to test
+- One file at a time under `capped` (`-m "not render"` unless noted): `test_pronunciation_defaults`
+  (20), `test_pronunciation` (26), `test_tts_kokoro` (34, 1 skipped), `test_readback` (27),
+  `test_speech_flags` (19), `test_voice_sounds` (7 + 1 render), `test_word_anchors` (30 + 1 render),
+  `test_tts` (35, 1 skipped), `test_tts_openrouter` (32), `test_review4` (8 + 3 render),
+  `test_dubbing` (14), `test_json_output` (21), `test_docs` (62), `test_guide` (53), `test_config`
+  (21), `test_translation` (69), `test_captions` (17); `test_schema` (63, capped3g, 113 s). All pass.

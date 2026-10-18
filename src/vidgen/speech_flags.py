@@ -26,7 +26,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from vidgen.readback import EDGE_CHARS, BeatReadback, Edit, entries_by_word, entry_says, hard_term, term_core, written_owner
+from vidgen.readback import EDGE_CHARS, BeatReadback, Edit, entries_by_word, entry_hint, hard_term, term_core, written_owner
 
 if TYPE_CHECKING:
     from vidgen.config import UnclearSpeechRule
@@ -241,10 +241,7 @@ def _suggestion(beat: str, unit: _Unit, word: str, written_words: Sequence[str],
     if written_index is not None:
         entry = entries_by_word(spoken).get(written_index)
         if entry is not None:
-            return (
-                f'the pronunciation entry "{entry}" (says "{entry_says(spoken, entry)}") is not heard clearly: respell its '
-                "spoken form (other letters, syllables split by hyphens), then `vidgen tts`"
-            )
+            return entry_hint(spoken, entry, "is not heard clearly")
         if hard_term(written_words, written_index):
             term = term_core(written_words[written_index])
             return f'"{term}" is not heard clearly: add a pronunciation entry `{term}: <how to say it>` (a respelling), then `vidgen tts`'
@@ -267,7 +264,7 @@ def beat_flags(project: Project, result: BeatReadback, settings: UnclearSpeechRu
     """:func:`flag_words` of a beat of ``project`` compared by ``vidgen readback`` (its text as
     pronounced; a pause is expected where a voice sound sits)."""
     beat = project.beat(result.beat)
-    spoken = project.pronunciation.apply(beat.text)
+    spoken = project.pronounced(beat)
     return flag_words(result, spoken, settings, {sound.word for sound in beat.voice_sounds})
 
 

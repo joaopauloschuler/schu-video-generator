@@ -119,7 +119,8 @@ class Edit:
     the substitutions + deletions + insertions; ``at`` when the heard words start in the MP3
     (seconds, ``None`` without word times); ``term`` the written term a fix is about (a
     pronunciation entry's term, a name, acronym or number), ``entry`` true when it has a
-    pronunciation entry; ``suggestion`` what to do. ``heard_indices`` (the heard words of the
+    pronunciation entry (``builtin``: of a built-in list, DESIGN.md §88; not in the JSON);
+    ``suggestion`` what to do. ``heard_indices`` (the heard words of the
     edit, indices into :meth:`Transcript.word_texts`) and ``written_index`` (its first written
     word) place it for the word flags; not in the JSON."""
 
@@ -133,6 +134,7 @@ class Edit:
     after: str | None = None
     term: str | None = None
     entry: bool = False
+    builtin: bool = False
     suggestion: str = ""
     heard_indices: tuple[int, ...] = ()
     written_index: int = 0
@@ -276,6 +278,21 @@ def entries_by_word(spoken: Spoken) -> dict[int, str]:
     return out
 
 
+def entry_hint(spoken: Spoken, term: str, problem: str) -> str:
+    """What to do when the word of the pronunciation entry ``term`` ``problem`` (``is heard as
+    "x"``): respell the entry, or, for a built-in entry (DESIGN.md §88), write the project's own."""
+    says = entry_says(spoken, term)
+    if any(r.builtin for r in spoken.replacements if r.term == term):
+        return (
+            f'the built-in pronunciation entry "{term}" (says "{says}") {problem}: write your own in `pronunciation:` '
+            f"(`{term}: <respelling>`, or `{term}: null` to drop it), then `vidgen tts`"
+        )
+    return (
+        f'the pronunciation entry "{term}" (says "{says}") {problem}: respell its spoken form '
+        "(other letters, syllables split by hyphens), then `vidgen tts`"
+    )
+
+
 def entry_says(spoken: Spoken, term: str) -> str | None:
     """What the pronunciation entry ``term`` says in ``spoken`` (``None``: not used there)."""
     for r in spoken.replacements:
@@ -413,6 +430,7 @@ def _edit(
     entry = next((entries[w] for w in words if w in entries), None)
     if entry is not None:
         edit.term, edit.entry = entry, True
+        edit.builtin = any(r.builtin for r in spoken.replacements if r.term == entry)
     else:
         hard = next((w for w in words if hard_term(written_words, w)), None)
         if hard is not None:
@@ -424,11 +442,7 @@ def _edit(
 def _suggestion(edit: Edit, spoken: Spoken) -> str:
     heard = f'"{edit.heard}"' if edit.heard else "nothing"
     if edit.entry and edit.term is not None:
-        says = entry_says(spoken, edit.term)
-        return (
-            f'the pronunciation entry "{edit.term}" (says "{says}") is heard as {heard}: respell its spoken form '
-            "(other letters, syllables split by hyphens), then `vidgen tts`"
-        )
+        return entry_hint(spoken, edit.term, f"is heard as {heard}")
     if edit.term is not None:
         how = "the number in words" if any(ch.isdigit() for ch in edit.term) else "how to say it"
         return f'"{edit.term}" is heard as {heard}: add a pronunciation entry `{edit.term}: <{how}>`, then `vidgen tts`'
@@ -463,6 +477,7 @@ class TermReport:
     entry: bool
     beats: list[str] = field(default_factory=list)
     heard: list[str] = field(default_factory=list)
+    builtin: bool = False
 
     @property
     def consistent(self) -> bool:
@@ -473,9 +488,12 @@ class TermReport:
     def suggestion(self) -> str:
         """What to do about it."""
         where = f"in {len(self.beats)} beats" if self.consistent else f"in beat {self.beats[0]}"
+        if self.builtin:
+            return f'"{self.term}" is misheard {where} despite its built-in pronunciation entry: write your own (`{self.term}: <respelling>`)'
         if self.entry:
             return f'"{self.term}" is misheard {where} despite its pronunciation entry: respell the entry\'s spoken form'
-        return f'"{self.term}" is misheard {where}: add a pronunciation entry `{self.term}: <how to say it>`'
+        shared = " (other videos with it can share a pronunciation_file)" if self.consistent else ""
+        return f'"{self.term}" is misheard {where}: add a pronunciation entry `{self.term}: <how to say it>`{shared}'
 
     def to_json(self) -> dict[str, Any]:
         """``{term, entry, beats, heard, consistent, suggestion}``."""
@@ -496,7 +514,7 @@ def term_reports(results: Iterable[BeatReadback]) -> list[TermReport]:
         for edit in result.edits:
             if edit.term is None:
                 continue
-            report = terms.setdefault(edit.term, TermReport(edit.term, edit.entry))
+            report = terms.setdefault(edit.term, TermReport(edit.term, edit.entry, builtin=edit.builtin))
             if result.beat not in report.beats:
                 report.beats.append(result.beat)
             if edit.heard not in report.heard:
@@ -665,7 +683,7 @@ def _compare(project: Project, scene: str, beat_id: str, transcript: Transcript)
     """:func:`compare_beat` of a beat of ``project``: its text as pronounced, without its voice
     sounds (a transcript's ``ha ha`` for a ``[laugh]`` is skipped, DESIGN.md §69.33)."""
     beat = project.beat(beat_id)
-    spoken = project.pronunciation.apply(beat.text)
+    spoken = project.pronounced(beat)
     return compare_beat(scene, beat_id, spoken, transcript, project.config.language, heard_sound_words(beat.voice_sounds))
 
 

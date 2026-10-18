@@ -26,7 +26,7 @@ from vidgen.includes import (
     read_project_config,
 )
 from vidgen.kokoro_voices import voice_parts
-from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
+from vidgen.pronunciation import Pronunciation, PronunciationValue, Spoken, build_pronunciation, builtin_entries, builtin_list_name, project_entries
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.word_anchors import pin_translated_anchors, retime_project_anchors
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
@@ -213,9 +213,11 @@ class Project:
         self.files_named_by_includes: tuple[Path, ...] = included.named_files if included is not None else ()
         #: Where values of the merged config are written (included files, sets), for :meth:`attributed`.
         self.origins: dict[str, Origin] = dict(origins or {})
-        #: How the narrator says terms (``pronunciation:`` + ``pronunciation_file``, DESIGN.md §45);
-        #: loading reads the files, so a missing or invalid one is a :class:`VidgenError` here.
-        self.pronunciation: Pronunciation = load_pronunciation(config, root)
+        #: The project's own pronunciation entries (``pronunciation_file`` + ``pronunciation:``,
+        #: DESIGN.md §45; ``null`` values kept): reading the files here makes a missing or
+        #: invalid one a :class:`VidgenError` at load.
+        self.pronunciation_entries: dict[str, PronunciationValue] = project_entries(config, root)
+        self._pronunciations: dict[str | None, Pronunciation] = {}
         self._own_audio: bool | None = None
         self._voices: dict[str | None, VoiceConfig] = {}
         #: True for :meth:`without_overlays` copies: their renders go to ``build/..._bare``.
@@ -365,11 +367,50 @@ class Project:
         mode = self.config.subtitles.speakers if mode is None else mode
         return {} if mode in ("off", "color") else speaker_tags(self.config)
 
+    # ----- pronunciation (DESIGN.md §45, §88) -------------------------------------------------
+
+    def builtin_list(self, voice: VoiceConfig) -> str | None:
+        """The built-in pronunciation list ``voice``'s text goes through
+        (:func:`vidgen.pronunciation.builtin_list_name`); ``None`` with
+        ``pronunciation_defaults: false`` or when vidgen ships no entries for it."""
+        if not self.config.pronunciation_defaults:
+            return None
+        name = builtin_list_name(voice, self.config.language)
+        return name if builtin_entries(name) else None
+
+    def pronunciation_for(self, voice: VoiceConfig) -> Pronunciation:
+        """The project's entries over ``voice``'s built-in list (one object per list)."""
+        name = self.builtin_list(voice)
+        if name not in self._pronunciations:
+            self._pronunciations[name] = build_pronunciation(self.pronunciation_entries, self.config.language, name)
+        return self._pronunciations[name]
+
+    @property
+    def pronunciation(self) -> Pronunciation:
+        """How the base voice says terms: the project's entries over its built-in list
+        (:meth:`beat_pronunciation` for a beat of another voice)."""
+        return self.pronunciation_for(self.voice())
+
+    def beat_pronunciation(self, beat_id: str) -> Pronunciation:
+        """How a beat's voice says terms: the project's entries over the built-in list of its
+        engine and language."""
+        return self.pronunciation_for(self.beat_voice(beat_id))
+
+    def pronounced(self, beat: BeatConfig) -> Spoken:
+        """``beat``'s text with its pronunciation applied (no voice sounds or emotion tag)."""
+        return self.beat_pronunciation(beat.id).apply(beat.text)
+
+    def builtin_changes(self) -> dict[str, tuple[str, ...]]:
+        """Beat id -> the built-in entries that change its spoken text (only such beats), in
+        video order."""
+        changes = {beat.id: self.pronounced(beat).builtin_terms for _, beat in self.beats()}
+        return {beat_id: terms for beat_id, terms in changes.items() if terms}
+
     def spoken(self, beat: BeatConfig) -> Spoken:
-        """What the TTS gets for ``beat``: its text with ``pronunciation`` applied, what its
+        """What the TTS gets for ``beat``: its text with its pronunciation applied, what its
         voice says for its voice sounds (:func:`vidgen.voicesounds.voiced_spoken`) and, for an
         ElevenLabs v3 voice, its emotion's audio tag before it (DESIGN.md §73)."""
-        spoken = self.pronunciation.apply(beat.text)
+        spoken = self.pronounced(beat)
         voice = self.beat_voice(beat.id)
         if beat.voice_sounds:
             spoken = voiced_spoken(spoken, beat.voice_sounds, voice)

@@ -45,6 +45,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
 | `terms` | `{}` | one colour per concept: `{loss: tertiary, gradient: "#E07A5F"}` (theme colour tokens or hex), or `{term: {color, tex}}`; the term is drawn in its colour wherever it is on-screen text, its `tex` parts in equations; see [one colour per concept](#one-colour-per-concept-terms) |
 | `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
+| `pronunciation_defaults` | `true` | use vidgen's [built-in pronunciation list](#built-in-pronunciation-lists) of each beat's TTS engine and language (`false`: only the project's entries) |
 | `language` | none (English rules) | the video's language, a BCP-47 tag (`en`, `pt-BR`, `es-419`): caption and SRT line breaks, the `narration_speed` lint, ElevenLabs `language_code`, the MP4's audio language; see [languages and translations](#languages-and-translations) |
 | `translations` | none | a translation file (YAML, `vidgen translate-template`) whose texts replace beat texts and on-screen texts, usually in a variant; see [languages and translations](#languages-and-translations) |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
@@ -1371,9 +1372,11 @@ scenes:
   label (named voices always do; the base voice only with `voice.label`); `off` (default) writes
   the text only. Burned-in [`captions`](#captions) follow it, or set their own `speakers` (`name`,
   `color`, `both`, `off`).
-- **Pronunciation** is one dictionary for all voices (the hash covers each beat's spoken text and
-  its voice); there are no per-voice entries yet: write a variant (`pronunciation:` in it) when a
-  voice of another language needs other spoken forms.
+- **Pronunciation**: the project's entries are one dictionary for all voices (the hash covers each
+  beat's spoken text and its voice); the [built-in list](#built-in-pronunciation-lists) under them
+  follows each beat's voice (a British Kokoro voice gets the British list). There are no per-voice
+  project entries: write a variant (`pronunciation:` in it) when a voice of another language needs
+  other spoken forms.
 
 ## Characters (`characters:`)
 
@@ -2010,6 +2013,40 @@ pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a
   models, and they would break the word timings) and ElevenLabs' server-side pronunciation
   dictionaries; write the spoken form as plain letters instead.
 
+### Built-in pronunciation lists
+
+vidgen ships pronunciation entries for words a TTS engine gets wrong, one list per engine and
+language, and every project uses them automatically. Respellings are engine-specific: Kokoro's
+American English voices say "epoch" like "epic", so their list says `E pock`; a British Kokoro
+voice already says it right, and ElevenLabs could be made worse by a respelling, so their lists
+leave it out.
+
+- **Which list.** Each beat goes through the list of its own [voice](#multiple-voices-voices):
+  Kokoro by the language its voice reads with (`lang`, else the voice's first letter, else the
+  video's `language`): `kokoro-en-us` for `af_heart` and other `a` voices, `kokoro-en-gb` for `b`
+  voices; other providers by the video's `language` (`elevenlabs-en`). A [dubbed](#dubbing-dub---all-languages)
+  variant whose voices are Portuguese gets the Portuguese list. Lists today: `kokoro-en-us` and
+  `kokoro-en-gb` (README, JSON, YAML, ReLU, RMSProp, Jupyter, ResNet, C#, BERT, NaN, TeX, tanh,
+  enum, Cauchy, ...; `kokoro-en-us` also `epoch`, `epochs`, `VS Code`). No list for ElevenLabs,
+  OpenRouter or other Kokoro languages yet.
+- **Order.** The built-in list first, then the `pronunciation_file`(s), then `pronunciation:`. A
+  project entry with the same term replaces the built-in one; `term: null` removes it; where a
+  project entry and a built-in one match the same text (`Epoch` and `epoch`), the project's wins.
+  `pronunciation_defaults: false` turns the built-in lists off for the project (or a variant).
+- **See them.** `vidgen list-pronunciation [PROJECT]` prints every list, or in a project the lists
+  its voices use, each entry with what the project does to it (`replaced by the project`, `removed
+  by the project`) and the beats it changes. `vidgen validate` prints `pronounce: built-in
+  kokoro-en-us changes 3 beat(s): epoch (2), JSON (1)` when the lists change beats, and never warns
+  about built-in entries that match no beat. `vidgen tts --dry-run` adds `(built-in: epoch)` to the
+  `says:` line, and a run adds `built-in pronunciation: epoch` to each beat it generated for it.
+- **Audio of existing projects.** The audio hash covers the spoken text, so a Kokoro English beat
+  whose text has a word of the list (an `epoch`, a `JSON`) is **stale** once you update vidgen:
+  `vidgen validate` counts it in `audio:`, `vidgen tts` regenerates only those beats (the other
+  beats keep their hash), and `vidgen render` uses the old MP3 until then. To keep the old audio,
+  set `pronunciation_defaults: false` or remove the entry (`epoch: null`).
+- **Readback.** When `vidgen readback` hears a word of a built-in entry wrong, its fix says to
+  write your own entry for the term (`epoch: <respelling>`) or drop it (`epoch: null`).
+
 **Housekeeping.** MP3s of beats that no longer exist are reported as orphaned but never deleted.
 Failed requests show the HTTP status and ElevenLabs' message; rate limits and server errors are
 retried a few times automatically. Rendering uses whatever audio exists; stale or missing audio
@@ -2052,7 +2089,7 @@ flagged (word error rate above 10%): 1
     fix: "NVIDIA" is heard as "and video": add a pronunciation entry `NVIDIA: <how to say it>`, then `vidgen tts`
 worst: setup_b2 20%, intro_b1 9%
 terms misheard in several beats:
-  NVIDIA: 2 beats (setup_b2, results_b1), heard "and video", "in video" -> "NVIDIA" is misheard in 2 beats: add a pronunciation entry `NVIDIA: <how to say it>`
+  NVIDIA: 2 beats (setup_b2, results_b1), heard "and video", "in video" -> "NVIDIA" is misheard in 2 beats: add a pronunciation entry `NVIDIA: <how to say it>` (other videos with it can share a pronunciation_file)
 words to check: 2 unclear, 1 doubtful (probability below 0.5 / 0.75, pauses over 0.5 s inside a sentence, differences)
   unclear  intro_b2 @ 1.84s (video 9.12s): "rushing" (text "Russian"), heard with probability 0.22
     fix: "Russian" is not heard clearly: add a pronunciation entry `Russian: <how to say it>` (a respelling), then `vidgen tts`
@@ -2811,6 +2848,16 @@ beats:
 `assets/sfx` with their length, loudness and peak, and for built-ins a precise description of the
 sound and when to use it (an AI author cannot listen); `--render-dir` also writes each sound at
 its defaults as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-sfx---json).
+
+### `vidgen list-pronunciation`
+
+`vidgen list-pronunciation [PROJECT] [--json]` prints vidgen's [built-in pronunciation
+lists](#built-in-pronunciation-lists): with no project (and none in the current folder) every
+list; in a project the lists its beats' voices use, with how many beats use each, every entry
+(`term -> spoken form`, `(any case)`), what the project does to it (`replaced by the project:
+"..."`, `removed by the project (null)`) and the beats whose text it changes. With
+`pronunciation_defaults: false` it says that no built-in entry is used. JSON: see
+[below](#vidgen-list-pronunciation---json).
 
 ## Background music (`music`)
 
@@ -9045,6 +9092,7 @@ and the other variants are still checked (the human output does the same since S
 | `problems` | list | `{location, message, variant, file}` (as in `error.problems`); empty when the project is valid |
 | `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
 | `images` | list | the [generated pictures](#generated-images-imagegen-vidgen-imagegen) of the base config, plus each variant whose pictures differ (none without `generate:` params): `{variant, generated, missing, pictures}`, `pictures` listing each distinct request once as `{key, scenes, path, exists, prompt}` |
+| `pronunciation_defaults` | object \| null | beat id → the [built-in pronunciation](#built-in-pronunciation-lists) entries that change its spoken text (only such beats; `{}` when none) |
 | `music` | list | the base config's music cues: `{source, kind, plays, fitted, from, to, scenes}` — `source` the bed, file or `compose: <mood>`; `kind` `bed`, `file` or `composed`; `plays` what will play (`composed`, `file`, or `bed <name>`: a bed, or a composed cue's bed without the `music` extra); `fitted` composed for the video's timings; `scenes` scene id → the compose settings it changes (`["mood"]`...) |
 
 `warnings` include the theme contrast warnings (`theme contrast: ...`, prefixed `[variant] `
@@ -9130,6 +9178,14 @@ difference between two palette colours).
 | `count` | int | number of sounds |
 | `sounds` | list | `{name, origin, overrides_builtin, description, use, duration, duration_range, channels, loudness, peak_db, preview}`: `origin` `builtin` or the file (`assets/sfx/x.wav`); `description` (what it sounds like), `use` and `duration_range` (`[min, max]` s) for built-ins, else `null`; `duration` (s), `loudness` (LUFS), `peak_db` (dBFS) at the defaults; `preview` the WAV written with `--render-dir`, else `null` |
 | `previews` | str \| null | the `--render-dir` folder |
+
+### `vidgen list-pronunciation --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project folder (`null`: no project, every list) |
+| `defaults` | bool | the project's `pronunciation_defaults` (`true` without a project) |
+| `lists` | list | `{name, files, beats, entries}`: `name` like `kokoro-en-us`, `files` the shipped files it merges (general first), `beats` how many beats use it (`null` without a project), `entries` `{term, say, case_sensitive, whole_word, regex, state, own, beats}` with `state` `used`, `replaced` (`own`: the project's spoken form) or `removed` (`term: null`) and `beats` the beat ids whose text it changes |
 
 ### `vidgen list-music --json`
 
@@ -9433,7 +9489,7 @@ message says how many beats were done (their MP3s are kept: run again to continu
 | `notes`, `problems` | list | OpenRouter: what its live model list says about the voices (a voice it does not list, `instructions` / `speed` a model may ignore) and what a run refuses before paying (a model it does not have); Kokoro: free and local, the model download still to come, the extra not installed |
 | `charged` | float \| null | US dollars OpenRouter reported for this run's requests; `null` in a dry run, with ElevenLabs, or when not reported |
 | `voices` | object | `{voice name: {voice_id, provider, model, provider_voice, instructions, speed, lang, device, beats, characters}}` of the beats to synthesise (`default` = the base voice; `voice_id` `null` in an OpenRouter or Kokoro video; `lang` / `device` Kokoro's, else `null`) |
-| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, provider, model, provider_voice, instructions, speed, lang, device, action, characters, estimated_cost, says, source}`; `model` / `provider_voice` are ElevenLabs' `model_id` / `voice_id`, OpenRouter's `model` / `voice` or `hexgrad/Kokoro-82M` / Kokoro's `voice`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `estimated_cost` `null` when unknown, `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
+| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, provider, model, provider_voice, instructions, speed, lang, device, action, characters, estimated_cost, says, builtin_pronunciation, source}`; `model` / `provider_voice` are ElevenLabs' `model_id` / `voice_id`, OpenRouter's `model` / `voice` or `hexgrad/Kokoro-82M` / Kokoro's `voice`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `estimated_cost` `null` when unknown, `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`), `builtin_pronunciation` the [built-in entries](#built-in-pronunciation-lists) that changed it (`[]`: none) |
 | `generated` | list | beat ids voiced by this run (`[]` for a dry run) |
 | `up_to_date` | list | beat ids skipped because their MP3 is current |
 | `orphaned` | list | MP3s in the audio folder no beat uses (never deleted) |

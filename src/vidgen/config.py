@@ -2234,6 +2234,8 @@ class VideoConfig(_Strict):
     """One colour per concept: {term: colour} (theme token or hex), or {term: {color, tex}}; the term is drawn in its colour wherever it is on-screen text (bullets, cards, titles, captions, chart and diagram labels, callout plates) and its tex parts in equations; whole words, any case, plurals too; a scene's terms: false turns it off there."""
     pronunciation_file: str | list[str] | None = None
     """YAML/JSON file(s) (relative to the project) with more pronunciation entries; `pronunciation:` entries win over them."""
+    pronunciation_defaults: bool = True
+    """Use vidgen's built-in pronunciation list of each beat's TTS engine and language (e.g. kokoro-en-us: epoch, README, JSON); project entries win over it and term: null removes one; `vidgen list-pronunciation` shows it. false: only the project's entries."""
     language: LanguageTag | None = None
     """Language of the narration and on-screen text (BCP-47: en, pt-BR, es...): caption cutting, narration-speed lint, ElevenLabs language_code, the MP4's audio language; default: English rules, no language sent."""
     translations: str | None = Field(default=None, min_length=1)
