@@ -11000,3 +11000,78 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
   (40 x 11, the camera rising) 47.9 s in 113 s: 85 of 131 profiled seconds are Manim's PIL
   transform drawing the tile chunks (about 0.05 s per chunk per frame). Backlog: draw the chunks
   in view into one picture per frame, or cut chunks by rows too.
+
+## 87. Presentation toolkit (Phase P, Steps 156–164)
+
+Reference: docs/CONFIG.md "Actions on a spoken word" (more sections as the steps land). Help AI
+authors make clearer and better-looking presentation videos: coding Shorts, science and maths
+explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
+checked by `vidgen validate` with a `VidgenError` that says what to write, covered by `vidgen
+lint` where a rule helps, documented in docs/CONFIG.md and the author guide
+(`src/vidgen/data/guide/AGENTS.md`, copied to `AGENTS.md`), and work in 16:9 and 9:16. Same
+rules as Phases H–O: cheap tests, new public extension surface only through `vidgen.api`.
+
+### 87.1 The plan
+
+| step | what | design intent |
+|---|---|---|
+| 156 | Actions timed to a spoken word | `at: "@word"` on any beat action and on `lower_third`; times from the beat's audio, else the estimate (§87.2) |
+| 157 | One colour per concept | a video-level `terms: {loss: accent, gradient: "#E07A5F"}` (theme colour names or hex) painting those words wherever they are on-screen text (TeX parts of equations, bullets, text cards, titles, captions / karaoke, chart and diagram labels, callout labels); per-scene opt-out; lint: too many concept colours (about 5), poor contrast on the theme background, a term coloured otherwise by a scene setting; cookbook §12 rule "same term, same colour" |
+| 158 | Code that morphs between versions | in the code scene(s) version A morphs to version B: unchanged tokens glide, new lines grow in, removed lines fade out; the diff is vidgen's (`difflib`), timed to beats and words (§87.2); the phone readability rules of the code scenes still apply |
+| 159 | Terminal scene | a terminal window typing commands and showing their output, given by the author (vidgen never runs a command), timed to beats / words; the code scenes' look and themes; usable beside code (a split) or after it (a carry / match cut if cheap) |
+| 160 | Maths, part 1: function plots | axes with f(x) from expressions evaluated safely (a small whitelisted parser, or sympy only if already a dependency; never `eval`), several functions, a dot moving along a curve with a live value, a tangent following the dot, shaded area between bounds, labels; driven by beat actions |
+| 161 | Maths, part 2: geometry basics | braces and angle arcs with labels, dimension lines, a number line (points, intervals, jumps), a coordinate plane with vectors (add, scale); a scene type or additions to Step 160's scene, decided and recorded there |
+| 162 | Charts that change between beats | the chart scenes take values per beat and animate between them (bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line, the axis rescaling); values stay the author's |
+| 163 | Narration–picture check in lint | deterministic rules on the layout dump / plan: a beat naming an on-screen label or term that only appears in a later beat; optionally a reveal the narration never mentions; stemming, case, stop words and a threshold keep false positives low; a setting tunes or turns it off |
+| 164 | Example, docs and review | a short science or coding explainer (16:9 and a 9:16 variant), guide / CONFIG / CHANGELOG / README / gallery, the Shorts cookbook (word timing, concept colours, code morphing, the terminal), a review of the phase with fixes in HANDOFF |
+
+### 87.2 Actions on a spoken word (Step 156)
+
+- **Syntax** (`vidgen/word_anchors.py`, no manim): `at: "@WORDS[#N][±S s]"`. `WORDS` is one word
+  or a few in a row, matched against the beat's text split at spaces (the words the word timings
+  are of) without case, accents (`textnorm.fold`) and the punctuation around them; `#N` is the
+  N-th time the beat says them (from 1); the offset needs its `s` so a hyphenated word
+  (`@K-Phi-3`) stays a word. `parse_word_anchor` refuses `@`, `#0`, a second `@` and, on an
+  action, a beat id before `@` (an action's word is in its own beat), each with an example.
+- **The field**: `ActionConfig.at` is `float (0 ≤ at < 1) | str (^\s*@)`. A `mode="before"`
+  validator checks the anchor's syntax (and gives a range error that mentions the word form);
+  the written anchor is kept in the private `_anchor` (`ActionConfig.anchor`), and `at` itself
+  is set to the anchor's fraction of the beat (`set_fraction`) once resolved. So every consumer
+  of `at` (the runner `ActionRunner.start_beat`, the stage's move ordering, `musicfit`'s
+  reveals, automatic directing, the host's looks) keeps reading a float and none had to change.
+  `shorthand()` and `model_dump` write the anchor back (a `field_serializer`), so `vidgen
+  direct --json` and a dumped config re-validate to the same anchor; `resolved()` (shorthand keys
+  sorted by a tool) keeps the fraction.
+- **Three resolutions, each refining the one before**:
+  1. `BeatConfig` (an after-validator): the beat must say the word (else `ValueError`, placed at
+     `scenes[i].beats[j]`, naming the beat, the action and "words like it" by `difflib`, or "its
+     words" when none is close, or "says X 2 times, so there is no #3"); `at` = the word's start
+     in `estimate_word_times` over the word-count length at the default rate.
+  2. `VideoConfig` (after its checks): the same estimate in the video's `language` and
+     `narration.words_per_second` (it matters only for syllables and for an offset's share).
+  3. `Project.__init__` (`retime_project_anchors`): a beat with an MP3 is re-timed from
+     `beat_word_times` over the MP3's length with the beat's spoken form (`Project.spoken`:
+     pronunciation, voice sounds, an emotion tag), i.e. the stored TTS alignment when it is the
+     MP3's, else the estimate within the MP3's speech: the same timings the karaoke captions use.
+     The render worker loads the project per scene, after `vidgen tts`, so renders, storyboards,
+     `lint` and `direct` all see the audio's times; before any audio they see the estimate.
+- **Fraction, not seconds**: the anchor resolves to `word start + offset` over the narration's
+  length, clamped to `0 .. MAX_FRACTION` 0.999, and the runner multiplies by the beat's body as
+  for any `at`. With an `overlap` / `interrupt` the body is shorter than the narration, so the
+  moment moves a little earlier in proportion (accepted: rare, and a fraction of the beat is what
+  `at` has always meant).
+- **Translations**: a translated beat says other words. `_translated` calls
+  `pin_translated_anchors` on the translated raw config before validating it: an anchor of a beat
+  whose text changed becomes the source config's fraction (rounded to 4 places); untranslated
+  beats keep their anchor (and its audio timing).
+- **`lower_third`**: its `at` also takes `"@Ada"` (the anchor scene's first beat that says it;
+  `#N` counts over the scene) or `"intro_b2@Ada"` (that beat). `locate_word_anchor` gives the
+  beat and the seconds into it from the planned beat (`BeatSlot`: its narration length) or, in
+  `validate_project` (no plan), the MP3's or estimated length.
+- **Not word-timed**: a scene's `sfx:` list (seconds from the scene's start, before any beat; an
+  anchor there is refused with a pointer to the beat's `sfx` action), `keyframes` keys (`t`:
+  seconds from the action's start or a share), the thumbnail's `at`, `sting` (`start` / `end`).
+- **`vidgen.api`** adds `WordAnchor`, `is_word_anchor`, `parse_word_anchor` and
+  `locate_word_anchor` (an overlay or scene of a project that starts something on a word; the
+  built-in `lower_third` uses them, as built-ins import only `vidgen.api`). Actions need none of
+  them: they get word timing through `at` without code of their own.

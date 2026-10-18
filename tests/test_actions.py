@@ -59,7 +59,7 @@ def test_canonical_and_shorthand_forms_are_equivalent() -> None:
         ({"target": "x"}, "no action name"),
         ({"highlight": "x", "target": "y"}, "already gives the target"),
         ({"action": "dim", "target": []}, "at least 1 item"),
-        ({"action": "dim", "target": "x", "at": 1}, "less than 1"),
+        ({"action": "dim", "target": "x", "at": 1}, "0 <= at < 1"),
         ({"action": "dim", "target": "x", "run_time": 0}, "greater than 0"),
         ({"action": "di m", "target": "x"}, "pattern"),
     ],

@@ -1350,6 +1350,15 @@ scene that shows the narration its own way):
   written words timed by their spoken form (`map_word_times(spoken, times)` does that mapping for
   times of the spoken words). `project.spoken_texts()` gives what the TTS says per beat;
   `beat.voice_sounds` lists a beat's sounds (their markers are not in `beat.text`).
+- **A word of the narration** (docs/CONFIG.md "Actions on a spoken word"): an action's `at:
+  "@word"` reaches a project action already resolved (`self.config.at` is the fraction,
+  `self.config.anchor` the text as written). For an option of your own that names a word,
+  `is_word_anchor(value)` tells the form, `parse_word_anchor(text, beat_allowed=True)` reads
+  `"intro_b2@Ada#2-0.2s"` into a `WordAnchor(words, occurrence, offset, beat)` (a `ValueError`
+  with an example on bad syntax), and `locate_word_anchor(project, scene_id, anchor, beats) ->
+  (beat_id, seconds)` finds it in a scene's beats (`beats`: `(id, narration seconds or None)`,
+  e.g. from `self.context.scene.beats` as `(b.id, b.end - b.start)`; a `ValueError` naming the
+  beat and the words like it when no beat says it), timed as the captions are.
 - `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
   max_lines=2, max_words=None, until=None, prefix="", prefix_width=None) -> [CaptionCue(start,
   end, lines, words, prefix)]`: the text cut at phrase boundaries into cues (`segment_cues`, costs

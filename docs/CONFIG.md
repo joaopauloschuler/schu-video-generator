@@ -2554,7 +2554,7 @@ writes them as WAV files to listen to):
 | key | default | |
 |---|---|---|
 | `sound` | required | a built-in sound or the project's own (below); in an action written as `- sfx: NAME` (or `sound: NAME`) |
-| `at` | `0` | scene `sfx:` list: seconds from the scene's start; beat action: fraction of the beat's narration, as for every action (rounded to a frame) |
+| `at` | `0` | scene `sfx:` list: seconds from the scene's start; beat action: fraction of the beat's narration or a word it says (`at: "@crash"`), as for every action (rounded to a frame) |
 | `gain` | `0` | dB, -60 to 12; at 0 a sound's loudest 400 ms is −27 LUFS (K-weighted, one channel), about 7 dB under ElevenLabs narration, with peaks at most −9 dBFS |
 | `pan` | `0` | -1 left, 0 centre (full level on both channels), 1 right (equal-power) |
 | `align` | `start` | `start`: the sound starts at `at`; `end`: it ends there |
@@ -7321,7 +7321,7 @@ the one key that names an action).
 |---|---|---|
 | `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
-| `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
+| `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
 | `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6 (with `to` on a level: its run-up, crouch, flight and landing), `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6), `let_go` by how far the balloons rise (1–6), `pour` 2.0; a zoom takes as long again to come back) |
 
@@ -7447,7 +7447,7 @@ is for arrows, `zoom` for magnifiers; `keep` and `until` exclude each other; a `
 in the scene. A magnifier on a target without a still picture is an error when the scene renders.
 
 **Timing.** Actions never make a beat longer. An action is due `at` x the beat's narration
-after the beat starts and runs at the first moment from then on when the scene's own animation
+(or on its word, below) after the beat starts and runs at the first moment from then on when the scene's own animation
 is not playing (the scene's reveal of that beat's step comes first, then the action), for its
 `run_time`, shortened to end within the beat (narration + `narration.pad`; `vidgen lint`
 reports run times shortened below 0.5 s as `rushed_animation`). Actions due together play
@@ -7469,6 +7469,45 @@ you mean 'bar:4K'? (targets: title, bar1, bar:Preview 480p, ...; forms: title, b
 bar:<label>; * and ? match several)`. The JSON Schema checks action names and options; targets
 depend on the params, so only `vidgen validate` checks them. Use `vidgen storyboard --scene ID
 --per-beat 3` to see actions mid-beat.
+
+### Actions on a spoken word
+
+Instead of a fraction, `at` can name the word the action belongs to: the action starts as the
+narrator begins that word.
+
+```yaml
+- text: "The loss is high, so we follow the gradient downhill, and the gradient gets smaller."
+  actions:
+    - {highlight: "term:loss", at: "@loss"}
+    - {callout: "point:grad", label: "slope", at: "@gradient"}      # its first time in the beat
+    - {highlight: "term:grad", at: "@gradient#2"}                   # its second time
+    - {reveal: arrow, at: "@downhill-0.2s"}                         # 0.2 s before the word
+    - {zoom: curve, at: "@gets smaller"}                            # a few words in a row
+    - {sfx: pop, at: "@smaller+0.1s"}
+```
+
+- **Syntax**: `"@WORD"`, quoted (YAML reads a bare `@` as an error). `#N` picks the N-th time
+  the beat says it (from 1); an offset in seconds ends the anchor, with its `s`:
+  `"@gradient+0.3s"`, `"@gradient#2 -0.25s"`. A few words in a row (`"@learning rate"`) match
+  as a phrase. Words match without case, accents and the punctuation around them (`"@voce"`
+  finds "Você,"); a hyphenated word is one word (`"@K-Phi-3"`). An offset moves the moment
+  within the beat (at most to its start and just before its end).
+- **Every action** takes it: scene actions (`reveal`, `highlight`, `zoom`, `transform`, ...),
+  `callout`, `sfx`, `particles`, the stage's actions (`walk_to`, `jump`, `emote`, `gesture`,
+  `react`, ...) and the host's. The `lower_third` overlay's `at` takes one too (table in
+  [Overlays](#overlays)). A scene's `sfx:` list stays in seconds; for a sound on a word use the
+  beat's `sfx` action.
+- **Where the time comes from**: the beat's MP3 once `vidgen tts` has made it (the word timings
+  the TTS gives, as ElevenLabs and Kokoro do; else the words spread over the speech in the MP3,
+  by syllables), the same timings as the karaoke captions. Before there is any audio, an
+  estimate from the text over the word-count length (`narration.words_per_second`), so
+  `vidgen validate`, `direct`, `storyboard`, `lint` and drafts use the word's moment already.
+  A word the [pronunciation](#pronunciation-pronunciation) respells is still found by its written form.
+- **Errors**: `vidgen validate` names the beat and the words like the one written:
+  `scenes[0].beats[1]: actions: callout item2 at '@downn': beat 'steps_b2' does not say "downn"
+  (words like it: down)`, or `says "gradient" 2 times, so there is no #3`.
+- **Translations**: a beat whose text a `translations:` file replaces says other words, so its
+  actions keep the moment the source text's word has (as a fraction of the beat).
 
 ## Overlays
 
@@ -7573,7 +7612,7 @@ overlay with `reserve: true`) it moves above them (with the 0.2 gap), in 16:9 an
 | `title` | none | the second line (role, affiliation) |
 | `icon` | none | an icon left of the text |
 | `scene` | first scene drawn on | the scene it belongs to; it must be one the overlay is drawn on |
-| `at` | `0.5` | when it starts: seconds after its scene's start, or a beat id of that scene (the beat's start) |
+| `at` | `0.5` | when it starts: seconds after its scene's start, a beat id of that scene (the beat's start), or a word its narration says: `"@Ada"` (the scene's first beat that says it; `#2` its second time in the scene) or `"intro_b2@Ada"` (in that beat), with an offset (`"@Ada-0.2s"`) |
 | `duration` | `5.0` | seconds shown, slide in and out included |
 | `across_cuts` | `false` | stay on over the following scenes (those the entry is drawn on) until `duration` is over; default: gone by the end of its scene |
 | `align` | `bottom_left` | `bottom_left`, `bottom`, `bottom_right`, `top_left`, `top`, `top_right` (in the safe area) |

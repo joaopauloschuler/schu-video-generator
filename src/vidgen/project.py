@@ -28,6 +28,7 @@ from vidgen.includes import (
 from vidgen.kokoro_voices import voice_parts
 from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
+from vidgen.word_anchors import pin_translated_anchors, retime_project_anchors
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
 from vidgen.voicesounds import is_tagged_voice, voiced_spoken
 
@@ -176,6 +177,7 @@ def _translated(
         return config, source, TranslationReport(rel, None, missing=True)
     doc = read_translation_file(root / rel, rel)
     translated, report = apply_translations(data, doc, rel)
+    pin_translated_anchors(translated, data, config)
     return _parsed(translated, f"{where} with the translations of {rel}", origins), source, report
 
 
@@ -224,6 +226,7 @@ class Project:
         self.draft = False
         #: The ``--output-dir`` folder (absolute); it wins over ``output_dir:`` (see :attr:`output_dir`).
         self.output_dir_override: Path | None = None
+        retime_project_anchors(self)   # actions at a spoken word, timed by the beats' audio (§87.2)
 
     @classmethod
     def load(

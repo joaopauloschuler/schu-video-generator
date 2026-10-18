@@ -14700,3 +14700,93 @@ How to test
   examples/platform-story --preview` 2:50 (170.0 s), music and sounds in the mix (timings.json:
   meadow 37 footsteps, 4 coins, 2 boings, 2 thuds; garden unlock, creak, swoosh, twinkle, 3 coins;
   sky 4 boings, 4 thuds, 2 twinkles); storyboards 16:9 (two stills a beat) and 9:16 checked by eye.
+
+## Step 156 — Actions timed to a spoken word (and the Phase P plan)
+
+What was built
+- **Phase P planned**: tasklist.md "Phase P — Presentation toolkit" (Steps 156–164, the brief's
+  titles and scope as checkboxes) and DESIGN §87 (goal, rules, §87.1 a table of the nine steps'
+  design intent, §87.2 this step).
+- **Word anchors** (`src/vidgen/word_anchors.py`, no manim): a beat action's `at` may be
+  `"@gradient"` (the first time the beat says it), `"@gradient#2"` (a later time),
+  `"@gradient+0.3s"` / `"@gradient -0.25s"` (an offset; the `s` is required so `@K-Phi-3` stays
+  one word), `"@learning rate"` (a phrase). Matching ignores case, accents (`textnorm.fold`) and
+  surrounding punctuation, against `beat.text.split()` (the words the timings are of).
+- **Resolution** (DESIGN §87.2): `ActionConfig.at` is `float | "@..."`; the written anchor is kept
+  in `ActionConfig.anchor`, `at` becomes its fraction. `BeatConfig` checks the word and estimates
+  (default rate), `VideoConfig` re-estimates in its `language` and `narration.words_per_second`,
+  `Project.__init__` re-times beats with an MP3 from `beat_word_times` (TTS alignment, else the
+  estimate within the MP3's speech; the spoken form via `Project.spoken`), the captions' timings.
+  So every consumer of `at` (runner, stage move order, musicfit reveals, directing, host) reads a
+  float unchanged, and validate / direct / storyboard / lint / drafts work before `vidgen tts`.
+  `shorthand()` and `model_dump` write the anchor back; `resolved()` keeps the fraction.
+- **Errors**: `scenes[0].beats[1]: actions: callout item2 at '@downn': beat 'steps_b2' does not say
+  "downn" (words like it: down)`; `... says "gradient" 2 times, so there is no #3`; syntax errors
+  with examples; a beat id before `@` on an action; `at 1.5` says the range and the word form; an
+  anchor in a scene's `sfx:` list points to the beat's `sfx` action.
+- **Every action that takes `at`**: all go through `ActionConfig` (scene actions, `callout`,
+  `sfx`, `particles`, stage moves / acting / handling, host actions), so all take a word; the test
+  validates a bullets scene (reveal, callout) and a stage scene (walk_to, gesture, emote, sfx).
+  **`lower_third`**'s `at` takes `"@Ada"` (the scene's first beat that says it; `#N` over the
+  scene) or `"intro_b2@Ada"`, checked in `validate_project`, timed in `window()`.
+- **Translations**: `_translated` pins anchors of translated beats to the source config's fraction
+  (`pin_translated_anchors`) before validating the translated config.
+- **Example and docs**: `examples/minimal` trend callout `at: "@sparse"` (0.33; was 0.4); CONFIG
+  "Actions on a spoken word" (new subsection of Beat actions; the `at` rows of actions, sfx and
+  lower_third; the Checks paragraph moved above it), guide `at` bullet and its example
+  (`at: "@iterate"`) + `AGENTS.md`, EXTENDING "A word of the narration".
+
+Files touched
+- New: `src/vidgen/word_anchors.py`, `tests/test_word_anchors.py`.
+- Changed: `src/vidgen/config.py` (`ActionConfig.at`, `anchor`, `fraction`, `set_fraction`, the
+  serializer, `resolved`, `shorthand`; `BeatConfig._time_word_anchors`; `VideoConfig` calls
+  `time_config_anchors`; `DEFAULT_WORDS_PER_SECOND`; `SfxCue` refuses an anchor),
+  `src/vidgen/project.py`, `src/vidgen/api.py`, `src/vidgen/scenes/overlays.py`,
+  `examples/minimal/video.yaml`, `docs/CONFIG.md`, `docs/EXTENDING.md`,
+  `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`,
+  `tests/test_actions.py` (the range message changed: "0 <= at < 1").
+
+Public interfaces
+- YAML: action `at: "@WORDS[#N][±S s]"`; `lower_third` `at: "[BEAT]@WORDS[#N][±S s]"`.
+- `vidgen.api` adds `WordAnchor`, `is_word_anchor`, `parse_word_anchor`, `locate_word_anchor`
+  (DESIGN §87.2; built-ins import only `vidgen.api`). `ActionConfig.anchor`, `.fraction`,
+  `.set_fraction`; `config.DEFAULT_WORDS_PER_SECOND`; `word_anchors.beat_words`,
+  `time_beat_anchors`, `time_config_anchors`, `retime_project_anchors`, `pin_translated_anchors`.
+
+Decisions
+- Resolve to a fraction at load rather than teach every consumer a new type: one place, and the
+  render worker loads the project after `vidgen tts`, so renders get the audio's times.
+- A translated beat keeps the source word's moment (its words differ); an untranslated beat of a
+  translated variant keeps its anchor and its own audio timing.
+- No new lint rule: a word that is not said is a validate error, and a word late in the beat is
+  already caught by `rushed_animation` (run times shortened below 0.5 s).
+- `cartoon/directing._beat_words` was left as it is (it passes the spoken form only for voice
+  sounds); `word_anchors.beat_words` always passes `Project.spoken` like the captions. Moving
+  directing onto it would change gesture timing with `pronunciation:`: not done unasked.
+
+Known gaps
+- Not word-timed: a scene's `sfx:` list (seconds; refused with a pointer), `keyframes` keys `t`,
+  the thumbnail's `at`, `sting` start / end.
+- With `overlap` / `interrupt` the runner scales `at` by the beat's shorter body, so a word-timed
+  action lands slightly early (Backlog).
+- `@mid-20s` parses as `mid` with -20 s; write `"@mid-20s+0s"` (Backlog).
+- Pre-existing, not from this step: `test_builtins_use_only_the_public_api` fails on
+  `scenes/stage.py`'s direct imports (Phase O; confirmed on HEAD in a worktree; Backlog).
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `tests/test_word_anchors.py` (31, incl. one
+  tiny render, 3 s), `test_actions` (28), `test_config` (21), `test_overlays` (26),
+  `test_translation` (66), `test_schema` (62, 106 s), `test_cartoon_directing` (31, not render),
+  `test_screenplay` (20), `test_captions` (17, not render), `test_project` (24), `test_api` (10),
+  `test_builtin_scenes` (185 passed, 1 failed: the pre-existing stage.py import check),
+  `test_actions_coverage` (12, not render), `test_docs` (60), `test_guide` (52),
+  `test_platform_moves` (22, not render), `test_cartoon_stage` (23, not render), `test_musicfit`
+  (28, 1 skipped), `test_sfx` (114, not render), `test_host` (14), `test_host_acting` (19).
+- Manual (scratchpad project, bullets with a highlight `@gradient`, a callout `@down`, an
+  `sfx` `@step`, a `lower_third` `@gradient#2`): `vidgen validate` ok, misspelt word and `#3`
+  errors as above; storyboard before audio checked by eye (highlight on beat 2's first
+  "gradient", callout later on "down", the lower third on the second "gradient"); Kokoro `vidgen
+  tts` (with timings) then the resolved times equal the alignment's (0.53 s "gradient", 1.93 s
+  "down" in beat 2); storyboard and lint with the audio ran (lint: 3 narration-speed warnings,
+  Kokoro's pace). `vidgen validate examples/minimal` ok; all its variants load, `pt` pins the
+  translated beat's anchor.

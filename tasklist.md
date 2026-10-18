@@ -828,6 +828,63 @@ cartoon style; the hero and the story are original. Same rules as Phases H–N.
 - [x] Author guide (+ `AGENTS.md`), CONFIG, DESIGN, README, CHANGELOG; gallery if applicable (guide topic `platform`; CONFIG: snail, a set on a level, screenplay with a level; DESIGN §86.11; README feature + example; CHANGELOG Phase O in the untagged 0.3.0; the gallery is per scene type: the stage page's params table regenerated; `vidgen screenplay` with a level: front-matter sets, spots as marks, `jumps onto`)
 - [x] Review of Phase O; fix what it finds; gaps to the Backlog (fixed: a set's props on a level, the screenplay's multi-line YAML round-trip crash, no night stars over a tall level, a refusal's wording, a docstring's module name, portrait close-ups narrower than a face (`SHOT_MIN_WIDTHS`); the no-manim test covers the camera and foley; `tests/test_mcp.py` run in full; 9 Backlog lines)
 
+## Phase P — Presentation toolkit
+
+Goal: help AI authors make clearer, more beautiful presentation videos (coding Shorts, science and
+maths explainers). Every feature is easy to write correctly in YAML, validated with clear
+`VidgenError` messages, covered by lint where useful, documented in docs/CONFIG.md and the author
+guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as Phases H–O.
+
+### Step 156 — Actions timed to a spoken word
+- [x] Phase P plan here and DESIGN §87 (the whole phase; §87.2 word anchors)
+- [x] `at: "@gradient"` on any beat action: the first time the beat says the word; `"@gradient#2"` a later time, `"@gradient+0.3s"` / `"-0.2s"` an offset, `"@learning rate"` a phrase; matched without case, accents or punctuation (`vidgen/word_anchors.py`; `ActionConfig.at` float or anchor, `ActionConfig.anchor`; written back as written by `shorthand()` / `model_dump`)
+- [x] Times from the beat's audio (the TTS alignment, else the estimate within the MP3's speech, with the spoken form: pronunciation, voice sounds), the same as the karaoke captions; before any audio, the estimate from the text over the word-count length, so drafts, storyboards, `vidgen direct` and lint work before `vidgen tts` (resolved by `BeatConfig`, `VideoConfig`, then `Project`)
+- [x] An unknown word, or `#N` past the last time, is a `vidgen validate` error naming the beat and listing words like it
+- [x] Every action that takes `at`: scene actions, `callout`, `sfx`, `particles`, the stage's moves and acting, the host's; `lower_third`'s `at` (`"@Ada"`, `"intro_b2@Ada#2"`); a scene's `sfx:` list (seconds) refuses an anchor and points to the `sfx` action; a translated beat keeps the source word's moment
+- [x] Docs: CONFIG "Actions on a spoken word", the action / sfx / lower_third `at` rows; the author guide (+ `AGENTS.md`)
+- [x] Tests: syntax, matching, the estimate, the config's language and rate, the audio's alignment, pronunciation, translations, the overlay, every kind of action validating, one tiny render on the word (`tests/test_word_anchors.py`)
+
+### Step 157 — One colour per concept
+- [ ] A video-level `terms:` map (`{loss: accent, gradient: "#E07A5F"}`, theme colour names or hex) applied wherever the terms are on-screen text: equations (TeX parts), bullets, text cards, titles, captions / karaoke, chart and diagram labels, callout labels (code comments only if sensible); per-scene opt-out
+- [ ] Lint: too many concept colours (about 5), poor contrast on the theme background, a term coloured differently by a scene-level colour setting
+- [ ] Cookbook (docs/COOKBOOK.md §12): the rule "same term, same colour" next to the exact-wording rules
+- [ ] Tests
+
+### Step 158 — Code that morphs between versions
+- [ ] In the code scene(s): version A, then a morph to version B (unchanged tokens glide into place, new lines grow in, removed lines fade out), timed to beats and words (Step 156); the diff computed by vidgen (`difflib`), not the author
+- [ ] The phone readability rules of the existing code scenes still apply
+- [ ] Tests
+
+### Step 159 — Terminal scene
+- [ ] A terminal window with commands typed (typing effect) and their output appearing, timed to beats / words; the output is the author's (vidgen never runs commands)
+- [ ] The code scenes' look and themes; works beside code (a split) or after a code scene (a carry / match cut if cheap)
+- [ ] Tests
+
+### Step 160 — Maths toolkit, part 1: function plots
+- [ ] Axes with f(x) from expressions evaluated safely (no `eval`; a small whitelisted parser, or sympy only if already a dependency: check), several functions
+- [ ] A dot moving along a curve with a live value label, a tangent line at a point moving with the dot, shaded area under a curve between bounds, labels; driven by beat actions
+- [ ] Tests
+
+### Step 161 — Maths toolkit, part 2: geometry basics
+- [ ] Braces with labels, angle arcs with labels, dimension lines
+- [ ] A number line (points, intervals, jumps); a coordinate plane with vectors (add, scale)
+- [ ] A scene type or additions to Step 160's scene: decided and recorded in DESIGN §87
+- [ ] Tests
+
+### Step 162 — Charts that change between beats
+- [ ] The chart scenes (bar, line, ...) take values per beat and animate between them: bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line chart, the axis rescaling when needed; values stay the author's
+- [ ] Tests
+
+### Step 163 — Narration–picture check in lint
+- [ ] A deterministic rule on the layout dump / plan: a beat whose narration names an on-screen label or term not visible yet (it appears in a later beat); optionally a reveal the narration never mentions
+- [ ] Low false positives (stemming, case, stop words, a threshold); a setting to tune or turn it off
+- [ ] Tests
+
+### Step 164 — Examples, docs and review of Phase P
+- [ ] One example project showing the new features (a short science or coding explainer, 16:9 with a 9:16 variant)
+- [ ] Guide / CONFIG / CHANGELOG / README / gallery as the repo's conventions require; the Shorts cookbook (docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) for word timing, concept colours, code morphing and the terminal
+- [ ] Review of the whole phase with fixes, in HANDOFF like earlier phase reviews; the phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
+
 ---
 
 ## Backlog (after Step 60)
@@ -836,6 +893,8 @@ Not done in the roadmap; each is one line, with where it came from. Bugs first, 
 then nice-to-have.
 
 Bugs / correctness
+- [ ] `tests/test_builtin_scenes.py::test_builtins_use_only_the_public_api` fails: `scenes/stage.py` imports `vidgen.cartoon.level_*`, `vidgen.camera`, `vidgen.world`, `vidgen.config` directly (Phase O, Steps 150–154; found in Step 156) — export what a stage needs through `vidgen.api` or exempt the stage in the test with a reason
+- [ ] Word anchors (Step 156): with `overlap` / `interrupt` the runner scales `at` by the beat's shorter body, so a word-timed action lands a little early; an offset like `@mid-20s` reads as the word `mid` minus 20 s (write `"@mid-20s+0s"`)
 - [ ] MCP: large documents (a long video's `lint` / `storyboard` JSON, `schema full=true`) are not trimmed and can exceed a client's tool-output limit (Step 59) — page or summarise them
 - [ ] MCP on Windows: process-tree kill on cancel is untested; no session with a real client (Claude Desktop / Code) was possible here (Step 59)
 - [ ] `equation_derivation`: a `highlight` colour on a step is not carried into its dimmed copy; `code`'s own highlight steps reset opacities a `dim` action set (Step 37)

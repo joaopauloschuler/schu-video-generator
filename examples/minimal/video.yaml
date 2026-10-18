@@ -185,7 +185,7 @@ scenes:
           - callout: "point:sparse@8"
             kind: arrow
             label: "Lowest loss"
-            at: 0.4
+            at: "@sparse"     # as that word is said (or a fraction of the beat: 0.4)
 
   - id: picture
     type: image

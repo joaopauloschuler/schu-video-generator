@@ -26,6 +26,7 @@ from pydantic import (
     PrivateAttr,
     ValidationError,
     WithJsonSchema,
+    field_serializer,
     field_validator,
     model_validator,
 )
@@ -33,6 +34,7 @@ from pydantic import (
 from vidgen.errors import Problem, VidgenError
 from vidgen.languages import LANGUAGE_TAG_PATTERN, normalize_language
 from vidgen.voicesounds import VoiceSound, take_out_sounds
+from vidgen.word_anchors import ACTION_ANCHOR_PATTERN, is_word_anchor, parse_word_anchor, time_beat_anchors, time_config_anchors
 
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
@@ -686,12 +688,16 @@ PronunciationValue = str | PronunciationEntry | None
 PronunciationMap = dict[Annotated[str, Field(min_length=1)], PronunciationValue]
 
 
+#: The speech rate a beat's length is estimated with when it has no audio (``narration.words_per_second``).
+DEFAULT_WORDS_PER_SECOND = 2.6
+
+
 class NarrationConfig(_Strict):
     """Timing of narrated beats."""
 
     pad: float = Field(default=0.35, ge=0)
     """Seconds of silence after each beat."""
-    words_per_second: PositiveFloat = 2.6
+    words_per_second: PositiveFloat = DEFAULT_WORDS_PER_SECOND
     """Speech rate used to estimate a beat's duration when it has no audio yet."""
 
 
@@ -1170,9 +1176,8 @@ class ActionConfig(BaseModel):
     """Action type: reveal, dim, highlight, or a project action (`vidgen list-scenes`)."""
     target: TargetPattern | list[TargetPattern] | None = Field(default=None, min_length=1)
     """Target name(s) of the scene (item3, bar:<label>, ...); * and ? match several."""
-    at: float = Field(default=0.0, ge=0, lt=1)
-    """When in the beat, as a fraction of its narration (0 = start); the action waits for the
-    scene's own animation running then."""
+    at: Annotated[float, Field(ge=0, lt=1)] | Annotated[str, Field(pattern=ACTION_ANCHOR_PATTERN)] = 0.0
+    """When in the beat: a fraction of its narration (0 = start), or a spoken word of the beat ("@gradient", "@gradient#2" its second time, "@gradient+0.3s" moved by seconds); the action waits for the scene's own animation running then."""
     until: Identifier | None = None
     """A later beat of the scene at whose start the action is undone (dim, highlight)."""
     run_time: PositiveFloat | None = None
@@ -1180,6 +1185,44 @@ class ActionConfig(BaseModel):
 
     _shorthand: dict[str, Any] | None = PrivateAttr(default=None)
     _auto: bool = PrivateAttr(default=False)
+    _anchor: str | None = PrivateAttr(default=None)
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _word_or_fraction(cls, value: Any) -> Any:
+        """A word anchor's syntax is checked here (its word against the beat's text by
+        :class:`BeatConfig`); a number must be a fraction 0 <= at < 1."""
+        if isinstance(value, str) and is_word_anchor(value):
+            parse_word_anchor(value)
+            return value.strip()
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and not 0 <= value < 1:
+            raise ValueError(f"at {value:g}: a fraction of the beat's narration, 0 <= at < 1 (0.5 is its middle), or a word it says: \"@word\"")
+        return value
+
+    @model_validator(mode="after")
+    def _keep_anchor(self) -> ActionConfig:
+        if isinstance(self.at, str):
+            self._anchor = self.at
+        return self
+
+    @property
+    def anchor(self) -> str | None:
+        """The word anchor ``at`` was written as (``"@gradient#2"``), else ``None``; ``at``
+        itself is its fraction of the beat once resolved (DESIGN.md §87.2)."""
+        return self._anchor
+
+    @property
+    def fraction(self) -> float:
+        """``at`` as a fraction of the beat (a word anchor not resolved yet: 0)."""
+        return self.at if isinstance(self.at, float | int) else 0.0
+
+    def set_fraction(self, fraction: float) -> None:
+        """Set ``at`` to the fraction a word anchor resolves to (the anchor is kept)."""
+        self.at = fraction
+
+    @field_serializer("at")
+    def _written_at(self, value: float | str) -> float | str:
+        return self._anchor if self._anchor is not None else value
 
     @classmethod
     def automatic(cls, data: dict[str, Any]) -> ActionConfig:
@@ -1231,7 +1274,9 @@ class ActionConfig(BaseModel):
         names = [k for k in self._shorthand if k in known and k not in ACTION_KEYS]
         if len(names) != 1:
             return self
-        return ActionConfig.model_validate(_unshorten(self._shorthand, names[0]))
+        made = ActionConfig.model_validate(_unshorten(self._shorthand, names[0]))
+        made.at = self.at
+        return made
 
     @property
     def options(self) -> dict[str, Any]:
@@ -1253,8 +1298,8 @@ class ActionConfig(BaseModel):
         ``until`` and ``run_time`` only when set)."""
         data: dict[str, Any] = {self.action: self.target} if self.target is not None else {"action": self.action}
         data.update(self.options)
-        if self.at:
-            data["at"] = self.at
+        if self._anchor is not None or self.at:
+            data["at"] = self._anchor if self._anchor is not None else self.at
         for key in ("until", "run_time"):
             if getattr(self, key) is not None:
                 data[key] = getattr(self, key)
@@ -1337,6 +1382,13 @@ class SfxCue(_Strict):
     """start: the sound starts at `at`; end: it ends there (a riser landing on a reveal)."""
     params: SfxParams = Field(default_factory=SfxParams)
     """duration, pitch, intensity of a built-in sound."""
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _no_word(cls, value: Any) -> Any:
+        if is_word_anchor(value):
+            raise ValueError(f"{value!r}: a scene's sfx list is timed in seconds; for a sound on a spoken word use the beat's sfx action: actions: [{{sfx: NAME, at: \"@word\"}}]")
+        return value
 
 
 def _cue(value: str | SfxCue) -> SfxCue:
@@ -1962,6 +2014,15 @@ class BeatConfig(_Strict):
             raise ValueError("interrupt: true with overlap: 0 cuts nothing; give the seconds it starts before the line ends (or leave overlap out: 0.5)")
         return self
 
+    @model_validator(mode="after")
+    def _time_word_anchors(self) -> BeatConfig:
+        """Actions at a spoken word (``at: "@gradient"``): the beat must say it; ``at`` becomes
+        its estimated fraction (the video's language and speech rate, then the beat's audio,
+        refine it: DESIGN.md §87.2)."""
+        if any(act.anchor is not None for act in self.actions):
+            time_beat_anchors(self, None, self.estimated_duration(DEFAULT_WORDS_PER_SECOND))
+        return self
+
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
         return len(self.text.split()) / words_per_second
@@ -2241,6 +2302,7 @@ class VideoConfig(_Strict):
             problems.append("scenes[0].carry: the first scene has no scene before it to carry objects from")
         if problems:
             raise ValueError("; ".join(problems))
+        time_config_anchors(self)
         return self
 
     def thumbnail_problems(self, thumb: ThumbnailConfig) -> list[str]:

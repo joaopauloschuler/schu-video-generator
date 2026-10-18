@@ -762,11 +762,16 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
         - callout: "bar:Preview"
           kind: arrow
           label: "Use this while editing"
-          at: 0.3
+          at: "@iterate"           # on that word (or a fraction of the beat: 0.3)
 ```
 
-- `at` (0–1, a fraction of the beat) times the action to the word it belongs to; actions never
-  make a beat longer.
+- `at` times the action to the word it belongs to: name the word, `at: "@gradient"` (quoted;
+  `"@gradient#2"` its second time in the beat, `"@gradient-0.2s"` a moment before it,
+  `"@learning rate"` a phrase), or give a fraction of the beat (0–1). A word is timed by the
+  beat's audio once `vidgen tts` made it, by an estimate from the text before; a word the beat
+  does not say is a `vidgen validate` error that lists the words like it. Every action takes it
+  (`callout`, `sfx`, the stage's moves and acting too), and so does `lower_third`'s `at`
+  (`"@Ada"`). Actions never make a beat longer.
 - The `stage` actions (`say` to `throw`) take the character as the target and the new
   state as `to:` (`- emote: kit` + `to: happy`). How to use them together for a cartoon:
   `vidgen guide cartoons`.
