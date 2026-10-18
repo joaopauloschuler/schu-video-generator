@@ -421,7 +421,9 @@ class Trace(Action):
     """Moves what a maths scene draws: on a function_plot a dot (dot<N>) along its curve to
     x = `to` (its value label, guides and tangent following), an area's right end (area<N>) to
     `to`, a point (point<N>) to [x, y] = `to`, a vector's tip (vector<N>) to `to` or the vector
-    scaled by `scale`; on a number_line a point to `to`. Everything drawn from them follows.
+    scaled by `scale`; on a number_line a point to `to`; on a line_chart a cursor dot along a
+    series (series<N>) to x = `to` (on categories, the position from 1), with the line's value.
+    Everything drawn from them follows.
     `until: <beat>` moves it back."""
 
     class Options(ActionOptions):
@@ -449,7 +451,7 @@ class Trace(Action):
         """The scene's own checks (``trace_problem``) of each target it moves."""
         trace_problem = getattr(scene_cls, "trace_problem", None)
         if trace_problem is None:
-            return [("target", "trace moves the dots, areas, points and vectors of a function_plot or the points of a number_line")]
+            return [("target", "trace moves the dots, areas, points and vectors of a function_plot, the points of a number_line or a cursor along a line_chart series")]
         names = scene_cls.target_names(params)
         matched = [n for pattern in self.config.targets() for n in names if fnmatchcase(n, pattern)]
         problems: list[tuple[str, str]] = []

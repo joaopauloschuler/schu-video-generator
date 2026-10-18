@@ -294,8 +294,8 @@ project's own scene types, in its theme).
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
-| categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption` |
-| change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label` |
+| categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
+| change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
 | a relationship between two measures | `scatter` | `title`, `series`, `trend`, `highlight`, `x_label`, `y_label` |
 | how values are distributed | `histogram` | `title`, `values`, `bins`, `mean`, `median`, `highlight` |
 | parts of a whole (≤ 6 parts) | `pie` | `title`, `labels`, `values`, `donut`, `highlight`, `other_below` |
@@ -481,6 +481,32 @@ Minimal snippets (copy, then adapt):
   beats:
     - text: "The baseline improves steadily."
     - text: "The sparse model starts slower, but ends lower."
+- id: ranking
+  type: bar_chart
+  params:
+    title: "Most loved languages"
+    labels: [Python, Rust, Go]
+    values: [62, 48, 31]
+    changes: [[58, 66, 30], [55, 72, 41]]   # the values at each later step; bars grow / shrink
+    sort: true                              # and re-sort, largest first
+    unit: "%"
+  beats:
+    - text: "In the first survey, Python led."
+    - text: "A year later Rust overtook it."
+    - text: "Then Go climbed as well."
+      actions: [{reveal: change2, at: "@climbed"}]   # change 2 on that word
+- id: training
+  type: line_chart
+  params:
+    title: "Training loss"
+    x: [1, 2, 3, 4]
+    series: {loss: [2.4, 1.8, 1.4, 1.2], accuracy: [0.3, 0.5, 0.6, 0.65]}
+    changes: [{loss: [1.0, 0.5, 0.3, 0.2]}]   # series left out keep their values; the y axis rescales
+    reveal: all
+  beats:
+    - text: "Here is the loss over four epochs."
+      actions: [{trace: "series:loss", to: 3, at: "@four"}]   # a cursor dot with the value sweeps the line
+    - text: "With pretraining it starts far lower."
 - id: size_vs_accuracy
   type: scatter
   params:
@@ -794,7 +820,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start) | one at a time |
 | `reveal` | bring a later element in early | rarely: the default order is usually right |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
-| `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`) | one movement per beat, timed to the word that says it |
+| `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |

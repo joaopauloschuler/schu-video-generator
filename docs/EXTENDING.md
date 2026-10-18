@@ -553,11 +553,12 @@ scales like them (docs/CONFIG.md "Charts: common to all chart types"):
   `short_number(v)`). Build a `ChartAxis` yourself for other ticks (categories: positions 0..n-1
   with their names as labels).
 - `chart_axes(area, x, y, size="caption", grid="y"|"x"|"both"|"none", lines="x"|"xy",
-  right=0, top=0)` → `ChartAxes`: tick labels left and below, axis titles, dashed gridlines,
+  right=0, top=0, tick_width=0)` → `ChartAxes`: tick labels left and below, axis titles, dashed gridlines,
   axis lines, colliding labels thinned; `axes.plot` (the data `Region`), `axes.point(x, y)`,
   `x_pos`, `y_pos`, `axes.group` (everything, not yet added) and its parts (`lines`, `grid`,
   `x_labels`, `y_labels`, `x_title`, `y_title`). `right` / `top` keep room for end labels or a
-  legend.
+  legend; `tick_width` is the least room for the y tick labels, so axes that replace each other
+  (a y axis before and after it rescales) share one plot.
 - `chart_label_size(size)` — points for a size token, never below `readable_size()`.
 - `chart_legend(entries, max_width, stack=False)` with entries `(name, color, swatch)` (`line`,
   `box` or a marker shape); `auto_legend(entries, axes.plot, points, max_width)` puts it in a

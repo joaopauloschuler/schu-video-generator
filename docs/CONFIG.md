@@ -1897,8 +1897,9 @@ host directs itself in every scene with a host:
 
 What each scene type reveals: `bullets` an item per step (`reveal: all`: `item1`), `bar_chart` a
 bar per step (`per_beat`: up or down from the bar before; `all`: the last bar, up or down from
-the first) and the `highlight` bar, `line_chart` a series per step (up or down from its first
-value to its last), `code` the lines of each `highlight` entry (`listing` without highlights).
+the first), each of its `changes` (up or down as the values' sum does) and the `highlight` bar,
+`line_chart` a series per step (up or down from its first value to its last) and each of its
+`changes` (up or down as the lines' last values do), `code` the lines of each `highlight` entry (`listing` without highlights).
 Other types reveal nothing the host reacts to (it still looks at written highlights). Everything
 it adds is lint-safe by construction (the hand stays in its room; no pointer line). `vidgen
 direct` and the storyboard's `auto:` lines show the added actions; `examples/host-explainer`
@@ -3454,10 +3455,21 @@ most 16).
 
 ### `bar_chart`
 
-Steps: all bars (`reveal: all`, default) or one per bar (`per_beat`), then — if `highlight` is
-set — a focus step that dims the other bars. Bars grow while their value labels count up.
+Steps: all bars (`reveal: all`, default) or one per bar (`per_beat`), then one per entry of
+`changes`, then — if `highlight` is set — a focus step that dims the other bars. Bars grow
+while their value labels count up.
 [Action targets](#beat-actions): `title`, `bar<N>` (1-based) and `bar:<label>`, each a bar with
-its value and category labels (beat actions can do more than the one `highlight` step).
+its value and category labels (beat actions can do more than the one `highlight` step), and
+`change<N>` (all bars; revealing it plays change N).
+
+**Values that change between beats**: `changes` lists the values the bars change to, one list
+per change (one value per label, in the order of `labels`). At a change every bar grows or
+shrinks to its new value while its label counts, and with `sort: true` the bars re-sort,
+largest first (at the top when horizontal), sliding past each other; a bar keeps its colour
+and its targets. Change N plays in its own step (its own beat when there is one), or on a
+spoken word with `{reveal: change<N>, at: "@word"}` (that step then waits for the action). The
+bars keep one scale over every change (the chart has no value axis to rescale), so their heights
+compare across changes; the value labels are sized for every value they will show.
 
 Like every chart, the title stands in the `header` band (1.3x in a vertical frame) and label
 sizes are theme size tokens that never go below the readable minimum (see
@@ -3484,6 +3496,8 @@ does not fit (or with more than 5 bars), unless `horizontal` is set.
 | `horizontal` | bool | auto | default: vertical bars; horizontal in a portrait frame with more than 5 bars or value labels too wide for vertical ones |
 | `reveal` | `all` \| `per_beat` | `all` | |
 | `baseline` | float | `0` | value the bars start from (e.g. `1.0` for losses; say so in `caption`) |
+| `changes` | list[list[float]] | `[]` | values the bars change to, one list per change (one value per label); see above |
+| `sort` | bool | `false` | order the bars by value, largest first; they re-sort at each change |
 
 ```yaml
 - id: params
@@ -3500,16 +3514,53 @@ does not fit (or with more than 5 bars), unless `horizontal` is set.
     - text: "The three-layer version keeps just 23 percent."
 ```
 
+Bars that change and re-sort, the last change on a word:
+
+```yaml
+- id: langs
+  type: bar_chart
+  params:
+    title: "Most loved languages"
+    labels: [Python, Rust, Go, Zig]
+    values: [62, 48, 31, 12]
+    changes:
+      - [58, 66, 30, 20]
+      - [55, 72, 41, 35]
+    sort: true
+    unit: "%"
+  beats:
+    - text: "In the first survey, Python led by a wide margin."
+    - text: "A year later Rust overtook it."
+    - text: "Then Go and Zig both climbed as well."
+      actions: [{reveal: change2, at: "@climbed"}]
+```
+
 ### `line_chart`
 
 Steps: one per series (`reveal: per_beat`, default; the axes come with the first) or all
-series in beat 1 (`all`). Each line ends with a `name value` label; when those labels would be
+series in beat 1 (`all`), then one per entry of `changes`. Each line ends with a `name value` label; when those labels would be
 too wide (e.g. in portrait) the names move to a legend, placed in a corner of the plot that no
 line crosses (else above the plot). Axis labels are plain text (no LaTeX); tick labels that
 would collide are thinned to every second (third...) one.
 [Action targets](#beat-actions): `title`, `axes`, `series<N>` (1-based), `series:<name>` (a line with its markers
 and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
-`point:sparse@8`; without `dots` the point appears as a dot when an action uses it).
+`point:sparse@8`; without `dots` the point appears as a dot when an action uses it) and
+`change<N>` (the axes and lines; revealing it plays change N).
+
+**Values that change between beats**: `changes` lists the values the lines change to, one
+entry per change: `{name: [values]}` for the series that change (the others keep theirs) or,
+with one series, just `[values]`; `x` stays. At a change every line morphs to its new values,
+its markers and end label riding along (the value counting). The y axis rescales when the new
+values leave it or would span less than half of it: the old gridlines and tick labels slide to
+where their values lie on the new axis as they fade, the new ones slide in. `y_min` / `y_max`
+fix an end; `rescale: false` keeps one axis covering every change. Change N plays in its own
+step, or on a spoken word with `{reveal: change<N>, at: "@word"}`.
+
+**A cursor on a line**: `{trace: series1, to: 4}` (or `series:<name>`) sweeps a dot along that
+line to x = 4 with the line's value over it (between two points, the straight line's), on a
+word with `at: "@word"`; on category `x`, `to` is the position from 1 (`to: 3`: the third).
+The cursor stays and rides along when the line changes; `until: <beat>` takes it back to the
+first x.
 
 | param | type | default | |
 |---|---|---|---|
@@ -3527,6 +3578,8 @@ and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
 | `reveal` | `per_beat` \| `all` | `per_beat` | |
 | `annotate` | bool | `true` | end-of-line labels |
 | `dots` | bool | auto | markers at the data points (default: up to 12 points) |
+| `changes` | list of `{name: [values]}` (or `[values]` with one series) | `[]` | values the lines change to, one entry per change; see above |
+| `rescale` | bool | `true` | at a change, rescale the y axis when the values leave it or span less than half of it; `false`: one axis for every change |
 
 ```yaml
 - id: loss
@@ -3541,6 +3594,29 @@ and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
   beats:
     - text: "Here is the baseline."
     - text: "And the sparse model, which ends lower."
+```
+
+Lines that change (the axis rescales) and a cursor on a word:
+
+```yaml
+- id: loss
+  type: line_chart
+  params:
+    title: "Training loss"
+    x: [1, 2, 3, 4, 5, 6]
+    x_label: epoch
+    series:
+      loss: [2.4, 1.9, 1.5, 1.3, 1.2, 1.15]
+      accuracy: [0.3, 0.5, 0.6, 0.65, 0.7, 0.72]
+    changes:
+      - {loss: [2.4, 1.6, 1.0, 0.7, 0.5, 0.42]}
+      - {loss: [0.9, 0.5, 0.3, 0.2, 0.15, 0.12], accuracy: [0.5, 0.7, 0.8, 0.85, 0.88, 0.9]}
+    reveal: all
+  beats:
+    - text: "Here are loss and accuracy over six epochs."
+      actions: [{trace: "series:loss", to: 4, at: "@six"}]
+    - text: "With a better learning rate the loss drops much faster."
+    - text: "And after pretraining, both curves start far better."
 ```
 
 ### Charts: common to all chart types
@@ -7795,8 +7871,8 @@ a title card, a `transform` of a bar).
 | `text_card` | `text` | highlight, zoom | |
 | `bullets` | `heading`, `item<N>`, `item:<text>` | reveal, dim, highlight, zoom, transform | an item is its row (marker, icon, text) |
 | `icon_grid` | `heading`, `item<N>`, `item:<label>` | reveal, dim, highlight, zoom, transform | an item is its icon, label and sublabel |
-| `bar_chart` | `title`, `bar<N>`, `bar:<label>` | reveal, dim, highlight, zoom | a bar with its value and category labels; a `box` sits on the axis |
-| `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>` | reveal, dim, highlight, zoom | a series is its line, markers and end label; `point:sparse@8` |
+| `bar_chart` | `title`, `bar<N>`, `bar:<label>`, `change<N>` | reveal, dim, highlight, zoom | a bar with its value and category labels; a `box` sits on the axis; `change<N>` is every bar, revealing it plays that change |
+| `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>`, `change<N>` | reveal, dim, highlight, zoom, trace | a series is its line, markers and end label; `point:sparse@8`; `change<N>` is the axes and lines, revealing it plays that change; `trace` a series to sweep a cursor along it |
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
@@ -7852,7 +7928,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |
-| `trace` | `to` (an x, or `[x, y]` for a point or a vector's tip) or `scale` (a vector only) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following; a point (`point<N>`, `point:A`) moves to `to: [x, y]`; a vector (`vector<N>`, `vector:a`) moves its tip to `to: [x, y]` or is multiplied by `scale` (2: twice as long, -1: turned round; its tail stays). Vectors, sums, marks and live labels drawn from a moved point or vector follow it. On a [`number_line`](#number_line): a point moves to `to` (a number). 2 s; it stays there (`until: <beat>`: back when that beat starts). |
+| `trace` | `to` (an x, or `[x, y]` for a point or a vector's tip) or `scale` (a vector only) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following; a point (`point<N>`, `point:A`) moves to `to: [x, y]`; a vector (`vector<N>`, `vector:a`) moves its tip to `to: [x, y]` or is multiplied by `scale` (2: twice as long, -1: turned round; its tail stays). Vectors, sums, marks and live labels drawn from a moved point or vector follow it. On a [`number_line`](#number_line): a point moves to `to` (a number). On a [`line_chart`](#line_chart): a cursor dot sweeps along a series (`series<N>`, `series:<name>`) to x = `to` (on category `x`, the position from 1) with the line's value over it. 2 s; it stays there (`until: <beat>`: back when that beat starts). |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |
@@ -7962,7 +8038,9 @@ narrator begins that word.
   a `reveal` action: [`code_morph`](#code_morph) morphs to `version2` on `{reveal: version2, at: "@word"}`,
   [`terminal`](#terminal) shows `output2` (or types `command2`) on `{reveal: output2, at: "@word"}`,
   [`function_plot`](#function_plot) draws a tangent on `{reveal: tangent1, at: "@word"}` and moves a dot on
-  `{trace: dot1, to: 2, at: "@word"}` (a point, a vector and the [`number_line`](#number_line)'s points too).
+  `{trace: dot1, to: 2, at: "@word"}` (a point, a vector and the [`number_line`](#number_line)'s points too),
+  and [`bar_chart`](#bar_chart) / [`line_chart`](#line_chart) change their values on
+  `{reveal: change1, at: "@word"}` (a line's cursor sweeps on `{trace: series1, to: 4, at: "@word"}`).
 - **Where the time comes from**: the beat's MP3 once `vidgen tts` has made it (the word timings
   the TTS gives, as ElevenLabs and Kokoro do; else the words spread over the speech in the MP3,
   by syllables), the same timings as the karaoke captions. Before there is any audio, an

@@ -11014,8 +11014,8 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
 
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
-Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot`, `number_line` (more
-sections as the steps land). Help AI
+Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot`, `number_line`, `bar_chart` / `line_chart` "Values that
+change between beats" (more sections as the steps land). Help AI
 authors make clearer and better-looking presentation videos: coding Shorts, science and maths
 explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
 checked by `vidgen validate` with a `VidgenError` that says what to write, covered by `vidgen
@@ -11419,3 +11419,67 @@ Built as planned in §87.7; the changes and the details:
 - **Not done** (Backlog): reflex angles; a mark on a curve (a tangent's angle with the axis);
   arcs of jumps below the line; a vertical number line; the default ranges growing to fit
   `trace` goals; point labels avoiding dot labels of functions; vectors from a function's dot.
+
+### 87.9 Charts that change between beats (Step 162)
+
+- **Which charts**: the existing chart types were checked one by one. `bar_chart` and
+  `line_chart` take `changes` (a bar race and a morphing line are what "a chart that changes"
+  means in an explainer). Not done, and why: `pie` (shares that change would need the slice
+  labels re-placed every frame, and a pie compares parts of one whole, not states), `histogram`
+  (raw values are binned; changing counts is a bar chart), `scatter` (points that move are a
+  different feature: trajectories), `heatmap` (cells could recolour, but no request names it),
+  `stat` (already counts from `count_from` / a `before` comparison). Charts without `changes`
+  are built exactly as before (the gallery stills and clips of both types re-rendered byte for
+  byte).
+- **YAML**: `changes` lists the later states, each the values the chart changes to; the first
+  state is the existing `values` / `series`, so a one-state chart is unchanged and `changes`
+  never repeats the first state. `bar_chart`: `changes: [[...], ...]` (one value per label) and
+  `sort: true` (largest first, re-sorted at each change). `line_chart`: `changes: [{name:
+  [values]}, ...]` (series left out keep theirs; with one series a plain list), `x` fixed, and
+  `rescale` (default `true`). The change keys are `TextRef`s, so they follow a translated series
+  name. `vidgen validate` names the change, the series and the counts (`changes[0].loss has 2
+  values but x has 4`, `'los' is not a series (series: loss, acc)`, a list with several series).
+- **Steps and words**: each change is one step after the chart's own reveal steps (the bar
+  chart's `highlight` step stays last), so with enough beats change N lands on its own beat.
+  `change<N>` is a target (`scenes/chart_changes.py`, mixin `ChangingChart`): revealing it plays
+  that change (`{reveal: change2, at: "@word"}`), and the scene leaves that change's step empty,
+  as `code_morph` does with its versions. Its mobject is the whole chart (bars; axes and lines),
+  so `dim` / `highlight` on it act on the chart; `is_shown` is overridden for these targets to
+  mean "the chart has reached state N" (a target whose mobject is always on screen would never
+  be revealed), and `entrance_time` gives a `reveal` 1.2 s (`CHANGE_TIME`) instead of 0.8 s.
+  Changes only go forward: a later state shown already makes an earlier change a no-op. A change
+  before a bar or line is on screen sets its new shape at once (it grows / draws to the new
+  values later). `reveal_steps` adds one step per change, rising or falling as the bars' sum or
+  the lines' last values do, for host reactions and music cues.
+- **Bars**: one value scale over every state (the bar chart has no value axis, so rescaling
+  would hide the change: doubled values would look the same); the value labels are sized and the
+  room beside negative bars kept for every value any state shows. Bars keep their colour,
+  targets and highlight box (the `outline` rectangle is updated in place). A change animates each
+  shown bar with one `UpdateFromAlphaFunc` (value and slot interpolated: the layout functions
+  take a fractional slot), the value label counting and the category label sliding; with
+  `sort`, a bar's labels fade by up to 75 % half way (`SWAP_FADE`) while it changes slot, so two
+  labels passing never read as one. Labels are rebuilt with `become`, keeping the shown opacity
+  (`keep_opacity`, not `match_style`: after a `become` from a longer text the old label holds
+  padding glyphs, and copying their style glyph by glyph hid digits).
+- **Lines**: every state's points, end labels and y axis are computed up front. The y axis
+  rescales when the new values leave the current axis or span less than half of it
+  (`needs_rescale`, `RESCALE_SHARE` 0.5; `state_axes` keeps the same axis object otherwise, and
+  `y_min` / `y_max` pin an end); `rescale: false` makes one axis over every state. All axes
+  share one plot: `chart_axes` takes a new `tick_width` (the least room for the y tick labels,
+  default 0, so nothing else changes), set to the widest tick label of all the axes. A change
+  interpolates each line's frame points (so it morphs with the axis), its markers, end label
+  (counting) and cursor; on a rescale the old gridlines and tick labels slide to where their
+  values lie on the new axis while fading (first 60 % of the change), the new ones slide in from
+  their old-axis places (last 60 %). The `axes` target's group stays one group on screen: the
+  swap happens in `_SwapAtEnd.clean_up_from_scene` (an `Animation`, not an `AnimationGroup`,
+  whose group Manim would add to the scene, dissolving the group whose parts it animates).
+- **Cursor**: the `trace` action (Step 160) also takes a `line_chart` series: `trace_problem`
+  checks `to` (an x inside the data; on categories a position from 1), `traced_item` makes a
+  `_Cursor` on first use: a dot with a background ring and a `LiveLabel` with the line's value
+  (linear between points) above it, or below at the top of the plot. It sweeps over 2 s like any
+  trace, stays, follows the line through a change, and `until:` takes it back.
+- **Concept colours**: labels still go through `self.text` / `fit_text`, and a series named
+  after a term keeps the term's colour through changes; nothing new to lint.
+- **Not done** (Backlog): per-state notes (a caption or a title per change); changing labels
+  (bars entering or leaving a race); `x` changing between states; a line chart's cursor that
+  shows a guide line to the axes; `pie` / `heatmap` changes.

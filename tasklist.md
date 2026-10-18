@@ -873,8 +873,8 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Tests (`tests/test_geometry.py`: the mark builders, the figure's references, sums and trace goals, params and checks, trace checks, terms, the number line, tiny renders in 16:9 and 9:16 on words and with `until`; the builtin / coverage / translation samples; the gallery page and example scene `hops`)
 
 ### Step 162 — Charts that change between beats
-- [ ] The chart scenes (bar, line, ...) take values per beat and animate between them: bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line chart, the axis rescaling when needed; values stay the author's
-- [ ] Tests
+- [x] The chart scenes (bar, line, ...) take values per beat and animate between them: bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line chart, the axis rescaling when needed; values stay the author's (`bar_chart` and `line_chart` take `changes`, one step each after their own, or on a word with `{reveal: change<N>, at: "@word"}`; bars keep one scale and `sort: true` re-sorts them; lines morph and the y axis rescales when the values leave it or would span less than half of it (`rescale`); `{trace: series1, to: 4}` sweeps a cursor dot with the line's value; pie, histogram, scatter, heatmap and stat not, with the reasons in DESIGN §87.9; `scenes/chart_changes.py`; `chart_axes(tick_width=)`)
+- [x] Tests (`tests/test_chart_changes.py`: states, checks, the rescale rule, sorting, targets and steps, trace checks, tiny renders in 16:9 and 9:16, on a word, concept colours)
 
 ### Step 163 — Narration–picture check in lint
 - [ ] A deterministic rule on the layout dump / plan: a beat whose narration names an on-screen label or term not visible yet (it appears in a later beat); optionally a reveal the narration never mentions
@@ -910,6 +910,7 @@ Bugs / correctness
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
 
 Quality (what an agent's video looks like)
+- [ ] Charts that change (Step 162): no caption or title per change; bars cannot enter or leave a race (labels fixed), `x` cannot change; no guide line from a line chart's cursor to the axes; `pie` / `heatmap` / `scatter` do not change; the gallery example shows no change (`examples/gallery` holds each newer type once, and `bar_chart` / `line_chart` belong to `examples/minimal`): Step 164's example
 - [ ] `function_plot` (Step 160): a function of a parameter animated over beats (`a` in `a x^2`); parametric / polar curves; LaTeX labels; a dot's label plate does not avoid other curves; `trace` moves in x only
 - [ ] `terminal` (Step 159): no general split with another scene type (only the `code` pane); a long session does not scroll (`clear` starts a new page); one colour per output; `code_morph`'s `reveal` of a version could use `entrance_time` (its morph's 1.5 s) instead of the action's 0.8 s
 - [ ] `code_morph` (Step 158): `code_walkthrough` does not morph between versions; a token moving to another line (a line split in two) fades out and in instead of gliding; a `reveal` action's morph takes the action's `run_time` (default 0.8 s; the guide writes 1.5)

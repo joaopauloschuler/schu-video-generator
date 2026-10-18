@@ -62,7 +62,8 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   - flows: `diagram` (alias `flowchart`; laid out automatically from `edges: ["a -> b: label"]`,
     and `layered_layout` is there for project scenes), `process` (a token travelling through a
     pipeline), `network` (a neural network with forward-pass pulses);
-  - data: `bar_chart`, `line_chart`, `scatter`, `histogram`, `pie` (and donut), `heatmap` (colour
+  - data: `bar_chart`, `line_chart` (both can change their values between beats: bars re-sort, lines
+    morph, the axis rescales, a cursor sweeps a line), `scatter`, `histogram`, `pie` (and donut), `heatmap` (colour
     scales from the theme), `stat` (a counting number with a comparison), `map` (countries step by
     step, choropleths, pins and flight-path arcs; Natural Earth data bundled);
   - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified

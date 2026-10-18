@@ -294,13 +294,15 @@ def chart_axes(
     lines: Literal["x", "xy"] = "x",
     right: float = 0.0,
     top: float = 0.0,
+    tick_width: float = 0.0,
     theme: Theme | None = None,
 ) -> ChartAxes:
     """Lay out two axes in ``area``: y tick labels on the left (the y title above them, left
     aligned), x tick labels below the plot (the x title under them, centred), dashed gridlines
     at the labelled ticks (``grid``), and the x axis line (``lines="xy"``: also the y axis
-    line). ``right``/``top`` keep room free beside / above the plot (end labels, a legend).
-    Labels that would collide are thinned to every k-th one. Text sizes use
+    line). ``right``/``top`` keep room free beside / above the plot (end labels, a legend);
+    ``tick_width`` is the least room left of it for the y tick labels (axes that must share one
+    plot, e.g. a chart's y axis before and after it rescales). Labels that would collide are thinned to every k-th one. Text sizes use
     :func:`chart_label_size`; nothing is added to a scene."""
     theme = theme or current_theme()
     s = chart_label_size(size, theme)
@@ -313,7 +315,7 @@ def chart_axes(
     x_texts = [label(t) for t in x.labels]
     y_title = fit_text(y.title, area.width * 0.7, size=s, color=color, align="left", theme=theme) if y.title else None
     x_title = fit_text(x.title, area.width * 0.9, size=s, color=color, theme=theme) if x.title else None
-    tick_w = max((t.width for t in y_texts), default=0.0)
+    tick_w = max(max((t.width for t in y_texts), default=0.0), tick_width)
     x_h = max((t.height for t in x_texts), default=0.0)
     y_h = max((t.height for t in y_texts), default=0.0)
     cap = styled(Text, theme, "0", s, color, NORMAL).height

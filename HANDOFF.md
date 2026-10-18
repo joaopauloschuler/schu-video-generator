@@ -15206,3 +15206,87 @@ How to test
   three: only the expected `dead_air` (`reveal: all`) and the scratch project's own low-contrast
   term colour; `examples/gallery --scene hops` storyboards (both formats) and lint 0 findings;
   `vidgen validate examples/gallery`; `vidgen gallery --types function_plot,number_line`.
+
+## Step 162 — Charts that change between beats
+
+What was built
+- **Which charts** (DESIGN §87.9): all chart types were checked. `bar_chart` and `line_chart`
+  take values per state; `pie`, `histogram`, `scatter`, `heatmap` and `stat` do not (reasons in
+  §87.9). Charts without `changes` are unchanged: `vidgen gallery --types bar_chart,line_chart`
+  re-rendered their stills and GIFs byte for byte (only the params tables changed).
+- **`changes`** on both: the later states (the first is `values` / `series`). `bar_chart`:
+  `changes: [[58, 66, 30], ...]` (one value per label) and `sort: true` (largest first,
+  re-sorted at each change; labels fade by up to 75 % while passing another bar). One value
+  scale over every state, so heights compare (the chart has no value axis to rescale).
+  `line_chart`: `changes: [{loss: [...]}, ...]` (series left out keep theirs; one series: a plain
+  list), `rescale: true` (the y axis rescales when the values leave it or span less than half of
+  it; `y_min` / `y_max` pin an end; `false`: one axis over every state). Old ticks and gridlines
+  slide to their values on the new axis while fading, new ones slide in.
+- **Steps and words**: change N is a step after the chart's own reveal steps (the highlight step
+  stays last), or plays on a word with `{reveal: change<N>, at: "@word"}` (the scene then leaves
+  that step empty, as `code_morph` does). `change<N>` targets (the whole chart) are "shown" once
+  the chart reached state N (`ChangingChart.is_shown`); a reveal plays a change for 1.2 s.
+  `reveal_steps` adds a rise / fall step per change (host reactions, music cues).
+- **Cursor**: `{trace: series1, to: 4, at: "@word"}` (or `series:<name>`) sweeps a dot with the
+  line's value (linear between points) along the line; on category `x`, `to` is the position
+  from 1. It stays, rides along through changes; `until:` takes it back.
+- **Concept colours**: unchanged paths (`self.text` / `fit_text`; a series named after a term
+  keeps its colour); tested through a change.
+
+Files touched
+- New: `src/vidgen/scenes/chart_changes.py` (`ChangingChart` mixin, `needs_rescale`,
+  `state_axes`, `swap_parts` / `_SwapAtEnd`, `keep_opacity`, `lerp`), `tests/test_chart_changes.py`.
+- Changed: `src/vidgen/scenes/bar_chart.py` (layouts as functions of a fractional slot and a
+  value; `set_bar`; `play_change`; `_order`), `src/vidgen/scenes/line_chart.py` (states computed
+  up front; `_set_series`, `play_change`, `_rescale`, `_Cursor`, `trace_problem`,
+  `traced_item`), `src/vidgen/charts.py` (`chart_axes(tick_width=0.0)`),
+  `src/vidgen/scenes/math_axes.py` (the `trace` action's description and message name the line
+  chart), `docs/CONFIG.md` (both sections, params rows, two examples, targets table, `trace`
+  row, "Actions on a spoken word", host reveal steps), `src/vidgen/data/guide/AGENTS.md` +
+  `AGENTS.md` (chooser keys, two snippets, `trace` row), `docs/EXTENDING.md` (`tick_width`),
+  `README.md` (scene list), `docs/gallery/bar_chart.md`, `docs/gallery/line_chart.md` (params
+  tables), `DESIGN.md` §87.9, `tasklist.md`.
+- Tests fixed that were already failing on HEAD (stale lists from Steps 159–161, checked in a
+  worktree): `tests/test_actions.py` (the action names now include `trace`, which is also
+  reversible), `tests/test_extensions.py` (the known scene types include `number_line` and
+  `terminal`).
+
+Public interfaces
+- YAML: `bar_chart` `changes`, `sort`, target `change<N>`; `line_chart` `changes`, `rescale`,
+  target `change<N>`, `trace` on `series<N>` / `series:<name>`.
+- `vidgen.api`: `chart_axes(..., tick_width=0.0)` (new keyword, default keeps the old layout).
+
+Decisions / deviations
+- `changes` holds the later states only (the first is the existing params), so one-state charts
+  and every existing project are untouched and nothing is written twice.
+- Bars never rescale (no axis to show it); lines do, by a deterministic rule.
+- A change is a target and a step rather than a new action: the same `{reveal: X, at: "@word"}`
+  the other Phase P scenes use for their own steps.
+- The gallery example got no changing chart: `examples/gallery` holds each newer type once and
+  `bar_chart` / `line_chart` are in `examples/minimal` (`test_examples_use_every_builtin_scene_type`);
+  Step 164's example project should show `changes`, `sort` and the cursor.
+
+Known gaps (Backlog, Quality)
+- No caption / title per change; bars cannot enter or leave (labels fixed); `x` fixed; no guide
+  line from the cursor; pie / heatmap / scatter do not change. Two same-coloured bars swapping
+  overlap half way (their labels fade).
+- Step 163's narration check sees the chart's final state in the dump (all labels exist from
+  the start), not which values a beat shows.
+
+How to test
+- One file at a time under `capped`: `tests/test_chart_changes.py` (22, incl. 4 tiny renders in
+  16:9 and 9:16, on a word, with terms; 12 s); `test_charts`, `test_gallery`, `test_docs`,
+  `test_guide`, `test_api` (with the above: 235, 68 s); `test_actions_coverage` (83, 58 s);
+  `test_builtin_scenes` + `test_actions` (230, 75 s); `test_translation`, `test_plan`,
+  `test_terms`, `test_lint`, `test_review2`, `test_review4`, `test_word_anchors` (238, 55 s);
+  `test_function_plot`, `test_geometry`, `test_host_acting`, `test_json_output`, `test_presets`,
+  `test_regions`, `test_registry`, `test_extensions`, `test_callout_action`,
+  `test_chapters_progress`, `test_musicfit` (364 + 1 skipped); `test_schema` (62, capped3g,
+  124 s): all pass.
+- Manual: a scratchpad project (a sorted bar race with a highlight and a change on a word; a
+  loss / accuracy chart with a cursor on a word and two changes, the second rescaling; six
+  horizontal bars with a negative value re-sorting; a category line chart with two traces and a
+  rescaling change): storyboards in 16:9, 9:16 and `light_academic` checked by eye; `vidgen lint`
+  0 findings in 16:9 and 9:16 (light: only the scratch project's own low-contrast term colour).
+  A gallery scene `ranking` was storyboarded and linted (0 findings, both formats), then taken
+  out again (see Decisions).
