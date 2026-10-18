@@ -896,7 +896,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
   beat's audio once `vidgen tts` made it, by an estimate from the text before; a word the beat
   does not say is a `vidgen validate` error that lists the words like it. Every action takes it
   (`callout`, `sfx`, the stage's moves and acting too), and so does `lower_third`'s `at`
-  (`"@Ada"`). Actions never make a beat longer.
+  (`"@Ada"`). Actions never make a beat longer. Show a label when the narration names it:
+  lint's `said_before_shown` warns when a node, callout or stage is named seconds before it
+  appears.
 - The `stage` actions (`say` to `throw`) take the character as the target and the new
   state as `to:` (`- emote: kit` + `to: happy`). How to use them together for a cartoon:
   `vidgen guide cartoons`.
@@ -1959,6 +1961,8 @@ install; `vidgen validate` warns when it is missing.
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
 | `small_speaker` | a speaking face too small on screen to read it and its lip sync | `shot: closeup <name>` (or `medium`) for that beat, or `character_size: large` |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
+| `said_before_shown` | the narration names a label on screen (a node, a callout, a stage) seconds before it appears, and not again when it does | show it on the word: `{reveal: node:database, at: "@database"}` (or the callout's `at`); or name it in the beat that shows it |
+| `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

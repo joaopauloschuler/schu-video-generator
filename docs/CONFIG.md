@@ -8052,6 +8052,9 @@ narrator begins that word.
   (words like it: down)`, or `says "gradient" 2 times, so there is no #3`.
 - **Translations**: a beat whose text a `translations:` file replaces says other words, so its
   actions keep the moment the source text's word has (as a fraction of the beat).
+- **Checked by lint**: [`vidgen lint`](#lint-vidgen-lint)'s `said_before_shown` rule warns when
+  the narration names a label on screen (a node, a callout, a stage) more than 1.5 s before it
+  appears; the usual fix is a `reveal` (or the `callout`) on that word.
 
 ## Overlays
 
@@ -8627,6 +8630,8 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `talked_over` | warning | a beat with [`overlap`](#overlapping-lines-overlap-interrupt) that starts speaking before whole words of the line before it are said: those words are spoken entirely under the new line (word times from the alignment, else estimated). The message names the words and the largest overlap that keeps them clear. With `interrupt`: words of a line with audio that the cut removes before they start (the interrupt should cut at most the end of the last word). Fix: a shorter `overlap`, or `interrupt: true`; for an interrupt, a shorter `overlap` or none |
 | `readback` | warning | a beat whose MP3, transcribed by [`vidgen readback`](#readback-vidgen-readback), differs from its spoken text by a word error rate above `max_wer`; the message quotes the first differences and a suggested fix. Reads only the transcripts `vidgen readback` cached for the beats' current MP3s and the `stt:` settings (it never runs speech to text): nothing is reported until that command has run |
 | `unclear_speech` | warning; info for doubtful words | only with `--readback`: each [word to check](#readback-vidgen-readback) of `vidgen readback` — a word heard with a probability below `min_probability` (info: below `doubtful_probability`), after a pause longer than `max_gap` seconds inside a sentence, or differently from the text — at its time (the beat's start + the word's time in the MP3), with the fix (a respelling in `pronunciation:`, another voice, speed or emotion). `value` / `limit` are the probability or the pause and its threshold |
+| `said_before_shown` | warning | the narration names an on-screen **label** (a scene text of at most `max_words` words with a word that names something: a diagram node, a callout, a stage, an axis title) more than `min_lead` seconds before the label is on screen, and does not name it again when it shows. When it shows is known from the layout dump: it was not there at the still before the one that first shows it (the beat-end still of the beat before, or a mid-beat still of a storyboard), or at the time of the `reveal` / `callout` / `transform` action of its beat that shows it (a callout with that label, or an action [on a word](#actions-on-a-spoken-word) the label says). Words are compared without case and accents, with English plural and verb endings (`databases` = `database`, `moving` = `moves`), without stop words and numbers; a label of several words counts as named when all its words are said close together. Not checked: overlays (captions repeat the narration), speech bubbles, maths and code, numbers (a chart's values, tick labels, live values like `slope 0.50`), texts that another text on screen already says (the heading "How a cache works" before a `Cache` node). Word times come from the beat's audio (the alignment), else the estimate. Fix: show it on the word (`{reveal: node:database, at: "@database"}`), reveal it earlier, or name it when it shows; or `lint_ignore` it (`{rule: said_before_shown, object: Database}`) |
+| `unsaid_reveal` | off (info when turned on) | a beat (not the scene's first) brings new labels, and the scene's narration names none of them (same labels and word matching as `said_before_shown`). Off by default: many labels are fine unsaid (a map's city names, a step's output); turn it on with `unsaid_reveal: {severity: info}` to review a script |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -8663,6 +8668,8 @@ lint:
     readback: {max_wer: 0.1}                # word error rate; also `vidgen readback`'s threshold
     unclear_speech: {min_probability: 0.5, doubtful_probability: 0.75, max_gap: 0.5}   # also `vidgen readback`'s word flags
     concept_colors: {max_colors: 5, min_contrast: 4.5}   # the terms: colours
+    said_before_shown: {min_lead: 1.5, max_words: 4}     # seconds; longer texts are sentences
+    unsaid_reveal: {max_words: 4}                        # off unless given a severity ("info")
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
@@ -9511,7 +9518,7 @@ The include file written by [`vidgen cast`](#a-random-cast-vidgen-cast).
 Each finding: `scene`; `beat` (the beat at whose end it was seen, `null` for a silent scene);
 `time` (in the video, `null` when not every scene has a render at this format) and
 `scene_time` (from the scene start); `rule`; `severity` (`error`, `warning`, `info`);
-`object` (the object concerned, `null` for `max_words` and the timing rules) and `other` (the second object of a
+`object` (the object concerned, `null` for `max_words` and the timing rules; for `said_before_shown` / `unsaid_reveal` the label, as the layout dump has it where it first shows) and `other` (the second object of a
 pair: the other text for `text_overlap`, the shape for `covered_text`; else `null`), each
 `{id, kind, class, name, path, text, icon, bbox}` as in the [layout dump](#layout-dump-buildlayoutscenejson)
 (`text` `null` for shapes, `icon` the icon name for kind `icon`, else `null`); `similar` (further objects with the same problem, reported with

@@ -11015,7 +11015,7 @@ Reference: docs/CONFIG.md "Character size (`character_size`)", "The camera on a 
 ## 87. Presentation toolkit (Phase P, Steps 156–164)
 
 Reference: docs/CONFIG.md "Actions on a spoken word", "One colour per concept (`terms`)", `code_morph`, `terminal`, `function_plot`, `number_line`, `bar_chart` / `line_chart` "Values that
-change between beats" (more sections as the steps land). Help AI
+change between beats", the lint rules `said_before_shown` / `unsaid_reveal` (more sections as the steps land). Help AI
 authors make clearer and better-looking presentation videos: coding Shorts, science and maths
 explainers. Every feature is written in YAML by an agent, so each must be easy to write right,
 checked by `vidgen validate` with a `VidgenError` that says what to write, covered by `vidgen
@@ -11483,3 +11483,45 @@ Built as planned in §87.7; the changes and the details:
 - **Not done** (Backlog): per-state notes (a caption or a title per change); changing labels
   (bars entering or leaving a race); `x` changing between states; a line chart's cursor that
   shows a guide line to the axes; `pie` / `heatmap` changes.
+
+### 87.10 Narration–picture check in lint (Step 163)
+
+- **Rules** (`src/vidgen/lint/narration_rule.py`, scene scope, last in `LINT_RULES`):
+  `said_before_shown` (warning) — the narration names an on-screen *label* more than `min_lead`
+  (1.5 s) before the label is on screen, and does not name it again in the beat that shows it;
+  `unsaid_reveal` (default severity `off`, `info` when given one) — a beat other than the
+  scene's first brings new labels and the scene's narration names none of them.
+- **Deterministic inputs**: the layout dump (every frame it holds: beat-end stills, plus the
+  mid-beat stills of a storyboard), the activity file's beat times, the beats' word times
+  (`word_anchors.beat_words`: the alignment of the MP3, else the estimate, so the rule works
+  before `vidgen tts`) and the config's actions. The runner reads them into
+  `SceneContext.narration` (a `NarrationPicture`) only when one of the two rules runs; the rules
+  are pure functions of it (tested without renders).
+- **A label** is a scene text (kind `text`; not an overlay — captions repeat the narration —,
+  not a speech bubble, not maths or code) of at most `max_words` (4) words with at least one
+  content word (not a stop word, not a single letter, not a number). Labels with the same
+  content words are one label, so a live label (`slope 0.50` → `slope 1.20`) or a value label
+  that counts is never "new". Its arrival is bounded by the frame before the first frame showing
+  it (`hidden_until`), narrowed to the time of a `reveal` / `callout` / `transform` of that beat
+  that shows it: a callout whose `label` has the same content words, or an action on a word
+  (Step 156) the label says. So a reveal on a word is timed to the word, not to the beat.
+- **Matching**: words folded (case, accents; NFKC so `x²` is `x 2`), English stems (plural,
+  `-ing`, `-ed`, final `e`, doubled consonant; other languages only a plural `s`), stop words
+  (English, Portuguese) dropped. A label of several words is named where all its content words
+  are said within `len + 1` content words of one beat. The mention's time is its first word's.
+- **Keeping false positives low**: `min_lead`; nothing within a beat unless an action pins the
+  label's arrival (one beat-end still cannot tell when in the beat it came); a label whose words
+  another text on screen already says (before or as it arrives: a heading, a legend) is not
+  "unseen"; a label named again in the beat that shows it means the early word was in passing
+  ("A render starts..." before a `Render` stage). Charts: the dump holds every category label and
+  series name from the beat the chart shows (Step 162's `changes` only change numbers), and
+  numbers are no content words, so changing values, rescaled ticks and the cursor's value never
+  count as reveals.
+- **Measured** on the repo's examples (existing dumps and fresh `vidgen lint`; numbers in
+  HANDOFF Step 163): `said_before_shown` reports a handful of findings, each a label named in an
+  earlier beat; `unsaid_reveal` reports about one beat in eight of the gallery, mostly labels
+  that need no narration (a map's cities, a quote's author, a terminal's command), hence off by
+  default.
+- **Not done**: other languages' stemming and stop words; a mention in an earlier *scene*;
+  labels inside pictures, maths (`MathTex` parts) and code; "shown but long gone" (a label that
+  left the screen before it is named).

@@ -15290,3 +15290,101 @@ How to test
   0 findings in 16:9 and 9:16 (light: only the scratch project's own low-contrast term colour).
   A gallery scene `ranking` was storyboarded and linted (0 findings, both formats), then taken
   out again (see Decisions).
+
+## Step 163 — Narration–picture check in lint
+
+What was built
+- **`said_before_shown`** (warning; `src/vidgen/lint/narration_rule.py`, DESIGN §87.10): the
+  narration names an on-screen *label* (a scene text of at most `max_words` 4 words with a
+  content word: a diagram node, a callout, a stage, an axis title) more than `min_lead` 1.5 s
+  before it is on screen, and does not name it again in the beat that shows it. Message:
+  `beat 'cache_b1' says "database" at 4.9 s, but 'Database' appears only in beat 'cache_b3': show
+  it on the word ({reveal: <target>, at: "@database"}) or say it when it shows`; within a beat
+  `... appears 5.9 s later`.
+- **When a label arrives**: from every frame of the layout dump (beat-end stills; a storyboard's
+  mid-beat stills make it finer): it was not there at the frame before its first one. A
+  `reveal` / `callout` / `transform` of that beat pins it to the action's time (Step 156 word
+  anchors included): a callout whose `label` has the label's words, or an action on a word the
+  label says. When it is named: the beats' word times (`word_anchors.beat_words`: the TTS
+  alignment, else the estimate, so it works before `vidgen tts`) over the activity file's beat
+  starts.
+- **Matching**: case and accents folded (NFKC first, so `x²` is not a word), English stems
+  (plural, `-ing`, `-ed`, final `e`, doubled consonant; other languages a plural `s`), English
+  and Portuguese stop words, numbers and single letters dropped; a multi-word label counts as
+  named when all its words are said within `len + 1` content words of one beat.
+- **What the dump knows per beat** (Step 162's note): a chart's category labels and series names
+  are in the dump from the beat the chart shows, and `changes` only change numbers; numbers are
+  never content words and labels with the same words are one label (`slope 0.50` -> `slope
+  1.20`, a value counting), so chart changes, rescaled ticks, live values and cursors never
+  count as reveals. Checked by a real render (bar race with `sort` and a change on a word, a
+  line chart with a change and a cursor): no finding.
+- **Not counted**: overlays (captions repeat the narration; chapter indicator), speech bubbles,
+  maths, code, texts longer than `max_words`, a label whose words another text on screen
+  already says (a heading), a label named again as it shows (the early word was in passing).
+- **`unsaid_reveal`** (default severity `off`; `info` once given a severity): a beat other than
+  the scene's first brings new labels and the scene's narration names none of them. Kept off:
+  on the examples it mostly finds labels that need no words (below).
+- **Runner**: `SceneContext.narration` (a `NarrationPicture`), filled by `narration_picture`
+  only when one of the two rules runs; `_timing_findings` gets the layout dump and now passes a
+  scene rule's `objects` to its finding, so `lint_ignore: [{rule: said_before_shown, object:
+  Database}]` works and the JSON `object` is the label.
+- **Docs**: CONFIG lint table rows, config block, JSON `object` note, a bullet in "Actions on a
+  spoken word"; guide troubleshooting rows and a sentence at the `at` bullet (+ `AGENTS.md`);
+  DESIGN §87.10. CHANGELOG is left to Step 164 (the phase's entry).
+
+False positives, measured (`vidgen lint` with fresh renders of `examples/gallery` (23 scenes),
+`plan` (19), `minimal` (11), `kphi3` (8, real audio); plus the rules run directly on every
+existing dump of the examples, 14 builds incl. vertical and `pt`: 118 scenes, 365 beats, 338
+labels)
+- `said_before_shown`: 2 findings. `plan` `how_cache_works_b1` names the database two beats
+  before its node appears and beat 3 never names it: a real, useful finding. `kphi3` `title`
+  says "large language model" in beat 1, and the subtitle "in Large Language Models" shows in
+  beat 2: correct, minor (a title card). gallery, minimal, custom_scene, the cartoons and the
+  platform story: 0 (the cartoon examples have no scene labels).
+- Tuning: a first version reported 4; "named again in the beat that shows it" removed gallery
+  `render` ("A render starts by validating..." before the `Render` stage, whose beat says
+  "rendered") and kphi3 `equivalence` (a dense layer discussed a beat before the `Dense layer`
+  label, named again with it).
+- `unsaid_reveal` (if turned on): 20 beat findings in 365 beats, mostly fine unsaid (a map's
+  cities, quote authors, a chapter's subtitle, a terminal's command, a scatter's "diagram"
+  cluster, an equation step's "Simplify"); hence off by default.
+
+Files touched
+- New: `src/vidgen/lint/narration_rule.py`, `tests/test_narration_rule.py`.
+- Changed: `src/vidgen/config.py` (`LINT_RULES`, `RuleName`, `SaidBeforeShownRule`,
+  `UnsaidRevealRule`, `LintRules`), `src/vidgen/lint/__init__.py`, `src/vidgen/lint/rules.py`
+  (`SceneContext.narration`), `src/vidgen/lint/run.py`, `docs/CONFIG.md`,
+  `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- YAML: `lint.rules.said_before_shown: {min_lead, max_words, severity}`,
+  `lint.rules.unsaid_reveal: {max_words, severity}` (default `off`); `lint_ignore` entries
+  with these rule names and `object: <label text>`.
+- No `vidgen.api` change (lint rules are built in).
+
+Decisions
+- Rules on the rendered dump, not on the config/plan: only the dump knows what text is on
+  screen for every scene type (project scenes too). The cost is a render, which lint does anyway.
+- Nothing within a beat unless an action pins the label's arrival: a beat-end still cannot say
+  when in the beat a label came, and guessing would flag the common "named at the start of the
+  beat that shows it".
+- A label named again when it shows is not reported, trading the "named a beat early but also
+  when shown" case for no false positive on words used in passing.
+
+Known gaps (Backlog)
+- Stems and stop words for English (and Portuguese stop words) only; a label inside a picture,
+  maths or code is not seen; a mention in an earlier scene is not compared; the message cannot
+  name the target to reveal (the dump does not know targets).
+- Observed, not changed: in `diagram`, a node revealed by an action on a word comes without its
+  incoming edge until the scene's next step (scratch project, `{reveal: "node:cache", at:
+  "@cache"}`).
+
+How to test
+- One file at a time under `capped`: `tests/test_narration_rule.py` (12, 7 s); with
+  `test_lint`, `test_timing_lint`, `test_docs`, `test_guide`, `test_config`, `test_terms` (199,
+  not render, 10 s); `test_lint`, `test_timing_lint`, `test_json_output`, `test_word_anchors`,
+  `test_api` (97, 37 s); `test_schema` (62, capped3g, 122 s): all pass.
+- Manual: a scratchpad project (a diagram naming its database early with a node revealed on
+  "@cache", a bar race with `sort` and a change on a word, a line chart with a change and a
+  cursor, bullets with a callout late in the beat): `vidgen lint` in 16:9 and 9:16 reported
+  exactly the database and the callout ("learning rate" 5.9 s before it shows); stills looked at.

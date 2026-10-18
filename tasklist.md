@@ -877,9 +877,9 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Tests (`tests/test_chart_changes.py`: states, checks, the rescale rule, sorting, targets and steps, trace checks, tiny renders in 16:9 and 9:16, on a word, concept colours)
 
 ### Step 163 — Narration–picture check in lint
-- [ ] A deterministic rule on the layout dump / plan: a beat whose narration names an on-screen label or term not visible yet (it appears in a later beat); optionally a reveal the narration never mentions
-- [ ] Low false positives (stemming, case, stop words, a threshold); a setting to tune or turn it off
-- [ ] Tests
+- [x] A deterministic rule on the layout dump / plan: a beat whose narration names an on-screen label or term not visible yet (it appears in a later beat); optionally a reveal the narration never mentions (`said_before_shown`: from every frame of the layout dump, the beats' word times and the `reveal` / `callout` / `transform` actions of the beat, so a reveal on a word is timed to the word; `unsaid_reveal`, off by default; `src/vidgen/lint/narration_rule.py`, DESIGN §87.10)
+- [x] Low false positives (stemming, case, stop words, a threshold); a setting to tune or turn it off (`min_lead` 1.5 s, `max_words` 4, numbers / overlays / bubbles / maths / code left out, a label another text already says, a label named again as it shows; `severity`, `lint_ignore` with `object`; measured on every example's dumps: 2 findings in 118 scenes)
+- [x] Tests (`tests/test_narration_rule.py`: stems, mentions, labels from dumps, action narrowing, both rules, config, the runner on faked renders with a word anchor and `lint_ignore`)
 
 ### Step 164 — Examples, docs and review of Phase P
 - [ ] One example project showing the new features (a short science or coding explainer, 16:9 with a 9:16 variant)

@@ -795,6 +795,8 @@ LINT_RULES: tuple[str, ...] = (
     "readback",
     "unclear_speech",
     "concept_colors",
+    "said_before_shown",
+    "unsaid_reveal",
 )
 RuleName = Literal[
     "off_frame",
@@ -825,6 +827,8 @@ RuleName = Literal[
     "readback",
     "unclear_speech",
     "concept_colors",
+    "said_before_shown",
+    "unsaid_reveal",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -997,6 +1001,24 @@ class ConceptColorsRule(RuleConfig):
     """Lowest acceptable WCAG contrast of a concept colour on the theme background (4.5: AA for normal text)."""
 
 
+class SaidBeforeShownRule(RuleConfig):
+    """``said_before_shown``: the narration names an on-screen label clearly before the label shows (DESIGN.md §87.10)."""
+
+    min_lead: PositiveFloat = 1.5
+    """Seconds the word may come before its label shows unflagged (the label's arrival is known to the beat-end still before it, or to the action that shows it)."""
+    max_words: PositiveInt = 4
+    """Texts of more words are sentences, not labels, and are not checked."""
+
+
+class UnsaidRevealRule(RuleConfig):
+    """``unsaid_reveal``: a beat brings new labels the scene's narration never names (DESIGN.md §87.10)."""
+
+    severity: Severity | None = "off"
+    """Severity of its findings (default: off; set info or warning to turn it on)."""
+    max_words: PositiveInt = 4
+    """Texts of more words are sentences, not labels, and are not checked."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1141,6 +1163,10 @@ class LintRules(_Strict):
     """Words heard with low confidence or after an unusual pause; runs only with `vidgen lint --readback` (default: warning; info for doubtful words)."""
     concept_colors: ConceptColorsRule = Field(default_factory=ConceptColorsRule)
     """The terms: colours: more than max_colors, below min_contrast on the background, or a scene setting colouring a term otherwise (default: warning)."""
+    said_before_shown: SaidBeforeShownRule = Field(default_factory=SaidBeforeShownRule)
+    """The narration naming an on-screen label more than min_lead seconds before it shows (default: warning)."""
+    unsaid_reveal: UnsaidRevealRule = Field(default_factory=UnsaidRevealRule)
+    """A beat bringing new labels the narration never names (default: off; info when turned on)."""
 
 
 class LintConfig(_Strict):

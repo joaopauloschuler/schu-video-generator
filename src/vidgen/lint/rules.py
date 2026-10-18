@@ -129,7 +129,10 @@ class SceneContext:
     scene (filled when the ``look_alike`` rule runs), ``speech_flags`` beat id -> the words to
     check (:class:`vidgen.speech_flags.WordFlag`; filled when ``unclear_speech`` runs),
     ``term_issues`` the ``(beat, message, value, limit)`` of the video's concept colours in this
-    scene (:func:`vidgen.lint.term_rule.term_issues`; filled when ``concept_colors`` runs).
+    scene (:func:`vidgen.lint.term_rule.term_issues`; filled when ``concept_colors`` runs),
+    ``narration`` the scene's labels and spoken words
+    (:class:`vidgen.lint.narration_rule.NarrationPicture`; filled when ``said_before_shown`` or
+    ``unsaid_reveal`` runs).
     """
 
     scene_id: str
@@ -141,6 +144,7 @@ class SceneContext:
     character_pairs: list[Any] = field(default_factory=list)
     speech_flags: dict[str, list[Any]] = field(default_factory=dict)
     term_issues: list[tuple[str | None, str, float | None, float | None]] = field(default_factory=list)
+    narration: Any = None
 
     def spoken_text(self, beat: dict[str, Any]) -> str:
         """What the narrator says for an activity-file beat."""
