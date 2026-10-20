@@ -127,11 +127,13 @@ class ShowingAction:
 
 
 def _label_texts(frame: dict[str, Any], min_opacity: float) -> list[dict[str, Any]]:
-    """The frame's scene texts (no overlays: captions repeat the narration; no speech bubbles)."""
+    """The frame's scene texts (no overlays: captions repeat the narration; no speech bubbles; no
+    name tags: a tag names a speaker already on screen, DESIGN.md §89.12)."""
     return [
         o
         for o in frame["objects"]
-        if o.get("kind") == "text" and o.get("text") and "overlay" not in o and "bubble" not in o and o["opacity"] >= min_opacity
+        if o.get("kind") == "text" and o.get("text") and "overlay" not in o and "bubble" not in o and "name_tag" not in o
+        and o["opacity"] >= min_opacity
     ]
 
 

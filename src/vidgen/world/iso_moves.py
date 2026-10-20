@@ -238,19 +238,20 @@ def find_route(place: IsoPlace, start: Cell, goal: Cell, *, crowd: Collection[Ce
                to: str | None = None) -> IsoRoute:
     """The route on foot from ``start`` to ``goal`` (cells), round the cells in ``crowd`` (where
     others stand) when it can; a goal in ``crowd`` becomes a free cell beside it on the picture
-    (:data:`BESIDE`, the nearest to walk to), else the nearest free cell.
+    (:data:`BESIDE`, the nearest to walk to), else the nearest free cell at most
+    :data:`BESIDE_REACH` cells from it (none: no way there, as for any goal).
     :class:`VidgenError` naming ``who``, the goal (``to``) and where the way is blocked."""
     reached = _reach(place, start, crowd)
     if goal in crowd and goal != start:
         taken = goal
-        free = [cell for cell in reached if cell not in crowd or cell == start]
+        free = [cell for cell in reached if (cell not in crowd or cell == start) and _cells_apart(cell, [taken]) <= BESIDE_REACH]
 
         def nearness(cell: Cell) -> tuple[int, float, int, int]:
             offset = (cell[0] - taken[0], cell[1] - taken[1])
             rank = BESIDE.index(offset) if offset in BESIDE else len(BESIDE) + max(abs(offset[0]), abs(offset[1]))
             return (rank, reached[cell][0], cell[1], cell[0])
 
-        goal = min(free, key=nearness)
+        goal = min(free, key=nearness, default=taken)   # none near it: the way there is blocked (across water)
     if goal not in reached:
         raise VidgenError(f"{who} cannot walk from {where(start)} to {to or where(goal)}: {_why_not(place, reached, goal)}")
     return route_through(place, reached[goal][1])
@@ -280,6 +281,10 @@ SIDE_BY_SIDE: tuple[Cell, ...] = ((1, -1), (-1, 1), (1, 0), (0, 1), (-1, 0), (0,
 #: Where to stand next to someone (offsets from its cell), best first: on its level line, then
 #: a tile and a half to its side, then its four sides.
 BESIDE: tuple[Cell, ...] = ((1, -1), (-1, 1), (2, -1), (1, -2), (-2, 1), (-1, 2), (1, 0), (0, 1), (-1, 0), (0, -1))
+#: How far (cells across, 8 neighbours) from a character a walk to where it stands may end when
+#: no cell of :data:`BESIDE` can be reached (Step 170: before, the nearest cell the walker could
+#: reach, which could be across a stream from it).
+BESIDE_REACH = 2
 
 
 def meet_routes(place: IsoPlace, a: Cell, b: Cell, *, crowd: Collection[Cell] = (), who: str = "they") -> tuple[IsoRoute, IsoRoute]:
@@ -663,6 +668,7 @@ __all__ = [
     "ISO_PLACE_CHANGES",
     "ISO_REACH",
     "BESIDE",
+    "BESIDE_REACH",
     "NEIGHBOURS",
     "SIDE_BY_SIDE",
     "STEP_EASE",

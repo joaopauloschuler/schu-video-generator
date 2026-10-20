@@ -944,8 +944,9 @@ Same rules as Phases H–P.
 - [ ] (optional, not done) closed doors blocking routes
 
 ### Step 170 — Example story and docs
-- [ ] A short original kids' story (2–3 min) in an iso village with narration (`examples/<name>`), 16:9 (a 9:16 variant if cheap)
-- [ ] Guide (+ `AGENTS.md`), CONFIG, README, CHANGELOG; the stage's gallery page (its params table: `iso`)
+- [x] A short original kids' story (2–3 min) in an iso village with narration (`examples/iso-story`, "Hazel and the Lamp by the Bridge"), 16:9 and a 9:16 variant; voiced with Kokoro and rendered outside the repo
+- [x] Guide (+ `AGENTS.md`, new topic `iso`), CONFIG, README, CHANGELOG, the Shorts cookbook; the stage's gallery page (its params table: `iso`)
+- [x] Fixes found by the example: rain from a scene's start darkens an iso place (`ISO_RAIN_LIGHT`), a held thing fades with its holder leaving the place, a walk to where someone stands across water is refused (`BESIDE_REACH`)
 
 ### Step 171 — Review of Phase Q
 - [ ] Critical review of the phase with fixes, recorded in HANDOFF like earlier phase reviews

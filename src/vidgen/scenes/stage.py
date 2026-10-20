@@ -57,6 +57,9 @@ LEVEL_STAR_SKY = 0.45
 #: The props an iso place takes: small things to hold, give and put down (DESIGN.md §89.10); its
 #: big things are its ready-made objects.
 ISO_ITEMS: tuple[str, ...] = (*SMALL_PROPS, "key", "ball", "cup", "box", "basket", "umbrella", "laptop", "napkin", "shell", "mushroom")
+#: The light of an iso place where it rains from the start and no ``light`` is given (DESIGN.md
+#: §89.12): the overcast tint the docs give for a rainy day, so the rain reads as rain.
+ISO_RAIN_LIGHT: tuple[str, float] = ("#6B7890", 0.45)
 #: A blocker stepping back off a level's path (``step_aside`` without ``to``, DESIGN.md §86.8):
 #: it walks to this depth (a little smaller), its feet this many tiles higher (behind the path).
 ASIDE_DEPTH = 0.3
@@ -792,7 +795,7 @@ class Stage(IsoStaging, NarratedScene):
         particles: list[StageParticles] = []
         """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles, lightning, settle, settled}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; rain with lightning: true flashes lightning with thunder at seeded times; snow with settle: true lands on the ground and the props, where a white layer grows; for one beat use the particles action."""
         light: LightSetting = "day"
-        """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene."""
+        """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene; default day (on an iso place where it rains from the start: an overcast tint)."""
         shadows: bool = True
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
         wind: WindSetting = 0.0
@@ -925,6 +928,8 @@ class Stage(IsoStaging, NarratedScene):
                 if not isinstance(member.at, str) or member.at not in spots:
                     raise ValueError(f"characters[{k}].at: on an iso place a character stands at a spot of the map, not at "
                                      f"'{member.at}' (spots: {', '.join(spots) or 'none: put a letter on the map'})")
+            if "light" not in self.model_fields_set and any(item.kind == "rain" for item in self.particles):
+                self.light = CustomLight(tint=ISO_RAIN_LIGHT[0], strength=ISO_RAIN_LIGHT[1])   # a rainy day, not a sunny one
 
         def _check_level(self, marks: dict[str, float]) -> None:
             """A level is the ground: no room, water or width of its own; everything stands on its

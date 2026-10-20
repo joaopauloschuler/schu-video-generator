@@ -5624,7 +5624,7 @@ never leaves the stage.
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
-| `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
+| `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene; on an [iso place](#isometric-places-iso) where it rains from the start, the rainy day's tint |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `drawing` | mapping | none (the video's `drawing`) | this scene's [drawing style](#drawing-style-drawing): `{outline, shading, texture, seed}`; the keys given win over the video's `drawing` |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
@@ -5633,7 +5633,7 @@ never leaves the stage.
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -6108,8 +6108,9 @@ they hide what is behind them.
   ```
 
   `to` is a spot or `{column, row}`, not an x or another mark, and there is no `depth`. A goal
-  where another character stands becomes the free cell beside it; a route goes round where others
-  stand when it can. `after: kit` (with `gap`, the cells it stops behind, default 1) walks after
+  where another character stands becomes the free cell beside it (at most two cells from it: one
+  across a stream from it is no way there); a route goes round where others stand when it can.
+  What a character holds goes with it, and fades with it as it leaves or comes onto the place. `after: kit` (with `gap`, the cells it stops behind, default 1) walks after
   a leader that moves in the same beat at the same time: write it after the leader's move.
   `wander` picks `stops` cells within `radius` of `around` (a spot; default where it stands), the
   same ones on every render (`seed` picks others). `enter` / `exit` without `door` use the place's
@@ -6134,7 +6135,10 @@ they hide what is behind them.
     still hides it.
   - `particles: [rain]` (or the `particles` action) rains over the place: seen from above, the
     drops land anywhere on its ground in view, with a small splash, but not on the characters
-    (no splash on a face). Snow falls over the place too. Not on an iso place yet: `puddles` and
+    (no splash on a face). A scene where it rains from the start and that gives no `light` gets
+    the rainy day's tint by itself, so it does not look like a sunny day with drops; rain that
+    starts during a scene (the `particles` action) goes with a `light` action, e.g. `- {action:
+    light, tint: "#5D6A84", strength: 0.5, run_time: 3}`. Snow falls over the place too. Not on an iso place yet: `puddles` and
     settling snow (`settle`); indoors no rain, snow, leaves or streaks.
 - **Sound** ([foley](#foley-and-music-stings), on by default): footsteps by what the feet walk on
   (grass, a sandy path, wooden boards or a bridge, stone steps and tiles, a rug), a door's creak
@@ -6158,6 +6162,11 @@ they hide what is behind them.
   sofa: use `objects`), a prop's `depth`, `lift` or `against`, rain's `puddles`, snow's
   `settle`. A set (`set: park`) gives an iso place its sky, light, ambience and weather, not its
   props, layers or fog.
+- **One place, several scenes**: put the `iso` (and the sky's `background`) in a set (`sets:
+  {village: {background: [...], iso: {map: ..., spots: ..., objects: ...}}}`) and give each scene
+  `set: village` with its own `light`, characters, props and beats. A whole story: the example
+  `examples/iso-story` (a village by a stream in the morning, the evening rain and the night, and a
+  room; a key picked up and given back, a door, a lamp lit, flowers that bloom; a 9:16 variant).
 - Errors name the map's row and column, counted from the top left from 1: `iso: map row 2,
   column 7: unknown symbol '?'`, `'house' would stand on water at map row 4, column 5; move it,
   or make it smaller (size)`.

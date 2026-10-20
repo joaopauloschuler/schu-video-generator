@@ -1,0 +1,295 @@
+# An isometric story (Phase Q, DESIGN §89): a village by a stream and a room, written as small
+# ASCII maps; walks along routes round the houses, a meeting, a key picked up and given back, a
+# house door opening, rain, a lamp lit at night, flowers that bloom after the rain; close-ups for
+# the lines, name tags in the wide views, footsteps by surface, birdsong, rain and crickets.
+# Original story and characters. No audio committed: run `vidgen tts` (Kokoro, free), or render
+# as it is (the beats are timed by their word count; music and sounds still play).
+# The Short: vidgen render examples/iso-story --variant short (9:16).
+title: Hazel and the Lamp by the Bridge
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+theme: {preset: soft_pastel}
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}
+narration: {pad: 0.3}
+music: {source: cartoon, volume: -4}
+voices:
+  hazel_voice: {voice: af_bella, label: Hazel, speed: 0.8, color: primary}
+  rowan_voice: {voice: bm_george, label: Grandpa Rowan, speed: 0.75, color: secondary}
+  juno_voice: {voice: af_heart, label: Juno, speed: 0.8, color: accent}
+characters:
+  - name: hazel
+    voice: hazel_voice
+    look: {species: rabbit, proportions: kid, eyes: round, outfit: dress, accessories: [bow]}
+    colors: {skin: "#D9C2A7", clothes: "#E07A5F", accessory: "#F2C14E"}
+  - name: rowan
+    voice: rowan_voice
+    look: {species: bear, body: round, eyes: sleepy, outfit: coat, accessories: [glasses, scarf]}
+    colors: {skin: "#8A6248", clothes: "#5B7DB1", accessory: "#C0504D"}
+  - name: juno
+    voice: juno_voice
+    look: {species: bird, proportions: kid, eyes: round, accessories: [backpack]}
+    colors: {skin: "#6FA8DC", clothes: "#F4F6FA", accessory: "#F2C14E"}
+variants:
+  short:
+    format: {width: 1080, height: 1920, fps: 30}
+    preview: {width: 270, height: 480, fps: 15}
+
+# The village, a set four scenes stand on (the map in one place). The top line is the back of
+# the place; the stream (~) runs down its right side, the bridge crosses it on the path's row.
+sets:
+  village:
+    background: ["#9CCBEA", "#E4F3FB"]
+    iso:
+      map: |
+        -.@.......@...~~..@.
+        ..h......r....~~....
+        ......w.......~~..&.
+        ..............~~....
+        ...a......d.l.~~....
+        .::::::::p:q::~~.y..
+        ......j....:..~~....
+        .....g.....:s.~~....
+        ....v.........~~....
+        -.&...........~~.&..
+      spots: {h: hazel_home, r: rowan_home, a: hazel_door, d: rowan_door, l: lamp, w: well,
+              g: garden, v: lawn, j: green, s: bench, y: far_bank, p: porch, q: path_end}
+      objects:
+        - {object: house, name: hazel_house, at: hazel_home}
+        - {object: house, name: rowan_house, at: rowan_home, color: "#B5C99A"}
+        - {object: lamp, at: lamp}
+        - {object: well, at: well}
+        - {object: bench, at: bench}
+        - {object: bridge, at: {column: 15, row: 6}, facing: right, size: [2, 1]}
+        - {object: flowers, name: bud_1, at: {column: 7, row: 8}, open: false}   # Hazel's flower bed
+        - {object: flowers, name: bud_2, at: {column: 8, row: 8}, open: false}
+        - {object: flowers, name: bud_3, at: {column: 9, row: 8}, open: false}
+
+scenes:
+  - id: title
+    type: card
+    params: {text: "Hazel and the Lamp by the Bridge"}
+    duration: 2
+
+  - id: morning
+    type: stage
+    set: village
+    transition: iris_in
+    params:
+      light: morning
+      characters:
+        - {name: hazel, at: hazel_door}
+        - {name: juno, at: well}
+        - {name: rowan, at: rowan_door}
+    beats:
+      - text: "This is Brookfield Green, a little village by a stream."
+      - text: "Every evening, old Grandpa Rowan lights the lamp by the bridge."
+        actions: [{zoom: [rowan, lamp], at: 0.2, run_time: 1.5}]
+      - text: "One morning, Hazel the rabbit hopped to her flower bed. It was still all buds."
+        actions: [{walk_to: hazel, to: garden, at: 0.15}]
+      - text: "Grow, little buds!"
+        voice: hazel_voice
+        shot: closeup hazel
+      - text: "Then her friend Juno the bluebird came along."
+        actions: [{meet: juno, with: hazel, at: 0.2}]
+      - text: "I'm off to see my auntie, over the bridge!"
+        voice: juno_voice
+        shot: closeup juno
+      - text: "Come home before dark, Juno!"
+        voice: hazel_voice
+        shot: closeup hazel
+      - text: "Juno waved goodbye, and ran off along the path and over the bridge."
+        actions:
+          - {gesture: juno, to: wave, at: 0}
+          - {run_to: juno, to: far_bank, at: 0.1}
+          - {exit: juno, to: right, at: 0.85}
+      - text: "Ahem, ahem! I think I'm catching a cold."
+        voice: rowan_voice
+        shot: closeup rowan
+        actions: [{emote: rowan, to: sad, at: 0.3}]
+      - text: "So Grandpa Rowan went inside to keep warm."
+        actions:
+          - {open: rowan_house, by: rowan, at: 0.1}
+          - {exit: rowan, door: rowan_door, at: 0.4}
+          - {close: rowan_house, at: 0.85}
+
+  - id: evening
+    type: stage
+    set: village
+    transition: crossfade
+    params:
+      background: ["#8E9AB0", "#C9CFD9"]
+      light: sunset
+      characters:
+        - {name: hazel, at: hazel_door}
+    beats:
+      - text: "That evening, it began to rain."
+        actions:
+          - {action: light, tint: "#5D6A84", strength: 0.5, at: 0.1, run_time: 3}
+          - {particles: rain, at: 0.3, keep: true}
+      - text: "The lamp by the bridge should be shining by now. But it was dark."
+        actions: [{zoom: lamp, scale: 2.5, at: 0.2, run_time: 1.5}]
+      - text: "Oh no! Juno won't find the bridge in the dark!"
+        voice: hazel_voice
+        shot: closeup hazel
+        actions: [{emote: hazel, to: worried, at: 0.1}]
+      - text: "So Hazel ran through the rain to Grandpa Rowan's house, opened his door, and went inside."
+        actions:
+          - {follow: hazel}
+          - {run_to: hazel, to: rowan_door, at: 0.05}
+          - {open: rowan_house, by: hazel, at: 0.55}
+          - {exit: hazel, door: rowan_door, at: 0.7}
+
+  - id: rowans_room
+    type: stage
+    transition: crossfade
+    params:
+      background: ["#3E4A6B", "#5C6A8E"]
+      light: indoor
+      iso:
+        place: indoor
+        map: |
+          ###%####%###
+          #..........#
+          #..o.......#
+          #....::::..#
+          #..t.::::..#
+          #....::::..#
+          #.e......l.#
+          ##+#########
+        spots: {o: sofa, t: table, e: entry, l: lamp_corner}
+        objects:
+          - {object: sofa, at: sofa}
+          - {object: table, at: table}
+          - {object: lamp, name: floor_lamp, at: lamp_corner, "on": true}   # quoted: a bare on is a YAML boolean
+          - {object: rug, at: {column: 6, row: 4}, size: [4, 3]}
+          - {object: shelf, at: {column: 7, row: 2}}
+          - {object: plant, at: {column: 11, row: 2}}
+      props:
+        - {prop: key, name: lamp_key, at: table}
+      characters:
+        - {name: rowan, at: sofa, expression: sad}
+        - {name: hazel, at: entry}
+    beats:
+      - text: "Inside, Grandpa Rowan was sniffling by his sofa."
+        actions: [{enter: hazel, to: entry, side: left, at: 0.2}]
+      - text: "Achoo! My cold is too bad to go out in the rain."
+        voice: rowan_voice
+        shot: closeup rowan
+        actions: [{look_at: rowan, to: hazel, at: 0}]
+      - text: "But the lamp is dark, and Juno is still across the bridge!"
+        voice: hazel_voice
+        shot: closeup hazel
+      - text: "Then you light it. Take my lamp key, and turn it once."
+        voice: rowan_voice
+        shot: two_shot rowan hazel
+      - text: "Hazel took the little brass key from the table."
+        actions:
+          - {walk_to: hazel, to: table, at: 0.05}
+          - {pick_up: hazel, to: lamp_key, at: 0.65}
+      - text: "I'll be quick!"
+        voice: hazel_voice
+        shot: closeup hazel
+        actions: [{emote: hazel, to: happy, at: 0}]
+      - text: "And out she ran, into the rain."
+        actions: [{exit: hazel, to: left, at: 0, speed: 4}]
+
+  - id: night
+    type: stage
+    set: village
+    transition: crossfade
+    params:
+      background: ["#1E2742", "#3A4566"]
+      light: night
+      particles: [rain]
+      props:
+        - {prop: key, name: lamp_key, at: rowan_door}
+      characters:
+        - {name: hazel, at: rowan_door}
+        - {name: juno, at: far_bank}
+    beats:
+      - text: "Night fell. Rain pattered down, and the stream was black and hard to see."
+        actions:
+          - {hold: hazel, to: lamp_key, at: 0}
+          - {enter: hazel, door: rowan_door, at: 0.6}
+      - text: "Hazel hurried to the lamp."
+        actions:
+          - {follow: hazel}
+          - {run_to: hazel, to: path_end, at: 0.1}
+      - text: "She turned the key. Click! The lamp shone, bright and golden."
+        actions:
+          - {zoom: [hazel, lamp], at: 0, run_time: 1}
+          - {switch_on: lamp, at: "@Click"}
+      - text: "On the far bank, Juno saw the light!"
+        shot: wide
+        actions:
+          - {enter: juno, to: far_bank, side: right, at: 0.05}
+      - text: "There's the bridge!"
+        voice: juno_voice
+        shot: wide
+        actions: [{emote: juno, to: surprised, at: 0}]
+      - text: "Juno ran over the bridge, straight to Hazel."
+        shot: wide
+        actions: [{run_to: juno, to: path_end, at: 0.05}]
+      - text: "You lit the lamp! Thank you, Hazel!"
+        voice: juno_voice
+        shot: two_shot juno hazel
+        actions: [{look_at: juno, to: hazel, at: 0}, {emote: juno, to: happy, at: 0.2}]
+      - text: "Tonight, I'm the lamplighter!"
+        voice: hazel_voice
+        shot: two_shot hazel juno
+        actions: [{emote: hazel, to: happy, at: 0.4}]
+      - text: "Then the two friends hurried home together, in the light of the lamp."
+        shot: wide
+        actions:
+          - {run_to: hazel, to: hazel_door, at: 0.05}
+          - {run_to: juno, to: hazel_door, at: 0.05}
+
+  - id: next_morning
+    type: stage
+    set: village
+    transition: crossfade
+    params:
+      light: morning
+      props:
+        - {prop: key, name: lamp_key, at: porch}
+      characters:
+        - {name: hazel, at: porch}
+        - {name: juno, at: green}
+        - {name: rowan, at: rowan_door}
+    beats:
+      - text: "Next morning, Hazel and Juno went to see Grandpa Rowan."
+        actions: [{hold: hazel, to: lamp_key, at: 0}]
+      - text: "He came out, feeling much better."
+        actions:
+          - {open: rowan_house, at: 0.05}
+          - {enter: rowan, door: rowan_door, at: 0.25}
+          - {close: rowan_house, at: 0.85}
+      - text: "Here's your key! The lamp shone all night."
+        voice: hazel_voice
+        shot: two_shot hazel rowan
+        actions: [{give: hazel, to: rowan, at: 0.4}]
+      - text: "Thank you, little lamplighter. Now, look at your garden!"
+        voice: rowan_voice
+        shot: closeup rowan
+        actions: [{emote: rowan, to: happy, at: 0.1}]
+      - text: "Hazel hopped over to her flower bed, and Juno came too."
+        actions:
+          - {walk_to: hazel, to: garden, at: 0.05}
+          - {walk_to: juno, to: lawn, at: 0.1}
+      - text: "The rain had watered the buds. One by one, they opened!"
+        actions:
+          - {zoom: [hazel, bud_1, bud_3], at: 0, run_time: 1}
+          - {open: bud_1, at: 0.45, run_time: 1}
+          - {open: bud_2, at: 0.6, run_time: 1}
+          - {open: bud_3, at: 0.75, run_time: 1}
+      - text: "You grew! The rain helped you grow!"
+        voice: hazel_voice
+        shot: closeup hazel
+        actions: [{emote: hazel, to: laughing, at: 0}]
+      - text: "And from that day on, Hazel helped Grandpa Rowan light the lamp, every evening."
+        shot: wide
+
+  - id: end
+    type: end_card
+    params: {title: "The End", lines: ["A little help can light the way."]}
+    duration: 3

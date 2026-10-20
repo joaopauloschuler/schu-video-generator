@@ -20,7 +20,7 @@ narrates on the computer itself at no cost (see `vidgen guide audio`).
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
 `actions` (pointing at things), `cartoons` (characters on a stage), `platform` (platform
-stories: levels, jumps, keys and doors), `overlays` (overlays,
+stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for a story), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
 thumbnail, GIFs, translations, rights to your content), `troubleshooting` (validate and lint messages).
@@ -1431,6 +1431,92 @@ nutmeg at start`); spots are marks there, and `[Nutmeg jumps onto over.]` is a j
 A whole story: `examples/platform-story` (three levels, a key and a gate, coins and stars, a
 grumpy snail, clouds up to a picnic, a 9:16 variant). Every key: `docs/CONFIG.md` "Platform levels
 (`level`)" and the sections after it.
+
+<!-- topic: iso (also: isometric, village, villages, iso-place) -->
+## Isometric places: villages and rooms for a story
+
+**When to make one.** A children's story that happens *in a place*: a village green with houses,
+a well and a bridge over a stream, a garden, a room. The place is seen from above at an angle
+(isometric, no perspective) and the whole of it fits the frame, so the viewer always knows where
+everyone is. It is a `stage` scene with an `iso:` place, so everything of `vidgen guide cartoons`
+still works: the characters are the same flat cut-outs (lip sync, expressions, gestures), shots,
+the camera, sets, light, music. No jumping or gravity here (that is a platform `level`).
+
+**The map.** One line per row, the top line furthest back: `.` grass (boards indoors), `:` a
+path, `~` water, `#` a wall, `+` a door, `%` a window, `1`–`9` a raised block (steps of half a
+tile; walkers go up one step at a time), `@` a tree, `&` a bush, `*` flowers, `=` a fence, `-`
+outside the place, and a **letter** for a *spot*. Name the spots (`spots: {w: well, d: door}`)
+and stand characters, small things and objects at them. `objects:` adds ready-made things at a
+spot or `{column, row}`: `house`, `tree`, `lamp`, `well`, `bench`, `bridge` (over `~`, walked on),
+`flowers`, `sign`; indoors (`place: indoor`, the front walls cut away like a dollhouse) `table`,
+`chair`, `bed`, `sofa`, `shelf`, `plant`, `rug`. Put a place used by several scenes in `sets:`
+and give each scene `set: village`.
+
+**Telling the story clearly.**
+- Start each scene on the whole place (the establishing view), then move the camera only when it
+  helps: `shot: closeup <name>` or `two_shot` for a line, `follow: <name>` for a long walk,
+  `zoom: [rowan, lamp]` to point at something, `shot: wide` to see everyone again.
+- Give every character its own voice (`voices:` with a `label`): in a wide view the speaker gets a
+  **name tag** with that label; without a voice of its own a character lip-syncs the narrator.
+  A tagged speaker may say up to 12 words in a wide view; longer lines need a shot.
+- Moves go round what is in the way: `walk_to` / `run_to` a spot, `meet` (two walk to each
+  other), `after: hazel` (follows), `wander`, `enter` / `exit` over the edge or `door:` a spot
+  (a house's door). Give a walk a beat whose line lasts as long as the way (`rushed_animation`
+  warns otherwise), and keep the camera on it (`offscreen_action` warns about a walk, a hand-over
+  or a door the camera does not show).
+- Cause and effect: `pick_up` / `give` / `put_down` small things (`key`, `gift`, `letter`,
+  `flower`...) next to each other; `open` a house's door or flowers (they bloom), `switch_on` a
+  lamp, `reveal` / `hide` an object (a bridge appears). Each has its sound by itself.
+- Mood: `light: morning`, `sunset` (evening), `night` (a lit lamp and windows glow), and
+  `particles: [rain]` (it darkens to an overcast tint by itself, unless the scene sets a `light`).
+  Footsteps follow the ground (grass, path, boards, a bridge), birdsong by day, crickets at night.
+
+```yaml
+characters:
+  - {name: hazel, voice: hazel_voice, look: {species: rabbit, proportions: kid, outfit: dress}}
+  - {name: juno, voice: juno_voice, look: {species: bird, proportions: kid}}
+voice: {provider: kokoro, voice: bf_emma}          # the narrator
+voices:
+  hazel_voice: {voice: af_bella, label: Hazel, color: primary}
+  juno_voice: {voice: af_heart, label: Juno, color: accent}
+scenes:
+  - id: green
+    type: stage
+    params:
+      background: ["#9CCBEA", "#E4F3FB"]
+      light: sunset
+      iso:
+        map: |
+          -.@......~~...
+          ..h......~~...
+          ...a..l..~~.y.
+          .::::::::~~:..
+          ....f....~~...
+        spots: {h: home, a: door, l: lamp, f: garden, y: far_bank}
+        objects:
+          - {object: house, at: home}
+          - {object: lamp, at: lamp}
+          - {object: bridge, at: {column: 10, row: 4}, facing: right, size: [2, 1]}
+          - {object: flowers, name: flower_bed, at: garden, open: false}
+      props: [{prop: key, at: door}]
+      characters: [{name: hazel, at: door}, {name: juno, at: far_bank}]
+    beats:
+      - text: "In the evening, Hazel picked up the lamp key and ran to the lamp."
+        actions:
+          - {pick_up: hazel, to: key, at: 0.2}
+          - {run_to: hazel, to: lamp, at: 0.45}
+      - text: "Click! The lamp lit up, and Juno could see the bridge."
+        actions: [{switch_on: lamp, at: "@Click"}, {walk_to: juno, to: lamp, at: 0.3}]
+      - text: "Thank you, Hazel!"
+        voice: juno_voice
+        shot: two_shot juno hazel
+```
+
+`vidgen validate` replays every move and hand-over and names what is in the way (without the bridge:
+`'juno' cannot walk from row 3, column 13 to 'lamp': the way stops at row 4, column 12: water (a
+bridge crosses it) at row 4, column 11`). A whole story: `examples/iso-story` (a village by a stream and a room,
+a key, a lamp lit in the rain, flowers that bloom, a 9:16 variant). Every key: `docs/CONFIG.md`
+"Isometric places (`iso`)".
 
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->
 ## Overlays, transitions and continuity

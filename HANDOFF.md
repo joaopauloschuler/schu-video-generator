@@ -15932,3 +15932,105 @@ How to test
   Dot's face, an off-screen walk under a close-up, rain, evening, the Step 168 village and room;
   variant `shorts`); stills in `<scratchpad>/iso/step169/`. The village renders 50.6 s of video
   in 58.9 s, as in Step 168.
+
+## Step 170 — The iso example story and the docs of Phase Q
+
+What was built
+- **The example** `examples/iso-story/video.yaml` ("Hazel and the Lamp by the Bridge", original
+  story and cast): Hazel (a rabbit), Grandpa Rowan (an old bear with a cold) and Juno (a
+  bluebird). Morning: the establishing view of Brookfield Green, a `zoom` on Rowan and the lamp
+  he lights every evening, Hazel walks to her flower bed (buds), Juno `meet`s her, close-ups for
+  their lines, Juno walks over the bridge and `exit`s, Rowan coughs (close-up), opens his door and
+  goes in (`open` / `exit door:` / `close`). Evening: the light fades to a rainy tint as the rain
+  starts, a `zoom` on the dark lamp, Hazel's worried close-up, a `follow`ed `run_to` to Rowan's
+  house and in at its door. Rowan's room (`place: indoor`, sofa, table, rug, shelf, a lit floor lamp):
+  Hazel enters over the edge, close-ups and a two-shot, she picks up the lamp key from the table
+  and leaves. Night in the rain: she comes out of Rowan's door holding the key, runs to the lamp,
+  `switch_on` on "@Click" (zoom on her and the lamp; the lamp and its pool glow), Juno appears on
+  the far bank (name tag in the wide view), walks over the bridge to her, two-shots, they walk
+  home (`after: hazel`). Next morning: Rowan comes out, Hazel `give`s the key back, three buds
+  `open` one by one (zoom), close-ups, a wide ending. The village is a project set
+  (`sets: {village: ...}`) for four scenes. Kokoro voices: narrator `bf_emma`, Hazel `af_bella`,
+  Juno `af_heart` (speed 0.8), Rowan `bm_george` (0.75); `music: cartoon` at -4; a `short` 9:16
+  variant. No audio committed (as platform-story).
+- **Voiced and rendered outside the repo** (`<scratchpad>/s170/voiced`, a copy of the example):
+  Kokoro `vidgen tts` (38 beats), `vidgen lint` with the audio and the final render (below).
+- **Fixes found while making it** (DESIGN §89.12):
+  - a thing held by a character that `exit`s (or `enter`s) the place stayed drawn at the doorway
+    while its holder faded: `IsoStaging.iso_walks` passes the held props as the walk's `carried`;
+  - a walk `to` a spot where someone stands, when no cell beside them could be reached (across a
+    stream), ended at the nearest cell the walker could reach, on the wrong bank, and `vidgen
+    validate` said nothing: `find_route` keeps the goal within `BESIDE_REACH` (2) cells of the
+    character there, else "no way there" (found writing the guide snippet);
+  - rain on an iso place looked like a sunny day (the review's note): a scene with `rain` in its
+    `particles` and no `light` (its own or its set's) gets `ISO_RAIN_LIGHT` (`#6B7890` at 0.45),
+    the tint the docs recommend. Iso only; rain started by the `particles` action keeps the
+    light (paired with a `light` action, as the example does);
+  - lint `said_before_shown` took a name tag ("Juno", shown while she speaks) for a label and
+    reported the narration naming her a beat before she spoke, although she was on screen: name
+    tags (the dump's `name_tag` key) are no labels (`narration_rule._label_texts`).
+- **Docs**: guide topic `iso` (when to make one, the map, telling a story clearly: shots, voices
+  and name tags, moves and their timing, cause and effect, mood; a validated snippet) + topic
+  list + `AGENTS.md`; CONFIG iso section (one place in several scenes through a set, the example,
+  the rain light, held things, the beside rule) and the stage table's `light` and `iso` rows;
+  README feature and example entries; CHANGELOG "Isometric story places (Phase Q)" (0.3.0 now
+  Steps 61–170); the Shorts cookbook (an iso place has no `character_size`);
+  `docs/gallery/stage.md` params table regenerated with `vidgen gallery --types stage` (it had
+  no `iso` rows; its stills and clips left as committed); DESIGN §89.12; tasklist.
+
+Files touched
+- New: `examples/iso-story/video.yaml`, `tests/test_iso_story.py`.
+- Changed: `src/vidgen/scenes/stage.py` (`ISO_RAIN_LIGHT`, `_check_iso`, the `light` docstring),
+  `src/vidgen/scenes/stage_iso.py` (carried), `src/vidgen/world/iso_moves.py` (`BESIDE_REACH`,
+  `find_route`), `src/vidgen/lint/narration_rule.py` (name tags), `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `docs/CONFIG.md`,
+  `docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md`, `docs/gallery/stage.md`, `README.md`,
+  `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` unchanged. New names: `stage.ISO_RAIN_LIGHT`, `iso_moves.BESIDE_REACH`; guide
+  topic `iso` (aliases isometric, village, villages, iso-place). Behaviour (iso only): the rain
+  light, held things fading with their holder, the beside rule.
+
+Decisions
+- A project set for the village rather than a YAML anchor (the config refuses unknown top-level
+  keys such as `x-village`).
+- The map was laid out so that nothing stands in front of a speaker's spot (the first draft had
+  the well's roof across Hazel's face in two close-ups and a tree in front of the bridge that hid
+  her in a two-shot); a flower bed of three `flowers` objects (a bigger `size` draws one clump).
+- `zoom` on a character and an object to point at something (the lamp, the buds): `pan` keeps
+  the zoom, so it does nothing in the establishing view.
+- After a `follow`, beats whose action happens elsewhere say `shot: wide` (the follow keeps the
+  camera on its walker); `look_at` turns Juno to Hazel after a `walk_to` (only `meet` ends facing).
+- Story length: Kokoro at speed 1.0 kept it near 3 min but lint found 17 beats too fast
+  (`narration_speed` over 3.5 words/s); the script was cut to about 350 words and spoken at 0.8
+  (0.75 for Rowan), as platform-story does; `narration.pad` 0.3.
+
+Known gaps / for Step 171
+- At night the characters are graded dark even in the lamp's pool (Step 169's gap).
+- A `flowers` object with a larger `size` still draws one clump; doors do not block routes.
+- `pan` to a spot does nothing in the establishing view (it keeps the zoom): the guide says to
+  use `zoom` for pointing at a thing.
+- The 9:16 variant validates and lints clean, but its wide views show the village small in the
+  middle of the frame (fit by width, Step 168's gap); the lines all have shots.
+- A bare `on: true` in `iso.objects` works for vidgen but fails the JSON Schema check (YAML 1.1
+  reads it as a key `true`); the example quotes it, as CONFIG advises for props.
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_iso_story` (6 incl. 1 render),
+  `test_iso_moves` (34), `test_iso_staging` (32), `test_iso_mood` (14), `test_iso_place` (54),
+  `test_narration_rule` (12), `test_guide` (54), `test_docs` (62), `test_gallery` (12),
+  `test_cartoon_stage`, `test_cartoon_rain`, `test_particles`, `test_cartoon_lighting`,
+  `test_cartoon_holding`, `test_actions`, `test_actions_coverage` (83), `test_includes`,
+  `test_api`, `test_cartoon_lint`, `test_lint`, `test_timing_lint`, `test_word_anchors`,
+  `test_platform_moves`, `test_platform_level`, `test_platform_props`, `test_platform_camera`,
+  `test_phase_o_review`, `test_cartoon_foley`, `test_cartoon_sounds`, `test_cartoon_shots`,
+  `test_cartoon_small_props`, `test_cartoon_character`, `test_introspect`, `test_cartoon_acting`,
+  `test_config`, `test_cartoon_props`, `test_builtin_sets`, `test_cartoon_room`,
+  `test_builtin_scenes` (202); `test_schema` (64, capped3g). All pass.
+- Compatibility: baseline frames (`phase-q-baseline/make_baseline.sh` into `check170`,
+  `compare.py`): 31 frames, max difference 0.
+- The example: `vidgen validate` ok (16:9 and `--variant short`); `vidgen lint` without audio 0
+  findings in 16:9 and in 9:16; with the Kokoro audio (the voiced copy) 0 findings. Final render
+  of the voiced copy: 1280x720 @ 30, 3:02, -16.0 LUFS, true peak -1.9 dBTP, audio as long as the
+  video, no silence over 1.5 s: `<scratchpad>/s170/hazel_and_the_lamp.mp4`, contact sheet (one
+  frame per 5 s) `<scratchpad>/s170/contact_sheet.png`, checked by eye, as were the storyboards.

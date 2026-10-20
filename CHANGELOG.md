@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–165)
+## 0.3.0 (Steps 61–170)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -18,10 +18,12 @@ each video and played with real instruments, side-view platform stories (levels 
 small maps, planned walks and jumps, keys, doors, coins and friendly blockers), and a
 presentation toolkit for explainers and coding Shorts (actions on a spoken word, one colour per
 concept, code that morphs, a terminal, function plots and geometry, charts that change, and a
-lint check of narration against the picture).
+lint check of narration against the picture), and isometric story places (a village or a room
+written as a small map, seen from above, where the cut-out characters walk round what is in the
+way, hand things about, open doors and light lamps).
 
-0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–165
-(Phases M, N, O and P in `tasklist.md`, and Step 165) is part of this release rather than an "Unreleased" section.
+0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–170
+(Phases M, N, O and P in `tasklist.md`, Step 165 and Phase Q) is part of this release rather than an "Unreleased" section.
 
 ### Behaviour changes and possible breaks
 
@@ -166,6 +168,29 @@ matters only for projects made with development builds between Steps 67 and 131)
 - A `snail` species; a set's sky, layers and light on a level (not its props); `vidgen
   screenplay` with a level from a front-matter set and `jumps onto` directions; portrait
   close-ups no narrower than a face; the example `examples/platform-story` (155).
+
+### Isometric story places (Phase Q)
+
+- A `stage` scene with an `iso:` place: a village, a garden or a room written as a small ASCII
+  map with heights (grass, paths, water, garden walls, doors, raised blocks, spots by letter),
+  seen from above at an angle; ready-made objects (house, tree, lamp, well, bench, bridge,
+  flowers, table, sofa, bed...); indoor rooms with their front walls cut away; the characters
+  stay the flat cut-outs, hidden by what stands in front of them (166).
+- Moves on the place: `walk_to` / `run_to` a spot along a route round objects, water and walls
+  and up steps, `meet`, `wander`, `after:` a leader, `enter` / `exit` over the edge or by a door;
+  `vidgen validate` replays them and says where the way stops (167).
+- Staging: shots and `follow` on the place (sharp in close-ups), `pan` to a spot; small things
+  picked up, given and put down (checked in cells); `open` a house's door or flowers (they
+  bloom), `switch_on` a lamp, `reveal` / `hide` an object (a bridge appears) (168).
+- Mood and sound: `light: morning | sunset | night` with lit lamps and windows glowing, rain
+  landing on the place, name tags over small speakers in wide views, footsteps by the ground
+  (grass, path, boards, bridge, stone), door, pick-up and bloom sounds, crickets at night; lint
+  `offscreen_action`, and `hidden_speaker` / `small_speaker` measured on the place (169).
+- The example `examples/iso-story` (16:9 and 9:16), the guide topic `iso`; rain from a scene's
+  start darkens an iso place to the rainy tint unless the scene sets a `light`; a held thing
+  fades with a character leaving the place; a walk to where someone stands across a stream is
+  refused instead of ending on the near bank; lint `said_before_shown` no longer takes a name
+  tag for a label (170).
 
 ### Presentation toolkit (Phase P)
 

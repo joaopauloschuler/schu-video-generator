@@ -229,6 +229,8 @@ class IsoStaging:
             if len(route.points) < 2 and not passing:
                 continue
             extra: dict[str, Any] = {} if len(route.points) > 1 else {"run_time": 2 * DOOR_FADE_SECONDS}
+            if passing:   # what it holds fades in and out with it (a key carried out of the room)
+                extra["carried"] = [prop for prop in getattr(self, "props", {}).values() if getattr(prop, "held_by", None) == name]
             if action == "exit":
                 side = nearer_side(self.iso_view.point(*route.end)[0], left, right)
                 extra["park_x"] = offstage_x(side, left, right, figure.width / 2)

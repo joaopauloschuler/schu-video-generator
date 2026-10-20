@@ -12185,3 +12185,42 @@ the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTil
   default, so blocking would break existing walks through them; it needs a door state that is
   open by default for walking); no shelter from rain under a tree on the place, no puddles or
   settling snow there; a character in a pool of light is graded like the rest.
+
+### 89.12 The example story and the docs (Step 170)
+
+- **The example** `examples/iso-story` ("Hazel and the Lamp by the Bridge", original story and
+  cast: a rabbit, an old bear, a bluebird): five iso scenes between a title card and an end card.
+  The village is a project `set` (`sets: {village: {background, iso}}`) that four scenes stand on
+  with their own `light`, characters, props and beats, so the map is written once (a YAML anchor
+  is not possible: the config refuses unknown top-level keys). The map puts the houses and the
+  well at the back, the path across the middle, the flower bed in front and the stream with its
+  bridge on the right, so nothing stands in front of a speaker's spot (the first draft had the
+  well's roof across Hazel's face in two close-ups and a tree in front of the bridge). Every
+  character has its own Kokoro voice (name tags show its label). Staging rules it follows: the
+  establishing view at each scene's start, `zoom` to point at the lamp, a `shot` for every line
+  longer than a tag's, `follow` for a run, `shot: wide` for the beats after a follow whose
+  action happens elsewhere (a follow keeps the camera on its walker until a shot says otherwise).
+- **A held thing leaves with its holder.** `IsoStaging.iso_walks` passes the props a character
+  holds as the walk's `carried` when it enters or exits (the flat stage does so only through a
+  door), so they fade with it: a key carried out of the room stayed at the doorway, fully drawn,
+  while its holder faded and was parked.
+- **A walk to where someone stands stays near them** (`find_route`, `BESIDE_REACH` 2): when no
+  cell of `BESIDE` can be reached, the goal is the nearest free cell at most two cells from the
+  character there; none reachable is "no way there" with the usual message. Before, it was the
+  nearest cell the walker could reach, which could be across a stream, and `vidgen validate`
+  said nothing (found writing the guide's snippet). Iso only; unreleased behaviour.
+- **Rain reads as rain** (`ISO_RAIN_LIGHT` `("#6B7890", 0.45)`, `Params._check_iso`): an iso
+  place with `rain` in its `particles` and no `light` given (by the scene or its set) gets the
+  rainy tint the docs recommend, instead of a sunny `day` with faint drops. Rain started by the
+  `particles` action keeps the light (the author pairs it with a `light` action, as the example
+  does). A flat stage is unchanged (the branch is in the iso check). Considered: stronger drops on
+  iso (the drops are visible once the place is darker; the light was what said "sunny").
+- **Name tags are not labels** (`narration_rule._label_texts`): lint `said_before_shown` skips
+  texts with the dump's `name_tag` key, as it skips speech bubbles. A tag names a speaker who is
+  on screen; the example's narration naming Juno a beat before her tag showed was reported.
+- **Docs**: guide topic `iso` ("Isometric places: villages and rooms for a story", a validated
+  snippet) + `AGENTS.md`; CONFIG (a set for one place in several scenes, the rain light, held
+  things, the beside rule, the stage table's `light` and `iso` rows); README feature and example
+  entries; CHANGELOG "Isometric story places (Phase Q)"; the Shorts cookbook (an iso place has no
+  `character_size`); `docs/gallery/stage.md` params table regenerated (it had no `iso` rows;
+  stills and clips unchanged).
