@@ -339,4 +339,4 @@ def test_a_walk_behind_the_house_renders(make_project, tmp_path: Path) -> None:
     assert kit.feet()[:2] == pytest.approx(view.point(b[0] + 0.5, b[1] + 0.5, 0.0), abs=1e-6)
     assert scene.grounds["kit"] == pytest.approx(kit.feet()[1])
     assert (pip.facing == "right") == (pip.feet()[0] < kit.feet()[0])   # they face each other
-    assert scene._iso_fronts["pip"][0] == scene.iso_scenery.over(scene._iso_body(pip))
+    assert scene._iso_fronts["pip"][0] == scene.iso_scenery.front(scene._iso_body(pip))

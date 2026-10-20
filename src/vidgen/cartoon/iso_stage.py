@@ -16,25 +16,25 @@ a character walks the pieces in front of it change, and the stage swaps its fron
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections import OrderedDict
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from PIL import Image
 
 from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes
 from vidgen.cartoon.iso_objects import ObjectLook, object_box
 from vidgen.cartoon.iso_scenery import SLAB_DEPTH, IsoColors, IsoPiece, ground_shapes, place_pieces
-from vidgen.cartoon.stage import StageItem, StagePlacement
+from vidgen.cartoon.stage import MAX_ZOOM, StageItem, StagePlacement
 from vidgen.errors import VidgenError
-from vidgen.world.iso import ISO_CHARACTER_HEIGHT, VOID, IsoPlace
+from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, VOID, IsoPlace, ObjectState, default_state
 from vidgen.world.iso_view import ISO_RISE, Box3, draw_order, in_front, iso_point
 
 #: Room left around the place in the frame, a share of the frame's width and height each side.
 ISO_MARGIN = 0.05
 #: Half the width of the box a character stands in, for the draw order (tile units).
 ISO_BODY_HALF = 0.25
-#: The most pixels a drawing may have while supersampled (memory): fewer supersamples above it.
-ISO_MAX_DRAW_PIXELS = 40_000_000
 
 
 @dataclass(frozen=True)
@@ -113,18 +113,64 @@ def standing_box(place: IsoPlace, feet: tuple[float, float, float], height: floa
     return Box3(box.x0, box.y0, max(box.z0, top), box.x1, box.y1, max(box.z1, top + height))
 
 
+#: Where in its cell a small thing put on an object stands, when not in the middle: on a well's
+#: rim at the front (its middle is the water).
+TOP_SPOTS: dict[str, tuple[float, float]] = {"well": (0.79, 0.79)}
+
+
+def iso_item_point(place: IsoPlace, at: str) -> tuple[float, float, float]:
+    """Where a small thing put at the spot ``at`` stands (tile units, DESIGN.md §89.10): on the
+    top of an object standing there that things go on (a table, a bench, a well's rim), in the
+    middle of the spot's cell; else in the middle of the spot's cell on the ground (or of the
+    nearest free cell when an object stands there)."""
+    spot = place.spot(at)
+    item = place.object_at(spot.column, spot.row)
+    top = OBJECT_KINDS[item.kind].top if item is not None else None
+    if item is not None and top is not None:
+        dx, dy = TOP_SPOTS.get(item.kind, (0.5, 0.5))
+        return (spot.column + dx, spot.row + dy, place.floor_z(item.column, item.row) + top)
+    return iso_stand(place, at)
+
+
+def item_box(place: IsoPlace, feet: tuple[float, float, float], height: float) -> Box3:
+    """The box a small thing with its bottom at ``feet`` and ``height`` tall stands in (tile
+    units): :func:`standing_box`, and on an object it is put on (a table) over that object's box,
+    so it is drawn over it."""
+    box = standing_box(place, feet, height)
+    item = place.object_at(math.floor(feet[0]), math.floor(feet[1]))
+    if item is None or item.walkable or OBJECT_KINDS[item.kind].top is None or feet[2] <= place.floor_z(item.column, item.row) + 1e-9:
+        return box
+    top = object_box(item, place.floor_z(item.column, item.row)).z1
+    return Box3(box.x0, box.y0, max(box.z0, top), box.x1, box.y1, max(box.z1, top + height))
+
+
+#: A ``follow`` on an iso place zooms in until a character is this share of the frame's shorter
+#: side tall (as on a plain stage), unless the camera is closer already (DESIGN.md §89.10).
+ISO_FOLLOW_SIZE = 0.45
+
+
+def follow_width(character_height: float, frame_width: float, frame_height: float, view_width: float) -> float:
+    """The view's width (Manim units) a ``follow`` of a character ``character_height`` tall on
+    screen (at the establishing view) moves to: zoomed in to :data:`ISO_FOLLOW_SIZE`, at most
+    to :data:`~vidgen.cartoon.stage.MAX_ZOOM`, never wider than ``view_width`` (the camera's
+    now)."""
+    zoom = ISO_FOLLOW_SIZE * min(frame_width, frame_height) / max(character_height, 1e-9)
+    return min(view_width, frame_width / min(max(zoom, 1.0), MAX_ZOOM))
+
+
 def iso_layout(place: IsoPlace, items: Sequence[StageItem], *, frame_width: float, frame_height: float) -> list[StagePlacement]:
-    """Where each character stands on the place, back to front (like
+    """Where each character and small thing stands on the place, back to front (like
     :func:`~vidgen.cartoon.stage.stage_layout`, all at depth 0): its feet in Manim units on its
-    spot's cell, its height :data:`ISO_CHARACTER_HEIGHT` tiles times its ``scale``.
-    :class:`VidgenError` for an ``at`` that is not a spot."""
+    spot's cell (a small thing on the top of a table standing there, :func:`iso_item_point`), its
+    height :data:`ISO_CHARACTER_HEIGHT` tiles times its ``scale`` (a prop's: its height next to a
+    character). :class:`VidgenError` for an ``at`` that is not a spot."""
     view = iso_view(place, frame_width, frame_height)
     found = []
     for index, item in enumerate(items):
         if not isinstance(item.at, str) or item.at not in place.spot_names():
             raise VidgenError(f"'{item.name}' stands at '{item.at}', which is not a spot of the place "
                               f"(spots: {', '.join(place.spot_names()) or 'none'}); put a letter on the map for it")
-        feet = iso_stand(place, item.at)
+        feet = iso_item_point(place, item.at) if item.kind == "prop" else iso_stand(place, item.at)
         x, y = view.point(*feet)
         found.append((feet[0] + feet[1], index, StagePlacement(
             name=item.name, kind=item.kind, index=index, x_fraction=x / frame_width + 0.5, depth=0.0, feet=(x, y),
@@ -154,49 +200,170 @@ def pieces_in_front(pieces: Sequence[IsoPiece], bodies: Sequence[tuple[str, Box3
 
 #: Room (tile widths) around a front picture's pieces: drawings reach past their boxes.
 FRONT_MARGIN = 0.5
+#: The pictures are drawn in square tiles this many pixels wide (each overlapping the next by
+#: :data:`TILE_OVERLAP` pixels: a resampled picture's edge is half transparent and showed a seam),
+#: at levels of detail: level ``k`` has 2**k times the pixels of level 0, up to
+#: :data:`MAX_DETAIL` (DESIGN.md §89.10). A camera zoomed in shows the tiles of the level as sharp
+#: as its view needs, and only those in view are drawn (once, kept in :data:`TILE_CACHE`).
+TILE_PIXELS = 512
+TILE_OVERLAP = 2
+MAX_DETAIL = 3
+#: A level of detail is used up to a zoom this much over its own (a little blur is not seen).
+DETAIL_SLACK = 1.1
+#: How many tiles a scenery keeps drawn (about 1 MB each).
+TILE_CACHE = 320
+
+#: A picture of the scenery: whether it has the ground, and the pieces in it (indices into
+#: :attr:`IsoScenery.pieces`, in draw order) with the state each is drawn in.
+Picture = tuple[bool, tuple[tuple[int, ObjectState], ...]]
+
+
+def detail_for(zoom: float, density: float) -> int:
+    """The level of detail for a camera ``zoom`` (1: the establishing view) when level 0 has
+    ``density`` pixels per frame pixel: the least that is sharp enough, at most :data:`MAX_DETAIL`."""
+    level = 0
+    while level < MAX_DETAIL and density * 2**level * DETAIL_SLACK < zoom:
+        level += 1
+    return level
 
 
 class IsoScenery:
-    """An iso place drawn on one ``canvas`` (DESIGN.md §89.7, §89.9): ``base``, the ground and every
-    piece in draw order (behind the characters, drawn first), and on demand a *front picture* of
-    the pieces drawn over a character standing in a box (:meth:`over`, :meth:`front`): drawn right
-    after it, so what stands in front of it hides it. A front picture covers just its pieces (a
-    part of the canvas, whole pixels of it) and is kept for when the same pieces hide someone
-    again. A piece in a front picture is in the base too, so where its edge meets the base no
-    seam shows."""
+    """An iso place drawn into pictures (DESIGN.md §89.7, §89.9, §89.10): the *base*, the ground
+    and every piece in draw order (behind the characters, drawn first); for a character standing
+    in a box a *front* picture of the pieces drawn over it (:meth:`front`: drawn right after it,
+    so what stands in front of it hides it); and for each object the scene changes (``layered``:
+    a door opens, a lamp lights, a bridge appears) a *layer* of it with the pieces over it
+    (:meth:`layer`), drawn right after the base, which leaves it out. ``states``: how the objects
+    are at the start (:class:`~vidgen.world.iso.ObjectState`); :meth:`set_state` changes one.
+
+    A picture is drawn in tiles (:meth:`tiles`, :meth:`tile_image`) on the canvas of a level of
+    detail (:func:`detail_for`); a front or a layer covers just its pieces (whole pixels of the
+    canvas), so its pixels fall on the base's and no seam shows. A piece in a front picture or a
+    layer is in the base too (but a layered one), so where its edge meets the base no seam shows."""
 
     def __init__(self, place: IsoPlace, colors: IsoColors, looks: Mapping[str, ObjectLook], view: IsoView, pixels_per_unit: float,
-                 *, outline: float = 1.0) -> None:
+                 *, outline: float = 1.0, states: Mapping[str, ObjectState] | None = None, layered: Collection[str] = ()) -> None:
         pieces = place_pieces(place, colors, looks)
-        self.canvas = iso_canvas(place, view, pixels_per_unit)
+        self.view = view
+        self.bounds = place_bounds(place)
+        #: pixels per tile width at level 0
+        self.scale = view.unit * pixels_per_unit
         self.outline = outline
-        self.supersample = ISO_SUPERSAMPLE
-        while self.supersample > 1 and self.canvas.width * self.canvas.height * self.supersample**2 > ISO_MAX_DRAW_PIXELS:
-            self.supersample -= 1
         #: the pieces in draw order
         self.pieces = [pieces[k] for k in draw_order([p.box for p in pieces])]
-        shapes: list[Shape] = [*ground_shapes(place, colors), *(shape for piece in self.pieces for shape in piece.shapes)]
-        self.base = draw_shapes(shapes, self.canvas, outline=outline, supersample=self.supersample)
-        self._fronts: dict[tuple[int, ...], tuple[IsoCanvas, Image.Image]] = {}
+        self.index = {piece.name: k for k, piece in enumerate(self.pieces)}
+        self.ground = tuple(ground_shapes(place, colors))
+        #: each piece's state now (a block or a wall: as drawn)
+        self.states: dict[int, ObjectState] = {k: (states or {}).get(piece.name, default_state(piece.kind or "")) for k, piece in enumerate(self.pieces)}
+        self.layered = tuple(k for k, piece in enumerate(self.pieces) if piece.name in layered)
+        self._images: OrderedDict[tuple[Any, ...], Image.Image | None] = OrderedDict()
+
+    @property
+    def canvas(self) -> IsoCanvas:
+        """The whole place's canvas at level 0."""
+        return self.level_canvas(0)
+
+    def level_canvas(self, level: int) -> IsoCanvas:
+        """The whole place's canvas at a level of detail."""
+        return canvas_for(self.bounds, self.scale * 2**level, margin=0.1)
+
+    def shown(self, k: int) -> bool:
+        return self.states[k].shown
+
+    def set_state(self, name: str, state: ObjectState) -> None:
+        """Change the object (or map door) ``name`` to ``state`` from now on."""
+        self.states[self.index[name]] = state
 
     def over(self, box: Box3) -> tuple[int, ...]:
         """Which pieces (indices into :attr:`pieces`) are drawn over a character standing in ``box``."""
         return tuple(_over(self.pieces, box))
 
-    def front(self, key: tuple[int, ...]) -> tuple[IsoCanvas, Image.Image]:
-        """The front picture of the pieces ``key`` (from :meth:`over`, not empty): the part of the
-        canvas it covers and the picture."""
-        if key not in self._fronts:
-            bounds = [self.pieces[k].box.picture_bounds() for k in key]
-            c = self.canvas
-            x0 = max(math.floor((min(b[0] for b in bounds) - FRONT_MARGIN - c.left) * c.scale), 0)
-            y0 = max(math.floor((min(b[1] for b in bounds) - FRONT_MARGIN - c.top) * c.scale), 0)
-            x1 = min(math.ceil((max(b[2] for b in bounds) + FRONT_MARGIN - c.left) * c.scale), c.width)
-            y1 = min(math.ceil((max(b[3] for b in bounds) + FRONT_MARGIN - c.top) * c.scale), c.height)
+    def _entries(self, ks: Collection[int]) -> tuple[tuple[int, ObjectState], ...]:
+        return tuple((k, self.states[k]) for k in sorted(ks) if self.shown(k))
+
+    def base(self) -> Picture:
+        """The base picture: the ground and every piece there now but the layered ones."""
+        return (True, self._entries([k for k in range(len(self.pieces)) if k not in self.layered]))
+
+    def front(self, box: Box3) -> Picture | None:
+        """The front picture of a character standing in ``box`` (``None``: nothing hides it)."""
+        found = self._entries(self.over(box))
+        return (False, found) if found else None
+
+    def layer(self, name: str) -> Picture | None:
+        """The layer of the layered piece ``name``: it as it is now, with the pieces over it
+        (``None``: it is not there now)."""
+        k = self.index[name]
+        if not self.shown(k):
+            return None
+        return (False, self._entries({k, *(j for j in _over(self.pieces, self.pieces[k].box) if j != k)}))
+
+    def clip(self, picture: Picture) -> tuple[float, float, float, float] | None:
+        """The picture bounds (tile widths) a front or a layer covers (``None``: the whole canvas)."""
+        if picture[0]:
+            return None
+        bounds = [self.pieces[k].box.picture_bounds() for k, _ in picture[1]]
+        return (min(b[0] for b in bounds) - FRONT_MARGIN, min(b[1] for b in bounds) - FRONT_MARGIN,
+                max(b[2] for b in bounds) + FRONT_MARGIN, max(b[3] for b in bounds) + FRONT_MARGIN)
+
+    def tiles(self, picture: Picture, level: int, view: tuple[float, float, float, float] | None = None) -> list[tuple[tuple[int, int], IsoCanvas]]:
+        """The tiles of ``picture`` at ``level`` that ``view`` (picture bounds in tile widths:
+        left, top, right, bottom; ``None``: all of it) shows: ``((column, row), the part of the
+        level's canvas)``, left to right, top to bottom."""
+        c = self.level_canvas(level)
+        x0, y0, x1, y1 = 0, 0, c.width, c.height
+        clip = self.clip(picture)
+        for bounds in (clip, view):
+            if bounds is not None:
+                x0, y0 = max(x0, math.floor((bounds[0] - c.left) * c.scale)), max(y0, math.floor((bounds[1] - c.top) * c.scale))
+                x1, y1 = min(x1, math.ceil((bounds[2] - c.left) * c.scale)), min(y1, math.ceil((bounds[3] - c.top) * c.scale))
+        found = []
+        if x1 <= x0 or y1 <= y0:
+            return found
+        for j in range(y0 // TILE_PIXELS, (y1 - 1) // TILE_PIXELS + 1):
+            for i in range(x0 // TILE_PIXELS, (x1 - 1) // TILE_PIXELS + 1):
+                tx0, ty0 = i * TILE_PIXELS, j * TILE_PIXELS
+                tx1, ty1 = min(tx0 + TILE_PIXELS + TILE_OVERLAP, c.width), min(ty0 + TILE_PIXELS + TILE_OVERLAP, c.height)
+                if clip is not None:   # a front or a layer: just its pieces' part of the tile
+                    cx0, cy0 = math.floor((clip[0] - c.left) * c.scale), math.floor((clip[1] - c.top) * c.scale)
+                    cx1, cy1 = math.ceil((clip[2] - c.left) * c.scale), math.ceil((clip[3] - c.top) * c.scale)
+                    tx0, ty0, tx1, ty1 = max(tx0, cx0), max(ty0, cy0), min(tx1, cx1), min(ty1, cy1)
+                if tx1 > tx0 and ty1 > ty0:
+                    found.append(((i, j), IsoCanvas(c.scale, c.left + tx0 / c.scale, c.top + ty0 / c.scale, tx1 - tx0, ty1 - ty0)))
+        return found
+
+    def shapes(self, picture: Picture) -> list[Shape]:
+        """What ``picture`` draws, back to front."""
+        ground = list(self.ground) if picture[0] else []
+        return ground + [shape for k, state in picture[1] for shape in self.pieces[k].shapes_in(state)]
+
+    def tile_image(self, picture: Picture, level: int, tile: tuple[int, int], canvas: IsoCanvas) -> Image.Image | None:
+        """The tile ``tile`` of ``picture`` at ``level`` (its ``canvas`` from :meth:`tiles`),
+        drawn once (``None``: nothing on it)."""
+        key = (picture, level, tile)
+        if key in self._images:
+            self._images.move_to_end(key)
+            return self._images[key]
+        image: Image.Image | None = draw_shapes(self.shapes(picture), canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE)
+        if image is not None and image.getbbox() is None:
+            image = None
+        self._images[key] = image
+        while len(self._images) > TILE_CACHE:
+            self._images.popitem(last=False)
+        return image
+
+    def picture(self, picture: Picture, level: int = 0) -> tuple[IsoCanvas, Image.Image]:
+        """The whole of ``picture`` at ``level`` as one image, on its part of the canvas (for tests
+        and stills; the stage draws tiles)."""
+        c = self.level_canvas(level)
+        clip = self.clip(picture)
+        if clip is None:
+            part = c
+        else:
+            x0, y0 = max(math.floor((clip[0] - c.left) * c.scale), 0), max(math.floor((clip[1] - c.top) * c.scale), 0)
+            x1, y1 = min(math.ceil((clip[2] - c.left) * c.scale), c.width), min(math.ceil((clip[3] - c.top) * c.scale), c.height)
             part = IsoCanvas(c.scale, c.left + x0 / c.scale, c.top + y0 / c.scale, max(x1 - x0, 1), max(y1 - y0, 1))
-            shapes = [shape for k in key for shape in self.pieces[k].shapes]
-            self._fronts[key] = (part, draw_shapes(shapes, part, outline=self.outline, supersample=self.supersample))
-        return self._fronts[key]
+        return part, draw_shapes(self.shapes(picture), part, outline=self.outline, supersample=ISO_SUPERSAMPLE)
 
 
 def iso_canvas(place: IsoPlace, view: IsoView, pixels_per_unit: float) -> IsoCanvas:
@@ -212,7 +379,18 @@ def canvas_center(canvas: IsoCanvas, view: IsoView) -> tuple[float, float]:
 
 
 __all__ = [
+    "DETAIL_SLACK",
     "ISO_BODY_HALF",
+    "ISO_FOLLOW_SIZE",
+    "MAX_DETAIL",
+    "TILE_CACHE",
+    "TILE_OVERLAP",
+    "TILE_PIXELS",
+    "Picture",
+    "detail_for",
+    "follow_width",
+    "item_box",
+    "iso_item_point",
     "ISO_MARGIN",
     "FRONT_MARGIN",
     "IsoScenery",

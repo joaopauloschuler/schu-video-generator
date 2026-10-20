@@ -151,6 +151,30 @@ def canvas_for(bounds: tuple[float, float, float, float], scale: float, margin: 
     return IsoCanvas(scale, left, top, max(width, 1), max(height, 1))
 
 
+def shape_bounds(shape: Shape) -> tuple[float, float, float, float]:
+    """The picture bounds (tile widths: left, top, right, bottom) of ``shape``'s fill, without
+    its outline."""
+    if isinstance(shape, (Poly, Line)):
+        found = [iso_point(*p) for p in shape.points]
+        return min(u for u, _ in found), min(v for _, v in found), max(u for u, _ in found), max(v for _, v in found)
+    if isinstance(shape, Blobs):
+        found = [(*iso_point(*c), r) for c, r in zip(shape.centres, shape.radii)]
+        return min(u - r for u, _, r in found), min(v - r for _, v, r in found), max(u + r for u, _, r in found), max(v + r for _, v, r in found)
+    a, b = shape.radius * math.sqrt(2) / 2, shape.radius * math.sqrt(2) / 4
+    if isinstance(shape, Disc):
+        u, v = iso_point(*shape.centre)
+        return u - a, v - b, u + a, v + b
+    (u0, v0), (_, v1) = iso_point(shape.x, shape.y, shape.z0), iso_point(shape.x, shape.y, shape.z1)
+    return u0 - a, min(v0, v1) - b, u0 + a, max(v0, v1) + b
+
+
+def _on_canvas(shape: Shape, canvas: IsoCanvas, pad: float) -> bool:
+    """Whether ``shape`` (with ``pad`` tile widths around it for its outline) reaches onto ``canvas``."""
+    left, top, right, bottom = shape_bounds(shape)
+    return (right + pad >= canvas.left and left - pad <= canvas.left + canvas.width / canvas.scale
+            and bottom + pad >= canvas.top and top - pad <= canvas.top + canvas.height / canvas.scale)
+
+
 def _ink_runs(points: list[tuple[float, float]], ink: bool | tuple[bool, ...]) -> list[list[tuple[float, float]]]:
     """The outlined runs of a closed polygon's edges, each a list of points."""
     count = len(points)
@@ -190,7 +214,10 @@ def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 
         for x, y in (points[0], points[-1]):
             draw.ellipse((x - r, y - r, x + r, y + r), fill=color)
 
+    pad = ISO_OUTLINE * outline * 3 + 2 / canvas.scale   # the outline and a line's width reach past the fill
     for shape in shapes:
+        if not _on_canvas(shape, canvas, pad):
+            continue   # nothing of it on this canvas (a tile of a large picture, DESIGN.md §89.10)
         if isinstance(shape, Poly):
             points = [canvas.pixel(p, ss) for p in shape.points]
             draw.polygon(points, fill=shape.fill, outline=shape.fill)   # its own colour on the edge: no seam with a neighbour
@@ -211,11 +238,13 @@ def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 
             patch = Image.new("RGBA", (math.ceil(2 * a) + 2, math.ceil(2 * b) + 2), (0, 0, 0, 0))
             rgb = tuple(int(shape.fill[k:k + 2], 16) for k in (1, 3, 5))
             ImageDraw.Draw(patch).ellipse((x - a - left, y - b - top, x + a - left, y + b - top), fill=(*rgb, round(255 * shape.opacity)))
-            if left >= 0 and top >= 0:
+            if left >= 0 and top >= 0 and left + patch.width <= big.width and top + patch.height <= big.height:
                 big.alpha_composite(patch, dest=(left, top))
             else:   # partly off the canvas: crop the patch to it
-                crop = patch.crop((max(-left, 0), max(-top, 0), patch.width, patch.height))
-                big.alpha_composite(crop, dest=(max(left, 0), max(top, 0)))
+                x0, y0 = max(-left, 0), max(-top, 0)
+                x1, y1 = min(patch.width, big.width - left), min(patch.height, big.height - top)
+                if x1 > x0 and y1 > y0:
+                    big.alpha_composite(patch.crop((x0, y0, x1, y1)), dest=(max(left, 0), max(top, 0)))
         elif isinstance(shape, Disc):
             x, y = canvas.pixel(shape.centre, ss)
             a, b = shape.radius * math.sqrt(2) / 2 * canvas.scale * ss, shape.radius * math.sqrt(2) / 4 * canvas.scale * ss
@@ -260,4 +289,5 @@ __all__ = [
     "canvas_for",
     "draw_shapes",
     "shade",
+    "shape_bounds",
 ]

@@ -16,7 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from vidgen.cartoon.iso_drawing import Blobs, Disc, Line, Poly, Shape, Upright, box_shapes, mix, shade
-from vidgen.world.iso import IsoObject
+from vidgen.world.iso import IsoObject, ObjectState, default_state
 from vidgen.world.iso_view import ISO_RISE, Box3, Point3
 
 #: Default (main, detail) colours of each object: theme tokens like the stage's props
@@ -35,6 +35,14 @@ FRAME = "#F4F6FA"
 WOOD = "#9C6B47"
 WATER_DEEP = "#4D8FC0"
 LAMP_GLOW = "#FFF1B8"
+#: A lamp's lantern and a house's windows when lit, the pool of light under a lit lamp (a tint
+#: of the ground, ``LIGHT_POOL_OPACITY``), and the dark of an open doorway (DESIGN.md §89.10).
+LIT_GLASS = "#FFD75E"
+LIT_CORE = "#FFF6D0"
+LIGHT_POOL = "#FFE58A"
+LIGHT_POOL_OPACITY = 0.32
+LIGHT_POOL_RADIUS = 1.1
+DOORWAY = "#2E2A38"
 BOOK_COLORS: tuple[str, ...] = ("#E2574C", "#F6C945", "#5BA35B", "#4C8DD6", "#B48EAD")
 
 
@@ -83,9 +91,11 @@ class _Frame:
         return (x + offset / 2, y - offset / 2, zz)
 
 
-def _window(f: _Frame, u0: float, u1: float, z0: float, z1: float, *, front: float | None = None, side: float | None = None) -> list[Shape]:
+def _window(f: _Frame, u0: float, u1: float, z0: float, z1: float, *, front: float | None = None, side: float | None = None,
+            lit: bool = False) -> list[Shape]:
     """A window with a frame and a cross of bars on the front face (at ``b`` = ``front``; ``u``
-    across it as ``a``) or the right side face (at ``a`` = ``side``; ``u`` from the front back)."""
+    across it as ``a``) or the right side face (at ``a`` = ``side``; ``u`` from the front back);
+    ``lit``: warm light behind its glass."""
     def at(u: float, z: float) -> tuple[float, float, float]:
         if side is not None:
             return (side, f.depth - u, z)
@@ -94,26 +104,44 @@ def _window(f: _Frame, u0: float, u1: float, z0: float, z1: float, *, front: flo
 
     pad = 0.06
     shapes: list[Shape] = [f.poly([at(u0, z0), at(u1, z0), at(u1, z1), at(u0, z1)], FRAME),
-                           f.poly([at(u0 + pad, z0 + pad), at(u1 - pad, z0 + pad), at(u1 - pad, z1 - pad), at(u0 + pad, z1 - pad)], GLASS, False)]
+                           f.poly([at(u0 + pad, z0 + pad), at(u1 - pad, z0 + pad), at(u1 - pad, z1 - pad), at(u0 + pad, z1 - pad)],
+                                  LIT_GLASS if lit else GLASS, False)]
     mid_u, mid_z = (u0 + u1) / 2, (z0 + z1) / 2
+    if lit:
+        core = 0.3
+        shapes.append(f.poly([at(mid_u - (mid_u - u0) * core, mid_z - (mid_z - z0) * core), at(mid_u + (u1 - mid_u) * core, mid_z - (mid_z - z0) * core),
+                              at(mid_u + (u1 - mid_u) * core, mid_z + (z1 - mid_z) * core), at(mid_u - (mid_u - u0) * core, mid_z + (z1 - mid_z) * core)],
+                             LIT_CORE, False))
     shapes += [Line((f.p(*at(mid_u, z0 + pad)), f.p(*at(mid_u, z1 - pad))), FRAME, 1.4),
                Line((f.p(*at(u0 + pad, mid_z)), f.p(*at(u1 - pad, mid_z))), FRAME, 1.4)]
     return shapes
 
 
-def _house(f: _Frame, look: ObjectLook) -> list[Shape]:
+def _door_leaf(f: _Frame, a0: float, a1: float, b: float, height: float, is_open: bool) -> list[Shape]:
+    """A door in the front face (at ``b``) from ``a0`` to ``a1``: closed, its leaf with a knob;
+    open, a dark doorway and the leaf swung out towards the viewer on its hinge at ``a0``."""
+    if not is_open:
+        return [f.poly([(a0, b, 0.0), (a1, b, 0.0), (a1, b, height), (a0, b, height)], WOOD),
+                Disc(f.p(a0 + (a1 - a0) * 0.8, b, height * 0.52), 0.045, "#F2C14E", False)]
+    swing = (a1 - a0) * 0.9
+    out = (a0 - swing * 0.17, b + swing * 0.98)
+    return [f.poly([(a0, b, 0.0), (a1, b, 0.0), (a1, b, height), (a0, b, height)], DOORWAY),
+            f.poly([(a0, b, 0.0), (out[0], out[1], 0.0), (out[0], out[1], height), (a0, b, height)], mix(WOOD, "#FFFFFF", 0.12)),
+            Disc(f.p(out[0] + 0.02, out[1] - 0.12, height * 0.52), 0.045, "#F2C14E", False)]
+
+
+def _house(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     """Walls, a gable roof whose ridge runs across the front (the gable on the right side), a
-    door and windows on the front, a window on the side, a chimney."""
+    door and windows on the front, a window on the side, a chimney; the door open and the
+    windows lit as ``state`` says."""
     inset, wall, ridge, eave = 0.12, 2.3, 4.35, 0.28
     a0, a1, b0, b1 = inset, f.width - inset, inset, f.depth - inset
     mid = (b0 + b1) / 2
     shapes = f.box(a0, b0, 0.0, a1, b1, wall, look.main)
     door_w = 0.62
     door_a = (a0 + a1) / 2 - door_w / 2 + 0.35
-    shapes.append(f.poly([(door_a, b1, 0.0), (door_a + door_w, b1, 0.0), (door_a + door_w, b1, 1.55), (door_a, b1, 1.55)], WOOD))
-    shapes.append(Disc(f.p(door_a + door_w * 0.8, b1, 0.8), 0.045, "#F2C14E", False))
-    shapes += _window(f, a0 + 0.35, a0 + 1.0, 1.0, 1.75, front=b1)
-    shapes += _window(f, f.depth / 2 - 0.32, f.depth / 2 + 0.32, 1.0, 1.7, side=a1)
+    shapes += _window(f, a0 + 0.35, a0 + 1.0, 1.0, 1.75, front=b1, lit=state.on)
+    shapes += _window(f, f.depth / 2 - 0.32, f.depth / 2 + 0.32, 1.0, 1.7, side=a1, lit=state.on)
     roof = look.detail
     # the far slope first (only its edge shows past the near one), then the gable, the chimney, the near slope
     shapes.append(f.poly([(a0, mid, ridge), (a1, mid, ridge), (a1, b0 - eave, wall - 0.25), (a0, b0 - eave, wall - 0.25)], shade(roof, 0.3)))
@@ -123,7 +151,7 @@ def _house(f: _Frame, look: ObjectLook) -> list[Shape]:
     shapes.append(f.poly([(a0, mid, ridge), (a1, mid, ridge), (a1, b1 + eave, wall - 0.25), (a0, b1 + eave, wall - 0.25)], f.front(roof)))
     shapes.append(f.poly([(a1, mid, ridge), (a1, b1 + eave, wall - 0.25), (a1, b1 + eave, wall - 0.4), (a1, mid, ridge - 0.15)],
                          shade(roof, 0.4)))
-    return shapes
+    return shapes + _door_leaf(f, door_a, door_a + door_w, b1, 1.55, state.open)
 
 
 def _crown(f: _Frame, look: ObjectLook, z: float, size: float) -> list[Shape]:
@@ -175,8 +203,9 @@ def _rock(f: _Frame, look: ObjectLook) -> list[Shape]:
             Blobs(((stones[1][0] - 0.05, stones[1][1] + 0.05, stones[1][2] + 0.12),), (0.08,), mix(look.main, "#FFFFFF", 0.35), False)]
 
 
-def _flowers(f: _Frame, look: ObjectLook) -> list[Shape]:
-    """A clump of leaves with flower heads in the main and detail colours."""
+def _flowers(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A clump of leaves with flower heads in the main and detail colours (in bloom), or with
+    green buds tinged with them (closed)."""
     centre = f.p(0.5, 0.5, 0.0)
     leaves = [(-0.2, 0.15, 0.14), (0.18, 0.15, 0.14), (0.0, 0.22, 0.15)]
     shapes: list[Shape] = [Blobs(tuple((centre[0] + du / 2, centre[1] - du / 2, centre[2] + z) for du, z, _ in leaves),
@@ -184,6 +213,9 @@ def _flowers(f: _Frame, look: ObjectLook) -> list[Shape]:
     heads = [(-0.22, 0.42, look.main), (0.05, 0.55, look.detail), (0.25, 0.4, look.main), (-0.05, 0.32, look.detail), (0.12, 0.3, look.main)]
     for du, z, color in heads:
         point = (centre[0] + du / 2, centre[1] - du / 2, centre[2] + z)
+        if not state.open:
+            shapes.append(Blobs((point,), (0.042,), mix(color, "#5BA35B", 0.55)))
+            continue
         shapes.append(Blobs((point,), (0.075,), color))
         shapes.append(Blobs((point,), (0.025,), "#F6C945" if color != "#F6C945" else "#FFFFFF", False))
     return shapes
@@ -235,12 +267,15 @@ def _bench(f: _Frame, look: ObjectLook) -> list[Shape]:
     return shapes + front
 
 
-def _lamp(f: _Frame, look: ObjectLook) -> list[Shape]:
+def _lamp(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A post with a lantern, lit (a bright lantern, a pool of light on the ground) when on."""
     x, y = f.p(0.5, 0.5, 0.0)[:2]
     z = f.base
     post = look.main
-    return [Disc((x, y, z + 0.02), 0.2, shade(post, 0.1)), Upright(x, y, z, z + 2.75, 0.06, post),
-            *box_shapes(x - 0.16, y - 0.16, z + 2.6, x + 0.16, y + 0.16, z + 3.1, LAMP_GLOW, left=look.detail, right=shade(look.detail, 0.15)),
+    pool: list[Shape] = [Disc((x, y, z + 0.01), LIGHT_POOL_RADIUS, LIGHT_POOL, False, LIGHT_POOL_OPACITY)] if state.on else []
+    glass = (LIT_CORE, LIT_GLASS, shade(LIT_GLASS, 0.08)) if state.on else (LAMP_GLOW, look.detail, shade(look.detail, 0.15))
+    return [*pool, Disc((x, y, z + 0.02), 0.2, shade(post, 0.1)), Upright(x, y, z, z + 2.75, 0.06, post),
+            *box_shapes(x - 0.16, y - 0.16, z + 2.6, x + 0.16, y + 0.16, z + 3.1, glass[0], left=glass[1], right=glass[2]),
             Poly(((x - 0.22, y - 0.22, z + 3.1), (x + 0.22, y - 0.22, z + 3.1), (x + 0.22, y + 0.22, z + 3.1), (x - 0.22, y + 0.22, z + 3.1)), post),
             Poly(((x - 0.22, y + 0.22, z + 3.1), (x + 0.22, y + 0.22, z + 3.1), (x, y, z + 3.35)), shade(post, 0.1)),
             Poly(((x + 0.22, y + 0.22, z + 3.1), (x + 0.22, y - 0.22, z + 3.1), (x, y, z + 3.35)), shade(post, 0.25))]
@@ -378,8 +413,7 @@ def _rug(f: _Frame, look: ObjectLook) -> list[Shape]:
 
 
 _DRAWINGS: dict[str, Callable[[_Frame, ObjectLook], list[Shape]]] = {
-    "house": _house, "tree": _tree, "pine": _pine, "bush": _bush, "rock": _rock, "flowers": _flowers, "bench": _bench,
-    "lamp": _lamp, "well": _well, "sign": _sign, "bridge": _bridge, "table": _table, "chair": _chair, "bed": _bed,
+    "tree": _tree, "pine": _pine, "bush": _bush, "rock": _rock, "bench": _bench, "well": _well, "sign": _sign, "bridge": _bridge, "table": _table, "chair": _chair, "bed": _bed,
     "shelf": _shelf, "sofa": _sofa, "plant": _plant, "rug": _rug,
 }
 
@@ -392,15 +426,22 @@ SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
 
 
-def object_shapes(item: IsoObject, look: ObjectLook, base: float) -> list[Shape]:
+#: The objects drawn by their state too (DESIGN.md §89.10).
+_STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {"house": _house, "flowers": _flowers, "lamp": _lamp}
+
+
+def object_shapes(item: IsoObject, look: ObjectLook, base: float, state: ObjectState | None = None) -> list[Shape]:
     """The shapes of ``item`` standing at height ``base`` (tile units), back to front, its soft
-    shadow on the ground first."""
+    shadow on the ground first; ``state``: open, lit (default: :func:`default_state`)."""
     frame = _Frame(item, base)
+    state = state or default_state(item.kind)
     radius = SHADOW_RADII.get(item.kind)
     shadow: list[Shape] = [] if radius is None else [Disc(frame.p(frame.width / 2, frame.depth / 2, 0.0), radius, SHADOW_COLOR, False,
                                                           SHADOW_OPACITY)]
     if item.kind == "fence":
         return shadow + _fence(frame, look, item.links)
+    if item.kind in _STATEFUL:
+        return shadow + _STATEFUL[item.kind](frame, look, state)
     return shadow + _DRAWINGS[item.kind](frame, look)
 
 
@@ -409,4 +450,4 @@ def object_box(item: IsoObject, base: float) -> Box3:
     return Box3(item.column, item.row, base, item.column + item.width, item.row + item.depth, base + item.height)
 
 
-__all__ = ["OBJECT_COLORS", "ObjectLook", "object_box", "object_shapes"]
+__all__ = ["DOORWAY", "LIGHT_POOL", "LIT_GLASS", "OBJECT_COLORS", "ObjectLook", "object_box", "object_shapes"]

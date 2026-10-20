@@ -17,7 +17,7 @@ columns from the left, both from 1.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from vidgen.errors import VidgenError
@@ -67,7 +67,9 @@ MAX_ROWS = 48
 class ObjectKind:
     """A ready-made object: its footprint (``width`` columns by ``depth`` rows when facing left),
     its height (tile units), whether one can walk on it (a rug, a bridge; ``deck``: how high
-    over its base the feet stand on it) and the ground it may stand on (``water``: a bridge spans it)."""
+    over its base the feet stand on it) and the ground it may stand on (``water``: a bridge spans it); ``top``: how high over its base a
+    small thing put on it stands (a table's top, a bench's seat; ``None``: nothing goes on it,
+    DESIGN.md §89.10)."""
 
     width: int
     depth: int
@@ -75,6 +77,7 @@ class ObjectKind:
     walkable: bool = False
     over_water: bool = False
     deck: float = 0.0
+    top: float | None = None
 
 
 #: The ready-made objects (DESIGN.md §89.5).
@@ -83,22 +86,45 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "tree": ObjectKind(1, 1, 4.0),
     "pine": ObjectKind(1, 1, 4.2),
     "bush": ObjectKind(1, 1, 1.1),
-    "rock": ObjectKind(1, 1, 0.8),
+    "rock": ObjectKind(1, 1, 0.8, top=0.5),
     "flowers": ObjectKind(1, 1, 0.6),
     "fence": ObjectKind(1, 1, 1.0),
-    "bench": ObjectKind(2, 1, 1.1),
+    "bench": ObjectKind(2, 1, 1.1, top=0.55),
     "lamp": ObjectKind(1, 1, 3.4),
-    "well": ObjectKind(1, 1, 2.9),
+    "well": ObjectKind(1, 1, 2.9, top=0.85),
     "sign": ObjectKind(1, 1, 1.7),
     "bridge": ObjectKind(1, 3, 0.35, walkable=True, over_water=True, deck=0.22),
-    "table": ObjectKind(2, 1, 1.0),
-    "chair": ObjectKind(1, 1, 1.3),
-    "bed": ObjectKind(1, 2, 1.0),
-    "shelf": ObjectKind(1, 2, 2.5),
-    "sofa": ObjectKind(2, 1, 1.15),
+    "table": ObjectKind(2, 1, 1.0, top=0.98),
+    "chair": ObjectKind(1, 1, 1.3, top=0.63),
+    "bed": ObjectKind(1, 2, 1.0, top=0.58),
+    "shelf": ObjectKind(1, 2, 2.5, top=2.4),
+    "sofa": ObjectKind(2, 1, 1.15, top=0.55),
     "plant": ObjectKind(1, 1, 1.5),
     "rug": ObjectKind(2, 2, 0.03, walkable=True, deck=0.02),
 }
+
+
+#: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
+#: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
+OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door"})
+SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp"})
+
+
+@dataclass(frozen=True)
+class ObjectState:
+    """What an object of the place shows now (DESIGN.md §89.10): whether it is there
+    (``shown``), open (a house's or a room's door; flowers in bloom, else in bud) and on (a lamp
+    lit; a house's windows lit)."""
+
+    shown: bool = True
+    open: bool = False
+    on: bool = False
+
+
+def default_state(kind: str) -> ObjectState:
+    """The state of an object of ``kind`` unless the scene says otherwise: there, closed and off;
+    flowers in bloom."""
+    return ObjectState(open=kind == "flowers")
 
 
 @dataclass(frozen=True)
@@ -203,6 +229,27 @@ class IsoPlace:
         item = self.object_at(column, row)
         deck = OBJECT_KINDS[item.kind].deck if item is not None and item.walkable else 0.0
         return self.floor_z(column, row) + deck
+
+    def without(self, names: Collection[str]) -> "IsoPlace":
+        """The place without the objects ``names`` (not there now: they appear later, or have
+        gone; DESIGN.md §89.10): one walks where they would stand, and not over a bridge that is
+        not there."""
+        if not names:
+            return self
+        gone = set(names)
+        occupied = {cell: name for cell, name in self._occupied.items() if name not in gone}
+        return IsoPlace(self.cells, self.indoor, self.spots, tuple(o for o in self.objects if o.name not in gone), occupied)
+
+    def doors(self) -> list[tuple[str, int, int]]:
+        """The doors of the map that can open and close: each ``+`` in a room's standing wall (a
+        door drawn on it), named ``door_1``, ``door_2``... in map order, with its cell. A doorway
+        in a cut-away wall and a gap in a garden wall are ways through with no door."""
+        found = []
+        for r in range(self.rows):
+            for c in range(self.columns):
+                if self.ground(c, r) == DOOR and self.indoor and not self.is_cut(c, r):
+                    found.append((f"door_{len(found) + 1}", c, r))
+        return found
 
     def object_at(self, column: int, row: int) -> IsoObject | None:
         """The object standing on the cell (``None``: none)."""
@@ -485,12 +532,14 @@ __all__ = [
     "MAX_COLUMNS",
     "MAX_ROWS",
     "OBJECT_KINDS",
+    "OPENING_KINDS",
     "OBJECT_SYMBOLS",
     "OUTDOOR",
     "PATH",
     "PLACES",
     "STANDABLE",
     "STEP_HEIGHT",
+    "SWITCHED_KINDS",
     "VOID",
     "WALL",
     "WALLS",
@@ -503,6 +552,8 @@ __all__ = [
     "IsoSpot",
     "ObjectKind",
     "ObjectPlacing",
+    "ObjectState",
+    "default_state",
     "parse_iso_map",
     "place_objects",
 ]

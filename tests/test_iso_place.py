@@ -322,19 +322,21 @@ def test_scenery_draws_front_pictures_of_the_pieces_over_a_character() -> None:
     place = village()
     view = iso_view(place, FW, FH)
     scenery = IsoScenery(place, IsoColors(), looks(place), view, 20.0)
-    assert scenery.base.size == (scenery.canvas.width, scenery.canvas.height)
-    assert scenery.over(body_box((9.5, 1.5, 0.0), 2.0)) == ()   # nothing hides kit
+    canvas, base = scenery.picture(scenery.base())
+    assert base.size == (scenery.canvas.width, scenery.canvas.height) and canvas == scenery.canvas
+    assert scenery.front(body_box((9.5, 1.5, 0.0), 2.0)) is None   # nothing hides kit
     key = scenery.over(body_box((1.5, 1.5, 0.0), 2.0))
     assert scenery.pieces[key[0]].name == "house"   # the house in front of pip
-    part, front = scenery.front(key)
-    assert scenery.front(key)[1] is front   # made once
+    picture = scenery.front(body_box((1.5, 1.5, 0.0), 2.0))
+    assert picture == (False, tuple((k, scenery.states[k]) for k in key))
+    part, front = scenery.picture(picture)
     assert front.size == (part.width, part.height) and part.width < scenery.canvas.width and part.scale == scenery.canvas.scale
     # the front picture is a part of the canvas, in whole pixels: it lies on the base where it is drawn
     x0, y0 = round((part.left - scenery.canvas.left) * part.scale), round((part.top - scenery.canvas.top) * part.scale)
     assert (part.left - scenery.canvas.left) * part.scale == pytest.approx(x0, abs=1e-6)
-    base = np.asarray(scenery.base)[y0:y0 + part.height, x0:x0 + part.width]
+    under = np.asarray(base)[y0:y0 + part.height, x0:x0 + part.width]
     shown = np.asarray(front)[..., 3] == 255
-    assert 0 < shown.mean() and np.all(np.asarray(front)[shown] == base[shown], axis=1).mean() > 0.98   # no seam where they meet
+    assert 0 < shown.mean() and np.all(np.asarray(front)[shown] == under[shown], axis=1).mean() > 0.98   # no seam where they meet
 
 
 # ----- stage params and config ---------------------------------------------------------------------
@@ -362,7 +364,7 @@ def test_stage_takes_an_iso_place() -> None:
         ({"level": {"map": "a..\n###"}}, "an iso place cannot have level"),
         ({"room": True}, "an iso place cannot have room \\(an indoor place is iso: \\{place: indoor\\}\\)"),
         ({"water": True}, "cannot have water"),
-        ({"props": ["tree"]}, "cannot have props \\(use iso.objects"),
+        ({"props": ["tree"]}, "props\\[0\\]: on an iso place the props are small things to hold .* a tree is a ready-made object"),
         ({"layers": [{"place": "background", "shapes": [{"shape": "hills"}]}]}, "cannot have layers"),
         ({"width": 2}, "cannot have width"),
         ({"size": 0.3}, "the characters' size follows the place .*remove size"),

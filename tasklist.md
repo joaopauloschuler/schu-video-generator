@@ -930,10 +930,10 @@ Same rules as Phases H–P.
 - [x] Tests: rules without rendering, timing, a tiny render (`tests/test_iso_moves.py`)
 
 ### Step 168 — Staging: iso shots, items, doors, lights, place changes
-- [ ] Iso shots: the establishing view of the whole place, follow the hero, zoom to a group, dialogue close-ups reusing the existing flat close-ups / `shot:`
-- [ ] Small items as cut-outs (gift, letter, key, flower) with `pick_up` / `give` / `drop` / `place`
-- [ ] Doors that open, lights that turn on, simple changes to the place (a flower blooms, a lamp lights, a bridge appears) for cause and effect
-- [ ] Tests
+- [x] Iso shots: the establishing view of the whole place, follow the hero, zoom to a group, dialogue close-ups reusing the existing flat close-ups / `shot:` (the place drawn in tiles at levels of detail for the zoom; `follow` zooms in; `pan` to a spot)
+- [x] Small items as cut-outs (gift, letter, key, flower) with `pick_up` / `give` / `drop` / `place` (the stage's `props`, small ones, at spots or on a table; drop and place are `put_down` without / with `to`; new prop `flower`)
+- [x] Doors that open, lights that turn on, simple changes to the place (a flower blooms, a lamp lights, a bridge appears) for cause and effect (`open` / `close`, `switch_on` / `switch_off`, `reveal` and a new `hide`; objects' `open`, `on`, `shown`)
+- [x] Tests (`tests/test_iso_staging.py`); also: a follower ending right behind its leader steps aside
 
 ### Step 169 — Mood, small characters, sounds and lint
 - [ ] Time of day / mood tints (morning, evening, night, rain) on the place

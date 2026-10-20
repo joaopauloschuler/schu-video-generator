@@ -15737,3 +15737,104 @@ How to test
   arrivals over the edge and out of the house's door) and `<scratchpad>/iso/proj4` (behind a
   house, down and behind a garden wall, through its gap, behind a tree), contact sheets in
   `<scratchpad>/iso/step167/`.
+
+## Step 168 — Staging on an iso place: camera and shots, small things, changes to the place
+
+What was built (DESIGN §89.10)
+- **Pictures in tiles at levels of detail** (`cartoon/iso_stage.py`, `cartoon/iso_pictures.py`):
+  `IsoScenery` now gives *pictures* (`Picture`: ground or not, pieces with their states): `base()`,
+  `front(box)`, `layer(name)`, drawn in 512 px tiles (`tiles`, `tile_image`, LRU cache) on the canvas
+  of a level of detail (level k = 2^k × level 0, up to 3; `detail_for(zoom, density)`). On the stage
+  each picture is an `IsoTiles` group showing the tiles in the camera's view at the zoom's level,
+  swapped by a camera listener and before Manim splits moving/static (`get_moving_and_static_mobjects`:
+  after a cut the static image showed the previous view's tiles). `draw_tile` (installed on the
+  camera before the light wraps it) resizes only the visible part of a tile into just that part of
+  the frame: the test village (50 s with a long follow) went from 239 s to 59 s. `draw_shapes` skips
+  shapes off its canvas (`shape_bounds`).
+- **Camera**: shots work unchanged on the place (close-ups are sharp: the head at 8× zoom); `wide`
+  is the establishing view; `follow` zooms in to a plain stage's character size (`follow_start`,
+  `follow_width`, `ISO_FOLLOW_SIZE` 0.45) and tracks up/down (`_MoveThenFollow(y_of=...)`, then the
+  stage's `SmoothFollow` as on a level); `pan` to a spot centres on the object there / a character's
+  middle, or on its targets, across and up (`pan_point`); `zoom` on a group as anywhere. 16:9 and 9:16
+  checked by eye.
+- **Small things**: the stage's `props` on an iso place, small ones only (`ISO_ITEMS`; refused: big
+  props, depth/lift/against, non-spot `at`, a name clash), standing at a spot on the ground or on a
+  table/bench/chair/bed/sofa/rock/well rim (`ObjectKind.top`, `iso_item_point`, `TOP_SPOTS`),
+  bodies in the draw order like characters (`item_box`, own front pictures). `pick_up`, `give`,
+  `put_down` (no `to`: dropped beside the feet, `iso_put_point`; `to: <spot>`: placed on the object
+  there) work; `throw` / `blow_away` refused. New prop `flower`. Reach is checked in cells by the iso
+  replay (`iso_move_problems` with `items`, `ISO_ITEM_ACTIONS`, `ISO_REACH` 1), the flat holding
+  replay gets no positions on an iso place.
+- **Changes to the place**: `ObjectState` (`shown`, `open`, `on`), `object_shapes(..., state)`
+  (house door open + windows lit, lamp lit with a pool of light, flowers in bud), room doors in
+  standing back walls named `door_1`... (`IsoPlace.doors`) opening into the room; `iso.objects`
+  `open` / `on` / `shown`. Actions: `open` / `close` (house, door_n, flowers), `switch_on` /
+  `switch_off` (lamp, house), `reveal` (generic, via the object's target entrance), new `hide`
+  (`scenes/hide_action.py`, cued). Changed objects are *layered*: out of the base, an `IsoObject`
+  group after the base (object + pieces over it); `Stage.iso_change` fades a new layer in by a scene
+  updater, sets the state at the start, refreshes fronts/other layers; `_iso_redrawn` redraws the
+  layers while a change overlaps an animation. Objects not there are left out of route planning
+  (`IsoPlace.without`; render and validate replay with `reveal` / `hide`, `ISO_PLACE_CHANGES`).
+- **Fix from Step 167**: a follower ending one cell straight behind (or in front of) its leader on
+  the picture takes a step aside (`follow_route`).
+- Code move: Step 167's iso methods of `Stage` moved to `scenes/stage_iso.py` (`IsoStaging` mixin,
+  `_moving_block`), with this step's.
+
+Files touched
+- New: `src/vidgen/scenes/stage_iso.py`, `src/vidgen/scenes/hide_action.py`,
+  `src/vidgen/cartoon/iso_pictures.py`, `tests/test_iso_staging.py`.
+- Changed: `src/vidgen/world/iso.py` (`ObjectState`, `default_state`, `OPENING_KINDS`,
+  `SWITCHED_KINDS`, `ObjectKind.top`, `IsoPlace.without`, `IsoPlace.doors`), `world/iso_moves.py`
+  (reach and place changes in the replay, step aside), `cartoon/iso_objects.py`, `iso_scenery.py`
+  (`IsoPiece.kind`, `redraw`, `shapes_in`; door states), `iso_stage.py` (tiles, layers, item points,
+  follow width), `iso_drawing.py` (`shape_bounds`, skip off-canvas shapes, translucent disc crop
+  fix), `cartoon/props.py` (`flower`), `scenes/stage.py` (iso props checks, object params, targets,
+  tile drawing, switch, follower), `scenes/actions.py` (pan/follow hooks, `_MoveThenFollow.y_of`),
+  `scenes/handling.py` (open/close objects, iso put_down, throw/blow_away refused),
+  `scenes/switch_action.py`, `scenes/__init__.py`, `api.py`, `docs/CONFIG.md`, guide + `AGENTS.md`,
+  `DESIGN.md` §89.10 (+ notes in §89.2, §89.6, §89.9), `tests/test_iso_place.py`,
+  `tests/test_iso_moves.py`, `tests/test_actions.py`, `tests/test_cartoon_props.py`, `tasklist.md`.
+
+Public interfaces
+- Config: action `hide`; prop `flower`; `iso.objects[*].open|on|shown`; small `props` on an iso
+  place; `put_down` `to:` a spot on an iso place; `open` / `close` / `switch_on` / `switch_off` /
+  `reveal` take iso objects (and `door_1`...) as targets.
+- `vidgen.api`: + `IsoTiles`, `install_tile_drawing`, `ObjectState`, `default_state`,
+  `OPENING_KINDS`, `SWITCHED_KINDS`, `ISO_FOLLOW_SIZE`, `follow_width`, `iso_item_point`,
+  `item_box`, `object_box`, `ISO_ITEM_ACTIONS`, `ISO_PLACE_CHANGES`, `ISO_REACH`; `IsoScenery`'s
+  interface changed (pictures and tiles instead of `base` / `front(key)` images).
+
+Decisions
+- `size` / `character_size` stay refused on an iso place: shots (and `follow`) make characters
+  large; a base zoom would crop the place and fight the shots.
+- Reuse over new names: drop / place are `put_down` without / with `to`; a bloom is `open` on
+  flowers; appear is `reveal`; only `hide` is new (no existing action takes a thing away).
+- Changing objects as layers over a base without them (not redrawing the base); tiles with a
+  fast drawer rather than one big picture (Manim warps whole pictures every frame).
+
+Known gaps / for Step 169+
+- Lint `hidden_speaker` measures iso front pictures as rectangles of tiles: a speaker behind a tree
+  is reported 100 % hidden (in the test village's close-up of Dot). Step 169's iso lint should
+  measure the pieces (or the picture's alpha) instead.
+- A lit lamp / glowing windows are graded by the light like the rest: at night they will look dim
+  (Step 169's mood tints: an ungraded glow).
+- Doors do not block routes when closed (open them for the story); outdoor `+` gaps have no gate.
+- Small things are tiny on the establishing view (use a shot or `follow`); lint `prop_overlap`
+  compares iso props by screen boxes (two things put on the same table spot overlap: true).
+- `wide` in 9:16 shows the place small in the middle of a tall frame (fit by width).
+
+How to test
+- One file at a time under `capped`: `test_iso_staging` (32 incl. 1 render, 4.5 s), `test_iso_place`
+  (54), `test_iso_moves` (34), `test_actions` (28), `test_actions_coverage` (83), `test_api`,
+  `test_cartoon_holding`, `test_cartoon_small_props`, `test_cartoon_shots`, `test_cartoon_stage`,
+  `test_platform_level`, `test_platform_moves`, `test_platform_props`, `test_platform_camera`,
+  `test_phase_o_review`, `test_platform_sounds`, `test_cartoon_props` (91), `test_word_anchors`,
+  `test_cartoon_lint`, `test_lint`, `test_timing_lint`, `test_cartoon_character`,
+  `test_cartoon_foley`, `test_includes`, `test_builtin_sets`, `test_cartoon_motion_effects`,
+  `test_cartoon_depth`, `test_cartoon_room`, `test_builtin_scenes` (202), `test_guide`, `test_docs`;
+  `test_schema` (63, capped3g). All pass. Baseline frames (`phase-q-baseline/make_baseline.sh` into
+  `check168`, `compare.py`): 31 frames, max difference 0.
+- Scratch project `<scratchpad>/iso/proj5` (village: close-ups, two-shot give, follow, pan, lamp and
+  windows, door, flowers, bridge appearing; room: letter placed on a table, room door, lamp, key
+  dropped; variant `shorts` 9:16); stills in `<scratchpad>/iso/step168/`. `proj3` re-rendered: as
+  before.

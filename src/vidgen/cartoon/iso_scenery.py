@@ -11,11 +11,11 @@ showing on top.
 from __future__ import annotations
 
 import zlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 from vidgen.cartoon.iso_drawing import Disc, Line, Poly, Shape, box_shapes, mix, shade
-from vidgen.cartoon.iso_objects import FRAME, GLASS, WOOD, ObjectLook, object_box, object_shapes
+from vidgen.cartoon.iso_objects import DOORWAY, FRAME, GLASS, WOOD, ObjectLook, object_box, object_shapes
 from vidgen.config import CHARACTER_INK
 from vidgen.world.iso import (
     BLOCK,
@@ -27,7 +27,10 @@ from vidgen.world.iso import (
     WALLS,
     WATER,
     WINDOW,
+    IsoObject,
     IsoPlace,
+    ObjectState,
+    default_state,
 )
 from vidgen.world.iso_view import Box3
 
@@ -61,11 +64,21 @@ class IsoColors:
 @dataclass(frozen=True)
 class IsoPiece:
     """Something that can hide what stands behind it: its ``name`` (a cell's ``block_3_4`` /
-    ``wall_3_4``, an object's own), the box it stands in and its shapes back to front."""
+    ``wall_3_4``, a map door's ``door_1``, an object's own), the box it stands in and its shapes
+    back to front as it is unless the scene changes it; ``kind``: an object's kind, ``door`` for a
+    map door (``None``: a block or a wall); ``redraw``: its shapes in another state (DESIGN.md §89.10)."""
 
     name: str
     box: Box3
     shapes: tuple[Shape, ...] = field(compare=False)
+    kind: str | None = None
+    redraw: Callable[[ObjectState], tuple[Shape, ...]] | None = field(default=None, compare=False)
+
+    def shapes_in(self, state: ObjectState) -> tuple[Shape, ...]:
+        """Its shapes in ``state`` (open, lit; whether it is shown is the scenery's business)."""
+        if self.redraw is None or state == default_state(self.kind or ""):
+            return self.shapes
+        return self.redraw(state)
 
 
 def _seed(column: int, row: int, salt: str = "") -> int:
@@ -229,11 +242,12 @@ def _block(place: IsoPlace, colors: IsoColors, column: int, row: int) -> IsoPiec
     return IsoPiece(f"block_{column + 1}_{row + 1}", Box3(column, row, low, column + 1, row + 1, z), tuple(shapes))
 
 
-def _wall(place: IsoPlace, colors: IsoColors, column: int, row: int) -> IsoPiece | None:
+def _wall(place: IsoPlace, colors: IsoColors, column: int, row: int, *, name: str | None = None, door_open: bool = False) -> IsoPiece | None:
     """A wall's cell: a core standing in from the cell's sides (flush with the place's edge) and
     an arm to each wall it joins, so runs, corners and crossings read as one wall; indoors a
     standing back wall with its skirting, window or door on the faces that look into the room,
-    or a cut-away wall showing its cut on top; outdoors a stone wall with a cap."""
+    or a cut-away wall showing its cut on top; outdoors a stone wall with a cap. ``name``: a map
+    door's (default ``wall_<column>_<row>``), its door open with ``door_open``."""
     height = place.wall_height(column, row)
     if height <= 0.0:
         return None   # a doorway in a cut-away wall, a gate in a garden wall: a way through
@@ -282,7 +296,7 @@ def _wall(place: IsoPlace, colors: IsoColors, column: int, row: int) -> IsoPiece
             if inside[side] and ground == WINDOW:
                 shapes += _wall_window(side, column, row, cx1, cy1, base)
             elif inside[side] and ground == DOOR:
-                shapes += _wall_door(side, column, row, cx1, cy1, base)
+                shapes += _wall_door(side, column, row, cx1, cy1, base, door_open)
     elif not place.indoor:
         for side in ("s", "e"):   # stone courses on the faces that show
             if side in joined:
@@ -294,7 +308,16 @@ def _wall(place: IsoPlace, colors: IsoColors, column: int, row: int) -> IsoPiece
                 else:
                     shapes.append(Line(((cx1, fy1 - 0.04, level), (cx1, fy0 + 0.04, level)), shade(face, 0.38), 0.5))
                 level -= 0.3
-    return IsoPiece(f"wall_{column + 1}_{row + 1}", Box3(fx0, fy0, min(lows), fx1, fy1, top_z), tuple(shapes))
+    box = Box3(fx0, fy0, min(lows), fx1, fy1, top_z)
+    if name is None:
+        return IsoPiece(f"wall_{column + 1}_{row + 1}", box, tuple(shapes))
+
+    def redraw(state: ObjectState) -> tuple[Shape, ...]:
+        found = _wall(place, colors, column, row, name=name, door_open=state.open)
+        assert found is not None
+        return found.shapes
+
+    return IsoPiece(name, box, tuple(shapes), "door", redraw)
 
 
 def _on_face(side: str, column: int, row: int, x1: float, y1: float, base: float, u0: float, u1: float, z0: float, z1: float) -> tuple:
@@ -316,29 +339,45 @@ def _wall_window(side: str, column: int, row: int, x1: float, y1: float, base: f
             Poly(sill, shade(FRAME, 0.15))]
 
 
-def _wall_door(side: str, column: int, row: int, x1: float, y1: float, base: float) -> list[Shape]:
+def _wall_door(side: str, column: int, row: int, x1: float, y1: float, base: float, is_open: bool = False) -> list[Shape]:
+    """A door on a standing wall's face; open: a dark doorway and the leaf swung into the room on
+    its hinge at the doorway's left edge (as seen)."""
     door = _on_face(side, column, row, x1, y1, base, 0.15, 0.85, 0.0, DOOR_HEIGHT - 0.25)
+    if is_open:
+        hinge_low, hinge_high = door[0], door[3]
+        into = (0.0, 0.62) if side == "s" else (0.62, 0.0)   # into the room, away from the face
+        along = (0.1, 0.0) if side == "s" else (0.0, -0.1)
+        leaf_low = (hinge_low[0] + into[0] + along[0], hinge_low[1] + into[1] + along[1], hinge_low[2])
+        leaf_high = (leaf_low[0], leaf_low[1], hinge_high[2])
+        return [Poly(door, DOORWAY), Poly((hinge_low, leaf_low, leaf_high, hinge_high), mix(WOOD, "#FFFFFF", 0.12))]
     knob = _on_face(side, column, row, x1, y1, base, 0.72, 0.72, 1.05, 1.05)[0]
     panel = _on_face(side, column, row, x1, y1, base, 0.27, 0.73, 1.35, DOOR_HEIGHT - 0.45)
     return [Poly(door, WOOD), Poly(panel, shade(WOOD, 0.18), False), Disc(knob, 0.05, "#F2C14E", False)]
 
 
 def place_pieces(place: IsoPlace, colors: IsoColors, looks: Mapping[str, ObjectLook]) -> list[IsoPiece]:
-    """The place's pieces: each raised cell, each wall that stands (not a doorway) and each
-    object (``looks``: its colours by name; a walkable rug or bridge too, it lies on top)."""
+    """The place's pieces: each raised cell, each wall that stands (not a doorway; a door that
+    opens named ``door_1``... as :meth:`~vidgen.world.iso.IsoPlace.doors`) and each object
+    (``looks``: its colours by name; a walkable rug or bridge too, it lies on top), as they are
+    unless the scene changes them (:meth:`IsoPiece.shapes_in`)."""
     pieces: list[IsoPiece] = []
+    doors = {(c, r): name for name, c, r in place.doors()}
     for r in range(place.rows):
         for c in range(place.columns):
             ground = place.ground(c, r)
             if ground in WALLS:
-                wall = _wall(place, colors, c, r)
+                wall = _wall(place, colors, c, r, name=doors.get((c, r)))
                 if wall is not None:
                     pieces.append(wall)
             elif ground != VOID and ground != WATER and place.cell(c, r).steps > 0:
                 pieces.append(_block(place, colors, c, r))
     for item in place.objects:
         base = place.floor_z(item.column, item.row)
-        pieces.append(IsoPiece(item.name, object_box(item, base), tuple(object_shapes(item, looks[item.name], base))))
+
+        def redraw(state: ObjectState, item: IsoObject = item, base: float = base) -> tuple[Shape, ...]:
+            return tuple(object_shapes(item, looks[item.name], base, state))
+
+        pieces.append(IsoPiece(item.name, object_box(item, base), redraw(default_state(item.kind)), item.kind, redraw))
     return pieces
 
 

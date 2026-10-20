@@ -521,7 +521,8 @@ def _x_of(mob: Mobject) -> Callable[[], float]:
 @action("pan")
 class Pan(Action):
     """Move the camera sideways to targets (a character) or to a place (``to``: a mark of a
-    ``stage``, or an x from 0 = left to 1 = right of the stage), keeping its zoom. It stays there;
+    ``stage``, or an x from 0 = left to 1 = right of the stage; on an iso place a spot, and the
+    camera moves up and down the picture too), keeping its zoom. It stays there;
     ``until: <beat>`` moves it back. Ends a ``follow``. The view never leaves the stage (the
     frame, in other scene types: there the camera pans only while zoomed in)."""
 
@@ -559,6 +560,18 @@ class Pan(Action):
         place's) x."""
         scene.follow_with_camera(None)
         end_shot(scene)
+        point = getattr(scene, "pan_point", None)   # an iso place: across and up the picture (DESIGN.md §89.10)
+        found = point([t.mobject for t in targets], self.options.to) if point is not None else None
+        if found is not None:
+            self.before = camera_view(scene)
+            frame = scene.camera.frame
+            center = np.array([*view_center_within(scene.camera_bounds(), found, frame.width, frame.height), 0.0])
+            if np.allclose(center[:2], frame.get_center()[:2], atol=1e-6):
+                return []
+            if self.options.cut:
+                frame.move_to(center)
+                return []
+            return [MoveCamera(scene, frame.width, center)]
         if targets:
             x = float(np.mean([_x_of(t.mobject)() for t in targets]))
         else:
@@ -582,17 +595,22 @@ class Pan(Action):
 class _MoveThenFollow(MoveCamera):
     """A :class:`MoveCamera` to ``x_of()`` after which the camera follows ``x_of``. Its end view
     is taken again on every frame, so it catches up with a target that moves meanwhile (a
-    character walking) and hands over to following without a jump."""
+    character walking) and hands over to following without a jump; with ``y_of`` (an iso place)
+    up and down too, until the camera's own follow takes over when the animations it plays with
+    are over."""
 
-    def __init__(self, scene: NarratedScene, width: float, center: np.ndarray, x_of: Callable[[], float], **kwargs: Any) -> None:
+    def __init__(self, scene: NarratedScene, width: float, center: np.ndarray, x_of: Callable[[], float],
+                 y_of: Callable[[], float] | None = None, **kwargs: Any) -> None:
         super().__init__(scene, width, center, **kwargs)
         self.x_of = x_of
+        self.y_of = y_of
         self.bounds = scene.camera_bounds
         self.target_y = float(center[1])
 
     def interpolate_mobject(self, alpha: float) -> None:
         end = self.target_copy
-        x, y = view_center_within(self.bounds(), (self.x_of(), self.target_y), end.width, end.height)
+        y = self.y_of() if self.y_of is not None else self.target_y   # an iso place: up and down the picture too (§89.10)
+        x, y = view_center_within(self.bounds(), (self.x_of(), y), end.width, end.height)
         end.move_to([x, y, 0.0])
         super().interpolate_mobject(alpha)
 
@@ -606,7 +624,9 @@ class Follow(Action):
     """Keep the camera on a character (its feet) as it moves, at the camera's zoom, inside the
     stage: from this beat to the end of the scene, or until ``until: <beat>`` starts (the camera
     then stays where it is). The camera first pans to it (``run_time``). A ``pan`` or another
-    ``follow`` ends it. On a platform level it follows gently, up and down too (DESIGN.md §86.10)."""
+    ``follow`` ends it. On a platform level it follows gently, up and down too (DESIGN.md §86.10);
+    on an iso place too, zooming in first until the character is as large as on a plain stage
+    (§89.10)."""
 
     run_time = 1.0
     reversible = True
@@ -624,6 +644,11 @@ class Follow(Action):
         end_shot(scene)
         follower = getattr(scene, "camera_follower", None)   # a stage's own way of following (a level's)
         self.x_of = (follower(targets[0].mobject) if follower is not None else None) or _x_of(targets[0].mobject)
+        start = getattr(scene, "follow_start", None)   # an iso place: zoom in on it first (DESIGN.md §89.10)
+        view = start(targets[0].mobject) if start is not None else None
+        if view is not None:
+            width, center, y_of = view
+            return [_MoveThenFollow(scene, width, center, self.x_of, y_of)]
         center = _sideways(scene, self.x_of())
         if center is None:
             scene.follow_with_camera(self.x_of)

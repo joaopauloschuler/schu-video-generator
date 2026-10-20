@@ -6005,22 +6005,76 @@ they hide what is behind them.
   colours are theme tokens like the props' (a house's walls `secondary`, its roof `accent`, a
   tree's leaves `tertiary`); `color` and `detail` change them. Named `house`, `house_2`... by
   default; the map's trees, bushes, flowers and fences are `tree_1`, `bush_1`... in map order.
+  How an object starts: `open: true` (a house: its door open), `open: false` (flowers: in bud),
+  `on: true` (a lamp lit; a house: its windows lit), `shown: false` (not there until a `reveal`;
+  nobody walks on a bridge that is not there). See **Changes to the place** below.
 - **`place: indoor`** makes a room: a wooden floor, walls in a warm cream, the walls along the
   back (the top and left edges of the map) standing with skirting boards, windows and doors,
   every other wall cut away low, like a dollhouse, its cut showing on top, so nothing in the
   room is hidden; a door in a cut-away wall is an opening. Outdoors the place stands on a slab
   of earth whose sides show along its front edges, walls are low garden walls of stone, and a
   door in one is a gap.
-- **Size.** The whole place fits the frame (a margin of 5 % on each side), so a larger map makes
-  everything smaller; a character is two tiles tall wherever it stands (no `depth`; `size` and
-  `character_size` are refused). In a 9:16 frame a wide place is small: keep it narrow.
+- **Size.** The whole place fits the frame (a margin of 5 % on each side): the **establishing
+  view** at the start, so a larger map makes everything smaller; a character is two tiles tall
+  wherever it stands (no `depth`; `size` and `character_size` are refused: the camera's shots
+  make characters large, see **The camera** below). In a 9:16 frame a wide place is small: keep it
+  narrow, and frame the speakers with shots.
 - **`colors`**: `grass`, `earth` (the slab and the sides of raised grass), `path`, `water`,
   `stone` (raised blocks and garden walls outdoors), `floor`, `tiles`, `wall`, `cut` (the top of
   the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the
   light grades the place like the rest of the set.
-- **Drawn once.** The place is drawn into pictures when the scene renders (finer than the
-  frame): one with everything, and for each character one with what stands in front of it where
-  it is (made again, once, for each new place a walk takes it to).
+- **Drawn as it is seen.** The place is drawn into pictures while the scene renders: one with
+  everything, for each character one with what stands in front of it where it is, and one for
+  each object that changes. Each picture is drawn in tiles, only where the camera looks, and as
+  fine as the camera's zoom needs (up to 10 times the frame's pixels in a close-up), so a shot
+  that zooms in stays sharp.
+- **The camera.** A stage's camera works on an iso place:
+  - The scene starts on the establishing view; `shot: wide` goes back to it for a beat.
+  - A beat's `shot:` frames characters as on any stage: `closeup pip` (head and shoulders, the
+    place behind sharp), `medium kit`, `two_shot pip kit`, `over_shoulder pip kit`. It holds
+    for its beat. On a 16 x 10 place a character is about a seventh of the frame's height
+    in the establishing view, too small for its face to read when it speaks (lint
+    `small_speaker`): give speaking beats a shot.
+  - `follow: pip` zooms in until the character is as large as on a plain stage (unless the camera
+    is closer already), then follows it gently, across and up and down the picture.
+  - `pan` with `to: <spot>` centres the view on the spot (on the object standing there), or on
+    its targets (`- {action: pan, to: well}`, `- pan: pip`), at the camera's zoom.
+  - `zoom` on characters (`- zoom: [pip, kit]`) frames a group.
+  The view never leaves the frame's area.
+- **Small things.** `props` on an iso place are small things to hold (`gift`, `letter`, `key`,
+  `flower`, `book`, `cake`, `cup`, `ball`, `basket`, `umbrella`... or an svg), standing `at` a
+  spot: on the ground, or on the table, bench, chair, bed, sofa, rock or well (its rim) standing
+  there. They are cut-outs like the characters, hidden by what stands in front of them, and handed
+  about with the stage's actions:
+
+  ```yaml
+  props:
+    - {prop: gift, at: bench}               # on the bench
+  actions:
+    - {walk_to: pip, to: bench}
+    - {pick_up: pip, to: gift}
+    - {meet: pip, with: kit}
+    - {give: pip, to: kit}
+    - {put_down: kit}                       # drops it on the ground beside it
+    - {put_down: kit, to: table}            # places it on the table (a spot next to it)
+  ```
+
+  Picking up, giving and putting down need the two to stand next to each other (in the next
+  cell, or next to the table a thing stands on): `vidgen validate` names the walk that fixes it
+  (`'pip' stands 3 cells from 'gift' (at row 4, column 6); it must stand next to it: walk_to first
+  (- walk_to: pip, to: bench)`). `throw` and `blow_away` are not for an iso place; `open`,
+  `close`, `let_go` and `pour` work as on any stage.
+- **Changes to the place.** Cause and effect, timed like any action (`at: 0.5`, `at: "@door"`):
+  - `open` / `close` a `house` (its door swings open), a door of a room's back wall (`door_1`,
+    `door_2`... in map order) or `flowers` (they bloom; closed, they are buds); `by: pip` has a
+    character reach for it.
+  - `switch_on` / `switch_off` a `lamp` (its lantern lights and a pool of light lies under it)
+    or a `house` (its windows glow).
+  - `reveal` an object that is not there (`shown: false`): a bridge appears over the pond, a
+    present under the tree; `hide` takes one away (`- hide: rock`). Nobody walks on a bridge
+    before it is there (or after it went).
+
+  The object's new look fades in over its old one, for the action's `run_time`.
 - **Moving.** On an iso place the characters go from cell to cell on the map, round what is in
   the way, never through water (a `bridge` crosses it), walls (a `+` door lets them through),
   objects (but a bridge or a rug) or off the place, up and down **one step at a time** (a block
@@ -6060,9 +6114,9 @@ they hide what is behind them.
   entered yet, or it has exited)`. A character with an `enter` waits off the place until then. No
   jumps to a place, `react` or `step_aside` (those are a platform level's).
 - **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `fog`, `width`,
-  `layers` (the background colour or picture shows around the place), the stage's `props` (use
-  `objects`). A set (`set: park`) gives an iso place its sky, light, ambience and weather, not
-  its props, layers or fog.
+  `layers` (the background colour or picture shows around the place), big `props` (a tree, a
+  sofa: use `objects`), a prop's `depth`, `lift` or `against`. A set (`set: park`) gives an iso
+  place its sky, light, ambience and weather, not its props, layers or fog.
 - Errors name the map's row and column, counted from the top left from 1: `iso: map row 2,
   column 7: unknown symbol '?'`, `'house' would stand on water at map row 4, column 5; move it,
   or make it smaller (size)`.
@@ -6394,7 +6448,7 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can flower`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -6764,7 +6818,7 @@ scenes:
 
 ##### Everyday small props (`let_go`, `pour`)
 
-Nine small things to hold, give, put down and set on a table (`lift`, as for any prop on
+Ten small things to hold, give, put down and set on a table (`lift`, as for any prop on
 furniture), drawn from simple shapes in the theme's colours:
 
 ![The small props in the default theme](gallery/media/small_props.png)
@@ -6780,6 +6834,7 @@ furniture), drawn from simple shapes in the theme's colours:
 | `balloons` | 1.1 | three balloons on strings tied to a small weight; `let_go` floats them away |
 | `vase` | 0.32 | a vase with three flowers |
 | `watering_can` | 0.22 | held by its handle; `pour` waters |
+| `flower` | 0.22 | one flower picked with its stem and a leaf, held by its stem: to give |
 
 - A **book, a letter or a gift** opens and closes like an umbrella (`- open: gift`, `open: true`
   in `props`), standing or in a hand; held open, it stays in front of its holder (only an open

@@ -19,6 +19,7 @@ from vidgen.api import *
 
 from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image
+from .stage_iso import IsoStaging, _moving_block
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -53,6 +54,9 @@ LEVEL_MAX_PIXELS = 24_000_000
 #: On a level the camera rises over (DESIGN.md §86.11): the night's stars fill this top share of
 #: the view and stay there as the camera moves (they are as far as the sky).
 LEVEL_STAR_SKY = 0.45
+#: The props an iso place takes: small things to hold, give and put down (DESIGN.md §89.10); its
+#: big things are its ready-made objects.
+ISO_ITEMS: tuple[str, ...] = (*SMALL_PROPS, "key", "ball", "cup", "box", "basket", "umbrella", "laptop", "napkin", "shell", "mushroom")
 #: A blocker stepping back off a level's path (``step_aside`` without ``to``, DESIGN.md §86.8):
 #: it walks to this depth (a little smaller), its feet this many tiles higher (behind the path).
 ASIDE_DEPTH = 0.3
@@ -100,7 +104,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; indoors: blackboard, school_desk, shelf_with_goods, till, wardrobe; on a platform level: key (opens a locked door, level.locks); vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can, flower; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; indoors: blackboard, school_desk, shelf_with_goods, till, wardrobe; on a platform level: key (opens a locked door, level.locks); vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -540,6 +544,32 @@ class IsoObjectParam(SceneParams):
     """Its main colour (a theme token or #hex); default the object's own (house walls secondary, roof accent...)."""
     detail: ThemeColor | None = None
     """Its second colour (a house's roof, a lamp's light, flower heads...)."""
+    open: bool | None = None
+    """A house: true starts its door open; flowers: false starts them in bud (the open / close actions change it later)."""
+    on: bool = False
+    """A lamp: true starts it lit; a house: its windows lit (switch_on / switch_off change it)."""
+    shown: bool = True
+    """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _on_key(cls, data: Any) -> Any:
+        if isinstance(data, dict) and True in data and "on" not in data:   # YAML 1.1 reads the bare key `on` as true
+            data = {("on" if key is True else key): value for key, value in data.items()}
+        return data
+
+    @model_validator(mode="after")
+    def _states(self) -> "IsoObjectParam":
+        if self.open is not None and self.object not in OPENING_KINDS:
+            raise ValueError(f"open is for a house (its door) or flowers (in bloom or in bud), not a {self.object}")
+        if self.on and self.object not in SWITCHED_KINDS:
+            raise ValueError(f"on is for a lamp or a house (its windows lit), not a {self.object}")
+        return self
+
+    def state(self) -> ObjectState:
+        """How it is at the start (DESIGN.md §89.10)."""
+        start = default_state(self.object)
+        return ObjectState(self.shown, start.open if self.open is None else self.open, self.on)
 
     def placing(self) -> ObjectPlacing:
         at = self.at if isinstance(self.at, str) else (self.at.column, self.at.row)
@@ -558,7 +588,7 @@ class StageIso(SceneParams):
     spots: dict[Annotated[str, Field(pattern=r"^[A-Za-z]$")], Identifier] = {}
     """Names for the map's letters, e.g. {w: well, d: door}; a letter without one is named by itself. Characters stand at spots (at: well); next to an object standing there."""
     objects: list[IsoObjectParam] = []
-    """Ready-made objects: {object, at, name, facing, size, color, detail}, e.g. {object: house, at: home}."""
+    """Ready-made objects: {object, at, name, facing, size, color, detail, open, on, shown}, e.g. {object: house, at: home}."""
     colors: dict[Literal["grass", "earth", "path", "water", "stone", "floor", "tiles", "wall", "cut"], ThemeColor] = {}
     """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
 
@@ -574,6 +604,21 @@ class StageIso(SceneParams):
         """The world's :class:`~vidgen.world.iso.IsoPlace` with its objects (:class:`VidgenError`
         naming the map's row and column, or the object, when it does not parse)."""
         return _parsed_iso(self.map, tuple(sorted(self.spots.items())), self.heights, self.place, tuple(item.placing() for item in self.objects))
+
+    def object_kinds(self) -> dict[str, str]:
+        """The objects of the place (the map's and the placed ones) and its doors that open
+        (``door``, DESIGN.md §89.10) by name: their kinds."""
+        place = self.parsed()
+        return {**{item.name: item.kind for item in place.objects}, **{name: "door" for name, _, _ in place.doors()}}
+
+    def states(self) -> dict[str, ObjectState]:
+        """The placed objects that do not start as their kind does (open, lit, not there) by name."""
+        placed = self.parsed().objects[-len(self.objects):] if self.objects else ()
+        return {item.name: param.state() for param, item in zip(self.objects, placed) if param.state() != default_state(param.object)}
+
+    def changeable_names(self) -> list[str]:
+        """The names an action may change or name: the objects and the doors that open."""
+        return list(self.object_kinds())
 
 
 class LevelTiles(Group):
@@ -600,7 +645,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(NarratedScene):
+class Stage(IsoStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -642,7 +687,10 @@ class Stage(NarratedScene):
     above at an angle: a small map with heights (grass, paths, water, walls, raised blocks and
     steps, trees, fences; letters are spots), ready-made objects (a house, a well, a bench, a
     bed...), outdoors on a slab of earth or indoors with the room's front walls cut away; the
-    characters stand upright at its spots, hidden by what stands in front of them.
+    characters stand upright at its spots, hidden by what stands in front of them; shots frame
+    them close, ``follow`` zooms in on one, small props stand at its spots and are handed about,
+    and its houses, doors, lamps and flowers open, light and bloom (``reveal`` / ``hide`` an
+    object, a bridge).
     ``character_size`` (``small``, ``medium``, ``large``) sets how big the characters (and a
     level's tiles and props) are.
 
@@ -695,7 +743,8 @@ class Stage(NarratedScene):
         """The names of the characters, then of the props, on the stage, then the characters'
         parts (``kit.arm_left``; only with an active project, which knows the parts)."""
         names = [c.name for c in params.characters]
-        return names + params.prop_names() + part_target_names(names)
+        objects = params.iso.changeable_names() if getattr(params, "iso", None) is not None else []   # an iso place's objects (§89.10)
+        return names + params.prop_names() + objects + part_target_names(names)
 
     class Params(SceneParams):
         image: str | None = None
@@ -840,14 +889,30 @@ class Stage(NarratedScene):
             characters stand at its spots, with no depth (DESIGN.md §89.7)."""
             assert self.iso is not None
             given = [key for key in ("level", "room", "water", "fog") if getattr(self, key) is not None]
-            given += [key for key in ("width", "props", "layers") if key in self.model_fields_set and getattr(self, key) not in ([], 1.0)]
+            given += [key for key in ("width", "layers") if key in self.model_fields_set and getattr(self, key) not in ([], 1.0)]
             if given:
                 hints = {"level": "a side-view platform level is its own kind of stage", "room": "an indoor place is iso: {place: indoor}",
                          "water": "water is ~ on the map", "fog": "fog lies in bands by depth on a flat stage",
-                         "width": "the whole place fits the frame", "props": "use iso.objects (ready-made objects standing in the place)",
-                         "layers": "the background colour or picture shows around the place"}
+                         "width": "the whole place fits the frame", "layers": "the background colour or picture shows around the place"}
                 raise ValueError(f"an iso place cannot have {given[0]} ({hints[given[0]]}); remove it, or the iso")
             spots = self.iso.parsed().spot_names()
+            taken = set(self.iso.changeable_names()) | set(spots)
+            for k, (prop, name) in enumerate(zip(self.props, self.prop_names())):
+                if prop.svg is None and prop.prop not in ISO_ITEMS:
+                    raise ValueError(f"props[{k}]: on an iso place the props are small things to hold ({', '.join(ISO_ITEMS)}, or an svg); "
+                                     f"a {prop.prop} is a ready-made object (iso.objects: house, tree, bench, lamp...) or not for an iso place")
+                moved = [key for key in ("depth", "lift", "against") if key in prop.model_fields_set]
+                if moved:
+                    raise ValueError(f"props[{k}]: on an iso place a small thing stands at a spot (on a table or a bench there); remove {moved[0]}")
+                if not isinstance(prop.at, str) or prop.at not in spots:
+                    raise ValueError(f"props[{k}].at: on an iso place a small thing stands at a spot of the map, not at "
+                                     f"'{prop.at}' (spots: {', '.join(spots) or 'none: put a letter on the map'})")
+                if name in taken:
+                    raise ValueError(f"props[{k}]: '{name}' is also the name of an object, a door or a spot of the place; give the prop another name")
+            characters = {c.name for c in self.characters}
+            for name in self.iso.changeable_names():
+                if name in characters:
+                    raise ValueError(f"iso: '{name}' is the name of a character and of an object of the place; give the object another name")
             for k, member in enumerate(self.characters):
                 if member.depth:
                     raise ValueError(f"characters[{k}]: an iso place has no depth (things keep their size wherever they stand); remove depth")
@@ -1118,6 +1183,7 @@ class Stage(NarratedScene):
         frame = stage_frame(project, params)
         names = [c.name for c in params.characters] + params.prop_names()
         beats = [b.id for b in spec.beats]
+        iso = params.iso is not None   # an iso place's distances are cells: its own replay checks them (§89.10)
 
         def matched(use: Any) -> tuple[str, ...]:
             return tuple(n for n in names if any(fnmatchcase(n, p) for p in use.config.targets()))
@@ -1127,9 +1193,9 @@ class Stage(NarratedScene):
         left = -frame.stage_width / 2
         problems = holding_problems(
             steps,
-            characters={name: (place.x, place.height) for name, place in frame.places.items()},
-            props=dict(frame.props),
-            place_x=frame.place_x,
+            characters={name: (None if iso else place.x, place.height) for name, place in frame.places.items()},
+            props={name: None for name in frame.props} if iso else dict(frame.props),
+            place_x=(lambda _: None) if iso else frame.place_x,
             to_fraction=lambda x: min(max((x - left) / frame.stage_width, 0.0), 1.0),
             entering=[n for u in uses if u.config.action == "enter" for n in matched(u)],
             seat_places=frame.seat_places,
@@ -1173,23 +1239,29 @@ class Stage(NarratedScene):
     def _iso_move_problems(spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
         """On an iso place, the moves replayed in order with the rules (DESIGN.md §89.9,
         :func:`iso_move_problems`): an unknown spot, a cell nobody can stand on, no way there, a
-        move of a character not on the place, naming the beat and why."""
+        move of a character not on the place, a small thing picked up, given or put down from too
+        far, naming the beat and why; objects that are not there are not walked over (§89.10)."""
         if params.iso is None:
             return []
         characters = [c.name for c in params.characters]
         beats = [b.id for b in spec.beats]
         ordered = [u for _, u in sorted(enumerate(uses), key=lambda iu: (beats.index(iu[1].beat), iu[1].config.at, iu[0]))]
+        objects = params.iso.changeable_names()
         steps = []
         for use in ordered:
             action = use.config.action
-            if action not in ISO_MOVES:
+            if action not in ISO_MOVES | ISO_ITEM_ACTIONS | ISO_PLACE_CHANGES:
                 continue
-            moved = tuple(n for n in characters if any(fnmatchcase(n, pattern) for pattern in use.config.targets()))
-            plan = use.action._iso_plan()
+            names = objects if action in ISO_PLACE_CHANGES else characters
+            moved = tuple(n for n in names if any(fnmatchcase(n, pattern) for pattern in use.config.targets()))
+            plan = use.action._iso_plan() if action in ISO_MOVES else dict(use.config.options)
             steps.append(IsoStep(use.location, use.beat, "walk_to" if action == "run_to" else action, moved,
                                  {**plan, "at": use.config.at}))
         entering = [n for step in steps if step.action == "enter" for n in step.names]
-        return iso_move_problems(params.iso.parsed(), {c.name: str(c.at) for c in params.characters}, steps, entering=entering)
+        items = {name: str(prop.at) for name, prop in zip(params.prop_names(), params.stage_props())}
+        hidden = [name for name, state in params.iso.states().items() if not state.shown]
+        return iso_move_problems(params.iso.parsed(), {c.name: str(c.at) for c in params.characters}, steps, entering=entering,
+                                 items=items, hidden=hidden)
 
     @staticmethod
     def _fruit_count_problems(params: Any, uses: list[Any]) -> list[tuple[str, str]]:
@@ -1718,9 +1790,10 @@ class Stage(NarratedScene):
 
     def camera_follower(self, mob: Mobject) -> SmoothFollow | None:
         """How the camera follows ``mob`` (the ``follow`` action, ``level.follow``): on a level
-        gently, with a dead zone, up and down too (:class:`~vidgen.camera.SmoothFollow`,
-        DESIGN.md §86.10); ``None`` elsewhere (the camera keeps its centre on it)."""
-        if not self.on_level:
+        and on an iso place gently, with a dead zone, up and down too
+        (:class:`~vidgen.camera.SmoothFollow`, DESIGN.md §86.10, §89.10); ``None`` elsewhere (the
+        camera keeps its centre on it)."""
+        if not self.on_level and not self.on_iso:
             return None
         if isinstance(mob, Character):
             def x_of() -> float:
@@ -1750,6 +1823,8 @@ class Stage(NarratedScene):
         frame = self.camera.frame
         start_x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
         frame.move_to([*view_center_within(self.camera_bounds(), (start_x, 0.0), frame.width, frame.height), 0.0])
+        if p.iso is not None:   # the place's tiles drawn fast; before the light wraps the camera (§89.10)
+            install_tile_drawing(self.renderer.camera)
         self._start_light()
         layers = self._layers()
         #: the layers by name, in the order given (DESIGN.md §69.7)
@@ -1805,6 +1880,8 @@ class Stage(NarratedScene):
                 item.shift(np.array([*place_at.feet, 0.0]) - item.feet())
                 item.stage_depth = place_at.depth   # its place in the draw order (walks in depth, §69.44)
                 item.raised = props[place_at.name].resolved_lift() + props[place_at.name].resolved_hang() > 0
+                if p.iso is not None:   # where it stands on the place (§89.10)
+                    item.iso_feet = iso_item_point(p.iso.parsed(), str(props[place_at.name].at))
                 self.props[place_at.name] = item
                 on_stage.append((place_at.name, item))
                 continue
@@ -1864,6 +1941,8 @@ class Stage(NarratedScene):
             if isinstance(whole.mobject, Character):
                 for part in whole.mobject.parts:
                     self.target(f"{whole.name}.{part}", whole.mobject.parts[part], entrance=lambda t=whole: self.entrance(t))
+        for name, holder in getattr(self, "iso_objects", {}).items():   # an iso place's objects the scene changes (§89.10)
+            self.target(name, holder, entrance=lambda name=name: self.iso_reveal(name))
         cast_by = {id(c.mobject) for c in (moving.casters if moving is not None else [])}
         first_moving = next((k for k, t in enumerate(targets) if id(t.mobject) in cast_by), None)
 
@@ -2368,6 +2447,8 @@ class Stage(NarratedScene):
         names = [name for name in getattr(self, "living", {}) if any(fnmatchcase(name, pat) for pat in patterns)]
         for name in names:
             self.living[name].switch(on, time)
+        if self.on_iso and self.iso_switch(patterns, on, time) and self._foley_on():   # a lamp, a house's windows (§89.10)
+            self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
         if not names or not self._foley_on():
             return
         if any(self.living[name].kind not in ("fireplace", *(("phone",) if on else ())) for name in names):
@@ -3031,172 +3112,6 @@ class Stage(NarratedScene):
         self._watch_draw_order()
         return walk
 
-    @property
-    def on_iso(self) -> bool:
-        """Whether the stage is an iso place: walks go from cell to cell on its map (§89.9)."""
-        return self.params.iso is not None
-
-    def iso_walks(self, action: str, character: Character, options: dict[str, Any], *, pace: Any, gait: Gait = WALKING) -> list[IsoWalk]:
-        """The walks of a move ``action`` of ``character`` on the iso place (DESIGN.md §89.9):
-        ``walk_to`` / ``run_to`` (``options`` ``to``, or ``after`` and ``gap``), ``enter`` (``to``,
-        ``door``, ``side``), ``exit`` (``to``: a side, ``door``), ``wander`` (``around``, ``radius``,
-        ``stops``, ``seed``) or ``meet`` (``with``: the other walks too), planned by the rules
-        (:func:`~vidgen.world.iso_moves.plan_move`) from where everyone stands once the moves
-        planned so far are over; ``pace(character)``: its speed. A walk that goes nowhere is left
-        out. Entering over the place's edge or out of a door it fades in, leaving it fades out
-        and is moved off stage. :class:`VidgenError` naming the scene, the beat and the problem."""
-        p = self.params
-        assert p.iso is not None
-        beat = self.current_beat
-        now = float(self.renderer.time)
-        step = IsoStep("", beat.id if beat is not None else "", action, (character.name,), options)
-        planned = {name: route for name, (time, route) in self._iso_planned.items() if abs(time - now) < 1e-9}
-        try:
-            routes = plan_move(p.iso.parsed(), self.iso_cells, step, character.name, homes={c.name: str(c.at) for c in p.characters},
-                               leader_routes=planned)
-        except VidgenError as exc:
-            raise self._level_error(exc) from None
-        left, right = self.camera_bounds()[:2]
-        walks: list[IsoWalk] = []
-        for name, route in routes.items():
-            self._iso_planned[name] = (now, route)
-            figure = self.cast[name]
-            passing = action in ("enter", "exit")
-            if len(route.points) < 2 and not passing:
-                continue
-            extra: dict[str, Any] = {} if len(route.points) > 1 else {"run_time": 2 * DOOR_FADE_SECONDS}
-            if action == "exit":
-                side = nearer_side(self.iso_view.point(*route.end)[0], left, right)
-                extra["park_x"] = offstage_x(side, left, right, figure.width / 2)
-            walk = IsoWalk(figure, route, self.iso_view, speed=pace(figure), gait=gait, entering=action == "enter", **extra)
-            if passing:
-                fade = DOOR_FADE_SECONDS
-                if route.cells[0 if action == "enter" else -1] is None:   # over the edge: it fades while it walks the step beyond
-                    a, b = route.leg(0 if action == "enter" else len(route.points) - 2)
-                    fade = max(walk.run_time * math.dist(a[:2], b[:2]) / route.length, DOOR_FADE_SECONDS)
-                if action == "enter":
-                    walk.fade_in = fade
-                else:
-                    walk.fade_out = fade
-            walks.append(walk)
-        return walks
-
-    def iso_moved(self, walks: list[IsoWalk], *, leaving: bool = False) -> None:
-        """Record where the walkers of ``walks`` (from :meth:`iso_walks`) stand once they are over
-        (``leaving``: off the place): their cells for the next moves' plans, the cell top under
-        their feet as their ground; the draw order is kept from now on (:meth:`_iso_keep_order`)."""
-        for walk in walks:
-            name = walk.mobject.name
-            self.iso_cells[name] = None if leaving else walk.route.end_cell
-            self.grounds[name] = self.iso_view.point(*walk.route.end)[1]
-        self._watch_draw_order()
-
-    def _iso_scenery(self, placements: list[StagePlacement]) -> list[Mobject]:
-        """An iso place drawn into pictures (DESIGN.md §89.7, §89.9): returns the whole place, for
-        the backdrop; each character's front picture (the pieces that hide part of it where it
-        stands) goes in :attr:`_iso_after` under its name, drawn right after it."""
-        p = self.params
-        assert p.iso is not None
-        place = p.iso.parsed()
-        #: where the place lies in the frame, and its pictures
-        self.iso_view = iso_view(place, self.frame_width, self.frame_height)
-        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()})
-        looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
-                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
-                 for item in place.objects}
-        density = 1.0 if self.is_draft else LEVEL_OVERSAMPLE
-        self.iso_scenery = IsoScenery(place, colors, looks, self.iso_view, config.pixel_height / self.frame_height * density,
-                                      outline=self.drawing.outline_factor)
-        #: each character's front picture now: (the pieces in it, its picture; ``None``: nothing
-        #: hides it), and the front pictures made so far by (character, pieces)
-        self._iso_fronts: dict[str, tuple[tuple[int, ...], ImageMobject | None]] = {}
-        self._iso_front_pictures: dict[tuple[str, tuple[int, ...]], ImageMobject] = {}
-        members = {c.name: c for c in p.characters}
-        for pl in placements:
-            if pl.kind == "character":
-                key = self.iso_scenery.over(standing_box(place, iso_stand(place, str(members[pl.name].at)), ISO_CHARACTER_HEIGHT * members[pl.name].scale))
-                front = self._iso_front(pl.name, key)
-                self._iso_fronts[pl.name] = (key, front)
-                if front is not None:
-                    self._iso_after[pl.name] = [front]
-        return [self._iso_picture(self.iso_scenery.canvas, self.iso_scenery.base, "iso_place")]
-
-    def _iso_picture(self, canvas: Any, image: Any, name: str) -> ImageMobject:
-        """``image`` drawn on ``canvas`` (a part of the place's) as a picture where it lies in the frame."""
-        picture = ImageMobject(np.array(image))
-        picture.scale_to_fit_width(canvas.width / canvas.scale * self.iso_view.unit)
-        picture.move_to([*canvas_center(canvas, self.iso_view), 0.0])
-        picture.name = name
-        return picture
-
-    def _iso_front(self, name: str, key: tuple[int, ...]) -> ImageMobject | None:
-        """``name``'s front picture of the pieces ``key`` (made once; ``None`` for no pieces), graded by the light."""
-        if not key:
-            return None
-        if (name, key) not in self._iso_front_pictures:
-            front = self._iso_picture(*self.iso_scenery.front(key), f"iso_front_{name}")
-            mark_lit(front)
-            self._iso_front_pictures[(name, key)] = front
-        return self._iso_front_pictures[(name, key)]
-
-    def _iso_body(self, character: Character) -> Box3:
-        """The box ``character`` stands in on the place now (tile units)."""
-        member = next(c for c in self.params.characters if c.name == character.name)
-        return standing_box(self.params.iso.parsed(), character.iso_feet, ISO_CHARACTER_HEIGHT * member.scale)
-
-    def _iso_keep_order(self) -> bool:
-        """On an iso place, each frame while characters walk (DESIGN.md §89.9): each character's
-        front picture shows the pieces in front of it where it is now (swapped when they change),
-        and the characters with their front pictures are drawn in the order of their boxes
-        (:func:`draw_order`); whether anything changed. A new front picture joins what Manim
-        redraws on each frame of the animation playing."""
-        changed = False
-        added: list[Mobject] = []
-        for name, figure in self.cast.items():
-            key, front = self._iso_fronts[name]
-            new_key = self.iso_scenery.over(self._iso_body(figure))
-            if new_key == key:
-                continue
-            new = self._iso_front(name, new_key)
-            if front is not None and front in self.mobjects:
-                at = self.mobjects.index(front)
-                self.mobjects.remove(front)
-            else:
-                block = _moving_block(self, figure)
-                at = self.mobjects.index(block[-1]) + 1 if block else len(self.mobjects)
-            if new is not None:
-                self.mobjects.insert(at, new)
-                added.append(new)
-            self._iso_fronts[name] = (new_key, new)
-            changed = True
-        names = list(self.cast)
-        order = [names[k] for k in draw_order([self._iso_body(self.cast[n]) for n in names])]
-        shown = sorted((n for n in names if self.cast[n] in self.mobjects), key=lambda n: self.mobjects.index(self.cast[n]))
-        wanted = [n for n in order if n in shown]
-        if wanted != shown:
-            blocks = {n: [*_moving_block(self, self.cast[n]), *([self._iso_fronts[n][1]] if self._iso_fronts[n][1] in self.mobjects else [])]
-                      for n in shown}
-            taken = {id(m) for block in blocks.values() for m in block}
-            at = min(self.mobjects.index(blocks[n][0]) for n in shown)
-            rest = [m for m in self.mobjects if id(m) not in taken]
-            before = sum(1 for m in self.mobjects[:at] if id(m) not in taken)
-            self.mobjects[:] = rest[:before] + [m for n in wanted for m in blocks[n]] + rest[before:]
-            self._shadows_first()
-            changed = True
-        if added and getattr(self, "animations", None):
-            self.moving_mobjects = [*self.moving_mobjects, *(m for front in added for m in front.get_family())]
-        return changed
-
-    def _iso_redrawn(self, animations: tuple[Animation, ...]) -> set[int]:
-        """While a character walks on an iso place: the ids of the characters, their front
-        pictures and the moving shadows (their order and the front pictures change, §89.9)."""
-        if self.params.iso is None or not any(isinstance(anim, IsoWalk) for anim in animations):
-            return set()
-        things: list[Mobject] = [*self.cast.values(), *(front for _, front in self._iso_fronts.values() if front is not None)]
-        if getattr(self, "_moving_shadows", None) is not None:
-            things.append(self._moving_shadows)
-        return {id(m) for thing in things for m in thing.get_family()}
-
     def _level_tiles(self) -> LevelTiles:
         """The level's tiles (named ``level``), drawn once into pictures of :data:`CHUNK_COLUMNS`
         columns each (``level_1``, ``level_2``...); only the chunks in view are drawn on each frame."""
@@ -3268,24 +3183,6 @@ class Stage(NarratedScene):
             mob.set_fill(resolve_color(item.color, self.theme), opacity=1.0)
             shapes.add(mob)
         return shapes
-
-
-def _moving_block(scene: Any, mover: Mobject) -> list[Mobject]:
-    """``mover`` with what moves with it in ``scene``'s draw order: a walker and the props right
-    after it (or right before it: an open umbrella, balloons) that it holds; a vehicle, its riders
-    and the props they hold (DESIGN.md §69.52)."""
-    at = next((k for k, m in enumerate(scene.mobjects) if m is mover), None)
-    if at is None:
-        return []
-    if isinstance(mover, Character):
-        start, end = at, at + 1
-        while start > 0 and getattr(scene.mobjects[start - 1], "held_by", None) == mover.name:
-            start -= 1
-        while end < len(scene.mobjects) and getattr(scene.mobjects[end], "held_by", None) == mover.name:
-            end += 1
-        return scene.mobjects[start:end]
-    riders = {name for name, figure in scene.cast.items() if getattr(figure, "riding", None) == getattr(mover, "name", None)}
-    return [m for m in scene.mobjects if m is mover or (isinstance(m, Character) and m.name in riders) or getattr(m, "held_by", None) in riders]
 
 
 def _box(mob: Mobject) -> tuple[float, float, float, float] | None:

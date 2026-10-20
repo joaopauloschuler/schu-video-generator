@@ -561,13 +561,14 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_move_problems,
     level_world,
 )
-from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, IsoPlace, ObjectPlacing, parse_iso_map, place_objects  # noqa: E402
+from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
 from vidgen.world.iso_view import Box3, draw_order, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
-from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook  # noqa: E402
+from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook, object_box  # noqa: E402
 from vidgen.cartoon.iso_scenery import IsoColors  # noqa: E402
-from vidgen.cartoon.iso_stage import IsoScenery, IsoView, body_box, canvas_center, iso_layout, iso_stand, iso_view, map_fraction, standing_box  # noqa: E402
-from vidgen.world.iso_moves import ISO_MOVES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move  # noqa: E402
+from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, standing_box  # noqa: E402
+from vidgen.cartoon.iso_pictures import IsoTiles, install_tile_drawing  # noqa: E402
+from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move  # noqa: E402
 from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
@@ -1329,6 +1330,17 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "IsoColors",
     "IsoRoute",
     "IsoScenery",
+    "IsoTiles",
+    "object_box",
+    "install_tile_drawing",
+    "ISO_FOLLOW_SIZE",
+    "OPENING_KINDS",
+    "SWITCHED_KINDS",
+    "ObjectState",
+    "default_state",
+    "follow_width",
+    "iso_item_point",
+    "item_box",
     "IsoStep",
     "IsoView",
     "body_box",
@@ -1337,6 +1349,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "iso_move_problems",
     "iso_stand",
     "ISO_MOVES",
+    "ISO_ITEM_ACTIONS",
+    "ISO_PLACE_CHANGES",
+    "ISO_REACH",
     "WANDER_RADIUS",
     "WANDER_STOPS",
     "IsoWalk",

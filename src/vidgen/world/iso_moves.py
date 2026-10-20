@@ -315,7 +315,9 @@ def meet_routes(place: IsoPlace, a: Cell, b: Cell, *, crowd: Collection[Cell] = 
 def follow_route(place: IsoPlace, start: Cell, leader: Cell, leader_route: IsoRoute | None = None, *, gap: int = 1,
                  crowd: Collection[Cell] = (), who: str = "it", whom: str = "the leader") -> IsoRoute:
     """A walk after a leader: to where it stands (``leader``) and on along its route when it walks
-    now (``leader_route``), stopping ``gap`` cells behind where the leader stops."""
+    now (``leader_route``), stopping ``gap`` cells behind where the leader stops; one cell right
+    behind it on the picture (where the leader would hide it) takes a step aside, to a cell next
+    to the leader half a tile to the side (DESIGN.md §89.10)."""
     cells = [cell for cell in (leader_route.cells if leader_route is not None else (leader,)) if cell is not None]
     approach = find_route(place, start, cells[0], crowd=set(crowd) - {cells[0]}, who=who, to=whom)
     path = list(approach.cells) + cells[1:]
@@ -323,6 +325,14 @@ def follow_route(place: IsoPlace, start: Cell, leader: Cell, leader_route: IsoRo
         last = len(path) - 1 - path[::-1].index(start)
         path = path[last:]
     path = path[:max(len(path) - gap, 1)]
+    end, last = path[-1], cells[-1]
+    if end != last and abs(end[0] - last[0]) == 1 and end[0] - last[0] == end[1] - last[1]:
+        # right behind (or in front of) the leader on the picture, it would be hidden (or hide
+        # it): a step aside, to a cell beside the leader half a tile to the side
+        aside = [cell for cell in ((end[0], last[1]), (last[0], end[1]))
+                 if place.is_standable(*cell) and can_step(place, end, cell) and cell not in set(crowd) - {start}]   # type: ignore[arg-type]
+        if aside:
+            path.append(aside[0])
     return route_through(place, path)   # type: ignore[arg-type]
 
 
@@ -416,12 +426,19 @@ def exit_route(place: IsoPlace, start: Cell, *, side: str | None = None, door: C
 
 #: The moves :func:`iso_move_problems` replays.
 ISO_MOVES = frozenset({"walk_to", "run_to", "enter", "exit", "wander", "meet"})
+#: What else :func:`iso_move_problems` replays (DESIGN.md §89.10): small things handed about
+#: (who stands next to what), and objects coming and going (a bridge to walk over).
+ISO_ITEM_ACTIONS = frozenset({"pick_up", "give", "put_down"})
+ISO_PLACE_CHANGES = frozenset({"reveal", "hide"})
+#: How far (in cells across, 8 neighbours) a character reaches to pick up, give or put down.
+ISO_REACH = 1
 
 
 @dataclass(frozen=True)
 class IsoStep:
     """One move of a scene, in play order: where it is written (``location``), its beat, the
-    action, the characters it moves and its options."""
+    action, the characters it moves (the objects a ``reveal`` or ``hide`` changes) and its
+    options."""
 
     location: str
     beat: str
@@ -483,18 +500,95 @@ def plan_move(place: IsoPlace, cells: Mapping[str, Cell | None], step: IsoStep, 
     return {name: find_route(place, here, goal, crowd=crowd, who=who, to=label)}
 
 
-def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequence[IsoStep], *, entering: Collection[str] = ()) -> list[tuple[str, str]]:
+def _cells_apart(cell: Cell, cells: Collection[Cell]) -> int:
+    """How many cells across (8 neighbours) ``cell`` is from the nearest of ``cells``."""
+    return min(max(abs(cell[0] - c), abs(cell[1] - r)) for c, r in cells)
+
+
+def _cell_words(cell: Cell) -> str:
+    return f"row {cell[1] + 1}, column {cell[0] + 1}"
+
+
+def _footprint(place: IsoPlace, cell: Cell) -> list[Cell]:
+    """The cells a small thing at ``cell`` can be reached from next to: the whole object it
+    stands on (a table 2 cells long), else its cell."""
+    item = place.object_at(*cell)
+    return item.cells() if item is not None else [cell]
+
+
+def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequence[IsoStep], *, entering: Collection[str] = (),
+                      items: Mapping[str, str] | None = None, hidden: Collection[str] = ()) -> list[tuple[str, str]]:
     """The moves of a scene replayed in order on its place (``starts``: each character's spot;
     ``entering``: off the place until their ``enter``): a spot it does not have, a cell nobody can
     stand on, no way there, a move of a character not on the place, as ``(location.option,
     message naming the beat)``. A character with a problem is no longer followed, nor one whose
-    move names a spot the place does not have (the action's own check says so)."""
+    move names a spot the place does not have (the action's own check says so).
+
+    Also (DESIGN.md §89.10): ``items`` (small thing -> its spot) picked up, given and put down
+    by characters standing next to them (:data:`ISO_REACH`), and the objects ``hidden`` at the
+    start or by a ``hide`` (not there until a ``reveal``): routes go round where they would stand
+    and do not cross a bridge that is not there."""
     cells: dict[str, Cell | None] = {name: None if name in entering else place.stand_cell(spot) for name, spot in starts.items()}
+    spots = set(place.spot_names())
+    things: dict[str, Cell | None] = {name: (place.spot(spot).column, place.spot(spot).row) for name, spot in (items or {}).items() if spot in spots}
+    held: dict[str, list[str]] = {}
+    gone = set(hidden)
     lost: set[str] = set()
     problems: list[tuple[str, str]] = []
     planned: dict[tuple[str, str], dict[str, IsoRoute]] = {}
-    spots = set(place.spot_names())
+
+    def too_far(step: IsoStep, who: str, here: Cell, what: str, there: Collection[Cell], hint: str) -> bool:
+        apart = _cells_apart(here, there)
+        if apart <= ISO_REACH:
+            return False
+        problems.append((f"{step.location}.to", f"beat '{step.beat}': '{who}' stands {apart} cells from {what}; it must stand next to "
+                         f"it: {hint}"))
+        return True
+
     for step in steps:
+        if step.action in ISO_PLACE_CHANGES:
+            gone = (gone | set(step.names)) if step.action == "hide" else (gone - set(step.names))
+            continue
+        now = place.without(gone)
+        if step.action in ISO_ITEM_ACTIONS:
+            for who in step.names:
+                here = cells.get(who)
+                if here is None or who in lost:
+                    continue
+                o = step.options
+                if step.action == "pick_up":
+                    thing = str(o.get("to"))
+                    there = things.get(thing)
+                    if there is None:
+                        continue   # held by someone (the holding replay says so) or not a small thing of the place
+                    start = (items or {}).get(thing)
+                    at_start = start is not None and there == (place.spot(start).column, place.spot(start).row)
+                    goal = start if at_start else f"{{column: {there[0] + 1}, row: {there[1] + 1}}}"
+                    hint = f"walk_to first (- walk_to: {who}, to: {goal})"
+                    if not too_far(step, who, here, f"'{thing}' (at {_cell_words(there)})", _footprint(now, there), hint):
+                        things[thing] = None
+                        held.setdefault(who, []).append(thing)
+                elif step.action == "give":
+                    other = str(o.get("to"))
+                    there = cells.get(other)
+                    if there is None or not held.get(who):
+                        continue
+                    if not too_far(step, who, here, f"'{other}'", [there], f"walk_to first (- walk_to: {who}, to: {other}) or meet "
+                                   f"(- meet: {who}, with: {other})"):
+                        thing = str(o["prop"]) if o.get("prop") in held[who] else held[who][-1]
+                        held[who].remove(thing)
+                        held.setdefault(other, []).append(thing)
+                else:
+                    if not held.get(who):
+                        continue
+                    thing = str(o["prop"]) if o.get("prop") in held[who] else held[who][-1]
+                    to = o.get("to")
+                    there = (place.spot(str(to)).column, place.spot(str(to)).row) if isinstance(to, str) and to in spots else here
+                    if not too_far(step, who, here, f"'{to}' (where it puts '{thing}' down)", _footprint(now, there),
+                                   f"walk_to first (- walk_to: {who}, to: {to})"):
+                        held[who].remove(thing)
+                        things[thing] = there
+            continue
         batch = planned.setdefault((step.beat, str(step.options.get("at", ""))), {})
         for name in step.names:
             moved = {name, str(step.options.get("with"))} if step.action == "meet" else {name}
@@ -504,7 +598,7 @@ def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequenc
             if moved & lost:
                 continue
             try:
-                routes = plan_move(place, cells, step, name, homes=starts, leader_routes=batch)
+                routes = plan_move(now, cells, step, name, homes=starts, leader_routes=batch)
             except VidgenError as exc:
                 option = {"enter": "to", "exit": "to", "wander": "around", "meet": "with"}.get(step.action, "after" if step.options.get("after") else "to")
                 problems.append((f"{step.location}.{option}", f"beat '{step.beat}': {exc}"))
@@ -520,7 +614,10 @@ __all__ = [
     "CROWD_COST",
     "EDGE_SIDES",
     "EDGE_STEP",
+    "ISO_ITEM_ACTIONS",
     "ISO_MOVES",
+    "ISO_PLACE_CHANGES",
+    "ISO_REACH",
     "BESIDE",
     "NEIGHBOURS",
     "SIDE_BY_SIDE",

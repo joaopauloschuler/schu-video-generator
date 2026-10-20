@@ -820,9 +820,10 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
 | `zoom` | look closer at a detail, then come back | at most one per scene |
-| `pan` | on a `stage`: move the camera to a character or a mark (`to: right`) | on a stage wider than the frame (`width: 2`) |
-| `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start) | one at a time |
-| `reveal` | bring a later element in early | rarely: the default order is usually right |
+| `pan` | on a `stage`: move the camera to a character or a mark (`to: right`); on an iso place to a spot (`to: well`) across and up the picture | on a stage wider than the frame (`width: 2`), or a zoomed-in iso place |
+| `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start; on an iso place it zooms in first, to a plain stage's size) | one at a time |
+| `reveal` | bring a later element in early; on an iso place an object with `shown: false` appears (a bridge over the pond) | rarely: the default order is usually right |
+| `hide` | on an iso place: an object fades away (`- hide: rock`; a bridge gone cannot be crossed) | cause and effect in the story |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
@@ -832,7 +833,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s; `move_sun: true` moves a `sun` / `moon` prop across the sky, shadows turning) | when time passes in the story |
 | `lightning` | on a `stage`: the set flashes and a bolt strikes (`- lightning: right`; `distance: 2`: its thunder ~6 s later; in a room the windows flash) | a storm, a scare; rain with `lightning: true` strikes on its own |
 | `rainbow` | on a `stage` outdoors: a rainbow fades into the sky and stays (`- rainbow: centre`; `hide: true` fades it out) | after the rain |
-| `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley) | when someone in the story switches it on or lights the fire; when a call comes |
+| `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley); on an iso place a `lamp` lights, a `house`'s windows glow | when someone in the story switches it on or lights the fire; when a call comes |
 | `switch_off` | on a `stage`: a `tv`, `lamp`, `kettle` or `fireplace` goes off, a `phone` stops ringing (`- switch_off: lamp`) | when someone in the story switches it off or answers |
 | `knock` | on a `stage`: someone knocks three times on a door (`- knock: front`; a room's door or a `door` prop; nobody needs to stand there) | a visitor in the story; the door then `open`s with a creak |
 | `let_go` | on a `stage`: a character lets go of the balloons it holds; they float away (`- let_go: pip`) | gone for the scene |
@@ -859,18 +860,18 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating |
 | `pick_up` | on a `stage`: a character reaches for a prop and holds it (`to: ball`; `hand`); it goes along with the hand | `walk_to` next to the prop first (`vidgen validate` says where) |
 | `hold` | on a `stage`: a character holds a prop from now on, without picking it up (`to: cup`) | a prop it has from the start (`at: 0`) |
-| `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front) | within reach |
+| `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front); on an iso place beside it, or `to:` a spot next to it (on the table there) | within reach |
 | `give` | on a `stage`: the held prop goes to another character (`to: kit`) | the two stand next to each other |
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
-| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head; `by: pip` reaches for it (a locked door on a `level` opens only by whoever holds its key) | `open: true` in `props` starts it open |
-| `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand | |
+| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head; `by: pip` reaches for it (a locked door on a `level` opens only by whoever holds its key); on an iso place a `house`'s door, a room's `door_1`, `flowers` (they bloom) | `open: true` in `props` starts it open |
+| `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand; on an iso place a house's or a room's door, flowers back to buds | |
 | `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
 | `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
 | `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
-| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
+| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back; on an iso place `wide` is the whole place and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every spoken line); not with a walk out of the framing |
 | `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
 | `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
 | `host_react` | with a `host:`: the host's expression for this beat (`- host_react: happy`; `effect: sparkle` adds a symbol) | on a result or a surprise |
@@ -1017,7 +1018,7 @@ asks for one, say vidgen makes original characters and offer one with the same r
   pip` for a head, stars) lets one fall; `birds: true` (or `- birds: 4`) sends a flock across the
   sky (outdoors only).
 - **Small props**: `cake`, `muffin`, `book`, `phone`, `letter`, `gift`, `balloons`, `vase`,
-  `watering_can` to hold, give and set on a table (`lift: 0.17` on a `table`). A book, a letter
+  `watering_can`, `flower` to hold, give and set on a table (`lift: 0.17` on a `table`). A book, a letter
   and a gift `open` / `close` like an umbrella (held in front, not overhead). A `phone` that is on
   rings (`on: true` or `- switch_on: phone`; it shakes in bursts with a trill, `- switch_off:
   phone` answers it). Held balloons rise behind the head; `- let_go: pip` floats them away for
@@ -1937,7 +1938,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `wander`, `meet`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `wander`, `meet`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `hide`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |

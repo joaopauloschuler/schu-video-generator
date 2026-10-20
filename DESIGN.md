@@ -11680,13 +11680,14 @@ stage without `iso` takes no new branch (every iso branch tests `params.iso is n
 and no default changes. Mixtures that make no sense are refused by `Params._check_iso` with the
 conflict and the alternative: `level`, `room` (an indoor place is `iso: {place: indoor}`),
 `water` (`~` on the map), `fog` (bands by depth), `width` (the place fits the frame), `layers`,
-the stage's flat `props` (use `iso.objects`), `size` and `character_size` (`_default_size`:
+big flat `props` (use `iso.objects`; small ones stand on the place since Step 168, §89.10),
+`size` and `character_size` (`_default_size`:
 the place sets the size), a character's `depth`, a character `at` anything but a spot. A set
 gives an iso place its sky, light, ambience, particles and birds; `includes.ISO_DROPPED_KEYS`
 (`LEVEL_DROPPED_KEYS` + `layers`, `fog`, `width`) are left out, and the video's `character_size`
 is not copied into an iso scene (`expand_character_size`), so a video with `character_size:
-large` can have iso scenes. `size` / `character_size` on an iso stage may come back with the
-camera's shots (Step 168).
+large` can have iso scenes. `size` / `character_size` stay refused: the camera's shots make
+characters large (Step 168, §89.10).
 
 ### 89.3 The view: projection and draw order (Step 166)
 
@@ -11773,7 +11774,7 @@ camera's shots (Step 168).
   `Blobs`, `Disc` (a flat circle; with `opacity` below 1 a tint, alpha-composited through a
   patch), `Upright` (a cylinder: trunks, posts, the well), `Line`. `draw_shapes` paints them in
   order on an `IsoCanvas` (pixels per tile width, its top-left picture point) at
-  `ISO_SUPERSAMPLE` 3 (fewer above `ISO_MAX_DRAW_PIXELS` 40 M), reduced with a box filter. The
+  `ISO_SUPERSAMPLE` 3 (Step 168: always, as pictures are tiles, §89.10), reduced with a box filter. The
   outline is `ISO_OUTLINE` 0.022 tile widths × the drawing style's `outline_factor`, in the
   characters' ink. A polygon's fill also strokes its own edge one supersampled pixel wide: two
   fills meeting on an edge showed a faint seam.
@@ -11976,9 +11977,110 @@ camera's shots (Step 168).
   - Nothing changes off an iso place: every new branch tests `params.iso` (or `on_iso`) first,
     and the baseline frames of §89.8 are identical.
 - **Left for later**:
-  - Shots, `pan`, `zoom` and `follow` (the camera) on an iso place (Step 168).
+  - Shots, `pan`, `zoom` and `follow` (the camera) on an iso place (Step 168: §89.10).
   - A follower that ends straight behind its leader on the picture is partly hidden by it
-    (`gap: 2` spaces them out).
+    (`gap: 2` spaces them out). Step 168: it steps aside (§89.10).
   - The speed lines of a rushed walk are drawn level, not along the diagonal.
   - Two walkers crossing in one cell pass through each other: routes avoid standing
     characters, not moving ones.
+
+### 89.10 Staging on the place (Step 168)
+
+The camera on the place, small things handed about, and changes to the place for cause and
+effect. Code: `cartoon/iso_stage.py` (tiles, levels of detail, layers, item points; no manim),
+`cartoon/iso_pictures.py` (`IsoTiles`, `draw_tile`), `scenes/stage_iso.py` (`IsoStaging`, the
+iso part of the `Stage`, moved there from `stage.py` with Step 167's methods), `scenes/hide_action.py`.
+
+- **Pictures in tiles, at levels of detail.** Close-ups on a place where a character is ~70 px
+  tall zoom 6–8x; Step 166's pictures (1.25x the frame's pixels) were blurred there, and Manim
+  warps a whole picture to its size on screen for every frame (8x zoom of a frame-sized picture:
+  64 frames of pixels per frame). So each picture (`Picture`: whether it has the ground, and the
+  pieces in it with their states) is drawn in square tiles of `TILE_PIXELS` 512 (overlapping
+  their right and bottom neighbours by `TILE_OVERLAP` 2: a resampled edge is half transparent)
+  on the canvas of a **level of detail**: level k has 2^k times level 0's pixels, up to
+  `MAX_DETAIL` 3 (10x the frame at 1.25 oversampling, beyond `MAX_ZOOM` 8). `detail_for(zoom,
+  density)` picks the least level as sharp as the camera's zoom needs (`DETAIL_SLACK` 1.1).
+  `IsoScenery.tiles(picture, level, view)` lists the tiles a view shows (a front or a layer only
+  its pieces' part of each tile, in whole pixels of the level's canvas, so they lie on the
+  base pixel for pixel); `tile_image` draws one once (an LRU of `TILE_CACHE` 320 tiles, about
+  1 MB each). `draw_shapes` now skips shapes off its canvas (`shape_bounds`). Pillow rounds a
+  polygon's corners off the picture slightly differently, so a tile can differ from the whole
+  picture by a third of a pixel along an edge that crosses its border; not seen.
+- **On the stage** each picture is an `IsoTiles` group (`api`) whose members are the tiles in
+  the camera's view with half a view's margin, swapped by a camera listener
+  (`Stage._iso_show_view`) and once more before Manim splits a frame into moving and static
+  mobjects (`get_moving_and_static_mobjects`: Manim lists the members before it asks for the
+  moving ones, which runs the listeners; after a cut the static image showed the tiles of the
+  view before). Tiles are drawn by `draw_tile` (installed on the camera by
+  `install_tile_drawing` before the light wraps it): only the part in the frame is resized
+  (bilinear, smooth also when it shrinks) and blended into just that part of the frame; Manim's
+  own way blends a frame-sized picture per image. The village test scene (50 s, with a follow
+  that redraws everything on every frame) went from 239 s to 59 s.
+- **The camera.** Nothing new to write: the stage's camera works on the place.
+  - The start is the establishing view (§89.7). `shot:` frames work as on any stage
+    (`shot_framing` measures the characters on screen); `wide` is the establishing view again.
+    `size` / `character_size` stay refused (decided: the shots are the way to make characters
+    large; a base zoom would crop the place and fight the shots).
+  - `follow` (`Stage.follow_start`): zoomed in until a character is `ISO_FOLLOW_SIZE` 0.45 of
+    the frame's shorter side (a plain stage's size; `follow_width`), unless the camera is closer.
+    The move tracks the body's middle up and down too (`_MoveThenFollow`'s new `y_of`; the
+    platform level's follow is unchanged), then the stage's `SmoothFollow` (as a level's) takes
+    over.
+  - `pan` (`Stage.pan_point`): to a spot (the object standing there: its picture's middle; else
+    a character's middle standing there) or to the targets' middle, across and up the picture.
+  - `zoom` on characters frames a group as anywhere. The bounds stay the frame (the whole place
+    is in it), also in 9:16.
+- **Small things** (the stage's `props`, `ISO_ITEMS`: `SMALL_PROPS` + key, ball, cup, box,
+  basket, umbrella, laptop, napkin, shell, mushroom; or an svg). Decided to reuse the stage's
+  props and actions rather than invent parallel ones: `drop` is `put_down` without `to` (beside
+  its feet in its own cell, `ISO_PUT_ASIDE` 0.36 along the picture's level line on the side it
+  faces), `place` is `put_down` with `to:` a spot (on the object there). New prop `flower` (one
+  flower with its stem, to give). A small thing stands `at` a spot: on the ground in the spot's
+  cell, or on the `ObjectKind.top` of the object standing there (`iso_item_point`; a table
+  0.98, a bench's seat 0.55, a well's rim at its front, `TOP_SPOTS`). It is a body like the
+  characters (its `iso_feet`, `item_box`: over the object it stands on, so drawn after it), with
+  its own front picture; held, it goes with its holder's block (§69.27) and has none.
+  `_check_iso` refuses big props (with the alternative `iso.objects`), `depth`, `lift`,
+  `against`, an `at` that is not a spot, and a name an object, door or spot has. `throw` and
+  `blow_away` are refused on the place.
+- **Reach in cells.** The stage's holding replay measures x distances on a flat stage; on an
+  iso place it gets no positions (it still checks who holds what), and `iso_move_problems`
+  replays `pick_up`, `give`, `put_down` (`ISO_ITEM_ACTIONS`) with the moves: the two must be
+  `ISO_REACH` 1 cell apart (8 neighbours; to anywhere on the object a thing stands on), naming
+  the `walk_to` (or `meet`) that fixes it.
+- **Changes to the place.** An object's state (`ObjectState`: `shown`, `open`, `on`; kinds:
+  `OPENING_KINDS` house, flowers, door; `SWITCHED_KINDS` house, lamp; `default_state`: flowers
+  open) is drawn by `object_shapes(..., state)`: a house's door open (a dark doorway, the leaf
+  swung out towards the viewer), its windows lit; a lamp lit (bright lantern, a translucent pool
+  of light on the ground); flowers in bud. The doors of a room's standing back walls are named
+  `door_1`... in map order (`IsoPlace.doors`; their wall piece is named so) and open into the
+  room. Objects start as `iso.objects` say (`open`, `on`, `shown`; YAML's bare `on` key read as
+  `on`). Actions: `open` / `close` (house, door, flowers: bloom), `switch_on` / `switch_off`
+  (lamp, house), `reveal` (the generic action: the object's entrance) and a new `hide` (cued
+  like `switch_on`). Each changeable object the scene names (or that starts changed) is
+  **layered**: left out of the base picture and drawn as its own layer, an `IsoObject` group
+  (the action's target, named after it) right after the base: the object with the pieces over
+  it, so the layer hides what stands behind the object and is hidden by what stands in front.
+  A change (`Stage.iso_change`) makes the new layer at once (transparent), and a scene updater
+  fades it in from the change's start over its time (the old one leaves at the end; a gone
+  object's group leaves the scene, so `reveal` can bring it again), sets the state at the start
+  (front pictures and the layers of objects behind it follow), and `_iso_redrawn` redraws the
+  layers and everything after them while a change overlaps an animation. Why layers and not
+  redrawing the base: the base is large and in Manim's static image; a layer is small and the
+  same pixels as the base would have.
+- **Not there.** An object with `shown: false` (or hidden) is left out of the place the moves
+  are planned on (`IsoPlace.without`), in the render and in `vidgen validate`'s replay
+  (`ISO_PLACE_CHANGES`), so a bridge that is not there is not walked on.
+- **A follower right behind its leader** (gap 1, the last step straight down or up the
+  picture) takes one step aside to a cell beside the leader half a tile to the side.
+- **Public**: `vidgen.api` adds `IsoTiles`, `install_tile_drawing`, `ObjectState`,
+  `default_state`, `OPENING_KINDS`, `SWITCHED_KINDS`, `ISO_FOLLOW_SIZE`, `follow_width`,
+  `iso_item_point`, `item_box`, `object_box`, `ISO_ITEM_ACTIONS`, `ISO_PLACE_CHANGES`,
+  `ISO_REACH`. Config adds the `hide` action, the `flower` prop, `open`, `on`, `shown` on
+  `iso.objects`, and allows small `props` on an iso place. Off an iso place nothing changes (the
+  new branches test `params.iso` / `on_iso`, or a scene hook only the stage has); the baseline
+  frames are identical.
+- **Left for later**: lint's `hidden_speaker` measures a front picture's tiles as rectangles, so
+  it reports a speaker behind a tree as wholly hidden (Step 169's iso lint); a lit lamp is graded
+  by the light like the rest (a night scene's glow is Step 169's); items are small on the
+  establishing view (shots or `follow` show them).
