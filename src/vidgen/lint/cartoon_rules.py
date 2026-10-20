@@ -23,6 +23,7 @@ from vidgen.config import (
     HiddenSpeakerRule,
     LookAlikeRule,
     MouthWithoutVoiceRule,
+    OffscreenActionRule,
     OffStageRule,
     PropOverlapRule,
     SmallSpeakerRule,
@@ -69,14 +70,24 @@ def _face_x(obj: dict[str, Any]) -> float:
     return (float(box[0]) + float(box[2])) / 2
 
 
-def _covered_share(box: Bbox, covers: list[Bbox]) -> float:
-    """Share of ``box`` inside any of ``covers`` (sampled on a grid)."""
+def face_grid(box: Bbox) -> tuple[np.ndarray, np.ndarray]:
+    """The points (x and y arrays, :data:`_FACE_SAMPLES` per side, row by row) on which a face's
+    box is sampled."""
     xs = np.linspace(box[0], box[2], _FACE_SAMPLES)
     ys = np.linspace(box[1], box[3], _FACE_SAMPLES)
-    gx, gy = np.meshgrid(xs, ys)
+    return np.meshgrid(xs, ys)
+
+
+def _covered_share(box: Bbox, covers: list[Bbox], masks: list[str] = ()) -> float:
+    """Share of ``box`` inside any of ``covers`` (sampled on a grid), or under any of ``masks``
+    (which grid points a picture's opaque pixels cover, the layout dump's ``covers``)."""
+    gx, gy = face_grid(box)
     hit = np.zeros(gx.shape, dtype=bool)
     for c in covers:
         hit |= (gx >= c[0]) & (gx <= c[2]) & (gy >= c[1]) & (gy <= c[3])
+    for mask in masks:
+        if len(mask) == hit.size:
+            hit |= (np.frombuffer(mask.encode("ascii"), dtype=np.uint8) == ord("1")).reshape(hit.shape)
     return float(hit.mean())
 
 
@@ -333,27 +344,34 @@ def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[I
     for speaker in _figures(ctx):
         if not speaker.get("speaking") or not speaker.get("face"):
             continue
-        face = tuple(float(v) for v in speaker["face"])
+        iso = speaker.get("features") is not None   # on an iso place: its eyes and mouth (DESIGN.md §89.11)
+        face = tuple(float(v) for v in speaker["features" if iso else "face"])
         fronts = [
             obj for obj in ctx.objects
             if obj["order"] > speaker["order"] and not is_text(obj) and obj["kind"] not in ("particles", "effect", "motion_effect")
-            and obj.get("bubble") is None and intersection(object_box(obj), face) is not None
+            and obj.get("bubble") is None and obj.get("name_tag") is None and intersection(object_box(obj), face) is not None
             and not (obj["kind"] == "prop" and speaker.get("riding") is not None and obj.get("name") == speaker.get("riding"))
         ]
         if not fronts:
             continue
-        share = _covered_share(face, [object_box(o) for o in fronts])
-        if share < settings.min_hidden:
+        name = speaker.get("name")
+        masked = [o for o in fronts if iso and name in (o.get("covers") or {})]
+        boxes = [object_box(o) for o in fronts if o not in masked and not (iso and o.get("scenery") and o["kind"] == "image")]
+        share = _covered_share(face, boxes, [o["covers"][name] for o in masked])
+        limit = settings.min_hidden_features if iso else settings.min_hidden
+        if share < limit:
             continue
-        front = max(fronts, key=lambda o: area(intersection(object_box(o), face) or (0, 0, 0, 0)))
-        yield Issue(
-            f"{describe(speaker)} speaks with {share:.0%} of its face hidden behind {describe(front)}; move it or what "
-            "is in front of it, or bring it nearer the camera (a smaller depth)",
-            face,
-            (speaker, front),
-            value=round(share, 3),
-            limit=settings.min_hidden,
-        )
+        front = max(fronts, key=lambda o: (o["covers"][name].count("1") if o in masked else 0, area(intersection(object_box(o), face) or (0, 0, 0, 0))))
+        if iso:
+            pieces = [str(n) for n in front.get("pieces") or []]
+            what = describe(front) if front not in masked else ("the place's " + ", ".join(pieces[:3]) if pieces else "the place")
+            message = (f"{describe(speaker)} speaks with {share:.0%} of its eyes and mouth hidden behind {what} (something of "
+                       "the place in front of it); walk it to a spot where nothing stands in front of it, or give the beat a "
+                       "shot that frames it from where it shows")
+        else:
+            message = (f"{describe(speaker)} speaks with {share:.0%} of its face hidden behind {describe(front)}; move it or what "
+                       "is in front of it, or bring it nearer the camera (a smaller depth)")
+        yield Issue(message, face, (speaker, front), value=round(share, 3), limit=limit)
 
 
 @rule("small_speaker")
@@ -369,6 +387,8 @@ def small_speaker(ctx: StillContext, settings: SmallSpeakerRule) -> Iterator[Iss
         height = face[3] - face[1]
         if height >= limit:
             continue
+        if speaker.get("name_tag") and int(ctx.frame.get("line_words", settings.max_tagged_words + 1)) <= settings.max_tagged_words:
+            continue   # on an iso place its name tag shows who says this short line (DESIGN.md §89.11)
         name = speaker.get("name")
         yield Issue(
             f"{describe(speaker)} speaks with its face {height / ctx.short_side:.2%} of the frame's shorter side tall "
@@ -378,6 +398,30 @@ def small_speaker(ctx: StillContext, settings: SmallSpeakerRule) -> Iterator[Iss
             (speaker,),
             value=round(height / ctx.short_side, 4),
             limit=settings.min_face,
+        )
+
+
+@rule("offscreen_action")
+def offscreen_action(ctx: StillContext, settings: OffscreenActionRule) -> Iterator[Issue]:
+    """On an iso place (DESIGN.md §89.11): an action of the still's beat that the camera never
+    mostly did not show while it played (the layout dump's ``iso_actions``: what acted and the
+    share of its frames with at least half of it in view): a walk, a small thing handed about, a
+    change of the place."""
+    for done in ctx.frame.get("iso_actions") or []:
+        seen = float(done.get("seen", 1.0))
+        if seen >= settings.min_seen:
+            continue
+        who, action = done.get("who"), done.get("action")
+        shown = next((o for o in ctx.objects if o["kind"] in ("character", "prop") and o.get("name") == who), None)
+        acted = shown or {"id": f"iso:{who}", "kind": "iso_object", "class": "IsoObject", "name": who, "path": str(who), "bbox": [0.0, 0.0, 0.0, 0.0]}
+        yield Issue(
+            f"the {action} of '{who}' happens off screen (in view on {seen:.0%} of its frames); "
+            f"show it: a wider shot (shot: wide), pan or follow to it (- pan: {who}), or do it in a beat whose shot shows it",
+            None,
+            (acted,),
+            value=round(seen, 3),
+            limit=settings.min_seen,
+            group=("offscreen_action", who, action),
         )
 
 

@@ -936,11 +936,12 @@ Same rules as Phases H–P.
 - [x] Tests (`tests/test_iso_staging.py`); also: a follower ending right behind its leader steps aside
 
 ### Step 169 — Mood, small characters, sounds and lint
-- [ ] Time of day / mood tints (morning, evening, night, rain) on the place
-- [ ] Speech bubbles or name tags when characters are small on screen
-- [ ] Footsteps by surface, door, pickup and ambience (birds, rain) through the existing sfx / foley system (synthesised; no licensed assets)
-- [ ] Lint: a speaker hidden behind objects, a speaker too small for the line, an action happening off-screen
-- [ ] Tests
+- [x] Time of day / mood tints (morning, evening, night, rain) on the place (the stage's `light` and `particles`; lit lamps and windows glow)
+- [x] Speech bubbles or name tags when characters are small on screen (automatic name tags; `say` bubbles as anywhere)
+- [x] Footsteps by surface, door, pickup and ambience (birds, rain) through the existing sfx / foley system (synthesised; no licensed assets; + crickets at night)
+- [x] Lint: a speaker hidden behind objects, a speaker too small for the line, an action happening off-screen
+- [x] Tests
+- [ ] (optional, not done) closed doors blocking routes
 
 ### Step 170 — Example story and docs
 - [ ] A short original kids' story (2–3 min) in an iso village with narration (`examples/<name>`), 16:9 (a 9:16 variant if cheap)

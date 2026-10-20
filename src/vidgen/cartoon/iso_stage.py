@@ -21,6 +21,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 from PIL import Image
 
 from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes
@@ -257,6 +258,7 @@ class IsoScenery:
         self.states: dict[int, ObjectState] = {k: (states or {}).get(piece.name, default_state(piece.kind or "")) for k, piece in enumerate(self.pieces)}
         self.layered = tuple(k for k, piece in enumerate(self.pieces) if piece.name in layered)
         self._images: OrderedDict[tuple[Any, ...], Image.Image | None] = OrderedDict()
+        self._glows: dict[Picture, bool] = {}
 
     @property
     def canvas(self) -> IsoCanvas:
@@ -337,14 +339,20 @@ class IsoScenery:
         ground = list(self.ground) if picture[0] else []
         return ground + [shape for k, state in picture[1] for shape in self.pieces[k].shapes_in(state)]
 
-    def tile_image(self, picture: Picture, level: int, tile: tuple[int, int], canvas: IsoCanvas) -> Image.Image | None:
+    def glows(self, picture: Picture) -> bool:
+        """Whether ``picture`` shows a light (a lit lamp or window, DESIGN.md §89.11)."""
+        if picture not in self._glows:
+            self._glows[picture] = any(getattr(shape, "glow", False) for k, state in picture[1] for shape in self.pieces[k].shapes_in(state))
+        return self._glows[picture]
+
+    def tile_image(self, picture: Picture, level: int, tile: tuple[int, int], canvas: IsoCanvas, *, glow: bool = False) -> Image.Image | None:
         """The tile ``tile`` of ``picture`` at ``level`` (its ``canvas`` from :meth:`tiles`),
-        drawn once (``None``: nothing on it)."""
-        key = (picture, level, tile)
+        drawn once (``None``: nothing on it); ``glow``: of its lights only (DESIGN.md §89.11)."""
+        key = (picture, level, tile, glow)
         if key in self._images:
             self._images.move_to_end(key)
             return self._images[key]
-        image: Image.Image | None = draw_shapes(self.shapes(picture), canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE)
+        image: Image.Image | None = draw_shapes(self.shapes(picture), canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow)
         if image is not None and image.getbbox() is None:
             image = None
         self._images[key] = image
@@ -352,9 +360,9 @@ class IsoScenery:
             self._images.popitem(last=False)
         return image
 
-    def picture(self, picture: Picture, level: int = 0) -> tuple[IsoCanvas, Image.Image]:
+    def picture(self, picture: Picture, level: int = 0, *, glow: bool = False) -> tuple[IsoCanvas, Image.Image]:
         """The whole of ``picture`` at ``level`` as one image, on its part of the canvas (for tests
-        and stills; the stage draws tiles)."""
+        and stills; the stage draws tiles); ``glow``: of its lights only."""
         c = self.level_canvas(level)
         clip = self.clip(picture)
         if clip is None:
@@ -363,7 +371,36 @@ class IsoScenery:
             x0, y0 = max(math.floor((clip[0] - c.left) * c.scale), 0), max(math.floor((clip[1] - c.top) * c.scale), 0)
             x1, y1 = min(math.ceil((clip[2] - c.left) * c.scale), c.width), min(math.ceil((clip[3] - c.top) * c.scale), c.height)
             part = IsoCanvas(c.scale, c.left + x0 / c.scale, c.top + y0 / c.scale, max(x1 - x0, 1), max(y1 - y0, 1))
-        return part, draw_shapes(self.shapes(picture), part, outline=self.outline, supersample=ISO_SUPERSAMPLE)
+        return part, draw_shapes(self.shapes(picture), part, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow)
+
+
+#: How many places across the picture :func:`place_outline` measures the place's edges at.
+OUTLINE_SAMPLES = 256
+
+
+def place_outline(place: IsoPlace, view: IsoView, samples: int = OUTLINE_SAMPLES) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
+    """The place's ground as seen (Manim units): ``(xs, fronts, backs)``, at ``samples`` xs
+    across it the lowest and the highest y of the tops of its cells there (a raised block's
+    top, water's surface): where rain can land (DESIGN.md §89.11)."""
+    cells = [(c, r, place.floor_z(c, r)) for r in range(place.rows) for c in range(place.columns) if place.ground(c, r) != VOID]
+    if not cells:
+        return (), (), ()
+    corners = np.array([[view.point(c + dx, r + dy, z) for dx, dy in ((0, 0), (1, 0), (1, 1), (0, 1))] for c, r, z in cells])
+    back, right, front, left = (corners[:, k] for k in range(4))   # each (cells, 2): x, y
+    xs = np.linspace(float(left[:, 0].min()), float(right[:, 0].max()), samples)
+    x = xs[:, None]
+    inside = (x >= left[None, :, 0]) & (x <= right[None, :, 0])
+    on_left = x <= back[None, :, 0]   # the back and front corners share their x
+    share_left = (x - left[None, :, 0]) / np.maximum(back[None, :, 0] - left[None, :, 0], 1e-9)
+    share_right = (x - back[None, :, 0]) / np.maximum(right[None, :, 0] - back[None, :, 0], 1e-9)
+    tops = np.where(on_left, left[None, :, 1] + share_left * (back[None, :, 1] - left[None, :, 1]),
+                    back[None, :, 1] + share_right * (right[None, :, 1] - back[None, :, 1]))
+    bottoms = np.where(on_left, left[None, :, 1] + share_left * (front[None, :, 1] - left[None, :, 1]),
+                       front[None, :, 1] + share_right * (right[None, :, 1] - front[None, :, 1]))
+    highs = np.where(inside, tops, -np.inf).max(axis=1)
+    lows = np.where(inside, bottoms, np.inf).min(axis=1)
+    found = np.isfinite(highs) & np.isfinite(lows)
+    return tuple(xs[found].tolist()), tuple(lows[found].tolist()), tuple(highs[found].tolist())
 
 
 def iso_canvas(place: IsoPlace, view: IsoView, pixels_per_unit: float) -> IsoCanvas:
@@ -402,7 +439,9 @@ __all__ = [
     "iso_stand",
     "iso_view",
     "map_fraction",
+    "OUTLINE_SAMPLES",
     "place_bounds",
+    "place_outline",
     "standing_box",
     "pieces_in_front",
 ]

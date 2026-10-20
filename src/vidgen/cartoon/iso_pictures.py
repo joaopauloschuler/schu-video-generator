@@ -17,12 +17,28 @@ from vidgen.cartoon.iso_stage import IsoScenery, IsoView, Picture, canvas_center
 from vidgen.cartoon.shading import LIT, mark_lit
 
 
+class GlowTile(ImageMobject):
+    """A tile of the lights of a picture (DESIGN.md §89.11): never graded by the stage's light,
+    even when the group holding it is marked lit (:func:`~vidgen.cartoon.shading.mark_lit`), so
+    a lit lamp or window glows at night."""
+
+    @property
+    def light_graded(self) -> bool:
+        return False
+
+    @light_graded.setter
+    def light_graded(self, value: bool) -> None:
+        pass
+
+
 class IsoTiles(Group):
     """One picture of an iso place (``picture`` of ``scenery``), named ``name``: its members are
     the tiles in the camera's view (:meth:`show_view`) at the level of detail of the camera's
     zoom; ``density``: level 0's pixels per frame pixel. A tile is made once (kept for the
     scene), lit like the group (:func:`~vidgen.cartoon.shading.mark_lit`), and marked
-    ``scenery`` (the camera crops it on purpose: lint ``off_frame``)."""
+    ``scenery`` (the camera crops it on purpose: lint ``off_frame``). A picture with lights in
+    it (a lit lamp or window) has their tiles too, after the others, never graded
+    (:class:`GlowTile`, DESIGN.md §89.11)."""
 
     def __init__(self, scenery: IsoScenery, picture: Picture, view: IsoView, *, name: str, density: float, frame_width: float) -> None:
         super().__init__()
@@ -31,7 +47,7 @@ class IsoTiles(Group):
         self.density = density
         self.frame_width = frame_width
         self.shown_key: tuple[int, tuple[tuple[int, int], ...]] | None = None
-        self._tiles: dict[tuple[int, tuple[int, int]], ImageMobject | None] = {}
+        self._tiles: dict[tuple[int, tuple[int, int], bool], ImageMobject | None] = {}
         #: the tiles' opacity (a place change fades a layer in or out, DESIGN.md §89.10)
         self.tile_opacity = 1.0
 
@@ -51,30 +67,38 @@ class IsoTiles(Group):
             return False
         self.shown_key = key
         members = []
-        for tile, canvas in tiles:
-            if (level, tile) not in self._tiles:
-                self._tiles[(level, tile)] = self._make(level, tile, canvas)
-            made = self._tiles[(level, tile)]
-            if made is not None:
-                members.append(made)
+        for glow in (False, True) if self.scenery.glows(self.picture) else (False,):
+            for tile, canvas in tiles:
+                if (level, tile, glow) not in self._tiles:
+                    self._tiles[(level, tile, glow)] = self._make(level, tile, canvas, glow)
+                made = self._tiles[(level, tile, glow)]
+                if made is not None:
+                    members.append(made)
         self.submobjects = members
         return True
 
-    def _make(self, level: int, tile: tuple[int, int], canvas: Any) -> ImageMobject | None:
-        image = self.scenery.tile_image(self.picture, level, tile, canvas)
+    def _make(self, level: int, tile: tuple[int, int], canvas: Any, glow: bool = False) -> ImageMobject | None:
+        image = self.scenery.tile_image(self.picture, level, tile, canvas, glow=glow)
         if image is None:
             return None
-        made = ImageMobject(np.array(image))
+        made = (GlowTile if glow else ImageMobject)(np.array(image))
         made.scale_to_fit_width(canvas.width / canvas.scale * self.iso_view.unit)
         made.move_to([*canvas_center(canvas, self.iso_view), 0.0])
         made.name = self.name
+        made.iso_pieces = tuple(self._piece_box(k) for k, _ in self.picture[1])   # what it shows, and where (lint, §89.11)
         made.scenery = True
         made.iso_tile = True   # drawn by :func:`draw_tile`
         if self.tile_opacity < 1.0:
             made.set_opacity(self.tile_opacity)
-        if getattr(self, LIT, False):
+        if getattr(self, LIT, False) and not glow:
             mark_lit(made)
         return made
+
+    def _piece_box(self, k: int) -> tuple[str, tuple[float, float, float, float]]:
+        """A piece's name and the box (Manim units: left, bottom, right, top) its box's picture covers."""
+        piece, view = self.scenery.pieces[k], self.iso_view
+        left, top, right, bottom = piece.box.picture_bounds()
+        return piece.name, ((left - view.u0) * view.unit, -(bottom - view.v0) * view.unit, (right - view.u0) * view.unit, -(top - view.v0) * view.unit)
 
     def set_tile_opacity(self, opacity: float) -> None:
         """Show every tile (also those made later) at ``opacity`` (0..1)."""
@@ -126,4 +150,4 @@ def install_tile_drawing(camera: Any) -> None:
     camera.draws_iso_tiles = True
 
 
-__all__ = ["IsoTiles", "draw_tile", "install_tile_drawing"]
+__all__ = ["GlowTile", "IsoTiles", "draw_tile", "install_tile_drawing"]

@@ -217,7 +217,7 @@ from vidgen.cartoon.acting import (  # noqa: E402
 )
 from vidgen.cartoon.motion import MOTION_LEVELS, jump_motion_seconds, motion_strength, resolve_motion, walk_motion_seconds  # noqa: E402
 from vidgen.cartoon.spring import Spring  # noqa: E402
-from vidgen.cartoon.foley import FoleyCue, PlayedAction, foley_cues, wet_steps  # noqa: E402
+from vidgen.cartoon.foley import SURFACE_STEPS, FoleyCue, PlayedAction, foley_cues, handling_cues, place_change_cues, wet_steps  # noqa: E402
 from vidgen.ambience import SET_BEDS, set_ambience  # noqa: E402
 from vidgen.cartoon.keyframes import (  # noqa: E402
     CHANNELS,
@@ -407,6 +407,7 @@ from vidgen.cartoon.sun_path import SKY_BODIES, PathMove, path_point, place_for,
 from vidgen.cartoon.rain import (  # noqa: E402
     SHELTER_PROPS,
     SPLASH_SECONDS,
+    IsoRainGround,
     RainGround,
     ShelterBox,
     drop_floors,
@@ -566,9 +567,9 @@ from vidgen.world.iso_view import Box3, draw_order, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
 from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook, object_box  # noqa: E402
 from vidgen.cartoon.iso_scenery import IsoColors  # noqa: E402
-from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, standing_box  # noqa: E402
-from vidgen.cartoon.iso_pictures import IsoTiles, install_tile_drawing  # noqa: E402
-from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move  # noqa: E402
+from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box  # noqa: E402
+from vidgen.cartoon.iso_pictures import GlowTile, IsoTiles, install_tile_drawing  # noqa: E402
+from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
 from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
@@ -932,6 +933,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "jump_motion_seconds",
     "walk_motion_seconds",
     "Spring",
+    "SURFACE_STEPS",
+    "handling_cues",
+    "place_change_cues",
     "FoleyCue",
     "PlayedAction",
     "foley_cues",
@@ -1133,6 +1137,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "RainGroundSource",
     "SHELTER_PROPS",
     "SPLASH_SECONDS",
+    "IsoRainGround",
     "RainGround",
     "ShelterBox",
     "drop_floors",
@@ -1331,6 +1336,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "IsoRoute",
     "IsoScenery",
     "IsoTiles",
+    "GlowTile",
+    "place_outline",
     "object_box",
     "install_tile_drawing",
     "ISO_FOLLOW_SIZE",
@@ -1349,6 +1356,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "iso_move_problems",
     "iso_stand",
     "ISO_MOVES",
+    "SURFACES",
+    "route_surfaces",
+    "surface_at",
     "ISO_ITEM_ACTIONS",
     "ISO_PLACE_CHANGES",
     "ISO_REACH",

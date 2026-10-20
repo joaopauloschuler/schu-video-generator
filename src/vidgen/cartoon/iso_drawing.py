@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from PIL import Image, ImageDraw
 
@@ -41,11 +42,13 @@ def shade(color: str, amount: float) -> str:
 @dataclass(frozen=True)
 class Poly:
     """A flat polygon in the world; ``ink`` outlines every edge (``True``), none (``False``) or
-    the edges marked (edge ``i`` runs from point ``i`` to the next)."""
+    the edges marked (edge ``i`` runs from point ``i`` to the next); ``glow``: a light (a lit
+    window or lantern) that the stage's light does not dim (DESIGN.md §89.11)."""
 
     points: tuple[Point3, ...]
     fill: str
     ink: bool | tuple[bool, ...] = True
+    glow: bool = False
 
 
 @dataclass(frozen=True)
@@ -62,13 +65,15 @@ class Blobs:
 @dataclass(frozen=True)
 class Disc:
     """A flat circle lying in the world at height ``centre[2]`` (a well's water, a lamp's base):
-    ``radius`` in tile units; with ``opacity`` under 1 it tints what is under it (a shadow)."""
+    ``radius`` in tile units; with ``opacity`` under 1 it tints what is under it (a shadow, a
+    pool of light); ``glow`` as a :class:`Poly`'s."""
 
     centre: Point3
     radius: float
     fill: str
     ink: bool = True
     opacity: float = 1.0
+    glow: bool = False
 
 
 @dataclass(frozen=True)
@@ -99,13 +104,13 @@ Shape = Poly | Blobs | Disc | Upright | Line
 
 def box_shapes(x0: float, y0: float, z0: float, x1: float, y1: float, z1: float, top: str, *,
                left: str | None = None, right: str | None = None, joined: Iterable[str] = (),
-               bottoms: tuple[float, float] | None = None, faces: str = "tlr") -> list[Shape]:
+               bottoms: tuple[float, float] | None = None, faces: str = "tlr", glow: bool = False) -> list[Shape]:
     """A box's visible faces: its top, its face to the viewer's lower left (``y = y1``, the map's
     ``s`` side) and to the lower right (``x = x1``, ``e``), coloured ``top`` and shades of it
     unless given. ``joined`` sides (``n``, ``e``, ``s``, ``w``) continue into a neighbour of the
     same height: no outline there, and no face on ``s`` or ``e``. ``bottoms`` (``s``, ``e``)
     start those faces higher than ``z0`` (on a neighbour's top). ``faces`` picks among top
-    (``t``), left (``l``) and right (``r``)."""
+    (``t``), left (``l``) and right (``r``); ``glow``: its faces are a light (a lit lantern)."""
     joined = set(joined)
     left = left or shade(top, LEFT_SHADE)
     right = right or shade(top, RIGHT_SHADE)
@@ -114,13 +119,13 @@ def box_shapes(x0: float, y0: float, z0: float, x1: float, y1: float, z1: float,
     if "l" in faces and "s" not in joined and z1 > bottom_s:
         # bottom edge, front corner (unless the right side joins), top edge, back-left corner (unless the left joins)
         shapes.append(Poly(((x0, y1, bottom_s), (x1, y1, bottom_s), (x1, y1, z1), (x0, y1, z1)), left,
-                           (True, "e" not in joined, True, "w" not in joined)))
+                           (True, "e" not in joined, True, "w" not in joined), glow))
     if "r" in faces and "e" not in joined and z1 > bottom_e:
         shapes.append(Poly(((x1, y1, bottom_e), (x1, y0, bottom_e), (x1, y0, z1), (x1, y1, z1)), right,
-                           (True, "n" not in joined, True, "s" not in joined)))
+                           (True, "n" not in joined, True, "s" not in joined), glow))
     if "t" in faces:
         shapes.append(Poly(((x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)), top,
-                           tuple(side not in joined for side in ("n", "e", "s", "w"))))
+                           tuple(side not in joined for side in ("n", "e", "s", "w")), glow))
     return shapes
 
 
@@ -198,17 +203,25 @@ def _ink_runs(points: list[tuple[float, float]], ink: bool | tuple[bool, ...]) -
     return runs
 
 
+#: What a shape that is not a light paints in a picture of the lights (:func:`draw_shapes` with
+#: ``glow``): nothing, so a light behind it stays hidden.
+CLEAR = (0, 0, 0, 0)
+
+
 def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 1.0, ink: str = CHARACTER_INK,
-                image: Image.Image | None = None, supersample: int = ISO_SUPERSAMPLE) -> Image.Image:
+                image: Image.Image | None = None, supersample: int = ISO_SUPERSAMPLE, glow: bool = False) -> Image.Image:
     """An RGBA picture of ``shapes`` (painted in order) on ``canvas``, transparent elsewhere;
     ``outline`` multiplies :data:`ISO_OUTLINE`. Drawn ``supersample`` times larger and reduced
-    with a box filter. With ``image`` (the canvas's size) the shapes go over it."""
+    with a box filter. With ``image`` (the canvas's size) the shapes go over it. ``glow``: a
+    picture of the lights only (DESIGN.md §89.11): the shapes marked ``glow`` as drawn, every
+    other shape (but a tint) clearing what it covers, so a light is seen only where the whole
+    picture shows it."""
     ss = supersample
     big = Image.new("RGBA", (canvas.width * ss, canvas.height * ss), (0, 0, 0, 0))
     draw = ImageDraw.Draw(big)
     width = max(ISO_OUTLINE * outline * canvas.scale * ss, 1.0)
 
-    def line(points: list[tuple[float, float]], color: str, line_width: float) -> None:
+    def line(points: list[tuple[float, float]], color: Any, line_width: float) -> None:
         draw.line(points, fill=color, width=max(round(line_width), 1), joint="curve")
         r = line_width / 2
         for x, y in (points[0], points[-1]):
@@ -218,6 +231,12 @@ def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 
     for shape in shapes:
         if not _on_canvas(shape, canvas, pad):
             continue   # nothing of it on this canvas (a tile of a large picture, DESIGN.md §89.10)
+        clearing = glow and not getattr(shape, "glow", False)
+        if clearing and isinstance(shape, Disc) and shape.opacity < 1.0:
+            continue   # a shadow hides no light
+        if clearing:
+            _clear(draw, shape, canvas, ss, width, line)
+            continue
         if isinstance(shape, Poly):
             points = [canvas.pixel(p, ss) for p in shape.points]
             draw.polygon(points, fill=shape.fill, outline=shape.fill)   # its own colour on the edge: no seam with a neighbour
@@ -272,7 +291,34 @@ def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 
     return Image.alpha_composite(image, small)
 
 
+def _clear(draw: ImageDraw.ImageDraw, shape: Shape, canvas: IsoCanvas, ss: int, width: float, line: Any) -> None:
+    """Paint ``shape``'s whole drawing (its fill and outline) as :data:`CLEAR` (a picture of the lights)."""
+    if isinstance(shape, Poly):
+        points = [canvas.pixel(p, ss) for p in shape.points]
+        draw.polygon(points, fill=CLEAR, outline=CLEAR)
+        if shape.ink is not False:
+            for run in _ink_runs(points, shape.ink):
+                line(run, CLEAR, width)
+    elif isinstance(shape, Blobs):
+        for c, r in zip(shape.centres, shape.radii):
+            (x, y), r = canvas.pixel(c, ss), r * canvas.scale * ss + width / 2
+            draw.ellipse((x - r, y - r, x + r, y + r), fill=CLEAR)
+    elif isinstance(shape, Disc):
+        x, y = canvas.pixel(shape.centre, ss)
+        a, b = shape.radius * math.sqrt(2) / 2 * canvas.scale * ss + width / 2, shape.radius * math.sqrt(2) / 4 * canvas.scale * ss + width / 2
+        draw.ellipse((x - a, y - b, x + a, y + b), fill=CLEAR)
+    elif isinstance(shape, Upright):
+        (xb, yb), (xt, yt) = canvas.pixel((shape.x, shape.y, shape.z0), ss), canvas.pixel((shape.x, shape.y, shape.z1), ss)
+        a, b = shape.radius * math.sqrt(2) / 2 * canvas.scale * ss + width / 2, shape.radius * math.sqrt(2) / 4 * canvas.scale * ss + width / 2
+        draw.ellipse((xb - a, yb - b, xb + a, yb + b), fill=CLEAR)
+        draw.rectangle((xb - a, yt, xb + a, yb), fill=CLEAR)
+        draw.ellipse((xt - a, yt - b, xt + a, yt + b), fill=CLEAR)
+    else:
+        line([canvas.pixel(p, ss) for p in shape.points], CLEAR, width * shape.width)
+
+
 __all__ = [
+    "CLEAR",
     "ISO_OUTLINE",
     "ISO_SUPERSAMPLE",
     "LEFT_SHADE",

@@ -19,7 +19,7 @@ from vidgen.api import *
 
 from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image
-from .stage_iso import IsoStaging, _moving_block
+from .stage_iso import IsoStaging, _moving_block, iso_particle_problem
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -591,6 +591,8 @@ class StageIso(SceneParams):
     """Ready-made objects: {object, at, name, facing, size, color, detail, open, on, shown}, e.g. {object: house, at: home}."""
     colors: dict[Literal["grass", "earth", "path", "water", "stone", "floor", "tiles", "wall", "cut"], ThemeColor] = {}
     """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
+    name_tags: bool = True
+    """While a character speaks and is small on screen (a wide view), a tag with its name over its head shows who speaks (not with a speech bubble); false: none."""
 
     @model_validator(mode="after")
     def _parses(self) -> "StageIso":
@@ -769,8 +771,8 @@ class Stage(IsoStaging, NarratedScene):
         """false: the characters do not breathe, sway or blink in this scene."""
         foley: bool | None = None
         """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols; on a level also landings, coins and stars picked up, a key unlocking a door, a blocker stepping aside), and the ambience: false for none in this scene; default: the video's foley (on)."""
-        ambience: bool | Literal["auto", "birdsong", "city", "room_tone"] | list[Literal["birdsong", "city", "room_tone"]] | None = None
-        """A sound bed under the whole scene while foley is on: birdsong, city (street sounds), room_tone, or a list of them; auto (or true): chosen from the set: room_tone in a room, birdsong outdoors while the light is day or morning and it does not rain; false: none; default: the video's ambience (auto). Rain and a burning fire play their own beds whatever this says."""
+        ambience: bool | Literal["auto", "birdsong", "city", "room_tone", "crickets"] | list[Literal["birdsong", "city", "room_tone", "crickets"]] | None = None
+        """A sound bed under the whole scene while foley is on: birdsong, city (street sounds), room_tone, crickets, or a list of them; auto (or true): chosen from the set: room_tone in a room (an indoor iso place too), birdsong outdoors while the light is day or morning and it does not rain, on an iso place outdoors crickets while the light is sunset or night; false: none; default: the video's ambience (auto). Rain and a burning fire play their own beds whatever this says."""
         auto_direct: AutoDirectSetting | None = None
         """Automatic directing in this scene: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up (true, false or {looks, reactions, gestures, closeups, effects}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
         cartoon_motion: MotionSetting | None = None
@@ -897,6 +899,10 @@ class Stage(IsoStaging, NarratedScene):
                 raise ValueError(f"an iso place cannot have {given[0]} ({hints[given[0]]}); remove it, or the iso")
             spots = self.iso.parsed().spot_names()
             taken = set(self.iso.changeable_names()) | set(spots)
+            for k, item in enumerate(self.particles):
+                problem = iso_particle_problem(self.iso, item.kind, item)
+                if problem is not None:
+                    raise ValueError(f"particles[{k}]: {problem}")
             for k, (prop, name) in enumerate(zip(self.props, self.prop_names())):
                 if prop.svg is None and prop.prop not in ISO_ITEMS:
                     raise ValueError(f"props[{k}]: on an iso place the props are small things to hold ({', '.join(ISO_ITEMS)}, or an svg); "
@@ -1309,6 +1315,8 @@ class Stage(IsoStaging, NarratedScene):
             yield d
         for figure, track in speakers:
             self.end_lip_sync(figure, track)
+        if self.on_iso:
+            self._iso_drop_tags()   # the name tags of the lines that ended (§89.11)
 
     def action_foley(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
         """The sounds of a character's action as it plays (DESIGN.md §69.19): footsteps on
@@ -1317,13 +1325,17 @@ class Stage(IsoStaging, NarratedScene):
         creak, a splash of water (:func:`foley_cues`), splashing steps once puddles lie on the
         ground (:func:`wet_steps`); none with ``foley: false`` (the stage's, else the video's). A
         project file with a sound's name plays as it is (without the cue's params)."""
+        if self.on_iso:
+            self.iso_watch_action(action, animations, start, seconds)   # what the camera shows of it (lint offscreen_action, §89.11)
         if not self._foley_on():
             return
         wet_from = min(getattr(self, "_puddles_from", []), default=None)
+        cues = handling_cues(action, start, seconds) if self.on_iso else []   # small things handed about (§89.11)
         for part, anim, part_start, part_seconds in _timed_parts(action, animations, start, seconds):
-            for cue in wet_steps(foley_cues(_played(part, options, anim, part_start, part_seconds)), wet_from):
-                params = {} if self.sounds.file(cue.sound) is not None else cue.params
-                self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)
+            cues += wet_steps(foley_cues(_played(part, options, anim, part_start, part_seconds)), wet_from)
+        for cue in cues:
+            params = {} if self.sounds.file(cue.sound) is not None else cue.params
+            self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)
 
     def _foley_on(self) -> bool:
         """Whether this stage plays its sounds: its ``foley``, else the video's."""
@@ -1519,7 +1531,10 @@ class Stage(IsoStaging, NarratedScene):
 
     def rain_ground(self) -> RainGround:
         """Where rain ends now: the landing band from the ground line up to the top of the ground
-        area, and the shelters (open umbrellas, held or standing, and trees) where they are."""
+        area, and the shelters (open umbrellas, held or standing, and trees) where they are; on an
+        iso place anywhere on its ground (DESIGN.md §89.11)."""
+        if self.on_iso:
+            return self.iso_rain_ground()
         shelters = [s for s in (self._shelter_of(prop) for prop in self.props.values()) if s is not None]
         top = ground_top(self.params.ground, self.params.items())
         return rain_ground(self.params.ground, top, self.frame_height, shelters)
@@ -1742,7 +1757,9 @@ class Stage(IsoStaging, NarratedScene):
         else:
             setting = True if given == "auto" else [given] if isinstance(given, str) else list(given)
         lights = getattr(self, "light_marks", [(0.0, None)])
-        return set_ambience(setting, room=self.params.room is not None, lights=lights, rain=rain, end=end)
+        iso = self.params.iso
+        room = self.params.room is not None or (iso is not None and iso.place == "indoor")
+        return set_ambience(setting, room=room, lights=lights, rain=rain, end=end, crickets=iso is not None)
 
     def shot_framing(self, kind: str, names: list[str]) -> tuple[ShotView, Shot]:
         """The camera view of a ``kind`` shot of the characters ``names`` (filled in by
@@ -3215,7 +3232,8 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     if isinstance(anim, Walk):
         through_door = anim.fade_in > 0 or anim.fade_out > 0   # a fade in a doorway (§69.42)
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length, rolls=anim.gait.rolls,
-                            through_door=through_door, opens_door=anim.opens_door, pickups=_picked_kinds(anim))
+                            through_door=through_door, opens_door=anim.opens_door, pickups=_picked_kinds(anim),
+                            surfaces=getattr(anim, "surfaces", ()))
     if isinstance(anim, PropReshape):
         return PlayedAction(action, start, seconds, prop=getattr(anim.mobject, "kind", None), unlocks=getattr(anim, "unlocks", False))
     if isinstance(anim, WaterFlow):

@@ -66,7 +66,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `motion_effects` | `true` | dust, speed lines, impact stars and whoosh arcs the moves on `stage` scenes add while `cartoon_motion` is not `none`; `false`: none; a stage's `motion_effects` param wins; see [motion effects](#motion-effects-motion_effects) |
 | `drawing` | none (`normal`, `flat`, `none`: as drawn) | how the cartoons are drawn: `{outline: thin \| normal \| bold, shading: flat \| soft, texture: none \| paper \| storybook, seed}` on `stage` scenes (the host: outline and shading); a stage's `drawing` param wins key by key; a variant may change it; see [drawing style](#drawing-style-drawing) |
 | `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
-| `ambience` | `true` | a sound bed chosen from each `stage` scene's set while foley is on: a room tone in a room, birdsong outdoors while the light is `day` or `morning` and it does not rain; `false`: none unless a stage's `ambience` param names one; see [ambience](#ambience-and-door-sounds-ambience-knock) |
+| `ambience` | `true` | a sound bed chosen from each `stage` scene's set while foley is on: a room tone in a room (and on an indoor iso place), birdsong outdoors while the light is `day` or `morning` and it does not rain, crickets outdoors on an [iso place](#isometric-places-iso) while it is `sunset` or `night`; `false`: none unless a stage's `ambience` param names one; see [ambience](#ambience-and-door-sounds-ambience-knock) |
 | `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
 | `reframe` | none | on `stage` scenes wider than the frame: `speaker` moves the camera to whoever speaks (a 9:16 frame then crops the stage laid out as wide as the 16:9 one), `none` leaves the camera to the beats' own camera actions; none: `speaker` when a stage's characters do not fit in one view; a stage's `reframe` wins; see [vertical cartoons](#vertical-cartoons-reframe) |
 | `character_size` | none (`medium`) | how big the characters are on `stage` scenes: `small` (a wide landscape, for cinema), `medium` (TV / YouTube) or `large` (big characters, for phones and Shorts); on a platform level the tiles and props scale with them; captions, on-screen text and speech bubbles keep their size; a stage's `character_size` or `size` wins; a variant may change it; see [character size](#character-size-character_size) |
@@ -2629,6 +2629,10 @@ writes them as WAV files to listen to):
 | `error` | 0.5 s (0.3–2) | two muted notes falling G4 → E♭4 | a mistake, a failing case |
 | `thud` | 0.45 s (0.15–1.5) | a soft low impact, 110 → 55 Hz with a muffled knock | something landing, a big number |
 | `footstep` | 0.14 s (0.06–0.4) | one soft step: a muffled heel knock (~260 Hz, a 95 Hz thump), then a faint scuff | a character's step ([foley](#foley-and-music-stings)) |
+| `step_grass` | 0.16 s (0.06–0.4) | one step on grass: a soft swish of blades (~2.5 kHz) over a faint, muffled heel | a step on grass (walks on an [iso place](#isometric-places-iso)) |
+| `step_gravel` | 0.18 s (0.06–0.4) | one step on a sandy path: a crunch of tiny grain clicks (~2.2 kHz) over ~80 ms and a soft heel knock | a step on a path, gravel or sand |
+| `step_wood` | 0.16 s (0.06–0.4) | one step on wooden boards: a hollow knock (~150 Hz) with the boards ringing (~340, ~720 Hz) and a short heel tap | a step on a wooden floor or a bridge |
+| `step_stone` | 0.12 s (0.05–0.3) | one step on stone or tiles: a hard, short heel click (~2.8 kHz) with a small dry body (~260 Hz) | a step on stone, steps or tiles |
 | `boing` | 0.5 s (0.2–1.5) | a twangy cartoon spring gliding up ~140 → ~260 Hz with a fast wobble | a jump, a bounce |
 | `bell` | 0.7 s (0.3–2) | a bicycle bell, "ring-ring": two quick strikes of a small bright bell at ~2.35 kHz | a bicycle setting off ([foley](#foley-and-music-stings)) |
 | `engine` | 1.6 s (0.5–8) | a small engine starting and running: a buzzy ~42 Hz tone revving up, settling, with a soft rumble | a car or a bus setting off |
@@ -2705,7 +2709,12 @@ watering can's water lands (`pour`) and, softly, under every step once
 [puddles](#rain-on-the-ground) lie on the ground; on a [platform
 level](#story-props-on-a-level-keys-doors-coins-stars-blockers) a jump's soft landing, a `coin`
 or a `twinkle` at each coin or star picked up, a key's `unlock` before a locked door creaks open,
-and a blocker's soft shuffle as it steps aside. Other
+and a blocker's soft shuffle as it steps aside; on an [iso place](#isometric-places-iso) footsteps
+by what the feet walk on (`step_grass`, `step_gravel` on a path, `step_wood` on boards and, lower,
+on a bridge, `step_stone` on stone steps and tiles, a soft `footstep` on a rug), a soft `pop` as a
+small thing is picked up, a light `swoosh` as it is given and a small `thud` as it is put down, a
+house's or a room's door creaking open and shut, flowers blooming and an object appearing with a
+soft `twinkle`, and a lamp's `click`. Other
 actions are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
@@ -2714,7 +2723,8 @@ generated rain sound bed while it lasts, mixed with the music and ducked less
 ([Rain on the ground](#rain-on-the-ground)), and a burning fireplace a crackle bed
 ([fireplaces](#fireplaces-and-kettles-on-switch_on)), and every stage a bed of its set
 ([ambience](#ambience-and-door-sounds-ambience-knock): birdsong outdoors by day, a room tone
-indoors, or the city); `foley: false` turns them off too.
+indoors, crickets in the evening and at night on an iso place, or the city); `foley: false` turns
+them off too.
 
 **Music stings.** A beat's `sting` plays a short musical phrase on it:
 
@@ -5606,7 +5616,7 @@ never leaves the stage.
 | `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
 | `motion_effects` | bool | none (the video's `motion_effects`: on) | dust, speed lines, impact stars and whoosh arcs in this scene ([motion effects](#motion-effects-motion_effects)); `false`: none |
 | `foley` | bool | none (the video's `foley`: on) | sounds for the characters' actions in this scene (footsteps, whoosh, boing, pop; [foley](#foley-and-music-stings)) and its ambience; `false`: none |
-| `ambience` | `auto` \| bed \| list of beds \| bool | none (the video's `ambience`: `auto`) | the sound bed under the scene while foley is on: `birdsong`, `city`, `room_tone` or a list of them, for the whole scene; `auto` (or `true`): chosen from the set; `false`: none ([ambience](#ambience-and-door-sounds-ambience-knock)) |
+| `ambience` | `auto` \| bed \| list of beds \| bool | none (the video's `ambience`: `auto`) | the sound bed under the scene while foley is on: `birdsong`, `city`, `room_tone`, `crickets` or a list of them, for the whole scene; `auto` (or `true`): chosen from the set; `false`: none ([ambience](#ambience-and-door-sounds-ambience-knock)) |
 | `auto_direct` | bool \| mapping | none (the video's `auto_direct`: off) | [automatic directing](#automatic-directing-auto_direct) in this scene: `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a beat's own `auto_direct` wins |
 | `reframe` | `speaker` \| `none` | none (the video's, else `speaker` when the characters do not fit in one view) | [vertical cartoons](#vertical-cartoons-reframe): the camera keeps whoever speaks in view on a stage wider than the frame |
 | `width` | float 1–4 | `1` | width of the stage in frame widths (16:9 frame widths while it [reframes](#vertical-cartoons-reframe) in a narrower frame); wider than 1: the camera pans across it (`pan`, `follow`) |
@@ -5623,7 +5633,7 @@ never leaves the stage.
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -6113,10 +6123,41 @@ they hide what is behind them.
   `the place has no spot 'pond' (spots: well, home)`, `'kit' is not on the place then (it has not
   entered yet, or it has exited)`. A character with an `enter` waits off the place until then. No
   jumps to a place, `react` or `step_aside` (those are a platform level's).
+- **Time of day and weather** are the stage's own keys:
+  - `light` grades the whole place: `morning` (a soft peach haze), `day`, `sunset` (the evening:
+    warm and a little darker), `night` (dark blue, with stars in the sky around the place) or
+    `{tint, strength}` (an overcast, rainy day: `{tint: "#6B7890", strength: 0.45}`); the `light`
+    action changes it during the scene (`- {light: night, run_time: 3}`).
+  - What is lit **glows**: a lamp that is on (its lantern and the pool of light under it) and a
+    house's lit windows keep their light at `sunset` and at `night` instead of being darkened with
+    the rest, so `switch_on` at night lights the village up. What stands in front of a light
+    still hides it.
+  - `particles: [rain]` (or the `particles` action) rains over the place: seen from above, the
+    drops land anywhere on its ground in view, with a small splash, but not on the characters
+    (no splash on a face). Snow falls over the place too. Not on an iso place yet: `puddles` and
+    settling snow (`settle`); indoors no rain, snow, leaves or streaks.
+- **Sound** ([foley](#foley-and-music-stings), on by default): footsteps by what the feet walk on
+  (grass, a sandy path, wooden boards or a bridge, stone steps and tiles, a rug), a door's creak
+  and thud, a soft sound as a small thing is picked up, given or put down, a lamp's click, a
+  twinkle as flowers bloom or an object appears; under the scene birdsong by day, crickets in the
+  evening and at night (outdoors), rain while it rains, a room tone indoors
+  ([ambience](#ambience-and-door-sounds-ambience-knock)).
+- **Who speaks.** In a wide view the characters are small; while one speaks (its voice says the
+  beat, or a `say`) and its face is small on screen, a **name tag** shows over its head: its name
+  (its voice's `label`, else the character's name) on a small plate in its speaker colour, with a
+  pointer down to it, the same size in 16:9 and 9:16, not graded by the light. A `say` with a
+  `bubble` shows the bubble instead (its tail shows who speaks). `iso: {name_tags: false}` turns
+  the tags off. For a longer line give the beat a shot (`shot: closeup dot`): lint
+  `small_speaker` lets a tagged speaker say up to 12 words in a wide view.
+- **Lint** on an iso place: `hidden_speaker` measures what really covers the speaker's eyes and
+  mouth (a lamp post across the face is reported, the empty corner of a tree's picture is not),
+  `small_speaker` as above, and `offscreen_action` names an action the camera mostly does not
+  show while it happens (a walk outside a close-up, a door opening out of view).
 - **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `fog`, `width`,
   `layers` (the background colour or picture shows around the place), big `props` (a tree, a
-  sofa: use `objects`), a prop's `depth`, `lift` or `against`. A set (`set: park`) gives an iso
-  place its sky, light, ambience and weather, not its props, layers or fog.
+  sofa: use `objects`), a prop's `depth`, `lift` or `against`, rain's `puddles`, snow's
+  `settle`. A set (`set: park`) gives an iso place its sky, light, ambience and weather, not its
+  props, layers or fog.
 - Errors name the map's row and column, counted from the top left from 1: `iso: map row 2,
   column 7: unknown symbol '?'`, `'house' would stand on water at map row 4, column 5; move it,
   or make it smaller (size)`.
@@ -7948,6 +7989,7 @@ seeded, seamless loops, no recordings):
 | `birdsong` | about one bird phrase a second, near and far, left and right (runs of short falling tweets at 3–5 kHz, two-note whistles at 2–3 kHz, trills at 3.5–5.5 kHz) over a faint airy rustle; a 20 s loop | −36 | 4 dB |
 | `city` | street sounds: a low traffic rumble, three or four cars passing (1–2 s swells around 600 Hz) and a far murmur of people; a 16 s loop | −35 | 5 dB |
 | `room_tone` | the air of a quiet room: soft low noise (40–250 Hz) with a faint hiss; an 8 s loop | −46 | no |
+| `crickets` | a warm night outdoors: four crickets, each at its own pitch (3.8–5.2 kHz), place and steady rate (1.3–2.6 chirps a second, each three or four quick pulses), over a faint low night air; a 12 s loop | −37 | 4 dB |
 
 The levels are integrated loudness before ducking (the music: −28, the rain: −32); each bed fades
 in over 2 s from the scene's start and out over 1.5 s ending at its end, and the same bed in the
@@ -7957,7 +7999,9 @@ next stage scene goes on without a dip.
 `room_tone`; outdoors, `birdsong` plays while the light is `day` or `morning` (a [`light`
 change](#light-and-shadows-light-shadows) counts half-way through its fade; not at `sunset`,
 `night`, `indoor` or a tint), never while it [rains](#rain-on-the-ground) and only 2 s after the
-rain stops, and not for less than 2 s; nothing else. The `city` bed is never chosen: name it.
+rain stops, and not for less than 2 s; on an [iso place](#isometric-places-iso) outdoors also
+`crickets` while it is `sunset` or `night` (by the same rules), and an indoor iso place plays the
+`room_tone`; nothing else. The `city` bed is never chosen: name it.
 A stage's **`ambience`** param names the bed for the whole scene (`ambience: city`, `ambience:
 [city, birdsong]` for a park in town) or turns it off (`false`); the top-level `ambience: false`
 turns the automatic choice off for the video (a stage that names a bed still plays it).
@@ -8852,8 +8896,9 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `prop_overlap` | warning | two props standing on the floor whose boxes share at least `min_overlap` of the narrower one's width, at depths less than 0.15 apart: drawn over each other, like a [room](#rooms-room)'s door over the sofa against the wall. Not reported: a prop in front of another (depths 0.15 or more apart, like an armchair before the sofa), one lifted onto another (`lift`: a basket on the counter) or hanging on the wall above it (a picture, a clock), a rug under them, a held prop (the layout dump's `raised`, `flat`, `held_by`). Fix: another `at` for one of them (a door: its x in the room's `doors`), a smaller `scale`, or a `depth` that puts one in front |
 | `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too), of the smaller of two bubbles, or of an [effect symbol](#effect-symbols-effect)'s box. Fix: a shorter `bubble` text, the characters further apart, or the two lines (or the line and the effect) in different beats |
 | `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
-| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
-| `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
+| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. On an [iso place](#isometric-places-iso) it measures what really covers the speaker's eyes and mouth (the opaque pixels of the place in front of it: a lamp post across the face, not the empty corners of a tree's picture) and reports at `min_hidden_features` (`0.25`) of their box, naming the pieces of the place (`lamp`, `tree_2`). Fix: move one of them, or a smaller `depth` for the speaker; on an iso place walk it to a spot where nothing stands in front of it, or a shot that frames it from where it shows |
+| `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. On an [iso place](#isometric-places-iso) a speaker whose name tag shows (or that has a speech bubble) is not reported for a line of at most `max_tagged_words` (`12`) words: the tag shows who says a short line. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
+| `offscreen_action` | warning | on an [iso place](#isometric-places-iso): something a beat does — a walk (`walk_to`, `run_to`, `meet`, `wander`, `enter`, `exit`), a small thing picked up, given or put down, a door, lamp or flowers changing, an object appearing or going — that the camera mostly does not show while it happens: on fewer than `min_seen` (`0.5`) of its frames is at least half of it in view (or enough of it to fill a quarter of the view: a house in a close-up). Fix: a wider shot (`shot: wide`), a `pan` or `follow` to it, or do it in a beat whose shot shows it |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's, area's, point's, vector's or mark's `color` or a `number_line` point's, interval's or jump's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
 | `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared. Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
@@ -8890,8 +8935,9 @@ lint:
     prop_overlap: {min_overlap: 0.15}       # fraction of the narrower prop's width
     bubble_overlap: {min_overlap: 0.1}      # fraction of the face's (or smaller bubble's, or symbol's) box
     facing_away: {}
-    hidden_speaker: {min_hidden: 0.5}       # fraction of the speaker's face box
-    small_speaker: {min_face: 0.075}        # a speaker's face height, fraction of the shorter side
+    hidden_speaker: {min_hidden: 0.5, min_hidden_features: 0.25}   # fraction of the speaker's face box; on an iso place of its eyes and mouth
+    small_speaker: {min_face: 0.075, max_tagged_words: 12}   # a speaker's face height, fraction of the shorter side; words a name tag carries
+    offscreen_action: {min_seen: 0.5}       # on an iso place: share of an action's frames that show it
     mouth_without_voice: {}
     look_alike: {min_contrast: 0.35}        # contrast score of two characters, 0 to 1
     narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range

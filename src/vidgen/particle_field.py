@@ -246,7 +246,7 @@ class ParticleField(VGroup):
         size = states.size * short
         tip_x = xs + size * np.sin(states.angle)
         tip_y = ys - size * np.cos(states.angle)
-        floor = drop_floors(tip_x, landing_lines(self._landing, ground), ground)
+        floor = drop_floors(tip_x, ground.landing(self._landing, tip_x), ground)
         slant = float(np.tan(states.angle[0])) if len(states.angle) else 0.0
         landed = drop_landings(tip_y, floor, spec.fall * self.seeds.speed * short, slant)
         idx = np.nonzero(landed.splashing)[0]

@@ -15838,3 +15838,97 @@ How to test
   windows, door, flowers, bridge appearing; room: letter placed on a table, room door, lamp, key
   dropped; variant `shorts` 9:16); stills in `<scratchpad>/iso/step168/`. `proj3` re-rendered: as
   before.
+
+## Step 169 — Mood, sound and who speaks on an iso place; the iso lint
+
+What was built (DESIGN §89.11)
+- **Time of day / weather reuse the stage's keys** (decided: no new mood key or preset): `light`
+  (`morning`, `day`, `sunset` = evening, `night`; a tint for a rainy day, documented) and
+  `particles` (rain, snow). **Lit things glow**: `Poly` / `Disc` `glow` (lit window glass and core,
+  lit lantern faces, the lamp's pool of light); `draw_shapes(glow=True)` draws a picture of the
+  lights only (other shapes clear what they cover, so hidden lights stay hidden);
+  `IsoScenery.glows`, `tile_image(glow=)`; `IsoTiles` adds `GlowTile`s after its tiles, never
+  graded (`light_graded` is a read-only false property). By day no visible change; at
+  sunset/night lamps and windows stay bright.
+- **Rain on the place**: `IsoRainGround` (`RainGround.landing(shares, x)`; the flat stage's band is
+  unchanged), `place_outline` (front/back edge of the place's picture per x), drops land anywhere
+  on the ground in view, not beside the place, not on characters (no splashes on faces).
+  `puddles` / `settle` / indoor rain refused with alternatives (`iso_particle_problem`). Fixed on
+  the way (Step 168 bug): a place change in the first beat before the set's entrance crashed
+  (`_iso_insert` now inserts into the backdrop still to come).
+- **Sound**: new built-in sounds `step_grass`, `step_gravel`, `step_wood`, `step_stone`;
+  `surface_at` / `route_surfaces` (grass, path, boards, tiles, stone, bridge, rug) →
+  `PlayedAction.surfaces` → the step per footfall (`SURFACE_STEPS`, `footfall_distances`);
+  `handling_cues` (pick_up pop, give swoosh, put_down thud), `place_change_cues` (door creak/thud
+  for houses and room doors, a twinkle for a bloom or a `reveal`); lamp click was already there.
+  Ambience: new bed `crickets` (auto on an iso place outdoors at `sunset` / `night`; nameable on
+  any stage); an indoor iso place gets `room_tone`. All iso-only branches.
+- **Name tags** (automatic; `iso.name_tags: false` to turn off): `NameTag` from
+  `IsoStaging.speak`, the voice's label in its speaker colour, same size on screen, inside the
+  view (16:9 and 9:16 checked), shown while the line's lip sync lasts and the head is under 7.5 %
+  of the view's short side; a `say` bubble replaces it (`iso_untag`); removed at the beat's end.
+- **Lint**: `hidden_speaker` on iso measures the speaker's eyes-and-mouth box (`features`) against
+  the real alpha of the place's tiles in front (`covers` masks written by the layout dump,
+  `face_grid`), threshold `min_hidden_features` 0.25, naming the pieces (`the place's lamp`): the
+  tree-crown false report is gone, the lamp post across Dot's face (33 %) is reported.
+  `small_speaker` skips a tagged speaker with a line of ≤ `max_tagged_words` (12). New rule
+  `offscreen_action` (`min_seen` 0.5): each walk, handing action and place change is watched over
+  its own frames (`iso_watch`, a self-removing scene updater); the dump's `iso_actions` via a new
+  scene hook `layout_keys(beat_id)`.
+
+Files touched
+- New: `tests/test_iso_mood.py` (14 incl. 1 render).
+- Changed: `src/vidgen/cartoon/iso_drawing.py`, `iso_objects.py`, `iso_pictures.py`,
+  `iso_stage.py`, `rain.py`, `foley.py`, `src/vidgen/particle_field.py`, `ambience.py`, `sfx.py`,
+  `config.py` (rules), `introspect.py`, `lint/cartoon_rules.py`, `world/iso_moves.py`,
+  `scenes/stage.py`, `scenes/stage_iso.py`, `scenes/acting.py`, `scenes/particles_action.py`,
+  `api.py`, `docs/CONFIG.md`, guide + `AGENTS.md`, `DESIGN.md` §89.11, `tests/test_cartoon_sounds.py`,
+  `tasklist.md`.
+
+Public interfaces
+- Config: `iso.name_tags`; ambience bed `crickets`; sounds `step_grass`, `step_gravel`,
+  `step_wood`, `step_stone`; lint `offscreen_action: {min_seen}`, `hidden_speaker.min_hidden_features`,
+  `small_speaker.max_tagged_words`.
+- `vidgen.api`: + `GlowTile`, `place_outline`, `IsoRainGround`, `SURFACES`, `surface_at`,
+  `route_surfaces`, `SURFACE_STEPS`, `handling_cues`, `place_change_cues`. Layout dump: frame keys
+  `line_words`, `iso_actions`; character keys `features`, `name_tag`; tile keys `covers`, `pieces`;
+  objects of a name tag `name_tag` (all iso only). A scene may define `layout_keys(beat_id)`.
+
+Decisions
+- Reuse `light` / `particles` (no `mood`); evening = `sunset`; rain light = a tint.
+- Name tags automatic (small speakers only), bubbles stay opt-in via `say`.
+- `hidden_speaker` on iso: eyes and mouth by real pixels (threshold 0.25), flat stages unchanged.
+- `offscreen_action` measures the share of the action's own frames in view (a first version took
+  the most seen on any frame: a shot easing in from the wide view hid the problem).
+- Closed doors blocking routes (optional) not done: a room's doors are drawn closed by default,
+  so blocking would break walks that work today.
+
+Known gaps / for Step 170+
+- Closed doors do not block walks; no rain shelter under iso trees, no puddles / settling snow on
+  the place; characters standing in a pool of light are graded like the rest.
+- In the scratch village a `follow` lags behind a rushed walk (lint `offscreen_action` names it):
+  give such beats enough narration in the example (storyboards without audio rush walks).
+- Characters without their own voice lip-sync the narrator's lines (as on any stage), so they
+  would all get name tags in wide views: give the example's characters voices.
+
+How to test
+- One file at a time under `capped`: `test_iso_mood` (14 incl. 1 render), `test_iso_place` (54),
+  `test_iso_moves` (34), `test_iso_staging` (32), `test_cartoon_sounds` (16), `test_cartoon_foley`,
+  `test_sfx` (131), `test_cartoon_lint`, `test_lint`, `test_timing_lint`, `test_cartoon_rain`,
+  `test_particles`, `test_cartoon_lighting`, `test_platform_sounds`, `test_introspect`,
+  `test_cartoon_acting`, `test_actions`, `test_actions_coverage` (83), `test_cartoon_stage`,
+  `test_cartoon_shots`, `test_guide`, `test_docs`, `test_includes`, `test_builtin_sets`,
+  `test_word_anchors`, `test_cartoon_character`, `test_platform_level`, `test_platform_camera`,
+  `test_phase_o_review`, `test_cartoon_storm`, `test_cartoon_holding`, `test_cartoon_small_props`,
+  `test_cartoon_props`, `test_platform_moves`, `test_platform_props`, `test_cartoon_motion_effects`,
+  `test_cartoon_depth`, `test_cartoon_room`, `test_cartoon_effects`, `test_cartoon_robots`,
+  `test_cartoon_vehicles`, `test_cartoon_wind`, `test_builtin_scenes` (202), `test_api`;
+  `test_schema` (63, capped3g). All pass.
+- Compatibility: baseline frames (`phase-q-baseline/make_baseline.sh` into `check169`,
+  `compare.py`): 31 frames, max difference 0. `vidgen lint --json` of platform-story and
+  examples/cartoon (copies in `<scratchpad>/s169/lintbase`): 0 findings before and after; their
+  timings' `sfx` and `ambience` identical (only the code fingerprint differs).
+- Scratch project `<scratchpad>/iso/proj6` (night village with glow and name tags, lamp post over
+  Dot's face, an off-screen walk under a close-up, rain, evening, the Step 168 village and room;
+  variant `shorts`); stills in `<scratchpad>/iso/step169/`. The village renders 50.6 s of video
+  in 58.9 s, as in Step 168.

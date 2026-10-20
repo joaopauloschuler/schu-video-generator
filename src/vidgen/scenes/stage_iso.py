@@ -43,10 +43,126 @@ class _IsoChange:
     applied: bool = False
 
 
+def iso_particle_problem(iso: Any, kind: str, settings: Any) -> str | None:
+    """Why particles of ``kind`` with ``settings`` (``puddles``, ``settle``) cannot fall on the
+    iso place ``iso`` (DESIGN.md §89.11): rain, snow, leaves and streaks stay out of an indoor
+    place; puddles and settling snow are a flat stage's. ``None``: they can."""
+    if iso.place == "indoor" and kind in OUTDOOR_PARTICLES:
+        return f"{kind} stays outdoors; an indoor place has none inside (sparkles, dust, confetti, smoke and bubbles work)"
+    if getattr(settings, "puddles", False):
+        return "puddles are not drawn on an iso place yet; remove puddles (the rain still lands on the place with splashes)"
+    if getattr(settings, "settle", False):
+        return "settling snow is not drawn on an iso place yet; remove settle (the snow still falls over the place)"
+    return None
+
+
+#: What acts is in view on a frame when at least this share of it shows, or when what shows of
+#: it fills at least :data:`WATCH_FILLS` of the view (a house in a close-up; lint ``offscreen_action``).
+WATCH_IN_VIEW = 0.5
+WATCH_FILLS = 0.25
+
+
+@dataclass
+class _Watched:
+    """Something a beat does on an iso place, watched for lint ``offscreen_action`` (DESIGN.md
+    §89.11): the ``action`` of ``who`` (a character, a small thing or an object of the place) in
+    ``beat`` from scene time ``start`` to ``end``; ``box()`` gives what acts on screen now
+    (``left, bottom, right, top``; ``None``: not there); ``frames`` counts the frames it played
+    on, ``shown`` those with at least :data:`WATCH_IN_VIEW` of it in view."""
+
+    beat: str
+    action: str
+    who: str
+    start: float
+    end: float
+    box: Callable[[], tuple[float, float, float, float] | None]
+    frames: int = 0
+    shown: int = 0
+
+    @property
+    def seen(self) -> float:
+        """The share of its frames on which it was in view (1 before any frame)."""
+        return self.shown / self.frames if self.frames else 1.0
+
+
+def _in_view(box: tuple[float, float, float, float] | None, frame: Mobject) -> bool:
+    """Whether the camera's view ``frame`` shows ``box`` (``left, bottom, right, top``; ``None``:
+    not there): :data:`WATCH_IN_VIEW` of it, or enough to fill :data:`WATCH_FILLS` of the view."""
+    if box is None:
+        return False
+    left, bottom, right, top = box
+    cx, cy = (float(v) for v in frame.get_center()[:2])
+    hw, hh = float(frame.width) / 2, float(frame.height) / 2
+    w, h = min(right, cx + hw) - max(left, cx - hw), min(top, cy + hh) - max(bottom, cy - hh)
+    seen = max(w, 0.0) * max(h, 0.0)
+    return seen >= WATCH_IN_VIEW * max((right - left) * (top - bottom), 1e-12) or seen >= WATCH_FILLS * 4 * hw * hh
+
+
 class IsoObject(Group):
     """An object of the place that the scene changes or names (DESIGN.md §89.10): a group holding
     its layer picture (two while one fades into the other), drawn right after the place's base
     picture. Named after the object: an action's target."""
+
+
+#: A speaker on an iso place gets a name tag over its head while its face on screen is smaller
+#: than this share of the view's shorter side (lint ``small_speaker``'s ``min_face``), DESIGN.md §89.11.
+NAME_TAG_FACE = 0.075
+#: The name tag's gap over the head, its pointer's height and half width, and the width of its
+#: outline, at the establishing view (Manim units; scaled with the camera's view).
+NAME_TAG_GAP = 0.06
+NAME_TAG_POINTER = 0.1
+NAME_TAG_POINTER_HALF = 0.08
+NAME_TAG_STROKE = 2.5
+
+
+class NameTag(VGroup):
+    """A speaker's name on a small plate in its colour with a pointer down to its head (DESIGN.md
+    §89.11), kept the same size on screen and inside the view; shown while ``speaker`` speaks
+    ``track`` (its lip sync) and its face is small on screen (:data:`NAME_TAG_FACE`), never while
+    it has a speech bubble (``bubbled``). Not graded by the light."""
+
+    def __init__(self, text: str, fill: str, theme: Any, speaker: Character, track: Any) -> None:
+        label = callout_label(text, color=fill, size="caption", theme=theme)
+        ink = label.text.family_members_with_points()[0].get_fill_color()
+        plate = label.plate
+        bottom = plate.get_bottom()
+        pointer = Polygon(bottom + np.array([NAME_TAG_POINTER_HALF, 0.02, 0.0]), bottom + np.array([-NAME_TAG_POINTER_HALF, 0.02, 0.0]),
+                          bottom + np.array([0.0, -NAME_TAG_POINTER, 0.0]))
+        shape = Union(plate, pointer)
+        shape.set_fill(plate.get_fill_color(), opacity=1).set_stroke(ink, width=NAME_TAG_STROKE)
+        super().__init__(shape, label.text)
+        self.shape, self.speaker, self.track = shape, speaker, track
+        self.name_tag_of = speaker.name
+        self.size_now = 1.0
+        self.bubbled = False
+        self.shown = 1.0
+
+    def place(self, frame: Mobject, frame_width: float) -> None:
+        """Size it for the camera's view ``frame``, put it over the speaker's head inside the
+        view, and show it when it should show."""
+        size = float(frame.width) / frame_width
+        if abs(size - self.size_now) > 1e-9:
+            self.scale(size / self.size_now)
+            self.size_now = size
+            self.shape.set_stroke(width=NAME_TAG_STROKE * size)
+        figure = self.speaker
+        head = figure.parts["head"] if figure.has_part("head") else figure
+        tops = [figure.parts[part].get_top()[1] for part in ("head", "accessory") if figure.has_part(part)]
+        top = float(max(tops)) if tops else float(figure.get_top()[1])
+        cx, cy = (float(v) for v in frame.get_center()[:2])
+        half_w, half_h = float(frame.width) / 2, float(frame.height) / 2
+        x = float(head.get_center()[0])
+        in_view = abs(x - cx) <= half_w and abs(top - cy) <= half_h
+        x = min(max(x, cx - half_w + self.width / 2 + 0.1 * size), cx + half_w - self.width / 2 - 0.1 * size)
+        y = min(top + NAME_TAG_GAP * size, cy + half_h - self.height - 0.05 * size)
+        self.shift(np.array([x - float(self.get_center()[0]), y - float(self.get_bottom()[1]), 0.0]))
+        small = float(head.height) < NAME_TAG_FACE * min(float(frame.width), float(frame.height))
+        speaking = figure.lip_sync_track is self.track
+        figure.name_tagged = speaking and small and in_view
+        shown = 1.0 if figure.name_tagged and not self.bubbled else 0.0
+        if shown != self.shown:
+            self.set_opacity(shown)
+            self.shown = shown
 
 
 def _moving_block(scene: Any, mover: Mobject) -> list[Mobject]:
@@ -117,6 +233,7 @@ class IsoStaging:
                 side = nearer_side(self.iso_view.point(*route.end)[0], left, right)
                 extra["park_x"] = offstage_x(side, left, right, figure.width / 2)
             walk = IsoWalk(figure, route, self.iso_view, speed=pace(figure), gait=gait, entering=action == "enter", **extra)
+            walk.surfaces = route_surfaces(self.iso_place_now(), route)   # its footsteps (§89.11)
             if passing:
                 fade = DOOR_FADE_SECONDS
                 if route.cells[0 if action == "enter" else -1] is None:   # over the edge: it fades while it walks the step beyond
@@ -382,19 +499,34 @@ class IsoStaging:
             if holder not in self.mobjects:
                 self._iso_insert(holder)
         self._iso_changes.append(_IsoChange(name, state, float(start), max(float(seconds), 1e-3), old, new))
+        if "shown" in fields:
+            change = "reveal" if fields["shown"] else "hide"
+        elif "open" in fields:
+            change = "open" if fields["open"] else "close"
+        else:
+            change = "switch_on" if fields.get("on") else "switch_off"
+        self.iso_watch(change, name, float(start), float(seconds), self._iso_object_box(name))
+        if self._foley_on():   # a door's creak, a bloom, an appearance (§89.11)
+            kind = self.iso_scenery.pieces[k].kind or "door"
+            for cue in place_change_cues(kind, fields.get("open"), fields.get("shown"), float(start), float(seconds)):
+                self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **cue.params)
         if not any(f is self._iso_change_updater for f in self.updaters):
             self.add_updater(self._iso_change_updater)
         return True
 
     def _iso_insert(self, holder: IsoObject) -> None:
-        """Put ``holder`` in the draw order: right after the base picture and the objects drawn before it."""
+        """Put ``holder`` in the draw order: right after the base picture and the objects drawn
+        before it (in the set still to come in when the scene's entrance has not played yet)."""
         order = [self.iso_scenery.pieces[k].name for k in self.iso_scenery.layered]
         before = [self.iso_objects[n] for n in order[:order.index(holder.name)]]
-        at = next(k for k, m in enumerate(self.mobjects) if isinstance(m, IsoTiles) and m.name == "iso_place") + 1
-        for k, mob in enumerate(self.mobjects):
+        drawn = self.mobjects if any(isinstance(m, IsoTiles) and m.name == "iso_place" for m in self.mobjects) else self._backdrop
+        if any(m is holder for m in drawn):
+            return
+        at = next(k for k, m in enumerate(drawn) if isinstance(m, IsoTiles) and m.name == "iso_place") + 1
+        for k, mob in enumerate(drawn):
             if any(mob is other for other in before):
                 at = max(at, k + 1)
-        self.mobjects.insert(at, holder)
+        drawn.insert(at, holder)
 
     def _iso_change_step(self, dt: float) -> None:
         """Scene updater while the place changes: each change's new picture fades in over the
@@ -456,6 +588,136 @@ class IsoStaging:
         names = [name for name in self.iso_objects if any(fnmatchcase(name, pat) for pat in patterns)]
         return [name for name in names if self.iso_change(name, time, ISO_SWITCH_SECONDS, on=on)]
 
+    # ----- what the camera shows of the beat's actions (DESIGN.md §89.11) -------------------------------
+
+    def iso_watch(self, action: str, who: str, start: float, seconds: float, box: Callable[[], tuple[float, float, float, float] | None]) -> None:
+        """Watch the ``action`` of ``who`` from scene time ``start`` for ``seconds``: on how many
+        of its frames the camera shows it (``box()``; lint ``offscreen_action``)."""
+        beat = self.current_beat
+        if beat is None:
+            return
+        watched = self.__dict__.setdefault("_iso_watched", [])
+        watched.append(_Watched(beat.id, action, who, float(start), float(start) + max(float(seconds), 0.0), box))
+        if "_iso_look_updater" not in self.__dict__:   # kept: Manim removes an updater by identity
+            self._iso_look_updater = lambda dt: self._iso_look()
+        if not any(f is self._iso_look_updater for f in self.updaters):
+            self.add_updater(self._iso_look_updater)   # from the next frame (a shot of the beat cuts as it plays)
+
+    def _iso_look(self) -> None:
+        """What the camera shows now of each watched action of the beat under way; the scene
+        updater doing it on every frame leaves once each is wholly seen or its beat is over (a
+        scene updater makes Manim draw every frame of a wait)."""
+        now = float(self.renderer.time)
+        beat = self.current_beat
+        step = 1.0 / config.frame_rate
+        pending = False
+        for item in self.__dict__.get("_iso_watched", []):
+            if beat is None or item.beat != beat.id or (item.frames and now > item.end + step / 2):
+                continue
+            if now >= item.start - step / 2:
+                item.frames += 1
+                item.shown += _in_view(item.box(), self.camera.frame)
+            pending = pending or now < item.end
+        if not pending and "_iso_look_updater" in self.__dict__:
+            self.remove_updater(self._iso_look_updater)
+
+    def _iso_body_box(self, mob: Mobject) -> Callable[[], tuple[float, float, float, float] | None]:
+        def box() -> tuple[float, float, float, float] | None:
+            if mob not in self.mobjects and not any(mob in m.get_family() for m in self.mobjects):
+                return None
+            return float(mob.get_left()[0]), float(mob.get_bottom()[1]), float(mob.get_right()[0]), float(mob.get_top()[1])
+        return box
+
+    def _iso_object_box(self, name: str) -> Callable[[], tuple[float, float, float, float] | None]:
+        piece = self.iso_scenery.pieces[self.iso_scenery.index[name]]
+        left, top, right, bottom = piece.box.picture_bounds()
+        view = self.iso_view
+        found = ((left - view.u0) * view.unit, -(bottom - view.v0) * view.unit, (right - view.u0) * view.unit, -(top - view.v0) * view.unit)
+        return lambda: found
+
+    def iso_watch_action(self, action: str, animations: Any, start: float, seconds: float) -> None:
+        """Watch a built-in action as it plays from scene time ``start`` for ``seconds`` (from
+        :meth:`action_foley`): each character walking, and the character picking up, giving or
+        putting down a small thing."""
+        for anim in animations:
+            if isinstance(anim, IsoWalk):
+                self.iso_watch(action, anim.mobject.name, start, seconds, self._iso_body_box(anim.mobject))
+        if action in ISO_ITEM_ACTIONS:
+            movers = {m.name: m for m in (getattr(anim, "mobject", None) for anim in animations) if isinstance(m, Character)}
+            for name, figure in movers.items():
+                self.iso_watch(action, name, start, seconds, self._iso_body_box(figure))
+
+    def layout_keys(self, beat_id: str | None) -> dict[str, Any]:
+        """What the layout dump adds to a still of ``beat_id`` on an iso place (DESIGN.md §89.11):
+        ``line_words`` (the beat's words: a short line a name tag may carry) and ``iso_actions``
+        (the beat's watched actions, each with the share of its frames on which the camera
+        showed it)."""
+        if not self.on_iso or beat_id is None:
+            return {}
+        beat = self.beat(beat_id)
+        acts = [{"action": w.action, "who": w.who, "seen": round(w.seen, 4)} for w in self.__dict__.get("_iso_watched", []) if w.beat == beat_id and w.frames]
+        return {"line_words": len(beat.text.split()), **({"iso_actions": acts} if acts else {})}
+
+    # ----- who speaks (DESIGN.md §89.11) -----------------------------------------------------------
+
+    def speak(self, character: Any) -> None:
+        """As any scene's (lip sync for the beat); on an iso place with ``name_tags`` a name tag
+        over its head shows while it speaks and is small on screen (:class:`NameTag`)."""
+        super().speak(character)
+        if self.on_iso and self.params.iso.name_tags and isinstance(character, Character):
+            self._iso_name_tag(character)
+
+    def _iso_name_tag(self, character: Character) -> None:
+        tags = self.__dict__.setdefault("_iso_tags", {})
+        old = tags.pop(character.name, None)
+        if old is not None and old in self.mobjects:
+            self.remove(old)
+        config = self.project.config
+        entry = next((c for c in config.characters if c.name == character.name), None)
+        voice = entry.voice if entry is not None and entry.voice in config.voices else None
+        label = config.voices[voice].label if voice is not None else None
+        text = label or (character.name.replace("_", " ")[:1].upper() + character.name.replace("_", " ")[1:])
+        fill = speaker_color(config, voice, self.theme) if voice is not None else "#FFFFFF"
+        tag = NameTag(text, fill, self.theme, character, character.lip_sync_track)
+        top = max((m.z_index for m in self.get_mobject_family_members()), default=0)
+        tag.set_z_index(top + 2)
+        tag.place(self.camera.frame, self.frame_width)
+        tag.add_updater(lambda m: m.place(self.camera.frame, self.frame_width))
+        tags[character.name] = tag
+        self.add(tag)
+
+    def iso_untag(self, name: str) -> None:
+        """``name`` speaks with a speech bubble now: no name tag (the bubble's tail shows who speaks)."""
+        tag = self.__dict__.get("_iso_tags", {}).get(name)
+        if tag is not None:
+            tag.bubbled = True
+            tag.place(self.camera.frame, self.frame_width)
+
+    def _iso_drop_tags(self) -> None:
+        """Take the name tags of the lines that have ended off the scene."""
+        tags = self.__dict__.get("_iso_tags", {})
+        for name, tag in list(tags.items()):
+            if tag.speaker.lip_sync_track is not tag.track:
+                tag.speaker.name_tagged = False
+                if tag in self.mobjects:
+                    self.remove(tag)
+                del tags[name]
+
+    # ----- weather (DESIGN.md §89.11) ----------------------------------------------------------------
+
+    def iso_rain_ground(self) -> IsoRainGround:
+        """Where rain ends on the place now: anywhere on its ground as the camera sees it (the
+        front and back edge of the place's picture at each x, within the view), but on the
+        characters and small things standing there (no splash on a face)."""
+        if getattr(self, "_iso_outline", None) is None:
+            self._iso_outline = place_outline(self.params.iso.parsed(), self.iso_view)
+        xs, fronts, backs = self._iso_outline
+        frame = self.camera.frame
+        cy, half = float(frame.get_center()[1]), float(frame.height) / 2
+        bodies = tuple((float(m.get_left()[0]), float(m.get_bottom()[1]), float(m.get_right()[0]), float(m.get_top()[1]))
+                       for m in self._iso_bodies().values() if m in self.mobjects)
+        return IsoRainGround(cy - half, cy - half, cy + half, self.frame_height, (), xs, fronts, backs, bodies)
+
     # ----- the camera (DESIGN.md §89.10) -------------------------------------------------------------
 
     def _iso_span(self, mob: Mobject) -> tuple[float, float, float]:
@@ -509,4 +771,4 @@ class IsoStaging:
         return x, y + self.iso_view.height(ISO_CHARACTER_HEIGHT) / 2
 
 
-__all__ = ["ISO_PUT_ASIDE", "ISO_REVEAL_SECONDS", "ISO_SWITCH_SECONDS", "IsoObject", "IsoStaging", "_moving_block"]
+__all__ = ["NAME_TAG_FACE", "NameTag", "iso_particle_problem", "ISO_PUT_ASIDE", "ISO_REVEAL_SECONDS", "ISO_SWITCH_SECONDS", "IsoObject", "IsoStaging", "_moving_block"]

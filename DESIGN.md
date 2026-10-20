@@ -12084,3 +12084,104 @@ iso part of the `Stage`, moved there from `stage.py` with Step 167's methods), `
   it reports a speaker behind a tree as wholly hidden (Step 169's iso lint); a lit lamp is graded
   by the light like the rest (a night scene's glow is Step 169's); items are small on the
   establishing view (shots or `follow` show them).
+
+### 89.11 Mood, sound and who speaks on the place (Step 169)
+
+Time of day and weather, the sounds of the place, who speaks when the characters are small, and
+the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTile`),
+`iso_stage.py` (`place_outline`), `cartoon/rain.py` (`IsoRainGround`), `ambience.py` (crickets),
+`sfx.py` (step sounds), `cartoon/foley.py`, `world/iso_moves.py` (surfaces), `scenes/stage_iso.py`
+(`NameTag`, rain ground, watching actions), `introspect.py`, `lint/cartoon_rules.py`.
+
+- **Reuse, no new mood keys.** Time of day is the stage's `light` (`morning`, `day`, `sunset` for
+  the evening, `night`, `indoor`; the `light` action fades it), weather its `particles` (rain,
+  snow; the action too). Decided against a `mood` key or new presets: they would duplicate
+  `light` and need the room's window skies and the sun's path for each. A rainy day is a tint
+  (`{tint: "#6B7890", strength: 0.45}`, as the rain examples do); the docs say so.
+- **Lights glow.** `Poly` and `Disc` get `glow` (a lit window's glass and core, a lit lantern's
+  faces, the pool of light under a lamp). `draw_shapes(..., glow=True)` draws a *picture of the
+  lights*: glow shapes as drawn, every other shape clearing what it covers (tints excepted), so a
+  light behind a tree stays hidden. `IsoScenery.glows(picture)` says whether a picture has one
+  (cached); its tiles are drawn once per `(picture, level, tile, glow)`. `IsoTiles` adds the
+  light tiles after its tiles as `GlowTile`s, whose `light_graded` is always false (a property
+  `mark_lit` cannot set: the stage marks whole groups lit, also later), so the light grades the
+  place and its lights stay as drawn. By day the light tiles repeat the pixels under them (no
+  change to see); at sunset and night they glow. Every picture (base, fronts, layers) gets them,
+  so a character in front of a lamp is covered by the lamp's front picture with its light.
+  Considered: an ungraded copy of the object's layer (shows its post and roof bright too), a
+  halo (shows by day; not needed: the bright lantern and pool read at night).
+- **Rain on the place.** Seen from above the whole place is ground: `IsoRainGround` (a
+  `RainGround` whose `landing(shares, x)` depends on the drop's x) lands each drop between the
+  front and back edge of the place's picture at its x (`place_outline`: 256 xs across the place,
+  the lowest and highest y of the cells' tops there, measured once per scene), within the
+  camera's view; beside the place, or on a character or small thing standing there (their boxes:
+  no splash on a face in a close-up), it falls through (`NO_FLOOR`). No depth, so splashes keep one
+  size. `RainGround.landing` is the old band (`landing_lines`), so a flat stage's rain is
+  unchanged. Not on the place yet, refused with the alternative (`iso_particle_problem`, by the
+  params' check and the `particles` action): `puddles`, `settle`; indoors no rain, snow, leaves,
+  streaks.
+- **Ambience.** A new set bed `crickets` (four crickets at their own pitch, place and rate over a
+  faint low night air; −37 LUFS, ducking 4 dB like birdsong; a 12 s seamless loop). Chosen
+  automatically only on an iso place outdoors while the light is `sunset` or `night`
+  (`set_ambience(..., crickets=True)`; `NIGHT`), with birdsong's rules (not in rain, 2 s after it,
+  at least 2 s); a flat stage's night stays silent as before. An indoor iso place plays the room
+  tone. Any stage may name `ambience: crickets`.
+- **Footsteps by surface.** `surface_at(place, column, row)` (`SURFACES`): grass and path
+  outdoors, boards and tiles indoors, stone for raised blocks and a garden wall's gap, bridge and
+  rug for walkable objects. `route_surfaces(place, route)`: `(share of the route, surface)` from
+  the middle of the leg where the feet enter each new surface; `iso_walks` puts it on the walk
+  (`IsoWalk.surfaces`), `_played` on `PlayedAction.surfaces`. `foley._walk_steps` plays at each
+  footfall (`footfall_distances`: where each footfall of `footfall_shares` is along the walk) the
+  surface's sound (`SURFACE_STEPS`: four new built-in sounds `step_grass`, `step_gravel`,
+  `step_wood` (a bridge 4 semitones lower), `step_stone` (tiles 2 higher); a rug a soft
+  `footstep`). Without surfaces (every flat stage) the cues are exactly the old `footstep`s.
+  `wet_steps` splashes under any step sound (`STEP_SOUNDS`).
+- **Other sounds, iso only.** `handling_cues`: `pick_up` a soft `pop` when the hand gets there
+  (45 %), `give` a light `swoosh`, `put_down` a small `thud` as it lands (75 %), played by
+  `Stage.action_foley` once per action. `place_change_cues`, played by `iso_change`: a house's or
+  a room's door creaks open, creaks and thuds shut (`door_cues`), flowers bloom and an object
+  appears (`reveal`) with a soft `twinkle`; a lamp's click stays the switch's (Step 168). All
+  follow `foley`. A flat stage's `pick_up` stays silent (no new sounds in existing projects).
+- **Name tags.** Decided automatic (nothing for an author to remember), with `iso.name_tags:
+  false` to turn them off. `IsoStaging.speak` (every line's lip sync starts there: a voiced beat
+  or a `say`) adds a `NameTag`: the speaker's name (its voice's `label`, else its name) on a
+  `callout_label` plate in its `speaker_color` (white without a voice of its own) with a pointer
+  down, outlined in the text's ink, unlit, on top. Its updater keeps it the same size on screen
+  (scaled by the camera's view), over the head, inside the view (9:16 too), and shows it only
+  while that line's lip sync lasts and the head is smaller than `NAME_TAG_FACE` (0.075, lint
+  `small_speaker`'s `min_face`) of the view's shorter side; a `say` with a `bubble` hides it
+  (`iso_untag`: the tail shows who speaks). Ended lines' tags leave at the beat's end. Why not
+  automatic bubbles: a bubble with a whole narrated line covers the place; the tag is small.
+- **Lint.**
+  - `hidden_speaker` on an iso place (a character with the dump's `features`: the box of its eyes
+    and mouth, only on an iso place) measures what really covers them: the layout dump gives each
+    iso picture tile drawn after a character a `covers` mask (which of the 12 x 12 points of
+    `face_grid(features)` its pixels' alpha covers, from the tile's own pixels) and the `pieces` of
+    the place whose boxes reach there; the rule ORs the masks (other objects by their boxes) and
+    reports from `min_hidden_features` (0.25; `min_hidden` 0.5 stays the flat stage's face-box
+    share), naming the pieces (`the place's lamp`). The village's close-up of Dot under a tree's
+    crown is no longer reported; Dot with a lamp post across her face (33 %) is.
+  - `small_speaker`: a speaker whose name tag shows (`name_tag` in the dump: the tag would show or
+    a bubble replaced it) is not reported for a line of at most `max_tagged_words` (12; the
+    frame's `line_words`). Otherwise as before: it measures the face as seen, so shots and
+    `follow` count.
+  - New rule `offscreen_action` (warning): `iso_watch` records each walk, pick-up / give /
+    put-down (from `action_foley`, with the seconds it played) and each change of the place
+    (`iso_change`); a scene updater (removed once nothing is watched) counts the frames of each
+    and those on which at least `WATCH_IN_VIEW` (½) of it is in view, or enough of it to fill
+    `WATCH_FILLS` (¼) of the view (a house in a close-up). The dump's frame gets `iso_actions`
+    (`{action, who, seen}`, seen = the share of its frames) through a new scene hook
+    `layout_keys(beat_id)`; the rule reports `seen < min_seen` (0.5). The finding's object is the
+    character, or an `iso_object` stand-in, so two such findings never merge. It found a real
+    case in the test village: a `follow` lagging behind a rushed walk (43 %).
+- **Public**: `vidgen.api` adds `GlowTile`, `place_outline`, `IsoRainGround`, `SURFACES`,
+  `surface_at`, `route_surfaces`, `SURFACE_STEPS`, `handling_cues`, `place_change_cues`. Config
+  adds `iso.name_tags`, the bed `crickets`, the sounds `step_grass`, `step_gravel`, `step_wood`,
+  `step_stone`, the lint rule `offscreen_action` (`min_seen`), `hidden_speaker.min_hidden_features`
+  and `small_speaker.max_tagged_words`. Off an iso place nothing changes: the baseline frames are
+  identical, and `vidgen lint` of platform-story and the cartoon example gives the same (no)
+  findings and the same sounds as before.
+- **Left for later**: closed doors do not block routes (a room's doors are drawn closed by
+  default, so blocking would break existing walks through them; it needs a door state that is
+  open by default for walking); no shelter from rain under a tree on the place, no puddles or
+  settling snow there; a character in a pool of light is graded like the rest.

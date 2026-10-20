@@ -27,7 +27,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from vidgen.errors import VidgenError
-from vidgen.world.iso import VOID, WALLS, WATER, IsoPlace
+from vidgen.world.iso import BLOCK, DOOR, PATH, VOID, WALLS, WATER, IsoPlace
 
 Cell = tuple[int, int]
 Point3 = tuple[float, float, float]
@@ -610,7 +610,51 @@ def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequenc
     return problems
 
 
+#: What a cell is underfoot, for the footsteps (DESIGN.md §89.11): outdoors ``grass`` (floor) and
+#: ``path``, indoors ``boards`` (floor) and ``tiles`` (a path); ``stone`` a raised block (steps,
+#: a terrace) or a doorway in a garden wall; a ``bridge`` and a ``rug`` (walkable objects).
+SURFACES: tuple[str, ...] = ("grass", "path", "boards", "tiles", "stone", "bridge", "rug")
+
+
+def surface_at(place: IsoPlace, column: int, row: int) -> str:
+    """What the cell is underfoot (:data:`SURFACES`)."""
+    item = place.object_at(column, row)
+    if item is not None and item.walkable:
+        return "rug" if item.kind == "rug" else "bridge"
+    ground = place.ground(column, row)
+    if ground == BLOCK:
+        return "stone"
+    if ground == PATH:
+        return "tiles" if place.indoor else "path"
+    if ground == DOOR:
+        return "boards" if place.indoor else "stone"
+    return "boards" if place.indoor else "grass"   # the floor
+
+
+def route_surfaces(place: IsoPlace, route: IsoRoute) -> tuple[tuple[float, str], ...]:
+    """What the feet walk on along ``route``: ``(share of its length, surface)`` from where each
+    surface starts (the middle of the leg where the feet go from one cell into the next; beyond
+    the place's edge, the surface of the first or last cell on it)."""
+    known = [c for c in route.cells if c is not None]
+    if not known:
+        return ()
+    length = route.length
+    found: list[tuple[float, str]] = []
+    covered = 0.0
+    for k, cell in enumerate(route.cells):
+        surface = surface_at(place, *(cell if cell is not None else (known[0] if k == 0 or not found else known[-1])))
+        start = 0.0 if k == 0 else covered - math.dist(route.points[k - 1][:2], route.points[k][:2]) / 2
+        if not found or found[-1][1] != surface:
+            found.append((min(max(start / length, 0.0), 1.0) if length > 0 else 0.0, surface))
+        if k + 1 < len(route.points):
+            covered += math.dist(route.points[k][:2], route.points[k + 1][:2])
+    return tuple(found)
+
+
 __all__ = [
+    "SURFACES",
+    "route_surfaces",
+    "surface_at",
     "CROWD_COST",
     "EDGE_SIDES",
     "EDGE_STEP",

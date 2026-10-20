@@ -8,6 +8,8 @@ from typing import Any
 
 from vidgen.api import *
 
+from .stage_iso import iso_particle_problem
+
 
 @action("particles")
 class Particles(Action):
@@ -67,6 +69,9 @@ class Particles(Action):
         """Rain, snow, leaves and streaks stay out of a stage's room (DESIGN.md §69.42)."""
         if getattr(params, "room", None) is not None and self.kind() in OUTDOOR_PARTICLES:
             return [("target", f"{self.kind()} stays outdoors; a room has none inside (sparkles, dust, confetti, smoke and bubbles work)")]
+        if getattr(params, "iso", None) is not None:   # an iso place (DESIGN.md §89.11)
+            problem = iso_particle_problem(params.iso, self.kind(), self.options)
+            return [] if problem is None else [("target", problem)]
         return []
 
     def default_until(self, later: Any) -> str | None:

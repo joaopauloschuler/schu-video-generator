@@ -21,6 +21,7 @@ from pydantic import (
     Field,
     ModelWrapValidatorHandler,
     PlainSerializer,
+    NonNegativeInt,
     PositiveFloat,
     PositiveInt,
     PrivateAttr,
@@ -785,6 +786,7 @@ LINT_RULES: tuple[str, ...] = (
     "facing_away",
     "hidden_speaker",
     "small_speaker",
+    "offscreen_action",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -817,6 +819,7 @@ RuleName = Literal[
     "facing_away",
     "hidden_speaker",
     "small_speaker",
+    "offscreen_action",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -972,6 +975,8 @@ class HiddenSpeakerRule(RuleConfig):
 
     min_hidden: Fraction = 0.5
     """Share of the face's box covered by things drawn in front from which it is reported."""
+    min_hidden_features: Fraction = 0.25
+    """On an iso place: share of the box of its eyes and mouth that what stands in front of it really covers (its opaque pixels) from which it is reported."""
 
 
 class SmallSpeakerRule(RuleConfig):
@@ -979,6 +984,15 @@ class SmallSpeakerRule(RuleConfig):
 
     min_face: Fraction = 0.075
     """Smallest acceptable height of a speaking character's head on screen (its box, fraction of the frame's shorter side: 0.075 is 36 px at 480p, 81 px at 1080p; a character on a level has about 0.07 at character_size small, 0.095 at medium)."""
+    max_tagged_words: NonNegativeInt = 12
+    """On an iso place, a small speaker whose name tag shows (or with a speech bubble) is not reported for a line of at most this many words: the tag shows who speaks a short line; a longer one needs its face (a closer shot)."""
+
+
+class OffscreenActionRule(RuleConfig):
+    """``offscreen_action``: on an iso place, something a beat does (a walk, a small thing picked up, given or put down, a door, lamp or flowers changing, an object appearing or going) that the camera mostly does not show while it happens."""
+
+    min_seen: Fraction = 0.5
+    """Least share of the action's frames on which at least half of what acts (the character's box, the object's picture) is in view."""
 
 
 class MouthWithoutVoiceRule(RuleConfig):
@@ -1143,6 +1157,8 @@ class LintRules(_Strict):
     """A speaking character whose face is hidden by something in front of it (default: warning)."""
     small_speaker: SmallSpeakerRule = Field(default_factory=SmallSpeakerRule)
     """A speaking character too small on screen to read its face and lip sync (default: warning)."""
+    offscreen_action: OffscreenActionRule = Field(default_factory=OffscreenActionRule)
+    """On an iso place, an action the camera mostly does not show while it happens (default: warning)."""
     mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
     """A mouth moving with lip sync while no narration is heard (default: warning)."""
     look_alike: LookAlikeRule = Field(default_factory=LookAlikeRule)

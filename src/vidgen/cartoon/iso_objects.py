@@ -68,8 +68,8 @@ class _Frame:
             return (self.x0 + b, self.y0 + a, self.base + z)
         return (self.x0 + a, self.y0 + b, self.base + z)
 
-    def poly(self, points: list[tuple[float, float, float]], fill: str, ink: bool | tuple[bool, ...] = True) -> Poly:
-        return Poly(tuple(self.p(*q) for q in points), fill, ink)
+    def poly(self, points: list[tuple[float, float, float]], fill: str, ink: bool | tuple[bool, ...] = True, glow: bool = False) -> Poly:
+        return Poly(tuple(self.p(*q) for q in points), fill, ink, glow)
 
     def box(self, a0: float, b0: float, z0: float, a1: float, b1: float, z1: float, color: str, *, top: str | None = None) -> list[Shape]:
         """A box in the frame, its faces shaded as they face in the world."""
@@ -105,13 +105,13 @@ def _window(f: _Frame, u0: float, u1: float, z0: float, z1: float, *, front: flo
     pad = 0.06
     shapes: list[Shape] = [f.poly([at(u0, z0), at(u1, z0), at(u1, z1), at(u0, z1)], FRAME),
                            f.poly([at(u0 + pad, z0 + pad), at(u1 - pad, z0 + pad), at(u1 - pad, z1 - pad), at(u0 + pad, z1 - pad)],
-                                  LIT_GLASS if lit else GLASS, False)]
+                                  LIT_GLASS if lit else GLASS, False, lit)]
     mid_u, mid_z = (u0 + u1) / 2, (z0 + z1) / 2
     if lit:
         core = 0.3
         shapes.append(f.poly([at(mid_u - (mid_u - u0) * core, mid_z - (mid_z - z0) * core), at(mid_u + (u1 - mid_u) * core, mid_z - (mid_z - z0) * core),
                               at(mid_u + (u1 - mid_u) * core, mid_z + (z1 - mid_z) * core), at(mid_u - (mid_u - u0) * core, mid_z + (z1 - mid_z) * core)],
-                             LIT_CORE, False))
+                             LIT_CORE, False, True))
     shapes += [Line((f.p(*at(mid_u, z0 + pad)), f.p(*at(mid_u, z1 - pad))), FRAME, 1.4),
                Line((f.p(*at(u0 + pad, mid_z)), f.p(*at(u1 - pad, mid_z))), FRAME, 1.4)]
     return shapes
@@ -272,10 +272,10 @@ def _lamp(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     x, y = f.p(0.5, 0.5, 0.0)[:2]
     z = f.base
     post = look.main
-    pool: list[Shape] = [Disc((x, y, z + 0.01), LIGHT_POOL_RADIUS, LIGHT_POOL, False, LIGHT_POOL_OPACITY)] if state.on else []
+    pool: list[Shape] = [Disc((x, y, z + 0.01), LIGHT_POOL_RADIUS, LIGHT_POOL, False, LIGHT_POOL_OPACITY, glow=True)] if state.on else []
     glass = (LIT_CORE, LIT_GLASS, shade(LIT_GLASS, 0.08)) if state.on else (LAMP_GLOW, look.detail, shade(look.detail, 0.15))
     return [*pool, Disc((x, y, z + 0.02), 0.2, shade(post, 0.1)), Upright(x, y, z, z + 2.75, 0.06, post),
-            *box_shapes(x - 0.16, y - 0.16, z + 2.6, x + 0.16, y + 0.16, z + 3.1, glass[0], left=glass[1], right=glass[2]),
+            *box_shapes(x - 0.16, y - 0.16, z + 2.6, x + 0.16, y + 0.16, z + 3.1, glass[0], left=glass[1], right=glass[2], glow=state.on),
             Poly(((x - 0.22, y - 0.22, z + 3.1), (x + 0.22, y - 0.22, z + 3.1), (x + 0.22, y + 0.22, z + 3.1), (x - 0.22, y + 0.22, z + 3.1)), post),
             Poly(((x - 0.22, y + 0.22, z + 3.1), (x + 0.22, y + 0.22, z + 3.1), (x, y, z + 3.35)), shade(post, 0.1)),
             Poly(((x + 0.22, y + 0.22, z + 3.1), (x + 0.22, y - 0.22, z + 3.1), (x, y, z + 3.35)), shade(post, 0.25))]
