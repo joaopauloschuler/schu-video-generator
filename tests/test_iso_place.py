@@ -18,7 +18,7 @@ from test_cartoon_stage import CAST, render_with_layout, stage_params
 from vidgen.cartoon.iso_drawing import Disc, IsoCanvas, Poly, _ink_runs, box_shapes, draw_shapes
 from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook, object_shapes
 from vidgen.cartoon.iso_scenery import IsoColors, ground_shapes, place_pieces
-from vidgen.cartoon.iso_stage import ISO_MARGIN, body_box, iso_layout, iso_pictures, iso_stand, iso_view, map_fraction, pieces_in_front, place_bounds
+from vidgen.cartoon.iso_stage import ISO_MARGIN, IsoScenery, body_box, iso_layout, iso_stand, iso_view, map_fraction, pieces_in_front, place_bounds
 from vidgen.cartoon.stage import StageItem
 from vidgen.errors import VidgenError
 from vidgen.includes import ISO_DROPPED_KEYS, apply_set, builtin_sets
@@ -318,19 +318,23 @@ def test_layout_stands_characters_on_their_cells_back_to_front() -> None:
         iso_layout(place, [StageItem("pip", "character", "left")], frame_width=FW, frame_height=FH)
 
 
-def test_pictures_split_around_the_characters() -> None:
+def test_scenery_draws_front_pictures_of_the_pieces_over_a_character() -> None:
     place = village()
     view = iso_view(place, FW, FH)
-    bodies = [("pip", body_box((1.5, 1.5, 0.0), 2.0)), ("kit", body_box((9.5, 1.5, 0.0), 2.0))]
-    pictures = iso_pictures(place, IsoColors(), looks(place), view, 20.0, bodies)
-    assert [name for name, _ in pictures.fronts] == ["pip"]   # the house in front of pip; nothing hides kit
-    size = (pictures.canvas.width, pictures.canvas.height)
-    assert pictures.base.size == size and pictures.fronts[0][1].size == size
-    base, front = np.asarray(pictures.base), np.asarray(pictures.fronts[0][1])
-    assert base[..., 3].max() == 255 and 0 < (front[..., 3] > 0).mean() < (base[..., 3] > 0).mean()
-    shown = front[..., 3] == 255
-    same = np.all(front[shown] == base[shown], axis=1).mean()
-    assert same > 0.98   # a front picture is a part of the base (but at the edges): no seam where they meet
+    scenery = IsoScenery(place, IsoColors(), looks(place), view, 20.0)
+    assert scenery.base.size == (scenery.canvas.width, scenery.canvas.height)
+    assert scenery.over(body_box((9.5, 1.5, 0.0), 2.0)) == ()   # nothing hides kit
+    key = scenery.over(body_box((1.5, 1.5, 0.0), 2.0))
+    assert scenery.pieces[key[0]].name == "house"   # the house in front of pip
+    part, front = scenery.front(key)
+    assert scenery.front(key)[1] is front   # made once
+    assert front.size == (part.width, part.height) and part.width < scenery.canvas.width and part.scale == scenery.canvas.scale
+    # the front picture is a part of the canvas, in whole pixels: it lies on the base where it is drawn
+    x0, y0 = round((part.left - scenery.canvas.left) * part.scale), round((part.top - scenery.canvas.top) * part.scale)
+    assert (part.left - scenery.canvas.left) * part.scale == pytest.approx(x0, abs=1e-6)
+    base = np.asarray(scenery.base)[y0:y0 + part.height, x0:x0 + part.width]
+    shown = np.asarray(front)[..., 3] == 255
+    assert 0 < shown.mean() and np.all(np.asarray(front)[shown] == base[shown], axis=1).mean() > 0.98   # no seam where they meet
 
 
 # ----- stage params and config ---------------------------------------------------------------------

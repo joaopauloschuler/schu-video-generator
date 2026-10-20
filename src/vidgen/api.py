@@ -566,7 +566,9 @@ from vidgen.world.iso_view import Box3, draw_order, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
 from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook  # noqa: E402
 from vidgen.cartoon.iso_scenery import IsoColors  # noqa: E402
-from vidgen.cartoon.iso_stage import IsoPictures, IsoView, body_box, canvas_center, iso_layout, iso_pictures, iso_stand, iso_view, map_fraction  # noqa: E402
+from vidgen.cartoon.iso_stage import IsoScenery, IsoView, body_box, canvas_center, iso_layout, iso_stand, iso_view, map_fraction, standing_box  # noqa: E402
+from vidgen.world.iso_moves import ISO_MOVES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move  # noqa: E402
+from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -1325,15 +1327,25 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "OBJECT_COLORS",
     "ObjectLook",
     "IsoColors",
-    "IsoPictures",
+    "IsoRoute",
+    "IsoScenery",
+    "IsoStep",
     "IsoView",
     "body_box",
     "canvas_center",
     "iso_layout",
-    "iso_pictures",
+    "iso_move_problems",
     "iso_stand",
+    "ISO_MOVES",
+    "WANDER_RADIUS",
+    "WANDER_STOPS",
+    "IsoWalk",
+    "cell_of",
+    "find_route",
+    "plan_move",
     "iso_view",
     "map_fraction",
+    "standing_box",
     "Field",
     "field_validator",
     "model_validator",

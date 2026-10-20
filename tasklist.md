@@ -924,10 +924,10 @@ Same rules as Phases H–P.
 - [x] An early test render with existing character cut-outs on the map, checked by eye (a village and a room at 854x480 and 1280x720, 9:16: a character hidden behind the house, one behind a tree's crown, one on a block; `tests/test_iso_place.py` incl. one tiny render)
 
 ### Step 167 — Characters in iso: placement, draw order while moving, pathfinding
-- [ ] Characters on the place: ground shadow on the cell top, height on blocks and steps, draw order with walls and objects while they move (in front hides, behind is covered), facing follows the walk direction (side view left / right; front view coming towards the camera if it reads well; no back view); `depth` refused (done in Step 166)
-- [ ] Movement rules (no manim): `walk_to: <spot>` finds a route on the grid around obstacles and up steps (deterministic pathfinding); `run_to`, `wander`, `follow`, `meet` (two characters walk to each other); a clear `VidgenError` for an unknown spot or no route; `vidgen validate` replays the moves
-- [ ] Timed to narration lines and to words (Phase P `at: "@word"` anchors)
-- [ ] Tests: rules without rendering, timing, a tiny render
+- [x] Characters on the place: ground shadow on the cell top, height on blocks and steps (feet rise before a higher cell, drop after; on a bridge's deck), draw order with walls and objects while they move (each frame: the pieces over the character's box, its front picture swapped when they change, made once per set and cropped to its pieces; characters re-sorted by their boxes), facing follows the walk direction (side view left / right by the picture's direction; front view straight towards the camera when the character has one; no back view); `depth` refused (done in Step 166)
+- [x] Movement rules (no manim, `vidgen/world/iso_moves.py`): `walk_to: <spot>` or `{column, row}` finds a route on the grid (8 neighbours, no corner cutting, one step up or down at a time, round water, walls, objects and others; deterministic, fewest turns); `run_to`; `walk_to` / `run_to` `after: <leader>` (follow: `follow` is the camera's action name), `wander`, `meet` (side by side, facing each other); `enter` / `exit` over the place's edge (`side` / `to`) or out of / into a spot (`door`), fading; a clear `VidgenError` for an unknown spot, a cell nobody stands on or no route (where the way stops and what is in the way); `vidgen validate` replays the moves
+- [x] Timed to narration lines and to words (Phase P `at: "@word"` anchors), natural run times from the route; lint `rushed_animation` covers iso walks
+- [x] Tests: rules without rendering, timing, a tiny render (`tests/test_iso_moves.py`)
 
 ### Step 168 — Staging: iso shots, items, doors, lights, place changes
 - [ ] Iso shots: the establishing view of the whole place, follow the hero, zoom to a group, dialogue close-ups reusing the existing flat close-ups / `shot:`

@@ -15652,3 +15652,88 @@ How to test
   (41), `test_actions` (21), `test_actions_coverage` (12), `test_cartoon_lint` (9), `test_lint`
   (22), `test_word_anchors` (30), `test_cartoon_character` (21), `test_platform_moves` (22);
   `test_schema` (63, capped3g, 113 s). All pass. Baseline frames: identical.
+
+## Step 167 — Characters moving on an iso place: routes, draw order while moving, facing
+
+What was built
+- **Rules** (`vidgen/world/iso_moves.py`, no manim, DESIGN §89.9): `find_route` on the grid
+  (8 neighbours; a diagonal only past two free level cells; up or down one step at a time;
+  round water, walls, objects (but a bridge or a rug) and, when it can, other characters;
+  fewest turns; deterministic), `goal_cell` (a spot or `{column, row}`), `meet_routes` (side by
+  side on the picture's level line, the one from the left on the left), `follow_route`
+  (`after:` a leader, `gap` cells behind), `wander_route` (seeded), `edge_ways` /
+  `entry_route` / `exit_route` (over the place's edge on the picture's `left` / `right`, or from
+  / to a spot), `IsoRoute` (feet points; `at()` eases the feet up before a higher cell and down
+  after it), `plan_move` (one plan for the render and for validation, from the logical cells) and
+  `iso_move_problems` (the replay `vidgen validate` runs). Errors name the beat, the character,
+  the goal and where the way stops: `'pip' cannot walk from row 2, column 1 to 'well': the way
+  stops at row 4, column 3: water (a bridge crosses it) at row 4, column 4`.
+- **The walk** (`cartoon/iso_motion.py`): `IsoWalk(Walk)`, the side walk cycle along the projected
+  route, facing left / right by the picture's direction, the front view straight towards the
+  camera (when the character has one), no back view; feet on blocks, steps and a bridge's deck
+  (`IsoPlace.stand_z`, `ObjectKind.deck`); the shadow follows on the cell top.
+- **Draw order while moving** (`Stage._iso_keep_order`, every frame once a walk was applied):
+  the pieces over the character's box (`standing_box`: kept inside its cell; on a bridge or rug
+  on top of it), its front picture swapped when they change, the characters re-sorted by their
+  boxes; Manim redraws characters, fronts and shadows while an `IsoWalk` plays.
+  `IsoScenery` (replaces `IsoPictures` / `iso_pictures`) draws the base once and each front
+  picture once per set of pieces, cropped to the pieces in whole canvas pixels.
+- **Actions**: `walk_to` / `run_to` on an iso place (`to:` a spot or a cell; new `after:` +
+  `gap`), new `wander` and `meet`, `enter` / `exit` (`side` / `to` over the edge, `door:` a spot),
+  checks (an x, another mark or `depth` on an iso place; `after` / `meet` / `wander` off one;
+  bad spots); timing as any action (`at`, `"@word"`), default speeds scaled by `level_pace`
+  (iso branch); lint `rushed_animation` covers `IsoWalk`; foley footsteps for `wander` / `meet`.
+
+Files touched
+- New: `src/vidgen/world/iso_moves.py`, `src/vidgen/cartoon/iso_motion.py`, `tests/test_iso_moves.py`.
+- Changed: `src/vidgen/scenes/stage.py` (iso cells and plans, `iso_walks`, `iso_moved`,
+  `on_iso`, `_iso_scenery` with `IsoScenery`, `_iso_front`, `_iso_body`, `_iso_keep_order`,
+  `_iso_redrawn`, `level_pace`, `_iso_move_problems`), `src/vidgen/scenes/moving.py`,
+  `src/vidgen/cartoon/iso_stage.py` (`IsoScenery`, `standing_box`, `body_box` kept in its
+  cell, `iso_stand` on the deck), `src/vidgen/world/iso.py` (`deck`, `stand_z`),
+  `src/vidgen/api.py`, `src/vidgen/cartoon/foley.py` (`WALKING_ACTIONS`),
+  `src/vidgen/lint/timing_rules.py`, `src/vidgen/config.py` (a docstring), `docs/CONFIG.md`
+  (iso "Moving"), guide + `AGENTS.md` (action rows), `DESIGN.md` §89.9, `tests/test_actions.py`
+  (action lists), `tests/test_iso_place.py` (the pictures test → `IsoScenery`), `tasklist.md`.
+
+Public interfaces
+- Config: actions `wander` (`around`, `radius`, `stops`, `seed`, `speed`) and `meet` (`with`,
+  `speed`); `walk_to` / `run_to` `after`, `gap`; on an iso place `to` is a spot or `{column,
+  row}`, `enter` / `exit` `door` is a spot.
+- `vidgen.api`: + `IsoScenery`, `standing_box`, `IsoRoute`, `IsoStep`, `ISO_MOVES`,
+  `WANDER_RADIUS`, `WANDER_STOPS`, `cell_of`, `find_route`, `plan_move`, `iso_move_problems`,
+  `IsoWalk`; − `IsoPictures`, `iso_pictures` (Step 166, replaced).
+
+Decisions
+- Follow is `walk_to` / `run_to` `after:` because `follow` is the camera's action.
+- 8 neighbours, diagonals without corner cutting or climbing; other characters cost more but
+  never block (a crowd would jam lanes); a goal someone stands on becomes the cell beside it on
+  the picture's level line (not in front of / behind it, where they would overlap).
+- `enter` / `exit` on an iso place: over the edge nearest the goal (`left`: the map's west and
+  south edges, `right`: north and east), fading over the step beyond; or `door:` a spot (a
+  house's door) to fade in / out at. Indoors only an edge door is a way out.
+- Planning from logical cells (where everyone stands once planned moves are over), so the render
+  and `vidgen validate` agree.
+
+Known gaps / for Step 168+
+- Shots, `pan`, `zoom` and the camera's `follow` on an iso place are still the flat stage's.
+- A follower ending straight behind its leader on the picture is partly covered (`gap: 2`);
+  walkers crossing at the same time pass through each other; speed lines of a rushed walk are
+  level; `wander` with the defaults can be long for a short beat (lint names it).
+- Lint for iso (hidden speaker, small speaker, off-screen action) is Step 169.
+
+How to test
+- One file at a time under `capped`: `test_iso_moves` (34 incl. 1 render), `test_iso_place`
+  (54 incl. 1 render), `test_actions`, `test_actions_coverage` (83), `test_builtin_scenes` (202),
+  `test_guide`, `test_docs`, `test_cartoon_stage`, `test_platform_moves`, `test_platform_props`,
+  `test_phase_o_review`, `test_platform_camera`, `test_word_anchors`, `test_cartoon_lint`,
+  `test_lint`, `test_timing_lint`, `test_cartoon_character`, `test_cartoon_foley`,
+  `test_platform_sounds`, `test_cartoon_motion_effects`, `test_cartoon_depth`,
+  `test_cartoon_room`, `test_includes`, `test_builtin_sets`; `test_schema` (63, capped3g). All
+  pass. Baseline frames (`phase-q-baseline/make_baseline.sh`, `compare.py`): 31 frames, max
+  difference 0.
+- Scratch projects: `<scratchpad>/iso/proj3` (village: walks behind the house and well, up the
+  steps, meet, run after, wander, exits; room: enter by a spot, walk, exit through the edge door;
+  arrivals over the edge and out of the house's door) and `<scratchpad>/iso/proj4` (behind a
+  house, down and behind a garden wall, through its gap, behind a tree), contact sheets in
+  `<scratchpad>/iso/step167/`.

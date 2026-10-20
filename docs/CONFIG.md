@@ -6019,7 +6019,46 @@ they hide what is behind them.
   the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the
   light grades the place like the rest of the set.
 - **Drawn once.** The place is drawn into pictures when the scene renders (finer than the
-  frame): one with everything, and one for each character with what stands in front of it.
+  frame): one with everything, and for each character one with what stands in front of it where
+  it is (made again, once, for each new place a walk takes it to).
+- **Moving.** On an iso place the characters go from cell to cell on the map, round what is in
+  the way, never through water (a `bridge` crosses it), walls (a `+` door lets them through),
+  objects (but a bridge or a rug) or off the place, up and down **one step at a time** (a block
+  `2` next to floor `0` needs a `1` between). They step diagonally too (never cutting a corner).
+  The same map gives the same route every time. Their feet rise onto blocks and steps, their
+  shadow lies on the cell under them, and what stands in front of them hides them as they pass
+  (a house, a tree's crown, a wall). They face left or right the way they go on the picture;
+  walking straight towards the camera a character shows its front view (one without keeps its
+  side); there is no back view. The moves:
+
+  ```yaml
+  actions:
+    - {walk_to: pip, to: well}                  # a spot (next to the well when it stands there)
+    - {run_to: kit, to: {column: 9, row: 4}}    # a cell, from the map's top left, from 1
+    - {run_to: kit, after: pip}                 # follows pip: to it, then behind it along its way
+    - {meet: pip, with: kit}                    # both walk; they stop side by side, facing each other
+    - {wander: kit, around: pond, radius: 3, stops: 3}
+    - {enter: pip, to: well, side: left}        # in over the place's edge, from the picture's left
+    - {enter: kit, door: front_door}            # out of a spot (a house's door), fading in there
+    - {exit: pip, to: right}                    # out over the edge; door: a spot to fade away in
+  ```
+
+  `to` is a spot or `{column, row}`, not an x or another mark, and there is no `depth`. A goal
+  where another character stands becomes the free cell beside it; a route goes round where others
+  stand when it can. `after: kit` (with `gap`, the cells it stops behind, default 1) walks after
+  a leader that moves in the same beat at the same time: write it after the leader's move.
+  `wander` picks `stops` cells within `radius` of `around` (a spot; default where it stands), the
+  same ones on every render (`seed` picks others). `enter` / `exit` without `door` use the place's
+  edge nearest the goal on `side` / `to` (`left`: the map's left and bottom edges, which are on the
+  picture's left; `right`: its top and right edges; indoors only a `+` door at the edge of the
+  room is a way out). Moves take as long as their way needs (the default speeds scaled to the
+  place's characters) and are timed like any action (`at: 0.4`, `at: "@well"`); a beat too short
+  for a walk speeds it up (lint `rushed_animation` names it). `vidgen validate` replays the moves
+  in order and names the beat and why one cannot be made: `'pip' cannot walk from row 2, column 1
+  to 'well': the way stops at row 4, column 3: water (a bridge crosses it) at row 4, column 4`,
+  `the place has no spot 'pond' (spots: well, home)`, `'kit' is not on the place then (it has not
+  entered yet, or it has exited)`. A character with an `enter` waits off the place until then. No
+  jumps to a place, `react` or `step_aside` (those are a platform level's).
 - **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `fog`, `width`,
   `layers` (the background colour or picture shows around the place), the stage's `props` (use
   `objects`). A set (`set: park`) gives an iso place its sky, light, ambience and weather, not

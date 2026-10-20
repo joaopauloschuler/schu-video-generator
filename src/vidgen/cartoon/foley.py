@@ -50,7 +50,7 @@ LAST_STEP_INTENSITY = 0.3
 #: A stop closer than this (in steps) after the last footfall adds no step of its own.
 LAST_STEP_MIN = 0.25
 #: The actions that walk (footsteps).
-WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit"})
+WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit", "wander", "meet"})
 #: A ride's sounds (DESIGN.md §69.52), per vehicle: the sound as it sets off (``bell`` or
 #: ``engine``), its pitch (semitones) and gain (dB); then its brakes as it stops: pitch and gain.
 #: A boat's outboard motor is a small engine, high; a balloon roars its burner, a toy rocket fizzes

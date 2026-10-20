@@ -66,14 +66,15 @@ MAX_ROWS = 48
 @dataclass(frozen=True)
 class ObjectKind:
     """A ready-made object: its footprint (``width`` columns by ``depth`` rows when facing left),
-    its height (tile units), whether one can walk on it (a rug, a bridge) and the ground it may
-    stand on (``water``: a bridge spans it)."""
+    its height (tile units), whether one can walk on it (a rug, a bridge; ``deck``: how high
+    over its base the feet stand on it) and the ground it may stand on (``water``: a bridge spans it)."""
 
     width: int
     depth: int
     height: float
     walkable: bool = False
     over_water: bool = False
+    deck: float = 0.0
 
 
 #: The ready-made objects (DESIGN.md §89.5).
@@ -89,14 +90,14 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "lamp": ObjectKind(1, 1, 3.4),
     "well": ObjectKind(1, 1, 2.9),
     "sign": ObjectKind(1, 1, 1.7),
-    "bridge": ObjectKind(1, 3, 0.35, walkable=True, over_water=True),
+    "bridge": ObjectKind(1, 3, 0.35, walkable=True, over_water=True, deck=0.22),
     "table": ObjectKind(2, 1, 1.0),
     "chair": ObjectKind(1, 1, 1.3),
     "bed": ObjectKind(1, 2, 1.0),
     "shelf": ObjectKind(1, 2, 2.5),
     "sofa": ObjectKind(2, 1, 1.15),
     "plant": ObjectKind(1, 1, 1.5),
-    "rug": ObjectKind(2, 2, 0.03, walkable=True),
+    "rug": ObjectKind(2, 2, 0.03, walkable=True, deck=0.02),
 }
 
 
@@ -195,6 +196,13 @@ class IsoPlace:
         """The height (tile units) of the cell's top: where something standing there has its feet
         (a wall's base for a wall)."""
         return self.cell(column, row).steps * STEP_HEIGHT
+
+    def stand_z(self, column: int, row: int) -> float:
+        """The height (tile units) of the feet of someone standing on the cell: its top, or the
+        deck of a walkable object on it (a bridge's planks)."""
+        item = self.object_at(column, row)
+        deck = OBJECT_KINDS[item.kind].deck if item is not None and item.walkable else 0.0
+        return self.floor_z(column, row) + deck
 
     def object_at(self, column: int, row: int) -> IsoObject | None:
         """The object standing on the cell (``None``: none)."""

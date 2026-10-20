@@ -11660,7 +11660,8 @@ The three layers of §86.1, extended rather than forked:
 1. **World model** (`vidgen/world/iso.py`, no manim): `IsoPlace` (cells: a ground kind and a
    height in steps; spots; objects), `IsoCell`, `IsoSpot`, `IsoObject`, `ObjectKind` /
    `OBJECT_KINDS`, `ObjectPlacing`, `parse_iso_map`, `place_objects`. Step 167 adds the rules
-   (routes on the grid) beside `moves.py`, reusing its style (pure functions, `VidgenError`).
+   (`vidgen/world/iso_moves.py`: routes on the grid, §89.9) beside `moves.py`, in its style
+   (pure functions, `VidgenError`).
 2. **The view** (`vidgen/world/iso_view.py`, no manim, no drawing): the projection
    (`iso_point`, `ISO_RISE`) and the draw order of boxes (`Box3`, `in_front`, `draw_order`).
    Kept apart from the place and from Pillow so a later presentation scene (`iso_diagram`:
@@ -11833,9 +11834,9 @@ camera's shots (Step 168).
   objects 2.8 s in 6.0 s.
 - `vidgen.api` exports `ISO_CHARACTER_HEIGHT`, `OBJECT_KINDS`, `IsoPlace`, `ObjectPlacing`,
   `parse_iso_map`, `place_objects`, `Box3`, `draw_order`, `iso_point`, `draw_shapes`,
-  `OBJECT_COLORS`, `ObjectLook`, `IsoColors`, `IsoPictures`, `IsoView`, `body_box`,
-  `canvas_center`, `iso_layout`, `iso_pictures`, `iso_stand`, `iso_view`, `map_fraction`
-  (none shadows a manim name).
+  `OBJECT_COLORS`, `ObjectLook`, `IsoColors`, `IsoView`, `body_box`, `canvas_center`,
+  `iso_layout`, `iso_stand`, `iso_view`, `map_fraction` (none shadows a manim name); Step 167
+  replaced `IsoPictures` / `iso_pictures` by `IsoScenery` (§89.9).
 
 ### 89.8 The rest of the phase (plan)
 
@@ -11868,3 +11869,116 @@ camera's shots (Step 168).
   recorded in Step 166 (platform-story `meadow`, cartoon `yard`, gradient-descent `curve` and
   `code`/`run`: 31 PNGs at 854 x 480, rendered twice identically; the commands are in the
   scratchpad's `phase-q-baseline/make_baseline.sh`, comparison `compare.py`).
+
+### 89.9 Characters moving on the place (Step 167)
+
+- **Rules** (`vidgen/world/iso_moves.py`, no manim). A route goes from cell to cell, to the **8
+  neighbours** (`NEIGHBOURS`; chosen over 4 because a diagonal of the map runs straight down or
+  across the picture, and 4 neighbours made zig-zags). A diagonal step needs both cells beside
+  it standable and all four cells level (`can_step`: no corner cut, no diagonal climb). A step
+  goes up or down at most **one step** of height, onto standable cells only (`is_standable`:
+  floor, path, block, door, a bridge or a rug). The search is a cheapest-path search over
+  (cell, heading) (`_reach`): 1 per side, √2 per diagonal, `TURN_COST` 0.05 per turn (fewest
+  turns among routes of equal length), `CROWD_COST` 4 per cell where another character stands
+  (the route goes round them when it can but is never refused, so a narrow lane does not jam).
+  Ties go by the order found (`NEIGHBOURS` order), so the same map gives the same route. A 48 x 48
+  place searches in milliseconds. `IsoRoute` holds the feet points and their cells (`None`
+  beyond the edge). The points are cell middles at `stand_z`: the cell top, or a walkable
+  object's deck (`ObjectKind.deck`: 0.22 for a bridge, 0.02 for a rug). `at(distance)` raises
+  the feet in the last `STEP_EASE` (0.3) of the leg before the higher cell's edge, and lowers
+  them in the 0.3 after it, so the feet are never inside a block.
+- **Goals** (`goal_cell`): a spot (its stand cell, §89.4) or a cell `{column, row}` from 1. A
+  `VidgenError` names an unknown spot (listing the spots), a cell outside the place, or a cell
+  nobody can stand on (saying what is there). A goal where someone stands becomes a free cell
+  **beside** that character on the picture (`BESIDE`, best first: on its level line, `(1, -1)`
+  or `(-1, 1)`, one tile width apart; then a tile and a half to the side; then its four sides).
+  It is never right in front of or behind that character, where the two would overlap. **No
+  route** gives a message like `'pip' cannot walk from row 2, column 1 to 'well': the way stops
+  at row 4, column 3: water (a bridge crosses it) at row 4, column 4`. The message names the
+  reached cell nearest the goal and the blocked neighbour towards it: the edge of the place, an
+  object by name, water, a wall, a climb of n steps, or a corner.
+- **Moves**:
+  - `walk_to` / `run_to` go `to:` a spot or a cell.
+  - `after: <character>` (with `gap`, default 1) walks to the leader and then on along the
+    route the leader walks *in the same batch*, stopping `gap` cells behind it. That route is
+    the one planned just before (`Stage._iso_planned`, keyed by the scene time). The action is
+    not called `follow` because that name is the camera's action.
+  - `meet` (`with:`) runs one search from each of the two characters and picks the side-by-side
+    pair of cells (`SIDE_BY_SIDE`, the level line first) that the longer of the two walks
+    reaches soonest. The character coming from the picture's left takes the left cell. Both end
+    facing each other; one that is already there turns.
+  - `wander` (`around`, `radius` 3, `stops` 3, `seed`; the default seed is `crc32(name/beat)`)
+    walks to random, seeded cells within the radius, each at least 2 cells from the one before.
+  - `enter` / `exit` without `door` cross the place's edge (`edge_ways`: standable edge cells
+    with outside next to them). `side` / `to` `left` means the map's west and south edges, which
+    are on the picture's left; `right` means its north and east edges. The edge cell cheapest
+    to reach from the goal is used, the front edges first between equals. The walk starts or
+    ends at a point `EDGE_STEP` (1 tile) beyond the edge, and the character fades in or out
+    over that step. With `door:` (a spot) the character comes out of that spot or goes into it,
+    fading over `DOOR_FADE_SECONDS`. Indoors only a door in an edge wall is a way out. A
+    character with an `enter` waits off the place until then, as on any stage.
+- **One plan for render and validate** (`plan_move`). Moves are planned from the stage's
+  *logical* cells (`Stage.iso_cells`: where each character stands once the moves planned so far
+  are over; `None` means off the place). So `vidgen validate`'s replay (`iso_move_problems`,
+  run by `Stage.action_sequence_problems`) sees what the render does. It reports a move of a
+  character not on the place, no route, or a bad cell, naming the beat and the option. A move
+  naming an unknown spot is left to the action's own check (one message, not two), and that
+  character is no longer followed.
+- **Timing** works as for every walk. `run_time_for` plans the move, and its natural time is
+  the route over its speed. `at` fractions and Phase P word anchors (`at: "@well"`) start it, and
+  a short beat speeds it up. Lint `rushed_animation` names an `IsoWalk` sped up more than
+  `max_speedup`, as it does a level's moves. Default speeds are scaled by `level_pace`: on an iso
+  place, the place's character height over a plain stage's (`STAGE_SIZE`). So characters walk as
+  many of their own heights per second as on any stage. A tile walked counts as a tile of height
+  (`IsoWalk._distance`), so footsteps keep step (in foley, `wander` and `meet` are walks).
+- **The walk drawn** (`cartoon/iso_motion.py`, `IsoWalk(Walk)`). The side walk cycle plays along
+  the projected route; it slides on diagonals, which is accepted. The facing follows the leg's
+  direction on the picture (`leg_facing`): left or right; straight towards the camera (a map
+  diagonal `(1, 1)`) the front view when the character has one; straight away, the side it last
+  showed (there is no back view). Its `ground_y` follows the feet, so the soft shadow lies on the
+  cell top or the step. `iso_feet` holds the feet's place in the world, for the draw order.
+- **Draw order while moving** (`Stage._iso_keep_order`). The stage's draw-order updater runs it
+  on every frame once a walk has been applied:
+  - Each character stands in a box (`standing_box`). This is `body_box` kept inside the cell
+    its feet are in, so a walker is in one cell or the next, never inside a neighbour's block.
+    On a bridge or a rug the box sits on top of the whole object.
+  - The box gives the pieces drawn over the character (`IsoScenery.over`: those in front of it,
+    and those in front of these). When they change, its front picture (`iso_front_<name>`,
+    right after it) is swapped.
+  - The characters are re-sorted by their boxes (`draw_order`), each with its front picture and
+    held props (`_moving_block`). The moving shadows stay before the first of them.
+  - While an `IsoWalk` plays, Manim redraws the characters, their front pictures and the shadows
+    on every frame (`_iso_redrawn`). The place's base picture stays in Manim's static image.
+  - Considered and dropped: pre-cut layers of the place between characters (they showed seams,
+    §89.7), and one front picture per route leg (a leg can pass several pieces).
+- **Front pictures** (`IsoScenery`, replacing Step 166's `IsoPictures`). The base is drawn once.
+  A front picture is made the first time a set of pieces needs one, and kept for the scene. It
+  is drawn on the part of the canvas its pieces cover (their boxes plus `FRONT_MARGIN`, 0.5 tile
+  widths), in whole pixels of the canvas, so its pixels fall on the base's and no seam shows. A
+  whole-canvas picture would cost about 13 MB at 1080p. A walk past a house and a tree makes a
+  handful of front pictures. Measured at 854 x 480 @ 15 fps: the 16 x 10 village with seven
+  walks, a meet and a follow renders 45 s of video in 29 s.
+- **Checks** (`moving.py`):
+  - On an iso place `to` is a spot or a cell. An x or another mark is refused with "on an iso
+    place a move goes to a spot of the map (...) or a cell {column, row}, not 'left'". There is
+    no `depth`.
+  - `after` needs an iso place, is not given with `to`, and names another character of the
+    scene.
+  - `meet` and `wander` need an iso place.
+  - On an iso place `door` is a spot, and is not given with `side` / `to`.
+  - A jump to a place, `react` and `step_aside` stay a platform level's; their existing checks
+    name the level.
+- **Public**:
+  - `vidgen.api` adds `IsoScenery`, `standing_box`, `IsoRoute`, `IsoStep`, `ISO_MOVES`,
+    `WANDER_RADIUS`, `WANDER_STOPS`, `cell_of`, `find_route`, `plan_move`, `iso_move_problems`
+    and `IsoWalk`.
+  - Config adds the actions `wander` and `meet`, and `after` and `gap` on `walk_to` / `run_to`.
+  - Nothing changes off an iso place: every new branch tests `params.iso` (or `on_iso`) first,
+    and the baseline frames of §89.8 are identical.
+- **Left for later**:
+  - Shots, `pan`, `zoom` and `follow` (the camera) on an iso place (Step 168).
+  - A follower that ends straight behind its leader on the picture is partly hidden by it
+    (`gap: 2` spaces them out).
+  - The speed lines of a rushed walk are drawn level, not along the diagonal.
+  - Two walkers crossing in one cell pass through each other: routes avoid standing
+    characters, not moving ones.
