@@ -649,8 +649,8 @@ def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, An
 
 def video_cues(project: Project, timings: dict[str, Any]) -> list[Cue]:
     """The subtitle cues of the video with the combined ``timings`` (what its SRT holds): word
-    times from the narration MP3s, the project's pronunciation, speakers and language."""
-    spoken = {beat.id: project.spoken(beat) for _, beat in project.beats() if beat.voice_sounds}
+    times from the narration MP3s, each beat's pronunciation, speakers and language."""
+    spoken = {beat.id: project.spoken(beat) if beat.voice_sounds else project.pronounced(beat) for _, beat in project.beats()}
     return cues_from_timings(timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language, spoken)
 
 

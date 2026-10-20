@@ -116,7 +116,7 @@ def _overlay_inputs(project: Project) -> Any:
     cfg = project.config
     if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
         return None
-    say = project.pronunciation.say  # captions time the written words by their spoken form (§45)
+    said = {b.id: project.pronounced(b).spoken for _, b in project.beats()}  # captions time words by their spoken form (§45, §88)
     speakers = project.voice_names()  # captions name / colour speakers (§46)
     scenes = [
         {
@@ -131,7 +131,7 @@ def _overlay_inputs(project: Project) -> Any:
             **({"joins": _joins(s)} if _joins(s) else {}),  # overlapping lines move later beats (§69.34)
             "beats": [
                 [
-                    b.id, b.text, say(b.text), speakers[b.id],
+                    b.id, b.text, said[b.id], speakers[b.id],
                     _stat(project.audio_dir / f"{b.id}.mp3"), _stat(project.audio_dir / f"{b.id}.align.json"),
                 ]
                 for b in s.beats
@@ -187,7 +187,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # `include` files are already merged into the config, and each scene's set into its params
     # (§69.35): the file names and the unused sets change nothing.
     excluded = {
-        "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
+        "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "pronunciation_defaults", "voices", "subtitles", "music", "audio",
         "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets", "soundfont",
         # a draft's size and frame rate: only drafts use them, checked like any format (§74)
         "draft",

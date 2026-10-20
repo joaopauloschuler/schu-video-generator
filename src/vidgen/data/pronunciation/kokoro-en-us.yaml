@@ -1,0 +1,10 @@
+# Built-in pronunciation entries for Kokoro's American English voices (lang a) only, over
+# kokoro-en.yaml (DESIGN.md §88). British misaki (lang b) already reads these right.
+
+epoch:                # ˈɛpək (sounds like "epic"; British ˈiːpɒk) -> ˈi pˈɑk ("E-pock" with a hyphen: weaker stress mid-sentence)
+  say: E pock
+  case_sensitive: false
+epochs:               # ˈɛpəks -> ˈi pˈɑks
+  say: E pocks
+  case_sensitive: false
+VS Code: V S Code     # vˈiz kˈOd ("veez code") -> vˈi ˈɛs kˈOd

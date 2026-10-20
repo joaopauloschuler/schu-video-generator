@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–164)
+## 0.3.0 (Steps 61–165)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -20,8 +20,8 @@ presentation toolkit for explainers and coding Shorts (actions on a spoken word,
 concept, code that morphs, a terminal, function plots and geometry, charts that change, and a
 lint check of narration against the picture).
 
-0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–164
-(Phases M, N, O and P in `tasklist.md`) is part of this release rather than an "Unreleased" section.
+0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–165
+(Phases M, N, O and P in `tasklist.md`, and Step 165) is part of this release rather than an "Unreleased" section.
 
 ### Behaviour changes and possible breaks
 
@@ -56,6 +56,15 @@ Changes that affect projects made with 0.2.0:
   1.5 s before it appears). `vidgen lint --fail-on warning` may now fail on a project that passed:
   show the label on the word (`{reveal: ..., at: "@word"}`), or set
   `lint.rules.said_before_shown: {severity: off}`.
+- **Built-in pronunciation entries** (Step 165): vidgen now respells some words for some voices
+  in every project (`vidgen list-pronunciation` lists them): Kokoro's English voices say `README`
+  as `readme`, `JSON` as `Jason`, `YAML` as `yammel`, `ReLU` as `ray loo` and more, and its
+  American voices `epoch` as `E pock`. The audio hash covers the spoken text, so **existing Kokoro
+  audio of beats with these words becomes stale**: `vidgen validate` counts them in `audio:` and
+  prints `pronounce: built-in kokoro-en-us changes N beat(s): ...`; `vidgen tts` regenerates only
+  those beats. To keep the old audio, set `pronunciation_defaults: false` or drop an entry with
+  `term: null`. A project entry for the same term wins, so projects that already respell a word
+  keep their audio. ElevenLabs and OpenRouter videos are unchanged (no lists for them yet).
 - **Readback transcripts** (Step 141): `vidgen readback` keeps faster-whisper's word
   probabilities in its cache; a cached faster-whisper transcript without them is transcribed
   once more (local, free). Audio for faster-whisper is decoded with the ffmpeg executable.
@@ -263,6 +272,10 @@ matters only for projects made with development builds between Steps 67 and 131)
   translated variant, lip sync and timings from each language's audio, and `--all-languages`
   on `tts`, `render` and `lint` (MCP `render` / `lint`) (143). `examples/cartoon-music-box`
   has a Brazilian Portuguese variant.
+- Built-in pronunciation lists per TTS engine and language (`kokoro-en-us`, `kokoro-en-gb`), used
+  under every project's own entries; `pronunciation_defaults: false` turns them off; `vidgen
+  list-pronunciation [PROJECT] [--json]` shows them and what they change; validate, `tts` and
+  readback say when a built-in entry is involved (165).
 - `vidgen readback` flags single words the recogniser was unsure of or heard after an odd pause,
   with the time in the video and a suggested fix; `vidgen lint --readback` reports them as rule
   `unclear_speech` (141).

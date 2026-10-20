@@ -31,8 +31,10 @@ class TTSPlan:
     ``todo``: beats to generate, in video order. ``reuse``: beat id -> base ``audio/`` MP3 to copy
     instead of calling the API (a variant with its own audio folder whose beat and voice are
     unchanged). ``up_to_date``: ids skipped because their audio is current. ``spoken``: beat id
-    -> the text sent to the TTS (the beat's text with the project's pronunciation applied).
+    -> the text sent to the TTS (the beat's text with its pronunciation applied).
     ``voices``: beat id -> the name of the voice that says it (``None``: the base voice).
+    ``builtin``: beat id -> the built-in pronunciation entries that changed its spoken text
+    (DESIGN.md §88; only such beats).
     """
 
     audio_dir: Path
@@ -41,6 +43,7 @@ class TTSPlan:
     up_to_date: list[str] = field(default_factory=list)
     spoken: dict[str, str] = field(default_factory=dict)
     voices: dict[str, str | None] = field(default_factory=dict)
+    builtin: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: Beat id -> its effective voice (provider, model, voice...).
     beat_voices: dict[str, VoiceConfig] = field(default_factory=dict)
     #: OpenRouter model -> its price per character (:func:`price_tts`; DESIGN.md §66).
@@ -133,7 +136,7 @@ def plan_tts(
         raise VidgenError(f"unknown beat id(s): {', '.join(unknown)}; beats: {', '.join(by_id) or 'none'}")
     _check_voices(project, voices)
     wanted = set(beat_ids) if beat_ids else set(by_id)
-    plan = TTSPlan(project.audio_dir, spoken=project.spoken_texts(), voices=project.voice_names())
+    plan = TTSPlan(project.audio_dir, spoken=project.spoken_texts(), voices=project.voice_names(), builtin=project.builtin_changes())
     plan.beat_voices = {beat.id: project.beat_voice(beat.id) for beat in known}
     providers = beat_providers(project) if provider is None else dict.fromkeys(by_id, provider)
     base_dir = project.root / "audio"
@@ -299,6 +302,12 @@ def _reported_cost(plan: TTSPlan, providers: Iterable[TTSProvider]) -> str:
     return f", {_money(total)} charged by openrouter{part}"
 
 
+def _builtin_note(plan: TTSPlan, beat_id: str, template: str) -> str:
+    """``template`` filled with the built-in entries that changed the beat (empty: none)."""
+    terms = plan.builtin.get(beat_id)
+    return template.format(", ".join(terms)) if terms else ""
+
+
 def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> None:
     named = bool(project.config.voices)
     routed = any(plan.engine(b).provider == "openrouter" for b in plan.todo)
@@ -316,7 +325,7 @@ def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> Non
             note += f", {emotion.name}"
         out(f"would generate {beat.id}.mp3 ({note})")
         if plan.say(beat) != beat.text:
-            out(f"    says: {plan.say(beat)}")
+            out(f"    says: {plan.say(beat)}{_builtin_note(plan, beat.id, '  (built-in: {})')}")
     out(
         f"dry run: {len(plan.todo)} beat(s) to generate, {plan.characters} characters; "
         f"{len(plan.up_to_date)} up to date"
@@ -443,7 +452,7 @@ def run_tts(
                     audio, alignment = timed(text, previous, following)
                 else:
                     audio = beat_provider.synthesize(text, previous, following)
-                action = f"generated {beat.id}.mp3 ({len(text)} chars{', with timings' if alignment else ''})"
+                action = f"generated {beat.id}.mp3 ({len(text)} chars{', with timings' if alignment else ''}{_builtin_note(plan, beat.id, ', built-in pronunciation: {}')})"
             atomic_write(mp3_path(plan.audio_dir, beat.id), audio)
             # The alignment's text and the hash are the spoken text (what the audio says).
             write_alignment(plan.audio_dir, beat.id, text, audio, alignment)

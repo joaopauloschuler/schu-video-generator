@@ -34,7 +34,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
-    "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
+    "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
     "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music",
 )
@@ -401,10 +401,11 @@ def theme_warnings(project: Project) -> list[str]:
 
 
 def pronunciation_warnings(project: Project) -> list[str]:
-    """``pronunciation:`` entries that match no beat, never apply or collide (DESIGN.md §45)."""
+    """``pronunciation:`` entries that match no beat, never apply or collide (DESIGN.md §45);
+    built-in entries are not reported (§88)."""
     from vidgen.pronunciation import pronunciation_warnings as check
 
-    return check(project.pronunciation, ((beat.id, beat.text) for _, beat in project.beats()))
+    return check(project.pronunciation, ((beat.id, beat.text) for _, beat in project.beats()), project.beat_pronunciation)
 
 
 def validate_warnings(project: Project) -> list[str]:
@@ -504,6 +505,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
     if config.voices:
         counts = Counter(name or "default" for name in project.voice_names().values())
         print(f"voices:    {', '.join(f'{name} ({n} beats)' for name, n in counts.items())}")
+    for line in pronunciation_summary_lines(project):
+        print(line)
     for line in language_summary_lines(project, variants):
         print(line)
     for line in audio_summary_lines(project):
@@ -530,6 +533,18 @@ def _validate_json(path: str) -> dict[str, Any]:
 
     images = [jsonout.images_json(p, found) for p, found in variant_images(project, variants)]
     return jsonout.validate_document(project, problems, variants, error, images=images, music=music_summary(project.config))
+
+
+def pronunciation_summary_lines(project: Project) -> list[str]:
+    """``pronounce: built-in kokoro-en-us changes 3 beat(s): epoch (2), README (1)`` when
+    built-in pronunciation entries change beats' spoken text (DESIGN.md §88); else nothing."""
+    changes = project.builtin_changes()
+    if not changes:
+        return []
+    counts = Counter(term for terms in changes.values() for term in terms)
+    lists = sorted({str(project.beat_pronunciation(beat_id).builtin_list) for beat_id in changes})
+    terms = ", ".join(f"{term} ({n})" for term, n in counts.items())
+    return [f"{'pronounce:':<10} built-in {', '.join(lists)} changes {len(changes)} beat(s): {terms} (vidgen list-pronunciation)"]
 
 
 def language_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
@@ -1263,6 +1278,50 @@ def cmd_list_sfx(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_list_pronunciation(args: argparse.Namespace) -> CommandResult:
+    """Print vidgen's built-in pronunciation lists (DESIGN.md §88): every list, or in a project
+    the lists its beats' voices use, with what the project replaces or removes and the beats
+    each entry changes."""
+    from vidgen.pronunciation import builtin_list_names, builtin_listing
+
+    project = None
+    if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        project = Project.load(args.project)
+    if project is None:
+        lists = [builtin_listing(name) for name in builtin_list_names()]
+        users: dict[str, int] = {}
+    else:
+        names = {beat.id: project.beat_pronunciation(beat.id).builtin_list for _, beat in project.beats()}
+        users = dict(Counter(name for name in names.values() if name is not None))
+        changes = project.builtin_changes()
+        lists = [builtin_listing(name, project.pronunciation_entries, changes) for name in users]
+    if args.json:
+        return jsonout.list_pronunciation_document(project, lists, users)
+    if project is not None and not project.config.pronunciation_defaults:
+        print("pronunciation_defaults: false: no built-in entries are used")
+    elif project is not None and not lists:
+        print("no built-in list for this project's voices (only the project's own entries are used)")
+    for listing in lists:
+        entries = listing["entries"]
+        used = f"; {users[listing['name']]} beat(s) use it" if listing["name"] in users else ""
+        print(f"{listing['name']}: {len(entries)} entries ({', '.join(listing['files'])}){used}")
+        width = max((len(e["term"]) for e in entries), default=0)
+        for e in entries:
+            line = f"  {e['term']:<{width}}  -> {e['say']}"
+            if not e["case_sensitive"]:
+                line += "  (any case)"
+            if e["state"] == "replaced":
+                line += f'  replaced by the project: "{e["own"]}"'
+            elif e["state"] == "removed":
+                line += "  removed by the project (null)"
+            elif e["beats"]:
+                line += f"  changes {', '.join(e['beats'])}"
+            print(line)
+    if lists:
+        print("a project entry with the same term replaces a built-in one, `term: null` removes it; `pronunciation_defaults: false` turns them off")
+    return 0
+
+
 def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     """Print the built-in music beds (what they sound like) and the project's ``assets/music``
     files, and write previews."""
@@ -1592,6 +1651,10 @@ def build_parser() -> argparse.ArgumentParser:
     project_arg(p)
     p.add_argument("--render-dir", metavar="DIR", help="also write every sound at its defaults as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_sfx)
+
+    p = sub.add_parser("list-pronunciation", help="list vidgen's built-in pronunciation entries (per TTS engine and language) and, in a project, what they change")
+    project_arg(p)
+    p.set_defaults(func=cmd_list_pronunciation)
 
     p = sub.add_parser("list-music", help="list background music beds (built-in and the project's assets/music) with descriptions")
     project_arg(p)

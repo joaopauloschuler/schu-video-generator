@@ -149,6 +149,7 @@ def validate_document(
         "estimated_duration": None,
         "variants": [],
         "audio": [],
+        "pronunciation_defaults": None,
     }
     if project is not None:
         summary.update(
@@ -161,6 +162,7 @@ def validate_document(
             scenes=len(project.config.scenes),
             beats=sum(1 for _ in project.beats()),
             estimated_duration=round(project.estimated_duration(), 2),
+            pronunciation_defaults={beat_id: list(terms) for beat_id, terms in project.builtin_changes().items()},
             variants=[
                 {
                     "name": name,
@@ -276,7 +278,7 @@ def tts_document(
 ) -> dict[str, Any]:
     """The ``vidgen tts --json`` document (a dry run or a run): every beat to voice (``action``
     ``generate`` or ``copy`` from the base audio folder, its voice, characters billed and the
-    spoken text when pronunciation changed it, provider, model and provider voice, Kokoro's
+    spoken text when pronunciation changed it (and the built-in entries that did, §88), provider, model and provider voice, Kokoro's
     ``lang`` / ``device``, estimated cost), the characters per voice, the estimated total with
     its basis (OpenRouter, DESIGN.md §66; Kokoro: 0, "free (local)", §68), notes and problems, the cost the provider reported in a run, the beats generated (none
     in a dry run) and up to date, and the orphaned MP3s."""
@@ -317,6 +319,7 @@ def tts_document(
                 "characters": 0 if source is not None else len(says),
                 "estimated_cost": None if cost is None else round(cost, 6),
                 "says": says if says != beat.text else None,
+                "builtin_pronunciation": list(plan.builtin.get(beat.id, ())),
                 "source": None if source is None else _path(source),
             }
         )
@@ -508,6 +511,22 @@ def list_sfx_document(
         count=len(entries),
         sounds=entries,
         previews=None if previews is None else _path(previews),
+    )
+
+
+def list_pronunciation_document(
+    project: Project | None, lists: Iterable[Mapping[str, Any]], users: Mapping[str, int], warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen list-pronunciation --json`` document (DESIGN.md §88): the project (or
+    ``null``), whether it uses built-in entries, and each list
+    (:func:`vidgen.pronunciation.builtin_listing`) with the number of beats using it."""
+    return envelope(
+        "list-pronunciation",
+        True,
+        warnings,
+        project=None if project is None else _path(project.root),
+        defaults=True if project is None else project.config.pronunciation_defaults,
+        lists=[{**listing, "beats": users.get(str(listing["name"]))} for listing in lists],
     )
 
 

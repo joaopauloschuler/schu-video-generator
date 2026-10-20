@@ -1,0 +1,36 @@
+# Built-in pronunciation entries for Kokoro's English voices (lang a, American, and b, British),
+# DESIGN.md §88. Same format as a project's pronunciation_file. Every project whose beat is said
+# by such a voice uses them unless it sets `pronunciation_defaults: false`; a project entry with
+# the same term replaces one, `term: null` removes one. `vidgen list-pronunciation` shows them.
+#
+# Each entry was checked with misaki (Kokoro's English G2P, espeak-ng fallback for unknown words,
+# as Kokoro runs it): the phonemes as written, then with the respelling, American / British.
+# Add an entry only when the default reading is clearly wrong and the respelling clearly better.
+
+README: readme        # ˌɑɹˌiˌAdˌiˌɛmˈi (spelled R-E-A-D-M-E) -> ɹˈidmi; "read me" said ɹˈɛd ("red") after "each"
+READMEs: readmes      # ˌɑɹˌiˌAdˌiˌɛmˈiz -> ɹˈidmiz
+JSON: Jason           # ʤˌAˌɛsˌOˈɛn (spelled J-S-O-N) -> ʤˈAsᵊn
+JSONs: Jasons         # ʤˌAˌɛsˌOˈɛnz -> ʤˈAsᵊnz
+YAML: yammel          # wˌIˌAˌɛmˈɛl (spelled Y-A-M-L) -> jˈæmᵊl
+YAMLs: yammels        # wˌIˌAˌɛmˈɛlz -> jˈæmᵊlz
+ReLU: ray loo         # ɹˌAˌɛljˈu ("ray L U") -> ɹˈA lˈu
+ReLUs: ray loos       # ɹˌAˌɛljˈuz -> ɹˈA lˈuz
+RMSProp: R M S prop   # not in misaki's dictionary (only espeak-ng's guess ˌɑɹɹˌɛmˈɛs pɹˈɑp) -> ˈɑɹ ˈɛm ˈɛs pɹˈɑp
+neural-api:           # nˈʊɹɹᵊlˌApˌiˈI as one word: Kokoro said "API" like the article "a" -> nˈʊɹᵊl ˌApˌiˈI
+  say: neural A.P.I.
+  case_sensitive: false
+Jupyter: Jupiter      # ʤˈʌpITəɹ ("jup-eye-ter") -> ʤˈupəTəɹ
+ResNet: Rez net       # ɹˌAznˈɛt ("raze net"; British ɹˈiːznˌɛt) -> ɹˈɛz nˈɛt
+"C#": C sharp         # sˈi hˈæʃ ("C hash"; alone just sˈi) -> sˈi ʃˈɑɹp
+"F#": F sharp         # ˈɛf hˈæʃ -> ˈɛf ʃˈɑɹp
+BERT: Burt            # bˌiˌiˌɑɹtˈi (spelled B-E-R-T) -> bˈɜɹt
+NaN: nan              # nˌʌˈɛn ("nuh N") -> nˈæn
+TeX: tek              # tˈi ˈɛks ("T ex") -> tˈɛk
+tanh: tanch           # tˈæn (said like "tan", the tangent) -> tˈænʧ
+enum:                 # ɪnˈʌm ("in-UM") -> ˈi nˈʌm
+  say: E num
+  case_sensitive: false
+enums:
+  say: E nums
+  case_sensitive: false
+Cauchy: Koh shee      # kˈɔʧi ("caw-chee") -> kˈO ʃˈi
