@@ -15557,3 +15557,98 @@ How to test
   `test_tts` (35, 1 skipped), `test_tts_openrouter` (32), `test_review4` (8 + 3 render),
   `test_dubbing` (14), `test_json_output` (21), `test_docs` (62), `test_guide` (53), `test_config`
   (21), `test_translation` (69), `test_captions` (17); `test_schema` (63, capped3g, 113 s). All pass.
+
+## Step 166 — Phase Q plan, iso world model, projection and static rendering
+
+What was built
+- **Phase Q plan** in tasklist.md (Steps 166–171) and DESIGN §89 (the layers, `stage` + `iso:`,
+  the map, objects, drawing, the stage, and the plan of Steps 167–171 in §89.8).
+- **Baseline frames** for Step 171's backwards-compatibility check, outside the repo:
+  `<scratchpad>/phase-q-baseline/` (`make_baseline.sh`, `compare.py`, `frames/`): storyboard stills
+  at 854x480 of platform-story `meadow` (16), cartoon `yard` (9), gradient-descent `curve` and
+  `code` + `run` (6), 31 PNGs, from the examples as committed at e0ae8180 (`git archive`), with
+  `vidgen storyboard <copy> --scene <id> --width 640`. Rendered twice: identical (max difference 0);
+  re-run after this step's code: identical. Re-run in Step 171 with `OUT=<dir> WORK=<dir>
+  ./make_baseline.sh`, then `python compare.py frames <dir>`.
+- **World model** (`vidgen/world/iso.py`, no manim): `parse_iso_map(text, names=, heights=,
+  place=)` → `IsoPlace` (cells: ground kind + height in steps of 0.5 tiles; `IsoSpot`s;
+  `IsoObject`s), `place_objects(place, [ObjectPlacing])`, `OBJECT_KINDS` (19 ready-made objects
+  with footprints and heights), `stand_cell`, `free_cell_near`, `is_standable`, `wall_height`,
+  `is_cut` (indoors only the walls along the room's back stand; the rest are cut away), checks
+  naming the map's row and column or the object and cell. Letters and object symbols take the
+  ground around them (a spot on a path is path, on a terrace raised).
+- **View** (`vidgen/world/iso_view.py`): `iso_point` (2:1 isometric, `ISO_RISE` √1.5/2), `Box3`,
+  `in_front` (pictures apart or side by side → no order; else the separating axis),
+  `draw_order` (deterministic topological sort).
+- **Drawing** (`cartoon/iso_drawing.py`, Pillow): `Poly`, `Blobs`, `Disc` (with opacity:
+  shadows), `Upright`, `Line`, `box_shapes` (joined sides: no face, no outline), `draw_shapes`
+  (supersampled). `cartoon/iso_objects.py`: the 19 objects in their own frame (facing right
+  mirrors), theme-token colours like the props', soft shadows. `cartoon/iso_scenery.py`: the
+  ground (grass checker and tufts, paths with stones, boards, tiles, sunk water with banks, the
+  slab's sides), raised blocks (grass lip, stone courses), walls (core + arms; skirting, windows
+  and doors on standing walls; cut tops), `place_pieces`. `cartoon/iso_stage.py`: `iso_view`
+  (the place fits the frame, 5 % margin), `iso_layout` (characters at their spots' cells, back to
+  front, as `StagePlacement`s), `pieces_in_front`, `iso_pictures` (a base picture with
+  everything + a front picture per hidden character).
+- **Stage**: `iso: {place, map, heights, spots, objects, colors}` (`StageIso`, `IsoObjectParam`,
+  `IsoCellRef`); `_check_iso` refuses `level`, `room`, `water`, `fog`, `width`, `layers`,
+  `props`, a character's `depth` or an `at` that is not a spot; `_default_size` refuses `size`
+  and `character_size`; spots are marks; `layout` → `iso_layout`; `_iso_scenery` draws the
+  pictures (`iso_place` in the backdrop, `iso_front_<name>` right after its character via
+  `_iso_after`); `grounds` are the feet. `includes`: `ISO_DROPPED_KEYS` from a set; the video's
+  `character_size` is not copied into an iso scene.
+- **Test render, checked by eye** (scratch project `<scratchpad>/iso/proj2/video.yaml`, the
+  mouse `nutmeg` of platform-story and `dot` of the cartoon example): an outdoor village (house,
+  well, stone steps, a bridge over a pond, trees, pine, bushes, flowers, fence, lamp, sign,
+  bench) and an indoor room (bed, table, chair, shelf, sofa, plant, tiles), 16:9 at 854x480 and
+  1280x720 and 9:16. Fixed on the way: a hole in the inner corner of an L of walls (one box per
+  cell → core + arms), a faint seam where two fills met (fills stroke their own edge) and where
+  a wall run was split between two pictures (→ base + front pictures), trees too small.
+
+Files touched
+- New: `src/vidgen/world/iso.py`, `src/vidgen/world/iso_view.py`, `src/vidgen/cartoon/iso_drawing.py`,
+  `iso_objects.py`, `iso_scenery.py`, `iso_stage.py`, `tests/test_iso_place.py`.
+- Changed: `src/vidgen/scenes/stage.py` (iso params, checks, marks, layout, construct branch,
+  backdrop branch, entrance: `_iso_after`), `src/vidgen/includes.py` (`ISO_DROPPED_KEYS`, iso in
+  `apply_set` and `expand_character_size`), `src/vidgen/api.py` (exports), `docs/CONFIG.md`
+  ("Isometric places (`iso`)", the `iso` row of the stage table), `DESIGN.md` §89, `tasklist.md`,
+  `HANDOFF.md`.
+
+Public interfaces
+- Config: the stage's `iso` param (above). No other key or default changed.
+- `vidgen.api`: `ISO_CHARACTER_HEIGHT`, `OBJECT_KINDS`, `IsoPlace`, `ObjectPlacing`,
+  `parse_iso_map`, `place_objects`, `Box3`, `draw_order`, `iso_point`, `draw_shapes`,
+  `OBJECT_COLORS`, `ObjectLook`, `IsoColors`, `IsoPictures`, `IsoView`, `body_box`,
+  `canvas_center`, `iso_layout`, `iso_pictures`, `iso_stand`, `iso_view`, `map_fraction` (DESIGN
+  §89.7; none shadows a manim name).
+
+Decisions
+- `-` as a second "outside" symbol: a YAML block scalar cannot start its first line with a space.
+- Indoor cut-away by one rule (a wall with a room cell right behind it is cut), not a list.
+- Pictures: base (everything) + one front picture per hidden character, not layers cut between
+  characters (seams). Pieces count for a front picture transitively (a fence in front of the
+  house in front of the hero), so a front piece never covers a nearer one.
+- `size` / `character_size` refused on an iso stage for now (the place's size is the frame fit);
+  Step 168 decides whether they return as the camera's base zoom.
+- The stage's own flat `props` are refused on an iso place for now (`iso.objects` instead);
+  Step 168 adds small items as cut-outs.
+
+Known gaps / for Step 167+
+- Characters are placed where they start; no moves on the place yet (`walk_to` etc. run the flat
+  stage's moves: Step 167 must route them, and refuse what it does not support). `enter` / `exit`,
+  shots, `pan`, `zoom` are untested on an iso place. The front pictures are fixed for the
+  characters' start cells.
+- In a 9:16 frame a wide place is small (fit by width); in a 16 x 10 place a character is about
+  70 px tall at 854x480: `small_speaker` lint will fire for speaking characters (Step 168 shots).
+- No lint rules yet for iso; no gallery page update (Step 170: the stage page's params table).
+- `vidgen storyboard` reuses a scene's render when only vidgen's code changed: use `--force`
+  while developing.
+
+How to test
+- One file at a time under `capped` (`-m "not render"` unless noted): `test_iso_place` (54 incl. 1
+  render, 3.3 s), `test_builtin_scenes` (202, 47 s), `test_guide` (53), `test_docs` (62),
+  `test_cartoon_stage` (23 + 1 render), `test_platform_level` (29 + 1 render), `test_phase_o_review`
+  (7 + 1 render), `test_platform_camera` (15 + 3 render), `test_includes` (24), `test_builtin_sets`
+  (41), `test_actions` (21), `test_actions_coverage` (12), `test_cartoon_lint` (9), `test_lint`
+  (22), `test_word_anchors` (30), `test_cartoon_character` (21), `test_platform_moves` (22);
+  `test_schema` (63, capped3g, 113 s). All pass. Baseline frames: identical.

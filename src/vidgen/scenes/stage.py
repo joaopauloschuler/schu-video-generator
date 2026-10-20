@@ -508,6 +508,74 @@ class StageLevel(SceneParams):
         return _parsed_level(self.map, tuple(sorted(self.spots.items())))
 
 
+@lru_cache(maxsize=32)
+def _parsed_iso(text: str, spots: tuple[tuple[str, str], ...], heights: str | None, place: str,
+                objects: tuple[ObjectPlacing, ...]) -> IsoPlace:
+    return place_objects(parse_iso_map(text, names=dict(spots), heights=heights, place=place), objects)
+
+
+class IsoCellRef(SceneParams):
+    """A cell of an iso place's map as the author reads it (DESIGN.md §89)."""
+
+    column: int = Field(ge=1)
+    """Its column, from 1 at the map's left."""
+    row: int = Field(ge=1)
+    """Its row, from 1 at the map's top line."""
+
+
+class IsoObjectParam(SceneParams):
+    """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
+
+    object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug."""
+    at: Identifier | IsoCellRef
+    """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
+    name: Identifier | None = None
+    """Its name; default: the object's kind (house, house_2...)."""
+    facing: Literal["left", "right"] = "left"
+    """Which way its front looks: left (towards the viewer's lower left) or right (lower right); facing right turns its footprint (a bench 2 x 1 becomes 1 x 2)."""
+    size: Annotated[list[Annotated[int, Field(ge=1, le=12)]], Field(min_length=2, max_length=2)] | None = None
+    """Its footprint in cells [columns, rows] on the map, e.g. [1, 4] for a long bridge; default the object's own."""
+    color: ThemeColor | None = None
+    """Its main colour (a theme token or #hex); default the object's own (house walls secondary, roof accent...)."""
+    detail: ThemeColor | None = None
+    """Its second colour (a house's roof, a lamp's light, flower heads...)."""
+
+    def placing(self) -> ObjectPlacing:
+        at = self.at if isinstance(self.at, str) else (self.at.column, self.at.row)
+        return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail)
+
+
+class StageIso(SceneParams):
+    """An isometric place (DESIGN.md §89): written as a small map, seen from above at an angle."""
+
+    place: Literal["outdoor", "indoor"] = "outdoor"
+    """outdoor (grass, paths, water, garden walls, on a slab of earth) or indoor (a wooden floor, the room's back walls standing and its front walls cut away, like a dollhouse)."""
+    map: str
+    """The place, one line per row, the top line furthest back: a space or - outside the place, . floor (grass outdoors, boards indoors), : a path (tiles indoors), ~ water, # a wall, + a door in a wall, % a window in a wall, 1-9 a raised block that many steps high (half a tile each), @ a tree, & a bush, * flowers, = a fence, a letter: a spot (on the ground around it)."""
+    heights: str | None = None
+    """Optional heights map, one digit per cell of the map (steps, half a tile each; . keeps the map's): raise grass, paths, spots and walls."""
+    spots: dict[Annotated[str, Field(pattern=r"^[A-Za-z]$")], Identifier] = {}
+    """Names for the map's letters, e.g. {w: well, d: door}; a letter without one is named by itself. Characters stand at spots (at: well); next to an object standing there."""
+    objects: list[IsoObjectParam] = []
+    """Ready-made objects: {object, at, name, facing, size, color, detail}, e.g. {object: house, at: home}."""
+    colors: dict[Literal["grass", "earth", "path", "water", "stone", "floor", "tiles", "wall", "cut"], ThemeColor] = {}
+    """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
+
+    @model_validator(mode="after")
+    def _parses(self) -> "StageIso":
+        try:
+            self.parsed()
+        except VidgenError as exc:
+            raise ValueError(str(exc)) from None
+        return self
+
+    def parsed(self) -> IsoPlace:
+        """The world's :class:`~vidgen.world.iso.IsoPlace` with its objects (:class:`VidgenError`
+        naming the map's row and column, or the object, when it does not parse)."""
+        return _parsed_iso(self.map, tuple(sorted(self.spots.items())), self.heights, self.place, tuple(item.placing() for item in self.objects))
+
+
 class LevelTiles(Group):
     """A level's tiles as pictures of a few columns each, side by side (``chunks``); only those
     in the camera's view are its members, so a moving camera redraws only those."""
@@ -570,8 +638,13 @@ class Stage(NarratedScene):
     ladders, gaps) is the ground, its letters are spots to stand at, and the background and
     layers move behind it by parallax; walks follow its tiles and ladders and ``jump`` with
     ``to`` jumps a planned arc between its platforms; its ``follow`` hero is followed by the
-    camera, gently, sideways and up and down. ``character_size`` (``small``, ``medium``,
-    ``large``) sets how big the characters (and a level's tiles and props) are.
+    camera, gently, sideways and up and down. ``iso`` makes it an isometric place seen from
+    above at an angle: a small map with heights (grass, paths, water, walls, raised blocks and
+    steps, trees, fences; letters are spots), ready-made objects (a house, a well, a bench, a
+    bed...), outdoors on a slab of earth or indoors with the room's front walls cut away; the
+    characters stand upright at its spots, hidden by what stands in front of them.
+    ``character_size`` (``small``, ``medium``, ``large``) sets how big the characters (and a
+    level's tiles and props) are.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -686,12 +759,21 @@ class Stage(NarratedScene):
         level: StageLevel | None = None
         """A platform level instead of the ground line: {map, spots, colors, locks, blockers, follow}; the map's tiles are the ground (its bottom row at the frame's bottom edge; a short map in a portrait frame sits higher, on more ground), the stage is as wide as the map, the background picture or colour and the layers move behind it by parallax, and characters and props stand on the tiles at the level's spots (or at a mark or x, on the highest tile there); default size 0.25 at character_size medium (a character is two tiles tall); follow: the hero the camera follows gently, sideways and up and down."""
 
+        iso: StageIso | None = None
+        """An isometric place instead of the ground line: {place, map, heights, spots, objects, colors}; seen from above at an angle, the whole place in the frame (outdoors on a slab of earth, indoors a room with its back walls standing and its front walls cut away); characters stand upright at its spots (their size follows the place: two tiles tall; no depth, size or character_size), hidden by the walls, blocks and objects in front of them; the background colour or picture shows around it."""
+
         @model_validator(mode="before")
         @classmethod
         def _default_size(cls, data: Any) -> Any:
             """The default ``size`` from ``character_size`` (DESIGN.md §86.10); on a level the
-            characters are smaller (:data:`LEVEL_SIZE` for medium)."""
+            characters are smaller (:data:`LEVEL_SIZE` for medium); an iso place sets its own
+            (DESIGN.md §89.7)."""
             if not isinstance(data, dict):
+                return data
+            if data.get("iso") is not None:
+                given = [key for key in ("size", "character_size") if data.get(key) is not None]
+                if given:
+                    raise ValueError(f"on an iso place the characters' size follows the place (a character is two tiles tall): remove {' and '.join(given)}")
                 return data
             named = data.get("character_size")
             if "size" in data:
@@ -747,9 +829,31 @@ class Stage(NarratedScene):
             self._check_water_and_air(marks)
             if self.room is not None:
                 self._check_room()
+            if self.iso is not None:
+                self._check_iso()
             if self.level is not None:
                 self._check_level(marks)
             return self
+
+        def _check_iso(self) -> None:
+            """An iso place is the whole set: no level, room, water, width, layers or flat props;
+            characters stand at its spots, with no depth (DESIGN.md §89.7)."""
+            assert self.iso is not None
+            given = [key for key in ("level", "room", "water", "fog") if getattr(self, key) is not None]
+            given += [key for key in ("width", "props", "layers") if key in self.model_fields_set and getattr(self, key) not in ([], 1.0)]
+            if given:
+                hints = {"level": "a side-view platform level is its own kind of stage", "room": "an indoor place is iso: {place: indoor}",
+                         "water": "water is ~ on the map", "fog": "fog lies in bands by depth on a flat stage",
+                         "width": "the whole place fits the frame", "props": "use iso.objects (ready-made objects standing in the place)",
+                         "layers": "the background colour or picture shows around the place"}
+                raise ValueError(f"an iso place cannot have {given[0]} ({hints[given[0]]}); remove it, or the iso")
+            spots = self.iso.parsed().spot_names()
+            for k, member in enumerate(self.characters):
+                if member.depth:
+                    raise ValueError(f"characters[{k}]: an iso place has no depth (things keep their size wherever they stand); remove depth")
+                if not isinstance(member.at, str) or member.at not in spots:
+                    raise ValueError(f"characters[{k}].at: on an iso place a character stands at a spot of the map, not at "
+                                     f"'{member.at}' (spots: {', '.join(spots) or 'none: put a letter on the map'})")
 
         def _check_level(self, marks: dict[str, float]) -> None:
             """A level is the ground: no room, water or width of its own; everything stands on its
@@ -914,6 +1018,9 @@ class Stage(NarratedScene):
         def stage_marks(self) -> dict[str, float]:
             """The stage's own marks, plus a mark at each of its room's doors (named after it) and
             at each spot of its level."""
+            if self.iso is not None:   # a spot across the picture of the map (DESIGN.md §89.7)
+                place = self.iso.parsed()
+                return {**self.marks, **{spot.name: map_fraction(place, spot.column, spot.row) for spot in place.spots}}
             if self.level is not None:
                 level = self.level.parsed()
                 return {**self.marks, **{spot.name: spot.x / level.columns for spot in level.spots}}
@@ -932,6 +1039,8 @@ class Stage(NarratedScene):
             if self.level is not None:
                 return level_layout(self.level.parsed(), self.items(), marks=self.stage_marks(), size=self.size,
                                     frame_width=frame_width, frame_height=frame_height)
+            if self.iso is not None:
+                return iso_layout(self.iso.parsed(), self.items(), frame_width=frame_width, frame_height=frame_height)
             return stage_layout(self.items(), marks=self.stage_marks(), ground=self.ground, size=self.size,
                                 frame_width=frame_width, frame_height=frame_height, stage_width=stage_width)
 
@@ -1629,6 +1738,9 @@ class Stage(NarratedScene):
                 raise VidgenError(f"scene '{self.spec.id}': level: {problems[0]}")
         placements = p.layout(frame_width=self.frame_width, frame_height=self.frame_height, stage_width=self.stage_width)
         heads = [place.feet[1] + place.height for place in placements if place.kind == "character"]
+        #: an iso place's scenery drawn right after each character (DESIGN.md §89.7)
+        self._iso_after: dict[str, list[Mobject]] = {}
+        self._iso_behind = self._iso_scenery(placements) if p.iso is not None else []
         backdrop = self._backdrop(behind, max(heads, default=None))
         members = {m.name: m for m in p.characters}
         props = dict(zip(p.prop_names(), p.stage_props()))
@@ -1653,6 +1765,8 @@ class Stage(NarratedScene):
         for place_at in placements:
             if p.level is not None:   # the tile it stands on (§86)
                 self.grounds[place_at.name] = place_at.feet[1] - lifts[place_at.name]
+            elif p.iso is not None:   # its cell's top (§89)
+                self.grounds[place_at.name] = place_at.feet[1]
             else:
                 self.grounds[place_at.name] = feet_point(
                     place_at.x_fraction, place_at.depth, p.ground, self.frame_width, self.frame_height,
@@ -1739,6 +1853,7 @@ class Stage(NarratedScene):
                     live = self.living.get(t.name)   # a glow right behind it, steam right in front (§69.54, §69.55)
                     shown += [m for m in (live.glow if live else None, t.mobject, live.steam if live else None) if m is not None]
                     shown += self._after_props.pop(t.name, [])   # its snow cap (§69.60)
+                    shown += self._iso_after.get(t.name, [])   # the iso scenery in front of it (§89.7)
             self.add(*shown, *in_front)
             for body in self.sky_bodies:   # a moving sun or moon goes behind everything (§69.61)
                 self.mobjects.remove(body.prop)
@@ -2516,6 +2631,8 @@ class Stage(NarratedScene):
         parts += layers
         if p.level is not None:   # the tiles are the ground: no ground band (§86)
             return [*parts, self._level_tiles()]
+        if p.iso is not None:   # the place is the ground: no ground band (§89)
+            return [*parts, *self._iso_behind]
         ground_color = p.ground_color
         if ground_color is None and not p.has_picture():
             ground_color = DEFAULT_GROUND_COLOR
@@ -2877,6 +2994,39 @@ class Stage(NarratedScene):
         self._depth_walks.append((character, walk))
         self._watch_draw_order()
         return walk
+
+    def _iso_scenery(self, placements: list[StagePlacement]) -> list[Mobject]:
+        """An iso place drawn once into pictures (DESIGN.md §89.7): returns the whole place, for the
+        backdrop; the pieces that hide part of a character go in :attr:`_iso_after` under its
+        name, drawn right after it."""
+        p = self.params
+        assert p.iso is not None
+        place = p.iso.parsed()
+        view = iso_view(place, self.frame_width, self.frame_height)
+        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()})
+        looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
+                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
+                 for item in place.objects}
+        members = {c.name: c for c in p.characters}
+        bodies = [(pl.name, body_box(iso_stand(place, str(members[pl.name].at)), ISO_CHARACTER_HEIGHT * members[pl.name].scale))
+                  for pl in placements if pl.kind == "character"]
+        density = 1.0 if self.is_draft else LEVEL_OVERSAMPLE
+        pictures = iso_pictures(place, colors, looks, view, config.pixel_height / self.frame_height * density, bodies,
+                                outline=self.drawing.outline_factor)
+        center = canvas_center(pictures.canvas, view)
+
+        def mobject(image: Any, name: str) -> ImageMobject:
+            picture = ImageMobject(np.array(image))
+            picture.scale_to_fit_width(pictures.canvas.width / pictures.canvas.scale * view.unit)
+            picture.move_to([*center, 0.0])
+            picture.name = name
+            return picture
+
+        for name, image in pictures.fronts:
+            front = mobject(image, f"iso_front_{name}")
+            mark_lit(front)
+            self._iso_after[name] = [front]
+        return [mobject(pictures.base, "iso_place")]
 
     def _level_tiles(self) -> LevelTiles:
         """The level's tiles (named ``level``), drawn once into pictures of :data:`CHUNK_COLUMNS`

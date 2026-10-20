@@ -561,6 +561,12 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_move_problems,
     level_world,
 )
+from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, IsoPlace, ObjectPlacing, parse_iso_map, place_objects  # noqa: E402
+from vidgen.world.iso_view import Box3, draw_order, iso_point  # noqa: E402
+from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
+from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook  # noqa: E402
+from vidgen.cartoon.iso_scenery import IsoColors  # noqa: E402
+from vidgen.cartoon.iso_stage import IsoPictures, IsoView, body_box, canvas_center, iso_layout, iso_pictures, iso_stand, iso_view, map_fraction  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -1306,6 +1312,28 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "level_layout",
     "level_move_problems",
     "level_world",
+    "ISO_CHARACTER_HEIGHT",
+    "OBJECT_KINDS",
+    "IsoPlace",
+    "ObjectPlacing",
+    "parse_iso_map",
+    "place_objects",
+    "Box3",
+    "draw_order",
+    "iso_point",
+    "draw_shapes",
+    "OBJECT_COLORS",
+    "ObjectLook",
+    "IsoColors",
+    "IsoPictures",
+    "IsoView",
+    "body_box",
+    "canvas_center",
+    "iso_layout",
+    "iso_pictures",
+    "iso_stand",
+    "iso_view",
+    "map_fraction",
     "Field",
     "field_validator",
     "model_validator",

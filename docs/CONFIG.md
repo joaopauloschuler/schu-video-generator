@@ -5623,6 +5623,7 @@ never leaves the stage.
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -5946,6 +5947,86 @@ beat order, and names the beat and what to write when one does not work.
   video's, or a stage's) turns them off with the other foley; `sfx: {gain}` sets their level;
   `assets/sfx/coin.wav` (or `twinkle`, `unlock`, `thud`...) replaces one with your own. A move's
   `react` effect symbol plays no sound (an `effect` action's does).
+
+#### Isometric places (`iso`)
+
+A place for a story seen from above at an angle (an isometric view, no perspective): a village
+green, a garden, a room. It is written as a small map in the YAML, one line per row, the top
+line furthest back; the whole place is drawn in the frame. The characters stay the flat
+cut-outs they are on every stage, standing upright in it: things in front of them hide them,
+they hide what is behind them.
+
+```yaml
+- id: village
+  type: stage
+  params:
+    background: ["#9CCBEA", "#E4F3FB"]   # shows around the place
+    iso:
+      map: |
+        -........@....
+        .@..:::::.....&.
+        ..h.:...w:....*.
+        ....:....::a..~~
+        .&..:.123.....~~
+        ....:.12c..s..~~
+      spots: {h: home, w: well, a: lane, c: steps, s: bench}
+      objects:
+        - {object: house, at: home}
+        - {object: well, at: well}
+        - {object: bench, at: bench}
+        - {object: lamp, at: {column: 7, row: 1}}
+    characters:
+      - {name: pip, at: well}         # stands next to the well
+      - {name: kit, at: steps}        # beside the steps
+```
+
+- **Symbols.** A space or `-` is outside the place (write `-` where a YAML block would start a
+  line with a space), `.` floor (grass outdoors, boards indoors), `:` a path (tiles indoors), `~`
+  water, `#` a wall, `+` a door in a wall, `%` a window in a wall, `1`–`9` a raised block that
+  many **steps** high (a step is half a tile; a character is two tiles tall), `@` a tree, `&` a
+  bush, `*` flowers, `=` a fence (joining the fences and walls next to it). A **letter** is a
+  **spot**: a cell to stand at, on the ground around it (a spot on a path is path, on a terrace
+  as high as the terrace). Short rows are filled with outside on the right; the blank lines
+  around the map are ignored; at most 48 x 48 cells.
+- **`heights`**: a second map of the same shape, a digit per cell (`.` keeps the map's): raises
+  grass, paths, spots and walls, e.g. a grassy hill with a spot on top. Water lies at height 0.
+- **`spots`** names a letter (`{w: well}`); a letter without a name is named by itself. Each
+  letter once. A character `at` a spot stands in the middle of its cell; when an object stands
+  there (a well, a bench), it stands in the nearest free cell in front of it. Spots are also
+  marks (`pan`, `camera_at`), placed by where they are across the picture.
+- **`objects`**: ready-made objects `{object, at, name, facing, size, color, detail}`: outdoors
+  `house` (3 x 3 cells), `tree`, `pine`, `bush`, `rock`, `flowers`, `fence`, `bench` (2 x 1),
+  `lamp`, `well`, `sign`, `bridge` (1 x 3, over water: walked on); indoors `table` (2 x 1),
+  `chair`, `bed` (1 x 2), `shelf` (2 x 1), `sofa` (2 x 1), `plant`, `rug` (2 x 2: walked on).
+  `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
+  cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
+  front looks to the viewer's lower left) or `right` (lower right; its footprint turns: a bench
+  becomes 1 x 2); `size: [columns, rows]` changes the footprint (a long bridge, a big rug). The
+  colours are theme tokens like the props' (a house's walls `secondary`, its roof `accent`, a
+  tree's leaves `tertiary`); `color` and `detail` change them. Named `house`, `house_2`... by
+  default; the map's trees, bushes, flowers and fences are `tree_1`, `bush_1`... in map order.
+- **`place: indoor`** makes a room: a wooden floor, walls in a warm cream, the walls along the
+  back (the top and left edges of the map) standing with skirting boards, windows and doors,
+  every other wall cut away low, like a dollhouse, its cut showing on top, so nothing in the
+  room is hidden; a door in a cut-away wall is an opening. Outdoors the place stands on a slab
+  of earth whose sides show along its front edges, walls are low garden walls of stone, and a
+  door in one is a gap.
+- **Size.** The whole place fits the frame (a margin of 5 % on each side), so a larger map makes
+  everything smaller; a character is two tiles tall wherever it stands (no `depth`; `size` and
+  `character_size` are refused). In a 9:16 frame a wide place is small: keep it narrow.
+- **`colors`**: `grass`, `earth` (the slab and the sides of raised grass), `path`, `water`,
+  `stone` (raised blocks and garden walls outdoors), `floor`, `tiles`, `wall`, `cut` (the top of
+  the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the
+  light grades the place like the rest of the set.
+- **Drawn once.** The place is drawn into pictures when the scene renders (finer than the
+  frame): one with everything, and one for each character with what stands in front of it.
+- **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `fog`, `width`,
+  `layers` (the background colour or picture shows around the place), the stage's `props` (use
+  `objects`). A set (`set: park`) gives an iso place its sky, light, ambience and weather, not
+  its props, layers or fog.
+- Errors name the map's row and column, counted from the top left from 1: `iso: map row 2,
+  column 7: unknown symbol '?'`, `'house' would stand on water at map row 4, column 5; move it,
+  or make it smaller (size)`.
 
 #### Rooms (`room`)
 

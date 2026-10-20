@@ -899,6 +899,58 @@ voices say "epoch" like "epic") should ship with vidgen instead of being copied 
 - [x] Entries checked with misaki in the Kokoro venv (phonemes before / after, American and British), kept only when clearly better: 21 English + 3 American (SGD dropped: already right)
 - [x] Docs (CONFIG, guide + `AGENTS.md`, README, CHANGELOG, DESIGN §88) and tests (`tests/test_pronunciation_defaults.py`)
 
+## Phase Q — Isometric story worlds
+
+Goal: isometric *environments* for cartoon stories, to tell ideas and stories clearly: a place
+written as an ASCII map with heights (floor, walls, raised blocks, steps, water and grass; letters
+are named spots), ready-made objects, indoor rooms with two cut-away walls and outdoor places,
+drawn once into pictures in vidgen's flat cartoon style with theme colours. The characters stay
+the 2D cut-outs they are (side and front views, expressions, actions, lip sync), standing upright
+in it, hidden by what is in front of them. No platforming in iso (no jumps, no gravity); a side
+walk cycle sliding along a diagonal is accepted. An `iso:` param on the cartoon `stage`, like
+Phase O's `level:` (DESIGN §89); the world model and rules extend `src/vidgen/world/` (no manim),
+renderers in `cartoon/`; the projection and block drawing stay reusable for a later presentation
+`iso_diagram` (not built in this phase). Purely additive: every existing project renders exactly
+as before (baseline frames from Step 166 compared in Step 171); mixtures that make no sense are
+refused with a `VidgenError` naming the conflict and the alternative. Hero and story original.
+Same rules as Phases H–P.
+
+### Step 166 — Phase plan, iso world model, projection and static rendering
+- [x] Phase Q plan here and DESIGN §89 (the whole phase, `stage` + `iso:` rather than a new scene type, the layers, the plan of Steps 167–171 in §89.8)
+- [x] Baseline frames of existing examples for Step 171, outside the repo (platform-story `meadow`, cartoon `yard`, gradient-descent `curve` and `code` / `run`: 31 storyboard stills at 854x480 from the examples as committed at e0ae8180; rendered twice, identical; `phase-q-baseline/make_baseline.sh` and `compare.py` in the session scratchpad)
+- [x] Iso world model with an ASCII map with heights and validation (`vidgen/world/iso.py`: `IsoPlace`, `parse_iso_map`, `place_objects`; symbols for outside, floor, path, water, wall, door, window, blocks 1–9 steps, trees, bushes, flowers, fences; letters are spots taking the ground around them; an optional `heights` map; ready-made objects with footprints, facing and size; indoor walls cut away in front; errors naming the map's row and column or the object and cell)
+- [x] Projection and draw order, reusable (`vidgen/world/iso_view.py`: `iso_point`, `Box3`, `in_front`, `draw_order`; `cartoon/iso_drawing.py`: shapes, `box_shapes` with joined sides, `draw_shapes`)
+- [x] Static rendering in the flat cartoon style with theme colours (`cartoon/iso_scenery.py`, `iso_objects.py`, `iso_stage.py`: the ground, the slab, water, raised blocks and steps, walls with skirting, windows and doors, cut-away walls indoors, 19 ready-made objects with soft shadows; the place drawn once into a base picture and a front picture per character; `stage` param `iso: {place, map, heights, spots, objects, colors}`, characters at spots, refusals of `level`, `room`, `water`, `fog`, `width`, `layers`, `props`, `size`, `character_size`, `depth`)
+- [x] An early test render with existing character cut-outs on the map, checked by eye (a village and a room at 854x480 and 1280x720, 9:16: a character hidden behind the house, one behind a tree's crown, one on a block; `tests/test_iso_place.py` incl. one tiny render)
+
+### Step 167 — Characters in iso: placement, draw order while moving, pathfinding
+- [ ] Characters on the place: ground shadow on the cell top, height on blocks and steps, draw order with walls and objects while they move (in front hides, behind is covered), facing follows the walk direction (side view left / right; front view coming towards the camera if it reads well; no back view); `depth` refused (done in Step 166)
+- [ ] Movement rules (no manim): `walk_to: <spot>` finds a route on the grid around obstacles and up steps (deterministic pathfinding); `run_to`, `wander`, `follow`, `meet` (two characters walk to each other); a clear `VidgenError` for an unknown spot or no route; `vidgen validate` replays the moves
+- [ ] Timed to narration lines and to words (Phase P `at: "@word"` anchors)
+- [ ] Tests: rules without rendering, timing, a tiny render
+
+### Step 168 — Staging: iso shots, items, doors, lights, place changes
+- [ ] Iso shots: the establishing view of the whole place, follow the hero, zoom to a group, dialogue close-ups reusing the existing flat close-ups / `shot:`
+- [ ] Small items as cut-outs (gift, letter, key, flower) with `pick_up` / `give` / `drop` / `place`
+- [ ] Doors that open, lights that turn on, simple changes to the place (a flower blooms, a lamp lights, a bridge appears) for cause and effect
+- [ ] Tests
+
+### Step 169 — Mood, small characters, sounds and lint
+- [ ] Time of day / mood tints (morning, evening, night, rain) on the place
+- [ ] Speech bubbles or name tags when characters are small on screen
+- [ ] Footsteps by surface, door, pickup and ambience (birds, rain) through the existing sfx / foley system (synthesised; no licensed assets)
+- [ ] Lint: a speaker hidden behind objects, a speaker too small for the line, an action happening off-screen
+- [ ] Tests
+
+### Step 170 — Example story and docs
+- [ ] A short original kids' story (2–3 min) in an iso village with narration (`examples/<name>`), 16:9 (a 9:16 variant if cheap)
+- [ ] Guide (+ `AGENTS.md`), CONFIG, README, CHANGELOG; the stage's gallery page (its params table: `iso`)
+
+### Step 171 — Review of Phase Q
+- [ ] Critical review of the phase with fixes, recorded in HANDOFF like earlier phase reviews
+- [ ] Backwards compatibility against Step 166's baseline frames (`make_baseline.sh` with `OUT=` a new folder, then `compare.py`)
+- [ ] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
+
 ---
 
 ## Backlog (after Step 60)

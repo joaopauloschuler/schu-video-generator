@@ -41,6 +41,9 @@ ROOM_KEY = "room"
 #: Set params a stage with a platform ``level`` does not take from its set (DESIGN.md §86.2): what
 #: stands at a depth (props), the water and a room; everything on a level stands on its tiles.
 LEVEL_DROPPED_KEYS = frozenset({"props", "water", ROOM_KEY, "ground_color"})
+#: Set params a stage with an ``iso`` place does not take from its set (DESIGN.md §89.7): the
+#: place is the whole set; the set gives the sky, the light, the ambience, the weather.
+ISO_DROPPED_KEYS = frozenset({*LEVEL_DROPPED_KEYS, "layers", "fog", "width"})
 #: Set params whose lists combine with the stage's (the set's entries first).
 COMBINED_LISTS: tuple[str, ...] = ("characters", "props", "layers", "particles")
 #: The built-in sets (DESIGN.md §76): every ``*.yaml`` file here holds ``sets:``.
@@ -277,10 +280,13 @@ def apply_set(set_params: Mapping[str, Any], params: Mapping[str, Any]) -> SetMe
       entry instead (its keys win); an empty list clears the set's;
     - anything else is replaced;
     - a stage with a platform ``level`` takes none of :data:`LEVEL_DROPPED_KEYS` (its own props
-      stand on the tiles; the set gives the sky, the layers, the light, the ambience, the marks).
+      stand on the tiles; the set gives the sky, the layers, the light, the ambience, the marks);
+      one with an ``iso`` place none of :data:`ISO_DROPPED_KEYS`.
     """
     own = dict(params)
     dropped: set[str] = set(LEVEL_DROPPED_KEYS) if "level" in own else set()
+    if "iso" in own:
+        dropped |= ISO_DROPPED_KEYS
     if BACKGROUND_KEYS & own.keys():
         dropped |= BACKGROUND_KEYS | {ROOM_KEY}
     if ROOM_KEY in own:
@@ -353,7 +359,7 @@ _CHARACTER_SIZES = ("small", "medium", "large")
 
 def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str, Origin]]:
     """``data`` with the video's ``character_size`` (DESIGN.md §86.10) given to every ``stage``
-    scene whose params (after its set) give neither ``character_size`` nor ``size``, and
+    scene whose params (after its set) give neither ``character_size`` nor ``size`` nor an ``iso`` place, and
     ``origins`` pointing those at the video's key; the scene's own setting wins."""
     updated = dict(origins)
     named = data.get("character_size") if isinstance(data, Mapping) else None
@@ -362,7 +368,8 @@ def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any
     scenes: list[Any] = []
     for i, scene in enumerate(data["scenes"]):
         params = scene.get("params", {}) if isinstance(scene, Mapping) else None
-        if not isinstance(params, Mapping) or scene.get("type") != "stage" or "character_size" in params or "size" in params:
+        if (not isinstance(params, Mapping) or scene.get("type") != "stage" or "character_size" in params or "size" in params
+                or params.get("iso") is not None):   # an iso place sets its own size (DESIGN.md §89.7)
             scenes.append(scene)
             continue
         scenes.append({**scene, "params": {**params, "character_size": named}})
