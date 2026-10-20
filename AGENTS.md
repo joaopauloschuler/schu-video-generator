@@ -820,7 +820,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
 | `zoom` | look closer at a detail, then come back | at most one per scene |
-| `pan` | on a `stage`: move the camera to a character or a mark (`to: right`); on an iso place to a spot (`to: well`) across and up the picture | on a stage wider than the frame (`width: 2`), or a zoomed-in iso place |
+| `pan` | on a `stage`: move the camera to a character or a mark (`to: right`); on an iso place to a spot (`to: well`) across and up the picture, moving in from the wide view | on a stage wider than the frame (`width: 2`), or on an iso place to look at a thing |
 | `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start; on an iso place it zooms in first, to a plain stage's size) | one at a time |
 | `reveal` | bring a later element in early; on an iso place an object with `shown: false` appears (a bridge over the pond) | rarely: the default order is usually right |
 | `hide` | on an iso place: an object fades away (`- hide: rock`; a bridge gone cannot be crossed) | cause and effect in the story |
@@ -871,7 +871,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
-| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back; on an iso place `wide` is the whole place and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
+| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back; on an iso place `wide` is the place's wide view and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
 | `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
 | `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
 | `host_react` | with a `host:`: the host's expression for this beat (`- host_react: happy`; `effect: sparkle` adds a symbol) | on a result or a surprise |
@@ -1437,7 +1437,8 @@ grumpy snail, clouds up to a picnic, a 9:16 variant). Every key: `docs/CONFIG.md
 
 **When to make one.** A children's story that happens *in a place*: a village green with houses,
 a well and a bridge over a stream, a garden, a room. The place is seen from above at an angle
-(isometric, no perspective) and the whole of it fits the frame, so the viewer always knows where
+(isometric, no perspective) and each scene starts on a wide view of it (in 16:9 every spot and
+object you placed; in 9:16 the part where the characters stand), so the viewer knows where
 everyone is. It is a `stage` scene with an `iso:` place, so everything of `vidgen guide cartoons`
 still works: the characters are the same flat cut-outs (lip sync, expressions, gestures), shots,
 the camera, sets, light, music. No jumping or gravity here (that is a platform `level`).
@@ -1448,26 +1449,29 @@ tile; walkers go up one step at a time), `@` a tree, `&` a bush, `*` flowers, `=
 outside the place, and a **letter** for a *spot*. Name the spots (`spots: {w: well, d: door}`)
 and stand characters, small things and objects at them. `objects:` adds ready-made things at a
 spot or `{column, row}`: `house`, `tree`, `lamp`, `well`, `bench`, `bridge` (over `~`, walked on),
-`flowers`, `sign`; indoors (`place: indoor`, the front walls cut away like a dollhouse) `table`,
+`flowers`, `sign` (`size: [3, 2]`: a flower bed; a larger `bush` is a hedge); indoors (`place: indoor`, the front walls cut away like a dollhouse) `table`,
 `chair`, `bed`, `sofa`, `shelf`, `plant`, `rug`. Put a place used by several scenes in `sets:`
 and give each scene `set: village`.
 
 **Telling the story clearly.**
-- Start each scene on the whole place (the establishing view), then move the camera only when it
-  helps: `shot: closeup <name>` or `two_shot` for a line, `follow: <name>` for a long walk,
-  `zoom: [rowan, lamp]` to point at something, `shot: wide` to see everyone again.
+- Each scene starts on the wide view; move the camera only when it helps: `shot: closeup
+  <name>` or `two_shot` for a line, `follow: <name>` for a long walk, `zoom: [rowan, lamp]` or
+  `- {action: pan, to: well}` (it moves in) to point at something, `shot: wide` to see everyone
+  again.
 - Give every character its own voice (`voices:` with a `label`): in a wide view the speaker gets a
   **name tag** with that label; without a voice of its own a character lip-syncs the narrator.
   A tagged speaker may say up to 12 words in a wide view; longer lines need a shot.
 - Moves go round what is in the way: `walk_to` / `run_to` a spot, `meet` (two walk to each
   other), `after: hazel` (follows), `wander`, `enter` / `exit` over the edge or `door:` a spot
-  (a house's door). Give a walk a beat whose line lasts as long as the way (`rushed_animation`
+  (a house's door; `open` it first: a closed door does not stop anyone). Two walks at the same
+  time do not avoid each other: time crossing walks apart. Give a walk a beat whose line lasts as long as the way (`rushed_animation`
   warns otherwise), and keep the camera on it (`offscreen_action` warns about a walk, a hand-over
   or a door the camera does not show).
 - Cause and effect: `pick_up` / `give` / `put_down` small things (`key`, `gift`, `letter`,
   `flower`...) next to each other; `open` a house's door or flowers (they bloom), `switch_on` a
   lamp, `reveal` / `hide` an object (a bridge appears). Each has its sound by itself.
-- Mood: `light: morning`, `sunset` (evening), `night` (a lit lamp and windows glow), and
+- Mood: `light: morning`, `sunset` (evening), `night` (a lit lamp and windows glow, and a lamp
+  lights who stands next to it), and
   `particles: [rain]` (it darkens to an overcast tint by itself, unless the scene sets a `light`).
   Footsteps follow the ground (grass, path, boards, a bridge), birdsong by day, crickets at night.
 

@@ -78,6 +78,71 @@ def iso_view(place: IsoPlace, frame_width: float, frame_height: float) -> IsoVie
     return IsoView(unit, (left + right) / 2, (top + bottom) / 2)
 
 
+#: The wide view (:func:`wide_view`) magnifies the whole-place fit at most this much.
+ISO_WIDE_MAX = 2.0
+#: A ``pan`` to a spot or a character of an iso place shows it at least this many times closer
+#: than the whole place (DESIGN.md §89.13).
+ISO_PAN_ZOOM = 2.0
+#: Room (tile widths) kept beside a body the wide view keeps in view (a character is narrower
+#: than its box's picture is tall, its arms and a name tag reach out).
+ISO_WIDE_BODY_ROOM = 0.25
+
+
+def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float,
+              bodies: Sequence[Box3] = (), placed: Collection[str] = ()) -> tuple[float, tuple[float, float]]:
+    """The wide (establishing) camera view of the place (DESIGN.md §89.13): ``(view width,
+    centre)`` in Manim units. The place's picture is diamond-shaped, so fitted whole
+    (:func:`iso_view`, the frame) it leaves wide empty corners; the wide view magnifies that fit
+    until the place's bounds fill the frame both ways (its tips cut off), but never so far that
+    what must be seen leaves the view (with :data:`ISO_MARGIN`): ``bodies`` (the boxes of the
+    characters and small things at their spots, those entering later too) and, in a frame at least as wide as tall, the
+    spots (a character standing at each) and the objects named in ``placed`` (the scene's
+    ``iso.objects``) whole, so a house's roof is not cut; the map's trees, bushes, flowers and
+    fences may be cut at the frame's edges. A room keeps all of itself in such a frame. A
+    portrait frame keeps just the bodies: a Short shows the part of the place where they stand
+    rather than the whole place small in the middle. At most :data:`ISO_WIDE_MAX` times the
+    whole place's fit, at least that fit; centred on the place's middle, moved as little as keeps
+    what must be seen in view, inside the frame (the camera's bounds)."""
+    left, top, right, bottom = place_bounds(place)
+    room = 1 - 2 * ISO_MARGIN
+    unit = view.unit
+    fill = max(frame_width * room / ((right - left) * unit), frame_height * room / ((bottom - top) * unit))
+    keep = [_padded(box.picture_bounds(), ISO_WIDE_BODY_ROOM) for box in bodies]
+    if frame_width >= frame_height:
+        if place.indoor:
+            keep.append((left, top, right, bottom))
+        keep += [object_box(item, place.floor_z(item.column, item.row)).picture_bounds() for item in place.objects if item.name in placed]
+        for spot in place.spots:
+            feet = iso_stand(place, spot.name)
+            keep.append(_padded(standing_box(place, feet, ISO_CHARACTER_HEIGHT).picture_bounds(), ISO_WIDE_BODY_ROOM))
+    scale = min(fill, ISO_WIDE_MAX)
+    u, v = (left + right) / 2, (top + bottom) / 2   # the place's middle, moved as little as keeps what must be seen
+    if keep:
+        k_left, k_top = min(b[0] for b in keep), min(b[1] for b in keep)
+        k_right, k_bottom = max(b[2] for b in keep), max(b[3] for b in keep)
+        scale = max(min(scale, frame_width * room / max((k_right - k_left) * unit, 1e-9), frame_height * room / max((k_bottom - k_top) * unit, 1e-9)), 1.0)
+        half_u, half_v = frame_width / scale / unit / 2, frame_height / scale / unit / 2   # the view's half size (tile widths)
+        pad_u, pad_v = ISO_MARGIN * 2 * half_u, ISO_MARGIN * 2 * half_v
+        u = _between(u, k_right + pad_u - half_u, k_left - pad_u + half_u)
+        v = _between(v, k_bottom + pad_v - half_v, k_top - pad_v + half_v)
+    scale = max(scale, 1.0)
+    width, height = frame_width / scale, frame_height / scale
+    x, y = (u - view.u0) * unit, -(v - view.v0) * unit
+    half_w, half_h = frame_width / 2, frame_height / 2
+    return width, (_between(x, -half_w + width / 2, half_w - width / 2), _between(y, -half_h + height / 2, half_h - height / 2))
+
+
+def _between(value: float, low: float, high: float) -> float:
+    """``value`` moved into ``[low, high]`` (their middle when ``low > high``)."""
+    if low > high:
+        return (low + high) / 2
+    return min(max(value, low), high)
+
+
+def _padded(bounds: tuple[float, float, float, float], pad: float) -> tuple[float, float, float, float]:
+    return bounds[0] - pad, bounds[1] - pad, bounds[2] + pad, bounds[3]
+
+
 def map_fraction(place: IsoPlace, column: int, row: int) -> float:
     """Where a cell's middle is across the picture of the map, 0 (its left corner) to 1 (its
     right corner): a spot as a stage mark (frame-independent)."""
@@ -438,6 +503,10 @@ __all__ = [
     "iso_layout",
     "iso_stand",
     "iso_view",
+    "ISO_WIDE_BODY_ROOM",
+    "ISO_PAN_ZOOM",
+    "ISO_WIDE_MAX",
+    "wide_view",
     "map_fraction",
     "OUTLINE_SAMPLES",
     "place_bounds",

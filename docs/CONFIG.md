@@ -6011,7 +6011,8 @@ they hide what is behind them.
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
   front looks to the viewer's lower left) or `right` (lower right; its footprint turns: a bench
-  becomes 1 x 2); `size: [columns, rows]` changes the footprint (a long bridge, a big rug). The
+  becomes 1 x 2); `size: [columns, rows]` changes the footprint (a long bridge, a big rug; a
+  larger `flowers` is a flower bed and a larger `bush` a hedge, a clump in each cell). The
   colours are theme tokens like the props' (a house's walls `secondary`, its roof `accent`, a
   tree's leaves `tertiary`); `color` and `detail` change them. Named `house`, `house_2`... by
   default; the map's trees, bushes, flowers and fences are `tree_1`, `bush_1`... in map order.
@@ -6024,11 +6025,16 @@ they hide what is behind them.
   room is hidden; a door in a cut-away wall is an opening. Outdoors the place stands on a slab
   of earth whose sides show along its front edges, walls are low garden walls of stone, and a
   door in one is a gap.
-- **Size.** The whole place fits the frame (a margin of 5 % on each side): the **establishing
-  view** at the start, so a larger map makes everything smaller; a character is two tiles tall
-  wherever it stands (no `depth`; `size` and `character_size` are refused: the camera's shots
-  make characters large, see **The camera** below). In a 9:16 frame a wide place is small: keep it
-  narrow, and frame the speakers with shots.
+- **Size.** The whole place fits the frame (a margin of 5 % on each side), so a larger map makes
+  everything smaller; a character is two tiles tall wherever it stands (no `depth`; `size` and
+  `character_size` are refused: the camera's shots make characters large, see **The camera**
+  below). The scene starts on the **wide view** (the establishing view), which moves in from that
+  fit as far as fills the frame: a place's picture is a diamond, so its tips are cut off, but in
+  16:9 never the characters, the spots or the `objects` you placed (a house's roof stays whole;
+  the map's trees, bushes, flowers and fences may be cut at the edges; a room shows all of
+  itself). In 9:16 it keeps just the characters (at their spots, those that `enter` later too):
+  up to twice as close as the whole place, it shows the part where they stand. A wide place in 9:16 still shows only part of it at
+  a time: frame the speakers with shots, and `pan` to what they talk about.
 - **`colors`**: `grass`, `earth` (the slab and the sides of raised grass), `path`, `water`,
   `stone` (raised blocks and garden walls outdoors), `floor`, `tiles`, `wall`, `cut` (the top of
   the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the
@@ -6039,7 +6045,8 @@ they hide what is behind them.
   fine as the camera's zoom needs (up to 10 times the frame's pixels in a close-up), so a shot
   that zooms in stays sharp.
 - **The camera.** A stage's camera works on an iso place:
-  - The scene starts on the establishing view; `shot: wide` goes back to it for a beat.
+  - The scene starts on the wide view (see **Size**); `shot: wide` frames it again for a beat,
+    keeping the characters on the place then in view.
   - A beat's `shot:` frames characters as on any stage: `closeup pip` (head and shoulders, the
     place behind sharp), `medium kit`, `two_shot pip kit`, `over_shoulder pip kit`. It holds
     for its beat. On a 16 x 10 place a character is about a seventh of the frame's height
@@ -6048,7 +6055,8 @@ they hide what is behind them.
   - `follow: pip` zooms in until the character is as large as on a plain stage (unless the camera
     is closer already), then follows it gently, across and up and down the picture.
   - `pan` with `to: <spot>` centres the view on the spot (on the object standing there), or on
-    its targets (`- {action: pan, to: well}`, `- pan: pip`), at the camera's zoom.
+    its targets (`- {action: pan, to: well}`, `- pan: pip`), at the camera's zoom, but at least
+    twice as close as the whole place: from the wide view a pan moves in to look at its target.
   - `zoom` on characters (`- zoom: [pip, kit]`) frames a group.
   The view never leaves the frame's area.
 - **Small things.** `props` on an iso place are small things to hold (`gift`, `letter`, `key`,
@@ -6124,6 +6132,13 @@ they hide what is behind them.
   `the place has no spot 'pond' (spots: well, home)`, `'kit' is not on the place then (it has not
   entered yet, or it has exited)`. A character with an `enter` waits off the place until then. No
   jumps to a place, `react` or `step_aside` (those are a platform level's).
+
+  Two things the moves do not do, on purpose: a **closed door does not stop a walk** (a room's
+  doors are drawn closed and every way in or out goes through one; `open` a house's door before
+  someone goes in or out, as `examples/iso-story` does, so it reads), and **two characters
+  walking at the same time do not avoid each other** (a route goes round where others stand, not
+  round others walking; they pass in front of or behind each other, drawn in the right order).
+  Time two walks that cross so they do not meet in one cell, or `meet` them.
 - **Time of day and weather** are the stage's own keys:
   - `light` grades the whole place: `morning` (a soft peach haze), `day`, `sunset` (the evening:
     warm and a little darker), `night` (dark blue, with stars in the sky around the place) or
@@ -6132,7 +6147,9 @@ they hide what is behind them.
   - What is lit **glows**: a lamp that is on (its lantern and the pool of light under it) and a
     house's lit windows keep their light at `sunset` and at `night` instead of being darkened with
     the rest, so `switch_on` at night lights the village up. What stands in front of a light
-    still hides it.
+    still hides it. A lit lamp also lights the characters and small things near it (within about
+    two cells, fully in the cell next to it): in the dark they are drawn warm and bright, fading
+    as they walk away or the lamp goes off; by day it changes nothing.
   - `particles: [rain]` (or the `particles` action) rains over the place: seen from above, the
     drops land anywhere on its ground in view, with a small splash, but not on the characters
     (no splash on a face). A scene where it rains from the start and that gives no `light` gets
@@ -6511,7 +6528,7 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella`, `door`, `book`, `letter` or `gift` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room), [small props](#everyday-small-props-let_go-pour)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
-| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle` or `phone` only: `true` starts it switched on (a phone: ringing). vidgen also takes a bare `on: true`, which YAML 1.1 tools read as a key `true`; write `"on": true` where a YAML 1.1 tool or a JSON Schema check reads the file ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
+| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle` or `phone` only: `true` starts it switched on (a phone: ringing). vidgen and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
 | `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
 | `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
 | `fruit` | `false` | `tree` only: `true` hangs four fruits on it ([`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) lets one fall) |
@@ -8201,7 +8218,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
 | `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. |
-| `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in. Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
+| `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in; on an iso place `to` is a spot, the camera moves up and down too, and from the wide view it moves in (at least twice as close as the whole place). Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`; a label that says one of the video's [terms](#one-colour-per-concept-terms): its colour), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |

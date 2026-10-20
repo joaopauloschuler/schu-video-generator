@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–170)
+## 0.3.0 (Steps 61–171)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -191,6 +191,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   fades with a character leaving the place; a walk to where someone stands across a stream is
   refused instead of ending on the near bank; lint `said_before_shown` no longer takes a name
   tag for a label (170).
+- Review (171): each iso scene starts on a wide view that fills the frame (16:9: the place's
+  tips cut, never a spot, a character or a placed object; 9:16: the part where the characters
+  stand, up to twice as close), and `shot: wide` is that view; `pan` to a spot moves in from it;
+  a lit lamp lights the characters next to it at night; a larger `flowers` or `bush` is a flower
+  bed or a hedge (a clump per cell); the JSON Schema takes a bare `on: true` as YAML 1.1 reads it.
 
 ### Presentation toolkit (Phase P)
 

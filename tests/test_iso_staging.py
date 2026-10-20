@@ -21,6 +21,7 @@ from vidgen.cartoon.iso_objects import DOORWAY, LIGHT_POOL, LIT_GLASS, ObjectLoo
 from vidgen.cartoon.iso_scenery import IsoColors
 from vidgen.cartoon.iso_stage import (
     ISO_FOLLOW_SIZE,
+    ISO_WIDE_MAX,
     MAX_DETAIL,
     TILE_OVERLAP,
     TILE_PIXELS,
@@ -343,9 +344,10 @@ def test_staging_renders(make_project, tmp_path: Path) -> None:
     scene, _ = render_with_layout(project, "pond", tmp_path / "media", recorder)
     last = {frame["beat"]: frame for frame in recorder.frames}   # each beat's last still
     named = {beat: {o["name"]: o for o in frame["objects"] if o["name"]} for beat, frame in last.items()}
-    assert last["pond_b1"]["camera"]["zoom"] == pytest.approx(1.0)   # the establishing view
+    wide = last["pond_b1"]["camera"]["zoom"]   # the establishing view: the wide view (§89.13)
+    assert 1.0 <= wide <= ISO_WIDE_MAX
     assert last["pond_b2"]["camera"]["zoom"] > 2 and last["pond_b2"]["shot"]["kind"] == "two_shot"
-    assert last["pond_b3"]["camera"]["zoom"] == pytest.approx(1.0)   # back after the shot's beat
+    assert last["pond_b3"]["camera"]["zoom"] == pytest.approx(wide)   # back after the shot's beat
     assert last["pond_b4"]["camera"]["zoom"] > 1.5   # the follow zoomed in
     assert scene.holdings.holder("gift") is None and scene.props["gift"].iso_feet[2] == pytest.approx(0.0)
     assert scene.iso_scenery.states[scene.iso_scenery.index["lamp"]] == ObjectState(on=False)

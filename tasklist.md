@@ -949,9 +949,9 @@ Same rules as Phases H–P.
 - [x] Fixes found by the example: rain from a scene's start darkens an iso place (`ISO_RAIN_LIGHT`), a held thing fades with its holder leaving the place, a walk to where someone stands across water is refused (`BESIDE_REACH`)
 
 ### Step 171 — Review of Phase Q
-- [ ] Critical review of the phase with fixes, recorded in HANDOFF like earlier phase reviews
-- [ ] Backwards compatibility against Step 166's baseline frames (`make_baseline.sh` with `OUT=` a new folder, then `compare.py`)
-- [ ] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
+- [x] Critical review of the phase with fixes, recorded in HANDOFF like earlier phase reviews (the wide view fits the place to 16:9 and 9:16, `pan` moves in from it, lamplight on the characters, flower beds and hedges a clump per cell, a bare `on:` in the JSON Schema, clearer messages; closed doors and crossing walkers decided and documented; DESIGN §89.13)
+- [x] Backwards compatibility against Step 166's baseline frames (`make_baseline.sh` with `OUT=` a new folder, then `compare.py`): 31 frames, max difference 0; lint of platform-story, cartoon and gradient-descent as before
+- [x] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
 
 ---
 

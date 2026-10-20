@@ -16034,3 +16034,98 @@ How to test
   of the voiced copy: 1280x720 @ 30, 3:02, -16.0 LUFS, true peak -1.9 dBTP, audio as long as the
   video, no silence over 1.5 s: `<scratchpad>/s170/hazel_and_the_lamp.mp4`, contact sheet (one
   frame per 5 s) `<scratchpad>/s170/contact_sheet.png`, checked by eye, as were the storyboards.
+
+## Step 171 — Review of Phase Q
+
+Review of Phase Q (Steps 166–170: the iso world model, projection and drawing, routes, staging,
+mood, sound and lint, the example and its docs)
+- Fixed, known gaps:
+  1. **Wide views left the frame half empty** (the village used about half of a 16:9 frame; in
+     9:16 it sat small in the middle): the camera now starts on a *wide view*
+     (`iso_stage.wide_view`, DESIGN §89.13) magnified from the whole-place fit until the place
+     fills the frame both ways (its diamond tips cut), at most `ISO_WIDE_MAX` 2, but keeping in
+     view the characters and small things at their spots (those entering later too) and, in a
+     landscape frame, every spot and every `iso.objects` object whole (a roof is never cut; the
+     map's trees and bushes may be cut at the edges; a room keeps all of itself). `shot: wide` is
+     that view (`IsoStaging.iso_wide_shot`), `camera_at` moves it across. The world's scale is
+     unchanged, so close shots, `follow`, the tiles and every measure are as before. The
+     village: 1.21x in 16:9 (it spans the frame's width), 2x in 9:16.
+  2. **`pan` did nothing on the whole-village view**: on an iso place a pan to a spot or a
+     character moves in to at least `ISO_PAN_ZOOM` (2) times the whole place
+     (`IsoStaging.pan_width`).
+  3. **Characters stayed dark in a lamp's light at night**: `LampLit` on each character and
+     small thing of a place with a lamp; `StageLight` grades them with `lamp_lit` (warm, up to
+     `LAMP_LIFT` 0.6 of the way to the lamp's grade, scaled by how dark the light is: nothing by
+     day), by the feet's distance from each lamp (`ISO_LAMP_REACH` full within 1 tile, none
+     beyond 2.2) and the lamp's level, which fades with its switches; asked when drawn (no scene
+     updater, so waits stay cheap).
+  4. **A larger flower bed drew one clump**: `flowers` and `bush` (`BED_KINDS`) draw a clump with
+     its shadow in each cell of their footprint (a bed's clumps alternate its colours); 1 x 1 as
+     before.
+  5. **A bare `on: true` failed the JSON Schema check**: `schema._yaml_on_key` adds a `"true"`
+     property beside every boolean `on` (props and iso objects), as JSON writes YAML 1.1's key.
+- Decided and documented (CONFIG "Moving", the guide, DESIGN §89.13): **closed doors do not
+  block walks** (a room's doors are drawn closed and every way in goes through one; `open` a
+  house's door before going in); **two walkers at the same time do not avoid each other**
+  (routes go round standing characters; walkers are drawn in the order of their boxes; time
+  crossing walks apart, or `meet`).
+- Found by this review: a 9:16 room scene's `enter` was off screen once the wide view kept only
+  the characters already there (lint `offscreen_action`): the view keeps the entering
+  characters' spots too.
+- Error messages for AI authors (read through `vidgen validate` with 14 typical mistakes): a
+  `jump` to a place on an iso place now says `walk_to or run_to it` (it named a platform level);
+  `size` / `character_size` names the shots; `on` / `open` on flowers reads "not flowers"; two
+  objects on one cell say to move one. The others (unknown spot, an x as a goal, `depth`, `level`
+  with `iso`, an unknown symbol or object, a big prop, `switch_on` a well, a pan to an unknown
+  spot) name the problem and the alternative already.
+- Checked and right: the docs (guide topic `iso`, CONFIG's iso section, the stage's gallery
+  table, README, CHANGELOG) against the code; the no-manim rule of the world and view modules;
+  `vidgen.api` exports; the example in both formats with and without audio.
+- Not changed (judgment): the speed lines of a rushed walk are drawn level; no shelter from rain
+  under a tree, no puddles or settling snow on the place; storyboards of the 9:16 variant at
+  270 px show the characters' outlines very thick (a preview-size effect: the 1080 x 1920 stills
+  are right).
+
+Files touched
+- New: `tests/test_phase_q_review.py` (11 tests, 1 tiny render).
+- Changed: `src/vidgen/cartoon/iso_stage.py` (`wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`,
+  `ISO_WIDE_BODY_ROOM`), `src/vidgen/scenes/stage_iso.py` (`iso_wide`, `iso_wide_shot`,
+  `pan_width`, `iso_lamplight`, `_iso_lamp_level`, `_iso_lamp_share`, `ISO_LAMP_REACH`),
+  `src/vidgen/scenes/stage.py` (wide shot, lamplight, messages), `src/vidgen/scenes/actions.py`
+  (`Pan`), `src/vidgen/scenes/moving.py` (the jump message), `src/vidgen/cartoon/lighting.py`
+  (`lamp_lit`, `LAMP_LIGHT`, `LAMP_LIFT`, `LAMP_DARK`), `src/vidgen/cartoon/shading.py`
+  (`LampLit`, `mark_lamp_lit`, `LAMP_LIT`), `src/vidgen/cartoon/iso_objects.py` (beds),
+  `src/vidgen/world/iso.py` (a message), `src/vidgen/schema.py`, `src/vidgen/api.py`,
+  `tests/test_iso_staging.py` (the start is the wide view), `examples/iso-story/video.yaml` (a
+  comment), `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `docs/CONFIG.md`, `CHANGELOG.md`,
+  `DESIGN.md` (§89.13 and pointers in §89.9–89.11), `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` adds `wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`, `LampLit`, `mark_lamp_lit`.
+  Behaviour, iso only: the wide view at a scene's start and for `shot: wide`, a pan that moves in,
+  lamplight, beds and hedges. The JSON Schema accepts `"true"` where it accepts a boolean `on`.
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_phase_q_review` (11), `test_iso_place`
+  (54), `test_iso_moves` (34), `test_iso_staging` (32), `test_iso_mood` (14), `test_iso_story`
+  (6), `test_cartoon_lighting` (8), `test_cartoon_shots` (14), `test_api` (10), `test_guide`
+  (54), `test_docs` (62), `test_gallery` (12), `test_cartoon_stage` (24), `test_platform_camera`
+  (18), `test_platform_moves` (23), `test_platform_level` (30), `test_phase_o_review` (8),
+  `test_actions` (28), `test_cartoon_lint` (10), `test_lint` (23), `test_timing_lint` (10),
+  `test_word_anchors` (31), `test_includes` (24), `test_config` (21), `test_cartoon_rain` (15),
+  `test_particles` (23), `test_cartoon_holding` (16), `test_cartoon_room` (28),
+  `test_cartoon_props` (91), `test_cartoon_foley` (7), `test_introspect` (15),
+  `test_narration_rule` (12), `test_cartoon_small_props` (18), `test_cartoon_acting` (19),
+  `test_cartoon_character` (22), `test_builtin_scenes` (202), `test_actions_coverage` (83),
+  `test_cartoon_sounds` (16), `test_builtin_sets` (53), `test_drawing_style` (15); `test_schema`
+  (64, capped3g, 110 s); `tests/test_mcp.py` in full (capped3g, `timeout 1500`): 17 passed in
+  53 s. All pass. (The disk filled up once with pytest's temp folders; cleared, the rain suite
+  passed.)
+- Compatibility: `phase-q-baseline/make_baseline.sh` into `check171`, `compare.py`: 31 frames,
+  max difference 0. `vidgen lint` of `examples/platform-story` and `examples/cartoon`: 0
+  findings; `examples/gradient-descent`: the same 2 `narration_speed` infos as before (no audio).
+- The example: `vidgen validate` ok; `vidgen lint` 0 findings in 16:9 and in 9:16 (no audio) and
+  with the Kokoro audio of Step 170 (`<scratchpad>/s171/voiced`, a copy with the same narration:
+  no new TTS). Final render of the voiced copy at 1920x1080 @ 30:
+  `<scratchpad>/s171/hazel_and_the_lamp.mp4`, contact sheet `<scratchpad>/s171/contact_sheet.png`,
+  checked by eye (storyboards of the scratch test place and of both formats too).

@@ -522,7 +522,8 @@ def _x_of(mob: Mobject) -> Callable[[], float]:
 class Pan(Action):
     """Move the camera sideways to targets (a character) or to a place (``to``: a mark of a
     ``stage``, or an x from 0 = left to 1 = right of the stage; on an iso place a spot, and the
-    camera moves up and down the picture too), keeping its zoom. It stays there;
+    camera moves up and down the picture too, moving in to at least twice the whole place's
+    size), keeping its zoom. It stays there;
     ``until: <beat>`` moves it back. Ends a ``follow``. The view never leaves the stage (the
     frame, in other scene types: there the camera pans only while zoomed in)."""
 
@@ -565,13 +566,15 @@ class Pan(Action):
         if found is not None:
             self.before = camera_view(scene)
             frame = scene.camera.frame
-            center = np.array([*view_center_within(scene.camera_bounds(), found, frame.width, frame.height), 0.0])
-            if np.allclose(center[:2], frame.get_center()[:2], atol=1e-6):
+            width = scene.pan_width()   # from the wide view it moves in (§89.13)
+            height = width * frame.height / frame.width
+            center = np.array([*view_center_within(scene.camera_bounds(), found, width, height), 0.0])
+            if abs(width - frame.width) < 1e-6 and np.allclose(center[:2], frame.get_center()[:2], atol=1e-6):
                 return []
             if self.options.cut:
-                frame.move_to(center)
+                frame.scale(width / frame.width).move_to(center)
                 return []
-            return [MoveCamera(scene, frame.width, center)]
+            return [MoveCamera(scene, width, center)]
         if targets:
             x = float(np.mean([_x_of(t.mobject)() for t in targets]))
         else:

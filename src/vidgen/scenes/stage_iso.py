@@ -26,6 +26,10 @@ ISO_SWITCH_SECONDS = 0.25
 ISO_PUT_ASIDE = 0.36
 #: Seconds an object fades in when the scene's own entrance brings it (``reveal``).
 ISO_REVEAL_SECONDS = 0.8
+#: A lit lamp's light falls fully on a character whose feet are within the first distance of
+#: the lamp's middle (tile units) and fades out by the second (its pool on the ground has a
+#: radius of 1.1; the lantern stands high, so it lights a body a little beyond), DESIGN.md §89.13.
+ISO_LAMP_REACH = (1.0, 2.2)
 
 
 @dataclass
@@ -277,6 +281,12 @@ class IsoStaging:
         place = p.iso.parsed()
         #: where the place lies in the frame, and its pictures
         self.iso_view = iso_view(place, self.frame_width, self.frame_height)
+        # everyone at its spot, those entering later too: the wide view shows where they come (§89.13)
+        width, center = self.iso_wide([self._iso_start_box(pl.name) for pl in placements])
+        if "camera_at" in p.model_fields_set:   # across the picture to the mark (a spot), as on any stage
+            x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
+            center = view_center_within(self.camera_bounds(), (x, center[1]), width, width * self.frame_height / self.frame_width)
+        self.camera.frame.scale(width / self.camera.frame.width).move_to([*center, 0.0])   # the wide view (§89.13)
         colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()})
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
                                          for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
@@ -318,6 +328,21 @@ class IsoStaging:
                 shown.append(holder)
         self.add_camera_listener(self._iso_show_view)
         return shown
+
+    def iso_wide(self, bodies: list[Box3]) -> tuple[float, tuple[float, float]]:
+        """The wide view of the place (:func:`~vidgen.cartoon.iso_stage.wide_view`, DESIGN.md
+        §89.13) keeping ``bodies`` in view: ``(view width, centre)``; the scene's start and
+        ``shot: wide``."""
+        place = self.params.iso.parsed()
+        count = len(self.params.iso.objects)
+        placed = [item.name for item in place.objects[len(place.objects) - count:]] if count else []
+        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed)
+
+    def iso_wide_shot(self, names: list[str]) -> ShotView:
+        """``shot: wide`` on the place: the wide view keeping the characters ``names`` (those on
+        the place now) in view."""
+        width, (x, y) = self.iso_wide([self._iso_body(self.cast[name]) for name in names if hasattr(self.cast[name], "iso_feet")])
+        return ShotView(x, y, self.frame_width / width)
 
     def _iso_tiles(self, picture: Any, name: str) -> IsoTiles:
         """An :class:`IsoTiles` group of ``picture`` showing what the camera sees now, graded by the light."""
@@ -451,6 +476,9 @@ class IsoStaging:
         end = now + (math.inf if duration is None else float(duration))
         if any(change.start <= end and change.start + change.seconds >= now for change in self._iso_changes):
             found |= {id(m) for holder in self.iso_objects.values() for m in holder.get_family()}
+        lamps = getattr(self, "_iso_lamps", {})
+        if any(start <= end and start + seconds >= now for _, events in lamps.values() for start, seconds, _ in events[1:]):
+            found |= {id(m) for body in [*self.cast.values(), *self.props.values()] for m in body.get_family()}   # lamplight (§89.13)
         return found
 
     # ----- small things (DESIGN.md §89.10) ----------------------------------------------------------
@@ -508,6 +536,8 @@ class IsoStaging:
         else:
             change = "switch_on" if fields.get("on") else "switch_off"
         self.iso_watch(change, name, float(start), float(seconds), self._iso_object_box(name))
+        if name in getattr(self, "_iso_lamps", {}):   # its light on the characters near it fades with it (§89.13)
+            self._iso_lamps[name][1].append((float(start), max(float(seconds), 1e-3), 1.0 if state.on and state.shown else 0.0))
         if self._foley_on():   # a door's creak, a bloom, an appearance (§89.11)
             kind = self.iso_scenery.pieces[k].kind or "door"
             for cue in place_change_cues(kind, fields.get("open"), fields.get("shown"), float(start), float(seconds)):
@@ -558,6 +588,59 @@ class IsoStaging:
         self._iso_changes = [c for c in self._iso_changes if not (c.applied and now >= c.start + c.seconds)]
         if not self._iso_changes:
             self.remove_updater(self._iso_change_updater)
+
+    def iso_lamplight(self) -> None:
+        """Let the place's lamps light the characters and small things near them (DESIGN.md
+        §89.13): each is graded by the stage's light with a lamp's light on it
+        (:class:`LampLit`), as much as :meth:`_iso_lamp_share` says when it is drawn."""
+        place = self.params.iso.parsed()
+        scenery = self.iso_scenery
+        #: each lamp's middle (tile units) and its light from the start: (scene time, seconds, level)
+        self._iso_lamps: dict[str, tuple[tuple[float, float], list[tuple[float, float, float]]]] = {}
+        for item in place.objects:
+            if item.kind == "lamp":
+                state = scenery.states[scenery.index[item.name]]
+                self._iso_lamps[item.name] = ((item.column + 0.5, item.row + 0.5), [(0.0, 0.0, 1.0 if state.on and state.shown else 0.0)])
+        if not self._iso_lamps:
+            return
+        self._iso_lamp_shares: dict[str, float] = {}
+        self._iso_lamp_time = -1.0
+        for name, mob in [*self.cast.items(), *getattr(self, "props", {}).items()]:
+            mark_lamp_lit(mob, LampLit(lambda name=name: self._iso_lamp_share(name)))
+
+    def _iso_lamp_level(self, name: str, now: float) -> float:
+        """How lit the lamp ``name`` is at scene time ``now`` (0..1), fading with its switches."""
+        events = self._iso_lamps[name][1]
+        level = events[0][2]
+        for start, seconds, target in sorted(events[1:]):
+            if now <= start:
+                break
+            level += (target - level) * smooth(min((now - start) / seconds, 1.0))
+        return level
+
+    def _iso_lamp_share(self, name: str) -> float:
+        """How much lamplight falls on the character or small thing ``name`` now (a held thing:
+        as on its holder), 0..1: the most of any lamp's, by the distance of its feet from the
+        lamp (:data:`ISO_LAMP_REACH`) times how lit the lamp is."""
+        now = float(self.renderer.time)
+        if now != self._iso_lamp_time:
+            self._iso_lamp_time, self._iso_lamp_shares = now, {}
+        if name in self._iso_lamp_shares:
+            return self._iso_lamp_shares[name]
+        mob = self.cast[name] if name in self.cast else self.props.get(name)
+        holder = getattr(mob, "held_by", None)
+        if holder is not None and holder in self.cast:
+            mob = self.cast[holder]
+        feet = getattr(mob, "iso_feet", None)
+        share = 0.0
+        if feet is not None:
+            near, far = ISO_LAMP_REACH
+            for lamp, ((x, y), _) in self._iso_lamps.items():
+                reach = min(max((far - math.hypot(feet[0] - x, feet[1] - y)) / (far - near), 0.0), 1.0)
+                if reach > 0:
+                    share = max(share, smooth(reach) * self._iso_lamp_level(lamp, now))
+        self._iso_lamp_shares[name] = share
+        return share
 
     def _iso_refresh_layers(self, changed: str) -> None:
         """The layers of the other objects that show ``changed`` (it stands in front of them)
@@ -751,6 +834,13 @@ class IsoStaging:
 
         return width, np.array([*center, 0.0]), y_of
 
+    def pan_width(self) -> float:
+        """The view's width a ``pan`` to a spot or a character of the place moves to: the
+        camera's now, but at least :data:`ISO_PAN_ZOOM` times closer than the whole place, so a
+        pan from the wide view moves in to its target (the wide view has little room to move
+        in, DESIGN.md §89.13)."""
+        return min(float(self.camera.frame.width), self.frame_width / ISO_PAN_ZOOM)
+
     def pan_point(self, targets: list[Mobject], to: Any) -> tuple[float, float] | None:
         """On an iso place, where a ``pan`` centres the view: the middle of ``targets`` (their
         bodies), or the spot ``to`` (the object standing there, else a character's middle
@@ -773,4 +863,4 @@ class IsoStaging:
         return x, y + self.iso_view.height(ISO_CHARACTER_HEIGHT) / 2
 
 
-__all__ = ["NAME_TAG_FACE", "NameTag", "iso_particle_problem", "ISO_PUT_ASIDE", "ISO_REVEAL_SECONDS", "ISO_SWITCH_SECONDS", "IsoObject", "IsoStaging", "_moving_block"]
+__all__ = ["ISO_LAMP_REACH", "NAME_TAG_FACE", "NameTag", "iso_particle_problem", "ISO_PUT_ASIDE", "ISO_REVEAL_SECONDS", "ISO_SWITCH_SECONDS", "IsoObject", "IsoStaging", "_moving_block"]

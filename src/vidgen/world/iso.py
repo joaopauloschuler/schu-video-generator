@@ -483,7 +483,7 @@ def _with_objects(place: IsoPlace, objects: Sequence[IsoObject]) -> IsoPlace:
                 raise VidgenError(f"'{item.name}' would stand on {'a wall' if ground in WALLS else 'water'} at {where}; "
                                   "move it, or make it smaller (size)")
             if (c, r) in occupied:
-                raise VidgenError(f"'{item.name}' and '{occupied[(c, r)]}' would both stand at {where}")
+                raise VidgenError(f"'{item.name}' and '{occupied[(c, r)]}' would both stand at {where}; move one of them (its at)")
             if place.cell(c, r).steps != place.cell(item.column, item.row).steps:
                 raise VidgenError(f"'{item.name}' would stand on two heights (at {where}); put it on level ground")
             occupied[(c, r)] = item.name

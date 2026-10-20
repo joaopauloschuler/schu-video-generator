@@ -441,7 +441,7 @@ from vidgen.cartoon.lighting import (  # noqa: E402
     shadow_ellipse,
     tint_grade,
 )
-from vidgen.cartoon.shading import CustomLight, LightSetting, ShadowCaster, StageLight, StageShadows, StarField, mark_lit, resolve_light  # noqa: E402
+from vidgen.cartoon.shading import CustomLight, LightSetting, ShadowCaster, StageLight, StageShadows, StarField, LampLit, mark_lamp_lit, mark_lit, resolve_light  # noqa: E402
 from vidgen.cartoon.drawing_style import DrawingStyle, mark_shaded  # noqa: E402
 from vidgen.config import DrawingConfig  # noqa: E402
 from vidgen.cartoon.wind import (  # noqa: E402
@@ -567,7 +567,7 @@ from vidgen.world.iso_view import Box3, draw_order, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
 from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook, object_box  # noqa: E402
 from vidgen.cartoon.iso_scenery import IsoColors  # noqa: E402
-from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box  # noqa: E402
+from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view  # noqa: E402
 from vidgen.cartoon.iso_pictures import GlowTile, IsoTiles, install_tile_drawing  # noqa: E402
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
 from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
@@ -1099,6 +1099,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "StageShadows",
     "StarField",
     "mark_lit",
+    "LampLit",
+    "mark_lamp_lit",
     "resolve_light",
     "DrawingConfig",
     "DrawingStyle",
@@ -1369,6 +1371,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "find_route",
     "plan_move",
     "iso_view",
+    "wide_view",
+    "ISO_WIDE_MAX",
+    "ISO_PAN_ZOOM",
     "map_fraction",
     "standing_box",
     "Field",

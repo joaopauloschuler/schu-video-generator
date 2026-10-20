@@ -11982,7 +11982,7 @@ characters large (Step 168, §89.10).
     (`gap: 2` spaces them out). Step 168: it steps aside (§89.10).
   - The speed lines of a rushed walk are drawn level, not along the diagonal.
   - Two walkers crossing in one cell pass through each other: routes avoid standing
-    characters, not moving ones.
+    characters, not moving ones (kept, Step 171: §89.13).
 
 ### 89.10 Staging on the place (Step 168)
 
@@ -12017,7 +12017,7 @@ iso part of the `Stage`, moved there from `stage.py` with Step 167's methods), `
   own way blends a frame-sized picture per image. The village test scene (50 s, with a follow
   that redraws everything on every frame) went from 239 s to 59 s.
 - **The camera.** Nothing new to write: the stage's camera works on the place.
-  - The start is the establishing view (§89.7). `shot:` frames work as on any stage
+  - The start is the establishing view (§89.7; since Step 171 the wide view, §89.13). `shot:` frames work as on any stage
     (`shot_framing` measures the characters on screen); `wide` is the establishing view again.
     `size` / `character_size` stay refused (decided: the shots are the way to make characters
     large; a base zoom would crop the place and fight the shots).
@@ -12183,8 +12183,9 @@ the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTil
   findings and the same sounds as before.
 - **Left for later**: closed doors do not block routes (a room's doors are drawn closed by
   default, so blocking would break existing walks through them; it needs a door state that is
-  open by default for walking); no shelter from rain under a tree on the place, no puddles or
-  settling snow there; a character in a pool of light is graded like the rest.
+  open by default for walking; kept, Step 171: §89.13); no shelter from rain under a tree on the
+  place, no puddles or settling snow there; a character in a pool of light is graded like the
+  rest (Step 171: lamplight, §89.13).
 
 ### 89.12 The example story and the docs (Step 170)
 
@@ -12224,3 +12225,59 @@ the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTil
   entries; CHANGELOG "Isometric story places (Phase Q)"; the Shorts cookbook (an iso place has no
   `character_size`); `docs/gallery/stage.md` params table regenerated (it had no `iso` rows;
   stills and clips unchanged).
+
+### 89.13 The review of Phase Q (Step 171)
+
+- **The wide view** (`iso_stage.wide_view`, `ISO_WIDE_MAX` 2, `ISO_WIDE_BODY_ROOM` 0.25). The
+  place's picture is a diamond, so fitting all of it (§89.7) left half the frame empty in 16:9
+  (the corners, and bands beside a place limited by its height) and in 9:16 put a wide village
+  small in the middle. The world's scale stays the whole-place fit (pictures, shots, follow, the
+  camera's bounds and every Step 166–170 measure are unchanged); the *camera* starts magnified:
+  as far as the place's bounds fill the frame both ways (its tips cut), at most `ISO_WIDE_MAX`,
+  but never so far that what must be seen leaves the view with `ISO_MARGIN`: the characters and
+  small things at their spots (those entering later too: the view shows where they come; without
+  them a 9:16 room's `enter` was off screen), and in a frame at least as wide as tall every spot
+  (a character standing there) and the objects of `iso.objects` whole (a house's roof is never
+  cut; the map's trees, bushes, flowers and fences may be cut at the edges); a room keeps all of
+  itself (its walls cut would look broken). A portrait frame keeps just the bodies. Centred on
+  the place's middle, moved as little as keeps all that in view (centring on what is kept left
+  the place off-centre), inside the frame. `shot: wide` on an iso place is the same view keeping
+  the characters on the place then (`IsoStaging.iso_wide_shot`); `camera_at` (a spot) moves it
+  across. The village: 1.21x in 16:9 (it spans the frame's width), 2x in 9:16. Considered: a
+  larger world scale with the camera's bounds beyond the frame (it changed every measure and the
+  shots' clamps), keeping every object whole in 16:9 (1.09x: a bush at the front tip decided it).
+- **`pan` moves in** (`IsoStaging.pan_width`, `ISO_PAN_ZOOM` 2): a pan to a spot or a character
+  of an iso place shows it at least twice as close as the whole place; it did nothing in the
+  whole-place view (nothing to move in), and the guide had to say "use zoom". A flat stage's pan is
+  unchanged (the branch is behind `pan_point`, which is `None` off an iso place).
+- **Lamplight on the characters** (`lighting.lamp_lit`, `LAMP_LIGHT` `#FFD98A` at 0.3,
+  `LAMP_LIFT` 0.6, `LAMP_DARK` 0.45; `shading.LampLit`, `mark_lamp_lit`, `LAMP_LIT`;
+  `stage_iso.ISO_LAMP_REACH` (1, 2.2)). A lit lamp's pool glowed but a character in it stayed
+  night-dark. Each character and small thing of an iso place with a lamp carries a `LampLit`
+  (on every member of its family); `StageLight` grades a member with one by
+  `lamp_lit(grade, share)`: `LAMP_LIFT` × share of the way to the warm lamp grade, scaled by how
+  dark the light is (nothing by day). The share is asked when the shape is drawn (once per
+  scene time, cached): the most over the lamps of the feet's distance falloff (full within 1
+  tile of the lamp's middle, none beyond 2.2: the lantern stands high) times the lamp's level,
+  which fades with its `switch_on` / `switch_off` / `reveal` / `hide` (`_iso_lamp_level`); a held
+  thing goes with its holder. While a lamp change overlaps an animation the bodies are redrawn
+  (`_iso_redrawn`). Drawn when drawn, not a scene updater: an updater would make every wait render
+  each frame. Considered: a per-pixel light (the pictures are cut-outs; a grade per body reads).
+- **Flower beds and hedges** (`iso_objects.BED_KINDS` flowers, bush; `_bed_cells`): a larger
+  `size` draws a clump (with its shadow) in each cell, back to front, a flower bed's clumps
+  alternating its two colours. A 1 x 1 one is drawn exactly as before.
+- **Decided, kept**: a closed door does not block a route (a room's doors are drawn closed and
+  every way in or out goes through one; blocking would need a door open by default for walking
+  and break existing walks; the guide and CONFIG say to `open` a house's door before going in);
+  two characters walking at the same time do not avoid each other (routes go round standing
+  characters; walkers are drawn in the order of their boxes, so they pass in front of or behind
+  each other; a reservation of cells in time would change the routes of every existing walk and
+  rarely matters with a story's few characters: time crossing walks apart, or `meet`).
+- **Schema**: `schema._yaml_on_key` adds a `"true"` property beside every boolean `on` (a prop, an
+  iso object): YAML 1.1 reads a bare `on` as `true`, JSON writes it `"true"`, vidgen takes it.
+- **Messages**: a `jump` to a place on an iso place says to walk or run there; `character_size` /
+  `size` names the shots; `on` / `open` on flowers reads "not flowers"; two objects on one cell
+  say to move one.
+- **Public**: `vidgen.api` adds `wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`, `LampLit`,
+  `mark_lamp_lit`. Off an iso place nothing changes (the baseline frames are identical, the
+  examples' lint is as before).

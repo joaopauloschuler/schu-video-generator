@@ -186,14 +186,24 @@ def _pine(f: _Frame, look: ObjectLook) -> list[Shape]:
 
 
 def _bush(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A round bush in each cell of its footprint (a larger one is a hedge of bushes)."""
     leaves = mix(look.main, "#2F6B3A", 0.05)
-    centre = f.p(0.5, 0.55, 0.0)
     puffs = [(-0.26, 0.42, 0.24), (0.24, 0.42, 0.24), (0.0, 0.62, 0.27), (-0.1, 0.3, 0.2), (0.14, 0.28, 0.2)]
-    centres = tuple((centre[0] + du / 2, centre[1] - du / 2, centre[2] + z) for du, z, _ in puffs)
-    shapes: list[Shape] = [Blobs(centres, tuple(r for _, _, r in puffs), leaves)]
     berries = [(-0.2, 0.62), (0.12, 0.75), (0.22, 0.45)]
-    shapes.append(Blobs(tuple((centre[0] + du / 2, centre[1] - du / 2, centre[2] + z) for du, z in berries), (0.045,) * 3, look.detail))
+    shapes: list[Shape] = []
+    for a, b in _bed_cells(f):
+        centre = f.p(a, b + 0.05, 0.0)
+        centres = tuple((centre[0] + du / 2, centre[1] - du / 2, centre[2] + z) for du, z, _ in puffs)
+        shapes.append(Blobs(centres, tuple(r for _, _, r in puffs), leaves))
+        shapes.append(Blobs(tuple((centre[0] + du / 2, centre[1] - du / 2, centre[2] + z) for du, z in berries), (0.045,) * 3, look.detail))
     return shapes
+
+
+def _bed_cells(f: _Frame) -> list[tuple[float, float]]:
+    """The middles (``a``, ``b`` in the object's frame) of the cells of its footprint, back to
+    front: a flower bed or a hedge draws a clump in each."""
+    cells = [(a + 0.5, b + 0.5) for b in range(round(f.depth)) for a in range(round(f.width))]
+    return sorted(cells, key=lambda cell: (sum(f.p(cell[0], cell[1], 0.0)[:2]), cell[0]))
 
 
 def _rock(f: _Frame, look: ObjectLook) -> list[Shape]:
@@ -205,19 +215,23 @@ def _rock(f: _Frame, look: ObjectLook) -> list[Shape]:
 
 def _flowers(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     """A clump of leaves with flower heads in the main and detail colours (in bloom), or with
-    green buds tinged with them (closed)."""
-    centre = f.p(0.5, 0.5, 0.0)
+    green buds tinged with them (closed), in each cell of its footprint (a larger one is a bed,
+    every other clump with its colours the other way round)."""
     leaves = [(-0.2, 0.15, 0.14), (0.18, 0.15, 0.14), (0.0, 0.22, 0.15)]
-    shapes: list[Shape] = [Blobs(tuple((centre[0] + du / 2, centre[1] - du / 2, centre[2] + z) for du, z, _ in leaves),
-                                 tuple(r for _, _, r in leaves), "#5BA35B")]
-    heads = [(-0.22, 0.42, look.main), (0.05, 0.55, look.detail), (0.25, 0.4, look.main), (-0.05, 0.32, look.detail), (0.12, 0.3, look.main)]
-    for du, z, color in heads:
-        point = (centre[0] + du / 2, centre[1] - du / 2, centre[2] + z)
-        if not state.open:
-            shapes.append(Blobs((point,), (0.042,), mix(color, "#5BA35B", 0.55)))
-            continue
-        shapes.append(Blobs((point,), (0.075,), color))
-        shapes.append(Blobs((point,), (0.025,), "#F6C945" if color != "#F6C945" else "#FFFFFF", False))
+    shapes: list[Shape] = []
+    for k, (a, b) in enumerate(_bed_cells(f)):
+        centre = f.p(a, b, 0.0)
+        main, detail = (look.main, look.detail) if k % 2 == 0 else (look.detail, look.main)
+        shapes.append(Blobs(tuple((centre[0] + du / 2, centre[1] - du / 2, centre[2] + z) for du, z, _ in leaves),
+                            tuple(r for _, _, r in leaves), "#5BA35B"))
+        heads = [(-0.22, 0.42, main), (0.05, 0.55, detail), (0.25, 0.4, main), (-0.05, 0.32, detail), (0.12, 0.3, main)]
+        for du, z, color in heads:
+            point = (centre[0] + du / 2, centre[1] - du / 2, centre[2] + z)
+            if not state.open:
+                shapes.append(Blobs((point,), (0.042,), mix(color, "#5BA35B", 0.55)))
+                continue
+            shapes.append(Blobs((point,), (0.075,), color))
+            shapes.append(Blobs((point,), (0.025,), "#F6C945" if color != "#F6C945" else "#FFFFFF", False))
     return shapes
 
 
@@ -426,6 +440,9 @@ SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
 
 
+#: The objects drawn as one clump per cell of their footprint (a flower bed, a hedge), with a
+#: shadow under each.
+BED_KINDS = ("flowers", "bush")
 #: The objects drawn by their state too (DESIGN.md §89.10).
 _STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {"house": _house, "flowers": _flowers, "lamp": _lamp}
 
@@ -436,8 +453,8 @@ def object_shapes(item: IsoObject, look: ObjectLook, base: float, state: ObjectS
     frame = _Frame(item, base)
     state = state or default_state(item.kind)
     radius = SHADOW_RADII.get(item.kind)
-    shadow: list[Shape] = [] if radius is None else [Disc(frame.p(frame.width / 2, frame.depth / 2, 0.0), radius, SHADOW_COLOR, False,
-                                                          SHADOW_OPACITY)]
+    middles = _bed_cells(frame) if item.kind in BED_KINDS else [(frame.width / 2, frame.depth / 2)]
+    shadow: list[Shape] = [] if radius is None else [Disc(frame.p(a, b, 0.0), radius, SHADOW_COLOR, False, SHADOW_OPACITY) for a, b in middles]
     if item.kind == "fence":
         return shadow + _fence(frame, look, item.links)
     if item.kind in _STATEFUL:
@@ -450,4 +467,4 @@ def object_box(item: IsoObject, base: float) -> Box3:
     return Box3(item.column, item.row, base, item.column + item.width, item.row + item.depth, base + item.height)
 
 
-__all__ = ["DOORWAY", "LIGHT_POOL", "LIT_GLASS", "OBJECT_COLORS", "ObjectLook", "object_box", "object_shapes"]
+__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "OBJECT_COLORS", "ObjectLook", "object_box", "object_shapes"]

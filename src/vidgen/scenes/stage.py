@@ -530,6 +530,11 @@ class IsoCellRef(SceneParams):
     """Its row, from 1 at the map's top line."""
 
 
+def _a(kind: str) -> str:
+    """An object kind with its article: ``a well``, ``flowers``."""
+    return kind if kind.endswith("s") else f"a {kind}"
+
+
 class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
@@ -564,9 +569,9 @@ class IsoObjectParam(SceneParams):
     @model_validator(mode="after")
     def _states(self) -> "IsoObjectParam":
         if self.open is not None and self.object not in OPENING_KINDS:
-            raise ValueError(f"open is for a house (its door) or flowers (in bloom or in bud), not a {self.object}")
+            raise ValueError(f"open is for a house (its door) or flowers (in bloom or in bud), not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
-            raise ValueError(f"on is for a lamp or a house (its windows lit), not a {self.object}")
+            raise ValueError(f"on is for a lamp or a house (its windows lit), not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
@@ -827,7 +832,8 @@ class Stage(IsoStaging, NarratedScene):
             if data.get("iso") is not None:
                 given = [key for key in ("size", "character_size") if data.get(key) is not None]
                 if given:
-                    raise ValueError(f"on an iso place the characters' size follows the place (a character is two tiles tall): remove {' and '.join(given)}")
+                    raise ValueError(f"on an iso place the characters' size follows the place (a character is two tiles tall): remove {' and '.join(given)} "
+                                     "(a beat's shot makes them large: shot: closeup <name>, two_shot, follow)")
                 return data
             named = data.get("character_size")
             if "size" in data:
@@ -1780,6 +1786,8 @@ class Stage(IsoStaging, NarratedScene):
             present[name] = ShotFigure(name, x, float(figure.feet()[1]), figure.standing_height, figure.facing, float(top))
         looked = {name: figure.looked_at for name, figure in self.cast.items()}
         shot = shot_figures(kind, names, present, speakers=getattr(self, "beat_speakers", []), looked_at=looked)
+        if kind == "wide" and self.on_iso:   # the place's wide view, keeping who is there (§89.13)
+            return self.iso_wide_shot(list(present)), shot
         view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
         return view, shot
 
@@ -1950,6 +1958,8 @@ class Stage(IsoStaging, NarratedScene):
                     self.water.float_boat(prop)
         # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
         mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews))], *in_front, *(mob for _, mob in on_stage))
+        if p.iso is not None:   # a lamp's light falls on who stands near it (§89.13)
+            self.iso_lamplight()
         if self.drawing.shading == "soft":   # the characters' and props' fills (DESIGN.md §79)
             mark_shaded(*(mob for _, mob in on_stage))
         self._start_living(living)

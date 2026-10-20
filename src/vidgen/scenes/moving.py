@@ -639,7 +639,9 @@ class JumpAction(_Moving):
         to = self.options.to
         problems = self._place_problems(scene_cls, params, None if isinstance(to, MapTile) else to)
         problems += self._react_problems(scene_cls, params, jumps=True)
-        if to is not None and getattr(params, "level", None) is None:
+        if to is not None and getattr(params, "iso", None) is not None:
+            problems.append(("to", "an iso place has no jumping to a place: walk_to or run_to it (a jump without to jumps up where it stands)"))
+        elif to is not None and getattr(params, "level", None) is None:
             problems.append(("to", "jumping to a place needs a platform level (params.level); without one a character jumps up where it stands"))
         if to is not None and "height" in self.options.model_fields_set:
             problems.append(("height", "give height (a jump where it stands) or to (a jump to a place on the level), not both"))
