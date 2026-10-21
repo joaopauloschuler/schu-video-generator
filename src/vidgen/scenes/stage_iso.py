@@ -47,6 +47,20 @@ class _IsoChange:
     applied: bool = False
 
 
+@dataclass
+class _IsoFollow:
+    """Another picture showing a changed object (a layer of an object behind it, a body's front
+    picture) following the change instead of swapping at its start (DESIGN.md §90.15): the
+    ``new`` picture, right under the ``old`` one, fades in and then the old one fades out
+    (:meth:`IsoStaging._iso_follow_step`); when the change ends ``old`` leaves ``parent`` (a
+    holder; ``None``: the scene). Either may be ``None`` (nothing was or will be there)."""
+
+    change: _IsoChange
+    old: Any
+    new: Any
+    parent: Mobject | None = None
+
+
 def iso_particle_problem(iso: Any, kind: str, settings: Any) -> str | None:
     """Why particles of ``kind`` cannot fall on the iso place ``iso`` (DESIGN.md §89.11): rain,
     snow, leaves and streaks stay out of an indoor place. ``None``: they can (puddles and
@@ -304,6 +318,8 @@ class IsoStaging:
         self._iso_planned_states: dict[str, ObjectState] = {name: self.iso_scenery.states[self.iso_scenery.index[name]] for name in layered}
         self.iso_objects: dict[str, IsoObject] = {}
         self._iso_changes: list[_IsoChange] = []
+        #: the other pictures following a change under way (§90.15)
+        self._iso_follows: list[_IsoFollow] = []
         self._iso_change_updater = self._iso_change_step
         #: each body's (character's, small thing's) front picture now: (its picture, the group;
         #: ``None``: nothing hides it), and the front pictures made so far by (body, picture)
@@ -455,23 +471,10 @@ class IsoStaging:
         added: list[Mobject] = []
         bodies = self._iso_bodies()
         for name in list(self._iso_fronts):
-            picture, front = self._iso_fronts[name]
-            figure = bodies.get(name)
-            new_picture = None if figure is None else self.iso_scenery.front(self._iso_body(figure))
-            if new_picture == picture:
-                continue
-            new = self._iso_front(name, new_picture)
-            if front is not None and front in self.mobjects:
-                at = self.mobjects.index(front)
-                self.mobjects.remove(front)
-            else:
-                block = _moving_block(self, figure) if figure is not None else []
-                at = self.mobjects.index(block[-1]) + 1 if block else len(self.mobjects)
-            if new is not None:
-                self.mobjects.insert(at, new)
-                added.append(new)
-            self._iso_fronts[name] = (new_picture, new)
-            changed = True
+            swapped = self._iso_swap_front(name, bodies)
+            if swapped is not None:
+                added += [swapped[1]] if swapped[1] is not None else []
+                changed = True
         names = list(bodies)
         order = [names[k] for k in draw_order([self._iso_body(bodies[n]) for n in names])]
         shown = sorted((n for n in names if bodies[n] in self.mobjects), key=lambda n: self.mobjects.index(bodies[n]))
@@ -489,6 +492,106 @@ class IsoStaging:
         if added and getattr(self, "animations", None):
             self.moving_mobjects = [*self.moving_mobjects, *(m for front in added for m in front.get_family())]
         return changed
+
+    def _iso_swap_front(self, name: str, bodies: dict[str, Mobject], keep: bool = False) -> tuple[Mobject | None, Mobject | None] | None:
+        """Give the body ``name`` the front picture of the pieces in front of it where it is now:
+        ``(old, new)`` front groups when it changed (``None``: it did not). ``keep``: the old one
+        stays in the scene right over the new one (a change of the place fades from one to the
+        other, §90.15)."""
+        picture, front = self._iso_fronts[name]
+        figure = bodies.get(name)
+        new_picture = None if figure is None else self.iso_scenery.front(self._iso_body(figure))
+        if new_picture == picture:
+            return None
+        new = self._iso_front(name, new_picture)
+        if new is not None and new in self.mobjects:   # still fading out after an earlier change
+            self.mobjects.remove(new)
+        if front is not None and front in self.mobjects:
+            at = self.mobjects.index(front)
+            if not keep:
+                self.mobjects.remove(front)
+        else:
+            block = _moving_block(self, figure) if figure is not None else []
+            at = self.mobjects.index(block[-1]) + 1 if block else len(self.mobjects)
+        if new is not None:
+            self.mobjects.insert(at, new)
+        self._iso_fronts[name] = (new_picture, new)
+        return front, new
+
+    def _iso_follow_change(self, change: _IsoChange) -> None:
+        """When ``change`` starts, the other pictures showing its object follow it as it fades
+        (§90.15): the layers of the objects it stands in front of and the bodies' front pictures,
+        each new one right under the old one. Swapped at once, they showed an object appearing
+        at full at the start of its fade (and one going, gone at once where it was in front)."""
+        layers = self._iso_refresh_layers(change.name)
+        follows = [_IsoFollow(change, old, new, holder) for old, new, holder in layers if holder is not None]
+        added: list[Mobject] = [new for _, new, _ in layers]   # made now, mid-play: Manim must redraw them
+        bodies = self._iso_bodies()
+        for name in list(self._iso_fronts):
+            swapped = self._iso_swap_front(name, bodies, keep=True)
+            if swapped is not None:
+                follows.append(_IsoFollow(change, *swapped))
+                added += [swapped[1]] if swapped[1] is not None else []
+        for follow in follows:
+            if not self._iso_follow_on(follow):
+                self._iso_follow_step(follow, 0.0)
+                self._iso_follows.append(follow)
+        if added and getattr(self, "animations", None):
+            self.moving_mobjects = [*self.moving_mobjects, *(m for front in added for m in front.get_family())]
+            self.moving_mobjects = self._moving_in_order()
+
+    def _iso_follow_on(self, follow: _IsoFollow) -> bool:
+        """When ``follow`` starts from the picture an earlier one under way fades to (two changes
+        at once), the earlier one fades to ``follow``'s new picture instead (in its place, as
+        far through): whether it did."""
+        earlier = next((f for f in self._iso_follows if f.parent is follow.parent and follow.old is not None and f.new is follow.old), None)
+        if earlier is None:
+            return False
+        siblings = follow.parent.submobjects if follow.parent is not None else self.mobjects
+        if follow.new is not None:
+            follow.new.set_tile_opacity(follow.old.tile_opacity)
+        if follow.old in siblings:
+            siblings.remove(follow.old)
+        self._iso_undraw(follow.old)
+        follow.old.set_tile_opacity(1.0)
+        earlier.new = follow.new
+        return True
+
+    def _iso_undraw(self, mob: Mobject) -> None:
+        """``mob`` taken out of the scene mid-play is no longer drawn: Manim draws the list of
+        moving mobjects it made when the animation began (one left in it was drawn on, at full
+        once its fade was undone: a hidden object showed again until the next animation)."""
+        if getattr(self, "animations", None) and self.moving_mobjects:
+            gone = {id(m) for m in mob.get_family()}
+            self.moving_mobjects = [m for m in self.moving_mobjects if id(m) not in gone]
+
+    @staticmethod
+    def _iso_follow_step(follow: _IsoFollow, share: float) -> None:
+        """Show ``follow`` ``share`` of the way through its change: a picture alone fades in or
+        out with it; with both, the new one fades in under the old one in the first half and the
+        old one fades out over it in the second (what both show stays as it is: never half seen
+        through, never drawn twice when the change is over)."""
+        if follow.old is None:
+            if follow.new is not None:
+                follow.new.set_tile_opacity(share)
+        elif follow.new is None:
+            follow.old.set_tile_opacity(1.0 - share)
+        else:
+            follow.new.set_tile_opacity(min(1.0, 2.0 * share))
+            follow.old.set_tile_opacity(1.0 - max(0.0, 2.0 * share - 1.0))
+
+    def _iso_follow_end(self, follow: _IsoFollow) -> None:
+        """``follow``'s change is over: the new picture as it is, the old one gone (shown fully
+        again: a body's front pictures are kept for later)."""
+        if follow.new is not None:
+            follow.new.set_tile_opacity(1.0)
+        if follow.old is None:
+            return
+        siblings = follow.parent.submobjects if follow.parent is not None else self.mobjects
+        if follow.old in siblings:
+            siblings.remove(follow.old)
+        self._iso_undraw(follow.old)
+        follow.old.set_tile_opacity(1.0)
 
     def _iso_redrawn(self, animations: tuple[Animation, ...]) -> set[int]:
         """While a character walks on an iso place: the ids of the characters, small things,
@@ -604,17 +707,24 @@ class IsoStaging:
             if not change.applied:
                 change.applied = True
                 self.iso_scenery.set_state(change.name, change.state)
-                self._iso_refresh_layers(change.name)
+                self._iso_follow_change(change)
                 self._watch_draw_order()
             share = smooth(min(max((now - change.start) / change.seconds, 0.0), 1.0))
             if change.new is not None:
                 change.new.set_tile_opacity(share)
             elif change.old is not None:
                 change.old.set_tile_opacity(1.0 - share)
+            for follow in [f for f in self._iso_follows if f.change is change]:
+                if share >= 1.0:
+                    self._iso_follow_end(follow)
+                    self._iso_follows.remove(follow)
+                else:
+                    self._iso_follow_step(follow, share)
             if share >= 1.0:
                 holder = self.iso_objects[change.name]
                 if change.old is not None and change.old in holder.submobjects:
                     holder.remove(change.old)
+                    self._iso_undraw(change.old)
                 if not holder.submobjects and holder in self.mobjects:
                     self.mobjects.remove(holder)
         self._iso_changes = [c for c in self._iso_changes if not (c.applied and now >= c.start + c.seconds)]
@@ -674,17 +784,36 @@ class IsoStaging:
         self._iso_lamp_shares[name] = share
         return share
 
-    def _iso_refresh_layers(self, changed: str) -> None:
+    def _iso_refresh_layers(self, changed: str) -> list[tuple[Mobject | None, Mobject, IsoObject | None]]:
         """The layers of the other objects that show ``changed`` (it stands in front of them)
-        drawn again as it is now: swapped at once."""
+        drawn again as it is now, each added right under the old one in its holder (they fade
+        from one to the other with the change, §90.15): ``(old, new, holder)`` of each. An object
+        fading in by a change of its own is drawn again in its place at the opacity it has now
+        (it goes on fading in; swapped for a whole picture, it showed at full): ``(None, new,
+        None)``."""
+        out = []
         for name, holder in self.iso_objects.items():
             if name == changed or not holder.submobjects or self._iso_planned_states[name] != self.iso_scenery.states[self.iso_scenery.index[name]]:
                 continue
             current = holder.submobjects[-1]
+            following = [f for f in self._iso_follows if f.parent is holder]
+            if following:   # still fading after an earlier change: the picture it fades to
+                current = following[-1].new
             picture = self.iso_scenery.layer(name)
             if picture is None or current.picture == picture:
                 continue
-            holder.submobjects[-1] = self._iso_tiles(picture, f"iso_{name}")
+            new = self._iso_tiles(picture, f"iso_{name}")
+            own = next((c for c in self._iso_changes if c.name == name and c.applied and c.new is current), None)
+            if own is not None:
+                new.set_tile_opacity(current.tile_opacity)
+                holder.submobjects[holder.submobjects.index(current)] = new
+                self._iso_undraw(current)
+                own.new = new
+                out.append((None, new, None))
+                continue
+            holder.submobjects.insert(holder.submobjects.index(current), new)
+            out.append((current, new, holder))
+        return out
 
     def iso_reveal(self, name: str) -> list[Animation]:
         """The ``reveal`` of an object that is not there: it fades in from now (none to play: the

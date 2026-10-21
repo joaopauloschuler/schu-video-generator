@@ -12762,3 +12762,42 @@ iso-story differs from the pre-Phase-R stills only in Step 172's intended rain a
   edge (only shots are reframed); a raised block's label is kept off tilted connectors at the
   highest planned lift only; a pipe's draw order is its ground one (a pipe climbing to a block
   raised high in front of another could be drawn behind it).
+
+### 90.15 Nothing shows its final look before it comes in (Step 178)
+
+- **The bug** (owner, `examples/iso-web-page`): a block built with `grow` appeared at full size
+  for a moment (12 frames at 30 fps), then jumped back to nothing and grew. Every grown block the
+  first time it came in, and at a scene's start (the "HTML response" slab during the crossfade).
+- **Cause**: `_arrivals` plays what comes with a block first (the floor piece under it, a group's
+  plate, the heading at a scene's start) and then the block, in a `Succession`. Manim adds every
+  non-introducer sub-animation's mobject to the scene when the `Succession` starts, but begins
+  (and so first interpolates) each sub-animation only when its turn comes. `GrowBlock` was not an
+  introducer, so the block sat in the scene at its final look until the fade before it ended.
+  `drop` and `fade` (`FadeIn`, an introducer) and connectors (`FadeIn`) were not affected.
+- **Fix**: `GrowBlock` is an introducer: the block joins the scene when its growth begins, at its
+  start (unseen, no height) on that very frame; in a `LaggedStart` (a stack's layers) every layer
+  starts unseen too. Whatever the timing (beat start, `at:`, `@word`, `build: each`, the scene's
+  first beat) and target (block, stack, layer, group, the diagram, `reveal`).
+- **Same class on an iso place** (Step 168's `reveal` / `hide` / `open` / `switch_*`): when a
+  change started, the *other* pictures showing the object were swapped at once: the layer of an
+  object behind it and a character's front picture showed a revealed object at full on the
+  change's first frame (a pine in front of a lamp, the buds of iso-story opening each other at
+  once), and a hidden one vanished at once there. Now they follow the change (`_IsoFollow`): the
+  new picture goes right under the old one, fades in during the first half and the old one fades
+  out over it in the second (what both show stays as it is; never two pictures left drawn at the
+  end); a picture alone fades in or out with the change; a second change while one is under way
+  continues it; an object fading in by its own change keeps its opacity when redrawn.
+- **Two more of that class**: a picture made mid-play (those new layers) was in neither Manim's
+  static image nor its moving list, so it was not drawn until the next animation; one taken out
+  mid-play (an old picture when its change ended) was still in the moving list, so it was drawn
+  on, at full once its fade was undone (a hidden pine came back; a closed door's open leaf stayed
+  under it until the beat ended; doubled outlines). New pictures join the moving list and removed
+  ones leave it (`_iso_undraw`).
+- **Compatibility**: Phase Q's 31 baseline stills identical. iso-story: 79 of 84 stills identical;
+  5 differ where a change ends or runs at the still (the door closed at the end of `morning` b10
+  and `next_morning` b2 no longer shows its open leaf; single instead of doubled outlines after
+  the lamp door opens in `evening`; in `next_morning` b6 the third bud is still a bud at the
+  still instead of fully open at the start of its opening). Deliberate fixes.
+- **Gaps**: an object's own change with two pictures (a lamp switched, a door opened) still fades
+  the new one over the old one, so their soft edges are drawn twice until it ends (a faint
+  sharpening of outlines on its last frame).

@@ -49,10 +49,16 @@ class FillFade(Animation):
 class GrowBlock(Animation):
     """A block growing up from its ground: ``build(t)`` draws it ``t`` of its height (its points
     are taken, its colours left as they are); the text on its top (``riders``) rides up with the
-    top, and its other labels (``labels``) fade in at the end."""
+    top, and its other labels (``labels``) fade in at the end.
+
+    An introducer: the block joins the scene when the growth starts, already at its start (unseen,
+    no height). Not one, it was added with the animation holding it, so in a ``Succession`` (after
+    the floor or a plate fades in, or after the heading) it showed at full size until its turn,
+    then jumped back to nothing and grew (Step 178)."""
 
     def __init__(self, group: Mobject, block: Mobject, build: Callable[[float], Mobject], rise: np.ndarray,
                  riders: Sequence[Mobject], labels: Sequence[Mobject], **kwargs: Any) -> None:
+        kwargs.setdefault("introducer", True)
         super().__init__(group, **kwargs)
         self.block, self.build, self.rise = block, build, np.asarray(rise, dtype=float)
         self.riders, self.labels = list(riders), [m for label in labels for m in label.get_family() if isinstance(m, VMobject)]

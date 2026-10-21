@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–177)
+## 0.3.0 (Steps 61–178)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -241,6 +241,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   9:16 on an iso place a shot never cuts a character in half at the frame's edge (whole in, or
   out), centres the figures when the tightest zoom leaves the view taller than needed, and the
   wide view keeps in view the spots the scene's walks go to. 16:9 is unchanged.
+- Fix (178): a block built with `grow` no longer shows at full size for a moment before it grows
+  (it starts unseen on its first frame, whatever the timing); on an iso place an object revealed,
+  hidden, opened or switched no longer shows its final look early in the pictures of what stands
+  behind it or of a character behind it, and a hidden object no longer comes back (or a closed
+  door's open leaf stays) until the next animation.
 
 ### Presentation toolkit (Phase P)
 

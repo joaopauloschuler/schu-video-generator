@@ -994,6 +994,11 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] Pipes tilt up to raised ends like flat arrows (during the raise / lower, with `flow` dots and packets on them)
 - [x] 9:16 shots on an iso place keep characters whole (in or out, never cut at the edge), centre the figures when the tightest zoom leaves room, and the wide view keeps the scene's walk destinations; 16:9 unchanged (iso-story's 61 16:9 baseline stills identical); renders of the web-page video (16:9) and Hazel's Short with the Kokoro audio; `tests/test_step177.py`
 
+### Step 178 — Bug fix: a block shown at full before it grows in
+- [x] A grown `iso_diagram` block (any timing, any target) starts unseen on its first frame instead of showing at full size until the floor, plate or heading before it had faded in (`GrowBlock` an introducer)
+- [x] The same class on an iso place: other pictures showing a revealed, hidden, opened or switched object follow its fade; pictures made or removed mid-play are drawn / no longer drawn (`_IsoFollow`, `_iso_undraw`)
+- [x] Regression tests from per-frame state and pixels (`tests/test_step178.py`); Phase Q baseline identical; the web-page video re-rendered with the Kokoro audio and checked frame by frame
+
 ---
 
 ## Backlog (after Step 60)

@@ -16640,3 +16640,85 @@ How to test
   + `test_phase_o_review` (33), `test_iso_place` + `test_iso_staging` + `test_iso_moves` +
   `test_iso_story` (126), `test_api` + `test_lint` + `test_iso_weather` + `test_iso_mood` (60),
   `test_guide` + `test_docs` (116), `test_builtin_scenes -m "not render"` (124). All pass.
+
+## Step 178 — Bug fix: a block shown at full before it grows in
+
+The bug (owner, `<scratchpad>/s177/open_a_web_page.mp4`): "When a block is meant to grow in, it
+appears at its final full size for a split second, then jumps back to tiny and grows." Seen frame
+by frame: the Browser at full size with its label from 10.833 s to 11.200 s (12 frames), then an
+empty floor at 11.233 s, then the growth; the same for the load balancer, the app servers, the
+cache, the "HTML response" slab during the crossfade into `render` and the Rendering stack.
+
+Root cause (DESIGN §90.15)
+- `IsoDiagram._arrivals` plays what comes with a block first (the floor piece under it, a
+  group's plate, at a scene's start the heading) and then the blocks, in a `Succession`. Manim adds
+  the mobjects of every non-introducer sub-animation to the scene when the `Succession` starts, but
+  begins (first interpolates) each sub-animation only when its turn comes. `GrowBlock` was not an
+  introducer, so the block stood in the scene at its final look until the fade before it ended,
+  then its `begin()` hid it and it grew. `drop` / `fade` and connectors use `FadeIn` (an
+  introducer) and were not affected.
+
+Fix
+- `GrowBlock` is an introducer (`scenes/iso_motion.py`): the block joins the scene when its growth
+  starts, unseen and flat on that frame. Covers every timing and target (beat start, `at:`,
+  `@word`, `build: each`, the first beat's steps, `reveal`, block / stack layers / group / diagram).
+- The same class on an iso place (Step 168's changes, `scenes/stage_iso.py`), found with a scratch
+  render (`s178/stage_reveal.py`): when a change started, the other pictures showing the object
+  (the layer of an object behind it, a character's front picture) were swapped at once, so a
+  revealed pine showed at full on its first frame over the lamp behind it; also a picture made
+  mid-play was not drawn until the next animation, and one removed mid-play stayed in Manim's
+  moving list and was drawn on (a hidden pine came back at full; a closed door's open leaf stayed
+  until the beat's end). Now: `_iso_follow_change` puts each new picture right under the old one
+  (`_IsoFollow`; new fades in during the first half, old fades out over it in the second; a lone
+  picture fades with the change), `_iso_follow_on` continues a fade a second simultaneous change
+  starts from, `_iso_refresh_layers` redraws an object fading in by its own change at its current
+  opacity, new pictures join the moving list and `_iso_undraw` takes removed ones out of it.
+  `_iso_swap_front` is the front swap `_iso_keep_order` used inline (`keep=` for the follow).
+
+Files touched
+- `src/vidgen/scenes/iso_motion.py`, `src/vidgen/scenes/stage_iso.py`; new
+  `tests/test_step178.py`; `DESIGN.md` §90.15, `CHANGELOG.md` (0.3.0 now Steps 61–178),
+  `tasklist.md`, `HANDOFF.md`. No public interface change (`vidgen.api` unchanged).
+
+Tests (`tests/test_step178.py`, 7, all render at tiny sizes)
+- Per-frame state recorded by wrapping `CairoRenderer.render`: for every diagram block its drawn
+  opacity, height and bottom, its labels' opacity; connectors, plates, floor. A grown block is
+  unseen before its build, under half grown with no label on its first seen frame, and never
+  shrinks afterwards; drop / fade blocks start below full opacity (drop: above their place) and
+  only come in. Cases: mid-beat `at:`, `@word`, beat start, a stack layer by layer, a group,
+  the scene's own first-beat steps with `entrance: grow`, `build: each`, `build: diagram`,
+  `build: edge:` early, `reveal`, `drop` and `fade`, and the example's trip shortened. Three of
+  them fail with the old `GrowBlock` (checked).
+- An iso stage (pixels): a pine revealed in front of a lamp and a bush in front of a character,
+  then hidden: no pixel jumps most of the way in one frame, and the last frame equals the one
+  before the reveal. Fails on the old `stage_iso.py` (checked with the change stashed).
+- Run one command at a time under `capped`: `test_step178` (7), `test_iso_diagram` +
+  `test_iso_diagram_actions` + `test_iso_web_page` + `test_phase_r_review` + `test_step177` (72),
+  `test_iso_staging` + `test_iso_place` + `test_iso_moves` + `test_iso_story` +
+  `test_phase_q_review` (137), `test_iso_weather` + `test_iso_mood` + `test_cartoon_shots` +
+  `test_api` (51), `test_actions_coverage -k "iso or focus or build or flow or relabel or reveal"`
+  (29), `test_builtin_scenes -k iso` (8). All pass.
+
+Compatibility
+- Phase Q baseline (`s178/qbase.sh`): 31 frames, max difference 0.
+- iso-story against Step 177's stills (`s178/rscene.sh`, one scene a call, into `s178/rframes`):
+  79 of 84 identical; 5 differ, all deliberate (old / new / diff in `s178/rdiff/`): `morning_b10`
+  (wide and short) and `next_morning_b2` (a door closed at 0.85: its open leaf no longer drawn
+  under the closed picture), `evening_b4-m256` (single instead of doubled outlines after the door
+  opened), `next_morning_b6` (the third bud is still opening, no longer at full from its start).
+
+Render (Kokoro audio reused, narration unchanged)
+- `<scratchpad>/s178/open_a_web_page.mp4`: 1920x1080, 2:00 (120.07 s), -16.0 LUFS, true peak
+  -1.9 dBTP. Checked by frame sheets (`s178/new_browser`, `new_render`, `new_stack`) and a scan
+  of every frame from 8 s to 100 s for picture area that drops from one frame to the next
+  (`s178/scan.py`): the old video drops at 11.23 (Browser), 20.43 (load balancer), 23.83 (app
+  servers), 28.80 (cache), 69.43 (HTML response), 73.10 (stack); the new one only at the four
+  scene crossfades. Proof strip (before / after of the Browser build):
+  `<scratchpad>/s178/proof_strip_browser_build.png`.
+
+Known gaps
+- An object's own two-picture change on an iso place (lamp switched, door opened) still fades the
+  new picture over the old one, so soft edges are drawn twice until it ends (a faint outline
+  sharpening on its last frame); pre-existing, not an entrance.
+- A front picture left over from a follow is outside the walkers' draw-order blocks while it
+  fades (a character walking during a change near an object; not seen).
