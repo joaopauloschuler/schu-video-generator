@@ -1,8 +1,9 @@
 # schu-video-generator
 
-**A video and presentation generator built for AI agents.** schu-video-generator is a tool that
-an AI agent (Claude, or any LLM-based agent with a shell or an MCP client) uses to produce
-narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
+**A video and presentation generator built for AI agents.** See the [scene gallery](docs/gallery/README.md).
+
+schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
+an MCP client) uses to produce narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
 editing on a timeline: a human describes the video they want, and the agent writes the project,
 checks it and renders it.
 
