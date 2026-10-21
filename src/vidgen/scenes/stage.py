@@ -1798,6 +1798,8 @@ class Stage(IsoStaging, NarratedScene):
         if kind == "wide" and self.on_iso:   # the place's wide view, keeping who is there (§89.13)
             return self.iso_wide_shot(list(present)), shot
         view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
+        if self.on_iso and self.frame_height > self.frame_width:   # 9:16 on an iso place: nobody cut at the edge (§90.14)
+            view = portrait_shot(view, shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
         return view, shot
 
     def drawing_settings(self) -> list[Any]:

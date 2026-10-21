@@ -77,6 +77,7 @@ def iso_labels(ctx: StillContext, settings: IsoLabelsRule) -> Iterator[Issue]:
     plates = {p["id"]: np.asarray(p["outline"], dtype=float) for p in data.get("plates", []) if len(p["outline"]) >= 3}
     stacks = {s["id"]: list(s["layers"]) for s in data.get("stacks", [])}
     edges = {e["ref"]: e for e in data.get("edges", [])}
+    zoom = max(float(data.get("zoom", 1.0)), 1.0)
     for label in labels:
         box = tuple(float(v) for v in label["box"])
         size = max(_area(box), 1e-9)
@@ -99,10 +100,11 @@ def iso_labels(ctx: StillContext, settings: IsoLabelsRule) -> Iterator[Issue]:
                     yield Issue(f"{_what(label)} hides part of connector {ref}", box, objects, value=inside, limit=LINE_POINTS)
         if not label.get("leader") and not label.get("on_top"):
             gap = _owner_gap(label, box, outlines, plates, stacks, edges)
-            limit = settings.max_gap * ctx.short_side
+            # judged at the diagram's own scale: a focus magnifies the gap with everything else
+            limit = settings.max_gap * ctx.short_side * zoom
             if gap is not None and gap > limit:
                 yield Issue(f"{_what(label)} is {gap:.0f} px from what it names (at most {limit:.0f} px without a leader line)",
-                            box, objects, value=round(gap / ctx.short_side, 4), limit=settings.max_gap)
+                            box, objects, value=round(gap / zoom / ctx.short_side, 4), limit=settings.max_gap)
     for a, b in combinations(labels, 2):
         box_a, box_b = (tuple(float(v) for v in x["box"]) for x in (a, b))
         shared = overlap_area(box_a, box_b)

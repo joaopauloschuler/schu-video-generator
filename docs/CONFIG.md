@@ -5587,8 +5587,9 @@ else with one turn (the turn that crosses fewer blocks), round the front of the 
 when a straight one would cross them; two connectors between the same blocks (one each way) run
 side by side. An arrow's tip stops where it meets the target's outline as seen (a block hides
 the floor behind it). `solid` is a flat arrow, `dashed` a dashed one, `pipe` a raised channel
-without a head (for data that flows both ways, or a bus). A flat connector to a block a `raise`
-lifts tilts up to it (a pipe stays on the floor).
+without a head (for data that flows both ways, or a bus). A connector to a block a `raise`
+lifts tilts up to it, a flat arrow or a pipe (dots and packets of a `flow` ride along the
+slope); the label of a raised block keeps off its tilted connectors.
 
 | param | type | default | |
 |---|---|---|---|
@@ -6211,9 +6212,15 @@ they hide what is behind them.
   fit as far as fills the frame: a place's picture is a diamond, so its tips are cut off, but in
   16:9 never the characters, the spots or the `objects` you placed (a house's roof stays whole;
   the map's trees, bushes, flowers and fences may be cut at the edges; a room shows all of
-  itself). In 9:16 it keeps just the characters (at their spots, those that `enter` later too):
-  up to twice as close as the whole place, it shows the part where they stand. A wide place in 9:16 still shows only part of it at
-  a time: frame the speakers with shots, and `pan` to what they talk about.
+  itself). In 9:16 it keeps just the characters (at their spots, those that `enter` later too)
+  and the spots the scene's `walk_to`, `run_to` and `enter` actions go to (with the cells round
+  them): up to twice as close as the whole place, it shows the part where they stand and go. A
+  wide place in 9:16 still shows only part of it at a time: frame the speakers with shots, and
+  `pan` to what they talk about. In 9:16 a shot on the place never cuts a character at the
+  frame's edge: anyone next to the framed ones is either wholly in the view or out of it (the
+  view moves the least it needs), and when the tightest zoom leaves the view taller than the
+  characters (a close-up: the characters are small on a place) they are centred up and down
+  rather than the heads put at the top. `shot: wide` in 9:16 keeps the same spots in view.
 - **`colors`**: `grass`, `earth` (the slab and the sides of raised grass), `path`, `water`,
   `stone` (raised blocks and garden walls outdoors), `floor`, `tiles`, `wall`, `cut` (the top of
   the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the

@@ -12723,3 +12723,42 @@ iso-story differs from the pre-Phase-R stills only in Step 172's intended rain a
   the label clear at both heights crowded the others off their blocks). L-routes in a slanted
   9:16 grid read as a ">" round the side (the grid's nature). Snow's `color`, puddles only on
   ground cells and the snow-growth redraw cost (Step 172's gaps) stay.
+
+### 90.14 Follow-ups (Step 177)
+
+- **A raised block's label keeps off its tilted connectors.** The label rides up with its block
+  (§90.9), so placed clear of the floor's connectors it could lie over the start of its own
+  connector tilted up to it (the example's "App 2", Step 176's gap). `_geometry` keeps each
+  connector with a raised end sampled along its tilt at the planned lifts (`_raised_lines`, the
+  same even ramp as `ramped`); a block label's candidate (not one on its top) also costs
+  `LINE_COST` per such sample under it moved up by its planned lift (`raised` in `_place`). Only
+  that label's own choice changes, so the crowding Step 176 saw when other labels kept clear of
+  both heights does not come back. The example lints clean in 16:9 and 9:16.
+- **Lint at the diagram's scale.** The label then sat a little further off, within
+  `leader_from`, and `iso_labels`' `max_gap` fired only while a `focus` magnified the gap: the
+  layout dump's `iso_diagram` key gains `zoom` (frame width over the camera's), and the gap limit
+  is `max_gap × short side × zoom` (the reported value divided by it). Whether a label reads as its
+  block's does not change when everything is magnified.
+- **Pipes tilt too.** `_draw` keeps each pipe's segments with their ground boxes
+  (`_pipe_pieces`); `_settle` reshapes a connector's arrow and its pipe segments alike, each
+  segment `ramped(box_faces(box))` (the box sheared along the slope: faces stay planar, its
+  visible faces the ground box's), animated with `Reshape` during a raise or lower. `_edge_lift`
+  now follows pipes, so `flow` dots and packets ride the slope (they already added it) and the
+  layout dump gives lint the tilted path. Draw order stays the ground one.
+- **9:16 shots on an iso place** (`shots.portrait_shot`, called by `Stage.shot_framing` only on
+  an iso place in a tall frame): the place's characters are small, so a 9:16 close-up is held at
+  `MAX_SHOT_SCALE` and its view is about three characters tall and 1.6 wide; framed with the head
+  at the top it left two thirds of ground below and cut a neighbour in half at the edge (the
+  contact sheet's bench "with nobody on it"). Now: across, the nearest centre at which every other
+  character is wholly in (`PORTRAIT_EDGE` 0.04 of the width inside) or wholly out, the subjects
+  wholly in; up and down, the figures in view centred when the view is `PORTRAIT_ROOM` 1.6 times
+  their height. `wide` and `over_shoulder` (its near one cut on purpose) are kept. The wide
+  view in a tall frame (start and `shot: wide`) also keeps the spots the scene's `walk_to`,
+  `run_to` and `enter` go to and the cells round them (`_iso_arrivals`: two sent to one spot stop
+  side by side), so a walk does not end half out of the frame. A 16:9 frame and flat stages are
+  untouched: iso-story's 61 16:9 baseline stills and Phase Q's 31 are identical.
+- **Public**: `vidgen.api` adds `portrait_shot`, `LINE_COST`. Layout dump: `iso_diagram.zoom`.
+- **Gaps**: a `zoom` or `pan` action on an iso place in 9:16 can still cut a character at the
+  edge (only shots are reframed); a raised block's label is kept off tilted connectors at the
+  highest planned lift only; a pipe's draw order is its ground one (a pipe climbing to a block
+  raised high in front of another could be drawn behind it).

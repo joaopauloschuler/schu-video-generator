@@ -342,7 +342,7 @@ from vidgen.cartoon.stage import (  # noqa: E402
     walk_destination,
 )
 from vidgen.camera import view_center_within  # noqa: E402
-from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, shot_figures, shot_view  # noqa: E402
+from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, portrait_shot, shot_figures, shot_view  # noqa: E402
 from vidgen.particles import MAX_PARTICLES, PARTICLE_KINDS, particle_count, particle_seeds, particle_states  # noqa: E402
 from vidgen.particle_field import (  # noqa: E402
     ParticleField,
@@ -574,7 +574,7 @@ from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGE
 from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
 from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
 from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, FloorCells, picture_size, plate_shapes, ramped, slant  # noqa: E402
-from vidgen.iso_labels import AROUND, FAR_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
+from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
 from vidgen.world.iso_view import ISO_RISE  # noqa: E402
 from vidgen.iso_vector import picture_to_scene, shapes_mobject  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
@@ -1068,6 +1068,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "frame_shot",
     "shot_figures",
     "shot_view",
+    "portrait_shot",
     "REFRAME_SECONDS",
     "REPLY_HOLD_SECONDS",
     "CameraMove",
@@ -1419,6 +1420,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "slant",
     "AROUND",
     "FAR_COST",
+    "LINE_COST",
     "SIDEWAYS",
     "Obstacles",
     "clip_area",

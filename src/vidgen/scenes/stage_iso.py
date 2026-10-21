@@ -277,8 +277,12 @@ class IsoStaging:
         place = p.iso.parsed()
         #: where the place lies in the frame, and its pictures
         self.iso_view = iso_view(place, self.frame_width, self.frame_height)
-        # everyone at its spot, those entering later too: the wide view shows where they come (§89.13)
-        width, center = self.iso_wide([self._iso_start_box(pl.name) for pl in placements])
+        # everyone at its spot, those entering later too: the wide view shows where they come (§89.13);
+        # in a tall frame also where the scene's walks go (it shows only the part where they are, §90.14)
+        bodies = [self._iso_start_box(pl.name) for pl in placements]
+        if self.frame_height > self.frame_width:
+            bodies += self._iso_arrivals(place)
+        width, center = self.iso_wide(bodies)
         if "camera_at" in p.model_fields_set:   # across the picture to the mark (a spot), as on any stage
             x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
             center = view_center_within(self.camera_bounds(), (x, center[1]), width, width * self.frame_height / self.frame_width)
@@ -325,6 +329,29 @@ class IsoStaging:
         self.add_camera_listener(self._iso_show_view)
         return shown
 
+    def _iso_arrivals(self, place: Any) -> list[Box3]:
+        """In a tall frame, what the wide view keeps in view besides the characters: a character
+        standing at each spot the scene's walks go to, or on a cell next to it (two sent to one
+        spot stop side by side)."""
+        boxes: list[Box3] = []
+        for spot in self._iso_destinations(place):
+            x, y, z = iso_stand(place, spot)
+            boxes += [standing_box(place, (min(max(x + dx, 0.5), place.columns - 0.5), min(max(y + dy, 0.5), place.rows - 0.5), z), ISO_CHARACTER_HEIGHT)
+                      for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+        return boxes
+
+    def _iso_destinations(self, place: Any) -> list[str]:
+        """The spots of the place the scene's ``walk_to``, ``run_to`` and ``enter`` actions take
+        characters to."""
+        spots = {spot.name for spot in place.spots}
+        out: list[str] = []
+        for kind in ("walk_to", "run_to", "enter"):
+            for use in self.action_uses(kind):
+                to = getattr(use.options, "to", None)
+                if isinstance(to, str) and to in spots and to not in out:
+                    out.append(to)
+        return out
+
     def iso_wide(self, bodies: list[Box3]) -> tuple[float, tuple[float, float]]:
         """The wide view of the place (:func:`~vidgen.cartoon.iso_stage.wide_view`, DESIGN.md
         §89.13) keeping ``bodies`` in view: ``(view width, centre)``; the scene's start and
@@ -336,8 +363,11 @@ class IsoStaging:
 
     def iso_wide_shot(self, names: list[str]) -> ShotView:
         """``shot: wide`` on the place: the wide view keeping the characters ``names`` (those on
-        the place now) in view."""
-        width, (x, y) = self.iso_wide([self._iso_body(self.cast[name]) for name in names if hasattr(self.cast[name], "iso_feet")])
+        the place now) in view; in a tall frame also the spots the scene's walks go to."""
+        bodies = [self._iso_body(self.cast[name]) for name in names if hasattr(self.cast[name], "iso_feet")]
+        if self.frame_height > self.frame_width:   # a tall frame: also where the scene's walks go, as the start's view (§90.14)
+            bodies += self._iso_arrivals(self.params.iso.parsed())
+        width, (x, y) = self.iso_wide(bodies)
         return ShotView(x, y, self.frame_width / width)
 
     def _iso_tiles(self, picture: Any, name: str) -> IsoTiles:

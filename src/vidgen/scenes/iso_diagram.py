@@ -616,6 +616,16 @@ class IsoDiagram(NarratedScene):
         self._stack_hulls = {sid: convex_hull(np.vstack([self._swept[n] for n in s.layers])) for sid, s in layout.stacks.items()}
         self._plate_hulls = {gid: convex_hull(np.array(box_outline(box)) * up) for gid, box in layout.plates.items()}
         self._lines = {edge.ref(): np.array([iso_point(*q) for q in edge.samples(self.line_step)]) * up for edge in layout.edges}
+        # the connectors as they tilt up to the blocks actions raise (a raised block's label rides
+        # up with it and must keep off them there too)
+        self._raised_lines: dict[str, np.ndarray] = {}
+        for edge in layout.edges:
+            low, high = self._lift_max[self._end_blocks(edge.source)[0]], self._lift_max[self._end_blocks(edge.target)[0]]
+            if max(low, high) > 1e-9:
+                samples = edge.samples(self.line_step)
+                last = max(len(samples) - 1, 1)
+                self._raised_lines[edge.ref()] = np.array([iso_point(x, y, z + low + (high - low) * j / last)
+                                                           for j, (x, y, z) in enumerate(samples)]) * up
         boxes = iter(layout.pipe_boxes())
         self._pipe_hulls = {f"{edge.ref()}#{j}": convex_hull(np.array(box_outline(next(boxes))) * up)
                             for edge in layout.edges if edge.style == "pipe" for j in range(len(edge.points) - 1)}
@@ -865,10 +875,27 @@ class IsoDiagram(NarratedScene):
                 start = ray_exit(hull, middle, centre)
                 out.leaders.append((k, start, rect_exit(rect, start)))
 
+        def raised(k: int, plate: bool, rect: Box) -> float:
+            """What label ``k`` at ``rect`` covers of the tilted connectors when its block is raised
+            as high as the scene's actions take it (it rides up with the block; a label on the top
+            may lie anywhere on its block)."""
+            label = labels[k]
+            lift = self._lift_max.get(label.owner, 0.0) if label.kind == "block" else 0.0
+            if lift <= 1e-9 or not plate or not self._raised_lines:
+                return 0.0
+            dy = lift * ISO_RISE * scale
+            up_rect = (rect[0], rect[1] + dy, rect[2], rect[3] + dy)
+            count = 0
+            for points in self._raised_lines.values():
+                pts = points * scale
+                count += int(np.count_nonzero((pts[:, 0] >= up_rect[0]) & (pts[:, 0] <= up_rect[2]) & (pts[:, 1] >= up_rect[1]) & (pts[:, 1] <= up_rect[3])))
+            return LINE_COST * count
+
         def choose(k: int, near: list[tuple[np.ndarray, bool]], far: Callable[[], list[np.ndarray]], skip: set[str], owner: Owner) -> None:
             best: tuple[float, np.ndarray, bool] | None = None
             for centre, plate in near:
-                cost = obstacles.cost(rect_of(centre, size(k, plate)), skip)
+                rect = rect_of(centre, size(k, plate))
+                cost = obstacles.cost(rect, skip) + raised(k, plate, rect)
                 if cost <= 1e-9:
                     commit(k, centre, plate, owner)
                     return
@@ -878,7 +905,7 @@ class IsoDiagram(NarratedScene):
                 rect = rect_of(centre, size(k))
                 hull = owner(centre) if callable(owner) else owner
                 off = max(hull_gap(rect, hull) - self.leader_from, 0.0) if hull is not None else 0.0
-                cost = obstacles.cost(rect, skip) + FAR_COST * off
+                cost = obstacles.cost(rect, skip) + raised(k, True, rect) + FAR_COST * off
                 if best is None or cost < best[0] - 1e-9:
                     best = (cost, centre, True)
             assert best is not None
@@ -1119,6 +1146,9 @@ class IsoDiagram(NarratedScene):
         blocks: dict[str, Mobject] = {}
         self._pipe_depths: dict[int, list[float]] = {k: [] for k in range(len(layout.edges))}
         pipe_boxes = layout.pipe_boxes()
+        #: each pipe's segments (by connector index): the piece drawn and its box on the ground
+        self._pipe_pieces: dict[int, list[tuple[Mobject, Box3]]] = {}
+        pieces: dict[int, Mobject] = {}
         ranks: dict[int, int] = {}
         for rank, (kind, key) in enumerate(layout.order()):
             if kind == "block":
@@ -1131,8 +1161,10 @@ class IsoDiagram(NarratedScene):
                 piece = drawn(lambda paint, box=box, color=color: (box_faces(box, paint(color)), outline_ink(paint(color))))
                 edges[k].add(piece.set_z_index(10 + rank))
                 ranks[key] = rank
+                pieces[key] = piece
         for key in range(len(s.pipes)):   # pipe segments in path order, with the depth each is drawn at
             self._pipe_depths[s.pipes[key][0]].append(10 + ranks[key] + 0.5)
+            self._pipe_pieces.setdefault(s.pipes[key][0], []).append((pieces[key], pipe_boxes[key]))
         texts: dict[LabelKey, VGroup] = {}
         self._label_text: dict[LabelKey, Mobject] = {}
         self._label_plate: dict[LabelKey, Mobject | None] = {}
@@ -1529,25 +1561,30 @@ class IsoDiagram(NarratedScene):
                 move(self._parts["texts"][("group", gid)], dz)
             self._plate_lifted[gid] = self._plate_lift[gid]
             anims += self._shadow(gid, self._plate_lift[gid], box, ("plate", gid) in self._in, "box")
-        for k, arrow in self._arrows.items():   # a flat connector tilts up to its raised ends
-            edge = layout.edges[k]
+        for k, edge in enumerate(layout.edges):   # a connector (flat arrow or pipe) tilts up to its raised ends
             wanted = (lifts[self._end_blocks(edge.source)[0]], lifts[self._end_blocks(edge.target)[0]])
             before = self._edge_lift[k]
             if np.allclose(wanted, before, atol=1e-9):
                 continue
             self._edge_lift[k] = wanted
             color = self._edge_colors[k]
+            pieces: list[tuple[Mobject, Callable[[list[float]], Mobject]]] = []
+            if k in self._arrows:
+                pieces.append((self._arrows[k], lambda ends, edge=edge, color=color:
+                               shapes_mobject(ramped(arrow_shapes(edge, color), edge, *ends), self._to_scene, ink=None, stroke=self.stroke)))
+            for piece, box in self._pipe_pieces.get(k, []):   # each segment's box sheared along the slope
+                pieces.append((piece, lambda ends, edge=edge, color=color, box=box:
+                               shapes_mobject(ramped(box_faces(box, color), edge, *ends), self._to_scene, ink=outline_ink(color), stroke=self.stroke)))
+            for piece, make in pieces:
+                def build(t: float, make: Callable[[list[float]], Mobject] = make, before: tuple[float, float] = before,
+                          wanted: tuple[float, float] = wanted) -> Mobject:
+                    return make([a + (b - a) * t for a, b in zip(before, wanted)])
 
-            def build(t: float, edge: Any = edge, color: str = color, before: tuple[float, float] = before,
-                      wanted: tuple[float, float] = wanted) -> Mobject:
-                ends = [a + (b - a) * t for a, b in zip(before, wanted)]
-                return shapes_mobject(ramped(arrow_shapes(edge, color), edge, *ends), self._to_scene, ink=None, stroke=self.stroke)
-
-            if any(id(m) in shown for m in arrow.get_family()):
-                anims.append(Reshape(arrow, build))
-            else:
-                for m, made in zip(arrow.get_family(), build(1.0).get_family()):
-                    m.points = made.points.copy()
+                if any(id(m) in shown for m in piece.get_family()):
+                    anims.append(Reshape(piece, build))
+                else:
+                    for m, made in zip(piece.get_family(), build(1.0).get_family()):
+                        m.points = made.points.copy()
         return anims
 
     def _shadow(self, name: str, lift: float, box: Box3, visible: bool, shape: str) -> list[Animation]:
@@ -1751,7 +1788,9 @@ class IsoDiagram(NarratedScene):
                                for s, (x, y, z) in enumerate(samples)])
             edges.append({"ref": edge.ref(), "source": edge.source, "target": edge.target,
                           "points": [[round(float(x), 1), round(float(y), 1)] for x, y in px(mob, points)]})
-        return {"iso_diagram": {"labels": labels, "blocks": blocks, "plates": plates, "stacks": stacks, "edges": edges}}
+        frame = getattr(cam, "frame", None)
+        zoom = self.frame_width / float(frame.width) if frame is not None and float(frame.width) > 1e-9 else 1.0   # a focus magnifies
+        return {"iso_diagram": {"labels": labels, "blocks": blocks, "plates": plates, "stacks": stacks, "edges": edges, "zoom": round(zoom, 4)}}
 
 
 def _words(text: Mobject) -> str:

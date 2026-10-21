@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–176)
+## 0.3.0 (Steps 61–177)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -235,6 +235,12 @@ matters only for projects made with development builds between Steps 67 and 131)
   with the blocks that are built and follows them in whole cells without a ragged edge; puddle
   ripples stay inside their puddle. The example drops its "App servers" caption and is drawn a
   third larger.
+- Follow-ups (177): pipes tilt up to raised blocks too (dots and packets ride on them); the label
+  of a block a `raise` lifts keeps off its tilted connectors (the example lints clean in 16:9 and
+  9:16; `iso_labels` judges a label's distance at the diagram's own scale under a `focus`); in
+  9:16 on an iso place a shot never cuts a character in half at the frame's edge (whole in, or
+  out), centres the figures when the tightest zoom leaves the view taller than needed, and the
+  wide view keeps in view the spots the scene's walks go to. 16:9 is unchanged.
 
 ### Presentation toolkit (Phase P)
 

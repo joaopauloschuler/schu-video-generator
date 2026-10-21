@@ -16581,3 +16581,62 @@ How to test
   + `test_introspect` (71); under `capped3g`: `test_actions_coverage` + `test_schema` (149,
   3 min), `test_mcp` in full (17, 71 s). All pass.
 - `vidgen lint` of the example: 16:9 one warning (above), 9:16 none.
+
+## Step 177 — Phase R follow-ups
+
+What was built (DESIGN §90.14)
+- **"App 2" off its own arrow** (general, not an example tweak): a block label's candidate also
+  pays `LINE_COST` per sample of the connectors tilted up to the scene's planned lifts that lie
+  under the label moved up with its block (`_raised_lines`, `raised` in `IsoDiagram._place`).
+  `iso_labels` now judges the leader-line gap at the diagram's scale under a focus (dump key
+  `iso_diagram.zoom`; the moved label was 30 px off at a 2x focus against a 29 px limit, 15 px
+  unzoomed). `vidgen lint examples/iso-web-page`: 0 findings in 16:9 and 9:16 (with the Kokoro
+  audio in the voiced copy too).
+- **Pipes follow raised ends**: `_settle` reshapes pipe segments like arrows (`ramped` on each
+  segment's `box_faces`, `Reshape` while raising / lowering); `_edge_lift` follows pipes, so
+  flows ride the slope and lint gets the tilted path. Checked in a scratch project
+  (`s177/pipe`): raise, packets along both pipes, lower.
+- **9:16 shots on an iso place**: `shots.portrait_shot` (only on an iso place in a tall frame):
+  neighbours wholly in or out of the view, never cut at its edge; figures centred up and down
+  when the zoom cap leaves the view taller than needed (it is on an iso place: characters 0.6
+  units tall, the 9:16 view at 8x is 1.0 x 1.78). The wide view in 9:16 (start and `shot: wide`)
+  also keeps the spots the scene's walks go to and the cells round them (`_iso_arrivals`).
+  No example tweak was needed.
+
+Files touched
+- New: `tests/test_step177.py` (4, 1 render).
+- Changed: `src/vidgen/scenes/iso_diagram.py`, `src/vidgen/lint/iso_rule.py`,
+  `src/vidgen/cartoon/shots.py`, `src/vidgen/scenes/stage.py`, `src/vidgen/scenes/stage_iso.py`,
+  `src/vidgen/api.py`, `docs/CONFIG.md`, `CHANGELOG.md` (0.3.0 now Steps 61–177), `DESIGN.md`,
+  `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` adds `portrait_shot`, `LINE_COST`; `shots.PORTRAIT_EDGE`, `PORTRAIT_ROOM`. Layout
+  dump: `iso_diagram.zoom`. Behaviour: iso_diagram pipes tilt; labels of raised blocks placed
+  differently; 9:16 framing on iso places (shots and wide view). 16:9 and flat stages unchanged.
+
+Compatibility
+- Phase Q baseline (`s177/baselines.sh q`): 31 frames, max difference 0.
+- iso-story against Step 176's frames (`s177/rscene.sh`, one scene a call, into `s177/rframes`):
+  all 61 16:9 stills identical; 9:16 `morning` and `night` differ in every still with a wide view
+  (it now keeps the walks' destinations: a little wider / shifted) and the close-ups; night's
+  follow, zoom and two-shot stills identical. Intended.
+
+Renders (Kokoro audio reused, narration unchanged)
+- `<scratchpad>/s177/open_a_web_page.mp4`: 1920x1080, 2:00.07, -16.0 LUFS, video and audio
+  120.07 s, no silence over 1.5 s; contact sheet `s177/web_contact_sheet.png`.
+- `<scratchpad>/s177/hazel_and_the_lamp_short.mp4`: 1080x1920, 3:02 (181.97 s), -16.0 LUFS, no
+  silence over 1.5 s; contact sheet `s177/hazel_short_contact_sheet.png`. Close-ups now show the
+  speaker with the neighbour whole and centred (next morning: Rowan with Hazel, not the bench).
+
+Known gaps
+- `zoom` / `pan` actions in 9:16 are not reframed (the buds zoom can still show Juno's beak at the
+  edge; the evening lamp zoom shows no one); a pipe keeps its ground draw order; the label is
+  kept off tilted connectors at the highest planned lift only.
+
+How to test
+- One at a time under `capped`: `test_step177` (4), `test_iso_diagram` + `test_iso_diagram_actions`
+  + `test_iso_web_page` + `test_phase_r_review` (68), `test_cartoon_shots` + `test_phase_q_review`
+  + `test_phase_o_review` (33), `test_iso_place` + `test_iso_staging` + `test_iso_moves` +
+  `test_iso_story` (126), `test_api` + `test_lint` + `test_iso_weather` + `test_iso_mood` (60),
+  `test_guide` + `test_docs` (116), `test_builtin_scenes -m "not render"` (124). All pass.

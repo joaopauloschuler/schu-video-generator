@@ -989,6 +989,11 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] Critical review with fixes in HANDOFF (diagrams fill the body, focus fades the labels it would cut, connectors tilt to raised blocks, a tidy floor that comes in with the blocks, 9:16 layouts chosen by fit, ripples inside puddles; `tests/test_phase_r_review.py`); backwards compatibility against the baseline stills (Phase Q 31 identical; iso-story only Step 172's changes); the 9:16 variant of `examples/iso-story` rendered at 1080x1920 with the Kokoro audio
 - [x] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
 
+### Step 177 — Phase R follow-ups (after the review)
+- [x] A raised block's label keeps off its tilted connectors (`examples/iso-web-page` lints clean in 16:9 and 9:16; `iso_labels` judges a label's distance at the diagram's own scale under a `focus`)
+- [x] Pipes tilt up to raised ends like flat arrows (during the raise / lower, with `flow` dots and packets on them)
+- [x] 9:16 shots on an iso place keep characters whole (in or out, never cut at the edge), centre the figures when the tightest zoom leaves room, and the wide view keeps the scene's walk destinations; 16:9 unchanged (iso-story's 61 16:9 baseline stills identical); renders of the web-page video (16:9) and Hazel's Short with the Kokoro audio; `tests/test_step177.py`
+
 ---
 
 ## Backlog (after Step 60)
