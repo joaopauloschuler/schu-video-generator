@@ -16493,3 +16493,91 @@ How to test
   trip built), `still_055s.png` (the focus with "Database: 40 ms"), `still_085s.png` (the stack
   exploded), `voiced_sheet_16x9_p1..p4.png`, `sheet_9x16_p1..p5.png`,
   `lint_9x16_app2_on_connector.png`.
+
+## Step 176 — Review of Phase R
+
+What was reviewed and fixed (DESIGN §90.13)
+- Problems seen in Step 175's contact sheet of `examples/iso-web-page`, fixed in code:
+  1. **The first diagram was small** (two thirds of the width, a third of the frame): the labels
+     above and below set the height. Labels are now tried beside the blocks when the usual order
+     overflows only the height (`_place(sideways=True)`, `SIDEWAYS`), and above / below lined up
+     with a block's edge (`aligned`); the scan starts at the largest scale the drawing alone fits.
+     The example also drops the "App servers" group caption. Trip: 1.01 → 1.35 units a tile;
+     one_request 1.01 → 1.24.
+  2. **Focus cut labels at the frame's edge** ("vers", "PS", half "App 1"): `focus` and its
+     `until` fade out every label (and the heading) not wholly inside the new view and bring them
+     back when they are again (`iso_veil`, `Veil`: out early in the move, in late, so none shows
+     cut while the camera moves). `padding` is now a share of the view's shorter side.
+  3. **The Cache label under the database**: with the larger fit and the edge-aligned places the
+     cache's label sits under the cache with a short leader (the pipe is to its right, the app
+     servers to its left: nowhere closer is free).
+  4. **The ragged floor**: a floor that follows the blocks is grown to whole cells of a grid half
+     a cell off and filled across rows and columns (`_tidy`): clean steps, no notches.
+  5. Known gaps of 174/175: the 9:16 grid is now chosen among as written / slanted all or half
+     the way by the actual fit (`Params.layouts`; trip 1.08 → 1.21, the "round the outside"
+     HTTPS route is gone); focus zooms in 9:16 (padding fix; the example's padding 0.2 → 0.1);
+     flat connectors tilt up to raised ends (`ramped`, `Reshape`; flows and lint follow); the
+     floor comes in with the blocks built (`FloorCells`), not under blocks not yet there.
+- Review of Step 172: puddle ripples could spread past the puddle onto the grass (offset 0.45 +
+  reach 0.75 of the radius): `RIPPLE_OFFSET` keeps them inside. `lift_floors`' docstring said
+  twice for three steps. Shelter, settling snow and speed lines read correctly in the iso-story
+  render below; nothing else found.
+- Tried and dropped: keeping a raised block's label clear at both heights (the labels then
+  crowded each other off their blocks and the cache's went under the database again); moving
+  the example's cache and database (a smaller diagram, or a label over a connector).
+
+Files touched
+- New: `tests/test_phase_r_review.py` (8, 2 render).
+- Changed: `src/vidgen/scenes/iso_diagram.py` (fit, placement, `layouts`, `_take`, veil, ramps,
+  floor pieces, focus padding, layout dump), `src/vidgen/iso_blocks.py` (`_tidy`, `_floor_of`,
+  `FloorCells`, `FLOOR_SEAM`, `ramped`, `slant(share)`, `grid_lines(within)`),
+  `src/vidgen/iso_labels.py` (`SIDEWAYS`, boxes in `Obstacles`, `clip_area(box=)`),
+  `src/vidgen/scenes/iso_motion.py` (`Reshape`, `Veil`), `src/vidgen/scenes/iso_actions.py`
+  (focus fades labels), `src/vidgen/cartoon/iso_weather.py` (`RIPPLE_OFFSET`),
+  `src/vidgen/api.py`, `examples/iso-web-page/video.yaml` (no group caption, focus padding 0.1),
+  `docs/CONFIG.md`, guide + `AGENTS.md`, `docs/gallery/iso_diagram.md` + media (regenerated),
+  `CHANGELOG.md` (0.3.0 now Steps 61–176), `DESIGN.md`, `tasklist.md`,
+  `tests/test_iso_diagram.py` (the floor test), `tests/test_iso_web_page.py` (stub signature).
+
+Public interfaces
+- `vidgen.api` adds `SIDEWAYS`, `FloorCells`, `ramped`; `slant(items, along, share=1.0)`,
+  `floor_shapes(..., within=None)`, `clip_area(rect, hull, box=None)`.
+  `IsoDiagram.Params.layouts(portrait)`, `IsoDiagram.iso_veil(width, centre)`; constant
+  `iso_diagram.LAYOUT_GAIN`. Behaviour (iso_diagram only): diagrams drawn larger, a tidier floor
+  that comes in with the blocks, `focus` padding of the shorter side, labels faded by focus,
+  tilting connectors.
+
+Compatibility
+- `phase-q-baseline/make_baseline.sh` into `s176/qframes`: 31 frames, max difference 0.
+- iso-story (`s176/rscene.sh`: the Phase R baseline one scene at a time) into `s176/rframes`:
+  against the pre-Phase-R stills only the rain scenes and the mid-run stills differ (Step 172's
+  intended changes; 9:16 `morning_b8-m435` is the same run); against Step 172's check frames
+  (`s172/r_check`) 84 frames, max difference 0.
+
+Renders (Kokoro audio reused, narration unchanged)
+- `<scratchpad>/s176/hazel_and_the_lamp_short.mp4`: iso-story's `short` variant, 1080x1920 @ 30,
+  3:02, video and audio 181.97 s, -16.0 LUFS, no silence over 1.5 s; contact sheet
+  `s176/hazel_short_contact_sheet.png` (checked by eye).
+- `<scratchpad>/s176/open_a_web_page.mp4`: the web-page example in 16:9, 1920x1080, 2:00.07,
+  -16.0 LUFS, no silence over 1.5 s; contact sheet `s176/web_contact_sheet.png`; the move back
+  from the focus `s176/focus_back.png`.
+
+Known gaps
+- "App 2" raised in `one_request` lies on the start of `app2->cache` (one `iso_labels` warning
+  in 16:9; 9:16 clean). Pipes do not tilt to raised ends. A focus fades labels by their box, so a
+  label of a block mostly in view can vanish while its block stays. A plan in 9:16 tries up to
+  five layouts (a few seconds more per scene). L-routes on a slanted grid still turn round the
+  side.
+
+How to test
+- One file at a time under `capped`: `test_phase_r_review` (8), `test_iso_diagram` +
+  `test_iso_diagram_actions` + `test_iso_web_page` (60 with the review), `test_iso_weather` +
+  `test_iso_mood` (27), `test_api` + `test_guide` + `test_docs` (126), `test_builtin_scenes` +
+  `test_actions_coverage -k "iso or focus or build or flow or relabel"` (15), `test_actions` +
+  `test_lint` + `test_narration_rule` + `test_translation` (134), `test_gallery` +
+  `test_json_output -m "not render"` (32), `test_builtin_scenes -m "not render"` (124),
+  `test_iso_place` + `test_iso_staging` + `test_iso_moves` + `test_iso_story` +
+  `test_phase_q_review` (137), `test_cartoon_rain` + `test_cartoon_snow_fog` + `test_particles`
+  + `test_introspect` (71); under `capped3g`: `test_actions_coverage` + `test_schema` (149,
+  3 min), `test_mcp` in full (17, 71 s). All pass.
+- `vidgen lint` of the example: 16:9 one warning (above), 9:16 none.

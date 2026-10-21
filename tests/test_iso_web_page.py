@@ -49,11 +49,11 @@ def test_the_example_validates_and_uses_phase_r(variant: str | None, tmp_path: P
 def test_the_fit_finds_the_largest_scale_even_when_a_smaller_one_does_not_fit() -> None:
     from vidgen.scenes.iso_diagram import IsoDiagram, _Placement
 
-    def place(scale: float, labels: list) -> _Placement:
+    def place(scale: float, labels: list, sideways: bool = False) -> _Placement:
         width = 40.0 if 1.0 < scale < 1.5 else 4 * scale    # a label pushed far at middle scales only
         return _Placement(bounds=(0.0, 0.0, width, 1.0))
 
-    stub = SimpleNamespace(max_tile=2.4, portrait_tile=1.35, is_portrait=False, _place=place)
+    stub = SimpleNamespace(max_tile=2.4, portrait_tile=1.35, is_portrait=False, _place=place, _bounds=(0.0, 0.0, 1.0, 0.1))
     plan = IsoDiagram._largest(stub, Region(0.0, 0.0, 8.0, 8.0), [])   # type: ignore[arg-type]
     assert plan.fits and plan.scale == pytest.approx(2.0, abs=0.01)     # bisection from the bottom stopped near 1.0
     tight = IsoDiagram._largest(stub, Region(0.0, 0.0, 0.5, 8.0), [])   # type: ignore[arg-type]

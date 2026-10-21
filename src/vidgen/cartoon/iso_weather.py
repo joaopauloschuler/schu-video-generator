@@ -160,8 +160,8 @@ def lift_floors(u: np.ndarray, v: np.ndarray, surface: TopSurface) -> np.ndarray
     """How far up the picture (tile widths) a drop that would land on the ground seen at picture
     point (``u``, ``v``) lands instead: on the top surface over that ground point when something
     is :data:`SHELTER_CLEARANCE` or more over it (a roof, a crown, a bridge's deck over water),
-    else 0. The ground point is found by stepping to the cell top's height (twice: a raised block
-    moves it)."""
+    else 0. The ground point is found by stepping to the cell top's height (three times: a
+    raised block moves it)."""
     z = np.zeros_like(np.asarray(u, dtype=float))
     for _ in range(3):
         x, y = world_at(u, v, z)
@@ -241,6 +241,9 @@ RIPPLE_SECONDS = 0.9
 RIPPLE_REACH = 0.75
 RIPPLE_WIDTH = 0.16
 RIPPLE_OPACITY = 0.7
+#: How far from the puddle's middle a ripple starts (a share of its radius): at most the room
+#: its ring leaves, so a ring never spreads past the puddle onto the grass.
+RIPPLE_OFFSET = 1.0 - RIPPLE_REACH - 0.05
 
 
 @dataclass(frozen=True)
@@ -267,7 +270,7 @@ def ripples(puddle: IsoPuddle, seconds: float, size: float = 1.0) -> list[Ripple
         turn = math.floor(cycle)
         spread = cycle - turn
         where = random.Random(f"{puddle.seed}:{k}:{turn}")
-        angle, reach = where.uniform(0.0, 2 * math.pi), where.uniform(0.0, 0.45)
+        angle, reach = where.uniform(0.0, 2 * math.pi), where.uniform(0.0, RIPPLE_OFFSET)
         found.append(Ripple(math.cos(angle) * reach * radius, math.sin(angle) * reach * radius,
                             max(spread * RIPPLE_REACH * radius, 1e-6), RIPPLE_OPACITY * (1.0 - spread) * size))
     return found
@@ -280,6 +283,7 @@ __all__ = [
     "PUDDLE_GROUNDS",
     "PUDDLE_RADIUS",
     "RIPPLES",
+    "RIPPLE_OFFSET",
     "RIPPLE_OPACITY",
     "RIPPLE_SECONDS",
     "RIPPLE_WIDTH",

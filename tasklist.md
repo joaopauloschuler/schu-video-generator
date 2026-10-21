@@ -986,8 +986,8 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] Guide + `AGENTS.md`, CONFIG, CHANGELOG, README, gallery (iso_diagram media regenerated), the Shorts cookbook
 
 ### Step 176 — Review of Phase R
-- [ ] Critical review with fixes in HANDOFF; backwards compatibility against the baseline stills; the 9:16 variant of `examples/iso-story` rendered at 1080x1920 with the Kokoro audio
-- [ ] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
+- [x] Critical review with fixes in HANDOFF (diagrams fill the body, focus fades the labels it would cut, connectors tilt to raised blocks, a tidy floor that comes in with the blocks, 9:16 layouts chosen by fit, ripples inside puddles; `tests/test_phase_r_review.py`); backwards compatibility against the baseline stills (Phase Q 31 identical; iso-story only Step 172's changes); the 9:16 variant of `examples/iso-story` rendered at 1080x1920 with the Kokoro audio
+- [x] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
 
 ---
 

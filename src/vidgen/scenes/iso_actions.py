@@ -176,12 +176,13 @@ class Flow(_IsoAction):
 @action("focus")
 class Focus(_IsoAction):
     """Move the camera onto iso_diagram targets (no rotation): as close as they fit with
-    ``padding`` around them (or ``scale``), and stay there; ``focus: diagram`` or ``until:
-    <beat>`` goes back to the whole view."""
+    ``padding`` around them (or ``scale``), and stay there; labels the view would cut at its
+    edge fade out meanwhile; ``focus: diagram`` or ``until: <beat>`` goes back to the whole view
+    (and brings them back)."""
 
     class Options(ActionOptions):
         padding: float = Field(default=0.12, ge=0, lt=0.45)
-        """Share of the view kept free on each side of the targets."""
+        """Space kept free on each side of the targets, as a share of the view's shorter side."""
         scale: float | None = Field(default=None, gt=1, le=6)
         """Magnification (2 = twice as large); default: as close as they fit (at most 3x)."""
 
@@ -195,11 +196,12 @@ class Focus(_IsoAction):
         """Move the view onto the targets."""
         self.before = camera_view(scene)
         width, centre = scene.iso_focus_view(targets, self.options.padding, self.options.scale)  # type: ignore[attr-defined]
-        return move_camera_back(scene, (width, centre))
+        return move_camera_back(scene, (width, centre)) + scene.iso_veil(width, centre)  # type: ignore[attr-defined]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to the view before."""
-        return move_camera_back(scene, getattr(self, "before", None))
+        before = getattr(self, "before", None)
+        return move_camera_back(scene, before) + (scene.iso_veil(*before) if before is not None else [])  # type: ignore[attr-defined]
 
 
 @action("relabel")

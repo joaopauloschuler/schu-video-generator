@@ -573,8 +573,8 @@ from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
 from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
 from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
-from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, picture_size, plate_shapes, slant  # noqa: E402
-from vidgen.iso_labels import AROUND, FAR_COST, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
+from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, FloorCells, picture_size, plate_shapes, ramped, slant  # noqa: E402
+from vidgen.iso_labels import AROUND, FAR_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
 from vidgen.world.iso_view import ISO_RISE  # noqa: E402
 from vidgen.iso_vector import picture_to_scene, shapes_mobject  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
@@ -1414,9 +1414,12 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "box_outline",
     "picture_size",
     "plate_shapes",
+    "FloorCells",
+    "ramped",
     "slant",
     "AROUND",
     "FAR_COST",
+    "SIDEWAYS",
     "Obstacles",
     "clip_area",
     "convex_hull",

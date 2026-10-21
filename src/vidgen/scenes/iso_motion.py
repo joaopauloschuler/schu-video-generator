@@ -121,6 +121,48 @@ class FlowDots(Animation):
                 m.fill_rgbas, m.stroke_rgbas = f, k
 
 
+class Reshape(Animation):
+    """Takes the points of ``build(t)`` (``mobject`` as it is ``t`` of the way through a change
+    of shape, e.g. a connector tilting up to a raised block); its colours are left alone."""
+
+    def __init__(self, mobject: Mobject, build: Callable[[float], Mobject], **kwargs: Any) -> None:
+        super().__init__(mobject, **kwargs)
+        self.build = build
+
+    def create_starting_mobject(self) -> Mobject:
+        return Mobject()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        for m, made in zip(self.mobject.get_family(), self.build(self.rate_func(alpha)).get_family()):
+            if len(m.points) == len(made.points):
+                m.points = made.points.copy()
+
+
+class Veil(Animation):
+    """Fades a label out (``hide``, in the first 40 % of the time) from the colours it had,
+    ``looks`` (``(mobject, fill rgbas, stroke rgbas)`` of its parts), or back in to them (in the
+    last 40 %), alongside a camera move."""
+
+    def __init__(self, mobject: Mobject, looks: Sequence[tuple[VMobject, np.ndarray, np.ndarray]], hide: bool, **kwargs: Any) -> None:
+        super().__init__(mobject, **kwargs)
+        self.looks, self.hide = list(looks), hide
+
+    def create_starting_mobject(self) -> Mobject:
+        return Mobject()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        t = self.rate_func(alpha)
+        # out early and back in late: while the camera moves, a label at the view's edge is not seen cut
+        shown = max(0.0, 1 - t / 0.4) if self.hide else min(1.0, max(0.0, (t - 0.6) / 0.4))
+        for m, fill, stroke in self.looks:
+            if len(m.fill_rgbas) != len(fill) or len(m.stroke_rgbas) != len(stroke):
+                continue
+            f, s = fill.copy(), stroke.copy()
+            f[:, 3] *= shown
+            s[:, 3] *= shown
+            m.fill_rgbas, m.stroke_rgbas = f, s
+
+
 class SwapAtEnd(Animation):
     """Changes nothing while it plays; when it ends, ``new`` takes ``old``'s place in ``holder``
     (a label's group on screen; not removed from the scene, which would break up the groups
@@ -142,4 +184,4 @@ class SwapAtEnd(Animation):
         self.mobject.add(self.new)
 
 
-__all__ = ["FillFade", "FlowDots", "GrowBlock", "LiftMove", "SwapAtEnd"]
+__all__ = ["FillFade", "FlowDots", "GrowBlock", "LiftMove", "Reshape", "SwapAtEnd", "Veil"]

@@ -11,7 +11,7 @@ An item fills its cells less :data:`CELL_INSET` on each side, so neighbours stay
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from vidgen.cartoon.iso_drawing import Line, Poly, Shape, Upright, box_shapes, shade, shape_bounds
@@ -390,25 +390,36 @@ def layout_iso_diagram(items: Sequence[ItemSpec], groups: Sequence[GroupSpec] = 
         plates[group.id] = Box3(area.x0, area.y0, 0.0, area.x1, area.y1, PLATE_HEIGHT)
     layout = IsoDiagramLayout(blocks, stacks, plates, [], (), rects)
     layout.edges = route_edges(layout, edges)
-    under = [*rects.values(), *[Rect(p.x0, p.y0, p.x1, p.y1) for p in plates.values()]]
-    for edge in layout.edges:
-        for a, b in zip(edge.points, edge.points[1:]):
-            under.append(Rect(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
-    layout.floor = _floor(tuple(r.grown(FLOOR_PAD) for r in under))
+    layout.floor = _floor_of(layout, rects)
     return layout
 
 
-def slant(items: Sequence[ItemSpec], along: str) -> list[ItemSpec]:
+def _floor_of(layout: IsoDiagramLayout, items: Collection[str]) -> tuple[Rect, ...]:
+    """The floor under ``items`` (:func:`_floor`): under each of them, the plates of their
+    groups and the connectors between them, :data:`FLOOR_PAD` around."""
+    under = [layout.items[name] for name in items]
+    groups = {layout.stacks[n].group if n in layout.stacks else layout.blocks[n].group for n in items}
+    under += [Rect(p.x0, p.y0, p.x1, p.y1) for gid, p in layout.plates.items() if gid in groups]
+    for edge in layout.edges:
+        if _item_of(layout, edge.source) in items and _item_of(layout, edge.target) in items:
+            for a, b in zip(edge.points, edge.points[1:]):
+                under.append(Rect(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
+    return _floor(tuple(r.grown(FLOOR_PAD) for r in under))
+
+
+def slant(items: Sequence[ItemSpec], along: str, share: float = 1.0) -> list[ItemSpec]:
     """``items`` (all with ``at``) on a slanted grid: each moves along the other axis by how far
     its middle lies along ``along`` (``x`` or ``y``), so that axis runs straight down the
     picture (the view's ``x = y`` diagonal). A row along ``x`` becomes a column down a tall frame;
-    neighbours keep their order and sides."""
+    neighbours keep their order and sides. ``share`` under 1 moves them that share of the way
+    (rounded to whole cells): the axis runs down the picture at a slant."""
     middles = [(item.at[0] + item.cells()[0] / 2) if along == "x" else (item.at[1] + item.cells()[1] / 2) for item in items]  # type: ignore[index]
     low = min(middles)
     out = []
     for item, middle in zip(items, middles):
         x, y = item.at  # type: ignore[misc]
-        out.append(replace(item, at=(x, y + middle - low) if along == "x" else (x + middle - low, y)))
+        move = middle - low if share >= 1 else float(round(share * (middle - low)))
+        out.append(replace(item, at=(x, y + move) if along == "x" else (x + move, y)))
     return out
 
 
@@ -430,7 +441,38 @@ def _floor(rects: tuple[Rect, ...]) -> tuple[Rect, ...]:
     cover = _Cover(rects)
     area = sum((cover.xs[i + 1] - cover.xs[i]) * (cover.ys[j + 1] - cover.ys[j])
                for i in range(len(cover.xs) - 1) for j in range(len(cover.ys) - 1) if cover.inside[i][j])
-    return (box,) if area >= FLOOR_FILL * (box.x1 - box.x0) * (box.y1 - box.y0) else rects
+    return (box,) if area >= FLOOR_FILL * (box.x1 - box.x0) * (box.y1 - box.y0) else _tidy(rects)
+
+
+def _tidy(rects: Sequence[Rect]) -> tuple[Rect, ...]:
+    """The floor following ``rects`` without a ragged edge: grown out to whole cells of a grid
+    half a cell off the diagram's (its edges then lie mid-cell all round, as a rectangular
+    floor's do), and filled across each row and down each column between its ends (no notches;
+    steps only where the diagram's width changes). Returned as one rectangle per row run."""
+    cells: set[tuple[int, int]] = set()
+    for r in rects:
+        cells |= {(i, j) for i in range(math.floor(r.x0 - 0.5 + 1e-6), math.ceil(r.x1 - 0.5 - 1e-6))
+                  for j in range(math.floor(r.y0 - 0.5 + 1e-6), math.ceil(r.y1 - 0.5 - 1e-6))}
+    while True:
+        filled = set(cells)
+        for axis in (0, 1):
+            lines: dict[int, list[int]] = {}
+            for cell in cells:
+                lines.setdefault(cell[1 - axis], []).append(cell[axis])
+            for line, spots in lines.items():
+                filled |= {(k, line) if axis == 0 else (line, k) for k in range(min(spots), max(spots) + 1)}
+        if filled == cells:
+            break
+        cells = filled
+    out: list[Rect] = []
+    for j in sorted({j for _, j in cells}):
+        row = sorted(i for i, jj in cells if jj == j)
+        start = row[0]
+        for a, b in zip(row, [*row[1:], None]):
+            if b != a + 1:
+                out.append(Rect(start + 0.5, j + 0.5, a + 1.5, j + 1.5))
+                start = b if b is not None else start
+    return tuple(out)
 
 
 def layer_box(rect: Rect, layer: BlockSpec, z: float) -> Box3:
@@ -669,6 +711,35 @@ def arrow_shapes(edge: PlacedEdge, fill: str) -> list[Shape]:
     return shapes
 
 
+def ramped(shapes: Sequence[Shape], edge: PlacedEdge, start: float, end: float) -> list[Shape]:
+    """``shapes`` drawn along ``edge`` (its flat arrow) tilted so that the connector rises
+    evenly along its path from ``start`` above its height at the source to ``end`` at the
+    target (tile units): a connector to a raised block reaches up to it."""
+    if abs(start) < 1e-9 and abs(end) < 1e-9:
+        return list(shapes)
+    points = [(p[0], p[1]) for p in edge.points]
+    lengths = [math.dist(a, b) for a, b in zip(points, points[1:])]
+    total = sum(lengths) or 1.0
+
+    def rise(x: float, y: float) -> float:
+        best, walked, along = math.inf, 0.0, 0.0
+        for (a, b), length in zip(zip(points, points[1:]), lengths):
+            t = 0.0 if length < 1e-12 else max(0.0, min(1.0, ((x - a[0]) * (b[0] - a[0]) + (y - a[1]) * (b[1] - a[1])) / (length * length)))
+            d = math.dist((x, y), (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+            if d < best - 1e-12:
+                best, along = d, walked + length * t
+            walked += length
+        return start + (end - start) * along / total
+
+    out: list[Shape] = []
+    for shape in shapes:
+        if isinstance(shape, (Poly, Line)):
+            out.append(replace(shape, points=tuple((x, y, z + rise(x, y)) for x, y, z in shape.points)))
+        else:
+            out.append(shape)
+    return out
+
+
 def pipe_segments(edge: PlacedEdge) -> list[Box3]:
     """The boxes of a pipe along the connector, one per segment (each reaching half the pipe's
     width past an inner corner)."""
@@ -724,13 +795,61 @@ def plate_shapes(plate: Box3, fill: str) -> list[Shape]:
     return box_faces(plate, fill)
 
 
-def floor_shapes(floor: Sequence[Rect], fill: str, line: str) -> list[Shape]:
+def floor_shapes(floor: Sequence[Rect], fill: str, line: str, within: Rect | None = None) -> list[Shape]:
     """The floor: the union of the rectangles ``floor`` (flat polygons, one per outline) with the
-    grid's lines over it (every whole cell)."""
+    grid's lines over it (every whole cell; ``within``: of a whole floor this is a part of, so
+    the lines on the part's edges inside it are drawn)."""
     cover = _Cover(floor)
     shapes: list[Shape] = [Poly(tuple((x, y, 0.0) for x, y in loop), fill, False) for loop in cover.outlines()]
-    shapes += [Line(((a[0], a[1], 0.0), (b[0], b[1], 0.0)), line, 0.6) for a, b in cover.grid_lines()]
+    shapes += [Line(((a[0], a[1], 0.0), (b[0], b[1], 0.0)), line, 0.6) for a, b in cover.grid_lines(within)]
     return shapes
+
+
+#: Neighbouring parts of a floor that comes in part by part overlap this much (tile units), so
+#: no seam shows between them.
+FLOOR_SEAM = 0.02
+
+
+class FloorCells:
+    """``layout``'s floor cut into cells (at its own edges and the grid's lines), for a diagram
+    built a part at a time: :meth:`under` the cells of the floor under some of its items (as the
+    floor under them alone would be drawn, within the whole floor), :meth:`shapes` a set of cells
+    drawn as the floor is."""
+
+    def __init__(self, layout: IsoDiagramLayout) -> None:
+        self.layout = layout
+        cover = _Cover(layout.floor)
+        self.xs = sorted(set(cover.xs) | set(range(math.ceil(cover.xs[0]), math.floor(cover.xs[-1]) + 1)))
+        self.ys = sorted(set(cover.ys) | set(range(math.ceil(cover.ys[0]), math.floor(cover.ys[-1]) + 1)))
+        self.cells = self._inside(layout.floor)
+        whole = layout.floor[0]
+        for rect in layout.floor[1:]:
+            whole = whole.union(rect)
+        self.whole = whole
+
+    def _inside(self, rects: Sequence[Rect]) -> set[tuple[int, int]]:
+        xs, ys = self.xs, self.ys
+        return {(i, j) for i in range(len(xs) - 1) for j in range(len(ys) - 1)
+                if any(r.x0 <= (xs[i] + xs[i + 1]) / 2 <= r.x1 and r.y0 <= (ys[j] + ys[j + 1]) / 2 <= r.y1 for r in rects)}
+
+    def under(self, items: Collection[str]) -> set[tuple[int, int]]:
+        """The cells of the floor under ``items`` (blocks and stacks by id)."""
+        return self._inside(_floor_of(self.layout, items)) & self.cells if items else set()
+
+    def shapes(self, cells: Collection[tuple[int, int]], shown: Collection[tuple[int, int]], *, floor: str, background: str, text: str) -> list[Shape]:
+        """``cells`` drawn as :func:`diagram_shapes` draws the floor (``floor``: ``grid`` or
+        ``plain``), reaching :data:`FLOOR_SEAM` under the cells ``shown`` already beside them
+        (so no seam shows between them)."""
+        xs, ys = self.xs, self.ys
+
+        def seam(i: int, j: int) -> float:
+            return FLOOR_SEAM if (i, j) in shown else 0.0
+
+        rects = [Rect(xs[i] - seam(i - 1, j), ys[j] - seam(i, j - 1), xs[i + 1] + seam(i + 1, j), ys[j + 1] + seam(i, j + 1)) for i, j in cells]
+        if not rects:
+            return []
+        out = floor_shapes(rects, mix(background, text, FLOOR_TINT), mix(background, text, FLOOR_LINE_TINT), within=self.whole)
+        return [s for s in out if isinstance(s, Poly)] if floor == "plain" else out
 
 
 class _Cover:
@@ -775,13 +894,15 @@ class _Cover:
                 loops.append(loop)
         return loops
 
-    def grid_lines(self) -> list[tuple[tuple[float, float], tuple[float, float]]]:
-        """The whole-cell lines over the union, as segments (along ``x``, then along ``y``)."""
+    def grid_lines(self, within: Rect | None = None) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+        """The whole-cell lines over the union, as segments (along ``x``, then along ``y``),
+        except those on its outer edges (``within``: those on the edges of that rectangle)."""
+        box = within or Rect(self.xs[0], self.ys[0], self.xs[-1], self.ys[-1])
         out: list[tuple[tuple[float, float], tuple[float, float]]] = []
-        for y in range(math.ceil(self.ys[0] + 0.05), math.floor(self.ys[-1] - 0.05) + 1):
+        for y in range(max(math.ceil(box.y0 + 0.05), math.ceil(self.ys[0])), min(math.floor(box.y1 - 0.05), math.floor(self.ys[-1])) + 1):
             rows = [j for j in range(len(self.ys) - 1) if self.ys[j] - 1e-9 <= y <= self.ys[j + 1] + 1e-9]
             out += [((a, y), (b, y)) for a, b in _runs(self.xs, [any(self.covered(i, j) for j in rows) for i in range(len(self.xs) - 1)])]
-        for x in range(math.ceil(self.xs[0] + 0.05), math.floor(self.xs[-1] - 0.05) + 1):
+        for x in range(max(math.ceil(box.x0 + 0.05), math.ceil(self.xs[0])), min(math.floor(box.x1 - 0.05), math.floor(self.xs[-1])) + 1):
             cols = [i for i in range(len(self.xs) - 1) if self.xs[i] - 1e-9 <= x <= self.xs[i + 1] + 1e-9]
             out += [((x, a), (x, b)) for a, b in _runs(self.ys, [any(self.covered(i, j) for i in cols) for j in range(len(self.ys) - 1)])]
         return out
@@ -917,6 +1038,7 @@ __all__ = [
     "block_shapes",
     "box_outline",
     "diagram_shapes",
+    "FloorCells",
     "floor_shapes",
     "layout_iso_diagram",
     "outline_ink",
@@ -924,6 +1046,7 @@ __all__ = [
     "slant",
     "pipe_segments",
     "plate_shapes",
+    "ramped",
     "readable_ink",
     "route",
     "side_point",

@@ -99,7 +99,13 @@ def test_the_floor_is_one_rectangle_unless_the_items_zigzag() -> None:
     assert (floor.x0, floor.y0, floor.x1, floor.y1) == pytest.approx((0.1 - FLOOR_PAD, 0.1 - FLOOR_PAD, 4.9 + FLOOR_PAD, 0.9 + FLOOR_PAD))
     zig = layout_iso_diagram([box("a"), box("b"), box("c"), box("d")], edges=[EdgeSpec("a", "b"), EdgeSpec("b", "c"), EdgeSpec("c", "d")],
                              how="zigzag", spacing=2)
-    assert len(zig.floor) == 7   # under each block and each connector
+    # Step 176: whole cells of a grid half a cell off (its edges mid-cell all round), no notches
+    assert all((v - 0.5) == pytest.approx(round(v - 0.5)) for r in zig.floor for v in (r.x0, r.y0, r.x1, r.y1))
+    for item in zig.items.values():
+        grown = item.grown(FLOOR_PAD)
+        for x, y in ((grown.x0, grown.y0), (grown.x1, grown.y0), (grown.x0, grown.y1), (grown.x1, grown.y1)):
+            assert any(r.x0 <= x <= r.x1 and r.y0 <= y <= r.y1 for r in zig.floor)
+    assert [(r.x0, r.x1) for r in zig.floor] == [(-0.5, 4.5), (-0.5, 4.5), (2.5, 4.5), (2.5, 7.5), (2.5, 7.5)]   # a staircase
     shapes = floor_shapes(zig.floor, "#202020", "#303030")
     polys = [s for s in shapes if isinstance(s, Poly)]
     assert len(polys) == 1 and len(polys[0].points) > 4   # one stepped outline, not four squares

@@ -12679,3 +12679,47 @@ plate's caption left behind, now riding with it).
   early (as any action shows its target); the example builds before it flows. In 9:16 the
   slanted grid can route a connector round the outside, and `iso_labels` warns that "App 2" lies
   on part of `lb->app2` (one warning, judged acceptable: the arrow is still read).
+
+### 90.13 Review of Phase R (Step 176)
+
+Found by watching the example's contact sheet and fixed (iso_diagram only; no change to iso
+stages, platform levels, presentations: the Phase Q baseline's 31 stills are identical, and
+iso-story differs from the pre-Phase-R stills only in Step 172's intended rain and run stills):
+
+- **Filling the body.** A wide body whose height the labels above and below the blocks take
+  (the example's first diagram used two thirds of the width and a third of the frame) is now
+  tried with the labels beside the blocks first (`_place(sideways=True)`, directions
+  `iso_labels.SIDEWAYS`), at each scale where the usual order overflows the height only; the
+  scan starts at the largest scale the drawing alone fits (`_bounds`), which also makes the fit
+  cheaper. Above and below, a label wider than its block is also tried lined up with the block's
+  left or right edge (`aligned`), clear of a neighbour on the other side. `Obstacles` keeps each
+  outline's box (a cheaper cost). In the example, dropping the "App servers" caption (the blocks
+  say "App 1", "App 2") took the trip from 1.01 to 1.35 units a tile.
+- **9:16.** `Params.layouts(portrait)`: the preferred layout (`layout()`, as before), the grid as
+  written and slanted all or half the way (`slant(..., share)`: half the move, whole cells) along
+  x and y; the scene fits each at the label size asked for (a scan and 2 bisection steps) and
+  draws the largest unless the preferred one is within `LAYOUT_GAIN` 5 %.
+- **Focus never cuts a label.** `focus` (and its `until`) calls `iso_veil(width, centre)`: each
+  label group (plate, text, leader) and the heading not wholly inside the new view fades out
+  (`Veil`, in the first 40 % of the move; its colours kept in `_veiled`), and those wholly inside
+  again fade back in (the last 40 %). A relabel of a faded label swaps its kept colours to the
+  new text. Blocks may still be cut by the view's edge. `padding` is a share of the safe area's
+  **shorter** side, both ways: in 9:16 a share of the width left the targets no room to grow.
+- **Connectors to raised blocks.** A flat connector whose ends are raised tilts evenly along its
+  path from the source's lift to the target's (`iso_blocks.ramped`, `Reshape` while it moves);
+  flows follow the tilt, and the layout dump gives lint the tilted path. Pipes stay on the floor.
+- **The floor.** When it follows the blocks (they cover under 60 % of its rectangle) it is grown
+  out to whole cells of a grid half a cell off the diagram's, its edges mid-cell all round as a
+  rectangular floor's, and filled across rows and columns between their ends (`_tidy`): steps
+  only where the diagram's width changes, no ragged end. When blocks come in a part at a time
+  (`build: each`, `build` / `reveal` actions) the floor comes with them: `FloorCells.under(items)`
+  is the floor the items alone would get (`_floor_of`, the same rule), within the whole floor's
+  cells; each arrival adds the cells not shown yet, reaching `FLOOR_SEAM` under the shown ones (no
+  seam). A diagram built at once keeps its one floor mobject.
+- **Puddle ripples** (Step 172) could spread 1.2 radii from a puddle's middle onto the grass: a
+  ripple now starts at most `RIPPLE_OFFSET` (1 − reach − 0.05) of the radius off the middle.
+- Considered and left: a raised block's label rides with it and may lie on the start of its own
+  outgoing connector (the example's "App 2" in `one_request`, one `iso_labels` warning; keeping
+  the label clear at both heights crowded the others off their blocks). L-routes in a slanted
+  9:16 grid read as a ">" round the side (the grid's nature). Snow's `color`, puddles only on
+  ground cells and the snow-growth redraw cost (Step 172's gaps) stay.

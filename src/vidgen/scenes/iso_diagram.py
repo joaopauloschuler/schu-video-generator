@@ -15,7 +15,7 @@ import numpy as np
 from vidgen.api import *
 
 from .chart_changes import keep_opacity
-from .iso_motion import FillFade, FlowDots, GrowBlock, LiftMove, SwapAtEnd
+from .iso_motion import FillFade, FlowDots, GrowBlock, LiftMove, Reshape, SwapAtEnd, Veil
 from .diagram import _ID, _unknown, edge_ref, parse_edges
 
 log = logging.getLogger("vidgen.scenes")
@@ -35,6 +35,9 @@ PORTRAIT_BODY = 0.62
 #: until one fits; then this many bisection steps between it and the next larger one.
 SCAN_STEP = 0.9
 BISECT_STEPS = 8
+#: In a tall frame, another layout of an ``at`` grid (``IsoDiagram.Params.layouts``) is drawn
+#: instead of the preferred one when it is fitted at least this much larger.
+LAYOUT_GAIN = 1.05
 
 
 def _check_id(value: str) -> str:
@@ -342,7 +345,7 @@ class IsoDiagram(NarratedScene):
         spacing: float | None = Field(default=None, ge=0, le=6)
         """Empty cells between arranged blocks (default: 1; 2 in a zigzag, so labels fit above and below)."""
         portrait_grid: Literal["auto", "keep"] = "auto"
-        """Blocks placed with 'at' in a tall frame (9:16): auto slants the grid so its longer direction runs down the frame when that draws the diagram larger (neighbours keep their sides; connectors are routed again); keep draws it as written."""
+        """Blocks placed with 'at' in a tall frame (9:16): auto draws the grid as written or slanted (all or half the way) so its longer direction runs down the frame, whichever is drawn larger (neighbours keep their sides; connectors are routed again); keep draws it as written."""
         floor: Literal["grid", "plain", "none"] = "grid"
         """The floor under the diagram: with grid lines, plain, or none."""
         build: Literal["together", "each"] = "together"
@@ -434,10 +437,7 @@ class IsoDiagram(NarratedScene):
             """The diagram laid out on the grid (:func:`layout_iso_diagram`); ``portrait``: for a
             tall frame (``arrange: auto`` is a zigzag there; with ``at``, the grid may be slanted
             down the frame, ``portrait_grid``)."""
-            items = [ItemSpec(b.id, b.at, block=BlockSpec(b.id, b.shape or "box", b.size, b.height)) if b.layers is None else
-                     ItemSpec(b.id, b.at, layers=tuple(BlockSpec(layer.id, layer.shape, None, layer.height) for layer in b.layers),
-                              size=b.size, **({"gap": b.gap} if b.gap is not None else {}))
-                     for b in self.blocks]
+            items = self._items()
             groups = [GroupSpec(g.id, tuple(g.blocks)) for g in self.groups]
             edges = [EdgeSpec(e.source, e.to, e.style or self.edge_style) for e in self.edges]
             how = ("zigzag" if portrait else "row") if self.arrange == "auto" else self.arrange
@@ -451,14 +451,43 @@ class IsoDiagram(NarratedScene):
                 return min(PORTRAIT_BODY / max(w, 1e-6), 1.0 / max(h, 1e-6))
 
             best, best_score = written, score(written) * SLANT_GAIN
-            for along in ("x", "y"):
-                try:
-                    slanted = layout_iso_diagram(slant(items, along), groups, edges, how=how, columns=self.columns, spacing=spacing)
-                except ValueError:
-                    continue
+            for slanted in self._slanted(items, groups, edges, how, spacing, (1.0,)):
                 if score(slanted) > best_score:
                     best, best_score = slanted, score(slanted)
             return best
+
+        def layouts(self, portrait: bool = False) -> list[IsoDiagramLayout]:
+            """The layouts the scene may draw, the preferred first: :meth:`layout`, and in a tall
+            frame with ``at`` and ``portrait_grid: auto`` also the grid as written and slanted
+            all or half the way along either axis (the scene draws the one fitted largest)."""
+            first = self.layout(portrait)
+            items = self._items()
+            if not portrait or self.portrait_grid == "keep" or any(item.at is None for item in items) or len(items) < 2:
+                return [first]
+            groups = [GroupSpec(g.id, tuple(g.blocks)) for g in self.groups]
+            edges = [EdgeSpec(e.source, e.to, e.style or self.edge_style) for e in self.edges]
+            spacing = self.spacing if self.spacing is not None else 1.0
+            how = "row" if self.arrange == "auto" else self.arrange
+            written = layout_iso_diagram(items, groups, edges, how=how, columns=self.columns, spacing=spacing)
+            return [first, written, *self._slanted(items, groups, edges, how, spacing, (1.0, 0.5))]
+
+        def _items(self) -> list[ItemSpec]:
+            return [ItemSpec(b.id, b.at, block=BlockSpec(b.id, b.shape or "box", b.size, b.height)) if b.layers is None else
+                    ItemSpec(b.id, b.at, layers=tuple(BlockSpec(layer.id, layer.shape, None, layer.height) for layer in b.layers),
+                             size=b.size, **({"gap": b.gap} if b.gap is not None else {}))
+                    for b in self.blocks]
+
+        def _slanted(self, items: list[ItemSpec], groups: list[GroupSpec], edges: list[EdgeSpec], how: str, spacing: float,
+                     shares: Sequence[float]) -> list[IsoDiagramLayout]:
+            """The grid slanted along x and along y, each by the ``shares`` (where the blocks do not then overlap)."""
+            out = []
+            for share in shares:
+                for along in ("x", "y"):
+                    try:
+                        out.append(layout_iso_diagram(slant(items, along, share), groups, edges, how=how, columns=self.columns, spacing=spacing))
+                    except ValueError:
+                        continue
+            return out
 
     #: Largest tile width (Manim units), so a small diagram does not fill the frame; in 9:16 this
     #: much more (a phone shows the frame small, and a tall frame has room above and below).
@@ -516,10 +545,24 @@ class IsoDiagram(NarratedScene):
                                color=p.heading_color, weight=BOLD, role="heading")
             place(heading, header, fit="none", align="center")
             body = body.below(heading, gap=0.4)
-        self.diagram_layout = layout = p.layout(self.is_portrait)
         self._colors = self._block_colors()
-        self._shapes = self._world_shapes(layout)
-        self._geometry(layout)
+        layouts = p.layouts(self.is_portrait)
+        if len(layouts) > 1:   # in 9:16 the grid as written or slanted: the one drawn largest at the label size asked for
+            sizes = (float(self.theme.size(p.size)), float(self.theme.size(p.edge_label_size)))
+            best: tuple[_Plan, IsoDiagramLayout] | None = None
+            seen: set[tuple[Any, ...]] = set()
+            for layout in layouts:
+                key = tuple(sorted(layout.items.items()))
+                if key in seen:
+                    continue
+                seen.add(key)
+                self._take(layout)
+                plan = self._largest(body, self._make_labels(*sizes), bisect=2)
+                if best is None or (plan.fits, plan.scale) > (best[0].fits, best[0].scale * LAYOUT_GAIN):
+                    best = (plan, layout)
+            assert best is not None
+            layouts = [best[1]]
+        self._take(layouts[0])
         plan = self._fit(body)
         if not plan.fits:
             log.warning("scene '%s': the iso diagram does not fit this frame at the readable label size; "
@@ -528,6 +571,12 @@ class IsoDiagram(NarratedScene):
             log.warning("scene '%s': the iso diagram's blocks are drawn small (its labels take the room); "
                         "use fewer blocks or stacks, shorter labels, or split it", self.spec.id)
         return heading, body, plan
+
+    def _take(self, layout: IsoDiagramLayout) -> None:
+        """``layout`` taken as the scene's: its shapes and the geometry its labels keep clear of."""
+        self.diagram_layout = layout
+        self._shapes = self._world_shapes(layout)
+        self._geometry(layout)
 
     def _block_colors(self) -> dict[str, str]:
         """Each block's colour: its own, else a term's its label says, else the scene's."""
@@ -733,15 +782,29 @@ class IsoDiagram(NarratedScene):
         assert best is not None
         return best
 
-    def _largest(self, body: Region, labels: list[_Label]) -> _Plan:
+    def _largest(self, body: Region, labels: list[_Label], bisect: int = BISECT_STEPS) -> _Plan:
         """The largest scale (tile width, Manim units) up to :attr:`max_tile` at which the
-        diagram and ``labels`` fit ``body`` (bisection; not fitting even small: the smallest)."""
+        diagram and ``labels`` fit ``body`` (a scan down, then ``bisect`` steps; not fitting
+        even small: the smallest)."""
         cap = min(self.max_tile * (self.portrait_tile if self.is_portrait else 1.0), body.width / 1.2, body.height / 1.2)
+        x0, y0, x1, y1 = self._bounds   # no larger than the drawing alone fits (its labels only add to it)
+        cap = min(cap, body.width / max(x1 - x0, 1e-6), body.height / max(y1 - y0, 1e-6))
+
+        def inside(placement: _Placement) -> bool:
+            x0, y0, x1, y1 = placement.bounds
+            return x1 - x0 <= body.width + 1e-6 and y1 - y0 <= body.height + 1e-6
 
         def fits(scale: float) -> tuple[bool, _Placement]:
+            # labels above and below their blocks first; else beside them (a wide body has room
+            # at the sides when the labels above and below take its height, a tall one the other way)
             placement = self._place(scale, labels)
+            if inside(placement):
+                return True, placement
             x0, y0, x1, y1 = placement.bounds
-            return x1 - x0 <= body.width + 1e-6 and y1 - y0 <= body.height + 1e-6, placement
+            if y1 - y0 <= body.height + 1e-6 or x1 - x0 > body.width * 0.98:   # labels beside the blocks help the height only
+                return False, placement
+            sideways = self._place(scale, labels, sideways=True)
+            return (True, sideways) if inside(sideways) else (False, placement)
 
         ok, placement = fits(cap)
         if ok:
@@ -760,7 +823,7 @@ class IsoDiagram(NarratedScene):
             ok, placement = fits(low)
             if not ok:
                 return _Plan(low, labels, placement, False)
-        for _ in range(BISECT_STEPS):
+        for _ in range(bisect):
             middle = (low + high) / 2
             ok, found = fits(middle)
             if ok:
@@ -769,15 +832,16 @@ class IsoDiagram(NarratedScene):
                 high = middle
         return _Plan(low, labels, placement, True)
 
-    def _place(self, scale: float, labels: list[_Label]) -> _Placement:
+    def _place(self, scale: float, labels: list[_Label], sideways: bool = False) -> _Placement:
         """The labels placed at ``scale`` (picture origin at 0, 0; y up), in turn: a stack's
         layers in a column at its side with leader lines, or listed under it with swatches
         (``label_side``; ``auto``: away from the diagram's middle in 16:9, under it in 9:16, unless
         another place covers less); each block's on its top when it fits there, else right by its
-        outline (above, below, beside), else pushed clear with a leader line; connector labels
-        along the connector, beside it; stack and group captions by the stack's foot and the
-        plate's front edges. Each takes the first place that covers no label, block or connector,
-        else the one that covers least."""
+        outline (above, below, beside: ``sideways`` tries beside first; above and below also
+        lined up with either side of the block), else pushed clear with a leader line; connector
+        labels along the connector, beside it; stack and group captions by the stack's foot and
+        the plate's front edges. Each takes the first place that covers no label, block or
+        connector, else the one that covers least."""
         layout = self.diagram_layout
         out = _Placement()
         hulls = {n: h * scale for n, h in {**self._swept, **self._pipe_hulls}.items()}
@@ -824,6 +888,17 @@ class IsoDiagram(NarratedScene):
             middle = np.array([(hull[:, 0].min() + hull[:, 0].max()) / 2, (hull[:, 1].min() + hull[:, 1].max()) / 2])
             near = [(slide_out(size(k), middle, d, hull, self.gap), True) for d in directions]
             return near, lambda: [obstacles.clear_of_all(size(k), c, d, self.gap) for (c, _), d in zip(near, directions)]
+
+        def aligned(k: int, hull: np.ndarray) -> list[tuple[np.ndarray, bool]]:
+            """Above and below a block narrower than the label, lined up with its left or right
+            edge instead of its middle (clear of a neighbour on the other side)."""
+            left, _bottom, right, _top = hull_box(hull)
+            room = (size(k)[0] - (right - left)) / 2
+            if room <= 1e-6:
+                return []
+            middle = np.array([(left + right) / 2, (hull[:, 1].min() + hull[:, 1].max()) / 2])
+            return [(slide_out(size(k), middle + np.array([side * room, 0.0]), (0.0, up), hull, self.gap), True)
+                    for up in (1.0, -1.0) for side in (-1.0, 1.0)]
 
         # a stack's layers: a column at its side, or a list under it
         placed_captions: set[str] = set()
@@ -874,8 +949,8 @@ class IsoDiagram(NarratedScene):
             if tw / (2 * room_w) + th / (2 * room_h) <= 0.92:
                 u, v = top_point(block)
                 near.append((np.array([u * scale, -v * scale]), False))
-            beside, far_off = around(k, hull, AROUND)
-            choose(k, near + beside, far_off, {name}, hull)
+            beside, far_off = around(k, hull, SIDEWAYS if sideways else AROUND)
+            choose(k, near + beside + aligned(k, hull), far_off, {name}, hull)
         # a stack's caption: under its foot, else round it
         for sid, stack in layout.stacks.items():
             k = by_owner.get(("stack", sid))
@@ -1022,7 +1097,11 @@ class IsoDiagram(NarratedScene):
             solids[id(mob)] = _Solid(mob, made)
             return mob
 
-        floor = shapes_mobject(s.floor, to_scene, ink=None, stroke=self.stroke)
+        p = self.params
+        # built a part at a time: the floor comes in with what stands on it (pieces added to this group)
+        self._floor_cells = FloorCells(layout) if p.floor != "none" and (p.build == "each" or self._left_to_actions()) else None
+        self._floor_shown: set[tuple[int, int]] = set()
+        floor = VGroup() if self._floor_cells is not None else shapes_mobject(s.floor, to_scene, ink=None, stroke=self.stroke)
         floor.set_z_index(0)
         plates: dict[str, Mobject] = {}
         for gid, shapes in s.plates.items():
@@ -1030,10 +1109,13 @@ class IsoDiagram(NarratedScene):
             plates[gid] = drawn(lambda paint, box=box, fill=fill: (plate_shapes(box, paint(fill)), outline_ink(paint(fill))))
             plates[gid].set_z_index(1)
         edges: dict[int, VGroup] = {k: VGroup() for k in range(len(layout.edges))}
+        self._arrows: dict[int, Mobject] = {}
+        self._edge_lift = {k: (0.0, 0.0) for k in range(len(layout.edges))}   # how far up each connector's ends reach (raised blocks)
         for k in s.arrows:
             edge, color = layout.edges[k], self._edge_colors[k]
             arrow = drawn(lambda paint, edge=edge, color=color: (arrow_shapes(edge, paint(color)), None))
             edges[k].add(arrow.set_z_index(2))
+            self._arrows[k] = arrow
         blocks: dict[str, Mobject] = {}
         self._pipe_depths: dict[int, list[float]] = {k: [] for k in range(len(layout.edges))}
         pipe_boxes = layout.pipe_boxes()
@@ -1145,6 +1227,8 @@ class IsoDiagram(NarratedScene):
         p = self.params
         layout = self.diagram_layout
         self._parts = parts
+        self._heading = heading
+        self._veiled: dict[Any, list[tuple[VMobject, np.ndarray, np.ndarray]]] = {}   # labels a focus faded out, with their colours
         texts = parts["texts"]
         self._style = p.entrance
         self._in: set[Any] = set()   # ("block", id), ("plate", gid), ("caption", key), ("edge", k), "floor"
@@ -1258,10 +1342,15 @@ class IsoDiagram(NarratedScene):
         ground: list[Mobject] = []
         if floor and "floor" not in self._in:
             self._in.add("floor")
-            ground.append(parts["floor"])
+            if self._floor_cells is None:
+                ground.append(parts["floor"])
         coming = [b for b in [key for kind, key in layout.order() if kind == "block"] if b in blocks and ("block", b) not in self._in]
         for b in coming:
             self._in.add(("block", b))
+        if self._floor_cells is not None and coming:   # the floor under what is there now
+            piece = self._floor_piece({self._item_of(b) for b in layout.blocks if ("block", b) in self._in})
+            if piece is not None:
+                ground.append(piece)
         wanted_plates = list(plates) + [layout.blocks[b].group for b in coming if layout.blocks[b].group and ("plate", layout.blocks[b].group) not in self._waiting]
         for gid in dict.fromkeys(wanted_plates):
             if gid and ("plate", gid) not in self._in:
@@ -1287,6 +1376,20 @@ class IsoDiagram(NarratedScene):
             if links:
                 anims.append(LaggedStart(*links, lag_ratio=0.1))
         return [Succession(*anims)] if len(anims) > 1 else anims
+
+    def _floor_piece(self, items: set[str]) -> Mobject | None:
+        """The floor not shown yet under ``items`` (the floor of a diagram built a part at a
+        time), added to the floor's group; ``None`` when there is none."""
+        cells = self._floor_cells
+        assert cells is not None
+        new = cells.under(items) - self._floor_shown
+        if not new:
+            return None
+        shapes = cells.shapes(sorted(new), self._floor_shown, floor=self.params.floor, background=self.theme.background, text=self.theme.color("text"))
+        self._floor_shown |= new
+        piece = shapes_mobject(shapes, self._to_scene, ink=None, stroke=self.stroke).set_z_index(0)
+        self._parts["floor"].add(piece)
+        return piece
 
     def _edge_arrivals(self, ks: Sequence[int], force: bool) -> list[Animation]:
         """The connectors ``ks`` whose ends are both shown fade in (``force``: whatever their ends)."""
@@ -1426,6 +1529,25 @@ class IsoDiagram(NarratedScene):
                 move(self._parts["texts"][("group", gid)], dz)
             self._plate_lifted[gid] = self._plate_lift[gid]
             anims += self._shadow(gid, self._plate_lift[gid], box, ("plate", gid) in self._in, "box")
+        for k, arrow in self._arrows.items():   # a flat connector tilts up to its raised ends
+            edge = layout.edges[k]
+            wanted = (lifts[self._end_blocks(edge.source)[0]], lifts[self._end_blocks(edge.target)[0]])
+            before = self._edge_lift[k]
+            if np.allclose(wanted, before, atol=1e-9):
+                continue
+            self._edge_lift[k] = wanted
+            color = self._edge_colors[k]
+
+            def build(t: float, edge: Any = edge, color: str = color, before: tuple[float, float] = before,
+                      wanted: tuple[float, float] = wanted) -> Mobject:
+                ends = [a + (b - a) * t for a, b in zip(before, wanted)]
+                return shapes_mobject(ramped(arrow_shapes(edge, color), edge, *ends), self._to_scene, ink=None, stroke=self.stroke)
+
+            if any(id(m) in shown for m in arrow.get_family()):
+                anims.append(Reshape(arrow, build))
+            else:
+                for m, made in zip(arrow.get_family(), build(1.0).get_family()):
+                    m.points = made.points.copy()
         return anims
 
     def _shadow(self, name: str, lift: float, box: Box3, visible: bool, shape: str) -> list[Animation]:
@@ -1466,14 +1588,16 @@ class IsoDiagram(NarratedScene):
             total = sum(float(np.linalg.norm(np.subtract(b, a))) for a, b in zip(points, points[1:]))
             lengths = np.cumsum([0.0] + [float(np.linalg.norm(np.subtract(b, a))) for a, b in zip(points, points[1:])])
             depths = list(reversed(self._pipe_depths[k])) if back else self._pipe_depths[k]
+            rise = tuple(reversed(self._edge_lift[k])) if back else self._edge_lift[k]   # up to raised ends
 
-            def at(s: float, points: list[Any] = points, lengths: np.ndarray = lengths, total: float = total, up: float = up) -> np.ndarray:
+            def at(s: float, points: list[Any] = points, lengths: np.ndarray = lengths, total: float = total, up: float = up,
+                   rise: tuple[float, float] = rise) -> np.ndarray:
                 d = s * total
                 j = int(min(np.searchsorted(lengths, d, side="right") - 1, len(points) - 2))
                 share = (d - lengths[j]) / max(lengths[j + 1] - lengths[j], 1e-9)
                 a, b = np.array(points[j]), np.array(points[j + 1])
                 x, y, z = a + (b - a) * share
-                return self._to_scene(*iso_point(x, y, z + up))
+                return self._to_scene(*iso_point(x, y, z + up + rise[0] + (rise[1] - rise[0]) * s))
 
             def depth(s: float, lengths: np.ndarray = lengths, total: float = total, depths: list[float] = depths) -> float:
                 if not depths:
@@ -1510,9 +1634,19 @@ class IsoDiagram(NarratedScene):
         new_inks = {rgb_to_hex(m.fill_rgbas[0, :3]) for m in new.family_members_with_points() if isinstance(m, VMobject)}
         if old_inks and (key in self._label_on_top or (len(old_inks) == 1 and old_inks != new_inks)):   # its block's ink, or a highlight's colour
             new.set_color(next(iter(old_inks)))
+        veiled = key in self._veiled   # faded out by a focus: the new text comes back with it
+        if veiled:
+            gone = {id(m) for m in old.get_family()}
+            self._veiled[key] = [look for look in self._veiled[key] if id(look[0]) not in gone] + \
+                [(m, m.fill_rgbas.copy(), m.stroke_rgbas.copy()) for m in new.get_family() if isinstance(m, VMobject)]
         keep_opacity(new, old)
         group = self._parts["texts"][key]
         plate = self._label_plate[key]
+        new_plate = None
+        if plate is not None:
+            new_plate = self._plate_for(new).set_z_index(plate.z_index)
+            if veiled:
+                new_plate.set_fill(opacity=0.0)
         self._label_text[key] = new
         for t in self.targets:
             if any(pair[0] is old for pair in t.on_fill):
@@ -1521,11 +1655,11 @@ class IsoDiagram(NarratedScene):
             group.remove(old)
             group.add(new)
             if plate is not None:
-                plate.become(self._plate_for(new).set_z_index(plate.z_index))
+                plate.become(new_plate)
             return [], before
         anims: list[Animation] = [Transform(old, new.copy())]   # the old text morphs; the new one takes its place when it ends
         if plate is not None:
-            anims.append(Transform(plate, self._plate_for(new).set_z_index(plate.z_index)))
+            anims.append(Transform(plate, new_plate))
         return [*anims, SwapAtEnd(group, old, new)], before
 
     def iso_focus_view(self, targets: Sequence[Target], padding: float, scale: float | None) -> tuple[float, np.ndarray]:
@@ -1538,14 +1672,38 @@ class IsoDiagram(NarratedScene):
         parts = [m for t in targets for m in (self.on_screen_parts(t) or [t.mobject])]
         group = Group(*parts)
         area = self.safe_area
-        room = 1 - 2 * padding
-        factor = scale if scale is not None else min(3.0, room * area.width / max(group.width, 1e-6), room * area.height / max(group.height, 1e-6))
+        pad = 2 * padding * min(area.width, area.height)   # a share of the shorter side, both ways (9:16: not most of its width)
+        factor = scale if scale is not None else min(3.0, (area.width - pad) / max(group.width, 1e-6), (area.height - pad) / max(group.height, 1e-6))
         if factor <= 1.02:
             return fw, np.zeros(3)
         width, height = fw / factor, fh / factor
         wanted = group.get_center()[:2] - np.asarray(area.center[:2], dtype=float) / factor   # its middle on the area's
         center = view_center_within(self.camera_bounds(), wanted, width, height)
         return width, np.array([*center, 0.0])
+
+    def iso_veil(self, width: float, centre: np.ndarray) -> list[Animation]:
+        """The labels (and the heading) that a view ``width`` wide at ``centre`` would cut at its
+        edge, or leave out, fade out; those faded so that the view shows whole fade back in.
+        Blocks may be cut by the view's edge, a label never is (``focus``)."""
+        height = width * self.frame_height / self.frame_width
+        margin = 0.01 * width
+        x0, x1 = centre[0] - width / 2 + margin, centre[0] + width / 2 - margin
+        y0, y1 = centre[1] - height / 2 + margin, centre[1] + height / 2 - margin
+        texts = dict(self._parts["texts"])
+        if self._heading is not None:
+            texts[("heading", "")] = self._heading
+        anims: list[Animation] = []
+        for key, group in texts.items():
+            if not self.on_screen_parts(group):
+                continue
+            whole = x0 <= group.get_left()[0] and group.get_right()[0] <= x1 and y0 <= group.get_bottom()[1] and group.get_top()[1] <= y1
+            if not whole and key not in self._veiled:
+                looks = [(m, m.fill_rgbas.copy(), m.stroke_rgbas.copy()) for m in group.get_family() if isinstance(m, VMobject)]
+                self._veiled[key] = looks
+                anims.append(Veil(group, looks, hide=True))
+            elif whole and key in self._veiled:
+                anims.append(Veil(group, self._veiled.pop(key), hide=False))
+        return anims
 
     # ----- lint (DESIGN.md §90.10) -----------------------------------------------------------
 
@@ -1587,7 +1745,10 @@ class IsoDiagram(NarratedScene):
             mob = self._parts["edges"][k]
             if not visible(mob):
                 continue
-            points = np.array([self._to_scene(*iso_point(*q)) for q in edge.samples(0.25)])
+            samples = edge.samples(0.25)
+            low, high = self._edge_lift[k]   # tilted up to raised ends, as drawn
+            points = np.array([self._to_scene(*iso_point(x, y, z + low + (high - low) * s / max(len(samples) - 1, 1)))
+                               for s, (x, y, z) in enumerate(samples)])
             edges.append({"ref": edge.ref(), "source": edge.source, "target": edge.target,
                           "points": [[round(float(x), 1), round(float(y), 1)] for x, y in px(mob, points)]})
         return {"iso_diagram": {"labels": labels, "blocks": blocks, "plates": plates, "stacks": stacks, "edges": edges}}

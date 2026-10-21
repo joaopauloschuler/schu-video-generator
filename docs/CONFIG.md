@@ -5551,7 +5551,9 @@ with leader lines (in 16:9), or listed under it, top layer first, each after a s
 colour (in 9:16, where the stack can then be drawn larger); its label is a caption under it (not
 drawn when it repeats a layer's label; a stack of one layer has one label: the layer's own, else
 the stack's). A group's caption sits by its plate's front edge; a connector's label beside the
-connector, along its longest straight run. Lint's [`iso_labels`](#lint-rules) rule reports a label
+connector, along its longest straight run. When the labels above and below the blocks would take
+a wide body's height, they go beside them instead, so the diagram is drawn as large as the body
+between the heading and the captions allows. Lint's [`iso_labels`](#lint-rules) rule reports a label
 that still covers another block or label, hides a connector, or stands far from what it names.
 
 **Stacks.** A block with `layers` is a stack: its layers (**from the bottom up**) lie on its
@@ -5566,10 +5568,17 @@ between them (1.5 more on each side of a stack in a row or column, for its layer
 `row` (along the columns), `column` (along the rows), `grid` (`columns` per row) or
 `zigzag` (right, then down-left, right...: two columns down the picture, the shape that fills a
 tall frame); `auto` (default) is a `row` in 16:9 and square frames and a `zigzag` in 9:16. A grid
-written with `at` keeps its shape in 16:9; in 9:16 (`portrait_grid: auto`) it is slanted so its
-longer direction runs straight down the frame when that draws it larger (each block moves along
-the rows by how far along the columns it stands, or the other way round: neighbours keep their
-sides, connectors are routed again); `portrait_grid: keep` draws it as written.
+written with `at` keeps its shape in 16:9; in 9:16 (`portrait_grid: auto`) it is drawn as written
+or slanted, all or half the way, so its longer direction runs down the frame, whichever is drawn
+largest with its labels (each block moves along the rows by how far along the columns it stands,
+or the other way round: neighbours keep their sides, connectors are routed again);
+`portrait_grid: keep` draws it as written.
+
+**The floor** lies under the blocks, their plates and connectors with a margin; when what it is
+under covers less than 60 % of the rectangle round it, it follows them in whole cells (its edges
+mid-cell all round, as a rectangular floor's), without notches. When blocks come in one at a time
+(`build: each`, or `build` / `reveal` actions), the floor comes in with them: only the floor
+under what is there is shown.
 Overlapping blocks, a block on another group's plate, two groups' plates overlapping and a
 connector between layers of one stack are refused by `vidgen validate`, naming what to change.
 
@@ -5578,7 +5587,8 @@ else with one turn (the turn that crosses fewer blocks), round the front of the 
 when a straight one would cross them; two connectors between the same blocks (one each way) run
 side by side. An arrow's tip stops where it meets the target's outline as seen (a block hides
 the floor behind it). `solid` is a flat arrow, `dashed` a dashed one, `pipe` a raised channel
-without a head (for data that flows both ways, or a bus).
+without a head (for data that flows both ways, or a bus). A flat connector to a block a `raise`
+lifts tilts up to it (a pipe stays on the floor).
 
 | param | type | default | |
 |---|---|---|---|
@@ -5589,7 +5599,7 @@ without a head (for data that flows both ways, or a bus).
 | `arrange` | `auto` \| `row` \| `column` \| `grid` \| `zigzag` | `auto` | how blocks without `at` are placed (above) |
 | `columns` | int (1–12) | about √count | columns of `arrange: grid` |
 | `spacing` | float (0–6) | `1`, a `zigzag` `2` | empty cells between arranged blocks (a zigzag needs room for labels above and below) |
-| `portrait_grid` | `auto` \| `keep` | `auto` | blocks placed with `at` in 9:16: slanted down the frame when that draws them larger, or as written |
+| `portrait_grid` | `auto` \| `keep` | `auto` | blocks placed with `at` in 9:16: as written or slanted down the frame, whichever is drawn larger, or always as written |
 | `build` | `together` \| `each` | `together` | the scene builds the diagram in its first beat, or one block or stack per step over the beats |
 | `entrance` | `drop` \| `grow` \| `fade` | `drop` | how blocks come in (the scene's steps and `reveal`): drop in from above, grow up from the floor (a stack layer by layer), fade |
 | `floor` | `grid` \| `plain` \| `none` | `grid` | the floor under the diagram, a touch lighter than the background, with or without its grid lines; under a zigzag it follows the steps |
@@ -5655,7 +5665,7 @@ actions for every scene work as anywhere.
 | `explode` | `gap` (`0.6` cells, up to 3) | pulls a stack's layers apart, `gap` between them, their labels going along; `collapse` or `until: <beat>` puts them back. |
 | `collapse` | — | a stack's layers back together (its own `gap`). |
 | `flow` | `count` (`3`, 1–12), `style` (`dots`, `packets`: small cubes), `color` (`highlight`), `back` (`false`), `chain` (`false`) | dots or packets run along connectors from their start to their tip (`back`: the other way), on top of a pipe, fading in and out at the ends; `chain: true` runs the targets one after another (each 1.2 s) — a request passing through. Not undone (nothing stays). |
-| `focus` | `padding` (`0.12`), `scale` (default: as close as the targets fit, at most 3x) | moves the camera onto the targets without turning it, and stays there (unlike `zoom`, which goes back by the beat's end); the targets are placed in the safe area, clear of captions and other reserved overlays; `focus: diagram` or `until: <beat>` goes back to the whole view (the whole frame, heading too). |
+| `focus` | `padding` (`0.12`: room on each side, a share of the view's shorter side), `scale` (default: as close as the targets fit, at most 3x) | moves the camera onto the targets without turning it, and stays there (unlike `zoom`, which goes back by the beat's end); the targets are placed in the safe area, clear of captions and other reserved overlays; labels (and the heading) the view would cut at its edge fade out meanwhile, never shown cut; `focus: diagram` or `until: <beat>` goes back to the whole view (the whole frame, heading too) and brings them back. |
 | `relabel` | `text` (required) | a block's, layer's, stack's, group's or connector's label becomes `text` (a new value, a new name), the old text morphing into it in place; the scene keeps room for the longer of the two. `until: <beat>` brings the old text back. A target without a label is refused. |
 
 ```yaml

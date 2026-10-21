@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–175)
+## 0.3.0 (Steps 61–176)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -227,6 +227,14 @@ matters only for projects made with development builds between Steps 67 and 131)
   could come out at a third of its size), `focus` keeps its targets clear of the captions, and
   `focus: diagram` goes back to the whole frame (it zoomed onto the diagram and cut off the
   heading).
+- Review of Phase R (176): an iso diagram fills the room between heading and captions (labels
+  go beside the blocks when those above and below would take a wide frame's height; in 9:16 an
+  `at` grid is drawn as written or slanted, whichever is largest); `focus` fades out the labels
+  its view would cut and brings them back, and its `padding` is a share of the view's shorter
+  side (it zooms in 9:16 too); a flat connector tilts up to a raised block; the floor comes in
+  with the blocks that are built and follows them in whole cells without a ragged edge; puddle
+  ripples stay inside their puddle. The example drops its "App servers" caption and is drawn a
+  third larger.
 
 ### Presentation toolkit (Phase P)
 

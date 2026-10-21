@@ -75,7 +75,7 @@ scenes:
         - {id: cache, label: "Cache", at: [7, 1], shape: cylinder}
         - {id: db, label: "Database", at: [9, 1], shape: database, height: 1.1}
       groups:
-        - {id: apps, label: "App servers", blocks: [app1, app2], color: "#7C93F2"}
+        - {id: apps, blocks: [app1, app2], color: "#7C93F2"}   # no caption: "App 1" and "App 2" say it, and the diagram is drawn larger
       edges:
         - "browser --> dns"
         - "browser -> lb: HTTPS"
@@ -117,7 +117,7 @@ scenes:
         - {id: cache, label: "Cache", at: [7, 1], shape: cylinder}
         - {id: db, label: "Database", at: [9, 1], shape: database, height: 1.1}
       groups:
-        - {id: apps, label: "App servers", blocks: [app1, app2], color: "#7C93F2"}
+        - {id: apps, blocks: [app1, app2], color: "#7C93F2"}
       edges:
         - "browser -> lb: HTTPS"
         - lb -> app1
@@ -134,7 +134,7 @@ scenes:
           - {raise: "block:app2", by: 0.4, at: "@two"}
       - text: "The first time, the cache misses, and the database takes about forty milliseconds."
         actions:
-          - {focus: ["block:cache", "block:db"], padding: 0.2, at: 0.05}
+          - {focus: ["block:cache", "block:db"], padding: 0.1, at: 0.05}
           - {relabel: "block:cache", text: "Cache: miss", at: "@misses"}
           - {flow: "edge:cache->db", at: "@database"}
           - {relabel: "block:db", text: "Database: 40 ms", at: "@forty"}

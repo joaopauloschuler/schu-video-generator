@@ -75,9 +75,10 @@ def hull_box(hull: np.ndarray) -> Rect:
     return float(hull[:, 0].min()), float(hull[:, 1].min()), float(hull[:, 0].max()), float(hull[:, 1].max())
 
 
-def clip_area(rect: Rect, hull: np.ndarray) -> float:
-    """The area of the convex polygon ``hull`` inside ``rect`` (Sutherland-Hodgman)."""
-    if len(hull) < 3 or overlap_area(rect, hull_box(hull)) <= 0:
+def clip_area(rect: Rect, hull: np.ndarray, box: Rect | None = None) -> float:
+    """The area of the convex polygon ``hull`` inside ``rect`` (Sutherland-Hodgman); ``box``:
+    the hull's :func:`hull_box`, when known."""
+    if len(hull) < 3 or overlap_area(rect, box or hull_box(hull)) <= 0:
         return 0.0
     poly = [tuple(p) for p in hull]
     left, bottom, right, top = rect
@@ -193,6 +194,9 @@ class Obstacles:
     taken: list[Rect] = field(default_factory=list)
     clearance: float = 0.0
 
+    def __post_init__(self) -> None:
+        self.boxes = {name: hull_box(hull) for name, hull in self.hulls.items() if len(hull)}
+
     def cost(self, rect: Rect, skip: Iterable[str] = ()) -> float:
         """What a label at ``rect`` covers (:data:`LABEL_WEIGHT`, :data:`BLOCK_WEIGHT`,
         :data:`LINE_COST`); blocks and connectors named in ``skip`` do not count."""
@@ -204,8 +208,11 @@ class Obstacles:
         for name, hull in self.hulls.items():
             if name in skipped or name.split("#")[0] in skipped:
                 continue
-            covered = clip_area(rect, hull)
-            total += BLOCK_WEIGHT * (covered + NEAR_WEIGHT * (clip_area(near, hull) - covered if c > 0 else 0.0))
+            box = self.boxes.get(name)
+            if box is None or overlap_area(near, box) <= 0:
+                continue
+            covered = clip_area(rect, hull, box)
+            total += BLOCK_WEIGHT * (covered + NEAR_WEIGHT * (clip_area(near, hull, box) - covered if c > 0 else 0.0))
         for ref, points in self.lines.items():
             if ref in skipped or not len(points):
                 continue
@@ -220,7 +227,8 @@ class Obstacles:
         gap = max(gap, self.clearance)
         for _ in range(rounds):
             rect = rect_of(centre, size)
-            hits = [hull for hull in self.hulls.values() if clip_area(rect_of(centre, (size[0] + 2 * gap, size[1] + 2 * gap)), hull) > 1e-9]
+            spaced = rect_of(centre, (size[0] + 2 * gap, size[1] + 2 * gap))
+            hits = [hull for name, hull in self.hulls.items() if name in self.boxes and clip_area(spaced, hull, self.boxes[name]) > 1e-9]
             hits += [hull_of_rect(r) for r in self.taken if overlap_area(rect, r) > 1e-9]
             if not hits:
                 break
@@ -241,10 +249,13 @@ def hull_of_point(point: Sequence[float], radius: float = 1e-3) -> np.ndarray:
 
 #: Directions a label beside a block is tried in: up, down, right, left, then the diagonals.
 AROUND = ((0.0, 1.0), (0.0, -1.0), (1.0, 0.0), (-1.0, 0.0), (1.0, 1.0), (-1.0, 1.0), (1.0, -1.0), (-1.0, -1.0))
+#: The same, beside the block first (when the labels above and below take a wide frame's height).
+SIDEWAYS = ((1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0), (1.0, 1.0), (-1.0, 1.0), (1.0, -1.0), (-1.0, -1.0))
 
 
 __all__ = [
     "AROUND",
+    "SIDEWAYS",
     "BLOCK_WEIGHT",
     "FAR_COST",
     "LABEL_WEIGHT",
