@@ -972,9 +972,9 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] The `puddles` / `settle` refusals removed; CONFIG iso section, guide topic `iso` + `AGENTS.md`, CHANGELOG; tests (`tests/test_iso_weather.py`)
 
 ### Step 173 — `iso_diagram` core
-- [ ] A presentation scene type `iso_diagram` reusing `world/iso_view.py` and the iso block drawing (shared drawing moved to a neutral module if needed, iso stage output unchanged)
-- [ ] Blocks (boxes, slabs/layers, cylinders, flat tiles) placed on a grid by name with sizes and heights; flat readable labels (phone rules); theme and Phase P `terms:` colours; connectors along the grid; groups and stacks
-- [ ] Auto-fit to 16:9 and 9:16; tests
+- [x] A presentation scene type `iso_diagram` reusing `world/iso_view.py` and the iso block drawing (the shape model and `box_shapes` imported as they are, drawn as vectors by `iso_vector.py`; nothing moved, iso stage output unchanged: 31 baseline frames identical)
+- [x] Blocks (boxes, slabs, cylinders, databases, flat tiles) placed on a grid by name (`at`, `size`, `height`) or arranged in order (`row`, `column`, `grid`, `zigzag`); flat readable labels (on a block's top when they fit, else on a plate, never below the readable size); theme palette and Phase P `terms:` colours; connectors along the grid (flat arrows, dashed, pipes; tips in view); groups (plates) and stacks (a block with `layers`)
+- [x] Auto-fit to 16:9 and 9:16 (`arrange: auto` is a zigzag in 9:16); tests (`tests/test_iso_diagram.py`); CONFIG section, guide chooser row and snippet, gallery page, `examples/gallery` scene
 
 ### Step 174 — `iso_diagram` actions
 - [ ] Build-in (grow up, drop in), raise / lower, highlight / dim, flow along connectors, explode / collapse a stack, camera focus on a block or group, swap labels and values; timed to beats and `at: "@word"`

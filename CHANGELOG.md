@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–172)
+## 0.3.0 (Steps 61–173)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -201,6 +201,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   `settle: true` snow turns its ground, roofs, block tops and treetops white (both were refused
   before); a run's speed lines follow its diagonal. Iso rain scenes and runs render a little
   differently than in Step 171 (splashes on the roofs, slanted speed lines).
+- A new scene type `iso_diagram` (173): architecture and data-flow diagrams of blocks in the
+  isometric view (boxes, slabs, cylinders and databases, flat tiles; a block with `layers` is a
+  stack), group plates and connectors along the grid (flat arrows, dashed, pipes), with flat
+  labels that stay readable, placed in order (`arrange`, a zigzag in 9:16) or on the grid
+  (`at`), fitted to 16:9 and 9:16; shown in its first beat for now.
 
 ### Presentation toolkit (Phase P)
 

@@ -292,6 +292,14 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
         {"values": {"DE": 1, "FR": 2}, "unit": "T:unit", "legend_label": "T:legend"},
     ],
     "network": [{"layers": [3, {"size": 2, "label": "T:hidden"}], "heading": "T:heading"}],
+    "iso_diagram": [
+        {
+            "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],
+            "groups": [{"id": "g", "label": "T:group", "blocks": ["b"]}],
+            "edges": ["Alpha -> b: T:edge", {"from": "b", "to": "s", "label": "T:edge2"}],
+            "heading": "T:heading",
+        }
+    ],
     "pie": [
         {
             "labels": ["T:a", "T:b"], "values": [1, 2], "donut": True, "title": "T:title", "center": "T:center", "center_label": "T:cl", "unit": "T:unit",
@@ -337,7 +345,8 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "video_clip": [{"path": "x.mp4", "title": "T:title", "caption": "T:caption", "steps": [[{"box": BOX, "label": "T:c"}]]}],
 }
 SAMPLES["flowchart"] = SAMPLES["diagram"]
-EXTRA: dict[str, set[str]] = {"diagram": {"Alpha", "Gamma", "T:edge"}, "flowchart": {"Alpha", "Gamma", "T:edge"}, "stat": {","}}
+EXTRA: dict[str, set[str]] = {"diagram": {"Alpha", "Gamma", "T:edge"}, "flowchart": {"Alpha", "Gamma", "T:edge"}, "stat": {","},
+                              "iso_diagram": {"Alpha", "Gamma", "T:edge"}}
 #: References each sample's TextRef params make (place -> text key, relative to the scene).
 REFS: dict[str, dict[str, str]] = {
     "bar_chart": {"params.highlight": "params.labels[1]"},

@@ -43,6 +43,7 @@ from vidgen.scenes import (  # noqa: F401
     host_actions,
     icon_grid,
     image,
+    iso_diagram,
     keyframes_action,
     knock_action,
     light_action,

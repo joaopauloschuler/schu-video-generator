@@ -16211,3 +16211,85 @@ How to test
   scene): `s172/rainzoom.png` (rain with splashes on the roofs, puddles with ripples, a run's
   diagonal speed lines, 1280 x 720), `s172/snowgrid.png` (the village turning white),
   `s172/side_night.png`, `side_morning.png`, `side_room.png` (baseline vs now).
+
+## Step 173 — The `iso_diagram` core
+
+What was built (DESIGN §90.6–90.7, CONFIG `iso_diagram`)
+- A presentation scene type `iso_diagram`: blocks in the isometric view of the iso places —
+  `box`, `slab`, `cylinder`, `database` (a cylinder with two bands), `tile` (a flat platform) —
+  on a grid (`at: [column, row]`, `size`, `height`) or arranged in the order written
+  (`arrange: auto | row | column | grid | zigzag`, `spacing`); a block with `layers` (bottom up)
+  is a stack (`gap`, `label_side`); `groups` put a plate under their members; `edges` are
+  connectors along the grid (`"a -> b: label"`, `-->` dashed, `style: pipe`, the scene's
+  `edge_style`), straight, with one turn, or round the front of what is in the way, their tips
+  stopping where they meet the target's outline as seen (`hidden_run`). Floor (`grid`, `plain`,
+  `none`) under everything, following a zigzag's steps.
+- Labels flat and readable: on a block's top when they fit (ink chosen by contrast), else on a
+  plate above / below / right / left, placed greedily against other labels, block faces and
+  connectors; stack layers in a column at the side with leader lines; connector labels beside
+  the connector; sizes from `size` down to the readable minimum, never below. The diagram is
+  fitted to the body by bisection on the tile width; a warning when blocks come out small or it
+  does not fit.
+- Colours: a block's `color` (a layer's, else its stack's), else the colour of a `terms:` term
+  its label says, else `block_color` (`palette` by default); faces shaded as on the iso place,
+  outlines a darker shade of each block (`outline_ink`), plates tinted by the group colour.
+- `arrange: auto` is a row in 16:9 and a `zigzag` (two picture columns, spacing 2) in 9:16: the
+  only direction of the 2:1 view that runs down a tall frame.
+- Steps: the whole diagram in the first beat (floor and plates, blocks back to front, then the
+  connectors); targets `heading`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`,
+  `edge:<from>-><to>`, so `reveal` / `dim` / `highlight` / `zoom` already work on it.
+
+Files touched
+- New: `src/vidgen/iso_blocks.py` (model, routing, shapes; no manim), `src/vidgen/iso_vector.py`
+  (iso shapes as Manim mobjects), `src/vidgen/scenes/iso_diagram.py`, `tests/test_iso_diagram.py`,
+  `docs/gallery/iso_diagram.md` and its four media files.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md` (section and
+  targets row), `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md` (chooser row, a snippet under
+  "flows": the gallery sample), `docs/gallery/README.md`, `examples/gallery/video.yaml` (scene
+  `arch`), `tests/test_actions_coverage.py`, `tests/test_builtin_scenes.py`,
+  `tests/test_translation.py` (samples of the new type), `CHANGELOG.md` (0.3.0 now Steps 61–173),
+  `DESIGN.md`, `tasklist.md`, `HANDOFF.md`. Nothing in `cartoon/` or `world/` changed.
+
+Public interfaces
+- `vidgen.api` adds `BlockSpec`, `ItemSpec`, `GroupSpec`, `EdgeSpec`, `IsoDiagramLayout`,
+  `layout_iso_diagram`, `DiagramShapes`, `diagram_shapes`, `outline_ink`, `readable_ink`,
+  `top_point`, `top_room`, `side_point`, `picture_to_scene`, `shapes_mobject`.
+
+Decisions / deviations
+- No neutral module was needed: the diagram imports the projection (`world/iso_view.py`) and
+  the shape model and `box_shapes` (`cartoon/iso_drawing.py`) as they are and draws them as
+  vectors (`iso_vector.py`), so iso stage output cannot change. Vector rather than the stage's
+  Pillow tiles: Step 174 recolours, raises and fades blocks one by one.
+- One `blocks` list with stacks inside (a first draft had a separate `stacks:` list; `arrange`
+  then could not put a stack between two blocks without `at`).
+- A stack keeps 1.5 more cells to its neighbours in a row or column, and `label_side: auto`
+  takes the side that covers less: in the first stills a stack's labels sat on its neighbour.
+- Labels avoid block faces (points on the visible faces), not bounding boxes: the empty corners
+  of an iso block's box pushed labels onto connectors.
+- A stack's caption defaults to its id like every label (the translation template lists it).
+
+Known gaps / for later steps
+- Step 174: build-in, raise / lower, highlight / dim of its own, flow along connectors,
+  explode / collapse, focus, label / value swaps; the model keeps `lift` on `block_shapes`,
+  `box_faces`, `top_point`, `side_point`, a stack's `gap`, connector `samples`, per-block
+  picture bounds.
+- No icons on blocks; a connector to a stack's upper layer runs on the floor to the stack.
+- Greedy label placement: a crowded diagram can still put a label over a connector or a block
+  (lint in Step 174). In 9:16 a stack is narrow (its layer labels take the side); a grid laid
+  out with `at` keeps its 16:9 shape in 9:16 (small).
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_iso_diagram` (35, 2 render),
+  `test_docs` (62), `test_guide` (54), `test_gallery -m "not render"` (11),
+  `test_translation` (71), `test_api` (10), `test_actions_coverage -m "not render"` (12),
+  `test_builtin_scenes -m "not render"` (124), `test_json_output -m "not render"` (21),
+  `test_schema` (64, 131 s), and `-k iso_diagram` of `test_builtin_scenes` +
+  `test_actions_coverage` (5, renders in both orientations). All pass.
+- Compatibility: `phase-q-baseline/make_baseline.sh` into `s173/qframes`: 31 frames, max
+  difference 0.
+- Stills (scratch projects `<scratchpad>/s173/proj`, `proj3`, collected in `s173/stills/`):
+  `stack_16x9.png` (a layered architecture), `flow_16x9.png` (a request through four blocks),
+  `groups_pipes_16x9.png` (a group plate, pipes, a dashed edge), `flow_9x16.png` (the zigzag),
+  `stack_9x16.png`, `transformer_light_16x9.png` (light theme, a term colour, a database layer),
+  `labels_on_tops_16x9.png` (labels on the tops, a pipe, a detour), `gallery_16x9.png`,
+  `gallery_9x16.png`.

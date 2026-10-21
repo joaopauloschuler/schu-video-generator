@@ -5522,6 +5522,104 @@ previous layer; not on the first layer) and `color` (its units). A connection's 
     - text: "This path leads to the answer."
 ```
 
+### `iso_diagram`
+
+A diagram of blocks in the isometric view of the [iso places](#isometric-places-iso) (the same
+projection, the same three-face shading), for architecture and data-flow explainers: boxes,
+slabs, cylinders and databases, flat tiles, stacks of layers (a layered architecture, a network's
+layers) and group plates, on a grid, joined by connectors along the grid. Blocks are drawn as
+vectors in the theme's colours (`block_color: palette` gives each block the next palette colour; a
+block whose label is one of the video's [`terms`](#one-colour-per-concept-terms) takes that term's
+colour). Labels stay flat and readable: on a block's top when they fit there (in the ink that
+reads on it), else on a plate above, below or beside it, wherever they cover no other label or
+block (and the fewest connectors); a stack's layers are labelled in a column at its side with
+leader lines; connector labels sit beside the connector. The whole diagram (floor, blocks,
+labels) is fitted to the body: as large as it fits, labels from `size` down to the readable
+minimum, never below it (a warning says when the blocks come out small or nothing fits).
+Steps: the scene shows the whole diagram in its first beat (heading, floor and plates, the
+blocks back to front, then the connectors); later beats hold it for [beat actions](#beat-actions).
+[Action targets](#beat-actions): `heading`, `block<N>` (1-based: every block and layer in the
+order written, a stack's layers bottom up in its place), `block:<id>` (a block or layer with its
+label), `stack:<id>` (its layers and caption), `group:<id>` (its plate, caption and members) and
+`edge:<from>-><to>` (a connector with its label).
+
+**Stacks.** A block with `layers` is a stack: its layers (**from the bottom up**) lie on its
+footprint one above the other, `gap` apart, each labelled at the stack's side; the stack's label
+is a caption under it. Stacks go in the same `blocks` list as the other blocks, in order.
+
+**The grid.** `at: [column, row]` is the back cell of a block or stack; it covers `size`
+cells from there (`[columns, rows]`). Columns run to the lower right on the picture, rows to the
+lower left, heights go up (all in cells). Give every block an `at`, or none: then
+`arrange` places them in the order written with `spacing` empty cells
+between them (1.5 more on each side of a stack in a row or column, for its layers' labels):
+`row` (along the columns), `column` (along the rows), `grid` (`columns` per row) or
+`zigzag` (right, then down-left, right...: two columns down the picture, the shape that fills a
+tall frame); `auto` (default) is a `row` in 16:9 and square frames and a `zigzag` in 9:16.
+Overlapping blocks, a block on another group's plate, two groups' plates overlapping and a
+connector between layers of one stack are refused by `vidgen validate`, naming what to change.
+
+**Connectors** run on the floor along the grid: straight when the two blocks face each other,
+else with one turn (the turn that crosses fewer blocks), round the front of the blocks in the way
+when a straight one would cross them; two connectors between the same blocks (one each way) run
+side by side. An arrow's tip stops where it meets the target's outline as seen (a block hides
+the floor behind it). `solid` is a flat arrow, `dashed` a dashed one, `pipe` a raised channel
+without a head (for data that flows both ways, or a bus).
+
+| param | type | default | |
+|---|---|---|---|
+| `blocks` | list (1–30) | required | in order: an id string, `{id, label, shape, at, size, height, color}`, or a stack `{id, layers, label, at, size, gap, label_side, color}` (below) |
+| `groups` | list (≤ 8) | `[]` | `{id, blocks, label, color}`: a plate under the listed blocks and stacks |
+| `edges` | list (≤ 40) | `[]` | `"a -> b"`, `"a -> b: label"`, `"a --> b"` (dashed), chains `"a -> b -> c"`, or `{from, to, label, style, color}`; ends are block, layer or stack ids |
+| `heading` | str | `""` | above the diagram |
+| `arrange` | `auto` \| `row` \| `column` \| `grid` \| `zigzag` | `auto` | how blocks without `at` are placed (above) |
+| `columns` | int (1–12) | about √count | columns of `arrange: grid` |
+| `spacing` | float (0–6) | `1`, a `zigzag` `2` | empty cells between arranged blocks (a zigzag needs room for labels above and below) |
+| `floor` | `grid` \| `plain` \| `none` | `grid` | the floor under the diagram, a touch lighter than the background, with or without its grid lines; under a zigzag it follows the steps |
+| `block_color` | `palette` \| color | `palette` | blocks without their own `color` |
+| `edge_style` | `solid` \| `dashed` \| `pipe` | `solid` | connectors without their own `style` (`-->` is always dashed) |
+| `edge_color` | color | `dim` | connectors without their own `color` |
+| `label_color`, `edge_label_color`, `heading_color` | color | `text`, `dim`, `text` | a label on a block's top takes the ink that reads on it instead |
+| `size`, `edge_label_size`, `heading_size` | size | `body`, `caption`, `heading` | labels (reduced to fit, never below the readable minimum), connector labels, heading |
+
+A block is `{id, label, shape, at, size, height, color}`: `id` (required; letters, digits,
+spaces, `_ . -`), `label` (default: the id), `shape` (`box` 1x1 cells and 0.8 high, `slab` 2x2
+and 0.3, `cylinder` 1x1 and 0.9, `database` a cylinder with two bands, `tile` a flat 2x2 platform
+0.12 high), `at`, `size` (a cylinder's footprint is square), `height` (cells, up to 8) and
+`color`. A stack is `{id, layers, label, at, size, gap, label_side, color}`: `layers` (1–12,
+**from the bottom up**; each an id string or `{id, label, shape, height, color}`, a `slab` by
+default, all covering the stack's footprint), `label` (its caption, default the id), `size`
+(default `[2, 2]`), `gap` between layers (default 0.12 cells), `label_side` (`auto`: the side
+away from the diagram's middle; `left`, `right`) and `color` (its layers' unless a layer has its
+own); `shape` and `height` belong to its layers, `gap` and `label_side` only to a stack. A
+group's plate covers its members and 0.3 cells around them; its members stand on it.
+
+```yaml
+- id: request
+  type: iso_diagram
+  params:
+    heading: "How a request flows"
+    blocks:
+      - {id: browser, label: "Browser"}
+      - {id: api, label: "API server", height: 1.1}
+      - {id: cache, label: "Cache", shape: cylinder}
+      - {id: db, label: "Database", shape: database}
+    edges: ["browser -> api: HTTPS", "api -> cache", "cache -> db"]
+  beats:
+    - text: "The browser asks the API server, which asks the cache first, then the database."
+- id: layers
+  type: iso_diagram
+  params:
+    heading: "A layered web app"
+    blocks:
+      - browser
+      - {id: app, label: "One server", layers: [Database, Services, API, "Web UI"]}
+    edges: ["browser -> app: HTTPS"]
+  beats:
+    - text: "Four layers, each built on the one below."
+      actions:
+        - {highlight: "block:API", at: "@built"}
+```
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -8217,6 +8315,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
+| `iso_diagram` | `heading`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line; a `box` frames the shape); `block<N>` counts the `blocks`, then each stack's layers; a stack is its layers and caption, a group its plate, caption and members; an edge its arrow or pipe and label |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:

@@ -12297,7 +12297,7 @@ drawing.
   settling snow, speed lines along the diagonal; the obsolete refusals removed. Deliberate
   changes to iso output: in rain scenes drops that landed under a roof or crown now splash on it,
   and a run's speed lines slant. Everything else renders as before.
-- **Step 173, `iso_diagram` core**: a new presentation scene type reusing `world/iso_view.py`
+- **Step 173, `iso_diagram` core** (§90.6–90.7): a new presentation scene type reusing `world/iso_view.py`
   (projection, `Box3`, `draw_order`) and the iso block drawing (`cartoon/iso_drawing.py`:
   `box_shapes`, `draw_shapes`; moved to a neutral module if the diagram needs it, iso stage
   output unchanged). Blocks (boxes, slabs, cylinders such as databases, flat tiles) placed on a
@@ -12392,3 +12392,98 @@ drawing.
   `IsoRainGround` a `lift`; `IsoTiles.set_snow_opacity`, `picture_tiles`. Config: `puddles` and
   `settle` are accepted on an iso place outdoors (no new keys). Off an iso place nothing changes:
   Phase Q's 31 baseline frames are identical.
+
+### 90.6 The `iso_diagram` scene type (Step 173)
+
+Reference: docs/CONFIG.md `iso_diagram`. A presentation scene type (`scenes/iso_diagram.py`), not
+a mode of the `stage`: no characters, no map, its own params, and the view fitted to the frame
+like the other diagram scenes.
+
+- **Three layers**, as for iso places (§89.1): `iso_blocks.py` (the model, no manim: what
+  `vidgen validate` runs), `iso_vector.py` (iso shapes as Manim mobjects), the scene (labels,
+  fitting, targets, steps). Shared with Phase Q without moving anything: the projection, `Box3`
+  and `draw_order` (`world/iso_view.py`) and the shape model and box faces of
+  `cartoon/iso_drawing.py` (`Poly`, `Upright`, `Line`, `box_shapes`, `shade`, `shape_bounds`),
+  imported as they are, so iso stage output cannot change (Phase Q's 31 baseline frames are
+  identical). Decided: **vector, not the stage's Pillow pictures.** A diagram is small (tens of
+  polygons), must stay sharp in a zoom, and Step 174's actions recolour, raise, fade and move
+  blocks one by one; a raster tile would have to be redrawn for each. `iso_vector.shape_mobject`
+  draws a `Poly` as a filled polygon, an `Upright` as a cylinder (body, its right part in shade,
+  the outline of its sides, a lighter top) and a `Line` as a stroke, so the diagram has the
+  stage's three-face shading in the theme's colours.
+- **Model** (`layout_iso_diagram`): items are `ItemSpec`s, a block (`BlockSpec`: shape of
+  `SHAPES` box / slab / cylinder / database / tile, footprint, height; defaults `SHAPE_SIZE`,
+  `SHAPE_HEIGHT`) or a stack of block layers (bottom first, `gap` apart, default 0.12) on one
+  footprint. `at` is an item's back cell (`x` = column, to the lower right; `y` = row, to the
+  lower left); an item fills its cells less `CELL_INSET` 0.1. All items have `at` or none
+  (`arrange`: `row`, `column`, `grid`, `zigzag`; a stack keeps `STACK_ROOM` 1.5 more cells to
+  its neighbours in a row or column, for its layers' labels). Group plates (`PLATE_PAD` 0.3 round
+  the members, `PLATE_HEIGHT` 0.08) lift their members. Refused with what to change (a
+  `ValueError` that the params validator turns into a located `vidgen validate` problem): items
+  with and without `at`, overlapping items, a non-member on a plate, overlapping plates, an item
+  in two groups, a connector between layers of one stack.
+- **Why `zigzag`**: in the 2:1 view a row of any shape is wider than tall (its picture is
+  `(columns + rows) / 2` wide), so a 9:16 frame fits it by its width and stays two-thirds empty.
+  Only the `x = y` diagonal runs down the picture; the zigzag (item k at `(⌈k/2⌉, ⌊k/2⌋)` steps)
+  follows it in two picture columns, its connectors all straight. `arrange: auto` is a row in
+  16:9 and a zigzag (spacing 2, so labels fit above and below) in 9:16. The floor follows the
+  union of the items, plates and connectors (padded `FLOOR_PAD` 0.45; `_Cover`: the union on the
+  grid of their own edges, traced to outlines) and is their bounding rectangle when that union
+  covers at least `FLOOR_FILL` 0.6 of it (a ragged edge under a row looked like a mistake).
+- **Connectors** (`route`): along `x` or `y` when the two footprints face each other over at
+  least `MIN_SHARED` 0.2, round the front of whatever is in the way (`DETOUR` 0.5 past it, when
+  that crosses fewer items), else one turn (the one crossing fewer items, `x` first); one each
+  way between the same ends run `TWIN_OFFSET` 0.16 apart. Ends stay `CLEARANCE` off the side, and
+  off a back side (`x0`, `y0`, which the view does not show) by `hidden_run`: the floor behind a
+  box is hidden for `min(far side − lateral position, 2·height·ISO_RISE)` (derived from the
+  silhouette's front corner and its top's back edge); a cylinder's by `r√2 − l − √(r² − l²)` from
+  its round side (`_on_circle`). Without it an arrow into a block from the left ended out of
+  sight behind it (the first stills). Flat arrows (`arrow_shapes`: a band `ARROW_WIDTH` 0.1 and a
+  head, dashes cut along the path) lie on the floor just over the plates and are drawn before
+  the blocks; a pipe is a low box per segment drawn in the blocks' draw order (`order`). All at
+  one height per connector (the higher ground of its ends); connectors run on the floor even to a
+  stack's upper layer (the stack's footprint).
+- **Labels** stay flat, at a readable size: from `size` down (factors of 0.9) to the readable
+  minimum (× 1.05), never below; per size the largest scale (tile width ≤ `max_tile` 2.4 Manim
+  units) at which everything fits the body is found by bisection, and the first size giving a tile
+  of at least `min_tile` × size/32 wins (else the largest scale; a warning when it is small or
+  nothing fits, then the whole drawing is shrunk). At each scale the labels are placed greedily:
+  a stack's layer labels in a column at its side with leader lines (spread apart, `_spread`;
+  `label_side: auto` takes the side away from the middle unless the other one covers less), each
+  block's on its top when it fits inside the top's diamond (ink: background or text colour,
+  whichever contrasts more with the block, `readable_ink`; registered as `on_fill` so `dim` and
+  `highlight` keep it readable), else above, below, right or left on a plate; stack and group
+  captions below (else above, right, left); a connector's beside its longest segment (offset
+  along the screen normal by the label's half extent), else on it. A candidate's cost: the area
+  of other labels it covers, the share of each block's visible faces (25 points per face, worth
+  70% of the block's picture), and `line_cost` per connector sample (every `line_step` 0.1);
+  the first free candidate wins, else the cheapest.
+- **Colours**: a block's `color` (a layer's, else its stack's); else the colour of the first term
+  (§87.3) its label says (`find_term` over the active terms); else `block_color` (`palette`: the next
+  palette colour per block and layer in order). Faces as on the iso place (top, `LEFT_SHADE`,
+  `RIGHT_SHADE` towards a cool dark), outlines `outline_ink` (the fill 0.55 darker: an ink
+  outline vanished on dark themes); plates `PLATE_TINT` 0.32 of the group colour on the
+  background, the floor `FLOOR_TINT` / `FLOOR_LINE_TINT` of the text colour.
+- **Params**: one `blocks` list in order, a block with `layers` being a stack (first written as
+  a separate `stacks:` list; dropped because `arrange` then had to put all stacks after all
+  blocks, so "browser → app stack → database" could not be written without `at`). Shorthands as
+  in `diagram`: a block or layer is an id string (its label), edges `"a -> b: label"`, `-->`
+  dashed, chains; `->` takes the scene's `edge_style`. A stack's caption defaults to its id like
+  every label (the translation template lists it as for a block).
+- **Steps** (for now): one step in the first beat: heading, floor, plates and captions, the
+  blocks back to front (each a little `FadeIn` from above), then the connectors. Planned for
+  Step 174 and kept possible by the model: per-block `lift` and growth in `block_shapes` /
+  `box_faces` (`lift`), a stack's `gap` (explode / collapse), connector paths and `samples` (flow),
+  picture bounds per block / stack / plate (focus), and every block, stack, group and connector a
+  target.
+- **Gaps**: no icons on blocks; a connector to a stack's upper layer runs on the floor; label
+  placement is greedy (a crowded diagram can still overlap a label and a block or connector;
+  Step 174's lint); a stack in 9:16 is narrow (its labels take the side).
+
+### 90.7 Public (Step 173)
+
+- `vidgen.api` adds `BlockSpec`, `ItemSpec`, `GroupSpec`, `EdgeSpec`, `IsoDiagramLayout`,
+  `layout_iso_diagram`, `DiagramShapes`, `diagram_shapes`, `outline_ink`, `readable_ink`,
+  `top_point`, `top_room`, `side_point` (`iso_blocks`) and `picture_to_scene`, `shapes_mobject`
+  (`iso_vector`): what the built-in scene uses, so a project scene can draw its own iso diagram.
+  Config: the scene type `iso_diagram` (no new video-level keys).

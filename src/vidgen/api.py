@@ -572,6 +572,8 @@ from vidgen.cartoon.iso_pictures import GlowTile, IsoPuddles, IsoSnow, IsoTiles,
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
 from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
+from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
+from vidgen.iso_vector import picture_to_scene, shapes_mobject  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -1385,6 +1387,21 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "ISO_PAN_ZOOM",
     "map_fraction",
     "standing_box",
+    "BlockSpec",
+    "DiagramShapes",
+    "EdgeSpec",
+    "GroupSpec",
+    "IsoDiagramLayout",
+    "ItemSpec",
+    "diagram_shapes",
+    "layout_iso_diagram",
+    "outline_ink",
+    "readable_ink",
+    "side_point",
+    "top_point",
+    "top_room",
+    "picture_to_scene",
+    "shapes_mobject",
     "Field",
     "field_validator",
     "model_validator",

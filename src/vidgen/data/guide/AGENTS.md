@@ -293,6 +293,7 @@ project's own scene types, in its theme).
 | how parts connect, decisions, architecture | `diagram`, `flowchart` | `heading`, `nodes`, `edges`, `highlight`, `direction` |
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
+| architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
@@ -449,6 +450,18 @@ Minimal snippets (copy, then adapt):
     - text: "A hidden layer combines them."
     - text: "Ten outputs score the ten digits."
     - text: "A forward pass flows from left to right."
+- id: arch
+  type: iso_diagram
+  params:
+    heading: "A web app, layer by layer"
+    blocks:
+      - {id: browser, label: "Browser"}
+      - {id: app, label: "App server", layers: [Storage, Logic, API]}   # a stack: layers bottom up
+      - {id: db, label: "Database", shape: database}
+    edges: ["browser -> app: HTTPS", "app -> db"]
+  beats:
+    - text: "Requests come in from the browser."
+    - text: "The app server handles them layer by layer, and keeps its data in a database."
 ```
 
 ```yaml
