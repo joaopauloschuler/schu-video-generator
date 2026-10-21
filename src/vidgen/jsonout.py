@@ -564,6 +564,17 @@ def gallery_document(project: Project | None, result: GalleryResult, elapsed: fl
         }
         for t in result.types
     ]
+    showcases = [
+        {
+            "name": s.name,
+            "section": s.showcase.section,
+            "title": s.showcase.title,
+            "page": None if s.page is None else _path(s.page),
+            "stills": {fmt: _path(p) for fmt, p in s.stills.items()},
+            "clips": {fmt: _path(p) for fmt, p in s.clips.items()},
+        }
+        for s in result.showcases
+    ]
     worker_warnings = [warning(message, sample) for sample, message in result.render_warnings]
     return envelope(
         "gallery",
@@ -579,6 +590,7 @@ def gallery_document(project: Project | None, result: GalleryResult, elapsed: fl
         bytes=result.bytes,
         elapsed=round(elapsed, 3),
         types=types,
+        showcases=showcases,
     )
 
 

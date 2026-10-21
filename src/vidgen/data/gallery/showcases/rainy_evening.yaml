@@ -1,0 +1,37 @@
+title: Rain at Nightfall
+voice: {provider: kokoro, voice: bf_emma}
+voices:
+  lia_voice: {voice: af_bella, label: Lia, color: primary}
+characters:
+  - name: lia
+    voice: lia_voice
+    look: {body: round, eyes: round, hair: bun, outfit: coat, accessories: [scarf]}
+    colors: {skin: "#F2C9A0", clothes: "#C0504D", hair: "#6B4226", accessory: "#F2C14E"}
+  - name: amos
+    look: {species: fox, body: tall, eyes: oval, accessories: [glasses]}
+    colors: {skin: "#D9773B", clothes: "#3E5C76"}
+scenes:
+  - id: rainy_evening
+    type: stage
+    set: city_street
+    params:
+      light: sunset
+      particles: [{kind: rain, puddles: true}]
+      props: [{prop: umbrella, at: stand_right}]
+      characters:
+        - {name: lia, at: stand_right}
+        - {name: amos, at: 0.41, depth: 0.25}
+    beats:
+      - text: "At sundown the rain came, and Lia opened her umbrella."
+        actions:
+          - {hold: lia, to: umbrella, at: 0}
+          - {sit_on: amos, to: bench, at: 0}
+          - {react: amos, expression: sad, at: 0.2}
+          - {open: umbrella, at: 0.45}
+          - {light: night, at: 0.5, run_time: 2}
+          - {switch_on: lamp, at: 0.7}
+      - text: "Room for two under here!"
+        voice: lia_voice
+        actions:
+          - {emote: amos, to: happy, at: 0}
+          - {walk_to: lia, to: {mark: 0.58, depth: 0.25}, at: 0}

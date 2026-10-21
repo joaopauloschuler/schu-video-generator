@@ -9339,20 +9339,30 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
   from the word counts (no audio). Like the storyboard, a sample is rendered again only when its
   stills are missing or stale; the work project always holds every sample, so a run for a few
   `--types` keeps the others current.
+- **Showcases.** The built-in gallery (not a project's) also renders a few small scenes written
+  for it, each a whole `video.yaml` with one scene (`src/vidgen/data/gallery/showcases/`): the
+  "2D cartoons" section ends with a dialogue in a furnished room, walks in depth, rain at
+  nightfall and a platform jump; "Isometric cartoons" has a village, a cut-away room, a lamp lit
+  at night and settling snow. Each has a page with its GIFs, stills and YAML; `--types` takes
+  their names too (`--types iso_snow`).
 - **Output** (default `docs/gallery`; `--output DIR`): `README.md`, the index (every registered
   type by the guide's groups — text and structure, flows, data, pictures and media, maths and
-  code, then the project's — with both stills and what it is for, from the guide's chooser),
-  `<type>.md` per type (what it is for, the type's description, the stills, links to the GIFs,
+  code, 2D cartoons, then the project's — with its animated preview at both formats and what it
+  is for, from the guide's chooser; the showcases at the end of their sections),
+  `<type>.md` per type (what it is for, the type's description, the stills, the GIFs,
   the YAML, a params table from the `Params` model with types, defaults and docs, the action
   targets, the beat count) and `media/<type>-16x9.png|gif`, `media/<type>-9x16.png|gif`. The
   still is the end of the last beat; the GIF plays the scene to that point (320 px / 180 px wide,
-  6 fps, 32 colours, the end held 1.5 s; the fade-out left out). Nothing in the files depends on
-  the time or the machine: the same vidgen writes the same files.
+  6 fps, 32 colours; the empty opening and the fade-out left out) and holds the end for 2 s at
+  its start, so a page shows the finished picture before the GIF plays (and between loops). A GIF
+  over 150 KB is made again at 5, then 4 fps. The index shows each GIF in a `<picture>` whose
+  still replaces it for viewers who ask for reduced motion. Nothing in the files depends on the
+  time or the machine: the same vidgen writes the same files.
 
 | option | |
 |---|---|
 | `--output DIR`, `-o` | the gallery folder (default `docs/gallery`) |
-| `--types T,T` | only these types (comma-separated, repeatable; another name renders its type); the index still lists every type, with the stills already in the folder (a type with no page there yet: "not rendered here yet") |
+| `--types T,T` | only these types or showcases (comma-separated, repeatable; another name renders its type); the index still lists every type and showcase, with the media already in the folder (one with no page there yet: "not rendered here yet") |
 | `--formats 16:9,9:16` | the formats to render (default both) |
 | `--theme PRESET` | render in this theme preset (default: the project's theme, or the default look) |
 | `--clips` / `--no-clips` | also write the GIFs (default yes); without, the pages link the GIFs already there |
@@ -9360,8 +9370,8 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
 | `--force` | render the samples again even if their stills are current |
 | `--json` | print the gallery's files (below) |
 
-The repository's gallery is committed (stills and GIFs, about 4.4 MB; a test keeps it under
-8 MB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
+The repository's gallery is committed (stills and GIFs, about 8.6 MB with the showcases; a test
+keeps it under 10 MB and every GIF under 150 KB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
 or a guide snippet, look at the stills, and commit `docs/gallery`.
 
 ## Drafting from an outline (`vidgen plan`)
@@ -9907,10 +9917,11 @@ The [scene gallery](#scene-gallery-vidgen-gallery) written by `vidgen gallery`.
 | `project` | str \| null | the project whose own types are shown (`null`: built-ins only) |
 | `output`, `index`, `work` | str | the gallery folder, its `README.md`, the work project rendered in |
 | `formats` | list | the formats rendered (`16:9`, `9:16`) |
-| `rendered`, `reused` | list | samples rendered by this run and current ones reused, as `"<type> (<format>)"` |
+| `rendered`, `reused` | list | samples (and showcases) rendered by this run and current ones reused, as `"<name> (<format>)"` |
 | `bytes` | int | the size of the gallery folder |
 | `elapsed` | float | seconds |
 | `types` | list | every registered type, in index order: `{name, alias_of, sample, page, stills, clips}`; `alias_of` names the type it is another name of (`null` otherwise), `sample` is `guide`, the project's config file name or `null` (none), `page` the type's page written by this run (else `null`), `stills` / `clips` the files written by this run by format |
+| `showcases` | list | the showcases this run rendered (none for a project): `{name, section, title, page, stills, clips}` |
 
 `warnings`: a type with no sample, and the render warnings of the samples (`scene` is then
 `"<type> (<format>)"`). An unknown `--types` name or format is an error (`ok` false).

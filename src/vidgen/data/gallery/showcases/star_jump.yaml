@@ -1,0 +1,26 @@
+title: A Jump for a Star
+characters:
+  - name: pell
+    look: {species: mouse, proportions: kid, eyes: round, outfit: overalls}
+    colors: {skin: "#B8A89A", clothes: "#5B7DB1"}
+scenes:
+  - id: star_jump
+    type: stage
+    set: park
+    params:
+      character_size: large
+      level:
+        map: |
+          ........................
+          .............*..........
+          ..a...$$$.b....c.....d..
+          ###########....#########
+        spots: {a: start, b: brink, c: landing, d: end}
+        follow: pell
+      characters: [{name: pell, at: start}]
+    beats:
+      - text: "Pell ran for the edge, picking up coins."
+        actions: [{run_to: pell, to: brink, at: 0.05}]
+      - text: "One big jump, and she caught the star!"
+        actions:
+          - {jump: pell, to: landing, at: 0.15, react: {when: land, expression: laughing, effect: sparkle}}

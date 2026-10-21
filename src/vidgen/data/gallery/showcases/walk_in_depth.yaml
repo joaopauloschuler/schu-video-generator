@@ -1,0 +1,27 @@
+title: Passing in the Park
+characters:
+  - name: posy
+    look: {body: tall, eyes: oval, hair: braids, outfit: dress, accessories: [hat]}
+    colors: {skin: "#C68E64", clothes: "#E07A5F", hair: "#2B2B2B", accessory: "#F2C14E"}
+  - name: dunn
+    look: {species: dog, body: round, eyes: round, accessories: [backpack]}
+    colors: {skin: "#D9B38C", clothes: "#5B7DB1", accessory: "#C0504D"}
+scenes:
+  - id: walk_in_depth
+    type: stage
+    set: park
+    params:
+      characters:
+        - {name: posy, at: 0.25}
+        - {name: dunn, at: 0.75, depth: 0.7, facing: left}
+    beats:
+      - text: "Posy strolled deeper into the park, as Dunn came the other way."
+        actions:
+          - {walk_to: posy, to: {mark: 0.72, depth: 0.7}, at: 0.05}
+          - {walk_to: dunn, to: {mark: 0.3, depth: 0}, at: 0.1}
+      - text: "Far away now, Posy turned and waved."
+        actions:
+          - {turn: posy, to: left, at: 0.05}
+          - {gesture: posy, to: wave, at: 0.25}
+          - {look_at: dunn, to: posy, at: 0.2}
+          - {gesture: dunn, to: wave, at: 0.45}

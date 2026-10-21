@@ -1012,6 +1012,11 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] Same sound as approved: float32 loops equal the prototype's, WAVs byte-identical to the approved ones; the ten older beds unchanged (hashes); fingerprints for all fourteen and a facts test (`tests/test_music.py`)
 - [x] Docs: CONFIG beds table and bass-weight note, guide + `AGENTS.md` (`momentum` still first, the four as alternatives), COOKBOOK, Shorts cookbook, README, CHANGELOG, DESIGN §48 / §91.1
 
+### Step 182 — Animated gallery previews and cartoon showcases
+- [x] Gallery index cells play each scene's 16:9 and 9:16 GIFs (each linked to its page, in a `<picture>` with the still for reduced motion; column "preview"); every GIF skips the empty opening, opens on its held last beat (2 s) and stays under 150 KB (5 / 4 fps fallback); all GIFs regenerated (DESIGN §60.1)
+- [x] "2D cartoons" (stage, card, then four showcases: a dialogue in a furnished room with a close-up, walks in depth, rain at nightfall, a platform jump for a star) and "Isometric cartoons" (a village meeting, a cut-away room, a lamp lit at night with a name tag, settling snow; a link to `examples/iso-story`); showcases as named entries with their own YAML in `data/gallery/showcases/`, pages and tests; validate clean, lint clean in 16:9
+- [x] README strip of four gallery GIFs; CONFIG, DESIGN, CHANGELOG, HANDOFF; `tests/test_gallery.py`
+
 ---
 
 ## Backlog (after Step 60)

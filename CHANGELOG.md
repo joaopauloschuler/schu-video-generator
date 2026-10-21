@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–181)
+## 0.3.0 (Steps 61–182)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -380,6 +380,13 @@ matters only for projects made with development builds between Steps 67 and 131)
 - Faster cartoon renders: static layers stay in Manim's static image, and part drawings are
   cached (87).
 - Works with Manim 0.22 (64).
+- The scene gallery (`docs/gallery`, `vidgen gallery`) shows animated previews: each index cell
+  plays the 16:9 and 9:16 GIFs (the still for viewers who ask for reduced motion); every GIF
+  skips the empty opening, opens on its held last beat and stays under 150 KB. "2D cartoons" and
+  "Isometric cartoons" end with eight showcases, small scenes written for the gallery with their
+  whole YAML (a dialogue in a room, walks in depth, rain at nightfall, a platform jump; an iso
+  village, a cut-away room, a lamp lit at night, settling snow); `--types` takes their names.
+  The README shows four gallery GIFs near the top (182).
 - `vidgen render --draft`: a quick render at about 8 fps and 240 px without decoration (idle
   motion, wind, shadows, particles, light grade), every timing kept, in its own `build/draft`
   folder and `_draft.mp4` (137).
