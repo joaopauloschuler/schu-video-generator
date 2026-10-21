@@ -48,15 +48,11 @@ class _IsoChange:
 
 
 def iso_particle_problem(iso: Any, kind: str, settings: Any) -> str | None:
-    """Why particles of ``kind`` with ``settings`` (``puddles``, ``settle``) cannot fall on the
-    iso place ``iso`` (DESIGN.md §89.11): rain, snow, leaves and streaks stay out of an indoor
-    place; puddles and settling snow are a flat stage's. ``None``: they can."""
+    """Why particles of ``kind`` cannot fall on the iso place ``iso`` (DESIGN.md §89.11): rain,
+    snow, leaves and streaks stay out of an indoor place. ``None``: they can (puddles and
+    settling snow too, §90)."""
     if iso.place == "indoor" and kind in OUTDOOR_PARTICLES:
         return f"{kind} stays outdoors; an indoor place has none inside (sparkles, dust, confetti, smoke and bubbles work)"
-    if getattr(settings, "puddles", False):
-        return "puddles are not drawn on an iso place yet; remove puddles (the rain still lands on the place with splashes)"
-    if getattr(settings, "settle", False):
-        return "settling snow is not drawn on an iso place yet; remove settle (the snow still falls over the place)"
     return None
 
 
@@ -345,10 +341,16 @@ class IsoStaging:
         return ShotView(x, y, self.frame_width / width)
 
     def _iso_tiles(self, picture: Any, name: str) -> IsoTiles:
-        """An :class:`IsoTiles` group of ``picture`` showing what the camera sees now, graded by the light."""
+        """An :class:`IsoTiles` group of ``picture`` showing what the camera sees now, graded by
+        the light (with the snow lying on the place now, §90.3); every one made is kept in
+        :attr:`_iso_groups`."""
         tiles = IsoTiles(self.iso_scenery, picture, self.iso_view, name=name, density=self._iso_density, frame_width=self.frame_width)
         mark_lit(tiles)
+        snow = getattr(self, "iso_snow", None)
+        if snow is not None:
+            tiles.snow_opacity = snow.cover or 0.0
         tiles.show_view(self.camera.frame)
+        self.__dict__.setdefault("_iso_groups", []).append(tiles)
         return tiles
 
     def get_moving_and_static_mobjects(self, animations: Any) -> tuple[list[Mobject], list[Mobject]]:
@@ -801,7 +803,47 @@ class IsoStaging:
         cy, half = float(frame.get_center()[1]), float(frame.height) / 2
         bodies = tuple((float(m.get_left()[0]), float(m.get_bottom()[1]), float(m.get_right()[0]), float(m.get_top()[1]))
                        for m in self._iso_bodies().values() if m in self.mobjects)
-        return IsoRainGround(cy - half, cy - half, cy + half, self.frame_height, (), xs, fronts, backs, bodies)
+        return IsoRainGround(cy - half, cy - half, cy + half, self.frame_height, (), xs, fronts, backs, bodies, lift=self._iso_shelter_lift())
+
+    def _iso_shelter_lift(self) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+        """How much higher (Manim units) a drop landing on the ground seen at (``x``, ``y``) lands:
+        on the top of what keeps the rain off there now (:func:`~vidgen.cartoon.iso_weather.lift_floors`
+        over the place's top surface, DESIGN.md §90.2)."""
+        surface, view = self.iso_scenery.top_surface(), self.iso_view
+
+        def lift(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+            return lift_floors(x / view.unit + view.u0, view.v0 - y / view.unit, surface) * view.unit
+
+        return lift
+
+    def iso_lay_puddles(self, field: Any, settings: Any) -> None:
+        """Puddles growing on the place's ground cells while the rain ``field`` falls (``settings``:
+        its seed), with ripples while it rains (:class:`IsoPuddles`, DESIGN.md §90.2), laid over
+        the place's pictures under the shadows and the characters."""
+        scenery = self.iso_scenery
+        boxes = [piece.box for k, piece in enumerate(scenery.pieces) if scenery.shown(k)]
+        spots = iso_puddles(self.iso_place_now(), scenery.top_surface(), boxes, settings.seed)
+        if not spots:
+            return
+        puddles = IsoPuddles(spots, self.iso_view, start=field.start, ended=lambda: field.ended, clock=lambda: float(self.renderer.time))
+        mark_lit(puddles)
+        self.puddles.append(puddles)
+        self._lay_on_ground(puddles)
+
+    def iso_settle_snow(self, field: Any, settings: Any) -> None:
+        """Snow from the settling ``field`` lies on the place (``settings``: its density and
+        ``settled``): every picture shows its snow tiles, more and more opaque as it snows
+        (:class:`IsoSnow`, DESIGN.md §90.3); one layer for all the scene's settling fields."""
+        snow = getattr(self, "iso_snow", None)
+        if snow is None:
+            left, top, right, bottom = self.iso_scenery.bounds
+            view = self.iso_view
+            region = ((left - view.u0) * view.unit, -(bottom - view.v0) * view.unit, (right - view.u0) * view.unit, -(top - view.v0) * view.unit)
+            snow = IsoSnow(lambda: list(self.__dict__.get("_iso_groups", [])), region)
+            self.iso_snow = snow
+            self.snow_layers.append(snow)
+        snow.add_fall(field.start, lambda: field.ended, settings.density, settings.settled)
+        self._watch_living()
 
     # ----- the camera (DESIGN.md §89.10) -------------------------------------------------------------
 

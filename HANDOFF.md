@@ -16129,3 +16129,85 @@ How to test
   no new TTS). Final render of the voiced copy at 1920x1080 @ 30:
   `<scratchpad>/s171/hazel_and_the_lamp.mp4`, contact sheet `<scratchpad>/s171/contact_sheet.png`,
   checked by eye (storyboards of the scratch test place and of both formats too).
+
+## Step 172 — Phase R plan and iso weather polish
+
+What was built
+- **Phase R plan** in `tasklist.md` (Steps 172–176: iso weather polish, then the presentation
+  scene type `iso_diagram`, its actions, an example, the review) and DESIGN §90.
+- **Baseline stills of `examples/iso-story`**, recorded before any change, for Steps 173–176:
+  `<scratchpad>/phase-r-baseline/frames/` (84 PNGs: 16:9 `morning`, `evening`, `rowans_room`,
+  `night`, `next_morning`; 9:16 `morning`, `night`), script `phase-r-baseline/make_baseline.sh`
+  (`OUT=` / `WORK=` new folders; `CODE=` a checkout's `src` to render with other code), compared
+  with `phase-q-baseline/compare.py`. The example is taken as committed at `d792d86b`.
+- **Shelter from rain on an iso place** (DESIGN §90.2): the place's *top surface*
+  (`cartoon/iso_weather.py`: `TopSurface`, `top_surface`, from the shapes the place is drawn with:
+  tops and roof slopes facing up, crowns and bushes as balls, discs, posts' tops) lifts a drop
+  that would land under a roof, a crown or a bridge onto it (`lift_floors`, `IsoRainGround.lift`):
+  its splash shows on the roof. Nobody can stand under a shelter on the place, so steps are as
+  before.
+- **Puddles** (`puddles: true`, refused before): seeded on open grass and paths, never sheltered,
+  on water or under something in front; growing, with ripples while it rains (`IsoPuddles`).
+- **Settling snow** (`settle: true`, refused before): a picture of the snow
+  (`draw_shapes(..., snow=True)`: tops, roofs, crowns' caps, pine tiers, the well's roof) laid
+  over each tile of every picture as it grows (`IsoSnow`, `IsoTiles.set_snow_opacity`).
+- **Speed lines** of a run on an iso place along the walk's diagonal on screen
+  (`MotionEffect._iso_way`).
+- Docs: CONFIG iso section and the `puddles` / `settle` rows, guide topic `iso` + `AGENTS.md`,
+  CHANGELOG (0.3.0 now Steps 61–172), DESIGN §90 and pointers in §89.9 / §89.11.
+
+Files touched
+- New: `src/vidgen/cartoon/iso_weather.py`, `tests/test_iso_weather.py`.
+- Changed: `src/vidgen/cartoon/iso_drawing.py` (`holds_snow`, `snow_cap`, `upward`,
+  `surface_normal`, the snow pass), `iso_objects.py` (pine and well caps, knobs and the well's
+  fascia hold no snow), `iso_scenery.py` (water and knobs), `iso_stage.py` (`top_surface`, `snow`
+  keyword), `iso_pictures.py` (`IsoTiles` snow in place, `IsoPuddles`, `IsoSnow`), `rain.py`
+  (`IsoRainGround.lift`), `motion_effect_shapes.py`, `src/vidgen/particle_field.py` (flakes ask
+  the ground's `landing`), `src/vidgen/scenes/stage.py`, `scenes/stage_iso.py` (refusals removed,
+  `iso_lay_puddles`, `iso_settle_snow`, `_iso_shelter_lift`, `_iso_groups`),
+  `src/vidgen/introspect.py`, `src/vidgen/api.py`, `tests/test_iso_mood.py` (the refusal tests now
+  check acceptance), `docs/CONFIG.md`, `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`,
+  `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` adds `TopSurface`, `top_surface`, `lift_floors`, `IsoPuddle`, `iso_puddles`,
+  `ripples`, `IsoPuddles`, `IsoSnow`. New fields with defaults: `Poly.holds_snow`,
+  `Poly.snow_cap`, `Disc.holds_snow`, `IsoRainGround.lift`; `snow` keyword on `draw_shapes`,
+  `IsoScenery.tile_image` and `picture`. No new config keys: `puddles` and `settle` are accepted
+  on an iso place outdoors (indoors rain and snow stay refused).
+
+Decisions / deviations
+- Shelter from the drawn shapes, not a table per object kind: what keeps rain off is exactly what
+  snow lies on, and new objects need nothing.
+- Snow laid into each tile's pixels in place, not separate half-transparent snow tiles: those
+  doubled where tiles overlap and showed white lines while the snow grew (seen in the first
+  render).
+- Iso puddles are a light sky blue (`#A9C8E8` at 0.8): the flat stage's grey blue read as holes
+  in the grass from above.
+- Deliberate changes to existing iso output (intended by the brief): in `evening` and `night` of
+  iso-story splashes move from under the houses and crowns onto them; the runs in `morning`
+  (b8) and `rowans_room` (b7) show slanted speed lines. Checked by eye side by side.
+
+Known gaps / for later steps
+- Snow's `color` colours only the flakes; the layer is always snow white.
+- Puddles are only on grass and paths at ground cells (not on raised blocks, not on a bridge).
+- While snow grows, every picture tile of the place is redrawn each frame (the scratch village:
+  17 s of snow at 854 x 480 in 30 s); after it is full they are static again.
+- A drop whose landing point lies behind a tall object on the picture still ends on that
+  object's picture (Step 169's behaviour), it is not hidden by it.
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_iso_weather` (13, incl. 1 render),
+  `test_iso_mood` (14), `test_iso_place` + `test_iso_staging` (86), `test_iso_moves` +
+  `test_iso_story` + `test_phase_q_review` (51), `test_cartoon_rain` + `test_cartoon_snow_fog` +
+  `test_particles` (56), `test_cartoon_motion_effects` + `test_api` + `test_introspect` +
+  `test_cartoon_foley` (45), `test_builtin_scenes` without render (122), `test_guide` +
+  `test_docs` (116), `test_iso_weather` + `test_draft` (31). All pass.
+- Compatibility: `phase-q-baseline/make_baseline.sh` into `s172/q_check`: 31 frames, max
+  difference 0. `phase-r-baseline/make_baseline.sh` into `s172/r_check`: the 84 stills match
+  except the rain scenes (`evening`, `night`, both formats) and two mid-run stills
+  (`morning_b8-m435`, `rowans_room_b7-m361`): the intended changes above.
+- Stills (scratch project `<scratchpad>/s172/proj`, the village with a `rainy` and a `snowy`
+  scene): `s172/rainzoom.png` (rain with splashes on the roofs, puddles with ripples, a run's
+  diagonal speed lines, 1280 x 720), `s172/snowgrid.png` (the village turning white),
+  `s172/side_night.png`, `side_morning.png`, `side_room.png` (baseline vs now).

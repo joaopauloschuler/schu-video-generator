@@ -150,7 +150,7 @@ def ground_shapes(place: IsoPlace, colors: IsoColors) -> list[Shape]:
         open_n, open_w = place.ground(c, r - 1) == VOID, place.ground(c - 1, r) == VOID
         open_s, open_e = place.ground(c, r + 1) == VOID, place.ground(c + 1, r) == VOID
         if cell.ground == WATER:
-            shapes.append(Poly(_top(c, r, -WATER_DEPTH), colors.water, False))
+            shapes.append(Poly(_top(c, r, -WATER_DEPTH), colors.water, False, holds_snow=False))
             bank = _sides(place, colors, c, r)
             if place.ground(c, r - 1) not in (WATER, VOID):
                 shapes.append(Poly(((c, r, 0.0), (c + 1, r, 0.0), (c + 1, r, -WATER_DEPTH), (c, r, -WATER_DEPTH)), shade(bank, 0.1), False))
@@ -352,7 +352,7 @@ def _wall_door(side: str, column: int, row: int, x1: float, y1: float, base: flo
         return [Poly(door, DOORWAY), Poly((hinge_low, leaf_low, leaf_high, hinge_high), mix(WOOD, "#FFFFFF", 0.12))]
     knob = _on_face(side, column, row, x1, y1, base, 0.72, 0.72, 1.05, 1.05)[0]
     panel = _on_face(side, column, row, x1, y1, base, 0.27, 0.73, 1.35, DOOR_HEIGHT - 0.45)
-    return [Poly(door, WOOD), Poly(panel, shade(WOOD, 0.18), False), Disc(knob, 0.05, "#F2C14E", False)]
+    return [Poly(door, WOOD), Poly(panel, shade(WOOD, 0.18), False), Disc(knob, 0.05, "#F2C14E", False, holds_snow=False)]
 
 
 def place_pieces(place: IsoPlace, colors: IsoColors, looks: Mapping[str, ObjectLook]) -> list[IsoPiece]:

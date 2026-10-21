@@ -11980,7 +11980,8 @@ characters large (Step 168, §89.10).
   - Shots, `pan`, `zoom` and `follow` (the camera) on an iso place (Step 168: §89.10).
   - A follower that ends straight behind its leader on the picture is partly hidden by it
     (`gap: 2` spaces them out). Step 168: it steps aside (§89.10).
-  - The speed lines of a rushed walk are drawn level, not along the diagonal.
+  - The speed lines of a rushed walk are drawn level, not along the diagonal (Step 172: along
+    it, §90.4).
   - Two walkers crossing in one cell pass through each other: routes avoid standing
     characters, not moving ones (kept, Step 171: §89.13).
 
@@ -12118,8 +12119,8 @@ the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTil
   no splash on a face in a close-up), it falls through (`NO_FLOOR`). No depth, so splashes keep one
   size. `RainGround.landing` is the old band (`landing_lines`), so a flat stage's rain is
   unchanged. Not on the place yet, refused with the alternative (`iso_particle_problem`, by the
-  params' check and the `particles` action): `puddles`, `settle`; indoors no rain, snow, leaves,
-  streaks.
+  params' check and the `particles` action): `puddles`, `settle` (Step 172: drawn, with shelter
+  from rain, §90.2–90.3); indoors no rain, snow, leaves, streaks.
 - **Ambience.** A new set bed `crickets` (four crickets at their own pitch, place and rate over a
   faint low night air; −37 LUFS, ducking 4 dB like birdsong; a 12 s seamless loop). Chosen
   automatically only on an iso place outdoors while the light is `sunset` or `night`
@@ -12281,3 +12282,113 @@ the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTil
 - **Public**: `vidgen.api` adds `wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`, `LampLit`,
   `mark_lamp_lit`. Off an iso place nothing changes (the baseline frames are identical, the
   examples' lint is as before).
+
+
+## 90. Iso polish and iso diagrams (Phase R, Steps 172–176)
+
+Reference: docs/CONFIG.md "Isometric places (`iso`)". Two parts: the weather gaps Phase Q left
+on an iso place (§89.9–89.13: no shelter from rain, puddles and settling snow refused, speed
+lines drawn level), then a presentation scene type built on the same projection and block
+drawing.
+
+### 90.1 The phase (plan)
+
+- **Step 172, iso weather polish** (this section's §90.2–90.4): shelter from rain, puddles,
+  settling snow, speed lines along the diagonal; the obsolete refusals removed. Deliberate
+  changes to iso output: in rain scenes drops that landed under a roof or crown now splash on it,
+  and a run's speed lines slant. Everything else renders as before.
+- **Step 173, `iso_diagram` core**: a new presentation scene type reusing `world/iso_view.py`
+  (projection, `Box3`, `draw_order`) and the iso block drawing (`cartoon/iso_drawing.py`:
+  `box_shapes`, `draw_shapes`; moved to a neutral module if the diagram needs it, iso stage
+  output unchanged). Blocks (boxes, slabs, cylinders such as databases, flat tiles) placed on a
+  grid by name with sizes and heights; labels that stay flat and readable (phone rules); theme
+  colours and Phase P `terms:` concept colours; connectors along the grid; groups and stacks;
+  auto-fit to 16:9 and 9:16.
+- **Step 174, actions**: build-in, raise / lower, highlight / dim, flow along connectors,
+  explode / collapse a stack, camera focus on a block or group, swap labels and values, timed to
+  beats and Phase P words (`at: "@word"`); lint where useful.
+- **Step 175**: an original example (a short tech explainer, 16:9 and 9:16) with Kokoro
+  narration; docs.
+- **Step 176**: the review; backwards compatibility against Phase Q's 31 baseline frames and the
+  84 iso-story stills recorded in Step 172 before any change (`phase-r-baseline/make_baseline.sh`
+  in the session scratchpad: 16:9 `morning`, `evening`, `rowans_room`, `night`, `next_morning`;
+  9:16 `morning`, `night`; the 9:16 ones drawn with a worktree of `d792d86b`); the 9:16 render of
+  `examples/iso-story`.
+
+### 90.2 Rain on the place: shelter and puddles (Step 172)
+
+- **The top surface** (`cartoon/iso_weather.py`, no manim: `TopSurface`, `top_surface`): the
+  height of the highest thing facing up over each point of the map, `SURFACE_SAMPLES` 8 per
+  tile, made from the very shapes the place is drawn with (`IsoScenery.top_surface()`, cached per
+  set of object states, so a `reveal`ed bridge counts once it is there): every polygon whose unit
+  normal points up at least `SNOW_SLOPE` 0.45 (`iso_drawing.upward`: a top, a roof's slope; not a
+  wall or a cut-out), round puffs as balls (a circle of radius `r` on the picture is a ball of
+  `r·√2`: the view is a parallel projection scaled by 1/√2, `BALL_RADIUS`), opaque flat discs and
+  the tops of upright cylinders; shadows and pools of light do not count. `grounds` holds each
+  cell's top (water `-WATER_DEPTH`). Why from the shapes rather than a table per object kind: what
+  keeps the rain off is then exactly what snow lies on (§90.3), and a new object needs nothing.
+- **Shelter** (`lift_floors`, `IsoRainGround.lift`): a drop keeps Step 169's landing point on the
+  place's picture; the ground point there is found by undoing the projection at the cell top's
+  height (`world_at`, three steps: a raised block moves it), and when the top surface over it is
+  `SHELTER_CLEARANCE` 0.3 tiles or more higher (a roof, a crown, a bridge's deck over water) the
+  drop lands that much higher up the picture, on it, with its splash. `Stage.iso_rain_ground`
+  passes the lift (`_iso_shelter_lift`); a flat stage's `RainGround` has none and is unchanged.
+  Indoors there is no rain (refused as before). "Characters standing there stay dry": nobody can
+  stand under a shelter on the place (a house's or a tree's cells are not standable; eaves and a
+  crown's ball do not reach a neighbouring cell's middle, tested), so footsteps are unchanged;
+  drops landing on a character still fall through (no splash on a face).
+- **Puddles** (`puddles: true`, refused on an iso place before): `iso_puddles` picks seeded cells
+  (`random.Random("puddles:<seed>")`) among `puddle_cells`: grass (`.` outdoors) or path, nothing on
+  it, not sheltered, and no piece of the place in front of it (`in_front` with a flat box of the
+  cell) — the puddles are drawn over the place's pictures under the shadows and characters
+  (`_lay_on_ground`), so a piece in front would be covered. One per `CELLS_PER_PUDDLE` 10 cells,
+  2–12, radius 0.3–0.44 tile inside its cell. `IsoPuddles` (`cartoon/iso_pictures.py`) draws each as
+  the ellipse a ground circle makes in the view, `ISO_PUDDLE_COLOR` `#A9C8E8` at 0.8 (the plain
+  stage's darker puddle read as a hole in the grass from above), growing with `puddle_growth` and
+  staying when the rain stops, with `RIPPLES` 2 rings per puddle while it rains (`ripples`: each
+  spreads from a seeded point over `RIPPLE_SECONDS` 0.9 and starts again elsewhere; a ring is one
+  filled path, outer ellipse and inner reversed, so it scales with the zoom). Wet steps follow
+  the rain field as on a flat stage. Lit like the place; left out of the layout dump like
+  `Puddles`.
+
+### 90.3 Settling snow on the place (Step 172)
+
+- **A picture of the snow**: `draw_shapes(..., snow=True)` (as `glow=True` is a picture of the
+  lights) paints the snow lying on the shapes in order, each shape clearing the snow behind it:
+  an upward polygon that `holds_snow` (new `Poly` / `Disc` field, default true; water and door
+  knobs false; a well roof's fascia false) is `SNOW_WHITE` (`#F4F7FC`, a slope facing the back a
+  little shaded) with its outline kept; an upright polygon with `snow_cap` (new field: a pine's
+  tiers `PINE_SNOW_CAP` 0.72, the well's roof `ROOF_SNOW_CAP` 0.6) is white from its top down
+  that share; each puff of a `Blobs` gets a cap (a chord ±62° about its top), a later puff
+  clearing the caps behind it; an opaque disc and an upright's top are white; lines of at least
+  1.5 outline widths clear (a crank), thinner ones (seams, tufts, bars) are covered; tints leave
+  it. The fields' defaults keep every picture drawn exactly as before.
+- **Shown on the place** (`IsoSnow`, a living thing of the stage like `SettledSnow`): every
+  picture (`IsoTiles`: base, fronts, layers; `Stage._iso_groups` lists every one made) lays its
+  tiles' snow over each tile's own pixels in place, at `BLANKET_OPACITY × blanket_cover(amount)`,
+  the amount growing with `settle_amount(settled_seconds(...))` in Step 105's steps (one layer
+  for all the scene's settling fields, their amounts added). Considered and dropped: snow tiles
+  of their own, half transparent, over the picture tiles — the tiles overlap by `TILE_OVERLAP`
+  pixels and the doubled snow showed as white lines across the place while it grew. In place,
+  the tile stays the same mobject, so Manim's list of what moves stays right; while it grows the
+  place's tiles are redrawn (measured: the scratch village, 17 s of snow at 854 x 480, 30 s).
+  Flakes land where rain would (`snow_ground` is the iso rain ground; `ParticleField` asks the
+  ground's `landing`, which for a flat stage is the band as before). `color` colours the flakes
+  only. Not in a draft (§74), as on a flat stage.
+
+### 90.4 Speed lines along the walk (Step 172)
+
+- `MotionEffect._way`: for a character with `iso_feet` (on an iso place) the way is its feet's
+  move since the last frame projected to the screen (`(dx−dy)/2`, up `−((dx+dy)/4 − dz·ISO_RISE)`),
+  kept while it stands still for a frame (`ISO_STILL_MOVE`), and the lines start at its middle
+  half its width back along that way; before it has moved, as before (level, the way it faces).
+  A flat stage takes the old branch (no `iso_feet`).
+
+### 90.5 Public (Step 172)
+
+- `vidgen.api` adds `TopSurface`, `top_surface`, `lift_floors`, `IsoPuddle`, `iso_puddles`,
+  `ripples`, `IsoPuddles`, `IsoSnow`. `Poly` gains `holds_snow` and `snow_cap`, `Disc`
+  `holds_snow`; `draw_shapes` and `IsoScenery.tile_image` / `picture` a `snow` keyword;
+  `IsoRainGround` a `lift`; `IsoTiles.set_snow_opacity`, `picture_tiles`. Config: `puddles` and
+  `settle` are accepted on an iso place outdoors (no new keys). Off an iso place nothing changes:
+  Phase Q's 31 baseline frames are identical.

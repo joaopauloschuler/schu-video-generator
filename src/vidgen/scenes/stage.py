@@ -1566,7 +1566,10 @@ class Stage(IsoStaging, NarratedScene):
         shadows, characters and props). A snow field with ``settle: true``: its layer grows
         (:meth:`_settle_snow`)."""
         if field.seeds.kind == "snow" and settings.settle and not self.is_draft:
-            self._settle_snow(field, settings)
+            if self.on_iso:   # on the place's pictures (DESIGN.md §90.3)
+                self.iso_settle_snow(field, settings)
+            else:
+                self._settle_snow(field, settings)
         if field.seeds.kind != "rain":
             return
         every = storm_every(settings)
@@ -1583,6 +1586,9 @@ class Stage(IsoStaging, NarratedScene):
         self._puddles_from.append(field.start)   # steps splash from then on, also in a draft without puddles (§74)
         if self.is_draft:
             return
+        if self.on_iso:   # on the place's ground cells (DESIGN.md §90.2)
+            self.iso_lay_puddles(field, settings)
+            return
         left, right = self.camera_bounds()[:2]
         spots = puddle_spots(
             puddle_count(self.stage_width / self.frame_width), settings.seed, left, right, self.rain_ground(),
@@ -1597,7 +1603,10 @@ class Stage(IsoStaging, NarratedScene):
 
     def snow_ground(self) -> RainGround:
         """Where settling snow ends now: rain's landing band, open umbrellas (held or standing) and
-        the top line of every prop that catches snow (:meth:`_snow_tops`)."""
+        the top line of every prop that catches snow (:meth:`_snow_tops`); on an iso place where
+        its rain lands (DESIGN.md §90.3)."""
+        if self.on_iso:
+            return self.iso_rain_ground()
         tops = self._snow_tops()
         shelters: list[Any] = []
         for name, prop in self.props.items():

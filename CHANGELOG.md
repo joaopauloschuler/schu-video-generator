@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–171)
+## 0.3.0 (Steps 61–172)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -196,6 +196,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   stand, up to twice as close), and `shot: wide` is that view; `pan` to a spot moves in from it;
   a lit lamp lights the characters next to it at night; a larger `flowers` or `bush` is a flower
   bed or a hedge (a clump per cell); the JSON Schema takes a bare `on: true` as YAML 1.1 reads it.
+- Weather polish (Phase R, 172): rain on an iso place lands on roofs, crowns and the bridge
+  instead of under them; `puddles: true` grows puddles with ripples on its grass and paths;
+  `settle: true` snow turns its ground, roofs, block tops and treetops white (both were refused
+  before); a run's speed lines follow its diagonal. Iso rain scenes and runs render a little
+  differently than in Step 171 (splashes on the roofs, slanted speed lines).
 
 ### Presentation toolkit (Phase P)
 

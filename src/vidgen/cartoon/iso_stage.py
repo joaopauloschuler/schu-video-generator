@@ -27,6 +27,7 @@ from PIL import Image
 from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes
 from vidgen.cartoon.iso_objects import ObjectLook, object_box
 from vidgen.cartoon.iso_scenery import SLAB_DEPTH, IsoColors, IsoPiece, ground_shapes, place_pieces
+from vidgen.cartoon.iso_weather import TopSurface, top_surface
 from vidgen.cartoon.stage import MAX_ZOOM, StageItem, StagePlacement
 from vidgen.errors import VidgenError
 from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, VOID, IsoPlace, ObjectState, default_state
@@ -324,6 +325,8 @@ class IsoScenery:
         self.layered = tuple(k for k, piece in enumerate(self.pieces) if piece.name in layered)
         self._images: OrderedDict[tuple[Any, ...], Image.Image | None] = OrderedDict()
         self._glows: dict[Picture, bool] = {}
+        self._place = place
+        self._surfaces: dict[tuple[tuple[int, ObjectState], ...], TopSurface] = {}
 
     @property
     def canvas(self) -> IsoCanvas:
@@ -410,14 +413,26 @@ class IsoScenery:
             self._glows[picture] = any(getattr(shape, "glow", False) for k, state in picture[1] for shape in self.pieces[k].shapes_in(state))
         return self._glows[picture]
 
-    def tile_image(self, picture: Picture, level: int, tile: tuple[int, int], canvas: IsoCanvas, *, glow: bool = False) -> Image.Image | None:
+    def top_surface(self) -> TopSurface:
+        """The place's :class:`~vidgen.cartoon.iso_weather.TopSurface` as it is now (the objects
+        there now, in their states; made once per set of states): what keeps the rain off and
+        where puddles may lie (DESIGN.md §90.2)."""
+        key = self._entries(range(len(self.pieces)))
+        if key not in self._surfaces:
+            self._surfaces[key] = top_surface(self._place, self.shapes((True, key)))
+        return self._surfaces[key]
+
+    def tile_image(self, picture: Picture, level: int, tile: tuple[int, int], canvas: IsoCanvas, *, glow: bool = False,
+                   snow: bool = False) -> Image.Image | None:
         """The tile ``tile`` of ``picture`` at ``level`` (its ``canvas`` from :meth:`tiles`),
-        drawn once (``None``: nothing on it); ``glow``: of its lights only (DESIGN.md §89.11)."""
-        key = (picture, level, tile, glow)
+        drawn once (``None``: nothing on it); ``glow``: of its lights only (DESIGN.md §89.11);
+        ``snow``: of the snow lying on it (§90.3)."""
+        key = (picture, level, tile, glow) if not snow else (picture, level, tile, glow, snow)
         if key in self._images:
             self._images.move_to_end(key)
             return self._images[key]
-        image: Image.Image | None = draw_shapes(self.shapes(picture), canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow)
+        image: Image.Image | None = draw_shapes(self.shapes(picture), canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow,
+                                                snow=snow)
         if image is not None and image.getbbox() is None:
             image = None
         self._images[key] = image
@@ -425,9 +440,9 @@ class IsoScenery:
             self._images.popitem(last=False)
         return image
 
-    def picture(self, picture: Picture, level: int = 0, *, glow: bool = False) -> tuple[IsoCanvas, Image.Image]:
+    def picture(self, picture: Picture, level: int = 0, *, glow: bool = False, snow: bool = False) -> tuple[IsoCanvas, Image.Image]:
         """The whole of ``picture`` at ``level`` as one image, on its part of the canvas (for tests
-        and stills; the stage draws tiles); ``glow``: of its lights only."""
+        and stills; the stage draws tiles); ``glow``: of its lights only; ``snow``: of its snow."""
         c = self.level_canvas(level)
         clip = self.clip(picture)
         if clip is None:
@@ -436,7 +451,7 @@ class IsoScenery:
             x0, y0 = max(math.floor((clip[0] - c.left) * c.scale), 0), max(math.floor((clip[1] - c.top) * c.scale), 0)
             x1, y1 = min(math.ceil((clip[2] - c.left) * c.scale), c.width), min(math.ceil((clip[3] - c.top) * c.scale), c.height)
             part = IsoCanvas(c.scale, c.left + x0 / c.scale, c.top + y0 / c.scale, max(x1 - x0, 1), max(y1 - y0, 1))
-        return part, draw_shapes(self.shapes(picture), part, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow)
+        return part, draw_shapes(self.shapes(picture), part, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow, snow=snow)
 
 
 #: How many places across the picture :func:`place_outline` measures the place's edges at.

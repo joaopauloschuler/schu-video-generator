@@ -299,6 +299,7 @@ class LayoutRecorder:
         from vidgen.cartoon.character import Character
         from vidgen.cartoon.effect_symbols import EffectSymbol
         from vidgen.cartoon.host_drawing import HostFigure
+        from vidgen.cartoon.iso_pictures import IsoPuddles
         from vidgen.cartoon.living_drawing import PropGlow, PropSteam
         from vidgen.cartoon.motion_effect_shapes import MotionEffect
         from vidgen.cartoon.nature_drawing import FallenFruit, Flock
@@ -312,8 +313,8 @@ class LayoutRecorder:
 
         # a stage's shadows, stars, puddles, glows, steam, birds, fallen fruit, poured water,
         # settled snow, fog, lightning and rainbows: not placed by authors (§69.31, §69.39, §69.54,
-        # §69.55, §69.56, §69.60, §69.61)
-        unplaced = (StageShadows, StarField, Puddles, PropGlow, PropSteam, Flock, FallenFruit, WaterDrops, SnowBlanket, SnowCap, FogBand, LightningBolt, Rainbow)
+        # §69.55, §69.56, §69.60, §69.61; an iso place's puddles §90.2)
+        unplaced = (StageShadows, StarField, Puddles, IsoPuddles, PropGlow, PropSteam, Flock, FallenFruit, WaterDrops, SnowBlanket, SnowCap, FogBand, LightningBolt, Rainbow)
         if id(mob) in walk.seen or isinstance(mob, unplaced):
             return
         walk.seen.add(id(mob))

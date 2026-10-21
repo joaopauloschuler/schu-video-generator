@@ -1472,7 +1472,10 @@ and give each scene `set: village`.
   lamp, `reveal` / `hide` an object (a bridge appears). Each has its sound by itself.
 - Mood: `light: morning`, `sunset` (evening), `night` (a lit lamp and windows glow, and a lamp
   lights who stands next to it), and
-  `particles: [rain]` (it darkens to an overcast tint by itself, unless the scene sets a `light`).
+  `particles: [rain]` (it darkens to an overcast tint by itself, unless the scene sets a `light`;
+  drops land on roofs, crowns and the bridge, not under them; `{kind: rain, puddles: true}` grows
+  puddles with ripples), `{kind: snow, settle: true}` (the ground, roofs and treetops turn white;
+  `settled: 30` starts it white). A `run_to` leaves speed lines along its diagonal.
   Footsteps follow the ground (grass, path, boards, a bridge), birdsong by day, crickets at night.
 
 ```yaml

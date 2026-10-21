@@ -14,8 +14,8 @@ it is tested without rendering; :mod:`vidgen.particle_field` draws it.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -100,12 +100,16 @@ class IsoRainGround(RainGround):
     picture there (``xs`` sorted, ``fronts`` and ``backs`` their y), within the camera's view
     (``ground`` its bottom, ``back`` its top); a drop beside the place, or landing on one of
     the ``bodies`` (boxes ``(left, bottom, right, top)``: the characters, so no splash shows on a
-    face), falls through. No depth: a splash is the same size everywhere (no perspective)."""
+    face), falls through. No depth: a splash is the same size everywhere (no perspective).
+    ``lift(x, y)``: how much higher (Manim units) a drop that would land on the ground at
+    (``x``, ``y``) lands, on what keeps the rain off there (a roof, a crown, a bridge's deck;
+    DESIGN.md §90.2; ``None``: nothing does)."""
 
     xs: tuple[float, ...] = ()
     fronts: tuple[float, ...] = ()
     backs: tuple[float, ...] = ()
     bodies: tuple[tuple[float, float, float, float], ...] = ()
+    lift: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = field(default=None, compare=False)
 
     def depth(self, y: np.ndarray) -> np.ndarray:
         return np.zeros_like(np.asarray(y, dtype=float))
@@ -118,6 +122,8 @@ class IsoRainGround(RainGround):
         back = np.minimum(np.interp(x, xs, self.backs), self.back)
         lines = front + shares * (back - front)
         missed = (x < xs[0]) | (x > xs[-1]) | (back <= front)
+        if self.lift is not None:
+            lines = lines + self.lift(np.asarray(x, dtype=float), lines)
         for left, bottom, right, top in self.bodies:
             missed |= (x >= left) & (x <= right) & (lines >= bottom) & (lines <= top)
         return np.where(missed, NO_FLOOR, lines)

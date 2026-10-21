@@ -953,6 +953,41 @@ Same rules as Phases H–P.
 - [x] Backwards compatibility against Step 166's baseline frames (`make_baseline.sh` with `OUT=` a new folder, then `compare.py`): 31 frames, max difference 0; lint of platform-story, cartoon and gradient-descent as before
 - [x] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
 
+## Phase R — Iso polish and iso diagrams for presentations
+
+Goal: close the weather gaps Phase Q left on an iso place, then reuse the iso projection and
+block drawing for presentations: a new scene type `iso_diagram` (blocks, slabs, cylinders and
+tiles on a grid, flat readable labels, connectors, stacks) whose actions are timed to beats and
+spoken words, with an example tech explainer. DESIGN §90. Purely additive: existing projects
+render as before (Phase Q's 31 baseline frames; iso-story's 84 baseline stills from Step 172
+change only where intended), mixtures that make no sense are refused with a `VidgenError`
+naming the conflict and the alternative. Same rules as Phases H–Q.
+
+### Step 172 — Phase plan and iso weather polish
+- [x] Phase R plan here and DESIGN §90; baseline stills of `examples/iso-story` (wide, close-ups, night; 16:9 and 9:16) recorded before any change (`phase-r-baseline/make_baseline.sh` in the session scratchpad)
+- [x] Shelter from rain on an iso place: a drop lands on the top of what keeps it off (a roof, a crown, a bridge's deck, any upward surface; `TopSurface`, `lift_floors`); indoors stays rain-free; nobody can stand under a shelter, so steps stay as they were
+- [x] Puddles on an iso place (`puddles: true`): seeded on open grass and paths, never sheltered, on water or covered by something in front; growing, with ripples while it rains (`IsoPuddles`)
+- [x] Settling snow on an iso place (`settle: true`): the pictures' snow (a snow pass of `draw_shapes`: tops, roof slopes, crowns' and bushes' caps, pine tiers, a well's roof) laid over each tile as it grows (`IsoSnow`)
+- [x] Speed lines of a run on an iso place along the walk's diagonal on screen
+- [x] The `puddles` / `settle` refusals removed; CONFIG iso section, guide topic `iso` + `AGENTS.md`, CHANGELOG; tests (`tests/test_iso_weather.py`)
+
+### Step 173 — `iso_diagram` core
+- [ ] A presentation scene type `iso_diagram` reusing `world/iso_view.py` and the iso block drawing (shared drawing moved to a neutral module if needed, iso stage output unchanged)
+- [ ] Blocks (boxes, slabs/layers, cylinders, flat tiles) placed on a grid by name with sizes and heights; flat readable labels (phone rules); theme and Phase P `terms:` colours; connectors along the grid; groups and stacks
+- [ ] Auto-fit to 16:9 and 9:16; tests
+
+### Step 174 — `iso_diagram` actions
+- [ ] Build-in (grow up, drop in), raise / lower, highlight / dim, flow along connectors, explode / collapse a stack, camera focus on a block or group, swap labels and values; timed to beats and `at: "@word"`
+- [ ] Lint where useful (overlapping or too small labels, contrast); tests
+
+### Step 175 — Example and docs
+- [ ] An original short tech explainer with `iso_diagram` (16:9 and 9:16), rendered with Kokoro narration outside the repo
+- [ ] Guide + `AGENTS.md`, CONFIG, CHANGELOG, README, gallery, the Shorts cookbook
+
+### Step 176 — Review of Phase R
+- [ ] Critical review with fixes in HANDOFF; backwards compatibility against the baseline stills; the 9:16 variant of `examples/iso-story` rendered at 1080x1920 with the Kokoro audio
+- [ ] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
+
 ---
 
 ## Backlog (after Step 60)

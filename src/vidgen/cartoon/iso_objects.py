@@ -42,6 +42,11 @@ LIT_CORE = "#FFF6D0"
 LIGHT_POOL = "#FFE58A"
 LIGHT_POOL_OPACITY = 0.32
 LIGHT_POOL_RADIUS = 1.1
+#: Settling snow covers this share of each of a pine's tiers from its tip down (the tier above
+#: hides most of it, so the white shows as shoulders over a green fringe), and of a well's roof
+#: (a cut-out facing the viewer), DESIGN.md §90.3.
+PINE_SNOW_CAP = 0.72
+ROOF_SNOW_CAP = 0.6
 DOORWAY = "#2E2A38"
 BOOK_COLORS: tuple[str, ...] = ("#E2574C", "#F6C945", "#5BA35B", "#4C8DD6", "#B48EAD")
 
@@ -122,12 +127,12 @@ def _door_leaf(f: _Frame, a0: float, a1: float, b: float, height: float, is_open
     open, a dark doorway and the leaf swung out towards the viewer on its hinge at ``a0``."""
     if not is_open:
         return [f.poly([(a0, b, 0.0), (a1, b, 0.0), (a1, b, height), (a0, b, height)], WOOD),
-                Disc(f.p(a0 + (a1 - a0) * 0.8, b, height * 0.52), 0.045, "#F2C14E", False)]
+                Disc(f.p(a0 + (a1 - a0) * 0.8, b, height * 0.52), 0.045, "#F2C14E", False, holds_snow=False)]
     swing = (a1 - a0) * 0.9
     out = (a0 - swing * 0.17, b + swing * 0.98)
     return [f.poly([(a0, b, 0.0), (a1, b, 0.0), (a1, b, height), (a0, b, height)], DOORWAY),
             f.poly([(a0, b, 0.0), (out[0], out[1], 0.0), (out[0], out[1], height), (a0, b, height)], mix(WOOD, "#FFFFFF", 0.12)),
-            Disc(f.p(out[0] + 0.02, out[1] - 0.12, height * 0.52), 0.045, "#F2C14E", False)]
+            Disc(f.p(out[0] + 0.02, out[1] - 0.12, height * 0.52), 0.045, "#F2C14E", False, holds_snow=False)]
 
 
 def _house(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
@@ -179,7 +184,7 @@ def _pine(f: _Frame, look: ObjectLook) -> list[Shape]:
     shapes: list[Shape] = [Upright(*f.p(0.5, 0.5, 0.0)[:2], f.base, f.base + 0.9, 0.11, look.detail)]
     for k, (bottom, top, half) in enumerate(((0.7, 2.4, 0.62), (1.6, 3.3, 0.5), (2.5, 4.2, 0.38))):
         shapes.append(Poly((f.across(0.5, 0.5, bottom, -half), f.across(0.5, 0.5, bottom, half), f.across(0.5, 0.5, top, 0.0)),
-                           shade(leaves, 0.06 * (2 - k))))
+                           shade(leaves, 0.06 * (2 - k)), snow_cap=PINE_SNOW_CAP))
         shapes.append(Poly((f.across(0.5, 0.5, bottom + 0.05, -half * 0.75), f.across(0.5, 0.5, bottom + 0.05, -half * 0.35),
                             f.across(0.5, 0.5, top - 0.35, -0.04)), mix(leaves, "#FFFFFF", 0.18), False))
     return shapes
@@ -309,9 +314,9 @@ def _well(f: _Frame, look: ObjectLook) -> list[Shape]:
     shapes.append(Line(((x, y, z + 1.75), (x, y, z + 1.25)), "#7A7F88", 0.7))
     shapes += box_shapes(x - 0.09, y - 0.09, z + 1.05, x + 0.09, y + 0.09, z + 1.28, "#8A8F99")
     half = 0.6
-    shapes.append(Poly(((x - half, y + half, z + 2.05), (x + half, y - half, z + 2.05), (x, y, z + 2.85)), roof))
+    shapes.append(Poly(((x - half, y + half, z + 2.05), (x + half, y - half, z + 2.05), (x, y, z + 2.85)), roof, snow_cap=ROOF_SNOW_CAP))
     shapes.append(Poly(((x - half, y + half, z + 2.05), (x + half, y - half, z + 2.05), (x + half, y - half + 0.12, z + 1.95),
-                        (x - half, y + half + 0.12, z + 1.95)), shade(roof, 0.3)))
+                        (x - half, y + half + 0.12, z + 1.95)), shade(roof, 0.3), holds_snow=False))   # the roof's edge
     return shapes
 
 

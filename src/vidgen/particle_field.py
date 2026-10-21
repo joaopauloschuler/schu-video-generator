@@ -25,7 +25,6 @@ from vidgen.cartoon.rain import (
     RainGround,
     drop_floors,
     drop_landings,
-    landing_lines,
     landing_shares,
     puddle_growth,
     splash_depth_scale,
@@ -219,7 +218,7 @@ class ParticleField(VGroup):
             shown = shown * self._draw_splashes(ground, xs, ys, states, short, level)
         elif ground is not None:
             size = states.size * short
-            floor = flake_floors(xs, landing_lines(self._landing, ground), ground)
+            floor = flake_floors(xs, ground.landing(self._landing, xs), ground)
             seen, lift = rest_flakes(ys - size, floor, particle_kind(self.seeds.kind).fall * np.abs(self.seeds.speed) * short)
             shown, ys = shown * seen, ys + lift
         unit = self._unit

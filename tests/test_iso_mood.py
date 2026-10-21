@@ -93,16 +93,10 @@ def test_rain_lands_anywhere_on_the_place_and_not_beside_it_or_on_a_face() -> No
     assert np.array_equal(flat.landing(shares, x), landing_lines(shares, flat))
 
 
-@pytest.mark.parametrize(
-    "particles,message",
-    [
-        ([{"kind": "rain", "puddles": True}], "puddles are not drawn on an iso place"),
-        ([{"kind": "snow", "settle": True}], "settling snow is not drawn on an iso place"),
-    ],
-)
-def test_an_iso_place_refuses_puddles_and_settling_snow(particles: list[dict[str, Any]], message: str) -> None:
-    with pytest.raises(ValidationError, match=message):
-        stage_params(iso=ISO, characters=[{"name": "pip", "at": "start"}], particles=particles)
+@pytest.mark.parametrize("particles", [[{"kind": "rain", "puddles": True}], [{"kind": "snow", "settle": True}]])
+def test_an_iso_place_takes_puddles_and_settling_snow(particles: list[dict[str, Any]]) -> None:
+    # refused in Steps 169-171; drawn since Step 172 (DESIGN.md §90)
+    assert stage_params(iso=ISO, characters=[{"name": "pip", "at": "start"}], particles=particles).particles
 
 
 def test_no_rain_indoors_on_an_iso_place(make_project) -> None:
@@ -110,7 +104,7 @@ def test_no_rain_indoors_on_an_iso_place(make_project) -> None:
     with pytest.raises(ValidationError, match="an indoor place has none inside"):
         stage_params(iso=room, characters=[{"name": "pip", "at": "middle"}], particles=["rain"])
     beats = [{"text": "Rain.", "actions": [{"particles": "rain", "puddles": True}]}]
-    assert any("puddles are not drawn on an iso place" in text for _, text in problems(iso_project(make_project, beats)))
+    assert problems(iso_project(make_project, beats)) == []   # outdoors: puddles grow (§90.2)
     assert stage_params(iso=ISO, characters=[{"name": "pip", "at": "start"}], particles=["rain"]).particles[0].kind == "rain"
 
 

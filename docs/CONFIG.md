@@ -6155,8 +6155,22 @@ they hide what is behind them.
     (no splash on a face). A scene where it rains from the start and that gives no `light` gets
     the rainy day's tint by itself, so it does not look like a sunny day with drops; rain that
     starts during a scene (the `particles` action) goes with a `light` action, e.g. `- {action:
-    light, tint: "#5D6A84", strength: 0.5, run_time: 3}`. Snow falls over the place too. Not on an iso place yet: `puddles` and
-    settling snow (`settle`); indoors no rain, snow, leaves or streaks.
+    light, tint: "#5D6A84", strength: 0.5, run_time: 3}`. Rain does not fall under what keeps
+    it off: a drop over a **roof**, a **tree's crown**, a **bridge** or any other top lands and
+    splashes on it, not on the ground beneath (nobody can stand under one: the cells of a house
+    or a tree are not walkable, so a character on the place is never under shelter). Indoors no
+    rain, snow, leaves or streaks.
+  - `{kind: rain, puddles: true}` grows **puddles** on the grass and the paths: about one per ten
+    open cells (2–12, seeded by the field's `seed`), each inside its cell, never under a shelter,
+    on water or where something in front would be covered by it; they grow over 10 s of rain,
+    show spreading **ripples** while it rains, and stay when it stops. Steps splash from then on.
+  - `{kind: snow, settle: true}` **settles**: the flakes land on the place's tops (as rain does)
+    and a white layer grows on the ground, the roofs, the tops of blocks, walls, posts and
+    benches, the tops of crowns and bushes, the tiers of a pine and the well's roof; walls,
+    faces, water and the characters stay as they are. It covers fully after about 10 s at
+    `density: 1` (`settled: 30` starts it white) and stays when the snow stops. Its colour is
+    snow white (`color` colours the flakes only).
+  - A **run** (or a fast walk) leaves its **speed lines** along the walk's diagonal on screen.
 - **Sound** ([foley](#foley-and-music-stings), on by default): footsteps by what the feet walk on
   (grass, a sandy path, wooden boards or a bridge, stone steps and tiles, a rug), a door's creak
   and thud, a soft sound as a small thing is picked up, given or put down, a lamp's click, a
@@ -6176,8 +6190,7 @@ they hide what is behind them.
   show while it happens (a walk outside a close-up, a door opening out of view).
 - **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `fog`, `width`,
   `layers` (the background colour or picture shows around the place), big `props` (a tree, a
-  sofa: use `objects`), a prop's `depth`, `lift` or `against`, rain's `puddles`, snow's
-  `settle`. A set (`set: park`) gives an iso place its sky, light, ambience and weather, not its
+  sofa: use `objects`), a prop's `depth`, `lift` or `against`. A set (`set: park`) gives an iso place its sky, light, ambience and weather, not its
   props, layers or fog.
 - **One place, several scenes**: put the `iso` (and the sky's `background`) in a set (`sets:
   {village: {background: [...], iso: {map: ..., spots: ..., objects: ...}}}`) and give each scene
@@ -7599,9 +7612,9 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 | `area` | the whole frame | `[x, y, w, h]`: fractions 0–1 of the visible frame from its top-left corner (smoke from a chimney: `[0.6, 0.1, 0.08, 0.5]`); particles fade out near its edges |
 | `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF`, leaves `#7BAE4E #C9A23A #C2703D`, streaks `#FFFFFF` |
 | `seed` | `1` | another number gives other positions |
-| `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground)) |
+| `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground); on an iso place on its grass and paths, with ripples: [Isometric places](#isometric-places-iso)) |
 | `lightning` | `false` | rain on a `stage` only: `true` flashes [lightning](#lightning-and-thunder-lightning) while it rains, at seeded times about every 8 s, with thunder; a number (2–120) is the seconds between strikes on average |
-| `settle` | `false` | snow on a `stage` only: `true` lands it on the ground and on the props, where a white layer grows while it snows ([Snow that settles](#snow-that-settles-settle)) |
+| `settle` | `false` | snow on a `stage` only: `true` lands it on the ground and on the props, where a white layer grows while it snows ([Snow that settles](#snow-that-settles-settle); on an iso place on its ground, roofs and tops: [Isometric places](#isometric-places-iso)) |
 | `settled` | `0` | with `settle`: seconds of snowfall already lying when it starts, 0–600 (`24` or more: the full layer at density 1) |
 
 ```yaml
