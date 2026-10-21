@@ -2736,7 +2736,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   order, bigger parts first, glyphs used once) → `Transform` per pair; the remaining glyphs go
   through `TransformMatchingShapes` (identical shapes move, others fade). `shapes`: one
   `TransformMatchingShapes`; `fade`: cross-fade. The source is always a *copy* of the step on
-  screen; `_Swap` (an `AnimationGroup`) removes `hide` at setup and, at clean-up, every mobject its
+  screen; `SwapAtEnd` (an `AnimationGroup`) removes `hide` at setup and, at clean-up, every mobject its
   animations used, then adds the target formula whole — so the scene holds whole `MathTex`es
   between beats (targets, lint) and the source step stays intact for later actions.
 - **History.** Each step has an archived copy (dimmed at hand-over: `dim_opacity`, raised by
@@ -12304,9 +12304,10 @@ drawing.
   grid by name with sizes and heights; labels that stay flat and readable (phone rules); theme
   colours and Phase P `terms:` concept colours; connectors along the grid; groups and stacks;
   auto-fit to 16:9 and 9:16.
-- **Step 174, actions**: build-in, raise / lower, highlight / dim, flow along connectors,
-  explode / collapse a stack, camera focus on a block or group, swap labels and values, timed to
-  beats and Phase P words (`at: "@word"`); lint where useful.
+- **Step 174, actions** (§90.8–90.11): build-in, raise / lower, highlight / dim, flow along
+  connectors, explode / collapse a stack, camera focus on a block or group, swap labels and
+  values, timed to beats and Phase P words (`at: "@word"`); lint where useful; the label
+  placement reworked after Step 173's stills.
 - **Step 175**: an original example (a short tech explainer, 16:9 and 9:16) with Kokoro
   narration; docs.
 - **Step 176**: the review; backwards compatibility against Phase Q's 31 baseline frames and the
@@ -12443,7 +12444,8 @@ like the other diagram scenes.
   the blocks; a pipe is a low box per segment drawn in the blocks' draw order (`order`). All at
   one height per connector (the higher ground of its ends); connectors run on the floor even to a
   stack's upper layer (the stack's footprint).
-- **Labels** stay flat, at a readable size: from `size` down (factors of 0.9) to the readable
+- **Labels** (the placement below was replaced in Step 174, §90.8; the sizes and the fit are
+  as here) stay flat, at a readable size: from `size` down (factors of 0.9) to the readable
   minimum (× 1.05), never below; per size the largest scale (tile width ≤ `max_tile` 2.4 Manim
   units) at which everything fits the body is found by bisection, and the first size giving a tile
   of at least `min_tile` × size/32 wins (else the largest scale; a warning when it is small or
@@ -12470,7 +12472,7 @@ like the other diagram scenes.
   in `diagram`: a block or layer is an id string (its label), edges `"a -> b: label"`, `-->`
   dashed, chains; `->` takes the scene's `edge_style`. A stack's caption defaults to its id like
   every label (the translation template lists it as for a block).
-- **Steps** (for now): one step in the first beat: heading, floor, plates and captions, the
+- **Steps** (Step 173; Step 174 added `build: each` and the actions, §90.9): one step in the first beat: heading, floor, plates and captions, the
   blocks back to front (each a little `FadeIn` from above), then the connectors. Planned for
   Step 174 and kept possible by the model: per-block `lift` and growth in `block_shapes` /
   `box_faces` (`lift`), a stack's `gap` (explode / collapse), connector paths and `samples` (flow),
@@ -12487,3 +12489,161 @@ like the other diagram scenes.
   `top_point`, `top_room`, `side_point` (`iso_blocks`) and `picture_to_scene`, `shapes_mobject`
   (`iso_vector`): what the built-in scene uses, so a project scene can draw its own iso diagram.
   Config: the scene type `iso_diagram` (no new video-level keys).
+
+### 90.8 Labels, reworked (Step 174)
+
+Step 173's greedy placement put labels where nothing covered their *bounding* box: a group's
+caption among the group's blocks ("Web tier" over Web 1, its members skipped as obstacles), a
+block label at the top of its box's bounding rectangle, far from a long flat tile ("Load
+balancer"), a block's label over a pipe or right on the next block ("Orders", "API server" on the
+cache), and a one-layer stack labelled twice ("Stored weights" and its caption "Weights"). The
+geometry now lives in `iso_labels.py` (no manim; the scene places with it, lint checks with it):
+
+- **Outlines, not boxes.** Every block is its convex outline on the picture (`block_outline`: a
+  box's corners, a cylinder's two ellipses; `convex_hull`), pipes their segments' outlines
+  (`<ref>#<k>`), connectors their samples. A label beside a block is slid out of the block's
+  outline along a direction (`slide_out`: exact, per separating axis, the first moment the
+  rectangle and the convex outline part, plus `gap`), in the order up, down, right, left, then
+  the diagonals (`AROUND`); what a candidate covers is measured exactly (`clip_area`,
+  Sutherland-Hodgman). `Obstacles.cost`: other labels' area (× `LABEL_WEIGHT` 3, each label kept
+  `clearance` apart so two do not read as one line), blocks' area (× `BLOCK_WEIGHT` 4) plus
+  `NEAR_WEIGHT` 0.3 of their area within `clearance` (2 × `gap`: a label nearly touching another
+  block reads as its label), `LINE_COST` 0.08 per connector sample under it. The first free
+  candidate wins; else the candidates pushed past whatever they met (`clear_of_all`) are tried,
+  each costing `FAR_COST` 1.0 per unit beyond `leader_from` (0.35), and the cheapest of all wins.
+  A label left more than `leader_from` from what it names gets a leader line (from the outline,
+  `ray_exit`, to the label's edge, `rect_exit`). The weights were tuned on Step 173's crowded
+  "Services in groups" grid: lower `FAR_COST` sent labels far off with long leaders, a lower block
+  weight let "Web 2" lie on the load balancer.
+- **Order**: a stack's layer labels (their column or list), group captions, block labels, stack
+  captions, connector labels. Group captions go before block labels so they get the plate's
+  front edges; the label of a block on the plate then finds another side.
+- **Group captions** by the plate's front edges (directions from the plate's middle to the
+  middle of its front-left and front-right edges and its front corner, then left, right, up),
+  else pushed clear, else outside the whole diagram (below, above). Blocks on the plate count as
+  obstacles (they did not in Step 173).
+- **Connector labels** beside the connector at 0.5, 0.3, 0.7 of each straight run, longest run
+  first, both sides, else on it, else pushed off along the normal with a leader to the nearest
+  point of the connector.
+- **One label per block** (`all_blocks`): a stack of one layer is labelled once, with its layer's
+  own label, else the stack's (its caption is not drawn); a stack's caption that repeats one of
+  its layers' labels is not drawn.
+- **9:16 stacks** (`label_side: below`, `auto` in 9:16): the caption under the stack's foot, then
+  its layers listed top layer first, each after a swatch (a flat 2:1 diamond, the shape of a top,
+  `swatch` 1.5 text heights wide) of its colour; the stack is not widened by a column at its side,
+  so it is drawn larger. `auto` tries, preferred first, in 9:16 below, the outward side, the
+  other side; in 16:9 the outward side, the other side, below (whichever covers least). The tile
+  may be `portrait_tile` 1.35 × `max_tile` in 9:16. Measured: Step 173's 9:16 stack 0.93 Manim
+  units a tile, now 2.5 (the floor's margin is now what limits it).
+- **An `at` grid in 9:16** (`portrait_grid: auto`): `slant(items, along)` moves each item along
+  the other axis by how far its middle lies along `along`, so that axis runs down the view's
+  `x = y` diagonal: a row becomes a column down the frame, neighbours keep their order and sides,
+  connectors are routed again. `Params.layout(portrait=True)` tries both axes and keeps the one
+  whose picture (`picture_size`) fits a 0.62-wide body best when it is `SLANT_GAIN` 1.15 better
+  than the grid as written; a slant that makes items or plates overlap is skipped. Considered:
+  turning the grid by 90° (the picture of a grid turned is as wide as before: only the diagonal
+  runs down an iso picture).
+- **Room for actions**: blocks are fitted and labels placed for where the scene's `raise` and
+  `explode` actions will take them (`_planned_lifts`): other labels keep clear of each block's
+  outline swept from its ground to its highest lift, the bounds include the lifted outlines and
+  the labels riding with them; a `relabel` action's texts are measured beforehand and each label
+  keeps room for the largest of its texts (`_Label.extent`).
+
+### 90.9 Actions (Step 174)
+
+Eight actions in `scenes/iso_actions.py` (written against `vidgen.api`; the animations in `scenes/iso_motion.py`; the scene does the
+drawing in `IsoDiagram.iso_*`). Each checks in `scene_problems` that the scene is an
+`iso_diagram` (`iso_diagram_actions = True`) and that its targets are of the kinds it acts on
+(`IsoDiagram.target_kind`), naming them. All take `at` (a share or a word); `mid_still_actions`
+gives the storyboard a half-way still of `build`, `raise`, `lower`, `explode`, `collapse`, `flow`
+and `relabel`.
+
+- **Lifts**: the scene keeps each block's own raise and each stack's gap; a block's lift is its own
+  raise plus those of the layers under it plus `level × (gap now − its own gap)` (`_lifts_of`).
+  `_settle` moves every block (and the labels that ride with it: block and layer labels not in a
+  list under a stack, a group's caption with its plate) by the change of its lift — a pure move up
+  the picture (`ISO_RISE` per cell), points only (`LiftMove`), so colours being animated meanwhile
+  are left alone; parts not on screen move at once. A raised block standing on the floor (or a
+  stack's bottom layer, or a plate) gets a shadow on its ground, darker as it rises (`FillFade`,
+  `shadow_opacity` 0.35 at `shadow_lift` 0.6 cells). A raised plate is drawn over the arrows on
+  the floor under it (z 9).
+- **`raise`** (`by` 0.5, ≤ 4) / **`lower`** (`by`, default to the ground, never below it): raising
+  a layer raises the layers above (they rest on it); a group raises its members and its plate.
+  `until` undoes (raise: lower by the same; lower: the lifts before).
+- **`explode`** (`gap` 0.6, ≤ 3) / **`collapse`**: a stack's gap; a side column's labels go with
+  their layers, a list under the stack stays.
+- **`build`** (`style` grow, drop, fade) and **`reveal`** (the scene's `entrance`): the scene's
+  own steps leave to them what they name (`_left_to_actions`: blocks of the named block, stack,
+  group or the diagram; a stack's or group's caption and plate when it is named; named
+  connectors). Everything comes in through `_arrivals`: the floor, the plates and captions of the
+  arriving blocks' groups and stacks (unless an action waits to show them), the blocks back to
+  front, then every connector whose ends are both in (`_edge_arrivals`) — so a connector to a block
+  that waits comes with it. `grow` (`GrowBlock`) rebuilds the block each frame at `t` of its height
+  (`block_shapes` of a shortened box; only points are taken), the text on its top riding up, its
+  other labels fading in over the last 40 %; a block is unseen until its turn, and in a lagged
+  group (`lag_ratio` 0.9) each layer grows on the finished one below (with 0.5 the next layer
+  showed as a flat sheet floating over a half-grown one). `drop` fades in from `drop` 0.8 cells
+  above. A stack, group or `diagram` counts as shown once all its blocks are (`is_shown`), so a
+  `reveal` of a group whose plate came early still brings its blocks.
+- **`flow`** (`count` 3, `style` dots or packets, `color` highlight, `back`, `chain`): `FlowDots`
+  moves the dots along the connector's world path (raised a dot's radius, on top of a pipe) one
+  after another `flow_spacing` 0.16 of the way apart, fading in and out over the first and last
+  8 %, at the z-index of the pipe segment under them (blocks in front hide them); packets are
+  small iso cubes (`box_faces` of a 0.22-cell box, moved as one: a parallel projection moves a
+  cube's picture rigidly). Dots start invisible (a `Succession` for `chain` adds every connector's
+  dots at its start) and are removed at the end (`remover`).
+- **`focus`** (`padding` 0.12, `scale`): `MoveCamera` to the targets' box with padding (at most
+  3×); the whole frame when they fill it (`focus: diagram` goes back). Not temporary, unlike
+  `zoom`; no rotation (the view's angle is the diagram's meaning).
+- **`relabel`** (`text`): `Transform` of the old text into the new one (made by the label's
+  `make`, in the old text's ink when it was one colour: a highlight's, or the ink on a block's
+  top), the plate resized; when it ends the new text takes the old one's place in the label's
+  group (`SwapAtEnd`; nothing is removed from the scene, which would break up the groups holding
+  it). The targets' `on_fill` pairs follow the new text. A target without a label (`has_label`:
+  a group or connector without one, a stack whose caption repeats a layer's label) is refused.
+- **`dim` / `highlight` keep the shading** (`Target.recolor`, a generic hook): a target may say
+  which colours its members show when each of its colours is turned into another
+  (`recolor(paint) -> {member id: (fill, stroke)}`). `dim_to` then mixes the target's colours
+  towards the background (`mix_colors(colour, background, factor)`) instead of lowering opacity
+  — a see-through block showed the blocks behind it — and a colour highlight (and `flash`) paints
+  them with the shading kept (the three faces, a cylinder's shade and top, the outline:
+  `outline_ink` of the new colour); `Dim.revert` restores those members' colours. The iso
+  diagram builds `recolor` from each piece's shapes drawn again in the new colour (`_Solid`) and
+  maps the label plates to their own colour, so a highlighted label is coloured text on its plate,
+  not a block of colour (Step 173 painted the plate too). Targets without `recolor` (every other
+  scene) behave exactly as before.
+- **Targets**: a new `diagram` (floor, plates, connectors, blocks and labels). `target_kind`
+  tells actions what a name stands for.
+
+### 90.10 Lint `iso_labels` (Step 174)
+
+The scene adds to each still of its layout dump (`layout_keys`) an `iso_diagram` key: the labels
+shown (text, kind, owner, box of the plate or text in pixels, on a block's top, with a leader
+line; a layer's label counts as having one), the outlines of the blocks and plates on screen
+(convex hulls of their points in pixels), the stacks' layers and the connectors' paths (samples
+every 0.25 cell, in pixels). The rule (`lint/iso_rule.py`, last in `LINT_RULES`, default
+warning) reports a label covering at least `min_cover` (0.1) of its box over a block it does not
+name (a block's or layer's label may lie on its own block, a stack's caption on its layers), two
+labels sharing at least `min_overlap` (0.05) of the smaller box, a label (not on a top) over
+at least 2 samples of another connector, and a label without a leader line more than `max_gap`
+(0.06 of the shorter side) from what it names (its block's or plate's outline, the stack's
+layers, the connector's path). Text size and contrast stay `min_font`'s and `contrast`'s (the
+labels are ordinary texts in the dump), the narration `said_before_shown` / `unsaid_reveal`.
+Step 173's "Services in groups" still is reproduced in the tests ("Web tier" covering 33 % of
+its box over Web 1); its re-render with this step's placement has no finding, and the actions
+project in the session's scratchpad found three real ones while the weights were tuned (a raised
+plate's caption left behind, now riding with it).
+
+### 90.11 Public (Step 174)
+
+- `vidgen.api` adds `PIPE_HEIGHT`, `PlacedBlock`, `arrow_shapes`, `block_outline`,
+  `block_shapes`, `box_faces`, `box_outline`, `picture_size`, `plate_shapes`, `slant`
+  (`iso_blocks`), `AROUND`, `FAR_COST`, `Obstacles`, `clip_area`, `convex_hull`, `hull_box`,
+  `hull_gap`, `hull_of_point`, `polyline_gap`, `ray_exit`, `rect_exit`, `rect_of`, `rect_union`,
+  `slide_out` (`iso_labels`), `ISO_RISE`. `Target` gains `recolor` and
+  `NarratedScene.target` a `recolor` keyword (default `None`: unchanged behaviour).
+- Config: actions `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`;
+  `iso_diagram` params `build`, `entrance`, `portrait_grid`, a stack's `label_side: below`; the
+  target `diagram`; the lint rule `iso_labels` (`min_cover`, `min_overlap`, `max_gap`).
+- Output of `iso_diagram` scenes changes (Step 173's placement replaced; it shipped one step
+  ago). Phase Q's 31 baseline frames are identical.

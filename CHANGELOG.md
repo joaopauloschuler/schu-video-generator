@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–173)
+## 0.3.0 (Steps 61–174)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -205,7 +205,20 @@ matters only for projects made with development builds between Steps 67 and 131)
   isometric view (boxes, slabs, cylinders and databases, flat tiles; a block with `layers` is a
   stack), group plates and connectors along the grid (flat arrows, dashed, pipes), with flat
   labels that stay readable, placed in order (`arrange`, a zigzag in 9:16) or on the grid
-  (`at`), fitted to 16:9 and 9:16; shown in its first beat for now.
+  (`at`), fitted to 16:9 and 9:16.
+- `iso_diagram` actions (174), timed like any action (`at: "@word"`): `build` (blocks grow up
+  from the floor, drop in or fade in on the word; the scene leaves them to it), `raise` /
+  `lower` (with a shadow), `explode` / `collapse` (a stack's layers apart and back, labels
+  going along), `flow` (dots or packets along connectors, one after another with `chain`),
+  `focus` (the camera onto a part, staying) and `relabel` (a label or value changes in place);
+  `dim` and `highlight` keep the blocks' shading. New params `build: each` (one block or stack
+  per step), `entrance` (`drop`, `grow`, `fade`) and `portrait_grid` (an `at` grid slanted down
+  a 9:16 frame); a target `diagram`. Labels are placed right by their blocks (with a leader
+  line when pushed away), clear of other blocks and labels; a group's caption by its plate's
+  front edge, connector labels along the connector, one label per block; a stack's layers are
+  listed under it with colour swatches in 9:16, where it is drawn larger. A lint rule
+  `iso_labels` reports labels over other blocks, labels or connectors, or far from what they
+  name.
 
 ### Presentation toolkit (Phase P)
 

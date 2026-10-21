@@ -192,7 +192,7 @@ def test_params_shorthands_targets_and_arrangements() -> None:
     assert [b.text() for b in p.blocks] == ["web", "Data", "app"]
     assert [(e.source, e.to, e.style, e.label) for e in p.edges] == [("web", "db", None, "reads"), ("db", "app", "dashed", "")]
     assert registry.get("iso_diagram").cls.target_names(p) == [
-        "heading", "block1", "block:web", "block2", "block:db", "block3", "block:ui", "block4", "block:api",
+        "heading", "diagram", "block1", "block:web", "block2", "block:db", "block3", "block:ui", "block4", "block:api",
         "stack:app", "group:g", "edge:web->db", "edge:db->app"]
     assert p.layout().edges[0].style == "solid" and p.layout().edges[1].style == "dashed"
     assert p.layout().stacks["app"].rect.x0 == pytest.approx(5.6)               # in a row (16:9)

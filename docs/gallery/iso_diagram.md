@@ -4,7 +4,7 @@
 
 **Use it for:** architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks).
 
-A diagram of blocks in the isometric view: boxes, slabs, cylinders and databases, flat tiles, stacks of layers (a layered architecture, a network's layers) and group plates on a grid, joined by connectors along the grid (flat arrows, dashed, or pipes). Labels stay flat and readable: on a block's top when they fit, else beside it on a plate; a stack's layers are labelled at its side. The diagram is fitted to the frame (16:9 and 9:16) and shown in the first beat.
+A diagram of blocks in the isometric view: boxes, slabs, cylinders and databases, flat tiles, stacks of layers (a layered architecture, a network's layers) and group plates on a grid, joined by connectors along the grid (flat arrows, dashed, or pipes). Labels stay flat and readable: on a block's top when they fit, else right by it; a stack's layers are labelled at its side (or listed under it in 9:16); connector labels lie along the connector, a group's caption by its plate's front edge. The diagram is fitted to the frame (16:9 and 9:16) and built in the first beat (`build: each`: one block or stack per step), except what a `reveal` or `build` action brings.
 
 Last beat, 16:9 and 9:16:
 
@@ -31,6 +31,9 @@ From the author guide (`vidgen guide scenes`):
   beats:
     - text: "Requests come in from the browser."
     - text: "The app server handles them layer by layer, and keeps its data in a database."
+      actions:                                      # iso_diagram actions: build, raise, lower, explode,
+        - {flow: "edge:*", chain: true}             # collapse, flow, focus, relabel (`vidgen guide actions`)
+        - {explode: "stack:app", at: "@layer"}
 ```
 
 ## Params
@@ -39,7 +42,7 @@ From the author guide (`vidgen guide scenes`):
 |---|---|---|---|
 | `blocks` | `list[str \| IsoBlock]` | required | The blocks, in order: an id string, {id, label?, shape?, at?, size?, height?, color?}, or a stack {id, layers (bottom up), label?, at?, size?, gap?, label_side?, color?} (up to ~12 read well). |
 | `blocks.id` | `str` | required | Name used by edges, groups and targets (letters, digits, spaces, _ . -). |
-| `blocks.label` | `str` |  | Text shown with the block (default: the id): on its top when it fits, else beside it; a stack's caption under it. |
+| `blocks.label` | `str` |  | Text shown with the block (default: the id): on its top when it fits, else beside it; a stack's caption under it (a stack of one layer has one label: its layer's, else this). |
 | `blocks.shape` | `'box' \| 'slab' \| 'cylinder' \| 'database' \| 'tile' \| None` |  | box (default: 1x1, 0.8 high), slab (2x2, 0.3), cylinder (1x1, 0.9), database (a cylinder with bands) or tile (a flat 2x2 platform, 0.12); not on a stack. |
 | `blocks.layers` | `list[str \| IsoLayer] \| None` |  | Makes it a stack: its layers FROM THE BOTTOM UP, each an id string or {id, label?, shape?, height?, color?} (a slab by default). |
 | `blocks.layers.id` | `str` | required | Name used by edges and targets (letters, digits, spaces, _ . -). |
@@ -51,24 +54,27 @@ From the author guide (`vidgen guide scenes`):
 | `blocks.size` | `tuple[float, float] \| None` |  | [columns, rows] of cells it covers (default by shape, a stack [2, 2]; a cylinder's is square). |
 | `blocks.height` | `float \| None` |  | Height in cells (default by shape; not on a stack: give its layers heights). |
 | `blocks.gap` | `float \| None` |  | A stack's space between layers (default 0.12 cells). |
-| `blocks.label_side` | `'auto' \| 'left' \| 'right' \| None` |  | Where a stack's layer labels go: auto (default: the side away from the diagram's middle), left or right. |
+| `blocks.label_side` | `'auto' \| 'left' \| 'right' \| 'below' \| None` |  | Where a stack's layer labels go: auto (default: in 16:9 at the side away from the diagram's middle, in 9:16 below the stack), left, right (with leader lines) or below (a list under the stack, each with a swatch of its layer's colour). |
 | `blocks.color` | `color \| None` |  | Its colour (a stack's: its layers'; default: the scene's block_color, or a term's colour when its label is a term). |
 | `groups` | `list[IsoGroup]` |  | Plates under blocks that belong together: {id, blocks, label?, color?}. |
 | `groups.id` | `str` | required | Name used by targets (group:<id>). |
 | `groups.blocks` | `list[str]` | required | Ids of the blocks and stacks on the plate (whole stacks, not their layers). |
-| `groups.label` | `str` |  | Optional caption by the plate. |
+| `groups.label` | `str` |  | Optional caption by the plate's front edge. |
 | `groups.color` | `color \| None` |  | Plate tint (default: dim). |
 | `edges` | `list[str \| IsoEdge]` |  | Connectors along the grid: 'a -> b', 'a -> b: label', 'a --> b' (dashed), chains 'a -> b -> c', or {from, to, label?, style?, color?}. |
 | `edges.from` | `str` | required | Block or stack id the connector starts at. |
 | `edges.to` | `str` | required | Block or stack id it points to. |
-| `edges.label` | `str` |  | Optional text on the connector. |
+| `edges.label` | `str` |  | Optional text along the connector. |
 | `edges.style` | `'solid' \| 'dashed' \| 'pipe' \| None` |  | solid (a flat arrow), dashed or pipe (a raised channel, no arrowhead); default: the scene's edge_style ('-->' is dashed). |
 | `edges.color` | `color \| None` |  | Colour (default: the scene's edge_color). |
 | `heading` | `str` |  | Optional heading above the diagram. (also: title) |
 | `arrange` | `'auto' \| 'row' \| 'column' \| 'grid' \| 'zigzag'` | `'auto'` | How blocks without 'at' are placed, in the order written: row (along the columns, to the lower right), column (along the rows, to the lower left), grid, zigzag (right, down-left, right...: two columns down a tall frame) or auto (row; zigzag in 9:16). |
 | `columns` | `int \| None` |  | Columns of the grid arrangement (default: about the square root of the count). |
 | `spacing` | `float \| None` |  | Empty cells between arranged blocks (default: 1; 2 in a zigzag, so labels fit above and below). |
+| `portrait_grid` | `'auto' \| 'keep'` | `'auto'` | Blocks placed with 'at' in a tall frame (9:16): auto slants the grid so its longer direction runs down the frame when that draws the diagram larger (neighbours keep their sides; connectors are routed again); keep draws it as written. |
 | `floor` | `'grid' \| 'plain' \| 'none'` | `'grid'` | The floor under the diagram: with grid lines, plain, or none. |
+| `build` | `'together' \| 'each'` | `'together'` | How the scene builds the diagram: together (all in the first beat) or each (one block or stack per step, spread over the beats, with the connectors whose ends are there); blocks a reveal or build action names wait for it. |
+| `entrance` | `'drop' \| 'grow' \| 'fade'` | `'drop'` | How blocks come in: drop (in from above), grow (up from the floor; a stack layer by layer) or fade. |
 | `block_color` | `'palette' \| color` | `'palette'` | Colour of blocks without their own: 'palette' (one theme palette colour each) or one colour. |
 | `edge_style` | `'solid' \| 'dashed' \| 'pipe'` | `'solid'` | Connectors without their own style: solid (flat arrow), dashed or pipe. |
 | `edge_color` | `color` | `'dim'` | Connector colour. |
@@ -81,7 +87,7 @@ From the author guide (`vidgen guide scenes`):
 
 ## Targets
 
-`heading`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>`
+`heading`, `diagram`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>`
 
 ## Beats
 

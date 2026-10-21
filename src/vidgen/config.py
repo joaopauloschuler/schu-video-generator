@@ -799,6 +799,7 @@ LINT_RULES: tuple[str, ...] = (
     "concept_colors",
     "said_before_shown",
     "unsaid_reveal",
+    "iso_labels",
 )
 RuleName = Literal[
     "off_frame",
@@ -832,6 +833,7 @@ RuleName = Literal[
     "concept_colors",
     "said_before_shown",
     "unsaid_reveal",
+    "iso_labels",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1033,6 +1035,17 @@ class UnsaidRevealRule(RuleConfig):
     """Texts of more words are sentences, not labels, and are not checked."""
 
 
+class IsoLabelsRule(RuleConfig):
+    """``iso_labels``: an ``iso_diagram`` label covering a block it does not name, overlapping another label, hiding a connector, or far from what it names without a leader line (DESIGN.md §90.10)."""
+
+    min_cover: Fraction = 0.1
+    """Share of a label's box over another block from which it is reported."""
+    min_overlap: Fraction = 0.05
+    """Share of the smaller of two labels' boxes they must share to be reported."""
+    max_gap: Fraction = 0.06
+    """Farthest a label without a leader line may stand from what it names (fraction of the frame's shorter side: 0.06 is 29 px at 480p)."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1183,6 +1196,8 @@ class LintRules(_Strict):
     """The narration naming an on-screen label more than min_lead seconds before it shows (default: warning)."""
     unsaid_reveal: UnsaidRevealRule = Field(default_factory=UnsaidRevealRule)
     """A beat bringing new labels the narration never names (default: off; info when turned on)."""
+    iso_labels: IsoLabelsRule = Field(default_factory=IsoLabelsRule)
+    """An iso_diagram label over a block it does not name, over another label or a connector, or far from what it names (default: warning)."""
 
 
 class LintConfig(_Strict):

@@ -5530,18 +5530,29 @@ slabs, cylinders and databases, flat tiles, stacks of layers (a layered architec
 layers) and group plates, on a grid, joined by connectors along the grid. Blocks are drawn as
 vectors in the theme's colours (`block_color: palette` gives each block the next palette colour; a
 block whose label is one of the video's [`terms`](#one-colour-per-concept-terms) takes that term's
-colour). Labels stay flat and readable: on a block's top when they fit there (in the ink that
-reads on it), else on a plate above, below or beside it, wherever they cover no other label or
-block (and the fewest connectors); a stack's layers are labelled in a column at its side with
-leader lines; connector labels sit beside the connector. The whole diagram (floor, blocks,
-labels) is fitted to the body: as large as it fits, labels from `size` down to the readable
+colour). The whole diagram (floor, blocks, labels, and the room its `raise` and `explode` actions
+will need) is fitted to the body: as large as it fits, labels from `size` down to the readable
 minimum, never below it (a warning says when the blocks come out small or nothing fits).
-Steps: the scene shows the whole diagram in its first beat (heading, floor and plates, the
-blocks back to front, then the connectors); later beats hold it for [beat actions](#beat-actions).
-[Action targets](#beat-actions): `heading`, `block<N>` (1-based: every block and layer in the
-order written, a stack's layers bottom up in its place), `block:<id>` (a block or layer with its
-label), `stack:<id>` (its layers and caption), `group:<id>` (its plate, caption and members) and
-`edge:<from>-><to>` (a connector with its label).
+Steps: the scene builds the whole diagram in its first beat (heading, floor and plates, the
+blocks back to front as `entrance` says, then the connectors), or with `build: each` one block or
+stack per step, spread over the beats; blocks, stacks, groups and connectors that a `reveal` or
+[`build`](#iso-diagram-actions) action names wait for it (a connector comes in once both its ends
+are there). Later beats hold it for [beat actions](#beat-actions).
+[Action targets](#beat-actions): `heading`, `diagram` (everything), `block<N>` (1-based: every
+block and layer in the order written, a stack's layers bottom up in its place), `block:<id>` (a
+block or layer with its label), `stack:<id>` (its layers and caption), `group:<id>` (its plate,
+caption and members) and `edge:<from>-><to>` (a connector with its label).
+
+**Labels** stay flat and readable, one per block: on its top when it fits there (in the ink that
+reads on it), else right by its outline (above, below, beside), else pushed clear with a leader
+line to it; a label keeps off other blocks (and a little room round them, so it never reads as
+theirs), other labels, pipes and connectors. A stack's layers are labelled in a column at its side
+with leader lines (in 16:9), or listed under it, top layer first, each after a swatch of its
+colour (in 9:16, where the stack can then be drawn larger); its label is a caption under it (not
+drawn when it repeats a layer's label; a stack of one layer has one label: the layer's own, else
+the stack's). A group's caption sits by its plate's front edge; a connector's label beside the
+connector, along its longest straight run. Lint's [`iso_labels`](#lint-rules) rule reports a label
+that still covers another block or label, hides a connector, or stands far from what it names.
 
 **Stacks.** A block with `layers` is a stack: its layers (**from the bottom up**) lie on its
 footprint one above the other, `gap` apart, each labelled at the stack's side; the stack's label
@@ -5554,7 +5565,11 @@ lower left, heights go up (all in cells). Give every block an `at`, or none: the
 between them (1.5 more on each side of a stack in a row or column, for its layers' labels):
 `row` (along the columns), `column` (along the rows), `grid` (`columns` per row) or
 `zigzag` (right, then down-left, right...: two columns down the picture, the shape that fills a
-tall frame); `auto` (default) is a `row` in 16:9 and square frames and a `zigzag` in 9:16.
+tall frame); `auto` (default) is a `row` in 16:9 and square frames and a `zigzag` in 9:16. A grid
+written with `at` keeps its shape in 16:9; in 9:16 (`portrait_grid: auto`) it is slanted so its
+longer direction runs straight down the frame when that draws it larger (each block moves along
+the rows by how far along the columns it stands, or the other way round: neighbours keep their
+sides, connectors are routed again); `portrait_grid: keep` draws it as written.
 Overlapping blocks, a block on another group's plate, two groups' plates overlapping and a
 connector between layers of one stack are refused by `vidgen validate`, naming what to change.
 
@@ -5574,6 +5589,9 @@ without a head (for data that flows both ways, or a bus).
 | `arrange` | `auto` \| `row` \| `column` \| `grid` \| `zigzag` | `auto` | how blocks without `at` are placed (above) |
 | `columns` | int (1–12) | about √count | columns of `arrange: grid` |
 | `spacing` | float (0–6) | `1`, a `zigzag` `2` | empty cells between arranged blocks (a zigzag needs room for labels above and below) |
+| `portrait_grid` | `auto` \| `keep` | `auto` | blocks placed with `at` in 9:16: slanted down the frame when that draws them larger, or as written |
+| `build` | `together` \| `each` | `together` | the scene builds the diagram in its first beat, or one block or stack per step over the beats |
+| `entrance` | `drop` \| `grow` \| `fade` | `drop` | how blocks come in (the scene's steps and `reveal`): drop in from above, grow up from the floor (a stack layer by layer), fade |
 | `floor` | `grid` \| `plain` \| `none` | `grid` | the floor under the diagram, a touch lighter than the background, with or without its grid lines; under a zigzag it follows the steps |
 | `block_color` | `palette` \| color | `palette` | blocks without their own `color` |
 | `edge_style` | `solid` \| `dashed` \| `pipe` | `solid` | connectors without their own `style` (`-->` is always dashed) |
@@ -5588,10 +5606,11 @@ and 0.3, `cylinder` 1x1 and 0.9, `database` a cylinder with two bands, `tile` a 
 `color`. A stack is `{id, layers, label, at, size, gap, label_side, color}`: `layers` (1–12,
 **from the bottom up**; each an id string or `{id, label, shape, height, color}`, a `slab` by
 default, all covering the stack's footprint), `label` (its caption, default the id), `size`
-(default `[2, 2]`), `gap` between layers (default 0.12 cells), `label_side` (`auto`: the side
-away from the diagram's middle; `left`, `right`) and `color` (its layers' unless a layer has its
-own); `shape` and `height` belong to its layers, `gap` and `label_side` only to a stack. A
-group's plate covers its members and 0.3 cells around them; its members stand on it.
+(default `[2, 2]`), `gap` between layers (default 0.12 cells), `label_side` (`auto`: in 16:9 the
+side away from the diagram's middle, in 9:16 the list below; `left`, `right`, `below`) and
+`color` (its layers' unless a layer has its own); `shape` and `height` belong to its layers, `gap`
+and `label_side` only to a stack. A group's plate covers its members and 0.3 cells around them;
+its members stand on it.
 
 ```yaml
 - id: request
@@ -5618,6 +5637,49 @@ group's plate covers its members and 0.3 cells around them; its members stand on
     - text: "Four layers, each built on the one below."
       actions:
         - {highlight: "block:API", at: "@built"}
+```
+
+#### Iso diagram actions
+
+Timed like any action (`at: 0.5`, or on a spoken word: `at: "@cache"`), on `iso_diagram` scenes
+only (another scene type is refused, naming it). `dim` and `highlight` recolour a block with its
+shading kept (a dimmed block stays opaque, mixed towards the background, so the blocks behind it
+do not show through); a highlighted label keeps its plate. `zoom`, `callout` and the other
+actions for every scene work as anywhere.
+
+| action | options | |
+|---|---|---|
+| `build` | `style` (`grow` default, `drop`, `fade`) | brings blocks, layers, stacks, groups (plate, caption and members), connectors or the `diagram` in at `at`: growing up from the floor (a stack layer by layer, the label on its top riding up), dropping in from above or fading in. The scene's own steps leave them to it; a connector comes in once both its ends are there. |
+| `raise` | `by` (`0.5` cells, up to 4) | lifts blocks, layers, stacks or groups off their ground, a shadow growing under them; a raised layer lifts the layers above it, a group its plate and caption too; labels ride along. `until: <beat>` sets them down. |
+| `lower` | `by` (default: back onto the ground) | sets raised blocks down (never below their ground). `until: <beat>`: raised again. |
+| `explode` | `gap` (`0.6` cells, up to 3) | pulls a stack's layers apart, `gap` between them, their labels going along; `collapse` or `until: <beat>` puts them back. |
+| `collapse` | — | a stack's layers back together (its own `gap`). |
+| `flow` | `count` (`3`, 1–12), `style` (`dots`, `packets`: small cubes), `color` (`highlight`), `back` (`false`), `chain` (`false`) | dots or packets run along connectors from their start to their tip (`back`: the other way), on top of a pipe, fading in and out at the ends; `chain: true` runs the targets one after another (each 1.2 s) — a request passing through. Not undone (nothing stays). |
+| `focus` | `padding` (`0.12`), `scale` (default: as close as the targets fit, at most 3x) | moves the camera onto the targets without turning it, and stays there (unlike `zoom`, which goes back by the beat's end); `focus: diagram` or `until: <beat>` goes back to the whole view. |
+| `relabel` | `text` (required) | a block's, layer's, stack's, group's or connector's label becomes `text` (a new value, a new name), the old text morphing into it in place; the scene keeps room for the longer of the two. `until: <beat>` brings the old text back. A target without a label is refused. |
+
+```yaml
+- id: stack
+  type: iso_diagram
+  params:
+    heading: "Inside one server"
+    entrance: grow
+    blocks:
+      - {id: client, label: "Browser"}
+      - {id: app, label: "One server", layers: [Database, Services, API, "Web UI"]}
+    edges: ["client -> app: request"]
+  beats:
+    - text: "A request reaches one server."
+      actions:
+        - {flow: "edge:client->app", at: "@reaches"}
+    - text: "Pull the server apart and each layer has one job."
+      actions:
+        - {explode: "stack:app", at: "@apart"}
+        - {highlight: "block:API", at: 0.6}
+    - text: "Put back together, the API now answers faster."
+      actions:
+        - {collapse: "stack:app"}
+        - {relabel: "block:API", text: "API (cached)", at: "@faster"}
 ```
 
 ### `end_card`
@@ -8267,7 +8329,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -8315,7 +8377,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `iso_diagram` | `heading`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line; a `box` frames the shape); `block<N>` counts the `blocks`, then each stack's layers; a stack is its layers and caption, a group its plate, caption and members; an edge its arrow or pipe and label |
+| `iso_diagram` | `heading`, `diagram`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, build, raise, lower, explode, collapse, flow, focus, relabel, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line or swatch; a `box` frames the shape); `block<N>` counts every block and layer in the order written, a stack's layers bottom up in its place; a stack is its layers and caption, a group its plate, caption and members, `diagram` everything; an edge its arrow or pipe and label; `dim` and `highlight` recolour blocks with their shading kept; see [the actions](#iso-diagram-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
@@ -8358,6 +8420,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `get_in`, `ride_to`, `get_out` | see [Vehicles](#vehicles-get_in-ride_to-get_out) | a `stage`'s character gets in a car, a bus, a boat or a balloon or on a bicycle, the vehicle rides (or flies) to a place with its riders, and they get out |
 | `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |
 | `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit` | see [Pointing, reacting and moving](#pointing-reacting-and-moving-host-actions) | the scene's [host](#a-host-beside-any-scene-host) points at or looks at a target of the scene, shows an expression (and a symbol), walks to the other side (the content slides over), walks in or out; any scene type with a host |
+| `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel` | see [Iso diagram actions](#iso-diagram-actions) | the [`iso_diagram`](#iso_diagram) actions: blocks come in (growing up from the floor, dropping in, fading), are raised and set down, a stack's layers are pulled apart and put back, dots or packets run along connectors, the camera moves onto a part (no rotation), a label or value changes in place |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
@@ -9049,6 +9112,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `unclear_speech` | warning; info for doubtful words | only with `--readback`: each [word to check](#readback-vidgen-readback) of `vidgen readback` — a word heard with a probability below `min_probability` (info: below `doubtful_probability`), after a pause longer than `max_gap` seconds inside a sentence, or differently from the text — at its time (the beat's start + the word's time in the MP3), with the fix (a respelling in `pronunciation:`, another voice, speed or emotion). `value` / `limit` are the probability or the pause and its threshold |
 | `said_before_shown` | warning | the narration names an on-screen **label** (a scene text of at most `max_words` words with a word that names something: a diagram node, a callout, a stage, an axis title) more than `min_lead` seconds before the label is on screen, and does not name it again when it shows. When it shows is known from the layout dump: it was not there at the still before the one that first shows it (the beat-end still of the beat before, or a mid-beat still of a storyboard), or at the time of the `reveal` / `callout` / `transform` action of its beat that shows it (a callout with that label, or an action [on a word](#actions-on-a-spoken-word) the label says). Words are compared without case and accents, with English plural and verb endings (`databases` = `database`, `moving` = `moves`), without stop words and numbers; a label of several words counts as named when all its words are said close together. Not checked: overlays (captions repeat the narration), speech bubbles, maths and code, numbers (a chart's values, tick labels, live values like `slope 0.50`), texts that another text on screen already says (the heading "How a cache works" before a `Cache` node). Word times come from the beat's audio (the alignment), else the estimate. Fix: show it on the word (`{reveal: node:database, at: "@database"}`), reveal it earlier, or name it when it shows; or `lint_ignore` it (`{rule: said_before_shown, object: Database}`) |
 | `unsaid_reveal` | off (info when turned on) | a beat (not the scene's first) brings new labels, and the scene's narration names none of them (same labels and word matching as `said_before_shown`). Off by default: many labels are fine unsaid (a map's city names, a step's output); turn it on with `unsaid_reveal: {severity: info}` to review a script |
+| `iso_labels` | warning | an [`iso_diagram`](#iso_diagram) label (from the outlines of its blocks and plates and the paths of its connectors that the scene adds to the layout dump) that covers at least `min_cover` of its box over a block it does not name (a group's caption among the group's blocks; a label on its own block's top is fine), shares at least `min_overlap` of the smaller box with another label, hides part of another connector, or stands more than `max_gap` of the shorter side from what it names without a leader line. The scene places labels to avoid all of these; a finding means the diagram is crowded. Text size and contrast are `min_font`'s and `contrast`'s. Fix: more `spacing` (or `at` further apart), shorter labels, fewer blocks, or labels on a stack's side (`label_side`) |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -9088,6 +9152,7 @@ lint:
     concept_colors: {max_colors: 5, min_contrast: 4.5}   # the terms: colours
     said_before_shown: {min_lead: 1.5, max_words: 4}     # seconds; longer texts are sentences
     unsaid_reveal: {max_words: 4}                        # off unless given a severity ("info")
+    iso_labels: {min_cover: 0.1, min_overlap: 0.05, max_gap: 0.06}   # iso_diagram labels: shares of a label's box; fraction of the shorter side
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
@@ -9122,7 +9187,9 @@ grow with the width, long narration is wrapped and cut with `…`, and long vide
 several pages instead of one huge image. 16:9 videos get 4 stills per row (2 on a scene's
 sheet), 9:16 videos 5 (4); with `--per-beat N` a beat's stills stay side by side on one row.
 On a [`stage`](#stage), the mid-action stills (above) come before their beat's end still, labelled
-`½ walk_to pip @ time`, so a walk or a gesture can be checked in motion, not only where it ends.
+`½ walk_to pip @ time`, so a walk or a gesture can be checked in motion, not only where it ends;
+an [`iso_diagram`](#iso_diagram) gets them for its `build`, `raise`, `lower`, `explode`,
+`collapse`, `flow` and `relabel` actions.
 With [`auto_direct`](#automatic-directing-auto_direct), a line `auto: look_at kit pip · react kit
 thinking` under a beat's narration lists the actions automatic directing added to it.
 

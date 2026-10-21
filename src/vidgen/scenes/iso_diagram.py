@@ -1,22 +1,36 @@
-"""``iso_diagram``: a diagram of blocks in the isometric view (DESIGN.md §90.6): boxes, slabs,
-cylinders and databases, flat tiles, stacks of layers and group plates on a grid, joined by
-connectors along the grid, with flat labels that stay readable."""
+"""``iso_diagram``: a diagram of blocks in the isometric view (DESIGN.md §90.6, §90.8-90.10):
+boxes, slabs, cylinders and databases, flat tiles, stacks of layers and group plates on a grid,
+joined by connectors along the grid, with flat labels that stay readable, and the actions that
+build, raise, explode, recolour and relabel it, flow along its connectors and focus on its parts
+(``scenes/iso_actions.py``)."""
 
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from typing import Any, Literal
 
 import numpy as np
 
 from vidgen.api import *
 
+from .chart_changes import keep_opacity
+from .iso_motion import FillFade, FlowDots, GrowBlock, LiftMove, SwapAtEnd
 from .diagram import _ID, _unknown, edge_ref, parse_edges
 
 log = logging.getLogger("vidgen.scenes")
 
 BlockShape = Literal["box", "slab", "cylinder", "database", "tile"]
 EdgeStyle = Literal["solid", "dashed", "pipe"]
+EntranceStyle = Literal["drop", "grow", "fade"]
 Cells = tuple[float, float]
+LabelKey = tuple[str, str]
+Box = tuple[float, float, float, float]
+
+#: With ``at`` in a tall frame, a slanted grid (:func:`slant`) is used when it draws the
+#: diagram at least this much larger; the body's width over its height there.
+SLANT_GAIN = 1.15
+PORTRAIT_BODY = 0.62
 
 
 def _check_id(value: str) -> str:
@@ -81,7 +95,7 @@ class IsoBlock(_Named):
     id: str
     """Name used by edges, groups and targets (letters, digits, spaces, _ . -)."""
     label: TranslatableStr = ""
-    """Text shown with the block (default: the id): on its top when it fits, else beside it; a stack's caption under it."""
+    """Text shown with the block (default: the id): on its top when it fits, else beside it; a stack's caption under it (a stack of one layer has one label: its layer's, else this)."""
     shape: BlockShape | None = None
     """box (default: 1x1, 0.8 high), slab (2x2, 0.3), cylinder (1x1, 0.9), database (a cylinder with bands) or tile (a flat 2x2 platform, 0.12); not on a stack."""
     layers: list[IsoLayer] | None = Field(default=None, min_length=1, max_length=12)
@@ -94,8 +108,8 @@ class IsoBlock(_Named):
     """Height in cells (default by shape; not on a stack: give its layers heights)."""
     gap: float | None = Field(default=None, ge=0, le=2)
     """A stack's space between layers (default 0.12 cells)."""
-    label_side: Literal["auto", "left", "right"] | None = None
-    """Where a stack's layer labels go: auto (default: the side away from the diagram's middle), left or right."""
+    label_side: Literal["auto", "left", "right", "below"] | None = None
+    """Where a stack's layer labels go: auto (default: in 16:9 at the side away from the diagram's middle, in 9:16 below the stack), left, right (with leader lines) or below (a list under the stack, each with a swatch of its layer's colour)."""
     color: ThemeColor | None = None
     """Its colour (a stack's: its layers'; default: the scene's block_color, or a term's colour when its label is a term)."""
 
@@ -138,7 +152,7 @@ class IsoGroup(SceneParams):
     blocks: list[str] = Field(min_length=1)
     """Ids of the blocks and stacks on the plate (whole stacks, not their layers)."""
     label: TranslatableStr = ""
-    """Optional caption by the plate."""
+    """Optional caption by the plate's front edge."""
     color: ThemeColor | None = None
     """Plate tint (default: dim)."""
 
@@ -159,7 +173,7 @@ class IsoEdge(SceneParams):
     to: str
     """Block or stack id it points to."""
     label: TranslatableStr = ""
-    """Optional text on the connector."""
+    """Optional text along the connector."""
     style: EdgeStyle | None = None
     """solid (a flat arrow), dashed or pipe (a raised channel, no arrowhead); default: the scene's edge_style ('-->' is dashed)."""
     color: ThemeColor | None = None
@@ -199,22 +213,31 @@ def _scene_style(edge: dict[str, Any]) -> dict[str, Any]:
 @dataclass
 class _Label:
     """A label to place: whose (``kind``: block, layer, stack, group or edge; ``owner``: its id or
-    connector ref) and its text."""
+    connector ref), its text, the room it keeps (``extent``: the largest of the texts it shows,
+    with a ``relabel`` action's) and how to write another text in its style."""
 
     kind: str
     owner: str
     text: Mobject
+    extent: tuple[float, float]
+    make: Callable[[str], Mobject]
+
+    @property
+    def key(self) -> LabelKey:
+        return (self.kind, self.owner)
 
 
 @dataclass
 class _Placement:
-    """Where the labels go at one scale: centres (picture origin at 0, 0), which sit on their
-    block's top, leader lines, and the bounds of everything."""
+    """Where the labels go at one scale (picture origin at 0, 0; y up): centres, which sit on
+    their block's top, leader lines, swatches (a stack's labels listed under it) and the bounds of
+    everything."""
 
     centres: dict[int, np.ndarray] = field(default_factory=dict)
     on_top: set[int] = field(default_factory=set)
     leaders: list[tuple[int, np.ndarray, np.ndarray]] = field(default_factory=list)
-    bounds: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    swatches: dict[int, tuple[np.ndarray, tuple[float, float]]] = field(default_factory=dict)
+    bounds: Box = (0.0, 0.0, 0.0, 0.0)
 
 
 @dataclass
@@ -225,32 +248,79 @@ class _Plan:
     fits: bool
 
 
+@dataclass
+class _Solid:
+    """A drawn piece the actions recolour with its shading kept: its mobject and its shapes in
+    a colour (``paint`` turns each of its colours into the one wanted)."""
+
+    mobject: Mobject
+    build: Callable[[Callable[[str], str]], Mobject]
+
+
 @scene("iso_diagram")
 class IsoDiagram(NarratedScene):
     """A diagram of blocks in the isometric view: boxes, slabs, cylinders and databases, flat
     tiles, stacks of layers (a layered architecture, a network's layers) and group plates on a
     grid, joined by connectors along the grid (flat arrows, dashed, or pipes). Labels stay flat
-    and readable: on a block's top when they fit, else beside it on a plate; a stack's layers are
-    labelled at its side. The diagram is fitted to the frame (16:9 and 9:16) and shown in the
-    first beat.
+    and readable: on a block's top when they fit, else right by it; a stack's layers are
+    labelled at its side (or listed under it in 9:16); connector labels lie along the connector,
+    a group's caption by its plate's front edge. The diagram is fitted to the frame (16:9 and
+    9:16) and built in the first beat (``build: each``: one block or stack per step), except what
+    a ``reveal`` or ``build`` action brings.
 
-    Action targets: ``heading``, ``block<N>`` (1-based: every block and layer in the order
-    written, a stack's layers bottom up in its place), ``block:<id>``, ``stack:<id>``,
-    ``group:<id>`` and ``edge:<from>-><to>``.
+    Actions: ``build`` (grow up from the floor, drop in, fade), ``raise`` / ``lower``, ``explode``
+    / ``collapse`` (a stack's layers apart and back), ``flow`` (dots or packets along connectors),
+    ``focus`` (the camera on a part), ``relabel`` (swap a label or value), and ``dim``,
+    ``highlight`` (blocks keep their shading), ``zoom``, ``callout``... Action targets:
+    ``heading``, ``diagram``, ``block<N>`` (1-based: every block and layer in the order written, a
+    stack's layers bottom up in its place), ``block:<id>``, ``stack:<id>``, ``group:<id>`` and
+    ``edge:<from>-><to>``.
     """
 
     outro = 0.5
-    target_patterns = ("heading", "block<N>", "block:<id>", "stack:<id>", "group:<id>", "edge:<from>-><to>")
+    target_patterns = ("heading", "diagram", "block<N>", "block:<id>", "stack:<id>", "group:<id>", "edge:<from>-><to>")
+    #: The ``iso_diagram`` actions (``scenes/iso_actions.py``) act on this scene type only.
+    iso_diagram_actions = True
+    mid_still_actions = frozenset({"build", "raise", "lower", "explode", "collapse", "flow", "relabel"})
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
-        """``heading`` (if any), ``block<N>`` and ``block:<id>`` per block and layer,
-        ``stack:<id>``, ``group:<id>``, ``edge:<from>-><to>``."""
-        names = ["heading"] if params.heading else []
+        """``heading`` (if any), ``diagram``, ``block<N>`` and ``block:<id>`` per block and
+        layer, ``stack:<id>``, ``group:<id>``, ``edge:<from>-><to>``."""
+        names = (["heading"] if params.heading else []) + ["diagram"]
         for i, (block_id, *_rest) in enumerate(params.all_blocks(), start=1):
             names += [f"block{i}", f"block:{block_id}"]
         names += [f"stack:{s.id}" for s in params.stacks()] + [f"group:{g.id}" for g in params.groups]
         return names + [f"edge:{e.ref()}" for e in params.edges]
+
+    @staticmethod
+    def target_kind(name: str) -> str:
+        """What a target name of the scene stands for: ``heading``, ``diagram``, ``block``,
+        ``stack``, ``group`` or ``edge``."""
+        if name in ("heading", "diagram"):
+            return name
+        if name.startswith("block"):
+            return "block"
+        return name.split(":", 1)[0]
+
+    @classmethod
+    def has_label(cls, params: Any, name: str) -> bool:
+        """Whether target ``name`` shows a label (``relabel``): every block and layer does; a
+        stack its caption unless it repeats a layer's label (a stack of one: its layer's); a
+        group or connector when given one."""
+        kind = cls.target_kind(name)
+        if kind == "block":
+            return True
+        rest = name.split(":", 1)[-1]
+        if kind == "stack":
+            stack = next(s for s in params.stacks() if s.id == rest)
+            layers = stack.layers or []
+            return len(layers) == 1 or stack.text() not in {layer.text() for layer in layers}
+        if kind == "group":
+            return bool(next(g for g in params.groups if g.id == rest).label)
+        if kind == "edge":
+            return bool(next(e for e in params.edges if e.ref() == rest).label)
+        return False
 
     class Params(SceneParams):
         blocks: list[IsoBlock] = Field(min_length=1, max_length=30)
@@ -267,8 +337,14 @@ class IsoDiagram(NarratedScene):
         """Columns of the grid arrangement (default: about the square root of the count)."""
         spacing: float | None = Field(default=None, ge=0, le=6)
         """Empty cells between arranged blocks (default: 1; 2 in a zigzag, so labels fit above and below)."""
+        portrait_grid: Literal["auto", "keep"] = "auto"
+        """Blocks placed with 'at' in a tall frame (9:16): auto slants the grid so its longer direction runs down the frame when that draws the diagram larger (neighbours keep their sides; connectors are routed again); keep draws it as written."""
         floor: Literal["grid", "plain", "none"] = "grid"
         """The floor under the diagram: with grid lines, plain, or none."""
+        build: Literal["together", "each"] = "together"
+        """How the scene builds the diagram: together (all in the first beat) or each (one block or stack per step, spread over the beats, with the connectors whose ends are there); blocks a reveal or build action names wait for it."""
+        entrance: EntranceStyle = "drop"
+        """How blocks come in: drop (in from above), grow (up from the floor; a stack layer by layer) or fade."""
         block_color: Literal["palette"] | ThemeColor = "palette"
         """Colour of blocks without their own: 'palette' (one theme palette colour each) or one colour."""
         edge_style: EdgeStyle = "solid"
@@ -337,18 +413,23 @@ class IsoDiagram(NarratedScene):
 
         def all_blocks(self) -> list[tuple[str, str, str | None, str | None]]:
             """``(id, label, colour, stack)`` of every block and layer in the order written (a
-            stack's layers bottom up in its place; a layer's colour defaults to its stack's)."""
+            stack's layers bottom up in its place; a layer's colour defaults to its stack's; the
+            one layer of a stack of one is labelled with its own label, else the stack's)."""
             out: list[tuple[str, str, str | None, str | None]] = []
             for b in self.blocks:
                 if b.layers is None:
                     out.append((b.id, b.text(), b.color, None))
+                elif len(b.layers) == 1:
+                    layer = b.layers[0]
+                    out.append((layer.id, layer.label or b.label or layer.id, layer.color or b.color, b.id))
                 else:
                     out += [(layer.id, layer.text(), layer.color or b.color, b.id) for layer in b.layers]
             return out
 
         def layout(self, portrait: bool = False) -> IsoDiagramLayout:
             """The diagram laid out on the grid (:func:`layout_iso_diagram`); ``portrait``: for a
-            tall frame (``arrange: auto`` is a zigzag there)."""
+            tall frame (``arrange: auto`` is a zigzag there; with ``at``, the grid may be slanted
+            down the frame, ``portrait_grid``)."""
             items = [ItemSpec(b.id, b.at, block=BlockSpec(b.id, b.shape or "box", b.size, b.height)) if b.layers is None else
                      ItemSpec(b.id, b.at, layers=tuple(BlockSpec(layer.id, layer.shape, None, layer.height) for layer in b.layers),
                               size=b.size, **({"gap": b.gap} if b.gap is not None else {}))
@@ -357,10 +438,28 @@ class IsoDiagram(NarratedScene):
             edges = [EdgeSpec(e.source, e.to, e.style or self.edge_style) for e in self.edges]
             how = ("zigzag" if portrait else "row") if self.arrange == "auto" else self.arrange
             spacing = self.spacing if self.spacing is not None else (2.0 if how == "zigzag" else 1.0)
-            return layout_iso_diagram(items, groups, edges, how=how, columns=self.columns, spacing=spacing)
+            written = layout_iso_diagram(items, groups, edges, how=how, columns=self.columns, spacing=spacing)
+            if not portrait or self.portrait_grid == "keep" or any(item.at is None for item in items) or len(items) < 2:
+                return written
 
-    #: Largest tile width (Manim units), so a small diagram does not fill the frame.
+            def score(layout: IsoDiagramLayout) -> float:
+                w, h = picture_size(layout)
+                return min(PORTRAIT_BODY / max(w, 1e-6), 1.0 / max(h, 1e-6))
+
+            best, best_score = written, score(written) * SLANT_GAIN
+            for along in ("x", "y"):
+                try:
+                    slanted = layout_iso_diagram(slant(items, along), groups, edges, how=how, columns=self.columns, spacing=spacing)
+                except ValueError:
+                    continue
+                if score(slanted) > best_score:
+                    best, best_score = slanted, score(slanted)
+            return best
+
+    #: Largest tile width (Manim units), so a small diagram does not fill the frame; in 9:16 this
+    #: much more (a phone shows the frame small, and a tall frame has room above and below).
     max_tile = 2.4
+    portrait_tile = 1.35
     #: Smallest tile width before the labels are made smaller, per point of label size / 32.
     min_tile = 1.0
     #: Labels stay this much above the readable size (as ``diagram``).
@@ -369,22 +468,41 @@ class IsoDiagram(NarratedScene):
     wrap = 3.0
     layer_wrap = 3.6
     edge_wrap = 2.6
-    #: Space between a label and what it names, and a stack's layer labels' leader lines.
+    #: Space between a label and what it names, a stack's layer labels' leader lines, and the gap
+    #: from which a label beside a block gets a leader line to it.
     gap = 0.14
     lead = 0.35
+    leader_from = 0.35
     #: A label plate's padding, corner and opacity.
     label_pad = (0.16, 0.08)
     plate_opacity = 0.88
     #: Outline width of the blocks.
     stroke = 1.6
-    #: Placing labels: a connector is sampled every ``line_step`` tile units, and a label over
-    #: one sample costs as much as this much area (square Manim units) of overlap.
+    #: Connectors are sampled every ``line_step`` tile units (labels keep off them).
     line_step = 0.1
-    line_cost = 0.08
+    #: A stack's layer list under it (9:16): a swatch's width per text height, the gap after it.
+    swatch = 1.5
+    swatch_gap = 0.14
+    #: Entrances: how far (cells) a block drops in from, and a stack's layers' lag.
+    drop = 0.8
+    #: A raised block's shadow on its ground: its opacity at full lift (``shadow_lift`` cells).
+    shadow_opacity = 0.35
+    shadow_lift = 0.6
+    #: Flow: a dot's radius and a packet's size (cells), the dots' spacing (share of the way).
+    dot_radius = 0.09
+    packet = 0.22
+    flow_spacing = 0.16
 
     # ----- layout ----------------------------------------------------------------------------
 
     def construct(self) -> None:
+        heading, body, plan = self.plan_diagram()
+        parts = self._draw(plan, body)
+        self._steps(heading, parts)
+
+    def plan_diagram(self) -> tuple[Mobject | None, Region, _Plan]:
+        """The heading, the body left for the diagram, and the diagram laid out and fitted to it
+        with its labels placed (nothing drawn yet)."""
         p = self.params
         body = self.safe_area
         heading = None
@@ -397,7 +515,7 @@ class IsoDiagram(NarratedScene):
         self.diagram_layout = layout = p.layout(self.is_portrait)
         self._colors = self._block_colors()
         self._shapes = self._world_shapes(layout)
-        self._bounds = self._shapes.bounds()
+        self._geometry(layout)
         plan = self._fit(body)
         if not plan.fits:
             log.warning("scene '%s': the iso diagram does not fit this frame at the readable label size; "
@@ -405,8 +523,7 @@ class IsoDiagram(NarratedScene):
         elif plan.scale < self.min_tile * readable_size() / 32:
             log.warning("scene '%s': the iso diagram's blocks are drawn small (its labels take the room); "
                         "use fewer blocks or stacks, shorter labels, or split it", self.spec.id)
-        parts = self._draw(plan, body)
-        self._steps(heading, parts)
+        return heading, body, plan
 
     def _block_colors(self) -> dict[str, str]:
         """Each block's colour: its own, else a term's its label says, else the scene's."""
@@ -428,28 +545,165 @@ class IsoDiagram(NarratedScene):
     def _world_shapes(self, layout: IsoDiagramLayout) -> DiagramShapes:
         """The shapes of everything (:func:`diagram_shapes`) in the scene's colours."""
         p = self.params
-        edge_colors = [self.theme.color(e.color or p.edge_color) for e in p.edges]
-        group_colors = {g.id: self.theme.color(g.color or "dim") for g in p.groups}
-        return diagram_shapes(layout, self._colors, edge_colors, group_colors, floor=p.floor,
+        self._edge_colors = [self.theme.color(e.color or p.edge_color) for e in p.edges]
+        self._group_colors = {g.id: self.theme.color(g.color or "dim") for g in p.groups}
+        return diagram_shapes(layout, self._colors, self._edge_colors, self._group_colors, floor=p.floor,
                               background=self.theme.background, text=self.theme.color("text"))
+
+    def _geometry(self, layout: IsoDiagramLayout) -> None:
+        """What the labels keep clear of, on the picture turned up the right way (tile widths,
+        ``y`` up): each block's outline, each stack's and plate's, the connectors' samples; the
+        lifts the scene's actions will give the blocks, and the bounds of everything with them."""
+        up = np.array([1.0, -1.0])
+        self._hulls = {name: convex_hull(np.array(block_outline(b)) * up) for name, b in layout.blocks.items()}
+        self._lift_max = self._planned_lifts()
+        # what other labels keep clear of: a block where it stands and where actions raise it to
+        self._swept = {name: convex_hull(np.vstack([hull, np.array(block_outline(layout.blocks[name], self._lift_max[name])) * up]))
+                       if self._lift_max[name] > 1e-9 else hull for name, hull in self._hulls.items()}
+        self._stack_hulls = {sid: convex_hull(np.vstack([self._swept[n] for n in s.layers])) for sid, s in layout.stacks.items()}
+        self._plate_hulls = {gid: convex_hull(np.array(box_outline(box)) * up) for gid, box in layout.plates.items()}
+        self._lines = {edge.ref(): np.array([iso_point(*q) for q in edge.samples(self.line_step)]) * up for edge in layout.edges}
+        boxes = iter(layout.pipe_boxes())
+        self._pipe_hulls = {f"{edge.ref()}#{j}": convex_hull(np.array(box_outline(next(boxes))) * up)
+                            for edge in layout.edges if edge.style == "pipe" for j in range(len(edge.points) - 1)}
+        left, top, right, bottom = self._shapes.bounds()
+        rects = [(left, -bottom, right, -top)]
+        for name, lift in self._lift_max.items():
+            if lift > 1e-9:
+                rects.append(hull_box(convex_hull(np.array(block_outline(layout.blocks[name], lift)) * up)))
+        self._bounds = rect_union(rects)
+
+    def _planned_lifts(self) -> dict[str, float]:
+        """The most each block may be raised by the scene's ``raise`` and ``explode`` actions
+        (cells), so the diagram is fitted with room for them."""
+        layout = self.diagram_layout
+        names = type(self).target_names(self.params)
+        own = {name: 0.0 for name in layout.blocks}
+        gaps = {sid: s.gap for sid, s in layout.stacks.items()}
+        plates = self._plate_lift_max = {gid: 0.0 for gid in layout.plates}
+        for kind in ("raise", "explode"):
+            for use in self.action_uses(kind):
+                for pattern in use.config.targets():
+                    for name in [n for n in names if fnmatchcase(n, pattern)]:
+                        blocks = self._blocks_named(name)
+                        if kind == "raise":
+                            for b in self._bottoms(blocks):
+                                own[b] += use.options.by
+                            if self.target_kind(name) == "group":
+                                plates[name[len("group:"):]] += use.options.by
+                        else:
+                            for sid in {layout.blocks[b].stack for b in blocks} - {None}:
+                                gaps[sid] = max(gaps[sid], use.options.gap)
+        return self._lifts_of(own, gaps)
+
+    def _lifts_of(self, own: dict[str, float], gaps: dict[str, float]) -> dict[str, float]:
+        """Each block's lift (cells): its own raise and those of the layers under it, and its
+        stack's gap beyond the stack's own."""
+        layout = self.diagram_layout
+        out: dict[str, float] = {}
+        for name, block in layout.blocks.items():
+            if block.stack is None:
+                out[name] = own[name]
+                continue
+            stack = layout.stacks[block.stack]
+            out[name] = sum(own[layer] for layer in stack.layers[: block.level + 1]) + block.level * (gaps[block.stack] - stack.gap)
+        return out
+
+    def _bottoms(self, blocks: Sequence[str]) -> list[str]:
+        """What raising ``blocks`` raises: each block, but of a stack the lowest of them (the
+        layers above go with it)."""
+        layout = self.diagram_layout
+        out: list[str] = []
+        lowest: dict[str, str] = {}
+        for name in blocks:
+            stack = layout.blocks[name].stack
+            if stack is None:
+                out.append(name)
+            elif stack not in lowest or layout.blocks[name].level < layout.blocks[lowest[stack]].level:
+                lowest[stack] = name
+        return out + list(lowest.values())
+
+    def _blocks_named(self, name: str) -> list[str]:
+        """The blocks (and layers) target ``name`` covers."""
+        p = self.params
+        kind = self.target_kind(name)
+        everything = [b for b, *_ in p.all_blocks()]
+        if kind == "block":
+            if name.startswith("block:"):
+                return [name[len("block:"):]]
+            return [everything[int(name[len("block"):]) - 1]]
+        if kind == "stack":
+            return list(self.diagram_layout.stacks[name[len("stack:"):]].layers)
+        if kind == "group":
+            group = next(g for g in p.groups if g.id == name[len("group:"):])
+            return [b for b in everything if self._item_of(b) in group.blocks]
+        if kind == "diagram":
+            return everything
+        return []
+
+    def _item_of(self, block: str) -> str:
+        return self.diagram_layout.blocks[block].stack or block
+
+    # ----- labels ----------------------------------------------------------------------------
+
+    def _label_keys(self) -> dict[str, LabelKey]:
+        """The label each target name shows (for ``relabel``): a block's or layer's, a stack's
+        caption (of a stack of one: its layer's label), a group's caption, a connector's."""
+        p = self.params
+        out: dict[str, LabelKey] = {}
+        for i, (block_id, _label, _color, stack) in enumerate(p.all_blocks(), start=1):
+            kind = "layer" if stack is not None and len(self.diagram_layout.stacks[stack].layers) > 1 else "block"
+            out[f"block{i}"] = out[f"block:{block_id}"] = (kind, block_id)
+        for s in p.stacks():
+            out[f"stack:{s.id}"] = ("block", s.layers[0].id) if len(s.layers or ()) == 1 else ("stack", s.id)
+        out.update({f"group:{g.id}": ("group", g.id) for g in p.groups})
+        out.update({f"edge:{e.ref()}": ("edge", e.ref()) for e in p.edges})
+        return out
+
+    def _relabels(self) -> dict[LabelKey, list[str]]:
+        """The texts ``relabel`` actions will give each label (so it keeps room for them)."""
+        keys = self._label_keys()
+        out: dict[LabelKey, list[str]] = {}
+        for use in self.action_uses("relabel"):
+            for pattern in use.config.targets():
+                for name, key in keys.items():
+                    if fnmatchcase(name, pattern):
+                        out.setdefault(key, []).append(str(use.options.text))
+        return out
 
     def _make_labels(self, size: float, edge_size: float) -> list[_Label]:
         """Every label's text at ``size`` (blocks, layers, stacks, groups) and ``edge_size``."""
         p = self.params
         u, ue = size / 32, edge_size / 32
+        later = self._relabels()
         labels: list[_Label] = []
+
+        def add(kind: str, owner: str, text: str, width: float, at: float, color: str, weight: str = NORMAL) -> None:
+            def make(words: str) -> Mobject:
+                return fit_text(words, width, size=at, color=color, weight=weight, balance=True)
+
+            made = make(text)
+            extent = (made.width, made.height)
+            for other in later.get((kind, owner), []):
+                alt = make(other)
+                extent = (max(extent[0], alt.width), max(extent[1], alt.height))
+            labels.append(_Label(kind, owner, made, extent, make))
+
+        captions = {s.id: s.text() for s in p.stacks() if len(s.layers or ()) > 1}
         for block_id, label, _color, stack in p.all_blocks():
-            width = (self.layer_wrap if stack else self.wrap) * u
-            labels.append(_Label("layer" if stack else "block", block_id,
-                                 fit_text(label, width, size=size, color=p.label_color, weight=BOLD, balance=True)))
+            if stack is not None and stack in captions:
+                add("layer", block_id, label, self.layer_wrap * u, size, p.label_color, BOLD)
+            else:
+                add("block", block_id, label, self.wrap * u, size, p.label_color, BOLD)
         for s in p.stacks():
-            labels.append(_Label("stack", s.id, fit_text(s.text(), self.wrap * 1.3 * u, size=size, color=p.label_color, balance=True)))
+            if s.id in captions and captions[s.id] not in {layer.text() for layer in s.layers or ()}:   # never a label twice
+                add("stack", s.id, captions[s.id], self.wrap * 1.3 * u, size, p.label_color)
         for g in p.groups:
             if g.label:
-                labels.append(_Label("group", g.id, fit_text(g.label, self.wrap * 1.3 * u, size=size, color=p.label_color, balance=True)))
+                add("group", g.id, g.label, self.wrap * 1.3 * u, size, p.label_color)
         for e in p.edges:
             if e.label:
-                labels.append(_Label("edge", e.ref(), fit_text(e.label, self.edge_wrap * ue, size=edge_size, color=p.edge_label_color, balance=True)))
+                add("edge", e.ref(), e.label, self.edge_wrap * ue, edge_size, p.edge_label_color)
         return labels
 
     def _fit(self, body: Region) -> _Plan:
@@ -478,7 +732,7 @@ class IsoDiagram(NarratedScene):
     def _largest(self, body: Region, labels: list[_Label]) -> _Plan:
         """The largest scale (tile width, Manim units) up to :attr:`max_tile` at which the
         diagram and ``labels`` fit ``body`` (bisection; not fitting even small: the smallest)."""
-        cap = min(self.max_tile, body.width / 1.2, body.height / 1.2)
+        cap = min(self.max_tile * (self.portrait_tile if self.is_portrait else 1.0), body.width / 1.2, body.height / 1.2)
 
         def fits(scale: float) -> tuple[bool, _Placement]:
             placement = self._place(scale, labels)
@@ -492,7 +746,7 @@ class IsoDiagram(NarratedScene):
         ok, placement = fits(low)
         if not ok:
             return _Plan(low, labels, placement, False)
-        for _ in range(18):
+        for _ in range(14):
             middle = (low + high) / 2
             ok, found = fits(middle)
             if ok:
@@ -503,270 +757,827 @@ class IsoDiagram(NarratedScene):
 
     def _place(self, scale: float, labels: list[_Label]) -> _Placement:
         """The labels placed at ``scale`` (picture origin at 0, 0; y up), in turn: a stack's
-        layers at its side (its ``label_side``; ``auto``: away from the diagram's middle unless the
-        other side is clearer), spread so they do not touch, with leader lines; then each block's
-        on its top when it fits there, else above, below, right or left of it, whichever first
-        overlaps no label or block placed so far; stack and group captions below (else above,
-        right, left); connector labels on the connector's middle (else just above or below)."""
+        layers in a column at its side with leader lines, or listed under it with swatches
+        (``label_side``; ``auto``: away from the diagram's middle in 16:9, under it in 9:16, unless
+        another place covers less); each block's on its top when it fits there, else right by its
+        outline (above, below, beside), else pushed clear with a leader line; connector labels
+        along the connector, beside it; stack and group captions by the stack's foot and the
+        plate's front edges. Each takes the first place that covers no label, block or connector,
+        else the one that covers least."""
         layout = self.diagram_layout
         out = _Placement()
-
-        def at(point: tuple[float, float]) -> np.ndarray:
-            return np.array([point[0] * scale, -point[1] * scale])
-
-        def frame(box: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
-            left, top, right, bottom = box
-            return left * scale, -bottom * scale, right * scale, -top * scale
-
-        blocks = {name: frame(b.box.picture_bounds()) for name, b in layout.blocks.items()}
-        taken: list[tuple[float, float, float, float]] = []
+        hulls = {n: h * scale for n, h in {**self._swept, **self._pipe_hulls}.items()}
+        obstacles = Obstacles(hulls, {ref: pts * scale for ref, pts in self._lines.items()}, clearance=2 * self.gap)
+        by_owner = {lab.key: k for k, lab in enumerate(labels)}
+        Owner = np.ndarray | Callable[[np.ndarray], np.ndarray] | None
 
         def size(k: int, plate: bool = True) -> tuple[float, float]:
-            text = labels[k].text
-            return (text.width + 2 * self.label_pad[0], text.height + 2 * self.label_pad[1]) if plate else (text.width, text.height)
+            w, h = labels[k].extent
+            return (w + 2 * self.label_pad[0], h + 2 * self.label_pad[1]) if plate else (w, h)
 
-        def rect(centre: np.ndarray, wh: tuple[float, float]) -> tuple[float, float, float, float]:
-            return centre[0] - wh[0] / 2, centre[1] - wh[1] / 2, centre[0] + wh[0] / 2, centre[1] + wh[1] / 2
-
-        def inside(r: tuple[float, float, float, float], points: np.ndarray) -> int:
-            return int(np.count_nonzero((points[:, 0] >= r[0]) & (points[:, 0] <= r[2]) & (points[:, 1] >= r[1]) & (points[:, 1] <= r[3])))
-
-        def overlap(r: tuple[float, float, float, float], skip: set[str]) -> float:
-            """What a label at ``r`` covers: other labels (area), blocks (the share of each
-            block's faces, as its picture's area) and connectors (:attr:`line_cost` a sample)."""
-            total = sum(_area(r, other) for other in taken)
-            total += sum(weight * inside(r, points) for name, (points, weight) in faces.items() if name not in skip)
-            return total + sum(self.line_cost * inside(r, points) for ref, points in lines.items() if ref not in skip)
-
-        faces = {}
-        for name, block in layout.blocks.items():
-            points = np.array([at(iso_point(*p)) for p in _face_points(block.box)])
-            left, bottom, right, top = blocks[name]
-            faces[name] = (points, (right - left) * (top - bottom) * 0.7 / len(points))
-        lines = {edge.ref(): np.array([at(iso_point(*point)) for point in edge.samples(self.line_step)]) for edge in layout.edges}
-
-        def choose(k: int, options: list[tuple[np.ndarray, bool]], skip: set[str]) -> None:
-            best: tuple[float, int] | None = None
-            for n, (centre, plate) in enumerate(options):
-                cost = overlap(rect(centre, size(k, plate)), skip)
-                if best is None or cost < best[0] - 1e-9:
-                    best = (cost, n)
-                if cost <= 1e-9:
-                    break
-            assert best is not None
-            centre, plate = options[best[1]]
-            out.centres[k] = centre
+        def commit(k: int, centre: np.ndarray, plate: bool = True, owner: Owner = None) -> None:
+            out.centres[k] = np.asarray(centre, dtype=float)
             if not plate:
                 out.on_top.add(k)
-            taken.append(rect(centre, size(k, plate)))
+            rect = rect_of(centre, size(k, plate))
+            obstacles.taken.append(rect)
+            hull = owner(out.centres[k]) if callable(owner) else owner
+            if hull is not None and hull_gap(rect, hull) > self.leader_from:
+                middle = np.array([(hull[:, 0].min() + hull[:, 0].max()) / 2, (hull[:, 1].min() + hull[:, 1].max()) / 2])
+                start = ray_exit(hull, middle, centre)
+                out.leaders.append((k, start, rect_exit(rect, start)))
 
-        by_owner = {(lab.kind, lab.owner): k for k, lab in enumerate(labels)}
-        middle = _middle(blocks)
-        sides = {s.id: s.label_side or "auto" for s in self.params.stacks()}
-        for stack_id, stack in layout.stacks.items():
-            left, _, right, _ = _union([blocks[n] for n in stack.layers])
-            outward = "left" if (left + right) / 2 < middle - 1e-6 else "right"
-            options = [sides[stack_id]] if sides[stack_id] != "auto" else [outward, "right" if outward == "left" else "left"]
-            columns = [self._layer_column(stack, side, by_owner, at, blocks, size) for side in options]
+        def choose(k: int, near: list[tuple[np.ndarray, bool]], far: Callable[[], list[np.ndarray]], skip: set[str], owner: Owner) -> None:
+            best: tuple[float, np.ndarray, bool] | None = None
+            for centre, plate in near:
+                cost = obstacles.cost(rect_of(centre, size(k, plate)), skip)
+                if cost <= 1e-9:
+                    commit(k, centre, plate, owner)
+                    return
+                if best is None or cost < best[0] - 1e-9:
+                    best = (cost, centre, plate)
+            for centre in far():   # pushed clear: dearer the further off it goes
+                rect = rect_of(centre, size(k))
+                hull = owner(centre) if callable(owner) else owner
+                off = max(hull_gap(rect, hull) - self.leader_from, 0.0) if hull is not None else 0.0
+                cost = obstacles.cost(rect, skip) + FAR_COST * off
+                if best is None or cost < best[0] - 1e-9:
+                    best = (cost, centre, True)
+            assert best is not None
+            commit(k, best[1], best[2], owner)
+
+        def around(k: int, hull: np.ndarray, directions: Sequence[Sequence[float]]) -> tuple[list[tuple[np.ndarray, bool]], Callable[[], list[np.ndarray]]]:
+            middle = np.array([(hull[:, 0].min() + hull[:, 0].max()) / 2, (hull[:, 1].min() + hull[:, 1].max()) / 2])
+            near = [(slide_out(size(k), middle, d, hull, self.gap), True) for d in directions]
+            return near, lambda: [obstacles.clear_of_all(size(k), c, d, self.gap) for (c, _), d in zip(near, directions)]
+
+        # a stack's layers: a column at its side, or a list under it
+        placed_captions: set[str] = set()
+        for sid, stack in layout.stacks.items():
+            if len(stack.layers) < 2:
+                continue
+            columns = [self._layer_column(stack, side, by_owner, scale, size) for side in self._label_sides(sid)]
             mine = set(stack.layers)
-            column = min(columns, key=lambda c: sum(overlap(rect(centre, size(k)), mine) for k, centre, _, _ in c))
-            for k, centre, start, end in column:   # the outward side unless the other one is clearer
+            best = min(enumerate(columns), key=lambda c: (round(sum(obstacles.cost(rect, mine) for rect in c[1][1]), 6), c[0]))[1]
+            for k, centre, leader, swatch in best[0]:
                 out.centres[k] = centre
-                out.leaders.append((k, start, end))
-                taken.append(rect(centre, size(k)))
+                if leader is not None:
+                    out.leaders.append((k, *leader))
+                if swatch is not None:
+                    out.swatches[k] = swatch
+            obstacles.taken.extend(best[1])
+            if best[2]:
+                placed_captions.add(sid)
+        # a group's caption: by its plate's front edges, else round it, else outside the diagram
+        whole = rect_union([hull_box(h) for h in hulls.values()])
+        for gid in layout.plates:
+            k = by_owner.get(("group", gid))
+            if k is None:
+                continue
+            hull = self._plate_hulls[gid] * scale
+            box = layout.plates[gid]
+            fronts = [np.array(iso_point(*q)) * np.array([scale, -scale]) for q in
+                      (((box.x0 + box.x1) / 2, box.y1, 0.0), (box.x1, (box.y0 + box.y1) / 2, 0.0), (box.x1, box.y1, 0.0))]
+            middle = np.array([(hull[:, 0].min() + hull[:, 0].max()) / 2, (hull[:, 1].min() + hull[:, 1].max()) / 2])
+            directions = [f - middle for f in fronts] + [np.array([-1.0, 0.0]), np.array([1.0, 0.0]), np.array([0.0, 1.0])]
+            near, far_near = around(k, hull, directions)
+            h = size(k)[1]
+
+            def far(far_near: Callable[[], list[np.ndarray]] = far_near, middle: np.ndarray = middle, h: float = h) -> list[np.ndarray]:
+                outside = [np.array([middle[0], whole[1] - self.gap - h / 2]), np.array([middle[0], whole[3] + self.gap + h / 2])]
+                return far_near() + outside
+
+            choose(k, near, far, set(), hull)
+        # each block's label: on its top, else right by it, else pushed clear (with a leader)
         for name, block in layout.blocks.items():
             k = by_owner.get(("block", name))
             if k is None:
                 continue
-            left, bottom, right, top = blocks[name]
-            w, h = size(k)
+            hull = self._hulls[name] * scale   # its label rides with it when it is raised
             room_w, room_h = (v * scale for v in top_room(block))
             tw, th = size(k, False)
-            options: list[tuple[np.ndarray, bool]] = []
+            near: list[tuple[np.ndarray, bool]] = []
             if tw / (2 * room_w) + th / (2 * room_h) <= 0.92:
-                options.append((at(top_point(block)), False))
-            cx = (left + right) / 2
-            options += [(np.array([cx, top + self.gap + h / 2]), True), (np.array([cx, bottom - self.gap - h / 2]), True),
-                        (np.array([right + self.gap + w / 2, (top + bottom) / 2]), True), (np.array([left - self.gap - w / 2, (top + bottom) / 2]), True)]
-            choose(k, options, {name})
-        for kind, boxes in (("stack", {s: _union([blocks[n] for n in st.layers]) for s, st in layout.stacks.items()}),
-                            ("group", {g: frame(box.picture_bounds()) for g, box in layout.plates.items()})):
-            for name, (left, bottom, right, top) in boxes.items():
-                k = by_owner.get((kind, name))
-                if k is None:
-                    continue
-                w, h = size(k)
-                cx, cy = (left + right) / 2, (top + bottom) / 2
-                members = set(layout.stacks[name].layers) if kind == "stack" else {
-                    n for n, b in layout.blocks.items() if b.group == name}
-                choose(k, [(np.array([cx, bottom - self.gap - h / 2]), True), (np.array([cx, top + self.gap + h / 2]), True),
-                           (np.array([right + self.gap + w / 2, cy]), True), (np.array([left - self.gap - w / 2, cy]), True)], members)
+                u, v = top_point(block)
+                near.append((np.array([u * scale, -v * scale]), False))
+            beside, far_off = around(k, hull, AROUND)
+            choose(k, near + beside, far_off, {name}, hull)
+        # a stack's caption: under its foot, else round it
+        for sid, stack in layout.stacks.items():
+            k = by_owner.get(("stack", sid))
+            if k is None or sid in placed_captions:
+                continue
+            hull = self._stack_hulls[sid] * scale
+            near, far = around(k, hull, ((0.0, -1.0), (-1.0, -1.0), (1.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)))
+            choose(k, near, far, set(stack.layers), hull)   # clear of its layers also where actions raise them (the hull swept)
+        # connector labels: beside the connector, along its longest straight run first
         for edge in layout.edges:
             k = by_owner.get(("edge", edge.ref()))
             if k is None:
                 continue
-            a, b = edge.longest()
-            centre = at(iso_point(*edge.midpoint()))
-            way = at(iso_point(*b)) - at(iso_point(*a))
-            normal = np.array([-way[1], way[0]]) / max(float(np.linalg.norm(way)), 1e-9)
-            if normal[1] < 0:
-                normal = -normal
             w, h = size(k)
-            off = abs(normal[0]) * w / 2 + abs(normal[1]) * h / 2 + self.gap / 2 + 0.06 * scale
-            ends = {edge.source, edge.target, edge.ref()}
-            choose(k, [(centre + normal * off, True), (centre - normal * off, True), (centre, True)], ends)
-        bounds = frame(self._bounds)
-        everything = [bounds, *[rect(out.centres[k], size(k, k not in out.on_top)) for k in out.centres]]
-        out.bounds = _union(everything)
+            options: list[tuple[np.ndarray, bool]] = []
+            normals: list[np.ndarray] = []
+            segments = sorted(zip(edge.points, edge.points[1:]), key=lambda ab: -float(np.hypot(ab[1][0] - ab[0][0], ab[1][1] - ab[0][1])))
+            for a, b in segments:
+                pa, pb = (np.array(iso_point(*q)) * np.array([scale, -scale]) for q in (a, b))
+                way = pb - pa
+                normal = np.array([-way[1], way[0]]) / max(float(np.linalg.norm(way)), 1e-9)
+                if normal[1] < 0:
+                    normal = -normal
+                off = abs(normal[0]) * w / 2 + abs(normal[1]) * h / 2 + self.gap / 2 + 0.06 * scale
+                for share in (0.5, 0.3, 0.7):
+                    point = pa + way * share
+                    options += [(point + normal * off, True), (point - normal * off, True)]
+                    normals += [normal, -normal]
+            a, b = segments[0]
+            options.append(((np.array(iso_point(*a)) + np.array(iso_point(*b))) / 2 * np.array([scale, -scale]), True))
+            line = obstacles.lines[edge.ref()]
+
+            def anchor(centre: np.ndarray, line: np.ndarray = line) -> np.ndarray:
+                point = line[int(np.argmin(np.hypot(line[:, 0] - centre[0], line[:, 1] - centre[1])))]
+                return hull_of_point(point)
+
+            def pushed(options: list[tuple[np.ndarray, bool]] = options, normals: list[np.ndarray] = normals, k: int = k) -> list[np.ndarray]:
+                return [obstacles.clear_of_all(size(k), c, d, self.gap) for (c, _), d in zip(options[:4], normals[:4])]
+
+            choose(k, options, pushed, {edge.ref()}, anchor)
+        out.bounds = self._placement_bounds(scale, labels, out, size)
         return out
 
-    def _layer_column(self, stack: Any, side: str, by_owner: dict[tuple[str, str], int], at: Any,
-                      blocks: dict[str, tuple[float, float, float, float]], size: Any) -> list[tuple[int, np.ndarray, np.ndarray, np.ndarray]]:
-        """A stack's layer labels in a column at its ``side`` (``left`` or ``right``), spread
-        apart: per layer its label's index, centre, and its leader line's ends (from the layer's
-        side face to the label)."""
-        left, _bottom, right, _top = _union([blocks[n] for n in stack.layers])
-        rows = []
+    def _placement_bounds(self, scale: float, labels: list[_Label], out: _Placement, size: Callable[..., tuple[float, float]]) -> Box:
+        """Everything placed: the drawing (with the room its raised blocks take), the labels
+        (also where they ride when their block is raised), swatches and leader lines."""
+        x0, y0, x1, y1 = self._bounds
+        rects: list[Box] = [(x0 * scale, y0 * scale, x1 * scale, y1 * scale)]
+        for k, centre in out.centres.items():
+            rect = rect_of(centre, size(k, k not in out.on_top))
+            rects.append(rect)
+            lift = self._lift_max.get(labels[k].owner, 0.0) if labels[k].kind in ("block", "layer") and k not in out.swatches else 0.0
+            lift = self._plate_lift_max.get(labels[k].owner, 0.0) if labels[k].kind == "group" else lift
+            if lift > 1e-9:
+                dy = lift * ISO_RISE * scale
+                rects.append((rect[0], rect[1] + dy, rect[2], rect[3] + dy))
+        rects += [rect_of(c, wh) for c, wh in out.swatches.values()]
+        rects += [(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])) for _, a, b in out.leaders]
+        return rect_union(rects)
+
+    def _label_sides(self, stack_id: str) -> list[str]:
+        """Where a stack's layer labels may go, preferred first: its ``label_side``, or for
+        ``auto`` in 9:16 the list below it then the sides, in 16:9 the side away from the
+        diagram's middle, the other side, then below."""
+        side = next(s.label_side for s in self.params.stacks() if s.id == stack_id) or "auto"
+        if side != "auto":
+            return [side]
+        hull = self._stack_hulls[stack_id]
+        everything = rect_union([hull_box(h) for h in self._hulls.values()])
+        outward = "left" if (hull[:, 0].min() + hull[:, 0].max()) / 2 < (everything[0] + everything[2]) / 2 - 1e-6 else "right"
+        other = "right" if outward == "left" else "left"
+        return ["below", outward, other] if self.is_portrait else [outward, other, "below"]
+
+    def _layer_column(self, stack: Any, side: str, by_owner: dict[LabelKey, int], scale: float,
+                      size: Callable[..., tuple[float, float]]) -> tuple[list[tuple[int, np.ndarray, tuple[np.ndarray, np.ndarray] | None, Any]], list[Box], bool]:
+        """A stack's layer labels at its ``side``: in a column at its ``left`` or ``right``,
+        spread apart, each with a leader line from its layer's side face; or ``below``: its
+        caption under its foot and the layers listed under that, top layer first, each after a
+        swatch of its colour. Returns the labels (index, centre, leader, swatch), the rectangles
+        they take, and whether the caption was placed."""
+        hull = self._stack_hulls[stack.id] * scale
+        left, bottom, right, _top = hull_box(hull)
+        rows: list[tuple[int, np.ndarray, tuple[np.ndarray, np.ndarray] | None, Any]] = []
+        rects: list[Box] = []
+        if side == "below":
+            y = bottom - self.gap
+            caption = by_owner.get(("stack", stack.id))
+            if caption is not None:
+                w, h = size(caption)
+                centre = slide_out((w, h), ((left + right) / 2, (bottom + _top) / 2), (0.0, -1.0), hull, self.gap)
+                rows.append((caption, centre, None, None))
+                rects.append(rect_of(centre, (w, h)))
+                y = centre[1] - h / 2 - 0.04
+            entries = []
+            for name in reversed(stack.layers):
+                k = by_owner[("layer", name)]
+                w, h = size(k)
+                sw = self.swatch * size(k, False)[1]
+                entries.append((k, w, h, sw))
+            width = max(sw + self.swatch_gap + w for _, w, _, sw in entries)
+            x0 = (left + right) / 2 - width / 2
+            for k, w, h, sw in entries:
+                cy = y - h / 2
+                swatch = (np.array([x0 + sw / 2, cy]), (sw, sw / 2))
+                centre = np.array([x0 + sw + self.swatch_gap + w / 2, cy])
+                rows.append((k, centre, None, swatch))
+                rects += [rect_of(centre, (w, h)), rect_of(*swatch)]
+                y = cy - h / 2 - 0.02
+            return rows, rects, caption is not None
+        anchors = []
         for name in stack.layers:
-            rows.append((by_owner[("layer", name)], at(side_point(self.diagram_layout.blocks[name], side))))
-        ys = _spread([a[1] for _, a in rows], [size(k)[1] for k, _ in rows], 0.06)
-        column = []
-        for (k, anchor), y in zip(rows, ys):
-            w = size(k)[0]
+            u, v = side_point(self.diagram_layout.blocks[name], side)
+            anchors.append((by_owner[("layer", name)], np.array([u * scale, -v * scale])))
+        ys = _spread([a[1] for _, a in anchors], [size(k)[1] for k, _ in anchors], 0.06)
+        for (k, anchor), y in zip(anchors, ys):
+            w, h = size(k)
             x = right + self.lead + w / 2 if side == "right" else left - self.lead - w / 2
-            column.append((k, np.array([x, y]), anchor, np.array([x - w / 2 if side == "right" else x + w / 2, y])))
-        return column
+            centre = np.array([x, y])
+            rows.append((k, centre, (anchor, np.array([x - w / 2 if side == "right" else x + w / 2, y])), None))
+            rects.append(rect_of(centre, (w, h)))
+        return rows, rects, False
 
     # ----- drawing ---------------------------------------------------------------------------
 
     def _draw(self, plan: _Plan, body: Region) -> dict[str, Any]:
         """Every mobject, placed in the body: the floor, plates, connectors, blocks (in the
         view's draw order) and labels, and the groups the targets are made of."""
-        p = self.params
         layout = self.diagram_layout
         x0, y0, x1, y1 = plan.placement.bounds
         shift = body.center[:2] - np.array([(x0 + x1) / 2, (y0 + y1) / 2])
         to_scene = picture_to_scene(plan.scale, shift)
         s = self._shapes
+        solids: dict[int, _Solid] = {}
+
+        def drawn(build: Callable[[Callable[[str], str]], tuple[list[Any], str | None]]) -> Mobject:
+            """A piece drawn from ``build(paint)`` (its shapes and outline ink with each colour
+            turned by ``paint``), kept so actions can recolour it with its shading."""
+
+            def made(paint: Callable[[str], str]) -> Mobject:
+                shapes, ink = build(paint)
+                return shapes_mobject(shapes, to_scene, ink=ink, stroke=self.stroke)
+
+            mob = made(lambda color: color)
+            solids[id(mob)] = _Solid(mob, made)
+            return mob
+
         floor = shapes_mobject(s.floor, to_scene, ink=None, stroke=self.stroke)
         floor.set_z_index(0)
-        plates = {}
+        plates: dict[str, Mobject] = {}
         for gid, shapes in s.plates.items():
-            plates[gid] = shapes_mobject(shapes, to_scene, ink=outline_ink(shapes[-1].fill), stroke=self.stroke)
+            box, fill = layout.plates[gid], shapes[-1].fill
+            plates[gid] = drawn(lambda paint, box=box, fill=fill: (plate_shapes(box, paint(fill)), outline_ink(paint(fill))))
             plates[gid].set_z_index(1)
         edges: dict[int, VGroup] = {k: VGroup() for k in range(len(layout.edges))}
-        for k, shapes in s.arrows.items():
-            edges[k].add(shapes_mobject(shapes, to_scene, ink=None).set_z_index(2))
-        blocks: dict[str, VGroup] = {}
+        for k in s.arrows:
+            edge, color = layout.edges[k], self._edge_colors[k]
+            arrow = drawn(lambda paint, edge=edge, color=color: (arrow_shapes(edge, paint(color)), None))
+            edges[k].add(arrow.set_z_index(2))
+        blocks: dict[str, Mobject] = {}
+        self._pipe_depths: dict[int, list[float]] = {k: [] for k in range(len(layout.edges))}
+        pipe_boxes = layout.pipe_boxes()
+        ranks: dict[int, int] = {}
         for rank, (kind, key) in enumerate(layout.order()):
             if kind == "block":
-                blocks[key] = shapes_mobject(s.blocks[key], to_scene, ink=outline_ink(self._colors[key]), stroke=self.stroke)
+                block, color = layout.blocks[key], self._colors[key]
+                blocks[key] = drawn(lambda paint, block=block, color=color: (block_shapes(block, paint(color)), outline_ink(paint(color))))
                 blocks[key].set_z_index(10 + rank)
             else:
-                k, shapes = s.pipes[key]
-                piece = shapes_mobject(shapes, to_scene, ink=outline_ink(shapes[-1].fill), stroke=self.stroke)
+                k = s.pipes[key][0]
+                box, color = pipe_boxes[key], self._edge_colors[k]
+                piece = drawn(lambda paint, box=box, color=color: (box_faces(box, paint(color)), outline_ink(paint(color))))
                 edges[k].add(piece.set_z_index(10 + rank))
-        texts: dict[tuple[str, str], VGroup] = {}
+                ranks[key] = rank
+        for key in range(len(s.pipes)):   # pipe segments in path order, with the depth each is drawn at
+            self._pipe_depths[s.pipes[key][0]].append(10 + ranks[key] + 0.5)
+        texts: dict[LabelKey, VGroup] = {}
+        self._label_text: dict[LabelKey, Mobject] = {}
+        self._label_plate: dict[LabelKey, Mobject | None] = {}
+        self._label_on_top: set[LabelKey] = set()
+        self._label_moves: dict[LabelKey, bool] = {}
+        self._label_leader: set[LabelKey] = set()
+        self._labels = {lab.key: lab for lab in plan.labels}
         on_fill: dict[str, tuple[Mobject, Mobject]] = {}
-        background = self.theme.background
         dark, light = self.theme.background, self.theme.color("text")
+        place_ = plan.placement
         for k, label in enumerate(plan.labels):
-            centre = plan.placement.centres[k] + shift
+            centre = place_.centres[k] + shift
             text = label.text.move_to(np.array([centre[0], centre[1], 0.0]))
             group = VGroup()
-            if k in plan.placement.on_top:
-                text.set_color(readable_ink(self._colors[label.owner], dark, light))
-                on_fill[label.owner] = (text, blocks[label.owner][-1])
+            plate = None
+            if k in place_.on_top:
+                drawn_block = blocks[label.owner]   # its top: a box's last face, a cylinder's top ellipse
+                top_face = drawn_block[0][-1] if layout.blocks[label.owner].shape in ("cylinder", "database") else drawn_block[-1]
+                text.set_color(readable_ink(rgb_to_hex(top_face.fill_rgbas[0, :3]), dark, light))
+                on_fill[label.owner] = (text, top_face)
+                self._label_on_top.add(label.key)
             else:
-                plate = RoundedRectangle(width=text.width + 2 * self.label_pad[0], height=text.height + 2 * self.label_pad[1],
-                                         corner_radius=min(0.12, (text.height + 2 * self.label_pad[1]) / 2))
-                plate.set_fill(background, opacity=self.plate_opacity).set_stroke(width=0).move_to(text.get_center())
+                plate = self._plate_for(text)
                 group.add(plate.set_z_index(900))
             group.add(text.set_z_index(902))
-            texts[(label.kind, label.owner)] = group
-        for k, start, end in plan.placement.leaders:
+            if k in place_.swatches:
+                (sc, (sw, sh)) = place_.swatches[k]
+                group.add(self._swatch(sc + shift, sw, sh, self._colors[label.owner]))
+            texts[label.key] = group
+            self._label_text[label.key] = text
+            self._label_plate[label.key] = plate
+            self._label_moves[label.key] = label.kind in ("block", "layer") and k not in place_.swatches
+        for k, start, end in place_.leaders:
             label = plan.labels[k]
             line = Line(np.array([*(start + shift), 0.0]), np.array([*(end + shift), 0.0]))
             line.set_stroke(self.theme.color("dim"), width=2.0).set_z_index(899)
             dot = Dot(np.array([*(start + shift), 0.0]), radius=0.035, color=self.theme.color("dim")).set_z_index(899)
-            texts[(label.kind, label.owner)].add_to_back(line, dot)
+            texts[label.key].add_to_back(line, dot)
+            self._label_leader.add(label.key)
         everything = VGroup(floor, *plates.values(), *edges.values(), *blocks.values(), *texts.values())
+        self._unit = plan.scale
         if not plan.fits:   # at the readable size and still too big: the whole diagram smaller
+            before, width = everything.get_center().copy(), everything.width
             shrink_to_fit(everything, body.width, body.height).move_to(body.center)
+            factor, after = everything.width / max(width, 1e-9), everything.get_center().copy()
+            inner = to_scene
+            self._unit = plan.scale * factor
+
+            def to_scene(u: float, v: float, inner: Any = inner) -> np.ndarray:
+                return after + (inner(u, v) - before) * factor
+        self._to_scene = to_scene
+        self._solids = solids
         return {"floor": floor, "plates": plates, "edges": edges, "blocks": blocks, "texts": texts, "on_fill": on_fill}
 
-    # ----- steps -----------------------------------------------------------------------------
+    def _plate_for(self, text: Mobject) -> Mobject:
+        """The plate behind a label beside what it names."""
+        h = text.height + 2 * self.label_pad[1]
+        plate = RoundedRectangle(width=text.width + 2 * self.label_pad[0], height=h, corner_radius=min(0.12, h / 2))
+        return plate.set_fill(self.theme.background, opacity=self.plate_opacity).set_stroke(width=0).move_to(text.get_center())
+
+    def _swatch(self, centre: np.ndarray, width: float, height: float, color: str) -> Mobject:
+        """A small flat diamond in a layer's colour (the layer list under a stack)."""
+        x, y = float(centre[0]), float(centre[1])
+        diamond = Polygon([x - width / 2, y, 0], [x, y + height / 2, 0], [x + width / 2, y, 0], [x, y - height / 2, 0])
+        return diamond.set_fill(color, opacity=1.0).set_stroke(outline_ink(color), width=self.stroke).set_z_index(901)
+
+    # ----- targets and steps -------------------------------------------------------------------
+
+    def _recolor(self, mobs: Sequence[Mobject], keys: Sequence[LabelKey] = ()) -> Callable[[Callable[[str], str]], dict[int, tuple[np.ndarray, np.ndarray]]] | None:
+        """``Target.recolor`` for the solid pieces among ``mobs`` (blocks, plates, connectors);
+        the plates behind the labels ``keys`` keep their colour (a highlighted label is its text
+        in the colour on its plate, not a block of colour)."""
+        pieces = [self._solids[id(m)] for m in mobs if id(m) in self._solids]
+        if not pieces:
+            return None
+        plates = [m for key in keys if self._label_plate.get(key) is not None for m in self._label_plate[key].get_family() if isinstance(m, VMobject)]
+
+        def recolor(paint: Callable[[str], str]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+            out: dict[int, tuple[np.ndarray, np.ndarray]] = {id(m): (m.fill_rgbas[0, :3].copy(), m.stroke_rgbas[0, :3].copy()) for m in plates
+                                                             if len(m.fill_rgbas) and len(m.stroke_rgbas)}
+            for piece in pieces:
+                for live, made in zip(piece.mobject.get_family(), piece.build(paint).get_family()):
+                    if isinstance(live, VMobject) and isinstance(made, VMobject) and len(made.fill_rgbas) and len(made.stroke_rgbas):
+                        out[id(live)] = (made.fill_rgbas[0, :3].copy(), made.stroke_rgbas[0, :3].copy())
+            return out
+
+        return recolor
 
     def _steps(self, heading: Mobject | None, parts: dict[str, Any]) -> None:
-        """Targets, and the scene's one step: the whole diagram comes in (floor and plates, the
-        blocks back to front, then the connectors)."""
+        """Targets, and the scene's own steps: the diagram in the first beat, or one item per
+        step (``build: each``), leaving to the actions what a ``reveal`` or ``build`` names."""
         p = self.params
         layout = self.diagram_layout
+        self._parts = parts
         texts = parts["texts"]
+        self._style = p.entrance
+        self._in: set[Any] = set()   # ("block", id), ("plate", gid), ("caption", key), ("edge", k), "floor"
+        self._own = {name: 0.0 for name in layout.blocks}
+        self._plate_lift = {gid: 0.0 for gid in layout.plates}
+        self._gaps = {sid: s.gap for sid, s in layout.stacks.items()}
+        self._lifted = {name: 0.0 for name in layout.blocks}
+        self._plate_lifted = {gid: 0.0 for gid in layout.plates}
+        self._shadows: dict[str, Mobject] = {}
+        self._composite: dict[int, list[str]] = {}
         top = self.target("heading", heading, entrance=lambda: [FadeIn(heading, shift=DOWN * 0.15)]) if heading is not None else None
-        block_targets: dict[str, Target] = {}
+        self._block_targets: dict[str, Target] = {}
         for i, (block_id, *_rest) in enumerate(p.all_blocks(), start=1):
-            mob = VGroup(parts["blocks"][block_id], *([texts[(k, block_id)] for k in ("block", "layer") if (k, block_id) in texts]))
+            mob = VGroup(parts["blocks"][block_id], *self._block_labels(block_id))
             fill = [parts["on_fill"][block_id]] if block_id in parts["on_fill"] else []
-            block_targets[block_id] = self.target([f"block{i}", f"block:{block_id}"], mob, outline=parts["blocks"][block_id],
-                                                  on_fill=fill, entrance=lambda mob=mob: [FadeIn(mob, shift=DOWN * 0.12)])
+            self._block_targets[block_id] = self.target([f"block{i}", f"block:{block_id}"], mob, outline=parts["blocks"][block_id], on_fill=fill,
+                                                        entrance=lambda b=block_id: self._arrivals([b]),
+                                                        recolor=self._recolor([parts["blocks"][block_id]], self._keys_of([block_id])))
         for stack in p.stacks():
             caption = [texts[("stack", stack.id)]] if ("stack", stack.id) in texts else []
-            self.target(f"stack:{stack.id}", VGroup(*[block_targets[layer.id].mobject for layer in stack.layers], *caption))
+            layers = [layer.id for layer in stack.layers or ()]
+            target = self.target(f"stack:{stack.id}", VGroup(*[self._block_targets[n].mobject for n in layers], *caption),
+                                 entrance=lambda layers=layers, sid=stack.id: self._arrivals(layers, captions=[sid]),
+                                 recolor=self._recolor([parts["blocks"][n] for n in layers], [*self._keys_of(layers), ("stack", stack.id)]),
+                                 on_fill=[pair for n in layers for pair in self._block_targets[n].on_fill])
+            self._composite[id(target)] = layers
         for group in p.groups:
-            members = [block_targets[m].mobject for m in group.blocks if m in block_targets]
-            members += [block_targets[layer.id].mobject for s in p.stacks() if s.id in group.blocks for layer in s.layers or ()]
+            members = self._blocks_named(f"group:{group.id}")
             caption = [texts[("group", group.id)]] if ("group", group.id) in texts else []
-            self.target(f"group:{group.id}", VGroup(parts["plates"][group.id], *caption, *members))
-        edge_targets = []
+            target = self.target(f"group:{group.id}", VGroup(parts["plates"][group.id], *caption, *[self._block_targets[n].mobject for n in members]),
+                                 entrance=lambda members=members, gid=group.id: self._arrivals(members, plates=[gid]),
+                                 recolor=self._recolor([parts["plates"][group.id], *[parts["blocks"][n] for n in members]],
+                                                       [*self._keys_of(members), ("group", group.id)]),
+                                 on_fill=[pair for n in members for pair in self._block_targets[n].on_fill])
+            self._composite[id(target)] = members
+        self._edge_targets: list[Target] = []
         for k, edge in enumerate(p.edges):
             mob = VGroup(parts["edges"][k], *([texts[("edge", edge.ref())]] if ("edge", edge.ref()) in texts else []))
-            edge_targets.append(self.target(f"edge:{edge.ref()}", mob))
+            self._edge_targets.append(self.target(f"edge:{edge.ref()}", mob, entrance=lambda k=k: self._edge_arrivals([k], force=True),
+                                                  recolor=self._recolor(list(parts["edges"][k]), [("edge", edge.ref())])))
+        everything = [b for b, *_ in p.all_blocks()]
+        whole = VGroup(parts["floor"], *parts["plates"].values(), *parts["edges"].values(), *[t.mobject for t in self._block_targets.values()],
+                       *[texts[key] for key in texts if key[0] in ("stack", "group")])
+        diagram = self.target("diagram", whole, entrance=lambda: self._arrivals(everything, plates=list(layout.plates), floor=True, edges_too=True),
+                              recolor=self._recolor([*parts["plates"].values(), *[m for g in parts["edges"].values() for m in g], *parts["blocks"].values()],
+                                                    list(texts)),
+                              on_fill=list(parts["on_fill"].values()))
+        self._composite[id(diagram)] = everything
+        self._waiting = self._left_to_actions()
         order = [key for kind, key in layout.order() if kind == "block"]
-        captions = [texts[key] for key in texts if key[0] in ("stack", "group")]
-
-        def build() -> list[Animation]:
-            ground = [m for m in [parts["floor"], *parts["plates"].values(), *captions] if not self.on_screen_parts(m)]
-            anims: list[Animation] = [FadeIn(VGroup(*ground))] if ground else []
-            arrivals = [a for name in order for a in self.entrance(block_targets[name])]
-            if arrivals:
-                anims.append(LaggedStart(*arrivals, lag_ratio=0.12))
-            links = [a for t in edge_targets for a in self.entrance(t)]
-            if links:
-                anims.append(LaggedStart(*links, lag_ratio=0.1))
-            if top is not None:
-                anims = self.entrance(top) + anims
-            return [Succession(*anims)] if len(anims) > 1 else anims
-
-        self.reveal([build], fraction=0.8, cap=2.0)
+        free = [b for b in order if ("block", b) not in self._waiting]
+        steps: list[Callable[[], list[Animation]]]
+        if p.build == "together":
+            steps = [lambda: (self.entrance(top) if top is not None else []) + self._arrivals(free, floor=True, edges_too=True)]
+        else:
+            items = [[b for b in self._blocks_named(f"block:{blk.id}" if not blk.is_stack else f"stack:{blk.id}") if b in free] for blk in p.blocks]
+            items = [item for item in items if item]
+            first = items[0] if items else []
+            steps = [lambda: (self.entrance(top) if top is not None else []) + self._arrivals(first, floor=True, edges_too=True)]
+            steps += [lambda item=item: self._arrivals(item, edges_too=True) for item in items[1:]]
+        self.reveal(steps, fraction=0.8, cap=2.0)
         self.finish()
 
+    @staticmethod
+    def _keys_of(blocks: Sequence[str]) -> list[LabelKey]:
+        """The label keys a block or layer may have."""
+        return [(kind, b) for b in blocks for kind in ("block", "layer")]
 
-def _area(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
-    """The area two rectangles (left, bottom, right, top) share."""
-    w = min(a[2], b[2]) - max(a[0], b[0])
-    h = min(a[3], b[3]) - max(a[1], b[1])
-    return w * h if w > 0 and h > 0 else 0.0
+    def _block_labels(self, block_id: str) -> list[Mobject]:
+        texts = self._parts["texts"]
+        return [texts[(k, block_id)] for k in ("block", "layer") if (k, block_id) in texts]
+
+    def _left_to_actions(self) -> set[Any]:
+        """What the scene's own steps leave to ``reveal`` and ``build`` actions: the blocks (and
+        layers) they name, directly or as part of a stack, group or the diagram; the plates and
+        captions of the stacks and groups they name; the connectors they name. A connector to a
+        block that waits comes in with it."""
+        names = type(self).target_names(self.params)
+        patterns = [pattern for kind in ("reveal", "build") for use in self.action_uses(kind) for pattern in use.config.targets()]
+        named = [n for n in names if any(fnmatchcase(n, pattern) for pattern in patterns)]
+        out: set[Any] = set()
+        for name in named:
+            kind = self.target_kind(name)
+            out |= {("block", b) for b in self._blocks_named(name)}
+            if kind == "stack":
+                out.add(("caption", ("stack", name[len("stack:"):])))
+            elif kind == "group":
+                gid = name[len("group:"):]
+                out |= {("plate", gid), ("caption", ("group", gid))}
+            elif kind == "edge":
+                out.add(("edge", next(k for k, e in enumerate(self.params.edges) if f"edge:{e.ref()}" == name)))
+        return out
+
+    def is_shown(self, target: Target | str) -> bool:
+        """A stack, group or the diagram is shown once all its blocks are."""
+        found = self.find_targets(target) if isinstance(target, str) else [target]
+        composite = getattr(self, "_composite", {})
+        if found and all(id(t) in composite for t in found):
+            return any(all(("block", b) in self._in for b in composite[id(t)]) for t in found)
+        return super().is_shown(target)
+
+    def _arrivals(self, blocks: Sequence[str], *, plates: Sequence[str] = (), captions: Sequence[str] = (), floor: bool = False,
+                  edges_too: bool = True, style: str | None = None) -> list[Animation]:
+        """Bring ``blocks`` in (back to front, in ``style``: the scene's ``entrance`` unless
+        given), with what comes with them: the floor, their plates and the captions of their
+        groups and stacks unless an action waits to show those (``plates`` and ``captions``: shown
+        whatever waits), and the connectors whose ends are then all shown."""
+        parts = self._parts
+        layout = self.diagram_layout
+        style = style or self._style
+        ground: list[Mobject] = []
+        if floor and "floor" not in self._in:
+            self._in.add("floor")
+            ground.append(parts["floor"])
+        coming = [b for b in [key for kind, key in layout.order() if kind == "block"] if b in blocks and ("block", b) not in self._in]
+        for b in coming:
+            self._in.add(("block", b))
+        wanted_plates = list(plates) + [layout.blocks[b].group for b in coming if layout.blocks[b].group and ("plate", layout.blocks[b].group) not in self._waiting]
+        for gid in dict.fromkeys(wanted_plates):
+            if gid and ("plate", gid) not in self._in:
+                self._in.add(("plate", gid))
+                ground.append(parts["plates"][gid])
+                key = ("group", gid)
+                if key in parts["texts"] and (gid in plates or ("caption", key) not in self._waiting):
+                    self._in.add(("caption", key))
+                    ground.append(parts["texts"][key])
+        stacks = list(captions) + [layout.blocks[b].stack for b in coming if layout.blocks[b].stack]
+        for sid in dict.fromkeys(stacks):
+            key = ("stack", sid)
+            if key in parts["texts"] and ("caption", key) not in self._in and (sid in captions or ("caption", key) not in self._waiting):
+                self._in.add(("caption", key))
+                ground.append(parts["texts"][key])
+        anims: list[Animation] = [FadeIn(VGroup(*ground))] if ground else []
+        arrivals = [self._enter(b, style) for b in coming]
+        if arrivals:
+            anims.append(LaggedStart(*arrivals, lag_ratio=0.9 if style == "grow" else 0.12))   # grown: each on the one below
+        if edges_too:
+            ready = [k for k in range(len(layout.edges)) if ("edge", k) not in self._in and ("edge", k) not in self._waiting]
+            links = self._edge_arrivals(ready, force=False)
+            if links:
+                anims.append(LaggedStart(*links, lag_ratio=0.1))
+        return [Succession(*anims)] if len(anims) > 1 else anims
+
+    def _edge_arrivals(self, ks: Sequence[int], force: bool) -> list[Animation]:
+        """The connectors ``ks`` whose ends are both shown fade in (``force``: whatever their ends)."""
+        anims = []
+        for k in ks:
+            edge = self.diagram_layout.edges[k]
+            ends = [self._end_blocks(edge.source), self._end_blocks(edge.target)]
+            if ("edge", k) in self._in or not (force or all(any(("block", b) in self._in for b in end) for end in ends)):
+                continue
+            self._in.add(("edge", k))
+            anims.append(FadeIn(self._edge_targets[k].mobject))
+        return anims
+
+    def _end_blocks(self, name: str) -> list[str]:
+        layout = self.diagram_layout
+        return list(layout.stacks[name].layers) if name in layout.stacks else [name]
+
+    def _enter(self, block: str, style: str) -> Animation:
+        """One block (with its labels) coming in: dropping in from above, growing up from its
+        ground, or fading in."""
+        target = self._block_targets[block]
+        mob = target.mobject
+        if style == "fade":
+            return FadeIn(mob)
+        rise = UP * self.drop * ISO_RISE * self._unit
+        if style == "drop":
+            return FadeIn(mob, shift=-rise)
+        placed = self.diagram_layout.blocks[block]
+        box = placed.box
+        height = box.z1 - box.z0
+        drawn = self._parts["blocks"][block]
+        color = self._colors[block]
+        lift = self._lifted[block]
+
+        def build(t: float) -> Mobject:
+            grown = PlacedBlock(placed.id, placed.shape, Box3(box.x0, box.y0, box.z0, box.x1, box.y1, box.z0 + height * t))
+            shapes = block_shapes(grown, color, lift=lift)
+            return shapes_mobject(shapes, self._to_scene, ink=outline_ink(color), stroke=self.stroke)
+
+        riders = [self._label_text[key] for key in self._label_on_top if key[1] == block]
+        labels = [group for group in self._block_labels(block)]
+        return GrowBlock(mob, drawn, build, UP * height * ISO_RISE * self._unit, riders, labels, run_time=1.0)
+
+    # ----- actions (scenes/iso_actions.py) -----------------------------------------------------
+
+    def iso_blocks_of(self, targets: Sequence[Target]) -> list[str]:
+        """The blocks and layers ``targets`` cover, in order."""
+        out: list[str] = []
+        for t in targets:
+            for name in t.names:
+                if self.target_kind(name) in ("block", "stack", "group", "diagram"):
+                    out += [b for b in self._blocks_named(name) if b not in out]
+                    break
+        return out
+
+    def iso_build(self, targets: Sequence[Target], style: str) -> list[Animation]:
+        """Bring the hidden ``targets`` in, their blocks in ``style``."""
+        anims: list[Animation] = []
+        for t in targets:
+            kind = self.target_kind(t.name)
+            if kind == "edge":
+                anims += self._edge_arrivals([self._edge_targets.index(t)], force=True)
+            elif kind == "heading":
+                anims += self.entrance(t)
+            else:
+                blocks = self.iso_blocks_of([t])
+                plates = [t.name[len("group:"):]] if kind == "group" else list(self.diagram_layout.plates) if kind == "diagram" else []
+                captions = [t.name[len("stack:"):]] if kind == "stack" else []
+                anims += self._arrivals(blocks, plates=plates, captions=captions, floor=kind == "diagram", style=style)
+        return anims
+
+    def iso_raise(self, targets: Sequence[Target], by: float | None, *, down: bool = False) -> list[Animation]:
+        """Raise (``down``: lower; ``by`` ``None``: back to the ground) the targets' blocks;
+        raising a layer raises the layers above it; a group's plate rises with its members."""
+        blocks = self.iso_blocks_of(targets)
+        groups = {t.name[len("group:"):] for t in targets if self.target_kind(t.name) == "group"}
+        for b in self._bottoms(blocks):
+            self._own[b] = 0.0 if by is None else max(0.0, self._own[b] + (-by if down else by))
+        for gid in groups:
+            self._plate_lift[gid] = 0.0 if by is None else max(0.0, self._plate_lift[gid] + (-by if down else by))
+        return self._settle()
+
+    def iso_restore(self, targets: Sequence[Target], own: dict[str, float], plates: dict[str, float]) -> list[Animation]:
+        """The targets' lifts back to ``own`` and ``plates`` (from :meth:`iso_lift_state`; an
+        action's ``until``)."""
+        for b in self._bottoms(self.iso_blocks_of(targets)):
+            self._own[b] = own[b]
+        for t in targets:
+            if self.target_kind(t.name) == "group":
+                gid = t.name[len("group:"):]
+                self._plate_lift[gid] = plates[gid]
+        return self._settle()
+
+    def iso_lift_state(self) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
+        """The raises of the blocks and plates and the stacks' gaps now."""
+        return dict(self._own), dict(self._plate_lift), dict(self._gaps)
+
+    def iso_explode(self, targets: Sequence[Target], gap: float | None, gaps: dict[str, float] | None = None) -> list[Animation]:
+        """Set the gap between the layers of the targets' stacks: ``gap``, else from ``gaps``
+        (by stack), else their own."""
+        layout = self.diagram_layout
+        for sid in {layout.blocks[b].stack for b in self.iso_blocks_of(targets)} - {None}:
+            self._gaps[sid] = gap if gap is not None else (gaps or {}).get(sid, layout.stacks[sid].gap)
+        return self._settle()
+
+    def _settle(self) -> list[Animation]:
+        """Move every block, plate and label that rides with them to the lifts now wanted, with
+        a shadow under a raised block or plate."""
+        layout = self.diagram_layout
+        lifts = self._lifts_of(self._own, self._gaps)
+        rise = UP * ISO_RISE * self._unit
+        anims: list[Animation] = []
+        shown = {id(m) for m in self.get_mobject_family_members()}
+
+        def move(mob: Mobject, dz: float) -> None:
+            if abs(dz) < 1e-9:
+                return
+            if any(id(m) in shown for m in mob.get_family()):
+                anims.append(LiftMove(mob, rise * dz))
+            else:
+                mob.shift(rise * dz)
+
+        for name, block in layout.blocks.items():
+            dz = lifts[name] - self._lifted[name]
+            move(self._parts["blocks"][name], dz)
+            for key in [("block", name), ("layer", name)]:
+                if key in self._parts["texts"] and self._label_moves[key]:
+                    move(self._parts["texts"][key], dz)
+            self._lifted[name] = lifts[name]
+            if block.level == 0:
+                anims += self._shadow(name, lifts[name], block.box, ("block", name) in self._in, block.shape)
+        for gid, box in layout.plates.items():
+            dz = self._plate_lift[gid] - self._plate_lifted[gid]
+            move(self._parts["plates"][gid], dz)
+            self._parts["plates"][gid].set_z_index(9 if self._plate_lift[gid] > 1e-9 else 1)   # raised: over the arrows on the floor under it
+            if ("group", gid) in self._parts["texts"]:   # its caption by its front edge goes with it
+                move(self._parts["texts"][("group", gid)], dz)
+            self._plate_lifted[gid] = self._plate_lift[gid]
+            anims += self._shadow(gid, self._plate_lift[gid], box, ("plate", gid) in self._in, "box")
+        return anims
+
+    def _shadow(self, name: str, lift: float, box: Box3, visible: bool, shape: str) -> list[Animation]:
+        """The shadow under block or plate ``name`` raised ``lift`` cells: darker as it rises."""
+        to = self.shadow_opacity * min(1.0, lift / self.shadow_lift) if visible else 0.0
+        shadow = self._shadows.get(name)
+        if shadow is None:
+            if to <= 0:
+                return []
+            if shape in ("cylinder", "database"):
+                r = min(box.x1 - box.x0, box.y1 - box.y0) / 2
+                cx, cy = (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2
+                ground = [(cx + r * np.cos(a), cy + r * np.sin(a)) for a in np.linspace(0, 2 * np.pi, 32, endpoint=False)]
+            else:
+                ground = [(box.x0, box.y0), (box.x1, box.y0), (box.x1, box.y1), (box.x0, box.y1)]
+            shadow = Polygon(*[self._to_scene(*iso_point(x, y, box.z0)) for x, y in ground])
+            floor_color = mix_colors(self.theme.color("text"), self.theme.background, 0.05)
+            shadow.set_fill(mix_colors("#000000", floor_color, 0.6), opacity=0.0).set_stroke(width=0).set_z_index(1.5)
+            self._shadows[name] = shadow
+            self.add(shadow)
+        if abs(float(shadow.get_fill_opacity()) - to) < 1e-6:
+            return []
+        return [FillFade(shadow, to)]
+
+    def iso_flow(self, targets: Sequence[Target], *, count: int, style: str, color: str, back: bool, chain: bool) -> list[Animation]:
+        """Dots or packets moving along the targets' connectors (one after another with
+        ``chain``)."""
+        layout = self.diagram_layout
+        flows: list[Animation] = []
+        for t in targets:
+            if self.target_kind(t.name) != "edge":
+                continue
+            k = self._edge_targets.index(t)
+            edge = layout.edges[k]
+            points = list(reversed(edge.points)) if back else list(edge.points)
+            pipe = edge.style == "pipe"
+            up = (PIPE_HEIGHT if pipe else 0.0) + (self.packet / 2 if style == "packets" else self.dot_radius * 0.6)
+            total = sum(float(np.linalg.norm(np.subtract(b, a))) for a, b in zip(points, points[1:]))
+            lengths = np.cumsum([0.0] + [float(np.linalg.norm(np.subtract(b, a))) for a, b in zip(points, points[1:])])
+            depths = list(reversed(self._pipe_depths[k])) if back else self._pipe_depths[k]
+
+            def at(s: float, points: list[Any] = points, lengths: np.ndarray = lengths, total: float = total, up: float = up) -> np.ndarray:
+                d = s * total
+                j = int(min(np.searchsorted(lengths, d, side="right") - 1, len(points) - 2))
+                share = (d - lengths[j]) / max(lengths[j + 1] - lengths[j], 1e-9)
+                a, b = np.array(points[j]), np.array(points[j + 1])
+                x, y, z = a + (b - a) * share
+                return self._to_scene(*iso_point(x, y, z + up))
+
+            def depth(s: float, lengths: np.ndarray = lengths, total: float = total, depths: list[float] = depths) -> float:
+                if not depths:
+                    return 2.5
+                j = int(min(np.searchsorted(lengths, s * total, side="right") - 1, len(depths) - 1))
+                return depths[max(j, 0)]
+
+            dots = VGroup(*[self._flow_dot(style, color) for _ in range(count)])
+            flows.append(FlowDots(dots, at, depth, self.flow_spacing))
+        if chain and len(flows) > 1:
+            return [Succession(*flows)]
+        return flows
+
+    def _flow_dot(self, style: str, color: str) -> Mobject:
+        """A dot (a small disc) or a packet (a small cube in the view) in ``color``."""
+        if style == "packets":
+            half = self.packet / 2
+            return shapes_mobject(box_faces(Box3(-half, -half, -half, half, half, half), color), picture_to_scene(self._unit, (0.0, 0.0)),
+                                  ink=outline_ink(color), stroke=self.stroke)
+        dot = Circle(radius=max(self.dot_radius * self._unit, 0.05))
+        return dot.set_fill(color, opacity=1.0).set_stroke(outline_ink(color), width=self.stroke)
+
+    def iso_relabel(self, target: Target, text: str) -> tuple[list[Animation], str | None]:
+        """The label ``target`` shows (:meth:`_label_keys`) turned into ``text``; also returns
+        the text it showed (``None`` when the target has no label)."""
+        key = self._label_keys().get(target.name)
+        if key is None or key not in self._label_text:
+            return [], None
+        old = self._label_text[key]
+        before = _words(old)
+        new = self._labels[key].make(text)
+        new.move_to(old.get_center()).set_z_index(902)
+        old_inks = {rgb_to_hex(m.fill_rgbas[0, :3]) for m in old.family_members_with_points() if isinstance(m, VMobject)}
+        new_inks = {rgb_to_hex(m.fill_rgbas[0, :3]) for m in new.family_members_with_points() if isinstance(m, VMobject)}
+        if old_inks and (key in self._label_on_top or (len(old_inks) == 1 and old_inks != new_inks)):   # its block's ink, or a highlight's colour
+            new.set_color(next(iter(old_inks)))
+        keep_opacity(new, old)
+        group = self._parts["texts"][key]
+        plate = self._label_plate[key]
+        self._label_text[key] = new
+        for t in self.targets:
+            if any(pair[0] is old for pair in t.on_fill):
+                t.on_fill = tuple((new, shape) if words is old else (words, shape) for words, shape in t.on_fill)
+        if not self.on_screen_parts(old):   # not shown yet: changed at once
+            group.remove(old)
+            group.add(new)
+            if plate is not None:
+                plate.become(self._plate_for(new).set_z_index(plate.z_index))
+            return [], before
+        anims: list[Animation] = [Transform(old, new.copy())]   # the old text morphs; the new one takes its place when it ends
+        if plate is not None:
+            anims.append(Transform(plate, self._plate_for(new).set_z_index(plate.z_index)))
+        return [*anims, SwapAtEnd(group, old, new)], before
+
+    def iso_focus_view(self, targets: Sequence[Target], padding: float, scale: float | None) -> tuple[float, np.ndarray]:
+        """The camera view (width, centre) that shows ``targets`` with ``padding`` around them
+        (``scale``: that magnification); the whole frame when they fill it."""
+        parts = [m for t in targets for m in (self.on_screen_parts(t) or [t.mobject])]
+        group = Group(*parts)
+        fw, fh = self.frame_width, self.frame_height
+        room = 1 - 2 * padding
+        factor = scale if scale is not None else min(3.0, room * fw / max(group.width, 1e-6), room * fh / max(group.height, 1e-6))
+        if factor <= 1.02:
+            return fw, np.zeros(3)
+        width, height = fw / factor, fh / factor
+        center = view_center_within(self.camera_bounds(), group.get_center()[:2], width, height)
+        return width, np.array([*center, 0.0])
+
+    # ----- lint (DESIGN.md §90.10) -----------------------------------------------------------
+
+    def layout_keys(self, beat_id: str | None) -> dict[str, Any]:
+        """What the layout dump adds to a still: ``iso_diagram`` with the labels shown (text,
+        whose, box in pixels, on a block's top, with a leader line) and the outlines of the
+        blocks and plates and the paths of the connectors on screen, for lint ``iso_labels``."""
+        if not hasattr(self, "_label_text"):
+            return {}
+        shown = {id(m) for m in self.get_mobject_family_members()}
+        cam = self.camera
+
+        def px(mob: Mobject, points: np.ndarray) -> np.ndarray:
+            return np.asarray(cam.points_to_subpixel_coords(mob, np.asarray(points, dtype=float)), dtype=float)
+
+        def visible(mob: Mobject) -> bool:
+            members = [m for m in mob.family_members_with_points() if isinstance(m, VMobject)]
+            return bool(members) and any(id(m) in shown for m in members) and max(float(np.max(m.fill_rgbas[:, 3])) for m in members) > 0.3
+
+        def outline(mob: Mobject) -> list[list[float]]:
+            points = np.vstack([m.points for m in mob.family_members_with_points()])
+            return [[round(float(x), 1), round(float(y), 1)] for x, y in convex_hull(px(mob, points))]
+
+        labels = []
+        for key, text in self._label_text.items():
+            if not visible(text):
+                continue
+            plate = self._label_plate.get(key)
+            box_mob = plate if plate is not None else text
+            xy = px(box_mob, box_mob.get_all_points())
+            labels.append({"kind": key[0], "owner": key[1], "text": _words(text),
+                           "box": [round(float(v), 1) for v in (*xy.min(axis=0), *xy.max(axis=0))],
+                           "on_top": key in self._label_on_top, "leader": key in self._label_leader or key[0] == "layer"})
+        blocks = [{"id": name, "outline": outline(mob)} for name, mob in self._parts["blocks"].items() if visible(mob)]
+        plates = [{"id": gid, "outline": outline(mob)} for gid, mob in self._parts["plates"].items() if visible(mob)]
+        stacks = [{"id": sid, "layers": list(s.layers)} for sid, s in self.diagram_layout.stacks.items()]
+        edges = []
+        for k, edge in enumerate(self.diagram_layout.edges):
+            mob = self._parts["edges"][k]
+            if not visible(mob):
+                continue
+            points = np.array([self._to_scene(*iso_point(*q)) for q in edge.samples(0.25)])
+            edges.append({"ref": edge.ref(), "source": edge.source, "target": edge.target,
+                          "points": [[round(float(x), 1), round(float(y), 1)] for x, y in px(mob, points)]})
+        return {"iso_diagram": {"labels": labels, "blocks": blocks, "plates": plates, "stacks": stacks, "edges": edges}}
 
 
-def _union(rects: list[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
-    return min(r[0] for r in rects), min(r[1] for r in rects), max(r[2] for r in rects), max(r[3] for r in rects)
-
-
-def _face_points(box: Any, count: int = 5) -> list[tuple[float, float, float]]:
-    """Points spread over the three faces of ``box`` the view shows (top, ``y1`` and ``x1``
-    sides), ``count`` by ``count`` on each."""
-    steps = [k / (count - 1) for k in range(count)]
-    xs = [box.x0 + (box.x1 - box.x0) * s for s in steps]
-    ys = [box.y0 + (box.y1 - box.y0) * s for s in steps]
-    zs = [box.z0 + (box.z1 - box.z0) * s for s in steps]
-    return ([(x, y, box.z1) for x in xs for y in ys] + [(x, box.y1, z) for x in xs for z in zs]
-            + [(box.x1, y, z) for y in ys for z in zs])
-
-
-def _middle(blocks: dict[str, tuple[float, float, float, float]]) -> float:
-    left, _, right, _ = _union(list(blocks.values()))
-    return (left + right) / 2
+def _words(text: Mobject) -> str:
+    """The characters a label shows."""
+    inner = getattr(text, "lines_text", text)
+    return str(getattr(inner, "original_text", ""))
 
 
 def _spread(ys: list[float], heights: list[float], gap: float) -> list[float]:

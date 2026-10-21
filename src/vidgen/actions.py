@@ -69,6 +69,12 @@ class Target:
     #: The scene's own dimming of the target (a factor of its full opacity), recorded by
     #: ``dim_to``; undoing a ``dim`` action (``until``) keeps it.
     scene_dim: float | None = None
+    #: A solid drawing (an iso diagram's blocks, DESIGN.md §90.9): ``recolor(paint)`` gives the
+    #: ``(fill, stroke)`` RGB (0-1) its members show when each of its colours is turned into
+    #: ``paint(colour)`` with the drawing's shading kept, by member id. ``dim`` then mixes those
+    #: colours towards the background instead of fading the members (a see-through block would
+    #: show the ones behind it), and a colour ``highlight`` keeps the shading.
+    recolor: Callable[[Callable[[str], str]], dict[int, tuple[np.ndarray, np.ndarray]]] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         for m in self.mobject.get_family():

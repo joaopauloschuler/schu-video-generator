@@ -977,8 +977,9 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] Auto-fit to 16:9 and 9:16 (`arrange: auto` is a zigzag in 9:16); tests (`tests/test_iso_diagram.py`); CONFIG section, guide chooser row and snippet, gallery page, `examples/gallery` scene
 
 ### Step 174 — `iso_diagram` actions
-- [ ] Build-in (grow up, drop in), raise / lower, highlight / dim, flow along connectors, explode / collapse a stack, camera focus on a block or group, swap labels and values; timed to beats and `at: "@word"`
-- [ ] Lint where useful (overlapping or too small labels, contrast); tests
+- [x] Build-in (`build`: grow up, drop in, fade; `entrance`, `build: each`), `raise` / `lower` (shadows), highlight / dim keeping the blocks' shading (`Target.recolor`), `flow` along connectors (dots, packets, `chain`), `explode` / `collapse` a stack, camera `focus` on a block or group (no rotation), `relabel` labels and values; timed to beats and `at: "@word"`
+- [x] Label placement reworked after Step 173's stills (labels by their block's outline, leader lines when pushed away, clear of other blocks, labels and pipes; group captions by the plate's front edge; connector labels along the connector; one label per block; 9:16 stacks list their layers under them and are drawn larger; an `at` grid slanted down a 9:16 frame, `portrait_grid`)
+- [x] Lint `iso_labels` (labels over other blocks or labels, hiding a connector, far from what they name; size and contrast stay `min_font`'s and `contrast`'s); tests (`tests/test_iso_diagram_actions.py`)
 
 ### Step 175 — Example and docs
 - [ ] An original short tech explainer with `iso_diagram` (16:9 and 9:16), rendered with Kokoro narration outside the repo

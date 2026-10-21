@@ -171,7 +171,7 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("process") == ["heading", "input", "stage1", "stage:a", "stage2", "stage:b", "connector1", "token"]
     assert names("process", heading="", input="", token=False, loop=True, output="o") == ["stage1", "stage:a", "stage2", "stage:b", "connector1", "loop", "output"]
     assert names("network") == ["heading", "layer1", "neuron1.1", "neuron1.2", "layer2", "layer:Out", "neuron2.1", "neuron2.2", "edges1"]
-    assert names("iso_diagram") == ["heading", "block1", "block:a", "block2", "block:b", "block3", "block:l1", "block4", "block:l2",
+    assert names("iso_diagram") == ["heading", "diagram", "block1", "block:a", "block2", "block:b", "block3", "block:l1", "block4", "block:l2",
                                     "stack:s", "group:g", "edge:a->b"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]

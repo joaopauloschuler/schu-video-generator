@@ -190,8 +190,13 @@ def dim_to(target: Target, part: Mobject, factor: float, *, own: bool = True, **
         return mix_colors(fill, background, min(opacity, factor * target.rest_opacity(shape)[0]))
 
     inks = _inks(target, part, dimmed)
+    # a solid drawing (iso blocks): its colours towards the background, opaque as it is
+    solid = target.recolor(lambda color: mix_colors(color, background, factor)) if target.recolor is not None else {}
 
     def paint(m: VMobject, fill: np.ndarray, stroke: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        if id(m) in solid:
+            fill[:, :3], stroke[:, :3] = solid[id(m)]
+            return fill, stroke
         full_fill, full_stroke = target.rest_opacity(m)
         limit = factor
         if id(m) in inks:
@@ -227,6 +232,7 @@ class Dim(Action):
         pairs = _parts(scene, targets)
         self.memory = _Memory([part for _, part in pairs])
         self.inked = {id(m) for t in targets for text, _ in t.on_fill for m in text.get_family()}
+        self.inked |= {key for t in targets if t.recolor is not None for key in t.recolor(lambda color: color)}   # solid: recoloured
         return [dim_to(target, part, self.options.opacity, own=False) for target, part in pairs]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
@@ -341,11 +347,15 @@ class Highlight(Action):
         rgb = np.array(ManimColor(color).to_rgb())
         tint = self.image_tint
         inks = inks or {}
+        solid = target.recolor(lambda _old: color) if target.recolor is not None else {}   # iso blocks keep their shading
 
         def paint(m: VMobject, fill: np.ndarray, stroke: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-            ink = inks.get(id(m), rgb)
-            fill[:, :3] = ink
-            stroke[:, :3] = ink
+            if id(m) in solid:
+                fill[:, :3], stroke[:, :3] = solid[id(m)]
+            else:
+                ink = inks.get(id(m), rgb)
+                fill[:, :3] = ink
+                stroke[:, :3] = ink
             if undim:
                 full_fill, full_stroke = target.rest_opacity(m)
                 _scale_alpha(fill[:, 3], full_fill, raise_to=True)

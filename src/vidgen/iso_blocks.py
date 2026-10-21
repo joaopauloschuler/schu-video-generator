@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from vidgen.cartoon.iso_drawing import Line, Poly, Shape, Upright, box_shapes, shade, shape_bounds
 from vidgen.cartoon.level_drawing import mix
@@ -396,6 +396,28 @@ def layout_iso_diagram(items: Sequence[ItemSpec], groups: Sequence[GroupSpec] = 
             under.append(Rect(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
     layout.floor = _floor(tuple(r.grown(FLOOR_PAD) for r in under))
     return layout
+
+
+def slant(items: Sequence[ItemSpec], along: str) -> list[ItemSpec]:
+    """``items`` (all with ``at``) on a slanted grid: each moves along the other axis by how far
+    its middle lies along ``along`` (``x`` or ``y``), so that axis runs straight down the
+    picture (the view's ``x = y`` diagonal). A row along ``x`` becomes a column down a tall frame;
+    neighbours keep their order and sides."""
+    middles = [(item.at[0] + item.cells()[0] / 2) if along == "x" else (item.at[1] + item.cells()[1] / 2) for item in items]  # type: ignore[index]
+    low = min(middles)
+    out = []
+    for item, middle in zip(items, middles):
+        x, y = item.at  # type: ignore[misc]
+        out.append(replace(item, at=(x, y + middle - low) if along == "x" else (x + middle - low, y)))
+    return out
+
+
+def picture_size(layout: IsoDiagramLayout) -> tuple[float, float]:
+    """Width and height (tile widths) of ``layout``'s blocks and floor on the picture."""
+    points = [p for b in layout.blocks.values() for p in block_outline(b)]
+    points += [iso_point(x, y) for r in layout.floor for x in (r.x0, r.x1) for y in (r.y0, r.y1)]
+    us, vs = [p[0] for p in points], [p[1] for p in points]
+    return max(us) - min(us), max(vs) - min(vs)
 
 
 def _floor(rects: tuple[Rect, ...]) -> tuple[Rect, ...]:
@@ -821,6 +843,24 @@ def side_point(block: PlacedBlock, side: str, lift: float = 0.0) -> tuple[float,
     return iso_point((box.x0 + box.x1) / 2, box.y1, z)
 
 
+def box_outline(box: Box3, lift: float = 0.0) -> list[tuple[float, float]]:
+    """The corners of ``box`` raised ``lift`` on the picture (tile widths, ``v`` down): their
+    convex hull is the box's outline as seen."""
+    return [iso_point(x, y, z + lift) for x, y, z in box.corners()]
+
+
+def block_outline(block: PlacedBlock, lift: float = 0.0, samples: int = 24) -> list[tuple[float, float]]:
+    """Points whose convex hull is ``block``'s outline on the picture (raised ``lift``): a
+    box's corners, a cylinder's top and bottom ellipses."""
+    box = block.box
+    if block.shape not in ROUND:
+        return box_outline(box, lift)
+    cx, cy = (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2
+    r = min(box.x1 - box.x0, box.y1 - box.y0) / 2
+    return [iso_point(cx + r * math.cos(2 * math.pi * k / samples), cy + r * math.sin(2 * math.pi * k / samples), z + lift)
+            for z in (box.z0, box.z1) for k in range(samples)]
+
+
 def readable_ink(fill: str, dark: str, light: str) -> str:
     """``dark`` or ``light``, whichever reads better on ``fill`` (WCAG contrast)."""
     from vidgen.lint.color import contrast_ratio, hex_rgb   # here: the lint package registers its rules on import
@@ -873,11 +913,15 @@ __all__ = [
     "Rect",
     "arrange",
     "arrow_shapes",
+    "block_outline",
     "block_shapes",
+    "box_outline",
     "diagram_shapes",
     "floor_shapes",
     "layout_iso_diagram",
     "outline_ink",
+    "picture_size",
+    "slant",
     "pipe_segments",
     "plate_shapes",
     "readable_ink",

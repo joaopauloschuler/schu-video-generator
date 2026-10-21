@@ -462,6 +462,9 @@ Minimal snippets (copy, then adapt):
   beats:
     - text: "Requests come in from the browser."
     - text: "The app server handles them layer by layer, and keeps its data in a database."
+      actions:                                      # iso_diagram actions: build, raise, lower, explode,
+        - {flow: "edge:*", chain: true}             # collapse, flow, focus, relabel (`vidgen guide actions`)
+        - {explode: "stack:app", at: "@layer"}
 ```
 
 ```yaml
@@ -891,6 +894,14 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `host_move` | with a `host:`: the host walks to the other side and the content slides over with it (`- host_move: other_side`, `left`, `right`) | one move per beat; rarely, between topics |
 | `host_enter` | with a `host:`: the host walks in from an edge (`{action: host_enter}`, or `- host_enter: left`); the scene starts without it | at the start of the video |
 | `host_exit` | with a `host:`: the host walks out by an edge (`- host_exit: left`); its room stays free | at the end |
+| `build` | on an `iso_diagram`: blocks, a stack (layer by layer), a group or a connector come in on the word (`- build: "block:db"`; `style: grow`, `drop`, `fade`); the scene leaves them to it | one part per idea, as the voice names it |
+| `raise` | on an `iso_diagram`: lift blocks, a layer (with the layers above) or a group off the floor (`by: 0.5`), a shadow under them; `lower` sets them down | to single out a part; undo with `until` |
+| `lower` | on an `iso_diagram`: set raised blocks down (`by`, default to the ground) | |
+| `explode` | on an `iso_diagram`: pull a stack's layers apart (`- explode: "stack:app"`, `gap: 0.6`), labels going along; `collapse` puts them back | to show what a stack is made of |
+| `collapse` | on an `iso_diagram`: an exploded stack's layers back together | |
+| `flow` | on an `iso_diagram`: dots (`style: packets`: small cubes) run along connectors (`- flow: "edge:*"`, `chain: true` one after another, `back`, `count`) | when the voice follows data or a request |
+| `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`); `focus: diagram` goes back | at most one or two per scene |
+| `relabel` | on an `iso_diagram`: a label or value changes in place (`- relabel: "block:cache"`, `text: "Cache: hit"`) | a new value, a state change |
 
 ```yaml
 - id: speeds
@@ -2081,6 +2092,7 @@ install; `vidgen validate` warns when it is missing.
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `said_before_shown` | the narration names a label on screen (a node, a callout, a stage) seconds before it appears, and not again when it does | show it on the word: `{reveal: node:database, at: "@database"}` (or the callout's `at`); or name it in the beat that shows it |
 | `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |
+| `iso_labels` | an `iso_diagram` label over a block it does not name (a group's caption among its blocks), over another label or a connector, or far from what it names | more `spacing` or `at` further apart, shorter labels, fewer blocks; a stack's `label_side` |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

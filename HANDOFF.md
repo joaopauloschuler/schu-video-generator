@@ -16293,3 +16293,106 @@ How to test
   `stack_9x16.png`, `transformer_light_16x9.png` (light theme, a term colour, a database layer),
   `labels_on_tops_16x9.png` (labels on the tops, a pipe, a detour), `gallery_16x9.png`,
   `gallery_9x16.png`.
+
+## Step 174 — `iso_diagram` actions, label placement, lint
+
+What was built (DESIGN §90.8–90.11, CONFIG `iso_diagram` / "Iso diagram actions", lint table)
+- Eight actions on `iso_diagram` scenes, timed like any action (`at: 0.5`, `at: "@word"`):
+  `build` (`style` grow / drop / fade: blocks grow up from the floor, a stack layer by layer, or
+  drop or fade in; the scene's own steps leave what it names to it; a connector comes in once
+  both its ends are there), `raise` (`by`) / `lower` (with a shadow on the ground; a raised layer
+  lifts the layers above, a group its plate and caption), `explode` (`gap`) / `collapse` (a
+  stack's layers apart and back, side labels going along), `flow` (`count`, `style` dots /
+  packets, `color`, `back`, `chain`: dots or small cubes along connectors, on top of pipes),
+  `focus` (`padding`, `scale`: the camera onto a part and staying; `focus: diagram` back) and
+  `relabel` (`text`: a label or value morphs into a new one in place; the scene keeps room for
+  it). Each refuses another scene type and targets of the wrong kind, naming them.
+- `dim` and `highlight` keep a block's shading (a generic hook `Target.recolor`; a dimmed block
+  stays opaque, mixed towards the background); a highlighted label is coloured text on its plate.
+- Params `build: together | each` (one block or stack per step over the beats), `entrance: drop |
+  grow | fade` (the scene's steps and `reveal`), `portrait_grid: auto | keep`; a stack's
+  `label_side: below`; a target `diagram`.
+- The three problems in Step 173's stills, fixed: (1) labels are now placed by the blocks'
+  outlines, not boxes — right by their block, clear of other blocks (with a little room), labels,
+  pipes and connectors, else pushed clear with a leader line; group captions go first, by the
+  plate's front edges, with the plate's blocks as obstacles; connector labels beside the
+  connector along its longest run (leader when pushed off); (2) one label per block: a stack of
+  one layer is labelled once (its layer's label, else the stack's), a caption that repeats a
+  layer's label is not drawn; (3) in 9:16 a stack lists its layers under it with colour swatches
+  (`label_side: auto`) and may be drawn 1.35× larger (Step 173: 0.93 units a tile, now 2.5); an
+  `at` grid is slanted down a 9:16 frame when that draws it larger (`slant`).
+- Lint `iso_labels`: from geometry the scene adds to each still of the layout dump (labels,
+  block and plate outlines, connector paths in pixels): a label over another block, over another
+  label, hiding another connector, or far from what it names without a leader. Size and contrast
+  stay `min_font`'s / `contrast`'s.
+
+Files touched
+- New: `src/vidgen/iso_labels.py` (label geometry, no manim), `src/vidgen/scenes/iso_actions.py`
+  (the actions), `src/vidgen/scenes/iso_motion.py` (the animations), `src/vidgen/lint/iso_rule.py`,
+  `tests/test_iso_diagram_actions.py`.
+- Changed: `src/vidgen/scenes/iso_diagram.py` (placement, steps, actions support, layout keys),
+  `src/vidgen/iso_blocks.py` (`block_outline`, `box_outline`, `slant`, `picture_size`),
+  `src/vidgen/actions.py` + `src/vidgen/scene.py` (`Target.recolor`, `target(recolor=)`),
+  `src/vidgen/scenes/actions.py` (`dim_to`, `Dim`, `Highlight` use it), `src/vidgen/config.py`
+  (`IsoLabelsRule`, `LINT_RULES`), `src/vidgen/lint/__init__.py`, `src/vidgen/api.py`,
+  `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md`, guide + `AGENTS.md` (action rows, a lint row,
+  the snippet's actions), `docs/gallery/iso_diagram.md` + media (regenerated), `CHANGELOG.md`
+  (0.3.0 now Steps 61–174), `DESIGN.md`, `tasklist.md`; tests whose lists name every action or
+  rule (`test_actions`, `test_actions_coverage`, `test_iso_diagram`, `test_narration_rule`).
+
+Public interfaces
+- `vidgen.api` adds `PIPE_HEIGHT`, `PlacedBlock`, `arrow_shapes`, `block_outline`,
+  `block_shapes`, `box_faces`, `box_outline`, `picture_size`, `plate_shapes`, `slant`, `AROUND`,
+  `FAR_COST`, `Obstacles`, `clip_area`, `convex_hull`, `hull_box`, `hull_gap`, `hull_of_point`,
+  `polyline_gap`, `ray_exit`, `rect_exit`, `rect_of`, `rect_union`, `slide_out`, `ISO_RISE`.
+  `Target.recolor`; `NarratedScene.target(..., recolor=None)`. `IsoDiagram.plan_diagram()`
+  (layout, fit and placement without drawing), `target_kind`, `has_label`, `iso_*` methods for
+  the actions, `layout_keys`.
+
+Decisions / deviations
+- The label placement of Step 173 is replaced, not patched (its cost counted points on faces
+  and skipped a group's members); `iso_diagram` output changes (it shipped one step ago).
+- `Target.recolor` instead of iso-only dim/highlight actions: the generic actions keep working
+  on the diagram, shaded; other scenes are untouched (no `recolor`). Phase Q's 31 baseline
+  frames are identical (`s174/qframes`, max difference 0).
+- Weights (`iso_labels.py`) tuned on Step 173's crowded grid: blocks ×4, labels ×3, a block
+  within the clearance 0.3 of its area, a pushed label 1.0 per unit; lower values sent labels far
+  with long leaders or let "Web 2" lie on the load balancer.
+- A grown stack builds layer after layer (`lag_ratio` 0.9; with 0.5 the next layer floated as a
+  flat sheet), a block unseen until its turn. A raised plate is drawn over the arrows under it.
+- Relabel morphs the text (`Transform`) and swaps the new text in when it ends, without
+  removing anything from the scene (a `FadeOut` remover broke up the target groups holding it).
+- `focus` is its own action (stays; `zoom` goes back by the beat's end; no rotation: the iso
+  angle is the diagram's meaning).
+
+Known gaps / for later steps
+- Crowded diagrams can still leave a label over a connector (the 9:16 "Services in groups":
+  `iso_labels` warns that "Web 2" hides part of `lb->web2`); the lint names it.
+- A raised plate is drawn over the arrows under it but under blocks behind it; connectors stay on
+  the floor when their ends rise. A label pushed far gets a straight leader (no routing).
+- `focus` on a group in 9:16 hardly zooms when its members' labels span the frame.
+- The floor under blocks that wait for a `build` is there from the start.
+- Light theme + `block_color: secondary` gives a top label contrast 3.99 (`contrast` warns; a
+  theme matter, the ink is the better of the two).
+
+How to test
+- One file at a time under `capped` / `capped3g`: `test_iso_diagram_actions` (21, 3 render),
+  `test_iso_diagram` (35), `test_actions` (28), `test_actions_coverage` (84, renders, 51 s),
+  `test_builtin_scenes -m "not render"` (124) and `-k iso_diagram` (4), `test_lint` (23),
+  `test_narration_rule` (12), `test_docs` + `test_guide` + `test_api` (126), `test_translation`
+  (71 with `test_api`), `test_schema` (64, 135 s), `test_json_output`, `test_gallery`,
+  `test_cartoon_sheet -m "not render"` (39). All pass.
+- Compatibility: `phase-q-baseline/make_baseline.sh` into `s174/qframes`: 31 frames, max
+  difference 0.
+- Scratch projects in `<scratchpad>/s174`: `proj` (layers: grow, explode, highlight, collapse;
+  flow: `build: each`, chained flow, relabel, raise on a word; grid: packets, dim, focus, raise a
+  group, build a database), `proj3` (light theme: explode, highlight, dim; build grow on a word,
+  raise / lower; relabel, flow on a pipe), `orig` / `orig3` (Step 173's projects unchanged),
+  `docex` (the CONFIG examples). `vidgen lint` on them: no `iso_labels` finding in 16:9; the
+  9:16 grid one above. Stills in `s174/stills/`: `fixed_groups_pipes_16x9.png`,
+  `fixed_transformer_light_16x9.png`, `fixed_stack_9x16.png`, `fixed_groups_pipes_9x16_slanted.png`,
+  contact sheets `sheet_actions_16x9.png`, `sheet_actions_9x16_p1.png` / `_p2.png`,
+  `sheet_light_16x9.png` / `_9x16.png` (½ = mid-action stills), single frames `explode_mid_16x9.png`,
+  `grow_stack_mid_16x9.png`, `flow_packets_mid_16x9.png`, `focus_raise_group_16x9.png`,
+  `relabel_raise_16x9.png`, `raise_shadow_16x9.png`, `explode_dim_light_16x9.png`,
+  `gallery_16x9.png` / `gallery_9x16.png`.
