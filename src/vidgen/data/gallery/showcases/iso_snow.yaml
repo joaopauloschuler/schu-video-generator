@@ -1,0 +1,32 @@
+title: First Snow
+characters:
+  - name: suki
+    look: {species: penguin, proportions: kid, eyes: round, accessories: [scarf]}
+    colors: {clothes: "#C0504D", accessory: "#F2C14E"}
+scenes:
+  - id: iso_snow
+    type: stage
+    params:
+      background: ["#B8C4D6", "#E4EAF2"]
+      light: {tint: "#C9D6E8", strength: 0.25}
+      particles: [{kind: snow, density: 1, settle: true}]
+      iso:
+        map: |
+          -.@......@..
+          ..h.....@...
+          ............
+          ............
+          ...a..b.....
+          .:::::::::..
+          ..@..w......
+          -....@....&.
+        spots: {h: home, a: door, w: well, b: bench}
+        objects:
+          - {object: house, at: home}
+          - {object: well, at: well}
+          - {object: bench, at: bench}
+      characters: [{name: suki, at: door}]
+    beats:
+      - text: "In the night, the first snow of winter began to fall on the village."
+      - text: "By morning, Suki waddled out to see everything turn white."
+        actions: [{walk_to: suki, to: bench, at: 0.05}]

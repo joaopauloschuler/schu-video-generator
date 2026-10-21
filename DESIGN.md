@@ -264,7 +264,8 @@ src/vidgen/
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
   data/slides/            # deck.css + deck.js inlined into `vidgen slides` pages (package data, §55)
   data/guide/             # AGENTS.md: the author guide printed by `vidgen guide` (package data, §59)
-  data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
+  data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60);
+                          # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
@@ -4528,7 +4529,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
 - **Media**: the last still of each scene saved as an optimised PNG (`media/<type>-16x9.png`,
   `-9x16.png`; 640x360 / 360x640); a GIF of the scene up to its last beat's end (no fade-out:
   full-frame changes cost the most bytes), 320 / 180 px wide, 6 fps, 32-colour palette without
-  dithering (flat graphics), last frame held 1.5 s (`export.write_gif(..., colors, dither, hold)`,
+  dithering (flat graphics), last frame held 1.5 s (since Step 182: 2 s, at the GIF's start, the
+  empty opening skipped, §60.1) (`export.write_gif(..., colors, dither, hold)`,
   shared with `vidgen export gif`). Deterministic: no times or paths in the pages, Pillow and
   FFmpeg outputs are reproducible for the same inputs and versions, and render workers now run
   with `PYTHONHASHSEED=0` (unless set): with a random per-process seed, frames during a camera
@@ -4547,6 +4549,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   a tested 8 MB budget (`tests/test_gallery.py`): humans browsing GitHub and agents reading the
   docs see every type without rendering; clips are small enough at 320 px / 6 fps / 32 colours (a regenerated GIF adds to the history, so they stay small). A test
   keeps every page's YAML equal to the guide's current snippet and the index listing every type.
+  Since Step 182 (§60.1): 8.6 MB with the showcases (5.5 MB GIFs: the types' 3.6 MB, the
+  showcases' 1.9 MB; 2.9 MB stills), budget 10 MB, every GIF at most 150 KB.
 - **Routed visual fixes** (Steps 37 and 56):
   - `map`: a regional view in a vertical frame is narrowed to the longitudes that fill the frame
     at the view's latitudes, around its items (`_portrait_region`; before, the frame was filled
@@ -4574,6 +4578,55 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     the callout's own mark). `text_overlap` / `covered_text` missed these (no overlap, no
     cover). A `box` / `circle` tag (`tag_spot`) gets the same soft `clearance` (0.2 units) and
     the same spots one clearance further out.
+
+## 60.1 Animated previews and showcases (Step 182)
+
+- **Previews in the index.** Each cell of `docs/gallery/README.md` shows the scene's GIFs (16:9
+  and 9:16, 180 px high), each its own link to the page, each in a `<picture>` whose
+  `<source media="(prefers-reduced-motion: reduce)">` is the still (`gallery.preview_html`;
+  GitHub renders `<picture>`). A format without a GIF in the folder (a `--no-clips` run) shows
+  its still. The column is "preview"; the pages keep their stills and GIFs as before.
+- **GIF timing** (`gallery._write_clip`, all GIFs regenerated): the clip starts at
+  `clip_start`: the first frame whose mean grey difference from the scene's first frame is
+  `CLIP_START_SHARE` (0.75) of the largest such difference in the clip, at most `CLIP_START_MAX`
+  (1 s) in (frames read at 6 fps, 64 px wide, by `render.ffmpeg.decode_gray_frames`): the empty
+  opening and most of a fade-in are skipped; a chart whose bars grow in its first second starts
+  with them mostly grown (accepted). The end is held `CLIP_HOLD` (2 s, was 1.5) **at the start
+  of the GIF** (`export.write_gif(..., hold_first=True)`: the last frame, reversed out of the
+  clip, padded and put before it): looping plays the same as a hold at the end, and the first
+  frame, which a page shows before the GIF plays (or when a viewer's browser does not animate),
+  is the finished picture, so the index never shows a grid of empty boxes. A GIF over
+  `CLIP_MAX_BYTES` (150 KB) is made again at `CLIP_FALLBACK_FPS` 5, then 4 fps (busy cartoons:
+  rain, snow, camera cuts); a test fails if one is still larger. Widths, colours and dithering
+  are unchanged.
+- **Showcases** (decision: named entries, not types). `gallery.SHOWCASES` lists `Showcase(name,
+  section, title, use)`; the YAML is `data/gallery/showcases/<name>.yaml`, a whole config with
+  one scene whose id is the name (checked by `Showcase.config`). A showcase's `section` is a guide
+  group (its rows follow the group's types in that table) or a section of its own after the
+  groups (`SECTION_NOTES` gives it a line under the heading). The guide group `cartoons` is
+  headed "2D cartoons" (`GROUP_TITLES`; the guide's own comment and the sample's group stay
+  `cartoons`); "Isometric cartoons" has only showcases and a link to `examples/iso-story`. Each
+  showcase is its own work project, `build/gallery/showcases/<name>/video.yaml` (its config with
+  the gallery's preview sizes and `portrait` variant; `--theme` applies), rendered like a sample,
+  with a page `<name>.md` (title, use, the scene types it shows linked, the GIFs, the stills, the
+  YAML as written). Names may not collide with a scene type (a test). `--types` takes showcase
+  names; a run in a project renders none and its index lists none (they are the built-in
+  gallery's). Media names follow the types' (`<name>-16x9.gif`).
+- **The eight showcases**: 2D `talk_in_a_room` (the `living_room` set, a seated listener holding
+  a muffin, a close-up for the punchline), `walk_in_depth` (`park`: one walks back to depth 0.7
+  while the other comes forward, passing), `rainy_evening` (`city_street` at sunset, rain with
+  puddles, the light going to night, the street lamp switched on, an umbrella opened over a
+  seated friend), `star_jump` (a platform level at `character_size: large`: coins, a gap, a jump
+  that catches a star); iso `iso_village` (two houses, a `meet`, a close-up, back to the wide
+  view), `iso_room` (`place: indoor`, an `enter`, a gift picked up and opened in a medium shot),
+  `iso_lamp` (night, lit windows, a walk to the lamp, `switch_on`, the speaker's name tag in the
+  wide view), `iso_snow` (`{kind: snow, settle: true}`: the village turns white). All validate;
+  `vidgen lint` is clean in 16:9; in 9:16 the built-in sets `living_room`, `park` and
+  `city_street` report their own props cut at the frame's edges or overlapping (the ready-made
+  sets are laid out for 16:9 only, backlog).
+- **README strip**: the project README shows four gallery GIFs (the iso village, `iso_diagram`,
+  `line_chart`, `code_morph`), 200 px wide, each linked to its page and in the same `<picture>`;
+  a test checks the markup and that every file exists.
 
 ## 61. Refinements (Step 58, `vidgen plan`)
 

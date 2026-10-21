@@ -27,6 +27,15 @@ Here is what it produces — frames from a narrated paper explainer made with it
 scene built and timed to its narration. The project is in [examples/kphi3](examples/kphi3), so
 these images can be regenerated.</sub>
 
+More from the [scene gallery](docs/gallery/README.md), where every scene type plays at 16:9 and 9:16:
+
+<p align="center">
+  <a href="docs/gallery/iso_village.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/iso_village-16x9.png"><img src="docs/gallery/media/iso_village-16x9.gif" width="200" alt="An isometric village: a rabbit and a fox walk out of their houses and meet"></picture></a>
+  <a href="docs/gallery/iso_diagram.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/iso_diagram-16x9.png"><img src="docs/gallery/media/iso_diagram-16x9.gif" width="200" alt="An isometric diagram of a web app: browser, layered app server and database, data flowing between them"></picture></a>
+  <a href="docs/gallery/line_chart.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/line_chart-16x9.png"><img src="docs/gallery/media/line_chart-16x9.gif" width="200" alt="A line chart: two validation-loss curves drawn epoch by epoch"></picture></a>
+  <a href="docs/gallery/code_morph.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/code_morph-16x9.png"><img src="docs/gallery/media/code_morph-16x9.gif" width="200" alt="Code morphing: a recursive function gains a cache decorator"></picture></a>
+</p>
+
 Everything is built around what an agent can and cannot do:
 
 - **Text in, video out.** A video is one `video.yaml` file: narration written as short *beats*

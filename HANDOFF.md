@@ -16872,3 +16872,72 @@ Known gaps
   minute (a description-only listing would not need the audio).
 - The beds are bass-heavy (71–78 % under 150 Hz) and sound lighter on phone and laptop speakers;
   documented, not re-balanced (approved as heard).
+
+## Step 182 — Animated gallery previews and cartoon showcases
+
+What the owner agreed: animated previews in the gallery index, the cartoon section split into
+"2D cartoons" and "Isometric cartoons" with showcase scenes written for the gallery, and a small
+strip of gallery GIFs near the top of the README. DESIGN §60.1.
+
+What was built
+- Index (`gallery.write_index`): every cell shows the 16:9 and 9:16 GIFs, 180 px high, each
+  linked to its page and wrapped in `<picture>` with the still as the
+  `(prefers-reduced-motion: reduce)` source (`preview_html`); a format without a GIF shows its
+  still. Column "preview"; the intro says the previews are animated. Type pages unchanged.
+- GIFs (`_write_clip`, `clip_start`): skip the empty opening (first frame at 75 % of the largest
+  difference from the first frame, at most 1 s in), hold the end 2 s **at the GIF's start**
+  (`export.write_gif(..., hold_first=True)`, the loop plays the same, the first frame shown is
+  the finished picture), fall back to 5 then 4 fps above 150 KB. `render.ffmpeg.decode_gray_frames`
+  is new (grey frames through the ffmpeg executable). All 86 GIFs regenerated.
+- Showcases: `gallery.Showcase` / `SHOWCASES` (name, section, title, use), YAML in
+  `src/vidgen/data/gallery/showcases/<name>.yaml` (package data glob widened to
+  `data/gallery/**/*` in `pyproject.toml`), each rendered as its own work project
+  `build/gallery/showcases/<name>/`, page `<name>.md`. 2D: `talk_in_a_room`, `walk_in_depth`,
+  `rainy_evening`, `star_jump`; iso: `iso_village`, `iso_room`, `iso_lamp`, `iso_snow`. The guide
+  group `cartoons` is headed "2D cartoons" (`GROUP_TITLES`); "Isometric cartoons" links
+  `examples/iso-story`. `--types` takes showcase names; a project's gallery has none. JSON:
+  `showcases` list; the CLI prints them.
+- README: four GIFs (iso village, `iso_diagram`, `line_chart`, `code_morph`) after the kphi3
+  pictures, 200 px wide, linked to their pages, same `<picture>` fallback.
+- Docs: CONFIG "Scene gallery" (showcases, GIF timing, sizes, `--types`, JSON `showcases`),
+  DESIGN §60 / §60.1 and the layout line, CHANGELOG (0.3.0 now Steps 61–182), tasklist.
+  The guide and `AGENTS.md` are unchanged (no name they mention changed).
+
+Files: `src/vidgen/gallery.py`, `export.py` (`hold_first`), `render/ffmpeg.py`
+(`decode_gray_frames`), `jsonout.py`, `cli.py` (print, `--types` help), `pyproject.toml`,
+`src/vidgen/data/gallery/showcases/*.yaml` (8), `docs/gallery/**` (regenerated; 8 new pages,
+32 new media files; `code-*.png`, `stage-*.png` and `image.md` changed because they were stale
+from earlier steps), `README.md`, `docs/CONFIG.md`, `DESIGN.md`, `CHANGELOG.md`, `tasklist.md`,
+`tests/test_gallery.py`.
+
+Sizes: `docs/gallery/media` 5,746,396 bytes before, 8,338,148 after (GIFs 5.48 MB: the types'
+3.59 MB, the showcases' 1.89 MB; stills 2.86 MB); the whole `docs/gallery` 8.55 MB. Largest GIF
+144 KB (`rainy_evening-16x9`, `iso_snow-16x9`, at 4 fps); the test budget went from 8 to 10 MB
+for the showcases.
+
+How the showcases were checked: frames of every GIF looked at in contact sheets in both formats
+and fixed (fade-in starts, a bush hiding a speaker in a two-shot, a cut medium shot, rain that
+did not show at sunset, name tags only where the face is small, sizes over budget). `vidgen
+validate`: clean for all eight. `vidgen lint`: clean in 16:9 for all eight and in 9:16 for the
+four iso ones and `star_jump`; in 9:16 `talk_in_a_room`, `walk_in_depth` and `rainy_evening`
+keep warnings about the built-in sets' own props (`off_frame` at the edges, `prop_overlap` of
+`living_room`'s lamp and sofa, `park`'s tree and fountain): the ready-made sets are laid out for
+16:9 only (backlog).
+
+Tests (one at a time, under `capped`): `tests/test_gallery.py -m "not render"` 17 passed (4 s;
+new: showcase configs validate, clip start, GIF opening on its held end via a real ffmpeg
+encode, committed showcases and previews, every GIF ≤ 150 KB and not opening empty, README
+strip markup and files), `-m render` 1 passed (13 s); `tests/test_docs.py` 62 passed;
+`tests/test_thumbnail_export.py -k gif` 1 passed; `tests/test_jobs.py -k gallery` 1 passed.
+Not run: the full suite, `test_mcp.py` (its gallery tool is unchanged; a full MCP gallery run
+now also renders the showcases).
+
+Known gaps
+- Starting at the first frame 75 % of the way in, a chart whose bars grow during the first
+  second starts with them mostly grown (`bar_chart`); an iso place's fade can still show for a
+  frame (`iso_village`).
+- The 9:16 GIF is 180 px wide but shown about 101 px wide in the 180 px high cells (kept for
+  sharpness on high-density screens).
+- Name tags show only while the speaker's face is small, so `iso_lamp`'s tag shows in its wide
+  view mid-line, not on the held last frame.
+- The MCP `gallery` tool returns the types' stills only, not the showcases'.

@@ -46,16 +46,36 @@ FORMAT_TAGS: dict[str, str] = {"16:9": "16x9", "9:16": "9x16"}
 #: Render frame rate (also the clips' upper limit).
 FPS = 12
 #: GIF clips: width per format, frame rate, palette size (flat pictures, no dithering) and how
-#: long the last beat's end is held before the loop starts again. The clip ends at the last
-#: beat's end (the scene's fade-out, every pixel changing, would cost the most bytes).
+#: long the last beat's end is held; the held end opens the GIF, so a page shows the finished
+#: picture before it plays (and between loops). The clip ends at the last beat's end (the
+#: scene's fade-out, every pixel changing, would cost the most bytes).
 CLIP_WIDTHS: dict[str, int] = {"16:9": 320, "9:16": 180}
 CLIP_FPS = 6
 CLIP_COLORS = 32
-CLIP_HOLD = 1.5
+CLIP_HOLD = 2.0
+#: The clip skips the scene's empty opening: it starts at the first frame whose difference from
+#: the first frame (mean grey) is this share of the largest one, at most CLIP_START_MAX s in.
+CLIP_START_SHARE = 0.75
+CLIP_START_MAX = 1.0
+#: A clip larger than this is made again at the next lower frame rate of CLIP_FALLBACK_FPS
+#: (a busy cartoon: rain, camera moves), so every GIF stays light.
+CLIP_MAX_BYTES = 150_000
+CLIP_FALLBACK_FPS = (5, 4)
 #: The work project's variant rendering 9:16.
 PORTRAIT_VARIANT = "portrait"
 #: Index group of a project's own types.
 PROJECT_GROUP = "project types"
+#: The index heading of a group when it is not the group's own name.
+GROUP_TITLES: dict[str, str] = {"cartoons": "2D cartoons"}
+#: The showcases' scenes (package data): ``<name>.yaml``, each a whole config of one scene.
+SHOWCASES_DIR = SAMPLE_ASSETS_DIR / "showcases"
+#: Showcase sections that are not a guide group, and the line under their heading.
+SECTION_NOTES: dict[str, str] = {
+    "isometric cartoons": (
+        "A whole isometric story, a village by a stream, a room, rain and a lamp at night: "
+        "[Hazel and the Lamp by the Bridge](../../examples/iso-story/video.yaml) (`examples/iso-story`)."
+    ),
+}
 
 _FENCE = re.compile(r"```(\w*)\n(.*?)```", re.S)
 _TICKED = re.compile(r"`([^`]+)`")
@@ -90,18 +110,77 @@ class GalleryType:
     clips: dict[str, Path] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class Showcase:
+    """A small scene written for the gallery to show what a scene type can do, beyond its sample
+    (DESIGN.md §60.1): ``name`` (its scene's id, its page and media names), the index
+    ``section`` it ends (a guide group, or a section of its own after them), its ``title`` and
+    ``use`` (the "use it for" line). Its YAML is ``data/gallery/showcases/<name>.yaml``: a whole
+    config with one scene."""
+
+    name: str
+    section: str
+    title: str
+    use: str
+
+    @property
+    def path(self) -> Path:
+        return SHOWCASES_DIR / f"{self.name}.yaml"
+
+    def text(self) -> str:
+        """The YAML as written (the page shows it)."""
+        return self.path.read_text(encoding="utf-8")
+
+    def config(self) -> dict[str, Any]:
+        """The config, checked to hold one scene with the showcase's name as its id."""
+        data = yaml.safe_load(self.text())
+        scenes = data.get("scenes") if isinstance(data, dict) else None
+        if not scenes or len(scenes) != 1 or scenes[0].get("id") != self.name:
+            raise VidgenError(f"showcase {self.path.name}: a config with one scene, id '{self.name}'")
+        return data
+
+
+#: The showcases, in index order within their sections.
+SHOWCASES: tuple[Showcase, ...] = (
+    Showcase("talk_in_a_room", "cartoons", "A talk in the living room", "a dialogue on a furnished set, with a close-up on the punchline"),
+    Showcase("walk_in_depth", "cartoons", "Passing in the park", "characters walking towards and away from the camera, passing in front of each other"),
+    Showcase("rainy_evening", "cartoons", "Rain at nightfall", "weather and evening light outdoors: rain and puddles, the sun going down, a street lamp, an umbrella"),
+    Showcase("star_jump", "cartoons", "A jump for a star", "a platform level: run to the edge, jump the gap, catch a star"),
+    Showcase("iso_village", "isometric cartoons", "Morning in the village", "a sunny isometric village where two characters walk to meet"),
+    Showcase("iso_room", "isometric cartoons", "A cut-away room", "an isometric room seen like a dollhouse: furniture, a thing to pick up"),
+    Showcase("iso_lamp", "isometric cartoons", "Lighting the lamp", "night on an isometric place: a lamp lit, a speaker's name tag"),
+    Showcase("iso_snow", "isometric cartoons", "First snow", "snow settling on an isometric village: the ground, roofs and trees turn white"),
+)
+
+
+@dataclass
+class GalleryShowcase:
+    """A showcase in a gallery run: the ``showcase``, its written ``page`` and ``stills`` /
+    ``clips`` by format."""
+
+    showcase: Showcase
+    page: Path | None = None
+    stills: dict[str, Path] = field(default_factory=dict)
+    clips: dict[str, Path] = field(default_factory=dict)
+
+    @property
+    def name(self) -> str:
+        return self.showcase.name
+
+
 @dataclass
 class GalleryResult:
     """What :func:`make_gallery` did: the folder and its index, the work project, the formats,
-    every type (index order), the samples rendered / reused as ``"<type> (<format>)"``, the
-    gallery's own ``warnings`` (types without a sample) and the render workers' warnings
-    ``(sample, message)`` (already printed while rendering)."""
+    every type (index order) and showcase, the samples rendered / reused as ``"<name>
+    (<format>)"``, the gallery's own ``warnings`` (types without a sample) and the render
+    workers' warnings ``(sample, message)`` (already printed while rendering)."""
 
     output: Path
     index: Path
     work: Path
     formats: list[str]
     types: list[GalleryType]
+    showcases: list[GalleryShowcase] = field(default_factory=list)
     rendered: list[str] = field(default_factory=list)
     reused: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -263,15 +342,22 @@ def gallery_types(project: Project | None) -> list[GalleryType]:
 
 def rendered_names(types: list[GalleryType], only: list[str] | None) -> list[str]:
     """The names to render: every type with a sample, or those of ``only`` (another name of a
-    type renders it under its own name); an unknown name is a :class:`VidgenError`."""
+    type renders it under its own name; a showcase's name is left to :func:`rendered_showcases`);
+    an unknown name is a :class:`VidgenError`."""
     from vidgen import registry
 
     by_name = {t.name: t for t in types}
-    unknown = [n for n in only or [] if n not in by_name]
+    showcases = {s.name for s in SHOWCASES}
+    unknown = [n for n in only or [] if n not in by_name and n not in showcases]
     if unknown:
         raise VidgenError(registry.unknown_type_message(unknown[0]))
-    wanted = {by_name[n].alias_of or n for n in only} if only else set(by_name)
+    wanted = {by_name[n].alias_of or n for n in only if n in by_name} if only else set(by_name)
     return [t.name for t in types if t.name in wanted and t.alias_of is None and t.sample is not None]
+
+
+def rendered_showcases(only: list[str] | None) -> list[Showcase]:
+    """The showcases to render: all, or those named in ``only``."""
+    return [s for s in SHOWCASES if only is None or s.name in only]
 
 
 # ----- the work project ------------------------------------------------------------------------
@@ -286,7 +372,6 @@ def work_config(types: list[GalleryType], project: Project | None, preset: str |
     """The work project's config: one scene per rendered type (id = type name), the characters
     the samples declare (the first entry of a name), 16:9 preview, 9:16 as the ``portrait``
     variant; the project's theme and extensions."""
-    (w, h), (pw, ph) = FORMATS["16:9"], FORMATS["9:16"]
     scenes = []
     characters: dict[str, dict[str, Any]] = {}
     for t in types:
@@ -294,14 +379,7 @@ def work_config(types: list[GalleryType], project: Project | None, preset: str |
             scenes.append({**t.sample.config, "id": t.name})
             for entry in t.sample.characters:
                 characters.setdefault(entry["name"], entry)
-    config: dict[str, Any] = {
-        "title": "vidgen gallery",
-        "output": "gallery",
-        "preview": {"width": w, "height": h, "fps": FPS},
-        "variants": {PORTRAIT_VARIANT: {"preview": {"width": pw, "height": ph, "fps": FPS}}},
-        "extensions": [],
-        "scenes": scenes,
-    }
+    config: dict[str, Any] = {"title": "vidgen gallery", "output": "gallery", **_formats_keys(), "extensions": [], "scenes": scenes}
     if characters:
         config["characters"] = list(characters.values())
     if project is not None:
@@ -311,6 +389,24 @@ def work_config(types: list[GalleryType], project: Project | None, preset: str |
         theme = project.config.theme.model_dump(mode="json", exclude_defaults=True)
         if theme:
             config["theme"] = theme
+    if preset is not None:
+        config["theme"] = {"preset": preset}
+    return config
+
+
+def _formats_keys() -> dict[str, Any]:
+    """A work project's ``preview`` (16:9) and ``variants`` (9:16 as ``portrait``) keys."""
+    (w, h), (pw, ph) = FORMATS["16:9"], FORMATS["9:16"]
+    return {
+        "preview": {"width": w, "height": h, "fps": FPS},
+        "variants": {PORTRAIT_VARIANT: {"preview": {"width": pw, "height": ph, "fps": FPS}}},
+    }
+
+
+def showcase_work_config(showcase: Showcase, preset: str | None) -> dict[str, Any]:
+    """A showcase's work project config: its own config at the gallery's sizes (``preset``: in
+    this theme preset)."""
+    config = {**showcase.config(), "output": showcase.name, **_formats_keys()}
     if preset is not None:
         config["theme"] = {"preset": preset}
     return config
@@ -377,12 +473,50 @@ def _save_still(source: Path, target: Path) -> None:
     write_bytes_atomic(target, buffer.getvalue())
 
 
-def _render_format(
-    types: list[GalleryType], ids: list[str], work: Path, fmt: str, output: Path, clips: bool, jobs: int, force: bool, result: GalleryResult
-) -> None:
-    """Render (or reuse) the samples ``ids`` in one format and write their stills and clips."""
-    from vidgen import extensions
+def clip_start(frames: Any, fps: float) -> float:
+    """Where a clip of ``frames`` (grey, ``(n, h, w)``, ``fps`` a second) starts: at the first
+    frame whose difference from the first frame is :data:`CLIP_START_SHARE` of the largest one
+    (the empty opening and most of a fade-in skipped), at most :data:`CLIP_START_MAX` s in; 0
+    when the picture hardly changes."""
+    import numpy as np
+
+    pictures = np.asarray(frames, dtype=np.float32)
+    moved = np.abs(pictures - pictures[0]).mean(axis=(1, 2))
+    if float(moved.max()) < 1.0:
+        return 0.0
+    first = int(np.argmax(moved >= CLIP_START_SHARE * float(moved.max())))
+    return min(first / fps, CLIP_START_MAX)
+
+
+def _write_clip(ffmpeg: str, video: Path, target: Path, fmt: str, end: float) -> None:
+    """The GIF of ``video`` up to ``end`` s: from :func:`clip_start`, the end held first, at
+    :data:`CLIP_FPS` or, over :data:`CLIP_MAX_BYTES`, a lower rate of :data:`CLIP_FALLBACK_FPS`."""
     from vidgen.export import write_gif
+    from vidgen.render.ffmpeg import decode_gray_frames
+
+    start = clip_start(decode_gray_frames(video, 64, CLIP_FPS, end), CLIP_FPS)
+    tmp = target.with_name(f"{target.stem}.partial.gif")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        for fps in (CLIP_FPS, *CLIP_FALLBACK_FPS):
+            size = write_gif(
+                ffmpeg, video, tmp, CLIP_WIDTHS[fmt], fps, start, end,
+                colors=CLIP_COLORS, dither="none", hold=CLIP_HOLD, hold_first=True,
+            )
+            if size <= CLIP_MAX_BYTES:
+                break
+        replace_file(tmp, target)
+    finally:
+        remove_file(tmp)
+
+
+def _render_format(
+    entries: list[GalleryType] | list[GalleryShowcase], ids: list[str], work: Path, fmt: str, output: Path,
+    clips: bool, jobs: int, force: bool, result: GalleryResult,
+) -> None:
+    """Render (or reuse) the scenes ``ids`` of the work project ``work`` (a type's sample or a
+    showcase, by its name) in one format and write their stills and clips."""
+    from vidgen import extensions
     from vidgen.render import ffmpeg as ff
     from vidgen.render.pipeline import render_scenes
     from vidgen.render.worker import scene_frames_dir, scene_video_path
@@ -398,30 +532,20 @@ def _render_format(
     result.render_warnings.extend((f"{sid} ({fmt})", message) for sid, message in runs.warnings)
     ffmpeg = ff.find_ffmpeg() if clips else ""
     media = output / "media"
-    for t in types:
-        if t.name not in ids:
+    for entry in entries:
+        if entry.name not in ids:
             continue
-        index_file = scene_frames_dir(project, True, t.name) / "index.json"
+        index_file = scene_frames_dir(project, True, entry.name) / "index.json"
         index = json.loads(index_file.read_text(encoding="utf-8")) if index_file.is_file() else {}
         if not index.get("frames"):
-            raise VidgenError(f"scene type {t.name}: no still was rendered ({fmt})")
-        still = scene_frames_dir(project, True, t.name) / index["frames"][-1]["path"]
-        t.stills[fmt] = media / media_name(t.name, fmt, ".png")
-        _save_still(still, t.stills[fmt])
+            raise VidgenError(f"gallery scene {entry.name}: no still was rendered ({fmt})")
+        still = scene_frames_dir(project, True, entry.name) / index["frames"][-1]["path"]
+        entry.stills[fmt] = media / media_name(entry.name, fmt, ".png")
+        _save_still(still, entry.stills[fmt])
         if clips:
-            target = media / media_name(t.name, fmt, ".gif")
-            tmp = target.with_name(f"{target.stem}.partial.gif")
-            media.mkdir(parents=True, exist_ok=True)
-            try:
-                end = float(index["frames"][-1]["time"]) + 0.5 / FPS
-                write_gif(
-                    ffmpeg, scene_video_path(project, True, t.name), tmp, CLIP_WIDTHS[fmt], CLIP_FPS, 0.0, end,
-                    colors=CLIP_COLORS, dither="none", hold=CLIP_HOLD,
-                )
-                replace_file(tmp, target)
-            finally:
-                remove_file(tmp)
-            t.clips[fmt] = target
+            end = float(index["frames"][-1]["time"]) + 0.5 / FPS
+            entry.clips[fmt] = media / media_name(entry.name, fmt, ".gif")
+            _write_clip(ffmpeg, scene_video_path(project, True, entry.name), entry.clips[fmt], fmt, end)
 
 
 def _first_paragraph(text: str | None) -> str:
@@ -457,11 +581,36 @@ def _param_rows(model: Any, prefix: str = "", seen: tuple[type, ...] = ()) -> li
     return rows
 
 
-def _images(t: GalleryType, formats: list[str], height: int | None = 180, suffix: str = ".png") -> str:
-    """The stills (or with ``suffix`` ``.gif`` the clips) of ``t`` side by side, ``height`` px
+def _images(name: str, formats: list[str], height: int | None = 180, suffix: str = ".png") -> str:
+    """The stills (or with ``suffix`` ``.gif`` the clips) of ``name`` side by side, ``height`` px
     high (HTML, so GitHub shows them small; ``None``: their own size)."""
     size = f' height="{height}"' if height is not None else ""
-    return " ".join(f'<img src="media/{media_name(t.name, fmt, suffix)}"{size} alt="{t.name} at {fmt}">' for fmt in formats)
+    return " ".join(f'<img src="media/{media_name(name, fmt, suffix)}"{size} alt="{name} at {fmt}">' for fmt in formats)
+
+
+def preview_html(name: str, fmt: str, media: str = "media", height: int | None = 180, link: str | None = None) -> str:
+    """One format's animated preview of ``name``: its GIF in a ``<picture>`` whose source for
+    viewers who ask for reduced motion is the still; ``link``: wrapped in a link to it. ``media``
+    is the media folder as the page refers to it."""
+    size = f' height="{height}"' if height is not None else ""
+    png, gif = (f"{media}/{media_name(name, fmt, suffix)}" for suffix in (".png", ".gif"))
+    picture = (
+        f'<picture><source media="(prefers-reduced-motion: reduce)" srcset="{png}">'
+        f'<img src="{gif}"{size} alt="{name} at {fmt}"></picture>'
+    )
+    return f'<a href="{link}">{picture}</a>' if link is not None else picture
+
+
+def _previews(name: str, output: Path, formats: list[str]) -> str:
+    """The index cell of ``name``: each format's preview linked to its page (the still alone
+    for a format whose GIF is not in the folder)."""
+    cells = []
+    for fmt in formats:
+        if (output / "media" / media_name(name, fmt, ".gif")).is_file():
+            cells.append(preview_html(name, fmt, link=f"{name}.md"))
+        elif (output / "media" / media_name(name, fmt, ".png")).is_file():
+            cells.append(f'<a href="{name}.md">{_images(name, [fmt])}</a>')
+    return " ".join(cells)
 
 
 def write_page(t: GalleryType, output: Path, formats: list[str], uses: dict[str, str], aliases: list[str]) -> Path:
@@ -482,10 +631,10 @@ def write_page(t: GalleryType, output: Path, formats: list[str], uses: dict[str,
     origin = "the author guide (`vidgen guide scenes`)" if t.sample.origin == "guide" else f"`{t.sample.origin}`"
     shown = [f for f in formats if (output / "media" / media_name(t.name, f, ".png")).is_file()]
     if shown:
-        lines += [f"Last beat, {' and '.join(shown)}:", "", _images(t, shown, 300), ""]
+        lines += [f"Last beat, {' and '.join(shown)}:", "", _images(t.name, shown, 300), ""]
     clips = [f for f in formats if (output / "media" / media_name(t.name, f, ".gif")).is_file()]
     if clips:
-        lines += ["The scene playing (GIF, up to its last beat):", "", _images(t, clips, None, ".gif"), ""]
+        lines += ["The scene playing (GIF, up to its last beat):", "", _images(t.name, clips, None, ".gif"), ""]
     lines += ["## YAML", "", f"From {origin}:", "", "```yaml", t.sample.yaml.rstrip(), "```", ""]
     model = entry.params_model
     lines += ["## Params", ""]
@@ -512,40 +661,90 @@ def _use_from_doc(type_name: str) -> str:
     return doc.split(". ")[0].rstrip(".") if doc else ""
 
 
-def write_index(types: list[GalleryType], output: Path, formats: list[str], uses: dict[str, str]) -> Path:
-    """Write ``<output>/README.md``: every type by group with its stills."""
+def write_showcase_page(showcase: Showcase, output: Path, formats: list[str]) -> Path:
+    """Write ``<output>/<showcase>.md``: what it is for, the scene playing, its stills, the YAML."""
+    used = list(dict.fromkeys(scene["type"] for scene in showcase.config()["scenes"]))
+    links = ", ".join(f"[`{name}`]({name}.md)" for name in used)
+    lines = [
+        f"# {showcase.title}",
+        "",
+        f"<!-- Generated by `vidgen gallery`; edit src/vidgen/data/gallery/showcases/{showcase.path.name}, not this file. -->",
+        "",
+        f"**Use it for:** {showcase.use}.",
+        "",
+        f"A showcase of {links}: a small scene written for the gallery, a whole `video.yaml`. Copy it into a",
+        "project and run `vidgen render`; until `vidgen tts` voices it, its beats are timed by their word count.",
+        "",
+    ]
+    clips = [f for f in formats if (output / "media" / media_name(showcase.name, f, ".gif")).is_file()]
+    if clips:
+        lines += [f"The scene playing, {' and '.join(clips)}:", "", " ".join(preview_html(showcase.name, f, height=None) for f in clips), ""]
+    shown = [f for f in formats if (output / "media" / media_name(showcase.name, f, ".png")).is_file()]
+    if shown:
+        lines += ["Last beat:", "", _images(showcase.name, shown, 300), ""]
+    lines += ["## YAML", "", "```yaml", showcase.text().rstrip(), "```", ""]
+    lines += ["[All scene types and showcases](README.md) · `vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`", ""]
+    path = output / f"{showcase.name}.md"
+    write_text_atomic(path, "\n".join(lines))
+    return path
+
+
+def _type_row(t: GalleryType, output: Path, formats: list[str], uses: dict[str, str]) -> str:
+    """The index row of a scene type."""
+    use = _cell(uses.get(t.name) or uses.get(t.alias_of or "") or _use_from_doc(t.name))
+    if t.alias_of is not None:
+        return f"| `{t.name}` | same type as [`{t.alias_of}`]({t.alias_of}.md) | {use} |"
+    if t.sample is None:
+        return f"| `{t.name}` | no sample (use it in a scene of video.yaml) | {use} |"
+    if not (output / f"{t.name}.md").is_file():
+        return f"| `{t.name}` | not rendered here yet (`vidgen gallery --types {t.name}`) | {use} |"
+    return f"| [`{t.name}`]({t.name}.md) | {_previews(t.name, output, formats)} | {use} |"
+
+
+def _showcase_row(showcase: Showcase, output: Path, formats: list[str]) -> str:
+    """The index row of a showcase."""
+    if not (output / f"{showcase.name}.md").is_file():
+        return f"| {showcase.title} | not rendered here yet (`vidgen gallery --types {showcase.name}`) | {_cell(showcase.use)} |"
+    return f"| [{showcase.title}]({showcase.name}.md) | {_previews(showcase.name, output, formats)} | {_cell(showcase.use)} |"
+
+
+def write_index(
+    types: list[GalleryType], output: Path, formats: list[str], uses: dict[str, str], showcases: list[Showcase] | tuple[Showcase, ...] = ()
+) -> Path:
+    """Write ``<output>/README.md``: every type by group with its previews, each group's
+    showcases after its types (a showcase section that is no group after the groups)."""
+    sections: dict[str, list[str]] = {}
+    by_name = {t.name: t for t in types}
+    for t in types:
+        base = by_name.get(t.alias_of) if t.alias_of else t
+        group = base.sample.group if base is not None and base.sample is not None else "other"
+        sections.setdefault(group, []).append(_type_row(t, output, formats, uses))
+    type_groups = set(sections)
+    for showcase in showcases:
+        sections.setdefault(showcase.section, []).append(_showcase_row(showcase, output, formats))
+    with_showcases = {s.section for s in showcases}
     lines = [
         "# Scene gallery",
         "",
         "<!-- Generated by `vidgen gallery`; do not edit. -->",
         "",
         "Every vidgen scene type, rendered from its sample in the author guide (`AGENTS.md`,",
-        "`vidgen guide scenes`): the last beat at 16:9 and 9:16; each page has the YAML, the",
-        "params, the action targets and a GIF of the whole scene. Regenerate with `vidgen gallery`.",
+        "`vidgen guide scenes`). The previews are animated: each GIF plays the scene at 16:9 and",
+        "9:16 and holds its last beat (viewers who ask for reduced motion see that still instead).",
+        "Each page has the YAML, the params, the action targets and the stills. The cartoon sections",
+        "end with showcases, small scenes written for the gallery, each a whole `video.yaml`.",
+        "Regenerate with `vidgen gallery`.",
         "",
     ]
-    group = None
-    by_name = {t.name: t for t in types}
-    for t in types:
-        base = by_name.get(t.alias_of) if t.alias_of else t
-        current = base.sample.group if base is not None and base.sample is not None else "other"
-        if current != group:
-            group = current
-            lines += [f"## {group[:1].upper()}{group[1:]}", "", "| type | stills | use it for |", "|---|---|---|"]
-        use = _cell(uses.get(t.name) or uses.get(t.alias_of or "") or _use_from_doc(t.name))
-        if t.alias_of is not None:
-            lines.append(f"| `{t.name}` | same type as [`{t.alias_of}`]({t.alias_of}.md) | {use} |")
-        elif t.sample is None:
-            lines.append(f"| `{t.name}` | no sample (use it in a scene of video.yaml) | {use} |")
-        elif not (output / f"{t.name}.md").is_file():
-            lines.append(f"| `{t.name}` | not rendered here yet (`vidgen gallery --types {t.name}`) | {use} |")
-        else:
-            images = _images(t, [f for f in formats if (output / "media" / media_name(t.name, f, ".png")).is_file()])
-            lines.append(f"| [`{t.name}`]({t.name}.md) | <a href=\"{t.name}.md\">{images}</a> | {use} |")
-    text = "\n".join(lines) + "\n"
-    text = re.sub(r"\n(## )", r"\n\n\1", text).replace("\n\n\n", "\n\n")
+    for group, rows in sections.items():
+        title = GROUP_TITLES.get(group, group)
+        lines += [f"## {title[:1].upper()}{title[1:]}", ""]
+        if group in SECTION_NOTES:
+            lines += [SECTION_NOTES[group], ""]
+        first = {(True, False): "type", (True, True): "type or showcase", (False, True): "showcase"}[(group in type_groups, group in with_showcases)]
+        lines += [f"| {first} | preview | use it for |", "|---|---|---|", *rows, ""]
     path = output / "README.md"
-    write_text_atomic(path, text)
+    write_text_atomic(path, "\n".join(lines))
     return path
 
 
@@ -583,7 +782,9 @@ def make_gallery(
             extensions.load_builtins()
             types = gallery_types(None)
             names = rendered_names(types, only)
-    if not names:
+    # the showcases belong to the built-in gallery, not to a project's
+    showcases = [] if project is not None else rendered_showcases(only)
+    if not names and not showcases:
         raise VidgenError("no scene type to render (none has a sample)")
     # The work project always holds every sample and file, so a run for a few --types keeps the
     # other renders current (their fingerprints see the whole config and assets/).
@@ -593,17 +794,27 @@ def make_gallery(
     write_text_atomic(work / "video.yaml", yaml.safe_dump(config, sort_keys=False, allow_unicode=True))
     _copy_files(types, project, work)
     output.mkdir(parents=True, exist_ok=True)
-    result = GalleryResult(output, output / "README.md", work, list(formats), types)
+    result = GalleryResult(output, output / "README.md", work, list(formats), types, [GalleryShowcase(s) for s in showcases])
     for t in types:
         if t.sample is None and t.alias_of is None:
             result.warnings.append(f"scene type {t.name} has no sample; use it in a scene of video.yaml to show it")
     for fmt in formats:
-        _render_format(types, names, work, fmt, output, clips, jobs, force, result)
+        if names:
+            _render_format(types, names, work, fmt, output, clips, jobs, force, result)
+        # each showcase is a project of its own (its characters, sets and voices)
+        for entry in result.showcases:
+            showcase_work = work / "showcases" / entry.name
+            showcase_work.mkdir(parents=True, exist_ok=True)
+            text = yaml.safe_dump(showcase_work_config(entry.showcase, preset), sort_keys=False, allow_unicode=True)
+            write_text_atomic(showcase_work / "video.yaml", text)
+            _render_format([entry], [entry.name], showcase_work, fmt, output, clips, jobs, force, result)
     uses = chooser_uses()
     with extensions.project_session(Project.load(work)):
         for t in types:
             if t.name in names:
                 aliases = [a.name for a in types if a.alias_of == t.name]
                 t.page = write_page(t, output, list(FORMATS), uses, aliases)
-        write_index(types, output, list(FORMATS), uses)
+        for entry in result.showcases:
+            entry.page = write_showcase_page(entry.showcase, output, list(FORMATS))
+        write_index(types, output, list(FORMATS), uses, SHOWCASES if project is None else ())
     return result
