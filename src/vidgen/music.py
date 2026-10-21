@@ -1,4 +1,4 @@
-"""Background music (DESIGN.md §48, §69.63, §82, §83): five procedurally generated beds, the
+"""Background music (DESIGN.md §48, §69.63, §82, §83, §91): ten procedurally generated beds, the
 project's own music files, composed music (:mod:`vidgen.composer`, played by
 :mod:`vidgen.synth`), and the sources the mix reads from.
 
@@ -7,7 +7,8 @@ deterministic): sustained pads are built with the PADsynth method (Nasca Octavia
 Paul's algorithm, from ZynAddSubFX) — each chord's
 harmonics as narrow Gaussian bumps of a spectrum with seeded random phases, turned into a
 periodic wave by one inverse FFT — and cross-faded from chord to chord; plucked arpeggios,
-pizzicato strings, bells, music-box tines and woodblocks are added note by note. Everything is rendered *circularly* (notes running past the loop's
+pizzicato strings, bells, music-box tines and woodblocks are added note by note (the documentary
+beds also a soft kick, synth bass, hi-hats and side-chain dips). Everything is rendered *circularly* (notes running past the loop's
 end continue at its start; the final filtering is a circular FFT filter), so the loop repeats
 without a seam. The loop is set to :data:`MUSIC_LEVEL` integrated loudness.
 
@@ -17,6 +18,7 @@ start later (``start``) and loop with a cross-faded seam (``crossfade``).
 
 from __future__ import annotations
 
+import difflib
 import logging
 import math
 import zlib
@@ -30,7 +32,7 @@ import numpy as np
 
 from vidgen.errors import VidgenError
 from vidgen.loudness import integrated_loudness
-from vidgen.sfx import RATE, _band, _filtered, _highpass, _lowpass, decode_audio, write_wav
+from vidgen.sfx import RATE, _band, _bump, _filtered, _highpass, _lowpass, _sweep, _tone, decode_audio, write_wav
 
 if TYPE_CHECKING:
     from vidgen.config import MusicCue, VideoConfig
@@ -167,6 +169,130 @@ def _add_panned(out: np.ndarray, start: int, sound: np.ndarray, pan: float) -> N
     """Add a mono ``sound`` to stereo ``out`` at ``start`` (circularly), ``pan`` -1 (left) to 1."""
     for c, side in enumerate((1 - pan, 1 + pan)):
         _circular_add(out[:, c], start, sound * side)
+
+
+# ----- voices of the documentary beds (Step 179) ---------------------------------------------------
+
+
+@lru_cache(maxsize=16)
+def _kick(f_hi: float = 92.0, f_lo: float = 47.0, tau: float = 0.16, click: float = 0.06, seconds: float = 0.5) -> np.ndarray:
+    """A soft kick: a sine gliding from ``f_hi`` to ``f_lo`` Hz in ~35 ms, 2 ms attack, decay
+    ``tau``, a faint low-passed click for definition (nothing above ~2.5 kHz); peak 1."""
+    n = int(seconds * RATE)
+    t = np.arange(n) / RATE
+    freq = f_lo + (f_hi - f_lo) * np.exp(-t / 0.035)
+    body = np.sin(_tone(freq, n)) * (1 - np.exp(-t / 0.002)) * np.exp(-t / tau)
+    burst = np.random.default_rng(7).standard_normal(n) * np.exp(-t / 0.003)
+    body += click * _filtered(burst, lambda f: _lowpass(f, 2500.0, 2) * _highpass(f, 400.0, 2))
+    tail = int(0.03 * RATE)
+    body[-tail:] *= np.linspace(1, 0, tail)
+    body.setflags(write=False)
+    return body / np.abs(body).max()
+
+
+def _synth_bass(freq: float, n: int, tau: float, cutoff: float) -> np.ndarray:
+    """A warm saw-like synth bass: 10 harmonics at 1/h shaped by :func:`_shape` at ``cutoff``,
+    the upper ones dying faster (a closing filter), 4 ms attack."""
+    partials = tuple((float(h), 1.0 / h, 1.0 / (1 + 0.35 * (h - 1))) for h in range(1, 11))
+    return _partials(freq, n, tau, 0.004, partials, cutoff)
+
+
+@lru_cache(maxsize=4)
+def _hat(seed: int = 3, tau: float = 0.022, center: float = 6500.0) -> np.ndarray:
+    """A soft closed hi-hat: a noise burst around ``center`` Hz, 4.5-9 kHz, steep both sides; peak 1."""
+    n = int(0.09 * RATE)
+    t = np.arange(n) / RATE
+    burst = np.random.default_rng(seed).standard_normal(n) * np.exp(-t / tau) * (1 - np.exp(-t / 0.0005))
+    hat = _filtered(burst, lambda f: _band(f, center, 0.3) * _highpass(f, 4500.0, 4) * _lowpass(f, 9000.0, 4))
+    hat[-int(0.01 * RATE) :] *= np.linspace(1, 0, int(0.01 * RATE))
+    hat.setflags(write=False)
+    return hat / np.abs(hat).max()
+
+
+@lru_cache(maxsize=4)
+def _clock(center: float, seed: int = 11) -> np.ndarray:
+    """A clock tick: a 4 ms burst around ``center`` Hz with a little ring; peak 1."""
+    n = int(0.03 * RATE)
+    t = np.arange(n) / RATE
+    burst = np.random.default_rng(seed).standard_normal(n) * np.exp(-t / 0.0015)
+    ring = 0.4 * np.sin(2 * np.pi * center * t) * np.exp(-t / 0.004)
+    tick = _filtered(burst, lambda f: _band(f, center, 0.25) * _lowpass(f, 7000.0, 4)) + ring
+    tick[-int(0.005 * RATE) :] *= np.linspace(1, 0, int(0.005 * RATE))
+    tick.setflags(write=False)
+    return tick / np.abs(tick).max()
+
+
+def _piano(freq: float, n: int, tau: float, lowpass: float) -> np.ndarray:
+    """A soft piano-like note: slightly stretched partials, the upper ones dying first, 3 ms attack."""
+    partials = ((1.0, 1.0, 1.0), (2.003, 0.45, 0.6), (3.008, 0.2, 0.45), (4.015, 0.1, 0.35), (5.025, 0.05, 0.28))
+    return _partials(freq, n, tau, 0.003, partials, lowpass)
+
+
+@lru_cache(maxsize=128)
+def _fm_pluck(freq: float, n: int, tau: float, index: float, lowpass: float) -> np.ndarray:
+    """A modern electronic pluck: two-operator FM (modulator at twice the pitch) whose index
+    falls fast (a bright "blip" settling into a sine), 2 ms attack, low-passed at ``lowpass``."""
+    t = np.arange(n) / RATE
+    idx = index * np.exp(-t / (0.25 * tau))
+    y = np.sin(2 * np.pi * freq * t + idx * np.sin(2 * np.pi * 2 * freq * t)) * (1 - np.exp(-t / 0.002)) * np.exp(-t / tau)
+    y = _filtered(y, lambda f: _lowpass(f, lowpass, 2) * _highpass(f, 120.0, 2))
+    tail = min(n, int(0.02 * RATE))
+    y[-tail:] *= np.linspace(1, 0, tail)
+    y.setflags(write=False)
+    return y
+
+
+def _pump(total: int, beat: int, depth: float, release: float = 0.16) -> np.ndarray:
+    """A side-chain gain curve ``(total,)``: dips by ``depth`` just after every beat and recovers
+    with ``release`` seconds; built circularly, so it is smooth across beats and the loop's end."""
+    t = np.arange(2 * beat) / RATE
+    dip = depth * (1 - np.exp(-t / 0.008)) * np.exp(-t / release)
+    curve = np.zeros(total)
+    for start in range(0, total, beat):
+        _circular_add(curve, start, dip)
+    return 1.0 - curve
+
+
+def _riser(seconds: float, lo: float, hi: float, seed: int = 5) -> np.ndarray:
+    """A soft noise riser: band-passed noise sweeping ``lo`` to ``hi`` Hz, swelling to its end,
+    which is cut with a 10 ms fade; peak 1."""
+    n = int(seconds * RATE)
+    noise = np.random.default_rng(seed).standard_normal(n)
+    swept = _sweep(noise, lambda u: lo * (hi / lo) ** u, 0.35)
+    env = np.sin(0.5 * np.pi * np.linspace(0, 1, n)) ** 3
+    out = swept * env
+    out[-int(0.01 * RATE) :] *= np.linspace(1, 0, int(0.01 * RATE))
+    return out / np.abs(out).max()
+
+
+def _echoed(out: np.ndarray, start: int, sound: np.ndarray, pan: float, delay: int, feedback: float, repeats: int) -> None:
+    """``sound`` at ``start`` plus ``repeats`` echoes ``delay`` samples apart, each ``feedback``
+    quieter and on the other side (ping-pong)."""
+    for k in range(repeats + 1):
+        _add_panned(out, start + k * delay, sound * feedback**k, pan if k % 2 == 0 else -pan)
+
+
+def _hits(out: np.ndarray, sound: np.ndarray, positions: Sequence[int], gain: float | Sequence[float], pan: float = 0.0) -> None:
+    """``sound`` at each of ``positions``, times ``gain`` (one for all or one per position)."""
+    gains = [gain] * len(positions) if isinstance(gain, (int, float)) else list(gain)
+    for p, g in zip(positions, gains):
+        _add_panned(out, p, sound * g, pan)
+
+
+def _circular_smooth(x: np.ndarray, width: int) -> np.ndarray:
+    """``x`` averaged over a centred window of ``width`` samples, wrapping around the loop."""
+    kernel = np.zeros(len(x))
+    kernel[:width] = 1.0 / width
+    kernel = np.roll(kernel, -(width // 2))
+    return np.fft.irfft(np.fft.rfft(x) * np.fft.rfft(kernel), len(x))
+
+
+def _tone_filter(x: np.ndarray, lowpass: float, highpass: float = 32.0) -> np.ndarray:
+    """The whole stereo loop through a circular (FFT over the loop) high-pass and gentle
+    low-pass: the loop's end and start are filtered as neighbours, so the seam stays clean."""
+    freqs = np.fft.rfftfreq(len(x), 1 / RATE)
+    gain = _highpass(freqs, highpass, 2) * _lowpass(freqs, lowpass, 2)
+    return np.fft.irfft(np.fft.rfft(x, axis=0) * gain[:, None], len(x), axis=0)
 
 
 # ----- the beds ------------------------------------------------------------------------------------
@@ -462,6 +588,277 @@ def _lullaby(rng: np.random.Generator) -> np.ndarray:
     return _finish(out)
 
 
+# The documentary beds (Step 179, DESIGN.md §91): a soft kick and synth bass under pads and
+# arpeggios, side-chained, the whole loop through :func:`_tone_filter`. Bass-heavy on purpose.
+
+
+def _opening_pads(
+    chords: Sequence[Sequence[int]], bass: Sequence[int], seg: int, rng: np.random.Generator, dark: float, open_: float, curve: np.ndarray, air: float
+) -> np.ndarray:
+    """Pads whose filter opens and closes along ``curve`` (0 dark .. 1 open, per sample): a dark
+    and an open render (``dark`` / ``open_`` Hz) cross-faded with equal power."""
+    a = _pads(chords, bass, seg, seg // 2, rng, air=0.0, air_cycles=1, lowpass=dark)
+    b = _pads(chords, bass, seg, seg // 2, rng, air=air, air_cycles=1, lowpass=open_)
+    w = 0.5 * np.pi * curve[:, None]
+    return np.cos(w) * a + np.sin(w) * b
+
+
+def _discovery(rng: np.random.Generator) -> np.ndarray:
+    lowpass = 4200.0
+    beat = RATE * 60 // 104  # 104 BPM
+    bar = 4 * beat
+    seg = 2 * bar
+    chords = (
+        (50, 57, 62, 64, 65),  # Dm(add9)
+        (46, 53, 57, 62, 65),  # Bbmaj7
+        (53, 57, 60, 65, 67),  # Fadd9
+        (48, 55, 60, 62, 67),  # Csus2
+        (50, 57, 60, 65, 69),  # Dm7
+        (43, 50, 57, 58, 62),  # Gm9
+        (46, 53, 57, 60, 62),  # Bbmaj9
+        (45, 52, 57, 62, 64),  # Asus4
+        (50, 57, 62, 64, 65),  # Dm(add9)
+        (46, 53, 58, 62, 64),  # Bb(add#11)
+        (43, 50, 58, 62, 65),  # Gm7
+        (45, 52, 57, 61, 64),  # A
+    )
+    roots = (38, 34, 41, 36, 38, 43, 34, 33, 38, 34, 43, 33)
+    total = len(chords) * seg
+    u = np.arange(total) / total
+    opening = _bump(u, 0.72)
+    out = 0.42 * _opening_pads(chords, roots, seg, rng, 800.0, 3000.0, opening, air=0.25)
+    out *= _pump(total, beat, 0.35)[:, None]
+    arp = np.zeros((total, 2))
+    _arpeggio(arp, chords, seg, beat // 2, rng, octave=0, tau=0.2, bright=0.4, level=0.32, lowpass=2400.0)
+    out += arp * (0.75 + 0.25 * opening)[:, None]
+    _hits(out, _kick(), range(0, total, beat), 0.7)
+    hat = _hat()
+    for p in range(beat // 2, total, beat):
+        _add_panned(out, p, hat * 0.09 * (0.6 + 0.6 * opening[p]), 0.3)
+    for i, root in enumerate(roots):  # pulsing eighths, octave on the last eighth of every second bar
+        for k in range(16):
+            note = root + (12 if k == 15 else 0)
+            level = 0.4 if k % 2 == 0 else 0.3
+            _add_panned(out, i * seg + k * beat // 2, _synth_bass(_hz(note), int(0.26 * RATE), 0.11, 650.0) * level, 0.0)
+    return _finish(_tone_filter(out, lowpass))
+
+
+def _breakthrough(rng: np.random.Generator) -> np.ndarray:
+    lowpass = 4300.0
+    beat = RATE * 60 // 112  # 112 BPM
+    bar = 4 * beat
+    seg = 2 * bar
+    chords = (
+        (48, 55, 60, 62, 63),  # Cm(add9)
+        (44, 51, 55, 60, 63),  # Abmaj7
+        (41, 48, 55, 56, 60),  # Fm9
+        (43, 55, 60, 62, 63),  # Cm(add9)/G
+        (44, 51, 55, 60, 62),  # Abmaj7(#11)
+        (43, 50, 53, 55, 60),  # G7sus4
+        (51, 58, 63, 65, 67),  # Eb(add9): the lift
+        (50, 53, 58, 60, 65),  # Bb(add9)/D
+        (44, 51, 55, 58, 60),  # Abmaj9
+        (43, 51, 55, 58, 63),  # Eb/G
+        (46, 53, 58, 60, 62),  # Bb(add9)
+        (43, 50, 55, 59, 62),  # G
+    )
+    roots = (36, 44, 41, 43, 44, 43, 39, 38, 44, 43, 46, 43)
+    total = len(chords) * seg
+    half = 6 * seg
+    step = (np.arange(total) >= half).astype(float)  # 1 in the second half
+    lifted = _circular_smooth(step, int(0.06 * RATE))
+    out = 0.4 * _opening_pads(chords, roots, seg, rng, 900.0, 3200.0, 0.15 + 0.85 * lifted, air=0.35)
+    out *= (1 - lifted + lifted * _pump(total, beat, 0.35))[:, None]  # pumping only once lifted
+    dark, bright = np.zeros((total, 2)), np.zeros((total, 2))
+    _arpeggio(dark, chords, seg, beat // 2, rng, octave=0, tau=0.18, bright=0.3, level=0.3, lowpass=1900.0)
+    _arpeggio(bright, chords, seg, beat // 2, rng, octave=1, tau=0.2, bright=0.45, level=0.2, lowpass=3200.0)
+    out += dark * (1 - 0.6 * lifted)[:, None] + bright * lifted[:, None]
+    kick, hat = _kick(), _hat()
+    for b in range(0, total, beat):
+        k = (b // beat) % 4
+        if b < half:
+            if k in (0, 2):
+                _add_panned(out, b, kick * (0.72 if k == 0 else 0.6), 0.0)
+        else:
+            _add_panned(out, b, kick * 0.72, 0.0)
+            _add_panned(out, b + beat // 2, hat * 0.1, 0.3)
+    for k, p in enumerate(range(0, half, beat // 4)):  # a sixteenth tick growing through the first half
+        _add_panned(out, p, _clock(3600.0) * (0.012 + 0.03 * p / half) * (1.0 if k % 4 == 0 else 0.6), -0.3)
+    for i, root in enumerate(roots):
+        start = i * seg
+        if start < half:  # staccato quarter notes
+            for k in range(8):
+                _add_panned(out, start + k * beat, _synth_bass(_hz(root), int(0.3 * RATE), 0.09, 600.0) * (0.45 if k % 2 == 0 else 0.36), 0.0)
+        else:  # driving eighths
+            for k in range(16):
+                _add_panned(out, start + k * beat // 2, _synth_bass(_hz(root), int(0.24 * RATE), 0.1, 700.0) * (0.42 if k % 2 == 0 else 0.34), 0.0)
+    rise = _riser(4 * bar / RATE, 250.0, 2200.0)
+    _add_panned(out, half - len(rise), rise * 0.07, 0.0)
+    boom = _kick(f_hi=70.0, f_lo=38.0, tau=0.9, click=0.02, seconds=2.5)
+    _add_panned(out, half, boom * 0.55, 0.0)
+    return _finish(_tone_filter(out, lowpass))
+
+
+#: The ``enigma`` bed's piano motif per 4-bar phrase: (beat, midi) pairs; sparse, B3 to C#5.
+_ENIGMA_MOTIF = (
+    ((0, 66), (1.5, 61), (3, 62), (8, 66), (9.5, 61), (11, 59)),
+    ((0, 66), (1.5, 64), (3, 59), (8, 61), (9.5, 66), (12, 73)),
+    ((0, 66), (1.5, 61), (3, 62), (8, 69), (9.5, 66), (11, 64)),
+    ((0, 67), (1.5, 62), (3, 59), (8, 64), (9.5, 59), (11, 62)),
+    ((0, 66), (1.5, 71), (3, 72), (8, 66), (10, 61)),
+)
+
+
+def _enigma(rng: np.random.Generator) -> np.ndarray:
+    lowpass = 3600.0
+    beat = RATE * 60 // 96  # 96 BPM
+    bar = 4 * beat
+    seg = 2 * bar
+    chords = (
+        (47, 54, 61, 62, 66),  # Bm(add9)
+        (43, 50, 54, 61, 62),  # Gmaj7(#11)
+        (40, 47, 54, 59, 66),  # Esus2
+        (42, 49, 54, 59, 61),  # F#sus4
+        (47, 54, 61, 62, 66),  # Bm(add9)
+        (45, 50, 54, 57, 61),  # Dmaj7/A
+        (43, 50, 54, 61, 62),  # Gmaj7(#11)
+        (40, 47, 55, 62, 66),  # Em9
+        (36, 43, 47, 54, 59),  # Cmaj7(#11)
+        (42, 49, 54, 59, 61),  # F#sus4
+    )
+    roots = (35, 43, 40, 42, 35, 33, 43, 40, 36, 42)
+    total = len(chords) * seg
+    out = 0.38 * _pads(chords, roots, seg, seg // 2, rng, air=0.1, air_cycles=1, lowpass=1400.0)
+    out *= _pump(total, beat, 0.3, release=0.25)[:, None]
+    kick = _kick(f_hi=75.0, f_lo=42.0, tau=0.22, click=0.03)
+    for b in range(0, total, 2 * beat):
+        _add_panned(out, b, kick * (0.68 if (b // beat) % 4 == 0 else 0.52), 0.0)
+    for i, root in enumerate(roots):
+        sub = _partials(_hz(root), int(0.7 * RATE), 0.3, 0.012, ((1.0, 1.0, 1.0), (2.0, 0.18, 0.6)), 600.0)
+        for k in range(8):
+            _add_panned(out, i * seg + k * beat, sub * (0.58 if k % 2 == 0 else 0.46), 0.0)
+    for p, motif in enumerate(_ENIGMA_MOTIF):
+        for at, note in motif:
+            sound = _piano(_hz(note), int(2.4 * RATE), 0.7, 2400.0) * 0.26
+            _echoed(out, p * 2 * seg + int(at * beat), sound, 0.25, beat * 3 // 4, 0.38, 3)
+    for b in range(0, total, 4 * bar):  # a faint high glint every 4 bars, alternating B5 / F#5
+        note = 83 if (b // (4 * bar)) % 2 == 0 else 78
+        _echoed(out, b + 2 * bar + 2 * beat, _bell(_hz(note), int(2.0 * RATE), 0.6, 3000.0) * 0.06, -0.4, beat * 3 // 4, 0.4, 3)
+    return _finish(_tone_filter(out, lowpass))
+
+
+def _momentum(rng: np.random.Generator) -> np.ndarray:
+    lowpass = 4500.0
+    beat = RATE * 60 // 120  # 120 BPM
+    bar = 4 * beat
+    seg = 2 * bar
+    six = beat // 4
+    chords = (
+        (43, 50, 57, 58, 62),  # Gm(add9)
+        (51, 55, 58, 62, 63),  # Ebmaj7
+        (48, 55, 58, 62, 63),  # Cm9
+        (50, 55, 57, 62, 64),  # Dsus4(add9)
+        (43, 50, 53, 58, 62),  # Gm7
+        (51, 55, 58, 62, 65),  # Ebmaj9
+        (46, 53, 58, 60, 62),  # Bb(add9)
+        (41, 48, 55, 57, 60),  # F(add9)
+        (48, 55, 58, 62, 63),  # Cm9
+        (51, 55, 58, 62, 63),  # Ebmaj7
+        (50, 55, 57, 62, 64),  # Dsus4
+        (50, 54, 57, 62, 66),  # D
+    )
+    roots = (43, 39, 36, 38, 43, 39, 46, 41, 36, 39, 38, 38)
+    total = len(chords) * seg
+    out = 0.32 * _pads(chords, roots, seg, seg // 2, rng, air=0.3, air_cycles=2, lowpass=2600.0)
+    out *= _pump(total, beat, 0.45, release=0.14)[:, None]
+    kick, hat = _kick(f_hi=100.0, f_lo=50.0, tau=0.14, click=0.08), _hat()
+    _hits(out, kick, range(0, total, beat), 0.75)
+    n = int(0.11 * RATE)  # a soft clap: band-passed noise and a short 190 Hz body
+    t = np.arange(n) / RATE
+    noise = np.random.default_rng(21).standard_normal(n) * np.exp(-t / 0.03) * (1 - np.exp(-t / 0.001))
+    clap = _filtered(noise, lambda f: _band(f, 1300.0, 0.5) * _lowpass(f, 3500.0, 4)) + 0.6 * np.sin(2 * np.pi * 190 * t) * np.exp(-t / 0.03)
+    clap[-480:] *= np.linspace(1, 0, 480)
+    clap /= np.abs(clap).max()
+    for b in range(beat, total, 2 * beat):
+        _add_panned(out, b, clap * 0.13, 0.0)
+    for k, p in enumerate(range(0, total, six)):
+        _add_panned(out, p, hat * (0.085 if k % 4 == 2 else 0.035), 0.25 if k % 2 else -0.25)
+    accents = {0, 3, 6, 8, 11, 14}  # 3+3+2 in sixteenths, twice a bar
+    figure = (0, 1, 2, 0, 1, 3, 0, 1, 2, 0, 1, 3, 2, 1, 0, 1)
+    for i, (notes, root) in enumerate(zip(chords, roots)):
+        tones = (root + 12, root + 19, root + 24, sorted(notes)[2])
+        for bar_k in range(2):
+            for k, idx in enumerate(figure):
+                level = 0.36 if k in accents else 0.22
+                note = _synth_bass(_hz(tones[idx]), int(0.2 * RATE), 0.06, 1500.0) * level
+                _add_panned(out, i * seg + bar_k * bar + k * six, note, 0.15 if k % 2 else -0.15)
+        for k in range(8):  # off-beat bass
+            _add_panned(out, i * seg + k * beat + beat // 2, _synth_bass(_hz(root), int(0.22 * RATE), 0.1, 550.0) * 0.45, 0.0)
+    rise = _riser(2 * bar / RATE, 300.0, 2500.0, seed=9)
+    _add_panned(out, total - len(rise), rise * 0.06, 0.0)
+    return _finish(_tone_filter(out, lowpass))
+
+
+def _lab(rng: np.random.Generator) -> np.ndarray:
+    lowpass = 4800.0
+    beat = RATE * 60 // 108  # 108 BPM
+    bar = 4 * beat
+    seg = 2 * bar
+    six = beat // 4
+    chords = (
+        (41, 48, 55, 56, 60),  # Fm9
+        (49, 56, 60, 65),  # Dbmaj7
+        (46, 53, 56, 60, 61),  # Bbm9
+        (51, 58, 63, 65),  # Ebsus2
+        (41, 48, 55, 56, 60),  # Fm9
+        (44, 51, 55, 60, 63),  # Abmaj7
+        (49, 56, 60, 67),  # Dbmaj7(#11)
+        (46, 53, 56, 61),  # Bbm7
+        (43, 49, 53, 58),  # Gm7b5
+        (48, 52, 55, 58),  # C7
+    )
+    roots = (41, 37, 46, 39, 41, 44, 37, 46, 43, 36)
+    total = len(chords) * seg
+    out = 0.26 * _pads(chords, roots, seg, seg // 2, rng, air=0.2, air_cycles=1, lowpass=2000.0)
+    out *= _pump(total, beat, 0.5, release=0.13)[:, None]
+    _hits(out, _kick(f_hi=105.0, f_lo=50.0, tau=0.13, click=0.08), range(0, total, beat), 0.72)
+    n = int(0.06 * RATE)  # a soft snap: band-passed noise
+    t = np.arange(n) / RATE
+    noise = np.random.default_rng(31).standard_normal(n) * np.exp(-t / 0.012)
+    snap = _filtered(noise, lambda f: _band(f, 1800.0, 0.45) * _lowpass(f, 4000.0, 4))
+    snap[-240:] *= np.linspace(1, 0, 240)
+    snap /= np.abs(snap).max()
+    for b in range(beat, total, 2 * beat):
+        _add_panned(out, b, snap * 0.08, 0.1)
+    click_hi, click_lo = _clock(5200.0, seed=41), _clock(3800.0, seed=42)
+    glitch = np.random.default_rng(55)
+    slots = [s for s in range(16) if glitch.random() < 0.45 and s % 4 != 0]
+    for b in range(0, total, bar):
+        for s in slots:
+            _add_panned(out, b + s * six, (click_hi if s % 2 else click_lo) * 0.05, 0.5 if s % 3 else -0.5)
+        if (b // bar) % 4 == 3:  # a stutter: 32nd-note clicks rising in level into the next bar
+            for k in range(8):
+                _add_panned(out, b + 3 * beat + k * six // 2, click_hi * (0.02 + 0.006 * k), -0.2)
+    bass_slots = (2, 3, 6, 10, 11, 14)
+    pluck_slots = (0, 3, 6, 8, 10, 13)
+    for i, (notes, root) in enumerate(zip(chords, roots)):
+        upper = sorted(notes)[1:]
+        for bar_k in range(2):
+            start = i * seg + bar_k * bar
+            for k in bass_slots:
+                _add_panned(out, start + k * six, _synth_bass(_hz(root), int(0.18 * RATE), 0.08, 450.0) * (0.45 if k in (2, 10) else 0.34), 0.0)
+            for j, k in enumerate(pluck_slots):
+                note = upper[(j + bar_k) % len(upper)] + 12
+                sound = _fm_pluck(_hz(note), int(0.5 * RATE), 0.16, 1.6, 2600.0) * 0.2
+                _echoed(out, start + k * six, sound, 0.35, 3 * six, 0.33, 2)
+    return _finish(_tone_filter(out, lowpass))
+
+
+def _loop_seconds(tempo: int, bars: int) -> float:
+    """The length of ``bars`` bars of 4/4 at ``tempo`` BPM as the beds count it (whole samples per beat)."""
+    return RATE * 60 // tempo * 4 * bars / RATE
+
+
 #: The built-in beds, in listing order.
 BUILTIN_BEDS: dict[str, Bed] = {
     b.name: b
@@ -516,6 +913,65 @@ BUILTIN_BEDS: dict[str, Bed] = {
             "(C2 to Bb2); 16 bars, a chord per bar (I-IV-I-V7, ii, vi, IV turns, ending on V7 back "
             "to the top). No percussion; rolled off above ~3.5 kHz; tender, dreamy, sleepy.",
             "bedtime stories, soft or sentimental moments, endings, calm scenes for young children",
+        ),
+        Bed(
+            "discovery", _discovery, _loop_seconds(104, 24), 104, "D minor",
+            ("Dm(add9)", "Bbmaj7", "Fadd9", "Csus2", "Dm7", "Gm9", "Bbmaj9", "Asus4", "Dm(add9)", "Bb(add#11)", "Gm7", "A"),
+            "A steady, forward-moving documentary bed at 104 BPM in D minor, 4/4: a soft kick on every "
+            "beat, a pulsing synth bass in eighth notes (A1 to F2, an octave up on the last eighth of "
+            "each chord), a plucked minor arpeggio in eighths, soft off-beat hi-hats, and a pad that "
+            "opens slowly from dark to bright over the loop (brightest about three quarters through) "
+            "and dips gently with each kick; 24 bars, a chord every two bars (4.6 s), A major leading "
+            "back to the top. Rolled off above ~4 kHz; bass-heavy (57% of its power under 150 Hz: "
+            "lighter on phone speakers); curious, purposeful, building.",
+            "documentaries approaching a discovery, science stories, explainers that build to a finding",
+        ),
+        Bed(
+            "breakthrough", _breakthrough, _loop_seconds(112, 24), 112, "C minor to E-flat major",
+            ("Cm(add9)", "Abmaj7", "Fm9", "Cm(add9)/G", "Abmaj7(#11)", "G7sus4", "Eb(add9)", "Bb(add9)/D", "Abmaj9", "Eb/G", "Bb(add9)", "G"),
+            "A two-part bed at 112 BPM in C minor, 4/4, that lifts to E-flat major halfway, 25.7 s into "
+            "the loop. The first 12 bars hold tension: a soft kick on beats 1 and 3, staccato synth-bass "
+            "quarter notes, a dark plucked arpeggio, a quiet sixteenth-note tick that grows, and a soft "
+            "noise riser into the lift. The last 12 bars release it: a deep low boom on the lift, a kick "
+            "on every beat, driving eighth-note bass, the arpeggio an octave higher, an open pad dipping "
+            "with each kick and off-beat hi-hats; a G chord turns back to C minor at the top. A chord "
+            "every two bars (4.3 s). Rolled off above ~4 kHz; bass-heavy (59% of its power under 150 Hz: "
+            "lighter on phone speakers); suspense, then a reveal.",
+            "a reveal or result that lands mid-video, problem-to-solution stories, before / after",
+        ),
+        Bed(
+            "enigma", _enigma, _loop_seconds(96, 20), 96, "B minor",
+            ("Bm(add9)", "Gmaj7(#11)", "Esus2", "F#sus4", "Bm(add9)", "Dmaj7/A", "Gmaj7(#11)", "Em9", "Cmaj7(#11)", "F#sus4"),
+            "A dark, mysterious bed at 96 BPM in B minor, 4/4, with suspended chords and a Neapolitan "
+            "C major: a deep sub-bass pulse on every beat (A1 to G2), a soft felt kick on beats 1 and 3, "
+            "a dark, muffled pad that breathes with the pulse, a sparse piano motif (B3 to C#5, a few "
+            "notes every two bars) with ping-pong echoes, and a faint high bell (B5 or F#5) with echoes "
+            "every eight bars; 20 bars, a chord every two bars (5 s), F#sus4 leading back to the top. "
+            "Rolled off above ~3.5 kHz; the most bass-heavy (65% of its power under 150 Hz: lighter on "
+            "phone speakers) and the quietest in the voice's range; mysterious, unresolved, searching.",
+            "mysteries and unsolved questions, investigations, history or true-crime style stories, space and the deep sea",
+        ),
+        Bed(
+            "momentum", _momentum, _loop_seconds(120, 24), 120, "G minor",
+            ("Gm(add9)", "Ebmaj7", "Cm9", "Dsus4(add9)", "Gm7", "Ebmaj9", "Bb(add9)", "F(add9)", "Cm9", "Ebmaj7", "Dsus4", "D"),
+            "The most energetic bed, at 120 BPM in G minor, 4/4: a driving synth ostinato in sixteenth "
+            "notes accented 3+3+2 (C3 to B-flat 4, slightly left / right), a kick on every beat, synth "
+            "bass on the off-beat eighths, a soft clap on beats 2 and 4, sixteenth-note hi-hats, a pad "
+            "that pumps with the kick and a soft noise riser into the top of the loop; 24 bars, a chord "
+            "every two bars (4 s), D major leading back to G minor. Rolled off above ~4.5 kHz; "
+            "bass-heavy (61% of its power under 150 Hz: lighter on phone speakers); urgent, driving.",
+            "fast-paced explainers and Shorts, montages, countdowns, races and high-energy intros",
+        ),
+        Bed(
+            "lab", _lab, _loop_seconds(108, 20), 108, "F minor",
+            ("Fm9", "Dbmaj7", "Bbm9", "Ebsus2", "Fm9", "Abmaj7", "Dbmaj7(#11)", "Bbm7", "Gm7b5", "C7"),
+            "A modern tech bed at 108 BPM in F minor, 4/4: a steady kick on every beat, a rolling, "
+            "syncopated synth bass, syncopated electronic (FM) plucks (E4 to G5) with ping-pong echoes, "
+            "light glitchy clicks left and right (a short rising stutter every fourth bar), a soft snap "
+            "on beats 2 and 4, and a thin pad that pumps with the kick; 20 bars, a chord every two bars "
+            "(4.4 s), C7 leading back to the top. Rolled off above ~4.5 kHz; bass-heavy (67% of its "
+            "power under 150 Hz: lighter on phone speakers); clean, precise, electronic.",
+            "technology, AI, software and engineering explainers, lab science, product demos with a modern feel",
         ),
     )
 }
@@ -717,8 +1173,10 @@ def config_problems(config: VideoConfig, root: Path | None) -> list[tuple[str, s
         assert cue.source is not None
         path = root / cue.source
         if not path.is_file():
+            close = difflib.get_close_matches(cue.source.lower(), list(BUILTIN_BEDS), n=1, cutoff=0.7)
+            guess = f"; did you mean '{close[0]}'?" if close else ""
             hint = f"; built-in beds: {', '.join(BUILTIN_BEDS)}, or compose: {{mood: ...}} (vidgen list-music)"
-            found.append((f"{where}.source", f"neither a built-in bed nor a file: {cue.source} (looked for {path}){hint}"))
+            found.append((f"{where}.source", f"neither a built-in bed nor a file: {cue.source} (looked for {path}){guess}{hint}"))
     return found
 
 

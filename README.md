@@ -249,9 +249,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
   reveals, highlights, callouts, zooms and chapter cards. `vidgen list-sfx` describes every sound
   in words and `--render-dir` writes them out to listen to ([reference](docs/CONFIG.md#sound-effects-sfx)).
-- **Background music**: `music: calm` — one of five generated beds (`calm` pad,
+- **Background music**: `music: calm` — one of ten generated beds (`calm` pad,
   `pulse` soft arpeggio at 96 BPM, `bright` uplifting at 120 BPM, `cartoon` playful pizzicato
-  at 128 BPM, `lullaby` music box in 3/4 at 64 BPM; seamless loops; free to use in your videos, including commercially; no attribution
+  at 128 BPM, `lullaby` music box in 3/4 at 64 BPM, and five documentary beds with a soft kick
+  and synth bass: `discovery`, `breakthrough` (tension, then a reveal), `enigma` (mysterious),
+  `momentum` (the most energetic), `lab` (modern tech); seamless loops; free to use in your videos, including commercially; no attribution
   needed) or
   your own file, looped with a cross-faded seam, faded in and out, changed per scene range (a
   list of cues with `from` / `to`) or muted per scene (`music: false`); ducked 12 dB under the

@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–178)
+## 0.3.0 (Steps 61–179)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -322,6 +322,13 @@ matters only for projects made with development builds between Steps 67 and 131)
   `thunder`, `beep`, `creak`, `knock`, `splash`.
 - Ambience beds: rain, fire, birdsong, city, room tone (105, 121, 128).
 - New music beds: `cartoon` and `lullaby` (129).
+- Five documentary music beds with a soft kick and a synth bass (179): `discovery` (D minor,
+  104 BPM, a steady approach that builds), `breakthrough` (112 BPM, tension in C minor, then a
+  lift to E-flat major 25.7 s into the loop: a reveal), `enigma` (B minor, 96 BPM, mysterious),
+  `momentum` (G minor, 120 BPM, the most energetic), `lab` (F minor, 108 BPM, modern tech). Used
+  like the other beds (`music: discovery`); bass-heavy, so lighter on phone and laptop speakers.
+  The five older beds sound exactly as before. `vidgen validate` suggests the nearest bed name
+  for a misspelt `music` source.
 - Composed music: `music: {compose: MOOD}` writes an original piece as notes and plays it with
   real instruments (the optional `music` extra, symusic 0.5.9, and the GeneralUser GS SoundFont,
   downloaded once and checked: `vidgen soundfont fetch`, or `soundfont: PATH` for your own) (145,

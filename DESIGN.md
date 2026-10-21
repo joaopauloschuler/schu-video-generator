@@ -3567,7 +3567,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   inputs, nor are `music.py`, `mix.py`, `loudness.py` (music never changes pixels or timing).
 - **Beds** (`vidgen/music.py`, numpy only): `calm` (60 s, D major, no beat), `pulse` (40 s,
   A minor, 96 BPM), `bright` (48 s, C major, 120 BPM); Step 129 adds `cartoon` and `lullaby`
-  (§69.63). Pads by PADsynth: each chord's harmonics
+  (§69.63), Step 179 `discovery`, `breakthrough`, `enigma`, `momentum`, `lab` (§91). Pads by PADsynth: each chord's harmonics
   as Gaussian bumps (18–30 cents wide) with random phases in one spectrum, one inverse FFT → a
   periodic wave whose length divides the chord's segment; chords cross-fade with equal-power
   windows of 1.6 s; an airy layer an octave up swells with an LFO whose period divides the loop;
@@ -12801,3 +12801,65 @@ iso-story differs from the pre-Phase-R stills only in Step 172's intended rain a
 - **Gaps**: an object's own change with two pictures (a lamp switched, a door opened) still fades
   the new one over the old one, so their soft edges are drawn twice until it ends (a faint
   sharpening of outlines on its last frame).
+
+## 91. Documentary music beds (Step 179)
+
+Five more built-in beds, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, for
+documentaries and explainers that need more drive than §48's `pulse` / `bright`. The owner
+listened to six prototypes (rendered outside the repo with `music-candidates/newbeds.py`) and
+approved five; `investigation` (E minor with a Phrygian F, 92 BPM, a heartbeat kick and a ticking
+clock) was not approved and is not added.
+
+- **Made like the other beds** (`music.py`): numpy only, no recordings, no samples, seeded
+  `crc32("music:<name>")`, rendered circularly, `_finish`ed to `MUSIC_LEVEL` −28 LUFS
+  integrated; `Bed` entries after `lullaby`, so the listing order of the first five is kept.
+  Used like any bed: `music: discovery`, `{source: momentum, volume: -2}`, `start`, lists of
+  cues; `bed_loop` makes the loop when the video is joined (1.7–4.2 s each here; the older beds
+  1.1–1.6 s).
+- **New voices**: `_kick` (a sine gliding to 42–50 Hz in ~35 ms, a faint click low-passed at
+  2.5 kHz), `_synth_bass` (10 harmonics at 1/h through `_partials`, the upper ones dying faster),
+  `_hat` (noise 4.5–9 kHz), `_clock` (a short tick with a ring), `_piano` (stretched partials),
+  `_fm_pluck` (two-operator FM, falling index); and tools: `_pump` (a side-chain gain curve
+  dipping after each beat, built circularly), `_riser` (a swept noise swell), `_echoed`
+  (ping-pong echoes), `_hits`, `_circular_smooth`, `_tone_filter` (a high-pass at 32 Hz and a
+  gentle low-pass, as an FFT over the whole loop, so the seam is filtered like any other point)
+  and `_opening_pads` (a dark and an open `_pads` render cross-faded along a curve).
+- **The beds** (all 4/4, a chord every two bars, `Bed.description` gives the instruments, ranges
+  and chords):
+  - `discovery`: D minor, 104 BPM, 24 bars (55.384 s). Kick on every beat, pulsing eighth-note
+    synth bass A1–F2, a plucked minor arpeggio, off-beat hats, a pad that opens over the loop
+    (`_bump` peaking 72 % through).
+  - `breakthrough`: C minor → E-flat major, 112 BPM, 24 bars (51.428 s). Bars 1–12 tense (kick on
+    1 and 3, staccato bass quarters, a dark arpeggio, a sixteenth tick growing, a riser); at
+    25.714 s the lift (a 2.5 s low boom, four-on-the-floor, eighth bass, the arpeggio an octave
+    up, the pad opens and starts pumping, hats); its last chord, G, turns back to C minor.
+    `start: 25.7 − T` puts the lift T seconds after the cue starts.
+  - `enigma`: B minor with suspended chords and a Neapolitan C, 96 BPM, 20 bars (50 s). A sub
+    pulse on every beat (A1–G2), a felt kick on 1 and 3, a pad low-passed at 1.4 kHz, a piano
+    motif B3–C#5 (`_ENIGMA_MOTIF`) with ping-pong echoes, a bell B5 / F#5 every eight bars.
+  - `momentum`: G minor, 120 BPM, 24 bars (48 s). A sixteenth-note synth ostinato accented 3+3+2,
+    kick on every beat, off-beat bass, a clap on 2 and 4, sixteenth hats, the pad pumping 45 %,
+    a riser into the top.
+  - `lab`: F minor, 108 BPM, 20 bars (44.443 s). Kick on every beat, a syncopated synth bass, FM
+    plucks E4–G5 with ping-pong echoes, glitchy clicks on seeded sixteenth slots (a stutter every
+    fourth bar), a snap on 2 and 4, a thin pad pumping 50 %.
+- **Bass weight, measured on the approved WAVs**: 57 % (`discovery`), 59 % (`breakthrough`), 65 %
+  (`enigma`), 61 % (`momentum`), 67 % (`lab`) of the power is under 150 Hz (`pulse` 36 %); the
+  300 Hz–3 kHz band is 2.0–3.7 dB under `pulse`'s, which leaves room for the voice. On phone and
+  laptop speakers they sound lighter; CONFIG, the guide and the cookbooks say so. True peak
+  −15.4 to −17.1 dBTP; tempo detected from the low band within 1.1 BPM of the nominal one; 3 s
+  loudness −28.9 to −27.0 LUFS; the sample step at the seam 0.16–0.34 of the loop's
+  99.9th-percentile step.
+- **Same as approved**: the port is the prototype's code moved into `music.py` (same helpers, same
+  order of operations, same seeds); its float32 loops equal the prototype's sample for sample, and
+  written with `write_wav` from a float64 copy (as the prototype wrote them) they are
+  byte-identical to the five approved WAVs (`<scratchpad>/s179/match_check.py`). The older five
+  beds' float32 loops hash as before the change.
+- **Regression test**: `tests/test_music.py::test_bed_sounds_as_approved` stores, per bed, the
+  loop length and three projections of the loop on seeded Gaussian noise, within 0.01. Float
+  rounding on another platform moves them by about 1e-4, one added 0.25 s note at −40 dBFS by
+  about 1.5 (both estimated, from √n × the sample change). The parametrized bed tests (determinism, −28 ± 0.05 LUFS,
+  headroom, little above 5 kHz or below 35 Hz, stereo width, seam) run on all ten beds; `vidgen
+  validate` suggests the nearest bed for a misspelt source (`did you mean 'discovery'?`).
+- **Not done**: no time-signature or "lift" field on `Bed` (the lift time is in the
+  description); the beds were not re-balanced for small speakers (approved as heard).

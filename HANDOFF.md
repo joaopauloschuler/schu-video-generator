@@ -16722,3 +16722,64 @@ Known gaps
   sharpening on its last frame); pre-existing, not an entrance.
 - A front picture left over from a follow is outside the walkers' draw-order blocks while it
   fades (a character walking during a change near an object; not seen).
+
+## Step 179 — Documentary music beds
+
+The owner listened to six prototype beds (`<scratchpad>/music-candidates/`: `newbeds.py`, the
+generator built on `vidgen.music`'s helpers; `build.py`, render / measure / demos;
+`metrics.json`) and approved five as built-in alternatives: `discovery`, `breakthrough`,
+`enigma`, `momentum`, `lab`. `investigation` was not approved and is not added. The older beds
+`calm`, `pulse`, `bright`, `cartoon`, `lullaby` are unchanged.
+
+What was built (DESIGN §91)
+- `music.py`: the prototype's building blocks moved in unchanged (`_kick`, `_synth_bass`, `_hat`,
+  `_clock`, `_piano`, `_fm_pluck`, `_pump`, `_riser`, `_echoed`, `_hits`, `_circular_smooth`,
+  `_tone_filter`, `_opening_pads`), the five generators (`_discovery`, `_breakthrough`,
+  `_enigma` with `_ENIGMA_MOTIF`, `_momentum`, `_lab`) and five `Bed` entries after `lullaby`
+  (`_loop_seconds` gives their length from tempo and bars). Searched first: everything else they
+  use already existed (`_pads`, `_partials`, `_arpeggio`, `_bell`, `_add_panned`, `_finish`,
+  `sfx._filtered` / `_band` / `_bump` / `_sweep` / `_tone`). Nothing else in the pipeline needed
+  a change: `bed_loop`, `is_bed`, `Source`, `music_entries` (so `vidgen list-music`,
+  `--render-dir`, MCP `list_music`) and `config_problems` all read `BUILTIN_BEDS`.
+- Facts: `discovery` D minor, 104 BPM, 24 bars, 55.384 s; `breakthrough` C minor → E-flat major
+  (the lift at 25.714 s), 112 BPM, 24 bars, 51.428 s; `enigma` B minor, 96 BPM, 20 bars, 50 s;
+  `momentum` G minor, 120 BPM, 24 bars, 48 s; `lab` F minor, 108 BPM, 20 bars, 44.443 s. Made in
+  1.7–4.2 s each (the older beds 1.1–1.6 s), so `vidgen list-music` now takes ~20 s.
+- `config_problems`: a misspelt bed name gets `did you mean 'discovery'?` (difflib, cutoff 0.7)
+  before the list of beds. `MusicCue.source`'s schema description names the ten beds.
+- Docs: CONFIG (beds table rows with key, BPM, loop length, sound, use; a bass-weight paragraph;
+  `source` and the top-level `music` row), guide + `AGENTS.md` (how to choose between the five,
+  the `start: 25.7 − T` tip for `breakthrough`, the bass weight), COOKBOOK §9, the Shorts
+  cookbook §9 (listen on a phone first), README, the gallery example's comment (its music is
+  still `calm`), CHANGELOG (0.3.0 now Steps 61–179), DESIGN §48 and §91, tasklist.
+
+Match with the approved prototypes (`<scratchpad>/s179/match_check.py`)
+- The ported float32 loops equal `newbeds.loop(name)` sample for sample (all five).
+- Written with `write_wav` from a float64 copy, as `build.py` wrote them, they are byte-identical
+  to `1_discovery.wav`, `3_breakthrough.wav`, `4_enigma.wav`, `5_momentum.wav`, `6_lab.wav`.
+  (Written from float32 they differ by one 16-bit step at a few samples: `x * 32767` rounds a few
+  half-steps the other way in float32. Not a difference in the beds.)
+- The older five beds' float32 loops have the same sha256 as before the change
+  (`<scratchpad>/s179/before.json`, `after.json`).
+
+Tests
+- `tests/test_music.py`: `test_bed_sounds_as_approved` (10, slow): loop length and three
+  projections of the loop on seeded Gaussian noise, recorded from the approved loops (new beds)
+  and from the code before this step (older beds), tolerance 0.01; `test_every_bed_has_a_fingerprint`;
+  `test_documentary_beds_facts` (tempo, key, length, chords, descriptions; no audio);
+  `test_validate_reports_missing_music_file` checks the did-you-mean and that `momentum` with a
+  volume validates; `test_list_music` expects ten previews. The parametrized
+  `test_bed_is_deterministic_and_clean` and `test_bed_loop_seam_is_continuous` now run on ten beds
+  and pass unchanged (above 5 kHz, below 35 Hz, channel correlation, seam).
+- Run one command at a time under `capped`: `test_music.py -m "not render"` in three parts
+  (6 passed in 18 s; the per-bed tests 30 passed in 86 s; the rest 24 passed in 65 s);
+  `test_guide.py` (54 passed, 4 s); `test_docs.py` (62 passed, 3 s); `test_phase_l_review.py` + `test_composer.py -k music`
+  (6 passed, 70 s, including the MCP `list_music` call). Not run: `test_music.py`'s render tests
+  (the mix code is unchanged and they use `calm`), the full suite (not asked).
+
+Known gaps
+- The beds are bass-heavy (57–67 % of their power under 150 Hz, `pulse` 36 %) and sound lighter
+  on phone and laptop speakers; documented, not re-balanced (approved as heard).
+- `Bed` has no field for `breakthrough`'s lift time; it is in the description and the docs.
+- `vidgen list-music` makes every bed's loop (~20 s for ten); a description-only listing would
+  not need the audio, but the JSON reports each loop's measured loudness.

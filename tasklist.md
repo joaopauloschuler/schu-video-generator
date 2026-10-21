@@ -999,6 +999,11 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] The same class on an iso place: other pictures showing a revealed, hidden, opened or switched object follow its fade; pictures made or removed mid-play are drawn / no longer drawn (`_IsoFollow`, `_iso_undraw`)
 - [x] Regression tests from per-frame state and pixels (`tests/test_step178.py`); Phase Q baseline identical; the web-page video re-rendered with the Kokoro audio and checked frame by frame
 
+### Step 179 — Documentary music beds
+- [x] Five owner-approved prototype beds become built-in beds, used like the others (`music: discovery`, `{source: momentum, volume: -2}`; seamless, −28 LUFS, made at the join; `list-music`, `--render-dir`, schema text, validation with did-you-mean, MCP `list_music`): `discovery` (D minor, 104 BPM, 24 bars), `breakthrough` (C minor → E-flat major at 25.7 s, 112 BPM, 24 bars), `enigma` (B minor, 96 BPM, 20 bars), `momentum` (G minor, 120 BPM, 24 bars), `lab` (F minor, 108 BPM, 20 bars); `investigation` not approved, not added (`music.py`; DESIGN §91)
+- [x] Same sound as approved: float32 loops equal the prototype's, WAVs byte-identical to the approved ones; the older five beds unchanged (hashes); fingerprint test for all ten (`tests/test_music.py`)
+- [x] Docs: CONFIG beds table and bass-weight note, guide + `AGENTS.md` (choosing between them), COOKBOOK, Shorts cookbook, README, CHANGELOG, DESIGN §91
+
 ---
 
 ## Backlog (after Step 60)

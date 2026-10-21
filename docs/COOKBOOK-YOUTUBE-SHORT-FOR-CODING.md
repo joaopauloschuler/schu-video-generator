@@ -407,8 +407,14 @@ music: {source: bright, volume: -2}   # calm, cinematic scenes
   beat; forward-moving without being dramatic. The default for a coding Short.
 - `bright`: 120 BPM, C major, a light pad, a plucked arpeggio and a sparse soft bell melody;
   warm and open, for calmer, more cinematic pieces.
+- More drive: the documentary beds `lab` (108 BPM, modern tech: a kick, a rolling synth bass,
+  electronic plucks, glitchy clicks), `momentum` (120 BPM, the most energetic: a sixteenth-note
+  synth ostinato) and `discovery` (104 BPM, a steady approach that builds); `breakthrough` lifts
+  from tension to a reveal 25.7 s into its loop. They are bass-heavy (57–67 % of their power
+  under 150 Hz) and Shorts are mostly heard on phone speakers, which drop most of that: listen on
+  a phone before choosing one over `pulse`.
 - `volume: -2` sits well under the voice, and vidgen ducks the bed by 12 dB while the voice
-  speaks. Both beds loop without a seam, so they fit a video of any length.
+  speaks. Every bed loops without a seam, so it fits a video of any length.
 - Prefer the beds to composed music (`music: {compose: <mood>}`): on narrated Shorts the beds
   sounded clearly better. Beds need no SoundFont and no music credit.
 - The final mix is normalised to **−16 LUFS** integrated with a **true peak ≤ −1 dBTP** (vidgen's

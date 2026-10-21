@@ -1706,7 +1706,7 @@ class MusicCue(_Strict):
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
     source: str | None = Field(default=None, min_length=1)
-    """A built-in bed (calm, pulse, bright, cartoon, lullaby; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3); give this or compose."""
+    """A built-in bed (calm, pulse, bright, cartoon, lullaby, discovery, breakthrough, enigma, momentum, lab; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3); give this or compose."""
     compose: Annotated[ComposeConfig | None, BeforeValidator(_compose_shorthand)] = Field(default=None, json_schema_extra=_mood_name_schema)
     """Music composed from a mood instead of a source: a mood name or {mood, key, tempo, instruments, seed, bars}; needs the music extra."""
     volume: float = Field(default=0.0, ge=-60, le=12)
