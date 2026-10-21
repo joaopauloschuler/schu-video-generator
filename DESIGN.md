@@ -2736,7 +2736,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   order, bigger parts first, glyphs used once) → `Transform` per pair; the remaining glyphs go
   through `TransformMatchingShapes` (identical shapes move, others fade). `shapes`: one
   `TransformMatchingShapes`; `fade`: cross-fade. The source is always a *copy* of the step on
-  screen; `_Swap` (an `AnimationGroup`) removes `hide` at setup and, at clean-up, every mobject its
+  screen; `SwapAtEnd` (an `AnimationGroup`) removes `hide` at setup and, at clean-up, every mobject its
   animations used, then adds the target formula whole — so the scene holds whole `MathTex`es
   between beats (targets, lint) and the source step stays intact for later actions.
 - **History.** Each step has an archived copy (dimmed at hand-over: `dim_opacity`, raised by
@@ -11642,3 +11642,1162 @@ some words are read wrong by one engine in every project (Kokoro's American G2P,
 - **Not done**: no lists for ElevenLabs, OpenRouter or other Kokoro languages; a user-level
   shared list (outside a project) is only possible as a `pronunciation_file` path; no MCP tool
   for `list-pronunciation`; the checks are of phonemes, not of listening to Kokoro's audio.
+
+## 89. Isometric story worlds (Phase Q, Steps 166–171)
+
+Reference: docs/CONFIG.md "Isometric places (`iso`)". Isometric *environments* for cartoon
+stories: a place written as a small ASCII map with heights, seen from above at an angle, with
+ready-made objects, indoor rooms whose front walls are cut away and outdoor places. The
+characters stay the flat cut-outs of every stage (side and front views, expressions, actions,
+lip sync), standing upright in it. What matters most is telling a story clearly. No
+platforming in iso (no jumps, no gravity); a side walk cycle sliding along a diagonal is
+accepted (no new walk views).
+
+### 89.1 Layers, as in Phase O
+
+The three layers of §86.1, extended rather than forked:
+
+1. **World model** (`vidgen/world/iso.py`, no manim): `IsoPlace` (cells: a ground kind and a
+   height in steps; spots; objects), `IsoCell`, `IsoSpot`, `IsoObject`, `ObjectKind` /
+   `OBJECT_KINDS`, `ObjectPlacing`, `parse_iso_map`, `place_objects`. Step 167 adds the rules
+   (`vidgen/world/iso_moves.py`: routes on the grid, §89.9) beside `moves.py`, in its style
+   (pure functions, `VidgenError`).
+2. **The view** (`vidgen/world/iso_view.py`, no manim, no drawing): the projection
+   (`iso_point`, `ISO_RISE`) and the draw order of boxes (`Box3`, `in_front`, `draw_order`).
+   Kept apart from the place and from Pillow so a later presentation scene (`iso_diagram`:
+   blocks for architecture diagrams) can reuse it with `cartoon/iso_drawing.py` (`box_shapes`,
+   `draw_shapes`), which knows nothing of maps either.
+3. **Renderers** (`cartoon/`, Pillow, no manim): `iso_drawing.py` (shapes and drawing),
+   `iso_objects.py` (the ready-made objects), `iso_scenery.py` (a place's ground and pieces),
+   `iso_stage.py` (frame fit, layout, the pictures); `scenes/stage.py` shows them. The no-manim
+   test covers all six modules.
+
+### 89.2 `iso:` on the `stage`, not a new scene type
+
+Like `level:` (§86.2): the stage already has the characters, lip sync, acting, shots, the
+camera, light, foley and sets, so an iso place is the stage's `iso` param. Purely additive: a
+stage without `iso` takes no new branch (every iso branch tests `params.iso is not None` first),
+and no default changes. Mixtures that make no sense are refused by `Params._check_iso` with the
+conflict and the alternative: `level`, `room` (an indoor place is `iso: {place: indoor}`),
+`water` (`~` on the map), `fog` (bands by depth), `width` (the place fits the frame), `layers`,
+big flat `props` (use `iso.objects`; small ones stand on the place since Step 168, §89.10),
+`size` and `character_size` (`_default_size`:
+the place sets the size), a character's `depth`, a character `at` anything but a spot. A set
+gives an iso place its sky, light, ambience, particles and birds; `includes.ISO_DROPPED_KEYS`
+(`LEVEL_DROPPED_KEYS` + `layers`, `fog`, `width`) are left out, and the video's `character_size`
+is not copied into an iso scene (`expand_character_size`), so a video with `character_size:
+large` can have iso scenes. `size` / `character_size` stay refused: the camera's shots make
+characters large (Step 168, §89.10).
+
+### 89.3 The view: projection and draw order (Step 166)
+
+- **Coordinates**: world `x` = map column (to the viewer's lower right), `y` = map row from the
+  top line (lower left), `z` up, all in tile units (a cell's edge is 1). The top line of the map
+  is the back of the place; the map reads as the place looks, rotated 45°.
+- **Projection**: `u = (x − y) / 2`, `v = (x + y) / 4 − z·ISO_RISE` in *tile widths* (a cell's
+  diamond is 1 wide, ½ high: the 2:1 view of pixel-art games), `ISO_RISE = √1.5 / 2` (0.612):
+  a parallel view looking down at 30° from halfway between the axes. True isometric in the
+  brief's sense: no perspective, a character is the same size wherever it stands (so the
+  stage's `depth` scaling is not used).
+- **Draw order**: everything that can hide something stands in a `Box3`. `in_front(a, b)`:
+  `None` when their pictures are apart (bounds `PICTURE_SLACK` 0.35 tile widths apart: drawings
+  reach a little past their boxes, a tree's crown) or *side by side* (apart along `x` one way and
+  along `y` the other: their pictures cannot overlap, and ordering them made long false chains);
+  else the first axis they are apart on decides (the plane between them has the viewer on the
+  nearer one's side: larger `x`, larger `y`, higher `z`); overlapping boxes (the rules never make
+  them) by their middles. `draw_order` is a topological sort over the pairs with an order
+  (Kahn's, O(n²) pairs: a 16 x 10 place with 60 pieces sorts in milliseconds), ties broken by
+  the back corner `x0 + y0`, then `z0`, then the index: deterministic. A cycle (only from
+  overlapping boxes) is broken at the furthest-back box. Why boxes and not a per-cell depth key:
+  objects span several cells (a house is 3 x 3) and characters stand inside cells; a sum key
+  orders a character beside a house wrongly.
+
+### 89.4 The map (Step 166)
+
+- One text line per row, the top line furthest back. Symbols: a space or `-` outside the place
+  (`-` because a YAML block scalar cannot start its first line with a space), `.` floor, `:`
+  path, `~` water, `#` wall, `+` door (in a wall), `%` window (in a wall), `1`–`9` a raised
+  `BLOCK` that many steps high (`STEP_HEIGHT` 0.5 tiles; `0` is floor), `@` tree, `&` bush, `*`
+  flowers, `=` fence; a letter is a spot. Blank lines around the map are dropped, rows padded
+  with outside on the right, tabs expand to 4; at most `MAX_COLUMNS` x `MAX_ROWS` 48 x 48 (a
+  larger place would be too small to read in the frame).
+- **Letters and object symbols take the ground around them** (`_inherited`): the most common
+  standable ground with its height among the four neighbours; ties go to the lower, then floor
+  before path before block; none: floor at 0. So a spot on a path is path, in a terrace of `2`s
+  a block 2 steps high. Decided over "a letter is floor at 0" because that made a hole in every
+  path or terrace with a spot in it.
+- **`heights`**: an optional second map, a digit per cell (`.` or a space keeps the map's),
+  raising any cell but water (refused: water lies at 0) or outside (refused).
+- **Spots**: `IsoSpot(name, letter, column, row)`; `stand_cell(name)`: the spot's cell, or when
+  an object stands there the nearest free standable cell (Chebyshev distance, then the most in
+  front `−(c + r)`, then the leftmost), so `at: well` stands a character in front of the well.
+- **Objects from symbols** are named `tree_1`, `bush_1`, `flowers_1`, `fence_1`... in map order;
+  a fence joins (`links`) the fences and walls beside it, and alone runs left to right.
+- **Walls** (`wall_height`): outdoors a garden wall `GARDEN_WALL_HEIGHT` 1 tile, a door is a gap.
+  Indoors (`place: indoor`, the dollhouse view): a wall cell is **cut** (`is_cut`) when a cell of
+  the place that is not a wall lies right behind it (left, up or up-left on the map), else it
+  stands `WALL_HEIGHT` 3 tiles (a character and a half). So only the walls along the room's back
+  (its top and left edges on the map, and their front ends) stand; every front and inner wall is
+  cut to `CUT_WALL_HEIGHT` 0.45, and a door in a cut wall is an opening. One rule, no list of
+  "front" walls to keep in sync with the map; a room of any shape works.
+- **Standing**: `is_standable`: floor, path, block, door, or a walkable object (a rug, a bridge,
+  also over water); objects and walls are in the way (Step 167's routes use it).
+- **Errors** (`VidgenError`, `StageIso` turns them into errors at `scenes[i].params.iso`) name
+  the row and column from the top left, from 1: unknown symbol (with the list), a letter twice,
+  a `spots` letter not on the map, a name for two letters, nowhere to stand, a bad or too large
+  `heights` map, raised water, a height outside the place, too large, an unknown kind of place.
+
+### 89.5 Ready-made objects (Step 166)
+
+- `OBJECT_KINDS`: house 3 x 3, tree, pine, bush, rock, flowers, fence, bench 2 x 1, lamp, well,
+  sign, bridge 1 x 3 (walkable, over water), table 2 x 1, chair, bed 1 x 2, shelf 2 x 1, sofa
+  2 x 1, plant, rug 2 x 2 (walkable), each with a height for the draw order. The footprint is
+  given facing left (`width` along the front); `facing: right` swaps it, `size: [columns, rows]`
+  replaces it. `at` is the footprint's back (top-left) cell: a spot or `{column, row}` from 1.
+- `place_objects` checks each footprint: inside the place, not on a wall, not on water (but a
+  bridge), not on another object, all on one height; names default to the kind, numbered after
+  the map's (`house`, `house_2`); a name used twice is refused.
+- Colours: `OBJECT_COLORS` (main, detail) are theme tokens like the props' `PROP_COLORS` (a
+  house's walls `secondary` and roof `accent`, as the flat house prop; leaves `tertiary`,
+  darkened a little towards green so a tree reads on the grass), or a hex where no token fits
+  (stone, wood, glass). `color` / `detail` override them per object.
+- Drawn in their own frame (`_Frame`: `a` across the front, `b` from back to front, `z` up);
+  facing right mirrors the drawing (x and y swap), and faces are shaded as they face in the
+  world (light from the left). Round things (crowns, bushes, flowers) are `Blobs` (circles on
+  the picture, outlined as one form, like the flat tree prop); a pine's tiers and a sign's board
+  face the viewer like a cut-out. Round objects cast a soft shadow (`SHADOW_RADII`, ink at
+  `SHADOW_OPACITY` 0.16) lying under them, as the stage's props do.
+
+### 89.6 Drawing (Step 166)
+
+- **Shapes** (`iso_drawing.py`): `Poly` (a flat polygon in the world, its outline per edge),
+  `Blobs`, `Disc` (a flat circle; with `opacity` below 1 a tint, alpha-composited through a
+  patch), `Upright` (a cylinder: trunks, posts, the well), `Line`. `draw_shapes` paints them in
+  order on an `IsoCanvas` (pixels per tile width, its top-left picture point) at
+  `ISO_SUPERSAMPLE` 3 (Step 168: always, as pictures are tiles, §89.10), reduced with a box filter. The
+  outline is `ISO_OUTLINE` 0.022 tile widths × the drawing style's `outline_factor`, in the
+  characters' ink. A polygon's fill also strokes its own edge one supersampled pixel wide: two
+  fills meeting on an edge showed a faint seam.
+- **Joined boxes** (`box_shapes`): a box's top, its face to the lower left (the map's `s` side)
+  and to the lower right (`e`), shaded `LEFT_SHADE` 0.12 / `RIGHT_SHADE` 0.26 (towards a cool
+  dark); a `joined` side continues into a neighbour of the same height: no face, no outline
+  there. So a terrace of blocks or a run of wall is one solid form, with outlines only on its
+  silhouette and creases.
+- **The ground** (`ground_shapes`, height 0, back to front): each cell's top (grass with a faint
+  checker and tufts, a sandy path with stones, boards with staggered seams indoors, tiles in a
+  checker), water sunk `WATER_DEPTH` 0.14 below its banks with a ripple, the place's slab
+  (`SLAB_DEPTH` 0.45) showing along its open front edges (outlined only at the slab's corners),
+  the outline along its back edges. Raised cells are `_block` pieces whose faces run down to their
+  lower neighbour's top (or the slab's bottom); grass hangs a lip over a raised grass cell's
+  faces; stone blocks and garden walls show courses.
+- **Walls** (`_wall`): a core standing `WALL_INSET` 0.24 in from the cell's open sides (flush
+  with the place's edge) and an arm to each wall it joins; drawn as one piece, so a corner of
+  an L has no hole (a single box per cell left the inner corner open). Indoors the standing walls
+  get a skirting board and their window or door on the faces that look into the room; cut walls
+  show the `cut` colour on top. The room's colours follow `room.py` (a warm cream wall, a wooden
+  floor).
+
+### 89.7 The place on a stage (Step 166)
+
+- `StageIso` (`scenes/stage.py`): `place`, `map`, `heights`, `spots`, `objects`
+  (`IsoObjectParam`: `object`, `at` a spot or `IsoCellRef {column, row}`, `name`, `facing`,
+  `size`, `color`, `detail`), `colors` (`IsoColors`: grass, earth, path, water, stone, floor,
+  tiles, wall, cut). `parsed()` is cached (`_parsed_iso`, keyed by the map, spots, heights, kind
+  and the objects' `ObjectPlacing`s).
+- **Size and fit** (`iso_view`): the whole place fits the frame with `ISO_MARGIN` 5 % on each
+  side (`place_bounds`: every cell with the slab under it up to its wall or a character standing
+  on it, and the objects), centred: the establishing view. A character is
+  `ISO_CHARACTER_HEIGHT` 2 tiles tall (× its `scale`), so a larger place makes everyone smaller
+  (in a 16 x 10 place at 854 x 480 a character is about 70 px tall; a speaking close-up needs
+  Step 168's shots). `IsoView.point(x, y, z)` gives Manim units.
+- **Layout** (`iso_layout`): each character's feet in the middle of its stand cell, on its top
+  (`iso_stand`), `depth` 0, back to front by `x + y`, as `StagePlacement`s, so the stage's
+  construct, `stage_frame` (directing) and `stage_reframes` work unchanged. `Stage.grounds` is
+  the feet's y, so the soft shadow lies on the cell's top (on a block too).
+- **Marks**: each spot is also a stage mark at its cell's place across the picture of the map
+  (`map_fraction`, frame-independent, so validation needs no frame); the iso branch of
+  `stage_marks` comes first so `iso` with `level` reports the conflict, not an unknown mark.
+- **Pictures** (`iso_pictures`, `Stage._iso_scenery`): drawn once when the scene renders, at
+  `LEVEL_OVERSAMPLE` 1.25 × the frame's pixel density (1 in a draft): `base`, the ground and
+  every piece in draw order (`iso_place` in the backdrop, under the shadows and characters), and
+  for each character whose box something hides a front picture (`iso_front_<name>`, drawn right
+  after the character through `_iso_after`, graded by the light) with the pieces over it:
+  those in front of it (`in_front`) and, transitively, those in front of these
+  (`pieces_in_front`), so a piece drawn over the character never covers a nearer one. Why a
+  base with everything plus fronts, not the pieces cut into layers between characters: a terrace
+  or a wall split between two pictures showed a seam where the two anti-aliased edges met; a
+  front picture's pieces are in the base too, so its edges fall on the same colours. The
+  pictures are as large as the place on the canvas; Manim draws each static picture once per
+  animation (§86.5's cost is per moving picture). No disk cache: drawing the 16 x 10 village with
+  two front pictures takes 0.13 s at 854 x 480 and 0.7 s at 1920 x 1080.
+- Measured (854 x 480 @ 15 fps): a 16 x 10 village with a house, a well, steps, a bridge, nine
+  map objects and two characters renders 4.3 s of video in 8.0 s; the 12 x 8 room with six
+  objects 2.8 s in 6.0 s.
+- `vidgen.api` exports `ISO_CHARACTER_HEIGHT`, `OBJECT_KINDS`, `IsoPlace`, `ObjectPlacing`,
+  `parse_iso_map`, `place_objects`, `Box3`, `draw_order`, `iso_point`, `draw_shapes`,
+  `OBJECT_COLORS`, `ObjectLook`, `IsoColors`, `IsoView`, `body_box`, `canvas_center`,
+  `iso_layout`, `iso_stand`, `iso_view`, `map_fraction` (none shadows a manim name); Step 167
+  replaced `IsoPictures` / `iso_pictures` by `IsoScenery` (§89.9).
+
+### 89.8 The rest of the phase (plan)
+
+- **Step 167, characters and movement.** Rules beside `moves.py` (no manim): a cheapest-path
+  search over cells (8 or 4 neighbours, decided there; up or down at most one step per move;
+  not through walls, water, objects; doors and cut doorways pass), deterministic ties, a
+  `VidgenError` naming an unknown spot or where the way is blocked. `walk_to` / `run_to` a spot
+  (the stand cell), `wander`, `follow`, `meet` (both walk to free cells next to each other),
+  timed like level moves (the beat's `at`, words `@word`, natural run times scaled by speed).
+  Renderer: a route walk along the projected path (the side walk cycle sliding diagonally;
+  facing left / right by the picture's direction, the front view coming towards the camera if it
+  reads well, no back view), feet height following blocks and steps, the shadow on the cell top.
+  Draw order while moving: the pieces in front change as a character moves; the base-plus-front
+  pictures generalise to one front picture per (character, set of pieces in front), cached, and
+  swapped when the set changes (or a few pictures per route leg); the draw order between two
+  characters by their boxes (`in_front`), re-sorted when it changes (`_moving_in_order`).
+- **Step 168, staging.** Iso shots (the establishing view; follow the hero; zoom to a group;
+  dialogue close-ups reusing the flat close-ups / `shot:`), deciding then whether `size` /
+  `character_size` come back as the camera's base zoom; small items as cut-outs on the place
+  (gift, letter, key, flower) with `pick_up` / `give` / `drop` / `place`; doors that open, lamps
+  that light, place changes (a flower blooms, a bridge appears) as objects with states, redrawn
+  pictures swapped at the change.
+- **Step 169**: time of day / mood tints (the stage's `light` already grades the pictures),
+  speech bubbles or name tags when characters are small, footsteps by surface (grass, path,
+  boards, bridge), door, pickup and ambience through foley, lint (a speaker hidden behind an
+  object, too small for the line, an action off-screen).
+- **Step 170**: an original 2–3 minute kids' story in an iso village with narration, 16:9 (a
+  9:16 variant if cheap), the guide (+ `AGENTS.md`), CONFIG, the stage's gallery page.
+- **Step 171**: the phase's review, backwards compatibility against the baseline frames
+  recorded in Step 166 (platform-story `meadow`, cartoon `yard`, gradient-descent `curve` and
+  `code`/`run`: 31 PNGs at 854 x 480, rendered twice identically; the commands are in the
+  scratchpad's `phase-q-baseline/make_baseline.sh`, comparison `compare.py`).
+
+### 89.9 Characters moving on the place (Step 167)
+
+- **Rules** (`vidgen/world/iso_moves.py`, no manim). A route goes from cell to cell, to the **8
+  neighbours** (`NEIGHBOURS`; chosen over 4 because a diagonal of the map runs straight down or
+  across the picture, and 4 neighbours made zig-zags). A diagonal step needs both cells beside
+  it standable and all four cells level (`can_step`: no corner cut, no diagonal climb). A step
+  goes up or down at most **one step** of height, onto standable cells only (`is_standable`:
+  floor, path, block, door, a bridge or a rug). The search is a cheapest-path search over
+  (cell, heading) (`_reach`): 1 per side, √2 per diagonal, `TURN_COST` 0.05 per turn (fewest
+  turns among routes of equal length), `CROWD_COST` 4 per cell where another character stands
+  (the route goes round them when it can but is never refused, so a narrow lane does not jam).
+  Ties go by the order found (`NEIGHBOURS` order), so the same map gives the same route. A 48 x 48
+  place searches in milliseconds. `IsoRoute` holds the feet points and their cells (`None`
+  beyond the edge). The points are cell middles at `stand_z`: the cell top, or a walkable
+  object's deck (`ObjectKind.deck`: 0.22 for a bridge, 0.02 for a rug). `at(distance)` raises
+  the feet in the last `STEP_EASE` (0.3) of the leg before the higher cell's edge, and lowers
+  them in the 0.3 after it, so the feet are never inside a block.
+- **Goals** (`goal_cell`): a spot (its stand cell, §89.4) or a cell `{column, row}` from 1. A
+  `VidgenError` names an unknown spot (listing the spots), a cell outside the place, or a cell
+  nobody can stand on (saying what is there). A goal where someone stands becomes a free cell
+  **beside** that character on the picture (`BESIDE`, best first: on its level line, `(1, -1)`
+  or `(-1, 1)`, one tile width apart; then a tile and a half to the side; then its four sides).
+  It is never right in front of or behind that character, where the two would overlap. **No
+  route** gives a message like `'pip' cannot walk from row 2, column 1 to 'well': the way stops
+  at row 4, column 3: water (a bridge crosses it) at row 4, column 4`. The message names the
+  reached cell nearest the goal and the blocked neighbour towards it: the edge of the place, an
+  object by name, water, a wall, a climb of n steps, or a corner.
+- **Moves**:
+  - `walk_to` / `run_to` go `to:` a spot or a cell.
+  - `after: <character>` (with `gap`, default 1) walks to the leader and then on along the
+    route the leader walks *in the same batch*, stopping `gap` cells behind it. That route is
+    the one planned just before (`Stage._iso_planned`, keyed by the scene time). The action is
+    not called `follow` because that name is the camera's action.
+  - `meet` (`with:`) runs one search from each of the two characters and picks the side-by-side
+    pair of cells (`SIDE_BY_SIDE`, the level line first) that the longer of the two walks
+    reaches soonest. The character coming from the picture's left takes the left cell. Both end
+    facing each other; one that is already there turns.
+  - `wander` (`around`, `radius` 3, `stops` 3, `seed`; the default seed is `crc32(name/beat)`)
+    walks to random, seeded cells within the radius, each at least 2 cells from the one before.
+  - `enter` / `exit` without `door` cross the place's edge (`edge_ways`: standable edge cells
+    with outside next to them). `side` / `to` `left` means the map's west and south edges, which
+    are on the picture's left; `right` means its north and east edges. The edge cell cheapest
+    to reach from the goal is used, the front edges first between equals. The walk starts or
+    ends at a point `EDGE_STEP` (1 tile) beyond the edge, and the character fades in or out
+    over that step. With `door:` (a spot) the character comes out of that spot or goes into it,
+    fading over `DOOR_FADE_SECONDS`. Indoors only a door in an edge wall is a way out. A
+    character with an `enter` waits off the place until then, as on any stage.
+- **One plan for render and validate** (`plan_move`). Moves are planned from the stage's
+  *logical* cells (`Stage.iso_cells`: where each character stands once the moves planned so far
+  are over; `None` means off the place). So `vidgen validate`'s replay (`iso_move_problems`,
+  run by `Stage.action_sequence_problems`) sees what the render does. It reports a move of a
+  character not on the place, no route, or a bad cell, naming the beat and the option. A move
+  naming an unknown spot is left to the action's own check (one message, not two), and that
+  character is no longer followed.
+- **Timing** works as for every walk. `run_time_for` plans the move, and its natural time is
+  the route over its speed. `at` fractions and Phase P word anchors (`at: "@well"`) start it, and
+  a short beat speeds it up. Lint `rushed_animation` names an `IsoWalk` sped up more than
+  `max_speedup`, as it does a level's moves. Default speeds are scaled by `level_pace`: on an iso
+  place, the place's character height over a plain stage's (`STAGE_SIZE`). So characters walk as
+  many of their own heights per second as on any stage. A tile walked counts as a tile of height
+  (`IsoWalk._distance`), so footsteps keep step (in foley, `wander` and `meet` are walks).
+- **The walk drawn** (`cartoon/iso_motion.py`, `IsoWalk(Walk)`). The side walk cycle plays along
+  the projected route; it slides on diagonals, which is accepted. The facing follows the leg's
+  direction on the picture (`leg_facing`): left or right; straight towards the camera (a map
+  diagonal `(1, 1)`) the front view when the character has one; straight away, the side it last
+  showed (there is no back view). Its `ground_y` follows the feet, so the soft shadow lies on the
+  cell top or the step. `iso_feet` holds the feet's place in the world, for the draw order.
+- **Draw order while moving** (`Stage._iso_keep_order`). The stage's draw-order updater runs it
+  on every frame once a walk has been applied:
+  - Each character stands in a box (`standing_box`). This is `body_box` kept inside the cell
+    its feet are in, so a walker is in one cell or the next, never inside a neighbour's block.
+    On a bridge or a rug the box sits on top of the whole object.
+  - The box gives the pieces drawn over the character (`IsoScenery.over`: those in front of it,
+    and those in front of these). When they change, its front picture (`iso_front_<name>`,
+    right after it) is swapped.
+  - The characters are re-sorted by their boxes (`draw_order`), each with its front picture and
+    held props (`_moving_block`). The moving shadows stay before the first of them.
+  - While an `IsoWalk` plays, Manim redraws the characters, their front pictures and the shadows
+    on every frame (`_iso_redrawn`). The place's base picture stays in Manim's static image.
+  - Considered and dropped: pre-cut layers of the place between characters (they showed seams,
+    §89.7), and one front picture per route leg (a leg can pass several pieces).
+- **Front pictures** (`IsoScenery`, replacing Step 166's `IsoPictures`). The base is drawn once.
+  A front picture is made the first time a set of pieces needs one, and kept for the scene. It
+  is drawn on the part of the canvas its pieces cover (their boxes plus `FRONT_MARGIN`, 0.5 tile
+  widths), in whole pixels of the canvas, so its pixels fall on the base's and no seam shows. A
+  whole-canvas picture would cost about 13 MB at 1080p. A walk past a house and a tree makes a
+  handful of front pictures. Measured at 854 x 480 @ 15 fps: the 16 x 10 village with seven
+  walks, a meet and a follow renders 45 s of video in 29 s.
+- **Checks** (`moving.py`):
+  - On an iso place `to` is a spot or a cell. An x or another mark is refused with "on an iso
+    place a move goes to a spot of the map (...) or a cell {column, row}, not 'left'". There is
+    no `depth`.
+  - `after` needs an iso place, is not given with `to`, and names another character of the
+    scene.
+  - `meet` and `wander` need an iso place.
+  - On an iso place `door` is a spot, and is not given with `side` / `to`.
+  - A jump to a place, `react` and `step_aside` stay a platform level's; their existing checks
+    name the level.
+- **Public**:
+  - `vidgen.api` adds `IsoScenery`, `standing_box`, `IsoRoute`, `IsoStep`, `ISO_MOVES`,
+    `WANDER_RADIUS`, `WANDER_STOPS`, `cell_of`, `find_route`, `plan_move`, `iso_move_problems`
+    and `IsoWalk`.
+  - Config adds the actions `wander` and `meet`, and `after` and `gap` on `walk_to` / `run_to`.
+  - Nothing changes off an iso place: every new branch tests `params.iso` (or `on_iso`) first,
+    and the baseline frames of §89.8 are identical.
+- **Left for later**:
+  - Shots, `pan`, `zoom` and `follow` (the camera) on an iso place (Step 168: §89.10).
+  - A follower that ends straight behind its leader on the picture is partly hidden by it
+    (`gap: 2` spaces them out). Step 168: it steps aside (§89.10).
+  - The speed lines of a rushed walk are drawn level, not along the diagonal (Step 172: along
+    it, §90.4).
+  - Two walkers crossing in one cell pass through each other: routes avoid standing
+    characters, not moving ones (kept, Step 171: §89.13).
+
+### 89.10 Staging on the place (Step 168)
+
+The camera on the place, small things handed about, and changes to the place for cause and
+effect. Code: `cartoon/iso_stage.py` (tiles, levels of detail, layers, item points; no manim),
+`cartoon/iso_pictures.py` (`IsoTiles`, `draw_tile`), `scenes/stage_iso.py` (`IsoStaging`, the
+iso part of the `Stage`, moved there from `stage.py` with Step 167's methods), `scenes/hide_action.py`.
+
+- **Pictures in tiles, at levels of detail.** Close-ups on a place where a character is ~70 px
+  tall zoom 6–8x; Step 166's pictures (1.25x the frame's pixels) were blurred there, and Manim
+  warps a whole picture to its size on screen for every frame (8x zoom of a frame-sized picture:
+  64 frames of pixels per frame). So each picture (`Picture`: whether it has the ground, and the
+  pieces in it with their states) is drawn in square tiles of `TILE_PIXELS` 512 (overlapping
+  their right and bottom neighbours by `TILE_OVERLAP` 2: a resampled edge is half transparent)
+  on the canvas of a **level of detail**: level k has 2^k times level 0's pixels, up to
+  `MAX_DETAIL` 3 (10x the frame at 1.25 oversampling, beyond `MAX_ZOOM` 8). `detail_for(zoom,
+  density)` picks the least level as sharp as the camera's zoom needs (`DETAIL_SLACK` 1.1).
+  `IsoScenery.tiles(picture, level, view)` lists the tiles a view shows (a front or a layer only
+  its pieces' part of each tile, in whole pixels of the level's canvas, so they lie on the
+  base pixel for pixel); `tile_image` draws one once (an LRU of `TILE_CACHE` 320 tiles, about
+  1 MB each). `draw_shapes` now skips shapes off its canvas (`shape_bounds`). Pillow rounds a
+  polygon's corners off the picture slightly differently, so a tile can differ from the whole
+  picture by a third of a pixel along an edge that crosses its border; not seen.
+- **On the stage** each picture is an `IsoTiles` group (`api`) whose members are the tiles in
+  the camera's view with half a view's margin, swapped by a camera listener
+  (`Stage._iso_show_view`) and once more before Manim splits a frame into moving and static
+  mobjects (`get_moving_and_static_mobjects`: Manim lists the members before it asks for the
+  moving ones, which runs the listeners; after a cut the static image showed the tiles of the
+  view before). Tiles are drawn by `draw_tile` (installed on the camera by
+  `install_tile_drawing` before the light wraps it): only the part in the frame is resized
+  (bilinear, smooth also when it shrinks) and blended into just that part of the frame; Manim's
+  own way blends a frame-sized picture per image. The village test scene (50 s, with a follow
+  that redraws everything on every frame) went from 239 s to 59 s.
+- **The camera.** Nothing new to write: the stage's camera works on the place.
+  - The start is the establishing view (§89.7; since Step 171 the wide view, §89.13). `shot:` frames work as on any stage
+    (`shot_framing` measures the characters on screen); `wide` is the establishing view again.
+    `size` / `character_size` stay refused (decided: the shots are the way to make characters
+    large; a base zoom would crop the place and fight the shots).
+  - `follow` (`Stage.follow_start`): zoomed in until a character is `ISO_FOLLOW_SIZE` 0.45 of
+    the frame's shorter side (a plain stage's size; `follow_width`), unless the camera is closer.
+    The move tracks the body's middle up and down too (`_MoveThenFollow`'s new `y_of`; the
+    platform level's follow is unchanged), then the stage's `SmoothFollow` (as a level's) takes
+    over.
+  - `pan` (`Stage.pan_point`): to a spot (the object standing there: its picture's middle; else
+    a character's middle standing there) or to the targets' middle, across and up the picture.
+  - `zoom` on characters frames a group as anywhere. The bounds stay the frame (the whole place
+    is in it), also in 9:16.
+- **Small things** (the stage's `props`, `ISO_ITEMS`: `SMALL_PROPS` + key, ball, cup, box,
+  basket, umbrella, laptop, napkin, shell, mushroom; or an svg). Decided to reuse the stage's
+  props and actions rather than invent parallel ones: `drop` is `put_down` without `to` (beside
+  its feet in its own cell, `ISO_PUT_ASIDE` 0.36 along the picture's level line on the side it
+  faces), `place` is `put_down` with `to:` a spot (on the object there). New prop `flower` (one
+  flower with its stem, to give). A small thing stands `at` a spot: on the ground in the spot's
+  cell, or on the `ObjectKind.top` of the object standing there (`iso_item_point`; a table
+  0.98, a bench's seat 0.55, a well's rim at its front, `TOP_SPOTS`). It is a body like the
+  characters (its `iso_feet`, `item_box`: over the object it stands on, so drawn after it), with
+  its own front picture; held, it goes with its holder's block (§69.27) and has none.
+  `_check_iso` refuses big props (with the alternative `iso.objects`), `depth`, `lift`,
+  `against`, an `at` that is not a spot, and a name an object, door or spot has. `throw` and
+  `blow_away` are refused on the place.
+- **Reach in cells.** The stage's holding replay measures x distances on a flat stage; on an
+  iso place it gets no positions (it still checks who holds what), and `iso_move_problems`
+  replays `pick_up`, `give`, `put_down` (`ISO_ITEM_ACTIONS`) with the moves: the two must be
+  `ISO_REACH` 1 cell apart (8 neighbours; to anywhere on the object a thing stands on), naming
+  the `walk_to` (or `meet`) that fixes it.
+- **Changes to the place.** An object's state (`ObjectState`: `shown`, `open`, `on`; kinds:
+  `OPENING_KINDS` house, flowers, door; `SWITCHED_KINDS` house, lamp; `default_state`: flowers
+  open) is drawn by `object_shapes(..., state)`: a house's door open (a dark doorway, the leaf
+  swung out towards the viewer), its windows lit; a lamp lit (bright lantern, a translucent pool
+  of light on the ground); flowers in bud. The doors of a room's standing back walls are named
+  `door_1`... in map order (`IsoPlace.doors`; their wall piece is named so) and open into the
+  room. Objects start as `iso.objects` say (`open`, `on`, `shown`; YAML's bare `on` key read as
+  `on`). Actions: `open` / `close` (house, door, flowers: bloom), `switch_on` / `switch_off`
+  (lamp, house), `reveal` (the generic action: the object's entrance) and a new `hide` (cued
+  like `switch_on`). Each changeable object the scene names (or that starts changed) is
+  **layered**: left out of the base picture and drawn as its own layer, an `IsoObject` group
+  (the action's target, named after it) right after the base: the object with the pieces over
+  it, so the layer hides what stands behind the object and is hidden by what stands in front.
+  A change (`Stage.iso_change`) makes the new layer at once (transparent), and a scene updater
+  fades it in from the change's start over its time (the old one leaves at the end; a gone
+  object's group leaves the scene, so `reveal` can bring it again), sets the state at the start
+  (front pictures and the layers of objects behind it follow), and `_iso_redrawn` redraws the
+  layers and everything after them while a change overlaps an animation. Why layers and not
+  redrawing the base: the base is large and in Manim's static image; a layer is small and the
+  same pixels as the base would have.
+- **Not there.** An object with `shown: false` (or hidden) is left out of the place the moves
+  are planned on (`IsoPlace.without`), in the render and in `vidgen validate`'s replay
+  (`ISO_PLACE_CHANGES`), so a bridge that is not there is not walked on.
+- **A follower right behind its leader** (gap 1, the last step straight down or up the
+  picture) takes one step aside to a cell beside the leader half a tile to the side.
+- **Public**: `vidgen.api` adds `IsoTiles`, `install_tile_drawing`, `ObjectState`,
+  `default_state`, `OPENING_KINDS`, `SWITCHED_KINDS`, `ISO_FOLLOW_SIZE`, `follow_width`,
+  `iso_item_point`, `item_box`, `object_box`, `ISO_ITEM_ACTIONS`, `ISO_PLACE_CHANGES`,
+  `ISO_REACH`. Config adds the `hide` action, the `flower` prop, `open`, `on`, `shown` on
+  `iso.objects`, and allows small `props` on an iso place. Off an iso place nothing changes (the
+  new branches test `params.iso` / `on_iso`, or a scene hook only the stage has); the baseline
+  frames are identical.
+- **Left for later**: lint's `hidden_speaker` measures a front picture's tiles as rectangles, so
+  it reports a speaker behind a tree as wholly hidden (Step 169's iso lint); a lit lamp is graded
+  by the light like the rest (a night scene's glow is Step 169's); items are small on the
+  establishing view (shots or `follow` show them).
+
+### 89.11 Mood, sound and who speaks on the place (Step 169)
+
+Time of day and weather, the sounds of the place, who speaks when the characters are small, and
+the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTile`),
+`iso_stage.py` (`place_outline`), `cartoon/rain.py` (`IsoRainGround`), `ambience.py` (crickets),
+`sfx.py` (step sounds), `cartoon/foley.py`, `world/iso_moves.py` (surfaces), `scenes/stage_iso.py`
+(`NameTag`, rain ground, watching actions), `introspect.py`, `lint/cartoon_rules.py`.
+
+- **Reuse, no new mood keys.** Time of day is the stage's `light` (`morning`, `day`, `sunset` for
+  the evening, `night`, `indoor`; the `light` action fades it), weather its `particles` (rain,
+  snow; the action too). Decided against a `mood` key or new presets: they would duplicate
+  `light` and need the room's window skies and the sun's path for each. A rainy day is a tint
+  (`{tint: "#6B7890", strength: 0.45}`, as the rain examples do); the docs say so.
+- **Lights glow.** `Poly` and `Disc` get `glow` (a lit window's glass and core, a lit lantern's
+  faces, the pool of light under a lamp). `draw_shapes(..., glow=True)` draws a *picture of the
+  lights*: glow shapes as drawn, every other shape clearing what it covers (tints excepted), so a
+  light behind a tree stays hidden. `IsoScenery.glows(picture)` says whether a picture has one
+  (cached); its tiles are drawn once per `(picture, level, tile, glow)`. `IsoTiles` adds the
+  light tiles after its tiles as `GlowTile`s, whose `light_graded` is always false (a property
+  `mark_lit` cannot set: the stage marks whole groups lit, also later), so the light grades the
+  place and its lights stay as drawn. By day the light tiles repeat the pixels under them (no
+  change to see); at sunset and night they glow. Every picture (base, fronts, layers) gets them,
+  so a character in front of a lamp is covered by the lamp's front picture with its light.
+  Considered: an ungraded copy of the object's layer (shows its post and roof bright too), a
+  halo (shows by day; not needed: the bright lantern and pool read at night).
+- **Rain on the place.** Seen from above the whole place is ground: `IsoRainGround` (a
+  `RainGround` whose `landing(shares, x)` depends on the drop's x) lands each drop between the
+  front and back edge of the place's picture at its x (`place_outline`: 256 xs across the place,
+  the lowest and highest y of the cells' tops there, measured once per scene), within the
+  camera's view; beside the place, or on a character or small thing standing there (their boxes:
+  no splash on a face in a close-up), it falls through (`NO_FLOOR`). No depth, so splashes keep one
+  size. `RainGround.landing` is the old band (`landing_lines`), so a flat stage's rain is
+  unchanged. Not on the place yet, refused with the alternative (`iso_particle_problem`, by the
+  params' check and the `particles` action): `puddles`, `settle` (Step 172: drawn, with shelter
+  from rain, §90.2–90.3); indoors no rain, snow, leaves, streaks.
+- **Ambience.** A new set bed `crickets` (four crickets at their own pitch, place and rate over a
+  faint low night air; −37 LUFS, ducking 4 dB like birdsong; a 12 s seamless loop). Chosen
+  automatically only on an iso place outdoors while the light is `sunset` or `night`
+  (`set_ambience(..., crickets=True)`; `NIGHT`), with birdsong's rules (not in rain, 2 s after it,
+  at least 2 s); a flat stage's night stays silent as before. An indoor iso place plays the room
+  tone. Any stage may name `ambience: crickets`.
+- **Footsteps by surface.** `surface_at(place, column, row)` (`SURFACES`): grass and path
+  outdoors, boards and tiles indoors, stone for raised blocks and a garden wall's gap, bridge and
+  rug for walkable objects. `route_surfaces(place, route)`: `(share of the route, surface)` from
+  the middle of the leg where the feet enter each new surface; `iso_walks` puts it on the walk
+  (`IsoWalk.surfaces`), `_played` on `PlayedAction.surfaces`. `foley._walk_steps` plays at each
+  footfall (`footfall_distances`: where each footfall of `footfall_shares` is along the walk) the
+  surface's sound (`SURFACE_STEPS`: four new built-in sounds `step_grass`, `step_gravel`,
+  `step_wood` (a bridge 4 semitones lower), `step_stone` (tiles 2 higher); a rug a soft
+  `footstep`). Without surfaces (every flat stage) the cues are exactly the old `footstep`s.
+  `wet_steps` splashes under any step sound (`STEP_SOUNDS`).
+- **Other sounds, iso only.** `handling_cues`: `pick_up` a soft `pop` when the hand gets there
+  (45 %), `give` a light `swoosh`, `put_down` a small `thud` as it lands (75 %), played by
+  `Stage.action_foley` once per action. `place_change_cues`, played by `iso_change`: a house's or
+  a room's door creaks open, creaks and thuds shut (`door_cues`), flowers bloom and an object
+  appears (`reveal`) with a soft `twinkle`; a lamp's click stays the switch's (Step 168). All
+  follow `foley`. A flat stage's `pick_up` stays silent (no new sounds in existing projects).
+- **Name tags.** Decided automatic (nothing for an author to remember), with `iso.name_tags:
+  false` to turn them off. `IsoStaging.speak` (every line's lip sync starts there: a voiced beat
+  or a `say`) adds a `NameTag`: the speaker's name (its voice's `label`, else its name) on a
+  `callout_label` plate in its `speaker_color` (white without a voice of its own) with a pointer
+  down, outlined in the text's ink, unlit, on top. Its updater keeps it the same size on screen
+  (scaled by the camera's view), over the head, inside the view (9:16 too), and shows it only
+  while that line's lip sync lasts and the head is smaller than `NAME_TAG_FACE` (0.075, lint
+  `small_speaker`'s `min_face`) of the view's shorter side; a `say` with a `bubble` hides it
+  (`iso_untag`: the tail shows who speaks). Ended lines' tags leave at the beat's end. Why not
+  automatic bubbles: a bubble with a whole narrated line covers the place; the tag is small.
+- **Lint.**
+  - `hidden_speaker` on an iso place (a character with the dump's `features`: the box of its eyes
+    and mouth, only on an iso place) measures what really covers them: the layout dump gives each
+    iso picture tile drawn after a character a `covers` mask (which of the 12 x 12 points of
+    `face_grid(features)` its pixels' alpha covers, from the tile's own pixels) and the `pieces` of
+    the place whose boxes reach there; the rule ORs the masks (other objects by their boxes) and
+    reports from `min_hidden_features` (0.25; `min_hidden` 0.5 stays the flat stage's face-box
+    share), naming the pieces (`the place's lamp`). The village's close-up of Dot under a tree's
+    crown is no longer reported; Dot with a lamp post across her face (33 %) is.
+  - `small_speaker`: a speaker whose name tag shows (`name_tag` in the dump: the tag would show or
+    a bubble replaced it) is not reported for a line of at most `max_tagged_words` (12; the
+    frame's `line_words`). Otherwise as before: it measures the face as seen, so shots and
+    `follow` count.
+  - New rule `offscreen_action` (warning): `iso_watch` records each walk, pick-up / give /
+    put-down (from `action_foley`, with the seconds it played) and each change of the place
+    (`iso_change`); a scene updater (removed once nothing is watched) counts the frames of each
+    and those on which at least `WATCH_IN_VIEW` (½) of it is in view, or enough of it to fill
+    `WATCH_FILLS` (¼) of the view (a house in a close-up). The dump's frame gets `iso_actions`
+    (`{action, who, seen}`, seen = the share of its frames) through a new scene hook
+    `layout_keys(beat_id)`; the rule reports `seen < min_seen` (0.5). The finding's object is the
+    character, or an `iso_object` stand-in, so two such findings never merge. It found a real
+    case in the test village: a `follow` lagging behind a rushed walk (43 %).
+- **Public**: `vidgen.api` adds `GlowTile`, `place_outline`, `IsoRainGround`, `SURFACES`,
+  `surface_at`, `route_surfaces`, `SURFACE_STEPS`, `handling_cues`, `place_change_cues`. Config
+  adds `iso.name_tags`, the bed `crickets`, the sounds `step_grass`, `step_gravel`, `step_wood`,
+  `step_stone`, the lint rule `offscreen_action` (`min_seen`), `hidden_speaker.min_hidden_features`
+  and `small_speaker.max_tagged_words`. Off an iso place nothing changes: the baseline frames are
+  identical, and `vidgen lint` of platform-story and the cartoon example gives the same (no)
+  findings and the same sounds as before.
+- **Left for later**: closed doors do not block routes (a room's doors are drawn closed by
+  default, so blocking would break existing walks through them; it needs a door state that is
+  open by default for walking; kept, Step 171: §89.13); no shelter from rain under a tree on the
+  place, no puddles or settling snow there; a character in a pool of light is graded like the
+  rest (Step 171: lamplight, §89.13).
+
+### 89.12 The example story and the docs (Step 170)
+
+- **The example** `examples/iso-story` ("Hazel and the Lamp by the Bridge", original story and
+  cast: a rabbit, an old bear, a bluebird): five iso scenes between a title card and an end card.
+  The village is a project `set` (`sets: {village: {background, iso}}`) that four scenes stand on
+  with their own `light`, characters, props and beats, so the map is written once (a YAML anchor
+  is not possible: the config refuses unknown top-level keys). The map puts the houses and the
+  well at the back, the path across the middle, the flower bed in front and the stream with its
+  bridge on the right, so nothing stands in front of a speaker's spot (the first draft had the
+  well's roof across Hazel's face in two close-ups and a tree in front of the bridge). Every
+  character has its own Kokoro voice (name tags show its label). Staging rules it follows: the
+  establishing view at each scene's start, `zoom` to point at the lamp, a `shot` for every line
+  longer than a tag's, `follow` for a run, `shot: wide` for the beats after a follow whose
+  action happens elsewhere (a follow keeps the camera on its walker until a shot says otherwise).
+- **A held thing leaves with its holder.** `IsoStaging.iso_walks` passes the props a character
+  holds as the walk's `carried` when it enters or exits (the flat stage does so only through a
+  door), so they fade with it: a key carried out of the room stayed at the doorway, fully drawn,
+  while its holder faded and was parked.
+- **A walk to where someone stands stays near them** (`find_route`, `BESIDE_REACH` 2): when no
+  cell of `BESIDE` can be reached, the goal is the nearest free cell at most two cells from the
+  character there; none reachable is "no way there" with the usual message. Before, it was the
+  nearest cell the walker could reach, which could be across a stream, and `vidgen validate`
+  said nothing (found writing the guide's snippet). Iso only; unreleased behaviour.
+- **Rain reads as rain** (`ISO_RAIN_LIGHT` `("#6B7890", 0.45)`, `Params._check_iso`): an iso
+  place with `rain` in its `particles` and no `light` given (by the scene or its set) gets the
+  rainy tint the docs recommend, instead of a sunny `day` with faint drops. Rain started by the
+  `particles` action keeps the light (the author pairs it with a `light` action, as the example
+  does). A flat stage is unchanged (the branch is in the iso check). Considered: stronger drops on
+  iso (the drops are visible once the place is darker; the light was what said "sunny").
+- **Name tags are not labels** (`narration_rule._label_texts`): lint `said_before_shown` skips
+  texts with the dump's `name_tag` key, as it skips speech bubbles. A tag names a speaker who is
+  on screen; the example's narration naming Juno a beat before her tag showed was reported.
+- **Docs**: guide topic `iso` ("Isometric places: villages and rooms for a story", a validated
+  snippet) + `AGENTS.md`; CONFIG (a set for one place in several scenes, the rain light, held
+  things, the beside rule, the stage table's `light` and `iso` rows); README feature and example
+  entries; CHANGELOG "Isometric story places (Phase Q)"; the Shorts cookbook (an iso place has no
+  `character_size`); `docs/gallery/stage.md` params table regenerated (it had no `iso` rows;
+  stills and clips unchanged).
+
+### 89.13 The review of Phase Q (Step 171)
+
+- **The wide view** (`iso_stage.wide_view`, `ISO_WIDE_MAX` 2, `ISO_WIDE_BODY_ROOM` 0.25). The
+  place's picture is a diamond, so fitting all of it (§89.7) left half the frame empty in 16:9
+  (the corners, and bands beside a place limited by its height) and in 9:16 put a wide village
+  small in the middle. The world's scale stays the whole-place fit (pictures, shots, follow, the
+  camera's bounds and every Step 166–170 measure are unchanged); the *camera* starts magnified:
+  as far as the place's bounds fill the frame both ways (its tips cut), at most `ISO_WIDE_MAX`,
+  but never so far that what must be seen leaves the view with `ISO_MARGIN`: the characters and
+  small things at their spots (those entering later too: the view shows where they come; without
+  them a 9:16 room's `enter` was off screen), and in a frame at least as wide as tall every spot
+  (a character standing there) and the objects of `iso.objects` whole (a house's roof is never
+  cut; the map's trees, bushes, flowers and fences may be cut at the edges); a room keeps all of
+  itself (its walls cut would look broken). A portrait frame keeps just the bodies. Centred on
+  the place's middle, moved as little as keeps all that in view (centring on what is kept left
+  the place off-centre), inside the frame. `shot: wide` on an iso place is the same view keeping
+  the characters on the place then (`IsoStaging.iso_wide_shot`); `camera_at` (a spot) moves it
+  across. The village: 1.21x in 16:9 (it spans the frame's width), 2x in 9:16. Considered: a
+  larger world scale with the camera's bounds beyond the frame (it changed every measure and the
+  shots' clamps), keeping every object whole in 16:9 (1.09x: a bush at the front tip decided it).
+- **`pan` moves in** (`IsoStaging.pan_width`, `ISO_PAN_ZOOM` 2): a pan to a spot or a character
+  of an iso place shows it at least twice as close as the whole place; it did nothing in the
+  whole-place view (nothing to move in), and the guide had to say "use zoom". A flat stage's pan is
+  unchanged (the branch is behind `pan_point`, which is `None` off an iso place).
+- **Lamplight on the characters** (`lighting.lamp_lit`, `LAMP_LIGHT` `#FFD98A` at 0.3,
+  `LAMP_LIFT` 0.6, `LAMP_DARK` 0.45; `shading.LampLit`, `mark_lamp_lit`, `LAMP_LIT`;
+  `stage_iso.ISO_LAMP_REACH` (1, 2.2)). A lit lamp's pool glowed but a character in it stayed
+  night-dark. Each character and small thing of an iso place with a lamp carries a `LampLit`
+  (on every member of its family); `StageLight` grades a member with one by
+  `lamp_lit(grade, share)`: `LAMP_LIFT` × share of the way to the warm lamp grade, scaled by how
+  dark the light is (nothing by day). The share is asked when the shape is drawn (once per
+  scene time, cached): the most over the lamps of the feet's distance falloff (full within 1
+  tile of the lamp's middle, none beyond 2.2: the lantern stands high) times the lamp's level,
+  which fades with its `switch_on` / `switch_off` / `reveal` / `hide` (`_iso_lamp_level`); a held
+  thing goes with its holder. While a lamp change overlaps an animation the bodies are redrawn
+  (`_iso_redrawn`). Drawn when drawn, not a scene updater: an updater would make every wait render
+  each frame. Considered: a per-pixel light (the pictures are cut-outs; a grade per body reads).
+- **Flower beds and hedges** (`iso_objects.BED_KINDS` flowers, bush; `_bed_cells`): a larger
+  `size` draws a clump (with its shadow) in each cell, back to front, a flower bed's clumps
+  alternating its two colours. A 1 x 1 one is drawn exactly as before.
+- **Decided, kept**: a closed door does not block a route (a room's doors are drawn closed and
+  every way in or out goes through one; blocking would need a door open by default for walking
+  and break existing walks; the guide and CONFIG say to `open` a house's door before going in);
+  two characters walking at the same time do not avoid each other (routes go round standing
+  characters; walkers are drawn in the order of their boxes, so they pass in front of or behind
+  each other; a reservation of cells in time would change the routes of every existing walk and
+  rarely matters with a story's few characters: time crossing walks apart, or `meet`).
+- **Schema**: `schema._yaml_on_key` adds a `"true"` property beside every boolean `on` (a prop, an
+  iso object): YAML 1.1 reads a bare `on` as `true`, JSON writes it `"true"`, vidgen takes it.
+- **Messages**: a `jump` to a place on an iso place says to walk or run there; `character_size` /
+  `size` names the shots; `on` / `open` on flowers reads "not flowers"; two objects on one cell
+  say to move one.
+- **Public**: `vidgen.api` adds `wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`, `LampLit`,
+  `mark_lamp_lit`. Off an iso place nothing changes (the baseline frames are identical, the
+  examples' lint is as before).
+
+
+## 90. Iso polish and iso diagrams (Phase R, Steps 172–176)
+
+Reference: docs/CONFIG.md "Isometric places (`iso`)". Two parts: the weather gaps Phase Q left
+on an iso place (§89.9–89.13: no shelter from rain, puddles and settling snow refused, speed
+lines drawn level), then a presentation scene type built on the same projection and block
+drawing.
+
+### 90.1 The phase (plan)
+
+- **Step 172, iso weather polish** (this section's §90.2–90.4): shelter from rain, puddles,
+  settling snow, speed lines along the diagonal; the obsolete refusals removed. Deliberate
+  changes to iso output: in rain scenes drops that landed under a roof or crown now splash on it,
+  and a run's speed lines slant. Everything else renders as before.
+- **Step 173, `iso_diagram` core** (§90.6–90.7): a new presentation scene type reusing `world/iso_view.py`
+  (projection, `Box3`, `draw_order`) and the iso block drawing (`cartoon/iso_drawing.py`:
+  `box_shapes`, `draw_shapes`; moved to a neutral module if the diagram needs it, iso stage
+  output unchanged). Blocks (boxes, slabs, cylinders such as databases, flat tiles) placed on a
+  grid by name with sizes and heights; labels that stay flat and readable (phone rules); theme
+  colours and Phase P `terms:` concept colours; connectors along the grid; groups and stacks;
+  auto-fit to 16:9 and 9:16.
+- **Step 174, actions** (§90.8–90.11): build-in, raise / lower, highlight / dim, flow along
+  connectors, explode / collapse a stack, camera focus on a block or group, swap labels and
+  values, timed to beats and Phase P words (`at: "@word"`); lint where useful; the label
+  placement reworked after Step 173's stills.
+- **Step 175**: an original example (a short tech explainer, 16:9 and 9:16) with Kokoro
+  narration; docs.
+- **Step 176**: the review; backwards compatibility against Phase Q's 31 baseline frames and the
+  84 iso-story stills recorded in Step 172 before any change (`phase-r-baseline/make_baseline.sh`
+  in the session scratchpad: 16:9 `morning`, `evening`, `rowans_room`, `night`, `next_morning`;
+  9:16 `morning`, `night`; the 9:16 ones drawn with a worktree of `d792d86b`); the 9:16 render of
+  `examples/iso-story`.
+
+### 90.2 Rain on the place: shelter and puddles (Step 172)
+
+- **The top surface** (`cartoon/iso_weather.py`, no manim: `TopSurface`, `top_surface`): the
+  height of the highest thing facing up over each point of the map, `SURFACE_SAMPLES` 8 per
+  tile, made from the very shapes the place is drawn with (`IsoScenery.top_surface()`, cached per
+  set of object states, so a `reveal`ed bridge counts once it is there): every polygon whose unit
+  normal points up at least `SNOW_SLOPE` 0.45 (`iso_drawing.upward`: a top, a roof's slope; not a
+  wall or a cut-out), round puffs as balls (a circle of radius `r` on the picture is a ball of
+  `r·√2`: the view is a parallel projection scaled by 1/√2, `BALL_RADIUS`), opaque flat discs and
+  the tops of upright cylinders; shadows and pools of light do not count. `grounds` holds each
+  cell's top (water `-WATER_DEPTH`). Why from the shapes rather than a table per object kind: what
+  keeps the rain off is then exactly what snow lies on (§90.3), and a new object needs nothing.
+- **Shelter** (`lift_floors`, `IsoRainGround.lift`): a drop keeps Step 169's landing point on the
+  place's picture; the ground point there is found by undoing the projection at the cell top's
+  height (`world_at`, three steps: a raised block moves it), and when the top surface over it is
+  `SHELTER_CLEARANCE` 0.3 tiles or more higher (a roof, a crown, a bridge's deck over water) the
+  drop lands that much higher up the picture, on it, with its splash. `Stage.iso_rain_ground`
+  passes the lift (`_iso_shelter_lift`); a flat stage's `RainGround` has none and is unchanged.
+  Indoors there is no rain (refused as before). "Characters standing there stay dry": nobody can
+  stand under a shelter on the place (a house's or a tree's cells are not standable; eaves and a
+  crown's ball do not reach a neighbouring cell's middle, tested), so footsteps are unchanged;
+  drops landing on a character still fall through (no splash on a face).
+- **Puddles** (`puddles: true`, refused on an iso place before): `iso_puddles` picks seeded cells
+  (`random.Random("puddles:<seed>")`) among `puddle_cells`: grass (`.` outdoors) or path, nothing on
+  it, not sheltered, and no piece of the place in front of it (`in_front` with a flat box of the
+  cell) — the puddles are drawn over the place's pictures under the shadows and characters
+  (`_lay_on_ground`), so a piece in front would be covered. One per `CELLS_PER_PUDDLE` 10 cells,
+  2–12, radius 0.3–0.44 tile inside its cell. `IsoPuddles` (`cartoon/iso_pictures.py`) draws each as
+  the ellipse a ground circle makes in the view, `ISO_PUDDLE_COLOR` `#A9C8E8` at 0.8 (the plain
+  stage's darker puddle read as a hole in the grass from above), growing with `puddle_growth` and
+  staying when the rain stops, with `RIPPLES` 2 rings per puddle while it rains (`ripples`: each
+  spreads from a seeded point over `RIPPLE_SECONDS` 0.9 and starts again elsewhere; a ring is one
+  filled path, outer ellipse and inner reversed, so it scales with the zoom). Wet steps follow
+  the rain field as on a flat stage. Lit like the place; left out of the layout dump like
+  `Puddles`.
+
+### 90.3 Settling snow on the place (Step 172)
+
+- **A picture of the snow**: `draw_shapes(..., snow=True)` (as `glow=True` is a picture of the
+  lights) paints the snow lying on the shapes in order, each shape clearing the snow behind it:
+  an upward polygon that `holds_snow` (new `Poly` / `Disc` field, default true; water and door
+  knobs false; a well roof's fascia false) is `SNOW_WHITE` (`#F4F7FC`, a slope facing the back a
+  little shaded) with its outline kept; an upright polygon with `snow_cap` (new field: a pine's
+  tiers `PINE_SNOW_CAP` 0.72, the well's roof `ROOF_SNOW_CAP` 0.6) is white from its top down
+  that share; each puff of a `Blobs` gets a cap (a chord ±62° about its top), a later puff
+  clearing the caps behind it; an opaque disc and an upright's top are white; lines of at least
+  1.5 outline widths clear (a crank), thinner ones (seams, tufts, bars) are covered; tints leave
+  it. The fields' defaults keep every picture drawn exactly as before.
+- **Shown on the place** (`IsoSnow`, a living thing of the stage like `SettledSnow`): every
+  picture (`IsoTiles`: base, fronts, layers; `Stage._iso_groups` lists every one made) lays its
+  tiles' snow over each tile's own pixels in place, at `BLANKET_OPACITY × blanket_cover(amount)`,
+  the amount growing with `settle_amount(settled_seconds(...))` in Step 105's steps (one layer
+  for all the scene's settling fields, their amounts added). Considered and dropped: snow tiles
+  of their own, half transparent, over the picture tiles — the tiles overlap by `TILE_OVERLAP`
+  pixels and the doubled snow showed as white lines across the place while it grew. In place,
+  the tile stays the same mobject, so Manim's list of what moves stays right; while it grows the
+  place's tiles are redrawn (measured: the scratch village, 17 s of snow at 854 x 480, 30 s).
+  Flakes land where rain would (`snow_ground` is the iso rain ground; `ParticleField` asks the
+  ground's `landing`, which for a flat stage is the band as before). `color` colours the flakes
+  only. Not in a draft (§74), as on a flat stage.
+
+### 90.4 Speed lines along the walk (Step 172)
+
+- `MotionEffect._way`: for a character with `iso_feet` (on an iso place) the way is its feet's
+  move since the last frame projected to the screen (`(dx−dy)/2`, up `−((dx+dy)/4 − dz·ISO_RISE)`),
+  kept while it stands still for a frame (`ISO_STILL_MOVE`), and the lines start at its middle
+  half its width back along that way; before it has moved, as before (level, the way it faces).
+  A flat stage takes the old branch (no `iso_feet`).
+
+### 90.5 Public (Step 172)
+
+- `vidgen.api` adds `TopSurface`, `top_surface`, `lift_floors`, `IsoPuddle`, `iso_puddles`,
+  `ripples`, `IsoPuddles`, `IsoSnow`. `Poly` gains `holds_snow` and `snow_cap`, `Disc`
+  `holds_snow`; `draw_shapes` and `IsoScenery.tile_image` / `picture` a `snow` keyword;
+  `IsoRainGround` a `lift`; `IsoTiles.set_snow_opacity`, `picture_tiles`. Config: `puddles` and
+  `settle` are accepted on an iso place outdoors (no new keys). Off an iso place nothing changes:
+  Phase Q's 31 baseline frames are identical.
+
+### 90.6 The `iso_diagram` scene type (Step 173)
+
+Reference: docs/CONFIG.md `iso_diagram`. A presentation scene type (`scenes/iso_diagram.py`), not
+a mode of the `stage`: no characters, no map, its own params, and the view fitted to the frame
+like the other diagram scenes.
+
+- **Three layers**, as for iso places (§89.1): `iso_blocks.py` (the model, no manim: what
+  `vidgen validate` runs), `iso_vector.py` (iso shapes as Manim mobjects), the scene (labels,
+  fitting, targets, steps). Shared with Phase Q without moving anything: the projection, `Box3`
+  and `draw_order` (`world/iso_view.py`) and the shape model and box faces of
+  `cartoon/iso_drawing.py` (`Poly`, `Upright`, `Line`, `box_shapes`, `shade`, `shape_bounds`),
+  imported as they are, so iso stage output cannot change (Phase Q's 31 baseline frames are
+  identical). Decided: **vector, not the stage's Pillow pictures.** A diagram is small (tens of
+  polygons), must stay sharp in a zoom, and Step 174's actions recolour, raise, fade and move
+  blocks one by one; a raster tile would have to be redrawn for each. `iso_vector.shape_mobject`
+  draws a `Poly` as a filled polygon, an `Upright` as a cylinder (body, its right part in shade,
+  the outline of its sides, a lighter top) and a `Line` as a stroke, so the diagram has the
+  stage's three-face shading in the theme's colours.
+- **Model** (`layout_iso_diagram`): items are `ItemSpec`s, a block (`BlockSpec`: shape of
+  `SHAPES` box / slab / cylinder / database / tile, footprint, height; defaults `SHAPE_SIZE`,
+  `SHAPE_HEIGHT`) or a stack of block layers (bottom first, `gap` apart, default 0.12) on one
+  footprint. `at` is an item's back cell (`x` = column, to the lower right; `y` = row, to the
+  lower left); an item fills its cells less `CELL_INSET` 0.1. All items have `at` or none
+  (`arrange`: `row`, `column`, `grid`, `zigzag`; a stack keeps `STACK_ROOM` 1.5 more cells to
+  its neighbours in a row or column, for its layers' labels). Group plates (`PLATE_PAD` 0.3 round
+  the members, `PLATE_HEIGHT` 0.08) lift their members. Refused with what to change (a
+  `ValueError` that the params validator turns into a located `vidgen validate` problem): items
+  with and without `at`, overlapping items, a non-member on a plate, overlapping plates, an item
+  in two groups, a connector between layers of one stack.
+- **Why `zigzag`**: in the 2:1 view a row of any shape is wider than tall (its picture is
+  `(columns + rows) / 2` wide), so a 9:16 frame fits it by its width and stays two-thirds empty.
+  Only the `x = y` diagonal runs down the picture; the zigzag (item k at `(⌈k/2⌉, ⌊k/2⌋)` steps)
+  follows it in two picture columns, its connectors all straight. `arrange: auto` is a row in
+  16:9 and a zigzag (spacing 2, so labels fit above and below) in 9:16. The floor follows the
+  union of the items, plates and connectors (padded `FLOOR_PAD` 0.45; `_Cover`: the union on the
+  grid of their own edges, traced to outlines) and is their bounding rectangle when that union
+  covers at least `FLOOR_FILL` 0.6 of it (a ragged edge under a row looked like a mistake).
+- **Connectors** (`route`): along `x` or `y` when the two footprints face each other over at
+  least `MIN_SHARED` 0.2, round the front of whatever is in the way (`DETOUR` 0.5 past it, when
+  that crosses fewer items), else one turn (the one crossing fewer items, `x` first); one each
+  way between the same ends run `TWIN_OFFSET` 0.16 apart. Ends stay `CLEARANCE` off the side, and
+  off a back side (`x0`, `y0`, which the view does not show) by `hidden_run`: the floor behind a
+  box is hidden for `min(far side − lateral position, 2·height·ISO_RISE)` (derived from the
+  silhouette's front corner and its top's back edge); a cylinder's by `r√2 − l − √(r² − l²)` from
+  its round side (`_on_circle`). Without it an arrow into a block from the left ended out of
+  sight behind it (the first stills). Flat arrows (`arrow_shapes`: a band `ARROW_WIDTH` 0.1 and a
+  head, dashes cut along the path) lie on the floor just over the plates and are drawn before
+  the blocks; a pipe is a low box per segment drawn in the blocks' draw order (`order`). All at
+  one height per connector (the higher ground of its ends); connectors run on the floor even to a
+  stack's upper layer (the stack's footprint).
+- **Labels** (the placement below was replaced in Step 174, §90.8; the sizes and the fit are
+  as here) stay flat, at a readable size: from `size` down (factors of 0.9) to the readable
+  minimum (× 1.05), never below; per size the largest scale (tile width ≤ `max_tile` 2.4 Manim
+  units) at which everything fits the body is found by bisection, and the first size giving a tile
+  of at least `min_tile` × size/32 wins (else the largest scale; a warning when it is small or
+  nothing fits, then the whole drawing is shrunk). At each scale the labels are placed greedily:
+  a stack's layer labels in a column at its side with leader lines (spread apart, `_spread`;
+  `label_side: auto` takes the side away from the middle unless the other one covers less), each
+  block's on its top when it fits inside the top's diamond (ink: background or text colour,
+  whichever contrasts more with the block, `readable_ink`; registered as `on_fill` so `dim` and
+  `highlight` keep it readable), else above, below, right or left on a plate; stack and group
+  captions below (else above, right, left); a connector's beside its longest segment (offset
+  along the screen normal by the label's half extent), else on it. A candidate's cost: the area
+  of other labels it covers, the share of each block's visible faces (25 points per face, worth
+  70% of the block's picture), and `line_cost` per connector sample (every `line_step` 0.1);
+  the first free candidate wins, else the cheapest.
+- **Colours**: a block's `color` (a layer's, else its stack's); else the colour of the first term
+  (§87.3) its label says (`find_term` over the active terms); else `block_color` (`palette`: the next
+  palette colour per block and layer in order). Faces as on the iso place (top, `LEFT_SHADE`,
+  `RIGHT_SHADE` towards a cool dark), outlines `outline_ink` (the fill 0.55 darker: an ink
+  outline vanished on dark themes); plates `PLATE_TINT` 0.32 of the group colour on the
+  background, the floor `FLOOR_TINT` / `FLOOR_LINE_TINT` of the text colour.
+- **Params**: one `blocks` list in order, a block with `layers` being a stack (first written as
+  a separate `stacks:` list; dropped because `arrange` then had to put all stacks after all
+  blocks, so "browser → app stack → database" could not be written without `at`). Shorthands as
+  in `diagram`: a block or layer is an id string (its label), edges `"a -> b: label"`, `-->`
+  dashed, chains; `->` takes the scene's `edge_style`. A stack's caption defaults to its id like
+  every label (the translation template lists it as for a block).
+- **Steps** (Step 173; Step 174 added `build: each` and the actions, §90.9): one step in the first beat: heading, floor, plates and captions, the
+  blocks back to front (each a little `FadeIn` from above), then the connectors. Planned for
+  Step 174 and kept possible by the model: per-block `lift` and growth in `block_shapes` /
+  `box_faces` (`lift`), a stack's `gap` (explode / collapse), connector paths and `samples` (flow),
+  picture bounds per block / stack / plate (focus), and every block, stack, group and connector a
+  target.
+- **Gaps**: no icons on blocks; a connector to a stack's upper layer runs on the floor; label
+  placement is greedy (a crowded diagram can still overlap a label and a block or connector;
+  Step 174's lint); a stack in 9:16 is narrow (its labels take the side).
+
+### 90.7 Public (Step 173)
+
+- `vidgen.api` adds `BlockSpec`, `ItemSpec`, `GroupSpec`, `EdgeSpec`, `IsoDiagramLayout`,
+  `layout_iso_diagram`, `DiagramShapes`, `diagram_shapes`, `outline_ink`, `readable_ink`,
+  `top_point`, `top_room`, `side_point` (`iso_blocks`) and `picture_to_scene`, `shapes_mobject`
+  (`iso_vector`): what the built-in scene uses, so a project scene can draw its own iso diagram.
+  Config: the scene type `iso_diagram` (no new video-level keys).
+
+### 90.8 Labels, reworked (Step 174)
+
+Step 173's greedy placement put labels where nothing covered their *bounding* box: a group's
+caption among the group's blocks ("Web tier" over Web 1, its members skipped as obstacles), a
+block label at the top of its box's bounding rectangle, far from a long flat tile ("Load
+balancer"), a block's label over a pipe or right on the next block ("Orders", "API server" on the
+cache), and a one-layer stack labelled twice ("Stored weights" and its caption "Weights"). The
+geometry now lives in `iso_labels.py` (no manim; the scene places with it, lint checks with it):
+
+- **Outlines, not boxes.** Every block is its convex outline on the picture (`block_outline`: a
+  box's corners, a cylinder's two ellipses; `convex_hull`), pipes their segments' outlines
+  (`<ref>#<k>`), connectors their samples. A label beside a block is slid out of the block's
+  outline along a direction (`slide_out`: exact, per separating axis, the first moment the
+  rectangle and the convex outline part, plus `gap`), in the order up, down, right, left, then
+  the diagonals (`AROUND`); what a candidate covers is measured exactly (`clip_area`,
+  Sutherland-Hodgman). `Obstacles.cost`: other labels' area (× `LABEL_WEIGHT` 3, each label kept
+  `clearance` apart so two do not read as one line), blocks' area (× `BLOCK_WEIGHT` 4) plus
+  `NEAR_WEIGHT` 0.3 of their area within `clearance` (2 × `gap`: a label nearly touching another
+  block reads as its label), `LINE_COST` 0.08 per connector sample under it. The first free
+  candidate wins; else the candidates pushed past whatever they met (`clear_of_all`) are tried,
+  each costing `FAR_COST` 1.0 per unit beyond `leader_from` (0.35), and the cheapest of all wins.
+  A label left more than `leader_from` from what it names gets a leader line (from the outline,
+  `ray_exit`, to the label's edge, `rect_exit`). The weights were tuned on Step 173's crowded
+  "Services in groups" grid: lower `FAR_COST` sent labels far off with long leaders, a lower block
+  weight let "Web 2" lie on the load balancer.
+- **Order**: a stack's layer labels (their column or list), group captions, block labels, stack
+  captions, connector labels. Group captions go before block labels so they get the plate's
+  front edges; the label of a block on the plate then finds another side.
+- **Group captions** by the plate's front edges (directions from the plate's middle to the
+  middle of its front-left and front-right edges and its front corner, then left, right, up),
+  else pushed clear, else outside the whole diagram (below, above). Blocks on the plate count as
+  obstacles (they did not in Step 173).
+- **Connector labels** beside the connector at 0.5, 0.3, 0.7 of each straight run, longest run
+  first, both sides, else on it, else pushed off along the normal with a leader to the nearest
+  point of the connector.
+- **One label per block** (`all_blocks`): a stack of one layer is labelled once, with its layer's
+  own label, else the stack's (its caption is not drawn); a stack's caption that repeats one of
+  its layers' labels is not drawn.
+- **9:16 stacks** (`label_side: below`, `auto` in 9:16): the caption under the stack's foot, then
+  its layers listed top layer first, each after a swatch (a flat 2:1 diamond, the shape of a top,
+  `swatch` 1.5 text heights wide) of its colour; the stack is not widened by a column at its side,
+  so it is drawn larger. `auto` tries, preferred first, in 9:16 below, the outward side, the
+  other side; in 16:9 the outward side, the other side, below (whichever covers least). The tile
+  may be `portrait_tile` 1.35 × `max_tile` in 9:16. Measured: Step 173's 9:16 stack 0.93 Manim
+  units a tile, now 2.5 (the floor's margin is now what limits it).
+- **An `at` grid in 9:16** (`portrait_grid: auto`): `slant(items, along)` moves each item along
+  the other axis by how far its middle lies along `along`, so that axis runs down the view's
+  `x = y` diagonal: a row becomes a column down the frame, neighbours keep their order and sides,
+  connectors are routed again. `Params.layout(portrait=True)` tries both axes and keeps the one
+  whose picture (`picture_size`) fits a 0.62-wide body best when it is `SLANT_GAIN` 1.15 better
+  than the grid as written; a slant that makes items or plates overlap is skipped. Considered:
+  turning the grid by 90° (the picture of a grid turned is as wide as before: only the diagonal
+  runs down an iso picture).
+- **Room for actions**: blocks are fitted and labels placed for where the scene's `raise` and
+  `explode` actions will take them (`_planned_lifts`): other labels keep clear of each block's
+  outline swept from its ground to its highest lift, the bounds include the lifted outlines and
+  the labels riding with them; a `relabel` action's texts are measured beforehand and each label
+  keeps room for the largest of its texts (`_Label.extent`).
+
+### 90.9 Actions (Step 174)
+
+Eight actions in `scenes/iso_actions.py` (written against `vidgen.api`; the animations in `scenes/iso_motion.py`; the scene does the
+drawing in `IsoDiagram.iso_*`). Each checks in `scene_problems` that the scene is an
+`iso_diagram` (`iso_diagram_actions = True`) and that its targets are of the kinds it acts on
+(`IsoDiagram.target_kind`), naming them. All take `at` (a share or a word); `mid_still_actions`
+gives the storyboard a half-way still of `build`, `raise`, `lower`, `explode`, `collapse`, `flow`
+and `relabel`.
+
+- **Lifts**: the scene keeps each block's own raise and each stack's gap; a block's lift is its own
+  raise plus those of the layers under it plus `level × (gap now − its own gap)` (`_lifts_of`).
+  `_settle` moves every block (and the labels that ride with it: block and layer labels not in a
+  list under a stack, a group's caption with its plate) by the change of its lift — a pure move up
+  the picture (`ISO_RISE` per cell), points only (`LiftMove`), so colours being animated meanwhile
+  are left alone; parts not on screen move at once. A raised block standing on the floor (or a
+  stack's bottom layer, or a plate) gets a shadow on its ground, darker as it rises (`FillFade`,
+  `shadow_opacity` 0.35 at `shadow_lift` 0.6 cells). A raised plate is drawn over the arrows on
+  the floor under it (z 9).
+- **`raise`** (`by` 0.5, ≤ 4) / **`lower`** (`by`, default to the ground, never below it): raising
+  a layer raises the layers above (they rest on it); a group raises its members and its plate.
+  `until` undoes (raise: lower by the same; lower: the lifts before).
+- **`explode`** (`gap` 0.6, ≤ 3) / **`collapse`**: a stack's gap; a side column's labels go with
+  their layers, a list under the stack stays.
+- **`build`** (`style` grow, drop, fade) and **`reveal`** (the scene's `entrance`): the scene's
+  own steps leave to them what they name (`_left_to_actions`: blocks of the named block, stack,
+  group or the diagram; a stack's or group's caption and plate when it is named; named
+  connectors). Everything comes in through `_arrivals`: the floor, the plates and captions of the
+  arriving blocks' groups and stacks (unless an action waits to show them), the blocks back to
+  front, then every connector whose ends are both in (`_edge_arrivals`) — so a connector to a block
+  that waits comes with it. `grow` (`GrowBlock`) rebuilds the block each frame at `t` of its height
+  (`block_shapes` of a shortened box; only points are taken), the text on its top riding up, its
+  other labels fading in over the last 40 %; a block is unseen until its turn, and in a lagged
+  group (`lag_ratio` 0.9) each layer grows on the finished one below (with 0.5 the next layer
+  showed as a flat sheet floating over a half-grown one). `drop` fades in from `drop` 0.8 cells
+  above. A stack, group or `diagram` counts as shown once all its blocks are (`is_shown`), so a
+  `reveal` of a group whose plate came early still brings its blocks.
+- **`flow`** (`count` 3, `style` dots or packets, `color` highlight, `back`, `chain`): `FlowDots`
+  moves the dots along the connector's world path (raised a dot's radius, on top of a pipe) one
+  after another `flow_spacing` 0.16 of the way apart, fading in and out over the first and last
+  8 %, at the z-index of the pipe segment under them (blocks in front hide them); packets are
+  small iso cubes (`box_faces` of a 0.22-cell box, moved as one: a parallel projection moves a
+  cube's picture rigidly). Dots start invisible (a `Succession` for `chain` adds every connector's
+  dots at its start) and are removed at the end (`remover`).
+- **`focus`** (`padding` 0.12, `scale`): `MoveCamera` to the targets' box with padding (at most
+  3×); the whole frame when they fill it (`focus: diagram` goes back). Not temporary, unlike
+  `zoom`; no rotation (the view's angle is the diagram's meaning).
+- **`relabel`** (`text`): `Transform` of the old text into the new one (made by the label's
+  `make`, in the old text's ink when it was one colour: a highlight's, or the ink on a block's
+  top), the plate resized; when it ends the new text takes the old one's place in the label's
+  group (`SwapAtEnd`; nothing is removed from the scene, which would break up the groups holding
+  it). The targets' `on_fill` pairs follow the new text. A target without a label (`has_label`:
+  a group or connector without one, a stack whose caption repeats a layer's label) is refused.
+- **`dim` / `highlight` keep the shading** (`Target.recolor`, a generic hook): a target may say
+  which colours its members show when each of its colours is turned into another
+  (`recolor(paint) -> {member id: (fill, stroke)}`). `dim_to` then mixes the target's colours
+  towards the background (`mix_colors(colour, background, factor)`) instead of lowering opacity
+  — a see-through block showed the blocks behind it — and a colour highlight (and `flash`) paints
+  them with the shading kept (the three faces, a cylinder's shade and top, the outline:
+  `outline_ink` of the new colour); `Dim.revert` restores those members' colours. The iso
+  diagram builds `recolor` from each piece's shapes drawn again in the new colour (`_Solid`) and
+  maps the label plates to their own colour, so a highlighted label is coloured text on its plate,
+  not a block of colour (Step 173 painted the plate too). Targets without `recolor` (every other
+  scene) behave exactly as before.
+- **Targets**: a new `diagram` (floor, plates, connectors, blocks and labels). `target_kind`
+  tells actions what a name stands for.
+
+### 90.10 Lint `iso_labels` (Step 174)
+
+The scene adds to each still of its layout dump (`layout_keys`) an `iso_diagram` key: the labels
+shown (text, kind, owner, box of the plate or text in pixels, on a block's top, with a leader
+line; a layer's label counts as having one), the outlines of the blocks and plates on screen
+(convex hulls of their points in pixels), the stacks' layers and the connectors' paths (samples
+every 0.25 cell, in pixels). The rule (`lint/iso_rule.py`, last in `LINT_RULES`, default
+warning) reports a label covering at least `min_cover` (0.1) of its box over a block it does not
+name (a block's or layer's label may lie on its own block, a stack's caption on its layers), two
+labels sharing at least `min_overlap` (0.05) of the smaller box, a label (not on a top) over
+at least 2 samples of another connector, and a label without a leader line more than `max_gap`
+(0.06 of the shorter side) from what it names (its block's or plate's outline, the stack's
+layers, the connector's path). Text size and contrast stay `min_font`'s and `contrast`'s (the
+labels are ordinary texts in the dump), the narration `said_before_shown` / `unsaid_reveal`.
+Step 173's "Services in groups" still is reproduced in the tests ("Web tier" covering 33 % of
+its box over Web 1); its re-render with this step's placement has no finding, and the actions
+project in the session's scratchpad found three real ones while the weights were tuned (a raised
+plate's caption left behind, now riding with it).
+
+### 90.11 Public (Step 174)
+
+- `vidgen.api` adds `PIPE_HEIGHT`, `PlacedBlock`, `arrow_shapes`, `block_outline`,
+  `block_shapes`, `box_faces`, `box_outline`, `picture_size`, `plate_shapes`, `slant`
+  (`iso_blocks`), `AROUND`, `FAR_COST`, `Obstacles`, `clip_area`, `convex_hull`, `hull_box`,
+  `hull_gap`, `hull_of_point`, `polyline_gap`, `ray_exit`, `rect_exit`, `rect_of`, `rect_union`,
+  `slide_out` (`iso_labels`), `ISO_RISE`. `Target` gains `recolor` and
+  `NarratedScene.target` a `recolor` keyword (default `None`: unchanged behaviour).
+- Config: actions `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`;
+  `iso_diagram` params `build`, `entrance`, `portrait_grid`, a stack's `label_side: below`; the
+  target `diagram`; the lint rule `iso_labels` (`min_cover`, `min_overlap`, `max_gap`).
+- Output of `iso_diagram` scenes changes (Step 173's placement replaced; it shipped one step
+  ago). Phase Q's 31 baseline frames are identical.
+
+### 90.12 The example and the fixes it found (Step 175)
+
+- **The example** `examples/iso-web-page` ("What happens when you open a web page", 5 scenes, 18
+  beats, 2:00 with Kokoro `af_heart` at 0.82 and the `bright` bed): a title; `trip` (browser, DNS,
+  load balancer, two app servers on a group plate, cache, database on an `at` grid, each block
+  built on the word that names it, dots and packets along the connectors); `one_request` (the same
+  diagram: `dim` the busy server, `raise` the chosen one, `focus` on the cache and database,
+  `relabel` for the miss, `Database: 40 ms` and the hit, `focus: diagram`, a `chain` of packets
+  back); `render` (the rendering stack DOM / Styles / Layout / Paint built, exploded, each layer
+  highlighted `until` the next beat, collapsed); a `bullets` recap. `terms:` cache and database.
+  Blocks that appear in two scenes have their own `color` (by default the palette follows the
+  order of the blocks, so leaving DNS out of the second scene recoloured the others).
+- **Fit by scanning** (`IsoDiagram._largest`): whether the diagram fits the body is not monotonic
+  in the scale — at a middle scale a label can be pushed clear with a long leader and overflow,
+  while at a larger one it lies by its block — so Step 173's bisection from the smallest scale
+  could settle on a third of the possible size (the example's second scene, with the browser one
+  row up: "the blocks are drawn small"). Now: the largest scale `cap` if it fits, else scales
+  `SCAN_STEP` 0.9 apart downwards until one fits, then `BISECT_STEPS` 8 between it and the one
+  above; none fitting down to 0.15 as before. At most about 30 placements per label size (the
+  example's scenes render in the same time). The gallery sample's 9:16 still is now drawn larger
+  (regenerated).
+- **`focus` in the safe area** (`iso_focus_view`): the magnification fits the targets into the
+  scene's `safe_area` (the frame less margins and reserved overlays such as karaoke captions),
+  and the camera centre puts their middle on the safe area's middle (`centre = middle − area
+  centre / factor`), clamped to the camera bounds as before. Before, they were centred on the
+  frame and a cache's label went under the captions. A `diagram` target returns the whole frame
+  (`focus: diagram` zoomed onto the diagram's own box and cut the heading off).
+- Considered and left: a `flow` on a connector whose end is not built yet shows the connector
+  early (as any action shows its target); the example builds before it flows. In 9:16 the
+  slanted grid can route a connector round the outside, and `iso_labels` warns that "App 2" lies
+  on part of `lb->app2` (one warning, judged acceptable: the arrow is still read).
+
+### 90.13 Review of Phase R (Step 176)
+
+Found by watching the example's contact sheet and fixed (iso_diagram only; no change to iso
+stages, platform levels, presentations: the Phase Q baseline's 31 stills are identical, and
+iso-story differs from the pre-Phase-R stills only in Step 172's intended rain and run stills):
+
+- **Filling the body.** A wide body whose height the labels above and below the blocks take
+  (the example's first diagram used two thirds of the width and a third of the frame) is now
+  tried with the labels beside the blocks first (`_place(sideways=True)`, directions
+  `iso_labels.SIDEWAYS`), at each scale where the usual order overflows the height only; the
+  scan starts at the largest scale the drawing alone fits (`_bounds`), which also makes the fit
+  cheaper. Above and below, a label wider than its block is also tried lined up with the block's
+  left or right edge (`aligned`), clear of a neighbour on the other side. `Obstacles` keeps each
+  outline's box (a cheaper cost). In the example, dropping the "App servers" caption (the blocks
+  say "App 1", "App 2") took the trip from 1.01 to 1.35 units a tile.
+- **9:16.** `Params.layouts(portrait)`: the preferred layout (`layout()`, as before), the grid as
+  written and slanted all or half the way (`slant(..., share)`: half the move, whole cells) along
+  x and y; the scene fits each at the label size asked for (a scan and 2 bisection steps) and
+  draws the largest unless the preferred one is within `LAYOUT_GAIN` 5 %.
+- **Focus never cuts a label.** `focus` (and its `until`) calls `iso_veil(width, centre)`: each
+  label group (plate, text, leader) and the heading not wholly inside the new view fades out
+  (`Veil`, in the first 40 % of the move; its colours kept in `_veiled`), and those wholly inside
+  again fade back in (the last 40 %). A relabel of a faded label swaps its kept colours to the
+  new text. Blocks may still be cut by the view's edge. `padding` is a share of the safe area's
+  **shorter** side, both ways: in 9:16 a share of the width left the targets no room to grow.
+- **Connectors to raised blocks.** A flat connector whose ends are raised tilts evenly along its
+  path from the source's lift to the target's (`iso_blocks.ramped`, `Reshape` while it moves);
+  flows follow the tilt, and the layout dump gives lint the tilted path. Pipes stay on the floor.
+- **The floor.** When it follows the blocks (they cover under 60 % of its rectangle) it is grown
+  out to whole cells of a grid half a cell off the diagram's, its edges mid-cell all round as a
+  rectangular floor's, and filled across rows and columns between their ends (`_tidy`): steps
+  only where the diagram's width changes, no ragged end. When blocks come in a part at a time
+  (`build: each`, `build` / `reveal` actions) the floor comes with them: `FloorCells.under(items)`
+  is the floor the items alone would get (`_floor_of`, the same rule), within the whole floor's
+  cells; each arrival adds the cells not shown yet, reaching `FLOOR_SEAM` under the shown ones (no
+  seam). A diagram built at once keeps its one floor mobject.
+- **Puddle ripples** (Step 172) could spread 1.2 radii from a puddle's middle onto the grass: a
+  ripple now starts at most `RIPPLE_OFFSET` (1 − reach − 0.05) of the radius off the middle.
+- Considered and left: a raised block's label rides with it and may lie on the start of its own
+  outgoing connector (the example's "App 2" in `one_request`, one `iso_labels` warning; keeping
+  the label clear at both heights crowded the others off their blocks). L-routes in a slanted
+  9:16 grid read as a ">" round the side (the grid's nature). Snow's `color`, puddles only on
+  ground cells and the snow-growth redraw cost (Step 172's gaps) stay.
+
+### 90.14 Follow-ups (Step 177)
+
+- **A raised block's label keeps off its tilted connectors.** The label rides up with its block
+  (§90.9), so placed clear of the floor's connectors it could lie over the start of its own
+  connector tilted up to it (the example's "App 2", Step 176's gap). `_geometry` keeps each
+  connector with a raised end sampled along its tilt at the planned lifts (`_raised_lines`, the
+  same even ramp as `ramped`); a block label's candidate (not one on its top) also costs
+  `LINE_COST` per such sample under it moved up by its planned lift (`raised` in `_place`). Only
+  that label's own choice changes, so the crowding Step 176 saw when other labels kept clear of
+  both heights does not come back. The example lints clean in 16:9 and 9:16.
+- **Lint at the diagram's scale.** The label then sat a little further off, within
+  `leader_from`, and `iso_labels`' `max_gap` fired only while a `focus` magnified the gap: the
+  layout dump's `iso_diagram` key gains `zoom` (frame width over the camera's), and the gap limit
+  is `max_gap × short side × zoom` (the reported value divided by it). Whether a label reads as its
+  block's does not change when everything is magnified.
+- **Pipes tilt too.** `_draw` keeps each pipe's segments with their ground boxes
+  (`_pipe_pieces`); `_settle` reshapes a connector's arrow and its pipe segments alike, each
+  segment `ramped(box_faces(box))` (the box sheared along the slope: faces stay planar, its
+  visible faces the ground box's), animated with `Reshape` during a raise or lower. `_edge_lift`
+  now follows pipes, so `flow` dots and packets ride the slope (they already added it) and the
+  layout dump gives lint the tilted path. Draw order stays the ground one.
+- **9:16 shots on an iso place** (`shots.portrait_shot`, called by `Stage.shot_framing` only on
+  an iso place in a tall frame): the place's characters are small, so a 9:16 close-up is held at
+  `MAX_SHOT_SCALE` and its view is about three characters tall and 1.6 wide; framed with the head
+  at the top it left two thirds of ground below and cut a neighbour in half at the edge (the
+  contact sheet's bench "with nobody on it"). Now: across, the nearest centre at which every other
+  character is wholly in (`PORTRAIT_EDGE` 0.04 of the width inside) or wholly out, the subjects
+  wholly in; up and down, the figures in view centred when the view is `PORTRAIT_ROOM` 1.6 times
+  their height. `wide` and `over_shoulder` (its near one cut on purpose) are kept. The wide
+  view in a tall frame (start and `shot: wide`) also keeps the spots the scene's `walk_to`,
+  `run_to` and `enter` go to and the cells round them (`_iso_arrivals`: two sent to one spot stop
+  side by side), so a walk does not end half out of the frame. A 16:9 frame and flat stages are
+  untouched: iso-story's 61 16:9 baseline stills and Phase Q's 31 are identical.
+- **Public**: `vidgen.api` adds `portrait_shot`, `LINE_COST`. Layout dump: `iso_diagram.zoom`.
+- **Gaps**: a `zoom` or `pan` action on an iso place in 9:16 can still cut a character at the
+  edge (only shots are reframed); a raised block's label is kept off tilted connectors at the
+  highest planned lift only; a pipe's draw order is its ground one (a pipe climbing to a block
+  raised high in front of another could be drawn behind it).
+
+### 90.15 Nothing shows its final look before it comes in (Step 178)
+
+- **The bug** (owner, `examples/iso-web-page`): a block built with `grow` appeared at full size
+  for a moment (12 frames at 30 fps), then jumped back to nothing and grew. Every grown block the
+  first time it came in, and at a scene's start (the "HTML response" slab during the crossfade).
+- **Cause**: `_arrivals` plays what comes with a block first (the floor piece under it, a group's
+  plate, the heading at a scene's start) and then the block, in a `Succession`. Manim adds every
+  non-introducer sub-animation's mobject to the scene when the `Succession` starts, but begins
+  (and so first interpolates) each sub-animation only when its turn comes. `GrowBlock` was not an
+  introducer, so the block sat in the scene at its final look until the fade before it ended.
+  `drop` and `fade` (`FadeIn`, an introducer) and connectors (`FadeIn`) were not affected.
+- **Fix**: `GrowBlock` is an introducer: the block joins the scene when its growth begins, at its
+  start (unseen, no height) on that very frame; in a `LaggedStart` (a stack's layers) every layer
+  starts unseen too. Whatever the timing (beat start, `at:`, `@word`, `build: each`, the scene's
+  first beat) and target (block, stack, layer, group, the diagram, `reveal`).
+- **Same class on an iso place** (Step 168's `reveal` / `hide` / `open` / `switch_*`): when a
+  change started, the *other* pictures showing the object were swapped at once: the layer of an
+  object behind it and a character's front picture showed a revealed object at full on the
+  change's first frame (a pine in front of a lamp, the buds of iso-story opening each other at
+  once), and a hidden one vanished at once there. Now they follow the change (`_IsoFollow`): the
+  new picture goes right under the old one, fades in during the first half and the old one fades
+  out over it in the second (what both show stays as it is; never two pictures left drawn at the
+  end); a picture alone fades in or out with the change; a second change while one is under way
+  continues it; an object fading in by its own change keeps its opacity when redrawn.
+- **Two more of that class**: a picture made mid-play (those new layers) was in neither Manim's
+  static image nor its moving list, so it was not drawn until the next animation; one taken out
+  mid-play (an old picture when its change ended) was still in the moving list, so it was drawn
+  on, at full once its fade was undone (a hidden pine came back; a closed door's open leaf stayed
+  under it until the beat ended; doubled outlines). New pictures join the moving list and removed
+  ones leave it (`_iso_undraw`).
+- **Compatibility**: Phase Q's 31 baseline stills identical. iso-story: 79 of 84 stills identical;
+  5 differ where a change ends or runs at the still (the door closed at the end of `morning` b10
+  and `next_morning` b2 no longer shows its open leaf; single instead of doubled outlines after
+  the lamp door opens in `evening`; in `next_morning` b6 the third bud is still a bud at the
+  still instead of fully open at the start of its opening). Deliberate fixes.
+- **Gaps**: an object's own change with two pictures (a lamp switched, a door opened) still fades
+  the new one over the old one, so their soft edges are drawn twice until it ends (a faint
+  sharpening of outlines on its last frame).

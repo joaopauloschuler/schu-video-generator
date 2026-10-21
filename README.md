@@ -112,6 +112,19 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   on the tiles and checked by `vidgen validate`, a key opens a locked gate, a grumpy snail steps
   aside when asked nicely, the camera follows the hero, `character_size: large` for Shorts
   ([docs](docs/CONFIG.md#platform-levels-level), [example](examples/platform-story)).
+- **Isometric story places**: a stage's `iso:` is a village or a room seen from above at an
+  angle, written as a small ASCII map with ready-made houses, trees, lamps, wells, bridges and
+  furniture; the cut-out characters walk round what is in the way (`walk_to: hazel, to: well`,
+  `meet`, `after:`), hand small things about, open doors, light lamps and make flowers bloom;
+  shots and `follow` make them large, name tags show who speaks in wide views, evening, night
+  and rain set the mood, footsteps follow the ground ([docs](docs/CONFIG.md#isometric-places-iso),
+  [example](examples/iso-story)).
+- **Isometric diagrams**: `iso_diagram` draws architecture and data flow as blocks in the same
+  view (servers, databases, flat platforms, stacks of layers, group plates, connectors along a
+  grid) with flat, readable labels, fitted to 16:9 and 9:16; blocks grow in on the word that names
+  them, dots and packets flow along connectors, a stack's layers pull apart, the camera focuses on
+  a part, labels and values change in place ([docs](docs/CONFIG.md#iso_diagram),
+  [example](examples/iso-web-page)).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
@@ -654,6 +667,21 @@ my_video/
   granny's picnic; the camera follows her, close-ups for the dialogue, the automatic jump, coin
   and door sounds, the `cartoon` music bed and a 9:16 variant with `character_size: large`;
   about 2:50 at preview (no audio committed).
+- [examples/iso-story](examples/iso-story) — "Hazel and the Lamp by the Bridge", an isometric
+  story in a village by a stream and in a room: a little rabbit sees that the lamp by the bridge
+  is dark on a rainy evening while her friend is still across the stream, fetches the lamp key
+  from the old bear who keeps it (he has a cold), lights the lamp so her friend finds the bridge,
+  and gives the key back the next morning, when the rain has made her flower bed bloom; walks
+  along routes, a meeting, a door, close-ups and two-shots, name tags in the wide views,
+  morning, evening rain and night, footsteps, birdsong, rain and crickets, the `cartoon` music
+  bed and a 9:16 variant; about 3:00 with Kokoro narration (no audio committed).
+- [examples/iso-web-page](examples/iso-web-page) — "What happens when you open a web page", a
+  tech explainer in isometric diagrams: the browser asks DNS for the address, the request
+  crosses to a load balancer and one of two app servers, which asks the cache before the
+  database; each block grows in on the word that names it, packets run along the connectors, the
+  camera focuses on a cache miss (the database takes 40 ms) and then a hit, and the browser's
+  rendering steps (DOM, styles, layout, paint) are pulled apart as a stack; terms in their
+  colours, karaoke captions, a 9:16 variant; about 2:00 with Kokoro narration (no audio committed).
 - [examples/gradient-descent](examples/gradient-descent) — "Gradient descent, one step at a
   time", a maths-and-code explainer: a dot tracing a loss curve with its tangent and a live
   gradient label, the update rule with its symbols in the concepts' colours, the first steps as

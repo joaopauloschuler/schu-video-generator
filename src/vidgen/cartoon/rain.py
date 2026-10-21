@@ -14,8 +14,8 @@ it is tested without rendering; :mod:`vidgen.particle_field` draws it.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -83,6 +83,50 @@ class RainGround:
     def depth(self, y: np.ndarray) -> np.ndarray:
         """The depth of a line at height ``y`` (negative in front of the ground line)."""
         return (y - self.ground) / self.rise
+
+    def landing(self, shares: np.ndarray, x: np.ndarray) -> np.ndarray:
+        """The y of each drop's landing line (drops at ``x``; the band is the same everywhere)."""
+        return landing_lines(shares, self)
+
+
+#: Where a drop that misses an iso place ends: far under the frame (it falls through).
+NO_FLOOR = -1e9
+
+
+@dataclass(frozen=True)
+class IsoRainGround(RainGround):
+    """Where rain ends on an iso place (DESIGN.md §89.11): seen from above, its whole ground is a
+    landing band, so a drop at ``x`` lands between the front and the back edge of the place's
+    picture there (``xs`` sorted, ``fronts`` and ``backs`` their y), within the camera's view
+    (``ground`` its bottom, ``back`` its top); a drop beside the place, or landing on one of
+    the ``bodies`` (boxes ``(left, bottom, right, top)``: the characters, so no splash shows on a
+    face), falls through. No depth: a splash is the same size everywhere (no perspective).
+    ``lift(x, y)``: how much higher (Manim units) a drop that would land on the ground at
+    (``x``, ``y``) lands, on what keeps the rain off there (a roof, a crown, a bridge's deck;
+    DESIGN.md §90.2; ``None``: nothing does)."""
+
+    xs: tuple[float, ...] = ()
+    fronts: tuple[float, ...] = ()
+    backs: tuple[float, ...] = ()
+    bodies: tuple[tuple[float, float, float, float], ...] = ()
+    lift: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = field(default=None, compare=False)
+
+    def depth(self, y: np.ndarray) -> np.ndarray:
+        return np.zeros_like(np.asarray(y, dtype=float))
+
+    def landing(self, shares: np.ndarray, x: np.ndarray) -> np.ndarray:
+        xs = np.asarray(self.xs)
+        if len(xs) < 2:
+            return np.full(len(shares), NO_FLOOR)
+        front = np.maximum(np.interp(x, xs, self.fronts), self.ground)
+        back = np.minimum(np.interp(x, xs, self.backs), self.back)
+        lines = front + shares * (back - front)
+        missed = (x < xs[0]) | (x > xs[-1]) | (back <= front)
+        if self.lift is not None:
+            lines = lines + self.lift(np.asarray(x, dtype=float), lines)
+        for left, bottom, right, top in self.bodies:
+            missed |= (x >= left) & (x <= right) & (lines >= bottom) & (lines <= top)
+        return np.where(missed, NO_FLOOR, lines)
 
 
 def rain_ground(ground: float, top: float, frame_height: float, shelters: Sequence[ShelterBox] = ()) -> RainGround:
@@ -214,6 +258,8 @@ def splash_depth_scale(floor: np.ndarray, ground: RainGround) -> np.ndarray:
 
 
 __all__ = [
+    "NO_FLOOR",
+    "IsoRainGround",
     "LANDING_FRONT",
     "PUDDLE_GROW_SECONDS",
     "SHELTER_PROPS",

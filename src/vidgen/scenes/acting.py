@@ -192,6 +192,8 @@ class Say(_Acting):
             bubble = self._bubble(scene, character, str(text), targets)
             self.bubbles.append(bubble)
             anims += bubble.draw()
+            if getattr(scene, "on_iso", False):
+                scene.iso_untag(character.name)   # the bubble shows who speaks (DESIGN.md §89.11)
         return anims
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:

@@ -217,7 +217,7 @@ from vidgen.cartoon.acting import (  # noqa: E402
 )
 from vidgen.cartoon.motion import MOTION_LEVELS, jump_motion_seconds, motion_strength, resolve_motion, walk_motion_seconds  # noqa: E402
 from vidgen.cartoon.spring import Spring  # noqa: E402
-from vidgen.cartoon.foley import FoleyCue, PlayedAction, foley_cues, wet_steps  # noqa: E402
+from vidgen.cartoon.foley import SURFACE_STEPS, FoleyCue, PlayedAction, foley_cues, handling_cues, place_change_cues, wet_steps  # noqa: E402
 from vidgen.ambience import SET_BEDS, set_ambience  # noqa: E402
 from vidgen.cartoon.keyframes import (  # noqa: E402
     CHANNELS,
@@ -342,7 +342,7 @@ from vidgen.cartoon.stage import (  # noqa: E402
     walk_destination,
 )
 from vidgen.camera import view_center_within  # noqa: E402
-from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, shot_figures, shot_view  # noqa: E402
+from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, portrait_shot, shot_figures, shot_view  # noqa: E402
 from vidgen.particles import MAX_PARTICLES, PARTICLE_KINDS, particle_count, particle_seeds, particle_states  # noqa: E402
 from vidgen.particle_field import (  # noqa: E402
     ParticleField,
@@ -407,6 +407,7 @@ from vidgen.cartoon.sun_path import SKY_BODIES, PathMove, path_point, place_for,
 from vidgen.cartoon.rain import (  # noqa: E402
     SHELTER_PROPS,
     SPLASH_SECONDS,
+    IsoRainGround,
     RainGround,
     ShelterBox,
     drop_floors,
@@ -440,7 +441,7 @@ from vidgen.cartoon.lighting import (  # noqa: E402
     shadow_ellipse,
     tint_grade,
 )
-from vidgen.cartoon.shading import CustomLight, LightSetting, ShadowCaster, StageLight, StageShadows, StarField, mark_lit, resolve_light  # noqa: E402
+from vidgen.cartoon.shading import CustomLight, LightSetting, ShadowCaster, StageLight, StageShadows, StarField, LampLit, mark_lamp_lit, mark_lit, resolve_light  # noqa: E402
 from vidgen.cartoon.drawing_style import DrawingStyle, mark_shaded  # noqa: E402
 from vidgen.config import DrawingConfig  # noqa: E402
 from vidgen.cartoon.wind import (  # noqa: E402
@@ -561,6 +562,21 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_move_problems,
     level_world,
 )
+from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
+from vidgen.world.iso_view import Box3, draw_order, iso_point  # noqa: E402
+from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
+from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook, object_box  # noqa: E402
+from vidgen.cartoon.iso_scenery import IsoColors  # noqa: E402
+from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view  # noqa: E402
+from vidgen.cartoon.iso_pictures import GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
+from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
+from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
+from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
+from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
+from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, FloorCells, picture_size, plate_shapes, ramped, slant  # noqa: E402
+from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
+from vidgen.world.iso_view import ISO_RISE  # noqa: E402
+from vidgen.iso_vector import picture_to_scene, shapes_mobject  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -923,6 +939,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "jump_motion_seconds",
     "walk_motion_seconds",
     "Spring",
+    "SURFACE_STEPS",
+    "handling_cues",
+    "place_change_cues",
     "FoleyCue",
     "PlayedAction",
     "foley_cues",
@@ -1049,6 +1068,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "frame_shot",
     "shot_figures",
     "shot_view",
+    "portrait_shot",
     "REFRAME_SECONDS",
     "REPLY_HOLD_SECONDS",
     "CameraMove",
@@ -1086,6 +1106,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "StageShadows",
     "StarField",
     "mark_lit",
+    "LampLit",
+    "mark_lamp_lit",
     "resolve_light",
     "DrawingConfig",
     "DrawingStyle",
@@ -1124,6 +1146,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "RainGroundSource",
     "SHELTER_PROPS",
     "SPLASH_SECONDS",
+    "IsoRainGround",
     "RainGround",
     "ShelterBox",
     "drop_floors",
@@ -1306,6 +1329,112 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "level_layout",
     "level_move_problems",
     "level_world",
+    "ISO_CHARACTER_HEIGHT",
+    "OBJECT_KINDS",
+    "IsoPlace",
+    "ObjectPlacing",
+    "parse_iso_map",
+    "place_objects",
+    "Box3",
+    "draw_order",
+    "iso_point",
+    "draw_shapes",
+    "OBJECT_COLORS",
+    "ObjectLook",
+    "IsoColors",
+    "IsoRoute",
+    "IsoScenery",
+    "IsoTiles",
+    "GlowTile",
+    "IsoPuddles",
+    "IsoSnow",
+    "IsoPuddle",
+    "TopSurface",
+    "iso_puddles",
+    "lift_floors",
+    "ripples",
+    "top_surface",
+    "place_outline",
+    "object_box",
+    "install_tile_drawing",
+    "ISO_FOLLOW_SIZE",
+    "OPENING_KINDS",
+    "SWITCHED_KINDS",
+    "ObjectState",
+    "default_state",
+    "follow_width",
+    "iso_item_point",
+    "item_box",
+    "IsoStep",
+    "IsoView",
+    "body_box",
+    "canvas_center",
+    "iso_layout",
+    "iso_move_problems",
+    "iso_stand",
+    "ISO_MOVES",
+    "SURFACES",
+    "route_surfaces",
+    "surface_at",
+    "ISO_ITEM_ACTIONS",
+    "ISO_PLACE_CHANGES",
+    "ISO_REACH",
+    "WANDER_RADIUS",
+    "WANDER_STOPS",
+    "IsoWalk",
+    "cell_of",
+    "find_route",
+    "plan_move",
+    "iso_view",
+    "wide_view",
+    "ISO_WIDE_MAX",
+    "ISO_PAN_ZOOM",
+    "map_fraction",
+    "standing_box",
+    "BlockSpec",
+    "DiagramShapes",
+    "EdgeSpec",
+    "GroupSpec",
+    "IsoDiagramLayout",
+    "ItemSpec",
+    "diagram_shapes",
+    "layout_iso_diagram",
+    "outline_ink",
+    "readable_ink",
+    "side_point",
+    "top_point",
+    "top_room",
+    "picture_to_scene",
+    "shapes_mobject",
+    "PIPE_HEIGHT",
+    "PlacedBlock",
+    "arrow_shapes",
+    "block_outline",
+    "block_shapes",
+    "box_faces",
+    "box_outline",
+    "picture_size",
+    "plate_shapes",
+    "FloorCells",
+    "ramped",
+    "slant",
+    "AROUND",
+    "FAR_COST",
+    "LINE_COST",
+    "SIDEWAYS",
+    "Obstacles",
+    "clip_area",
+    "convex_hull",
+    "hull_box",
+    "hull_gap",
+    "hull_of_point",
+    "polyline_gap",
+    "ray_exit",
+    "rect_exit",
+    "rect_of",
+    "rect_union",
+    "slide_out",
+    "ISO_RISE",
     "Field",
     "field_validator",
     "model_validator",

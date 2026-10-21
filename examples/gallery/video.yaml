@@ -220,6 +220,19 @@ scenes:
       - text: "In a forward pass, the signal runs from layer to layer."
       - text: "And a highlight can follow a single path."
 
+  - id: arch
+    type: iso_diagram     # blocks in the isometric view, in the order written; a block with layers is a stack
+    params:
+      heading: "Where a request goes"
+      blocks:
+        - {id: browser, label: "Browser"}
+        - {id: app, label: "App server", layers: [Storage, Logic, API]}   # layers from the bottom up
+        - {id: db, label: "Database", shape: database}
+      edges: ["browser -> app: HTTPS", "app -> db"]   # along the grid; '-->' dashed, style: pipe
+    beats:
+      - text: "A request leaves the browser for the app server."
+      - text: "The server works through its layers, and keeps its data in a database."
+
   - id: part2
     type: chapter         # a section divider; silent here (duration), or narrated with beats
     transition: fade_color  # the scene before fades to the background colour, the card fades in from it

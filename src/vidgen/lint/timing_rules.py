@@ -175,8 +175,9 @@ def animation_overrun(ctx: SceneContext, settings: AnimationOverrunRule) -> Iter
 # ----- rushed_animation -------------------------------------------------------------------------
 
 
-#: The animations of a walk or a jump on a platform level (DESIGN.md §86.7), as the play log names them.
-LEVEL_MOVES = ("RouteWalk", "ArcJump")
+#: The animations of a walk or a jump on a platform level (DESIGN.md §86.7) or a walk on an iso
+#: place (§89.9), as the play log names them.
+LEVEL_MOVES = ("RouteWalk", "ArcJump", "IsoWalk")
 
 
 @rule("rushed_animation", scope="scene")
@@ -217,7 +218,7 @@ def _rushed_moves(ctx: SceneContext, settings: RushedAnimationRule) -> Iterator[
         beat = next((b for b in ctx.beats if b["id"] == play["beat"]), None)
         length = f"the beat ({beat['end'] - beat['start']:.1f} s of narration)" if beat else "the scene"
         yield Issue(
-            f"a walk or jump on the level plays {speedup:.1f} times as fast as its own pace ({names}: {seconds:.1f} s instead of "
+            f"a walk or jump on the {'iso place' if 'IsoWalk' in names else 'level'} plays {speedup:.1f} times as fast as its own pace ({names}: {seconds:.1f} s instead of "
             f"{play['requested']:.1f} s): {length} is too short for it; give the beat more narration, start the move earlier (at), "
             "or split the way over two beats",
             None,

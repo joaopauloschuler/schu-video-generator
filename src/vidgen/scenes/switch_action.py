@@ -28,10 +28,15 @@ class _Switch(Action):
             return [("action", f"{action} is for the props of a stage")]
         kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         able = ", ".join(SWITCHED_PROPS)
+        objects = params.iso.object_kinds() if getattr(params, "iso", None) is not None else {}   # an iso place's (§89.10)
         problems: list[tuple[str, str]] = []
         for pattern in self.config.targets():
             for name in [n for n in scene_cls.target_names(params) if fnmatchcase(n, pattern) and not is_part_target(n)]:
-                if name not in kinds:
+                if name in objects:
+                    if objects[name] not in SWITCHED_KINDS:
+                        problems.append(("target", f"'{name}' (a {objects[name]}) cannot be switched on or off; on an iso place a lamp "
+                                         "and a house (its windows) can"))
+                elif name not in kinds:
                     problems.append(("target", f"'{name}' is not a prop; {action} acts on props (- {action}: <prop>)"))
                 elif kinds[name] not in SWITCHED_PROPS:
                     problems.append(("target", f"'{name}' cannot be switched on or off (props that can: {able})"))
@@ -45,8 +50,9 @@ class _Switch(Action):
 @action("switch_on")
 class SwitchOn(_Switch):
     """The target tv or lamp switches on at `at` of the beat (`- switch_on: tv`): a tv's
-    picture changes and flickers, a lamp glows (with a click). A prop can also start on (`on:
-    true` in the stage's props). Stage scenes only."""
+    picture changes and flickers, a lamp glows (with a click); on an iso place a lamp lights and a
+    house's windows glow. A prop can also start on (`on: true` in the stage's props or iso
+    objects). Stage scenes only."""
 
     on = True
 

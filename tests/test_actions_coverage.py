@@ -64,6 +64,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "diagram": {"heading": "H", "nodes": ["a", {"id": "b", "icon": "rocket"}], "edges": ["a -> b: go"]},
     "process": {"heading": "H", "stages": ["a", {"label": "b", "icon": "rocket"}], "input": "in"},
     "network": {"heading": "H", "layers": [2, {"size": 2, "label": "Out"}], "passes": 0},
+    "iso_diagram": {"heading": "H", "blocks": ["a", {"id": "b", "shape": "database"}, {"id": "s", "label": "S", "layers": ["l1", "l2"]}],
+                    "groups": [{"id": "g", "label": "G", "blocks": ["b"]}], "edges": ["a -> b: go"]},
     "scatter": {"title": "T", "series": {"a": [[1, 2, "p"], [2, 3]], "b": [[1, 1], [3, 2]]}, "trend": "each"},
     "histogram": {"title": "T", "counts": [1, 3, 2], "edges": [0, 10, 20, 30], "compare": {"counts": [2, 2, 1]}, "mean": True, "median": True},
     "pie": {"title": "T", "labels": ["a", "b"], "values": [3, 1], "donut": True, "legend": True},
@@ -169,6 +171,8 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("process") == ["heading", "input", "stage1", "stage:a", "stage2", "stage:b", "connector1", "token"]
     assert names("process", heading="", input="", token=False, loop=True, output="o") == ["stage1", "stage:a", "stage2", "stage:b", "connector1", "loop", "output"]
     assert names("network") == ["heading", "layer1", "neuron1.1", "neuron1.2", "layer2", "layer:Out", "neuron2.1", "neuron2.2", "edges1"]
+    assert names("iso_diagram") == ["heading", "diagram", "block1", "block:a", "block2", "block:b", "block3", "block:l1", "block4", "block:l2",
+                                    "stack:s", "group:g", "edge:a->b"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

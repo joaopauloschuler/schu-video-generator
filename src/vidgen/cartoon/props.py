@@ -80,7 +80,7 @@ FURNITURE: tuple[str, ...] = (
     "fireplace",
 )
 #: The everyday small props (DESIGN.md §69.56): things to hold, give, open and put on a table.
-SMALL_PROPS: tuple[str, ...] = ("cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can")
+SMALL_PROPS: tuple[str, ...] = ("cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can", "flower")
 #: The outdoor props the built-in sets use (DESIGN.md §76): a street, a park, a beach, a forest.
 OUTDOOR_PROPS: tuple[str, ...] = (
     "shop", "bench", "bus_stop", "road", "path", "fountain", "flowers", "fence", "beach_umbrella", "shell", "pine",
@@ -104,7 +104,7 @@ PROP_HEIGHTS: dict[str, float] = {
     "sofa": 0.36, "armchair": 0.38, "bed": 0.34, "bookshelf": 0.9, "counter": 0.5, "fridge": 0.95,
     "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42, "fireplace": 0.75, "kettle": 0.15,
     "cake": 0.22, "muffin": 0.08, "book": 0.13, "phone": 0.13, "letter": 0.08, "gift": 0.2, "balloons": 1.1, "vase": 0.32,
-    "watering_can": 0.22,
+    "watering_can": 0.22, "flower": 0.22,
     "shop": 1.7, "bench": 0.32, "bus_stop": 1.35, "road": 0.12, "path": 0.08, "fountain": 0.75, "flowers": 0.28,
     "fence": 0.42, "beach_umbrella": 1.3, "shell": 0.06, "pine": 1.9, "mushroom": 0.13, "log": 0.16,
     "blackboard": 0.5, "school_desk": 0.4, "shelf_with_goods": 0.95, "till": 0.26, "wardrobe": 1.1, "key": 0.3,
@@ -133,7 +133,7 @@ WATERING_SPOUT = (0.7, 0.64)
 #: watering can by its handle.
 PROP_GRIPS: dict[tuple[str, str | None], tuple[float, float]] = {
     ("basket", None): (0.0, 0.94), ("umbrella", "open"): (0.0, 0.16),
-    ("balloons", None): BALLOON_KNOT, ("watering_can", None): WATERING_GRIP, ("key", None): (0.0, 0.8),
+    ("balloons", None): BALLOON_KNOT, ("watering_can", None): WATERING_GRIP, ("key", None): (0.0, 0.8), ("flower", None): (0.0, 0.3),
 }
 #: Height of an SVG prop relative to a character's, before its own ``scale``.
 SVG_PROP_HEIGHT = 0.5
@@ -158,6 +158,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "cake": ("accent", "highlight"), "muffin": ("secondary", "accent"), "book": ("primary", "highlight"),
     "phone": ("#2B2F3A", "primary"), "letter": ("#FBF8EF", "accent"), "gift": ("primary", "highlight"),
     "balloons": ("accent", "highlight"), "vase": ("primary", "accent"), "watering_can": ("tertiary", "highlight"),
+    "flower": ("accent", "highlight"),
     "bicycle": ("primary", "accent"), "car": ("accent", "highlight"), "bus": ("highlight", "primary"),
     "boat": ("highlight", "accent"), "hot_air_balloon": ("accent", "secondary"), "toy_rocket": ("primary", "accent"),
     "shop": ("primary", "accent"), "bench": ("secondary", "dim"), "bus_stop": ("primary", "dim"),
@@ -924,6 +925,21 @@ def _vase(p: _Paint) -> list[VMobject]:
     ]
 
 
+def _flower(p: _Paint) -> list[VMobject]:
+    """One flower picked with its stem (to hold and give): a green stem with a leaf, five round
+    petals in the main colour around a golden heart, a small shine."""
+    x, y = 0.04, 0.8
+    petals = [_circle(x + 0.1 * math.cos(a), y + 0.1 * math.sin(a), 0.085, p.main, p)
+              for a in np.linspace(math.pi / 2, math.pi / 2 + 2 * math.pi, 5, endpoint=False)]
+    return [
+        _line(0.0, 0.0, x, y - 0.06, STEM, 2.0 * OUTLINE_WIDTH),
+        _ellipse(0.09, 0.32, 0.06, 0.15, STEM, p, angle=-45),
+        *petals,
+        _circle(x, y, 0.06, FLOWER_HEART, p),
+        _circle(x - 0.12, y + 0.06, 0.025, p.light(p.main), p, outline=False),
+    ]
+
+
 def _watering_can(p: _Paint) -> list[VMobject]:
     """A watering can: a round-shouldered body, a long spout up to the right with a rose, a
     handle arching over the top."""
@@ -1473,7 +1489,7 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
     "moon": _moon, "rock": _rock, "plant": _plant, "laptop": _laptop, "cup": _cup,
     "basket": _basket, "umbrella": _umbrella, "napkin": _napkin, "kettle": _kettle,
     "cake": _cake, "muffin": _muffin, "book": _book, "phone": _phone, "letter": _letter, "gift": _gift,
-    "balloons": _balloons, "vase": _vase, "watering_can": _watering_can,
+    "balloons": _balloons, "vase": _vase, "watering_can": _watering_can, "flower": _flower,
     "sofa": _sofa, "armchair": _armchair, "bed": _bed, "bookshelf": _bookshelf, "counter": _counter,
     "fridge": _fridge, "picture": _picture, "rug": _rug, "houseplant": _houseplant, "clock": _clock,
     "tv": _tv, "desk": _desk, "fireplace": _fireplace,

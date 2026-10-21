@@ -1,8 +1,8 @@
 """Ambience (DESIGN.md §69.39, §69.55, §69.62): a generated sound bed under the scenes while
 something on screen lasts: ``rain`` under a stage's rain field and ``fire`` (a crackle) while a
 fireplace burns; and the beds of the set itself (:data:`SET_BEDS`): ``birdsong`` outdoors by day,
-``room_tone`` in a room (chosen by :func:`set_ambience`) and ``city`` when a stage names it; all
-while foley is on (:data:`BEDS`).
+``room_tone`` in a room (chosen by :func:`set_ambience`), ``crickets`` in the evening and at night outdoors on an iso
+place (§89.11) and ``city`` when a stage names it; all while foley is on (:data:`BEDS`).
 
 The rain bed is a seamless 8 s stereo loop made with numpy only (no recordings, deterministic):
 a soft hiss (noise band-passed around 2.5 kHz), many small drop ticks (sparse impulses
@@ -29,9 +29,9 @@ from vidgen.loudness import integrated_loudness
 from vidgen.sfx import RATE, _band, _highpass, _lowpass, _tone
 
 #: The ambience beds a scene's timings may name (``ambience: [{bed, start, end}]``).
-AMBIENCE_BEDS = ("rain", "fire", "birdsong", "city", "room_tone")
-#: The beds of a set (DESIGN.md §69.62): what a stage's ``ambience`` may name.
-SET_BEDS = ("birdsong", "city", "room_tone")
+AMBIENCE_BEDS = ("rain", "fire", "birdsong", "city", "room_tone", "crickets")
+#: The beds of a set (DESIGN.md §69.62, §89.11): what a stage's ``ambience`` may name.
+SET_BEDS = ("birdsong", "city", "room_tone", "crickets")
 #: Integrated loudness (LUFS) of the rain bed before ducking: 4 dB under the music's
 #: (:data:`vidgen.music.MUSIC_LEVEL` -28), so about 11 dB under narration in its pauses.
 RAIN_LEVEL = -32.0
@@ -282,8 +282,56 @@ def room_tone_loop() -> np.ndarray:
     return _leveled(np.stack(channels, axis=1), ROOM_TONE_LEVEL)
 
 
+#: Integrated loudness (LUFS) of the crickets bed, how it ducks (as birdsong) and its loop's length.
+CRICKETS_LEVEL = -37.0
+CRICKETS_DUCK = BIRDSONG_DUCK
+CRICKETS_LOOP_SECONDS = 12.0
+
+
+def _cricket_chirp(rng: np.random.Generator, pitch: float) -> np.ndarray:
+    """One cricket's chirp: 3-4 quick pulses (each ~14 ms, ~20 ms apart) of a pure tone near
+    ``pitch`` Hz with a faint second harmonic, the first pulse softest."""
+    pulse_s, gap_s = rng.uniform(0.012, 0.016), rng.uniform(0.018, 0.024)
+    m = int(pulse_s * RATE)
+    count = int(rng.integers(3, 5))
+    out = np.zeros(int((count * (pulse_s + gap_s)) * RATE) + m)
+    for k in range(count):
+        at = int(k * (pulse_s + gap_s) * RATE)
+        phase = _tone(pitch * rng.uniform(0.995, 1.005), m)
+        out[at:at + m] += (0.6 + 0.4 * min(k, 1)) * (np.sin(phase) + 0.08 * np.sin(2 * phase)) * np.sin(np.pi * np.arange(m) / m) ** 2
+    return out
+
+
+@lru_cache(maxsize=1)
+def crickets_loop() -> np.ndarray:
+    """The crickets bed's seamless loop (a night outdoors on an iso place, DESIGN.md §89.11):
+    float32 ``(n, 2)`` at :data:`RATE`, :data:`CRICKETS_LEVEL` integrated loudness, read-only.
+    Four crickets, each at its own pitch (3.8-5.2 kHz), place (left to right) and loudness, chirping
+    at its own steady rate (1.3-2.6 chirps a second, a little uneven), over a faint low night air
+    (noise under 400 Hz); numpy only, around a circle (no seam)."""
+    n = int(CRICKETS_LOOP_SECONDS * RATE)
+    rng = np.random.default_rng(zlib.crc32(b"ambience:crickets"))
+    out = np.zeros((n, 2))
+    for _ in range(4):
+        pitch, rate, loud = rng.uniform(3800, 5200), rng.uniform(1.3, 2.6), rng.uniform(0.35, 1.0)
+        angle = (rng.uniform(-0.8, 0.8) + 1) * math.pi / 4
+        count = round(rate * CRICKETS_LOOP_SECONDS)
+        start = rng.uniform(0, n / count)
+        for k in range(count):
+            chirp = _cricket_chirp(rng, pitch) * loud
+            at = int(start + k * n / count + rng.normal(0, 0.03 * RATE)) % n
+            _placed(out[:, 0], math.cos(angle) * chirp, at)
+            _placed(out[:, 1], math.sin(angle) * chirp, at)
+    for c in range(2):
+        air = _circular(rng.standard_normal(n), lambda f: _lowpass(f, 400.0) * _highpass(f, 40.0))
+        out[:, c] += 0.05 * air
+    return _leveled(out, CRICKETS_LEVEL)
+
+
 #: The lights (presets) by day, when birds sing outdoors.
 DAYLIGHT: frozenset[str] = frozenset({"day", "morning"})
+#: The lights (presets) when crickets chirp outdoors on an iso place: the evening and the night.
+NIGHT: frozenset[str] = frozenset({"sunset", "night"})
 #: Seconds after the rain stops before the birds sing again.
 BIRDS_AFTER_RAIN = 2.0
 #: Birdsong for less than this (s) is left out.
@@ -304,13 +352,16 @@ def set_ambience(
     lights: Sequence[tuple[float, str | None]],
     rain: Iterable[tuple[float, float]],
     end: float,
+    crickets: bool = False,
 ) -> list[tuple[str, float, float]]:
     """The set beds of a stage scene of ``end`` seconds (DESIGN.md §69.62) as ``(bed, start,
     end)``: ``setting`` ``False`` none; a list of :data:`SET_BEDS` names those beds for the whole
     scene; ``True`` chooses: a ``room`` its ``room_tone`` all along; outdoors ``birdsong`` while the
     light is a :data:`DAYLIGHT` preset (``lights``: ``(scene time, preset or None for a tint)``
     from the first, sorted), not while it rains (``rain`` spans) nor :data:`BIRDS_AFTER_RAIN` after,
-    each span at least :data:`MIN_BIRDSONG_SECONDS`."""
+    each span at least :data:`MIN_BIRDSONG_SECONDS`; with ``crickets`` (an iso place outdoors,
+    §89.11) also ``crickets`` while the light is ``sunset`` or ``night`` (:data:`NIGHT`), under the
+    same rules."""
     if setting is False or end <= 0:
         return []
     if setting is not True:
@@ -318,9 +369,16 @@ def set_ambience(
     if room:
         return [("room_tone", 0.0, end)]
     marks = sorted(lights)
-    day = [(t, min(nxt, end)) for (t, light), nxt in zip(marks, [*(m[0] for m in marks[1:]), end]) if light in DAYLIGHT and t < end]
-    sung = _without(merge_spans(day, 1e-6),((a, b + BIRDS_AFTER_RAIN) for a, b in rain))
-    return [("birdsong", a, b) for a, b in sung if b - a >= MIN_BIRDSONG_SECONDS]
+    rain = list(rain)
+
+    def sung(lit: frozenset[str]) -> list[tuple[float, float]]:
+        spans = [(t, min(nxt, end)) for (t, light), nxt in zip(marks, [*(m[0] for m in marks[1:]), end]) if light in lit and t < end]
+        return [s for s in _without(merge_spans(spans, 1e-6), ((a, b + BIRDS_AFTER_RAIN) for a, b in rain)) if s[1] - s[0] >= MIN_BIRDSONG_SECONDS]
+
+    beds = [("birdsong", a, b) for a, b in sung(DAYLIGHT)]
+    if crickets:
+        beds += [("crickets", a, b) for a, b in sung(NIGHT)]
+    return beds
 
 
 @dataclass(frozen=True)
@@ -340,6 +398,7 @@ BEDS: dict[str, AmbienceBed] = {
     "birdsong": AmbienceBed(birdsong_loop, BIRDSONG_DUCK, SET_FADE_IN, SET_FADE_OUT),
     "city": AmbienceBed(city_loop, CITY_DUCK, SET_FADE_IN, SET_FADE_OUT),
     "room_tone": AmbienceBed(room_tone_loop, ROOM_TONE_DUCK, SET_FADE_IN, SET_FADE_OUT),
+    "crickets": AmbienceBed(crickets_loop, CRICKETS_DUCK, SET_FADE_IN, SET_FADE_OUT),
 }
 
 

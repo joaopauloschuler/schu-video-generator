@@ -13,7 +13,9 @@ boat sets off and where a watering can's water lands (``pour``), and a splash un
 wet ground (:func:`wet_steps`) (DESIGN.md §69.62). On a platform level (DESIGN.md §86.9) a jump
 also lands with a soft thud and step, a walk or a jump plays a coin's or a star's sound at each one
 it picks up (:func:`pickup_cues`), a locked door opened with its key clicks open before it creaks,
-and a blocker stepping aside shuffles off.
+and a blocker stepping aside shuffles off. On an iso place (DESIGN.md §89.11) each footstep is the
+step of the surface under it (:data:`SURFACE_STEPS`), handing a small thing about makes a soft
+sound (:func:`handling_cues`) and so do changes to the place (:func:`place_change_cues`).
 
 Footfalls follow the walk cycle of :func:`~vidgen.cartoon.acting.walk_cycle`: a foot lands each
 time the legs are furthest apart (half a step, :data:`~vidgen.cartoon.acting.STEP_LENGTH`
@@ -50,7 +52,7 @@ LAST_STEP_INTENSITY = 0.3
 #: A stop closer than this (in steps) after the last footfall adds no step of its own.
 LAST_STEP_MIN = 0.25
 #: The actions that walk (footsteps).
-WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit"})
+WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit", "wander", "meet"})
 #: A ride's sounds (DESIGN.md §69.52), per vehicle: the sound as it sets off (``bell`` or
 #: ``engine``), its pitch (semitones) and gain (dB); then its brakes as it stops: pitch and gain.
 #: A boat's outboard motor is a small engine, high; a balloon roars its burner, a toy rocket fizzes
@@ -118,6 +120,30 @@ ASIDE_STEP: tuple[float, float] = (-8.0, -3.0)
 ASIDE_SWOOSH: tuple[float, dict[str, float]] = (-12.0, {"duration": 0.6, "pitch": -7.0, "intensity": 0.3})
 
 
+#: The footstep on each surface of an iso place (DESIGN.md §89.11): its sound, gain (dB) and pitch
+#: (semitones; added to the foot's); a surface not listed (none: a flat stage) plays ``footstep``.
+SURFACE_STEPS: dict[str, tuple[str, float, float]] = {
+    "grass": ("step_grass", -7.0, 0.0), "path": ("step_gravel", -8.0, 0.0), "boards": ("step_wood", -7.0, 0.0),
+    "tiles": ("step_stone", -7.0, 2.0), "stone": ("step_stone", -6.0, -1.0), "bridge": ("step_wood", -6.0, -4.0),
+    "rug": ("footstep", -9.0, -2.0),
+}
+#: The sounds of the footsteps (``wet_steps`` splashes under each).
+STEP_SOUNDS: frozenset[str] = frozenset({"footstep", *(sound for sound, _, _ in SURFACE_STEPS.values())})
+#: Handing small things about on an iso place (DESIGN.md §89.11): per action the sound, its time
+#: as a share of the action, its gain (dB) and params: a soft "bloop" as a thing is picked up
+#: (when the hand gets to it), a light swish as it is handed over, a small soft thud as it is put
+#: down.
+HANDLING_SOUNDS: dict[str, tuple[str, float, float, dict[str, float]]] = {
+    "pick_up": ("pop", 0.45, -10.0, {"pitch": -3.0, "intensity": 0.3}),
+    "give": ("swoosh", 0.35, -15.0, {"duration": 0.3, "pitch": 5.0, "intensity": 0.3}),
+    "put_down": ("thud", 0.75, -12.0, {"duration": 0.2, "pitch": 9.0, "intensity": 0.3}),
+}
+#: A change of an iso place (DESIGN.md §89.11): flowers blooming (a soft, high twinkle) and an
+#: object appearing (``reveal``: a twinkle), (gain dB, params).
+BLOOM_SOUND: tuple[float, dict[str, float]] = (-14.0, {"pitch": 5.0, "intensity": 0.3})
+APPEAR_SOUND: tuple[float, dict[str, float]] = (-11.0, {"intensity": 0.4})
+
+
 @dataclass(frozen=True)
 class PlayedAction:
     """One character's action as it played: its type, the scene time it started (``start``) and
@@ -164,6 +190,9 @@ class PlayedAction:
     share of the walk's distance or of the jump's flight at which it gets there (DESIGN.md §86.8)."""
     unlocks: bool = False
     """An ``open`` of a locked door with its key on a platform level (the key clicks first)."""
+    surfaces: tuple[tuple[float, str], ...] = ()
+    """What a walk on an iso place walks on: ``(share of its distance, surface)`` from where each
+    surface starts (DESIGN.md §89.11); none: the plain ``footstep``."""
 
 
 @dataclass(frozen=True)
@@ -205,6 +234,71 @@ def footfall_shares(heights: float, phases: Phases = Phases(), step_length: floa
     if not falls or steps - falls[-1] >= LAST_STEP_MIN:
         shares.append((phases.before + move, True))
     return shares
+
+
+def footfall_distances(heights: float, step_length: float = STEP_LENGTH) -> list[float]:
+    """Where each footfall of :func:`footfall_shares` is, as a share of the walk's distance (the
+    feet coming together at the stop: 1)."""
+    steps = heights / step_length
+    if steps <= 0:
+        return []
+    falls = [k + 0.5 for k in range(math.floor(steps - 0.5) + 1)] if steps >= 0.5 else []
+    shares = [fall / steps for fall in falls]
+    if not falls or steps - falls[-1] >= LAST_STEP_MIN:
+        shares.append(1.0)
+    return shares
+
+
+def surface_under(surfaces: tuple[tuple[float, str], ...], share: float) -> str | None:
+    """The surface at ``share`` of a walk's distance (``None``: no surfaces)."""
+    found = None
+    for start, surface in surfaces:
+        if start > share + 1e-9 and found is not None:
+            break
+        found = surface
+    return found
+
+
+def _walk_steps(played: PlayedAction) -> list[FoleyCue]:
+    """The footsteps of a walk: a ``footstep`` on each footfall, alternating feet; on an iso place
+    the step of the surface under it (:data:`SURFACE_STEPS`)."""
+    footfalls = [] if played.rolls else footfall_shares(played.heights, played.phases, played.step_length)
+    distances = footfall_distances(played.heights, played.step_length) if played.surfaces else []
+    cues = []
+    for k, (share, last) in enumerate(footfalls):
+        pitch, intensity = FEET[k % 2]
+        sound, gain = "footstep", FOOTSTEP_GAIN
+        surface = surface_under(played.surfaces, distances[k]) if k < len(distances) else None
+        if surface in SURFACE_STEPS:
+            sound, gain, shift = SURFACE_STEPS[surface]
+            pitch += shift
+        cues.append(FoleyCue(played.start + share * played.seconds, sound, gain, {"pitch": pitch, "intensity": LAST_STEP_INTENSITY if last else intensity}))
+    return cues
+
+
+def handling_cues(action: str, start: float, seconds: float) -> list[FoleyCue]:
+    """The sound of handing a small thing about on an iso place (:data:`HANDLING_SOUNDS`):
+    ``pick_up``, ``give`` or ``put_down`` from scene time ``start`` over ``seconds``."""
+    if action not in HANDLING_SOUNDS:
+        return []
+    sound, share, gain, params = HANDLING_SOUNDS[action]
+    return [FoleyCue(start + share * seconds, sound, gain, params)]
+
+
+def place_change_cues(kind: str, opening: bool | None, shown: bool | None, start: float, seconds: float) -> list[FoleyCue]:
+    """The sounds of a change of an iso place's object of ``kind`` from scene time ``start`` over
+    ``seconds`` (DESIGN.md §89.11): a house's or a room's door opening (a creak) or closing (a
+    shorter creak and a thud as it shuts, as :func:`door_cues`), flowers blooming (a soft twinkle),
+    an object appearing (a twinkle); a lamp's click is the switch's."""
+    if shown is True:
+        return [FoleyCue(start, "twinkle", APPEAR_SOUND[0], APPEAR_SOUND[1])]
+    if opening is None:
+        return []
+    if kind == "flowers":
+        return [FoleyCue(start, "twinkle", BLOOM_SOUND[0], BLOOM_SOUND[1])] if opening else []
+    if kind in ("house", "door"):
+        return door_cues(PlayedAction("open" if opening else "close", start, seconds, prop="door"))
+    return []
 
 
 def ride_cues(played: PlayedAction) -> list[FoleyCue]:
@@ -286,7 +380,7 @@ def wet_steps(cues: list[FoleyCue], wet_from: float | None) -> list[FoleyCue]:
     ``wet_from`` on (the ground is wet: puddles lie there; ``None``: dry)."""
     if wet_from is None:
         return cues
-    splashes = [FoleyCue(cue.time, "splash", WET_STEP[0], WET_STEP[1]) for cue in cues if cue.sound == "footstep" and cue.time >= wet_from]
+    splashes = [FoleyCue(cue.time, "splash", WET_STEP[0], WET_STEP[1]) for cue in cues if cue.sound in STEP_SOUNDS and cue.time >= wet_from]
     return sorted([*cues, *splashes], key=lambda cue: cue.time)
 
 
@@ -307,10 +401,7 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
             cues.append(FoleyCue(start, "creak", DOOR_OPEN_CREAK[0], DOOR_OPEN_CREAK[1]))
         if played.action == "enter" and not played.through_door:
             cues.append(FoleyCue(start, "whoosh", WHOOSH_GAIN))
-        footfalls = [] if played.rolls else footfall_shares(played.heights, played.phases, played.step_length)
-        for k, (share, last) in enumerate(footfalls):
-            pitch, intensity = FEET[k % 2]
-            cues.append(FoleyCue(start + share * seconds, "footstep", FOOTSTEP_GAIN, {"pitch": pitch, "intensity": LAST_STEP_INTENSITY if last else intensity}))
+        cues += _walk_steps(played)
         if played.action == "exit" and not played.through_door:
             moved = start + (1.0 - played.phases.after) * seconds
             cues.append(FoleyCue(moved, "swoosh", WHOOSH_GAIN, align="end"))

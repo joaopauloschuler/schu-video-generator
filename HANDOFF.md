@@ -15557,3 +15557,1168 @@ How to test
   `test_tts` (35, 1 skipped), `test_tts_openrouter` (32), `test_review4` (8 + 3 render),
   `test_dubbing` (14), `test_json_output` (21), `test_docs` (62), `test_guide` (53), `test_config`
   (21), `test_translation` (69), `test_captions` (17); `test_schema` (63, capped3g, 113 s). All pass.
+
+## Step 166 — Phase Q plan, iso world model, projection and static rendering
+
+What was built
+- **Phase Q plan** in tasklist.md (Steps 166–171) and DESIGN §89 (the layers, `stage` + `iso:`,
+  the map, objects, drawing, the stage, and the plan of Steps 167–171 in §89.8).
+- **Baseline frames** for Step 171's backwards-compatibility check, outside the repo:
+  `<scratchpad>/phase-q-baseline/` (`make_baseline.sh`, `compare.py`, `frames/`): storyboard stills
+  at 854x480 of platform-story `meadow` (16), cartoon `yard` (9), gradient-descent `curve` and
+  `code` + `run` (6), 31 PNGs, from the examples as committed at e0ae8180 (`git archive`), with
+  `vidgen storyboard <copy> --scene <id> --width 640`. Rendered twice: identical (max difference 0);
+  re-run after this step's code: identical. Re-run in Step 171 with `OUT=<dir> WORK=<dir>
+  ./make_baseline.sh`, then `python compare.py frames <dir>`.
+- **World model** (`vidgen/world/iso.py`, no manim): `parse_iso_map(text, names=, heights=,
+  place=)` → `IsoPlace` (cells: ground kind + height in steps of 0.5 tiles; `IsoSpot`s;
+  `IsoObject`s), `place_objects(place, [ObjectPlacing])`, `OBJECT_KINDS` (19 ready-made objects
+  with footprints and heights), `stand_cell`, `free_cell_near`, `is_standable`, `wall_height`,
+  `is_cut` (indoors only the walls along the room's back stand; the rest are cut away), checks
+  naming the map's row and column or the object and cell. Letters and object symbols take the
+  ground around them (a spot on a path is path, on a terrace raised).
+- **View** (`vidgen/world/iso_view.py`): `iso_point` (2:1 isometric, `ISO_RISE` √1.5/2), `Box3`,
+  `in_front` (pictures apart or side by side → no order; else the separating axis),
+  `draw_order` (deterministic topological sort).
+- **Drawing** (`cartoon/iso_drawing.py`, Pillow): `Poly`, `Blobs`, `Disc` (with opacity:
+  shadows), `Upright`, `Line`, `box_shapes` (joined sides: no face, no outline), `draw_shapes`
+  (supersampled). `cartoon/iso_objects.py`: the 19 objects in their own frame (facing right
+  mirrors), theme-token colours like the props', soft shadows. `cartoon/iso_scenery.py`: the
+  ground (grass checker and tufts, paths with stones, boards, tiles, sunk water with banks, the
+  slab's sides), raised blocks (grass lip, stone courses), walls (core + arms; skirting, windows
+  and doors on standing walls; cut tops), `place_pieces`. `cartoon/iso_stage.py`: `iso_view`
+  (the place fits the frame, 5 % margin), `iso_layout` (characters at their spots' cells, back to
+  front, as `StagePlacement`s), `pieces_in_front`, `iso_pictures` (a base picture with
+  everything + a front picture per hidden character).
+- **Stage**: `iso: {place, map, heights, spots, objects, colors}` (`StageIso`, `IsoObjectParam`,
+  `IsoCellRef`); `_check_iso` refuses `level`, `room`, `water`, `fog`, `width`, `layers`,
+  `props`, a character's `depth` or an `at` that is not a spot; `_default_size` refuses `size`
+  and `character_size`; spots are marks; `layout` → `iso_layout`; `_iso_scenery` draws the
+  pictures (`iso_place` in the backdrop, `iso_front_<name>` right after its character via
+  `_iso_after`); `grounds` are the feet. `includes`: `ISO_DROPPED_KEYS` from a set; the video's
+  `character_size` is not copied into an iso scene.
+- **Test render, checked by eye** (scratch project `<scratchpad>/iso/proj2/video.yaml`, the
+  mouse `nutmeg` of platform-story and `dot` of the cartoon example): an outdoor village (house,
+  well, stone steps, a bridge over a pond, trees, pine, bushes, flowers, fence, lamp, sign,
+  bench) and an indoor room (bed, table, chair, shelf, sofa, plant, tiles), 16:9 at 854x480 and
+  1280x720 and 9:16. Fixed on the way: a hole in the inner corner of an L of walls (one box per
+  cell → core + arms), a faint seam where two fills met (fills stroke their own edge) and where
+  a wall run was split between two pictures (→ base + front pictures), trees too small.
+
+Files touched
+- New: `src/vidgen/world/iso.py`, `src/vidgen/world/iso_view.py`, `src/vidgen/cartoon/iso_drawing.py`,
+  `iso_objects.py`, `iso_scenery.py`, `iso_stage.py`, `tests/test_iso_place.py`.
+- Changed: `src/vidgen/scenes/stage.py` (iso params, checks, marks, layout, construct branch,
+  backdrop branch, entrance: `_iso_after`), `src/vidgen/includes.py` (`ISO_DROPPED_KEYS`, iso in
+  `apply_set` and `expand_character_size`), `src/vidgen/api.py` (exports), `docs/CONFIG.md`
+  ("Isometric places (`iso`)", the `iso` row of the stage table), `DESIGN.md` §89, `tasklist.md`,
+  `HANDOFF.md`.
+
+Public interfaces
+- Config: the stage's `iso` param (above). No other key or default changed.
+- `vidgen.api`: `ISO_CHARACTER_HEIGHT`, `OBJECT_KINDS`, `IsoPlace`, `ObjectPlacing`,
+  `parse_iso_map`, `place_objects`, `Box3`, `draw_order`, `iso_point`, `draw_shapes`,
+  `OBJECT_COLORS`, `ObjectLook`, `IsoColors`, `IsoPictures`, `IsoView`, `body_box`,
+  `canvas_center`, `iso_layout`, `iso_pictures`, `iso_stand`, `iso_view`, `map_fraction` (DESIGN
+  §89.7; none shadows a manim name).
+
+Decisions
+- `-` as a second "outside" symbol: a YAML block scalar cannot start its first line with a space.
+- Indoor cut-away by one rule (a wall with a room cell right behind it is cut), not a list.
+- Pictures: base (everything) + one front picture per hidden character, not layers cut between
+  characters (seams). Pieces count for a front picture transitively (a fence in front of the
+  house in front of the hero), so a front piece never covers a nearer one.
+- `size` / `character_size` refused on an iso stage for now (the place's size is the frame fit);
+  Step 168 decides whether they return as the camera's base zoom.
+- The stage's own flat `props` are refused on an iso place for now (`iso.objects` instead);
+  Step 168 adds small items as cut-outs.
+
+Known gaps / for Step 167+
+- Characters are placed where they start; no moves on the place yet (`walk_to` etc. run the flat
+  stage's moves: Step 167 must route them, and refuse what it does not support). `enter` / `exit`,
+  shots, `pan`, `zoom` are untested on an iso place. The front pictures are fixed for the
+  characters' start cells.
+- In a 9:16 frame a wide place is small (fit by width); in a 16 x 10 place a character is about
+  70 px tall at 854x480: `small_speaker` lint will fire for speaking characters (Step 168 shots).
+- No lint rules yet for iso; no gallery page update (Step 170: the stage page's params table).
+- `vidgen storyboard` reuses a scene's render when only vidgen's code changed: use `--force`
+  while developing.
+
+How to test
+- One file at a time under `capped` (`-m "not render"` unless noted): `test_iso_place` (54 incl. 1
+  render, 3.3 s), `test_builtin_scenes` (202, 47 s), `test_guide` (53), `test_docs` (62),
+  `test_cartoon_stage` (23 + 1 render), `test_platform_level` (29 + 1 render), `test_phase_o_review`
+  (7 + 1 render), `test_platform_camera` (15 + 3 render), `test_includes` (24), `test_builtin_sets`
+  (41), `test_actions` (21), `test_actions_coverage` (12), `test_cartoon_lint` (9), `test_lint`
+  (22), `test_word_anchors` (30), `test_cartoon_character` (21), `test_platform_moves` (22);
+  `test_schema` (63, capped3g, 113 s). All pass. Baseline frames: identical.
+
+## Step 167 — Characters moving on an iso place: routes, draw order while moving, facing
+
+What was built
+- **Rules** (`vidgen/world/iso_moves.py`, no manim, DESIGN §89.9): `find_route` on the grid
+  (8 neighbours; a diagonal only past two free level cells; up or down one step at a time;
+  round water, walls, objects (but a bridge or a rug) and, when it can, other characters;
+  fewest turns; deterministic), `goal_cell` (a spot or `{column, row}`), `meet_routes` (side by
+  side on the picture's level line, the one from the left on the left), `follow_route`
+  (`after:` a leader, `gap` cells behind), `wander_route` (seeded), `edge_ways` /
+  `entry_route` / `exit_route` (over the place's edge on the picture's `left` / `right`, or from
+  / to a spot), `IsoRoute` (feet points; `at()` eases the feet up before a higher cell and down
+  after it), `plan_move` (one plan for the render and for validation, from the logical cells) and
+  `iso_move_problems` (the replay `vidgen validate` runs). Errors name the beat, the character,
+  the goal and where the way stops: `'pip' cannot walk from row 2, column 1 to 'well': the way
+  stops at row 4, column 3: water (a bridge crosses it) at row 4, column 4`.
+- **The walk** (`cartoon/iso_motion.py`): `IsoWalk(Walk)`, the side walk cycle along the projected
+  route, facing left / right by the picture's direction, the front view straight towards the
+  camera (when the character has one), no back view; feet on blocks, steps and a bridge's deck
+  (`IsoPlace.stand_z`, `ObjectKind.deck`); the shadow follows on the cell top.
+- **Draw order while moving** (`Stage._iso_keep_order`, every frame once a walk was applied):
+  the pieces over the character's box (`standing_box`: kept inside its cell; on a bridge or rug
+  on top of it), its front picture swapped when they change, the characters re-sorted by their
+  boxes; Manim redraws characters, fronts and shadows while an `IsoWalk` plays.
+  `IsoScenery` (replaces `IsoPictures` / `iso_pictures`) draws the base once and each front
+  picture once per set of pieces, cropped to the pieces in whole canvas pixels.
+- **Actions**: `walk_to` / `run_to` on an iso place (`to:` a spot or a cell; new `after:` +
+  `gap`), new `wander` and `meet`, `enter` / `exit` (`side` / `to` over the edge, `door:` a spot),
+  checks (an x, another mark or `depth` on an iso place; `after` / `meet` / `wander` off one;
+  bad spots); timing as any action (`at`, `"@word"`), default speeds scaled by `level_pace`
+  (iso branch); lint `rushed_animation` covers `IsoWalk`; foley footsteps for `wander` / `meet`.
+
+Files touched
+- New: `src/vidgen/world/iso_moves.py`, `src/vidgen/cartoon/iso_motion.py`, `tests/test_iso_moves.py`.
+- Changed: `src/vidgen/scenes/stage.py` (iso cells and plans, `iso_walks`, `iso_moved`,
+  `on_iso`, `_iso_scenery` with `IsoScenery`, `_iso_front`, `_iso_body`, `_iso_keep_order`,
+  `_iso_redrawn`, `level_pace`, `_iso_move_problems`), `src/vidgen/scenes/moving.py`,
+  `src/vidgen/cartoon/iso_stage.py` (`IsoScenery`, `standing_box`, `body_box` kept in its
+  cell, `iso_stand` on the deck), `src/vidgen/world/iso.py` (`deck`, `stand_z`),
+  `src/vidgen/api.py`, `src/vidgen/cartoon/foley.py` (`WALKING_ACTIONS`),
+  `src/vidgen/lint/timing_rules.py`, `src/vidgen/config.py` (a docstring), `docs/CONFIG.md`
+  (iso "Moving"), guide + `AGENTS.md` (action rows), `DESIGN.md` §89.9, `tests/test_actions.py`
+  (action lists), `tests/test_iso_place.py` (the pictures test → `IsoScenery`), `tasklist.md`.
+
+Public interfaces
+- Config: actions `wander` (`around`, `radius`, `stops`, `seed`, `speed`) and `meet` (`with`,
+  `speed`); `walk_to` / `run_to` `after`, `gap`; on an iso place `to` is a spot or `{column,
+  row}`, `enter` / `exit` `door` is a spot.
+- `vidgen.api`: + `IsoScenery`, `standing_box`, `IsoRoute`, `IsoStep`, `ISO_MOVES`,
+  `WANDER_RADIUS`, `WANDER_STOPS`, `cell_of`, `find_route`, `plan_move`, `iso_move_problems`,
+  `IsoWalk`; − `IsoPictures`, `iso_pictures` (Step 166, replaced).
+
+Decisions
+- Follow is `walk_to` / `run_to` `after:` because `follow` is the camera's action.
+- 8 neighbours, diagonals without corner cutting or climbing; other characters cost more but
+  never block (a crowd would jam lanes); a goal someone stands on becomes the cell beside it on
+  the picture's level line (not in front of / behind it, where they would overlap).
+- `enter` / `exit` on an iso place: over the edge nearest the goal (`left`: the map's west and
+  south edges, `right`: north and east), fading over the step beyond; or `door:` a spot (a
+  house's door) to fade in / out at. Indoors only an edge door is a way out.
+- Planning from logical cells (where everyone stands once planned moves are over), so the render
+  and `vidgen validate` agree.
+
+Known gaps / for Step 168+
+- Shots, `pan`, `zoom` and the camera's `follow` on an iso place are still the flat stage's.
+- A follower ending straight behind its leader on the picture is partly covered (`gap: 2`);
+  walkers crossing at the same time pass through each other; speed lines of a rushed walk are
+  level; `wander` with the defaults can be long for a short beat (lint names it).
+- Lint for iso (hidden speaker, small speaker, off-screen action) is Step 169.
+
+How to test
+- One file at a time under `capped`: `test_iso_moves` (34 incl. 1 render), `test_iso_place`
+  (54 incl. 1 render), `test_actions`, `test_actions_coverage` (83), `test_builtin_scenes` (202),
+  `test_guide`, `test_docs`, `test_cartoon_stage`, `test_platform_moves`, `test_platform_props`,
+  `test_phase_o_review`, `test_platform_camera`, `test_word_anchors`, `test_cartoon_lint`,
+  `test_lint`, `test_timing_lint`, `test_cartoon_character`, `test_cartoon_foley`,
+  `test_platform_sounds`, `test_cartoon_motion_effects`, `test_cartoon_depth`,
+  `test_cartoon_room`, `test_includes`, `test_builtin_sets`; `test_schema` (63, capped3g). All
+  pass. Baseline frames (`phase-q-baseline/make_baseline.sh`, `compare.py`): 31 frames, max
+  difference 0.
+- Scratch projects: `<scratchpad>/iso/proj3` (village: walks behind the house and well, up the
+  steps, meet, run after, wander, exits; room: enter by a spot, walk, exit through the edge door;
+  arrivals over the edge and out of the house's door) and `<scratchpad>/iso/proj4` (behind a
+  house, down and behind a garden wall, through its gap, behind a tree), contact sheets in
+  `<scratchpad>/iso/step167/`.
+
+## Step 168 — Staging on an iso place: camera and shots, small things, changes to the place
+
+What was built (DESIGN §89.10)
+- **Pictures in tiles at levels of detail** (`cartoon/iso_stage.py`, `cartoon/iso_pictures.py`):
+  `IsoScenery` now gives *pictures* (`Picture`: ground or not, pieces with their states): `base()`,
+  `front(box)`, `layer(name)`, drawn in 512 px tiles (`tiles`, `tile_image`, LRU cache) on the canvas
+  of a level of detail (level k = 2^k × level 0, up to 3; `detail_for(zoom, density)`). On the stage
+  each picture is an `IsoTiles` group showing the tiles in the camera's view at the zoom's level,
+  swapped by a camera listener and before Manim splits moving/static (`get_moving_and_static_mobjects`:
+  after a cut the static image showed the previous view's tiles). `draw_tile` (installed on the
+  camera before the light wraps it) resizes only the visible part of a tile into just that part of
+  the frame: the test village (50 s with a long follow) went from 239 s to 59 s. `draw_shapes` skips
+  shapes off its canvas (`shape_bounds`).
+- **Camera**: shots work unchanged on the place (close-ups are sharp: the head at 8× zoom); `wide`
+  is the establishing view; `follow` zooms in to a plain stage's character size (`follow_start`,
+  `follow_width`, `ISO_FOLLOW_SIZE` 0.45) and tracks up/down (`_MoveThenFollow(y_of=...)`, then the
+  stage's `SmoothFollow` as on a level); `pan` to a spot centres on the object there / a character's
+  middle, or on its targets, across and up (`pan_point`); `zoom` on a group as anywhere. 16:9 and 9:16
+  checked by eye.
+- **Small things**: the stage's `props` on an iso place, small ones only (`ISO_ITEMS`; refused: big
+  props, depth/lift/against, non-spot `at`, a name clash), standing at a spot on the ground or on a
+  table/bench/chair/bed/sofa/rock/well rim (`ObjectKind.top`, `iso_item_point`, `TOP_SPOTS`),
+  bodies in the draw order like characters (`item_box`, own front pictures). `pick_up`, `give`,
+  `put_down` (no `to`: dropped beside the feet, `iso_put_point`; `to: <spot>`: placed on the object
+  there) work; `throw` / `blow_away` refused. New prop `flower`. Reach is checked in cells by the iso
+  replay (`iso_move_problems` with `items`, `ISO_ITEM_ACTIONS`, `ISO_REACH` 1), the flat holding
+  replay gets no positions on an iso place.
+- **Changes to the place**: `ObjectState` (`shown`, `open`, `on`), `object_shapes(..., state)`
+  (house door open + windows lit, lamp lit with a pool of light, flowers in bud), room doors in
+  standing back walls named `door_1`... (`IsoPlace.doors`) opening into the room; `iso.objects`
+  `open` / `on` / `shown`. Actions: `open` / `close` (house, door_n, flowers), `switch_on` /
+  `switch_off` (lamp, house), `reveal` (generic, via the object's target entrance), new `hide`
+  (`scenes/hide_action.py`, cued). Changed objects are *layered*: out of the base, an `IsoObject`
+  group after the base (object + pieces over it); `Stage.iso_change` fades a new layer in by a scene
+  updater, sets the state at the start, refreshes fronts/other layers; `_iso_redrawn` redraws the
+  layers while a change overlaps an animation. Objects not there are left out of route planning
+  (`IsoPlace.without`; render and validate replay with `reveal` / `hide`, `ISO_PLACE_CHANGES`).
+- **Fix from Step 167**: a follower ending one cell straight behind (or in front of) its leader on
+  the picture takes a step aside (`follow_route`).
+- Code move: Step 167's iso methods of `Stage` moved to `scenes/stage_iso.py` (`IsoStaging` mixin,
+  `_moving_block`), with this step's.
+
+Files touched
+- New: `src/vidgen/scenes/stage_iso.py`, `src/vidgen/scenes/hide_action.py`,
+  `src/vidgen/cartoon/iso_pictures.py`, `tests/test_iso_staging.py`.
+- Changed: `src/vidgen/world/iso.py` (`ObjectState`, `default_state`, `OPENING_KINDS`,
+  `SWITCHED_KINDS`, `ObjectKind.top`, `IsoPlace.without`, `IsoPlace.doors`), `world/iso_moves.py`
+  (reach and place changes in the replay, step aside), `cartoon/iso_objects.py`, `iso_scenery.py`
+  (`IsoPiece.kind`, `redraw`, `shapes_in`; door states), `iso_stage.py` (tiles, layers, item points,
+  follow width), `iso_drawing.py` (`shape_bounds`, skip off-canvas shapes, translucent disc crop
+  fix), `cartoon/props.py` (`flower`), `scenes/stage.py` (iso props checks, object params, targets,
+  tile drawing, switch, follower), `scenes/actions.py` (pan/follow hooks, `_MoveThenFollow.y_of`),
+  `scenes/handling.py` (open/close objects, iso put_down, throw/blow_away refused),
+  `scenes/switch_action.py`, `scenes/__init__.py`, `api.py`, `docs/CONFIG.md`, guide + `AGENTS.md`,
+  `DESIGN.md` §89.10 (+ notes in §89.2, §89.6, §89.9), `tests/test_iso_place.py`,
+  `tests/test_iso_moves.py`, `tests/test_actions.py`, `tests/test_cartoon_props.py`, `tasklist.md`.
+
+Public interfaces
+- Config: action `hide`; prop `flower`; `iso.objects[*].open|on|shown`; small `props` on an iso
+  place; `put_down` `to:` a spot on an iso place; `open` / `close` / `switch_on` / `switch_off` /
+  `reveal` take iso objects (and `door_1`...) as targets.
+- `vidgen.api`: + `IsoTiles`, `install_tile_drawing`, `ObjectState`, `default_state`,
+  `OPENING_KINDS`, `SWITCHED_KINDS`, `ISO_FOLLOW_SIZE`, `follow_width`, `iso_item_point`,
+  `item_box`, `object_box`, `ISO_ITEM_ACTIONS`, `ISO_PLACE_CHANGES`, `ISO_REACH`; `IsoScenery`'s
+  interface changed (pictures and tiles instead of `base` / `front(key)` images).
+
+Decisions
+- `size` / `character_size` stay refused on an iso place: shots (and `follow`) make characters
+  large; a base zoom would crop the place and fight the shots.
+- Reuse over new names: drop / place are `put_down` without / with `to`; a bloom is `open` on
+  flowers; appear is `reveal`; only `hide` is new (no existing action takes a thing away).
+- Changing objects as layers over a base without them (not redrawing the base); tiles with a
+  fast drawer rather than one big picture (Manim warps whole pictures every frame).
+
+Known gaps / for Step 169+
+- Lint `hidden_speaker` measures iso front pictures as rectangles of tiles: a speaker behind a tree
+  is reported 100 % hidden (in the test village's close-up of Dot). Step 169's iso lint should
+  measure the pieces (or the picture's alpha) instead.
+- A lit lamp / glowing windows are graded by the light like the rest: at night they will look dim
+  (Step 169's mood tints: an ungraded glow).
+- Doors do not block routes when closed (open them for the story); outdoor `+` gaps have no gate.
+- Small things are tiny on the establishing view (use a shot or `follow`); lint `prop_overlap`
+  compares iso props by screen boxes (two things put on the same table spot overlap: true).
+- `wide` in 9:16 shows the place small in the middle of a tall frame (fit by width).
+
+How to test
+- One file at a time under `capped`: `test_iso_staging` (32 incl. 1 render, 4.5 s), `test_iso_place`
+  (54), `test_iso_moves` (34), `test_actions` (28), `test_actions_coverage` (83), `test_api`,
+  `test_cartoon_holding`, `test_cartoon_small_props`, `test_cartoon_shots`, `test_cartoon_stage`,
+  `test_platform_level`, `test_platform_moves`, `test_platform_props`, `test_platform_camera`,
+  `test_phase_o_review`, `test_platform_sounds`, `test_cartoon_props` (91), `test_word_anchors`,
+  `test_cartoon_lint`, `test_lint`, `test_timing_lint`, `test_cartoon_character`,
+  `test_cartoon_foley`, `test_includes`, `test_builtin_sets`, `test_cartoon_motion_effects`,
+  `test_cartoon_depth`, `test_cartoon_room`, `test_builtin_scenes` (202), `test_guide`, `test_docs`;
+  `test_schema` (63, capped3g). All pass. Baseline frames (`phase-q-baseline/make_baseline.sh` into
+  `check168`, `compare.py`): 31 frames, max difference 0.
+- Scratch project `<scratchpad>/iso/proj5` (village: close-ups, two-shot give, follow, pan, lamp and
+  windows, door, flowers, bridge appearing; room: letter placed on a table, room door, lamp, key
+  dropped; variant `shorts` 9:16); stills in `<scratchpad>/iso/step168/`. `proj3` re-rendered: as
+  before.
+
+## Step 169 — Mood, sound and who speaks on an iso place; the iso lint
+
+What was built (DESIGN §89.11)
+- **Time of day / weather reuse the stage's keys** (decided: no new mood key or preset): `light`
+  (`morning`, `day`, `sunset` = evening, `night`; a tint for a rainy day, documented) and
+  `particles` (rain, snow). **Lit things glow**: `Poly` / `Disc` `glow` (lit window glass and core,
+  lit lantern faces, the lamp's pool of light); `draw_shapes(glow=True)` draws a picture of the
+  lights only (other shapes clear what they cover, so hidden lights stay hidden);
+  `IsoScenery.glows`, `tile_image(glow=)`; `IsoTiles` adds `GlowTile`s after its tiles, never
+  graded (`light_graded` is a read-only false property). By day no visible change; at
+  sunset/night lamps and windows stay bright.
+- **Rain on the place**: `IsoRainGround` (`RainGround.landing(shares, x)`; the flat stage's band is
+  unchanged), `place_outline` (front/back edge of the place's picture per x), drops land anywhere
+  on the ground in view, not beside the place, not on characters (no splashes on faces).
+  `puddles` / `settle` / indoor rain refused with alternatives (`iso_particle_problem`). Fixed on
+  the way (Step 168 bug): a place change in the first beat before the set's entrance crashed
+  (`_iso_insert` now inserts into the backdrop still to come).
+- **Sound**: new built-in sounds `step_grass`, `step_gravel`, `step_wood`, `step_stone`;
+  `surface_at` / `route_surfaces` (grass, path, boards, tiles, stone, bridge, rug) →
+  `PlayedAction.surfaces` → the step per footfall (`SURFACE_STEPS`, `footfall_distances`);
+  `handling_cues` (pick_up pop, give swoosh, put_down thud), `place_change_cues` (door creak/thud
+  for houses and room doors, a twinkle for a bloom or a `reveal`); lamp click was already there.
+  Ambience: new bed `crickets` (auto on an iso place outdoors at `sunset` / `night`; nameable on
+  any stage); an indoor iso place gets `room_tone`. All iso-only branches.
+- **Name tags** (automatic; `iso.name_tags: false` to turn off): `NameTag` from
+  `IsoStaging.speak`, the voice's label in its speaker colour, same size on screen, inside the
+  view (16:9 and 9:16 checked), shown while the line's lip sync lasts and the head is under 7.5 %
+  of the view's short side; a `say` bubble replaces it (`iso_untag`); removed at the beat's end.
+- **Lint**: `hidden_speaker` on iso measures the speaker's eyes-and-mouth box (`features`) against
+  the real alpha of the place's tiles in front (`covers` masks written by the layout dump,
+  `face_grid`), threshold `min_hidden_features` 0.25, naming the pieces (`the place's lamp`): the
+  tree-crown false report is gone, the lamp post across Dot's face (33 %) is reported.
+  `small_speaker` skips a tagged speaker with a line of ≤ `max_tagged_words` (12). New rule
+  `offscreen_action` (`min_seen` 0.5): each walk, handing action and place change is watched over
+  its own frames (`iso_watch`, a self-removing scene updater); the dump's `iso_actions` via a new
+  scene hook `layout_keys(beat_id)`.
+
+Files touched
+- New: `tests/test_iso_mood.py` (14 incl. 1 render).
+- Changed: `src/vidgen/cartoon/iso_drawing.py`, `iso_objects.py`, `iso_pictures.py`,
+  `iso_stage.py`, `rain.py`, `foley.py`, `src/vidgen/particle_field.py`, `ambience.py`, `sfx.py`,
+  `config.py` (rules), `introspect.py`, `lint/cartoon_rules.py`, `world/iso_moves.py`,
+  `scenes/stage.py`, `scenes/stage_iso.py`, `scenes/acting.py`, `scenes/particles_action.py`,
+  `api.py`, `docs/CONFIG.md`, guide + `AGENTS.md`, `DESIGN.md` §89.11, `tests/test_cartoon_sounds.py`,
+  `tasklist.md`.
+
+Public interfaces
+- Config: `iso.name_tags`; ambience bed `crickets`; sounds `step_grass`, `step_gravel`,
+  `step_wood`, `step_stone`; lint `offscreen_action: {min_seen}`, `hidden_speaker.min_hidden_features`,
+  `small_speaker.max_tagged_words`.
+- `vidgen.api`: + `GlowTile`, `place_outline`, `IsoRainGround`, `SURFACES`, `surface_at`,
+  `route_surfaces`, `SURFACE_STEPS`, `handling_cues`, `place_change_cues`. Layout dump: frame keys
+  `line_words`, `iso_actions`; character keys `features`, `name_tag`; tile keys `covers`, `pieces`;
+  objects of a name tag `name_tag` (all iso only). A scene may define `layout_keys(beat_id)`.
+
+Decisions
+- Reuse `light` / `particles` (no `mood`); evening = `sunset`; rain light = a tint.
+- Name tags automatic (small speakers only), bubbles stay opt-in via `say`.
+- `hidden_speaker` on iso: eyes and mouth by real pixels (threshold 0.25), flat stages unchanged.
+- `offscreen_action` measures the share of the action's own frames in view (a first version took
+  the most seen on any frame: a shot easing in from the wide view hid the problem).
+- Closed doors blocking routes (optional) not done: a room's doors are drawn closed by default,
+  so blocking would break walks that work today.
+
+Known gaps / for Step 170+
+- Closed doors do not block walks; no rain shelter under iso trees, no puddles / settling snow on
+  the place; characters standing in a pool of light are graded like the rest.
+- In the scratch village a `follow` lags behind a rushed walk (lint `offscreen_action` names it):
+  give such beats enough narration in the example (storyboards without audio rush walks).
+- Characters without their own voice lip-sync the narrator's lines (as on any stage), so they
+  would all get name tags in wide views: give the example's characters voices.
+
+How to test
+- One file at a time under `capped`: `test_iso_mood` (14 incl. 1 render), `test_iso_place` (54),
+  `test_iso_moves` (34), `test_iso_staging` (32), `test_cartoon_sounds` (16), `test_cartoon_foley`,
+  `test_sfx` (131), `test_cartoon_lint`, `test_lint`, `test_timing_lint`, `test_cartoon_rain`,
+  `test_particles`, `test_cartoon_lighting`, `test_platform_sounds`, `test_introspect`,
+  `test_cartoon_acting`, `test_actions`, `test_actions_coverage` (83), `test_cartoon_stage`,
+  `test_cartoon_shots`, `test_guide`, `test_docs`, `test_includes`, `test_builtin_sets`,
+  `test_word_anchors`, `test_cartoon_character`, `test_platform_level`, `test_platform_camera`,
+  `test_phase_o_review`, `test_cartoon_storm`, `test_cartoon_holding`, `test_cartoon_small_props`,
+  `test_cartoon_props`, `test_platform_moves`, `test_platform_props`, `test_cartoon_motion_effects`,
+  `test_cartoon_depth`, `test_cartoon_room`, `test_cartoon_effects`, `test_cartoon_robots`,
+  `test_cartoon_vehicles`, `test_cartoon_wind`, `test_builtin_scenes` (202), `test_api`;
+  `test_schema` (63, capped3g). All pass.
+- Compatibility: baseline frames (`phase-q-baseline/make_baseline.sh` into `check169`,
+  `compare.py`): 31 frames, max difference 0. `vidgen lint --json` of platform-story and
+  examples/cartoon (copies in `<scratchpad>/s169/lintbase`): 0 findings before and after; their
+  timings' `sfx` and `ambience` identical (only the code fingerprint differs).
+- Scratch project `<scratchpad>/iso/proj6` (night village with glow and name tags, lamp post over
+  Dot's face, an off-screen walk under a close-up, rain, evening, the Step 168 village and room;
+  variant `shorts`); stills in `<scratchpad>/iso/step169/`. The village renders 50.6 s of video
+  in 58.9 s, as in Step 168.
+
+## Step 170 — The iso example story and the docs of Phase Q
+
+What was built
+- **The example** `examples/iso-story/video.yaml` ("Hazel and the Lamp by the Bridge", original
+  story and cast): Hazel (a rabbit), Grandpa Rowan (an old bear with a cold) and Juno (a
+  bluebird). Morning: the establishing view of Brookfield Green, a `zoom` on Rowan and the lamp
+  he lights every evening, Hazel walks to her flower bed (buds), Juno `meet`s her, close-ups for
+  their lines, Juno walks over the bridge and `exit`s, Rowan coughs (close-up), opens his door and
+  goes in (`open` / `exit door:` / `close`). Evening: the light fades to a rainy tint as the rain
+  starts, a `zoom` on the dark lamp, Hazel's worried close-up, a `follow`ed `run_to` to Rowan's
+  house and in at its door. Rowan's room (`place: indoor`, sofa, table, rug, shelf, a lit floor lamp):
+  Hazel enters over the edge, close-ups and a two-shot, she picks up the lamp key from the table
+  and leaves. Night in the rain: she comes out of Rowan's door holding the key, runs to the lamp,
+  `switch_on` on "@Click" (zoom on her and the lamp; the lamp and its pool glow), Juno appears on
+  the far bank (name tag in the wide view), walks over the bridge to her, two-shots, they walk
+  home (`after: hazel`). Next morning: Rowan comes out, Hazel `give`s the key back, three buds
+  `open` one by one (zoom), close-ups, a wide ending. The village is a project set
+  (`sets: {village: ...}`) for four scenes. Kokoro voices: narrator `bf_emma`, Hazel `af_bella`,
+  Juno `af_heart` (speed 0.8), Rowan `bm_george` (0.75); `music: cartoon` at -4; a `short` 9:16
+  variant. No audio committed (as platform-story).
+- **Voiced and rendered outside the repo** (`<scratchpad>/s170/voiced`, a copy of the example):
+  Kokoro `vidgen tts` (38 beats), `vidgen lint` with the audio and the final render (below).
+- **Fixes found while making it** (DESIGN §89.12):
+  - a thing held by a character that `exit`s (or `enter`s) the place stayed drawn at the doorway
+    while its holder faded: `IsoStaging.iso_walks` passes the held props as the walk's `carried`;
+  - a walk `to` a spot where someone stands, when no cell beside them could be reached (across a
+    stream), ended at the nearest cell the walker could reach, on the wrong bank, and `vidgen
+    validate` said nothing: `find_route` keeps the goal within `BESIDE_REACH` (2) cells of the
+    character there, else "no way there" (found writing the guide snippet);
+  - rain on an iso place looked like a sunny day (the review's note): a scene with `rain` in its
+    `particles` and no `light` (its own or its set's) gets `ISO_RAIN_LIGHT` (`#6B7890` at 0.45),
+    the tint the docs recommend. Iso only; rain started by the `particles` action keeps the
+    light (paired with a `light` action, as the example does);
+  - lint `said_before_shown` took a name tag ("Juno", shown while she speaks) for a label and
+    reported the narration naming her a beat before she spoke, although she was on screen: name
+    tags (the dump's `name_tag` key) are no labels (`narration_rule._label_texts`).
+- **Docs**: guide topic `iso` (when to make one, the map, telling a story clearly: shots, voices
+  and name tags, moves and their timing, cause and effect, mood; a validated snippet) + topic
+  list + `AGENTS.md`; CONFIG iso section (one place in several scenes through a set, the example,
+  the rain light, held things, the beside rule) and the stage table's `light` and `iso` rows;
+  README feature and example entries; CHANGELOG "Isometric story places (Phase Q)" (0.3.0 now
+  Steps 61–170); the Shorts cookbook (an iso place has no `character_size`);
+  `docs/gallery/stage.md` params table regenerated with `vidgen gallery --types stage` (it had
+  no `iso` rows; its stills and clips left as committed); DESIGN §89.12; tasklist.
+
+Files touched
+- New: `examples/iso-story/video.yaml`, `tests/test_iso_story.py`.
+- Changed: `src/vidgen/scenes/stage.py` (`ISO_RAIN_LIGHT`, `_check_iso`, the `light` docstring),
+  `src/vidgen/scenes/stage_iso.py` (carried), `src/vidgen/world/iso_moves.py` (`BESIDE_REACH`,
+  `find_route`), `src/vidgen/lint/narration_rule.py` (name tags), `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `docs/CONFIG.md`,
+  `docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md`, `docs/gallery/stage.md`, `README.md`,
+  `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` unchanged. New names: `stage.ISO_RAIN_LIGHT`, `iso_moves.BESIDE_REACH`; guide
+  topic `iso` (aliases isometric, village, villages, iso-place). Behaviour (iso only): the rain
+  light, held things fading with their holder, the beside rule.
+
+Decisions
+- A project set for the village rather than a YAML anchor (the config refuses unknown top-level
+  keys such as `x-village`).
+- The map was laid out so that nothing stands in front of a speaker's spot (the first draft had
+  the well's roof across Hazel's face in two close-ups and a tree in front of the bridge that hid
+  her in a two-shot); a flower bed of three `flowers` objects (a bigger `size` draws one clump).
+- `zoom` on a character and an object to point at something (the lamp, the buds): `pan` keeps
+  the zoom, so it does nothing in the establishing view.
+- After a `follow`, beats whose action happens elsewhere say `shot: wide` (the follow keeps the
+  camera on its walker); `look_at` turns Juno to Hazel after a `walk_to` (only `meet` ends facing).
+- Story length: Kokoro at speed 1.0 kept it near 3 min but lint found 17 beats too fast
+  (`narration_speed` over 3.5 words/s); the script was cut to about 350 words and spoken at 0.8
+  (0.75 for Rowan), as platform-story does; `narration.pad` 0.3.
+
+Known gaps / for Step 171
+- At night the characters are graded dark even in the lamp's pool (Step 169's gap).
+- A `flowers` object with a larger `size` still draws one clump; doors do not block routes.
+- `pan` to a spot does nothing in the establishing view (it keeps the zoom): the guide says to
+  use `zoom` for pointing at a thing.
+- The 9:16 variant validates and lints clean, but its wide views show the village small in the
+  middle of the frame (fit by width, Step 168's gap); the lines all have shots.
+- A bare `on: true` in `iso.objects` works for vidgen but fails the JSON Schema check (YAML 1.1
+  reads it as a key `true`); the example quotes it, as CONFIG advises for props.
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_iso_story` (6 incl. 1 render),
+  `test_iso_moves` (34), `test_iso_staging` (32), `test_iso_mood` (14), `test_iso_place` (54),
+  `test_narration_rule` (12), `test_guide` (54), `test_docs` (62), `test_gallery` (12),
+  `test_cartoon_stage`, `test_cartoon_rain`, `test_particles`, `test_cartoon_lighting`,
+  `test_cartoon_holding`, `test_actions`, `test_actions_coverage` (83), `test_includes`,
+  `test_api`, `test_cartoon_lint`, `test_lint`, `test_timing_lint`, `test_word_anchors`,
+  `test_platform_moves`, `test_platform_level`, `test_platform_props`, `test_platform_camera`,
+  `test_phase_o_review`, `test_cartoon_foley`, `test_cartoon_sounds`, `test_cartoon_shots`,
+  `test_cartoon_small_props`, `test_cartoon_character`, `test_introspect`, `test_cartoon_acting`,
+  `test_config`, `test_cartoon_props`, `test_builtin_sets`, `test_cartoon_room`,
+  `test_builtin_scenes` (202); `test_schema` (64, capped3g). All pass.
+- Compatibility: baseline frames (`phase-q-baseline/make_baseline.sh` into `check170`,
+  `compare.py`): 31 frames, max difference 0.
+- The example: `vidgen validate` ok (16:9 and `--variant short`); `vidgen lint` without audio 0
+  findings in 16:9 and in 9:16; with the Kokoro audio (the voiced copy) 0 findings. Final render
+  of the voiced copy: 1280x720 @ 30, 3:02, -16.0 LUFS, true peak -1.9 dBTP, audio as long as the
+  video, no silence over 1.5 s: `<scratchpad>/s170/hazel_and_the_lamp.mp4`, contact sheet (one
+  frame per 5 s) `<scratchpad>/s170/contact_sheet.png`, checked by eye, as were the storyboards.
+
+## Step 171 — Review of Phase Q
+
+Review of Phase Q (Steps 166–170: the iso world model, projection and drawing, routes, staging,
+mood, sound and lint, the example and its docs)
+- Fixed, known gaps:
+  1. **Wide views left the frame half empty** (the village used about half of a 16:9 frame; in
+     9:16 it sat small in the middle): the camera now starts on a *wide view*
+     (`iso_stage.wide_view`, DESIGN §89.13) magnified from the whole-place fit until the place
+     fills the frame both ways (its diamond tips cut), at most `ISO_WIDE_MAX` 2, but keeping in
+     view the characters and small things at their spots (those entering later too) and, in a
+     landscape frame, every spot and every `iso.objects` object whole (a roof is never cut; the
+     map's trees and bushes may be cut at the edges; a room keeps all of itself). `shot: wide` is
+     that view (`IsoStaging.iso_wide_shot`), `camera_at` moves it across. The world's scale is
+     unchanged, so close shots, `follow`, the tiles and every measure are as before. The
+     village: 1.21x in 16:9 (it spans the frame's width), 2x in 9:16.
+  2. **`pan` did nothing on the whole-village view**: on an iso place a pan to a spot or a
+     character moves in to at least `ISO_PAN_ZOOM` (2) times the whole place
+     (`IsoStaging.pan_width`).
+  3. **Characters stayed dark in a lamp's light at night**: `LampLit` on each character and
+     small thing of a place with a lamp; `StageLight` grades them with `lamp_lit` (warm, up to
+     `LAMP_LIFT` 0.6 of the way to the lamp's grade, scaled by how dark the light is: nothing by
+     day), by the feet's distance from each lamp (`ISO_LAMP_REACH` full within 1 tile, none
+     beyond 2.2) and the lamp's level, which fades with its switches; asked when drawn (no scene
+     updater, so waits stay cheap).
+  4. **A larger flower bed drew one clump**: `flowers` and `bush` (`BED_KINDS`) draw a clump with
+     its shadow in each cell of their footprint (a bed's clumps alternate its colours); 1 x 1 as
+     before.
+  5. **A bare `on: true` failed the JSON Schema check**: `schema._yaml_on_key` adds a `"true"`
+     property beside every boolean `on` (props and iso objects), as JSON writes YAML 1.1's key.
+- Decided and documented (CONFIG "Moving", the guide, DESIGN §89.13): **closed doors do not
+  block walks** (a room's doors are drawn closed and every way in goes through one; `open` a
+  house's door before going in); **two walkers at the same time do not avoid each other**
+  (routes go round standing characters; walkers are drawn in the order of their boxes; time
+  crossing walks apart, or `meet`).
+- Found by this review: a 9:16 room scene's `enter` was off screen once the wide view kept only
+  the characters already there (lint `offscreen_action`): the view keeps the entering
+  characters' spots too.
+- Error messages for AI authors (read through `vidgen validate` with 14 typical mistakes): a
+  `jump` to a place on an iso place now says `walk_to or run_to it` (it named a platform level);
+  `size` / `character_size` names the shots; `on` / `open` on flowers reads "not flowers"; two
+  objects on one cell say to move one. The others (unknown spot, an x as a goal, `depth`, `level`
+  with `iso`, an unknown symbol or object, a big prop, `switch_on` a well, a pan to an unknown
+  spot) name the problem and the alternative already.
+- Checked and right: the docs (guide topic `iso`, CONFIG's iso section, the stage's gallery
+  table, README, CHANGELOG) against the code; the no-manim rule of the world and view modules;
+  `vidgen.api` exports; the example in both formats with and without audio.
+- Not changed (judgment): the speed lines of a rushed walk are drawn level; no shelter from rain
+  under a tree, no puddles or settling snow on the place; storyboards of the 9:16 variant at
+  270 px show the characters' outlines very thick (a preview-size effect: the 1080 x 1920 stills
+  are right).
+
+Files touched
+- New: `tests/test_phase_q_review.py` (11 tests, 1 tiny render).
+- Changed: `src/vidgen/cartoon/iso_stage.py` (`wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`,
+  `ISO_WIDE_BODY_ROOM`), `src/vidgen/scenes/stage_iso.py` (`iso_wide`, `iso_wide_shot`,
+  `pan_width`, `iso_lamplight`, `_iso_lamp_level`, `_iso_lamp_share`, `ISO_LAMP_REACH`),
+  `src/vidgen/scenes/stage.py` (wide shot, lamplight, messages), `src/vidgen/scenes/actions.py`
+  (`Pan`), `src/vidgen/scenes/moving.py` (the jump message), `src/vidgen/cartoon/lighting.py`
+  (`lamp_lit`, `LAMP_LIGHT`, `LAMP_LIFT`, `LAMP_DARK`), `src/vidgen/cartoon/shading.py`
+  (`LampLit`, `mark_lamp_lit`, `LAMP_LIT`), `src/vidgen/cartoon/iso_objects.py` (beds),
+  `src/vidgen/world/iso.py` (a message), `src/vidgen/schema.py`, `src/vidgen/api.py`,
+  `tests/test_iso_staging.py` (the start is the wide view), `examples/iso-story/video.yaml` (a
+  comment), `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `docs/CONFIG.md`, `CHANGELOG.md`,
+  `DESIGN.md` (§89.13 and pointers in §89.9–89.11), `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` adds `wide_view`, `ISO_WIDE_MAX`, `ISO_PAN_ZOOM`, `LampLit`, `mark_lamp_lit`.
+  Behaviour, iso only: the wide view at a scene's start and for `shot: wide`, a pan that moves in,
+  lamplight, beds and hedges. The JSON Schema accepts `"true"` where it accepts a boolean `on`.
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_phase_q_review` (11), `test_iso_place`
+  (54), `test_iso_moves` (34), `test_iso_staging` (32), `test_iso_mood` (14), `test_iso_story`
+  (6), `test_cartoon_lighting` (8), `test_cartoon_shots` (14), `test_api` (10), `test_guide`
+  (54), `test_docs` (62), `test_gallery` (12), `test_cartoon_stage` (24), `test_platform_camera`
+  (18), `test_platform_moves` (23), `test_platform_level` (30), `test_phase_o_review` (8),
+  `test_actions` (28), `test_cartoon_lint` (10), `test_lint` (23), `test_timing_lint` (10),
+  `test_word_anchors` (31), `test_includes` (24), `test_config` (21), `test_cartoon_rain` (15),
+  `test_particles` (23), `test_cartoon_holding` (16), `test_cartoon_room` (28),
+  `test_cartoon_props` (91), `test_cartoon_foley` (7), `test_introspect` (15),
+  `test_narration_rule` (12), `test_cartoon_small_props` (18), `test_cartoon_acting` (19),
+  `test_cartoon_character` (22), `test_builtin_scenes` (202), `test_actions_coverage` (83),
+  `test_cartoon_sounds` (16), `test_builtin_sets` (53), `test_drawing_style` (15); `test_schema`
+  (64, capped3g, 110 s); `tests/test_mcp.py` in full (capped3g, `timeout 1500`): 17 passed in
+  53 s. All pass. (The disk filled up once with pytest's temp folders; cleared, the rain suite
+  passed.)
+- Compatibility: `phase-q-baseline/make_baseline.sh` into `check171`, `compare.py`: 31 frames,
+  max difference 0. `vidgen lint` of `examples/platform-story` and `examples/cartoon`: 0
+  findings; `examples/gradient-descent`: the same 2 `narration_speed` infos as before (no audio).
+- The example: `vidgen validate` ok; `vidgen lint` 0 findings in 16:9 and in 9:16 (no audio) and
+  with the Kokoro audio of Step 170 (`<scratchpad>/s171/voiced`, a copy with the same narration:
+  no new TTS). Final render of the voiced copy at 1920x1080 @ 30:
+  `<scratchpad>/s171/hazel_and_the_lamp.mp4`, contact sheet `<scratchpad>/s171/contact_sheet.png`,
+  checked by eye (storyboards of the scratch test place and of both formats too).
+
+## Step 172 — Phase R plan and iso weather polish
+
+What was built
+- **Phase R plan** in `tasklist.md` (Steps 172–176: iso weather polish, then the presentation
+  scene type `iso_diagram`, its actions, an example, the review) and DESIGN §90.
+- **Baseline stills of `examples/iso-story`**, recorded before any change, for Steps 173–176:
+  `<scratchpad>/phase-r-baseline/frames/` (84 PNGs: 16:9 `morning`, `evening`, `rowans_room`,
+  `night`, `next_morning`; 9:16 `morning`, `night`), script `phase-r-baseline/make_baseline.sh`
+  (`OUT=` / `WORK=` new folders; `CODE=` a checkout's `src` to render with other code), compared
+  with `phase-q-baseline/compare.py`. The example is taken as committed at `d792d86b`.
+- **Shelter from rain on an iso place** (DESIGN §90.2): the place's *top surface*
+  (`cartoon/iso_weather.py`: `TopSurface`, `top_surface`, from the shapes the place is drawn with:
+  tops and roof slopes facing up, crowns and bushes as balls, discs, posts' tops) lifts a drop
+  that would land under a roof, a crown or a bridge onto it (`lift_floors`, `IsoRainGround.lift`):
+  its splash shows on the roof. Nobody can stand under a shelter on the place, so steps are as
+  before.
+- **Puddles** (`puddles: true`, refused before): seeded on open grass and paths, never sheltered,
+  on water or under something in front; growing, with ripples while it rains (`IsoPuddles`).
+- **Settling snow** (`settle: true`, refused before): a picture of the snow
+  (`draw_shapes(..., snow=True)`: tops, roofs, crowns' caps, pine tiers, the well's roof) laid
+  over each tile of every picture as it grows (`IsoSnow`, `IsoTiles.set_snow_opacity`).
+- **Speed lines** of a run on an iso place along the walk's diagonal on screen
+  (`MotionEffect._iso_way`).
+- Docs: CONFIG iso section and the `puddles` / `settle` rows, guide topic `iso` + `AGENTS.md`,
+  CHANGELOG (0.3.0 now Steps 61–172), DESIGN §90 and pointers in §89.9 / §89.11.
+
+Files touched
+- New: `src/vidgen/cartoon/iso_weather.py`, `tests/test_iso_weather.py`.
+- Changed: `src/vidgen/cartoon/iso_drawing.py` (`holds_snow`, `snow_cap`, `upward`,
+  `surface_normal`, the snow pass), `iso_objects.py` (pine and well caps, knobs and the well's
+  fascia hold no snow), `iso_scenery.py` (water and knobs), `iso_stage.py` (`top_surface`, `snow`
+  keyword), `iso_pictures.py` (`IsoTiles` snow in place, `IsoPuddles`, `IsoSnow`), `rain.py`
+  (`IsoRainGround.lift`), `motion_effect_shapes.py`, `src/vidgen/particle_field.py` (flakes ask
+  the ground's `landing`), `src/vidgen/scenes/stage.py`, `scenes/stage_iso.py` (refusals removed,
+  `iso_lay_puddles`, `iso_settle_snow`, `_iso_shelter_lift`, `_iso_groups`),
+  `src/vidgen/introspect.py`, `src/vidgen/api.py`, `tests/test_iso_mood.py` (the refusal tests now
+  check acceptance), `docs/CONFIG.md`, `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`,
+  `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` adds `TopSurface`, `top_surface`, `lift_floors`, `IsoPuddle`, `iso_puddles`,
+  `ripples`, `IsoPuddles`, `IsoSnow`. New fields with defaults: `Poly.holds_snow`,
+  `Poly.snow_cap`, `Disc.holds_snow`, `IsoRainGround.lift`; `snow` keyword on `draw_shapes`,
+  `IsoScenery.tile_image` and `picture`. No new config keys: `puddles` and `settle` are accepted
+  on an iso place outdoors (indoors rain and snow stay refused).
+
+Decisions / deviations
+- Shelter from the drawn shapes, not a table per object kind: what keeps rain off is exactly what
+  snow lies on, and new objects need nothing.
+- Snow laid into each tile's pixels in place, not separate half-transparent snow tiles: those
+  doubled where tiles overlap and showed white lines while the snow grew (seen in the first
+  render).
+- Iso puddles are a light sky blue (`#A9C8E8` at 0.8): the flat stage's grey blue read as holes
+  in the grass from above.
+- Deliberate changes to existing iso output (intended by the brief): in `evening` and `night` of
+  iso-story splashes move from under the houses and crowns onto them; the runs in `morning`
+  (b8) and `rowans_room` (b7) show slanted speed lines. Checked by eye side by side.
+
+Known gaps / for later steps
+- Snow's `color` colours only the flakes; the layer is always snow white.
+- Puddles are only on grass and paths at ground cells (not on raised blocks, not on a bridge).
+- While snow grows, every picture tile of the place is redrawn each frame (the scratch village:
+  17 s of snow at 854 x 480 in 30 s); after it is full they are static again.
+- A drop whose landing point lies behind a tall object on the picture still ends on that
+  object's picture (Step 169's behaviour), it is not hidden by it.
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_iso_weather` (13, incl. 1 render),
+  `test_iso_mood` (14), `test_iso_place` + `test_iso_staging` (86), `test_iso_moves` +
+  `test_iso_story` + `test_phase_q_review` (51), `test_cartoon_rain` + `test_cartoon_snow_fog` +
+  `test_particles` (56), `test_cartoon_motion_effects` + `test_api` + `test_introspect` +
+  `test_cartoon_foley` (45), `test_builtin_scenes` without render (122), `test_guide` +
+  `test_docs` (116), `test_iso_weather` + `test_draft` (31). All pass.
+- Compatibility: `phase-q-baseline/make_baseline.sh` into `s172/q_check`: 31 frames, max
+  difference 0. `phase-r-baseline/make_baseline.sh` into `s172/r_check`: the 84 stills match
+  except the rain scenes (`evening`, `night`, both formats) and two mid-run stills
+  (`morning_b8-m435`, `rowans_room_b7-m361`): the intended changes above.
+- Stills (scratch project `<scratchpad>/s172/proj`, the village with a `rainy` and a `snowy`
+  scene): `s172/rainzoom.png` (rain with splashes on the roofs, puddles with ripples, a run's
+  diagonal speed lines, 1280 x 720), `s172/snowgrid.png` (the village turning white),
+  `s172/side_night.png`, `side_morning.png`, `side_room.png` (baseline vs now).
+
+## Step 173 — The `iso_diagram` core
+
+What was built (DESIGN §90.6–90.7, CONFIG `iso_diagram`)
+- A presentation scene type `iso_diagram`: blocks in the isometric view of the iso places —
+  `box`, `slab`, `cylinder`, `database` (a cylinder with two bands), `tile` (a flat platform) —
+  on a grid (`at: [column, row]`, `size`, `height`) or arranged in the order written
+  (`arrange: auto | row | column | grid | zigzag`, `spacing`); a block with `layers` (bottom up)
+  is a stack (`gap`, `label_side`); `groups` put a plate under their members; `edges` are
+  connectors along the grid (`"a -> b: label"`, `-->` dashed, `style: pipe`, the scene's
+  `edge_style`), straight, with one turn, or round the front of what is in the way, their tips
+  stopping where they meet the target's outline as seen (`hidden_run`). Floor (`grid`, `plain`,
+  `none`) under everything, following a zigzag's steps.
+- Labels flat and readable: on a block's top when they fit (ink chosen by contrast), else on a
+  plate above / below / right / left, placed greedily against other labels, block faces and
+  connectors; stack layers in a column at the side with leader lines; connector labels beside
+  the connector; sizes from `size` down to the readable minimum, never below. The diagram is
+  fitted to the body by bisection on the tile width; a warning when blocks come out small or it
+  does not fit.
+- Colours: a block's `color` (a layer's, else its stack's), else the colour of a `terms:` term
+  its label says, else `block_color` (`palette` by default); faces shaded as on the iso place,
+  outlines a darker shade of each block (`outline_ink`), plates tinted by the group colour.
+- `arrange: auto` is a row in 16:9 and a `zigzag` (two picture columns, spacing 2) in 9:16: the
+  only direction of the 2:1 view that runs down a tall frame.
+- Steps: the whole diagram in the first beat (floor and plates, blocks back to front, then the
+  connectors); targets `heading`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`,
+  `edge:<from>-><to>`, so `reveal` / `dim` / `highlight` / `zoom` already work on it.
+
+Files touched
+- New: `src/vidgen/iso_blocks.py` (model, routing, shapes; no manim), `src/vidgen/iso_vector.py`
+  (iso shapes as Manim mobjects), `src/vidgen/scenes/iso_diagram.py`, `tests/test_iso_diagram.py`,
+  `docs/gallery/iso_diagram.md` and its four media files.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md` (section and
+  targets row), `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md` (chooser row, a snippet under
+  "flows": the gallery sample), `docs/gallery/README.md`, `examples/gallery/video.yaml` (scene
+  `arch`), `tests/test_actions_coverage.py`, `tests/test_builtin_scenes.py`,
+  `tests/test_translation.py` (samples of the new type), `CHANGELOG.md` (0.3.0 now Steps 61–173),
+  `DESIGN.md`, `tasklist.md`, `HANDOFF.md`. Nothing in `cartoon/` or `world/` changed.
+
+Public interfaces
+- `vidgen.api` adds `BlockSpec`, `ItemSpec`, `GroupSpec`, `EdgeSpec`, `IsoDiagramLayout`,
+  `layout_iso_diagram`, `DiagramShapes`, `diagram_shapes`, `outline_ink`, `readable_ink`,
+  `top_point`, `top_room`, `side_point`, `picture_to_scene`, `shapes_mobject`.
+
+Decisions / deviations
+- No neutral module was needed: the diagram imports the projection (`world/iso_view.py`) and
+  the shape model and `box_shapes` (`cartoon/iso_drawing.py`) as they are and draws them as
+  vectors (`iso_vector.py`), so iso stage output cannot change. Vector rather than the stage's
+  Pillow tiles: Step 174 recolours, raises and fades blocks one by one.
+- One `blocks` list with stacks inside (a first draft had a separate `stacks:` list; `arrange`
+  then could not put a stack between two blocks without `at`).
+- A stack keeps 1.5 more cells to its neighbours in a row or column, and `label_side: auto`
+  takes the side that covers less: in the first stills a stack's labels sat on its neighbour.
+- Labels avoid block faces (points on the visible faces), not bounding boxes: the empty corners
+  of an iso block's box pushed labels onto connectors.
+- A stack's caption defaults to its id like every label (the translation template lists it).
+
+Known gaps / for later steps
+- Step 174: build-in, raise / lower, highlight / dim of its own, flow along connectors,
+  explode / collapse, focus, label / value swaps; the model keeps `lift` on `block_shapes`,
+  `box_faces`, `top_point`, `side_point`, a stack's `gap`, connector `samples`, per-block
+  picture bounds.
+- No icons on blocks; a connector to a stack's upper layer runs on the floor to the stack.
+- Greedy label placement: a crowded diagram can still put a label over a connector or a block
+  (lint in Step 174). In 9:16 a stack is narrow (its layer labels take the side); a grid laid
+  out with `at` keeps its 16:9 shape in 9:16 (small).
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_iso_diagram` (35, 2 render),
+  `test_docs` (62), `test_guide` (54), `test_gallery -m "not render"` (11),
+  `test_translation` (71), `test_api` (10), `test_actions_coverage -m "not render"` (12),
+  `test_builtin_scenes -m "not render"` (124), `test_json_output -m "not render"` (21),
+  `test_schema` (64, 131 s), and `-k iso_diagram` of `test_builtin_scenes` +
+  `test_actions_coverage` (5, renders in both orientations). All pass.
+- Compatibility: `phase-q-baseline/make_baseline.sh` into `s173/qframes`: 31 frames, max
+  difference 0.
+- Stills (scratch projects `<scratchpad>/s173/proj`, `proj3`, collected in `s173/stills/`):
+  `stack_16x9.png` (a layered architecture), `flow_16x9.png` (a request through four blocks),
+  `groups_pipes_16x9.png` (a group plate, pipes, a dashed edge), `flow_9x16.png` (the zigzag),
+  `stack_9x16.png`, `transformer_light_16x9.png` (light theme, a term colour, a database layer),
+  `labels_on_tops_16x9.png` (labels on the tops, a pipe, a detour), `gallery_16x9.png`,
+  `gallery_9x16.png`.
+
+## Step 174 — `iso_diagram` actions, label placement, lint
+
+What was built (DESIGN §90.8–90.11, CONFIG `iso_diagram` / "Iso diagram actions", lint table)
+- Eight actions on `iso_diagram` scenes, timed like any action (`at: 0.5`, `at: "@word"`):
+  `build` (`style` grow / drop / fade: blocks grow up from the floor, a stack layer by layer, or
+  drop or fade in; the scene's own steps leave what it names to it; a connector comes in once
+  both its ends are there), `raise` (`by`) / `lower` (with a shadow on the ground; a raised layer
+  lifts the layers above, a group its plate and caption), `explode` (`gap`) / `collapse` (a
+  stack's layers apart and back, side labels going along), `flow` (`count`, `style` dots /
+  packets, `color`, `back`, `chain`: dots or small cubes along connectors, on top of pipes),
+  `focus` (`padding`, `scale`: the camera onto a part and staying; `focus: diagram` back) and
+  `relabel` (`text`: a label or value morphs into a new one in place; the scene keeps room for
+  it). Each refuses another scene type and targets of the wrong kind, naming them.
+- `dim` and `highlight` keep a block's shading (a generic hook `Target.recolor`; a dimmed block
+  stays opaque, mixed towards the background); a highlighted label is coloured text on its plate.
+- Params `build: together | each` (one block or stack per step over the beats), `entrance: drop |
+  grow | fade` (the scene's steps and `reveal`), `portrait_grid: auto | keep`; a stack's
+  `label_side: below`; a target `diagram`.
+- The three problems in Step 173's stills, fixed: (1) labels are now placed by the blocks'
+  outlines, not boxes — right by their block, clear of other blocks (with a little room), labels,
+  pipes and connectors, else pushed clear with a leader line; group captions go first, by the
+  plate's front edges, with the plate's blocks as obstacles; connector labels beside the
+  connector along its longest run (leader when pushed off); (2) one label per block: a stack of
+  one layer is labelled once (its layer's label, else the stack's), a caption that repeats a
+  layer's label is not drawn; (3) in 9:16 a stack lists its layers under it with colour swatches
+  (`label_side: auto`) and may be drawn 1.35× larger (Step 173: 0.93 units a tile, now 2.5); an
+  `at` grid is slanted down a 9:16 frame when that draws it larger (`slant`).
+- Lint `iso_labels`: from geometry the scene adds to each still of the layout dump (labels,
+  block and plate outlines, connector paths in pixels): a label over another block, over another
+  label, hiding another connector, or far from what it names without a leader. Size and contrast
+  stay `min_font`'s / `contrast`'s.
+
+Files touched
+- New: `src/vidgen/iso_labels.py` (label geometry, no manim), `src/vidgen/scenes/iso_actions.py`
+  (the actions), `src/vidgen/scenes/iso_motion.py` (the animations), `src/vidgen/lint/iso_rule.py`,
+  `tests/test_iso_diagram_actions.py`.
+- Changed: `src/vidgen/scenes/iso_diagram.py` (placement, steps, actions support, layout keys),
+  `src/vidgen/iso_blocks.py` (`block_outline`, `box_outline`, `slant`, `picture_size`),
+  `src/vidgen/actions.py` + `src/vidgen/scene.py` (`Target.recolor`, `target(recolor=)`),
+  `src/vidgen/scenes/actions.py` (`dim_to`, `Dim`, `Highlight` use it), `src/vidgen/config.py`
+  (`IsoLabelsRule`, `LINT_RULES`), `src/vidgen/lint/__init__.py`, `src/vidgen/api.py`,
+  `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md`, guide + `AGENTS.md` (action rows, a lint row,
+  the snippet's actions), `docs/gallery/iso_diagram.md` + media (regenerated), `CHANGELOG.md`
+  (0.3.0 now Steps 61–174), `DESIGN.md`, `tasklist.md`; tests whose lists name every action or
+  rule (`test_actions`, `test_actions_coverage`, `test_iso_diagram`, `test_narration_rule`).
+
+Public interfaces
+- `vidgen.api` adds `PIPE_HEIGHT`, `PlacedBlock`, `arrow_shapes`, `block_outline`,
+  `block_shapes`, `box_faces`, `box_outline`, `picture_size`, `plate_shapes`, `slant`, `AROUND`,
+  `FAR_COST`, `Obstacles`, `clip_area`, `convex_hull`, `hull_box`, `hull_gap`, `hull_of_point`,
+  `polyline_gap`, `ray_exit`, `rect_exit`, `rect_of`, `rect_union`, `slide_out`, `ISO_RISE`.
+  `Target.recolor`; `NarratedScene.target(..., recolor=None)`. `IsoDiagram.plan_diagram()`
+  (layout, fit and placement without drawing), `target_kind`, `has_label`, `iso_*` methods for
+  the actions, `layout_keys`.
+
+Decisions / deviations
+- The label placement of Step 173 is replaced, not patched (its cost counted points on faces
+  and skipped a group's members); `iso_diagram` output changes (it shipped one step ago).
+- `Target.recolor` instead of iso-only dim/highlight actions: the generic actions keep working
+  on the diagram, shaded; other scenes are untouched (no `recolor`). Phase Q's 31 baseline
+  frames are identical (`s174/qframes`, max difference 0).
+- Weights (`iso_labels.py`) tuned on Step 173's crowded grid: blocks ×4, labels ×3, a block
+  within the clearance 0.3 of its area, a pushed label 1.0 per unit; lower values sent labels far
+  with long leaders or let "Web 2" lie on the load balancer.
+- A grown stack builds layer after layer (`lag_ratio` 0.9; with 0.5 the next layer floated as a
+  flat sheet), a block unseen until its turn. A raised plate is drawn over the arrows under it.
+- Relabel morphs the text (`Transform`) and swaps the new text in when it ends, without
+  removing anything from the scene (a `FadeOut` remover broke up the target groups holding it).
+- `focus` is its own action (stays; `zoom` goes back by the beat's end; no rotation: the iso
+  angle is the diagram's meaning).
+
+Known gaps / for later steps
+- Crowded diagrams can still leave a label over a connector (the 9:16 "Services in groups":
+  `iso_labels` warns that "Web 2" hides part of `lb->web2`); the lint names it.
+- A raised plate is drawn over the arrows under it but under blocks behind it; connectors stay on
+  the floor when their ends rise. A label pushed far gets a straight leader (no routing).
+- `focus` on a group in 9:16 hardly zooms when its members' labels span the frame.
+- The floor under blocks that wait for a `build` is there from the start.
+- Light theme + `block_color: secondary` gives a top label contrast 3.99 (`contrast` warns; a
+  theme matter, the ink is the better of the two).
+
+How to test
+- One file at a time under `capped` / `capped3g`: `test_iso_diagram_actions` (21, 3 render),
+  `test_iso_diagram` (35), `test_actions` (28), `test_actions_coverage` (84, renders, 51 s),
+  `test_builtin_scenes -m "not render"` (124) and `-k iso_diagram` (4), `test_lint` (23),
+  `test_narration_rule` (12), `test_docs` + `test_guide` + `test_api` (126), `test_translation`
+  (71 with `test_api`), `test_schema` (64, 135 s), `test_json_output`, `test_gallery`,
+  `test_cartoon_sheet -m "not render"` (39). All pass.
+- Compatibility: `phase-q-baseline/make_baseline.sh` into `s174/qframes`: 31 frames, max
+  difference 0.
+- Scratch projects in `<scratchpad>/s174`: `proj` (layers: grow, explode, highlight, collapse;
+  flow: `build: each`, chained flow, relabel, raise on a word; grid: packets, dim, focus, raise a
+  group, build a database), `proj3` (light theme: explode, highlight, dim; build grow on a word,
+  raise / lower; relabel, flow on a pipe), `orig` / `orig3` (Step 173's projects unchanged),
+  `docex` (the CONFIG examples). `vidgen lint` on them: no `iso_labels` finding in 16:9; the
+  9:16 grid one above. Stills in `s174/stills/`: `fixed_groups_pipes_16x9.png`,
+  `fixed_transformer_light_16x9.png`, `fixed_stack_9x16.png`, `fixed_groups_pipes_9x16_slanted.png`,
+  contact sheets `sheet_actions_16x9.png`, `sheet_actions_9x16_p1.png` / `_p2.png`,
+  `sheet_light_16x9.png` / `_9x16.png` (½ = mid-action stills), single frames `explode_mid_16x9.png`,
+  `grow_stack_mid_16x9.png`, `flow_packets_mid_16x9.png`, `focus_raise_group_16x9.png`,
+  `relabel_raise_16x9.png`, `raise_shadow_16x9.png`, `explode_dim_light_16x9.png`,
+  `gallery_16x9.png` / `gallery_9x16.png`.
+
+## Step 175 — The iso_diagram example and its docs
+
+What was built (DESIGN §90.12)
+- **The example** `examples/iso-web-page/video.yaml` ("What happens when you open a web page",
+  original content, no brands): a `title`; `trip` (an `iso_diagram` on an `at` grid: browser,
+  DNS, load balancer tile, two app servers on a group plate, cache cylinder, database; each block
+  built on the word that names it with `build` grow / drop, dots to DNS and back, packets to the
+  load balancer, dots to the cache, along the cache-database pipe); `one_request` (the same
+  diagram: the busy server dimmed, the chosen one raised, `focus` on the cache and database,
+  `relabel` "Cache: miss", "Database: 40 ms", "Cache: hit" with a highlight and a dim, `focus:
+  diagram`, a `chain` of packets back to the browser); `render` (a stack DOM / Styles / Layout /
+  Paint built, exploded, each layer highlighted `until` the next beat, collapsed); a `bullets`
+  recap. `terms:` cache (tertiary), database (secondary); karaoke captions (one line in 16:9);
+  Kokoro `af_heart` at 0.82; the `bright` bed at -4; a `short` 9:16 variant; the facts in the
+  header. No audio committed.
+- **Voiced and rendered outside the repo** (`<scratchpad>/s175/voiced`, a copy of the example):
+  Kokoro `vidgen tts` (18 beats); `vidgen lint` with the audio 0 findings (first takes: 5
+  `narration_speed` / `rushed_animation` warnings at speed 0.9: speed 0.82, four beats given more
+  words, one beat a closing clause after its `raise`); final render 1920x1080 @ 30, 2:00.07, video
+  and audio streams both 120.07 s, -16.0 LUFS, true peak -1.9 dBTP (narration-only was -22.9 LUFS
+  without normalisation, hence the music bed), no silence over 1.5 s:
+  `<scratchpad>/s175/open_a_web_page.mp4`; contact sheet (one frame per 6 s)
+  `<scratchpad>/s175/contact_sheet.png`, checked by eye.
+- **Fixes found while making it** (`scenes/iso_diagram.py`):
+  - the fit (`_largest`) bisected from the smallest scale on the assumption that fitting is
+    monotonic; it is not (a label pushed clear with a long leader overflows at a middle scale and
+    lies by its block at a larger one), and the example's second scene came out a third of its
+    size with "the blocks are drawn small". Now a scan down from the largest scale (`SCAN_STEP`
+    0.9) to the first that fits, then `BISECT_STEPS` 8 above it. The gallery sample's 9:16 still
+    is drawn larger (media regenerated with `vidgen gallery --types iso_diagram`; the page text is
+    unchanged);
+  - `focus` fitted and centred its targets on the whole frame, so a focused block's label slid
+    under the karaoke captions: now they are fitted into the scene's `safe_area` (margins and
+    reserved overlays left out) and centred on it;
+  - `focus: diagram` zoomed onto the diagram's own box and cut the heading off; it now returns the
+    whole frame, as CONFIG said.
+- **Docs**: guide (a paragraph after the `iso_diagram` snippet naming the example and two tips;
+  the `focus` action row) + `AGENTS.md`; CONFIG (the example under the iso diagram actions; the
+  `focus` row: safe area, whole frame); CHANGELOG (0.3.0 now Steps 61–175, an entry under the
+  iso section); README (an "Isometric diagrams" feature bullet and the example entry); the Shorts
+  cookbook (§3: architecture in a Short); the gallery's iso_diagram media; DESIGN §90.12;
+  tasklist.
+
+Files touched
+- New: `examples/iso-web-page/video.yaml`, `tests/test_iso_web_page.py`.
+- Changed: `src/vidgen/scenes/iso_diagram.py` (`SCAN_STEP`, `BISECT_STEPS`, `_largest`,
+  `iso_focus_view`), `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `docs/CONFIG.md`,
+  `docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md`, `docs/gallery/media/iso_diagram-*` (4 files),
+  `README.md`, `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` unchanged. New module constants `iso_diagram.SCAN_STEP`, `BISECT_STEPS`.
+  Behaviour (iso_diagram only): diagrams may come out larger where the old bisection stopped
+  short; `focus` lands in the safe area; `focus: diagram` is the whole frame.
+
+Decisions
+- An `at` grid repeated in two scenes with each block's own `color`: by default the palette
+  follows the order of the blocks, and leaving DNS out of the second scene recoloured the others.
+- Grid spacing chosen by the lint: with the load balancer one column from the browser,
+  `iso_labels` found the "HTTPS" and "lookup" connector labels lying on the browser (16:9); the
+  columns were spread by one and the dashed DNS connector lost its label (the narration says it).
+- Labels "App 1" / "App 2" instead of "App server 1" / "2": the longer ones went below their
+  blocks with leaders crossing the cache's label; the group caption says "App servers".
+- Relabel texts kept short ("Cache: hit", not "Cache hit: 2 ms"): the scene keeps room for the
+  longest text, and the long one pushed the cache's label under the database with a leader across
+  the pipe. The 2 ms is said, not written.
+- The flows are timed after the blocks they need (`flow` on a connector whose end is not built
+  yet shows that connector early: an action shows its target).
+- Music (`bright` at -4) so the mix is normalised to -16 LUFS; a narration-only video keeps the
+  MP3s' level (-22.9 LUFS here).
+
+Known gaps / for Step 176
+- 9:16: the slanted grid draws the seven blocks small and routes browser -> load balancer round
+  the outside; `vidgen lint --variant short` has one `iso_labels` warning ("App 2" lies on part of
+  `lb->app2`, judged acceptable: the arrow still reads), and "App 1" sits over the load balancer
+  tile's far end (not reported: under `min_cover`). `focus` on the cache and database hardly
+  zooms in 9:16 (Step 174's gap: the labels set the width).
+- The floor of the `trip` grid is a little ragged at its right end (it follows the blocks when
+  they cover less than `FLOOR_FILL` of their bounding box).
+- The cache's label sits under the database in `one_request` (room kept for "Cache: miss"); it
+  has a leader and reads, but a label placement that preferred above would be tidier.
+- The Phase Q baseline frames were not re-run: only `scenes/iso_diagram.py` changed (no shared
+  code).
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_iso_web_page` (4, 1 render),
+  `test_iso_diagram_actions` (21), `test_iso_diagram` (35), `test_guide` + `test_docs` (116),
+  `test_gallery -m "not render"` (11), `test_builtin_scenes -k iso_diagram` (4),
+  `test_actions_coverage -k "iso or focus or build or flow or relabel"` (3). All pass.
+- The example: `vidgen validate` ok (both variants); `vidgen lint` without audio 0 findings in
+  16:9, 1 warning in 9:16 (above); with the Kokoro audio (the voiced copy) 0 findings.
+  Storyboards at 2 stills a beat in both formats checked by eye.
+- Stills in `<scratchpad>/s175/stills/`: `contact_sheet_final_16x9.png`, `still_030s.png` (the
+  trip built), `still_055s.png` (the focus with "Database: 40 ms"), `still_085s.png` (the stack
+  exploded), `voiced_sheet_16x9_p1..p4.png`, `sheet_9x16_p1..p5.png`,
+  `lint_9x16_app2_on_connector.png`.
+
+## Step 176 — Review of Phase R
+
+What was reviewed and fixed (DESIGN §90.13)
+- Problems seen in Step 175's contact sheet of `examples/iso-web-page`, fixed in code:
+  1. **The first diagram was small** (two thirds of the width, a third of the frame): the labels
+     above and below set the height. Labels are now tried beside the blocks when the usual order
+     overflows only the height (`_place(sideways=True)`, `SIDEWAYS`), and above / below lined up
+     with a block's edge (`aligned`); the scan starts at the largest scale the drawing alone fits.
+     The example also drops the "App servers" group caption. Trip: 1.01 → 1.35 units a tile;
+     one_request 1.01 → 1.24.
+  2. **Focus cut labels at the frame's edge** ("vers", "PS", half "App 1"): `focus` and its
+     `until` fade out every label (and the heading) not wholly inside the new view and bring them
+     back when they are again (`iso_veil`, `Veil`: out early in the move, in late, so none shows
+     cut while the camera moves). `padding` is now a share of the view's shorter side.
+  3. **The Cache label under the database**: with the larger fit and the edge-aligned places the
+     cache's label sits under the cache with a short leader (the pipe is to its right, the app
+     servers to its left: nowhere closer is free).
+  4. **The ragged floor**: a floor that follows the blocks is grown to whole cells of a grid half
+     a cell off and filled across rows and columns (`_tidy`): clean steps, no notches.
+  5. Known gaps of 174/175: the 9:16 grid is now chosen among as written / slanted all or half
+     the way by the actual fit (`Params.layouts`; trip 1.08 → 1.21, the "round the outside"
+     HTTPS route is gone); focus zooms in 9:16 (padding fix; the example's padding 0.2 → 0.1);
+     flat connectors tilt up to raised ends (`ramped`, `Reshape`; flows and lint follow); the
+     floor comes in with the blocks built (`FloorCells`), not under blocks not yet there.
+- Review of Step 172: puddle ripples could spread past the puddle onto the grass (offset 0.45 +
+  reach 0.75 of the radius): `RIPPLE_OFFSET` keeps them inside. `lift_floors`' docstring said
+  twice for three steps. Shelter, settling snow and speed lines read correctly in the iso-story
+  render below; nothing else found.
+- Tried and dropped: keeping a raised block's label clear at both heights (the labels then
+  crowded each other off their blocks and the cache's went under the database again); moving
+  the example's cache and database (a smaller diagram, or a label over a connector).
+
+Files touched
+- New: `tests/test_phase_r_review.py` (8, 2 render).
+- Changed: `src/vidgen/scenes/iso_diagram.py` (fit, placement, `layouts`, `_take`, veil, ramps,
+  floor pieces, focus padding, layout dump), `src/vidgen/iso_blocks.py` (`_tidy`, `_floor_of`,
+  `FloorCells`, `FLOOR_SEAM`, `ramped`, `slant(share)`, `grid_lines(within)`),
+  `src/vidgen/iso_labels.py` (`SIDEWAYS`, boxes in `Obstacles`, `clip_area(box=)`),
+  `src/vidgen/scenes/iso_motion.py` (`Reshape`, `Veil`), `src/vidgen/scenes/iso_actions.py`
+  (focus fades labels), `src/vidgen/cartoon/iso_weather.py` (`RIPPLE_OFFSET`),
+  `src/vidgen/api.py`, `examples/iso-web-page/video.yaml` (no group caption, focus padding 0.1),
+  `docs/CONFIG.md`, guide + `AGENTS.md`, `docs/gallery/iso_diagram.md` + media (regenerated),
+  `CHANGELOG.md` (0.3.0 now Steps 61–176), `DESIGN.md`, `tasklist.md`,
+  `tests/test_iso_diagram.py` (the floor test), `tests/test_iso_web_page.py` (stub signature).
+
+Public interfaces
+- `vidgen.api` adds `SIDEWAYS`, `FloorCells`, `ramped`; `slant(items, along, share=1.0)`,
+  `floor_shapes(..., within=None)`, `clip_area(rect, hull, box=None)`.
+  `IsoDiagram.Params.layouts(portrait)`, `IsoDiagram.iso_veil(width, centre)`; constant
+  `iso_diagram.LAYOUT_GAIN`. Behaviour (iso_diagram only): diagrams drawn larger, a tidier floor
+  that comes in with the blocks, `focus` padding of the shorter side, labels faded by focus,
+  tilting connectors.
+
+Compatibility
+- `phase-q-baseline/make_baseline.sh` into `s176/qframes`: 31 frames, max difference 0.
+- iso-story (`s176/rscene.sh`: the Phase R baseline one scene at a time) into `s176/rframes`:
+  against the pre-Phase-R stills only the rain scenes and the mid-run stills differ (Step 172's
+  intended changes; 9:16 `morning_b8-m435` is the same run); against Step 172's check frames
+  (`s172/r_check`) 84 frames, max difference 0.
+
+Renders (Kokoro audio reused, narration unchanged)
+- `<scratchpad>/s176/hazel_and_the_lamp_short.mp4`: iso-story's `short` variant, 1080x1920 @ 30,
+  3:02, video and audio 181.97 s, -16.0 LUFS, no silence over 1.5 s; contact sheet
+  `s176/hazel_short_contact_sheet.png` (checked by eye).
+- `<scratchpad>/s176/open_a_web_page.mp4`: the web-page example in 16:9, 1920x1080, 2:00.07,
+  -16.0 LUFS, no silence over 1.5 s; contact sheet `s176/web_contact_sheet.png`; the move back
+  from the focus `s176/focus_back.png`.
+
+Known gaps
+- "App 2" raised in `one_request` lies on the start of `app2->cache` (one `iso_labels` warning
+  in 16:9; 9:16 clean). Pipes do not tilt to raised ends. A focus fades labels by their box, so a
+  label of a block mostly in view can vanish while its block stays. A plan in 9:16 tries up to
+  five layouts (a few seconds more per scene). L-routes on a slanted grid still turn round the
+  side.
+
+How to test
+- One file at a time under `capped`: `test_phase_r_review` (8), `test_iso_diagram` +
+  `test_iso_diagram_actions` + `test_iso_web_page` (60 with the review), `test_iso_weather` +
+  `test_iso_mood` (27), `test_api` + `test_guide` + `test_docs` (126), `test_builtin_scenes` +
+  `test_actions_coverage -k "iso or focus or build or flow or relabel"` (15), `test_actions` +
+  `test_lint` + `test_narration_rule` + `test_translation` (134), `test_gallery` +
+  `test_json_output -m "not render"` (32), `test_builtin_scenes -m "not render"` (124),
+  `test_iso_place` + `test_iso_staging` + `test_iso_moves` + `test_iso_story` +
+  `test_phase_q_review` (137), `test_cartoon_rain` + `test_cartoon_snow_fog` + `test_particles`
+  + `test_introspect` (71); under `capped3g`: `test_actions_coverage` + `test_schema` (149,
+  3 min), `test_mcp` in full (17, 71 s). All pass.
+- `vidgen lint` of the example: 16:9 one warning (above), 9:16 none.
+
+## Step 177 — Phase R follow-ups
+
+What was built (DESIGN §90.14)
+- **"App 2" off its own arrow** (general, not an example tweak): a block label's candidate also
+  pays `LINE_COST` per sample of the connectors tilted up to the scene's planned lifts that lie
+  under the label moved up with its block (`_raised_lines`, `raised` in `IsoDiagram._place`).
+  `iso_labels` now judges the leader-line gap at the diagram's scale under a focus (dump key
+  `iso_diagram.zoom`; the moved label was 30 px off at a 2x focus against a 29 px limit, 15 px
+  unzoomed). `vidgen lint examples/iso-web-page`: 0 findings in 16:9 and 9:16 (with the Kokoro
+  audio in the voiced copy too).
+- **Pipes follow raised ends**: `_settle` reshapes pipe segments like arrows (`ramped` on each
+  segment's `box_faces`, `Reshape` while raising / lowering); `_edge_lift` follows pipes, so
+  flows ride the slope and lint gets the tilted path. Checked in a scratch project
+  (`s177/pipe`): raise, packets along both pipes, lower.
+- **9:16 shots on an iso place**: `shots.portrait_shot` (only on an iso place in a tall frame):
+  neighbours wholly in or out of the view, never cut at its edge; figures centred up and down
+  when the zoom cap leaves the view taller than needed (it is on an iso place: characters 0.6
+  units tall, the 9:16 view at 8x is 1.0 x 1.78). The wide view in 9:16 (start and `shot: wide`)
+  also keeps the spots the scene's walks go to and the cells round them (`_iso_arrivals`).
+  No example tweak was needed.
+
+Files touched
+- New: `tests/test_step177.py` (4, 1 render).
+- Changed: `src/vidgen/scenes/iso_diagram.py`, `src/vidgen/lint/iso_rule.py`,
+  `src/vidgen/cartoon/shots.py`, `src/vidgen/scenes/stage.py`, `src/vidgen/scenes/stage_iso.py`,
+  `src/vidgen/api.py`, `docs/CONFIG.md`, `CHANGELOG.md` (0.3.0 now Steps 61–177), `DESIGN.md`,
+  `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` adds `portrait_shot`, `LINE_COST`; `shots.PORTRAIT_EDGE`, `PORTRAIT_ROOM`. Layout
+  dump: `iso_diagram.zoom`. Behaviour: iso_diagram pipes tilt; labels of raised blocks placed
+  differently; 9:16 framing on iso places (shots and wide view). 16:9 and flat stages unchanged.
+
+Compatibility
+- Phase Q baseline (`s177/baselines.sh q`): 31 frames, max difference 0.
+- iso-story against Step 176's frames (`s177/rscene.sh`, one scene a call, into `s177/rframes`):
+  all 61 16:9 stills identical; 9:16 `morning` and `night` differ in every still with a wide view
+  (it now keeps the walks' destinations: a little wider / shifted) and the close-ups; night's
+  follow, zoom and two-shot stills identical. Intended.
+
+Renders (Kokoro audio reused, narration unchanged)
+- `<scratchpad>/s177/open_a_web_page.mp4`: 1920x1080, 2:00.07, -16.0 LUFS, video and audio
+  120.07 s, no silence over 1.5 s; contact sheet `s177/web_contact_sheet.png`.
+- `<scratchpad>/s177/hazel_and_the_lamp_short.mp4`: 1080x1920, 3:02 (181.97 s), -16.0 LUFS, no
+  silence over 1.5 s; contact sheet `s177/hazel_short_contact_sheet.png`. Close-ups now show the
+  speaker with the neighbour whole and centred (next morning: Rowan with Hazel, not the bench).
+
+Known gaps
+- `zoom` / `pan` actions in 9:16 are not reframed (the buds zoom can still show Juno's beak at the
+  edge; the evening lamp zoom shows no one); a pipe keeps its ground draw order; the label is
+  kept off tilted connectors at the highest planned lift only.
+
+How to test
+- One at a time under `capped`: `test_step177` (4), `test_iso_diagram` + `test_iso_diagram_actions`
+  + `test_iso_web_page` + `test_phase_r_review` (68), `test_cartoon_shots` + `test_phase_q_review`
+  + `test_phase_o_review` (33), `test_iso_place` + `test_iso_staging` + `test_iso_moves` +
+  `test_iso_story` (126), `test_api` + `test_lint` + `test_iso_weather` + `test_iso_mood` (60),
+  `test_guide` + `test_docs` (116), `test_builtin_scenes -m "not render"` (124). All pass.
+
+## Step 178 — Bug fix: a block shown at full before it grows in
+
+The bug (owner, `<scratchpad>/s177/open_a_web_page.mp4`): "When a block is meant to grow in, it
+appears at its final full size for a split second, then jumps back to tiny and grows." Seen frame
+by frame: the Browser at full size with its label from 10.833 s to 11.200 s (12 frames), then an
+empty floor at 11.233 s, then the growth; the same for the load balancer, the app servers, the
+cache, the "HTML response" slab during the crossfade into `render` and the Rendering stack.
+
+Root cause (DESIGN §90.15)
+- `IsoDiagram._arrivals` plays what comes with a block first (the floor piece under it, a
+  group's plate, at a scene's start the heading) and then the blocks, in a `Succession`. Manim adds
+  the mobjects of every non-introducer sub-animation to the scene when the `Succession` starts, but
+  begins (first interpolates) each sub-animation only when its turn comes. `GrowBlock` was not an
+  introducer, so the block stood in the scene at its final look until the fade before it ended,
+  then its `begin()` hid it and it grew. `drop` / `fade` and connectors use `FadeIn` (an
+  introducer) and were not affected.
+
+Fix
+- `GrowBlock` is an introducer (`scenes/iso_motion.py`): the block joins the scene when its growth
+  starts, unseen and flat on that frame. Covers every timing and target (beat start, `at:`,
+  `@word`, `build: each`, the first beat's steps, `reveal`, block / stack layers / group / diagram).
+- The same class on an iso place (Step 168's changes, `scenes/stage_iso.py`), found with a scratch
+  render (`s178/stage_reveal.py`): when a change started, the other pictures showing the object
+  (the layer of an object behind it, a character's front picture) were swapped at once, so a
+  revealed pine showed at full on its first frame over the lamp behind it; also a picture made
+  mid-play was not drawn until the next animation, and one removed mid-play stayed in Manim's
+  moving list and was drawn on (a hidden pine came back at full; a closed door's open leaf stayed
+  until the beat's end). Now: `_iso_follow_change` puts each new picture right under the old one
+  (`_IsoFollow`; new fades in during the first half, old fades out over it in the second; a lone
+  picture fades with the change), `_iso_follow_on` continues a fade a second simultaneous change
+  starts from, `_iso_refresh_layers` redraws an object fading in by its own change at its current
+  opacity, new pictures join the moving list and `_iso_undraw` takes removed ones out of it.
+  `_iso_swap_front` is the front swap `_iso_keep_order` used inline (`keep=` for the follow).
+
+Files touched
+- `src/vidgen/scenes/iso_motion.py`, `src/vidgen/scenes/stage_iso.py`; new
+  `tests/test_step178.py`; `DESIGN.md` §90.15, `CHANGELOG.md` (0.3.0 now Steps 61–178),
+  `tasklist.md`, `HANDOFF.md`. No public interface change (`vidgen.api` unchanged).
+
+Tests (`tests/test_step178.py`, 7, all render at tiny sizes)
+- Per-frame state recorded by wrapping `CairoRenderer.render`: for every diagram block its drawn
+  opacity, height and bottom, its labels' opacity; connectors, plates, floor. A grown block is
+  unseen before its build, under half grown with no label on its first seen frame, and never
+  shrinks afterwards; drop / fade blocks start below full opacity (drop: above their place) and
+  only come in. Cases: mid-beat `at:`, `@word`, beat start, a stack layer by layer, a group,
+  the scene's own first-beat steps with `entrance: grow`, `build: each`, `build: diagram`,
+  `build: edge:` early, `reveal`, `drop` and `fade`, and the example's trip shortened. Three of
+  them fail with the old `GrowBlock` (checked).
+- An iso stage (pixels): a pine revealed in front of a lamp and a bush in front of a character,
+  then hidden: no pixel jumps most of the way in one frame, and the last frame equals the one
+  before the reveal. Fails on the old `stage_iso.py` (checked with the change stashed).
+- Run one command at a time under `capped`: `test_step178` (7), `test_iso_diagram` +
+  `test_iso_diagram_actions` + `test_iso_web_page` + `test_phase_r_review` + `test_step177` (72),
+  `test_iso_staging` + `test_iso_place` + `test_iso_moves` + `test_iso_story` +
+  `test_phase_q_review` (137), `test_iso_weather` + `test_iso_mood` + `test_cartoon_shots` +
+  `test_api` (51), `test_actions_coverage -k "iso or focus or build or flow or relabel or reveal"`
+  (29), `test_builtin_scenes -k iso` (8). All pass.
+
+Compatibility
+- Phase Q baseline (`s178/qbase.sh`): 31 frames, max difference 0.
+- iso-story against Step 177's stills (`s178/rscene.sh`, one scene a call, into `s178/rframes`):
+  79 of 84 identical; 5 differ, all deliberate (old / new / diff in `s178/rdiff/`): `morning_b10`
+  (wide and short) and `next_morning_b2` (a door closed at 0.85: its open leaf no longer drawn
+  under the closed picture), `evening_b4-m256` (single instead of doubled outlines after the door
+  opened), `next_morning_b6` (the third bud is still opening, no longer at full from its start).
+
+Render (Kokoro audio reused, narration unchanged)
+- `<scratchpad>/s178/open_a_web_page.mp4`: 1920x1080, 2:00 (120.07 s), -16.0 LUFS, true peak
+  -1.9 dBTP. Checked by frame sheets (`s178/new_browser`, `new_render`, `new_stack`) and a scan
+  of every frame from 8 s to 100 s for picture area that drops from one frame to the next
+  (`s178/scan.py`): the old video drops at 11.23 (Browser), 20.43 (load balancer), 23.83 (app
+  servers), 28.80 (cache), 69.43 (HTML response), 73.10 (stack); the new one only at the four
+  scene crossfades. Proof strip (before / after of the Browser build):
+  `<scratchpad>/s178/proof_strip_browser_build.png`.
+
+Known gaps
+- An object's own two-picture change on an iso place (lamp switched, door opened) still fades the
+  new picture over the old one, so soft edges are drawn twice until it ends (a faint outline
+  sharpening on its last frame); pre-existing, not an entrance.
+- A front picture left over from a follow is outside the walkers' draw-order blocks while it
+  fades (a character walking during a change near an object; not seen).

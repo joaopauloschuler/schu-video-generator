@@ -379,6 +379,52 @@ def _footstep(s: Synth) -> np.ndarray:
     return heel + 0.6 * thump + (0.12 + 0.2 * s.intensity) * scuff
 
 
+def _step_grass(s: Synth) -> np.ndarray:
+    # a step on grass: a soft swish of blades (noise around 2.5 kHz, swelling over ~25 ms and
+    # trailing off over ~90 ms) over a faint, muffled heel (noise around 180 Hz, ~15 ms)
+    t = s.t
+    scale = s.duration / 0.16
+    swish = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 2500 * s.ratio * 2 ** (0.5 * (s.intensity - 0.5)), 0.6) * _lowpass(f, 5000 * s.ratio)))
+    swish *= _bump(np.clip(t / (0.12 * scale), 0.0, 1.0), 0.22)
+    heel = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 180 * s.ratio, 0.6))) * _decay(t, 0.002, 0.015 * scale)
+    return 0.8 * swish + 0.5 * heel
+
+
+def _step_gravel(s: Synth) -> np.ndarray:
+    # a step on a sandy path with small stones: a crunch of 25-40 tiny grain clicks (noise
+    # around 2.2 kHz) spread over ~80 ms, thickest at the start, over a soft heel (~240 Hz)
+    t = s.t
+    scale = s.duration / 0.18
+    grains = np.zeros(s.n)
+    count = int(s.rng.integers(25, 41))
+    at = (s.rng.beta(1.2, 3.0, count) * 0.08 * scale * RATE).astype(int)
+    grains[np.clip(at, 0, s.n - 1)] = s.rng.uniform(0.3, 1.0, count) * s.rng.choice([-1.0, 1.0], count)
+    crunch = _normalized(_filtered(grains, lambda f: _band(f, 2200 * s.ratio * 2 ** (s.intensity - 0.5), 0.8)))
+    heel = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 240 * s.ratio, 0.7))) * _decay(t, 0.0015, 0.018 * scale)
+    return crunch + 0.5 * heel
+
+
+def _step_wood(s: Synth) -> np.ndarray:
+    # a step on wooden boards: a hollow knock, a thump near 150 Hz with the boards ringing at
+    # ~340 and ~720 Hz (~45 ms), and a short tap of the heel (noise around 1.2 kHz)
+    t = s.t
+    scale = s.duration / 0.16
+    thump = np.sin(_tone(150 * s.ratio * (1 + 0.3 * np.exp(-t / 0.008)), s.n)) * _decay(t, 0.0015, 0.035 * scale)
+    ring = (0.55 * np.sin(_tone(340 * s.ratio, s.n)) + 0.25 * np.sin(_tone(720 * s.ratio, s.n))) * _decay(t, 0.001, 0.045 * scale)
+    tap = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 1200 * s.ratio * 2 ** (s.intensity - 0.5), 0.6))) * _decay(t, 0.0005, 0.006)
+    return thump + ring + (0.25 + 0.3 * s.intensity) * tap
+
+
+def _step_stone(s: Synth) -> np.ndarray:
+    # a step on stone or tiles: a hard, short heel click (noise around 2.8 kHz, ~5 ms) with a
+    # small dry body (~260 Hz, ~15 ms); no scuff
+    t = s.t
+    scale = s.duration / 0.12
+    click = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 2800 * s.ratio * 2 ** (s.intensity - 0.5), 0.5))) * _decay(t, 0.0003, 0.005 * scale)
+    body = np.sin(_tone(260 * s.ratio, s.n)) * _decay(t, 0.0008, 0.015 * scale)
+    return click + 0.6 * body
+
+
 def _boing(s: Synth) -> np.ndarray:
     t = s.t
     scale = s.duration / 0.5
@@ -746,6 +792,32 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "One soft footstep: a muffled heel knock (noise around 260 Hz with a low 95 Hz thump) "
             "decaying in ~20 ms, then a faint scuff of the sole (noise around 1.8 kHz).",
             "a character's step; stage walks play one per footfall (foley)",
+        ),
+        BuiltinSound(
+            "step_grass", _step_grass, 0.16, (0.06, 0.4),
+            "One step on grass: a soft swish of blades (noise around 2.5 kHz, swelling over ~25 ms "
+            "and trailing off over ~90 ms) over a faint, muffled heel (noise around 180 Hz).",
+            "a character's step on grass (walks on an iso place's grass play it: foley)",
+        ),
+        BuiltinSound(
+            "step_gravel", _step_gravel, 0.18, (0.06, 0.4),
+            "One step on a sandy path: a crunch of 25-40 tiny grain clicks (noise around 2.2 kHz) "
+            "spread over ~80 ms, thickest at the start, over a soft heel knock (~240 Hz).",
+            "a step on a path, gravel or sand (walks on an iso place's paths play it: foley)",
+        ),
+        BuiltinSound(
+            "step_wood", _step_wood, 0.16, (0.06, 0.4),
+            "One step on wooden boards: a hollow knock, a thump near 150 Hz with the boards ringing "
+            "at ~340 and ~720 Hz for ~45 ms, and a short heel tap (noise around 1.2 kHz).",
+            "a step on a wooden floor or a bridge (walks on an iso place's boards and bridges play "
+            "it, a bridge lower: foley)",
+        ),
+        BuiltinSound(
+            "step_stone", _step_stone, 0.12, (0.05, 0.3),
+            "One step on stone or tiles: a hard, short heel click (noise around 2.8 kHz, ~5 ms) with "
+            "a small dry body (~260 Hz, ~15 ms); no scuff.",
+            "a step on stone, steps or tiles (walks on an iso place's stone blocks and tiles play "
+            "it: foley)",
         ),
         BuiltinSound(
             "boing", _boing, 0.5, (0.2, 1.5),

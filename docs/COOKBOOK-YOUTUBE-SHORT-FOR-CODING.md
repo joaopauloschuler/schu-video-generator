@@ -66,7 +66,10 @@ Measured on the final 1080x1920 frames (vidgen's frame is 8 units wide, 135 px p
   props grow with it, about 6 tiles across and 10 up). Captions, code and other text keep their
   size. `vidgen lint`'s `small_speaker` warns when a speaking face is still too small; a beat's
   `shot: closeup <name>` fixes one line. On a level, `level: {follow: <name>}` keeps the hero in
-  the narrow frame as it walks and jumps. See CONFIG.md "Character size (`character_size`)".
+  the narrow frame as it walks and jumps. An isometric place (`iso:`) takes no `character_size`:
+  the whole place fits the frame's width, so in 9:16 keep its map narrow and give every spoken
+  line a `shot:` (or `follow` a walker); name tags say who speaks in the wide views. See CONFIG.md
+  "Character size (`character_size`)" and "Isometric places (`iso`)".
 
   ```yaml
   variants:
@@ -74,6 +77,15 @@ Measured on the final 1080x1920 frames (vidgen's frame is 8 units wide, 135 px p
       format: {width: 1080, height: 1920, fps: 30}
       character_size: large
   ```
+- **Architecture in a Short** (`iso_diagram`): the iso view draws a row wider than tall, so a
+  tall frame needs the diagram's long direction down the frame. Without `at`, `arrange: auto` is
+  a zigzag in 9:16; with `at`, `portrait_grid: auto` slants the grid down the frame when that
+  draws it larger. Either way keep it to about five blocks with short labels ("App 1", "Cache")
+  for a phone; a stack lists its layers under it with colour swatches. `focus` on the part the
+  narration is about (it lands clear of the captions) and `focus: diagram` back. Check the 9:16
+  storyboard: `vidgen lint`'s `iso_labels` names a label lying on another block or connector.
+  The `short` variant of `examples/iso-web-page` shows the limit: its seven-block diagram fits,
+  but its blocks come out small on a phone.
 
 ## 4. Showing the source code
 

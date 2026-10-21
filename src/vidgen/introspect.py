@@ -154,6 +154,7 @@ class LayoutRecorder:
                     "zoom": _r(config.frame_width / camera.frame_width, 4),
                 },
                 **({"shot": dict(scene.camera_shot)} if getattr(scene, "camera_shot", None) else {}),
+                **(scene.layout_keys(captured.beat_id) if hasattr(scene, "layout_keys") else {}),
                 "objects": objects,
                 "overlays": [
                     {"id": overlay.id, "type": overlay.config.type, "settled": settled, "skip": list(overlay.lint_skip)}
@@ -178,7 +179,46 @@ class LayoutRecorder:
         )
         for index, mob in enumerate(scene.mobjects):
             self._walk(walk, mob, [], index, in_code=False)
+        self._iso_covers(walk)
         return walk.objects
+
+    def _iso_covers(self, walk: _Walk) -> None:
+        """On an iso place (DESIGN.md §89.11): each picture of the place drawn over a character's
+        eyes and mouth (its ``features``) gets ``covers`` (character name -> which points of a
+        :func:`~vidgen.lint.cartoon_rules.face_grid` over them its opaque pixels cover, ``1`` /
+        ``0`` per point), so lint ``hidden_speaker`` measures what hides the face, not the
+        picture's box."""
+        from vidgen.lint.cartoon_rules import face_grid
+
+        figures = [o for o in walk.objects if o["kind"] == "character" and o.get("features")]
+        if not figures:
+            return
+        mobs = {label: mob for mob, label in self._ids.values()}
+        for obj in walk.objects:
+            mob = mobs.get(obj["id"])
+            if obj["kind"] != "image" or not obj.get("scenery") or mob is None or not getattr(mob, "iso_tile", False):
+                continue
+            pixels = mob.get_pixel_array()
+            corners = walk.camera.points_to_subpixel_coords(mob, mob.points)
+            (left, top), (right, bottom) = corners[0], corners[3]
+            for figure in figures:
+                box = tuple(float(v) for v in figure["features"])
+                if obj["order"] <= figure["order"] or intersection_box(tuple(obj["bbox"]), box) is None:
+                    continue
+                gx, gy = face_grid(box)
+                height, width = pixels.shape[:2]
+                u = np.floor((gx - left) / max(right - left, 1e-9) * width).astype(int)
+                v = np.floor((gy - top) / max(bottom - top, 1e-9) * height).astype(int)
+                inside = (u >= 0) & (u < width) & (v >= 0) & (v < height)
+                hit = np.zeros(gx.shape, dtype=bool)
+                hit[inside] = pixels[v[inside], u[inside], 3] >= 128
+                obj.setdefault("covers", {})[figure["name"]] = "".join("1" if h else "0" for h in hit.ravel())
+                if hit.any():   # the pieces of the place drawn there (by their boxes on screen)
+                    near = obj.setdefault("pieces", [])
+                    for name, (x0, y0, x1, y1) in getattr(mob, "iso_pieces", ()):
+                        (a, b), (c, d) = walk.camera.points_to_subpixel_coords(mob, np.array([[x0, y1, 0.0], [x1, y0, 0.0]]))
+                        if name not in near and intersection_box((a, b, c, d), box) is not None:
+                            near.append(name)
 
     def overlay_objects(self, scene: NarratedScene, pixels: np.ndarray, shown: list[tuple[Any, Mobject]], first: int) -> list[dict[str, Any]]:
         """The visible objects of the overlays ``shown`` (``(overlay, mobject)`` as drawn), drawn
@@ -247,6 +287,10 @@ class LayoutRecorder:
         if isinstance(speaker, str):  # a speech bubble: its plate and text say whose it is
             for obj in walk.objects[first:]:
                 obj["bubble"] = speaker
+        tagged = getattr(mob, "name_tag_of", None)
+        if isinstance(tagged, str):  # a name tag over a speaker on an iso place (§89.11)
+            for obj in walk.objects[first:]:
+                obj["name_tag"] = tagged
 
     def _walk_one(self, walk: _Walk, mob: Mobject, parents: list[str], index: int, *, in_code: bool) -> None:
         from manim import Code
@@ -255,6 +299,7 @@ class LayoutRecorder:
         from vidgen.cartoon.character import Character
         from vidgen.cartoon.effect_symbols import EffectSymbol
         from vidgen.cartoon.host_drawing import HostFigure
+        from vidgen.cartoon.iso_pictures import IsoPuddles
         from vidgen.cartoon.living_drawing import PropGlow, PropSteam
         from vidgen.cartoon.motion_effect_shapes import MotionEffect
         from vidgen.cartoon.nature_drawing import FallenFruit, Flock
@@ -268,8 +313,8 @@ class LayoutRecorder:
 
         # a stage's shadows, stars, puddles, glows, steam, birds, fallen fruit, poured water,
         # settled snow, fog, lightning and rainbows: not placed by authors (§69.31, §69.39, §69.54,
-        # §69.55, §69.56, §69.60, §69.61)
-        unplaced = (StageShadows, StarField, Puddles, PropGlow, PropSteam, Flock, FallenFruit, WaterDrops, SnowBlanket, SnowCap, FogBand, LightningBolt, Rainbow)
+        # §69.55, §69.56, §69.60, §69.61; an iso place's puddles §90.2)
+        unplaced = (StageShadows, StarField, Puddles, IsoPuddles, PropGlow, PropSteam, Flock, FallenFruit, WaterDrops, SnowBlanket, SnowCap, FogBand, LightningBolt, Rainbow)
         if id(mob) in walk.seen or isinstance(mob, unplaced):
             return
         walk.seen.add(id(mob))
@@ -408,6 +453,12 @@ class LayoutRecorder:
         walk.objects.append(item)
 
 
+def intersection_box(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, float, float, float] | None:
+    """The overlap of two boxes ``(x0, y0, x1, y1)`` (``None``: apart)."""
+    x0, y0, x1, y1 = max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
+    return (x0, y0, x1, y1) if x1 > x0 and y1 > y0 else None
+
+
 def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
     """What the cartoon lint rules read about a character (DESIGN.md §69.17): ``facing``,
     ``speaking`` and, when they apply, ``face`` (its head's box), ``viseme`` (what its lip sync
@@ -427,6 +478,22 @@ def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
                 "holding": dict(figure.holding) or None, "sitting_on": figure.sitting_on, "leaning_on": figure.leaning_on,
                 "riding": figure.riding}
     keys.update({key: value for key, value in optional.items() if value is not None})
+    if getattr(figure, "iso_feet", None) is not None:   # on an iso place (DESIGN.md §89.11)
+        keys.update(_iso_character_keys(walk, figure))
+    return keys
+
+
+def _iso_character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
+    """What lint reads about a character on an iso place (DESIGN.md §89.11): ``features`` (the box
+    of its eyes and mouth: what must show for the viewer to see who speaks) and ``name_tag``
+    (its name tag shows: it speaks while small on screen)."""
+    keys: dict[str, Any] = {}
+    parts = [figure.parts[name] for name in ("eyes", "mouth") if figure.has_part(name)]
+    boxes = [p.box for part in parts for p in (_measure(walk, m) for m in part.get_family()) if p is not None]
+    if boxes:
+        keys["features"] = [_r(min(b[0] for b in boxes)), _r(min(b[1] for b in boxes)), _r(max(b[2] for b in boxes)), _r(max(b[3] for b in boxes))]
+    if getattr(figure, "name_tagged", False):
+        keys["name_tag"] = True
     return keys
 
 

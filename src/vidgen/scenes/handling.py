@@ -24,6 +24,7 @@ from vidgen.api import *
 
 from .acting import _Acting, _characters, is_part_target, is_posed, posture_parts
 from .moving import Place, _place_x
+from .stage_iso import IsoObject
 
 #: Which hand: left (the near one, drawn in front of the body) or right.
 Hand = Literal["left", "right"]
@@ -284,11 +285,13 @@ class PutDown(_Handling):
     the ground at ``to`` (a mark or an x of the stage; default: just in front of it), at its
     own depth, back to its full size, crouching when the spot is low; its arm goes back to how it
     was. The spot must be within
-    its reach (vidgen validate says where to walk_to first)."""
+    its reach (vidgen validate says where to walk_to first). On an iso place ``to`` is a spot
+    next to it (on the table or bench standing there: placing it); without ``to`` it drops it on
+    the ground beside it."""
 
     class Options(ActionOptions):
         to: Place | None = None
-        """Where it puts it: a mark or an x from 0 (left edge) to 1 (right edge) of the stage; default: just in front of it."""
+        """Where it puts it: a mark or an x from 0 (left edge) to 1 (right edge) of the stage (on an iso place a spot next to it, on a table or bench there); default: just in front of it."""
         prop: str | None = None
         """Which prop, when it holds two."""
 
@@ -308,14 +311,23 @@ class PutDown(_Handling):
             prop.stage_depth = character.stage_depth   # it lands at its holder's depth (DESIGN.md §69.44)
             held = _held(scene).get(name)
             feet = character.feet()
-            x = _place_x(scene, self.options.to) if self.options.to is not None else put_down_x(float(feet[0]), character.character_height, character.facing)
+            ground = float(feet[1])
+            if getattr(scene, "on_iso", False):   # on a spot of the place, or on the ground beside it (DESIGN.md §89.10)
+                prop.iso_feet = scene.iso_put_point(character, self.options.to)
+                x, ground = scene.iso_view.point(*prop.iso_feet)
+            elif self.options.to is not None:
+                x = _place_x(scene, self.options.to)
+            else:
+                x = put_down_x(float(feet[0]), character.character_height, character.facing)
             height = _standing_height(prop, character)
-            spot = [x, float(feet[1]) + height, 0.0]
+            spot = [x, ground + height, 0.0]
             back = held.arm_before if held is not None else _arm(character, hand)
             anims.append(_reach_low(character, hand, spot, PUT_DOWN_REACH_SHARE, back))
             anims.append(self._move(scene, prop, leave=PUT_DOWN_REACH_SHARE, arrive=PUT_DOWN_LAND_SHARE,
-                                    to=_standing_grip(prop, x, float(feet[1]), height), height=height))
+                                    to=_standing_grip(prop, x, ground, height), height=height))
             detach(scene, prop)
+            if getattr(scene, "on_iso", False):
+                scene.iso_put_down(prop, ground)
         return anims
 
 
@@ -399,6 +411,9 @@ class Throw(_Handling):
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
         problems = super().scene_problems(scene_cls, params)
+        if getattr(params, "iso", None) is not None:
+            return problems + [("action", "throw is not for an iso place (things do not fly across it); put_down the prop "
+                                          "(to: a spot next to it) or give it to someone")]
         return problems + _place_problem(scene_cls, params, self.options.to)
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
@@ -451,10 +466,15 @@ class _Reshape(Action):
             return [("target", f"{action} is for the props of a stage")]
         kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         able = sorted(kind for kind, shapes in PROP_SHAPES.items() if self.shape in shapes)
+        objects = params.iso.object_kinds() if getattr(params, "iso", None) is not None else {}   # an iso place's (§89.10)
         problems: list[tuple[str, str]] = []
         for pattern in self.config.targets():
             for name in [n for n in scene_cls.target_names(params) if fnmatchcase(n, pattern) and not is_part_target(n)]:
-                if name not in kinds:
+                if name in objects:
+                    if objects[name] not in OPENING_KINDS:
+                        problems.append(("target", f"'{name}' (a {objects[name]}) cannot {action}; on an iso place a house (its door), "
+                                         "a door of a room's wall (door_1...) and flowers (they bloom, or close to buds) can"))
+                elif name not in kinds:
                     problems.append(("target", f"'{name}' is not a prop; {action} acts on props (- {action}: <prop>)"))
                 elif self.shape not in PROP_SHAPES.get(kinds[name] or "", ()):
                     problems.append(("target", f"'{name}' cannot {action} (props that can: {', '.join(able)})"))
@@ -473,6 +493,9 @@ class _Reshape(Action):
         """Switch each target prop's shape half-way; a held one's arm moves to where it holds
         it in its new shape (overhead or in front), the prop at the hand."""
         anims: list[Animation] = []
+        seconds = float(self.config.run_time or self.run_time)
+        for target in [t for t in targets if isinstance(t.mobject, IsoObject)]:   # an iso place's house, door, flowers (§89.10)
+            scene.iso_change(target.name, float(scene.renderer.time) + seconds / 4, seconds / 2, open=self.shape == "open")
         for prop in [t.mobject for t in targets if isinstance(t.mobject, Prop)]:
             if self.shape not in prop.shapes or prop.shape == self.shape:
                 continue
@@ -583,6 +606,8 @@ class BlowAway(Action):
         """Targets are props light enough to blow away; ``to`` a place of the stage."""
         if "<prop>" not in scene_cls.target_patterns:
             return [("target", "blow_away is for the props of a stage")]
+        if getattr(params, "iso", None) is not None:
+            return [("action", "blow_away is not for an iso place (no wind there yet); hide an object, or put_down a prop")]
         kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         light = ", ".join(sorted(LIGHT_PROPS))
         problems: list[tuple[str, str]] = []
