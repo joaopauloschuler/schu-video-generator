@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "card", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "line_chart", "map", "network", "number_line", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["bar_chart", "bullets", "card", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "line_chart", "map", "network", "number_line", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -61,6 +61,10 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "process": {"heading": "Flow", "input": "in", "output": "out", "token_label": "job", "loop": True, "stages": ["a", {"label": "b", "icon": "cpu", "text": "detail"}, "c"]},
     "network": {"heading": "Net", "layers": [3, {"size": 100, "label": "Hidden"}, {"size": 2, "label": "Out", "connect": "sparse:0.5"}], "highlight": ["1.1", "2.1"]},
     "flowchart": {"nodes": ["start", "end"], "edges": ["start -> end"], "routing": "orthogonal", "steps": [["start"], ["end"]]},
+    "iso_diagram": {"heading": "Stack", "blocks": [{"id": "web", "label": "Web"}, {"id": "db", "shape": "database"},
+                                                   {"id": "app", "label": "App", "layers": ["ui", {"id": "api", "shape": "box", "height": 0.5}]}],
+                    "groups": [{"id": "back", "label": "Back end", "blocks": ["db", "app"]}],
+                    "edges": ["web -> db: SQL", {"from": "db", "to": "app", "style": "pipe"}, "app --> web"]},
     "stat": {"value": 1234.5, "prefix": "$", "unit": "k", "label": "Revenue", "context": "2025", "icon": "banknote", "comparison": {"value": 1000, "delta": "percent"}},
     "scatter": {"title": "Points", "series": {"a": [[1, 2], [2, 3.5, "two"], [3, 3]], "b": [[1.5, 1], [2.5, 2]]}, "trend": "each", "trend_label": "both", "highlight": ["two"], "x_label": "x"},
     "histogram": {"title": "Spread", "values": [1, 2, 2, 3, 3, 3, 4, 4, 5, 7], "mean": True, "median": True, "compare": {"name": "b", "values": [2, 3, 4, 4, 5, 6]}, "highlight": [1]},

@@ -47,6 +47,11 @@ FIGURE_HALF_WIDTH = 0.21
 MAX_SHOT_SCALE = MAX_ZOOM
 #: Seconds a ``shot`` with ``move: true`` eases to its framing (a cut takes no time).
 SHOT_MOVE_SECONDS = 1.0
+#: A tall frame on an iso place (:func:`portrait_shot`): a character wholly in the view keeps
+#: this share of the view's width off its edges; the figures are centred up and down when the
+#: view is this many times their height.
+PORTRAIT_EDGE = 0.04
+PORTRAIT_ROOM = 1.6
 
 
 @dataclass(frozen=True)
@@ -213,8 +218,53 @@ def shot_view(shot: Shot, present: Mapping[str, ShotFigure], *, frame_width: flo
     return frame_shot(shot.kind, subjects, frame_width=frame_width, frame_height=frame_height, bounds=bounds, near=near)
 
 
+def portrait_shot(view: ShotView, shot: Shot, present: Mapping[str, ShotFigure], *, frame_width: float, frame_height: float,
+                  bounds: Bounds) -> ShotView:
+    """``view`` (:func:`shot_view` of ``shot``) reframed for a tall frame where it is wider than
+    the framing asked for (a close-up held back by :data:`MAX_SHOT_SCALE`: on an iso place the
+    characters are small, and a 9:16 view at the tightest zoom is about three of them tall):
+
+    - across: the nearest centre at which every other character ``present`` is either wholly in
+      the view (:data:`PORTRAIT_EDGE` of its width inside each edge) or wholly out of it, the
+      subjects staying wholly in, so nobody stands cut in half at the frame's edge;
+    - up and down: when the view is :data:`PORTRAIT_ROOM` times taller than the characters in it,
+      their figures are centred (a close-up's head at the top left the lower two thirds to the
+      ground).
+
+    ``wide`` and ``over_shoulder`` (whose near character is cut on purpose) are kept as they are."""
+    if shot.kind in ("wide", "over_shoulder"):
+        return view
+    subjects = [present[n] for n in shot.subjects if n in present]
+    if not subjects:
+        return view
+    width, height = frame_width / view.scale, frame_height / view.scale
+    edge = PORTRAIT_EDGE * width
+    others = [f.box() for name, f in present.items() if name not in shot.subjects]
+    mine = [s.box() for s in subjects]
+
+    def fine(cx: float) -> bool:
+        left, right = cx - width / 2, cx + width / 2
+        if any(b[0] < left + edge - 1e-9 or b[2] > right - edge + 1e-9 for b in mine):
+            return False
+        return all(b[2] <= left + 1e-9 or b[0] >= right - 1e-9 or (b[0] >= left + edge - 1e-9 and b[2] <= right - edge + 1e-9) for b in others)
+
+    x = view.center_x
+    if not fine(x):
+        candidates = [c for b in [*others, *mine] for c in (b[0] - edge + width / 2, b[2] + edge - width / 2, b[2] + width / 2, b[0] - width / 2)]
+        found = sorted((c for c in candidates if fine(c)), key=lambda c: abs(c - x))
+        x = found[0] if found else x
+    left, right = x - width / 2, x + width / 2
+    shown = mine + [b for b in others if b[0] >= left + edge - 1e-9 and b[2] <= right - edge + 1e-9]
+    low, high = min(b[1] for b in shown), max(b[3] for b in shown)
+    y = (low + high) / 2 if height >= PORTRAIT_ROOM * (high - low) else view.center_y
+    return _within(bounds, x, y, view.scale, frame_width, frame_height)
+
+
 __all__ = [
     "LOOK_ROOM",
+    "PORTRAIT_EDGE",
+    "PORTRAIT_ROOM",
+    "portrait_shot",
     "MAX_SHOT_SCALE",
     "SHOT_KINDS",
     "SHOT_MIN_WIDTHS",

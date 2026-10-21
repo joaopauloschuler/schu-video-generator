@@ -28,6 +28,7 @@ from vidgen.cartoon.lighting import (
     Stars,
     grade_pixels,
     grade_rgbas,
+    lamp_lit,
     light_at,
     light_changing,
     light_grade,
@@ -73,6 +74,35 @@ def resolve_light(setting: str | CustomLight, theme: Theme | None = None) -> Lig
     return light_grade(setting)
 
 
+#: The attribute holding a :class:`LampLit` on what a lamp can light (DESIGN.md §89.13).
+LAMP_LIT = "lamp_lit"
+
+
+class LampLit:
+    """How much lamplight falls on a character: ``share()`` (0..1) is asked when it is drawn
+    (once per scene time, :class:`StageLight` asks for each of its shapes); :meth:`grade` is the
+    stage's light with it (:func:`~vidgen.cartoon.lighting.lamp_lit`), made once per light and
+    share."""
+
+    def __init__(self, share: Callable[[], float]) -> None:
+        self.share = share
+        self._made: tuple[LightGrade, float, LightGrade] | None = None
+
+    def grade(self, base: LightGrade) -> LightGrade:
+        share = round(float(self.share()), 3)
+        if self._made is not None and self._made[1] == share and self._made[0] is base:
+            return self._made[2]
+        grade = lamp_lit(base, share)
+        self._made = (base, share, grade)
+        return grade
+
+
+def mark_lamp_lit(mobject: Mobject, lamp: LampLit) -> None:
+    """Let a lamp light ``mobject`` and everything in it (where :func:`mark_lit` grades it)."""
+    for member in mobject.get_family():
+        setattr(member, LAMP_LIT, lamp)
+
+
 def mark_lit(*mobjects: Mobject) -> None:
     """Mark ``mobjects`` and everything in them as graded by the stage's light."""
     for mob in mobjects:
@@ -107,17 +137,22 @@ class StageLight:
         camera.get_stroke_rgbas = lambda vmobject, *args, **kwargs: self._graded(vmobject, stroke(vmobject, *args, **kwargs))
         camera.display_image_mobject = lambda image_mobject, pixel_array: self._draw_image(image, image_mobject, pixel_array)
 
+    def _grade_of(self, mob: Any) -> LightGrade:
+        """The grade of a lit ``mob``: the light's, with a lamp's light on it (§89.13)."""
+        lamp = getattr(mob, LAMP_LIT, None)
+        return self.grade if lamp is None else lamp.grade(self.grade)
+
     def _graded(self, mob: Any, rgbas: np.ndarray) -> np.ndarray:
         if not self.grade.changes_colors or not getattr(mob, LIT, False):
             return rgbas
-        return grade_rgbas(rgbas, self.grade)
+        return grade_rgbas(rgbas, self._grade_of(mob))
 
     def _draw_image(self, draw: Callable[[Any, Any], Any], image: Any, pixel_array: Any) -> Any:
         """Draw a picture, graded while it is drawn when it is lit."""
         if not self.grade.changes_colors or not getattr(image, LIT, False):
             return draw(image, pixel_array)
         original = image.pixel_array
-        image.pixel_array = grade_pixels(original, self.grade)
+        image.pixel_array = grade_pixels(original, self._grade_of(image))
         try:
             return draw(image, pixel_array)
         finally:

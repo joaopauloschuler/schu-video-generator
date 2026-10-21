@@ -1247,6 +1247,7 @@ class NarratedScene(MovingCameraScene):
         entrance: Callable[[], Sequence[Animation]] | None = None,
         outline: Mobject | None = None,
         on_fill: Sequence[tuple[Mobject, Mobject]] = (),
+        recolor: Callable[[Callable[[str], str]], dict[int, Any]] | None = None,
     ) -> Target:
         """Register ``mobject`` as an action target under ``names`` (the first is its main name).
 
@@ -1256,7 +1257,9 @@ class NarratedScene(MovingCameraScene):
         on screen (used by the ``reveal`` action and :meth:`entrance`; default ``FadeIn``);
         ``outline`` is what a ``highlight`` box surrounds (default: ``mobject``); ``on_fill``
         lists ``(text, shape)`` pairs of text written on a filled shape of the target, which
-        ``dim`` and ``highlight`` recolour to stay readable on the shape (see ``Target.on_fill``).
+        ``dim`` and ``highlight`` recolour to stay readable on the shape (see ``Target.on_fill``);
+        ``recolor`` makes it a solid drawing that ``dim`` and ``highlight`` recolour with its
+        shading kept (see ``Target.recolor``).
         """
         names = (names,) if isinstance(names, str) else tuple(names)
         if not names:
@@ -1264,7 +1267,7 @@ class NarratedScene(MovingCameraScene):
         for name in names:
             if not isinstance(name, str) or not TARGET_NAME.match(name):
                 raise VidgenError(f"scene '{self.spec.id}': invalid target name {name!r} (use name, name3, name1.part2 or kind:label)")
-        target = Target(names, mobject, entrance, outline, self._rest, tuple(on_fill))
+        target = Target(names, mobject, entrance, outline, self._rest, tuple(on_fill), recolor=recolor)
         self._targets.append(target)
         return target
 

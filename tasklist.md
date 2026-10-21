@@ -899,6 +899,106 @@ voices say "epoch" like "epic") should ship with vidgen instead of being copied 
 - [x] Entries checked with misaki in the Kokoro venv (phonemes before / after, American and British), kept only when clearly better: 21 English + 3 American (SGD dropped: already right)
 - [x] Docs (CONFIG, guide + `AGENTS.md`, README, CHANGELOG, DESIGN §88) and tests (`tests/test_pronunciation_defaults.py`)
 
+## Phase Q — Isometric story worlds
+
+Goal: isometric *environments* for cartoon stories, to tell ideas and stories clearly: a place
+written as an ASCII map with heights (floor, walls, raised blocks, steps, water and grass; letters
+are named spots), ready-made objects, indoor rooms with two cut-away walls and outdoor places,
+drawn once into pictures in vidgen's flat cartoon style with theme colours. The characters stay
+the 2D cut-outs they are (side and front views, expressions, actions, lip sync), standing upright
+in it, hidden by what is in front of them. No platforming in iso (no jumps, no gravity); a side
+walk cycle sliding along a diagonal is accepted. An `iso:` param on the cartoon `stage`, like
+Phase O's `level:` (DESIGN §89); the world model and rules extend `src/vidgen/world/` (no manim),
+renderers in `cartoon/`; the projection and block drawing stay reusable for a later presentation
+`iso_diagram` (not built in this phase). Purely additive: every existing project renders exactly
+as before (baseline frames from Step 166 compared in Step 171); mixtures that make no sense are
+refused with a `VidgenError` naming the conflict and the alternative. Hero and story original.
+Same rules as Phases H–P.
+
+### Step 166 — Phase plan, iso world model, projection and static rendering
+- [x] Phase Q plan here and DESIGN §89 (the whole phase, `stage` + `iso:` rather than a new scene type, the layers, the plan of Steps 167–171 in §89.8)
+- [x] Baseline frames of existing examples for Step 171, outside the repo (platform-story `meadow`, cartoon `yard`, gradient-descent `curve` and `code` / `run`: 31 storyboard stills at 854x480 from the examples as committed at e0ae8180; rendered twice, identical; `phase-q-baseline/make_baseline.sh` and `compare.py` in the session scratchpad)
+- [x] Iso world model with an ASCII map with heights and validation (`vidgen/world/iso.py`: `IsoPlace`, `parse_iso_map`, `place_objects`; symbols for outside, floor, path, water, wall, door, window, blocks 1–9 steps, trees, bushes, flowers, fences; letters are spots taking the ground around them; an optional `heights` map; ready-made objects with footprints, facing and size; indoor walls cut away in front; errors naming the map's row and column or the object and cell)
+- [x] Projection and draw order, reusable (`vidgen/world/iso_view.py`: `iso_point`, `Box3`, `in_front`, `draw_order`; `cartoon/iso_drawing.py`: shapes, `box_shapes` with joined sides, `draw_shapes`)
+- [x] Static rendering in the flat cartoon style with theme colours (`cartoon/iso_scenery.py`, `iso_objects.py`, `iso_stage.py`: the ground, the slab, water, raised blocks and steps, walls with skirting, windows and doors, cut-away walls indoors, 19 ready-made objects with soft shadows; the place drawn once into a base picture and a front picture per character; `stage` param `iso: {place, map, heights, spots, objects, colors}`, characters at spots, refusals of `level`, `room`, `water`, `fog`, `width`, `layers`, `props`, `size`, `character_size`, `depth`)
+- [x] An early test render with existing character cut-outs on the map, checked by eye (a village and a room at 854x480 and 1280x720, 9:16: a character hidden behind the house, one behind a tree's crown, one on a block; `tests/test_iso_place.py` incl. one tiny render)
+
+### Step 167 — Characters in iso: placement, draw order while moving, pathfinding
+- [x] Characters on the place: ground shadow on the cell top, height on blocks and steps (feet rise before a higher cell, drop after; on a bridge's deck), draw order with walls and objects while they move (each frame: the pieces over the character's box, its front picture swapped when they change, made once per set and cropped to its pieces; characters re-sorted by their boxes), facing follows the walk direction (side view left / right by the picture's direction; front view straight towards the camera when the character has one; no back view); `depth` refused (done in Step 166)
+- [x] Movement rules (no manim, `vidgen/world/iso_moves.py`): `walk_to: <spot>` or `{column, row}` finds a route on the grid (8 neighbours, no corner cutting, one step up or down at a time, round water, walls, objects and others; deterministic, fewest turns); `run_to`; `walk_to` / `run_to` `after: <leader>` (follow: `follow` is the camera's action name), `wander`, `meet` (side by side, facing each other); `enter` / `exit` over the place's edge (`side` / `to`) or out of / into a spot (`door`), fading; a clear `VidgenError` for an unknown spot, a cell nobody stands on or no route (where the way stops and what is in the way); `vidgen validate` replays the moves
+- [x] Timed to narration lines and to words (Phase P `at: "@word"` anchors), natural run times from the route; lint `rushed_animation` covers iso walks
+- [x] Tests: rules without rendering, timing, a tiny render (`tests/test_iso_moves.py`)
+
+### Step 168 — Staging: iso shots, items, doors, lights, place changes
+- [x] Iso shots: the establishing view of the whole place, follow the hero, zoom to a group, dialogue close-ups reusing the existing flat close-ups / `shot:` (the place drawn in tiles at levels of detail for the zoom; `follow` zooms in; `pan` to a spot)
+- [x] Small items as cut-outs (gift, letter, key, flower) with `pick_up` / `give` / `drop` / `place` (the stage's `props`, small ones, at spots or on a table; drop and place are `put_down` without / with `to`; new prop `flower`)
+- [x] Doors that open, lights that turn on, simple changes to the place (a flower blooms, a lamp lights, a bridge appears) for cause and effect (`open` / `close`, `switch_on` / `switch_off`, `reveal` and a new `hide`; objects' `open`, `on`, `shown`)
+- [x] Tests (`tests/test_iso_staging.py`); also: a follower ending right behind its leader steps aside
+
+### Step 169 — Mood, small characters, sounds and lint
+- [x] Time of day / mood tints (morning, evening, night, rain) on the place (the stage's `light` and `particles`; lit lamps and windows glow)
+- [x] Speech bubbles or name tags when characters are small on screen (automatic name tags; `say` bubbles as anywhere)
+- [x] Footsteps by surface, door, pickup and ambience (birds, rain) through the existing sfx / foley system (synthesised; no licensed assets; + crickets at night)
+- [x] Lint: a speaker hidden behind objects, a speaker too small for the line, an action happening off-screen
+- [x] Tests
+- [ ] (optional, not done) closed doors blocking routes
+
+### Step 170 — Example story and docs
+- [x] A short original kids' story (2–3 min) in an iso village with narration (`examples/iso-story`, "Hazel and the Lamp by the Bridge"), 16:9 and a 9:16 variant; voiced with Kokoro and rendered outside the repo
+- [x] Guide (+ `AGENTS.md`, new topic `iso`), CONFIG, README, CHANGELOG, the Shorts cookbook; the stage's gallery page (its params table: `iso`)
+- [x] Fixes found by the example: rain from a scene's start darkens an iso place (`ISO_RAIN_LIGHT`), a held thing fades with its holder leaving the place, a walk to where someone stands across water is refused (`BESIDE_REACH`)
+
+### Step 171 — Review of Phase Q
+- [x] Critical review of the phase with fixes, recorded in HANDOFF like earlier phase reviews (the wide view fits the place to 16:9 and 9:16, `pan` moves in from it, lamplight on the characters, flower beds and hedges a clump per cell, a bare `on:` in the JSON Schema, clearer messages; closed doors and crossing walkers decided and documented; DESIGN §89.13)
+- [x] Backwards compatibility against Step 166's baseline frames (`make_baseline.sh` with `OUT=` a new folder, then `compare.py`): 31 frames, max difference 0; lint of platform-story, cartoon and gradient-descent as before
+- [x] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
+
+## Phase R — Iso polish and iso diagrams for presentations
+
+Goal: close the weather gaps Phase Q left on an iso place, then reuse the iso projection and
+block drawing for presentations: a new scene type `iso_diagram` (blocks, slabs, cylinders and
+tiles on a grid, flat readable labels, connectors, stacks) whose actions are timed to beats and
+spoken words, with an example tech explainer. DESIGN §90. Purely additive: existing projects
+render as before (Phase Q's 31 baseline frames; iso-story's 84 baseline stills from Step 172
+change only where intended), mixtures that make no sense are refused with a `VidgenError`
+naming the conflict and the alternative. Same rules as Phases H–Q.
+
+### Step 172 — Phase plan and iso weather polish
+- [x] Phase R plan here and DESIGN §90; baseline stills of `examples/iso-story` (wide, close-ups, night; 16:9 and 9:16) recorded before any change (`phase-r-baseline/make_baseline.sh` in the session scratchpad)
+- [x] Shelter from rain on an iso place: a drop lands on the top of what keeps it off (a roof, a crown, a bridge's deck, any upward surface; `TopSurface`, `lift_floors`); indoors stays rain-free; nobody can stand under a shelter, so steps stay as they were
+- [x] Puddles on an iso place (`puddles: true`): seeded on open grass and paths, never sheltered, on water or covered by something in front; growing, with ripples while it rains (`IsoPuddles`)
+- [x] Settling snow on an iso place (`settle: true`): the pictures' snow (a snow pass of `draw_shapes`: tops, roof slopes, crowns' and bushes' caps, pine tiers, a well's roof) laid over each tile as it grows (`IsoSnow`)
+- [x] Speed lines of a run on an iso place along the walk's diagonal on screen
+- [x] The `puddles` / `settle` refusals removed; CONFIG iso section, guide topic `iso` + `AGENTS.md`, CHANGELOG; tests (`tests/test_iso_weather.py`)
+
+### Step 173 — `iso_diagram` core
+- [x] A presentation scene type `iso_diagram` reusing `world/iso_view.py` and the iso block drawing (the shape model and `box_shapes` imported as they are, drawn as vectors by `iso_vector.py`; nothing moved, iso stage output unchanged: 31 baseline frames identical)
+- [x] Blocks (boxes, slabs, cylinders, databases, flat tiles) placed on a grid by name (`at`, `size`, `height`) or arranged in order (`row`, `column`, `grid`, `zigzag`); flat readable labels (on a block's top when they fit, else on a plate, never below the readable size); theme palette and Phase P `terms:` colours; connectors along the grid (flat arrows, dashed, pipes; tips in view); groups (plates) and stacks (a block with `layers`)
+- [x] Auto-fit to 16:9 and 9:16 (`arrange: auto` is a zigzag in 9:16); tests (`tests/test_iso_diagram.py`); CONFIG section, guide chooser row and snippet, gallery page, `examples/gallery` scene
+
+### Step 174 — `iso_diagram` actions
+- [x] Build-in (`build`: grow up, drop in, fade; `entrance`, `build: each`), `raise` / `lower` (shadows), highlight / dim keeping the blocks' shading (`Target.recolor`), `flow` along connectors (dots, packets, `chain`), `explode` / `collapse` a stack, camera `focus` on a block or group (no rotation), `relabel` labels and values; timed to beats and `at: "@word"`
+- [x] Label placement reworked after Step 173's stills (labels by their block's outline, leader lines when pushed away, clear of other blocks, labels and pipes; group captions by the plate's front edge; connector labels along the connector; one label per block; 9:16 stacks list their layers under them and are drawn larger; an `at` grid slanted down a 9:16 frame, `portrait_grid`)
+- [x] Lint `iso_labels` (labels over other blocks or labels, hiding a connector, far from what they name; size and contrast stay `min_font`'s and `contrast`'s); tests (`tests/test_iso_diagram_actions.py`)
+
+### Step 175 — Example and docs
+- [x] An original short tech explainer with `iso_diagram` (16:9 and 9:16), rendered with Kokoro narration outside the repo (`examples/iso-web-page`, "What happens when you open a web page", 2:00; fixes found on the way: the fit's largest scale, `focus` in the safe area, `focus: diagram` back to the whole frame; `tests/test_iso_web_page.py`)
+- [x] Guide + `AGENTS.md`, CONFIG, CHANGELOG, README, gallery (iso_diagram media regenerated), the Shorts cookbook
+
+### Step 176 — Review of Phase R
+- [x] Critical review with fixes in HANDOFF (diagrams fill the body, focus fades the labels it would cut, connectors tilt to raised blocks, a tidy floor that comes in with the blocks, 9:16 layouts chosen by fit, ripples inside puddles; `tests/test_phase_r_review.py`); backwards compatibility against the baseline stills (Phase Q 31 identical; iso-story only Step 172's changes); the 9:16 variant of `examples/iso-story` rendered at 1080x1920 with the Kokoro audio
+- [x] The phase's test files and related suites one at a time; `tests/test_mcp.py` in full with a long timeout
+
+### Step 177 — Phase R follow-ups (after the review)
+- [x] A raised block's label keeps off its tilted connectors (`examples/iso-web-page` lints clean in 16:9 and 9:16; `iso_labels` judges a label's distance at the diagram's own scale under a `focus`)
+- [x] Pipes tilt up to raised ends like flat arrows (during the raise / lower, with `flow` dots and packets on them)
+- [x] 9:16 shots on an iso place keep characters whole (in or out, never cut at the edge), centre the figures when the tightest zoom leaves room, and the wide view keeps the scene's walk destinations; 16:9 unchanged (iso-story's 61 16:9 baseline stills identical); renders of the web-page video (16:9) and Hazel's Short with the Kokoro audio; `tests/test_step177.py`
+
+### Step 178 — Bug fix: a block shown at full before it grows in
+- [x] A grown `iso_diagram` block (any timing, any target) starts unseen on its first frame instead of showing at full size until the floor, plate or heading before it had faded in (`GrowBlock` an introducer)
+- [x] The same class on an iso place: other pictures showing a revealed, hidden, opened or switched object follow its fade; pictures made or removed mid-play are drawn / no longer drawn (`_IsoFollow`, `_iso_undraw`)
+- [x] Regression tests from per-frame state and pixels (`tests/test_step178.py`); Phase Q baseline identical; the web-page video re-rendered with the Kokoro audio and checked frame by frame
+
 ---
 
 ## Backlog (after Step 60)

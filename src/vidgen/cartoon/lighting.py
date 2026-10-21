@@ -115,6 +115,26 @@ def blend_grades(a: LightGrade, b: LightGrade, share: float) -> LightGrade:
     return LightGrade(multiply, glow, mix(a.stars, b.stars), mix(a.shadow, b.shadow))  # type: ignore[arg-type]
 
 
+#: A lamp's light on what stands near it (an iso place's lamp at night, DESIGN.md §89.13): its
+#: colour and strength as a light, the share of the way from the stage's light to it where it
+#: falls fully, and how dark the stage's light must be (one minus its mean ``multiply``) for the
+#: lamp to show fully (less in a lighter one; by day nothing).
+LAMP_LIGHT = ("#FFD98A", 0.3)
+LAMP_LIFT = 0.6
+LAMP_DARK = 0.45
+
+
+def lamp_lit(base: LightGrade, share: float) -> LightGrade:
+    """``base`` (the stage's light now) with a lamp's light falling at ``share`` 0..1 on what it
+    grades: :data:`LAMP_LIFT` of the way to :data:`LAMP_LIGHT` at full share in the dark; ``base``
+    itself by day or out of the light."""
+    dark = min(max((1.0 - sum(base.multiply) / 3) / LAMP_DARK, 0.0), 1.0)
+    lift = min(max(float(share), 0.0), 1.0) * dark * LAMP_LIFT
+    if lift <= 1e-6:
+        return base
+    return blend_grades(base, tint_grade(*LAMP_LIGHT), lift)
+
+
 def grade_rgbas(rgbas: np.ndarray, grade: LightGrade) -> np.ndarray:
     """RGBA rows (components 0..1) with the grade applied; alpha unchanged; a new array."""
     graded = np.array(rgbas, dtype=float, copy=True)

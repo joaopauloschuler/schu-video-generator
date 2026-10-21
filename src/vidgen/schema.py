@@ -391,8 +391,20 @@ def _overlay_defs(overlays: list[OverlayType], tokens: dict[str, list[str]]) -> 
     return defs
 
 
+def _yaml_on_key(schema: dict[str, Any]) -> None:
+    """YAML 1.1 (PyYAML, some editors' YAML-to-JSON) reads a bare key ``on`` as the boolean
+    ``true``, written ``"true"`` in JSON; vidgen takes it as ``on`` (a prop, an iso object), so
+    the schema takes a ``"true"`` key wherever it takes a boolean ``on``."""
+    for node in _walk(schema):
+        props = node.get("properties")
+        if isinstance(props, dict) and isinstance(props.get("on"), dict) and props["on"].get("type") == "boolean" and "true" not in props:
+            props["true"] = {**props["on"], "description": "The key `on` as YAML 1.1 reads it unquoted: the same as `on`."}
+
+
 def _document(title: str, description: str, schema: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
     """A top-level schema: ``$schema``, our title/description, ``schema``'s keywords, ``$defs``."""
+    for part in (schema, defs):
+        _yaml_on_key(part)
     out: dict[str, Any] = {
         "$schema": DIALECT,
         "title": title,

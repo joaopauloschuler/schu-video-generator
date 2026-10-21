@@ -20,7 +20,7 @@ narrates on the computer itself at no cost (see `vidgen guide audio`).
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
 `actions` (pointing at things), `cartoons` (characters on a stage), `platform` (platform
-stories: levels, jumps, keys and doors), `overlays` (overlays,
+stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for a story), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
 thumbnail, GIFs, translations, rights to your content), `troubleshooting` (validate and lint messages).
@@ -293,6 +293,7 @@ project's own scene types, in its theme).
 | how parts connect, decisions, architecture | `diagram`, `flowchart` | `heading`, `nodes`, `edges`, `highlight`, `direction` |
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
+| architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
@@ -449,7 +450,30 @@ Minimal snippets (copy, then adapt):
     - text: "A hidden layer combines them."
     - text: "Ten outputs score the ten digits."
     - text: "A forward pass flows from left to right."
+- id: arch
+  type: iso_diagram
+  params:
+    heading: "A web app, layer by layer"
+    blocks:
+      - {id: browser, label: "Browser"}
+      - {id: app, label: "App server", layers: [Storage, Logic, API]}   # a stack: layers bottom up
+      - {id: db, label: "Database", shape: database}
+    edges: ["browser -> app: HTTPS", "app -> db"]
+  beats:
+    - text: "Requests come in from the browser."
+    - text: "The app server handles them layer by layer, and keeps its data in a database."
+      actions:                                      # iso_diagram actions: build, raise, lower, explode,
+        - {flow: "edge:*", chain: true}             # collapse, flow, focus, relabel (`vidgen guide actions`)
+        - {explode: "stack:app", at: "@layer"}
 ```
+
+A whole iso explainer: `examples/iso-web-page` (a request from the browser to the database, each
+block built on the word that names it, `flow` along the connectors, `focus` and `relabel` for a
+cache miss and hit, a rendering stack exploded layer by layer). When one diagram returns in
+several scenes, give its blocks `at` and their own `color` so it looks the same each time; keep
+labels short ("App 1" over "Application server 1") so they sit right by their blocks, and leave
+out a group caption the blocks' labels already say: every label costs room, and the diagram is
+drawn as large as its labels let it.
 
 ```yaml
 # data
@@ -820,9 +844,10 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
 | `zoom` | look closer at a detail, then come back | at most one per scene |
-| `pan` | on a `stage`: move the camera to a character or a mark (`to: right`) | on a stage wider than the frame (`width: 2`) |
-| `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start) | one at a time |
-| `reveal` | bring a later element in early | rarely: the default order is usually right |
+| `pan` | on a `stage`: move the camera to a character or a mark (`to: right`); on an iso place to a spot (`to: well`) across and up the picture, moving in from the wide view | on a stage wider than the frame (`width: 2`), or on an iso place to look at a thing |
+| `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start; on an iso place it zooms in first, to a plain stage's size) | one at a time |
+| `reveal` | bring a later element in early; on an iso place an object with `shown: false` appears (a bridge over the pond) | rarely: the default order is usually right |
+| `hide` | on an iso place: an object fades away (`- hide: rock`; a bridge gone cannot be crossed) | cause and effect in the story |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
@@ -832,7 +857,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s; `move_sun: true` moves a `sun` / `moon` prop across the sky, shadows turning) | when time passes in the story |
 | `lightning` | on a `stage`: the set flashes and a bolt strikes (`- lightning: right`; `distance: 2`: its thunder ~6 s later; in a room the windows flash) | a storm, a scare; rain with `lightning: true` strikes on its own |
 | `rainbow` | on a `stage` outdoors: a rainbow fades into the sky and stays (`- rainbow: centre`; `hide: true` fades it out) | after the rain |
-| `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley) | when someone in the story switches it on or lights the fire; when a call comes |
+| `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley); on an iso place a `lamp` lights, a `house`'s windows glow (they stay bright at `light: sunset` / `night`) | when someone in the story switches it on or lights the fire; when a call comes |
 | `switch_off` | on a `stage`: a `tv`, `lamp`, `kettle` or `fireplace` goes off, a `phone` stops ringing (`- switch_off: lamp`) | when someone in the story switches it off or answers |
 | `knock` | on a `stage`: someone knocks three times on a door (`- knock: front`; a room's door or a `door` prop; nobody needs to stand there) | a visitor in the story; the door then `open`s with a creak |
 | `let_go` | on a `stage`: a character lets go of the balloons it holds; they float away (`- let_go: pip`) | gone for the scene |
@@ -846,35 +871,45 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `pose` | on a `stage`: change a character's pose (`to: pointing`) | one pose change per beat |
 | `react` | on a `stage`: a listener's `expression` / `pose` for this beat only | the listener, not the speaker |
 | `effect` | on a `stage`: a symbol over a character's head for this beat (`to: idea`, `question`, `exclaim`, `sweat`, `anger`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`) | a feeling that should read at a glance; one per line |
-| `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`), also towards or away from the camera (`depth: 0.4`, or `to: {mark: right, depth: 0.4}`) | with `follow` on a wide stage; the walk takes its distance's time |
+| `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`), also towards or away from the camera (`depth: 0.4`, or `to: {mark: right, depth: 0.4}`); on an iso place to a spot or `{column, row}` round what is in the way, or `after: kit` (follows it) | with `follow` on a wide stage; the walk takes its distance's time |
 | `run_to` | on a `stage`: a character runs to a mark or x (`to:`; `speed`): longer strides, leaning forward, dust and speed lines | a hurry, a chase, an escape |
-| `enter` | on a `stage`: a character walks in from an edge (`side:`) or through a room's door (`door: door`) to its mark (or `to:`) | it waits off stage until then |
+| `enter` | on a `stage`: a character walks in from an edge (`side:`) or through a room's door (`door: door`) to its mark (or `to:`); on an iso place over the place's edge, or out of a spot (`door: front_door`) | it waits off stage until then |
 | `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) or through a room's door (`door: door`) | an `enter` brings it back |
 | `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head`; `big: true` adds a whoosh arc | on the word it goes with (`at`) |
 | `jump` | on a `stage`: a character jumps (`height`); on a platform `level`, `to:` a spot, mark or tile jumps it there on a planned arc, picking up coins and stars on the way (`react: {when: land, expression: happy}`) | joy or surprise; getting onto a platform |
 | `step_aside` | on a platform `level`: a blocker (`level.blockers`) moves out of the way (`- step_aside: tobble`; `to:` a place to walk to) | after the line that asks it nicely |
+| `wander` | on an iso place (`iso:`): a character strolls to a few cells near it, round what is in the way (`around:` a spot, `radius`, `stops`; `seed` for another stroll) | waiting, looking about, time passing |
+| `meet` | on an iso place: a character and another (`with: kit`) walk to each other and stop side by side, facing each other | before the two talk |
 | `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
 | `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating |
 | `pick_up` | on a `stage`: a character reaches for a prop and holds it (`to: ball`; `hand`); it goes along with the hand | `walk_to` next to the prop first (`vidgen validate` says where) |
 | `hold` | on a `stage`: a character holds a prop from now on, without picking it up (`to: cup`) | a prop it has from the start (`at: 0`) |
-| `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front) | within reach |
+| `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front); on an iso place beside it, or `to:` a spot next to it (on the table there) | within reach |
 | `give` | on a `stage`: the held prop goes to another character (`to: kit`) | the two stand next to each other |
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
-| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head; `by: pip` reaches for it (a locked door on a `level` opens only by whoever holds its key) | `open: true` in `props` starts it open |
-| `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand | |
+| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head; `by: pip` reaches for it (a locked door on a `level` opens only by whoever holds its key); on an iso place a `house`'s door, a room's `door_1`, `flowers` (they bloom) | `open: true` in `props` starts it open |
+| `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand; on an iso place a house's or a room's door, flowers back to buds | |
 | `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
 | `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
 | `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
-| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
+| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back; on an iso place `wide` is the place's wide view and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
 | `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
 | `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
 | `host_react` | with a `host:`: the host's expression for this beat (`- host_react: happy`; `effect: sparkle` adds a symbol) | on a result or a surprise |
 | `host_move` | with a `host:`: the host walks to the other side and the content slides over with it (`- host_move: other_side`, `left`, `right`) | one move per beat; rarely, between topics |
 | `host_enter` | with a `host:`: the host walks in from an edge (`{action: host_enter}`, or `- host_enter: left`); the scene starts without it | at the start of the video |
 | `host_exit` | with a `host:`: the host walks out by an edge (`- host_exit: left`); its room stays free | at the end |
+| `build` | on an `iso_diagram`: blocks, a stack (layer by layer), a group or a connector come in on the word (`- build: "block:db"`; `style: grow`, `drop`, `fade`); the scene leaves them to it | one part per idea, as the voice names it |
+| `raise` | on an `iso_diagram`: lift blocks, a layer (with the layers above) or a group off the floor (`by: 0.5`), a shadow under them; `lower` sets them down | to single out a part; undo with `until` |
+| `lower` | on an `iso_diagram`: set raised blocks down (`by`, default to the ground) | |
+| `explode` | on an `iso_diagram`: pull a stack's layers apart (`- explode: "stack:app"`, `gap: 0.6`), labels going along; `collapse` puts them back | to show what a stack is made of |
+| `collapse` | on an `iso_diagram`: an exploded stack's layers back together | |
+| `flow` | on an `iso_diagram`: dots (`style: packets`: small cubes) run along connectors (`- flow: "edge:*"`, `chain: true` one after another, `back`, `count`) | when the voice follows data or a request |
+| `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; labels it would cut fade out; `focus: diagram` goes back to the whole frame | at most one or two per scene |
+| `relabel` | on an `iso_diagram`: a label or value changes in place (`- relabel: "block:cache"`, `text: "Cache: hit"`) | a new value, a state change |
 
 ```yaml
 - id: speeds
@@ -1015,7 +1050,7 @@ asks for one, say vidgen makes original characters and offer one with the same r
   pip` for a head, stars) lets one fall; `birds: true` (or `- birds: 4`) sends a flock across the
   sky (outdoors only).
 - **Small props**: `cake`, `muffin`, `book`, `phone`, `letter`, `gift`, `balloons`, `vase`,
-  `watering_can` to hold, give and set on a table (`lift: 0.17` on a `table`). A book, a letter
+  `watering_can`, `flower` to hold, give and set on a table (`lift: 0.17` on a `table`). A book, a letter
   and a gift `open` / `close` like an umbrella (held in front, not overhead). A `phone` that is on
   rings (`on: true` or `- switch_on: phone`; it shakes in bursts with a trill, `- switch_off:
   phone` answers it). Held balloons rise behind the head; `- let_go: pip` floats them away for
@@ -1209,7 +1244,7 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   `toy_rocket` (nobody rides it) launches with smoke and floats down under a parachute to `to`.
   `land: false` flies a balloon or a rocket out of the top of the frame, gone for the scene.
 - **Sound**: walks, entrances, exits, jumps, a `surprised` face and most effect symbols make their own sounds
-  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes, a balloon's burner roars, a toy rocket fizzes off; a door creaks as it opens or closes; water splashes; on a platform `level` a jump lands softly, each coin goes `coin` and each star `twinkle`, a key `unlock`s a locked door, a blocker shuffles aside), timed to the action,
+  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes, a balloon's burner roars, a toy rocket fizzes off; a door creaks as it opens or closes; water splashes; on a platform `level` a jump lands softly, each coin goes `coin` and each star `twinkle`, a key `unlock`s a locked door, a blocker shuffles aside; on an iso place footsteps by what the feet walk on: grass, a path, boards, a bridge, stone), timed to the action,
   and rain plays a rain sound bed. Each stage also plays a quiet bed of its set: birdsong
   outdoors by day (not at night, not in rain), a room tone in a room; `ambience: city` on a stage
   names the street sounds instead (or `birdsong`, `room_tone`, a list), `ambience: false` none.
@@ -1243,7 +1278,7 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
    facing each other? Does the reaction read without the words? Is anything cut by the edge?
 4. `vidgen lint --json`: the cartoon rules `off_stage`, `character_overlap`, `walk_overlap`,
    `prop_overlap`, `bubble_overlap`, `facing_away`, `hidden_speaker`, `small_speaker` (a face too small to read: a
-   `shot: closeup` or `character_size: large`), `mouth_without_voice` and `look_alike` (fixes in
+   `shot: closeup` or `character_size: large`), `offscreen_action` (iso), `mouth_without_voice` and `look_alike` (fixes in
    `vidgen guide troubleshooting`).
 5. Voices: with Kokoro (`vidgen guide audio`) `vidgen tts` is free and writes the lip sync
    tracks; then storyboard and lint again, since real lines change the timing.
@@ -1429,6 +1464,99 @@ A whole story: `examples/platform-story` (three levels, a key and a gate, coins 
 grumpy snail, clouds up to a picnic, a 9:16 variant). Every key: `docs/CONFIG.md` "Platform levels
 (`level`)" and the sections after it.
 
+<!-- topic: iso (also: isometric, village, villages, iso-place) -->
+## Isometric places: villages and rooms for a story
+
+**When to make one.** A children's story that happens *in a place*: a village green with houses,
+a well and a bridge over a stream, a garden, a room. The place is seen from above at an angle
+(isometric, no perspective) and each scene starts on a wide view of it (in 16:9 every spot and
+object you placed; in 9:16 the part where the characters stand), so the viewer knows where
+everyone is. It is a `stage` scene with an `iso:` place, so everything of `vidgen guide cartoons`
+still works: the characters are the same flat cut-outs (lip sync, expressions, gestures), shots,
+the camera, sets, light, music. No jumping or gravity here (that is a platform `level`).
+
+**The map.** One line per row, the top line furthest back: `.` grass (boards indoors), `:` a
+path, `~` water, `#` a wall, `+` a door, `%` a window, `1`–`9` a raised block (steps of half a
+tile; walkers go up one step at a time), `@` a tree, `&` a bush, `*` flowers, `=` a fence, `-`
+outside the place, and a **letter** for a *spot*. Name the spots (`spots: {w: well, d: door}`)
+and stand characters, small things and objects at them. `objects:` adds ready-made things at a
+spot or `{column, row}`: `house`, `tree`, `lamp`, `well`, `bench`, `bridge` (over `~`, walked on),
+`flowers`, `sign` (`size: [3, 2]`: a flower bed; a larger `bush` is a hedge); indoors (`place: indoor`, the front walls cut away like a dollhouse) `table`,
+`chair`, `bed`, `sofa`, `shelf`, `plant`, `rug`. Put a place used by several scenes in `sets:`
+and give each scene `set: village`.
+
+**Telling the story clearly.**
+- Each scene starts on the wide view; move the camera only when it helps: `shot: closeup
+  <name>` or `two_shot` for a line, `follow: <name>` for a long walk, `zoom: [rowan, lamp]` or
+  `- {action: pan, to: well}` (it moves in) to point at something, `shot: wide` to see everyone
+  again.
+- Give every character its own voice (`voices:` with a `label`): in a wide view the speaker gets a
+  **name tag** with that label; without a voice of its own a character lip-syncs the narrator.
+  A tagged speaker may say up to 12 words in a wide view; longer lines need a shot.
+- Moves go round what is in the way: `walk_to` / `run_to` a spot, `meet` (two walk to each
+  other), `after: hazel` (follows), `wander`, `enter` / `exit` over the edge or `door:` a spot
+  (a house's door; `open` it first: a closed door does not stop anyone). Two walks at the same
+  time do not avoid each other: time crossing walks apart. Give a walk a beat whose line lasts as long as the way (`rushed_animation`
+  warns otherwise), and keep the camera on it (`offscreen_action` warns about a walk, a hand-over
+  or a door the camera does not show).
+- Cause and effect: `pick_up` / `give` / `put_down` small things (`key`, `gift`, `letter`,
+  `flower`...) next to each other; `open` a house's door or flowers (they bloom), `switch_on` a
+  lamp, `reveal` / `hide` an object (a bridge appears). Each has its sound by itself.
+- Mood: `light: morning`, `sunset` (evening), `night` (a lit lamp and windows glow, and a lamp
+  lights who stands next to it), and
+  `particles: [rain]` (it darkens to an overcast tint by itself, unless the scene sets a `light`;
+  drops land on roofs, crowns and the bridge, not under them; `{kind: rain, puddles: true}` grows
+  puddles with ripples), `{kind: snow, settle: true}` (the ground, roofs and treetops turn white;
+  `settled: 30` starts it white). A `run_to` leaves speed lines along its diagonal.
+  Footsteps follow the ground (grass, path, boards, a bridge), birdsong by day, crickets at night.
+
+```yaml
+characters:
+  - {name: hazel, voice: hazel_voice, look: {species: rabbit, proportions: kid, outfit: dress}}
+  - {name: juno, voice: juno_voice, look: {species: bird, proportions: kid}}
+voice: {provider: kokoro, voice: bf_emma}          # the narrator
+voices:
+  hazel_voice: {voice: af_bella, label: Hazel, color: primary}
+  juno_voice: {voice: af_heart, label: Juno, color: accent}
+scenes:
+  - id: green
+    type: stage
+    params:
+      background: ["#9CCBEA", "#E4F3FB"]
+      light: sunset
+      iso:
+        map: |
+          -.@......~~...
+          ..h......~~...
+          ...a..l..~~.y.
+          .::::::::~~:..
+          ....f....~~...
+        spots: {h: home, a: door, l: lamp, f: garden, y: far_bank}
+        objects:
+          - {object: house, at: home}
+          - {object: lamp, at: lamp}
+          - {object: bridge, at: {column: 10, row: 4}, facing: right, size: [2, 1]}
+          - {object: flowers, name: flower_bed, at: garden, open: false}
+      props: [{prop: key, at: door}]
+      characters: [{name: hazel, at: door}, {name: juno, at: far_bank}]
+    beats:
+      - text: "In the evening, Hazel picked up the lamp key and ran to the lamp."
+        actions:
+          - {pick_up: hazel, to: key, at: 0.2}
+          - {run_to: hazel, to: lamp, at: 0.45}
+      - text: "Click! The lamp lit up, and Juno could see the bridge."
+        actions: [{switch_on: lamp, at: "@Click"}, {walk_to: juno, to: lamp, at: 0.3}]
+      - text: "Thank you, Hazel!"
+        voice: juno_voice
+        shot: two_shot juno hazel
+```
+
+`vidgen validate` replays every move and hand-over and names what is in the way (without the bridge:
+`'juno' cannot walk from row 3, column 13 to 'lamp': the way stops at row 4, column 12: water (a
+bridge crosses it) at row 4, column 11`). A whole story: `examples/iso-story` (a village by a stream and a room,
+a key, a lamp lit in the rain, flowers that bloom, a 9:16 variant). Every key: `docs/CONFIG.md`
+"Isometric places (`iso`)".
+
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->
 ## Overlays, transitions and continuity
 
@@ -1593,7 +1721,7 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `unlock`, `coin`, `twinkle`, `splash` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `step_grass`, `step_gravel`, `step_wood`, `step_stone`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `unlock`, `coin`, `twinkle`, `splash` and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 
@@ -1935,7 +2063,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `wander`, `meet`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `hide`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |
@@ -1966,11 +2094,13 @@ install; `vidgen validate` warns when it is missing.
 | `prop_overlap` | two props on the floor at about the same depth are drawn over each other (a room's door over the sofa against the wall) | another `at` for one (a door: its x in the room's `doors`), a smaller `scale`, or a `depth` that puts one in front; a picture or clock above furniture, a lifted prop and a rug are fine |
 | `bubble_overlap` | a speech bubble covers a face, another bubble or an effect symbol | a shorter `bubble` text, characters further apart, or the lines (or the line and the effect) in different beats |
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
-| `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
-| `small_speaker` | a speaking face too small on screen to read it and its lip sync | `shot: closeup <name>` (or `medium`) for that beat, or `character_size: large` |
+| `hidden_speaker` | something in front hides the speaker's face (on an iso place: what really covers its eyes and mouth, a lamp post across the face) | move one of them, or a smaller `depth` for the speaker; on an iso place `walk_to` a spot with nothing in front, or a `shot` |
+| `small_speaker` | a speaking face too small on screen to read it and its lip sync (on an iso place a speaker with a name tag may say up to 12 words) | `shot: closeup <name>` (or `medium`) for that beat, or `character_size: large` |
+| `offscreen_action` | on an iso place: a walk, a thing handed about or a change of the place (a door, a lamp) the camera mostly does not show while it happens | `shot: wide`, a `pan` or `follow` to it, or do it in a beat whose shot shows it |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `said_before_shown` | the narration names a label on screen (a node, a callout, a stage) seconds before it appears, and not again when it does | show it on the word: `{reveal: node:database, at: "@database"}` (or the callout's `at`); or name it in the beat that shows it |
 | `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |
+| `iso_labels` | an `iso_diagram` label over a block it does not name (a group's caption among its blocks), over another label or a connector, or far from what it names | more `spacing` or `at` further apart, shorter labels, fewer blocks; a stack's `label_side` |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

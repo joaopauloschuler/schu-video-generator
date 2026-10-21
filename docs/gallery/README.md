@@ -28,6 +28,7 @@ params, the action targets and a GIF of the whole scene. Regenerate with `vidgen
 | `flowchart` | same type as [`diagram`](diagram.md) | how parts connect, decisions, architecture |
 | [`process`](process.md) | <a href="process.md"><img src="media/process-16x9.png" height="180" alt="process at 16:9"> <img src="media/process-9x16.png" height="180" alt="process at 9:16"></a> | something moving through stages |
 | [`network`](network.md) | <a href="network.md"><img src="media/network-16x9.png" height="180" alt="network at 16:9"> <img src="media/network-9x16.png" height="180" alt="network at 9:16"></a> | a neural network |
+| [`iso_diagram`](iso_diagram.md) | <a href="iso_diagram.md"><img src="media/iso_diagram-16x9.png" height="180" alt="iso_diagram at 16:9"> <img src="media/iso_diagram-9x16.png" height="180" alt="iso_diagram at 9:16"></a> | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) |
 
 ## Data
 

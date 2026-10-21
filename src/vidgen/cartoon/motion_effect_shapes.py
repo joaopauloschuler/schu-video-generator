@@ -33,6 +33,7 @@ from vidgen.cartoon.transition import feet_of
 from vidgen.cartoon.stage import facing_sign
 from vidgen.cartoon.vehicle_paths import SMOKE_BURST, SMOKE_TRAIL, smoke_puffs
 from vidgen.config import CHARACTER_INK
+from vidgen.world.iso_view import ISO_RISE
 from vidgen.particles import KINDS as PARTICLE_SPECS
 
 #: The dust's colour (the ``dust`` particles'), and the opacity of its ink outline.
@@ -54,6 +55,8 @@ OUTLINE_SHARE = 0.6
 #: A prop moving less than this from one frame to the next (units) keeps the direction its speed
 #: lines had.
 STILL_MOVE = 1e-3
+#: The same for a character's feet on an iso place (tile widths on the picture, DESIGN.md §90.4).
+ISO_STILL_MOVE = 1e-4
 
 
 def _shape(fill: str, opacity: float, stroke: float, stroke_opacity: float) -> VMobject:
@@ -89,6 +92,8 @@ class MotionEffect(VGroup):
         self.done = False
         self._anchor: np.ndarray | None = None
         self._direction: np.ndarray | None = None
+        self._last_feet: np.ndarray | None = None
+        self._iso_ahead: np.ndarray | None = None
         self._last: np.ndarray | None = None
         self._size = 1.0
         self._angles: list[tuple[float, float]] = []
@@ -188,9 +193,28 @@ class MotionEffect(VGroup):
             self._set(k, [(puff.x + x * puff.radius, puff.y + y * puff.radius) for x, y in _circle(0.0, 0.0, 1.0, 20)], puff.opacity)
         return len(puffs)
 
+    def _iso_way(self, mover: Character) -> np.ndarray | None:
+        """On an iso place (DESIGN.md §90.4), the way ``mover`` walks on screen now (unit vector):
+        along its feet's move since the last frame (a diagonal of the picture), else the way it
+        went last; ``None`` before it has moved."""
+        feet = np.array(mover.iso_feet, dtype=float)
+        last, self._last_feet = self._last_feet, feet
+        if last is not None:
+            dx, dy, dz = feet - last
+            screen = np.array([(dx - dy) / 2, -((dx + dy) / 4 - dz * ISO_RISE)])
+            if np.linalg.norm(screen) > ISO_STILL_MOVE:
+                self._iso_ahead = screen / np.linalg.norm(screen)
+        return self._iso_ahead
+
     def _way(self) -> tuple[np.ndarray, np.ndarray] | None:
-        """The way the mover goes now (unit vector) and the middle of its back edge."""
+        """The way the mover goes now (unit vector) and the middle of its back edge; a character
+        walking on an iso place goes along the walk's diagonal on screen (DESIGN.md §90.4)."""
         mover = self.mover
+        if isinstance(mover, Character) and getattr(mover, "iso_feet", None) is not None:
+            ahead = self._iso_way(mover)
+            if ahead is not None:
+                middle = np.array([float(mover.get_center()[0]), float(mover.feet()[1]) + 0.45 * self._size])
+                return ahead, middle - ahead * float(mover.width) / 2
         if isinstance(mover, Character):
             ahead = np.array([facing_sign(mover.facing), 0.0])
             back = mover.get_left()[0] if ahead[0] > 0 else mover.get_right()[0]

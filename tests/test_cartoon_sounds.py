@@ -89,7 +89,8 @@ def test_a_knock_is_three_raps_and_a_creak_and_a_splash_sound_as_described() -> 
 
 @pytest.mark.parametrize(
     ("bed", "level", "seconds"),
-    [("birdsong", BIRDSONG_LEVEL, 20.0), ("city", CITY_LEVEL, 16.0), ("room_tone", ROOM_TONE_LEVEL, 8.0)],
+    [("birdsong", BIRDSONG_LEVEL, 20.0), ("city", CITY_LEVEL, 16.0), ("room_tone", ROOM_TONE_LEVEL, 8.0),
+     ("crickets", ambience.CRICKETS_LEVEL, ambience.CRICKETS_LOOP_SECONDS)],
 )
 def test_each_set_bed_is_a_seeded_seamless_loop_at_its_level(bed: str, level: float, seconds: float) -> None:
     make = ambience.BEDS[bed].loop
@@ -104,10 +105,11 @@ def test_each_set_bed_is_a_seeded_seamless_loop_at_its_level(bed: str, level: fl
 
 
 def test_the_beds_sound_like_what_they_are() -> None:
-    birds, city, room = (ambience.BEDS[b].loop()[:, 0] for b in SET_BEDS)
+    birds, city, room, crickets = (ambience.BEDS[b].loop()[:, 0] for b in SET_BEDS)
     assert band_share(birds, 1800, 7000) > 0.8   # the songs, high
     assert band_share(city, 20, 1200) > 0.8      # traffic and a murmur, low
     assert band_share(room, 20, 500) > 0.6       # a soft low air (and a faint hiss)
+    assert band_share(crickets, 3000, 6500) > 0.6   # the chirps, high (over a faint low night air)
     assert set(SET_BEDS) <= set(ambience.AMBIENCE_BEDS) == set(ambience.BEDS)
 
 

@@ -21,6 +21,7 @@ from pydantic import (
     Field,
     ModelWrapValidatorHandler,
     PlainSerializer,
+    NonNegativeInt,
     PositiveFloat,
     PositiveInt,
     PrivateAttr,
@@ -785,6 +786,7 @@ LINT_RULES: tuple[str, ...] = (
     "facing_away",
     "hidden_speaker",
     "small_speaker",
+    "offscreen_action",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -797,6 +799,7 @@ LINT_RULES: tuple[str, ...] = (
     "concept_colors",
     "said_before_shown",
     "unsaid_reveal",
+    "iso_labels",
 )
 RuleName = Literal[
     "off_frame",
@@ -817,6 +820,7 @@ RuleName = Literal[
     "facing_away",
     "hidden_speaker",
     "small_speaker",
+    "offscreen_action",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -829,6 +833,7 @@ RuleName = Literal[
     "concept_colors",
     "said_before_shown",
     "unsaid_reveal",
+    "iso_labels",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -972,6 +977,8 @@ class HiddenSpeakerRule(RuleConfig):
 
     min_hidden: Fraction = 0.5
     """Share of the face's box covered by things drawn in front from which it is reported."""
+    min_hidden_features: Fraction = 0.25
+    """On an iso place: share of the box of its eyes and mouth that what stands in front of it really covers (its opaque pixels) from which it is reported."""
 
 
 class SmallSpeakerRule(RuleConfig):
@@ -979,6 +986,15 @@ class SmallSpeakerRule(RuleConfig):
 
     min_face: Fraction = 0.075
     """Smallest acceptable height of a speaking character's head on screen (its box, fraction of the frame's shorter side: 0.075 is 36 px at 480p, 81 px at 1080p; a character on a level has about 0.07 at character_size small, 0.095 at medium)."""
+    max_tagged_words: NonNegativeInt = 12
+    """On an iso place, a small speaker whose name tag shows (or with a speech bubble) is not reported for a line of at most this many words: the tag shows who speaks a short line; a longer one needs its face (a closer shot)."""
+
+
+class OffscreenActionRule(RuleConfig):
+    """``offscreen_action``: on an iso place, something a beat does (a walk, a small thing picked up, given or put down, a door, lamp or flowers changing, an object appearing or going) that the camera mostly does not show while it happens."""
+
+    min_seen: Fraction = 0.5
+    """Least share of the action's frames on which at least half of what acts (the character's box, the object's picture) is in view."""
 
 
 class MouthWithoutVoiceRule(RuleConfig):
@@ -1017,6 +1033,17 @@ class UnsaidRevealRule(RuleConfig):
     """Severity of its findings (default: off; set info or warning to turn it on)."""
     max_words: PositiveInt = 4
     """Texts of more words are sentences, not labels, and are not checked."""
+
+
+class IsoLabelsRule(RuleConfig):
+    """``iso_labels``: an ``iso_diagram`` label covering a block it does not name, overlapping another label, hiding a connector, or far from what it names without a leader line (DESIGN.md §90.10)."""
+
+    min_cover: Fraction = 0.1
+    """Share of a label's box over another block from which it is reported."""
+    min_overlap: Fraction = 0.05
+    """Share of the smaller of two labels' boxes they must share to be reported."""
+    max_gap: Fraction = 0.06
+    """Farthest a label without a leader line may stand from what it names (fraction of the frame's shorter side: 0.06 is 29 px at 480p)."""
 
 
 class NarrationSpeedRule(RuleConfig):
@@ -1072,7 +1099,7 @@ class RushedAnimationRule(RuleConfig):
     min_run_time: PositiveFloat = 0.5
     """Shortest acceptable run time (seconds) of an animation `play_steps` had to shorten."""
     max_speedup: float = Field(default=1.5, ge=1.0)
-    """Fastest acceptable speed-up of a walk or a jump on a platform level squeezed into its beat (its own time over the time it got)."""
+    """Fastest acceptable speed-up of a walk or a jump on a platform level, or a walk on an iso place, squeezed into its beat (its own time over the time it got)."""
 
 
 class TalkedOverRule(RuleConfig):
@@ -1143,6 +1170,8 @@ class LintRules(_Strict):
     """A speaking character whose face is hidden by something in front of it (default: warning)."""
     small_speaker: SmallSpeakerRule = Field(default_factory=SmallSpeakerRule)
     """A speaking character too small on screen to read its face and lip sync (default: warning)."""
+    offscreen_action: OffscreenActionRule = Field(default_factory=OffscreenActionRule)
+    """On an iso place, an action the camera mostly does not show while it happens (default: warning)."""
     mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
     """A mouth moving with lip sync while no narration is heard (default: warning)."""
     look_alike: LookAlikeRule = Field(default_factory=LookAlikeRule)
@@ -1167,6 +1196,8 @@ class LintRules(_Strict):
     """The narration naming an on-screen label more than min_lead seconds before it shows (default: warning)."""
     unsaid_reveal: UnsaidRevealRule = Field(default_factory=UnsaidRevealRule)
     """A beat bringing new labels the narration never names (default: off; info when turned on)."""
+    iso_labels: IsoLabelsRule = Field(default_factory=IsoLabelsRule)
+    """An iso_diagram label over a block it does not name, over another label or a connector, or far from what it names (default: warning)."""
 
 
 class LintConfig(_Strict):
