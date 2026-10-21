@@ -264,7 +264,8 @@ src/vidgen/
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
   data/slides/            # deck.css + deck.js inlined into `vidgen slides` pages (package data, §55)
   data/guide/             # AGENTS.md: the author guide printed by `vidgen guide` (package data, §59)
-  data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
+  data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60);
+                          # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
@@ -3567,7 +3568,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   inputs, nor are `music.py`, `mix.py`, `loudness.py` (music never changes pixels or timing).
 - **Beds** (`vidgen/music.py`, numpy only): `calm` (60 s, D major, no beat), `pulse` (40 s,
   A minor, 96 BPM), `bright` (48 s, C major, 120 BPM); Step 129 adds `cartoon` and `lullaby`
-  (§69.63). Pads by PADsynth: each chord's harmonics
+  (§69.63), Step 179 `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, Step 181 `ascent`,
+  `horizon`, `beacon`, `neon` (§91). Pads by PADsynth: each chord's harmonics
   as Gaussian bumps (18–30 cents wide) with random phases in one spectrum, one inverse FFT → a
   periodic wave whose length divides the chord's segment; chords cross-fade with equal-power
   windows of 1.6 s; an airy layer an octave up swells with an LFO whose period divides the loop;
@@ -4527,7 +4529,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
 - **Media**: the last still of each scene saved as an optimised PNG (`media/<type>-16x9.png`,
   `-9x16.png`; 640x360 / 360x640); a GIF of the scene up to its last beat's end (no fade-out:
   full-frame changes cost the most bytes), 320 / 180 px wide, 6 fps, 32-colour palette without
-  dithering (flat graphics), last frame held 1.5 s (`export.write_gif(..., colors, dither, hold)`,
+  dithering (flat graphics), last frame held 1.5 s (since Step 182: 2 s, at the GIF's start, the
+  empty opening skipped, §60.1) (`export.write_gif(..., colors, dither, hold)`,
   shared with `vidgen export gif`). Deterministic: no times or paths in the pages, Pillow and
   FFmpeg outputs are reproducible for the same inputs and versions, and render workers now run
   with `PYTHONHASHSEED=0` (unless set): with a random per-process seed, frames during a camera
@@ -4546,6 +4549,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   a tested 8 MB budget (`tests/test_gallery.py`): humans browsing GitHub and agents reading the
   docs see every type without rendering; clips are small enough at 320 px / 6 fps / 32 colours (a regenerated GIF adds to the history, so they stay small). A test
   keeps every page's YAML equal to the guide's current snippet and the index listing every type.
+  Since Step 182 (§60.1): 8.6 MB with the showcases (5.5 MB GIFs: the types' 3.6 MB, the
+  showcases' 1.9 MB; 2.9 MB stills), budget 10 MB, every GIF at most 150 KB.
 - **Routed visual fixes** (Steps 37 and 56):
   - `map`: a regional view in a vertical frame is narrowed to the longitudes that fill the frame
     at the view's latitudes, around its items (`_portrait_region`; before, the frame was filled
@@ -4573,6 +4578,55 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     the callout's own mark). `text_overlap` / `covered_text` missed these (no overlap, no
     cover). A `box` / `circle` tag (`tag_spot`) gets the same soft `clearance` (0.2 units) and
     the same spots one clearance further out.
+
+## 60.1 Animated previews and showcases (Step 182)
+
+- **Previews in the index.** Each cell of `docs/gallery/README.md` shows the scene's GIFs (16:9
+  and 9:16, 180 px high), each its own link to the page, each in a `<picture>` whose
+  `<source media="(prefers-reduced-motion: reduce)">` is the still (`gallery.preview_html`;
+  GitHub renders `<picture>`). A format without a GIF in the folder (a `--no-clips` run) shows
+  its still. The column is "preview"; the pages keep their stills and GIFs as before.
+- **GIF timing** (`gallery._write_clip`, all GIFs regenerated): the clip starts at
+  `clip_start`: the first frame whose mean grey difference from the scene's first frame is
+  `CLIP_START_SHARE` (0.75) of the largest such difference in the clip, at most `CLIP_START_MAX`
+  (1 s) in (frames read at 6 fps, 64 px wide, by `render.ffmpeg.decode_gray_frames`): the empty
+  opening and most of a fade-in are skipped; a chart whose bars grow in its first second starts
+  with them mostly grown (accepted). The end is held `CLIP_HOLD` (2 s, was 1.5) **at the start
+  of the GIF** (`export.write_gif(..., hold_first=True)`: the last frame, reversed out of the
+  clip, padded and put before it): looping plays the same as a hold at the end, and the first
+  frame, which a page shows before the GIF plays (or when a viewer's browser does not animate),
+  is the finished picture, so the index never shows a grid of empty boxes. A GIF over
+  `CLIP_MAX_BYTES` (150 KB) is made again at `CLIP_FALLBACK_FPS` 5, then 4 fps (busy cartoons:
+  rain, snow, camera cuts); a test fails if one is still larger. Widths, colours and dithering
+  are unchanged.
+- **Showcases** (decision: named entries, not types). `gallery.SHOWCASES` lists `Showcase(name,
+  section, title, use)`; the YAML is `data/gallery/showcases/<name>.yaml`, a whole config with
+  one scene whose id is the name (checked by `Showcase.config`). A showcase's `section` is a guide
+  group (its rows follow the group's types in that table) or a section of its own after the
+  groups (`SECTION_NOTES` gives it a line under the heading). The guide group `cartoons` is
+  headed "2D cartoons" (`GROUP_TITLES`; the guide's own comment and the sample's group stay
+  `cartoons`); "Isometric cartoons" has only showcases and a link to `examples/iso-story`. Each
+  showcase is its own work project, `build/gallery/showcases/<name>/video.yaml` (its config with
+  the gallery's preview sizes and `portrait` variant; `--theme` applies), rendered like a sample,
+  with a page `<name>.md` (title, use, the scene types it shows linked, the GIFs, the stills, the
+  YAML as written). Names may not collide with a scene type (a test). `--types` takes showcase
+  names; a run in a project renders none and its index lists none (they are the built-in
+  gallery's). Media names follow the types' (`<name>-16x9.gif`).
+- **The eight showcases**: 2D `talk_in_a_room` (the `living_room` set, a seated listener holding
+  a muffin, a close-up for the punchline), `walk_in_depth` (`park`: one walks back to depth 0.7
+  while the other comes forward, passing), `rainy_evening` (`city_street` at sunset, rain with
+  puddles, the light going to night, the street lamp switched on, an umbrella opened over a
+  seated friend), `star_jump` (a platform level at `character_size: large`: coins, a gap, a jump
+  that catches a star); iso `iso_village` (two houses, a `meet`, a close-up, back to the wide
+  view), `iso_room` (`place: indoor`, an `enter`, a gift picked up and opened in a medium shot),
+  `iso_lamp` (night, lit windows, a walk to the lamp, `switch_on`, the speaker's name tag in the
+  wide view), `iso_snow` (`{kind: snow, settle: true}`: the village turns white). All validate;
+  `vidgen lint` is clean in 16:9; in 9:16 the built-in sets `living_room`, `park` and
+  `city_street` report their own props cut at the frame's edges or overlapping (the ready-made
+  sets are laid out for 16:9 only, backlog).
+- **README strip**: the project README shows four gallery GIFs (the iso village, `iso_diagram`,
+  `line_chart`, `code_morph`), 200 px wide, each linked to its page and in the same `<picture>`;
+  a test checks the markup and that every file exists.
 
 ## 61. Refinements (Step 58, `vidgen plan`)
 
@@ -12801,3 +12855,125 @@ iso-story differs from the pre-Phase-R stills only in Step 172's intended rain a
 - **Gaps**: an object's own change with two pictures (a lamp switched, a door opened) still fades
   the new one over the old one, so their soft edges are drawn twice until it ends (a faint
   sharpening of outlines on its last frame).
+
+## 91. Documentary music beds (Step 179)
+
+Five more built-in beds, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, for
+documentaries and explainers that need more drive than §48's `pulse` / `bright`. The owner
+listened to six prototypes (rendered outside the repo with `music-candidates/newbeds.py`) and
+approved five; `investigation` (E minor with a Phrygian F, 92 BPM, a heartbeat kick and a ticking
+clock) was not approved and is not added.
+
+- **Made like the other beds** (`music.py`): numpy only, no recordings, no samples, seeded
+  `crc32("music:<name>")`, rendered circularly, `_finish`ed to `MUSIC_LEVEL` −28 LUFS
+  integrated; `Bed` entries after `lullaby`, so the listing order of the first five is kept.
+  Used like any bed: `music: discovery`, `{source: momentum, volume: -2}`, `start`, lists of
+  cues; `bed_loop` makes the loop when the video is joined (1.7–4.2 s each here; the older beds
+  1.1–1.6 s).
+- **New voices**: `_kick` (a sine gliding to 42–50 Hz in ~35 ms, a faint click low-passed at
+  2.5 kHz), `_synth_bass` (10 harmonics at 1/h through `_partials`, the upper ones dying faster),
+  `_hat` (noise 4.5–9 kHz), `_clock` (a short tick with a ring), `_piano` (stretched partials),
+  `_fm_pluck` (two-operator FM, falling index); and tools: `_pump` (a side-chain gain curve
+  dipping after each beat, built circularly), `_riser` (a swept noise swell), `_echoed`
+  (ping-pong echoes), `_hits`, `_circular_smooth`, `_tone_filter` (a high-pass at 32 Hz and a
+  gentle low-pass, as an FFT over the whole loop, so the seam is filtered like any other point)
+  and `_opening_pads` (a dark and an open `_pads` render cross-faded along a curve).
+- **The beds** (all 4/4, a chord every two bars, `Bed.description` gives the instruments, ranges
+  and chords):
+  - `discovery`: D minor, 104 BPM, 24 bars (55.384 s). Kick on every beat, pulsing eighth-note
+    synth bass A1–F2, a plucked minor arpeggio, off-beat hats, a pad that opens over the loop
+    (`_bump` peaking 72 % through).
+  - `breakthrough`: C minor → E-flat major, 112 BPM, 24 bars (51.428 s). Bars 1–12 tense (kick on
+    1 and 3, staccato bass quarters, a dark arpeggio, a sixteenth tick growing, a riser); at
+    25.714 s the lift (a 2.5 s low boom, four-on-the-floor, eighth bass, the arpeggio an octave
+    up, the pad opens and starts pumping, hats); its last chord, G, turns back to C minor.
+    `start: 25.7 − T` puts the lift T seconds after the cue starts.
+  - `enigma`: B minor with suspended chords and a Neapolitan C, 96 BPM, 20 bars (50 s). A sub
+    pulse on every beat (A1–G2), a felt kick on 1 and 3, a pad low-passed at 1.4 kHz, a piano
+    motif B3–C#5 (`_ENIGMA_MOTIF`) with ping-pong echoes, a bell B5 / F#5 every eight bars.
+  - `momentum`: G minor, 120 BPM, 24 bars (48 s). A sixteenth-note synth ostinato accented 3+3+2,
+    kick on every beat, off-beat bass, a clap on 2 and 4, sixteenth hats, the pad pumping 45 %,
+    a riser into the top.
+  - `lab`: F minor, 108 BPM, 20 bars (44.443 s). Kick on every beat, a syncopated synth bass, FM
+    plucks E4–G5 with ping-pong echoes, glitchy clicks on seeded sixteenth slots (a stutter every
+    fourth bar), a snap on 2 and 4, a thin pad pumping 50 %.
+- **Bass weight, measured on the approved WAVs**: 57 % (`discovery`), 59 % (`breakthrough`), 65 %
+  (`enigma`), 61 % (`momentum`), 67 % (`lab`) of the power is under 150 Hz (`pulse` 36 %); the
+  300 Hz–3 kHz band is 2.0–3.7 dB under `pulse`'s, which leaves room for the voice. On phone and
+  laptop speakers they sound lighter; CONFIG, the guide and the cookbooks say so. True peak
+  −15.4 to −17.1 dBTP; tempo detected from the low band within 1.1 BPM of the nominal one; 3 s
+  loudness −28.9 to −27.0 LUFS; the sample step at the seam 0.16–0.34 of the loop's
+  99.9th-percentile step.
+- **Same as approved**: the port is the prototype's code moved into `music.py` (same helpers, same
+  order of operations, same seeds); its float32 loops equal the prototype's sample for sample, and
+  written with `write_wav` from a float64 copy (as the prototype wrote them) they are
+  byte-identical to the five approved WAVs (`<scratchpad>/s179/match_check.py`). The older five
+  beds' float32 loops hash as before the change.
+- **Regression test**: `tests/test_music.py::test_bed_sounds_as_approved` stores, per bed, the
+  loop length and three projections of the loop on seeded Gaussian noise, within 0.01. Float
+  rounding on another platform moves them by about 1e-4, one added 0.25 s note at −40 dBFS by
+  about 1.5 (both estimated, from √n × the sample change). The parametrized bed tests (determinism, −28 ± 0.05 LUFS,
+  headroom, little above 5 kHz or below 35 Hz, stereo width, seam) run on all ten beds; `vidgen
+  validate` suggests the nearest bed for a misspelt source (`did you mean 'discovery'?`).
+- **Not done**: no time-signature or "lift" field on `Bed` (the lift time is in the
+  description); the beds were not re-balanced for small speakers (approved as heard).
+
+### 91.1 Energetic beds (Step 181)
+
+Four more built-in beds inspired by `momentum` (its 3+3+2 sixteenth accent, `_ACCENTS`, and
+sixteenth figure, `_FIGURE`; a steady low pulse; an off-beat or rolling bass). The owner listened
+to six prototypes (`music-candidates2/beds2.py`, outside the repo) and approved four, renamed:
+`trance_a` → `ascent`, `trance_b` → `horizon`, `pulsar_a` → `beacon`, `night_drive_a` → `neon`.
+`pulsar_b` ("deep field") and `night_drive_b` ("afterglow") were not approved and are not added.
+
+- **Seeds**: a bed's generator is seeded `crc32("music:<name>")`; renamed beds would get other
+  random phases and sound different, so `Bed` gained `seed: str | None = None`, the name to seed
+  with when it is not the bed's own (`bed_loop` uses `bed.seed or name`). The four keep their
+  prototype names as seeds; the older ten have none.
+- **Grid**: `_grid(tempo)` gives `(beat, bar, chord segment, sixteenth)` with the beat rounded down
+  to whole sixteenths (132 BPM: 21816 samples, not 21818; 116 BPM: 24824, not 24827), so the
+  sixteenth grid is exact; `_grid_seconds` gives the loop length on it. `Bed.tempo` stays the
+  nominal tempo (132.01 and 116.01 BPM in fact).
+- **New voices and tools** (only those the four use): `_saw_chords` (supersaw-like chords: a
+  PADsynth wave of saw harmonics `_SAW` / `_SOFT_SAW` spread 22–45 cents, independent phases per
+  channel), `_sweep_mix` (a filter sweep as an equal-power cross-fade of a dark and a bright
+  render), `_section_curve` (a periodic per-sample curve through `(bar, value)` points, smoothed
+  circularly), `_gate` (a sixteenth-note trance gate), `_analog_bass` (two detuned saws through a
+  falling two-pole low-pass), `_square_pluck`, `_gated_snare` (crack, body and a held noise room
+  cut after 0.24 s), `_add_stereo`, `_pulsar_pulse` (a dispersed chirp plus a burst of
+  band-limited static), `_static` (band-limited noise whose level wanders), and `_clap` (moved
+  out of `_momentum`, which now uses it and `_ACCENTS` / `_FIGURE`; its loop is bit-identical).
+  Left in the prototype: `_soft_lead` (only `night_drive_b` used it).
+- **The beds** (all 4/4, a chord every two bars; `Bed.description` gives the instruments, ranges,
+  sections and chords):
+  - `ascent`: A minor, 136 BPM, 32 bars (56.469 s). Groove (bars 1–12), build (13–16: the
+    supersaw's filter opens, a 4-bar riser, a clap roll, the last kick dropped), lift at 28.235 s
+    (a boom, F–C–G–Am colours, rolling bass, an FM arpeggio on the accents with echoes, sixteenth
+    hats; bars 17–28), settle (29–32).
+  - `horizon`: D minor → F major, 132 BPM, 32 bars (58.176 s). A gated supersaw (accents 1.0,
+    other sixteenths 0.38); groove (1–8), build (9–16: the bass rests, an 8-bar riser, sixteenth
+    kicks in the last half bar), lift at 29.088 s (the gate an octave up and bright, a soft
+    supersaw pad, the bass back), C7sus4 back to the top.
+  - `beacon`: E minor, 120 BPM, 24 bars (48 s). Pulsar pulses on the accents (the main pulse
+    centred on 1 and 3, interpulses ±0.35), a deep kick on every beat, off-beat sub (C2–B2), a low
+    soft ostinato, a pad low-passed at 1.3 kHz, a two-octaves-up shimmer swelling twice, faint
+    static (1.8–4.2 kHz, level 0.006 against the pad's 0.34).
+  - `neon`: F-sharp minor, 116 BPM, 24 bars (49.648 s). Kick on every beat, a gated snare on 2
+    and 4, analog octave bass on the eighths (C#2–B3), a square-pluck arpeggio on `_FIGURE`
+    (turned around in the second bar), soft-saw pads pumping 30 %, sixteenth hats.
+- **Bass weight and voice range** (Step 179's measure): 71 % (`ascent`), 78 % (`horizon`, now the
+  most), 72 % (`beacon`), 71 % (`neon`) of the power under 150 Hz; the 300 Hz–3 kHz band 2.7, 2.4,
+  4.7 (`beacon`, now the quietest there) and 3.6 dB under `pulse`'s. `enigma`'s description no
+  longer calls it the most bass-heavy or the quietest in the voice's range, and `momentum` is now
+  "the most energetic documentary bed" (the trance beds are faster); descriptions only.
+- **Same as approved**: the port is the prototype's code (same helpers, same order of operations,
+  same seeds); its float32 loops equal `beds2.loop(<prototype name>)` sample for sample, and
+  written with `write_wav` from a float64 copy they are byte-identical to `1_trance_a.wav`,
+  `2_trance_b.wav`, `3_pulsar_a.wav`, `5_night_drive_a.wav` (`<scratchpad>/s181/match_check.py`).
+  The ten older beds' float32 loops hash as before the change. `test_bed_sounds_as_approved`
+  stores the four new fingerprints; `test_energetic_beds_facts` checks tempo, key, grid, length,
+  seed, chords and descriptions without making audio.
+- **Cost**: `beacon` and `neon` take ~3 s to make, `horizon` ~7 s, `ascent` ~17 s: its loop,
+  2710528 = 2^10 × 2647 samples, has a large prime factor, so its whole-loop FFTs (`_section_curve`,
+  `_tone_filter`) are slow. Not changed (another length would change the bed); `vidgen
+  list-music`, which makes every loop, now takes about a minute.

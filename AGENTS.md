@@ -1743,6 +1743,25 @@ comic scenes), `lullaby` (music box: bedtime stories, soft endings). It is ducke
 voice automatically and the mix is normalised to −16 LUFS. Leave the defaults; turn it off over
 clips with their own sound (`music: false` on the scene).
 
+Five documentary beds add a soft kick and a synth bass under the chords. **For presentations and
+documentaries, suggest `momentum` first** (`music: {source: momentum, volume: -2}`); the others
+are alternatives when the tone asks for them. Choosing one: `momentum` (the most energetic of the five:
+presentations, documentaries, fast explainers, Shorts, montages), `discovery` (a steady approach
+that builds: documentaries closing in on a finding, science stories), `breakthrough` (tension,
+then a reveal: good when the reveal lands mid-video; its loop lifts from C minor to E-flat major
+25.7 s in, so with the reveal T seconds after the music starts (T under 25.7), `start: 25.7 − T`
+puts the lift on it), `enigma` (dark and mysterious: open questions, investigations, history),
+`lab` (modern tech: AI, software, engineering). They are bass-heavy (57–67 % of their power under
+150 Hz), so they sound lighter on phone and laptop speakers than on headphones.
+
+Four energetic electronic beds are further alternatives (still suggest `momentum` first):
+`ascent` (uplifting trance, 136 BPM, builds and lifts: energetic reveals, tech launches, montages,
+uplifting endings; the lift lands 28.2 s into its loop, so `start: 28.2 − T` puts it T seconds
+after the music starts), `horizon` (anthemic trance with a gated supersaw, 132 BPM: the same uses,
+lifting to F major 29.1 s in), `beacon` (a pulsar-like ticking beacon, 120 BPM: space, astronomy,
+science, signals, data), `neon` (synthwave night drive, 116 BPM: tech at night, retro-futurism,
+cities, coding Shorts). They are even more bass-heavy (71–78 % under 150 Hz): listen on a phone too.
+
 ```yaml
 music: {source: calm, volume: -2}
 scenes:

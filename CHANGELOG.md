@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–178)
+## 0.3.0 (Steps 61–182)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -322,6 +322,19 @@ matters only for projects made with development builds between Steps 67 and 131)
   `thunder`, `beep`, `creak`, `knock`, `splash`.
 - Ambience beds: rain, fire, birdsong, city, room tone (105, 121, 128).
 - New music beds: `cartoon` and `lullaby` (129).
+- Five documentary music beds with a soft kick and a synth bass (179): `discovery` (D minor,
+  104 BPM, a steady approach that builds), `breakthrough` (112 BPM, tension in C minor, then a
+  lift to E-flat major 25.7 s into the loop: a reveal), `enigma` (B minor, 96 BPM, mysterious),
+  `momentum` (G minor, 120 BPM, the most energetic), `lab` (F minor, 108 BPM, modern tech). Used
+  like the other beds (`music: discovery`); bass-heavy, so lighter on phone and laptop speakers.
+  The five older beds sound exactly as before. `vidgen validate` suggests the nearest bed name
+  for a misspelt `music` source.
+- Four energetic electronic music beds (181): `ascent` (A minor, 136 BPM, uplifting trance that
+  builds and lifts 28.2 s into the loop), `horizon` (132 BPM, anthemic trance with a gated
+  supersaw, D minor lifting to F major 29.1 s in), `beacon` (E minor, 120 BPM, a cosmic
+  pulsar-like ticking beacon), `neon` (F-sharp minor, 116 BPM, synthwave night drive). Used like
+  the other beds (`music: neon`); bass-heavy, so lighter on phone and laptop speakers. The ten
+  older beds sound exactly as before.
 - Composed music: `music: {compose: MOOD}` writes an original piece as notes and plays it with
   real instruments (the optional `music` extra, symusic 0.5.9, and the GeneralUser GS SoundFont,
   downloaded once and checked: `vidgen soundfont fetch`, or `soundfont: PATH` for your own) (145,
@@ -367,6 +380,13 @@ matters only for projects made with development builds between Steps 67 and 131)
 - Faster cartoon renders: static layers stay in Manim's static image, and part drawings are
   cached (87).
 - Works with Manim 0.22 (64).
+- The scene gallery (`docs/gallery`, `vidgen gallery`) shows animated previews: each index cell
+  plays the 16:9 and 9:16 GIFs (the still for viewers who ask for reduced motion); every GIF
+  skips the empty opening, opens on its held last beat and stays under 150 KB. "2D cartoons" and
+  "Isometric cartoons" end with eight showcases, small scenes written for the gallery with their
+  whole YAML (a dialogue in a room, walks in depth, rain at nightfall, a platform jump; an iso
+  village, a cut-away room, a lamp lit at night, settling snow); `--types` takes their names.
+  The README shows four gallery GIFs near the top (182).
 - `vidgen render --draft`: a quick render at about 8 fps and 240 px without decoration (idle
   motion, wind, shadows, particles, light grade), every timing kept, in its own `build/draft`
   folder and `_draft.mp4` (137).

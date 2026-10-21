@@ -52,7 +52,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
 | `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
 | `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
-| `music` | none | background music: a bed name (`calm`, `pulse`, `bright`, `cartoon`, `lullaby`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
+| `music` | none | background music: a bed name (`calm`, `pulse`, `bright`, `cartoon`, `lullaby`, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, `ascent`, `horizon`, `beacon`, `neon`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
 | `soundfont` | none (GeneralUser GS 2.0.3, downloaded once) | the SoundFont (`.sf2` / `.sf3`, relative to the project) composed music is played with; see [SoundFont](#soundfont-soundfont-vidgen-soundfont) |
 | `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
 | `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color`, `push`, `wipe` or `{type, duration, color, direction, soft}`; see [transitions](#transitions-transition) |
@@ -2872,7 +2872,7 @@ list; in a project the lists its beats' voices use, with how many beats use each
 ## Background music (`music`)
 
 A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
-vidgen generates five beds itself (no recordings, no samples; free to use in your videos,
+vidgen generates fourteen beds itself (no recordings, no samples; free to use in your videos,
 including commercially; no attribution needed); any audio file FFmpeg
 reads works too, and so does music vidgen composes for the video in a mood
 ([composed music](#composed-music-compose)).
@@ -2911,7 +2911,11 @@ music:                                 # a list of cues: changing tracks
 ```
 
 **Built-in beds** (`vidgen list-music` describes them, `--render-dir DIR` writes one loop of
-each as WAV): seamless loops, generated in about a second when the video is joined.
+each as WAV): seamless loops, generated in one to seven seconds when the video is joined
+(`ascent` takes about 17 s). The
+first five are light; the next five (Step 179) are documentary beds with a soft kick and a synth
+bass; the last four (Step 181) are energetic electronic beds: two uplifting-trance beds that
+build and lift, a cosmic one and a synthwave one.
 
 | bed | loop | what it sounds like | use it for |
 |---|---|---|---|
@@ -2920,10 +2924,26 @@ each as WAV): seamless loops, generated in about a second when the video is join
 | `bright` | 48 s, C major, 120 BPM | a brighter pad, a plucked arpeggio an octave up, a sparse soft bell melody; I–V–vi–IV style | launches, tutorials, upbeat social clips |
 | `cartoon` | 45 s, G major, 128 BPM, 4/4 | a staccato pizzicato-string melody (B4–D6) on a short motif that comes back varied, a plucked bass bouncing root–fifth, oom-pah pizzicato chords on 2 and 4, two woodblocks, soft snare-like ticks, a faint pad; six 4-bar phrases | cartoons and children's stories, comic or light-hearted scenes, playful how-tos |
 | `lullaby` | 45 s, F major, 64 BPM, 3/4 | a music-box melody (C5–D6) over a quieter music-box broken chord in eighths, a warm soft pad, a low sine bass on each bar's first beat; no percussion | bedtime stories, soft or sentimental moments, endings |
+| `discovery` | 55.4 s (24 bars), D minor, 104 BPM | steady and forward-moving: a soft kick on every beat, a pulsing eighth-note synth bass, a plucked minor arpeggio, soft off-beat hi-hats, a pad that slowly opens from dark to bright over the loop | documentaries approaching a discovery, science stories, explainers that build to a finding |
+| `breakthrough` | 51.4 s (24 bars), C minor → E-flat major, 112 BPM | tension, then a reveal: 12 tense bars (kick on 1 and 3, staccato bass, a dark arpeggio, a ticking that grows, a riser), then at 25.7 s a lift to E-flat major (a low boom, a kick on every beat, driving bass, the arpeggio an octave up, an open pad, hi-hats); a G chord turns back to C minor at the top | a reveal or result that lands mid-video (set `start: 25.7 − T` for a reveal T seconds after the music starts), problem-to-solution stories, before / after |
+| `enigma` | 50 s (20 bars), B minor, 96 BPM | dark and mysterious: suspended chords and a Neapolitan C, a deep sub-bass pulse on every beat, a soft felt kick on 1 and 3, a muffled pad, a sparse piano motif with ping-pong echoes, a faint high bell every eight bars | mysteries and open questions, investigations, history or true-crime style stories, space and the deep sea |
+| `momentum` | 48 s (24 bars), G minor, 120 BPM | the most energetic of the documentary beds: a driving sixteenth-note synth ostinato accented 3+3+2, a kick on every beat, off-beat bass, a soft clap on 2 and 4, sixteenth hi-hats, a pumping pad, a riser into the top of the loop | fast-paced explainers and Shorts, montages, countdowns, high-energy intros |
+| `lab` | 44.4 s (20 bars), F minor, 108 BPM | modern tech: a steady kick, a rolling syncopated synth bass, syncopated electronic (FM) plucks with ping-pong echoes, light glitchy clicks with a stutter every fourth bar, a soft snap on 2 and 4, a thin pumping pad | technology, AI, software and engineering explainers, lab science, modern product demos |
+| `ascent` | 56.5 s (32 bars), A minor, 136 BPM | uplifting trance that builds and lifts: 12 bars of groove (a kick on every beat, off-beat bass, a low sixteenth-note synth figure, a half-open supersaw pad pumping with the kick), 4 bars of build (the pad's filter opens, a riser, a clap roll, one kick left out), then at 28.2 s a euphoric lift (a low boom, bright major chords, a rolling bass, the supersaw wide open, a soft bright arpeggio with echoes) for 12 bars, and 4 bars settling back | energetic reveals, tech launches, montages, uplifting endings (set `start: 28.2 − T` for the lift T seconds after the music starts) |
+| `horizon` | 58.2 s (32 bars), D minor → F major, 132 BPM | anthemic uplifting trance; its hook is a gated supersaw (the chords chopped into sixteenth notes, accented 3+3+2): 8 bars of groove, 8 bars of build (the bass rests, the filter opens, a long riser, a sixteenth-note kick roll), then at 29.1 s the lift to F major (a low boom, the bass back, the gated supersaw an octave higher and bright over a soft pad) | energetic reveals, tech launches, montages, uplifting endings, anthemic intros (`start: 29.1 − T` puts the lift T seconds in) |
+| `beacon` | 48 s (24 bars), E minor, 120 BPM | cosmic: a ticking beacon like a radio pulsar (short falling "chirps" with a touch of static on the 3+3+2 sixteenths, a strong pulse on beats 1 and 3, weaker ones left and right, the same every bar), a deep kick on every beat, off-beat sub bass, a low soft sixteenth-note figure, a deep dark space pad, a soft shimmer swelling twice per loop, faint radio static | space and astronomy, science, signals and data |
+| `neon` | 49.6 s (24 bars), F-sharp minor, 116 BPM | synthwave night drive: a steady kick, a big gated-reverb snare on 2 and 4, an analog bass bouncing in octaves on the eighths, a square-wave pluck arpeggio in sixteenths accented 3+3+2, warm detuned saw pads, soft sixteenth-note hi-hats | tech at night, retro-futurism, cities, coding Shorts |
+
+The documentary and energetic beds are deliberately bass-heavy: 57 % (`discovery`) to 78 %
+(`horizon`) of their power is under 150 Hz (`ascent` 71 %, `beacon` 72 %, `neon` 71 %), against
+about 36 % for `pulse`. On headphones and full-range speakers that is a warm, solid floor under
+the voice; on phone and laptop speakers, which play little below 150 Hz, they sound lighter and
+quieter than the other beds (their kick and bass partly vanish). They also leave the voice's
+range (300 Hz–3 kHz) 2–4.7 dB emptier than `pulse` does (`beacon` the most).
 
 | key | default | |
 |---|---|---|
-| `source` | required (or `compose`) | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
+| `source` | required (or `compose`) | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, `ascent`, `horizon`, `beacon`, `neon`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
 | `compose` | none | instead of `source`: music composed in a mood, `compose: calm` or `{mood, key, tempo, instruments, seed, bars}` ([below](#composed-music-compose)); without `bars` it is composed for the video ([follows it](#music-that-follows-the-video): `start` and `loop` do not apply); with `bars` it loops seamlessly like a bed and `start` wraps around the piece |
 | `volume` | `0` | dB, -60 to 12; at 0 the music is −28 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6.5 dB under ElevenLabs narration (≈ −21.4 LUFS) in its pauses |
 | `start` | `0` | seconds into the source where it starts; a loop restarts there |
@@ -9319,20 +9339,30 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
   from the word counts (no audio). Like the storyboard, a sample is rendered again only when its
   stills are missing or stale; the work project always holds every sample, so a run for a few
   `--types` keeps the others current.
+- **Showcases.** The built-in gallery (not a project's) also renders a few small scenes written
+  for it, each a whole `video.yaml` with one scene (`src/vidgen/data/gallery/showcases/`): the
+  "2D cartoons" section ends with a dialogue in a furnished room, walks in depth, rain at
+  nightfall and a platform jump; "Isometric cartoons" has a village, a cut-away room, a lamp lit
+  at night and settling snow. Each has a page with its GIFs, stills and YAML; `--types` takes
+  their names too (`--types iso_snow`).
 - **Output** (default `docs/gallery`; `--output DIR`): `README.md`, the index (every registered
   type by the guide's groups — text and structure, flows, data, pictures and media, maths and
-  code, then the project's — with both stills and what it is for, from the guide's chooser),
-  `<type>.md` per type (what it is for, the type's description, the stills, links to the GIFs,
+  code, 2D cartoons, then the project's — with its animated preview at both formats and what it
+  is for, from the guide's chooser; the showcases at the end of their sections),
+  `<type>.md` per type (what it is for, the type's description, the stills, the GIFs,
   the YAML, a params table from the `Params` model with types, defaults and docs, the action
   targets, the beat count) and `media/<type>-16x9.png|gif`, `media/<type>-9x16.png|gif`. The
   still is the end of the last beat; the GIF plays the scene to that point (320 px / 180 px wide,
-  6 fps, 32 colours, the end held 1.5 s; the fade-out left out). Nothing in the files depends on
-  the time or the machine: the same vidgen writes the same files.
+  6 fps, 32 colours; the empty opening and the fade-out left out) and holds the end for 2 s at
+  its start, so a page shows the finished picture before the GIF plays (and between loops). A GIF
+  over 150 KB is made again at 5, then 4 fps. The index shows each GIF in a `<picture>` whose
+  still replaces it for viewers who ask for reduced motion. Nothing in the files depends on the
+  time or the machine: the same vidgen writes the same files.
 
 | option | |
 |---|---|
 | `--output DIR`, `-o` | the gallery folder (default `docs/gallery`) |
-| `--types T,T` | only these types (comma-separated, repeatable; another name renders its type); the index still lists every type, with the stills already in the folder (a type with no page there yet: "not rendered here yet") |
+| `--types T,T` | only these types or showcases (comma-separated, repeatable; another name renders its type); the index still lists every type and showcase, with the media already in the folder (one with no page there yet: "not rendered here yet") |
 | `--formats 16:9,9:16` | the formats to render (default both) |
 | `--theme PRESET` | render in this theme preset (default: the project's theme, or the default look) |
 | `--clips` / `--no-clips` | also write the GIFs (default yes); without, the pages link the GIFs already there |
@@ -9340,8 +9370,8 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
 | `--force` | render the samples again even if their stills are current |
 | `--json` | print the gallery's files (below) |
 
-The repository's gallery is committed (stills and GIFs, about 4.4 MB; a test keeps it under
-8 MB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
+The repository's gallery is committed (stills and GIFs, about 8.6 MB with the showcases; a test
+keeps it under 10 MB and every GIF under 150 KB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
 or a guide snippet, look at the stills, and commit `docs/gallery`.
 
 ## Drafting from an outline (`vidgen plan`)
@@ -9887,10 +9917,11 @@ The [scene gallery](#scene-gallery-vidgen-gallery) written by `vidgen gallery`.
 | `project` | str \| null | the project whose own types are shown (`null`: built-ins only) |
 | `output`, `index`, `work` | str | the gallery folder, its `README.md`, the work project rendered in |
 | `formats` | list | the formats rendered (`16:9`, `9:16`) |
-| `rendered`, `reused` | list | samples rendered by this run and current ones reused, as `"<type> (<format>)"` |
+| `rendered`, `reused` | list | samples (and showcases) rendered by this run and current ones reused, as `"<name> (<format>)"` |
 | `bytes` | int | the size of the gallery folder |
 | `elapsed` | float | seconds |
 | `types` | list | every registered type, in index order: `{name, alias_of, sample, page, stills, clips}`; `alias_of` names the type it is another name of (`null` otherwise), `sample` is `guide`, the project's config file name or `null` (none), `page` the type's page written by this run (else `null`), `stills` / `clips` the files written by this run by format |
+| `showcases` | list | the showcases this run rendered (none for a project): `{name, section, title, page, stills, clips}` |
 
 `warnings`: a type with no sample, and the render warnings of the samples (`scene` is then
 `"<type> (<format>)"`). An unknown `--types` name or format is an error (`ok` false).

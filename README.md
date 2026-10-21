@@ -1,8 +1,9 @@
 # schu-video-generator
 
-**A video and presentation generator built for AI agents.** schu-video-generator is a tool that
-an AI agent (Claude, or any LLM-based agent with a shell or an MCP client) uses to produce
-narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
+**A video and presentation generator built for AI agents.** See the [scene gallery](docs/gallery/README.md).
+
+schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
+an MCP client) uses to produce narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
 editing on a timeline: a human describes the video they want, and the agent writes the project,
 checks it and renders it.
 
@@ -26,6 +27,15 @@ Here is what it produces — frames from a narrated paper explainer made with it
 <sub>A title card, a comparison, an animated diagram and a chart from the 4-minute video, each
 scene built and timed to its narration. The project is in [examples/kphi3](examples/kphi3), so
 these images can be regenerated.</sub>
+
+More from the [scene gallery](docs/gallery/README.md), where every scene type plays at 16:9 and 9:16:
+
+<p align="center">
+  <a href="docs/gallery/iso_village.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/iso_village-16x9.png"><img src="docs/gallery/media/iso_village-16x9.gif" width="200" alt="An isometric village: a rabbit and a fox walk out of their houses and meet"></picture></a>
+  <a href="docs/gallery/iso_diagram.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/iso_diagram-16x9.png"><img src="docs/gallery/media/iso_diagram-16x9.gif" width="200" alt="An isometric diagram of a web app: browser, layered app server and database, data flowing between them"></picture></a>
+  <a href="docs/gallery/line_chart.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/line_chart-16x9.png"><img src="docs/gallery/media/line_chart-16x9.gif" width="200" alt="A line chart: two validation-loss curves drawn epoch by epoch"></picture></a>
+  <a href="docs/gallery/code_morph.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/code_morph-16x9.png"><img src="docs/gallery/media/code_morph-16x9.gif" width="200" alt="Code morphing: a recursive function gains a cache decorator"></picture></a>
+</p>
 
 Everything is built around what an agent can and cannot do:
 
@@ -249,9 +259,13 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
   reveals, highlights, callouts, zooms and chapter cards. `vidgen list-sfx` describes every sound
   in words and `--render-dir` writes them out to listen to ([reference](docs/CONFIG.md#sound-effects-sfx)).
-- **Background music**: `music: calm` — one of five generated beds (`calm` pad,
+- **Background music**: `music: calm` — one of fourteen generated beds (`calm` pad,
   `pulse` soft arpeggio at 96 BPM, `bright` uplifting at 120 BPM, `cartoon` playful pizzicato
-  at 128 BPM, `lullaby` music box in 3/4 at 64 BPM; seamless loops; free to use in your videos, including commercially; no attribution
+  at 128 BPM, `lullaby` music box in 3/4 at 64 BPM, five documentary beds with a soft kick
+  and synth bass: `discovery`, `breakthrough` (tension, then a reveal), `enigma` (mysterious),
+  `momentum` (driving), `lab` (modern tech), and four energetic electronic beds: `ascent` and
+  `horizon` (uplifting trance that builds and lifts), `beacon` (a pulsar-like ticking beacon:
+  space, science), `neon` (synthwave night drive); seamless loops; free to use in your videos, including commercially; no attribution
   needed) or
   your own file, looped with a cross-faded seam, faded in and out, changed per scene range (a
   list of cues with `from` / `to`) or muted per scene (`music: false`); ducked 12 dB under the

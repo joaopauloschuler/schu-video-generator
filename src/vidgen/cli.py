@@ -1526,6 +1526,9 @@ def cmd_gallery(args: argparse.Namespace) -> CommandResult:
     for t in result.types:
         if t.page is not None:
             print(f"  {t.name}: {t.page.name}, {len(t.stills)} still(s), {len(t.clips)} clip(s)")
+    for s in result.showcases:
+        if s.page is not None:
+            print(f"  showcase {s.name}: {s.page.name}, {len(s.stills)} still(s), {len(s.clips)} clip(s)")
     return 0
 
 
@@ -1846,7 +1849,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("gallery", help="render every scene type's sample (16:9 and 9:16) into a Markdown gallery with stills, GIFs and YAML")
     p.add_argument("project", nargs="?", default=None, help="also show this project's own scene types, in its theme (default: the project in . if any)")
     p.add_argument("--output", "-o", default=str(Path("docs") / "gallery"), metavar="DIR", help="gallery folder (default: docs/gallery)")
-    p.add_argument("--types", action="append", default=[], metavar="T,T", help="only these scene types (comma-separated, repeatable)")
+    p.add_argument("--types", action="append", default=[], metavar="T,T", help="only these scene types or showcases (comma-separated, repeatable)")
     p.add_argument("--formats", default="16:9,9:16", metavar="F,F", help="formats to render: 16:9, 9:16 (default: both)")
     p.add_argument("--theme", metavar="PRESET", help="render in this theme preset (default: the project's theme, or the default one)")
     p.add_argument("--clips", action=argparse.BooleanOptionalAction, default=True, help="also write a GIF of each scene (default: yes)")

@@ -124,10 +124,18 @@ def next_try(width: int, fps: float, size: int, budget: float) -> tuple[int, flo
     return min(width, max(MIN_GIF_WIDTH, new_width)), new_fps
 
 
-def _gif_graph(width: int, fps: float, colors: int = 256, dither: str = "sierra2_4a", hold: float = 0.0) -> str:
-    pad = f",tpad=stop_mode=clone:stop_duration={hold:g}" if hold > 0 else ""
+def _gif_graph(width: int, fps: float, colors: int = 256, dither: str = "sierra2_4a", hold: float = 0.0, hold_first: bool = False) -> str:
+    frames = f"[0:v]fps={fps:g},scale={width}:-1:flags=lanczos"
+    if hold > 0 and hold_first:
+        # the last frame, held, then the clip: the loop plays the same, the first frame is the end
+        frames += (
+            ",split[clip][last];[last]reverse,trim=end_frame=1,setpts=PTS-STARTPTS,"
+            f"tpad=stop_mode=clone:stop_duration={hold:g}[held];[held][clip]concat=n=2:v=1:a=0"
+        )
+    elif hold > 0:
+        frames += f",tpad=stop_mode=clone:stop_duration={hold:g}"
     return (
-        f"[0:v]fps={fps:g},scale={width}:-1:flags=lanczos{pad},split[a][b];"
+        f"{frames},split[a][b];"
         f"[a]palettegen=max_colors={colors}:stats_mode=full[p];[b][p]paletteuse=dither={dither}:diff_mode=rectangle"
     )
 
@@ -144,13 +152,16 @@ def write_gif(
     colors: int = 256,
     dither: str = "sierra2_4a",
     hold: float = 0.0,
+    hold_first: bool = False,
 ) -> int:
     """Encode ``video`` (from ``start`` to ``end`` seconds, default its end) as a looping palette
     GIF ``width`` px wide at ``fps`` into ``path``, with a palette of ``colors`` (2-256),
     FFmpeg's ``dither`` method (``none`` for the smallest files of flat pictures) and the last
-    frame held ``hold`` seconds; returns the file's size in bytes."""
+    frame held ``hold`` seconds (``hold_first``: the held frame opens the GIF instead, so a page
+    shows the finished picture before it plays; looping, it still comes between the end and the
+    start); returns the file's size in bytes."""
     span = [] if end is None else ["-t", f"{end - start:.6f}"]
-    graph = _gif_graph(width, fps, colors, dither, hold)
+    graph = _gif_graph(width, fps, colors, dither, hold, hold_first)
     ff.run_ffmpeg(
         ffmpeg,
         ["-ss", f"{start:.6f}", *span, "-i", str(video), "-filter_complex", graph, "-loop", "0", str(path)],

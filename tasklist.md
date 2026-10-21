@@ -999,6 +999,24 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] The same class on an iso place: other pictures showing a revealed, hidden, opened or switched object follow its fade; pictures made or removed mid-play are drawn / no longer drawn (`_IsoFollow`, `_iso_undraw`)
 - [x] Regression tests from per-frame state and pixels (`tests/test_step178.py`); Phase Q baseline identical; the web-page video re-rendered with the Kokoro audio and checked frame by frame
 
+### Step 179 — Documentary music beds
+- [x] Five owner-approved prototype beds become built-in beds, used like the others (`music: discovery`, `{source: momentum, volume: -2}`; seamless, −28 LUFS, made at the join; `list-music`, `--render-dir`, schema text, validation with did-you-mean, MCP `list_music`): `discovery` (D minor, 104 BPM, 24 bars), `breakthrough` (C minor → E-flat major at 25.7 s, 112 BPM, 24 bars), `enigma` (B minor, 96 BPM, 20 bars), `momentum` (G minor, 120 BPM, 24 bars), `lab` (F minor, 108 BPM, 20 bars); `investigation` not approved, not added (`music.py`; DESIGN §91)
+- [x] Same sound as approved: float32 loops equal the prototype's, WAVs byte-identical to the approved ones; the older five beds unchanged (hashes); fingerprint test for all ten (`tests/test_music.py`)
+- [x] Docs: CONFIG beds table and bass-weight note, guide + `AGENTS.md` (choosing between them), COOKBOOK, Shorts cookbook, README, CHANGELOG, DESIGN §91
+
+### Step 180 — `momentum` recommended for presentations and documentaries
+- [x] The guide + `AGENTS.md`, COOKBOOK §9 and the Shorts cookbook §9 (snippets and template) suggest `momentum` first for presentations and documentaries; the other beds stay as alternatives (`tests/test_guide.py` checks the guide's sentence)
+
+### Step 181 — Energetic music beds
+- [x] Four owner-approved prototype beds become built-in beds, used like the others (`music: ascent`, `{source: neon, volume: -2}`; `list-music`, `--render-dir`, MCP `list_music`, schema text, validation with did-you-mean): `ascent` (trance_a: A minor, 136 BPM, 32 bars, lift at 28.2 s), `horizon` (trance_b: D minor → F major, gated supersaw, 132 BPM, 32 bars, lift at 29.1 s), `beacon` (pulsar_a: E minor, 120 BPM, 24 bars), `neon` (night_drive_a: F-sharp minor, 116 BPM, 24 bars); `pulsar_b`, `night_drive_b` not approved, not added (`music.py`: `Bed.seed`, `_grid`, the new voices; DESIGN §91.1)
+- [x] Same sound as approved: float32 loops equal the prototype's, WAVs byte-identical to the approved ones; the ten older beds unchanged (hashes); fingerprints for all fourteen and a facts test (`tests/test_music.py`)
+- [x] Docs: CONFIG beds table and bass-weight note, guide + `AGENTS.md` (`momentum` still first, the four as alternatives), COOKBOOK, Shorts cookbook, README, CHANGELOG, DESIGN §48 / §91.1
+
+### Step 182 — Animated gallery previews and cartoon showcases
+- [x] Gallery index cells play each scene's 16:9 and 9:16 GIFs (each linked to its page, in a `<picture>` with the still for reduced motion; column "preview"); every GIF skips the empty opening, opens on its held last beat (2 s) and stays under 150 KB (5 / 4 fps fallback); all GIFs regenerated (DESIGN §60.1)
+- [x] "2D cartoons" (stage, card, then four showcases: a dialogue in a furnished room with a close-up, walks in depth, rain at nightfall, a platform jump for a star) and "Isometric cartoons" (a village meeting, a cut-away room, a lamp lit at night with a name tag, settling snow; a link to `examples/iso-story`); showcases as named entries with their own YAML in `data/gallery/showcases/`, pages and tests; validate clean, lint clean in 16:9
+- [x] README strip of four gallery GIFs; CONFIG, DESIGN, CHANGELOG, HANDOFF; `tests/test_gallery.py`
+
 ---
 
 ## Backlog (after Step 60)

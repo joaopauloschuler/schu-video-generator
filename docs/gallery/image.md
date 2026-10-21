@@ -36,6 +36,7 @@ From the author guide (`vidgen guide scenes`):
 | `generate.style` | `str \| None` |  | Style words added to the prompt: a preset (photo, illustration, flat, isometric, watercolor, line_art, render_3d, cinematic), your own words, or none; default imagegen.style. |
 | `generate.aspect` | `'auto' \| 'landscape' \| 'portrait' \| 'square'` | `'auto'` | Shape of the picture: auto (the video's: landscape for 16:9, portrait for 9:16, square), landscape, portrait or square. |
 | `generate.seed` | `int \| None` |  | Another number asks for another picture of the same prompt (part of the cache key; OpenAI takes no seed, so it does not make a picture reproducible). |
+| `generate.format` | `'png' \| 'svg'` | `'png'` | png: a raster picture; svg: a vector picture drawn as shapes (provider openrouter with an SVG model, e.g. imagegen.svg_model: recraft/recraft-v4.1-vector; good for flat illustrations, not photos). |
 | `caption` | `str` |  | Caption text. |
 | `fit` | `'contain' \| 'cover'` | `'contain'` | contain: whole image, caption below; cover: fills the frame (cropped), caption on a band. |
 | `ken_burns` | `KenBurns \| bool` | `False` | Slow zoom/pan over the whole scene; true = zoom 1.0 -> 1.15 on the center. |
@@ -45,6 +46,9 @@ From the author guide (`vidgen guide scenes`):
 | `ken_burns.end_focus` | `tuple[float, float]` | `(0.5, 0.5)` | [x, y] in 0-1 (0,0 = top left) centered at the end. |
 | `caption_color` | `color` | `'text'` | Caption color. |
 | `caption_size` | `size` | `'caption'` | Caption text size. |
+| `draw` | `bool` | `False` | Vector pictures (.svg path or generate format: svg): trace the outlines, then fill them (instead of a fade). |
+| `recolor` | `'none' \| 'theme'` | `'none'` | Vector pictures: none keeps their colours; theme maps each to the nearest theme colour (greys by lightness, others by hue). |
+| `simplify` | `bool \| float` | `False` | Vector pictures: drop shapes smaller than this percentage of the picture's area (true = 0.05) so busy SVGs draw faster. |
 
 ## Targets
 

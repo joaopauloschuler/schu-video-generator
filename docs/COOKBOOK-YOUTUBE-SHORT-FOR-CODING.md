@@ -399,16 +399,29 @@ pronunciation:
 Use one of vidgen's built-in generated beds (synthesised, not MIDI), chosen by the video's tone:
 
 ```yaml
-music: {source: pulse, volume: -2}    # discovery, documentaries: "look what this code does"
+music: {source: momentum, volume: -2} # recommended: presentations, documentaries
+music: {source: pulse, volume: -2}    # lighter: "look what this code does"
 music: {source: bright, volume: -2}   # calm, cinematic scenes
 ```
 
+- `momentum`: 120 BPM, G minor, a driving sixteenth-note synth ostinato, a soft kick on every beat
+  and off-beat bass; the recommended bed for presentation- and documentary-style Shorts.
 - `pulse`: 96 BPM, A minor, a soft plucked arpeggio over a muted pad and a gentle thump on every
-  beat; forward-moving without being dramatic. The default for a coding Short.
+  beat; forward-moving without being dramatic, and lighter on phone speakers.
 - `bright`: 120 BPM, C major, a light pad, a plucked arpeggio and a sparse soft bell melody;
   warm and open, for calmer, more cinematic pieces.
+- Alternatives to `momentum` with the same kick and synth bass: `lab` (108 BPM, modern tech:
+  a rolling synth bass, electronic plucks, glitchy clicks) and `discovery` (104 BPM, a steady
+  approach that builds); `breakthrough` lifts from tension to a reveal 25.7 s into its loop.
+  More energy: `neon` (116 BPM, synthwave: a gated snare, an analog octave bass, a square-wave
+  arpeggio; tech at night, retro-futurism, coding), `ascent` / `horizon` (136 / 132 BPM,
+  uplifting trance that builds and lifts halfway through the loop: launches, montages, endings),
+  `beacon` (120 BPM, a pulsar-like ticking beacon: space, science, data).
+  All of these are bass-heavy (57–78 % of their power under 150 Hz) and Shorts are mostly heard on
+  phone speakers, which drop most of that: listen on a phone, and fall back to `pulse` if the bed
+  sounds thin.
 - `volume: -2` sits well under the voice, and vidgen ducks the bed by 12 dB while the voice
-  speaks. Both beds loop without a seam, so they fit a video of any length.
+  speaks. Every bed loops without a seam, so it fits a video of any length.
 - Prefer the beds to composed music (`music: {compose: <mood>}`): on narrated Shorts the beds
   sounded clearly better. Beds need no SoundFont and no music credit.
 - The final mix is normalised to **−16 LUFS** integrated with a **true peak ≤ −1 dBTP** (vidgen's
@@ -510,7 +523,7 @@ stt: {provider: faster_whisper, model: base.en}   # vidgen readback: local and f
 
 terms: {words: primary}            # one colour per concept: "words" in every text and caption
 
-music: {source: pulse, volume: -2}   # or bright, for a calmer, cinematic piece
+music: {source: momentum, volume: -2}   # or pulse (lighter), bright (calmer, cinematic)
 transition: {type: crossfade, duration: 0.4}
 
 overlays:

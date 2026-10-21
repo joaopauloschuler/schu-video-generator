@@ -16722,3 +16722,222 @@ Known gaps
   sharpening on its last frame); pre-existing, not an entrance.
 - A front picture left over from a follow is outside the walkers' draw-order blocks while it
   fades (a character walking during a change near an object; not seen).
+
+## Step 179 — Documentary music beds
+
+The owner listened to six prototype beds (`<scratchpad>/music-candidates/`: `newbeds.py`, the
+generator built on `vidgen.music`'s helpers; `build.py`, render / measure / demos;
+`metrics.json`) and approved five as built-in alternatives: `discovery`, `breakthrough`,
+`enigma`, `momentum`, `lab`. `investigation` was not approved and is not added. The older beds
+`calm`, `pulse`, `bright`, `cartoon`, `lullaby` are unchanged.
+
+What was built (DESIGN §91)
+- `music.py`: the prototype's building blocks moved in unchanged (`_kick`, `_synth_bass`, `_hat`,
+  `_clock`, `_piano`, `_fm_pluck`, `_pump`, `_riser`, `_echoed`, `_hits`, `_circular_smooth`,
+  `_tone_filter`, `_opening_pads`), the five generators (`_discovery`, `_breakthrough`,
+  `_enigma` with `_ENIGMA_MOTIF`, `_momentum`, `_lab`) and five `Bed` entries after `lullaby`
+  (`_loop_seconds` gives their length from tempo and bars). Searched first: everything else they
+  use already existed (`_pads`, `_partials`, `_arpeggio`, `_bell`, `_add_panned`, `_finish`,
+  `sfx._filtered` / `_band` / `_bump` / `_sweep` / `_tone`). Nothing else in the pipeline needed
+  a change: `bed_loop`, `is_bed`, `Source`, `music_entries` (so `vidgen list-music`,
+  `--render-dir`, MCP `list_music`) and `config_problems` all read `BUILTIN_BEDS`.
+- Facts: `discovery` D minor, 104 BPM, 24 bars, 55.384 s; `breakthrough` C minor → E-flat major
+  (the lift at 25.714 s), 112 BPM, 24 bars, 51.428 s; `enigma` B minor, 96 BPM, 20 bars, 50 s;
+  `momentum` G minor, 120 BPM, 24 bars, 48 s; `lab` F minor, 108 BPM, 20 bars, 44.443 s. Made in
+  1.7–4.2 s each (the older beds 1.1–1.6 s), so `vidgen list-music` now takes ~20 s.
+- `config_problems`: a misspelt bed name gets `did you mean 'discovery'?` (difflib, cutoff 0.7)
+  before the list of beds. `MusicCue.source`'s schema description names the ten beds.
+- Docs: CONFIG (beds table rows with key, BPM, loop length, sound, use; a bass-weight paragraph;
+  `source` and the top-level `music` row), guide + `AGENTS.md` (how to choose between the five,
+  the `start: 25.7 − T` tip for `breakthrough`, the bass weight), COOKBOOK §9, the Shorts
+  cookbook §9 (listen on a phone first), README, the gallery example's comment (its music is
+  still `calm`), CHANGELOG (0.3.0 now Steps 61–179), DESIGN §48 and §91, tasklist.
+
+Match with the approved prototypes (`<scratchpad>/s179/match_check.py`)
+- The ported float32 loops equal `newbeds.loop(name)` sample for sample (all five).
+- Written with `write_wav` from a float64 copy, as `build.py` wrote them, they are byte-identical
+  to `1_discovery.wav`, `3_breakthrough.wav`, `4_enigma.wav`, `5_momentum.wav`, `6_lab.wav`.
+  (Written from float32 they differ by one 16-bit step at a few samples: `x * 32767` rounds a few
+  half-steps the other way in float32. Not a difference in the beds.)
+- The older five beds' float32 loops have the same sha256 as before the change
+  (`<scratchpad>/s179/before.json`, `after.json`).
+
+Tests
+- `tests/test_music.py`: `test_bed_sounds_as_approved` (10, slow): loop length and three
+  projections of the loop on seeded Gaussian noise, recorded from the approved loops (new beds)
+  and from the code before this step (older beds), tolerance 0.01; `test_every_bed_has_a_fingerprint`;
+  `test_documentary_beds_facts` (tempo, key, length, chords, descriptions; no audio);
+  `test_validate_reports_missing_music_file` checks the did-you-mean and that `momentum` with a
+  volume validates; `test_list_music` expects ten previews. The parametrized
+  `test_bed_is_deterministic_and_clean` and `test_bed_loop_seam_is_continuous` now run on ten beds
+  and pass unchanged (above 5 kHz, below 35 Hz, channel correlation, seam).
+- Run one command at a time under `capped`: `test_music.py -m "not render"` in three parts
+  (6 passed in 18 s; the per-bed tests 30 passed in 86 s; the rest 24 passed in 65 s);
+  `test_guide.py` (54 passed, 4 s); `test_docs.py` (62 passed, 3 s); `test_phase_l_review.py` + `test_composer.py -k music`
+  (6 passed, 70 s, including the MCP `list_music` call). Not run: `test_music.py`'s render tests
+  (the mix code is unchanged and they use `calm`), the full suite (not asked).
+
+Known gaps
+- The beds are bass-heavy (57–67 % of their power under 150 Hz, `pulse` 36 %) and sound lighter
+  on phone and laptop speakers; documented, not re-balanced (approved as heard).
+- `Bed` has no field for `breakthrough`'s lift time; it is in the description and the docs.
+- `vidgen list-music` makes every bed's loop (~20 s for ten); a description-only listing would
+  not need the audio, but the JSON reports each loop's measured loudness.
+
+## Step 180 — `momentum` recommended for presentations and documentaries
+
+The owner wants `momentum` to be the suggested bed for presentations and documentaries. Docs only;
+no code or bed changed.
+
+What changed
+- Guide (`src/vidgen/data/guide/AGENTS.md`, copied to `AGENTS.md`), audio topic: "For
+  presentations and documentaries, suggest `momentum` first" with a snippet
+  (`{source: momentum, volume: -2}`); `momentum` now leads the list of the five documentary beds
+  and names presentations and documentaries; the others are kept as alternatives.
+- `docs/COOKBOOK.md` §9: the `video.yaml` snippet uses `momentum` (was `calm`); the paragraph
+  names it as the recommendation and lists the others (documentary beds and `calm` / `pulse` /
+  `bright`) as alternatives.
+- `docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md` §9: a `momentum` snippet and bullet first, `pulse`
+  described as the lighter choice for phone speakers (no longer "the default for a coding
+  Short"), the bass-heavy note kept; the full template's `music` line uses `momentum`.
+  `examples/cookbook/short.template.yaml` still uses `pulse` (its example video was made with it).
+- `tests/test_guide.py::test_presets_actions_rules_and_sounds_are_real_and_complete` also checks the guide's recommendation
+  sentence.
+
+Tests: `test_guide.py` (54 passed), `test_docs.py` (62 passed), one at a time under `capped`.
+
+Known gaps: `vidgen`'s own defaults are unchanged (no bed is added when `music` is not written);
+CONFIG's beds table is unchanged (it lists, it does not recommend).
+
+## Step 181 — Energetic music beds `ascent`, `horizon`, `beacon`, `neon`
+
+The owner listened to six momentum-inspired prototypes (`<scratchpad>/music-candidates2/`:
+`beds2.py`, the generator; `build2.py`, render / measure / demos; `metrics.json`) and approved
+four, renamed: `trance_a` → `ascent`, `trance_b` → `horizon`, `pulsar_a` → `beacon`,
+`night_drive_a` → `neon`. `pulsar_b` and `night_drive_b` were not approved and are not added.
+
+What was built (DESIGN §91.1)
+- `music.py`: the four generators (`_ascent`, `_horizon`, `_beacon`, `_neon`) and four `Bed`
+  entries after `lab`; the building blocks they need moved in unchanged: `_SAW`, `_SOFT_SAW`,
+  `_grid`, `_grid_seconds`, `_saw_chords`, `_sweep_mix`, `_section_curve`, `_gate`,
+  `_analog_bass`, `_square_pluck`, `_gated_snare`, `_add_stereo`, `_pulsar_pulse`, `_static`;
+  `_clap`, `_ACCENTS`, `_FIGURE` moved out of `_momentum`, which now uses them (bit-identical).
+  `_soft_lead` (only `night_drive_b`) was left out.
+- `Bed.seed` (new, default `None`): the name `bed_loop` seeds with instead of the bed's own
+  (`crc32("music:<seed or name>")`). The four keep their prototype names as seeds: renamed with
+  the new names they would get other random phases and not sound as approved.
+- `_grid` rounds the beat down to whole sixteenths: `horizon`'s beat is 21816 samples (not 21818),
+  `neon`'s 24824 (not 24827); `Bed.tempo` keeps the nominal 132 / 116.
+- Facts: `ascent` A minor, 136 BPM, 32 bars, 56.469 s, lift at 28.235 s; `horizon` D minor → F
+  major, 132 BPM, 32 bars, 58.176 s, lift at 29.088 s; `beacon` E minor, 120 BPM, 24 bars, 48 s;
+  `neon` F-sharp minor, 116 BPM, 24 bars, 49.648 s. Under 150 Hz: 71 / 78 / 72 / 71 % of the
+  power. `enigma`'s description no longer says "the most bass-heavy" / "the quietest in the
+  voice's range" (`horizon` and `beacon` are now), and `momentum` is "the most energetic
+  documentary bed" (description, CONFIG row, guide: "of the five"), since `ascent` / `horizon`
+  are faster; their sound is unchanged.
+- `MusicCue.source`'s schema description names the fourteen beds. Nothing else in the pipeline
+  changed: `is_bed`, `Source`, `music_entries` (list-music, `--render-dir`, MCP `list_music`) and
+  `config_problems` (did-you-mean) read `BUILTIN_BEDS`.
+- Docs: CONFIG (beds table rows, the top-level `music` and `source` rows, bass-weight paragraph,
+  generation time), guide + `AGENTS.md` (`momentum` still suggested first; the four as
+  alternatives with a one-line "when" and the `start: 28.2 − T` tip), COOKBOOK §9, Shorts
+  cookbook §9, README, CHANGELOG (0.3.0 now Steps 61–181), DESIGN §48 and §91.1, tasklist.
+
+Match with the approved prototypes (`<scratchpad>/s181/match_check.py`): ALL MATCH
+- The ported float32 loops equal `beds2.loop(<prototype name>)` sample for sample (all four).
+- Written with `write_wav` from a float64 copy (as `build2.py` wrote them) they are byte-identical
+  to `1_trance_a.wav`, `2_trance_b.wav`, `3_pulsar_a.wav`, `5_night_drive_a.wav`.
+- The ten older beds' float32 loops have the same sha256 as before the change
+  (`<scratchpad>/s181/before.json`), `momentum` included after its clap / accent refactor.
+
+Tests
+- `tests/test_music.py`: `_BED_FINGERPRINTS` has the four new beds (recorded from the approved
+  loops); new `test_energetic_beds_facts` (tempo, key, `_grid` beat, length, seed, chords,
+  descriptions, lift times; no audio); `test_bed_is_deterministic_and_clean` seeds with
+  `bed.seed or name`; `test_validate_reports_missing_music_file` checks `did you mean 'horizon'?`
+  and that `neon` with a volume and `ascent` validate; `test_list_music` expects fourteen previews
+  and checks `horizon` / `neon` / `beacon`; `test_schema_has_music` validates `{source: neon,
+  volume: -2}` and checks the description names every bed.
+- Run one command at a time under `capped`: `test_music.py -m "not render"` in four parts (the
+  new beds' per-bed tests 12 passed in 65 s; the older beds' 31 passed in 90 s; the rest 23 passed
+  in 24 s; `test_list_music` 1 passed in 110 s); `test_guide.py` (54 passed); `test_docs.py`
+  (62 passed); `test_phase_l_review.py -k list_music` (the MCP call, 1 passed, 74 s);
+  `test_composer.py -k music` (4 passed). Not run: `test_music.py`'s render tests (the mix code is
+  unchanged and they use `calm`), the full suite (not asked).
+
+Known gaps
+- `ascent` takes ~17 s to make (`horizon` ~7 s, `beacon` / `neon` ~3 s): its loop length,
+  2710528 = 2^10 × 2647 samples, makes its whole-loop FFTs slow. Changing the length or the FFT
+  would change the bed, so it is documented, not fixed; `vidgen list-music` now takes about a
+  minute (a description-only listing would not need the audio).
+- The beds are bass-heavy (71–78 % under 150 Hz) and sound lighter on phone and laptop speakers;
+  documented, not re-balanced (approved as heard).
+
+## Step 182 — Animated gallery previews and cartoon showcases
+
+What the owner agreed: animated previews in the gallery index, the cartoon section split into
+"2D cartoons" and "Isometric cartoons" with showcase scenes written for the gallery, and a small
+strip of gallery GIFs near the top of the README. DESIGN §60.1.
+
+What was built
+- Index (`gallery.write_index`): every cell shows the 16:9 and 9:16 GIFs, 180 px high, each
+  linked to its page and wrapped in `<picture>` with the still as the
+  `(prefers-reduced-motion: reduce)` source (`preview_html`); a format without a GIF shows its
+  still. Column "preview"; the intro says the previews are animated. Type pages unchanged.
+- GIFs (`_write_clip`, `clip_start`): skip the empty opening (first frame at 75 % of the largest
+  difference from the first frame, at most 1 s in), hold the end 2 s **at the GIF's start**
+  (`export.write_gif(..., hold_first=True)`, the loop plays the same, the first frame shown is
+  the finished picture), fall back to 5 then 4 fps above 150 KB. `render.ffmpeg.decode_gray_frames`
+  is new (grey frames through the ffmpeg executable). All 86 GIFs regenerated.
+- Showcases: `gallery.Showcase` / `SHOWCASES` (name, section, title, use), YAML in
+  `src/vidgen/data/gallery/showcases/<name>.yaml` (package data glob widened to
+  `data/gallery/**/*` in `pyproject.toml`), each rendered as its own work project
+  `build/gallery/showcases/<name>/`, page `<name>.md`. 2D: `talk_in_a_room`, `walk_in_depth`,
+  `rainy_evening`, `star_jump`; iso: `iso_village`, `iso_room`, `iso_lamp`, `iso_snow`. The guide
+  group `cartoons` is headed "2D cartoons" (`GROUP_TITLES`); "Isometric cartoons" links
+  `examples/iso-story`. `--types` takes showcase names; a project's gallery has none. JSON:
+  `showcases` list; the CLI prints them.
+- README: four GIFs (iso village, `iso_diagram`, `line_chart`, `code_morph`) after the kphi3
+  pictures, 200 px wide, linked to their pages, same `<picture>` fallback.
+- Docs: CONFIG "Scene gallery" (showcases, GIF timing, sizes, `--types`, JSON `showcases`),
+  DESIGN §60 / §60.1 and the layout line, CHANGELOG (0.3.0 now Steps 61–182), tasklist.
+  The guide and `AGENTS.md` are unchanged (no name they mention changed).
+
+Files: `src/vidgen/gallery.py`, `export.py` (`hold_first`), `render/ffmpeg.py`
+(`decode_gray_frames`), `jsonout.py`, `cli.py` (print, `--types` help), `pyproject.toml`,
+`src/vidgen/data/gallery/showcases/*.yaml` (8), `docs/gallery/**` (regenerated; 8 new pages,
+32 new media files; `code-*.png`, `stage-*.png` and `image.md` changed because they were stale
+from earlier steps), `README.md`, `docs/CONFIG.md`, `DESIGN.md`, `CHANGELOG.md`, `tasklist.md`,
+`tests/test_gallery.py`.
+
+Sizes: `docs/gallery/media` 5,746,396 bytes before, 8,338,148 after (GIFs 5.48 MB: the types'
+3.59 MB, the showcases' 1.89 MB; stills 2.86 MB); the whole `docs/gallery` 8.55 MB. Largest GIF
+144 KB (`rainy_evening-16x9`, `iso_snow-16x9`, at 4 fps); the test budget went from 8 to 10 MB
+for the showcases.
+
+How the showcases were checked: frames of every GIF looked at in contact sheets in both formats
+and fixed (fade-in starts, a bush hiding a speaker in a two-shot, a cut medium shot, rain that
+did not show at sunset, name tags only where the face is small, sizes over budget). `vidgen
+validate`: clean for all eight. `vidgen lint`: clean in 16:9 for all eight and in 9:16 for the
+four iso ones and `star_jump`; in 9:16 `talk_in_a_room`, `walk_in_depth` and `rainy_evening`
+keep warnings about the built-in sets' own props (`off_frame` at the edges, `prop_overlap` of
+`living_room`'s lamp and sofa, `park`'s tree and fountain): the ready-made sets are laid out for
+16:9 only (backlog).
+
+Tests (one at a time, under `capped`): `tests/test_gallery.py -m "not render"` 17 passed (4 s;
+new: showcase configs validate, clip start, GIF opening on its held end via a real ffmpeg
+encode, committed showcases and previews, every GIF ≤ 150 KB and not opening empty, README
+strip markup and files), `-m render` 1 passed (13 s); `tests/test_docs.py` 62 passed;
+`tests/test_thumbnail_export.py -k gif` 1 passed; `tests/test_jobs.py -k gallery` 1 passed.
+Not run: the full suite, `test_mcp.py` (its gallery tool is unchanged; a full MCP gallery run
+now also renders the showcases).
+
+Known gaps
+- Starting at the first frame 75 % of the way in, a chart whose bars grow during the first
+  second starts with them mostly grown (`bar_chart`); an iso place's fade can still show for a
+  frame (`iso_village`).
+- The 9:16 GIF is 180 px wide but shown about 101 px wide in the 180 px high cells (kept for
+  sharpness on high-density screens).
+- Name tags show only while the speaker's face is small, so `iso_lamp`'s tag shows in its wide
+  view mid-line, not on the held last frame.
+- The MCP `gallery` tool returns the types' stills only, not the showcases'.

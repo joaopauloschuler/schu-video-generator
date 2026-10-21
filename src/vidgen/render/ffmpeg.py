@@ -107,6 +107,23 @@ def decode_mono(path: Path, rate: int) -> np.ndarray:
     return samples
 
 
+def decode_gray_frames(path: Path, width: int, fps: float, end: float) -> np.ndarray:
+    """The video ``path`` up to ``end`` seconds as grey frames ``(n, height, width)`` (uint8),
+    ``fps`` frames a second, scaled to ``width`` px (the height keeps the aspect, rounded to
+    even); decoded by the ``ffmpeg`` executable."""
+    info = probe(path)
+    height = max(2, 2 * round(width * info.height / info.width / 2))
+    result = subprocess.run(
+        [find_ffmpeg(), "-hide_banner", "-nostdin", "-v", "error", "-t", f"{end:.6f}", "-i", str(path), "-an",
+         "-vf", f"fps={fps:g},scale={width}:{height}", "-pix_fmt", "gray", "-f", "rawvideo", "pipe:1"],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        details = result.stderr.decode("utf-8", errors="replace").strip()[-500:] or f"exit code {result.returncode}"
+        raise VidgenError(f"cannot read video file {path}: {details}")
+    return np.frombuffer(result.stdout, dtype=np.uint8).reshape(-1, height, width)
+
+
 @dataclass(frozen=True)
 class VideoInfo:
     """What the pipeline needs to know about a rendered scene file."""
