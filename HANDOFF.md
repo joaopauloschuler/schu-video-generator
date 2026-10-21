@@ -16396,3 +16396,100 @@ How to test
   `grow_stack_mid_16x9.png`, `flow_packets_mid_16x9.png`, `focus_raise_group_16x9.png`,
   `relabel_raise_16x9.png`, `raise_shadow_16x9.png`, `explode_dim_light_16x9.png`,
   `gallery_16x9.png` / `gallery_9x16.png`.
+
+## Step 175 — The iso_diagram example and its docs
+
+What was built (DESIGN §90.12)
+- **The example** `examples/iso-web-page/video.yaml` ("What happens when you open a web page",
+  original content, no brands): a `title`; `trip` (an `iso_diagram` on an `at` grid: browser,
+  DNS, load balancer tile, two app servers on a group plate, cache cylinder, database; each block
+  built on the word that names it with `build` grow / drop, dots to DNS and back, packets to the
+  load balancer, dots to the cache, along the cache-database pipe); `one_request` (the same
+  diagram: the busy server dimmed, the chosen one raised, `focus` on the cache and database,
+  `relabel` "Cache: miss", "Database: 40 ms", "Cache: hit" with a highlight and a dim, `focus:
+  diagram`, a `chain` of packets back to the browser); `render` (a stack DOM / Styles / Layout /
+  Paint built, exploded, each layer highlighted `until` the next beat, collapsed); a `bullets`
+  recap. `terms:` cache (tertiary), database (secondary); karaoke captions (one line in 16:9);
+  Kokoro `af_heart` at 0.82; the `bright` bed at -4; a `short` 9:16 variant; the facts in the
+  header. No audio committed.
+- **Voiced and rendered outside the repo** (`<scratchpad>/s175/voiced`, a copy of the example):
+  Kokoro `vidgen tts` (18 beats); `vidgen lint` with the audio 0 findings (first takes: 5
+  `narration_speed` / `rushed_animation` warnings at speed 0.9: speed 0.82, four beats given more
+  words, one beat a closing clause after its `raise`); final render 1920x1080 @ 30, 2:00.07, video
+  and audio streams both 120.07 s, -16.0 LUFS, true peak -1.9 dBTP (narration-only was -22.9 LUFS
+  without normalisation, hence the music bed), no silence over 1.5 s:
+  `<scratchpad>/s175/open_a_web_page.mp4`; contact sheet (one frame per 6 s)
+  `<scratchpad>/s175/contact_sheet.png`, checked by eye.
+- **Fixes found while making it** (`scenes/iso_diagram.py`):
+  - the fit (`_largest`) bisected from the smallest scale on the assumption that fitting is
+    monotonic; it is not (a label pushed clear with a long leader overflows at a middle scale and
+    lies by its block at a larger one), and the example's second scene came out a third of its
+    size with "the blocks are drawn small". Now a scan down from the largest scale (`SCAN_STEP`
+    0.9) to the first that fits, then `BISECT_STEPS` 8 above it. The gallery sample's 9:16 still
+    is drawn larger (media regenerated with `vidgen gallery --types iso_diagram`; the page text is
+    unchanged);
+  - `focus` fitted and centred its targets on the whole frame, so a focused block's label slid
+    under the karaoke captions: now they are fitted into the scene's `safe_area` (margins and
+    reserved overlays left out) and centred on it;
+  - `focus: diagram` zoomed onto the diagram's own box and cut the heading off; it now returns the
+    whole frame, as CONFIG said.
+- **Docs**: guide (a paragraph after the `iso_diagram` snippet naming the example and two tips;
+  the `focus` action row) + `AGENTS.md`; CONFIG (the example under the iso diagram actions; the
+  `focus` row: safe area, whole frame); CHANGELOG (0.3.0 now Steps 61–175, an entry under the
+  iso section); README (an "Isometric diagrams" feature bullet and the example entry); the Shorts
+  cookbook (§3: architecture in a Short); the gallery's iso_diagram media; DESIGN §90.12;
+  tasklist.
+
+Files touched
+- New: `examples/iso-web-page/video.yaml`, `tests/test_iso_web_page.py`.
+- Changed: `src/vidgen/scenes/iso_diagram.py` (`SCAN_STEP`, `BISECT_STEPS`, `_largest`,
+  `iso_focus_view`), `src/vidgen/data/guide/AGENTS.md`, `AGENTS.md`, `docs/CONFIG.md`,
+  `docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md`, `docs/gallery/media/iso_diagram-*` (4 files),
+  `README.md`, `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` unchanged. New module constants `iso_diagram.SCAN_STEP`, `BISECT_STEPS`.
+  Behaviour (iso_diagram only): diagrams may come out larger where the old bisection stopped
+  short; `focus` lands in the safe area; `focus: diagram` is the whole frame.
+
+Decisions
+- An `at` grid repeated in two scenes with each block's own `color`: by default the palette
+  follows the order of the blocks, and leaving DNS out of the second scene recoloured the others.
+- Grid spacing chosen by the lint: with the load balancer one column from the browser,
+  `iso_labels` found the "HTTPS" and "lookup" connector labels lying on the browser (16:9); the
+  columns were spread by one and the dashed DNS connector lost its label (the narration says it).
+- Labels "App 1" / "App 2" instead of "App server 1" / "2": the longer ones went below their
+  blocks with leaders crossing the cache's label; the group caption says "App servers".
+- Relabel texts kept short ("Cache: hit", not "Cache hit: 2 ms"): the scene keeps room for the
+  longest text, and the long one pushed the cache's label under the database with a leader across
+  the pipe. The 2 ms is said, not written.
+- The flows are timed after the blocks they need (`flow` on a connector whose end is not built
+  yet shows that connector early: an action shows its target).
+- Music (`bright` at -4) so the mix is normalised to -16 LUFS; a narration-only video keeps the
+  MP3s' level (-22.9 LUFS here).
+
+Known gaps / for Step 176
+- 9:16: the slanted grid draws the seven blocks small and routes browser -> load balancer round
+  the outside; `vidgen lint --variant short` has one `iso_labels` warning ("App 2" lies on part of
+  `lb->app2`, judged acceptable: the arrow still reads), and "App 1" sits over the load balancer
+  tile's far end (not reported: under `min_cover`). `focus` on the cache and database hardly
+  zooms in 9:16 (Step 174's gap: the labels set the width).
+- The floor of the `trip` grid is a little ragged at its right end (it follows the blocks when
+  they cover less than `FLOOR_FILL` of their bounding box).
+- The cache's label sits under the database in `one_request` (room kept for "Cache: miss"); it
+  has a leader and reads, but a label placement that preferred above would be tidier.
+- The Phase Q baseline frames were not re-run: only `scenes/iso_diagram.py` changed (no shared
+  code).
+
+How to test
+- One file at a time under `capped` (1500 MB, 300 s): `test_iso_web_page` (4, 1 render),
+  `test_iso_diagram_actions` (21), `test_iso_diagram` (35), `test_guide` + `test_docs` (116),
+  `test_gallery -m "not render"` (11), `test_builtin_scenes -k iso_diagram` (4),
+  `test_actions_coverage -k "iso or focus or build or flow or relabel"` (3). All pass.
+- The example: `vidgen validate` ok (both variants); `vidgen lint` without audio 0 findings in
+  16:9, 1 warning in 9:16 (above); with the Kokoro audio (the voiced copy) 0 findings.
+  Storyboards at 2 stills a beat in both formats checked by eye.
+- Stills in `<scratchpad>/s175/stills/`: `contact_sheet_final_16x9.png`, `still_030s.png` (the
+  trip built), `still_055s.png` (the focus with "Database: 40 ms"), `still_085s.png` (the stack
+  exploded), `voiced_sheet_16x9_p1..p4.png`, `sheet_9x16_p1..p5.png`,
+  `lint_9x16_app2_on_connector.png`.

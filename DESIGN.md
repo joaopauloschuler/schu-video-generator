@@ -12647,3 +12647,35 @@ plate's caption left behind, now riding with it).
   target `diagram`; the lint rule `iso_labels` (`min_cover`, `min_overlap`, `max_gap`).
 - Output of `iso_diagram` scenes changes (Step 173's placement replaced; it shipped one step
   ago). Phase Q's 31 baseline frames are identical.
+
+### 90.12 The example and the fixes it found (Step 175)
+
+- **The example** `examples/iso-web-page` ("What happens when you open a web page", 5 scenes, 18
+  beats, 2:00 with Kokoro `af_heart` at 0.82 and the `bright` bed): a title; `trip` (browser, DNS,
+  load balancer, two app servers on a group plate, cache, database on an `at` grid, each block
+  built on the word that names it, dots and packets along the connectors); `one_request` (the same
+  diagram: `dim` the busy server, `raise` the chosen one, `focus` on the cache and database,
+  `relabel` for the miss, `Database: 40 ms` and the hit, `focus: diagram`, a `chain` of packets
+  back); `render` (the rendering stack DOM / Styles / Layout / Paint built, exploded, each layer
+  highlighted `until` the next beat, collapsed); a `bullets` recap. `terms:` cache and database.
+  Blocks that appear in two scenes have their own `color` (by default the palette follows the
+  order of the blocks, so leaving DNS out of the second scene recoloured the others).
+- **Fit by scanning** (`IsoDiagram._largest`): whether the diagram fits the body is not monotonic
+  in the scale — at a middle scale a label can be pushed clear with a long leader and overflow,
+  while at a larger one it lies by its block — so Step 173's bisection from the smallest scale
+  could settle on a third of the possible size (the example's second scene, with the browser one
+  row up: "the blocks are drawn small"). Now: the largest scale `cap` if it fits, else scales
+  `SCAN_STEP` 0.9 apart downwards until one fits, then `BISECT_STEPS` 8 between it and the one
+  above; none fitting down to 0.15 as before. At most about 30 placements per label size (the
+  example's scenes render in the same time). The gallery sample's 9:16 still is now drawn larger
+  (regenerated).
+- **`focus` in the safe area** (`iso_focus_view`): the magnification fits the targets into the
+  scene's `safe_area` (the frame less margins and reserved overlays such as karaoke captions),
+  and the camera centre puts their middle on the safe area's middle (`centre = middle − area
+  centre / factor`), clamped to the camera bounds as before. Before, they were centred on the
+  frame and a cache's label went under the captions. A `diagram` target returns the whole frame
+  (`focus: diagram` zoomed onto the diagram's own box and cut the heading off).
+- Considered and left: a `flow` on a connector whose end is not built yet shows the connector
+  early (as any action shows its target); the example builds before it flows. In 9:16 the
+  slanted grid can route a connector round the outside, and `iso_labels` warns that "App 2" lies
+  on part of `lb->app2` (one warning, judged acceptable: the arrow is still read).

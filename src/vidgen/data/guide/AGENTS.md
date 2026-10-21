@@ -467,6 +467,12 @@ Minimal snippets (copy, then adapt):
         - {explode: "stack:app", at: "@layer"}
 ```
 
+A whole iso explainer: `examples/iso-web-page` (a request from the browser to the database, each
+block built on the word that names it, `flow` along the connectors, `focus` and `relabel` for a
+cache miss and hit, a rendering stack exploded layer by layer). When one diagram returns in
+several scenes, give its blocks `at` and their own `color` so it looks the same each time; keep
+labels short ("App 1" over "Application server 1") so they sit right by their blocks.
+
 ```yaml
 # data
 - id: users
@@ -900,7 +906,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `explode` | on an `iso_diagram`: pull a stack's layers apart (`- explode: "stack:app"`, `gap: 0.6`), labels going along; `collapse` puts them back | to show what a stack is made of |
 | `collapse` | on an `iso_diagram`: an exploded stack's layers back together | |
 | `flow` | on an `iso_diagram`: dots (`style: packets`: small cubes) run along connectors (`- flow: "edge:*"`, `chain: true` one after another, `back`, `count`) | when the voice follows data or a request |
-| `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`); `focus: diagram` goes back | at most one or two per scene |
+| `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; `focus: diagram` goes back to the whole frame | at most one or two per scene |
 | `relabel` | on an `iso_diagram`: a label or value changes in place (`- relabel: "block:cache"`, `text: "Cache: hit"`) | a new value, a state change |
 
 ```yaml

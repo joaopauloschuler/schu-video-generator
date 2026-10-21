@@ -982,8 +982,8 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] Lint `iso_labels` (labels over other blocks or labels, hiding a connector, far from what they name; size and contrast stay `min_font`'s and `contrast`'s); tests (`tests/test_iso_diagram_actions.py`)
 
 ### Step 175 — Example and docs
-- [ ] An original short tech explainer with `iso_diagram` (16:9 and 9:16), rendered with Kokoro narration outside the repo
-- [ ] Guide + `AGENTS.md`, CONFIG, CHANGELOG, README, gallery, the Shorts cookbook
+- [x] An original short tech explainer with `iso_diagram` (16:9 and 9:16), rendered with Kokoro narration outside the repo (`examples/iso-web-page`, "What happens when you open a web page", 2:00; fixes found on the way: the fit's largest scale, `focus` in the safe area, `focus: diagram` back to the whole frame; `tests/test_iso_web_page.py`)
+- [x] Guide + `AGENTS.md`, CONFIG, CHANGELOG, README, gallery (iso_diagram media regenerated), the Shorts cookbook
 
 ### Step 176 — Review of Phase R
 - [ ] Critical review with fixes in HANDOFF; backwards compatibility against the baseline stills; the 9:16 variant of `examples/iso-story` rendered at 1080x1920 with the Kokoro audio

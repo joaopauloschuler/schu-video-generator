@@ -5655,7 +5655,7 @@ actions for every scene work as anywhere.
 | `explode` | `gap` (`0.6` cells, up to 3) | pulls a stack's layers apart, `gap` between them, their labels going along; `collapse` or `until: <beat>` puts them back. |
 | `collapse` | — | a stack's layers back together (its own `gap`). |
 | `flow` | `count` (`3`, 1–12), `style` (`dots`, `packets`: small cubes), `color` (`highlight`), `back` (`false`), `chain` (`false`) | dots or packets run along connectors from their start to their tip (`back`: the other way), on top of a pipe, fading in and out at the ends; `chain: true` runs the targets one after another (each 1.2 s) — a request passing through. Not undone (nothing stays). |
-| `focus` | `padding` (`0.12`), `scale` (default: as close as the targets fit, at most 3x) | moves the camera onto the targets without turning it, and stays there (unlike `zoom`, which goes back by the beat's end); `focus: diagram` or `until: <beat>` goes back to the whole view. |
+| `focus` | `padding` (`0.12`), `scale` (default: as close as the targets fit, at most 3x) | moves the camera onto the targets without turning it, and stays there (unlike `zoom`, which goes back by the beat's end); the targets are placed in the safe area, clear of captions and other reserved overlays; `focus: diagram` or `until: <beat>` goes back to the whole view (the whole frame, heading too). |
 | `relabel` | `text` (required) | a block's, layer's, stack's, group's or connector's label becomes `text` (a new value, a new name), the old text morphing into it in place; the scene keeps room for the longer of the two. `until: <beat>` brings the old text back. A target without a label is refused. |
 
 ```yaml
@@ -5681,6 +5681,15 @@ actions for every scene work as anywhere.
         - {collapse: "stack:app"}
         - {relabel: "block:API", text: "API (cached)", at: "@faster"}
 ```
+
+A whole explainer built this way is `examples/iso-web-page` ("What happens when you open a web
+page", 16:9 and a 9:16 `short` variant): a request from the browser through DNS, a load balancer
+and two app servers to a cache and a database, each block built on the word that names it; dots
+and packets along the connectors; `focus` on the cache and database with `relabel` for a miss
+(`Database: 40 ms`) and a hit; a rendering stack (DOM, styles, layout, paint) exploded, each layer
+highlighted `until` the next beat, and collapsed. The same diagram appears in two scenes: its
+blocks have `at` and their own `color`, so it looks the same in both (by default the palette
+colours follow the order of the blocks, which changes when one is left out).
 
 ### `end_card`
 

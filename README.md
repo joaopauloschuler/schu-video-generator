@@ -119,6 +119,12 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   shots and `follow` make them large, name tags show who speaks in wide views, evening, night
   and rain set the mood, footsteps follow the ground ([docs](docs/CONFIG.md#isometric-places-iso),
   [example](examples/iso-story)).
+- **Isometric diagrams**: `iso_diagram` draws architecture and data flow as blocks in the same
+  view (servers, databases, flat platforms, stacks of layers, group plates, connectors along a
+  grid) with flat, readable labels, fitted to 16:9 and 9:16; blocks grow in on the word that names
+  them, dots and packets flow along connectors, a stack's layers pull apart, the camera focuses on
+  a part, labels and values change in place ([docs](docs/CONFIG.md#iso_diagram),
+  [example](examples/iso-web-page)).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
@@ -669,6 +675,13 @@ my_video/
   along routes, a meeting, a door, close-ups and two-shots, name tags in the wide views,
   morning, evening rain and night, footsteps, birdsong, rain and crickets, the `cartoon` music
   bed and a 9:16 variant; about 3:00 with Kokoro narration (no audio committed).
+- [examples/iso-web-page](examples/iso-web-page) — "What happens when you open a web page", a
+  tech explainer in isometric diagrams: the browser asks DNS for the address, the request
+  crosses to a load balancer and one of two app servers, which asks the cache before the
+  database; each block grows in on the word that names it, packets run along the connectors, the
+  camera focuses on a cache miss (the database takes 40 ms) and then a hit, and the browser's
+  rendering steps (DOM, styles, layout, paint) are pulled apart as a stack; terms in their
+  colours, karaoke captions, a 9:16 variant; about 2:00 with Kokoro narration (no audio committed).
 - [examples/gradient-descent](examples/gradient-descent) — "Gradient descent, one step at a
   time", a maths-and-code explainer: a dot tracing a loss curve with its tangent and a live
   gradient label, the update rule with its symbols in the concepts' colours, the first steps as

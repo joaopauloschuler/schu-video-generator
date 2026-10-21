@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–174)
+## 0.3.0 (Steps 61–175)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -219,6 +219,14 @@ matters only for projects made with development builds between Steps 67 and 131)
   listed under it with colour swatches in 9:16, where it is drawn larger. A lint rule
   `iso_labels` reports labels over other blocks, labels or connectors, or far from what they
   name.
+- The example `examples/iso-web-page` (175, 16:9 and 9:16): "What happens when you open a web
+  page", a two-minute explainer of a request from the browser to the database and back and of
+  the browser's rendering steps, in three iso diagrams with a title and a recap. Fixes found
+  while making it: a diagram is fitted at the largest scale that fits even when a smaller one
+  does not (a label pushed clear at one scale can lie by its block at a larger one; a diagram
+  could come out at a third of its size), `focus` keeps its targets clear of the captions, and
+  `focus: diagram` goes back to the whole frame (it zoomed onto the diagram and cut off the
+  heading).
 
 ### Presentation toolkit (Phase P)
 

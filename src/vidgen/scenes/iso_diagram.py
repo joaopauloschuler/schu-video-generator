@@ -31,6 +31,10 @@ Box = tuple[float, float, float, float]
 #: diagram at least this much larger; the body's width over its height there.
 SLANT_GAIN = 1.15
 PORTRAIT_BODY = 0.62
+#: Fitting the diagram: scales tried from the largest down, each this share of the one before,
+#: until one fits; then this many bisection steps between it and the next larger one.
+SCAN_STEP = 0.9
+BISECT_STEPS = 8
 
 
 def _check_id(value: str) -> str:
@@ -742,11 +746,21 @@ class IsoDiagram(NarratedScene):
         ok, placement = fits(cap)
         if ok:
             return _Plan(cap, labels, placement, True)
+        # Whether it fits is not monotonic in the scale (a label pushed clear at one scale can lie
+        # by its block at a larger one), so scan down for the largest that fits, then bisect.
         low, high = 0.15, cap
-        ok, placement = fits(low)
-        if not ok:
-            return _Plan(low, labels, placement, False)
-        for _ in range(14):
+        scale = cap * SCAN_STEP
+        while scale > low:
+            ok, found = fits(scale)
+            if ok:
+                low, placement = scale, found
+                break
+            high, scale = scale, scale * SCAN_STEP
+        else:
+            ok, placement = fits(low)
+            if not ok:
+                return _Plan(low, labels, placement, False)
+        for _ in range(BISECT_STEPS):
             middle = (low + high) / 2
             ok, found = fits(middle)
             if ok:
@@ -1516,16 +1530,21 @@ class IsoDiagram(NarratedScene):
 
     def iso_focus_view(self, targets: Sequence[Target], padding: float, scale: float | None) -> tuple[float, np.ndarray]:
         """The camera view (width, centre) that shows ``targets`` with ``padding`` around them
-        (``scale``: that magnification); the whole frame when they fill it."""
+        (``scale``: that magnification), placed in the safe area (clear of the margins and of
+        reserved overlays such as captions); the whole frame for ``diagram`` or when they fill it."""
+        fw, fh = self.frame_width, self.frame_height
+        if any(t.name == "diagram" for t in targets):
+            return fw, np.zeros(3)
         parts = [m for t in targets for m in (self.on_screen_parts(t) or [t.mobject])]
         group = Group(*parts)
-        fw, fh = self.frame_width, self.frame_height
+        area = self.safe_area
         room = 1 - 2 * padding
-        factor = scale if scale is not None else min(3.0, room * fw / max(group.width, 1e-6), room * fh / max(group.height, 1e-6))
+        factor = scale if scale is not None else min(3.0, room * area.width / max(group.width, 1e-6), room * area.height / max(group.height, 1e-6))
         if factor <= 1.02:
             return fw, np.zeros(3)
         width, height = fw / factor, fh / factor
-        center = view_center_within(self.camera_bounds(), group.get_center()[:2], width, height)
+        wanted = group.get_center()[:2] - np.asarray(area.center[:2], dtype=float) / factor   # its middle on the area's
+        center = view_center_within(self.camera_bounds(), wanted, width, height)
         return width, np.array([*center, 0.0])
 
     # ----- lint (DESIGN.md §90.10) -----------------------------------------------------------

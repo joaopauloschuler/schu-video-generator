@@ -1,0 +1,200 @@
+# What happens when you open a web page: a short tech explainer drawn as iso diagrams
+# (docs/CONFIG.md `iso_diagram`; DESIGN §90):
+#   - blocks built in on the words that name them: build with at: "@word" (grow, drop)
+#   - dots and packets along the connectors: flow (back, chain: an answer passing back through)
+#   - focus on a part and back, raise / highlight / dim, relabel a value in place
+#   - a stack of layers pulled apart and put back: explode / collapse
+#   - one colour per concept: terms: (cache, database) on the blocks, in the bullets and in the
+#     karaoke captions; the other blocks keep one colour each in every scene
+#
+#   vidgen validate examples/iso-web-page                        # checks the short variant too
+#   vidgen lint examples/iso-web-page [--variant short]          # incl. iso_labels, said_before_shown
+#   vidgen storyboard examples/iso-web-page --per-beat 2 [--variant short]
+#   vidgen tts examples/iso-web-page                             # Kokoro: local and free (the kokoro extra)
+#   vidgen render examples/iso-web-page [--preview] [--variant short]
+#
+# Facts (simplified, checked): a browser first resolves the site's name to an IP address through
+# DNS (often answered from a cache along the way); the request goes over HTTPS to a load balancer,
+# which forwards it to one of several app servers; a cache held in memory answers in about a
+# millisecond or less, a database query that reads from disk commonly takes tens of milliseconds
+# (the 2 ms and 40 ms shown are illustrative); the browser parses the HTML into the DOM, matches
+# the CSS rules to it, lays out the boxes and paints the pixels (real browsers also composite
+# layers). Original content; no audio is committed: before `vidgen tts` beats are timed from
+# their word count.
+title: "What happens when you open a web page"
+output: open_a_web_page
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  short:                          # a 9:16 Short of the same video
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+    overlays: [{type: captions, style: karaoke}]
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart, speed: 0.82}  # local and free, word timings; 0.82: under 3.5 words/s
+
+terms:                            # one colour per concept: the blocks, the bullets, the captions
+  cache: tertiary
+  database: secondary
+
+music: {source: bright, volume: -4}   # a light bed; the mix is normalised to -16 LUFS
+transition: {type: crossfade, duration: 0.4}
+
+overlays:
+  - type: captions
+    style: karaoke
+    max_lines: 1
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "HOW THE WEB WORKS"
+      title: "What happens when you open a web page"
+      highlight: "a web page"
+      subtitle: "One request, from the address bar to the pixels"
+    beats:
+      - text: "You type an address and press enter. Less than a second later, the page is there. Here is what happens in between."
+
+  - id: trip
+    type: iso_diagram
+    params:
+      heading: "The trip of one request"
+      entrance: grow
+      blocks:                     # the cache and the database take their terms' colours
+        - {id: browser, label: "Browser", at: [0, 1], color: primary}
+        - {id: dns, label: "DNS", at: [0, 3], shape: slab, size: [1, 1], color: dim}
+        - {id: lb, label: "Load balancer", at: [3, 0], shape: tile, size: [1, 3], color: "#B48CF0"}
+        - {id: app1, label: "App 1", at: [5, 0], height: 1.1, color: "#7C93F2"}
+        - {id: app2, label: "App 2", at: [5, 2], height: 1.1, color: "#7C93F2"}
+        - {id: cache, label: "Cache", at: [7, 1], shape: cylinder}
+        - {id: db, label: "Database", at: [9, 1], shape: database, height: 1.1}
+      groups:
+        - {id: apps, label: "App servers", blocks: [app1, app2], color: "#7C93F2"}
+      edges:
+        - "browser --> dns"
+        - "browser -> lb: HTTPS"
+        - lb -> app1
+        - lb -> app2
+        - app1 -> cache
+        - app2 -> cache
+        - {from: cache, to: db, style: pipe}
+    beats:
+      - text: "It starts in your browser. To find the site, it asks DNS, the internet's phone book, for the server's address."
+        actions:
+          - {build: "block:browser", at: "@browser"}
+          - {build: "block:dns", style: drop, at: "@DNS"}
+          - {flow: "edge:browser->dns", count: 2, at: "@phone"}
+          - {flow: "edge:browser->dns", count: 2, back: true, at: "@address"}
+      - text: "Then the request crosses the internet to a load balancer, which hands it to one of many app servers."
+        actions:
+          - {build: "block:lb", at: "@load"}
+          - {flow: "edge:browser->lb", style: packets, at: "@hands"}
+          - {build: "group:apps", at: "@many"}
+      - text: "To answer, a server needs data. It asks the cache first, a fast memory of recent answers."
+        actions:
+          - {build: "block:cache", at: "@cache"}
+          - {flow: ["edge:app1->cache", "edge:app2->cache"], count: 2, at: "@fast"}
+      - text: "Only when the cache has no copy does it go to the database. It is slower, but it keeps everything."
+        actions:
+          - {build: "block:db", style: drop, at: "@database"}
+          - {flow: "edge:cache->db", at: "@slower"}
+
+  - id: one_request
+    type: iso_diagram
+    params:
+      heading: "Following one request"
+      blocks:
+        - {id: browser, label: "Browser", at: [0, 1], color: primary}
+        - {id: lb, label: "Load balancer", at: [3, 0], shape: tile, size: [1, 3], color: "#B48CF0"}
+        - {id: app1, label: "App 1", at: [5, 0], height: 1.1, color: "#7C93F2"}
+        - {id: app2, label: "App 2", at: [5, 2], height: 1.1, color: "#7C93F2"}
+        - {id: cache, label: "Cache", at: [7, 1], shape: cylinder}
+        - {id: db, label: "Database", at: [9, 1], shape: database, height: 1.1}
+      groups:
+        - {id: apps, label: "App servers", blocks: [app1, app2], color: "#7C93F2"}
+      edges:
+        - "browser -> lb: HTTPS"
+        - lb -> app1
+        - lb -> app2
+        - app1 -> cache
+        - app2 -> cache
+        - {from: cache, to: db, style: pipe}
+    beats:
+      - text: "Let's follow one request. Server one is busy, so the load balancer picks server two, which is free."
+        actions:
+          - {flow: "edge:browser->lb", style: packets, at: "@follow"}
+          - {dim: "block:app1", at: "@busy"}
+          - {flow: "edge:lb->app2", style: packets, at: "@picks"}
+          - {raise: "block:app2", by: 0.4, at: "@two"}
+      - text: "The first time, the cache misses, and the database takes about forty milliseconds."
+        actions:
+          - {focus: ["block:cache", "block:db"], padding: 0.2, at: 0.05}
+          - {relabel: "block:cache", text: "Cache: miss", at: "@misses"}
+          - {flow: "edge:cache->db", at: "@database"}
+          - {relabel: "block:db", text: "Database: 40 ms", at: "@forty"}
+      - text: "The answer is kept in the cache, so the next time it is a hit, in about two milliseconds."
+        actions:
+          - {flow: "edge:cache->db", back: true, at: "@kept"}
+          - {relabel: "block:cache", text: "Cache: hit", at: "@hit"}
+          - {highlight: "block:cache", at: "@hit"}
+          - {dim: "block:db", at: "@hit"}
+      - text: "Then the answer travels back, step by step, all the way to your browser."
+        actions:
+          - {focus: diagram, at: 0.05}
+          - {flow: ["edge:app2->cache", "edge:lb->app2", "edge:browser->lb"], back: true, chain: true, style: packets, at: "@travels"}
+
+  - id: render
+    type: iso_diagram
+    params:
+      heading: "From HTML to pixels"
+      entrance: grow
+      blocks:
+        - {id: html, label: "HTML response", shape: slab, size: [1, 1], color: primary}
+        - id: page
+          label: "Rendering"
+          size: [3, 3]
+          layers:                 # bottom up
+            - {id: DOM, color: "#B48CF0"}
+            - {id: Styles, color: "#7C93F2"}
+            - {id: Layout, color: "#5FC9B8"}
+            - {id: Paint, color: "#F28FB0"}
+      edges: ["html -> page"]
+    beats:
+      - text: "What comes back is a page of HTML. The browser turns it into pixels in four steps."
+        actions:
+          - {build: "stack:page", at: "@turns"}
+      - text: "Pull them apart. First the HTML becomes a tree of elements, the DOM."
+        actions:
+          - {explode: "stack:page", at: "@apart"}
+          - {highlight: "block:DOM", at: "@DOM", until: render_b3}
+      - text: "Then the styles from the CSS are matched to every element."
+        actions:
+          - {highlight: "block:Styles", at: "@styles", until: render_b4}
+      - text: "Layout works out where each box goes, and paint fills in the pixels."
+        actions:
+          - {highlight: "block:Layout", at: "@Layout", until: render_b5}
+          - {highlight: "block:Paint", at: "@paint", until: render_b5}
+      - text: "Put back together, these four steps make the page you see on your screen."
+        actions:
+          - {collapse: "stack:page", at: "@together"}
+
+  - id: recap
+    type: bullets
+    params:
+      heading: "In under a second"
+      items:
+        - {text: "DNS finds the server's address", icon: search}
+        - {text: "A load balancer picks an app server", icon: server}
+        - {text: "The cache answers before the database", icon: database}
+        - {text: "The browser builds the page in layers", icon: layers}
+    beats:
+      - text: "So: DNS finds the address of the server."
+      - text: "A load balancer spreads the work over many app servers."
+      - text: "The cache, close to the servers, saves a slow trip to the database."
+      - text: "And the browser builds the page, layer by layer. All of this in under a second."
