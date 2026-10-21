@@ -1004,6 +1004,9 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] Same sound as approved: float32 loops equal the prototype's, WAVs byte-identical to the approved ones; the older five beds unchanged (hashes); fingerprint test for all ten (`tests/test_music.py`)
 - [x] Docs: CONFIG beds table and bass-weight note, guide + `AGENTS.md` (choosing between them), COOKBOOK, Shorts cookbook, README, CHANGELOG, DESIGN §91
 
+### Step 180 — `momentum` recommended for presentations and documentaries
+- [x] The guide + `AGENTS.md`, COOKBOOK §9 and the Shorts cookbook §9 (snippets and template) suggest `momentum` first for presentations and documentaries; the other beds stay as alternatives (`tests/test_guide.py` checks the guide's sentence)
+
 ---
 
 ## Backlog (after Step 60)

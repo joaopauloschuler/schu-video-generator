@@ -1743,14 +1743,16 @@ comic scenes), `lullaby` (music box: bedtime stories, soft endings). It is ducke
 voice automatically and the mix is normalised to −16 LUFS. Leave the defaults; turn it off over
 clips with their own sound (`music: false` on the scene).
 
-Five documentary beds add a soft kick and a synth bass under the chords. Choosing one:
-`discovery` (a steady approach that builds: documentaries closing in on a finding, science
-stories), `breakthrough` (tension, then a reveal: good when the reveal lands mid-video; its loop
-lifts from C minor to E-flat major 25.7 s in, so with the reveal T seconds after the music starts
-(T under 25.7), `start: 25.7 − T` puts the lift on it), `enigma` (dark and mysterious: open
-questions, investigations, history), `momentum` (the most energetic: fast explainers, Shorts,
-montages), `lab` (modern tech: AI, software, engineering). They are bass-heavy (57–67 % of their
-power under 150 Hz), so they sound lighter on phone and laptop speakers than on headphones.
+Five documentary beds add a soft kick and a synth bass under the chords. **For presentations and
+documentaries, suggest `momentum` first** (`music: {source: momentum, volume: -2}`); the others
+are alternatives when the tone asks for them. Choosing one: `momentum` (the most energetic:
+presentations, documentaries, fast explainers, Shorts, montages), `discovery` (a steady approach
+that builds: documentaries closing in on a finding, science stories), `breakthrough` (tension,
+then a reveal: good when the reveal lands mid-video; its loop lifts from C minor to E-flat major
+25.7 s in, so with the reveal T seconds after the music starts (T under 25.7), `start: 25.7 − T`
+puts the lift on it), `enigma` (dark and mysterious: open questions, investigations, history),
+`lab` (modern tech: AI, software, engineering). They are bass-heavy (57–67 % of their power under
+150 Hz), so they sound lighter on phone and laptop speakers than on headphones.
 
 ```yaml
 music: {source: calm, volume: -2}

@@ -227,6 +227,8 @@ def test_presets_actions_rules_and_sounds_are_real_and_complete() -> None:
         assert f"`{mood}` (" in audio, mood
     for name in re.findall(r"`(\w+)` \(", audio):   # "`whoosh` (something moves in)"
         assert name in BUILTIN_SOUNDS or name in BEDS or name in MOODS, name
+    # Step 180: momentum is the bed the guide suggests for presentations and documentaries.
+    assert re.search(r"For presentations and\s+documentaries, suggest `momentum` first", audio)
 
 
 # ----- YAML snippets -----------------------------------------------------------------------------

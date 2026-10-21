@@ -16783,3 +16783,28 @@ Known gaps
 - `Bed` has no field for `breakthrough`'s lift time; it is in the description and the docs.
 - `vidgen list-music` makes every bed's loop (~20 s for ten); a description-only listing would
   not need the audio, but the JSON reports each loop's measured loudness.
+
+## Step 180 — `momentum` recommended for presentations and documentaries
+
+The owner wants `momentum` to be the suggested bed for presentations and documentaries. Docs only;
+no code or bed changed.
+
+What changed
+- Guide (`src/vidgen/data/guide/AGENTS.md`, copied to `AGENTS.md`), audio topic: "For
+  presentations and documentaries, suggest `momentum` first" with a snippet
+  (`{source: momentum, volume: -2}`); `momentum` now leads the list of the five documentary beds
+  and names presentations and documentaries; the others are kept as alternatives.
+- `docs/COOKBOOK.md` §9: the `video.yaml` snippet uses `momentum` (was `calm`); the paragraph
+  names it as the recommendation and lists the others (documentary beds and `calm` / `pulse` /
+  `bright`) as alternatives.
+- `docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md` §9: a `momentum` snippet and bullet first, `pulse`
+  described as the lighter choice for phone speakers (no longer "the default for a coding
+  Short"), the bass-heavy note kept; the full template's `music` line uses `momentum`.
+  `examples/cookbook/short.template.yaml` still uses `pulse` (its example video was made with it).
+- `tests/test_guide.py::test_presets_actions_rules_and_sounds_are_real_and_complete` also checks the guide's recommendation
+  sentence.
+
+Tests: `test_guide.py` (54 passed), `test_docs.py` (62 passed), one at a time under `capped`.
+
+Known gaps: `vidgen`'s own defaults are unchanged (no bed is added when `music` is not written);
+CONFIG's beds table is unchanged (it lists, it does not recommend).

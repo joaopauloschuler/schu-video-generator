@@ -269,7 +269,7 @@ Lessons:
 Global, in `video.yaml`:
 
 ```yaml
-music: {source: calm, volume: -3}       # calm = documentary/science, pulse = tech, bright = upbeat
+music: {source: momentum, volume: -2}   # recommended for presentations and documentaries
 sfx: {gain: -2}                         # master SFX gain
 transition: {type: crossfade, duration: 0.35}
 ```
@@ -279,11 +279,14 @@ pitch=..., intensity=...)`. It is mixed sample-exact at the next `play()` (or at
 `align="end"` ends the sound there). `vidgen list-sfx` and `vidgen list-music` describe the
 sounds and beds.
 
-For a documentary with more drive, the beds with a soft kick and synth bass: `discovery` (a
-steady approach to a finding), `breakthrough` (tension, then a reveal 25.7 s into its loop:
-`start: 25.7 − T` lands it on a reveal T seconds after the music starts), `enigma` (mysterious,
-investigations), `momentum` (the most energetic), `lab` (modern tech). They are bass-heavy and
-sound lighter on phone and laptop speakers ([CONFIG](CONFIG.md#background-music-music)).
+`momentum` (G minor, 120 BPM: a driving sixteenth-note synth ostinato, a soft kick, off-beat bass)
+is the recommended bed for presentations and documentaries. Alternatives with the same soft kick
+and synth bass: `discovery` (a steady approach to a finding), `breakthrough` (tension, then a
+reveal 25.7 s into its loop: `start: 25.7 − T` lands it on a reveal T seconds after the music
+starts), `enigma` (mysterious, investigations), `lab` (modern tech); lighter ones: `calm`
+(serious, long narration), `pulse` (tech), `bright` (upbeat). The kick-and-bass beds are
+bass-heavy and sound lighter on phone and laptop speakers
+([CONFIG](CONFIG.md#background-music-music)).
 
 | sound | use for | gain we used |
 |---|---|---|
