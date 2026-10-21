@@ -1,4 +1,4 @@
-"""Background music (DESIGN.md §48, §69.63, §82, §83, §91): ten procedurally generated beds, the
+"""Background music (DESIGN.md §48, §69.63, §82, §83, §91): fourteen procedurally generated beds, the
 project's own music files, composed music (:mod:`vidgen.composer`, played by
 :mod:`vidgen.synth`), and the sources the mix reads from.
 
@@ -8,7 +8,8 @@ Paul's algorithm, from ZynAddSubFX) — each chord's
 harmonics as narrow Gaussian bumps of a spectrum with seeded random phases, turned into a
 periodic wave by one inverse FFT — and cross-faded from chord to chord; plucked arpeggios,
 pizzicato strings, bells, music-box tines and woodblocks are added note by note (the documentary
-beds also a soft kick, synth bass, hi-hats and side-chain dips). Everything is rendered *circularly* (notes running past the loop's
+beds also a soft kick, synth bass, hi-hats and side-chain dips; the energetic beds supersaw-like
+chords, a trance gate, an analog bass, a gated snare, pulsar pulses). Everything is rendered *circularly* (notes running past the loop's
 end continue at its start; the final filtering is a circular FFT filter), so the loop repeats
 without a seam. The loop is set to :data:`MUSIC_LEVEL` integrated loudness.
 
@@ -209,6 +210,22 @@ def _hat(seed: int = 3, tau: float = 0.022, center: float = 6500.0) -> np.ndarra
     return hat / np.abs(hat).max()
 
 
+def _clap(seed: int = 21, center: float = 1300.0) -> np.ndarray:
+    """A soft clap: band-passed noise around ``center`` Hz and a short 190 Hz body; peak 1."""
+    n = int(0.11 * RATE)
+    t = np.arange(n) / RATE
+    noise = np.random.default_rng(seed).standard_normal(n) * np.exp(-t / 0.03) * (1 - np.exp(-t / 0.001))
+    clap = _filtered(noise, lambda f: _band(f, center, 0.5) * _lowpass(f, 3500.0, 4)) + 0.6 * np.sin(2 * np.pi * 190 * t) * np.exp(-t / 0.03)
+    clap[-480:] *= np.linspace(1, 0, 480)
+    return clap / np.abs(clap).max()
+
+
+#: ``momentum``'s accent (also in the Step 181 beds): 3+3+2 sixteenths, twice a bar.
+_ACCENTS = (0, 3, 6, 8, 11, 14)
+#: ``momentum``'s sixteenth-note figure: indices into four tones.
+_FIGURE = (0, 1, 2, 0, 1, 3, 0, 1, 2, 0, 1, 3, 2, 1, 0, 1)
+
+
 @lru_cache(maxsize=4)
 def _clock(center: float, seed: int = 11) -> np.ndarray:
     """A clock tick: a 4 ms burst around ``center`` Hz with a little ring; peak 1."""
@@ -305,7 +322,9 @@ _AIRY = tuple(1.0 / h**1.1 for h in range(1, 13))
 @dataclass(frozen=True)
 class Bed:
     """A built-in music bed: its generator, loop length, musical facts and a precise textual
-    description (for authors who cannot listen) and when to use it."""
+    description (for authors who cannot listen) and when to use it. ``seed``: the name its random
+    generator is seeded with (``crc32("music:<seed>")``) when it is not the bed's own: the Step
+    181 beds keep their prototype's, so they sound exactly as approved."""
 
     name: str
     generate: Callable[[np.random.Generator], np.ndarray]
@@ -315,6 +334,7 @@ class Bed:
     chords: tuple[str, ...]
     description: str
     use: str
+    seed: str | None = None
 
 
 def _pads(
@@ -773,23 +793,16 @@ def _momentum(rng: np.random.Generator) -> np.ndarray:
     out *= _pump(total, beat, 0.45, release=0.14)[:, None]
     kick, hat = _kick(f_hi=100.0, f_lo=50.0, tau=0.14, click=0.08), _hat()
     _hits(out, kick, range(0, total, beat), 0.75)
-    n = int(0.11 * RATE)  # a soft clap: band-passed noise and a short 190 Hz body
-    t = np.arange(n) / RATE
-    noise = np.random.default_rng(21).standard_normal(n) * np.exp(-t / 0.03) * (1 - np.exp(-t / 0.001))
-    clap = _filtered(noise, lambda f: _band(f, 1300.0, 0.5) * _lowpass(f, 3500.0, 4)) + 0.6 * np.sin(2 * np.pi * 190 * t) * np.exp(-t / 0.03)
-    clap[-480:] *= np.linspace(1, 0, 480)
-    clap /= np.abs(clap).max()
+    clap = _clap()
     for b in range(beat, total, 2 * beat):
         _add_panned(out, b, clap * 0.13, 0.0)
     for k, p in enumerate(range(0, total, six)):
         _add_panned(out, p, hat * (0.085 if k % 4 == 2 else 0.035), 0.25 if k % 2 else -0.25)
-    accents = {0, 3, 6, 8, 11, 14}  # 3+3+2 in sixteenths, twice a bar
-    figure = (0, 1, 2, 0, 1, 3, 0, 1, 2, 0, 1, 3, 2, 1, 0, 1)
     for i, (notes, root) in enumerate(zip(chords, roots)):
         tones = (root + 12, root + 19, root + 24, sorted(notes)[2])
         for bar_k in range(2):
-            for k, idx in enumerate(figure):
-                level = 0.36 if k in accents else 0.22
+            for k, idx in enumerate(_FIGURE):
+                level = 0.36 if k in _ACCENTS else 0.22
                 note = _synth_bass(_hz(tones[idx]), int(0.2 * RATE), 0.06, 1500.0) * level
                 _add_panned(out, i * seg + bar_k * bar + k * six, note, 0.15 if k % 2 else -0.15)
         for k in range(8):  # off-beat bass
@@ -852,6 +865,394 @@ def _lab(rng: np.random.Generator) -> np.ndarray:
                 sound = _fm_pluck(_hz(note), int(0.5 * RATE), 0.16, 1.6, 2600.0) * 0.2
                 _echoed(out, start + k * six, sound, 0.35, 3 * six, 0.33, 2)
     return _finish(_tone_filter(out, lowpass))
+
+
+# The energetic beds (Step 181, DESIGN.md §91): uplifting trance, a pulsar beacon and a night
+# drive, built on ``momentum``'s 3+3+2 accent, a steady low pulse and an off-beat or rolling bass.
+
+#: Harmonic amplitudes of the supersaw-like chords: a saw, and a softer saw for warm pads.
+_SAW = tuple(1.0 / h for h in range(1, 25))
+_SOFT_SAW = tuple(1.0 / h**1.35 for h in range(1, 17))
+
+
+def _grid(tempo: int, bars_per_chord: int = 2) -> tuple[int, int, int, int]:
+    """``(beat, bar, chord segment, sixteenth)`` in samples at ``tempo`` BPM, the beat rounded
+    down to whole sixteenths so the sixteenth grid is exact."""
+    beat = RATE * 60 // tempo
+    beat -= beat % 4
+    bar = 4 * beat
+    return beat, bar, bars_per_chord * bar, beat // 4
+
+
+def _grid_seconds(tempo: int, bars: int) -> float:
+    """The length of ``bars`` bars of 4/4 on :func:`_grid`'s beat."""
+    return _grid(tempo)[1] * bars / RATE
+
+
+def _saw_chords(
+    chords: Sequence[Sequence[int]], seg: int, table: int, rng: np.random.Generator, harmonics: Sequence[float], width: float, lowpass: float, octave: int = 0, fade_s: float = 0.25
+) -> np.ndarray:
+    """Stereo ``(len(chords) * seg, 2)`` supersaw-like chords: each chord as a PADsynth wave of
+    saw ``harmonics`` spread ``width`` cents (a cloud of detuned saws, band-limited by
+    :func:`_shape` at ``lowpass``), independent phases per channel (wide), cross-faded in
+    ``fade_s`` seconds; RMS ~1 per channel. ``table`` divides ``seg``, so it loops."""
+    total = len(chords) * seg
+    fade = 2 * int(fade_s * RATE)
+    env = _xfade_window(seg, fade)
+    out = np.zeros((total, 2))
+    for i, notes in enumerate(chords):
+        first = i * seg - fade // 2
+        idx = (first + np.arange(seg + fade)) % table
+        for c in range(2):
+            wave = _pad_wave([n + 12 * octave for n in notes], table, rng, harmonics, width, lowpass)
+            _circular_add(out[:, c], first, env * wave[idx])
+    return out
+
+
+def _sweep_mix(dark: np.ndarray, bright: np.ndarray, curve: np.ndarray) -> np.ndarray:
+    """A filter sweep: an equal-power cross-fade of a dark and a bright render along ``curve``
+    (0 dark .. 1 bright, per sample)."""
+    w = 0.5 * np.pi * np.clip(curve, 0, 1)[:, None]
+    return np.cos(w) * dark + np.sin(w) * bright
+
+
+def _section_curve(total: int, bar: int, points: Sequence[tuple[float, float]], smooth: float = 0.4) -> np.ndarray:
+    """A per-sample curve through ``(bar, value)`` points, periodic over the loop (the last point
+    leads back to the first), smoothed circularly over ``smooth`` seconds."""
+    xs = np.array([p[0] * bar for p in points], float)
+    ys = np.array([p[1] for p in points], float)
+    curve = np.interp(np.arange(total), xs, ys, period=total)
+    return _circular_smooth(curve, max(1, int(smooth * RATE)))
+
+
+def _gate(total: int, six: int, levels: Sequence[float], duty: float = 0.55, floor: float = 0.08) -> np.ndarray:
+    """A trance gate ``(total,)``: one window per sixteenth (3 ms attack, open ``duty`` of the
+    step, 18 ms release) scaled by ``levels[slot]`` (16 per bar), never below ``floor``."""
+    bar = 16 * six
+    n = 2 * six
+    t = np.arange(n) / RATE
+    hold = duty * six / RATE
+    win = (1 - np.exp(-t / 0.003)) * np.where(t < hold, 1.0, np.exp(-(t - hold) / 0.018))
+    g = np.zeros(bar)
+    for s, lv in enumerate(levels):
+        pos = (s * six + np.arange(n)) % bar
+        g[pos] = np.maximum(g[pos], lv * win)
+    g = np.tile(g, total // bar)
+    return floor + (1 - floor) * g
+
+
+@lru_cache(maxsize=512)
+def _analog_bass(freq: float, n: int, tau: float, cut_hi: float, cut_lo: float, ftau: float, detune: float = 7.0) -> np.ndarray:
+    """An analog-style bass: two saws ``detune`` cents apart through a two-pole low-pass whose
+    cutoff falls from ``cut_hi`` to ``cut_lo`` Hz (time constant ``ftau``), 3 ms attack, decay
+    ``tau``, a 15 ms tail fade; peak 1."""
+    t = np.arange(n) / RATE
+    fc = cut_lo + (cut_hi - cut_lo) * np.exp(-t / ftau)
+    y = np.zeros(n)
+    f2 = freq * 2 ** (detune / 1200)
+    h = 1
+    while h * freq < min(3 * cut_hi, 5000.0):
+        for f, ph in ((freq, 0.0), (f2, 1.3 * h)):
+            g = (1.0 / h) / np.sqrt(1 + (h * f / fc) ** 4)
+            y += g * np.sin(2 * np.pi * h * f * t + ph)
+        h += 1
+    y *= (1 - np.exp(-t / 0.003)) * np.exp(-t / tau)
+    tail = min(n, int(0.015 * RATE))
+    y[-tail:] *= np.linspace(1, 0, tail)
+    y = y / max(np.abs(y).max(), 1e-12)
+    y.setflags(write=False)
+    return y
+
+
+def _square_pluck(freq: float, n: int, tau: float, lowpass: float) -> np.ndarray:
+    """A retro square-ish pluck: odd harmonics at 1/h, the upper ones dying first, 3 ms attack."""
+    return _partials(freq, n, tau, 0.003, ((1.0, 1.0, 1.0), (3.0, 0.33, 0.55), (5.0, 0.2, 0.4), (7.0, 0.14, 0.3)), lowpass)
+
+
+def _gated_snare(seed: int, gate: float = 0.24, body: float = 190.0) -> np.ndarray:
+    """A gated-reverb snare ``(n, 2)``: a short crack (noise around 1.8 kHz) and body (a falling
+    ``body`` Hz tone), then a dense noise "room" of 1-4.5 kHz held flat for ``gate`` seconds and
+    cut with a 20 ms fade; the room has a different noise per channel (wide); peak 1."""
+    n = int((gate + 0.03) * RATE)
+    t = np.arange(n) / RATE
+    rng = np.random.default_rng(seed)
+    crack = _filtered(rng.standard_normal(n) * np.exp(-t / 0.01), lambda f: _band(f, 1800.0, 0.6) * _lowpass(f, 4500.0, 4))
+    tone = np.sin(_tone(body * (1 + 0.35 * np.exp(-t / 0.01)), n)) * np.exp(-t / 0.05)
+    gate_env = np.where(t < gate, 1.0, np.cos(0.5 * np.pi * np.clip((t - gate) / 0.02, 0, 1)))
+    out = np.zeros((n, 2))
+    for c in range(2):
+        room = _filtered(rng.standard_normal(n), lambda f: _highpass(f, 900.0, 2) * _lowpass(f, 4500.0, 4) * _band(f, 2000.0, 0.9))
+        room *= (1 - np.exp(-t / 0.012)) * np.exp(-t / 0.5)
+        out[:, c] = (0.8 * crack + 0.9 * tone + 0.7 * room / np.abs(room).max() * np.abs(crack).max()) * gate_env
+    return out / np.abs(out).max()
+
+
+def _add_stereo(out: np.ndarray, start: int, sound: np.ndarray) -> None:
+    """Add a stereo ``sound`` to ``out`` at ``start`` (circularly)."""
+    for c in range(2):
+        _circular_add(out[:, c], start, sound[:, c])
+
+
+@lru_cache(maxsize=16)
+def _pulsar_pulse(f_hi: float, f_lo: float, sweep: float, noise: float, seed: int, lowpass: float = 1800.0) -> np.ndarray:
+    """A radio pulsar's pulse heard as sound: a dispersed chirp (high frequencies arrive first,
+    falling from ``f_hi`` to ``f_lo`` Hz with time constant ``sweep / 3``) and a short burst of
+    band-limited static shaped like a pulse profile; nothing above ``lowpass``; peak 1."""
+    n = int((sweep + 0.07) * RATE)
+    t = np.arange(n) / RATE
+    freq = f_lo + (f_hi - f_lo) * np.exp(-t / (sweep / 3))
+    chirp = np.sin(_tone(freq, n)) * (1 - np.exp(-t / 0.0015)) * np.exp(-t / sweep)
+    width = 0.006
+    profile = (t / width) * np.exp(1 - t / width)
+    burst = np.random.default_rng(seed).standard_normal(n) * profile
+    burst = _filtered(burst, lambda f: _highpass(f, 150.0, 2) * _lowpass(f, lowpass, 4))
+    y = chirp + noise * burst / max(np.abs(burst).max(), 1e-12)
+    y = _filtered(y, lambda f: _lowpass(f, lowpass, 2) * _highpass(f, 60.0, 2))
+    tail = int(0.02 * RATE)
+    y[-tail:] *= np.linspace(1, 0, tail)
+    y = y / np.abs(y).max()
+    y.setflags(write=False)
+    return y
+
+
+def _static(total: int, lo: float, hi: float, seed: int, wander: float = 1.5) -> np.ndarray:
+    """Soft stereo radio static ``(total, 2)``: noise band-limited to ``lo``-``hi`` Hz (circular
+    filter), its level wandering slowly (smoothed noise over ``wander`` s); RMS ~1."""
+    rng = np.random.default_rng(seed)
+    freqs = np.fft.rfftfreq(total, 1 / RATE)
+    gain = _highpass(freqs, lo, 2) * _lowpass(freqs, hi, 3)
+    out = np.zeros((total, 2))
+    level = _circular_smooth(rng.standard_normal(total), int(wander * RATE))
+    level = 0.6 + 0.4 * level / np.abs(level).max()
+    for c in range(2):
+        x = np.fft.irfft(np.fft.rfft(rng.standard_normal(total)) * gain, total)
+        out[:, c] = x / np.sqrt(np.mean(x**2)) * level
+    return out
+
+
+def _ascent(rng: np.random.Generator) -> np.ndarray:
+    beat, bar, seg, six = _grid(136)
+    chords = (
+        (45, 52, 57, 59, 60),  # Am(add9)
+        (41, 53, 57, 60, 64),  # Fmaj7
+        (48, 55, 60, 62, 64),  # C(add9)
+        (43, 50, 55, 60, 62),  # Gsus4
+        (45, 52, 55, 60, 64),  # Am7
+        (41, 48, 55, 57, 60),  # Fmaj9
+        (38, 50, 53, 57, 60),  # Dm7
+        (40, 52, 56, 59, 64),  # E: the build
+        (41, 53, 57, 60, 67),  # F(add9): the lift
+        (48, 55, 60, 64, 67),  # C
+        (47, 55, 57, 62, 67),  # G(add9)/B
+        (45, 52, 57, 59, 64),  # Am(add9)
+        (41, 53, 57, 60, 67),  # F(add9)
+        (40, 52, 55, 60, 64),  # C/E
+        (43, 50, 55, 60, 62),  # Gsus4
+        (43, 50, 55, 59, 62),  # G
+    )
+    roots = (45, 41, 48, 43, 45, 41, 38, 40, 41, 48, 47, 45, 41, 40, 43, 43)
+    total = len(chords) * seg
+    lift = _section_curve(total, bar, [(0, 0), (16, 0), (16.02, 1), (28, 1), (32, 0)], smooth=0.08)
+    open_ = _section_curve(total, bar, [(0, 0.3), (12, 0.5), (16, 0.85), (16.02, 1.0), (28, 1.0), (32, 0.3)], smooth=0.5)
+    dark = _saw_chords(chords, seg, seg // 2, rng, _SAW, 28.0, 900.0)
+    bright = _saw_chords(chords, seg, seg // 2, rng, _SAW, 34.0, 3200.0)
+    out = 0.2 * _sweep_mix(dark, bright, open_)
+    out += 0.16 * _pads(chords, roots, seg, seg // 2, rng, air=0.0, air_cycles=1, lowpass=700.0)  # warm body and sub
+    out *= _pump(total, beat, 0.55, release=0.13)[:, None]
+    kick = _kick(f_hi=118.0, f_lo=50.0, tau=0.16, click=0.08)
+    for b in range(0, total, beat):
+        if b == 16 * bar - beat:  # the gap before the lift
+            continue
+        _add_panned(out, b, kick * 0.78, 0.0)
+    hat, ohat = _hat(), _hat(seed=5, tau=0.05, center=7000.0)
+    for b in range(0, total, beat):
+        _add_panned(out, b + beat // 2, ohat * 0.07 * (0.8 + 0.4 * lift[b]), 0.2)
+    for k, p in enumerate(range(0, total, six)):
+        if k % 2:
+            _add_panned(out, p, hat * 0.035 * lift[p], 0.3 if k % 4 == 1 else -0.3)
+    clap = _clap()
+    for b in range(beat, total, 2 * beat):
+        _add_panned(out, b, clap * (0.09 + 0.04 * lift[b]), 0.0)
+    roll = [14 * bar + k * beat // 2 for k in range(8)] + [15 * bar + k * six for k in range(16)]
+    for k, p in enumerate(roll):  # a clap roll: eighths in bar 15, sixteenths in bar 16, growing
+        _add_panned(out, p, clap * (0.02 + 0.06 * k / (len(roll) - 1)), 0.1)
+    for i, (notes, root) in enumerate(zip(chords, roots)):
+        start = i * seg
+        lifted = i >= 8 and i < 14
+        tones = (root + 12, root + 19, root + 24, sorted(notes)[2])
+        for bar_k in range(2):
+            for k, idx in enumerate(_FIGURE):  # momentum's ostinato, low
+                level = (0.3 if k in _ACCENTS else 0.17) * (0.8 if lifted else 1.0)
+                _add_panned(out, start + bar_k * bar + k * six, _synth_bass(_hz(tones[idx]), int(0.17 * RATE), 0.05, 1300.0) * level, 0.15 if k % 2 else -0.15)
+        for k in range(8):
+            if lifted:  # rolling bass: the three sixteenths after each kick
+                for s in (1, 2, 3):
+                    _add_panned(out, start + k * beat + s * six, _synth_bass(_hz(root), int(0.12 * RATE), 0.06, 600.0) * (0.36 if s == 2 else 0.3), 0.0)
+            else:  # off-beat eighths
+                _add_panned(out, start + k * beat + beat // 2, _synth_bass(_hz(root), int(0.2 * RATE), 0.09, 560.0) * 0.44, 0.0)
+        if 8 <= i < 14:  # the bright arp lead on the accents, sparse and soft
+            upper = sorted(notes)[2:]
+            for bar_k in range(2):
+                for j, k in enumerate(_ACCENTS):
+                    note = upper[(j + bar_k) % len(upper)] + 12
+                    sound = _fm_pluck(_hz(note), int(0.45 * RATE), 0.14, 1.4, 3000.0) * 0.13
+                    _echoed(out, start + bar_k * bar + k * six, sound, 0.35, 3 * six, 0.35, 2)
+    rise = _riser(4 * bar / RATE, 300.0, 3000.0, seed=13)
+    _add_panned(out, 16 * bar - len(rise), rise * 0.07, 0.0)
+    boom = _kick(f_hi=70.0, f_lo=38.0, tau=0.8, click=0.02, seconds=2.2)
+    _add_panned(out, 16 * bar, boom * 0.5, 0.0)
+    return _finish(_tone_filter(out, 4600.0))
+
+
+def _horizon(rng: np.random.Generator) -> np.ndarray:
+    beat, bar, seg, six = _grid(132)
+    chords = (
+        (38, 50, 53, 57, 64),  # Dm9
+        (46, 50, 53, 57, 62),  # Bbmaj7
+        (43, 50, 53, 57, 58),  # Gm9
+        (45, 52, 55, 57, 62),  # A7sus4
+        (38, 52, 53, 57, 62),  # Dm(add9): the build
+        (46, 53, 58, 60, 62),  # Bb(add9)
+        (48, 55, 60, 62, 64),  # C(add9)
+        (45, 52, 57, 61, 64),  # A
+        (41, 53, 57, 60, 67),  # F(add9): the lift
+        (40, 52, 55, 62, 64),  # C(add9)/E
+        (38, 50, 53, 57, 64),  # Dm9
+        (46, 53, 58, 60, 65),  # Bb(add9)
+        (45, 53, 57, 60, 65),  # F/A
+        (43, 50, 53, 57, 58),  # Gm9
+        (46, 53, 57, 62, 64),  # Bbmaj7(#11)
+        (48, 55, 58, 60, 65),  # C7sus4
+    )
+    roots = (38, 46, 43, 45, 38, 46, 48, 45, 41, 40, 38, 46, 45, 43, 46, 48)
+    total = len(chords) * seg
+    build = _section_curve(total, bar, [(0, 0), (8, 0), (16, 1), (16.02, 0), (32, 0)], smooth=0.05)
+    lift = _section_curve(total, bar, [(0, 0), (16, 0), (16.02, 1), (30, 1), (32, 0)], smooth=0.08)
+    open_ = _section_curve(total, bar, [(0, 0.3), (8, 0.3), (16, 0.9), (16.02, 1.0), (30, 1.0), (32, 0.3)], smooth=0.3)
+    levels = [1.0 if s in _ACCENTS else 0.38 for s in range(16)]
+    gate = _gate(total, six, levels, duty=0.5, floor=0.05)
+    g_dark = _saw_chords(chords, seg, seg // 2, rng, _SAW, 22.0, 1100.0)
+    g_bright = _saw_chords(chords, seg, seg // 2, rng, _SAW, 26.0, 3400.0, octave=1)
+    hook = _sweep_mix(g_dark, g_bright, open_) * gate[:, None]  # the gated supersaw
+    out = 0.3 * hook
+    pad = _saw_chords(chords, seg, seg // 2, rng, _SOFT_SAW, 40.0, 1800.0)
+    out += 0.14 * pad * (0.5 + 0.5 * lift)[:, None]
+    out += 0.07 * _pads(chords, roots, seg, seg // 2, rng, air=0.25, air_cycles=1, lowpass=900.0)
+    out *= _pump(total, beat, 0.45, release=0.15)[:, None]
+    kick = _kick(f_hi=110.0, f_lo=48.0, tau=0.17, click=0.07)
+    _hits(out, kick, range(0, total, beat), 0.66)
+    for k in range(1, 8):  # the last half bar of the build: sixteenth kicks, growing
+        _add_panned(out, 16 * bar - 2 * beat + k * six, kick * (0.18 + 0.05 * k), 0.0)
+    ohat = _hat(seed=8, tau=0.06, center=6800.0)
+    for b in range(0, total, beat):
+        _add_panned(out, b + beat // 2, ohat * (0.04 + 0.05 * lift[b] + 0.03 * build[b]), -0.2)
+    clap = _clap(seed=23, center=1500.0)
+    for b in range(beat, total, 2 * beat):
+        _add_panned(out, b, clap * 0.1 * (0.6 + 0.4 * lift[b]), 0.0)
+    for i, root in enumerate(roots):
+        start = i * seg
+        if 4 <= i < 8:  # the build: the bass rests (a single long root every two bars)
+            _add_panned(out, start, _synth_bass(_hz(root), int(1.6 * RATE), 0.6, 450.0) * 0.4, 0.0)
+            continue
+        for k in range(8):  # momentum's off-beat bass, a pickup sixteenth on beat 4
+            _add_panned(out, start + k * beat + beat // 2, _synth_bass(_hz(root), int(0.21 * RATE), 0.1, 560.0) * 0.38, 0.0)
+            if k % 4 == 3:
+                _add_panned(out, start + k * beat + 3 * six, _synth_bass(_hz(root + 12), int(0.1 * RATE), 0.05, 700.0) * 0.26, 0.0)
+    rise = _riser(8 * bar / RATE, 250.0, 3200.0, seed=17)
+    _add_panned(out, 16 * bar - len(rise), rise * 0.065, 0.0)
+    boom = _kick(f_hi=68.0, f_lo=37.0, tau=0.9, click=0.02, seconds=2.4)
+    _add_panned(out, 16 * bar, boom * 0.5, 0.0)
+    return _finish(_tone_filter(out, 4600.0))
+
+
+def _beacon(rng: np.random.Generator) -> np.ndarray:
+    beat, bar, seg, six = _grid(120)
+    chords = (
+        (40, 52, 54, 55, 59),  # Em(add9)
+        (36, 52, 55, 59, 62),  # Cmaj9
+        (38, 50, 55, 59, 66),  # G/D
+        (47, 54, 57, 59, 64),  # Bm7sus4
+        (40, 50, 55, 59, 66),  # Em9
+        (45, 52, 57, 59, 60),  # Am(add9)
+        (36, 52, 54, 59, 64),  # Cmaj7(#11)
+        (38, 50, 57, 62, 64),  # Dsus2
+        (40, 52, 54, 55, 59),  # Em(add9)
+        (36, 52, 55, 59, 62),  # Cmaj9
+        (45, 52, 57, 59, 64),  # Asus2
+        (47, 52, 54, 57, 64),  # B7sus4
+    )
+    roots = (40, 36, 38, 47, 40, 45, 36, 38, 40, 36, 45, 47)
+    total = len(chords) * seg
+    u = np.arange(total) / total
+    out = 0.34 * _pads(chords, roots, seg, seg // 2, rng, air=0.15, air_cycles=1, lowpass=1300.0)
+    shimmer = _saw_chords([sorted(c)[2:] for c in chords], seg, seg // 2, rng, (1.0, 0.25, 0.08), 45.0, 4200.0, octave=2, fade_s=0.8)
+    out += 0.06 * shimmer * (0.4 + 0.6 * np.sin(2 * np.pi * u) ** 2)[:, None]
+    out *= _pump(total, beat, 0.3, release=0.22)[:, None]
+    out += 0.006 * _static(total, 1800.0, 4200.0, seed=77)
+    kick = _kick(f_hi=80.0, f_lo=44.0, tau=0.2, click=0.03)
+    _hits(out, kick, range(0, total, beat), 0.74)
+    main = _pulsar_pulse(1400.0, 160.0, 0.035, 0.6, seed=61)
+    inter = _pulsar_pulse(1100.0, 200.0, 0.025, 0.8, seed=62)
+    for b in range(0, total, bar):  # the beacon: a main pulse on 1 and 3, interpulses on the other accents
+        for k in _ACCENTS:
+            is_main = k in (0, 8)
+            _add_panned(out, b + k * six, (main * 0.15 if is_main else inter * 0.085), 0.0 if is_main else (0.35 if k in (3, 11) else -0.35))
+    for i, (notes, root) in enumerate(zip(chords, roots)):
+        start = i * seg
+        tones = (root + 12, root + 19, root + 24, sorted(notes)[2])
+        for bar_k in range(2):
+            for k, idx in enumerate(_FIGURE):  # the ostinato, lower and softer than momentum's
+                level = 0.2 if k in _ACCENTS else 0.1
+                _add_panned(out, start + bar_k * bar + k * six, _synth_bass(_hz(tones[idx]), int(0.16 * RATE), 0.05, 900.0) * level, 0.2 if k % 2 else -0.2)
+        for k in range(8):
+            sub = _partials(_hz(root), int(0.24 * RATE), 0.12, 0.006, ((1.0, 1.0, 1.0), (2.0, 0.3, 0.6), (3.0, 0.1, 0.4)), 500.0)
+            _add_panned(out, start + k * beat + beat // 2, sub * 0.5, 0.0)
+    return _finish(_tone_filter(out, 4200.0))
+
+
+def _neon(rng: np.random.Generator) -> np.ndarray:
+    beat, bar, seg, six = _grid(116)
+    chords = (
+        (42, 54, 57, 61, 68),  # F#m(add9)
+        (38, 54, 57, 61, 62),  # Dmaj7
+        (45, 52, 57, 59, 61),  # A(add9)
+        (40, 52, 56, 59, 61),  # E6
+        (42, 52, 57, 61, 64),  # F#m7
+        (38, 52, 54, 57, 61),  # Dmaj9
+        (47, 54, 57, 61, 62),  # Bm9
+        (49, 54, 56, 61, 66),  # C#7sus4
+        (42, 54, 57, 61, 68),  # F#m(add9)
+        (38, 54, 56, 57, 61),  # Dmaj7(#11)
+        (40, 52, 54, 56, 59),  # E(add9)
+        (49, 53, 56, 61, 65),  # C#
+    )
+    roots = (42, 38, 45, 40, 42, 38, 47, 37, 42, 38, 40, 37)
+    total = len(chords) * seg
+    pads = _saw_chords(chords, seg, seg // 2, rng, _SOFT_SAW, 24.0, 1700.0, fade_s=0.5)
+    out = 0.24 * pads + 0.1 * _pads(chords, roots, seg, seg // 2, rng, air=0.3, air_cycles=2, lowpass=1500.0)
+    out *= _pump(total, beat, 0.3, release=0.18)[:, None]
+    kick = _kick(f_hi=95.0, f_lo=48.0, tau=0.2, click=0.06)
+    _hits(out, kick, range(0, total, beat), 0.74)
+    snare = _gated_snare(seed=91)
+    for b in range(beat, total, 2 * beat):
+        _add_stereo(out, b, snare * 0.12)
+    hat = _hat(seed=4, tau=0.018, center=6000.0)
+    for k, p in enumerate(range(0, total, six)):
+        _add_panned(out, p, hat * (0.05 if k % 4 == 2 else 0.022), 0.3 if k % 2 else -0.3)
+    for i, (notes, root) in enumerate(zip(chords, roots)):
+        start = i * seg
+        for k in range(16):  # octave bass on the eighths
+            note = root + (12 if k % 2 else 0)
+            b = _analog_bass(_hz(note), int(0.2 * RATE), 0.12, 1400.0, 260.0, 0.05)
+            _add_panned(out, start + k * beat // 2, b * (0.32 if k % 2 == 0 else 0.25), 0.0)
+        tones = sorted(notes)[1:]
+        for bar_k in range(2):  # the square-pluck arpeggio, the figure turned around in the second bar
+            for k in range(16):
+                idx = _FIGURE[k] if bar_k == 0 else (3 - _FIGURE[k]) % 4
+                note = tones[idx % len(tones)] + 12
+                level = 0.12 if k in _ACCENTS else 0.055
+                _add_panned(out, start + bar_k * bar + k * six, _square_pluck(_hz(note), int(0.25 * RATE), 0.09, 2200.0) * level, 0.3 if k % 2 else -0.3)
+    return _finish(_tone_filter(out, 4400.0))
 
 
 def _loop_seconds(tempo: int, bars: int) -> float:
@@ -947,14 +1348,14 @@ BUILTIN_BEDS: dict[str, Bed] = {
             "a dark, muffled pad that breathes with the pulse, a sparse piano motif (B3 to C#5, a few "
             "notes every two bars) with ping-pong echoes, and a faint high bell (B5 or F#5) with echoes "
             "every eight bars; 20 bars, a chord every two bars (5 s), F#sus4 leading back to the top. "
-            "Rolled off above ~3.5 kHz; the most bass-heavy (65% of its power under 150 Hz: lighter on "
-            "phone speakers) and the quietest in the voice's range; mysterious, unresolved, searching.",
+            "Rolled off above ~3.5 kHz; bass-heavy (65% of its power under 150 Hz: lighter on "
+            "phone speakers) and quiet in the voice's range; mysterious, unresolved, searching.",
             "mysteries and unsolved questions, investigations, history or true-crime style stories, space and the deep sea",
         ),
         Bed(
             "momentum", _momentum, _loop_seconds(120, 24), 120, "G minor",
             ("Gm(add9)", "Ebmaj7", "Cm9", "Dsus4(add9)", "Gm7", "Ebmaj9", "Bb(add9)", "F(add9)", "Cm9", "Ebmaj7", "Dsus4", "D"),
-            "The most energetic bed, at 120 BPM in G minor, 4/4: a driving synth ostinato in sixteenth "
+            "The most energetic documentary bed, at 120 BPM in G minor, 4/4: a driving synth ostinato in sixteenth "
             "notes accented 3+3+2 (C3 to B-flat 4, slightly left / right), a kick on every beat, synth "
             "bass on the off-beat eighths, a soft clap on beats 2 and 4, sixteenth-note hi-hats, a pad "
             "that pumps with the kick and a soft noise riser into the top of the loop; 24 bars, a chord "
@@ -973,6 +1374,72 @@ BUILTIN_BEDS: dict[str, Bed] = {
             "power under 150 Hz: lighter on phone speakers); clean, precise, electronic.",
             "technology, AI, software and engineering explainers, lab science, product demos with a modern feel",
         ),
+        Bed(
+            "ascent", _ascent, _grid_seconds(136, 32), 136, "A minor",
+            ("Am(add9)", "Fmaj7", "C(add9)", "Gsus4", "Am7", "Fmaj9", "Dm7", "E",
+             "F(add9)", "C", "G(add9)/B", "Am(add9)", "F(add9)", "C/E", "Gsus4", "G"),
+            "An uplifting-trance bed at 136 BPM in A minor, 4/4, that builds and lifts. Bars 1-12 "
+            "groove: a kick on every beat, off-beat synth bass, a low synth ostinato in sixteenth notes "
+            "accented 3+3+2 (D3 to C5), a half-open supersaw pad pumping with the kick, open hi-hats "
+            "on the off-beats, a soft clap on 2 and 4. Bars 13-16 build: the supersaw's filter opens, "
+            "a noise riser, a clap roll (eighths, then sixteenths), the last kick dropped. At 28.2 s the "
+            "lift: a deep low boom, bright major-key chords (F, C, G, A minor), a bass rolling on the "
+            "sixteenths after each kick, the supersaw wide open, a soft bright electronic (FM) "
+            "arpeggio (G4 to G5) on the 3+3+2 accents with echoes, sixteenth-note hi-hats; after 12 "
+            "bars it settles back for four (Gsus4, G, back to A minor at the top). 32 bars, a chord "
+            "every two bars (3.5 s). Rolled off above ~4.5 kHz; bass-heavy (71% of its power under "
+            "150 Hz: lighter on phone speakers); energetic, hopeful, euphoric.",
+            "energetic reveals, tech launches, montages, uplifting endings, a build to a climax",
+            seed="trance_a",
+        ),
+        Bed(
+            "horizon", _horizon, _grid_seconds(132, 32), 132, "D minor to F major",
+            ("Dm9", "Bbmaj7", "Gm9", "A7sus4", "Dm(add9)", "Bb(add9)", "C(add9)", "A",
+             "F(add9)", "C(add9)/E", "Dm9", "Bb(add9)", "F/A", "Gm9", "Bbmaj7(#11)", "C7sus4"),
+            "An anthemic uplifting-trance bed at 132 BPM in D minor, 4/4, that lifts to F major "
+            "halfway, 29.1 s into the loop. Its hook is a gated supersaw: the chords chopped into "
+            "sixteenth notes, accented 3+3+2. Bars 1-8 groove: a kick on every beat, off-beat synth "
+            "bass with a pickup sixteenth, the gate on a dark supersaw, a soft clap on 2 and 4, open "
+            "off-beat hi-hats. Bars 9-16 build: the bass rests (one long note every two bars), the "
+            "gate's filter opens, a long noise riser, sixteenth-note kicks in the last half bar. At the "
+            "lift: a deep low boom, the bass back, the gate an octave higher and bright over a soft "
+            "supersaw pad, louder hi-hats, for 14 bars, settling over the last two; C7sus4 leads "
+            "back to the top. 32 bars, a chord every two bars (3.6 s). Rolled off above ~4.5 kHz; "
+            "the most bass-heavy (78% of its power under 150 Hz: lighter on phone speakers); bright, "
+            "anthemic, soaring.",
+            "energetic reveals, tech launches, montages, uplifting endings, anthemic intros",
+            seed="trance_b",
+        ),
+        Bed(
+            "beacon", _beacon, _grid_seconds(120, 24), 120, "E minor",
+            ("Em(add9)", "Cmaj9", "G/D", "Bm7sus4", "Em9", "Am(add9)", "Cmaj7(#11)", "Dsus2", "Em(add9)", "Cmaj9", "Asus2", "B7sus4"),
+            "A cosmic bed at 120 BPM in E minor, 4/4, built on a ticking beacon like a radio pulsar: "
+            "short dispersed pulses (a chirp falling from ~1.4 kHz with a burst of soft static) on "
+            "the 3+3+2 sixteenths, a strong main pulse on beats 1 and 3 in the centre and weaker "
+            "pulses left and right, the same in every bar like a lighthouse. Under it a deep kick on "
+            "every beat, off-beat sub bass (C2 to B2), a low, soft synth ostinato in sixteenth notes "
+            "(C3 to B4), a deep space pad low-passed at 1.3 kHz breathing with a slow side-chain, a "
+            "soft shimmer two octaves up swelling twice per loop and faint radio static. 24 bars, a "
+            "chord every two bars (4 s), B7sus4 leading back to the top. Rolled off above ~4 kHz; "
+            "bass-heavy (72% of its power under 150 Hz: lighter on phone speakers) and the quietest "
+            "in the voice's range; steady, spacious, curious.",
+            "space and astronomy, science, signals and data, steady explainers with a cosmic feel",
+            seed="pulsar_a",
+        ),
+        Bed(
+            "neon", _neon, _grid_seconds(116, 24), 116, "F-sharp minor",
+            ("F#m(add9)", "Dmaj7", "A(add9)", "E6", "F#m7", "Dmaj9", "Bm9", "C#7sus4", "F#m(add9)", "Dmaj7(#11)", "E(add9)", "C#"),
+            "A synthwave night-drive bed at 116 BPM in F-sharp minor, 4/4: a steady kick on every "
+            "beat, a big gated-reverb snare on 2 and 4, an analog bass bouncing in octaves on the "
+            "eighth notes (C#2 to B3, its filter snapping open on each note), a square-wave pluck "
+            "arpeggio in sixteenth notes accented 3+3+2 (E4 to G#5, left / right), warm detuned saw "
+            "pads breathing with a light side-chain and soft sixteenth-note hi-hats. 24 bars, a chord "
+            "every two bars (4.1 s), C# major leading back to the top. Rolled off above ~4.5 kHz; "
+            "bass-heavy (71% of its power under 150 Hz: lighter on phone speakers); retro, "
+            "nocturnal, cool, driving.",
+            "tech at night, retro-futurism, cities, coding Shorts",
+            seed="night_drive_a",
+        ),
     )
 }
 
@@ -984,7 +1451,7 @@ def bed_loop(name: str) -> np.ndarray:
     bed = BUILTIN_BEDS.get(name)
     if bed is None:
         raise VidgenError(f"unknown music bed '{name}' (beds: {', '.join(BUILTIN_BEDS)})")
-    return bed.generate(np.random.default_rng(zlib.crc32(f"music:{name}".encode("utf-8"))))
+    return bed.generate(np.random.default_rng(zlib.crc32(f"music:{bed.seed or name}".encode("utf-8"))))
 
 
 # ----- sources -------------------------------------------------------------------------------------

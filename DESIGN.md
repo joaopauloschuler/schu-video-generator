@@ -3567,7 +3567,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   inputs, nor are `music.py`, `mix.py`, `loudness.py` (music never changes pixels or timing).
 - **Beds** (`vidgen/music.py`, numpy only): `calm` (60 s, D major, no beat), `pulse` (40 s,
   A minor, 96 BPM), `bright` (48 s, C major, 120 BPM); Step 129 adds `cartoon` and `lullaby`
-  (§69.63), Step 179 `discovery`, `breakthrough`, `enigma`, `momentum`, `lab` (§91). Pads by PADsynth: each chord's harmonics
+  (§69.63), Step 179 `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, Step 181 `ascent`,
+  `horizon`, `beacon`, `neon` (§91). Pads by PADsynth: each chord's harmonics
   as Gaussian bumps (18–30 cents wide) with random phases in one spectrum, one inverse FFT → a
   periodic wave whose length divides the chord's segment; chords cross-fade with equal-power
   windows of 1.6 s; an airy layer an octave up swells with an LFO whose period divides the loop;
@@ -12863,3 +12864,63 @@ clock) was not approved and is not added.
   validate` suggests the nearest bed for a misspelt source (`did you mean 'discovery'?`).
 - **Not done**: no time-signature or "lift" field on `Bed` (the lift time is in the
   description); the beds were not re-balanced for small speakers (approved as heard).
+
+### 91.1 Energetic beds (Step 181)
+
+Four more built-in beds inspired by `momentum` (its 3+3+2 sixteenth accent, `_ACCENTS`, and
+sixteenth figure, `_FIGURE`; a steady low pulse; an off-beat or rolling bass). The owner listened
+to six prototypes (`music-candidates2/beds2.py`, outside the repo) and approved four, renamed:
+`trance_a` → `ascent`, `trance_b` → `horizon`, `pulsar_a` → `beacon`, `night_drive_a` → `neon`.
+`pulsar_b` ("deep field") and `night_drive_b` ("afterglow") were not approved and are not added.
+
+- **Seeds**: a bed's generator is seeded `crc32("music:<name>")`; renamed beds would get other
+  random phases and sound different, so `Bed` gained `seed: str | None = None`, the name to seed
+  with when it is not the bed's own (`bed_loop` uses `bed.seed or name`). The four keep their
+  prototype names as seeds; the older ten have none.
+- **Grid**: `_grid(tempo)` gives `(beat, bar, chord segment, sixteenth)` with the beat rounded down
+  to whole sixteenths (132 BPM: 21816 samples, not 21818; 116 BPM: 24824, not 24827), so the
+  sixteenth grid is exact; `_grid_seconds` gives the loop length on it. `Bed.tempo` stays the
+  nominal tempo (132.01 and 116.01 BPM in fact).
+- **New voices and tools** (only those the four use): `_saw_chords` (supersaw-like chords: a
+  PADsynth wave of saw harmonics `_SAW` / `_SOFT_SAW` spread 22–45 cents, independent phases per
+  channel), `_sweep_mix` (a filter sweep as an equal-power cross-fade of a dark and a bright
+  render), `_section_curve` (a periodic per-sample curve through `(bar, value)` points, smoothed
+  circularly), `_gate` (a sixteenth-note trance gate), `_analog_bass` (two detuned saws through a
+  falling two-pole low-pass), `_square_pluck`, `_gated_snare` (crack, body and a held noise room
+  cut after 0.24 s), `_add_stereo`, `_pulsar_pulse` (a dispersed chirp plus a burst of
+  band-limited static), `_static` (band-limited noise whose level wanders), and `_clap` (moved
+  out of `_momentum`, which now uses it and `_ACCENTS` / `_FIGURE`; its loop is bit-identical).
+  Left in the prototype: `_soft_lead` (only `night_drive_b` used it).
+- **The beds** (all 4/4, a chord every two bars; `Bed.description` gives the instruments, ranges,
+  sections and chords):
+  - `ascent`: A minor, 136 BPM, 32 bars (56.469 s). Groove (bars 1–12), build (13–16: the
+    supersaw's filter opens, a 4-bar riser, a clap roll, the last kick dropped), lift at 28.235 s
+    (a boom, F–C–G–Am colours, rolling bass, an FM arpeggio on the accents with echoes, sixteenth
+    hats; bars 17–28), settle (29–32).
+  - `horizon`: D minor → F major, 132 BPM, 32 bars (58.176 s). A gated supersaw (accents 1.0,
+    other sixteenths 0.38); groove (1–8), build (9–16: the bass rests, an 8-bar riser, sixteenth
+    kicks in the last half bar), lift at 29.088 s (the gate an octave up and bright, a soft
+    supersaw pad, the bass back), C7sus4 back to the top.
+  - `beacon`: E minor, 120 BPM, 24 bars (48 s). Pulsar pulses on the accents (the main pulse
+    centred on 1 and 3, interpulses ±0.35), a deep kick on every beat, off-beat sub (C2–B2), a low
+    soft ostinato, a pad low-passed at 1.3 kHz, a two-octaves-up shimmer swelling twice, faint
+    static (1.8–4.2 kHz, level 0.006 against the pad's 0.34).
+  - `neon`: F-sharp minor, 116 BPM, 24 bars (49.648 s). Kick on every beat, a gated snare on 2
+    and 4, analog octave bass on the eighths (C#2–B3), a square-pluck arpeggio on `_FIGURE`
+    (turned around in the second bar), soft-saw pads pumping 30 %, sixteenth hats.
+- **Bass weight and voice range** (Step 179's measure): 71 % (`ascent`), 78 % (`horizon`, now the
+  most), 72 % (`beacon`), 71 % (`neon`) of the power under 150 Hz; the 300 Hz–3 kHz band 2.7, 2.4,
+  4.7 (`beacon`, now the quietest there) and 3.6 dB under `pulse`'s. `enigma`'s description no
+  longer calls it the most bass-heavy or the quietest in the voice's range, and `momentum` is now
+  "the most energetic documentary bed" (the trance beds are faster); descriptions only.
+- **Same as approved**: the port is the prototype's code (same helpers, same order of operations,
+  same seeds); its float32 loops equal `beds2.loop(<prototype name>)` sample for sample, and
+  written with `write_wav` from a float64 copy they are byte-identical to `1_trance_a.wav`,
+  `2_trance_b.wav`, `3_pulsar_a.wav`, `5_night_drive_a.wav` (`<scratchpad>/s181/match_check.py`).
+  The ten older beds' float32 loops hash as before the change. `test_bed_sounds_as_approved`
+  stores the four new fingerprints; `test_energetic_beds_facts` checks tempo, key, grid, length,
+  seed, chords and descriptions without making audio.
+- **Cost**: `beacon` and `neon` take ~3 s to make, `horizon` ~7 s, `ascent` ~17 s: its loop,
+  2710528 = 2^10 × 2647 samples, has a large prime factor, so its whole-loop FFTs (`_section_curve`,
+  `_tone_filter`) are slow. Not changed (another length would change the bed); `vidgen
+  list-music`, which makes every loop, now takes about a minute.

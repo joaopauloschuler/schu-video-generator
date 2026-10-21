@@ -1007,6 +1007,11 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 ### Step 180 — `momentum` recommended for presentations and documentaries
 - [x] The guide + `AGENTS.md`, COOKBOOK §9 and the Shorts cookbook §9 (snippets and template) suggest `momentum` first for presentations and documentaries; the other beds stay as alternatives (`tests/test_guide.py` checks the guide's sentence)
 
+### Step 181 — Energetic music beds
+- [x] Four owner-approved prototype beds become built-in beds, used like the others (`music: ascent`, `{source: neon, volume: -2}`; `list-music`, `--render-dir`, MCP `list_music`, schema text, validation with did-you-mean): `ascent` (trance_a: A minor, 136 BPM, 32 bars, lift at 28.2 s), `horizon` (trance_b: D minor → F major, gated supersaw, 132 BPM, 32 bars, lift at 29.1 s), `beacon` (pulsar_a: E minor, 120 BPM, 24 bars), `neon` (night_drive_a: F-sharp minor, 116 BPM, 24 bars); `pulsar_b`, `night_drive_b` not approved, not added (`music.py`: `Bed.seed`, `_grid`, the new voices; DESIGN §91.1)
+- [x] Same sound as approved: float32 loops equal the prototype's, WAVs byte-identical to the approved ones; the ten older beds unchanged (hashes); fingerprints for all fourteen and a facts test (`tests/test_music.py`)
+- [x] Docs: CONFIG beds table and bass-weight note, guide + `AGENTS.md` (`momentum` still first, the four as alternatives), COOKBOOK, Shorts cookbook, README, CHANGELOG, DESIGN §48 / §91.1
+
 ---
 
 ## Backlog (after Step 60)

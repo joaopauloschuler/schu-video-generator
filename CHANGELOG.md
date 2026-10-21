@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–179)
+## 0.3.0 (Steps 61–181)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -329,6 +329,12 @@ matters only for projects made with development builds between Steps 67 and 131)
   like the other beds (`music: discovery`); bass-heavy, so lighter on phone and laptop speakers.
   The five older beds sound exactly as before. `vidgen validate` suggests the nearest bed name
   for a misspelt `music` source.
+- Four energetic electronic music beds (181): `ascent` (A minor, 136 BPM, uplifting trance that
+  builds and lifts 28.2 s into the loop), `horizon` (132 BPM, anthemic trance with a gated
+  supersaw, D minor lifting to F major 29.1 s in), `beacon` (E minor, 120 BPM, a cosmic
+  pulsar-like ticking beacon), `neon` (F-sharp minor, 116 BPM, synthwave night drive). Used like
+  the other beds (`music: neon`); bass-heavy, so lighter on phone and laptop speakers. The ten
+  older beds sound exactly as before.
 - Composed music: `music: {compose: MOOD}` writes an original piece as notes and plays it with
   real instruments (the optional `music` extra, symusic 0.5.9, and the GeneralUser GS SoundFont,
   downloaded once and checked: `vidgen soundfont fetch`, or `soundfont: PATH` for your own) (145,

@@ -16808,3 +16808,67 @@ Tests: `test_guide.py` (54 passed), `test_docs.py` (62 passed), one at a time un
 
 Known gaps: `vidgen`'s own defaults are unchanged (no bed is added when `music` is not written);
 CONFIG's beds table is unchanged (it lists, it does not recommend).
+
+## Step 181 — Energetic music beds `ascent`, `horizon`, `beacon`, `neon`
+
+The owner listened to six momentum-inspired prototypes (`<scratchpad>/music-candidates2/`:
+`beds2.py`, the generator; `build2.py`, render / measure / demos; `metrics.json`) and approved
+four, renamed: `trance_a` → `ascent`, `trance_b` → `horizon`, `pulsar_a` → `beacon`,
+`night_drive_a` → `neon`. `pulsar_b` and `night_drive_b` were not approved and are not added.
+
+What was built (DESIGN §91.1)
+- `music.py`: the four generators (`_ascent`, `_horizon`, `_beacon`, `_neon`) and four `Bed`
+  entries after `lab`; the building blocks they need moved in unchanged: `_SAW`, `_SOFT_SAW`,
+  `_grid`, `_grid_seconds`, `_saw_chords`, `_sweep_mix`, `_section_curve`, `_gate`,
+  `_analog_bass`, `_square_pluck`, `_gated_snare`, `_add_stereo`, `_pulsar_pulse`, `_static`;
+  `_clap`, `_ACCENTS`, `_FIGURE` moved out of `_momentum`, which now uses them (bit-identical).
+  `_soft_lead` (only `night_drive_b`) was left out.
+- `Bed.seed` (new, default `None`): the name `bed_loop` seeds with instead of the bed's own
+  (`crc32("music:<seed or name>")`). The four keep their prototype names as seeds: renamed with
+  the new names they would get other random phases and not sound as approved.
+- `_grid` rounds the beat down to whole sixteenths: `horizon`'s beat is 21816 samples (not 21818),
+  `neon`'s 24824 (not 24827); `Bed.tempo` keeps the nominal 132 / 116.
+- Facts: `ascent` A minor, 136 BPM, 32 bars, 56.469 s, lift at 28.235 s; `horizon` D minor → F
+  major, 132 BPM, 32 bars, 58.176 s, lift at 29.088 s; `beacon` E minor, 120 BPM, 24 bars, 48 s;
+  `neon` F-sharp minor, 116 BPM, 24 bars, 49.648 s. Under 150 Hz: 71 / 78 / 72 / 71 % of the
+  power. `enigma`'s description no longer says "the most bass-heavy" / "the quietest in the
+  voice's range" (`horizon` and `beacon` are now), and `momentum` is "the most energetic
+  documentary bed" (description, CONFIG row, guide: "of the five"), since `ascent` / `horizon`
+  are faster; their sound is unchanged.
+- `MusicCue.source`'s schema description names the fourteen beds. Nothing else in the pipeline
+  changed: `is_bed`, `Source`, `music_entries` (list-music, `--render-dir`, MCP `list_music`) and
+  `config_problems` (did-you-mean) read `BUILTIN_BEDS`.
+- Docs: CONFIG (beds table rows, the top-level `music` and `source` rows, bass-weight paragraph,
+  generation time), guide + `AGENTS.md` (`momentum` still suggested first; the four as
+  alternatives with a one-line "when" and the `start: 28.2 − T` tip), COOKBOOK §9, Shorts
+  cookbook §9, README, CHANGELOG (0.3.0 now Steps 61–181), DESIGN §48 and §91.1, tasklist.
+
+Match with the approved prototypes (`<scratchpad>/s181/match_check.py`): ALL MATCH
+- The ported float32 loops equal `beds2.loop(<prototype name>)` sample for sample (all four).
+- Written with `write_wav` from a float64 copy (as `build2.py` wrote them) they are byte-identical
+  to `1_trance_a.wav`, `2_trance_b.wav`, `3_pulsar_a.wav`, `5_night_drive_a.wav`.
+- The ten older beds' float32 loops have the same sha256 as before the change
+  (`<scratchpad>/s181/before.json`), `momentum` included after its clap / accent refactor.
+
+Tests
+- `tests/test_music.py`: `_BED_FINGERPRINTS` has the four new beds (recorded from the approved
+  loops); new `test_energetic_beds_facts` (tempo, key, `_grid` beat, length, seed, chords,
+  descriptions, lift times; no audio); `test_bed_is_deterministic_and_clean` seeds with
+  `bed.seed or name`; `test_validate_reports_missing_music_file` checks `did you mean 'horizon'?`
+  and that `neon` with a volume and `ascent` validate; `test_list_music` expects fourteen previews
+  and checks `horizon` / `neon` / `beacon`; `test_schema_has_music` validates `{source: neon,
+  volume: -2}` and checks the description names every bed.
+- Run one command at a time under `capped`: `test_music.py -m "not render"` in four parts (the
+  new beds' per-bed tests 12 passed in 65 s; the older beds' 31 passed in 90 s; the rest 23 passed
+  in 24 s; `test_list_music` 1 passed in 110 s); `test_guide.py` (54 passed); `test_docs.py`
+  (62 passed); `test_phase_l_review.py -k list_music` (the MCP call, 1 passed, 74 s);
+  `test_composer.py -k music` (4 passed). Not run: `test_music.py`'s render tests (the mix code is
+  unchanged and they use `calm`), the full suite (not asked).
+
+Known gaps
+- `ascent` takes ~17 s to make (`horizon` ~7 s, `beacon` / `neon` ~3 s): its loop length,
+  2710528 = 2^10 × 2647 samples, makes its whole-loop FFTs slow. Changing the length or the FFT
+  would change the bed, so it is documented, not fixed; `vidgen list-music` now takes about a
+  minute (a description-only listing would not need the audio).
+- The beds are bass-heavy (71–78 % under 150 Hz) and sound lighter on phone and laptop speakers;
+  documented, not re-balanced (approved as heard).

@@ -83,7 +83,7 @@ def test_meter_is_block_independent() -> None:
 def test_bed_is_deterministic_and_clean(name: str) -> None:
     bed = music.BUILTIN_BEDS[name]
     loop = music.bed_loop(name)
-    fresh = bed.generate(np.random.default_rng(zlib.crc32(f"music:{name}".encode("utf-8"))))
+    fresh = bed.generate(np.random.default_rng(zlib.crc32(f"music:{bed.seed or name}".encode("utf-8"))))
     assert np.array_equal(loop, fresh)  # same samples every time
     assert loop.dtype == np.float32 and loop.shape == (round(bed.seconds * RATE), 2) and not loop.flags.writeable
     assert loudness.integrated_loudness(loop) == pytest.approx(music.MUSIC_LEVEL, abs=0.05)
@@ -128,10 +128,10 @@ def test_bed_loop_seam_is_continuous(name: str) -> None:
 
 
 #: Per bed: loop length in samples and three projections of the float32 loop on seeded Gaussian
-#: noise (:func:`_fingerprint`). The five beds of Step 179 were recorded from the loops the owner
-#: approved (byte-identical to the prototype's WAVs); the five older ones from the code before Step
-#: 179, which must not change. A real change to any note moves a projection by far more than the
-#: tolerance; float rounding on another platform does not.
+#: noise (:func:`_fingerprint`). The beds of Steps 179 and 181 were recorded from the loops the
+#: owner approved (byte-identical to the prototypes' WAVs); the five older ones from the code before
+#: Step 179, which must not change. A real change to any note moves a projection by far more than
+#: the tolerance; float rounding on another platform does not.
 _BED_FINGERPRINTS: dict[str, tuple[int, tuple[float, float, float]]] = {
     "calm": (2880000, (-15.3937, 3.3763, 108.9938)),
     "pulse": (1920000, (-96.2739, -200.6432, -82.2206)),
@@ -143,6 +143,10 @@ _BED_FINGERPRINTS: dict[str, tuple[int, tuple[float, float, float]]] = {
     "enigma": (2400000, (-63.1468, 101.2333, 22.0507)),
     "momentum": (2304000, (5.226, 115.0083, 100.0002)),
     "lab": (2133280, (103.1881, -22.494, -99.5203)),
+    "ascent": (2710528, (-68.0114, -64.4007, -14.4593)),
+    "horizon": (2792448, (-106.0111, -165.0023, -14.2267)),
+    "beacon": (2304000, (30.9365, 7.4122, -55.1549)),
+    "neon": (2383104, (31.8743, 7.2493, -75.6359)),
 }
 
 
@@ -158,7 +162,7 @@ def test_every_bed_has_a_fingerprint() -> None:
 @pytest.mark.parametrize("name", list(_BED_FINGERPRINTS))
 @pytest.mark.slow
 def test_bed_sounds_as_approved(name: str) -> None:
-    """Step 179: the new beds sound as the approved prototypes, the older beds as before."""
+    """Steps 179 and 181: the new beds sound as the approved prototypes, the older beds as before."""
     length, expected = _BED_FINGERPRINTS[name]
     loop = music.bed_loop(name)
     assert len(loop) == length
@@ -175,7 +179,7 @@ def test_documentary_beds_facts() -> None:
         "lab": (108, "F minor", 20),
     }
     assert list(music.BUILTIN_BEDS)[:5] == ["calm", "pulse", "bright", "cartoon", "lullaby"]  # listing order kept
-    assert list(music.BUILTIN_BEDS)[5:] == list(facts)
+    assert list(music.BUILTIN_BEDS)[5:10] == list(facts)
     for name, (tempo, key, bars) in facts.items():
         bed = music.BUILTIN_BEDS[name]
         assert (bed.tempo, bed.key) == (tempo, key)
@@ -185,6 +189,31 @@ def test_documentary_beds_facts() -> None:
         assert "phone speakers" in bed.description and bed.use
     assert "25.7 s" in music.BUILTIN_BEDS["breakthrough"].description  # where the lift lands
     assert music.BUILTIN_BEDS["breakthrough"].seconds / 2 == pytest.approx(25.7, abs=0.05)
+
+
+def test_energetic_beds_facts() -> None:
+    """Step 181: the four energetic beds' tempo, key, length, chords, seeds and descriptions (no
+    audio made). Their beat is rounded down to whole sixteenths (``_grid``), and they keep their
+    prototype's seed, so they sound exactly as approved."""
+    facts = {
+        "ascent": (136, "A minor", 32, "trance_a", 21176),
+        "horizon": (132, "D minor to F major", 32, "trance_b", 21816),
+        "beacon": (120, "E minor", 24, "pulsar_a", 24000),
+        "neon": (116, "F-sharp minor", 24, "night_drive_a", 24824),
+    }
+    assert list(music.BUILTIN_BEDS)[10:] == list(facts)  # after the older ten
+    for name, (tempo, key, bars, seed, beat) in facts.items():
+        bed = music.BUILTIN_BEDS[name]
+        assert (bed.tempo, bed.key, bed.seed) == (tempo, key, seed)
+        assert music._grid(tempo)[0] == beat and beat % 4 == 0
+        assert round(bed.seconds * RATE) == _BED_FINGERPRINTS[name][0] == beat * 4 * bars
+        assert len(bed.chords) == bars // 2  # a chord every two bars
+        assert f"{tempo} BPM in {key.split(' to ')[0]}" in bed.description and "bass-heavy" in bed.description
+        assert "phone speakers" in bed.description and "3+3+2" in bed.description and bed.use
+    assert all(bed.seed is None for bed in list(music.BUILTIN_BEDS.values())[:10])
+    # where the trance beds lift: half-way, as their descriptions say
+    assert "28.2 s" in music.BUILTIN_BEDS["ascent"].description and music.BUILTIN_BEDS["ascent"].seconds / 2 == pytest.approx(28.23, abs=0.01)
+    assert "29.1 s" in music.BUILTIN_BEDS["horizon"].description and music.BUILTIN_BEDS["horizon"].seconds / 2 == pytest.approx(29.09, abs=0.01)
 
 
 def test_bed_sources_differ_and_describe_themselves() -> None:
@@ -412,8 +441,13 @@ def test_validate_reports_missing_music_file(make_project: Any) -> None:
     assert [p.location for p in project_problems(Project.load(root2))] == ["music[1].source"]
     root3 = make_project(_video(music={"source": "discovry", "volume": -2}), folder="p3")
     [problem] = project_problems(Project.load(root3))
-    assert "did you mean 'discovery'?" in problem.message and "momentum, lab" in problem.message
+    assert "did you mean 'discovery'?" in problem.message and "momentum, lab, ascent, horizon, beacon, neon" in problem.message
     assert not project_problems(Project.load(make_project(_video(music={"source": "momentum", "volume": -2}), folder="p4")))
+    root5 = make_project(_video(music="horizn"), folder="p5")
+    [problem] = project_problems(Project.load(root5))
+    assert "did you mean 'horizon'?" in problem.message
+    assert not project_problems(Project.load(make_project(_video(music={"source": "neon", "volume": -2}), folder="p6")))
+    assert not project_problems(Project.load(make_project(_video(music="ascent"), folder="p7")))
 
 
 @pytest.mark.slow
@@ -433,8 +467,10 @@ def test_list_music(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFix
     theme = items["assets/music/theme.wav"]
     assert theme["origin"] == "project" and theme["duration"] == 2.0 and theme["description"] is None
     assert items["cartoon"]["tempo"] == 128 and items["lullaby"]["key"] == "F major"
-    assert Path(calm["preview"]) == previews / "calm.wav" and len(list(previews.glob("*.wav"))) == len(music.BUILTIN_BEDS) == 10
+    assert Path(calm["preview"]) == previews / "calm.wav" and len(list(previews.glob("*.wav"))) == len(music.BUILTIN_BEDS) == 14
     assert items["enigma"]["tempo"] == 96 and items["lab"]["loop_seconds"] == 44.443 and (previews / "momentum.wav").is_file()
+    assert items["horizon"]["tempo"] == 132 and items["horizon"]["loop_seconds"] == 58.176 and items["neon"]["key"] == "F-sharp minor"
+    assert items["beacon"]["loudness"] == pytest.approx(music.MUSIC_LEVEL, abs=0.1) and (previews / "ascent.wav").is_file()
     assert np.allclose(read_wav(previews / "calm.wav"), music.bed_loop("calm"), atol=1.5 / 32768)
     assert main(["list-music", str(root)]) == 0
     out = capsys.readouterr().out
@@ -449,8 +485,9 @@ def test_schema_has_music(capsys: pytest.CaptureFixture[str]) -> None:
     assert {"music", "audio"} <= set(schema["properties"]) and "music" in schema["$defs"]["SceneConfig"]["properties"]
     import jsonschema
 
-    for value in ("calm", {"source": "pulse", "duck": False}, [{"source": "calm", "to": "a"}, "bright"], False):
+    for value in ("calm", {"source": "pulse", "duck": False}, [{"source": "calm", "to": "a"}, "bright"], False, {"source": "neon", "volume": -2}):
         jsonschema.validate(_video(music=value), schema)
+    assert "momentum, lab, ascent, horizon, beacon, neon" in json.dumps(schema)  # the source's description names every bed
 
 
 # ----- rendering ------------------------------------------------------------------------------------------

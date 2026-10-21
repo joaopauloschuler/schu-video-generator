@@ -413,7 +413,11 @@ music: {source: bright, volume: -2}   # calm, cinematic scenes
 - Alternatives to `momentum` with the same kick and synth bass: `lab` (108 BPM, modern tech:
   a rolling synth bass, electronic plucks, glitchy clicks) and `discovery` (104 BPM, a steady
   approach that builds); `breakthrough` lifts from tension to a reveal 25.7 s into its loop.
-  These four are bass-heavy (57–67 % of their power under 150 Hz) and Shorts are mostly heard on
+  More energy: `neon` (116 BPM, synthwave: a gated snare, an analog octave bass, a square-wave
+  arpeggio; tech at night, retro-futurism, coding), `ascent` / `horizon` (136 / 132 BPM,
+  uplifting trance that builds and lifts halfway through the loop: launches, montages, endings),
+  `beacon` (120 BPM, a pulsar-like ticking beacon: space, science, data).
+  All of these are bass-heavy (57–78 % of their power under 150 Hz) and Shorts are mostly heard on
   phone speakers, which drop most of that: listen on a phone, and fall back to `pulse` if the bed
   sounds thin.
 - `volume: -2` sits well under the voice, and vidgen ducks the bed by 12 dB while the voice
