@@ -1054,8 +1054,8 @@ advice; a human makes the final choice (DESIGN §93).
 - [x] Spectrogram PNG with section marks and a voice-range lane; a 20 s demo MP3 under a shipped Kokoro narration sample (`studio/data/narration_sample.mp3`) with vidgen's default ducking; plain-language advice naming score keys; `--compare` side-by-side table and two-row spectrogram; limits calibrated on the 14 beds and their templates (all fine) and on deliberately bad scores (all flagged)
 
 ### Step 188 — Using it in videos
-- [ ] Project pieces `assets/music/*.yaml` used like beds (`music: my_theme`, `{source: my_theme, volume: -2}`), rendered at the join with caching; `list-music`, `validate`, `lint` include them
-- [ ] MCP tools (render, check, template, patches); author guide recipe (start from a template, change one thing at a time, check, compare, let a human choose) + `AGENTS.md`
+- [x] Project pieces `assets/music/*.yaml` used like beds (`music: my_theme`, `{source: my_theme, volume: -2}`, the path form `source: assets/music/x.yaml`), rendered at the join and cached in `build/music` (key: the file's bytes + renderer and vidgen versions); a bed's name that is also a piece is a problem; `list-music` (origin `score`), `validate` (the score's `where: what` problems, did-you-mean across beds and pieces, unused broken pieces as warnings), `lint` (rule `music_check`, cached) include them; `timings.json` `kind: score` (`music_pieces.py`, DESIGN §93.10)
+- [x] MCP tools `music_template`, `music_patches`, `music_render`, `music_check` (the spectrogram as a picture); author guide recipe "Making music" (start from a template, change one thing at a time, check, compare, look at the spectrogram, room for the voice, let a human choose) + `AGENTS.md`; CONFIG "Project pieces"; existing projects' mixes byte-identical (beds, files, composed)
 
 ### Step 189 — Example and craft notes
 - [ ] An example project with an agent-made piece built from a template into something new, in a short narrated video (Kokoro), with its check report

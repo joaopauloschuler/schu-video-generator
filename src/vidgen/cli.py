@@ -429,6 +429,7 @@ def validate_warnings(project: Project) -> list[str]:
     from vidgen.dubbing import dub_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.music import music_warnings
+    from vidgen.music_pieces import piece_warnings
     from vidgen.overlap import overlap_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
@@ -455,6 +456,7 @@ def validate_warnings(project: Project) -> list[str]:
         + overlap_warnings(project.config)
         + dub_warnings(project)
         + music_warnings(project.config)
+        + piece_warnings(project.config, project.root)
     )
 
 
@@ -513,7 +515,7 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
         print(line)
     for line in images_summary_lines(project, variants):
         print(line)
-    for entry in music_summary(config):
+    for entry in music_summary(config, project.root):
         print(f"music:     {music_summary_line(entry)}")
     print("ok")
     return 0
@@ -532,7 +534,7 @@ def _validate_json(path: str) -> dict[str, Any]:
     from vidgen.music import music_summary
 
     images = [jsonout.images_json(p, found) for p, found in variant_images(project, variants)]
-    return jsonout.validate_document(project, problems, variants, error, images=images, music=music_summary(project.config))
+    return jsonout.validate_document(project, problems, variants, error, images=images, music=music_summary(project.config, project.root))
 
 
 def pronunciation_summary_lines(project: Project) -> list[str]:
@@ -1343,12 +1345,23 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
             print(f"    description: {e['description']}")
             print(f"    chords: {' - '.join(e['chords'])}")
             print(f"    use: {e['use']}")
+        elif e["origin"] == "score":
+            if e["problems"]:
+                print(f"{e['name']}  project piece  {e['path']}: {len(e['problems'])} problem(s), e.g. {e['problems'][0]}")
+                continue
+            length = f"{e['loop_seconds']:g} s loop" if e["loop"] else f"{e['duration']:g} s, one pass with an ending"
+            print(f"{e['name']}  project piece  {e['key']}, {e['tempo']:g} BPM, {e['time']}, {e['bars']} bars, {length}  ({e['path']})")
+            if e["title"] or e["description"]:
+                print(f"    description: {' - '.join(x for x in (e['title'], e['description']) if x)}")
+            print(f"    chords: {' - '.join(e['chords'])}")
+            print(f"    sections: {', '.join(e['sections'])}")
         else:
             level = f"{e['loudness']} LUFS" if e["loudness"] is not None else "silent"
             print(f"{e['name']}  project file  {e['duration']:.1f} s, {level} (played at {music.MUSIC_LEVEL:g} LUFS)")
     print(
         f"level at volume 0: {music.MUSIC_LEVEL:g} LUFS integrated (about 6.5 dB under narration), ducked "
-        "12 dB under speech by default; a file anywhere under the project works as a source too"
+        "12 dB under speech by default; a file anywhere under the project works as a source too; "
+        "a project piece (assets/music/NAME.yaml, a score file) plays with music: NAME"
     )
     if preview_dir is not None:
         print(f"previews: {preview_dir} (one loop of each bed as WAV)")
@@ -1831,7 +1844,7 @@ def build_parser() -> argparse.ArgumentParser:
     project_arg(p)
     p.set_defaults(func=cmd_list_pronunciation)
 
-    p = sub.add_parser("list-music", help="list background music beds (built-in and the project's assets/music) with descriptions")
+    p = sub.add_parser("list-music", help="list background music beds (built-in and the project's assets/music: score-file pieces and audio files) with descriptions")
     project_arg(p)
     p.add_argument("--render-dir", metavar="DIR", help="also write one loop of every bed as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_music)

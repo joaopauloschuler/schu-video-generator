@@ -2943,7 +2943,7 @@ range (300 Hz–3 kHz) 2–4.7 dB emptier than `pulse` does (`beacon` the most).
 
 | key | default | |
 |---|---|---|
-| `source` | required (or `compose`) | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, `ascent`, `horizon`, `beacon`, `neon`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
+| `source` | required (or `compose`) | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, `ascent`, `horizon`, `beacon`, `neon`, a [project piece](#project-pieces-score-files-in-a-video) (`my_theme` for `assets/music/my_theme.yaml`, or the path `assets/music/my_theme.yaml`), or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
 | `compose` | none | instead of `source`: music composed in a mood, `compose: calm` or `{mood, key, tempo, instruments, seed, bars}` ([below](#composed-music-compose)); without `bars` it is composed for the video ([follows it](#music-that-follows-the-video): `start` and `loop` do not apply); with `bars` it loops seamlessly like a bed and `start` wraps around the piece |
 | `volume` | `0` | dB, -60 to 12; at 0 the music is −28 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6.5 dB under ElevenLabs narration (≈ −21.4 LUFS) in its pauses |
 | `start` | `0` | seconds into the source where it starts; a loop restarts there |
@@ -2977,11 +2977,13 @@ way). Between two cues the first fades out at the end of its last scene and the 
   which the final MP4 encodes. `--no-audio` renders have no music. Drafts (`render --draft`) and
   animatics mix the music like the video (composed music too: a draft's timings differ a little
   from the preview's, so its piece is composed for them; each render is cached in `build/music/`).
-- **Checks.** `vidgen validate` reports a source that is neither a bed nor an existing file, and
-  cues naming unknown scenes, out of order or overlapping.
+- **Checks.** `vidgen validate` reports a source that is neither a bed, a project piece nor an
+  existing file (did-you-mean across the beds and the pieces), a project piece's problems (`music.source:
+  assets/music/x.yaml: tracks.bass.steps: ...`), and cues naming unknown scenes, out of order or
+  overlapping.
 - `timings.json` gains `mix` (below) with each cue's span (`music: [{source, kind, from, to,
-  start, end, volume, duck}]`; `kind` `bed`, `file` or `composed`, `source` `compose: <mood>` for
-  composed music).
+  start, end, volume, duck}]`; `kind` `bed`, `file`, `score` (a project piece) or `composed`,
+  `source` `compose: <mood>` for composed music).
 
 ### Composed music (`compose`)
 
@@ -3149,8 +3151,8 @@ ffmpeg with libmp3lame) and prints the sections (start, bars, key, chords), the 
 effects, the loudness and the true peak. Notes outside 20 Hz–12 kHz are left out with a warning
 (change the track's `octave` or `transpose`). The same file and `seed` always give the same
 samples. Every mistake is reported at once with where it is and the nearest known name. `vidgen
-music patches [--json]` describes every instrument, setting and effect in words. (Using score
-files in a video comes in a later step; DESIGN §93.)
+music patches [--json]` describes every instrument, setting and effect in words. A score file in
+`assets/music` plays in a video like a bed ([project pieces](#project-pieces-score-files-in-a-video)).
 
 ```yaml
 title: Tidewater
@@ -3309,6 +3311,44 @@ sections and the voice range's edges, with a lane under it showing each bar's vo
 against the limit (red above). `--compare OTHER` checks a second score or audio file, prints a
 side-by-side table and draws both on one time scale (`<name>-vs-<other>.png`).
 
+#### Project pieces: score files in a video
+
+A score file in the project's `assets/music` is a **project piece**: it plays like a built-in bed.
+
+```yaml
+music: my_theme                                 # assets/music/my_theme.yaml (or .yml)
+music: {source: my_theme, volume: -2}           # every cue key works (start, loop, fades, duck, from, to)
+music: {source: assets/music/my_theme.yaml}     # the path form: any .yaml / .yml under the project
+music:                                          # in a list of cues, with beds and files
+  - {source: my_theme, to: part2}
+  - {source: momentum, from: results}
+```
+
+- **Names.** `NAME` is the file's path under `assets/music` without `.yaml` (`themes/night` for
+  `assets/music/themes/night.yaml`). A name that is a built-in bed and also a project piece
+  (`assets/music/calm.yaml` with `music: calm`) is a problem, reported by `vidgen validate` and
+  the render: rename the piece, or write `source: assets/music/calm.yaml` (which plays the piece).
+  A source without a suffix that is neither a bed nor a piece (nor an existing file) is reported
+  with did-you-mean across the beds and the pieces.
+- **Rendering.** The piece is rendered when the video's audio is mixed (the same place as a bed:
+  drafts and animatics too, not storyboards or scenes) at −28 LUFS like a bed, and kept in
+  `build/music/piece-<key>.npy`; the key is the file's bytes, vidgen's version and the studio
+  renderer's version, so an unchanged piece is not rendered again and any edit is. Changing it
+  re-renders no scene. Notes it cannot play are logged as warnings.
+- **Loop or one pass.** A `loop: true` piece (the default) under a looping cue repeats seamlessly
+  and `start` wraps round it; with the cue's `loop: false` it plays once from `start`. A `loop:
+  false` piece (one pass with an ending) always plays once from `start` (which must be inside
+  it), then is silent; the cue's `fade_out` applies at the cue's end as usual, so end the cue
+  (`to:`) near the piece's end, or let it ring out.
+- **Checks.** `vidgen validate` reads every piece the video plays and reports its problems as
+  `music.source: assets/music/x.yaml: <where>: <what>`; pieces the video does not play are
+  checked too, as warnings. `vidgen lint`'s `music_check` rule runs `vidgen music check` (without
+  the demo and the picture) on the pieces the video plays and reports its fixes on the cue's first
+  scene (cached in `build/music` per version of the file; a minute of music takes 5–15 s the first
+  time). `timings.json`'s `mix.music` names them with `kind: score`.
+- **Listing.** `vidgen list-music` lists the pieces (origin `score`) with key, tempo, time, bars,
+  length, chords, sections and the score's `title` and `description`, or their problems.
+
 ### Loudness of the final mix (`audio`)
 
 ```yaml
@@ -3336,7 +3376,8 @@ raise the peak by ~0.2 dB, so the MP4 stays under it).
 
 `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` describes the built-in beds in words —
 instruments, key, tempo, chords, mood, frequency range — for an author who cannot listen, and
-lists the project's `assets/music` files (length, measured loudness); `--render-dir` writes one
+lists the project's [pieces](#project-pieces-score-files-in-a-video) (score files: key, tempo,
+length, chords, sections, title, description) and `assets/music` files (length, measured loudness); `--render-dir` writes one
 loop of every bed as `DIR/<name>.wav`. Then the moods of [composed music](#composed-music-compose)
 (key, tempo, meter, length, each part's instrument and pattern, the melody's range and style, the
 chord progressions, the bed played without the extra) and every instrument name (General MIDI
@@ -9344,6 +9385,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `said_before_shown` | warning | the narration names an on-screen **label** (a scene text of at most `max_words` words with a word that names something: a diagram node, a callout, a stage, an axis title) more than `min_lead` seconds before the label is on screen, and does not name it again when it shows. When it shows is known from the layout dump: it was not there at the still before the one that first shows it (the beat-end still of the beat before, or a mid-beat still of a storyboard), or at the time of the `reveal` / `callout` / `transform` action of its beat that shows it (a callout with that label, or an action [on a word](#actions-on-a-spoken-word) the label says). Words are compared without case and accents, with English plural and verb endings (`databases` = `database`, `moving` = `moves`), without stop words and numbers; a label of several words counts as named when all its words are said close together. Not checked: overlays (captions repeat the narration), speech bubbles, maths and code, numbers (a chart's values, tick labels, live values like `slope 0.50`), texts that another text on screen already says (the heading "How a cache works" before a `Cache` node). Word times come from the beat's audio (the alignment), else the estimate. Fix: show it on the word (`{reveal: node:database, at: "@database"}`), reveal it earlier, or name it when it shows; or `lint_ignore` it (`{rule: said_before_shown, object: Database}`) |
 | `unsaid_reveal` | off (info when turned on) | a beat (not the scene's first) brings new labels, and the scene's narration names none of them (same labels and word matching as `said_before_shown`). Off by default: many labels are fine unsaid (a map's city names, a step's output); turn it on with `unsaid_reveal: {severity: info}` to review a script |
 | `iso_labels` | warning | an [`iso_diagram`](#iso_diagram) label (from the outlines of its blocks and plates and the paths of its connectors that the scene adds to the layout dump) that covers at least `min_cover` of its box over a block it does not name (a group's caption among the group's blocks; a label on its own block's top is fine), shares at least `min_overlap` of the smaller box with another label, hides part of another connector, or stands more than `max_gap` of the shorter side from what it names without a leader line. The scene places labels to avoid all of these; a finding means the diagram is crowded. Text size and contrast are `min_font`'s and `contrast`'s. Fix: more `spacing` (or `at` further apart), shorter labels, fewer blocks, or labels on a stack's side (`label_side`) |
+| `music_check` | warning; info for notes | a [project piece](#project-pieces-score-files-in-a-video) the video plays (a score file in `assets/music`) that [`vidgen music check`](#checking-a-piece-vidgen-music-check) flags in one of `topics` (default: `voice range`, `highs`, `bass`, `steadiness`, `peaks`, `loop seam`; `key`, `sections`, `tempo` can be added): its fixes at the rule's severity, its notes as info, each with the first two changes it suggests (score keys), on the first scene of the cue. Reads the config, not the stills; the check (no demo, no picture) is cached in `build/music` per version of the file, so it costs 5–15 s for a minute of music once. Fix: the change it names, then `vidgen music check` again; or `severity: off` |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -9384,6 +9426,7 @@ lint:
     said_before_shown: {min_lead: 1.5, max_words: 4}     # seconds; longer texts are sentences
     unsaid_reveal: {max_words: 4}                        # off unless given a severity ("info")
     iso_labels: {min_cover: 0.1, min_overlap: 0.05, max_gap: 0.06}   # iso_diagram labels: shares of a label's box; fraction of the shorter side
+    music_check: {topics: [voice range, highs, bass, steadiness, peaks, loop seam]}   # project pieces: vidgen music check's topics reported
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
@@ -9648,7 +9691,10 @@ The server calls itself `schu-video-generator`; configuration snippets (server k
 back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `music_preview` (`vidgen music preview`: `mood`, `seed`, `bars`, `key`, `tempo`,
-`out`), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`out`), `music_template` (`bed`, `out` default `assets/music/<bed>.yaml`, `force`; no `bed`: the
+list), `music_patches`, `music_render` (`score`, `out` default `build/mcp/music/<score>.mp3`),
+`music_check` (`source`, `compare`, `narration`, `out` default `build/mcp/music`, `images`: returns
+the spectrogram as a picture), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `cast` (`count`
 for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`). Their parameters are the command's
@@ -9660,7 +9706,7 @@ wants `scene: TYPE` (a few KB) and gives the whole schema (hundreds of KB) only 
 
 **Pictures.** `storyboard` returns its contact sheets (whole-video sheets first), `thumbnail` the
 thumbnail and its small copy, `gallery` the stills, `list_icons` with `sheet: true` an icon
-sheet, `list_themes` with `swatches: true` the swatches, as MCP image content: at most 1568 px on
+sheet, `list_themes` with `swatches: true` the swatches, `music_check` its spectrogram, as MCP image content: at most 1568 px on
 the long side, PNG (JPEG when a PNG would exceed 800 KB). `images` (default 3, at most 8) and
 `image_offset` page through more; the document's `mcp_images` says `{total, offset, returned,
 next_offset}`. Stills are reused, so asking for the next page renders nothing.
@@ -9760,7 +9806,7 @@ and the other variants are still checked (the human output does the same since S
 | `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
 | `images` | list | the [generated pictures](#generated-images-imagegen-vidgen-imagegen) of the base config, plus each variant whose pictures differ (none without `generate:` params): `{variant, generated, missing, pictures}`, `pictures` listing each distinct request once as `{key, scenes, path, exists, prompt}` |
 | `pronunciation_defaults` | object \| null | beat id → the [built-in pronunciation](#built-in-pronunciation-lists) entries that change its spoken text (only such beats; `{}` when none) |
-| `music` | list | the base config's music cues: `{source, kind, plays, fitted, from, to, scenes}` — `source` the bed, file or `compose: <mood>`; `kind` `bed`, `file` or `composed`; `plays` what will play (`composed`, `file`, or `bed <name>`: a bed, or a composed cue's bed without the `music` extra); `fitted` composed for the video's timings; `scenes` scene id → the compose settings it changes (`["mood"]`...) |
+| `music` | list | the base config's music cues: `{source, kind, plays, fitted, from, to, scenes}` — `source` the bed, project piece, file or `compose: <mood>`; `kind` `bed`, `score` (a project piece), `file` or `composed`; `plays` what will play (`composed`, `score`, `file`, or `bed <name>`: a bed, or a composed cue's bed without the `music` extra); `fitted` composed for the video's timings; `scenes` scene id → the compose settings it changes (`["mood"]`...) |
 
 `warnings` include the theme contrast warnings (`theme contrast: ...`, prefixed `[variant] `
 for a variant's own; they do not make `ok` false). When there are problems, `error` is
@@ -9863,7 +9909,7 @@ difference between two palette colours).
 | `level` | float | integrated loudness (LUFS) of music at `volume: 0` (−28) |
 | `duck` | object | the default ducking `{depth, attack, release, hold, clips}` |
 | `count` | int | number of entries |
-| `music` | list | `{name, origin, description, use, tempo, key, chords, loop_seconds, duration, channels, loudness, preview}`: built-in beds (`origin` `builtin`; `description` what it sounds like, `use`, `tempo` BPM or `null` without a beat, `key`, `chords` in loop order, `loop_seconds`) then the project's files (`origin` `project`, `name` the path to use as `source`, `duration` s); `loudness` measured (LUFS); `preview` the WAV written with `--render-dir`, else `null` |
+| `music` | list | `{name, origin, description, use, tempo, key, chords, loop_seconds, duration, channels, loudness, preview}`: built-in beds (`origin` `builtin`; `description` what it sounds like, `use`, `tempo` BPM or `null` without a beat, `key`, `chords` in loop order, `loop_seconds`), the project's pieces (`origin` `score`, `name` what `source` takes, also `path`, `title`, `time`, `bars`, `loop`, `sections`, `problems` (the score file's `where: what` lines; empty when it reads); `loop_seconds` for a loop, `duration` for a one-pass piece; `loudness` −28, as played), then the project's files (`origin` `project`, `name` the path to use as `source`, `duration` s); `loudness` measured (LUFS); `preview` the WAV written with `--render-dir`, else `null` |
 | `previews` | str \| null | the `--render-dir` folder |
 | `moods` | list | composed music's moods: `{name, family, description, use, key, tempo, meter, bars, loop_seconds, instruments, fallback_bed}` (`family` `explainer` or `cartoon`; `instruments` part → instrument name; `fallback_bed` the bed played without the extra) |
 | `instruments` | list | `{name, program, drums, low, high, description}`: General MIDI program (a drum kit's number when `drums`), range as note names (`null` for drum kits) |
@@ -9968,7 +10014,7 @@ difference between two palette colours).
 | `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
-| `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: vidgen wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|file), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
+| `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: vidgen wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
 | `chapters` | list | the chapters as written into the MP4 and the YouTube list (empty without chapters): `{title, number, scene, start, end, index, count, card, intro}` — `number` as written (`null`: none), `scene` the scene it starts at, `start` / `end` seconds in the video, `index` its position in this list (1-based) of `count`, `card` whether it starts with a `chapter` card, `intro` whether it is the chapter added at 0:00 before the first one; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
 

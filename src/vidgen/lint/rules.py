@@ -132,7 +132,9 @@ class SceneContext:
     scene (:func:`vidgen.lint.term_rule.term_issues`; filled when ``concept_colors`` runs),
     ``narration`` the scene's labels and spoken words
     (:class:`vidgen.lint.narration_rule.NarrationPicture`; filled when ``said_before_shown`` or
-    ``unsaid_reveal`` runs).
+    ``unsaid_reveal`` runs), ``music_issues`` the ``(message, severity)`` of the project pieces
+    whose cue starts in this scene (:func:`vidgen.lint.music_rule.music_issues`; filled when
+    ``music_check`` runs).
     """
 
     scene_id: str
@@ -145,6 +147,7 @@ class SceneContext:
     speech_flags: dict[str, list[Any]] = field(default_factory=dict)
     term_issues: list[tuple[str | None, str, float | None, float | None]] = field(default_factory=list)
     narration: Any = None
+    music_issues: list[tuple[str, str | None]] = field(default_factory=list)
 
     def spoken_text(self, beat: dict[str, Any]) -> str:
         """What the narrator says for an activity-file beat."""

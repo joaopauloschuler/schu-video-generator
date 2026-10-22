@@ -800,6 +800,7 @@ LINT_RULES: tuple[str, ...] = (
     "said_before_shown",
     "unsaid_reveal",
     "iso_labels",
+    "music_check",
 )
 RuleName = Literal[
     "off_frame",
@@ -834,6 +835,7 @@ RuleName = Literal[
     "said_before_shown",
     "unsaid_reveal",
     "iso_labels",
+    "music_check",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1046,6 +1048,17 @@ class IsoLabelsRule(RuleConfig):
     """Farthest a label without a leader line may stand from what it names (fraction of the frame's shorter side: 0.06 is 29 px at 480p)."""
 
 
+#: Topics of ``vidgen music check`` (DESIGN.md §93.9) the ``music_check`` lint rule can report.
+MusicCheckTopic = Literal["voice range", "highs", "bass", "steadiness", "peaks", "loop seam", "key", "sections", "tempo"]
+
+
+class MusicCheckRule(RuleConfig):
+    """``music_check``: a project piece (a score file under assets/music) the video plays that `vidgen music check` finds too loud in the voice's range, too bright, boomy, unsteady, peaky or clicking at its loop (DESIGN.md §93.10); checked once per version of the file (cached in build/music)."""
+
+    topics: list[MusicCheckTopic] = Field(default_factory=lambda: ["voice range", "highs", "bass", "steadiness", "peaks", "loop seam"])
+    """The check's topics reported (what matters under a voice; add key, sections or tempo for the musical ones)."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1198,6 +1211,8 @@ class LintRules(_Strict):
     """A beat bringing new labels the narration never names (default: off; info when turned on)."""
     iso_labels: IsoLabelsRule = Field(default_factory=IsoLabelsRule)
     """An iso_diagram label over a block it does not name, over another label or a connector, or far from what it names (default: warning)."""
+    music_check: MusicCheckRule = Field(default_factory=MusicCheckRule)
+    """A project piece the video plays that `vidgen music check` finds hard on the voice: its fixes (default: warning; its notes: info)."""
 
 
 class LintConfig(_Strict):

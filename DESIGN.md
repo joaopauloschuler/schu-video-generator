@@ -186,6 +186,7 @@ src/vidgen/
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
                           # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
+                          # music_rule.py (project pieces, §93.10),
                           # color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
@@ -239,6 +240,7 @@ src/vidgen/
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
   music.py                # background music: generated beds, music files and composed music as looping sources (§48, §82, §83; no manim)
+  music_pieces.py         # project pieces: score files in assets/music played like beds, rendered at the join and cached (§93.10)
   composer.py             # composed music from a mood: moods, instruments, chords, phrases, melody, accompaniment (§83; pure, seeded, no manim)
   musicfit.py             # composed music that follows the video: bar lines at scene changes, per-scene moods, swells, pauses, cadence, stings (§84)
   score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
@@ -13071,8 +13073,9 @@ Term: a **score file** (YAML, this section; class `MusicScore`) is not the compo
   true peak, clipping, tempo, loop seam, voice-range share, bass weight, harsh highs, key, section
   energy (does the lift lift?), a spectrogram with section marks, a demo under narration, advice
   naming score keys (tracks measured one by one), compare two.
-- **188 Using it**: `assets/music/*.yaml` used like beds (`music: my_theme`), rendered at the join
-  with caching; list-music / validate / lint; MCP tools; the author-guide recipe.
+- **188 Using it** (done, §93.10): `assets/music/*.yaml` used like beds (`music: my_theme`),
+  rendered at the join with caching; list-music / validate / lint; MCP tools; the author-guide
+  recipe.
 - **189 Example and craft notes**, **190 Review** (beds and existing projects byte-identical;
   determinism; phase tests).
 
@@ -13494,3 +13497,71 @@ chooses; the check only says what the numbers say.
   judged against the section just before it only; audio files have no sections (the check does
   not guess them); level-dependent masking (a real psychoacoustic model) is out of scope — the
   voice-range level per bar and the demo's clearance stand in for it.
+
+### 93.10 Project pieces: score files in a video (Step 188)
+
+A score file in `assets/music` is a **project piece**, played by the `music:` cues like a bed
+(`src/vidgen/music_pieces.py`; `vidgen.music` calls it, never the other way round at import;
+`studio` stays free of video code).
+
+```yaml
+music: my_theme                               # assets/music/my_theme.yaml (or .yml)
+music: {source: my_theme, volume: -2}         # every cue key: start, loop, fades, duck, from, to
+music: [{source: my_theme, to: part2}, {source: assets/music/outro.yaml, from: results}]
+```
+
+- **Names** (decision): a cue's `source` is a score when it ends `.yaml` / `.yml` (a path under
+  the project, the path form) or has no suffix and is not a built-in bed — then it names
+  `assets/music/<source>.yaml` (`.yml`), sub-folders with `/` (`themes/night`); `..` refused. A
+  suffix-less source that is an existing file under the project stays a music file (as before
+  this step). `music.source_kind(cue, root)` returns `score` for them.
+- **Conflict** (decision: a clear problem, not a silent precedence): a built-in bed's name with a
+  project piece of the same name (`music: calm` and `assets/music/calm.yaml`) is reported by
+  `music.config_problems` (so by `vidgen validate` and the render's pre-check): rename the piece,
+  or write the path form (which plays the piece). Unknown names: did-you-mean across the beds and
+  the pieces, both listed.
+- **Rendering at the join**: `music.Source` (the mix's place for beds, files and composed music)
+  renders the piece with `studio.render_music_score` (−28 LUFS, the music level) through
+  `music_pieces.piece_audio`, cached as `build/music/piece-<key>.npy` (float32, exact; written
+  atomically) and per process (4 renders). Key: SHA-256 of `{score: sha256 of the file's bytes,
+  renderer: PIECE_RENDER_VERSION (1; bump when the studio's sound changes), vidgen: __version__,
+  rate}`. Out-of-range notes are logged as warnings. Measured with the `momentum` template as a
+  piece under a 60 s video: the first join 4.6 s, a cached one 2.3 s (the mix itself).
+- **Loop or one pass**: a `loop: true` piece under a looping cue is seamless like a bed (`start`
+  wraps); with the cue's `loop: false` it plays once from `start` (wrapped). A `loop: false`
+  piece (with its ending) always plays once — `start` must be inside it — and the cue's rules
+  apply (silence after it; the fade-out ends at the cue's end).
+- **Reporting**: `timings.json` / `render --json` `mix.music[].kind` `score`, `source` the name;
+  `vidgen validate` prints `music: my_theme, a project piece (score file, rendered at the join)`
+  and its JSON `music[].kind` / `plays` `score`.
+- **Validation**: `config_problems` reads every played piece (`load_music_score`, no render) and
+  adds each problem as `music.source: assets/music/x.yaml: <where>: <what>`; `piece_warnings`
+  (a `vidgen validate` warning) reads the pieces the video does not play.
+- **list-music**: entries with origin `score` (`music_pieces.piece_entry`): name, path, title,
+  description (the score's `title` / `description`), key, tempo, time, bars, chords (in order,
+  without repeats), loop, `loop_seconds` or `duration`, sections, loudness −28, and `problems`
+  (the file's `where: what` lines, the rest `null`). The score is read, not rendered (fast).
+- **Lint** (`lint/music_rule.py`, rule `music_check`, last in `LINT_RULES`, scope `scene`,
+  default warning): for each cue playing a piece, on the cue's first scene, the findings of
+  `check.check_music_score` (no demo, no picture) whose topic is in `topics` (default `voice
+  range`, `highs`, `bass`, `steadiness`, `peaks`, `loop seam`: what matters under a voice; `key`,
+  `sections`, `tempo` can be added): `fix` at the rule's severity, `note` as info, with the first
+  two suggested changes. The report is cached as `build/music/piece-<key>-check.json`
+  (`music_pieces.piece_check`): the `momentum` template 4.4 s the first time, nothing after.
+- **MCP** (`mcp_server.py`): `music_template` (`bed`, `out` default `assets/music/<bed>.yaml`,
+  `force`; no bed lists them), `music_patches`, `music_render` (`score`, `out` default
+  `build/mcp/music/<score>.mp3`), `music_check` (`source`, `compare`, `narration`, `out` default
+  `build/mcp/music`; returns the spectrogram as a picture); render and check are heavy (one at a
+  time).
+- **Guide**: the "Making music" recipe in the audio topic (template → one change at a time →
+  check and compare → spectrogram → room for the voice → `music: my_theme` → a human chooses),
+  `momentum` still the first suggestion.
+- `music_pieces.py` and `studio/` are in `render.fingerprint.NOT_RENDER_INPUTS` (they change no
+  scene's picture). No new `vidgen.api` names (the pieces are used through the config).
+- **Compatibility** (checked): mixes of `gradient-descent` and `iso-web-page` (beds),
+  `host-explainer` (composed) and a project with a music file and `momentum` are byte-identical
+  to Step 187's (`<scratchpad>/s188/mixcompare.py` with HEAD's `src` and this step's); the 14
+  beds' fingerprints pass.
+- **Not done**: no per-scene `music: {mood}`-like changes for pieces (a scene's `volume` and
+  `false` work); a piece cannot follow the video's timings (composed music does); the lint check
+  runs on the whole piece, not on the part the video plays.

@@ -1462,12 +1462,18 @@ def is_bed(source: str) -> bool:
     return source in BUILTIN_BEDS
 
 
-def source_kind(cue: MusicCue) -> str:
-    """``composed`` (``compose:``), ``bed`` (a built-in bed) or ``file``."""
+def source_kind(cue: MusicCue, root: Path | None = None) -> str:
+    """``composed`` (``compose:``), ``bed`` (a built-in bed), ``score`` (a project piece: a score
+    file, :mod:`vidgen.music_pieces`) or ``file``. ``root``: the project's folder (a name
+    without a suffix that is a file there stays a file)."""
+    from vidgen.music_pieces import is_score_source
+
     if cue.compose is not None:
         return "composed"
     assert cue.source is not None
-    return "bed" if is_bed(cue.source) else "file"
+    if is_bed(cue.source):
+        return "bed"
+    return "score" if is_score_source(cue.source, root) else "file"
 
 
 def cue_scene_range(cue: MusicCue, scene_ids: Sequence[str]) -> tuple[int, int]:
@@ -1523,7 +1529,7 @@ class Source:
     score composed for the cue's span (:mod:`vidgen.musicfit`), played once from its start."""
 
     def __init__(self, cue: MusicCue, root: Path, soundfont: str | None = None, cache_dir: Path | None = None, fitted: Score | None = None) -> None:
-        kind = source_kind(cue)
+        kind = source_kind(cue, root)
         bed = cue.source if kind == "bed" else fallback_bed(cue)
         #: What plays, as the mix summary names it: its kind and its source.
         self.kind, self.label = kind, cue.label
@@ -1542,6 +1548,9 @@ class Source:
             return
         if kind == "composed":
             self._composed(cue, root, soundfont, cache_dir, fitted)
+            return
+        if kind == "score":
+            self._piece(cue, root, cache_dir)
             return
         assert cue.source is not None
         path = root / cue.source
@@ -1590,6 +1599,29 @@ class Source:
             self.data = self.head = audio[first:]
         self.length = len(self.data)
 
+    def _piece(self, cue: MusicCue, root: Path, cache_dir: Path | None) -> None:
+        """A project piece (a score file, DESIGN.md §93.10), rendered (cached in ``cache_dir``):
+        a ``loop: true`` piece under a looping cue repeats seamlessly from ``start`` (wrapping
+        round, as a bed); otherwise it plays once from ``start`` (a loop piece's ``start`` wraps,
+        a one-shot's may not pass its end) and the cue's fade-out applies at its end."""
+        from vidgen.music_pieces import piece_audio, piece_path
+
+        assert cue.source is not None
+        audio, score = piece_audio(piece_path(cue.source, root), cache_dir)
+        first = round(cue.start * RATE)
+        if score.loop:
+            first %= len(audio)
+        elif first >= len(audio):
+            raise VidgenError(f"music: start {cue.start:g} s is past the end of {cue.source} ({len(audio) / RATE:.1f} s with its ending)")
+        self.offset = 0
+        self.loop = score.loop and cue.loop
+        self.seamless = self.loop
+        if self.loop:
+            self.data, self.offset = audio, first
+        else:
+            self.data = self.head = audio[first:]
+        self.length = len(self.data)
+
     @property
     def ends_at(self) -> int | None:
         """Sample (from the cue's start) where the source runs out; ``None`` when it loops."""
@@ -1629,15 +1661,32 @@ def _crossfaded_loop(body: np.ndarray, fade: int) -> np.ndarray:
 
 
 def config_problems(config: VideoConfig, root: Path | None) -> list[tuple[str, str]]:
-    """``(location, message)`` problems of the ``music:`` cues: a source that is neither a bed nor
-    a file under the project (``compose:`` settings are checked when the config loads)."""
+    """``(location, message)`` problems of the ``music:`` cues: a source that is neither a bed, a
+    project piece nor a file under the project, a bed's name that is also a project piece, and
+    the problems of the pieces' score files (``where: what``; ``compose:`` settings are checked
+    when the config loads)."""
+    from vidgen.music_pieces import bed_conflict, piece_path, score_problems
+
     found: list[tuple[str, str]] = []
     cues = config.music_cues
     for k, cue in enumerate(cues):
         where = "music" if not isinstance(config.music, list) else f"music[{k}]"
-        if source_kind(cue) != "file" or root is None:
+        kind = source_kind(cue, root)
+        if root is None or kind in ("composed", "bed"):
+            conflict = None if root is None or kind != "bed" else bed_conflict(cue.source or "", root)
+            if conflict is not None:
+                found.append((f"{where}.source", conflict))
             continue
         assert cue.source is not None
+        if kind == "score":
+            try:
+                path = piece_path(cue.source, root)
+            except VidgenError as exc:
+                found.append((f"{where}.source", str(exc)))
+                continue
+            rel = path.relative_to(root).as_posix() if path.is_relative_to(root) else str(path)
+            found.extend((f"{where}.source", f"{rel}: {problem}") for problem in score_problems(path))
+            continue
         path = root / cue.source
         if not path.is_file():
             close = difflib.get_close_matches(cue.source.lower(), list(BUILTIN_BEDS), n=1, cutoff=0.7)
@@ -1670,16 +1719,17 @@ def music_warnings(config: VideoConfig) -> list[str]:
     return []
 
 
-def music_summary(config: VideoConfig) -> list[dict[str, Any]]:
+def music_summary(config: VideoConfig, root: Path | None = None) -> list[dict[str, Any]]:
     """What each music cue plays, for ``vidgen validate``: ``{source, kind, plays, fitted, from,
-    to, scenes}`` (``plays``: ``composed``, ``bed <name>`` or ``file``; ``fitted``: composed for
-    the video's timings; ``scenes``: scene id → the compose settings it changes)."""
+    to, scenes}`` (``plays``: ``composed``, ``bed <name>``, ``score`` or ``file``; ``fitted``:
+    composed for the video's timings; ``scenes``: scene id → the compose settings it changes).
+    ``root``: the project's folder (tells a project piece from a file without a suffix)."""
     from vidgen.musicfit import is_fitted
 
     out = []
     ids = [s.id for s in config.scenes]
     for cue in config.music_cues:
-        kind = source_kind(cue)
+        kind = source_kind(cue, root)
         bed = cue.source if kind == "bed" else fallback_bed(cue)
         first, last = cue_scene_range(cue, ids)
         changes = {}
@@ -1712,6 +1762,8 @@ def music_summary_line(entry: dict[str, Any]) -> str:
         text += ", composed for the video" if entry["fitted"] else (", looped" if entry["plays"] == "composed" else "")
         if entry["plays"] != "composed":
             text += f" -> {entry['plays']} (no music extra)"
+    elif entry["kind"] == "score":
+        text += ", a project piece (score file, rendered at the join)"
     span = f" ({entry['from'] or 'start'} to {entry['to'] or 'end'})" if entry["from"] or entry["to"] else ""
     scenes = "; ".join(f"{sid}: {', '.join(keys)}" for sid, keys in entry["scenes"].items())
     return text + span + (f"; scenes {scenes}" if scenes else "")
@@ -1730,10 +1782,12 @@ def _decibels(value: float) -> float | None:
 
 
 def music_entries(root: Path | None, preview_dir: Path | None = None) -> list[dict[str, Any]]:
-    """The beds and the project's ``assets/music`` files described for ``vidgen list-music``:
-    ``{name, origin, description, use, tempo, key, chords, loop_seconds, duration, channels,
-    loudness, preview}`` (beds: their loop; files: as decoded; ``preview``: a WAV of the bed
-    written to ``preview_dir``, else ``None``)."""
+    """The beds, the project's pieces (score files, origin ``score``,
+    :func:`vidgen.music_pieces.piece_entry`: also ``path``, ``title``, ``time``, ``bars``,
+    ``loop``, ``sections``, ``problems``) and the project's ``assets/music`` files described for
+    ``vidgen list-music``: ``{name, origin, description, use, tempo, key, chords, loop_seconds,
+    duration, channels, loudness, preview}`` (beds: their loop; files: as decoded; ``preview``: a
+    WAV of the bed written to ``preview_dir``, else ``None``)."""
     entries: list[dict[str, Any]] = []
     for bed in BUILTIN_BEDS.values():
         data = bed_loop(bed.name)
@@ -1757,6 +1811,10 @@ def music_entries(root: Path | None, preview_dir: Path | None = None) -> list[di
                 "preview": preview,
             }
         )
+    if root is not None:
+        from vidgen.music_pieces import piece_entry, project_pieces
+
+        entries.extend(piece_entry(name, path, root) for name, path in project_pieces(root).items())
     for path in project_music(root):
         assert root is not None
         rel = path.relative_to(root).as_posix()

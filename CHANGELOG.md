@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–187)
+## 0.3.0 (Steps 61–188)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -371,6 +371,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   the build builds — with advice that names the tracks and score keys to change, a spectrogram
   with the sections marked and a 20 s demo under a narration sample with vidgen's ducking;
   `--compare` puts two versions side by side (187).
+- Project pieces: a score file in `assets/music/my_theme.yaml` plays like a bed with `music:
+  my_theme` (or `source: assets/music/my_theme.yaml`), rendered when the video is joined and
+  cached; `vidgen list-music`, `vidgen validate` and `vidgen lint` (rule `music_check`) include
+  them; MCP tools `music_template`, `music_patches`, `music_render`, `music_check`; the author
+  guide's "Making music" recipe (188).
 
 ### Narration and pictures
 

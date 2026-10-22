@@ -66,7 +66,9 @@ agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provide
 free: no confirm_cost); then `render`. `schema` with \
 scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_icons` / \
 `list_themes` / `list_sfx` / `list_music` what exists, `character_sheet` a cartoon character's \
-poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats. Every \
+poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats; \
+`music_template` / `music_patches` / `music_render` / `music_check` write and check original music as score files \
+(assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe). Every \
 tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
 
 Progress = Callable[[str], Awaitable[None]]
@@ -545,6 +547,60 @@ def build_server(root: Path) -> Any:
         options = {"mood": mood, "seed": seed, "bars": bars, "key": key, "tempo": tempo, "out": str(where(out, "out"))}
         positionals = ["preview", *([str(where(project))] if project else [])]
         return answer(await call(ctx, args_of(["music"], positionals, options), heavy=True))
+
+    @tool("Score files (music written in YAML: key, tempo, sections, chords, tracks of step patterns; a project piece "
+          "is assets/music/NAME.yaml, played with music: NAME): write a built-in bed as an editable template "
+          "(bed=NAME; no bed: list the 14 templates with key, tempo, bars, sections). Start from momentum for "
+          "documentaries; then change one thing at a time and run music_check after each change.", writes)
+    async def music_template(
+        ctx: Context,
+        bed: Annotated[str | None, Field(description="the built-in bed to write as a score file (none: list them)")] = None,
+        out: Annotated[str | None, Field(description="the .yaml to write, relative to the root (default assets/music/<bed>.yaml)")] = None,
+        force: Annotated[bool, Field(description="overwrite the file if it exists")] = False,
+    ) -> Any:
+        if bed is None:
+            return answer(await call(ctx, args_of(["music"], ["template"])))
+        target = out or (Path("assets") / "music" / f"{bed}.yaml").as_posix()
+        return answer(await call(ctx, args_of(["music"], ["template", bed], {"out": str(where(target, "out")), "force": force})))
+
+    @tool("Every score-file instrument (drums, noises, basses, plucks and keys, leads, pads) with its settings, ranges "
+          "and level, and every track effect (sweeps, ducking, gate, echo, reverb, width, volume curves), in words.", read_only)
+    async def music_patches(ctx: Context) -> Any:
+        return answer(await call(ctx, args_of(["music"], ["patches"])))
+
+    @tool("Play a score file (YAML) to an MP3 or WAV for a human to listen to; returns its sections (start, bars, key, "
+          "chords), tracks, length, loudness and warnings. Problems in the file come back all at once as "
+          "'where: what' with did-you-mean.", writes)
+    async def music_render(
+        ctx: Context,
+        score: Annotated[str, Field(description="the score file, relative to the root (e.g. assets/music/my_theme.yaml)")],
+        out: Annotated[str | None, Field(description="the .mp3 or .wav to write, relative to the root (default build/mcp/music/<score>.mp3)")] = None,
+    ) -> Any:
+        path = where(score, "score")
+        target = where(out, "out") if out else policy.root / WORK_DIR / "music" / f"{path.stem}.mp3"
+        return answer(await call(ctx, args_of(["music"], ["render", str(path)], {"out": str(target)}), heavy=True))
+
+    @tool("How a piece will sit under narration, for agents that cannot listen: a score file or an audio file checked "
+          "for loudness and steadiness, peaks, tempo, loop seam, voice-range level (300 Hz-3 kHz), bass, harsh highs, "
+          "key and whether its build / lift rise; a verdict, advice naming the score keys to change, a demo MP3 under a "
+          "narration sample, and the spectrogram (returned as a picture: section marks, the voice band, a red lane "
+          "where the voice range is too loud). compare=OTHER puts two versions side by side. A human makes the final choice.", writes)
+    async def music_check(
+        ctx: Context,
+        source: Annotated[str, Field(description="a score file (.yaml) or an audio file, relative to the root")],
+        compare: Annotated[str | None, Field(description="a second score or audio file to compare with (e.g. the version before a change)")] = None,
+        narration: Annotated[str | None, Field(description="an audio file of a voice for the demo (default: a 20 s sample shipped with vidgen)")] = None,
+        out: Annotated[str, Field(description="folder for <name>-check.png and <name>-demo.mp3, relative to the root")] = str(WORK_DIR / "music"),
+        images: Images = DEFAULT_IMAGES,
+    ) -> Any:
+        options = {
+            "compare": str(where(compare, "compare")) if compare else None,
+            "narration": str(where(narration, "narration")) if narration else None,
+            "out": str(where(out, "out")),
+        }
+        doc = await call(ctx, args_of(["music"], ["check", str(where(source, "source"))], options), heavy=True)
+        picture = (doc.get("files") or {}).get("spectrogram")
+        return answer(doc, [Path(picture)] if picture and images else [])
 
     # ----- outputs ---------------------------------------------------------------------------------
 

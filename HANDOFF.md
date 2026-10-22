@@ -17317,3 +17317,84 @@ Known gaps / for later steps
   window leakage and mean little; the advice only uses them when that band is flagged.
 - A riser at its default level adds almost nothing measurable (`tidewater`'s build passes on its
   pad brightening, not its riser); the build advice suggests a ramp or sweep first.
+
+## Step 188 — Using score files in videos
+
+What the owner agreed (Phase S plan): project pieces in `assets/music/*.yaml` used like beds,
+rendered at the join with caching; list-music / validate / lint include them; MCP tools for
+render, check, template, patches; the author-guide recipe.
+
+What was built (DESIGN §93.10)
+- `src/vidgen/music_pieces.py` (new): `is_score_source`, `project_pieces`, `piece_path`
+  (did-you-mean across beds and pieces), `bed_conflict`, `score_problems`, `played_pieces`,
+  `piece_warnings`, `piece_key`, `piece_audio` (render cached as `build/music/piece-<key>.npy`
+  and per process), `piece_entry` (list-music), `piece_check` (the check report cached as
+  `piece-<key>-check.json`), `PIECE_RENDER_VERSION`.
+- `music.py`: `source_kind(cue, root=None)` returns `score`; `Source._piece` (loop piece seamless
+  like a bed, `start` wraps; a one-pass piece or `loop: false` cue plays once); `config_problems`
+  adds unknown pieces, a piece's `where: what` problems and the bed / piece name conflict;
+  `music_summary(config, root=None)`, `music_summary_line` (`, a project piece (score file,
+  rendered at the join)`); `music_entries` lists the pieces (origin `score`). Bed code untouched.
+- `cli.py`: list-music prints the pieces (key, tempo, time, bars, length, path, title /
+  description, chords, sections, or their problems); validate passes the root and warns about
+  unused broken pieces (`piece_warnings`).
+- Lint: rule `music_check` (`lint/music_rule.py`, `config.MusicCheckRule` with `topics`,
+  `SceneContext.music_issues`, filled in `run._timing_findings`), last in `LINT_RULES`; fixes at
+  the rule's severity (warning), notes as info, on the cue's first scene.
+- MCP: `music_template`, `music_patches`, `music_render`, `music_check` (spectrogram returned as a
+  picture); the server instructions name them.
+- `render/fingerprint.py`: `music_pieces.py` and `studio/` in `NOT_RENDER_INPUTS` (they change
+  no picture; `studio/` had been counted as a render input since Step 184).
+- Docs: guide "Making music" recipe (audio topic), the MCP tool list and the `music_check`
+  troubleshooting row, copied to `AGENTS.md`; CONFIG "Project pieces: score files in a video",
+  the `source` row, checks, `timings.json` kind, list-music / validate / render JSON tables, the
+  lint rule row and config, MCP tools; README (music bullet, MCP list, list-music row); DESIGN
+  §93.1, §93.10, layout; CHANGELOG (0.3.0 now Steps 61–188); tasklist.
+
+Decisions
+- Names: a suffix-less source that is not a bed is a piece name (`assets/music/<name>.yaml` /
+  `.yml`, sub-folders with `/`), unless it is an existing file under the project (stays a file,
+  as before); `.yaml` / `.yml` sources are the path form.
+- A bed's name that is also a project piece is a problem (validate and render), not a silent
+  precedence: rename the piece or use the path form.
+- A `loop: false` piece always plays once (the cue's `loop` cannot repeat an ending); a loop piece
+  with the cue's `loop: false` plays one pass.
+- Cache key = the file's bytes + `PIECE_RENDER_VERSION` + `vidgen.__version__` + rate (the
+  version alone does not move between steps, so bump `PIECE_RENDER_VERSION` when the studio's
+  sound changes); cached as `.npy` (exact float32, so a cached join equals a fresh one).
+- The lint rule reports only what matters under a voice by default (voice range, highs, bass,
+  steadiness, peaks, loop seam); key / sections / tempo are opt-in topics (musical choices).
+
+Compatibility
+- Mixes byte-identical before / after (`<scratchpad>/s188/mixcompare.py`, run with HEAD's `src`
+  from `git archive` and with this step's): `gradient-descent` and `iso-web-page` (`bright`),
+  `host-explainer` (composed `curious`), and a project with a music file then `momentum`.
+- `test_music.py` (all 71, the 14 beds' fingerprints included) passed; `music.py`'s bed code not
+  edited.
+- `test_narration_rule.py` / `test_iso_diagram_actions.py` asserted `LINT_RULES` positions: updated
+  for the new last rule.
+
+Measured (`<scratchpad>/s188/timing.py`, the `momentum` template as a piece under a 60 s video):
+first join 4.6 s, cached join 2.3 s (the mix itself); the lint check 4.4 s the first time, 0 after.
+
+Tests (one at a time, under `capped3g`): `tests/test_music_pieces.py` 7 passed (5 s: names and
+kinds, sub-folders and `.yml`, validate problems with file + where, the bed conflict, unused
+broken pieces as warnings, validate's summary line, list-music JSON and text with a broken piece,
+a tiny project joined with its piece and cached (the cache equals a fresh render, an edit makes a
+new one), loop / one-pass sources, the lint rule and its cache); `tests/test_mcp.py` 18 passed
+(69 s, with the new `test_server_music_tools`); `test_music.py` 71 passed (270 s);
+`test_guide.py` + `test_docs.py` 116; `test_lint.py` + `test_narration_rule.py` 35;
+`test_iso_diagram_actions.py` 21; `test_json_output.py` + `test_api.py` + `test_config.py` 54;
+`test_composer.py` + `test_score.py` + `test_cli.py` 99; `test_studio.py` + `test_schema.py` 116.
+Not run: the full suite.
+
+Files to look at / listen to: `<scratchpad>/s188/out/timing/mix.wav` (60 s, the momentum template
+as a project piece, mixed at −16 LUFS); `<scratchpad>/s188/out/proj/` (the tiny smoke project).
+
+Known gaps / for later steps
+- A piece cannot follow the video's timings (composed music does) and scenes cannot change its
+  sections; a scene's `volume` / `false` work.
+- The lint check covers the whole piece, not the part the video plays; it says nothing about the
+  narration actually in the video (`vidgen music check --narration` does, by hand).
+- `vidgen music render` / `check` take file paths, not piece names.
+- Step 189: the example project and craft notes; the Listen page row.

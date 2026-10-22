@@ -57,6 +57,11 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   in words (instruments, key, tempo, chords, mood), `--render-dir` writes them out for a person,
   `vidgen music preview` composes a mood to WAV and MIDI; over MCP: `list_music`, `list_sfx`,
   `music_preview`.
+- **Music an agent can write**: a piece as a YAML score file (key, tempo, sections, chords, step
+  patterns, effects) in `assets/music/NAME.yaml`, played like a bed with `music: NAME`; start from
+  a bed's template (`vidgen music template momentum`), check it in words and a spectrogram
+  (`vidgen music check`); over MCP: `music_template`, `music_patches`, `music_render`,
+  `music_check` ([reference](docs/CONFIG.md#project-pieces-score-files-in-a-video)).
 - **Royalty-free**: everything is generated, so it is free to use in your videos, also
   commercially, with no attribution.
 
@@ -343,7 +348,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 `vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `music_preview`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast` — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).
@@ -558,7 +563,7 @@ narration.
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen list-pronunciation [PROJECT] [--json]` | vidgen's built-in pronunciation entries per TTS engine and language (Kokoro American English: `epoch`, `README`, `JSON`, ...); in a project, the lists its voices use, what the project replaces or removes and the beats each entry changes |
-| `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
+| `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood), the project's pieces (score files in `assets/music`: key, tempo, length, title, description) and its `assets/music` audio files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
 | `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to (needs the `music` extra) |
 | `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with vidgen's own instruments and writes a WAV or MP3 ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |

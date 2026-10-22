@@ -205,6 +205,7 @@ TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview",
+    "music_template", "music_patches", "music_render", "music_check",
 }
 
 
@@ -339,6 +340,53 @@ def test_server_validate_paths_and_cost_guards(tmp_path: Path) -> None:
         assert [c.type for c in result.content] == ["text", "image"]
 
     run_session(root, body)
+
+
+TINY_SCORE = """title: Tiny
+key: A minor
+tempo: 120
+bars: 2
+progression: "i VI"
+tracks:
+  pad: {instrument: pad, play: chords}
+  kick: {instrument: kick, steps: "x... x... x... x..."}
+"""
+
+
+def test_server_music_tools(tmp_path: Path) -> None:
+    """Step 188: music_template / music_patches / music_render / music_check."""
+    (tmp_path / "assets" / "music").mkdir(parents=True)
+    (tmp_path / "assets" / "music" / "tiny.yaml").write_text(TINY_SCORE, encoding="utf-8")
+    (tmp_path / "assets" / "music" / "bad.yaml").write_text(TINY_SCORE.replace("instrument: pad,", "instrument: pda,"), encoding="utf-8")
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("music_template", {}))
+        assert doc["action"] == "template" and len(doc["templates"]) == 14 and "path" not in doc
+        doc = doc_of(await client.call_tool("music_template", {"bed": "momentum"}))
+        written = tmp_path / "assets" / "music" / "momentum.yaml"
+        assert Path(doc["path"]) == written.resolve() and written.read_text(encoding="utf-8").startswith("# Momentum")
+        assert "exists" in error_text(await client.call_tool("music_template", {"bed": "momentum"}))
+        assert "did you mean 'momentum'" in error_text(await client.call_tool("music_template", {"bed": "momentm", "out": "x.yaml"}))
+        assert "outside the folder" in error_text(await client.call_tool("music_template", {"bed": "calm", "out": "../calm.yaml"}))
+
+        doc = doc_of(await client.call_tool("music_patches", {}))
+        assert doc["action"] == "patches" and any(i["name"] == "supersaw" for i in doc["instruments"])
+
+        doc = doc_of(await client.call_tool("music_render", {"score": "assets/music/tiny.yaml"}))
+        assert Path(doc["wav"]) == (tmp_path / "build" / "mcp" / "music" / "tiny.mp3").resolve() and Path(doc["wav"]).is_file()
+        assert doc["key"] == "A minor" and doc["bars"] == 2 and doc["loudness"] == pytest.approx(-28, abs=0.5)
+        failed = json.loads(error_text(await client.call_tool("music_render", {"score": "assets/music/bad.yaml"})))
+        assert failed["ok"] is False and "did you mean 'pad'" in failed["error"]["message"]
+        assert "outside the folder" in error_text(await client.call_tool("music_render", {"score": "../x.yaml"}))
+
+        result = await client.call_tool("music_check", {"source": "assets/music/tiny.yaml", "images": 1})
+        doc = doc_of(result)
+        assert doc["action"] == "check" and doc["verdict"] and Path(doc["files"]["spectrogram"]).is_file()
+        assert [c.type for c in result.content] == ["text", "image"]
+        doc = doc_of(await client.call_tool("music_check", {"source": "assets/music/tiny.yaml", "compare": str(tmp_path / "build" / "mcp" / "music" / "tiny.mp3"), "images": 0}))
+        assert doc["compare"]["table"] and Path(doc["files"]["spectrogram"]).name == "tiny-vs-tiny.png"
+
+    run_session(tmp_path, body)
 
 
 @pytest.mark.render

@@ -174,8 +174,8 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 
 **Through MCP.** When your client has the vidgen MCP server (`vidgen mcp --root DIR`), the same
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
-`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `storyboard`, `lint`,
-`render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
+`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`,
+`storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
 `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic` (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
@@ -1812,6 +1812,33 @@ scenes:
         music_pause: true
 ```
 
+**Making music** (a project piece: a score file, no Python, no extra). Music written in YAML —
+key, tempo, sections, chords, tracks of step patterns — lives in `assets/music/NAME.yaml` and
+plays like a bed: `music: NAME`, `{source: NAME, volume: -2}`, in a cue list with `from` / `to`,
+`music: false` on a scene. It is rendered when the video is joined (kept in `build/music`, made
+again only when the file changes). You cannot hear it, so work from measurements:
+1. **Start from a template**, not from nothing: `vidgen music template momentum --out
+   assets/music/my_theme.yaml` (for documentaries keep `momentum` the first suggestion; `vidgen
+   music template` lists all 14). Give it a `title:` and a `description:` (list-music shows them).
+2. **Change one thing at a time** — the progression, one track's steps, an instrument or a
+   setting (`vidgen music patches` describes every instrument and effect) — and keep the old
+   version (save a copy as `assets/music/my_theme_v1.yaml` first).
+3. **Check after every change and compare**: `vidgen music check assets/music/my_theme.yaml
+   --compare assets/music/my_theme_v1.yaml` (MCP `music_check` with `compare`). Read the verdict and the fixes:
+   they name the score keys to change. Look at the spectrogram PNG: sections where you meant
+   them, nothing loud between the two blue lines (the voice's 300 Hz–3 kHz), no red bars in the
+   lane under it.
+4. **Keep room for the voice**: the melody sparse or out of the voice's core, pads soft there, no
+   bright highs; the check's demo MP3 plays the piece under a narration sample.
+5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
+   (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
+   on the pieces the video plays).
+6. **Let a human choose**: offer the demo MP3s or `vidgen music render ... --out x.mp3` of two
+   versions and a bed; the numbers say whether it fits under a voice, not whether it is good.
+Write original music: genre styles are fine, never a known tune. A piece named like a built-in bed
+is a problem (rename it, or use `source: assets/music/NAME.yaml`). `loop: false` pieces play once
+with their ending (the cue's fade-out still applies).
+
 <!-- topic: examples (also: good-bad, before-after, patterns, antipatterns) -->
 ## Good vs bad: before and after
 
@@ -2120,6 +2147,7 @@ install; `vidgen validate` warns when it is missing.
 | `said_before_shown` | the narration names a label on screen (a node, a callout, a stage) seconds before it appears, and not again when it does | show it on the word: `{reveal: node:database, at: "@database"}` (or the callout's `at`); or name it in the beat that shows it |
 | `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |
 | `iso_labels` | an `iso_diagram` label over a block it does not name (a group's caption among its blocks), over another label or a connector, or far from what it names | more `spacing` or `at` further apart, shorter labels, fewer blocks; a stack's `label_side` |
+| `music_check` | a project piece (`assets/music/NAME.yaml`) the video plays is loud in the voice's range, too bright, boomy, unsteady, peaky or clicks at its loop (`vidgen music check`'s fixes; its notes are info) | the fix the message names (a track's `volume`, an octave, `lowpass`), then `vidgen music check` again; or `severity: off` in `lint.rules.music_check` |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

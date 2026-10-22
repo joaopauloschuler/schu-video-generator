@@ -169,7 +169,7 @@ def test_unsaid_reveal() -> None:
 
 
 def test_config_names_and_defaults() -> None:
-    assert LINT_RULES[-3:-1] == ("said_before_shown", "unsaid_reveal") and list(RULES)[-3:-1] == ["said_before_shown", "unsaid_reveal"]
+    assert LINT_RULES[-4:-2] == ("said_before_shown", "unsaid_reveal") and list(RULES)[-4:-2] == ["said_before_shown", "unsaid_reveal"]
     assert RULES["said_before_shown"].default == "warning" and RULES["unsaid_reveal"].default == "info"
     rules = parse_config(minimal_config(lint={"rules": {"said_before_shown": {"min_lead": 2.5, "max_words": 3}, "unsaid_reveal": {"severity": "info"}}})).lint.rules
     assert rules.said_before_shown.min_lead == 2.5 and rules.unsaid_reveal.severity == "info"

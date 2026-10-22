@@ -191,6 +191,10 @@ def _timing_findings(
 
         theme = Theme.for_format(project.config.theme, project.config.format)
         ctx.term_issues = term_issues(project.config, theme, scene_id, lint.rules.concept_colors)
+    if "music_check" in names and lint.rules.music_check.severity != "off":
+        from vidgen.lint.music_rule import music_issues
+
+        ctx.music_issues = music_issues(project, scene_id, lint.rules.music_check)
     narration_rules = [n for n in ("said_before_shown", "unsaid_reveal") if n in names and getattr(lint.rules, n).severity != "off"]
     if narration_rules and layout is not None and activity["beats"]:
         from vidgen.lint.narration_rule import narration_picture
