@@ -147,10 +147,11 @@ _BED_FINGERPRINTS: dict[str, tuple[int, tuple[float, float, float]]] = {
     "horizon": (2792448, (-106.0111, -165.0023, -14.2267)),
     "beacon": (2304000, (30.9365, 7.4122, -55.1549)),
     "neon": (2383104, (31.8743, 7.2493, -75.6359)),
-    # Step 190: the two beds written as score files, as the owner heard them (byte-identical to
-    # the approved renders of tests/data/studio/tidewater.yaml and skyline_lift.yaml)
+    # Step 190: the two beds written as score files, as the owner heard them: tidewater as
+    # tests/data/studio/tidewater.yaml renders; skyline equal, sample for sample, to Step 185's
+    # render of skyline_lift.yaml (its pad's sub_width: 1 keeps Step 185's wide sub)
     "tidewater": (2559744, (58.7584, 39.5267, 30.2177)),
-    "skyline": (2880000, (-24.169, 7.5638, -18.4739)),
+    "skyline": (2880000, (-33.1638, 44.471, -30.1705)),
 }
 
 
@@ -239,8 +240,11 @@ def test_score_beds_facts() -> None:
         assert f"At {lift} the lift" in bed.description
         lift_start = next(score.section_start(s) for s in score.sections if s.name == "lift") / RATE
         assert f"{lift_start:.1f}".rstrip("0").rstrip(".") + " s" == lift
-        # the same piece as the demo the owner listened to (only comments added)
+        # the same piece as the demo the owner listened to (comments added; skyline's pad keeps
+        # the wide sub of the Step 185 render the owner approved)
         shipped = yaml.safe_load((TEMPLATE_DIR / f"{name}.yaml").read_text(encoding="utf-8"))
+        if name == "skyline":
+            assert shipped["tracks"]["pad"]["settings"].pop("sub_width") == 1
         assert shipped == yaml.safe_load((Path(__file__).parent / "data" / "studio" / f"{demo}.yaml").read_text(encoding="utf-8"))
 
 

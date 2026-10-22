@@ -1488,7 +1488,7 @@ BUILTIN_BEDS: dict[str, Bed] = {
             "rolling bass, a clap on 2 and 4, sixteenth hi-hats and a soft lead melody (G4 to C6) "
             "in a hall with echoes. Bars 29-32 the filter closes and the saws fade back to the "
             "intro. 32 bars, a chord every two bars (3.75 s). Rolled off above ~4.5 kHz; bass-heavy "
-            "(64% of its power under 150 Hz: lighter on phone speakers); bright, energetic, euphoric.",
+            "(63% of its power under 150 Hz: lighter on phone speakers); bright, energetic, euphoric.",
             "energetic reveals, product launches, montages, a build to a big moment, upbeat intros and endings",
             score=True,
         ),

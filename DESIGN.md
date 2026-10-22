@@ -13207,7 +13207,8 @@ sentence (`vidgen music patches`):
   from the piece's start, the beds' `air_cycles`; 0 steady, the default, renders as before); the
   `sub` plays the chord's written `bass` note when there is one (else the bass in octave 2, as
   before) and is the same wave on both sides (centred, as the beds' `_pads`; it was a different
-  phase per side, which cancels to −3 dB in mono: a fix, see §93.8).
+  phase per side, which cancels to −3 dB in mono: a fix, see §93.8). Step 190: `sub_width`
+  (default 0) set to 1 brings the per-side sub back exactly, for the `skyline` bed (§93.12).
 
 Notes play `held + ring` seconds (`ring` 0 for instruments without it). Each instrument has a
 `level` (its normal hit's amplitude before the piece is set to −28 LUFS), so the default balance
@@ -13636,24 +13637,36 @@ text, the Listen page.
   not on disk — the other beds are not either (`ascent` takes 17 s), and `bed_loop` has no
   project folder. The YAML data are the test demos' (`tests/data/studio/tidewater.yaml`,
   `skyline_lift.yaml`; only comments added: the template header, what each part does);
-  `test_score_beds_facts` checks the parsed data are equal and that the `Bed` facts (tempo,
+  `test_score_beds_facts` checks the parsed data are equal (but skyline's `sub_width`, below) and that the `Bed` facts (tempo,
   key, length, chords in loop order, the lift time in the description) match the score.
 - **Name clash**: the Step 188 rule covers them (`bed_conflict` reads `BUILTIN_BEDS`): a
   project's `assets/music/tidewater.yaml` with `music: tidewater` is a problem — rename the piece
   or use the path form. CONFIG says to save a template copy under a name of one's own.
-- **The skyline render** (decision: keep it): Step 186 centred a pad's sub (one wave on both
-  sides), so `skyline_lift` renders differently from Step 185 (63 → 64 % under 150 Hz, true
-  peak −14.8 → −14.9 dBTP, L/R correlation 0.37 → 0.41). The MP3 the owner was given
-  (`<scratchpad>/s185/out/skyline_lift.mp3`, written at 15:13 during Step 186) turned out to be
-  byte-identical to the current code's render through `listen.write_mp3`; the Step 185 render
-  (`skyline_lift-cli.mp3`, 14:16) is the other one. So the built-in bed is exactly what was
-  approved, with no per-score setting needed (`<scratchpad>/s190/refnow.py`, `ref185.py`).
-  `tidewater` has no pad sub and is byte-identical since Step 184.
+- **The skyline render: Step 185's, sample for sample** (decision): Step 186 centred a pad's sub
+  (one wave on both sides), so `skyline_lift` renders differently from Step 185 (63 → 64 %
+  under 150 Hz, true peak −14.8 → −14.9 dBTP, L/R correlation 0.37 → 0.41). The owner approved
+  the Step 185 render (a +12 dB copy made at 14:17, after Step 185's commit; the
+  `s185/out/skyline_lift*.mp3` files dated 15:13 were rewritten during Step 186 with the centred
+  sub). So the pads gained a setting, `sub_width` (0–1, default 0: the centred sub, every
+  existing score unchanged; 1: the right side's sub drawn from its own channel's generator after
+  the airy layer, exactly as Step 185 did; between, a straight cross-fade of the two), and the
+  bed's score sets `sub_width: 1` on its pad (the only difference from
+  `tests/data/studio/skyline_lift.yaml`, which keeps the centred sub). Verified: the bed loop
+  and its template's render equal, sample for sample, Step 185's render of
+  `skyline_lift.yaml` (`src/` of `0d1b854f` extracted with `git archive` into the scratchpad;
+  `<scratchpad>/s190/ref185.py`, `verify185.py`); its MP3 through `listen.write_mp3` is
+  byte-identical to Step 185's `skyline_lift-cli.mp3`; against the approved MP3
+  (`/mnt/user-data/outputs/skyline_lift_step185.mp3`), the bed +12 dB encoded the same way and
+  decoded matches its decode at 43.0 dB SNR, equal peaks, no lag (both MP3s are 25.6 dB from
+  the exact samples, the MP3's own error; the centred-sub render is 13.8 dB from it). Every
+  other score renders byte-identically before and after the setting (SHA-256 of the 15 other
+  templates, the piece, the two test demos and the five cookbook sketches;
+  `<scratchpad>/s190/hashes.py`). `tidewater` has no pad sub and is byte-identical since Step 184.
 - **Facts**: `tidewater` E minor, 108 BPM (beat 26664 samples), 24 bars = 53.328 s, intro /
   build / lift (26.664 s) / outro; 39 % of the power under 150 Hz, the 300 Hz–3 kHz band 0.2 dB
   under `pulse`'s, true peak −14.6 dBTP, L/R correlation 0.37. `skyline` D minor, 128 BPM, 32
-  bars = 60 s, intro / build (15 s) / lift (30 s) / outro (52.5 s); 64 % under 150 Hz, 3.0 dB
-  under `pulse` in the voice's range, −14.9 dBTP, 0.41. Both `vidgen music check` "fine under
+  bars = 60 s, intro / build (15 s) / lift (30 s) / outro (52.5 s); 63 % under 150 Hz, 2.9 dB
+  under `pulse` in the voice's range, −14.8 dBTP, 0.37. Both `vidgen music check` "fine under
   narration" as scores and as audio. The descriptions give the parts, ranges (read from the
   renderer's voicing: bass C2–G3, arpeggio C4–G5, bell D5–E6; bass C2–B♭2, FM arpeggio C4–B♭5,
   lead G4–C6), sections and times in words.

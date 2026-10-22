@@ -241,8 +241,9 @@ def _pad_layers(
 ) -> tuple[np.ndarray, np.ndarray | None]:
     """``(PAD_TABLE, 2)`` waves: the pad's periodic wave of ``notes`` (an airy layer an octave up
     and a sub on ``sub_note`` when its settings ask), independent phases per channel (wide) but
-    the same sub in both (centred, as the beds'); and, when the pad swells (``swell`` > 0), the
-    airy layer on its own (``None`` otherwise)."""
+    the same sub in both (centred, as the beds') — with ``sub_width`` > 0 the right side's sub is
+    cross-faded towards its own phases (1: each side its own, Step 185's sound); and, when the pad
+    swells (``swell`` > 0), the airy layer on its own (``None`` otherwise)."""
     tone = settings["tone"]
     out = np.zeros((PAD_TABLE, 2))
     airy = np.zeros((PAD_TABLE, 2)) if settings["swell"] > 0 else None
@@ -258,9 +259,15 @@ def _pad_layers(
             else:
                 airy[:, c] = layer
         if settings["sub"] > 0 and sub_note is not None:
+            width = settings["sub_width"]
             if sub is None:
                 sub = settings["sub"] * _pad_wave([sub_note], PAD_TABLE, rng, (1.0, 0.15), 4.0, tone)
-            out[:, c] += sub
+                out[:, c] += sub
+            elif width == 0:
+                out[:, c] += sub
+            else:
+                own = settings["sub"] * _pad_wave([sub_note], PAD_TABLE, rng, (1.0, 0.15), 4.0, tone)
+                out[:, c] += own if width == 1 else (1 - width) * sub + width * own
     return out, airy
 
 

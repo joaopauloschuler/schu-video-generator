@@ -2945,7 +2945,7 @@ about 36 % for `pulse`. On headphones and full-range speakers that is a warm, so
 the voice; on phone and laptop speakers, which play little below 150 Hz, they sound lighter and
 quieter than the other beds (their kick and bass partly vanish). They also leave the voice's
 range (300 Hz–3 kHz) 2–4.7 dB emptier than `pulse` does (`beacon` the most). Of the score-file
-beds, `skyline` is bass-heavy too (64 %, 3 dB emptier in the voice's range than `pulse`);
+beds, `skyline` is bass-heavy too (63 %, 3 dB emptier in the voice's range than `pulse`);
 `tidewater` is lighter (39 %, about as full in the voice's range as `pulse`).
 
 | key | default | |
@@ -3228,7 +3228,7 @@ does):
 | basses | `synth_bass` (decay, tone, ring), `analog_bass` (decay, tone, closed, snap, detune, ring), `sub` (decay, tone, second, third, ring) |
 | plucks and keys | `pluck` (+ bright), `fm_pluck` (+ index), `square_pluck`, `pizzicato`, `music_box`, `bell`, `piano` (decay, tone, ring: seconds a note sounds on after its held steps), `woodblock` (tone) |
 | leads | `soft_lead` (attack, vibrato, tone, ring: it sustains while held) |
-| pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
+| pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), sub_width (0 centred, the default; 1 its own phases on each side: wider, thinner in mono, as scores rendered before Step 186 and the `skyline` bed), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):

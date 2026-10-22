@@ -17506,20 +17506,42 @@ What was built (DESIGN §93.12)
   still first; "lists all 16") + AGENTS.md, COOKBOOK, COOKBOOK-MUSIC, CHANGELOG (0.3.0 now Steps
   61–190), DESIGN §93.1 / §93.12, tasklist (Phase S now 184–191).
 
-Decision on skyline's sound (the owner's reference MP3)
+Skyline's sound: the approved Step 185 render, sample for sample (second commit of the step)
 - Step 186 centred a pad's sub, so `skyline_lift` renders differently from Step 185's code (63 →
-  64 % under 150 Hz, true peak −14.8 → −14.9, L/R correlation 0.37 → 0.41). Checked which one the
-  owner heard: `<scratchpad>/s185/out/skyline_lift.mp3` (15:13, written during Step 186) is
-  byte-identical to the current code's render written by `listen.write_mp3`
-  (`<scratchpad>/s190/refnow.py`); Step 185's render (`<scratchpad>/s190/ref185.py`, its source
-  extracted by `extract.py`) matches `skyline_lift-cli.mp3` (14:16) instead. So the built-in
-  `skyline` already is exactly the approved render — no per-pad setting added, the renderer
-  unchanged. (If the owner meant the 14:16 file, a pad setting giving each side its own sub phase
-  would reproduce it exactly; not done.)
+  64 % under 150 Hz, true peak −14.8 → −14.9, L/R correlation 0.37 → 0.41). The first commit
+  (c4c74449) kept the current render, believing `<scratchpad>/s185/out/skyline_lift.mp3` (15:13,
+  byte-identical to it) was what the owner heard. The coordinator checked the timestamps: the
+  owner's copy was made at 14:17:17 from `skyline_lift-plus12dB.mp3` as it then was — the real
+  Step 185 render (the 15:13 files were rewritten during Step 186); the approved copy is
+  `/mnt/user-data/outputs/skyline_lift_step185.mp3` (+12 dB).
+- So: a new pad setting `sub_width` (0–1, default 0 = the centred sub, nothing changes; 1 = the
+  right side's sub drawn from its own channel's generator after the airy layer, exactly as Step
+  185 did; between, a cross-fade; `studio/instruments.py`, `render._pad_layers`; CONFIG's pad
+  row, DESIGN §93.4 / §93.12), and `sub_width: 1` on the pad of `studio/beds/skyline.yaml` (the
+  only data difference from `tests/data/studio/skyline_lift.yaml`, which keeps the default).
+- Verified (`<scratchpad>/s190/verify185.py`, `verify_cal.py`): the bed loop and the template's
+  render equal Step 185's render of `skyline_lift.yaml` sample for sample (Step 185's `src/`
+  extracted from `0d1b854f` with `git archive` into `<scratchpad>/s190/src185` — no worktree —
+  rendered by `ref185.py` to `sky185.npy`); written by `listen.write_mp3` the bed's MP3 is
+  byte-identical to Step 185's `skyline_lift-cli.mp3`. Against the approved MP3: the bed +12 dB
+  through `write_mp3`, decoded, matches its decode at 43.0 dB SNR at zero lag (±1 sample: 26.5
+  dB), equal peaks (0.686); both MP3s are 25.6 dB SNR from the exact samples (gain 0.950, the
+  MP3's own error: they agree with each other far better than with the source); the
+  centred-sub render is only 13.8 dB from the approved MP3. The bytes differ (the copy was
+  probably raised by 12 dB another way before encoding), the sound is the same within MP3
+  tolerance.
+- No other score changed: SHA-256 of the render of the 15 other templates, the
+  `time_of_flight` piece, both test demos and the five cookbook genre sketches, with the first
+  commit's code and with this one, all equal (`<scratchpad>/s190/hashes.py`, 23 scores).
+- Fingerprint of `skyline` updated (−33.1638, 44.471, −30.1705); the Listen page's skyline clip
+  and spectrogram regenerated (only those two files changed; a second run identical; 6.33 MB);
+  description, guide and CONFIG now say 63 % under 150 Hz. New test
+  `test_pad_sub_width_gives_each_side_its_own_sub`.
 
 Compatibility
 - The 14 beds' fingerprints unchanged and passing; `music.py`'s bed code untouched (only the new
-  generator and entries); no studio change (Step 184–189 scores render as before). The Step 188
+  generator and entries); the studio change is the opt-in `sub_width` (every existing score
+  renders byte-identically, above). The Step 188
   name-clash rule covers the two (tested: `assets/music/tidewater.yaml` + `music: tidewater` is a
   problem; the path form plays the piece).
 - Determinism: `bed_loop` vs a fresh `generate` equal (the parametrised bed test), two processes
@@ -17527,8 +17549,9 @@ Compatibility
 
 Measured (`<scratchpad>/s190/measure.py`, `checkbeds.py`): tidewater −28.00 LUFS, true peak −14.6
 dBTP, 39 % under 150 Hz, voice band 0.2 dB under `pulse`'s, highs −48.6 dB, correlation 0.37;
-skyline −28.00, −14.9 dBTP, 64 %, 3.0 dB under `pulse`, −42.9 dB, 0.41. `vidgen music check`:
-both "fine under narration" as scores and as audio.
+skyline (Step 185's render) −28.00, −14.8 dBTP, 63 %, 2.9 dB under `pulse`, −42.8 dB, 0.37.
+`vidgen music check`: both "fine under narration" as scores and as audio (skyline checked
+again with the wide sub).
 
 Tests (one at a time, under `capped3g`): `test_music.py` 78 passed (343 s; new: fingerprints of
 the two, `test_score_beds_facts`, did-you-mean for `tidewatr` / `skylin`, schema names all 16,
@@ -17540,11 +17563,15 @@ equal to the beds; the 14 closeness tests now skip the score beds, whose `bed_me
 unchanged); `test_mcp.py` 19 (126 s, full; new: `test_server_list_music_has_every_bed`, slow, and
 the tidewater template over MCP); `test_studio.py` + `test_schema.py` + `test_music_check.py` +
 `test_cli.py` 141. Not run: the full suite; the 14 closeness tests (`slow`, unchanged beds and
-templates).
+templates). After `sub_width`: `test_music.py` 78 (344 s); `test_listen.py` + `test_studio.py`
+62; `test_music_templates.py -m "not slow"` 8 (with the new sub_width test) and
+`-k score_bed_is_its_template` (skyline's template equals the bed); `test_guide.py` +
+`test_docs.py` 117.
 
 Files to listen to / look at: `<scratchpad>/s190/tidewater.mp3` and `<scratchpad>/s190/skyline.mp3`
 (the built-in beds' full loops at −28 LUFS, as rendered by the bed code path; skyline's is
-byte-identical to `s185/out/skyline_lift.mp3`); `docs/music/media/bed-tidewater.{mp3,png}`,
+byte-identical to Step 185's `s185/out/skyline_lift-cli.mp3`),
+`<scratchpad>/s190/skyline-builtin-plus12dB.mp3` (+12 dB, to compare with the approved copy); `docs/music/media/bed-tidewater.{mp3,png}`,
 `bed-skyline.{mp3,png}` (the Listen page clips, +12 dB).
 
 Known gaps / for Step 191

@@ -35,7 +35,7 @@ tracks:
   pad:
     instrument: pad
     play: chords
-    settings: {tone: 900, air: 0.2, sub: 0.5}
+    settings: {tone: 900, air: 0.2, sub: 0.5, sub_width: 1}   # sub_width 1: a wide sub, as the approved render (0 centres it)
     volume: -5
     duck: {to: kick, depth: 0.4}
   kick:

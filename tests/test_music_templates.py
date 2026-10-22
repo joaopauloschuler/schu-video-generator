@@ -83,6 +83,21 @@ def test_pad_swell_moves_the_airy_layer_and_the_sub_is_centred() -> None:
     assert swelling[1] > 3 * swelling[0] and swelling[2] > 3 * swelling[3]  # silent at the start and end, full in the middle
 
 
+def test_pad_sub_width_gives_each_side_its_own_sub() -> None:
+    """Step 190: ``sub_width: 1`` brings back the Step 185 sub (its own phases on each side; the
+    built-in ``skyline`` keeps it); 0, the default, is the centred sub; between, a cross-fade."""
+    def low_correlation(width: float) -> float:
+        data = {"key": "A minor", "tempo": 120, "bars": 2, "progression": "i",
+                "tracks": {"pad": {"instrument": "pad", "play": "chords", "settings": {"tone": 300, "air": 0, "sub": 1.0, "sub_width": width}}}}
+        x = render_music_score(parse_music_score(data)).astype(np.float64)
+        f = np.fft.rfftfreq(len(x), 1 / RATE)
+        low = np.fft.irfft(np.fft.rfft(x, axis=0) * ((f > 80) & (f < 160))[:, None], len(x), axis=0)
+        return float(np.corrcoef(low[:, 0], low[:, 1])[0, 1])
+
+    centred, half, wide = low_correlation(0), low_correlation(0.5), low_correlation(1)
+    assert centred > 0.999 and wide < 0.9 and wide < half < centred
+
+
 def test_pad_sub_plays_the_written_bass() -> None:
     def sub_peak(bass: str) -> float:
         data = {"key": "A minor", "tempo": 120, "bars": 2, "progression": [{"chord": "Am", "notes": ["A3", "C4", "E4"], "bass": bass}],

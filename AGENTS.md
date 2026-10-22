@@ -1766,7 +1766,7 @@ Two beds written in the score format are alternatives too (still suggest `moment
 `tidewater` (steady and hopeful, 108 BPM, a bell melody in its lift 26.7 s in: nature, the sea,
 travel, progress stories, calm walkthroughs; 39 % under 150 Hz, lighter than the documentary
 beds) and `skyline` (a pumping supersaw build and lift, 128 BPM, the lift 30 s in: energetic
-reveals, launches, montages; 64 % under 150 Hz). `vidgen music template tidewater` gives the very
+reveals, launches, montages; 63 % under 150 Hz). `vidgen music template tidewater` gives the very
 score a bed plays, to start a piece of your own from.
 
 ```yaml

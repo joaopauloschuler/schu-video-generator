@@ -228,6 +228,8 @@ def _pad_settings(tone: float, air: float, detune: float, fade: float) -> dict[s
         swell=(0.0, 0.0, 512.0, "bars over which the airy layer swells from silence to `air` and back, counted from the piece's start "
                "(0: steady; a whole number of swells per piece keeps a loop seamless)"),
         sub=(0.0, 0.0, 1.0, "level of a sine-like sub bass on the chord's bass note (the written bass, else octave 2; 0 off)"),
+        sub_width=(0.0, 0.0, 1.0, "0: the sub is the same wave on both sides (centred, solid in mono); 1: its own phases on each side "
+                   "(wider, thinner in mono; how scores rendered before Step 186)"),
         attack=(0.08, 0.005, 2.0, "seconds to fade in a note played in steps (play: chords cross-fades instead, see fade)"),
         release=(0.4, 0.02, 3.0, "seconds to fade out after a note played in steps"),
         detune=(detune, 2.0, 80.0, "spread of each harmonic in cents: more is wider, more chorused"),
