@@ -3138,6 +3138,73 @@ and the SoundFont are there (the page never downloads it), the first 15 s of the
 vidgen, FFmpeg (with libmp3lame), Pillow and symusic give byte-identical files. Takes about two
 minutes (the beds take most of it). JSON: see [below](#vidgen-music---json).
 
+### Score files (`vidgen music render`)
+
+A **score file** is a piece of music written in YAML and played by vidgen's own synthesizer (the
+instruments of the built-in beds): key, tempo, time signature, named sections, a chord
+progression and tracks of step patterns. `vidgen music render SCORE.yaml [--out FILE.wav]
+[--json]` writes it as a WAV (default `<score>.wav` in the current folder; 48 kHz stereo, −28
+LUFS like a bed, a seamless loop unless `loop: false`) and prints the sections (start, bars,
+key, chords), the tracks, the loudness and the true peak. The same file and `seed` always give
+the same samples. Every mistake is reported at once with where it is and the nearest known name.
+(Using score files in a video comes in a later step; DESIGN §93.)
+
+```yaml
+title: Tidewater
+key: E minor                  # A minor, Am, F# major, Bb, D dorian
+tempo: 108                    # quarter notes per minute
+time: 4/4                     # default
+seed: 3                       # default 1
+loop: true                    # false: one pass with the notes' tails
+progression: "i VI III VII"   # Roman numerals of the key or chord names (Am F C G, Dm(add9), G7sus4, C/E)
+chord_bars: 2                 # bars per chord (default 1)
+sections:                     # or bars: 16
+  - {name: intro, bars: 4}
+  - {name: build, bars: 8}
+  - {name: lift, bars: 8, progression: "VI VII i i"}
+  - {name: outro, bars: 4}
+tracks:
+  pad: {instrument: pad, play: chords, settings: {tone: 1800}, sections: {lift: {settings: {tone: 3200}}}}
+  kick: {instrument: kick, steps: "x... x... x... x...", rest: [intro]}
+  hat: {instrument: hat, steps: "..x. ..x. ..x. ..x.", only: [build, lift]}
+  bass: {instrument: synth_bass, steps: "1..1 ..1. 1..1 ..8.", rest: [intro]}
+  arp: {instrument: pluck, steps: "1358 5315 1358 5318", accent: "3+3+2", volume: -4, pan: -0.2}
+  melody: {instrument: bell, only: [lift], steps: "E5 - - - G5 - . . | C6 - - - B5 - . ."}
+  riser: {instrument: riser, only: [build], steps: ". | . | . | . | . | . | x | -"}
+```
+
+| key | default | |
+|---|---|---|
+| `key`, `tempo` | required | a note and a mode (major, minor, dorian, phrygian, lydian, mixolydian; `Am` is A minor); 40–240 quarter notes per minute |
+| `time` | `4/4` | `n/2`, `n/4`, `n/8` |
+| `bars` / `sections` | one of them | `sections`: `{name, bars, key, progression, chord_bars}` (the last three override the score's for that section) |
+| `progression` | none | needed when a pitched track plays; a string or list of chords, repeated from each section's start; an item may be `{chord: Dm(add9), notes: [D3, A3, D4, F4], bass: D2}` (the voicing and bass written out) |
+| `chord_bars` | 1 | bars per chord, a whole number of beats |
+| `seed`, `loop` | 1, `true` | |
+| `master` | `{lowpass: 4500, highpass: 32}` | the filter over the whole piece |
+| `tracks` | required | by name: see below |
+
+A track: `instrument` (below); `steps` (a string, or a list of strings played in turn) or
+`play: chords` (pads only: each chord held and cross-faded); `accent` (`"3+3+2"`: accents where
+each group starts, repeated over the bar); `octave` (where the chord's root sits, C4 middle C;
+default per instrument); `transpose` (semitones); `volume` (dB); `pan` (−1 to 1); `settings`
+(the instrument's); `rest: [sections]` or `only: [sections]`; `sections: {lift: {steps, accent,
+octave, transpose, volume, pan, settings}}` changes for one section.
+
+Steps: `|` separates bars and each bar is split into as many equal steps as it has symbols
+(16 = sixteenths in 4/4); the pattern repeats from each section's start. `x` a hit (a pitched
+instrument plays the chord's bass note), `X` accented, `o` soft, `.` rest, `-` holds the note
+before it (also across `|`: `"x | - | - | -"` lasts four bars), `*` the whole chord, `1`–`9`
+chord degrees (1 root, 3 third, 5 fifth, 7 seventh, 8 octave; `'` after it an octave up, `,`
+down), notes like `E5`, `F#3`, `Bb4`; `!` / `?` after a hit accents / softens it. Spaces only help
+reading.
+
+Instruments (settings in brackets): drums `kick` (high, low, decay, click), `clap` (tone), `hat`
+and `open_hat` (decay, tone), `riser` (low, high; swells over its held steps), `boom` (low,
+decay); notes `synth_bass`, `sub`, `pluck` (+ bright), `fm_pluck` (+ index), `bell`, `piano`
+(decay, tone, ring: seconds a note sounds on after its held steps); pads `pad` and `supersaw`
+(tone, air, sub, attack, release).
+
 ### Loudness of the final mix (`audio`)
 
 ```yaml
@@ -9713,6 +9780,20 @@ difference between two palette colours).
 | `piece_seconds`, `seconds` | float | one pass of the piece; the WAV (with the 3 s tail) |
 | `parts` | list | `{role, instrument, volume}` |
 | `phrases` | list | `{bars: [first, last], phrase, chords}` (`phrase` e.g. `A question`; `chords` per bar, a list of chord names) |
+| `loudness`, `true_peak` | float | of the WAV: LUFS integrated, dBTP |
+
+`vidgen music render --json` ([Score files](#score-files-vidgen-music-render)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `render` |
+| `wav` | str | the file written |
+| `title`, `key`, `time` | str | |
+| `tempo`, `seconds`, `wav_seconds` | float | quarter notes per minute; one pass; the WAV (a one-shot adds its tail) |
+| `bars`, `seed` | int | |
+| `loop` | bool | |
+| `sections` | list | `{name, start, bars, key, chords}` (`start` in seconds, `chords` names) |
+| `tracks` | list | `{name, instrument, plays, sections}` (`plays`: `steps` or `chords`) |
 | `loudness`, `true_peak` | float | of the WAV: LUFS integrated, dBTP |
 
 `vidgen music page --json` ([Listen page](#listen-page-vidgen-music-page)):

@@ -54,6 +54,12 @@ src/vidgen/
   guide.py                # `vidgen guide`: the author guide for AI agents, its topics (§59)
   gallery.py              # `vidgen gallery`: samples from the guide, work project, stills / GIFs, pages (§60)
   listen.py               # `vidgen music page`: the Listen page, MP3 clips and spectrograms of the beds and sounds (§92)
+  studio/                 # score files: music written in YAML, rendered with the beds' synthesizer; no video code (§93, Phase S)
+    theory.py             #   notes, keys and modes, Roman numerals and chord names, degrees, voicings
+    patterns.py           #   step patterns ("x... x...", "1 3 5 8", "E5 - - .") and 3+3+2 accents
+    instruments.py        #   the starter instruments and their settings (the full library is Step 185)
+    score_file.py         #   reading and checking a score (MusicScore; every problem at once, did-you-mean)
+    render.py             #   render_music_score: seamless loop or one-shot, 48 kHz, -28 LUFS, deterministic
   outline.py              # Markdown outline / plain-text script -> blocks; inline Markdown removal (§61; no manim)
   prose.py                # sentences (language-aware), beats of 6-15 words, on-screen label compression (§61; no manim)
   plan.py                 # `vidgen plan`: blocks -> planned scenes (cue -> type, beats fitted to steps, TODOs) (§61; no manim)
@@ -1002,6 +1008,8 @@ without `drawing` renders the same frames as before.
 Step 153 (§86.9) adds the `PlayedAction` fields `pickups` and `unlocks` (`lands` also marks a
 level jump's touch-down) and the built-in sounds `unlock`, `coin`, `twinkle`. Compatible: a
 `PlayedAction` without them gives the same cues; a stage without a level sounds as before.
+Step 184 (§93) adds `MusicScore`, `load_music_score`, `parse_music_score` and
+`render_music_score` (score files; from `vidgen.studio`, which imports no video code).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -13019,3 +13027,173 @@ people can hear it: `docs/music/README.md`, committed with its media.
   ≤ 80 KB.
 - **Not done**: no per-clip loudness readout on the page; no clip of composed music following a
   video (mood changes, swells), only fixed moods; the page lists the moods but plays two.
+
+## 93. Music agents can write: score files (Phase S, Steps 184–190)
+
+Goal: AI agents make new music the way the Steps 179 / 181 agents made the beds, without
+editing vidgen's Python: a piece written as a YAML **score file**, an instrument library,
+templates made from the built-in beds, analysis reports in words (agents cannot listen), and
+pieces used in videos like beds. Quality without ears: templates, measurements, spectrograms,
+plain-language advice; a human makes the final choice.
+
+Term: a **score file** (YAML, this section; class `MusicScore`) is not the composer's
+`vidgen.score.Score` (§82, a note list played with a SoundFont). The code says "score file" or
+`MusicScore` for the YAML; the docs say "score file".
+
+### 93.1 The phase (plan)
+
+- **184 Score format and rendering** (this step, §93.2–93.6): the YAML, its checks, a starter
+  instrument set, `vidgen music render`.
+- **185 Instrument library**: today's building blocks as named, adjustable instruments (analog
+  bass, square pluck, gated snare, music box, pizzicato, woodblock, soft lead, pulsar tick, radio
+  static, piano, bells...) and track effects: filter sweeps along sections, side-chain ducking to
+  the kick (`_pump`), trance gate (`_gate`), echo (`_echoed`), reverb, stereo spread, volume
+  curves; `vidgen music patches` (+ `--json`) describes every instrument and setting in words.
+  The new keys go on a track (and in its `sections:` changes), next to `volume` / `pan`.
+- **186 Templates from the 14 beds**: `vidgen music template <bed> --out my_theme.yaml`, a close
+  re-creation of each bed as an editable score file (not bit-identical; the beds stay unchanged);
+  tested by measurements (tempo, key / chroma, loudness curve, spectrum balance, clean loop).
+- **187 Analysis**: `vidgen music check <score|wav>`: loudness and steadiness, true peak,
+  clipping, tempo, loop seam, voice-range share, bass weight, harsh highs, section energy (does
+  the lift lift?), a spectrogram with section marks, a demo under narration, advice, compare two.
+- **188 Using it**: `assets/music/*.yaml` used like beds (`music: my_theme`), rendered at the join
+  with caching; list-music / validate / lint; MCP tools; the author-guide recipe.
+- **189 Example and craft notes**, **190 Review** (beds and existing projects byte-identical;
+  determinism; phase tests).
+
+Compatibility: additive and opt-in. Nothing that exists plays differently; the 14 beds stay
+byte-identical (`tests/test_music.py` fingerprints).
+
+### 93.2 Where it lives
+
+`src/vidgen/studio/` (theory, patterns, instruments, score_file, render). Self-contained: it
+imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...),
+`vidgen.sfx` (`RATE`), `vidgen.loudness` and `vidgen.errors`; never manim, scenes, the project or
+the render pipeline (`tests/test_studio.py::test_studio_imports_no_video_code`), so it can become
+a package of its own. Public through `vidgen.api`: `MusicScore`, `load_music_score(path)`,
+`parse_music_score(data, origin)`, `render_music_score(score)`.
+
+### 93.3 The format
+
+Decision: one small, regular vocabulary an agent can write correctly the first time — named
+things are mappings (tracks by name), every bar of a pattern is a string of steps, chords are
+written the way musicians write them, and everything has a default. Example (the demo,
+`tests/data/studio/tidewater.yaml`, shortened):
+
+```yaml
+version: 1                    # optional
+title: Tidewater
+key: E minor                  # A minor, Am, F# major, Bb, D dorian (major, minor, dorian, phrygian, lydian, mixolydian)
+tempo: 108                    # quarter notes per minute, 40-240
+time: 4/4                     # n/2, n/4 or n/8
+seed: 3                       # pads' random phases; same score + seed = same samples
+loop: true                    # false: one pass that keeps the notes' tails (an ending)
+progression: "i VI III VII"   # Roman numerals of the key or chord names; repeated to fill each section
+chord_bars: 2                 # bars per chord (a whole number of beats: 0.5 in 4/4 is fine)
+sections:                     # or `bars: 16` for one section called main
+  - {name: intro, bars: 4}
+  - {name: build, bars: 8}
+  - {name: lift, bars: 8, progression: "VI VII i i"}   # a section may have its own progression, key, chord_bars
+  - {name: outro, bars: 4}
+tracks:
+  pad:   {instrument: pad, play: chords, settings: {tone: 1800, air: 0.3},
+          sections: {lift: {settings: {tone: 3200}, volume: 1}}}
+  kick:  {instrument: kick, steps: "x... x... x... x...", rest: [intro]}
+  hat:   {instrument: hat, steps: "..x. ..x. ..x. ..x.", only: [build, lift]}
+  bass:  {instrument: synth_bass, steps: "1..1 ..1. 1..1 ..8.", rest: [intro]}
+  arp:   {instrument: pluck, steps: "1358 5315 1358 5318", accent: "3+3+2", volume: -4, pan: -0.2}
+  melody:
+    instrument: bell
+    only: [lift]
+    steps: ["E5 - - - G5 - . . | C6 - - - B5 - . .", "A5 - - - F#5 - - . | D5 - - - . . . ."]
+  riser: {instrument: riser, only: [build], steps: ". | . | . | . | . | . | x | -"}
+```
+
+- **Top level**: `key`, `tempo`, `tracks` required; `bars` or `sections`; `progression` needed
+  when a pitched track plays (a drums-only score has none); `master: {lowpass: 4500, highpass:
+  32}` (the beds' final filter, the defaults). Allowed keys: `version title description key tempo
+  time seed loop bars sections progression chord_bars tracks master`.
+- **Sections**: `{name, bars, key?, progression?, chord_bars?}`; names lower-case. A section's
+  chords start again at its first bar (the progression repeats, the last chord cut at the end).
+- **Chords** (`theory.parse_chord`): Roman numerals — upper case major, lower case minor, then
+  `°` / `dim`, `ø`, `+` / `aug`, `7`, `maj7`, `9`, `6`, `sus2`, `sus4`, `add9`, `#11`...; `b` / `#`
+  before the numeral (`bVII`); `/3`, `/5`, `/7` or `/E` for the bass. Chord names — `Am`,
+  `Fmaj7`, `Dm(add9)`, `G7sus4`, `Cmaj7(#11)`, `C6/9`, `Bm7b5`, `A5`, `C/E`. A progression item
+  may be a mapping `{chord: Dm(add9), notes: [D3, A3, D4, E4, F4], bass: D2}` to write the voicing
+  and bass out (what templates of the beds use).
+- **Tracks** (by name): `instrument` (required); `steps` (a string or a list of strings, played
+  in turn) or `play: chords` (pads: each chord held, cross-faded 1.6 s, the same chord twice in a
+  row held on); `accent` (`"3+3+2"`: the steps where each group starts are accented, the groups
+  repeated to fill the bar; it must fit every bar); `octave` (the chord's root in that octave, C4
+  middle C; defaults per instrument: bass 2, sub 1, pluck / piano / FM pluck 4, bell 5, pads 3,
+  where a chord's lowest note sits, voice-led to the nearest inversion); `transpose` (semitones,
+  also to written notes); `volume` (dB); `pan` (−1 left .. 1 right); `settings` (the
+  instrument's, range-checked); `rest: [sections]` or `only: [sections]`; `sections: {name:
+  {steps, accent, octave, transpose, volume, pan, settings}}` changes for one section.
+- **Steps** (`patterns.parse_steps`): `|` between bars; each bar is split into as many equal steps
+  as it has symbols (16 = sixteenths in 4/4, 12 = triplet eighths, 1 = the whole bar), bars may
+  differ; the pattern repeats from each section's start. `x` hit (a pitched instrument plays the
+  chord's bass note), `X` accent (+3.5 dB), `o` soft (−6 dB), `.` rest, `-` holds the note
+  before it a step longer (also across `|`, so `"x | - | - | -"` is a four-bar note), `*` the
+  whole chord (voiced in the track's octave, or the written `notes`), `1`–`9` chord degrees (1
+  root, 3 third, 5 fifth, 7 seventh, 8 octave, 9 ninth; the chord's own tone, a sus chord's 3 is
+  its suspended tone, else the key's scale tone; `'` / `,` after it an octave up / down), notes
+  with octave (`E5`, `F#3`, `Bb4`); `!` / `?` after a hit accent / soften it. Spaces only help
+  reading.
+- **Timing**: the beat is `int(48000 · 60 / tempo)` rounded down to a multiple of 4 (as
+  `_grid` since Step 181), so sixteenths are whole samples; a bar is the beat × `n · 4 / d`; a
+  step starts at `round(k · bar / steps)`. The loop is exactly `bars × bar` samples.
+
+### 93.4 Instruments (starter set)
+
+`instruments.INSTRUMENTS`, from the beds' functions with their defaults: drums `kick` (high, low,
+decay, click), `clap` (tone), `hat`, `open_hat` (decay, tone), `riser` (low, high; swells over
+its held length), `boom` (low, decay); notes `synth_bass`, `sub`, `pluck`, `fm_pluck`, `bell`,
+`piano` (decay, tone, ring — seconds a note sounds on after its held steps — and `bright` /
+`index`); pads `pad` (warm PADsynth, `air`, `sub`, `tone`, `attack`, `release`) and `supersaw`.
+Each has a `level` (its normal hit's amplitude before the piece is set to −28 LUFS), so the
+default balance is the beds' (kick 0.75, hat 0.06, bass 0.45, pad 0.3...). A drum given a
+degree, a note, `*`, `octave` or `transpose` is a problem ("hat has no pitch"); `play: chords`
+is for pads only (others play `*` in steps).
+
+### 93.5 Checks
+
+`score_file.parse_music_score` reads everything and raises one `VidgenError` listing every
+problem as `where: what` (`tracks.bass.steps: unknown symbol 'a' at 6 ... (notes start with a
+capital letter: A4, not a4)`), with did-you-mean for keys, instruments, settings, sections and
+modes, and the allowed values. After a bad key / tempo / time the rest is still checked with
+stand-ins. Limits: tempo 40–240, 512 bars, 600 s.
+
+### 93.6 Rendering
+
+`render.render_music_score`: each track's events (from its steps per section, accents applied,
+holds extending the note) are synthesised one by one with its instrument (`_partials`-based notes
+of `held + ring` seconds; drums as they are; pads from `_pad_wave` tables of 2^18 samples with
+independent phases per channel, seeded `crc32("studio:<seed>:<track>:...")`, so a track's sound does not
+depend on the other tracks; only the final level does), panned with the beds' `(1 − pan, 1 + pan)`, and summed.
+A loop is summed circularly and filtered by `_tone_filter` over the whole loop, so the seam is
+an ordinary point; a one-shot is summed linearly with 8 s for the tails, filtered with a second
+of silence after it, cut 50 ms after the last sample above −80 dB of its peak (not before its last
+bar) with 5 ms / 50 ms fades. Then `_finish`: −28 LUFS integrated, float32, read-only. Measured on
+the demo (24 bars, 53.3 s, 2.6 s to render): −28.00 LUFS, true peak −14.6 dBTP, the seam's sample
+step 0.07–0.12 of the 99.9th-percentile step, the 50 ms RMS across it within 1.2 dB; sections
+−29.4 (intro), −28.3 (build), −27.0 (lift), −28.4 LUFS (outro); 39 % of the power under 150 Hz,
+little above 5 kHz (−48.6 dB); the spectrogram shows the kick and bass entering after the intro,
+the riser in the last two bars of the build, the pad opening and the bell line in the lift.
+
+- **How the beds fit** (Step 186): `momentum`'s ostinato is `steps: "8 5' 8' 3' ..."`-style
+  degrees on the sixteenth grid with `accent: "3+3+2"`; its off-beat bass `".1.1.1.1"` in
+  eighths; kick / clap / hats as drum strings; `ascent`'s groove / build / lift / settle are
+  sections, its build's clap roll a `sections: {build: {steps: ...}}` change, the riser and boom
+  held / single steps, its dropped kick a `.` in the build's last bar; the supersaw's opening
+  filter and the pumping pads need Step 185's sweeps and ducking. `neon`'s octave bass is
+  `"1 8 1 8 ..."`, its square-pluck figure turned around in the second bar a two-bar pattern, the
+  gated snare and analog bass Step 185 instruments. Exact voicings and absolute bass notes
+  are written with `{chord, notes, bass}`.
+- **Command** (decision: under `vidgen music`, beside `preview` and `page`): `vidgen music
+  render SCORE.yaml [--out FILE.wav] [--json]` writes the WAV (default `<score>.wav` in the
+  current folder) and prints the facts, the sections (start, bars, key, chords), the tracks and
+  the measured loudness and true peak; `--json` adds them to the document (`action: render`).
+- **Not done here** (later steps): effects, the full instrument library, templates, analysis,
+  project pieces in videos, MCP tools; no humanising; a hold cannot run past its section's end;
+  notes outside 20 Hz–12 kHz are skipped silently.

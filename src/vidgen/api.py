@@ -98,6 +98,7 @@ from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, Theme
 from vidgen.pronunciation import Pronunciation, Spoken  # noqa: E402
 from vidgen.config import SfxParams, StingCue, StingSetting  # noqa: E402
 from vidgen.sfx import SfxEvent, SoundLibrary, sound_library, synthesize  # noqa: E402
+from vidgen.studio import MusicScore, load_music_score, parse_music_score, render_music_score  # noqa: E402
 from vidgen.speech import WordTime, beat_word_times, estimate_word_times, map_word_times, speech_bounds, spoken_words, syllables  # noqa: E402
 from vidgen.word_anchors import WordAnchor, is_word_anchor, locate_word_anchor, parse_word_anchor  # noqa: E402
 from vidgen.geometry_marks import GeometryMark, angle_between, angle_mark, brace_mark, dimension_mark, segment_normal  # noqa: E402
@@ -784,6 +785,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "SoundLibrary",
     "sound_library",
     "synthesize",
+    "MusicScore",
+    "load_music_score",
+    "parse_music_score",
+    "render_music_score",
     "CALLOUT_KINDS",
     "Callout",
     "CalloutArea",

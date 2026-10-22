@@ -706,6 +706,26 @@ def music_preview_document(
     )
 
 
+def music_render_document(
+    outline: Mapping[str, Any], wav: Path, seconds: float, lufs: float, true_peak: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen music render --json`` document: the WAV written and what the score holds
+    (``outline`` from :func:`vidgen.studio.score_outline`)."""
+    import math
+
+    return envelope(
+        "music",
+        True,
+        warnings,
+        action="render",
+        wav=_path(wav),
+        **dict(outline),
+        wav_seconds=round(seconds, 3),
+        loudness=round(lufs, 2) if math.isfinite(lufs) else None,
+        true_peak=round(true_peak, 2) if math.isfinite(true_peak) else None,
+    )
+
+
 def listen_page_document(result: Any, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The ``vidgen music page --json`` document (``result`` a ``vidgen.listen.ListenResult``):
     the page, its clips and spectrograms, their size, and whether composed clips were made."""

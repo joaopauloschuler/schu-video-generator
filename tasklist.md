@@ -1022,6 +1022,47 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] `vidgen music page` (`listen.py`, DESIGN §92) writes `docs/music/README.md`: a 15 s MP3 (128 kbps) and a spectrogram PNG of every bed (lift beds from 6 s before the lift), six clips that play all 36 sound effects, one of the six ambience beds, two composed moods (`curious`, `playful`); deterministic (three runs byte-identical); 5.5 MB committed
 - [x] CONFIG (the command, its JSON, links from music and sound effects), CHANGELOG, DESIGN, HANDOFF; `tests/test_listen.py`
 
+## Phase S — Music agents can write
+
+Goal: give AI agents tools to create music the way the Steps 179 / 181 agents did, without
+editing vidgen's Python: a YAML score format, an instrument library, templates from the built-in
+beds, analysis reports (agents cannot listen), and using the pieces in videos. Built inside
+vidgen as a self-contained module (`src/vidgen/studio/`, no video / scene / render imports) so it
+can become its own package. Additive and opt-in: the 14 beds and every existing project's audio
+stay byte-identical. Quality without ears: templates, measurements, spectrograms, plain-language
+advice; a human makes the final choice (DESIGN §93).
+
+### Step 184 — Score format and rendering
+- [x] Phase S plan here and DESIGN §93 (the phase, the format, the decisions; "score file" vs the composer's `vidgen.score.Score`)
+- [x] YAML score file: key (major, minor and four modes), tempo, time signature, `bars` or named sections (own key / progression / chord_bars), progression in Roman numerals or chord names (or `{chord, notes, bass}` voicings), tracks by name: drum step strings, chord degrees, notes, `*` chords, holds across bars, `accent: "3+3+2"`, `play: chords` pads, octave / transpose / volume / pan / settings, `rest` / `only`, per-section changes (`studio/theory.py`, `patterns.py`, `score_file.py`)
+- [x] Starter instruments from the beds' building blocks: kick, clap, hat, open_hat, riser, boom, synth_bass, sub, pluck, fm_pluck, bell, piano, pad, supersaw (`studio/instruments.py`)
+- [x] Rendering: seamless loop (circular) or one-shot with its tails, 48 kHz, −28 LUFS, deterministic (`studio/render.py`); every problem reported at once with did-you-mean
+- [x] `vidgen music render SCORE.yaml [--out FILE.wav] [--json]`; `vidgen.api` exports `MusicScore`, `load_music_score`, `parse_music_score`, `render_music_score`; CONFIG, README, CHANGELOG; demo score `tests/data/studio/tidewater.yaml` rendered, measured and its spectrogram looked at; `tests/test_studio.py`
+
+### Step 185 — Instrument library (patches)
+- [ ] Today's building blocks as named, adjustable instruments: soft kick, clap, hi-hat, gated snare; synth bass, analog bass, sub; supersaw, pads, plucks, bells, piano-like, soft lead; pulsar tick, radio static, noise riser (and the cartoon / lullaby voices)
+- [ ] Track effects: filter sweeps over sections, side-chain ducking to the kick, gates, echo, reverb, panning / stereo spread, volume curves over sections
+- [ ] `vidgen music patches` (and `--json`) describes every instrument and setting in words
+
+### Step 186 — Templates from the 14 beds
+- [ ] `vidgen music template <bed> --out my_theme.yaml`: each built-in bed as an editable score file, a close re-creation (not bit-identical; the beds unchanged)
+- [ ] Tests: each template renders, loops cleanly and is close to its bed by measurements (tempo, key / chroma, loudness curve, spectrum balance)
+
+### Step 187 — Analysis
+- [ ] `vidgen music check <score|wav>`: a report in words and JSON — loudness and steadiness, true peak, clipping, tempo vs the score, loop-seam click, voice-range (300 Hz–3 kHz) share, bass weight, harsh highs, section energy (does the lift lift?)
+- [ ] Spectrogram PNG with section marks; a demo under a narration sample with default ducking; plain-language advice; compare two pieces / versions side by side
+
+### Step 188 — Using it in videos
+- [ ] Project pieces `assets/music/*.yaml` used like beds (`music: my_theme`, `{source: my_theme, volume: -2}`), rendered at the join with caching; `list-music`, `validate`, `lint` include them
+- [ ] MCP tools (render, check, template, patches); author guide recipe (start from a template, change one thing at a time, check, compare, let a human choose) + `AGENTS.md`
+
+### Step 189 — Example and craft notes
+- [ ] An example project with an agent-made piece built from a template into something new, in a short narrated video (Kokoro), with its check report
+- [ ] A "music craft" cookbook section (room for the voice, energy curves and lifts, loop design, genre recipes: documentary, trance, synthwave, cosmic, cartoon); the Listen page gains a "made with the score format" row
+
+### Step 190 — Review of Phase S
+- [ ] Critical review with fixes recorded in HANDOFF; compatibility (the 14 beds and all existing projects' audio byte-identical — fingerprint tests); determinism across runs; phase tests and related suites one at a time; `tests/test_mcp.py` fully with a long timeout
+
 ---
 
 ## Backlog (after Step 60)

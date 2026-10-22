@@ -17003,3 +17003,59 @@ Known gaps
 - The test cannot check the composed rows' text without the SoundFont; it checks the rest.
 - No clip of composed music following a video (mood changes, swells); two moods of eight.
 - GitHub opens each MP3 on its own page; there is no inline player.
+
+## Step 184 — Score files: format and rendering (Phase S starts)
+
+What the owner agreed: Phase S, "music agents can write" (Steps 184–190, plan in tasklist.md and
+DESIGN §93). This step: the YAML score format, its checks, a starter instrument set and a
+command to render a score to WAV.
+
+What was built
+- `src/vidgen/studio/` (new package, imports no video code; a test checks it):
+  `theory.py` (note names, keys in six modes, Roman numerals and chord names → `Chord`, chord
+  degrees with the key as fallback, close and voice-led voicings), `patterns.py` (step strings:
+  `x X o . - *`, degrees `1`–`9` with `'` / `,`, notes `E5`, `!` / `?`, `|` bars of any step
+  count; `accent: "3+3+2"`), `instruments.py` (14 starter instruments wrapping `vidgen.music`'s
+  functions with ranged settings and levels), `score_file.py` (`MusicScore`, `load_music_score`,
+  `parse_music_score`, `score_outline`; all problems reported at once as `where: what` with
+  did-you-mean), `render.py` (`render_music_score`: circular loop or one-shot with tails, master
+  `_tone_filter`, `_finish` to −28 LUFS).
+- `vidgen music render SCORE.yaml [--out FILE.wav] [--json]` (`cli._music_render`,
+  `jsonout.music_render_document`). Decision: under `vidgen music` beside `preview` / `page`; the
+  `music` parser's positional is now declared there (preview: project, render: score file), and
+  `--out` is a PATH (folder for preview / page, the WAV for render).
+- `vidgen.api` exports `MusicScore`, `load_music_score`, `parse_music_score`,
+  `render_music_score` (DESIGN §6.4).
+- Demo score `tests/data/studio/tidewater.yaml` (original; E minor, 108 BPM, 24 bars, intro /
+  build / lift / outro; pad, kick, hat, clap, syncopated bass, 3+3+2 pluck arpeggio, bell melody
+  in the lift, riser, boom).
+- Docs: DESIGN §93 (+ layout lines, §6.4), CONFIG "Score files" + JSON table, README commands
+  row, CHANGELOG (0.3.0 now Steps 61–184), tasklist Phase S. The guide and `AGENTS.md` are
+  unchanged (score files cannot be used in a video until Step 188, which adds the recipe).
+
+Demo measurements (`<scratchpad>/s184/demo.py`; render 2.6 s, twice identical): 53.328 s,
+−28.00 LUFS, true peak −14.6 dBTP; seam step 0.07 / 0.12 of the 99.9th-percentile step (L / R),
+50 ms RMS across the seam −1.2 dB; sections intro −29.4, build −28.3, lift −27.0, outro −28.4
+LUFS; 39 % of the power under 150 Hz, 300 Hz–3 kHz 29 %, above 5 kHz −48.6 dB, L/R correlation
+0.37. Spectrogram looked at (`<scratchpad>/s184/out/look-a.png`, `look-b.png`, section lines):
+no kick or bass in the intro, kick / bass / hats from the build, the riser in the build's last
+two bars, the pad brighter and the bell line in the lift, hats gone in the outro.
+
+Tests (one at a time, under `capped`): `tests/test_studio.py` 29 passed (15 s with
+`test_api.py`'s 10: theory, patterns, every problem with suggestions, 13 single problems,
+explicit voicings and section keys, a loop exact / −28 LUFS / deterministic / seamless, sections
+resting, seed, one-shot tail, the demo's lift and seam, every instrument, no video imports, the
+command with `--json`, text and an error); `test_docs.py` + `test_listen.py` 72 passed;
+`test_composer.py` + `test_cli.py -k "music or help or parser"` 4 passed; `test_json_output.py`
++ `test_guide.py` 75 passed; `test_music.py -k "approved or every_bed_has or facts"` 17 passed
+(the 14 beds' fingerprints unchanged; `music.py` was not edited). Not run: the full suite,
+`test_mcp.py` (no MCP change).
+
+Known gaps / for later steps
+- No effects yet (ducking, sweeps, gates, echo, reverb, spread): Step 185; the beds' pumping
+  pads and opening filters cannot be written yet.
+- A hold cannot continue past its section's end; notes outside 20 Hz–12 kHz are skipped
+  silently; no humanising; `vidgen music render` writes WAV only (the MP3 for listening was made
+  with `listen.write_mp3` in the scratch script, +12 dB).
+- Chord-name spelling for Roman numerals uses sharps or flats by key signature, not by degree
+  (`#iv` in a flat key prints a flat name).

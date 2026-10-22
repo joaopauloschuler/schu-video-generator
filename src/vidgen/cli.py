@@ -1378,6 +1378,8 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
 
     if args.action == "page":
         return _music_page(args)
+    if args.action == "render":
+        return _music_render(args)
     settings: dict[str, Any] = {}
     setting, root = None, Path.cwd()
     if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
@@ -1411,6 +1413,37 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
     print(f"loudness: {loudness.integrated_loudness(audio):.1f} LUFS integrated, true peak {20 * math.log10(max(peak, 1e-9)):.1f} dBTP, {len(audio) / RATE:.1f} s")
     print(f"wrote: {wav}")
     print(f"wrote: {mid}")
+    return 0
+
+
+def _music_render(args: argparse.Namespace) -> CommandResult:
+    """``vidgen music render SCORE.yaml [--out FILE.wav]``: play a score file (DESIGN.md §93)."""
+    import math
+
+    from vidgen import loudness
+    from vidgen.sfx import RATE, write_wav
+    from vidgen.studio import load_music_score, render_music_score, score_outline
+
+    if args.project == ".":
+        raise VidgenError("music render: give the score file, e.g. vidgen music render my_theme.yaml --out my_theme.wav")
+    path = Path(args.project)
+    score = load_music_score(path)
+    audio = render_music_score(score)
+    out = Path(args.out) if args.out else Path(path.stem + ".wav")
+    if out.suffix.lower() != ".wav":
+        raise VidgenError(f"music render: --out must be a .wav file, got {out}")
+    write_wav(out, audio)
+    meter = loudness.measure(len(audio), lambda a, b: audio[a:b])
+    outline = score_outline(score)
+    if args.json:
+        return jsonout.music_render_document(outline, out, len(audio) / RATE, meter.integrated, meter.true_peak)
+    print(f"{outline['title'] or path.stem}: {score.key.name}, {score.tempo:g} BPM, {outline['time']}, {score.bars} bars = {score.seconds:.2f} s "
+          f"({'a seamless loop' if score.loop else f'one pass, {len(audio) / RATE:.2f} s with its ending'})")
+    for s in outline["sections"]:
+        print(f"    {s['start']:7.2f} s  {s['name']:<10} {s['bars']:>3} bars  {s['key']:<10} {' '.join(s['chords'])}")
+    print("tracks: " + ", ".join(f"{t['name']} ({t['instrument']})" for t in outline["tracks"]))
+    print(f"loudness: {meter.integrated:.1f} LUFS integrated, true peak {meter.true_peak:.1f} dBTP")
+    print(f"wrote: {out}")
     return 0
 
 
@@ -1680,19 +1713,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--render-dir", metavar="DIR", help="also write one loop of every bed as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_music)
 
-    p = sub.add_parser("music", help="composed music: preview writes a piece in a mood as WAV and .mid (needs the music extra); page writes the Listen page")
-    p.add_argument(
-        "action", choices=["preview", "page"],
-        help="preview: compose the project's compose: music (or --mood) and write it; page: write the Listen page "
-        "(a clip and spectrogram of every bed, the sound effects, ambience and composed moods; default --out docs/music)",
+    p = sub.add_parser(
+        "music",
+        help="music tools: preview writes a composed piece in a mood as WAV and .mid (needs the music extra); render plays a score file; page writes the Listen page",
     )
-    project_arg(p)
+    p.add_argument(
+        "action", choices=["preview", "render", "page"],
+        help="preview: compose the project's compose: music (or --mood) and write it; render: play a score file (YAML) to a WAV; "
+        "page: write the Listen page (a clip and spectrogram of every bed, the sound effects, ambience and composed moods; default --out docs/music)",
+    )
+    p.add_argument("project", nargs="?", default=".", help="preview: project dir or config file (default: .); render: the score file")
     p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
     p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
     p.add_argument("--bars", type=int, metavar="N", help="length in bars, a multiple of 4 (default: the mood's)")
     p.add_argument("--key", metavar="KEY", help="e.g. E, 'Eb major', 'F# minor' (default: the mood's)")
     p.add_argument("--tempo", type=float, metavar="BPM", help="quarter notes per minute (default: the mood's)")
-    p.add_argument("--out", metavar="DIR", help="preview: folder for <mood>-seed<N>.wav and .mid (default: .); page: the page's folder (default: docs/music)")
+    p.add_argument(
+        "--out", metavar="PATH",
+        help="preview: folder for <mood>-seed<N>.wav and .mid (default: .); render: the WAV (default: <score>.wav here); page: the page's folder (default: docs/music)",
+    )
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
     p.set_defaults(func=cmd_music)
 

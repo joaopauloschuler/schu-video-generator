@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–183)
+## 0.3.0 (Steps 61–184)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -350,6 +350,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   `horizon`), clips that play all 36 sound effects and the six ambience beds, and two composed
   moods; all made by vidgen itself and byte-identical when made again. The README leads with
   the music and sound synthesis and links it (183).
+- Score files: music written in YAML (key, tempo, time signature, named sections, a progression
+  in Roman numerals or chord names, tracks of step patterns such as `"x... x..."`, `"1358 5315"`
+  with `accent: "3+3+2"` or `"E5 - - . G5"`), played by vidgen's own instruments as a seamless
+  loop or a one-shot at −28 LUFS; every mistake reported at once with did-you-mean. `vidgen music
+  render SCORE.yaml --out FILE.wav` (184).
 
 ### Narration and pictures
 

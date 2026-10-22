@@ -1,0 +1,64 @@
+# A small original demo of the score format (DESIGN.md §93): a steady, hopeful loop in E minor.
+# Render it: vidgen music render tests/data/studio/tidewater.yaml --out tidewater.wav
+version: 1
+title: Tidewater
+description: Pad, kick, syncopated bass and a 3+3+2 pluck arpeggio; a bell melody in the lift.
+key: E minor
+tempo: 108
+time: 4/4
+seed: 3
+progression: "i VI III VII"     # Em C G D, two bars each
+chord_bars: 2
+sections:
+  - {name: intro, bars: 4}
+  - {name: build, bars: 8}
+  - {name: lift, bars: 8, progression: "VI VII i i"}
+  - {name: outro, bars: 4}
+tracks:
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 1800, air: 0.3}
+    sections:
+      lift: {settings: {tone: 3200, air: 0.5}, volume: 1}
+  kick:
+    instrument: kick
+    steps: "x... x... x... x..."
+    rest: [intro]
+  hat:
+    instrument: hat
+    steps: "..x. ..x. ..x. ..x."
+    only: [build, lift]
+    sections:
+      lift: {steps: "o.x. o.x. o.x. o.xo"}
+  clap:
+    instrument: clap
+    steps: "....x.......x..."
+    only: [lift]
+  bass:
+    instrument: synth_bass
+    steps: "1..1 ..1. 1..1 ..8."
+    rest: [intro]
+  arp:
+    instrument: pluck
+    steps: "1358 5315 1358 5318"
+    accent: "3+3+2"
+    volume: -4
+    pan: -0.2
+  melody:
+    instrument: bell
+    only: [lift]
+    pan: 0.25
+    steps:
+      - "E5 - - - G5 - . . | C6 - - - B5 - . ."
+      - "A5 - - - F#5 - - . | D5 - - - . . . ."
+      - "E5 - - - G5 - B5 - | E6 - - - - - . ."
+      - ". . . . D6 - B5 - | G5 - - - - - . ."
+  riser:
+    instrument: riser
+    only: [build]
+    steps: ". | . | . | . | . | . | x | -"
+  boom:
+    instrument: boom
+    only: [lift]
+    steps: "x | . | . | . | . | . | . | ."
