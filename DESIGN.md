@@ -53,6 +53,7 @@ src/vidgen/
   describe.py             # scene-type/params descriptions for list-scenes
   guide.py                # `vidgen guide`: the author guide for AI agents, its topics (§59)
   gallery.py              # `vidgen gallery`: samples from the guide, work project, stills / GIFs, pages (§60)
+  listen.py               # `vidgen music page`: the Listen page, MP3 clips and spectrograms of the beds and sounds (§92)
   outline.py              # Markdown outline / plain-text script -> blocks; inline Markdown removal (§61; no manim)
   prose.py                # sentences (language-aware), beats of 6-15 words, on-screen label compression (§61; no manim)
   plan.py                 # `vidgen plan`: blocks -> planned scenes (cue -> type, beats fitted to steps, TODOs) (§61; no manim)
@@ -12977,3 +12978,44 @@ to six prototypes (`music-candidates2/beds2.py`, outside the repo) and approved 
   2710528 = 2^10 × 2647 samples, has a large prime factor, so its whole-loop FFTs (`_section_curve`,
   `_tone_filter`) are slow. Not changed (another length would change the bed); `vidgen
   list-music`, which makes every loop, now takes about a minute.
+
+## 92. The Listen page (Step 183)
+
+The README leads with vidgen's own music and sound synthesis (a bold headline under the tagline,
+a "Music and sound" block after the gallery strip, written as a bold-titled paragraph rather than
+a `##` heading so the README's intro that follows it stays outside it) and links a page where
+people can hear it: `docs/music/README.md`, committed with its media.
+
+- **Decision: a sibling generator, `vidgen music page`** (`vidgen/listen.py`, `make_listen_page`),
+  not part of `vidgen gallery`: the gallery renders scenes with Manim (minutes, a work project),
+  the page only synthesises audio (no Manim, no project) and belongs with the `music` command
+  next to `music preview`. Like the gallery, the page is never edited by hand; its first comment
+  says so, and `tests/test_listen.py` fails when the committed text differs from what the code
+  writes (all but the composed clips' table, which needs the SoundFont).
+- **What it writes** (`--out`, default `docs/music`): per built-in bed a 15 s clip
+  (`CLIP_SECONDS`) of its loop from `bed_clip_start` — the top, or for a bed whose best part is
+  later (`CLIP_MOMENTS`: the lift of `breakthrough`, `ascent`, `horizon` halfway through the loop,
+  `momentum`'s riser into the top, `discovery`'s pad at its brightest) 6 s before it, wrapping
+  past the loop's end as the bed does in a video — with 0.2 s / 1.5 s raised-cosine fades; six
+  `SOUND_ROWS` clips that together play every `BUILTIN_SOUNDS` entry at listed times (a test keeps
+  the set complete); one clip of the six ambience beds, 3.5 s each, cross-faded; and, when symusic
+  and the cached default SoundFont are there (`composed_available`; the page never downloads),
+  the first 15 s of `curious` and `playful` at their default settings. `--no-composed` leaves
+  them out; the page then says why.
+- **Levels**: music clips +12 dB (`MUSIC_GAIN_DB`: −28 → −16 LUFS, a finished video's level),
+  effects +8 dB, ambience +12 dB, each lowered if a sample would pass −1.5 dBFS.
+- **Files**: MP3 by FFmpeg's libmp3lame, CBR 128 kbps stereo (music, ambience) or 96 kbps mono
+  (effects, made mono), with `-map_metadata -1`, bitexact flags, no ID3 and no Xing header, so the
+  same samples give the same bytes (a bed clip is 240,384 bytes). Spectrograms: palette PNGs (64
+  "inferno" steps plus a grey for the dotted 100 Hz and 1 kHz lines), 32 px per second × 120 px,
+  40 Hz–8 kHz on a log scale, −95 to −10 dB (a full-scale sine at 0 dB), a 4096-point Hann FFT per
+  column of the mono mix; 4.5–45 KB each. The −10 dB top was chosen by looking: at −25 dB the
+  beds' bass rows were a flat saturated band.
+- **Deterministic**: three runs (two in fresh processes) gave byte-identical files, composed clips
+  included. The bytes depend on the vidgen, FFmpeg / LAME, Pillow and symusic versions, as the
+  gallery's do; a regeneration elsewhere may change the MP3s without a change in the sound.
+- **Size**: 5.51 MB (14 bed clips 3.37 MB, 2 composed 0.48 MB, 6 effect clips 0.71 MB, ambience
+  0.34 MB, spectrograms 0.6 MB); tested under 6.5 MB, bed and composed clips 200–320 KB, PNGs
+  ≤ 80 KB.
+- **Not done**: no per-clip loudness readout on the page; no clip of composed music following a
+  video (mood changes, swells), only fixed moods; the page lists the moods but plays two.

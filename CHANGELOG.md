@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–182)
+## 0.3.0 (Steps 61–183)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -320,7 +320,7 @@ matters only for projects made with development builds between Steps 67 and 131)
 - Foley tied to actions (footsteps, whooshes, pops, boings, thuds, door creaks, splashes) and
   music stings (86, 128). New generated sounds include `bell`, `engine`, `brakes`, `phone`,
   `thunder`, `beep`, `creak`, `knock`, `splash`.
-- Ambience beds: rain, fire, birdsong, city, room tone (105, 121, 128).
+- Ambience beds: rain, fire, birdsong, city, room tone, crickets (105, 121, 128, 169).
 - New music beds: `cartoon` and `lullaby` (129).
 - Five documentary music beds with a soft kick and a synth bass (179): `discovery` (D minor,
   104 BPM, a steady approach that builds), `breakthrough` (112 BPM, tension in C minor, then a
@@ -345,6 +345,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   instruments (148). Without the extra the mood's built-in bed plays and `vidgen validate` warns;
   drafts and animatics play it too; `vidgen music preview` (MCP `music_preview`) writes a piece
   as WAV and MIDI (147, 149). `examples/host-explainer` and `examples/cartoon-rain-check` use it.
+- A Listen page, [`docs/music/README.md`](docs/music/README.md), made by `vidgen music page`:
+  a 15 s MP3 clip and a spectrogram of every bed (from the lift for `breakthrough`, `ascent` and
+  `horizon`), clips that play all 36 sound effects and the six ambience beds, and two composed
+  moods; all made by vidgen itself and byte-identical when made again. The README leads with
+  the music and sound synthesis and links it (183).
 
 ### Narration and pictures
 

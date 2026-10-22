@@ -1368,13 +1368,16 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
 
 def cmd_music(args: argparse.Namespace) -> CommandResult:
     """``preview``: compose a piece (the project's first ``compose:`` cue, changed by the options)
-    and write it as ``<mood>-seed<N>.wav`` (one pass and the reverb's tail) and ``.mid`` (§83)."""
+    and write it as ``<mood>-seed<N>.wav`` (one pass and the reverb's tail) and ``.mid`` (§83);
+    ``page``: write the Listen page (§92)."""
     import math
 
     from vidgen import composer, loudness, soundfont, synth
     from vidgen.score import write_midi
     from vidgen.sfx import RATE, write_wav
 
+    if args.action == "page":
+        return _music_page(args)
     settings: dict[str, Any] = {}
     setting, root = None, Path.cwd()
     if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
@@ -1391,7 +1394,7 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
     piece = composer.compose_piece(**settings)
     synth.require_symusic()
     audio = synth.render_score(piece.score, soundfont.resolve(setting, root))
-    out = Path(args.out).resolve()
+    out = Path(args.out or ".").resolve()
     stem = f"{piece.mood.name}-seed{piece.seed}"
     wav, mid = out / f"{stem}.wav", out / f"{stem}.mid"
     write_wav(wav, audio)
@@ -1408,6 +1411,19 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
     print(f"loudness: {loudness.integrated_loudness(audio):.1f} LUFS integrated, true peak {20 * math.log10(max(peak, 1e-9)):.1f} dBTP, {len(audio) / RATE:.1f} s")
     print(f"wrote: {wav}")
     print(f"wrote: {mid}")
+    return 0
+
+
+def _music_page(args: argparse.Namespace) -> CommandResult:
+    """``vidgen music page``: write the Listen page (DESIGN.md §92)."""
+    from vidgen.listen import make_listen_page
+
+    result = make_listen_page(Path(args.out or Path("docs") / "music"), composed=args.composed)
+    if args.json:
+        return jsonout.listen_page_document(result)
+    print(f"listen page: {result.page} ({len(result.clips)} clips, {result.bytes / 1e6:.2f} MB in {result.output})")
+    if not result.composed:
+        print(f"no composed clips: {result.composed_note}")
     return 0
 
 
@@ -1664,15 +1680,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--render-dir", metavar="DIR", help="also write one loop of every bed as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_music)
 
-    p = sub.add_parser("music", help="composed music: preview writes a piece in a mood as WAV and .mid (needs the music extra)")
-    p.add_argument("action", choices=["preview"], help="preview: compose the project's compose: music (or --mood) and write it")
+    p = sub.add_parser("music", help="composed music: preview writes a piece in a mood as WAV and .mid (needs the music extra); page writes the Listen page")
+    p.add_argument(
+        "action", choices=["preview", "page"],
+        help="preview: compose the project's compose: music (or --mood) and write it; page: write the Listen page "
+        "(a clip and spectrogram of every bed, the sound effects, ambience and composed moods; default --out docs/music)",
+    )
     project_arg(p)
     p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
     p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
     p.add_argument("--bars", type=int, metavar="N", help="length in bars, a multiple of 4 (default: the mood's)")
     p.add_argument("--key", metavar="KEY", help="e.g. E, 'Eb major', 'F# minor' (default: the mood's)")
     p.add_argument("--tempo", type=float, metavar="BPM", help="quarter notes per minute (default: the mood's)")
-    p.add_argument("--out", default=".", metavar="DIR", help="folder for <mood>-seed<N>.wav and .mid (default: .)")
+    p.add_argument("--out", metavar="DIR", help="preview: folder for <mood>-seed<N>.wav and .mid (default: .); page: the page's folder (default: docs/music)")
+    p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
     p.set_defaults(func=cmd_music)
 
     p = sub.add_parser("soundfont", help="the SoundFont composed music is played with: fetch downloads GeneralUser GS into vidgen's cache, info shows it")

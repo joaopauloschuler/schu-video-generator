@@ -1017,6 +1017,11 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 - [x] "2D cartoons" (stage, card, then four showcases: a dialogue in a furnished room with a close-up, walks in depth, rain at nightfall, a platform jump for a star) and "Isometric cartoons" (a village meeting, a cut-away room, a lamp lit at night with a name tag, settling snow; a link to `examples/iso-story`); showcases as named entries with their own YAML in `data/gallery/showcases/`, pages and tests; validate clean, lint clean in 16:9
 - [x] README strip of four gallery GIFs; CONFIG, DESIGN, CHANGELOG, HANDOFF; `tests/test_gallery.py`
 
+### Step 183 — Music and sound in the README, and a Listen page
+- [x] README: a bold headline on the music and sound synthesis (14 beds, composed music, 36 sound effects, generated from code, free to use) and a "Music and sound" block after the gallery strip (beds, composed moods, mixing, effects and foley, ambience, tools for agents, royalty-free); the sound-effect bullet's stale "eleven" corrected to thirty-six
+- [x] `vidgen music page` (`listen.py`, DESIGN §92) writes `docs/music/README.md`: a 15 s MP3 (128 kbps) and a spectrogram PNG of every bed (lift beds from 6 s before the lift), six clips that play all 36 sound effects, one of the six ambience beds, two composed moods (`curious`, `playful`); deterministic (three runs byte-identical); 5.5 MB committed
+- [x] CONFIG (the command, its JSON, links from music and sound effects), CHANGELOG, DESIGN, HANDOFF; `tests/test_listen.py`
+
 ---
 
 ## Backlog (after Step 60)

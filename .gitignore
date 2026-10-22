@@ -225,6 +225,8 @@ __marimo__/
 **/media/
 # ... except the scene gallery's stills and GIFs, which are committed (vidgen gallery, Step 57)
 !docs/gallery/media/
+# ... and the Listen page's clips and spectrograms (vidgen music page, Step 183)
+!docs/music/media/
 *.mp4
 *.srt
 *.wav

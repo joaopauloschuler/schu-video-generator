@@ -2583,8 +2583,8 @@ language's own document. The MCP tools `render` and `lint` take `all_languages`.
 
 Short sounds under the narration: a whoosh as a card slides in, a pop per item, a tick per step.
 vidgen synthesises its own set (no recordings; free to use in your videos, including
-commercially; no attribution needed) and mixes them, sample-exact, into the
-video's sound when the scenes are joined. Three ways to place one:
+commercially; no attribution needed; [listen](music/README.md#sound-effects) to all of them) and
+mixes them, sample-exact, into the video's sound when the scenes are joined. Three ways to place one:
 
 ```yaml
 sfx: {auto: false, gain: 0}            # optional, video-wide (below)
@@ -2873,8 +2873,8 @@ list; in a project the lists its beats' voices use, with how many beats use each
 
 A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
 vidgen generates fourteen beds itself (no recordings, no samples; free to use in your videos,
-including commercially; no attribution needed); any audio file FFmpeg
-reads works too, and so does music vidgen composes for the video in a mood
+including commercially; no attribution needed; [listen](music/README.md) to a clip of each);
+any audio file FFmpeg reads works too, and so does music vidgen composes for the video in a mood
 ([composed music](#composed-music-compose)).
 
 ```yaml
@@ -3123,6 +3123,20 @@ writes `DIR/<mood>-seed<S>.wav` (one pass plus the 3 s reverb tail, at −28 LUF
 phrase and the measured loudness and true peak. Needs the `music` extra. `--json`: see
 [below](#vidgen-music---json); MCP tool `music_preview` (its `out` defaults to `build/mcp/music`
 under the server's root).
+
+### Listen page (`vidgen music page`)
+
+`vidgen music page [--out DIR] [--no-composed] [--json]` writes `DIR/README.md` (default
+`docs/music`; this repository's is the [Listen page](music/README.md)) and `DIR/media/`: for every
+built-in bed a 15 s MP3 clip (128 kbps stereo, 12 dB louder than in a mix: −16 LUFS; the beds
+with a lift, `breakthrough`, `ascent`, `horizon`, start 6 s before it, `momentum` 6 s before its
+riser into the top, `discovery` near its brightest) and a spectrogram PNG of the clip (32 px per
+second, 120 px high, 40 Hz–8 kHz on a log scale); six clips that together play all the built-in
+sound effects (96 kbps mono) and one of the six ambience beds in turn; and, when the `music` extra
+and the SoundFont are there (the page never downloads it), the first 15 s of the `curious` and
+`playful` moods. Every clip is made by vidgen itself, so the page can be made again: the same
+vidgen, FFmpeg (with libmp3lame), Pillow and symusic give byte-identical files. Takes about two
+minutes (the beds take most of it). JSON: see [below](#vidgen-music---json).
 
 ### Loudness of the final mix (`audio`)
 
@@ -9700,6 +9714,17 @@ difference between two palette colours).
 | `parts` | list | `{role, instrument, volume}` |
 | `phrases` | list | `{bars: [first, last], phrase, chords}` (`phrase` e.g. `A question`; `chords` per bar, a list of chord names) |
 | `loudness`, `true_peak` | float | of the WAV: LUFS integrated, dBTP |
+
+`vidgen music page --json` ([Listen page](#listen-page-vidgen-music-page)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `page` |
+| `output`, `page` | str | the folder and its `README.md` |
+| `clips`, `spectrograms` | list | the MP3s and PNGs written (`media/`) |
+| `bytes` | int | the page and its media together |
+| `composed` | bool | whether the composed moods' clips were made |
+| `composed_note` | str \| null | why not (no `music` extra, no SoundFont, `--no-composed`) |
 
 ### `vidgen schema --json`
 

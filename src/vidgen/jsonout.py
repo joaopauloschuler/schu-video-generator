@@ -706,6 +706,24 @@ def music_preview_document(
     )
 
 
+def listen_page_document(result: Any, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen music page --json`` document (``result`` a ``vidgen.listen.ListenResult``):
+    the page, its clips and spectrograms, their size, and whether composed clips were made."""
+    return envelope(
+        "music",
+        True,
+        warnings,
+        action="page",
+        output=_path(result.output),
+        page=_path(result.page),
+        clips=[_path(p) for p in result.clips],
+        spectrograms=[_path(p) for p in result.spectrograms],
+        bytes=result.bytes,
+        composed=result.composed,
+        composed_note=result.composed_note or None,
+    )
+
+
 # ----- render ------------------------------------------------------------------------------------
 
 

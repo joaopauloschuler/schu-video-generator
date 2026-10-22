@@ -16941,3 +16941,65 @@ Known gaps
 - Name tags show only while the speaker's face is small, so `iso_lamp`'s tag shows in its wide
   view mid-line, not on the held last frame.
 - The MCP `gallery` tool returns the types' stills only, not the showcases'.
+
+## Step 183 — Music and sound in the README, and a Listen page
+
+What the owner agreed: a bold headline on the music and sound synthesis near the top of the
+README, a short "Music and sound" section after the gallery strip, and a generated Listen page
+with a clip and a spectrogram of every bed. DESIGN §92.
+
+What was built
+- README: the headline under the tagline ("Its own music and sound synthesizer: 14 original
+  music beds, music composed for your video, and 36 sound effects — all generated from code, free
+  to use." + a Listen link; counts checked against `BUILTIN_BEDS` / `BUILTIN_SOUNDS`, and by a
+  test); after the gallery strip a **Music and sound.** block of six bullets (beds, composed
+  moods, mixing, effects / foley / ambience, tools for agents incl. MCP, royalty-free) with links
+  to the page and CONFIG. It is a bold-titled paragraph, not a `##` heading: a heading there would
+  put the README's "Everything is built around..." intro under it. The Features list keeps its
+  detailed bullets; the sound-effect bullet said "eleven" (stale since Step 86): now thirty-six,
+  with what the others are; both bullets link the page. The commands table has `vidgen music page`.
+- `vidgen music page [--out DIR] [--no-composed] [--json]` (`src/vidgen/listen.py`,
+  `make_listen_page`; `cli._music_page`; `jsonout.listen_page_document`). `vidgen music`'s
+  `--out` default moved into the code (preview: `.`, page: `docs/music`); MCP `music_preview`
+  passes `out` itself, unchanged. Decision: a sibling of `vidgen gallery`, not an option of it
+  (no Manim, no work project; sits with `music preview`).
+- `docs/music/README.md` + `docs/music/media/` (46 files, generated, committed; `.gitignore`
+  gains `!docs/music/media/`): 14 bed clips (15 s, 128 kbps; `breakthrough` from 19.71 s,
+  `ascent` 22.23 s, `horizon` 23.09 s, i.e. 6 s before the lift; `momentum` from 42 s through its
+  riser into the top; `discovery` from 33.88 s near its brightest; the others from the top), six
+  effect clips covering all 36 sounds (96 kbps mono), one ambience clip (six beds, 21.5 s), two
+  composed moods (`curious`: flute, harp, bass, drums; `playful`: clarinet, marimba, tuba,
+  drums); a spectrogram PNG per clip. The music extra (symusic 0.5.9) was installed here; the
+  SoundFont was not, so I ran `vidgen soundfont fetch` (the free GeneralUser GS download, checked
+  by its SHA-256) before generating.
+- Spectrograms looked at (breakthrough, calm, ascent, momentum, horizon, both composed, ambience,
+  four effect rows): the lifts and risers show where the page says; the level range was widened
+  from −95..−25 to −95..−10 dB after the first look, because the beds' bass was a flat saturated band.
+
+Files: `src/vidgen/listen.py` (new), `cli.py`, `jsonout.py`, `.gitignore`, `docs/music/**` (new),
+`README.md`, `docs/CONFIG.md` (the command and its JSON; links from "Background music" and "Sound
+effects"), `DESIGN.md` (§92, layout line), `CHANGELOG.md` (0.3.0 now Steps 61–183; the ambience
+line gains crickets, Step 169), `tasklist.md`, `tests/test_listen.py` (new). The guide and
+`AGENTS.md` are unchanged (no name they mention changed).
+
+Size: `docs/music` 5,509,488 bytes (bed clips 3.37 MB, composed 0.48 MB, effects 0.71 MB, ambience
+0.34 MB, spectrograms 0.60 MB, page 9.6 KB); the test budget is 6.5 MB.
+
+Deterministic: generated three times (twice in separate processes, once after page-text edits):
+media byte-identical every time (`diff -r`).
+
+Tests (one at a time, under `capped`): `tests/test_listen.py` 10 passed (3 s: clip starts, every
+sound played inside its clip, run grouping, a tone's spectrogram row, the peak ceiling, the
+committed page current, every link a file and every file linked, sizes / MP3 frame header / PNG
+size, the README's counts and links, the command twice with tiny settings and `--no-composed`,
+byte-identical); `test_gallery.py -m "not render"` 17 passed (24 s); `test_docs.py` 62 passed;
+`test_guide.py` 54 passed; `test_composer.py -k "music_preview or list_music"` 3 passed (the
+changed `--out` default). Not run: the full suite, `test_mcp.py` (its `music_preview` passes
+`out` explicitly).
+
+Known gaps
+- The committed MP3 bytes depend on FFmpeg / LAME, Pillow and symusic versions: a regeneration on
+  another machine may rewrite the clips without a change in sound (like the gallery's GIFs).
+- The test cannot check the composed rows' text without the SoundFont; it checks the rest.
+- No clip of composed music following a video (mood changes, swells); two moods of eight.
+- GitHub opens each MP3 on its own page; there is no inline player.

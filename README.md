@@ -2,6 +2,9 @@
 
 **A video and presentation generator built for AI agents.** See the [scene gallery](docs/gallery/README.md).
 
+**Its own music and sound synthesizer: 14 original music beds, music composed for your video, and
+36 sound effects — all generated from code, free to use.** [Listen](docs/music/README.md).
+
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
 an MCP client) uses to produce narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
 editing on a timeline: a human describes the video they want, and the agent writes the project,
@@ -36,6 +39,29 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   <a href="docs/gallery/line_chart.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/line_chart-16x9.png"><img src="docs/gallery/media/line_chart-16x9.gif" width="200" alt="A line chart: two validation-loss curves drawn epoch by epoch"></picture></a>
   <a href="docs/gallery/code_morph.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/code_morph-16x9.png"><img src="docs/gallery/media/code_morph-16x9.gif" width="200" alt="Code morphing: a recursive function gains a cache decorator"></picture></a>
 </p>
+
+**Music and sound.** vidgen makes its own soundtrack; [listen to every bed and sound](docs/music/README.md)
+(clips and spectrograms).
+
+- **14 synthesised music beds**: seamless loops from a calm pad to uplifting trance, mixed at
+  −28 LUFS, the same music every time; `music: momentum` is all it takes.
+- **Music composed for your video** in 8 moods, played with real instruments (the GeneralUser GS
+  SoundFont; optional `music` extra). It follows the video: a mood per scene, scene changes on bar
+  lines, swells on reveals, a closing cadence.
+- **Mixed like a finished video**: music cues per range of scenes, ducked under the narration only,
+  the whole mix normalised to −16 LUFS with a true-peak limiter.
+- **36 synthesised sound effects and cartoon foley**: whooshes, pops, typing, risers and stings;
+  footsteps by surface, doors that knock, unlock and creak, coins and stars picked up, vehicles,
+  thunder; and ambience beds (rain, fire, birdsong, city, room tone, crickets) under cartoon scenes.
+- **For agents, who cannot listen**: `vidgen list-music` and `vidgen list-sfx` describe every sound
+  in words (instruments, key, tempo, chords, mood), `--render-dir` writes them out for a person,
+  `vidgen music preview` composes a mood to WAV and MIDI; over MCP: `list_music`, `list_sfx`,
+  `music_preview`.
+- **Royalty-free**: everything is generated, so it is free to use in your videos, also
+  commercially, with no attribution.
+
+Reference: [music](docs/CONFIG.md#background-music-music), [composed music](docs/CONFIG.md#composed-music-compose),
+[sound effects](docs/CONFIG.md#sound-effects-sfx).
 
 Everything is built around what an agent can and cannot do:
 
@@ -251,9 +277,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   your own speed, pitch, loudness and pauses) on a beat or a voice; Kokoro changes how the line
   is spoken, ElevenLabs and OpenRouter get tags, settings or instructions
   ([reference](docs/CONFIG.md#voices-with-feeling-emotion)).
-- **Sound effects**: eleven synthesised sounds (whoosh, swoosh, pop, click, tick, typing, riser,
-  chime, success, error, thud; free to use in your videos, including commercially; no
-  attribution needed) or your own `assets/sfx/NAME.wav`, placed as a beat
+- **Sound effects**: thirty-six synthesised sounds (whoosh, swoosh, pop, click, tick, typing,
+  riser, chime, success, error, thud; footsteps on five surfaces, door knocks, creaks and locks,
+  coins, vehicles, thunder, voice sounds and music stings for cartoons; free to use in your videos,
+  including commercially; no attribution needed; [listen](docs/music/README.md#sound-effects))
+  or your own `assets/sfx/NAME.wav`, placed as a beat
   action (`- sfx: whoosh` with `at`, `gain`, `align: end`, `params: {pitch: 3}`), in a scene's
   `sfx:` list (seconds, silent scenes too) or with `self.sfx("pop")` in scene code; mixed
   sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
@@ -266,7 +294,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `momentum` (driving), `lab` (modern tech), and four energetic electronic beds: `ascent` and
   `horizon` (uplifting trance that builds and lifts), `beacon` (a pulsar-like ticking beacon:
   space, science), `neon` (synthwave night drive); seamless loops; free to use in your videos, including commercially; no attribution
-  needed) or
+  needed; [listen](docs/music/README.md)) or
   your own file, looped with a cross-faded seam, faded in and out, changed per scene range (a
   list of cues with `from` / `to`) or muted per scene (`music: false`); ducked 12 dB under the
   narration only (not under the sound effects). A video with music is normalised to −16 LUFS
@@ -532,6 +560,7 @@ narration.
 | `vidgen list-pronunciation [PROJECT] [--json]` | vidgen's built-in pronunciation entries per TTS engine and language (Kokoro American English: `epoch`, `README`, `JSON`, ...); in a project, the lists its voices use, what the project replaces or removes and the beats each entry changes |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
 | `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to (needs the `music` extra) |
+| `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when the `music` extra and the SoundFont are there |
 | `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
