@@ -1,6 +1,7 @@
-"""Background music (DESIGN.md §48, §69.63, §82, §83, §91): fourteen procedurally generated beds, the
-project's own music files, composed music (:mod:`vidgen.composer`, played by
-:mod:`vidgen.synth`), and the sources the mix reads from.
+"""Background music (DESIGN.md §48, §69.63, §82, §83, §91, §93.12): sixteen procedurally generated
+beds (two of them, ``tidewater`` and ``skyline``, written as score files and rendered by
+:mod:`vidgen.studio`), the project's own music files, composed music (:mod:`vidgen.composer`,
+played by :mod:`vidgen.synth`), and the sources the mix reads from.
 
 A *bed* is a seamless loop made of a chord progression (numpy only, no recordings, no samples,
 deterministic): sustained pads are built with the PADsynth method (Nasca Octavian
@@ -324,7 +325,9 @@ class Bed:
     """A built-in music bed: its generator, loop length, musical facts and a precise textual
     description (for authors who cannot listen) and when to use it. ``seed``: the name its random
     generator is seeded with (``crc32("music:<seed>")``) when it is not the bed's own: the Step
-    181 beds keep their prototype's, so they sound exactly as approved."""
+    181 beds keep their prototype's, so they sound exactly as approved. ``score``: the bed is a
+    score file, ``studio/beds/<name>.yaml`` (also its template), rendered by
+    :func:`vidgen.studio.render_music_score` (Step 190; the generator's ``rng`` is not used)."""
 
     name: str
     generate: Callable[[np.random.Generator], np.ndarray]
@@ -335,6 +338,7 @@ class Bed:
     description: str
     use: str
     seed: str | None = None
+    score: bool = False
 
 
 def _pads(
@@ -1255,6 +1259,20 @@ def _neon(rng: np.random.Generator) -> np.ndarray:
     return _finish(_tone_filter(out, 4400.0))
 
 
+def _score_bed(name: str) -> Callable[[np.random.Generator], np.ndarray]:
+    """The generator of a bed written as a score file (``studio/beds/<name>.yaml``, package data):
+    the file rendered by :func:`vidgen.studio.render_music_score` — a seamless loop at
+    :data:`MUSIC_LEVEL`, float32, read-only; the same file gives the same samples."""
+
+    def generate(rng: np.random.Generator) -> np.ndarray:
+        from vidgen.studio import load_music_score, render_music_score
+        from vidgen.studio.templates import TEMPLATE_DIR
+
+        return render_music_score(load_music_score(TEMPLATE_DIR / f"{name}.yaml"))
+
+    return generate
+
+
 def _loop_seconds(tempo: int, bars: int) -> float:
     """The length of ``bars`` bars of 4/4 at ``tempo`` BPM as the beds count it (whole samples per beat)."""
     return RATE * 60 // tempo * 4 * bars / RATE
@@ -1439,6 +1457,40 @@ BUILTIN_BEDS: dict[str, Bed] = {
             "nocturnal, cool, driving.",
             "tech at night, retro-futurism, cities, coding Shorts",
             seed="night_drive_a",
+        ),
+        Bed(
+            "tidewater", _score_bed("tidewater"), _grid_seconds(108, 24), 108, "E minor",
+            ("Em", "C", "Em", "C", "G", "D", "C", "D", "Em", "Em", "Em", "C"),
+            "A steady, hopeful bed at 108 BPM in E minor, 4/4, written as a score file. Bars 1-4 "
+            "intro: a warm pad and a plucked arpeggio in sixteenth notes accented 3+3+2 (C4 to G5, "
+            "slightly left). Bars 5-12 build: a soft kick on every beat, off-beat hi-hats and a "
+            "syncopated synth bass (C2 to G3), a noise riser over the last two bars. At 26.7 s the "
+            "lift (bars 13-20, C, D, E minor): a deep low boom, the pad opens brighter, a clap on 2 "
+            "and 4, busier hats and a sparse bell melody (D5 to E6, slightly right). Bars 21-24 "
+            "settle back to the opening chords. 24 bars, a chord every two bars (4.4 s). Rolled off "
+            "above ~4.5 kHz; 39% of its power under 150 Hz (lighter in the bass than the "
+            "documentary beds); hopeful, flowing, gently driving.",
+            "explainers and documentaries that need a steady, hopeful pulse: nature, the sea, travel, "
+            "progress stories, calm walkthroughs",
+            score=True,
+        ),
+        Bed(
+            "skyline", _score_bed("skyline"), _grid_seconds(128, 32), 128, "D minor",
+            ("Dm", "Bb", "F", "C", "Dm", "Bb", "F", "C", "Bb", "C", "Dm", "Dm", "F", "C", "Dm", "Bb"),
+            "A pumping supersaw bed at 128 BPM in D minor, 4/4, written as a score file, that builds "
+            "and lifts. Bars 1-8 intro: a dark, filtered cloud of supersaw chords over a soft pad and "
+            "sub, ticking pulsar pulses on the 3+3+2 sixteenths left and right, faint radio static; "
+            "no kick. Bars 9-16 build (from 15 s): a kick on every beat, the supersaw's filter opens "
+            "under a sixteenth-note trance gate, off-beat analog bass (C2 to B-flat 2), an electronic "
+            "(FM) arpeggio (C4 to B-flat 5) with echoes, open hi-hats growing, a noise riser over the "
+            "last four bars and a kick roll into the lift. At 30 s the lift (bars 17-28, B-flat, C, "
+            "D minor, F, C): a deep low boom, the supersaw wide open and pumping with the kick, a "
+            "rolling bass, a clap on 2 and 4, sixteenth hi-hats and a soft lead melody (G4 to C6) "
+            "in a hall with echoes. Bars 29-32 the filter closes and the saws fade back to the "
+            "intro. 32 bars, a chord every two bars (3.75 s). Rolled off above ~4.5 kHz; bass-heavy "
+            "(64% of its power under 150 Hz: lighter on phone speakers); bright, energetic, euphoric.",
+            "energetic reveals, product launches, montages, a build to a big moment, upbeat intros and endings",
+            score=True,
         ),
     )
 }

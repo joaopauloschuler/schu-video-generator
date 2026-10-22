@@ -1029,7 +1029,8 @@ editing vidgen's Python: a YAML score format, an instrument library, templates f
 beds, analysis reports (agents cannot listen), and using the pieces in videos. Built inside
 vidgen as a self-contained module (`src/vidgen/studio/`, no video / scene / render imports) so it
 can become its own package. Additive and opt-in: the 14 beds and every existing project's audio
-stay byte-identical. Quality without ears: templates, measurements, spectrograms, plain-language
+stay byte-identical. Steps 184–191 (Step 190, two score pieces as built-in beds, was added after
+the owner listened to them; the review moved to 191). Quality without ears: templates, measurements, spectrograms, plain-language
 advice; a human makes the final choice (DESIGN §93).
 
 ### Step 184 — Score format and rendering
@@ -1061,8 +1062,13 @@ advice; a human makes the final choice (DESIGN §93).
 - [x] An example project with an agent-made piece built from a template into something new, in a short narrated video (Kokoro), with its check report (`examples/gps-time-of-flight`, *Time of Flight* from `momentum` in nine checked steps; README with the log and report; 88.7 s render in the scratchpad)
 - [x] A "music craft" cookbook section (room for the voice, energy curves and lifts, loop design, genre recipes: documentary, trance, synthwave, cosmic, cartoon); the Listen page gains a "made with the score format" row (`docs/COOKBOOK-MUSIC.md`, linked from the cookbook, README, CONFIG, guide; `listen.SCORE_PIECES`, package data `studio/pieces/`); guide recipe fixes found by following it
 
-### Step 190 — Review of Phase S
-- [ ] Critical review with fixes recorded in HANDOFF; compatibility (the 14 beds and all existing projects' audio byte-identical — fingerprint tests); determinism across runs; phase tests and related suites one at a time; `tests/test_mcp.py` fully with a long timeout
+### Step 190 — Two score pieces become built-in beds (added to the plan: the owner approved them)
+- [x] `tidewater` (Step 184's demo) and `skyline` (Step 185's `skyline_lift`; the short name, no clash) are built-in beds like the other 14: `music: tidewater`, list-music (+ `--json`, MCP `list_music`) with plain-language descriptions, key, tempo, loop, use; did-you-mean; the schema's source text; CONFIG beds table; guide alternatives (`momentum` still first) + `AGENTS.md`; README and cookbook counts (16) (DESIGN §93.12)
+- [x] Mechanism: the score file is package data `studio/beds/<bed>.yaml` (also its template: `vidgen music template tidewater` gives the bed itself), rendered by `studio` at the join (`Bed.score`, `music._score_bed`, cached per process like the other beds); the Step 188 name-clash rule covers them; fingerprints added (the 14 unchanged); the skyline render is byte-identical to the MP3 the owner heard (`s185/out/skyline_lift.mp3`, made with Step 186's centred sub), so nothing was changed in the renderer
+- [x] Listen page rows, spectrograms and clips (both lead into the lift), regenerated (6.33 MB; every other file byte-identical; a second run identical)
+
+### Step 191 — Review of Phase S
+- [ ] Critical review with fixes recorded in HANDOFF; compatibility (the 16 beds and all existing projects' audio byte-identical — fingerprint tests); determinism across runs; phase tests and related suites one at a time; `tests/test_mcp.py` fully with a long timeout
 
 ---
 

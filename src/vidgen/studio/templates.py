@@ -1,6 +1,8 @@
-"""Templates of the built-in beds (DESIGN.md §93.8): each of vidgen's 14 music beds written as an
-editable score file, a close re-creation (not bit-identical) to start a new piece from. They ship
-as package data in ``studio/beds/<bed>.yaml``; ``vidgen music template <bed>`` copies one out.
+"""Templates of the built-in beds (DESIGN.md §93.8, §93.12): each of vidgen's 16 music beds written
+as an editable score file to start a new piece from — for the 14 beds made in Python a close
+re-creation (not bit-identical); for ``tidewater`` and ``skyline`` the very score the bed is
+rendered from. They ship as package data in ``studio/beds/<bed>.yaml``; ``vidgen music template
+<bed>`` copies one out.
 """
 
 from __future__ import annotations

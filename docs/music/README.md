@@ -21,9 +21,12 @@ sounds described in words with `vidgen list-music` and `vidgen list-sfx`.
 
 ## Music beds
 
-14 seamless loops, generated when the video is joined; the same name always gives the same
+16 seamless loops, generated when the video is joined; the same name always gives the same
 music. `music: momentum` plays one under the whole video (`{source: momentum, volume: -2}`,
 or a list of cues with `from` / `to` scenes).
+
+`tidewater` and `skyline` are written in the score format (below): `vidgen music template tidewater` gives
+the very score the bed plays, to start a piece of your own from.
 
 | bed | key, tempo, loop | use it for | spectrogram | clip |
 |---|---|---|---|---|
@@ -41,6 +44,8 @@ or a list of cues with `from` / `to` scenes).
 | `horizon` | D minor to F major, 132 BPM, 58.2 s loop | Energetic reveals, tech launches, montages, uplifting endings, anthemic intros | <img src="media/bed-horizon.png" width="300" alt="Spectrogram: horizon"> | [▶ listen (15 s)](media/bed-horizon.mp3)<br>from 23.09 s: the build and the lift to F major |
 | `beacon` | E minor, 120 BPM, 48.0 s loop | Space and astronomy, science, signals and data, steady explainers with a cosmic feel | <img src="media/bed-beacon.png" width="300" alt="Spectrogram: beacon"> | [▶ listen (15 s)](media/bed-beacon.mp3) |
 | `neon` | F-sharp minor, 116 BPM, 49.6 s loop | Tech at night, retro-futurism, cities, coding Shorts | <img src="media/bed-neon.png" width="300" alt="Spectrogram: neon"> | [▶ listen (15 s)](media/bed-neon.mp3) |
+| `tidewater` | E minor, 108 BPM, 53.3 s loop | Explainers and documentaries that need a steady, hopeful pulse: nature, the sea, travel, progress stories, calm walkthroughs | <img src="media/bed-tidewater.png" width="300" alt="Spectrogram: tidewater"> | [▶ listen (15 s)](media/bed-tidewater.mp3)<br>from 20.66 s: the riser and the lift with its bell melody |
+| `skyline` | D minor, 128 BPM, 60.0 s loop | Energetic reveals, product launches, montages, a build to a big moment, upbeat intros and endings | <img src="media/bed-skyline.png" width="300" alt="Spectrogram: skyline"> | [▶ listen (15 s)](media/bed-skyline.mp3)<br>from 24 s: the end of the build and the lift |
 
 ## Made with the score format
 

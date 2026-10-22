@@ -115,6 +115,11 @@ def test_validate_reports_piece_problems(tmp_path: Path) -> None:
     [problem] = project_problems(clash)
     assert problem.location == "music.source" and "rename the piece" in problem.message and "source: assets/music/calm.yaml" in problem.message
     assert project_problems(_project(tmp_path / "p3", {"source": "assets/music/calm.yaml"}, {"calm.yaml": SMALL})) == []
+    # Step 190: the beds written as score files are beds too (a copy of a template clashes)
+    for bed in ("tidewater", "skyline"):
+        [problem] = project_problems(_project(tmp_path / f"p-{bed}", bed, {f"{bed}.yaml": SMALL}))
+        assert "rename the piece" in problem.message and f"source: assets/music/{bed}.yaml" in problem.message
+        assert music.source_kind(MusicCue(source=bed)) == "bed"
     # the pieces a video does not play are checked too, as warnings
     unused = _project(tmp_path / "p4", "small", {"small.yaml": SMALL, "bad.yaml": bad})
     assert project_problems(unused) == []

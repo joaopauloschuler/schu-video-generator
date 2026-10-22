@@ -1762,6 +1762,13 @@ lifting to F major 29.1 s in), `beacon` (a pulsar-like ticking beacon, 120 BPM: 
 science, signals, data), `neon` (synthwave night drive, 116 BPM: tech at night, retro-futurism,
 cities, coding Shorts). They are even more bass-heavy (71–78 % under 150 Hz): listen on a phone too.
 
+Two beds written in the score format are alternatives too (still suggest `momentum` first):
+`tidewater` (steady and hopeful, 108 BPM, a bell melody in its lift 26.7 s in: nature, the sea,
+travel, progress stories, calm walkthroughs; 39 % under 150 Hz, lighter than the documentary
+beds) and `skyline` (a pumping supersaw build and lift, 128 BPM, the lift 30 s in: energetic
+reveals, launches, montages; 64 % under 150 Hz). `vidgen music template tidewater` gives the very
+score a bed plays, to start a piece of your own from.
+
 ```yaml
 music: {source: calm, volume: -2}
 scenes:
@@ -1819,7 +1826,7 @@ plays like a bed: `music: NAME`, `{source: NAME, volume: -2}`, in a cue list wit
 again only when the file changes). You cannot hear it, so work from measurements:
 1. **Start from a template**, not from nothing: `vidgen music template momentum --out
    assets/music/my_theme.yaml` (for documentaries keep `momentum` the first suggestion; `vidgen
-   music template` lists all 14). Give it a `title:` and a `description:` (list-music shows them).
+   music template` lists all 16). Give it a `title:` and a `description:` (list-music shows them).
    A template writes its chords out (`{chord, notes, bass}` in the bed's key): to change the key,
    replace the whole `progression:` with Roman numerals (`"i v VImaj7 iv9"`) in the same step.
 2. **Change one thing at a time** — the key and chords, the sections, one track's steps, an

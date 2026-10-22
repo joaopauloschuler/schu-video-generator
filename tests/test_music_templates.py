@@ -126,7 +126,7 @@ def test_music_template_command(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert "exists" in capsys.readouterr().err
     assert cli.main(["music", "template", "neon", "--out", str(out), "--force", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
-    assert doc["ok"] and doc["action"] == "template" and doc["template"]["name"] == "neon" and len(doc["templates"]) == 14
+    assert doc["ok"] and doc["action"] == "template" and doc["template"]["name"] == "neon" and len(doc["templates"]) == 16
     assert yaml.safe_load(out.read_text(encoding="utf-8"))["title"] == "Neon (template)"
     assert cli.main(["music", "template", "--json"]) == 0
     assert "template" not in json.loads(capsys.readouterr().out)
@@ -173,10 +173,15 @@ def profile(x: np.ndarray, bars: int, per_chord: int) -> dict[str, Any]:
     }
 
 
+#: The beds made in Python (their templates are re-creations); ``tidewater`` and ``skyline`` are
+#: their score files (Step 190).
+PYTHON_BEDS = [name for name, bed in music.BUILTIN_BEDS.items() if not bed.score]
+
+
 def test_bed_measures_are_current() -> None:
     """The kept measurements still describe the beds (one measured again; all are fingerprinted)."""
     kept = json.loads(BED_MEASURES.read_text(encoding="utf-8"))
-    assert list(kept) == list(music.BUILTIN_BEDS)
+    assert list(kept) == PYTHON_BEDS
     fresh = profile(music.bed_loop("momentum").astype(np.float64), 24, 2)
     for key, value in fresh.items():
         if isinstance(value, dict):
@@ -186,7 +191,14 @@ def test_bed_measures_are_current() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("name", list(music.BUILTIN_BEDS))
+@pytest.mark.parametrize("name", [name for name, bed in music.BUILTIN_BEDS.items() if bed.score])
+def test_score_bed_is_its_template(name: str) -> None:
+    """Step 190: the template of a bed written as a score file is the bed, sample for sample."""
+    assert np.array_equal(render_music_score(load_music_score(template_path(name))), music.bed_loop(name))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name", PYTHON_BEDS)
 def test_template_is_close_to_its_bed(name: str) -> None:
     score = load_music_score(TEMPLATE_DIR / f"{name}.yaml")
     warnings: list[str] = []

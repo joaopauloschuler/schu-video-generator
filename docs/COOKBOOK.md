@@ -289,7 +289,9 @@ starts), `enigma` (mysterious, investigations), `lab` (modern tech); energetic e
 `ascent` and `horizon` (uplifting trance that builds to a lift halfway through the loop:
 energetic reveals, tech launches, montages, uplifting endings), `beacon` (a pulsar-like ticking
 beacon: space, astronomy, science, data), `neon` (synthwave: tech at night, retro-futurism,
-cities); lighter ones: `calm` (serious, long narration), `pulse` (tech), `bright` (upbeat). The
+cities); two written as score files: `tidewater` (steady and hopeful: nature, the sea, travel,
+progress stories) and `skyline` (a pumping supersaw build and lift 30 s in: reveals, launches);
+lighter ones: `calm` (serious, long narration), `pulse` (tech), `bright` (upbeat). The
 kick-and-bass beds are bass-heavy and sound lighter on phone and laptop speakers
 ([CONFIG](CONFIG.md#background-music-music)). When no bed fits, write your own piece as a score
 file from a bed's template (`music: my_theme` plays `assets/music/my_theme.yaml`): see

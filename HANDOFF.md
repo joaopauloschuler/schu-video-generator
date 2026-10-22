@@ -17471,3 +17471,83 @@ Known gaps / for Step 190
 - A riser measures almost nothing (known since 187); the cookbook says not to rely on it alone.
 - The Listen page has one score piece; `SCORE_PIECES` takes more (each needs its file in
   `studio/pieces/` and an example).
+
+## Step 190 — Two score pieces become built-in beds: tidewater and skyline
+
+What the owner agreed (a plan change: this step is new; the Phase S review moves to Step 191):
+the owner listened to the two demos written in the score format and approved both as built-in
+beds, in the same list as the 14 ("Tidewater is an absolute piece of art and must be included as
+an option in the software").
+
+What was built (DESIGN §93.12)
+- `tidewater` (tests/data/studio/tidewater.yaml, E minor, 108 BPM, 24 bars, 53.328 s) and
+  `skyline` (tests/data/studio/skyline_lift.yaml, D minor, 128 BPM, 32 bars, 60 s) in
+  `music.BUILTIN_BEDS` after `neon`. Name: `skyline` (the short one; nothing else uses it).
+- Mechanism: the score files ship as package data in `src/vidgen/studio/beds/` (the templates'
+  folder: `vidgen music template tidewater` writes the bed's own score). `Bed.score: bool` (new
+  field, default False); `music._score_bed(name)` is the generator: it imports `vidgen.studio`
+  when called and renders the file with `render_music_score` (float32, read-only, −28 LUFS,
+  seamless). Rendered at the join like any bed, cached per process by `bed_loop` (tidewater 2 s,
+  skyline 9 s); no disk cache (the beds have none; `ascent` takes 17 s). The shipped YAML data
+  equal the test demos' (only comments added; tested).
+- Descriptions in words (parts, ranges read from the renderer's voicing, sections with their
+  times, chords, bass weight), `use`; facts tested against the parsed score.
+- `listen.CLIP_MOMENTS`: both clips start 6 s before the lift (tidewater 20.66 s: the riser and
+  the lift with the bell melody; skyline 24 s: riser, kick roll, lift); a sentence above the beds
+  table names the score beds and the template command. `docs/music` regenerated: README +
+  `media/bed-tidewater.{mp3,png}`, `media/bed-skyline.{mp3,png}`; 6.33 MB (budget 6.5 MB); every
+  other file byte-identical (git shows no change); a second run into the scratchpad identical.
+  Spectrograms looked at: the riser and the lift's entry visible in both.
+- Text: the schema's `source` description (all 16 + project pieces), MCP `music_template` (16
+  templates), `templates.py` and `music.py` docstrings.
+- Docs: README (16 beds, the list), CONFIG (intro, beds table, bass-weight paragraph, `music` and
+  `source` rows, templates paragraph — the two templates are the beds; save a copy under your own
+  name, `assets/music/tidewater.yaml` clashes —, check), guide bed alternatives (`momentum`
+  still first; "lists all 16") + AGENTS.md, COOKBOOK, COOKBOOK-MUSIC, CHANGELOG (0.3.0 now Steps
+  61–190), DESIGN §93.1 / §93.12, tasklist (Phase S now 184–191).
+
+Decision on skyline's sound (the owner's reference MP3)
+- Step 186 centred a pad's sub, so `skyline_lift` renders differently from Step 185's code (63 →
+  64 % under 150 Hz, true peak −14.8 → −14.9, L/R correlation 0.37 → 0.41). Checked which one the
+  owner heard: `<scratchpad>/s185/out/skyline_lift.mp3` (15:13, written during Step 186) is
+  byte-identical to the current code's render written by `listen.write_mp3`
+  (`<scratchpad>/s190/refnow.py`); Step 185's render (`<scratchpad>/s190/ref185.py`, its source
+  extracted by `extract.py`) matches `skyline_lift-cli.mp3` (14:16) instead. So the built-in
+  `skyline` already is exactly the approved render — no per-pad setting added, the renderer
+  unchanged. (If the owner meant the 14:16 file, a pad setting giving each side its own sub phase
+  would reproduce it exactly; not done.)
+
+Compatibility
+- The 14 beds' fingerprints unchanged and passing; `music.py`'s bed code untouched (only the new
+  generator and entries); no studio change (Step 184–189 scores render as before). The Step 188
+  name-clash rule covers the two (tested: `assets/music/tidewater.yaml` + `music: tidewater` is a
+  problem; the path form plays the piece).
+- Determinism: `bed_loop` vs a fresh `generate` equal (the parametrised bed test), two processes
+  give the same fingerprints, the Listen page twice identical.
+
+Measured (`<scratchpad>/s190/measure.py`, `checkbeds.py`): tidewater −28.00 LUFS, true peak −14.6
+dBTP, 39 % under 150 Hz, voice band 0.2 dB under `pulse`'s, highs −48.6 dB, correlation 0.37;
+skyline −28.00, −14.9 dBTP, 64 %, 3.0 dB under `pulse`, −42.9 dB, 0.41. `vidgen music check`:
+both "fine under narration" as scores and as audio.
+
+Tests (one at a time, under `capped3g`): `test_music.py` 78 passed (343 s; new: fingerprints of
+the two, `test_score_beds_facts`, did-you-mean for `tidewatr` / `skylin`, schema names all 16,
+list-music JSON and text with the two; the energetic beds' order test now `[10:14]`);
+`test_listen.py` + `test_music_pieces.py` 20 (clip starts; the clash); `test_guide.py` +
+`test_docs.py` 117; `test_json_output.py` + `test_music_templates.py -m "not slow"` 27;
+`test_music_templates.py -k "score_bed_is_its_template or momentum"` 3 (the two templates render
+equal to the beds; the 14 closeness tests now skip the score beds, whose `bed_measures.json` is
+unchanged); `test_mcp.py` 19 (126 s, full; new: `test_server_list_music_has_every_bed`, slow, and
+the tidewater template over MCP); `test_studio.py` + `test_schema.py` + `test_music_check.py` +
+`test_cli.py` 141. Not run: the full suite; the 14 closeness tests (`slow`, unchanged beds and
+templates).
+
+Files to listen to / look at: `<scratchpad>/s190/tidewater.mp3` and `<scratchpad>/s190/skyline.mp3`
+(the built-in beds' full loops at −28 LUFS, as rendered by the bed code path; skyline's is
+byte-identical to `s185/out/skyline_lift.mp3`); `docs/music/media/bed-tidewater.{mp3,png}`,
+`bed-skyline.{mp3,png}` (the Listen page clips, +12 dB).
+
+Known gaps / for Step 191
+- `check.py`'s comments and DESIGN §93.9 say the limits were calibrated on "the 14 beds": still
+  true (the two pass with no notes); not reworded.
+- The two score beds are rendered per process, not cached on disk (as the other beds).

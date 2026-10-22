@@ -16,7 +16,8 @@ from vidgen import ambience, cli, listen, music, sfx
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs" / "music"
-#: What the committed page may weigh (page + MP3s + PNGs), see HANDOFF.md Step 183 (5.5 MB then).
+#: What the committed page may weigh (page + MP3s + PNGs), see HANDOFF.md Step 183 (5.5 MB then;
+#: 6.3 MB with the two score beds of Step 190).
 BUDGET = 6_500_000
 
 
@@ -26,6 +27,9 @@ def test_clips_start_where_the_bed_shows_itself() -> None:
     assert listen.bed_clip_start("breakthrough") == pytest.approx(lift - listen.CLIP_LEAD_SECONDS, abs=0.01)
     assert listen.bed_clip_start("momentum") == pytest.approx(48.0 - listen.CLIP_LEAD_SECONDS)
     assert set(listen.CLIP_MOMENTS) <= set(music.BUILTIN_BEDS)
+    # Step 190: the score beds' clips lead into their lift (tidewater 26.664 s, skyline 30 s)
+    assert listen.bed_clip_start("tidewater") == pytest.approx(26.664 - listen.CLIP_LEAD_SECONDS, abs=0.01)
+    assert listen.bed_clip_start("skyline") == pytest.approx(30.0 - listen.CLIP_LEAD_SECONDS)
 
 
 def test_sound_rows_play_every_builtin_sound_inside_the_clip() -> None:

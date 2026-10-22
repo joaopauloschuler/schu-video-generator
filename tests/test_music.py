@@ -147,6 +147,10 @@ _BED_FINGERPRINTS: dict[str, tuple[int, tuple[float, float, float]]] = {
     "horizon": (2792448, (-106.0111, -165.0023, -14.2267)),
     "beacon": (2304000, (30.9365, 7.4122, -55.1549)),
     "neon": (2383104, (31.8743, 7.2493, -75.6359)),
+    # Step 190: the two beds written as score files, as the owner heard them (byte-identical to
+    # the approved renders of tests/data/studio/tidewater.yaml and skyline_lift.yaml)
+    "tidewater": (2559744, (58.7584, 39.5267, 30.2177)),
+    "skyline": (2880000, (-24.169, 7.5638, -18.4739)),
 }
 
 
@@ -201,7 +205,7 @@ def test_energetic_beds_facts() -> None:
         "beacon": (120, "E minor", 24, "pulsar_a", 24000),
         "neon": (116, "F-sharp minor", 24, "night_drive_a", 24824),
     }
-    assert list(music.BUILTIN_BEDS)[10:] == list(facts)  # after the older ten
+    assert list(music.BUILTIN_BEDS)[10:14] == list(facts)  # after the older ten
     for name, (tempo, key, bars, seed, beat) in facts.items():
         bed = music.BUILTIN_BEDS[name]
         assert (bed.tempo, bed.key, bed.seed) == (tempo, key, seed)
@@ -214,6 +218,30 @@ def test_energetic_beds_facts() -> None:
     # where the trance beds lift: half-way, as their descriptions say
     assert "28.2 s" in music.BUILTIN_BEDS["ascent"].description and music.BUILTIN_BEDS["ascent"].seconds / 2 == pytest.approx(28.23, abs=0.01)
     assert "29.1 s" in music.BUILTIN_BEDS["horizon"].description and music.BUILTIN_BEDS["horizon"].seconds / 2 == pytest.approx(29.09, abs=0.01)
+
+
+def test_score_beds_facts() -> None:
+    """Step 190: ``tidewater`` and ``skyline`` are score files (``studio/beds``, also their
+    templates); their facts match the score (no audio made) and the score is the approved demo's."""
+    from vidgen.studio import load_music_score
+    from vidgen.studio.templates import TEMPLATE_DIR
+
+    facts = {"tidewater": (108, "E minor", 24, "tidewater", "26.7 s"), "skyline": (128, "D minor", 32, "skyline_lift", "30 s")}
+    assert list(music.BUILTIN_BEDS)[14:] == list(facts)  # after the fourteen made in Python
+    assert [b.name for b in music.BUILTIN_BEDS.values() if b.score] == list(facts)
+    for name, (tempo, key, bars, demo, lift) in facts.items():
+        bed = music.BUILTIN_BEDS[name]
+        score = load_music_score(TEMPLATE_DIR / f"{name}.yaml")
+        assert (bed.tempo, bed.key, bed.seed) == (score.tempo, score.key.name, None) == (tempo, key, None)
+        assert score.bars == bars and score.loop and round(bed.seconds * RATE) == score.samples == _BED_FINGERPRINTS[name][0]
+        assert bed.chords == tuple(slot.chord.name for s in score.sections for slot in s.chords)
+        assert f"{tempo} BPM in {key}" in bed.description and "score file" in bed.description and bed.use
+        assert f"At {lift} the lift" in bed.description
+        lift_start = next(score.section_start(s) for s in score.sections if s.name == "lift") / RATE
+        assert f"{lift_start:.1f}".rstrip("0").rstrip(".") + " s" == lift
+        # the same piece as the demo the owner listened to (only comments added)
+        shipped = yaml.safe_load((TEMPLATE_DIR / f"{name}.yaml").read_text(encoding="utf-8"))
+        assert shipped == yaml.safe_load((Path(__file__).parent / "data" / "studio" / f"{demo}.yaml").read_text(encoding="utf-8"))
 
 
 def test_bed_sources_differ_and_describe_themselves() -> None:
@@ -446,6 +474,9 @@ def test_validate_reports_missing_music_file(make_project: Any) -> None:
     root5 = make_project(_video(music="horizn"), folder="p5")
     [problem] = project_problems(Project.load(root5))
     assert "did you mean 'horizon'?" in problem.message
+    for typo, bed in (("tidewatr", "tidewater"), ("skylin", "skyline")):  # Step 190: the score beds too
+        [problem] = project_problems(Project.load(make_project(_video(music=typo), folder=f"p-{bed}")))
+        assert f"did you mean '{bed}'?" in problem.message, problem.message
     assert not project_problems(Project.load(make_project(_video(music={"source": "neon", "volume": -2}), folder="p6")))
     assert not project_problems(Project.load(make_project(_video(music="ascent"), folder="p7")))
 
@@ -467,7 +498,10 @@ def test_list_music(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFix
     theme = items["assets/music/theme.wav"]
     assert theme["origin"] == "project" and theme["duration"] == 2.0 and theme["description"] is None
     assert items["cartoon"]["tempo"] == 128 and items["lullaby"]["key"] == "F major"
-    assert Path(calm["preview"]) == previews / "calm.wav" and len(list(previews.glob("*.wav"))) == len(music.BUILTIN_BEDS) == 14
+    assert Path(calm["preview"]) == previews / "calm.wav" and len(list(previews.glob("*.wav"))) == len(music.BUILTIN_BEDS) == 16
+    assert items["tidewater"]["tempo"] == 108 and items["tidewater"]["loop_seconds"] == 53.328 and items["tidewater"]["origin"] == "builtin"
+    assert items["skyline"]["key"] == "D minor" and items["skyline"]["loop_seconds"] == 60.0
+    assert items["skyline"]["loudness"] == pytest.approx(music.MUSIC_LEVEL, abs=0.1) and "Rolled off" in items["skyline"]["description"]
     assert items["enigma"]["tempo"] == 96 and items["lab"]["loop_seconds"] == 44.443 and (previews / "momentum.wav").is_file()
     assert items["horizon"]["tempo"] == 132 and items["horizon"]["loop_seconds"] == 58.176 and items["neon"]["key"] == "F-sharp minor"
     assert items["beacon"]["loudness"] == pytest.approx(music.MUSIC_LEVEL, abs=0.1) and (previews / "ascent.wav").is_file()
@@ -475,6 +509,7 @@ def test_list_music(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFix
     assert main(["list-music", str(root)]) == 0
     out = capsys.readouterr().out
     assert "calm  builtin  D major, no beat, 60 s loop" in out and "pulse  builtin  A minor, 96 BPM" in out
+    assert "tidewater  builtin  E minor, 108 BPM" in out and "skyline  builtin  D minor, 128 BPM" in out
     assert "assets/music/theme.wav  project file  2.0 s" in out and "level at volume 0: -28 LUFS" in out
 
 
@@ -487,7 +522,7 @@ def test_schema_has_music(capsys: pytest.CaptureFixture[str]) -> None:
 
     for value in ("calm", {"source": "pulse", "duck": False}, [{"source": "calm", "to": "a"}, "bright"], False, {"source": "neon", "volume": -2}):
         jsonschema.validate(_video(music=value), schema)
-    assert "momentum, lab, ascent, horizon, beacon, neon" in json.dumps(schema)  # the source's description names every bed
+    assert "momentum, lab, ascent, horizon, beacon, neon, tidewater, skyline;" in json.dumps(schema)  # the source's description names every bed
 
 
 # ----- rendering ------------------------------------------------------------------------------------------

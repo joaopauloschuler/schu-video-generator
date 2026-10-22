@@ -1,0 +1,73 @@
+# Tidewater: a score-file template of vidgen's built-in bed `tidewater` (vidgen music template tidewater).
+# This file IS the bed, not a re-creation: `music: tidewater` plays this score rendered by vidgen,
+# sample for sample. A steady, hopeful loop in E minor at 108 BPM: a pad and a 3+3+2 pluck
+# arpeggio alone in the intro; kick, off-beat hats and a syncopated synth bass in the build, with a
+# riser into the lift; in the lift the pad opens, a clap on 2 and 4 and a bell melody; the outro
+# settles back to the top of the loop.
+# Copy it under a new name and change one thing at a time; check each change:
+#   vidgen music check my_theme.yaml --compare tidewater.yaml --out build/music-check
+version: 1
+title: Tidewater
+description: Pad, kick, syncopated bass and a 3+3+2 pluck arpeggio; a bell melody in the lift.
+key: E minor
+tempo: 108
+time: 4/4
+seed: 3
+progression: "i VI III VII"     # Em C G D, two bars each
+chord_bars: 2
+sections:
+  - {name: intro, bars: 4}
+  - {name: build, bars: 8}
+  - {name: lift, bars: 8, progression: "VI VII i i"}
+  - {name: outro, bars: 4}
+tracks:
+  # the bed's warm pad, brighter and a little louder in the lift
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 1800, air: 0.3}
+    sections:
+      lift: {settings: {tone: 3200, air: 0.5}, volume: 1}
+  kick:
+    instrument: kick
+    steps: "x... x... x... x..."
+    rest: [intro]
+  hat:
+    instrument: hat
+    steps: "..x. ..x. ..x. ..x."
+    only: [build, lift]
+    sections:
+      lift: {steps: "o.x. o.x. o.x. o.xo"}
+  clap:
+    instrument: clap
+    steps: "....x.......x..."
+    only: [lift]
+  # chord degrees: 1 root, 8 the root an octave up
+  bass:
+    instrument: synth_bass
+    steps: "1..1 ..1. 1..1 ..8."
+    rest: [intro]
+  arp:
+    instrument: pluck
+    steps: "1358 5315 1358 5318"
+    accent: "3+3+2"
+    volume: -4
+    pan: -0.2
+  # the lift's tune, two bars per string, played in turn
+  melody:
+    instrument: bell
+    only: [lift]
+    pan: 0.25
+    steps:
+      - "E5 - - - G5 - . . | C6 - - - B5 - . ."
+      - "A5 - - - F#5 - - . | D5 - - - . . . ."
+      - "E5 - - - G5 - B5 - | E6 - - - - - . ."
+      - ". . . . D6 - B5 - | G5 - - - - - . ."
+  riser:
+    instrument: riser
+    only: [build]
+    steps: ". | . | . | . | . | . | x | -"
+  boom:
+    instrument: boom
+    only: [lift]
+    steps: "x | . | . | . | . | . | . | ."

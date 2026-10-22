@@ -52,7 +52,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
 | `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
 | `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
-| `music` | none | background music: a bed name (`calm`, `pulse`, `bright`, `cartoon`, `lullaby`, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, `ascent`, `horizon`, `beacon`, `neon`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
+| `music` | none | background music: a bed name (`calm`, `pulse`, `bright`, `cartoon`, `lullaby`, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, `ascent`, `horizon`, `beacon`, `neon`, `tidewater`, `skyline`), a project piece or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
 | `soundfont` | none (GeneralUser GS 2.0.3, downloaded once) | the SoundFont (`.sf2` / `.sf3`, relative to the project) composed music is played with; see [SoundFont](#soundfont-soundfont-vidgen-soundfont) |
 | `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
 | `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color`, `push`, `wipe` or `{type, duration, color, direction, soft}`; see [transitions](#transitions-transition) |
@@ -2872,7 +2872,7 @@ list; in a project the lists its beats' voices use, with how many beats use each
 ## Background music (`music`)
 
 A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
-vidgen generates fourteen beds itself (no recordings, no samples; free to use in your videos,
+vidgen generates sixteen beds itself (no recordings, no samples; free to use in your videos,
 including commercially; no attribution needed; [listen](music/README.md) to a clip of each);
 any audio file FFmpeg reads works too, and so does music vidgen composes for the video in a mood
 ([composed music](#composed-music-compose)).
@@ -2914,8 +2914,11 @@ music:                                 # a list of cues: changing tracks
 each as WAV): seamless loops, generated in one to seven seconds when the video is joined
 (`ascent` takes about 17 s). The
 first five are light; the next five (Step 179) are documentary beds with a soft kick and a synth
-bass; the last four (Step 181) are energetic electronic beds: two uplifting-trance beds that
-build and lift, a cosmic one and a synthwave one.
+bass; the next four (Step 181) are energetic electronic beds: two uplifting-trance beds that
+build and lift, a cosmic one and a synthwave one. The last two (Step 190) are written in the
+[score format](#score-files-vidgen-music-render): the bed is its score file, rendered when the
+video is joined (`tidewater` in about 2 s, `skyline` about 9 s), and `vidgen music template
+tidewater` gives that very score to start a piece from.
 
 | bed | loop | what it sounds like | use it for |
 |---|---|---|---|
@@ -2933,17 +2936,21 @@ build and lift, a cosmic one and a synthwave one.
 | `horizon` | 58.2 s (32 bars), D minor → F major, 132 BPM | anthemic uplifting trance; its hook is a gated supersaw (the chords chopped into sixteenth notes, accented 3+3+2): 8 bars of groove, 8 bars of build (the bass rests, the filter opens, a long riser, a sixteenth-note kick roll), then at 29.1 s the lift to F major (a low boom, the bass back, the gated supersaw an octave higher and bright over a soft pad) | energetic reveals, tech launches, montages, uplifting endings, anthemic intros (`start: 29.1 − T` puts the lift T seconds in) |
 | `beacon` | 48 s (24 bars), E minor, 120 BPM | cosmic: a ticking beacon like a radio pulsar (short falling "chirps" with a touch of static on the 3+3+2 sixteenths, a strong pulse on beats 1 and 3, weaker ones left and right, the same every bar), a deep kick on every beat, off-beat sub bass, a low soft sixteenth-note figure, a deep dark space pad, a soft shimmer swelling twice per loop, faint radio static | space and astronomy, science, signals and data |
 | `neon` | 49.6 s (24 bars), F-sharp minor, 116 BPM | synthwave night drive: a steady kick, a big gated-reverb snare on 2 and 4, an analog bass bouncing in octaves on the eighths, a square-wave pluck arpeggio in sixteenths accented 3+3+2, warm detuned saw pads, soft sixteenth-note hi-hats | tech at night, retro-futurism, cities, coding Shorts |
+| `tidewater` | 53.3 s (24 bars), E minor, 108 BPM | steady and hopeful: a warm pad and a plucked sixteenth-note arpeggio accented 3+3+2 alone for 4 bars, then a soft kick, off-beat hi-hats and a syncopated synth bass, a riser into the lift; at 26.7 s the lift (C, D, E minor: a low boom, the pad opens, a clap on 2 and 4, a sparse bell melody), 4 bars settling back | explainers and documentaries that need a steady, hopeful pulse: nature, the sea, travel, progress stories, calm walkthroughs (`start: 26.7 − T` puts the lift T seconds in) |
+| `skyline` | 60 s (32 bars), D minor, 128 BPM | a pumping supersaw build and lift: 8 bars of a dark filtered supersaw cloud with pulsar ticks and faint static (no kick), 8 bars of build (a kick on every beat, the filter opening under a sixteenth-note trance gate, off-beat analog bass, an FM arpeggio with echoes, a riser and a kick roll), then at 30 s the lift (a low boom, the supersaw wide open and pumping with the kick, a rolling bass, a clap, a soft lead melody in a hall) for 12 bars, and 4 bars closing the filter | energetic reveals, product launches, montages, a build to a big moment (`start: 30 − T` puts the lift T seconds in) |
 
 The documentary and energetic beds are deliberately bass-heavy: 57 % (`discovery`) to 78 %
 (`horizon`) of their power is under 150 Hz (`ascent` 71 %, `beacon` 72 %, `neon` 71 %), against
 about 36 % for `pulse`. On headphones and full-range speakers that is a warm, solid floor under
 the voice; on phone and laptop speakers, which play little below 150 Hz, they sound lighter and
 quieter than the other beds (their kick and bass partly vanish). They also leave the voice's
-range (300 Hz–3 kHz) 2–4.7 dB emptier than `pulse` does (`beacon` the most).
+range (300 Hz–3 kHz) 2–4.7 dB emptier than `pulse` does (`beacon` the most). Of the score-file
+beds, `skyline` is bass-heavy too (64 %, 3 dB emptier in the voice's range than `pulse`);
+`tidewater` is lighter (39 %, about as full in the voice's range as `pulse`).
 
 | key | default | |
 |---|---|---|
-| `source` | required (or `compose`) | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, `ascent`, `horizon`, `beacon`, `neon`, a [project piece](#project-pieces-score-files-in-a-video) (`my_theme` for `assets/music/my_theme.yaml`, or the path `assets/music/my_theme.yaml`), or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
+| `source` | required (or `compose`) | `calm`, `pulse`, `bright`, `cartoon`, `lullaby`, `discovery`, `breakthrough`, `enigma`, `momentum`, `lab`, `ascent`, `horizon`, `beacon`, `neon`, `tidewater`, `skyline`, a [project piece](#project-pieces-score-files-in-a-video) (`my_theme` for `assets/music/my_theme.yaml`, or the path `assets/music/my_theme.yaml`), or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
 | `compose` | none | instead of `source`: music composed in a mood, `compose: calm` or `{mood, key, tempo, instruments, seed, bars}` ([below](#composed-music-compose)); without `bars` it is composed for the video ([follows it](#music-that-follows-the-video): `start` and `loop` do not apply); with `bars` it loops seamlessly like a bed and `start` wraps around the piece |
 | `volume` | `0` | dB, -60 to 12; at 0 the music is −28 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6.5 dB under ElevenLabs narration (≈ −21.4 LUFS) in its pauses |
 | `start` | `0` | seconds into the source where it starts; a loop restarts there |
@@ -3272,6 +3279,9 @@ against the version before (`vidgen music check my_theme.yaml --compare my_theme
 command prints this hint after writing a template), or listen (`vidgen music render
 my_theme.yaml --out my_theme.mp3`). The chords are written out in the bed's key: to change the
 key, write the `progression` again as Roman numerals. The beds themselves are unchanged.
+`tidewater` and `skyline` are the exception: those beds are score files, so their templates are
+the beds themselves, sample for sample (their chords are Roman numerals already). A copy saved
+as `assets/music/tidewater.yaml` clashes with the bed's name: save it under a name of your own.
 A filter opening is written as the beds do it: a dark and a bright copy of the pad cross-faded
 by their `volume` curves.
 
@@ -3303,7 +3313,7 @@ Each line is `ok`, `note` or `FIX`:
 | sections | a section named `lift` (`drop`, `chorus`, `climax`...) against the one before; one named `build` (`rise`...) second half against first | a lift less than 0.5 dB louder and 1.5 dB brighter; a build rising less than 0.5 dB and brightening less than 1 dB |
 | narration | the demo: the voice's 300 Hz–3 kHz over the music's while it speaks | under 15 dB |
 
-All 14 built-in beds and their templates pass with no notes. For a score, every track is also
+All 16 built-in beds and their templates pass with no notes. For a score, every track is also
 played on its own, so the report lists each track's share of the power, of the voice range, of
 the bass and of the highs, and the advice names the tracks and the keys to change (`` `piano`
 (piano) holds 70 % of the voice range there: lower `piano: sections: {main: {volume: -1}}`

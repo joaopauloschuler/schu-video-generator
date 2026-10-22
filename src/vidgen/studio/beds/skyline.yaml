@@ -1,0 +1,121 @@
+# Skyline Lift: a score-file template of vidgen's built-in bed `skyline` (vidgen music template skyline).
+# This file IS the bed, not a re-creation: `music: skyline` plays this score rendered by vidgen,
+# sample for sample. A pumping supersaw lift in D minor at 128 BPM. The intro is a filtered saw
+# cloud with pulsar ticks and radio static; the build opens the filter under a trance gate, with a
+# kick roll and a riser; the lift (30 s in) pumps the saws against the kick, with a rolling analog
+# bass, an echoed FM arpeggio and a soft lead in a hall; the outro closes the filter again.
+# Copy it under a new name and change one thing at a time; check each change:
+#   vidgen music check my_theme.yaml --compare skyline.yaml --out build/music-check
+version: 1
+title: Skyline Lift
+description: A pumping supersaw lift - filter sweeps, trance gate, side-chain ducking, echo, reverb and stereo spread.
+key: D minor
+tempo: 128
+seed: 5
+progression: "i VI III VII"     # Dm Bb F C, two bars each
+chord_bars: 2
+sections:
+  - {name: intro, bars: 8}
+  - {name: build, bars: 8}
+  - {name: lift, bars: 12, progression: "VI VII i i III VII"}
+  - {name: outro, bars: 4}
+tracks:
+  saws:
+    instrument: supersaw
+    play: chords
+    settings: {tone: 4200, fade: 0.3}
+    lowpass: {from: 600, to: 1000}          # the intro: dark, opening a little
+    duck: {to: kick, depth: 0.55, release: 0.13}
+    sections:
+      build:
+        lowpass: [[0, 1000], [8, 3600]]      # the sweep up
+        gate: {steps: "X..x..x.X..x..x.", duty: 0.5, floor: 0.08}
+      lift: {lowpass: 4000, volume: 2, width: 1.4}
+      outro: {lowpass: {from: 3000, to: 600}, volume: {from: 0, to: -10}}
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 900, air: 0.2, sub: 0.5}
+    volume: -5
+    duck: {to: kick, depth: 0.4}
+  kick:
+    instrument: kick
+    settings: {high: 115, low: 50, click: 0.08}
+    steps: "x... x... x... x..."
+    rest: [intro]
+    sections:
+      build: {steps: ["x... x... x... x...", "x... x... x... x...", "x... x... x... x...", "x... x... x... x...",
+                      "x... x... x... x...", "x... x... x... x...", "x... x... x... x...", "x... x... x... ...."]}
+  roll:
+    instrument: kick
+    settings: {high: 115, low: 50, click: 0.08}
+    only: [build]
+    steps: ". | . | . | . | . | . | . | .... .... x.x. xxxx"
+    volume: [[7.5, -14], [8, -3]]
+  open_hat:
+    instrument: open_hat
+    steps: "..x. ..x. ..x. ..x."
+    only: [build, lift]
+    pan: 0.2
+    sections:
+      build: {volume: {from: -12, to: 0}}
+  hat:
+    instrument: hat
+    steps: "o.x. o.x. o.x. o.xo"
+    only: [lift]
+    spread: 0.3
+  clap:
+    instrument: clap
+    steps: "....x.......x..."
+    only: [lift]
+    reverb: {size: 1.2, mix: 0.3}
+  pulsar:
+    instrument: pulsar
+    steps: "x..x..x.x..x..x."
+    only: [intro, outro]
+    spread: 0.35
+    volume: -3
+  static:
+    instrument: static
+    only: [intro]
+    steps: "x | - | - | - | - | - | - | -"
+    width: 1.6
+  bass:
+    instrument: analog_bass
+    steps: "..x. ..x. ..x. ..x."
+    rest: [intro, outro]
+    sections:
+      lift: {steps: ".xxx .xxx .xxx .xxx", volume: -2}
+  arp:
+    instrument: fm_pluck
+    steps: "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3"
+    accent: "3+3+2"
+    octave: 4
+    volume: -6
+    pan: 0.25
+    echo: {delay: 0.75, feedback: 0.35, repeats: 2}
+    only: [build, lift]
+    sections:
+      build: {lowpass: [[0, 900], [8, 4000]]}
+  lead:
+    instrument: soft_lead
+    only: [lift]
+    volume: -1
+    echo: {delay: 1.5, feedback: 0.25, repeats: 2}
+    reverb: {size: 2.8, mix: 0.3}
+    steps:
+      - "F5 - - - D5 - - - | Bb4 - - - C5 - D5 -"
+      - "E5 - - - C5 - - - | G4 - - - - - . ."
+      - "D5 - - - F5 - A5 - | A5 - - - - - . ."
+      - "G5 - F5 - E5 - D5 - | E5 - - - - - . ."
+      - "A5 - - - C6 - - - | A5 - G5 - F5 - - -"
+      - "E5 - - - G5 - - - | E5 - - - - - . ."
+  riser:
+    instrument: riser
+    only: [build]
+    steps: ". | . | . | . | x | - | - | -"
+    settings: {high: 3200}
+  boom:
+    instrument: boom
+    only: [lift]
+    steps: "x | . | . | . | . | . | . | . | . | . | . | ."

@@ -13042,7 +13042,7 @@ people can hear it: `docs/music/README.md`, committed with its media.
 - **Not done**: no per-clip loudness readout on the page; no clip of composed music following a
   video (mood changes, swells), only fixed moods; the page lists the moods but plays two.
 
-## 93. Music agents can write: score files (Phase S, Steps 184–190)
+## 93. Music agents can write: score files (Phase S, Steps 184–191)
 
 Goal: AI agents make new music the way the Steps 179 / 181 agents made the beds, without
 editing vidgen's Python: a piece written as a YAML **score file**, an instrument library,
@@ -13078,7 +13078,9 @@ Term: a **score file** (YAML, this section; class `MusicScore`) is not the compo
   recipe.
 - **189 Example and craft notes** (done, §93.11): `examples/gps-time-of-flight` with an
   agent-made piece, `docs/COOKBOOK-MUSIC.md`, the Listen page's score-format row.
-- **190 Review** (beds and existing projects byte-identical; determinism; phase tests).
+- **190 Two score pieces as built-in beds** (done, §93.12; added to the plan after the owner
+  listened to the demos): `tidewater` and `skyline`.
+- **191 Review** (beds and existing projects byte-identical; determinism; phase tests).
 
 Compatibility: additive and opt-in. Nothing that exists plays differently; the 14 beds stay
 byte-identical (`tests/test_music.py` fingerprints).
@@ -13611,3 +13613,60 @@ music: [{source: my_theme, to: part2}, {source: assets/music/outro.yaml, from: r
 - **Known**: the overlay-plan warning seen on the final render ("'four' starts at 50.37 s, planned
   50.47 s") — the 16:9 render's scene lengths differ by 2–3 frames from the plan's; pre-existing,
   not music-related (captions 0.07–0.1 s off), left for review.
+
+### 93.12 Two score pieces as built-in beds (Step 190)
+
+The owner listened to the two demos written in the score format and approved both as built-in
+beds ("Tidewater is an absolute piece of art and must be included as an option in the
+software"): `tidewater` (Step 184's demo) and `skyline` (Step 185's `skyline_lift`; the short
+name, as no bed, sound, mood, ambience or piece uses it). They are in `BUILTIN_BEDS` after the
+14, so they work wherever a bed does: `music: tidewater`, `{source: skyline, volume: -2}`, cue
+lists, `vidgen list-music` (+ `--json`, MCP `list_music`), did-you-mean, the schema's `source`
+text, the Listen page.
+
+- **Mechanism** (decision): the score file is the bed. It ships as package data
+  `studio/beds/<bed>.yaml` — the folder of the templates, so `vidgen music template tidewater`
+  writes the very score the bed plays (a template that is the bed, sample for sample; the 14
+  others stay close re-creations). `Bed.score: bool` marks them; their generator,
+  `music._score_bed(name)`, imports `vidgen.studio` when called (music.py never imports studio
+  at import time: studio imports music) and returns `render_music_score(load_music_score(...))`
+  — float32, read-only, −28 LUFS, a seamless loop; the `rng` argument is not used, `seed` stays
+  `None` (the score's own `seed:` sets the pads' phases). Rendered at the join like every bed and
+  kept per process by `bed_loop`'s cache (`tidewater` 2 s, `skyline` 9 s: the filter sweeps);
+  not on disk — the other beds are not either (`ascent` takes 17 s), and `bed_loop` has no
+  project folder. The YAML data are the test demos' (`tests/data/studio/tidewater.yaml`,
+  `skyline_lift.yaml`; only comments added: the template header, what each part does);
+  `test_score_beds_facts` checks the parsed data are equal and that the `Bed` facts (tempo,
+  key, length, chords in loop order, the lift time in the description) match the score.
+- **Name clash**: the Step 188 rule covers them (`bed_conflict` reads `BUILTIN_BEDS`): a
+  project's `assets/music/tidewater.yaml` with `music: tidewater` is a problem — rename the piece
+  or use the path form. CONFIG says to save a template copy under a name of one's own.
+- **The skyline render** (decision: keep it): Step 186 centred a pad's sub (one wave on both
+  sides), so `skyline_lift` renders differently from Step 185 (63 → 64 % under 150 Hz, true
+  peak −14.8 → −14.9 dBTP, L/R correlation 0.37 → 0.41). The MP3 the owner was given
+  (`<scratchpad>/s185/out/skyline_lift.mp3`, written at 15:13 during Step 186) turned out to be
+  byte-identical to the current code's render through `listen.write_mp3`; the Step 185 render
+  (`skyline_lift-cli.mp3`, 14:16) is the other one. So the built-in bed is exactly what was
+  approved, with no per-score setting needed (`<scratchpad>/s190/refnow.py`, `ref185.py`).
+  `tidewater` has no pad sub and is byte-identical since Step 184.
+- **Facts**: `tidewater` E minor, 108 BPM (beat 26664 samples), 24 bars = 53.328 s, intro /
+  build / lift (26.664 s) / outro; 39 % of the power under 150 Hz, the 300 Hz–3 kHz band 0.2 dB
+  under `pulse`'s, true peak −14.6 dBTP, L/R correlation 0.37. `skyline` D minor, 128 BPM, 32
+  bars = 60 s, intro / build (15 s) / lift (30 s) / outro (52.5 s); 64 % under 150 Hz, 3.0 dB
+  under `pulse` in the voice's range, −14.9 dBTP, 0.41. Both `vidgen music check` "fine under
+  narration" as scores and as audio. The descriptions give the parts, ranges (read from the
+  renderer's voicing: bass C2–G3, arpeggio C4–G5, bell D5–E6; bass C2–B♭2, FM arpeggio C4–B♭5,
+  lead G4–C6), sections and times in words.
+- **Fingerprints** (`tests/test_music.py`): the two loops' projections are stored like the 14's
+  (unchanged), so their samples are locked from now on; the parametrised bed tests (determinism,
+  −28 LUFS, headroom, highs, rumble, width, seam, `Source` tiling) run on all 16. The template
+  closeness test runs on the 14 Python beds; `test_score_bed_is_its_template` checks the two
+  are equal to their templates' renders.
+- **Listen page**: rows, spectrograms and 15 s clips for both, each 6 s before its lift
+  (`CLIP_MOMENTS` 0.5: `tidewater` from 20.66 s, the riser and the lift with the bell melody;
+  `skyline` from 24 s, the end of the build — riser, kick roll — and the lift); a sentence above
+  the table names the score beds and the template command. 6.33 MB (budget 6.5 MB); every other
+  file byte-identical; a second run into the scratchpad identical.
+- **Docs**: README (16 beds; the list), CONFIG (the beds table, intro, bass-weight paragraph, the
+  `music` / `source` rows, templates, check), the guide's bed alternatives (`momentum` still the
+  first suggestion), the cookbooks, the MCP `music_template` text (16 templates).

@@ -57,6 +57,8 @@ CLIP_MOMENTS: dict[str, tuple[float, str]] = {
     "momentum": (1.0, "the riser into the top of the loop"),
     "ascent": (0.5, "the build and the lift"),
     "horizon": (0.5, "the build and the lift to F major"),
+    "tidewater": (0.5, "the riser and the lift with its bell melody"),
+    "skyline": (0.5, "the end of the build and the lift"),
 }
 CLIP_LEAD_SECONDS = 6.0
 #: The composed moods with a clip: one for explainers, one for cartoons.
@@ -411,6 +413,15 @@ def _piece_row(piece: ScorePiece) -> str:
 def page_text(composed_pieces: Sequence[composer.Piece], composed_note: str) -> str:
     """The Listen page's Markdown (no dates, no paths: the same inputs give the same text)."""
     beds = list(music.BUILTIN_BEDS)
+    score_beds = [name for name, bed in music.BUILTIN_BEDS.items() if bed.score]
+    score_beds_text = []
+    if score_beds:
+        names = " and ".join(f"`{name}`" for name in score_beds)
+        score_beds_text = [
+            f"{names} are written in the score format (below): `vidgen music template {score_beds[0]}` gives",
+            "the very score the bed plays, to start a piece of your own from.",
+            "",
+        ]
     score_rows: list[str] = []
     if SCORE_PIECES:
         score_rows = [
@@ -460,6 +471,7 @@ def page_text(composed_pieces: Sequence[composer.Piece], composed_note: str) -> 
         "music. `music: momentum` plays one under the whole video (`{source: momentum, volume: -2}`,",
         "or a list of cues with `from` / `to` scenes).",
         "",
+        *score_beds_text,
         "| bed | key, tempo, loop | use it for | spectrogram | clip |",
         "|---|---|---|---|---|",
         *(_bed_row(name) for name in beds),

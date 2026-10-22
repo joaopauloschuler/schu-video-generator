@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–189)
+## 0.3.0 (Steps 61–190)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -383,6 +383,10 @@ matters only for projects made with development builds between Steps 67 and 131)
   the Listen page gains a "Made with the score format" row. The recipe now says how to change a
   template's key and which section names the check judges; `vidgen music template` suggests the
   check as the next step (189).
+- Two new built-in beds written in the score format: `tidewater` (E minor, 108 BPM, steady and
+  hopeful, a bell melody in its lift) and `skyline` (D minor, 128 BPM, a pumping supersaw build
+  and lift). `music: tidewater` plays them like any bed; `vidgen music template tidewater` gives
+  the very score the bed plays. 16 beds in all, on the Listen page too (190).
 
 ### Narration and pictures
 

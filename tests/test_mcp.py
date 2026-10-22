@@ -361,13 +361,15 @@ def test_server_music_tools(tmp_path: Path) -> None:
 
     async def body(client: Any) -> None:
         doc = doc_of(await client.call_tool("music_template", {}))
-        assert doc["action"] == "template" and len(doc["templates"]) == 14 and "path" not in doc
+        assert doc["action"] == "template" and len(doc["templates"]) == 16 and "path" not in doc
         doc = doc_of(await client.call_tool("music_template", {"bed": "momentum"}))
         written = tmp_path / "assets" / "music" / "momentum.yaml"
         assert Path(doc["path"]) == written.resolve() and written.read_text(encoding="utf-8").startswith("# Momentum")
         assert "exists" in error_text(await client.call_tool("music_template", {"bed": "momentum"}))
         assert "did you mean 'momentum'" in error_text(await client.call_tool("music_template", {"bed": "momentm", "out": "x.yaml"}))
         assert "outside the folder" in error_text(await client.call_tool("music_template", {"bed": "calm", "out": "../calm.yaml"}))
+        doc = doc_of(await client.call_tool("music_template", {"bed": "tidewater", "out": "themes/tide.yaml"}))  # Step 190: a score bed's own score
+        assert (tmp_path / "themes" / "tide.yaml").read_text(encoding="utf-8").startswith("# Tidewater: a score-file template")
 
         doc = doc_of(await client.call_tool("music_patches", {}))
         assert doc["action"] == "patches" and any(i["name"] == "supersaw" for i in doc["instruments"])
@@ -385,6 +387,23 @@ def test_server_music_tools(tmp_path: Path) -> None:
         assert [c.type for c in result.content] == ["text", "image"]
         doc = doc_of(await client.call_tool("music_check", {"source": "assets/music/tiny.yaml", "compare": str(tmp_path / "build" / "mcp" / "music" / "tiny.mp3"), "images": 0}))
         assert doc["compare"]["table"] and Path(doc["files"]["spectrogram"]).name == "tiny-vs-tiny.png"
+
+    run_session(tmp_path, body)
+
+
+@pytest.mark.slow   # list_music makes every bed's loop (about a minute and a half)
+def test_server_list_music_has_every_bed(tmp_path: Path) -> None:
+    """Step 190: list_music lists the 16 beds, the two score beds described like the others."""
+    from vidgen.music import BUILTIN_BEDS
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("list_music", {}))
+        beds = {m["name"]: m for m in doc["music"] if m["origin"] == "builtin"}
+        assert list(beds) == list(BUILTIN_BEDS) and len(beds) == 16
+        for name, key, tempo in (("tidewater", "E minor", 108), ("skyline", "D minor", 128)):
+            bed = beds[name]
+            assert (bed["key"], bed["tempo"]) == (key, tempo) and bed["use"] and "score file" in bed["description"]
+            assert bed["loudness"] == pytest.approx(-28, abs=0.1)
 
     run_session(tmp_path, body)
 

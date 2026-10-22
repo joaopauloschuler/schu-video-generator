@@ -2,7 +2,7 @@
 
 **A video and presentation generator built for AI agents.** See the [scene gallery](docs/gallery/README.md).
 
-**Its own music and sound synthesizer: 14 original music beds, music composed for your video, and
+**Its own music and sound synthesizer: 16 original music beds, music composed for your video, and
 36 sound effects — all generated from code, free to use.** [Listen](docs/music/README.md).
 
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
@@ -43,8 +43,9 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
 **Music and sound.** vidgen makes its own soundtrack; [listen to every bed and sound](docs/music/README.md)
 (clips and spectrograms).
 
-- **14 synthesised music beds**: seamless loops from a calm pad to uplifting trance, mixed at
-  −28 LUFS, the same music every time; `music: momentum` is all it takes.
+- **16 synthesised music beds**: seamless loops from a calm pad to uplifting trance, mixed at
+  −28 LUFS, the same music every time; `music: momentum` is all it takes. Two of them,
+  `tidewater` and `skyline`, are written in vidgen's own score format.
 - **Music composed for your video** in 8 moods, played with real instruments (the GeneralUser GS
   SoundFont; optional `music` extra). It follows the video: a mood per scene, scene changes on bar
   lines, swells on reveals, a closing cadence.
@@ -292,13 +293,15 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
   reveals, highlights, callouts, zooms and chapter cards. `vidgen list-sfx` describes every sound
   in words and `--render-dir` writes them out to listen to ([reference](docs/CONFIG.md#sound-effects-sfx)).
-- **Background music**: `music: calm` — one of fourteen generated beds (`calm` pad,
+- **Background music**: `music: calm` — one of sixteen generated beds (`calm` pad,
   `pulse` soft arpeggio at 96 BPM, `bright` uplifting at 120 BPM, `cartoon` playful pizzicato
   at 128 BPM, `lullaby` music box in 3/4 at 64 BPM, five documentary beds with a soft kick
   and synth bass: `discovery`, `breakthrough` (tension, then a reveal), `enigma` (mysterious),
   `momentum` (driving), `lab` (modern tech), and four energetic electronic beds: `ascent` and
   `horizon` (uplifting trance that builds and lifts), `beacon` (a pulsar-like ticking beacon:
-  space, science), `neon` (synthwave night drive); seamless loops; free to use in your videos, including commercially; no attribution
+  space, science), `neon` (synthwave night drive), and two written as score files: `tidewater`
+  (steady and hopeful, a bell melody in its lift) and `skyline` (a pumping supersaw build and
+  lift); seamless loops; free to use in your videos, including commercially; no attribution
   needed; [listen](docs/music/README.md)) or
   your own file, looped with a cross-faded seam, faded in and out, changed per scene range (a
   list of cues with `from` / `to`) or muted per scene (`music: false`); ducked 12 dB under the
