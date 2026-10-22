@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–186)
+## 0.3.0 (Steps 61–187)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -365,6 +365,12 @@ matters only for projects made with development builds between Steps 67 and 131)
   momentum --out my_theme.yaml`. Score files gain voicing notes `v1`–`v9`, notes played together
   (`v2+v3+v4`), the bass an octave up (`x'`), a pad `swell` and a `snap`; a pad's sub now plays
   the written bass note and sits in the centre (186).
+- `vidgen music check my_theme.yaml` (or any audio file): how a piece will sit under narration,
+  in words — loudness and steadiness, peaks and clipping, the tempo heard, the loop's seam, how
+  much sits in the voice's range, bass weight, harsh highs, the key, whether the lift lifts and
+  the build builds — with advice that names the tracks and score keys to change, a spectrogram
+  with the sections marked and a 20 s demo under a narration sample with vidgen's ducking;
+  `--compare` puts two versions side by side (187).
 
 ### Narration and pictures
 

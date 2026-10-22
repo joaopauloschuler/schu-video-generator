@@ -1019,6 +1019,9 @@ Step 185 (§93.7) adds `patch_catalog` (the instruments and effects as data) and
 `warnings` list argument to `render_music_score` (compatible: without it, it renders as before).
 Step 186 (§93.8) adds `music_template_text(bed)` (a built-in bed's score-file template, YAML
 text) and `music_template_catalog()` (every template's facts).
+Step 187 (§93.9) adds `check_music_score(score)`, `check_music_audio(samples, name)` (both →
+`MusicCheck`: verdict, facts, findings with fixes, sections, tracks) and `music_check_text(check)`
+(the report in words).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -13064,9 +13067,10 @@ Term: a **score file** (YAML, this section; class `MusicScore`) is not the compo
   my_theme.yaml`, a close re-creation of each bed as an editable score file (not bit-identical;
   the beds stay unchanged); tested by measurements (tempo, key / chroma, loudness curve, spectrum
   balance, clean loop).
-- **187 Analysis**: `vidgen music check <score|wav>`: loudness and steadiness, true peak,
-  clipping, tempo, loop seam, voice-range share, bass weight, harsh highs, section energy (does
-  the lift lift?), a spectrogram with section marks, a demo under narration, advice, compare two.
+- **187 Analysis** (done, §93.9): `vidgen music check <score|audio>`: loudness and steadiness,
+  true peak, clipping, tempo, loop seam, voice-range share, bass weight, harsh highs, key, section
+  energy (does the lift lift?), a spectrogram with section marks, a demo under narration, advice
+  naming score keys (tracks measured one by one), compare two.
 - **188 Using it**: `assets/music/*.yaml` used like beds (`music: my_theme`), rendered at the join
   with caching; list-music / validate / lint; MCP tools; the author-guide recipe.
 - **189 Example and craft notes**, **190 Review** (beds and existing projects byte-identical;
@@ -13078,14 +13082,17 @@ byte-identical (`tests/test_music.py` fingerprints).
 ### 93.2 Where it lives
 
 `src/vidgen/studio/` (theory, patterns, instruments, effects, patches, score_file, render,
-templates, measure; the templates in `beds/`). Self-contained: it
+templates, measure, check; the templates in `beds/`, the check's narration sample in `data/`).
+Self-contained: it
 imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...,
-and `BUILTIN_BEDS` for the templates' names), `vidgen.sfx` (`RATE`, filters), `vidgen.loudness`
-and `vidgen.errors`; never manim, scenes, the project or the render pipeline
+and `BUILTIN_BEDS` for the templates' names), `vidgen.sfx` (`RATE`, filters, `decode_audio`),
+`vidgen.loudness` and `vidgen.errors`; never manim, scenes, the project or the render pipeline
 (`tests/test_studio.py::test_studio_imports_no_video_code`), so it can become a package of its
-own. Public through `vidgen.api`: `MusicScore`, `load_music_score(path)`,
+own (the MP3 writer, `listen.write_mp3`, is called by the command, not by `studio`). Public
+through `vidgen.api`: `MusicScore`, `load_music_score(path)`,
 `parse_music_score(data, origin)`, `render_music_score(score)`, `patch_catalog()` (185),
-`music_template_text(bed)`, `music_template_catalog()` (186).
+`music_template_text(bed)`, `music_template_catalog()` (186), `check_music_score(score)`,
+`check_music_audio(samples, name)`, `music_check_text(check)`, `MusicCheck` (187).
 
 ### 93.3 The format
 
@@ -13411,3 +13418,79 @@ did-you-mean, `music_template_text`, `music_template_catalog`).
   (the build-up and lift of `ascent` and `horizon`, `beacon`'s pulses, `cartoon`'s phrases,
   `lullaby`'s bass notes). Rendering a template takes 2–7 s; the closeness test about 90 s
   (`slow`).
+
+### 93.9 Checking a piece (Step 187)
+
+`vidgen music check SCORE.yaml|AUDIO [--narration FILE] [--compare OTHER] [--out DIR] [--json]`
+(`cli._music_check`, `jsonout.music_check_document`, `studio/check.py`): how a piece will sit
+under narration, for agents who cannot listen — a report in words (and JSON) with a verdict,
+advice naming the score keys to change, a spectrogram PNG and a demo MP3. A human listens and
+chooses; the check only says what the numbers say.
+
+- **Track by track** (decision): a score is played by `render.render_music_stems` — each track on
+  its own canvas, handed to a callback before the master filter and the final level (one track's
+  buffer at a time, so memory stays that of a render), then summed, filtered once and set to −28
+  LUFS as `render_music_score` does (the same within 1e-5: another summing order; tested). The
+  stems' bands are measured with the master filter's power response and the final gain applied.
+  So every problem is put down to the tracks causing it, with the dB to change. An audio file is
+  measured as vidgen plays it (scaled to −28 LUFS), in 2 s blocks instead of bars.
+- **Measures**: per 50 ms frame (4096-sample Hann; wrapped round for a loop) the power in 20–150
+  Hz (bass), 300 Hz–3 kHz (voice range), 2–20 kHz (brightness), 5–20 kHz (highs) and all, per bar;
+  K-weighted power once (integrated loudness, 3 s loudness every 0.5 s, sections, half-sections,
+  bars); true peak (`peak_envelope`); `measure.tempo` against the score's tempo — ×1, ×2, ×½, ×⅔,
+  ×3⁄2, ×4⁄3, ×¾ within 2 % are the same beat, said in words (a 3+3+2 figure makes the onsets
+  repeat in threes: `lab` is heard at 72 for 108); the seam step over the 99.9th-percentile step
+  (the level either side is not compared: a downbeat hit makes it jump on purpose, up to 11.7 dB
+  in `horizon`); the chroma of the pitched tracks only (drums' noise spreads over every pitch
+  class), the share on the key's scale per section (section keys honoured) and the best
+  Krumhansl-Kessler key; sections named `lift` / `drop` / `chorus` / `climax` / `peak` / `high`
+  against the section before (louder or brighter), `build` / `buildup` / `rise` / `riser` /
+  `climb` second half against first.
+- **Limits** (`check.LIMITS`), calibrated on the 14 beds (as audio) and their 14 templates (as
+  scores; `<scratchpad>/s187/calibrate.py`): every one passes with no note. Ranges measured →
+  limit: 3 s loudness range 0.5–1.8 dB (skyline_lift 4.1) → 8; peak over loudness 10.8–14.5 →
+  19; seam 0.03–0.44 → 1; loudest voice-range bar −35.0 … −27.2 dB (`lullaby`, a music box) →
+  −26, voice-range share 7–63 % → 72 %; bass 23–78 % → 85 % (under 5 %: a note); highs −94 …
+  −34.8 dB (`bright`) → −30, brightest bar up to −28.6 → −24; on the key's notes 0.90–1.00 →
+  0.75; demo voice-range clearance 17.6–26.2 dB → 15; lift +0.3 dB louder but +1.9 dB brighter
+  in `ascent` → 0.5 dB louder or 1.5 dB brighter; build +0.2 dB, +1.3 dB brighter in `tidewater`
+  → 0.5 dB or 1 dB. Deliberately bad scores (`<scratchpad>/s187/bad/`) are all flagged, each for
+  its fault only: a loud piano and lead in the voice range (94 %, bars up to −23.9 dB), a boomy
+  kick, sub and boom (97 % bass), open master filter with loud hats (highs −18 dB), chords and
+  melody outside the key (23 % on C major's notes), a lift quieter than its build and a flat build,
+  a near-silent intro before a loud lift (28.8 dB swing); a clipped WAV with a click at its seam.
+- **Advice**: the fewest of the tracks holding a band (up to three) lowered together by the same
+  whole dB (at most 20) to bring the band under its limit — computed from their shares — written
+  as the score change: `` `kick.volume: -5` (now 6) `` when it covers every section the track
+  plays at one level, else `` `piano: sections: {main: {volume: -1}}` (−5 dB) ``; with another
+  way (an octave up out of the voice's core for notes, `tone` / `lowpass` for pads, a shorter
+  `decay`, `lowpass: 5000` for hats, the master `lowpass`). A lift that does not lift: tracks
+  quieter there than before, its main part raised, a part that rests there brought in, the
+  section before made smaller; a build: a `volume` ramp, a `lowpass` sweep, a riser; unsteady:
+  tracks much quieter in the quiet sections, parts only in the loud one. Audio files get generic
+  advice (EQ, re-export with headroom, cross-fade the seam).
+- **Narration demo** (decision): the sample shipped as package data (`studio/data/
+  narration_sample.mp3`, 160 KB, 20 s mono, 64 kbps): two original lines spoken by Kokoro
+  (`af_heart`, speed 0.9; Kokoro-82M and its voices are Apache-2.0, so the recording can ship),
+  at 2.0–8.1 s and 10.6–15.8 s, set to −21.5 LUFS as stereo (the level vidgen's narration sits at,
+  §48); made by `<scratchpad>/s187/make_narration.py`. `--narration FILE` uses another at its own
+  level (vidgen plays narration as recorded), up to 60 s, 3 s of music after it. The music plays
+  from its start at volume 0 with a 1.5 s fade-in and a 2 s fade-out, ducked by
+  `check.duck_gain_db` — `mix.duck_curve` re-written in `studio` (which may not import `mix`)
+  with `DuckConfig()`'s numbers (12 dB, 0.4 s, 1 s, 1.5 s hold; a test keeps both equal) over the
+  speech found in 10 ms frames within 40 dB of the loudest — then set to −16 LUFS, true peak at
+  most −1.5 dBTP (scaled, no limiter), written by `listen.write_mp3`. It reports the voice's
+  loudness, the music's under it and alone, and how far the voice's 300 Hz–3 kHz stands over the
+  music's while it speaks.
+- **Pictures**: one row per piece (two with `--compare`, on one time scale: 20 columns a second
+  up to 80 s, at most 1600): a title with the verdict; the spectrogram (30 Hz–16 kHz log, the
+  same −105 … −30 dB scale for every piece, an inferno-like palette) with labelled section lines,
+  the 300 Hz / 3 kHz lines dotted blue, 10 s ticks; a lane under it with each bar's voice-range
+  level (blue, red over the limit) and the limit line.
+- **Speed**: `tidewater` (53 s, 9 tracks) 7.9 s for the command (render track by track 3.7 s);
+  `skyline_lift` (60 s, 14 tracks with filter sweeps) 15.1 s (render 11.7 s, the sweeps); a
+  template 4–15 s; an audio file of 40 s 4.8 s. The analysis itself is 2–4 s for a minute.
+- **Not done**: no per-track picture; the key check is per section, not per chord; a lift is
+  judged against the section just before it only; audio files have no sections (the check does
+  not guess them); level-dependent masking (a real psychoacoustic model) is out of scope — the
+  voice-range level per bar and the demo's clearance stand in for it.

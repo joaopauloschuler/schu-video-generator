@@ -99,8 +99,12 @@ from vidgen.pronunciation import Pronunciation, Spoken  # noqa: E402
 from vidgen.config import SfxParams, StingCue, StingSetting  # noqa: E402
 from vidgen.sfx import SfxEvent, SoundLibrary, sound_library, synthesize  # noqa: E402
 from vidgen.studio import (  # noqa: E402
+    MusicCheck,
     MusicScore,
+    check_music_audio,
+    check_music_score,
     load_music_score,
+    music_check_text,
     music_template_catalog,
     music_template_text,
     parse_music_score,
@@ -800,6 +804,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "patch_catalog",
     "music_template_catalog",
     "music_template_text",
+    "MusicCheck",
+    "check_music_score",
+    "check_music_audio",
+    "music_check_text",
     "CALLOUT_KINDS",
     "Callout",
     "CalloutArea",

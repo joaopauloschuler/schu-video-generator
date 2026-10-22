@@ -1050,8 +1050,8 @@ advice; a human makes the final choice (DESIGN §93).
 - [x] Tests (`tests/test_music_templates.py`): each template renders, loops cleanly, −28 LUFS, close to its bed by measurements (tempo, key / chroma, loudness curve, spectrum balance; `studio/measure.py`) with the tolerances justified; a bed-vs-template spectrogram per bed looked at
 
 ### Step 187 — Analysis
-- [ ] `vidgen music check <score|wav>`: a report in words and JSON — loudness and steadiness, true peak, clipping, tempo vs the score, loop-seam click, voice-range (300 Hz–3 kHz) share, bass weight, harsh highs, section energy (does the lift lift?)
-- [ ] Spectrogram PNG with section marks; a demo under a narration sample with default ducking; plain-language advice; compare two pieces / versions side by side
+- [x] `vidgen music check <score|audio> [--narration FILE] [--compare OTHER] [--out DIR] [--json]`: a report in words and JSON — loudness and steadiness, true peak, clipping, tempo vs the score (×2, ×½, ×⅔... accepted and said so), loop-seam click, voice-range (300 Hz–3 kHz) share and loudest bars, bass weight, harsh highs, section energy (does the lift lift? does the build build?), key fit; a score is played track by track so each problem names its tracks (`studio/check.py`, `render_music_stems`; `vidgen.api`: `check_music_score`, `check_music_audio`, `music_check_text`, `MusicCheck`; DESIGN §93.9)
+- [x] Spectrogram PNG with section marks and a voice-range lane; a 20 s demo MP3 under a shipped Kokoro narration sample (`studio/data/narration_sample.mp3`) with vidgen's default ducking; plain-language advice naming score keys; `--compare` side-by-side table and two-row spectrogram; limits calibrated on the 14 beds and their templates (all fine) and on deliberately bad scores (all flagged)
 
 ### Step 188 — Using it in videos
 - [ ] Project pieces `assets/music/*.yaml` used like beds (`music: my_theme`, `{source: my_theme, volume: -2}`), rendered at the join with caching; `list-music`, `validate`, `lint` include them

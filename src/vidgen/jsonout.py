@@ -726,6 +726,19 @@ def music_render_document(
     )
 
 
+def music_check_document(
+    report: Mapping[str, Any], files: Mapping[str, Path], compare: Mapping[str, Any] | None, seconds: float,
+    warnings: Iterable[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    """The ``vidgen music check --json`` document: the report (``vidgen.studio.check.check_dict``:
+    verdict, facts, findings with fixes, sections, tracks), the spectrogram and demo written, and
+    with ``--compare`` the other piece's report and the side-by-side table."""
+    return envelope(
+        "music", True, warnings, action="check", **dict(report), files={k: _path(v) for k, v in files.items()},
+        compare=dict(compare) if compare is not None else None, check_seconds=seconds,
+    )
+
+
 def music_patches_document(catalog: Mapping[str, Any], warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The ``vidgen music patches --json`` document: every score-file instrument and effect
     (``catalog`` from :func:`vidgen.studio.patch_catalog`)."""

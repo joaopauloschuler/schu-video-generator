@@ -1384,6 +1384,8 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
         return _music_patches(args)
     if args.action == "template":
         return _music_template(args)
+    if args.action == "check":
+        return _music_check(args)
     settings: dict[str, Any] = {}
     setting, root = None, Path.cwd()
     if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
@@ -1498,6 +1500,73 @@ def _music_template(args: argparse.Namespace) -> CommandResult:
     print(f"tracks: {', '.join(facts['tracks'])}")
     print(f"wrote: {out}")
     print(f"next: change one thing at a time and listen: vidgen music render {out} --out {out.with_suffix('.mp3')}")
+    return 0
+
+
+def _music_check(args: argparse.Namespace) -> CommandResult:
+    """``vidgen music check SCORE.yaml|AUDIO [--narration FILE] [--compare OTHER] [--out DIR]``:
+    how a piece will sit under narration, in words and numbers, a spectrogram and a demo under a
+    voice (DESIGN.md §93.9)."""
+    import time
+
+    from vidgen.listen import write_mp3
+    from vidgen.sfx import RATE, decode_audio
+    from vidgen.studio import MusicScore, check, load_music_score
+
+    if args.project == ".":
+        raise VidgenError("music check: give a score file or an audio file, e.g. vidgen music check my_theme.yaml")
+    began = time.perf_counter()
+
+    def load(path: Path) -> tuple[Any, float]:
+        if not path.is_file():
+            raise VidgenError(f"music check: {path} not found")
+        if path.suffix.lower() in (".yaml", ".yml"):
+            score = load_music_score(path)
+            return score, score.seconds
+        audio = decode_audio(path)
+        return audio, len(audio) / RATE
+
+    def run(path: Path, piece: Any, hop: int) -> check.MusicCheck:
+        if isinstance(piece, MusicScore):
+            return check.check_music_score(piece, hop=hop)
+        return check.check_music_audio(piece, path.stem, hop=hop)
+
+    path = Path(args.project)
+    main, seconds = load(path)
+    other_path = Path(args.compare) if args.compare else None
+    other, other_seconds = load(other_path) if other_path is not None else (None, 0.0)
+    hop = check.frame_hop(max(seconds, other_seconds))
+    voice, narration = check.load_narration(Path(args.narration) if args.narration else None)
+    tail = 3.0 if args.narration else 0.0
+    out = Path(args.out or ".")
+    reports = [run(path, main, hop)]
+    if other_path is not None:
+        reports.append(run(other_path, other, hop))
+    demos = []
+    for report, source in zip(reports, [path, other_path]):
+        assert source is not None
+        demo = out / f"{source.stem}-demo.mp3"
+        write_mp3(check.add_demo(report, voice, narration, tail), demo)
+        demos.append(demo)
+    png = out / (f"{path.stem}-check.png" if other_path is None else f"{path.stem}-vs-{other_path.stem}.png")
+    png.parent.mkdir(parents=True, exist_ok=True)
+    check.spectrogram_image(reports).save(png, optimize=True)
+    seconds_taken = time.perf_counter() - began
+    if args.json:
+        doc_files = {"spectrogram": png, "demo": demos[0]}
+        compare = None
+        if other_path is not None:
+            compare = {"report": check.check_dict(reports[1]), "demo": str(demos[1]), "table": check.compare_rows(reports[0], reports[1])}
+        return jsonout.music_check_document(check.check_dict(reports[0]), doc_files, compare, round(seconds_taken, 2))
+    print(check.music_check_text(reports[0]))
+    if other_path is not None:
+        print()
+        print(f"compared with {other_path}:")
+        print(check.compare_text(reports[0], reports[1]))
+    print()
+    print(f"spectrogram: {png}")
+    print(f"demo under narration: {', '.join(str(d) for d in demos)} ({narration}; listen to choose)")
+    print(f"checked in {seconds_taken:.1f} s")
     return 0
 
 
@@ -1770,18 +1839,22 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "music",
         help="music tools: preview writes a composed piece in a mood as WAV and .mid (needs the music extra); render plays a score file; "
+        "check says how a score or audio file will sit under narration; "
         "patches describes the score files' instruments and effects; template writes a built-in bed as a score file; page writes the Listen page",
     )
     p.add_argument(
-        "action", choices=["preview", "render", "patches", "template", "page"],
+        "action", choices=["preview", "render", "check", "patches", "template", "page"],
         help="preview: compose the project's compose: music (or --mood) and write it; render: play a score file (YAML) to a WAV or MP3; "
+        "check: a report in words (loudness, peaks, tempo, loop seam, voice range, bass, highs, sections, key) with advice, "
+        "a spectrogram PNG and a demo MP3 under narration; "
         "patches: every score-file instrument, setting and effect in words; "
         "template: list the built-in beds' score-file templates, or write one (vidgen music template momentum --out my_theme.yaml); "
         "page: write the Listen page (a clip and spectrogram of every bed, the sound effects, ambience and composed moods; default --out docs/music)",
     )
     p.add_argument(
         "project", nargs="?", default=".",
-        help="preview: project dir or config file (default: .); render: the score file; template: the bed (none: list them)",
+        help="preview: project dir or config file (default: .); render: the score file; check: a score file or an audio file; "
+        "template: the bed (none: list them)",
     )
     p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
     p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
@@ -1791,8 +1864,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--out", metavar="PATH",
         help="preview: folder for <mood>-seed<N>.wav and .mid (default: .); render: the .wav or .mp3 (default: <score>.wav here); "
+        "check: the folder for <name>-check.png and <name>-demo.mp3 (default: .); "
         "template: the .yaml to write (default: <bed>.yaml here); page: the page's folder (default: docs/music)",
     )
+    p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with vidgen)")
+    p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file: a side-by-side table and a two-row spectrogram")
     p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists")
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
     p.set_defaults(func=cmd_music)

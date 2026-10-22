@@ -8,6 +8,7 @@ become a package of its own.
 
 from __future__ import annotations
 
+from vidgen.studio.check import MusicCheck, check_music_audio, check_music_score, music_check_text
 from vidgen.studio.effects import EFFECTS
 from vidgen.studio.instruments import INSTRUMENTS, Instrument
 from vidgen.studio.patches import patch_catalog, patch_text
@@ -19,8 +20,12 @@ __all__ = [
     "EFFECTS",
     "INSTRUMENTS",
     "Instrument",
+    "MusicCheck",
     "MusicScore",
+    "check_music_audio",
+    "check_music_score",
     "load_music_score",
+    "music_check_text",
     "music_template_catalog",
     "music_template_text",
     "template_path",

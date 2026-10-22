@@ -3266,6 +3266,49 @@ differ — with comments saying what each part does. Change one thing at a time 
 A filter opening is written as the beds do it: a dark and a bright copy of the pad cross-faded
 by their `volume` curves.
 
+#### Checking a piece (`vidgen music check`)
+
+```bash
+vidgen music check my_theme.yaml                         # a score file (or a WAV / MP3 / any audio file)
+vidgen music check my_theme.yaml --compare momentum.yaml # side by side with another version
+vidgen music check my_theme.yaml --narration my_voice.mp3 --out checks/ --json
+```
+
+How a piece will sit under narration, for authors who cannot listen: a report in words with a
+verdict (`fine under narration`, with notes, or `needs work`), a spectrogram PNG and a demo MP3,
+written to `--out` (default: the current folder) as `<name>-check.png` and `<name>-demo.mp3`.
+Each line is `ok`, `note` or `FIX`:
+
+| topic | what is measured | flagged when |
+|---|---|---|
+| loudness | integrated LUFS (an audio file is measured as vidgen plays it, at −28 LUFS) | — |
+| steadiness | 3 s loudness, 10th to 95th percentile | it swings more than 8 dB |
+| peaks | true peak and how far it stands over the loudness | more than 19 dB over (single hits jump out) |
+| clipping | audio files: runs of samples at full scale | any |
+| tempo | the beat heard against the score's; double / half time and the 2/3 or 4/3 a 3+3+2 figure makes are the same beat (said so) | another tempo (a note) |
+| loop seam | the sample step where a loop starts again against the music's own biggest steps | over 1 (a click) |
+| voice range | share of the power in 300 Hz–3 kHz and each bar's level there | a bar over −26 dB or a share over 72 % |
+| bass | share under 150 Hz | over 85 % (under 5 %: a note, thin) |
+| highs | level above 5 kHz against the whole (and the brightest bar) | over −30 dB (−24 dB in a bar) |
+| key | share of the pitched tracks' sound on the key's notes, per section | under 75 % |
+| sections | a section named `lift` (`drop`, `chorus`, `climax`...) against the one before; one named `build` (`rise`...) second half against first | a lift less than 0.5 dB louder and 1.5 dB brighter; a build rising less than 0.5 dB and brightening less than 1 dB |
+| narration | the demo: the voice's 300 Hz–3 kHz over the music's while it speaks | under 15 dB |
+
+All 14 built-in beds and their templates pass with no notes. For a score, every track is also
+played on its own, so the report lists each track's share of the power, of the voice range, of
+the bass and of the highs, and the advice names the tracks and the keys to change (`` `piano`
+(piano) holds 70 % of the voice range there: lower `piano: sections: {main: {volume: -1}}`
+(−5 dB); or move `piano` an octave up (`octave: 5`) ``). Change one thing, check again, compare
+(`--compare`), and let a human listen and choose.
+
+The demo plays the piece from its start at volume 0 (−28 LUFS) under the narration — a 20 s
+sample shipped with vidgen (two lines spoken by Kokoro's `af_heart`), or `--narration FILE` at its
+own level — ducked by vidgen's default (12 dB, 0.4 s attack, 1 s release, 1.5 s hold), set to the
+video's −16 LUFS. The spectrogram (30 Hz–16 kHz, the same level scale for every piece) marks the
+sections and the voice range's edges, with a lane under it showing each bar's voice-range level
+against the limit (red above). `--compare OTHER` checks a second score or audio file, prints a
+side-by-side table and draws both on one time scale (`<name>-vs-<other>.png`).
+
 ### Loudness of the final mix (`audio`)
 
 ```yaml
@@ -9865,6 +9908,22 @@ difference between two palette colours).
 | `action` | str | `patches` |
 | `instruments` | list | `{name, group, kind, plays, words, level, octave, settings}`; `settings` maps a name to `{default, low, high, words}` |
 | `effects` | list | `{name, words, example, fields}`; `fields` maps a name to `{default, low, high, words}` (`low` / `high` null for words such as `to`, `steps`, `pingpong`) |
+
+`vidgen music check --json` ([Checking a piece](#checking-a-piece-vidgen-music-check)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `check` |
+| `name`, `kind`, `seconds`, `loop` | | the piece: its title (or file name), `score` or `audio`, its length, whether it loops |
+| `verdict` | str | `fine under narration`, `fine under narration, N notes (...)` or `needs work: N things to fix (...)` |
+| `facts` | object | `lufs`, `short_term_p10` / `_p95`, `steadiness_db`, `true_peak`, `peak_to_loudness_db`, `clipped_runs` (audio), `file_lufs` (audio), `tempo_heard`, `seam_ratio`, `voice_share`, `voice_bar_max_db`, `bass_share`, `highs_db`, `highs_bar_max_db`, `key_heard`, `key_fit`, `in_key` (score), `bar_voice_db` and `bar_lufs` (per bar; per 2 s for audio), the score's `title key tempo time bars`, and `demo`: `{seconds, voice_lufs, music_under_voice_lufs, music_alone_lufs, voice_clear_db, narration}` |
+| `findings` | list | `{topic, level, text, fixes}`: `level` `ok`, `note` or `fix`; `fixes` the advice in words naming score keys |
+| `sections` | list | `{name, first_bar, bars, start, key, lufs, bright_db, first_half_lufs, second_half_lufs, brighter_db}`, + `lift_db`, `lift_brighter_db` for a lift, `build_db` for a build |
+| `tracks` | list | score: `{name, instrument, all_share, voice_share, bass_share, highs_share, peak_db}` |
+| `timings` | object | seconds: `render` (score), `total` |
+| `files` | object | `spectrogram`, `demo` (paths written) |
+| `compare` | object | with `--compare`: `{report, demo, table}` (`report` as this document's fields, `table` rows `{label, a, b}`), else null |
+| `check_seconds` | float | the whole command |
 
 `vidgen music template --json` ([Templates](#templates-of-the-built-in-beds-vidgen-music-template)):
 

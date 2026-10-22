@@ -17234,3 +17234,86 @@ Known gaps / for later steps
 - Rendering a template takes 2–7 s (`ascent`, `horizon`: four or more held-chord tracks of 16
   chords, each a fresh 2^18-sample PADsynth wave per channel); a wave cache would help 188's
   render-at-join.
+
+## Step 187 — Analysis: vidgen music check
+
+What the owner agreed (Phase S plan): `vidgen music check <score|wav>` — a report in words and
+JSON (loudness and steadiness, true peak, clipping, tempo vs the score, loop-seam click,
+voice-range share, bass weight, harsh highs, section energy), a spectrogram with section marks,
+a demo under a narration sample with default ducking, plain-language advice naming score keys
+(tracks rendered separately), `--compare`; limits calibrated so the 14 beds pass and bad scores
+are flagged.
+
+What was built (DESIGN §93.9)
+- `studio/check.py`: `check_music_score` (plays the score track by track), `check_music_audio`
+  (any audio, measured at −28 LUFS, 2 s blocks for bars), `MusicCheck` (verdict, facts, findings
+  `{topic, level ok/note/fix, text, fixes}`, sections, tracks), `music_check_text`, `check_dict`,
+  `compare_rows` / `compare_text`, `LIMITS` (each with the beds' range in a comment), the
+  narration demo (`load_narration`, `speech_spans`, `duck_gain_db` = `mix.duck_curve` with
+  `DuckConfig()`'s numbers, `narration_demo`, `add_demo`) and the picture
+  (`spectrogram_image`: one row per piece, section marks, voice-band lines, a per-bar voice-range
+  lane against the limit). Advice computes, from the tracks' shares, the fewest tracks to lower
+  and by how many whole dB, written as the score change (`` `kick.volume: -5` (now 6) ``,
+  `` `piano: sections: {main: {volume: -1}}` (−5 dB) ``), plus another way (octave, tone,
+  lowpass, decay, master lowpass); lifts / builds / unsteady pieces name tracks quieter where they
+  should not be.
+- `render.render_music_stems(score, on_stem)`: each track on its own canvas handed to a callback
+  (before the master filter and level), the mix as `render_music_score` (within 1e-5), and the
+  final gain. `render_music_score` is unchanged.
+- `src/vidgen/studio/data/narration_sample.mp3` (package data, `pyproject.toml` `studio/data/*`):
+  20 s, two original lines by Kokoro `af_heart` (Apache-2.0), −21.5 LUFS as stereo
+  (`<scratchpad>/s187/make_narration.py`). Decision: a real voice (Kokoro's licence allows
+  shipping) rather than speech-like noise — the voice-range clearance is only meaningful with
+  speech.
+- `vidgen music check SCORE|AUDIO [--narration FILE] [--compare OTHER] [--out DIR] [--json]`
+  (`cli._music_check`, `jsonout.music_check_document`, action `check`): writes
+  `<name>-check.png` (or `<name>-vs-<other>.png`) and `<name>-demo.mp3` (each piece's) to `--out`
+  (default `.`), prints the report, the comparison table and the time taken.
+- `vidgen.api`: `MusicCheck`, `check_music_score`, `check_music_audio`, `music_check_text` (§6.4).
+- Docs: DESIGN §93.1, §93.2, §6.4, new §93.9; CONFIG "Checking a piece" (+ JSON table); README
+  commands row; CHANGELOG (0.3.0 now Steps 61–187); tasklist. Guide and `AGENTS.md` unchanged
+  (the recipe comes with Step 188's MCP tools).
+
+Calibration (`<scratchpad>/s187/calibrate.py`, `out/calib-*.json`): the 14 beds as audio and
+their 14 templates as scores, plus `tidewater` and `skyline_lift`: no finding above `ok` for any
+of the 30. Ranges → limits in DESIGN §93.9 (e.g. loudest voice-range bar −35.0 … −27.2 dB
+(`lullaby`) → −26; highs up to −34.8 dB (`bright`) → −30; build / lift by loudness or
+brightness, since `ascent`'s lift is only +0.3 dB louder but +1.9 dB brighter). Dropped: the 50 ms
+level step across the seam (a downbeat makes it jump 5–12 dB in clean beds). Bad scores
+(`<scratchpad>/s187/bad/*.yaml`, `run_bad.py`): each is flagged for its own fault only — voice
+range (`bad_voice`), bass (`bad_boomy`), highs (`bad_harsh`), key (`bad_key`), a flat build and a
+lift that does not lift (`bad_flat`), steadiness (`bad_swing`); a clipped WAV with a click at its
+seam (`run_more.py`) gets clipping and loop-seam fixes. Spectrograms looked at (tidewater,
+skyline_lift, horizon, bad_voice, bad_harsh, the tidewater-vs-bad_flat comparison): sections and
+the voice-band lines in place, the lane's red bars where the voice range is too loud.
+
+Speed: a 60 s score — `calm` template 5.5 s, `horizon` (58 s, 12 tracks) 12.0 s, `skyline_lift`
+(60 s, sweeps) 15.1 s; `tidewater` (53 s) 7.9 s; the render track by track is most of it, the
+analysis 2–4 s. `--compare` of two pieces 13.8 s.
+
+Tests (one at a time, under `capped3g`): `tests/test_music_check.py` 14 passed (39 s: a good small
+score passes; flat build/lift, voice range, boomy, harsh, off-key, unsteady scores flagged with
+the advice's score keys checked; clipping and a seam click in audio; tempo words; stems sum to the
+render, loop and one-shot; ducking equals `mix.duck_curve` with `DuckConfig()`; the narration
+demo's levels; pictures and comparison; the command with `--json`, `--compare`, a missing file;
+`pulse` and `horizon` templates pass as fine, `slow`); `test_studio.py` 51 passed;
+`test_docs.py` + `test_api.py` 72 passed; `test_json_output.py` + `test_guide.py` +
+`test_listen.py` 87 passed; `test_cli.py` + `test_composer.py -k "music or help or parser"` 4
+passed; `test_music.py -k "approved or every_bed_has or facts"` 17 passed (the 14 beds'
+fingerprints; `music.py` not edited); `test_music_templates.py` + `test_soundfont.py` (not slow)
+8 passed. Not run: the full suite, `test_mcp.py` (no MCP change).
+
+Example outputs (`<scratchpad>/s187/out/`): `tidewater-check.png`, `tidewater-demo.mp3`,
+`horizon-check.png`, `bad_voice-check.png`, `bad_harsh-check.png`,
+`tidewater-vs-bad_flat.png`, `skyline_lift-check.png` and the matching `-demo.mp3` files.
+
+Known gaps / for later steps
+- 188: MCP tool for the check; the author-guide recipe (template → change one thing → check →
+  compare → a human listens).
+- The key check is per section (not per chord); a lift is compared with the section just before
+  it; audio files have no sections; no psychoacoustic masking model (the per-bar voice-range level
+  and the demo's clearance stand in).
+- Track shares of a band that is nearly empty (e.g. "bass" of a piece with no bass) come from
+  window leakage and mean little; the advice only uses them when that band is flagged.
+- A riser at its default level adds almost nothing measurable (`tidewater`'s build passes on its
+  pad brightening, not its riser); the build advice suggests a ramp or sweep first.

@@ -509,3 +509,36 @@ def render_music_score(score: MusicScore, warnings: list[str] | None = None) -> 
     padded = np.concatenate([x, np.zeros((RATE, 2))])
     filtered = _tone_filter(padded, score.lowpass, score.highpass)[: len(x)]
     return _finish(_one_shot_end(filtered, score.samples))
+
+
+def render_music_stems(score: MusicScore, on_stem: Callable[[str, np.ndarray], None], warnings: list[str] | None = None) -> tuple[np.ndarray, float]:
+    """The score played track by track (for ``vidgen music check``, §93.9): every track is
+    rendered alone and handed to ``on_stem(name, sound)`` (float64 ``(n, 2)``, its one pass of
+    ``score.samples``, *before* the master filter and the final level), then summed. Returns
+    the mix as :func:`render_music_score` makes it (the same within rounding: the tracks are
+    summed in another order) and the linear gain that set it to -28 LUFS (to apply to the
+    stems' measures, with the master filter's response). One track's buffer at a time, so
+    memory stays that of a render."""
+    tracks = {t.name: t for t in score.tracks}
+    skipped = _Skipped()
+    canvas = _Canvas(score)
+    for track in score.tracks:
+        alone = _Canvas(score)
+        if _uses_bus(track):
+            alone.data += _render_bus(score, track, tracks, skipped)
+        elif track.play_chords:
+            _render_held_chords(lambda name: alone, score, track, skipped)
+        else:
+            _render_hits(lambda name: alone, score, track, skipped)
+        on_stem(track.name, alone.data[alone.before : alone.before + score.samples])
+        canvas.data += alone.data
+    if warnings is not None:
+        warnings.extend(skipped.warnings())
+    if canvas.wrap:
+        x = _tone_filter(canvas.data, score.lowpass, score.highpass)
+    else:
+        rest = canvas.data[canvas.before :]
+        x = _one_shot_end(_tone_filter(np.concatenate([rest, np.zeros((RATE, 2))]), score.lowpass, score.highpass)[: len(rest)], score.samples)
+    out = _finish(x)
+    loudest = float(np.abs(x).max())
+    return out, float(np.abs(out).max()) / loudest if loudest > 0 else 1.0
