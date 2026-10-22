@@ -1,6 +1,6 @@
-"""Background music (DESIGN.md §48, §69.63, §82, §83, §91, §93.12): sixteen procedurally generated
-beds (two of them, ``tidewater`` and ``skyline``, written as score files and rendered by
-:mod:`vidgen.studio`), the project's own music files, composed music (:mod:`vidgen.composer`,
+"""Background music (DESIGN.md §48, §69.63, §82, §83, §91, §93.12, §93.14): seventeen procedurally
+generated beds (three of them, ``tidewater``, ``skyline`` and ``time_of_flight``, written as score
+files and rendered by :mod:`vidgen.studio`), the project's own music files, composed music (:mod:`vidgen.composer`,
 played by :mod:`vidgen.synth`), and the sources the mix reads from.
 
 A *bed* is a seamless loop made of a chord progression (numpy only, no recordings, no samples,
@@ -1490,6 +1490,24 @@ BUILTIN_BEDS: dict[str, Bed] = {
             "intro. 32 bars, a chord every two bars (3.75 s). Rolled off above ~4.5 kHz; bass-heavy "
             "(63% of its power under 150 Hz: lighter on phone speakers); bright, energetic, euphoric.",
             "energetic reveals, product launches, montages, a build to a big moment, upbeat intros and endings",
+            score=True,
+        ),
+        Bed(
+            "time_of_flight", _score_bed("time_of_flight"), _grid_seconds(108, 24), 108, "B minor",
+            ("Bm(add9)", "F#m7", "Bm(add9)", "F#m7", "Gmaj7", "Em9", "Gmaj7", "A", "Bm(add9)", "D", "Gmaj7", "F#sus4"),
+            "A curious, forward-moving tech-documentary bed at 108 BPM in B minor, 4/4, written as a "
+            "score file (made by an AI author from the momentum template). Bars 1-4 intro: a dark, "
+            "filtered pad, an electronic (FM) plucked arpeggio in sixteenth notes behind a closed "
+            "filter (D3 to D5) and a high satellite 'ping' (4.8 kHz, above the voice) with echoes; no "
+            "kick. Bars 5-12 build (from 8.9 s): a soft kick on every beat, off-beat synth bass (D2 to "
+            "B2) and hi-hats; the pad grows and the arpeggio's filter opens; a noise riser over the "
+            "last two bars. At 26.7 s the lift (bars 13-20, G major 7, A, B minor, D): the pad wide "
+            "open, a clap on 2 and 4 and a soft lead with long notes (C-sharp 5 to D6) in a hall. Bars "
+            "21-24 settle (G major 7, F-sharp sus4): the pad and arpeggio close again, the pings "
+            "return, leading back to the top of the loop. 24 bars, a chord every two bars (4.4 s). "
+            "Rolled off above ~4.5 kHz; 54% of its power under 150 Hz; curious, precise, gently driving.",
+            "science and tech explainers, discovery and measurement stories, maps and navigation, "
+            "how-things-work videos",
             score=True,
         ),
     )

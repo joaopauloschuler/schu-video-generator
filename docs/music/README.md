@@ -21,11 +21,11 @@ sounds described in words with `vidgen list-music` and `vidgen list-sfx`.
 
 ## Music beds
 
-16 seamless loops, generated when the video is joined; the same name always gives the same
+17 seamless loops, generated when the video is joined; the same name always gives the same
 music. `music: momentum` plays one under the whole video (`{source: momentum, volume: -2}`,
 or a list of cues with `from` / `to` scenes).
 
-`tidewater` and `skyline` are written in the score format (below): `vidgen music template tidewater` gives
+`tidewater`, `skyline` and `time_of_flight` are written in the score format (below): `vidgen music template tidewater` gives
 the very score the bed plays, to start a piece of your own from.
 
 | bed | key, tempo, loop | use it for | spectrogram | clip |
@@ -46,6 +46,7 @@ the very score the bed plays, to start a piece of your own from.
 | `neon` | F-sharp minor, 116 BPM, 49.6 s loop | Tech at night, retro-futurism, cities, coding Shorts | <img src="media/bed-neon.png" width="300" alt="Spectrogram: neon"> | [▶ listen (15 s)](media/bed-neon.mp3) |
 | `tidewater` | E minor, 108 BPM, 53.3 s loop | Explainers and documentaries that need a steady, hopeful pulse: nature, the sea, travel, progress stories, calm walkthroughs | <img src="media/bed-tidewater.png" width="300" alt="Spectrogram: tidewater"> | [▶ listen (15 s)](media/bed-tidewater.mp3)<br>from 20.66 s: the riser and the lift with its bell melody |
 | `skyline` | D minor, 128 BPM, 60.0 s loop | Energetic reveals, product launches, montages, a build to a big moment, upbeat intros and endings | <img src="media/bed-skyline.png" width="300" alt="Spectrogram: skyline"> | [▶ listen (15 s)](media/bed-skyline.mp3)<br>from 24 s: the end of the build and the lift |
+| `time_of_flight` | B minor, 108 BPM, 53.3 s loop | Science and tech explainers, discovery and measurement stories, maps and navigation, how-things-work videos | <img src="media/bed-time_of_flight.png" width="300" alt="Spectrogram: time_of_flight"> | [▶ listen (15 s)](media/bed-time_of_flight.mp3)<br>from 20.66 s: the end of the build and the lift with its lead |
 
 ## Made with the score format
 
@@ -53,15 +54,16 @@ Music written as a score file: YAML with a key, a tempo, sections, chords and tr
 patterns, played by vidgen's own instruments. Agents write them without listening: they start
 from a template of a built-in bed, change one thing at a time and read `vidgen music check`'s
 report after each change. A score file in a project's `assets/music/` plays like a bed
-(`music: time_of_flight`). How: [score files](../CONFIG.md#score-files-vidgen-music-render),
+(`music: my_theme`). How: [score files](../CONFIG.md#score-files-vidgen-music-render),
 [templates of the beds](../CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template),
 [checking a piece](../CONFIG.md#checking-a-piece-vidgen-music-check),
 [project pieces](../CONFIG.md#project-pieces-score-files-in-a-video) and the
-[music craft notes](../COOKBOOK-MUSIC.md).
+[music craft notes](../COOKBOOK-MUSIC.md). The piece below was written this way and is now
+a built-in bed (hear it in the beds table above).
 
-| piece | key, tempo, length | how it was made | spectrogram | clip |
-|---|---|---|---|---|
-| `time_of_flight`<br>Time of Flight | B minor, 108 BPM, 53.3 s loop | An AI author's piece, made from the `momentum` template one change at a time (new key, tempo, chords, sections, arpeggio, pings and lead), checked with `vidgen music check` after each; it plays under [examples/gps-time-of-flight](../../examples/gps-time-of-flight/README.md) | <img src="media/piece-time_of_flight.png" width="300" alt="Spectrogram: time_of_flight"> | [▶ listen (15 s)](media/piece-time_of_flight.mp3)<br>from 20.66 s: the end of the build and the lift |
+| piece | key, tempo, length | how it was made | hear it |
+|---|---|---|---|
+| `time_of_flight`<br>Time of Flight | B minor, 108 BPM, 53.3 s loop | An AI author's piece, made from the `momentum` template one change at a time (new key, tempo, chords, sections, arpeggio, pings and lead), checked with `vidgen music check` after each; approved as a built-in bed; it plays under [examples/gps-time-of-flight](../../examples/gps-time-of-flight/README.md), whose README keeps the log of every version and the check report | the bed `time_of_flight` above: [▶ listen (15 s)](media/bed-time_of_flight.mp3) |
 
 ## Sound effects
 

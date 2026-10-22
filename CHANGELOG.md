@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–191)
+## 0.3.0 (Steps 61–192)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -399,6 +399,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   suggests a riser for a lift and says how far a quiet riser is under a build; lint's
   `music_check` reports only on the part of a piece the video plays; filter sweeps render in
   parallel (the same samples). Every existing score, bed and mix sounds exactly as before.
+- *Time of Flight* becomes the 17th built-in bed, `time_of_flight` (B minor, 108 BPM, intro /
+  build / lift / settle: science and tech explainers, discovery and measurement stories, maps and
+  navigation), exactly as it sounded; `vidgen music template time_of_flight` gives its score. The
+  GPS example plays the bed and no longer keeps its own copy (a project piece named
+  `time_of_flight` would now clash with the bed: rename it, or play it by its path) (192).
 
 ### Narration and pictures
 

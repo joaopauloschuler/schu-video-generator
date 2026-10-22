@@ -111,7 +111,7 @@ def bed_conflict(source: str, root: Path | None) -> str | None:
 def music_source(name: str, root: Path) -> tuple[str, Path | None]:
     """What ``vidgen music render`` / ``check`` play for ``name`` (a path or a name):
     ``("file", path)`` an existing file (a score file or audio); ``("score bed", path)`` the
-    score file of a bed written as one (``tidewater``, ``skyline``); ``("bed", None)`` another
+    score file of a bed written as one (``tidewater``, ``skyline``, ``time_of_flight``);``("bed", None)`` another
     built-in bed (its own code: the audio); ``("piece", path)`` a project piece under ``root``
     (``assets/music/<name>.yaml``). :class:`VidgenError` with did-you-mean otherwise, or when the
     name is both a bed and a project piece."""
@@ -134,7 +134,7 @@ def music_source(name: str, root: Path) -> tuple[str, Path | None]:
 
 def cue_score(cue: MusicCue, root: Path) -> Path | None:
     """The score file a cue plays: its project piece, or a score bed's own file (``tidewater``,
-    ``skyline``); ``None`` for other beds, audio files and composed music (or a missing piece)."""
+    ``skyline``, ``time_of_flight``); ``None`` for other beds, audio files and composed music (or a missing piece)."""
     from vidgen.music import source_kind
     from vidgen.studio.templates import TEMPLATE_DIR
 

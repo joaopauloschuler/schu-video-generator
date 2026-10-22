@@ -17700,3 +17700,79 @@ Known gaps
   beds are rendered per process (skyline ~8 s on two cores). Chord names from Roman numerals are
   spelled by key signature. The beat-window rounding is the plan's (half a frame rounds to even),
   so a tie can shorten a beat's pad by half a frame (at 30 fps 17 ms).
+
+## Step 192 — Time of Flight becomes a built-in bed
+
+What the owner agreed (a follow-up after Phase S): *Time of Flight*, the piece the Step 189 agent
+made from the `momentum` template, is approved as the 17th built-in bed, `time_of_flight`,
+exactly as it sounds now.
+
+What was built (DESIGN §93.14)
+- `src/vidgen/studio/beds/time_of_flight.yaml` (new): the example's score with a template header
+  (what the bed is, how it was made, the check-and-compare hint); the data copied unchanged
+  (`<scratchpad>/s192/makebed.py`). Its render equals the example piece's render at 24b9a8f8,
+  sample for sample (`<scratchpad>/s192/facts.py` against `before-loop.npy`).
+- `music.BUILTIN_BEDS["time_of_flight"]` after `skyline`: `_score_bed("time_of_flight")`, B
+  minor, 108 BPM, 53.328 s, chords in loop order, a plain-language description (intro / build /
+  lift at 26.7 s / settle, parts, ranges D3–D5 / D2–B2 / C#5–D6, 54 % under 150 Hz) and use
+  (science and tech explainers, discovery and measurement stories, maps and navigation,
+  how-things-work videos), `score=True`. Everything that reads `BUILTIN_BEDS` follows:
+  list-music (+ JSON, MCP), did-you-mean, the name clash, `section:`, `music render` / `check` by
+  name, `music template`.
+- Text: the schema's `source` and `section` descriptions, MCP `music_template` (17 templates),
+  docstrings of `music.py`, `templates.py`, `music_pieces.py`.
+- The GPS example plays the bed: `examples/gps-time-of-flight/assets/music/time_of_flight.yaml`
+  removed (it would clash with the bed's name), `video.yaml`'s header and comment, the README
+  (was a project piece, now the bed; commands by name; the check report is the bed's, verified
+  line for line with `vidgen music check time_of_flight --compare momentum.yaml`; the lint
+  sentence says `music_check` checks project pieces only). Mix byte-identical (below).
+- `src/vidgen/studio/pieces/` removed (its only file was that copy) and its `pyproject.toml`
+  package-data entry.
+- Listen page (`listen.py`): `CLIP_MOMENTS["time_of_flight"]` (0.5: 20.66 s, the end of the build
+  and the lift with its lead); `ScorePiece` is now `(name, made, example)` for a piece that became
+  a bed; `piece_score` reads `studio/beds`; `piece_clip`, `piece_clip_start`, `PIECES_DIR` gone;
+  the showcase table's last column links the bed's clip ("hear it"); the score-beds sentence lists
+  three names. `docs/music`: README regenerated; `piece-time_of_flight.{mp3,png}` renamed to
+  `bed-time_of_flight.{mp3,png}` — the regenerated bed files are byte-identical to them (same
+  start, same samples). 6.33 MB; a second run into `<scratchpad>/s192/listen` identical
+  (`diff -r -q` empty).
+- Docs: README (17 beds, three score beds, the example line), CONFIG (intro, beds paragraph and
+  table row, bass-weight paragraph, `music` / `source` / `section` rows, Listen page, render,
+  templates, check names), guide bed alternatives (`momentum` still first; "lists all 17"; the
+  worked example's note) + `AGENTS.md`, COOKBOOK, COOKBOOK-MUSIC, CHANGELOG (0.3.0 now Steps
+  61–192), DESIGN §93 title, §93.1, §93.2, new §93.14, tasklist (Step 192 after Phase S).
+
+Decisions
+- The example switches to the built-in bed (no project copy): with a copy, `music:
+  time_of_flight` is a name-clash problem by the Step 188 rule; two copies would also drift.
+- The Listen page shows the piece once, as a bed; "Made with the score format" stays as the
+  showcase (how it was made, the example's log), linking the bed's clip instead of a second copy.
+- No demo copy is kept in `tests/data/studio` for `time_of_flight` (tidewater / skyline have
+  theirs from Steps 184 / 185): the fingerprint locks the samples; `test_score_beds_facts` checks
+  the facts and sections.
+
+Compatibility (checked)
+- `<scratchpad>/s192/mixgps.py` on a copy of the example (six 15 s scenes, two ducking beats each,
+  a tone as the voice): before (HEAD, the project piece, kind `score`) and after (the bed, kind
+  `bed`) the mix WAV's SHA-256 `bbdae168…f74f` and the played loop's `3a1e76e7…3ac2` are equal.
+- The 16 other beds' fingerprints pass (`music.py` only gained the entry); no renderer change.
+
+Tests (one at a time, `capped3g`): `test_listen.py` 11 (rewritten: the showcase rows are score
+beds, link the example and the bed's clip, no `piece-*` media; the clip start 20.66 s);
+`test_music_pieces.py` 9 (the example validates with the bed and has no `assets/music`; its check
+on the bed's score; the clash for `time_of_flight`); `test_music_templates.py -m "not slow"` 8
+(`vidgen music template time_of_flight` writes the bed's score) and `-k
+score_bed_is_its_template` 3 (incl. `time_of_flight`); `test_music.py` 81 (365 s; the new
+fingerprint, facts, did-you-mean `time_of_flite`, list-music JSON and text, the schema);
+`test_guide.py` + `test_docs.py` 117; `test_json_output.py` 23; `test_mcp.py` in full 19 (130 s;
+17 templates, `list_music` with `time_of_flight`); `test_phase_s_review.py` 11. Not run: the full
+suite.
+
+Files to listen to / look at
+- `<scratchpad>/s192/time_of_flight.mp3` (the bed's full loop at −28 LUFS),
+  `docs/music/media/bed-time_of_flight.{mp3,png}` (the Listen page clip, +12 dB),
+  `<scratchpad>/s192/chk/time_of_flight-vs-momentum.png` and `time_of_flight-demo.mp3` (the check).
+
+Known gaps
+- As for the other score beds: rendered per process, not cached on disk (about 7 s).
+- The example's lint no longer runs `music_check` on its music (beds are not checked by it).

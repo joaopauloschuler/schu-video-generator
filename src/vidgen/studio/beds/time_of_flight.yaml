@@ -1,11 +1,14 @@
-# Time of Flight: an original piece written as a score file for the GPS explainer in this folder.
-# Made by an AI author from the `momentum` template (vidgen music template momentum) by the
-# "Making music" recipe of the author guide: one change at a time, `vidgen music check` after each,
-# compared with the version before (the log is in this example's README.md).
+# Time of Flight: a score-file template of vidgen's built-in bed `time_of_flight` (vidgen music template time_of_flight).
+# This file IS the bed, not a re-creation: `music: time_of_flight` plays this score rendered by
+# vidgen, sample for sample. A tech-documentary loop in B minor at 108 BPM: a dark pad, an
+# FM-pluck arpeggio behind a closed filter and satellite "pings" in the intro; kick, off-beat bass
+# and hats in the build while the pad and the arpeggio open, a riser into the lift; in the lift
+# the pad wide open, a clap on 2 and 4 and a soft lead; the settle closes back to the top.
+# Made by an AI author from the `momentum` template by the author guide's "Making music" recipe,
+# one change at a time with `vidgen music check` after each (the log: examples/gps-time-of-flight).
 # What it kept from the template: a pumping pad, a kick on every beat, the off-beat bass, hats.
-# What is new: the key, tempo and chords, four sections with a build and a lift, an FM-pluck
-# arpeggio whose filter opens through the build, a satellite "ping" in the quiet sections and a
-# sparse lead melody in the lift.
+# Copy it under a new name and change one thing at a time; check each change:
+#   vidgen music check my_theme.yaml --compare time_of_flight.yaml --out build/music-check
 version: 1
 title: Time of Flight
 description: Tech-documentary loop in B minor at 108 BPM - a quiet intro with satellite pings, a build that opens an arpeggio's filter, a lift with a soft lead, a settle that loops back.

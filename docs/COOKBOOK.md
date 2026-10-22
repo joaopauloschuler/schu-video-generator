@@ -289,8 +289,10 @@ starts), `enigma` (mysterious, investigations), `lab` (modern tech); energetic e
 `ascent` and `horizon` (uplifting trance that builds to a lift halfway through the loop:
 energetic reveals, tech launches, montages, uplifting endings), `beacon` (a pulsar-like ticking
 beacon: space, astronomy, science, data), `neon` (synthwave: tech at night, retro-futurism,
-cities); two written as score files: `tidewater` (steady and hopeful: nature, the sea, travel,
-progress stories) and `skyline` (a pumping supersaw build and lift 30 s in: reveals, launches);
+cities); three written as score files: `tidewater` (steady and hopeful: nature, the sea, travel,
+progress stories), `skyline` (a pumping supersaw build and lift 30 s in: reveals, launches) and
+`time_of_flight` (curious, a lead in its lift 26.7 s in: science and tech explainers, discovery
+and measurement stories, maps and navigation);
 lighter ones: `calm` (serious, long narration), `pulse` (tech), `bright` (upbeat). The
 kick-and-bass beds are bass-heavy and sound lighter on phone and laptop speakers
 ([CONFIG](CONFIG.md#background-music-music)). When no bed fits, write your own piece as a score

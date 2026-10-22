@@ -561,7 +561,7 @@ def build_server(root: Path) -> Any:
 
     @tool("Score files (music written in YAML: key, tempo, sections, chords, tracks of step patterns; a project piece "
           "is assets/music/NAME.yaml, played with music: NAME): write a built-in bed as an editable template "
-          "(bed=NAME; no bed: list the 16 templates with key, tempo, bars, sections). Start from momentum for "
+          "(bed=NAME; no bed: list the 17 templates with key, tempo, bars, sections). Start from momentum for "
           "documentaries; then change one thing at a time and run music_check after each change.", writes)
     async def music_template(
         ctx: Context,

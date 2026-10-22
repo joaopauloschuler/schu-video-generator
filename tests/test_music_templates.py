@@ -141,13 +141,18 @@ def test_music_template_command(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert "exists" in capsys.readouterr().err
     assert cli.main(["music", "template", "neon", "--out", str(out), "--force", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
-    assert doc["ok"] and doc["action"] == "template" and doc["template"]["name"] == "neon" and len(doc["templates"]) == 16
+    assert doc["ok"] and doc["action"] == "template" and doc["template"]["name"] == "neon" and len(doc["templates"]) == 17
     assert yaml.safe_load(out.read_text(encoding="utf-8"))["title"] == "Neon (template)"
     assert cli.main(["music", "template", "--json"]) == 0
     assert "template" not in json.loads(capsys.readouterr().out)
     assert cli.main(["music", "template", "lulaby"]) == 1
     assert "did you mean 'lullaby'" in capsys.readouterr().err
     assert cli.main(["music", "template", "neon", "--out", str(tmp_path / "x.txt")]) == 1
+    # Step 192: time_of_flight's template is its bed's own score
+    tof = tmp_path / "tof.yaml"
+    assert cli.main(["music", "template", "time_of_flight", "--out", str(tof)]) == 0
+    assert "Time of Flight: B minor, 108 BPM, 4/4, 24 bars = 53.33 s" in capsys.readouterr().out
+    assert tof.read_text(encoding="utf-8") == (TEMPLATE_DIR / "time_of_flight.yaml").read_text(encoding="utf-8")
 
 
 # ----- each template against its bed --------------------------------------------------------------------
@@ -188,8 +193,8 @@ def profile(x: np.ndarray, bars: int, per_chord: int) -> dict[str, Any]:
     }
 
 
-#: The beds made in Python (their templates are re-creations); ``tidewater`` and ``skyline`` are
-#: their score files (Step 190).
+#: The beds made in Python (their templates are re-creations); ``tidewater`` and ``skyline``
+#: (Step 190) and ``time_of_flight`` (Step 192) are their score files.
 PYTHON_BEDS = [name for name, bed in music.BUILTIN_BEDS.items() if not bed.score]
 
 

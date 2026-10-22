@@ -9,9 +9,10 @@ wrote this page. A person listens and chooses.
 
 Worked example: [examples/gps-time-of-flight](../examples/gps-time-of-flight/README.md), a piece
 turned from the `momentum` template into something new in nine checked steps, playing under a
-narrated GPS explainer. Hear it, and the 16 built-in beds, on the
-[Listen page](music/README.md). Two of the beds, `tidewater` and `skyline`, are score files
-themselves: `vidgen music template tidewater` shows a finished piece written in the format.
+narrated GPS explainer; a person listened and made it the built-in bed `time_of_flight`. Hear
+it, and the other built-in beds (17 in all), on the [Listen page](music/README.md). Three of the
+beds, `tidewater`, `skyline` and `time_of_flight`, are score files themselves: `vidgen music
+template tidewater` shows a finished piece written in the format.
 
 Contents: [room for the voice](#1-room-for-the-voice) ·
 [energy curves](#2-energy-curves-builds-and-lifts) · [loops](#3-loop-design) ·

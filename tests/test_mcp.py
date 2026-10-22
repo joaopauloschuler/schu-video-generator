@@ -361,7 +361,7 @@ def test_server_music_tools(tmp_path: Path) -> None:
 
     async def body(client: Any) -> None:
         doc = doc_of(await client.call_tool("music_template", {}))
-        assert doc["action"] == "template" and len(doc["templates"]) == 16 and "path" not in doc
+        assert doc["action"] == "template" and len(doc["templates"]) == 17 and "path" not in doc
         doc = doc_of(await client.call_tool("music_template", {"bed": "momentum"}))
         written = tmp_path / "assets" / "music" / "momentum.yaml"
         assert Path(doc["path"]) == written.resolve() and written.read_text(encoding="utf-8").startswith("# Momentum")
@@ -393,14 +393,14 @@ def test_server_music_tools(tmp_path: Path) -> None:
 
 @pytest.mark.slow   # list_music makes every bed's loop (about a minute and a half)
 def test_server_list_music_has_every_bed(tmp_path: Path) -> None:
-    """Step 190: list_music lists the 16 beds, the two score beds described like the others."""
+    """Step 190: list_music lists the beds (17 since Step 192), the score beds described like the others."""
     from vidgen.music import BUILTIN_BEDS
 
     async def body(client: Any) -> None:
         doc = doc_of(await client.call_tool("list_music", {}))
         beds = {m["name"]: m for m in doc["music"] if m["origin"] == "builtin"}
-        assert list(beds) == list(BUILTIN_BEDS) and len(beds) == 16
-        for name, key, tempo in (("tidewater", "E minor", 108), ("skyline", "D minor", 128)):
+        assert list(beds) == list(BUILTIN_BEDS) and len(beds) == 17
+        for name, key, tempo in (("tidewater", "E minor", 108), ("skyline", "D minor", 128), ("time_of_flight", "B minor", 108)):
             bed = beds[name]
             assert (bed["key"], bed["tempo"]) == (key, tempo) and bed["use"] and "score file" in bed["description"]
             assert bed["loudness"] == pytest.approx(-28, abs=0.1)

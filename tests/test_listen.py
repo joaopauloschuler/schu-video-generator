@@ -30,6 +30,8 @@ def test_clips_start_where_the_bed_shows_itself() -> None:
     # Step 190: the score beds' clips lead into their lift (tidewater 26.664 s, skyline 30 s)
     assert listen.bed_clip_start("tidewater") == pytest.approx(26.664 - listen.CLIP_LEAD_SECONDS, abs=0.01)
     assert listen.bed_clip_start("skyline") == pytest.approx(30.0 - listen.CLIP_LEAD_SECONDS)
+    # Step 192: time_of_flight's too (26.664 s), where its Step 189 piece clip started
+    assert listen.bed_clip_start("time_of_flight") == pytest.approx(26.664 - listen.CLIP_LEAD_SECONDS, abs=0.01) == 20.66
 
 
 def test_sound_rows_play_every_builtin_sound_inside_the_clip() -> None:
@@ -90,7 +92,7 @@ def test_committed_page_links_only_files_that_exist_and_every_file_is_linked() -
         assert (DOCS / rel).is_file(), rel
     on_disk = {p.relative_to(DOCS).as_posix() for p in (DOCS / "media").iterdir()}
     assert on_disk == linked, f"not linked: {sorted(on_disk - linked)}"
-    names = [f"bed-{n}" for n in music.BUILTIN_BEDS] + [f"piece-{p.name}" for p in listen.SCORE_PIECES]
+    names = [f"bed-{n}" for n in music.BUILTIN_BEDS]
     names += [row.name for row in listen.SOUND_ROWS] + ["ambience"]
     for name in names:
         assert f"media/{name}.mp3" in linked and f"media/{name}.png" in linked
@@ -104,34 +106,34 @@ def test_committed_media_sizes_and_formats() -> None:
     for mp3 in DOCS.glob("media/*.mp3"):
         head = mp3.read_bytes()[:2]
         assert head[0] == 0xFF and head[1] & 0xE0 == 0xE0, f"{mp3.name}: not a bare MP3 frame (tags?)"
-        if mp3.name.startswith(("bed-", "piece-", "composed-")):
+        if mp3.name.startswith(("bed-", "composed-")):
             assert 200_000 <= mp3.stat().st_size <= 320_000, mp3.name
     for png in DOCS.glob("media/*.png"):
         assert png.stat().st_size <= 80_000, png.name
         with Image.open(png) as image:
             assert image.mode == "P" and image.height == listen.SPECTROGRAM_HEIGHT
-            if png.name.startswith(("bed-", "piece-")):
+            if png.name.startswith("bed-"):
                 assert image.width == round(listen.CLIP_SECONDS * listen.SPECTROGRAM_PX_PER_SECOND)
 
 
-def test_score_pieces_are_the_examples_files_and_the_page_shows_them() -> None:
+def test_score_pieces_are_beds_and_the_page_shows_how_they_were_made() -> None:
+    """Step 192: the showcase's pieces are score beds; their rows link the example (its log) and
+    the bed's own clip (no second copy of the media)."""
     page = _page()
     section = page[page.index("## Made with the score format"): page.index("## Sound effects")]
     for anchor in ("score-files-vidgen-music-render", "templates-of-the-built-in-beds-vidgen-music-template",
                    "checking-a-piece-vidgen-music-check", "project-pieces-score-files-in-a-video"):
         assert f"(../CONFIG.md#{anchor})" in section
-    assert "(../COOKBOOK-MUSIC.md)" in section
+    assert "(../COOKBOOK-MUSIC.md)" in section and "<img" not in section
+    assert [p.name for p in listen.SCORE_PIECES] == ["time_of_flight"]
     for piece in listen.SCORE_PIECES:
-        shipped = (listen.PIECES_DIR / f"{piece.name}.yaml").read_bytes()
+        assert music.BUILTIN_BEDS[piece.name].score
         example = ROOT / "examples" / piece.example
-        assert (example / "assets" / "music" / f"{piece.name}.yaml").read_bytes() == shipped, "copy the example's piece to studio/pieces"
-        assert (example / "README.md").is_file()
-        assert f"music: {piece.name}" in (example / "video.yaml").read_text(encoding="utf-8")
-        assert f"| `{piece.name}`<br>" in section and f"media/piece-{piece.name}.mp3" in section
-    score = listen.piece_score(listen.SCORE_PIECES[0])
-    lift = next(s for s in score.sections if s.name == "lift")
-    assert listen.piece_clip_start(listen.SCORE_PIECES[0], score) == pytest.approx(
-        score.section_start(lift) / sfx.RATE - listen.CLIP_LEAD_SECONDS, abs=0.01)
+        assert (example / "README.md").is_file() and f"music: {piece.name}" in (example / "video.yaml").read_text(encoding="utf-8")
+        assert f"| `{piece.name}`<br>" in section and f"(../../examples/{piece.example}/README.md)" in section
+        assert f"(media/bed-{piece.name}.mp3)" in section
+        assert listen.piece_score(piece).title == "Time of Flight"
+    assert not list(DOCS.glob("media/piece-*"))
 
 
 def test_readme_names_the_real_counts_and_links_the_page() -> None:

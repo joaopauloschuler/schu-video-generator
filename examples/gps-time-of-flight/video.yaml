@@ -1,10 +1,12 @@
-# How GPS finds you: a one-minute science explainer whose music is a project piece, an original
-# score file made from a template by an AI author (assets/music/time_of_flight.yaml; how it was
-# made, with its check report: README.md). It plays like a built-in bed: `music: time_of_flight`.
+# How GPS finds you: a one-minute science explainer whose music, Time of Flight, is an original
+# score file made from a template by an AI author for this video (how it was made, with its check
+# report: README.md). The owner approved it as a built-in bed (Step 192), so it is no longer a
+# project piece here: `music: time_of_flight` plays the bed, the same samples.
 #
-#   vidgen validate examples/gps-time-of-flight          # reads the score file (no render)
-#   vidgen lint examples/gps-time-of-flight              # incl. music_check on the piece
-#   vidgen music check examples/gps-time-of-flight/assets/music/time_of_flight.yaml
+#   vidgen validate examples/gps-time-of-flight
+#   vidgen lint examples/gps-time-of-flight
+#   vidgen music check time_of_flight --out build/music-check    # the bed's score
+#   vidgen music template time_of_flight --out my_theme.yaml     # its score, to start from
 #   vidgen tts examples/gps-time-of-flight               # Kokoro: local and free (the kokoro extra)
 #   vidgen render examples/gps-time-of-flight [--preview]
 #
@@ -27,7 +29,7 @@ theme:
 
 voice: {provider: kokoro, voice: af_heart, speed: 0.8}   # local and free; 0.8: under 3.5 words/s
 
-music: time_of_flight              # assets/music/time_of_flight.yaml, rendered at the join
+music: time_of_flight              # the built-in bed (a score file), rendered at the join
 transition: {type: crossfade, duration: 0.4}
 
 overlays:

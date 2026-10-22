@@ -1721,7 +1721,7 @@ class MusicCue(_Strict):
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
     source: str | None = Field(default=None, min_length=1)
-    """A built-in bed (calm, pulse, bright, cartoon, lullaby, discovery, breakthrough, enigma, momentum, lab, ascent, horizon, beacon, neon, tidewater, skyline; vidgen list-music), a project piece (a score file: my_theme for assets/music/my_theme.yaml) or an audio file under the project (e.g. assets/music/theme.mp3); give this or compose."""
+    """A built-in bed (calm, pulse, bright, cartoon, lullaby, discovery, breakthrough, enigma, momentum, lab, ascent, horizon, beacon, neon, tidewater, skyline, time_of_flight; vidgen list-music), a project piece (a score file: my_theme for assets/music/my_theme.yaml) or an audio file under the project (e.g. assets/music/theme.mp3); give this or compose."""
     compose: Annotated[ComposeConfig | None, BeforeValidator(_compose_shorthand)] = Field(default=None, json_schema_extra=_mood_name_schema)
     """Music composed from a mood instead of a source: a mood name or {mood, key, tempo, instruments, seed, bars}; needs the music extra."""
     volume: float = Field(default=0.0, ge=-60, le=12)
@@ -1729,7 +1729,7 @@ class MusicCue(_Strict):
     start: float = Field(default=0.0, ge=0)
     """Seconds into the source where the music starts (a loop restarts there too)."""
     section: Identifier | None = None
-    """A project piece or a score bed (tidewater, skyline) only: start at this section of the piece (start then counts from it); with from, the section begins when that scene does."""
+    """A project piece or a score bed (tidewater, skyline, time_of_flight) only: start at this section of the piece (start then counts from it); with from, the section begins when that scene does."""
     loop: bool = True
     """Repeat the source while the cue lasts; false: it plays once and fades out at its end."""
     crossfade: float = Field(default=2.0, ge=0, le=30)

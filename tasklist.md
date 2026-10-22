@@ -1030,7 +1030,8 @@ beds, analysis reports (agents cannot listen), and using the pieces in videos. B
 vidgen as a self-contained module (`src/vidgen/studio/`, no video / scene / render imports) so it
 can become its own package. Additive and opt-in: the 14 beds and every existing project's audio
 stay byte-identical. Steps 184–191 (Step 190, two score pieces as built-in beds, was added after
-the owner listened to them; the review moved to 191). Quality without ears: templates, measurements, spectrograms, plain-language
+the owner listened to them; the review moved to 191); Step 192, a follow-up, makes Step 189's
+piece the 17th bed. Quality without ears: templates, measurements, spectrograms, plain-language
 advice; a human makes the final choice (DESIGN §93).
 
 ### Step 184 — Score format and rendering
@@ -1070,6 +1071,11 @@ advice; a human makes the final choice (DESIGN §93).
 ### Step 191 — Review of Phase S
 - [x] Critical review with fixes recorded in HANDOFF (DESIGN §93.13): holds across sections, `duck: {follow}`, a cue's `section:`, names in `vidgen music render` / `check` and MCP, the check's per-chord fit, lift against earlier sections, riser and lift advice, lint `music_check` on the part played, threaded filter sweeps (bit-identical), the module-boundary test as an allow-list, and the Step 189 caption offset (a beat now ends on its planned frame: `scene.narrate`)
 - [x] Compatibility: the 16 beds' loops, the 16 templates, the piece, the test demos and the cookbook sketches render byte-identically (SHA-256, two processes); mixes of six projects byte-identical; the Listen page regenerates identically; Phase Q baseline frames identical; phase tests and related suites one at a time; `tests/test_mcp.py` in full
+
+### Step 192 — Time of Flight becomes a built-in bed (follow-up: the owner approved it)
+- [x] `time_of_flight` (Step 189's piece, exactly as it sounded: sample-identical to the example's render) is the 17th built-in bed, a score bed like `tidewater` / `skyline`: `studio/beds/time_of_flight.yaml` (also its template), `music: time_of_flight`, list-music (+ `--json`, MCP `list_music`) with a plain-language description and use, did-you-mean, the schema's source text, CONFIG beds table, guide alternatives (`momentum` still first) + `AGENTS.md`, README and cookbook counts (17); its fingerprint added (the 16 unchanged) (DESIGN §93.14)
+- [x] The GPS example plays the bed and keeps no project copy (it would clash); its README keeps the log and check report; its mix is byte-identical; the redundant `studio/pieces/` copy removed
+- [x] Listen page: the bed's row (clip into its lift, spectrogram: the Step 189 piece files, byte-identical, renamed); "Made with the score format" stays as the showcase of how it was made, linking the example's log and the bed's clip (no second copy of the media); regenerated twice identically (6.33 MB)
 
 ---
 

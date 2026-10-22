@@ -1,26 +1,30 @@
 # How GPS finds you — with music an AI author wrote
 
 A one-minute science explainer (six scenes, about 89 s with Kokoro narration) whose background
-music is an original **score file**, [`assets/music/time_of_flight.yaml`](assets/music/time_of_flight.yaml),
-made by an AI author from a template of the built-in `momentum` bed by following the author
-guide's "Making music" recipe. It plays like a bed:
+music is an original **score file**, *Time of Flight*, made for this video by an AI author from a
+template of the built-in `momentum` bed by following the author guide's "Making music" recipe.
+It was written as a project piece (`assets/music/time_of_flight.yaml`); the owner then approved
+it as a built-in bed (Step 192), so the example now plays the bed — the same score, the same
+samples — and keeps no copy of its own (a project piece named like a bed would clash with it):
 
 ```yaml
-music: time_of_flight              # assets/music/time_of_flight.yaml, rendered when the video is joined
+music: time_of_flight              # the built-in bed, a score file rendered when the video is joined
 ```
 
 ```
-vidgen validate examples/gps-time-of-flight     # reads the score file
-vidgen lint examples/gps-time-of-flight         # incl. the music_check rule on the piece
-vidgen music check examples/gps-time-of-flight/assets/music/time_of_flight.yaml --out build/check
-vidgen music render examples/gps-time-of-flight/assets/music/time_of_flight.yaml --out time_of_flight.mp3
+vidgen validate examples/gps-time-of-flight
+vidgen lint examples/gps-time-of-flight
+vidgen music template time_of_flight --out my_theme.yaml   # the bed's very score, to start from
+vidgen music check time_of_flight --out build/check        # the report below
+vidgen music render time_of_flight --out time_of_flight.mp3
 vidgen tts examples/gps-time-of-flight          # Kokoro (the kokoro extra): local and free
 vidgen render examples/gps-time-of-flight
 ```
 
-No audio is committed. Hear a 15 s clip of the piece (the end of its build and its lift) on the
-[Listen page](../../docs/music/README.md#made-with-the-score-format). The craft behind it, and
-genre sketches to start from, are in [docs/COOKBOOK-MUSIC.md](../../docs/COOKBOOK-MUSIC.md).
+No audio is committed. Hear a 15 s clip of the bed (the end of its build and its lift) on the
+[Listen page](../../docs/music/README.md#music-beds); how it was made is also summed up
+[there](../../docs/music/README.md#made-with-the-score-format). The craft behind it, and genre
+sketches to start from, are in [docs/COOKBOOK-MUSIC.md](../../docs/COOKBOOK-MUSIC.md).
 
 ## The piece
 
@@ -62,6 +66,9 @@ What the run taught (and what changed in the guide): a template's key cannot be 
 not register as a build while the pad held 60 % of the power — shape the loudest part first.
 
 ## The check report (final version, compared with the template)
+
+The final version is the bed's score unchanged: `vidgen music check time_of_flight --compare
+momentum.yaml` (the template written by `vidgen music template momentum`) gives this report.
 
 ```
 Time of Flight: B minor, 108 BPM, 4/4, 24 bars = 53.3 s (a loop)
@@ -119,8 +126,10 @@ verdict                    fine under narration  fine under narration
 In the rendered video (1920×1080, 30 fps, 88.7 s, video and audio the same length) the mix
 measured −16.0 LUFS integrated, true peak −1.8 dBTP, loudness range 3.0 LU; the piece played
 from the first scene to the last, ducked 12 dB under the voice. `vidgen lint` with the real
-narration: 0 errors, 0 warnings (the `music_check` rule included). The numbers say the piece
-fits under a voice; whether it is *good* is for a person to hear.
+narration: 0 errors, 0 warnings (the `music_check` rule included: it checks project pieces, so
+it ran while the piece was one; built-in beds are not checked by it). The numbers say the piece
+fits under a voice; whether it is *good* is for a person to hear — the owner listened and made
+it the built-in bed `time_of_flight`.
 
 ## Facts
 

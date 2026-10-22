@@ -116,7 +116,7 @@ def test_validate_reports_piece_problems(tmp_path: Path) -> None:
     assert problem.location == "music.source" and "rename the piece" in problem.message and "source: assets/music/calm.yaml" in problem.message
     assert project_problems(_project(tmp_path / "p3", {"source": "assets/music/calm.yaml"}, {"calm.yaml": SMALL})) == []
     # Step 190: the beds written as score files are beds too (a copy of a template clashes)
-    for bed in ("tidewater", "skyline"):
+    for bed in ("tidewater", "skyline", "time_of_flight"):  # time_of_flight since Step 192
         [problem] = project_problems(_project(tmp_path / f"p-{bed}", bed, {f"{bed}.yaml": SMALL}))
         assert "rename the piece" in problem.message and f"source: assets/music/{bed}.yaml" in problem.message
         assert music.source_kind(MusicCue(source=bed)) == "bed"
@@ -212,24 +212,31 @@ def test_music_check_lint_rule(tmp_path: Path) -> None:
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "gps-time-of-flight"
 
 
-def test_the_gps_example_validates_with_its_piece(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_gps_example_validates_with_its_bed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Step 192: the example's piece became the built-in bed ``time_of_flight``; the example plays
+    the bed and keeps no project copy (which would clash with the bed's name)."""
     import shutil
 
+    from vidgen.studio.templates import TEMPLATE_DIR
+
+    assert not (EXAMPLE / "assets" / "music").exists()
     root = shutil.copytree(EXAMPLE, tmp_path / "gps", ignore=shutil.ignore_patterns("build", "output", "audio"))
     assert main(["validate", str(root)]) == 0
-    assert "music:     time_of_flight, a project piece" in capsys.readouterr().out
+    assert "music:     time_of_flight" in capsys.readouterr().out
     project = Project.load(root)
     assert project_problems(project) == []
-    assert music.source_kind(project.config.music, root) == "score"
-    score = load_music_score(root / "assets" / "music" / "time_of_flight.yaml")
+    assert music.source_kind(project.config.music, root) == "bed" and music.BUILTIN_BEDS["time_of_flight"].score
+    score = load_music_score(TEMPLATE_DIR / "time_of_flight.yaml")
     assert [s.name for s in score.sections] == ["intro", "build", "lift", "settle"] and score.loop
     assert score.key.name == "B minor" and score.tempo == 108   # not the template's G minor at 120
+    assert "music: time_of_flight" in (EXAMPLE / "video.yaml").read_text(encoding="utf-8")
 
 
 @pytest.mark.slow
 def test_the_gps_example_piece_is_fine_under_narration() -> None:
     from vidgen.studio import check_music_score
+    from vidgen.studio.templates import TEMPLATE_DIR
 
-    check = check_music_score(load_music_score(EXAMPLE / "assets" / "music" / "time_of_flight.yaml"))
+    check = check_music_score(load_music_score(TEMPLATE_DIR / "time_of_flight.yaml"))
     assert [f.topic for f in check.findings if f.level != "ok"] == []
     assert [f.text.split(":")[0] for f in check.findings if f.topic == "sections"] == ["the build builds", "the lift lifts"]

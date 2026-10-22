@@ -13042,7 +13042,7 @@ people can hear it: `docs/music/README.md`, committed with its media.
 - **Not done**: no per-clip loudness readout on the page; no clip of composed music following a
   video (mood changes, swells), only fixed moods; the page lists the moods but plays two.
 
-## 93. Music agents can write: score files (Phase S, Steps 184–191)
+## 93. Music agents can write: score files (Phase S, Steps 184–191; follow-up 192)
 
 Goal: AI agents make new music the way the Steps 179 / 181 agents made the beds, without
 editing vidgen's Python: a piece written as a YAML **score file**, an instrument library,
@@ -13084,6 +13084,8 @@ Term: a **score file** (YAML, this section; class `MusicScore`) is not the compo
   sections, ducking by level, a cue's `section`, names in the commands, the check's per-chord
   fit and lift / riser advice, lint on the part played, faster sweeps, a beat on its planned
   frame); beds, scores and existing projects byte-identical; determinism; phase tests.
+- **192 Time of Flight as a built-in bed** (done, §93.14; a follow-up after the owner listened):
+  Step 189's piece becomes the bed `time_of_flight`.
 
 Compatibility: additive and opt-in. Nothing that exists plays differently; the 14 beds stay
 byte-identical (`tests/test_music.py` fingerprints).
@@ -13092,7 +13094,8 @@ byte-identical (`tests/test_music.py` fingerprints).
 
 `src/vidgen/studio/` (theory, patterns, instruments, effects, patches, score_file, render,
 templates, measure, check; the templates in `beds/`, the check's narration sample in `data/`,
-the Listen page's score pieces in `pieces/` since Step 189).
+the Listen page's score pieces were in `pieces/` from Step 189 until Step 192 made the only one
+a bed).
 Self-contained: it
 imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...,
 and `BUILTIN_BEDS` for the templates' names), `vidgen.sfx` (`RATE`, filters, `decode_audio`),
@@ -13778,3 +13781,52 @@ the same samples (below).
   processes — all equal; mixes of six projects (a file + `momentum`, `tidewater` + `skyline`,
   `gradient-descent`, `iso-web-page`, `host-explainer`, `gps-time-of-flight`) byte-identical; the
   Listen page made again equals `docs/music`; the Phase Q baseline's 31 frames identical.
+
+### 93.14 Time of Flight as a built-in bed (Step 192)
+
+The owner listened to *Time of Flight* (Step 189's agent-made piece) and approved it as the 17th
+built-in bed, exactly as it sounds: `time_of_flight` (the piece's file name; no bed, sound, mood,
+ambience or piece uses it). It is a score bed like `tidewater` and `skyline` (§93.12): in
+`BUILTIN_BEDS` after `skyline`, `Bed.score`, generator `music._score_bed`, the score shipped as
+`studio/beds/time_of_flight.yaml` (also its template: `vidgen music template time_of_flight`
+writes the score the bed plays). So it works wherever a bed does: `music: time_of_flight`, cue
+keys including `section: lift`, `vidgen list-music` (+ `--json`, MCP `list_music`), did-you-mean,
+the schema's `source` text, `vidgen music render` / `check` by name, the Listen page.
+
+- **Sample-identical** (checked): the shipped file is the example's score with a template header
+  in place of its first comment lines (the data from `version: 1` on copied unchanged by a
+  script); its render equals the render of `examples/gps-time-of-flight/assets/music/time_of_flight.yaml`
+  at 24b9a8f8 sample for sample, and the bed loop's fingerprint is locked in `tests/test_music.py`
+  (the 16 others unchanged). `vidgen music check time_of_flight --compare momentum.yaml` gives the
+  example README's report line for line.
+- **Facts** (description and use in words, tested against the score): B minor, 108 BPM (beat
+  26664 samples), 24 bars = 53.328 s; intro (bars 1–4) / build (5–12, from 8.9 s) / lift (13–20,
+  26.7 s) / settle (21–24, 44.4 s); chords Bm(add9) F#m7 · Gmaj7 Em9 · Gmaj7 A Bm(add9) D ·
+  Gmaj7 F#sus4, a chord every two bars; ranges as the renderer voices them: arpeggio D3–D5, bass
+  D2–B2, lead C#5–D6; −28.00 LUFS, true peak −15.5 dBTP, 54 % of the power under 150 Hz, the voice
+  band 1.6 dB under `pulse`'s, highs −44.2 dB, L/R correlation 0.50; renders in about 7 s (two
+  cores). Use: science and tech explainers, discovery and measurement stories, maps and
+  navigation, how-things-work videos.
+- **The example** (decision): it plays the bed and its project copy is gone — with the copy, the
+  Step 188 name-clash rule would make `music: time_of_flight` a problem, and the copy would be a
+  second source of truth. `video.yaml` keeps `music: time_of_flight` (now kind `bed`); the README
+  keeps the iteration log and the check report, says the piece was a project piece and is now
+  the bed, and gives the commands by name (`vidgen music template / check / render
+  time_of_flight`). The `music_check` lint rule checks project pieces only, so it no longer runs
+  on the example (as for every bed). Its mix (six 15 s scenes, ducking beats) is byte-identical
+  to Step 191's (SHA-256 of the mix and of the loop the cue plays; `<scratchpad>/s192/mixgps.py`).
+- **`studio/pieces/` removed**: its only file was the example's copy, now the bed's score; the
+  package-data entry is gone.
+- **The Listen page** (decision): the bed's row in the beds table, its clip 6 s before the lift
+  (`CLIP_MOMENTS` 0.5: from 20.66 s, the end of the build, the riser and the lift with its lead) —
+  the same start as the Step 189 piece clip, so `bed-time_of_flight.{mp3,png}` are the old
+  `piece-time_of_flight` files byte for byte (renamed). The "Made with the score format" section
+  stays as the showcase of how such a piece is made: the links to the score-file, template,
+  check and project-piece docs and the craft notes, and one row per author-made piece that became
+  a bed (`listen.SCORE_PIECES`: name, how it was made, the example with its log) whose "hear it"
+  column links the bed's clip — no second copy of the media, no spectrogram repeated. A piece is
+  on the page only once it is a bed (`piece_score` reads `studio/beds`); `piece_clip`,
+  `piece_clip_start` and `PIECES_DIR` are gone. 6.33 MB (unchanged; budget 6.5 MB); every other
+  file byte-identical; a second run into the scratchpad identical.
+- **Not changed**: the other 16 beds (fingerprints), the renderer, `PIECE_RENDER_VERSION`, the
+  check's limits (`time_of_flight` was in Step 191's calibration as "the piece").

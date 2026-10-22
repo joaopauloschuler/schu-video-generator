@@ -152,6 +152,9 @@ _BED_FINGERPRINTS: dict[str, tuple[int, tuple[float, float, float]]] = {
     # render of skyline_lift.yaml (its pad's sub_width: 1 keeps Step 185's wide sub)
     "tidewater": (2559744, (58.7584, 39.5267, 30.2177)),
     "skyline": (2880000, (-33.1638, 44.471, -30.1705)),
+    # Step 192: Step 189's piece as the owner heard it (equal, sample for sample, to the render of
+    # examples/gps-time-of-flight/assets/music/time_of_flight.yaml at 24b9a8f8)
+    "time_of_flight": (2559744, (-22.7132, -99.0942, -18.0782)),
 }
 
 
@@ -222,12 +225,17 @@ def test_energetic_beds_facts() -> None:
 
 
 def test_score_beds_facts() -> None:
-    """Step 190: ``tidewater`` and ``skyline`` are score files (``studio/beds``, also their
-    templates); their facts match the score (no audio made) and the score is the approved demo's."""
+    """Step 190: ``tidewater`` and ``skyline`` (Step 192: ``time_of_flight``) are score files
+    (``studio/beds``, also their templates); their facts match the score (no audio made) and the
+    score is the approved demo's (``time_of_flight``'s project copy is gone: its fingerprint holds it)."""
     from vidgen.studio import load_music_score
     from vidgen.studio.templates import TEMPLATE_DIR
 
-    facts = {"tidewater": (108, "E minor", 24, "tidewater", "26.7 s"), "skyline": (128, "D minor", 32, "skyline_lift", "30 s")}
+    facts = {
+        "tidewater": (108, "E minor", 24, "tidewater", "26.7 s"),
+        "skyline": (128, "D minor", 32, "skyline_lift", "30 s"),
+        "time_of_flight": (108, "B minor", 24, None, "26.7 s"),
+    }
     assert list(music.BUILTIN_BEDS)[14:] == list(facts)  # after the fourteen made in Python
     assert [b.name for b in music.BUILTIN_BEDS.values() if b.score] == list(facts)
     for name, (tempo, key, bars, demo, lift) in facts.items():
@@ -245,6 +253,9 @@ def test_score_beds_facts() -> None:
         shipped = yaml.safe_load((TEMPLATE_DIR / f"{name}.yaml").read_text(encoding="utf-8"))
         if name == "skyline":
             assert shipped["tracks"]["pad"]["settings"].pop("sub_width") == 1
+        if demo is None:
+            assert [s.name for s in score.sections] == ["intro", "build", "lift", "settle"]
+            continue
         assert shipped == yaml.safe_load((Path(__file__).parent / "data" / "studio" / f"{demo}.yaml").read_text(encoding="utf-8"))
 
 
@@ -478,7 +489,7 @@ def test_validate_reports_missing_music_file(make_project: Any) -> None:
     root5 = make_project(_video(music="horizn"), folder="p5")
     [problem] = project_problems(Project.load(root5))
     assert "did you mean 'horizon'?" in problem.message
-    for typo, bed in (("tidewatr", "tidewater"), ("skylin", "skyline")):  # Step 190: the score beds too
+    for typo, bed in (("tidewatr", "tidewater"), ("skylin", "skyline"), ("time_of_flite", "time_of_flight")):  # Steps 190, 192: the score beds too
         [problem] = project_problems(Project.load(make_project(_video(music=typo), folder=f"p-{bed}")))
         assert f"did you mean '{bed}'?" in problem.message, problem.message
     assert not project_problems(Project.load(make_project(_video(music={"source": "neon", "volume": -2}), folder="p6")))
@@ -502,7 +513,10 @@ def test_list_music(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFix
     theme = items["assets/music/theme.wav"]
     assert theme["origin"] == "project" and theme["duration"] == 2.0 and theme["description"] is None
     assert items["cartoon"]["tempo"] == 128 and items["lullaby"]["key"] == "F major"
-    assert Path(calm["preview"]) == previews / "calm.wav" and len(list(previews.glob("*.wav"))) == len(music.BUILTIN_BEDS) == 16
+    assert Path(calm["preview"]) == previews / "calm.wav" and len(list(previews.glob("*.wav"))) == len(music.BUILTIN_BEDS) == 17
+    tof = items["time_of_flight"]  # Step 192
+    assert (tof["key"], tof["tempo"], tof["loop_seconds"], tof["origin"]) == ("B minor", 108, 53.328, "builtin")
+    assert "intro" in tof["description"] and "settle" in tof["description"] and "science and tech explainers" in tof["use"]
     assert items["tidewater"]["tempo"] == 108 and items["tidewater"]["loop_seconds"] == 53.328 and items["tidewater"]["origin"] == "builtin"
     assert items["skyline"]["key"] == "D minor" and items["skyline"]["loop_seconds"] == 60.0
     assert items["skyline"]["loudness"] == pytest.approx(music.MUSIC_LEVEL, abs=0.1) and "Rolled off" in items["skyline"]["description"]
@@ -514,6 +528,7 @@ def test_list_music(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFix
     out = capsys.readouterr().out
     assert "calm  builtin  D major, no beat, 60 s loop" in out and "pulse  builtin  A minor, 96 BPM" in out
     assert "tidewater  builtin  E minor, 108 BPM" in out and "skyline  builtin  D minor, 128 BPM" in out
+    assert "time_of_flight  builtin  B minor, 108 BPM" in out
     assert "assets/music/theme.wav  project file  2.0 s" in out and "level at volume 0: -28 LUFS" in out
 
 
@@ -526,7 +541,7 @@ def test_schema_has_music(capsys: pytest.CaptureFixture[str]) -> None:
 
     for value in ("calm", {"source": "pulse", "duck": False}, [{"source": "calm", "to": "a"}, "bright"], False, {"source": "neon", "volume": -2}):
         jsonschema.validate(_video(music=value), schema)
-    assert "momentum, lab, ascent, horizon, beacon, neon, tidewater, skyline;" in json.dumps(schema)  # the source's description names every bed
+    assert "momentum, lab, ascent, horizon, beacon, neon, tidewater, skyline, time_of_flight;" in json.dumps(schema)  # the source's description names every bed
 
 
 # ----- rendering ------------------------------------------------------------------------------------------
