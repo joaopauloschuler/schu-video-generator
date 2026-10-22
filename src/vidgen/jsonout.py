@@ -726,6 +726,12 @@ def music_render_document(
     )
 
 
+def music_patches_document(catalog: Mapping[str, Any], warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen music patches --json`` document: every score-file instrument and effect
+    (``catalog`` from :func:`vidgen.studio.patch_catalog`)."""
+    return envelope("music", True, warnings, action="patches", **dict(catalog))
+
+
 def listen_page_document(result: Any, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The ``vidgen music page --json`` document (``result`` a ``vidgen.listen.ListenResult``):
     the page, its clips and spectrograms, their size, and whether composed clips were made."""

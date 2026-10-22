@@ -3142,12 +3142,15 @@ minutes (the beds take most of it). JSON: see [below](#vidgen-music---json).
 
 A **score file** is a piece of music written in YAML and played by vidgen's own synthesizer (the
 instruments of the built-in beds): key, tempo, time signature, named sections, a chord
-progression and tracks of step patterns. `vidgen music render SCORE.yaml [--out FILE.wav]
-[--json]` writes it as a WAV (default `<score>.wav` in the current folder; 48 kHz stereo, −28
-LUFS like a bed, a seamless loop unless `loop: false`) and prints the sections (start, bars,
-key, chords), the tracks, the loudness and the true peak. The same file and `seed` always give
-the same samples. Every mistake is reported at once with where it is and the nearest known name.
-(Using score files in a video comes in a later step; DESIGN §93.)
+progression and tracks of step patterns, with effects. `vidgen music render SCORE.yaml [--out
+FILE.wav|FILE.mp3] [--json]` writes it as a WAV or an MP3 (default `<score>.wav` in the current
+folder; 48 kHz stereo, −28 LUFS like a bed, a seamless loop unless `loop: false`; the MP3 needs an
+ffmpeg with libmp3lame) and prints the sections (start, bars, key, chords), the tracks and their
+effects, the loudness and the true peak. Notes outside 20 Hz–12 kHz are left out with a warning
+(change the track's `octave` or `transpose`). The same file and `seed` always give the same
+samples. Every mistake is reported at once with where it is and the nearest known name. `vidgen
+music patches [--json]` describes every instrument, setting and effect in words. (Using score
+files in a video comes in a later step; DESIGN §93.)
 
 ```yaml
 title: Tidewater
@@ -3189,7 +3192,8 @@ A track: `instrument` (below); `steps` (a string, or a list of strings played in
 each group starts, repeated over the bar); `octave` (where the chord's root sits, C4 middle C;
 default per instrument); `transpose` (semitones); `volume` (dB); `pan` (−1 to 1); `settings`
 (the instrument's); `rest: [sections]` or `only: [sections]`; `sections: {lift: {steps, accent,
-octave, transpose, volume, pan, settings}}` changes for one section.
+octave, transpose, volume, pan, settings, ...effects}}` changes for one section; and the effects
+below.
 
 Steps: `|` separates bars and each bar is split into as many equal steps as it has symbols
 (16 = sixteenths in 4/4); the pattern repeats from each section's start. `x` a hit (a pitched
@@ -3199,11 +3203,53 @@ chord degrees (1 root, 3 third, 5 fifth, 7 seventh, 8 octave; `'` after it an oc
 down), notes like `E5`, `F#3`, `Bb4`; `!` / `?` after a hit accents / softens it. Spaces only help
 reading.
 
-Instruments (settings in brackets): drums `kick` (high, low, decay, click), `clap` (tone), `hat`
-and `open_hat` (decay, tone), `riser` (low, high; swells over its held steps), `boom` (low,
-decay); notes `synth_bass`, `sub`, `pluck` (+ bright), `fm_pluck` (+ index), `bell`, `piano`
-(decay, tone, ring: seconds a note sounds on after its held steps); pads `pad` and `supersaw`
-(tone, air, sub, attack, release).
+Instruments (settings in brackets; `vidgen music patches` lists defaults, ranges and what each
+does):
+
+| family | instruments |
+|---|---|
+| drums | `kick` (high, low, decay, click), `clap` (tone), `hat` and `open_hat` (decay, tone), `gated_snare` (gate, body: the 80s snare), `tick` (tone: a clock tick), `boom` (low, decay) |
+| noises | `riser` (low, high; swells over its held steps), `pulsar` (high, low, sweep, noise, tone: a pulsar's chirp), `static` (low, high, wander, fade: radio static for its held steps, `"x \| - \| - \| -"`) |
+| basses | `synth_bass` (decay, tone, ring), `analog_bass` (decay, tone, closed, snap, detune, ring), `sub` (decay, tone, second, third, ring) |
+| plucks and keys | `pluck` (+ bright), `fm_pluck` (+ index), `square_pluck`, `pizzicato`, `music_box`, `bell`, `piano` (decay, tone, ring: seconds a note sounds on after its held steps), `woodblock` (tone) |
+| leads | `soft_lead` (attack, vibrato, tone, ring: it sustains while held) |
+| pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, sub, attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
+
+Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
+section):
+
+```yaml
+saws:
+  instrument: supersaw
+  play: chords
+  lowpass: {from: 600, to: 1000}               # a filter sweep over each section
+  duck: {to: kick, depth: 0.55, release: 0.13}  # pumps under the kick track (or to: beat)
+  sections:
+    build:
+      lowpass: [[0, 1000], [8, 3600]]          # [bar from the section's start, value] points
+      gate: {steps: "X..x..x.X..x..x.", duty: 0.5, floor: 0.08}   # trance gate
+    lift: {lowpass: 4000, width: 1.4}
+    outro: {volume: {from: 0, to: -10}}        # a fade
+arp: {instrument: fm_pluck, steps: "1 5 8 1 5 8 5 3", echo: {delay: 0.75, feedback: 0.35, repeats: 2}}
+lead: {instrument: soft_lead, steps: "F5 - - - D5 - - -", reverb: {size: 2.8, mix: 0.3}}
+hat: {instrument: hat, steps: "o.x. o.x. o.x. o.xo", spread: 0.3}
+```
+
+| key | value | |
+|---|---|---|
+| `volume` | dB, or a curve | a number scales every note; a curve (`{from, to}` over the section, or `[[bar, dB], ...]` points) fades or swells the track |
+| `pan` | −1 to 1 | |
+| `spread` | 0 to 1 | odd steps this far right of `pan`, even steps as far left |
+| `width` | 0 to 2, or a curve | stereo width: 0 mono, 1 as it is, 2 extra wide |
+| `lowpass`, `highpass` | Hz, or a curve | gentle filters on the track; a curve is a filter sweep |
+| `duck` | `{to, depth, release}` or a track name | side-chain ducking: dips by `depth` (0.45) at every hit of track `to` (or `beat`: every beat), back in `release` s (0.15) |
+| `gate` | `{steps, duty, floor}` or a pattern | open on the pattern's hits (`x` fully, `o` to 0.4, `-` longer) for `duty` (0.55) of the step, `floor` (0.08) between |
+| `echo` | `{delay, feedback, repeats, pingpong}` or `true` | echoes `delay` beats apart (0.75), each `feedback` (0.35) quieter, `repeats` (2), alternating sides (`pingpong: true`) |
+| `reverb` | `{size, mix, tone, predelay}` or `true` | a room: a tail of `size` s (1.8) at `mix` (0.2), low-passed at `tone` Hz (4000), after `predelay` s (0.02) |
+
+A curve's points are bars from the section's start (fractions allowed); between them the value
+moves in a straight line (frequencies in octaves). The demo `tests/data/studio/skyline_lift.yaml`
+uses every effect: a pumping supersaw lift.
 
 ### Loudness of the final mix (`audio`)
 
@@ -9787,14 +9833,23 @@ difference between two palette colours).
 | key | type | |
 |---|---|---|
 | `action` | str | `render` |
-| `wav` | str | the file written |
+| `wav` | str | the file written (a WAV or an MP3) |
+| `warnings` | list | `{scene: null, message}`: notes left out because they are outside 20 Hz–12 kHz, per track and section |
 | `title`, `key`, `time` | str | |
 | `tempo`, `seconds`, `wav_seconds` | float | quarter notes per minute; one pass; the WAV (a one-shot adds its tail) |
 | `bars`, `seed` | int | |
 | `loop` | bool | |
 | `sections` | list | `{name, start, bars, key, chords}` (`start` in seconds, `chords` names) |
-| `tracks` | list | `{name, instrument, plays, sections}` (`plays`: `steps` or `chords`) |
+| `tracks` | list | `{name, instrument, plays, sections, effects}` (`plays`: `steps` or `chords`; `effects`: names such as `lowpass`, `duck`, `volume curve`) |
 | `loudness`, `true_peak` | float | of the WAV: LUFS integrated, dBTP |
+
+`vidgen music patches --json` ([Score files](#score-files-vidgen-music-render)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `patches` |
+| `instruments` | list | `{name, group, kind, plays, words, level, octave, settings}`; `settings` maps a name to `{default, low, high, words}` |
+| `effects` | list | `{name, words, example, fields}`; `fields` maps a name to `{default, low, high, words}` (`low` / `high` null for words such as `to`, `steps`, `pingpong`) |
 
 `vidgen music page --json` ([Listen page](#listen-page-vidgen-music-page)):
 

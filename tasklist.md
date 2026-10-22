@@ -1040,9 +1040,9 @@ advice; a human makes the final choice (DESIGN §93).
 - [x] `vidgen music render SCORE.yaml [--out FILE.wav] [--json]`; `vidgen.api` exports `MusicScore`, `load_music_score`, `parse_music_score`, `render_music_score`; CONFIG, README, CHANGELOG; demo score `tests/data/studio/tidewater.yaml` rendered, measured and its spectrogram looked at; `tests/test_studio.py`
 
 ### Step 185 — Instrument library (patches)
-- [ ] Today's building blocks as named, adjustable instruments: soft kick, clap, hi-hat, gated snare; synth bass, analog bass, sub; supersaw, pads, plucks, bells, piano-like, soft lead; pulsar tick, radio static, noise riser (and the cartoon / lullaby voices)
-- [ ] Track effects: filter sweeps over sections, side-chain ducking to the kick, gates, echo, reverb, panning / stereo spread, volume curves over sections
-- [ ] `vidgen music patches` (and `--json`) describes every instrument and setting in words
+- [x] Today's building blocks as named, adjustable instruments: soft kick, clap, hi-hat, gated snare; synth bass, analog bass, sub; supersaw, pads, plucks, bells, piano-like, soft lead; pulsar tick, radio static, noise riser (and the cartoon / lullaby voices: pizzicato, music box, woodblock); 26 in six families, every setting ranged and described (`studio/instruments.py`, DESIGN §93.4)
+- [x] Track effects: filter sweeps over sections or bars, side-chain ducking to the kick (or any track, or the beat), gates, echo, reverb, panning / stereo spread / width, volume curves over sections (`studio/effects.py`, DESIGN §93.7); the format can express what momentum, ascent, horizon, beacon and neon do (§93.7 "How the beds map"; a test score uses all of it)
+- [x] `vidgen music patches` (and `--json`) describes every instrument, setting and effect in words; `vidgen music render` warns about notes outside 20 Hz–12 kHz and writes MP3 (`--out x.mp3`); demo `tests/data/studio/skyline_lift.yaml` (a pumping supersaw lift) rendered, measured and its spectrogram looked at; the 14 beds and Step 184's scores byte-identical
 
 ### Step 186 — Templates from the 14 beds
 - [ ] `vidgen music template <bed> --out my_theme.yaml`: each built-in bed as an editable score file, a close re-creation (not bit-identical; the beds unchanged)

@@ -1,5 +1,6 @@
-"""Score files and their rendering (Step 184, DESIGN.md §93): theory, step patterns, checks with
-clear messages, deterministic seamless loops and one-shots, ``vidgen music render``."""
+"""Score files and their rendering (Steps 184-185, DESIGN.md §93): theory, step patterns, checks
+with clear messages, deterministic seamless loops and one-shots, ``vidgen music render``, the
+instrument library, effects and ``vidgen music patches``."""
 
 from __future__ import annotations
 
@@ -296,3 +297,202 @@ def test_music_render_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]
     path.write_text("key: A minor\ntempo: 120\nbars: 2\ntracks: {k: {instrument: kik, steps: x}}\n", encoding="utf-8")
     assert cli.main(["music", "render", str(path), "--out", str(out)]) == 1
     assert "did you mean 'kick'" in capsys.readouterr().err
+
+
+# ----- Step 185: the instrument library and effects ----------------------------------------------------
+
+
+def _fx(tracks: dict[str, Any], bars: int = 4, loop: bool = True) -> tuple[Any, np.ndarray]:
+    """A small score (120 BPM, A minor, one chord) of ``tracks`` and its audio as float64."""
+    score = parse_music_score({"key": "A minor", "tempo": 120, "bars": bars, "progression": "i", "loop": loop, "seed": 4, "tracks": tracks})
+    return score, render_music_score(score).astype(np.float64)
+
+
+def _rms(x: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(x**2)))
+
+
+def _band(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
+    f = np.fft.rfftfreq(len(x), 1 / RATE)
+    return np.fft.irfft(np.fft.rfft(x, axis=0) * ((f >= lo) & (f < hi))[:, None], len(x), axis=0)
+
+
+def _seamless(x: np.ndarray) -> bool:
+    steps = np.abs(np.diff(x, axis=0))
+    return bool((np.abs(x[0] - x[-1]) <= np.quantile(steps, 0.999, axis=0)).all())
+
+
+_PAD = {"instrument": "pad", "play": "chords", "settings": {"tone": 4000}}
+
+
+def test_effects_are_read_with_defaults_and_switched_off_per_section() -> None:
+    from vidgen.studio.effects import Duck, Echo
+
+    data = _score()
+    data["tracks"]["pad"].update({"lowpass": [[0, 500], [4, 3000]], "duck": "kick", "volume": {"from": -6, "to": 0}, "sections": {"b": {"duck": "none", "lowpass": 2000}}})
+    data["tracks"]["bass"].update({"echo": True, "reverb": 0.3, "spread": 0.2, "gate": "x.x.x.x.", "width": 1.5})
+    score = parse_music_score(data)
+    pad, bass = (next(t for t in score.tracks if t.name == n) for n in ("pad", "bass"))
+    a, b = pad.parts["a"], pad.parts["b"]
+    assert a.duck == Duck("kick", 0.45, 0.15) and b.duck is None
+    assert a.lowpass is not None and a.lowpass.points == ((0, 500), (4, 3000)) and b.lowpass is not None and b.lowpass.constant == 2000
+    assert a.volume_curve is not None and a.volume_curve.ramp and a.volume_db == 0
+    part = bass.parts["a"]
+    assert part.echo == Echo(0.75, 0.35, 2, True) and part.reverb is not None and part.reverb.mix == 0.3 and part.spread == 0.2
+    assert part.gate is not None and part.gate.floor == 0.08 and part.width is not None and part.width.constant == 1.5
+    tracks = {t["name"]: t for t in score_outline(score)["tracks"]}
+    assert tracks["pad"]["effects"] == ["volume curve", "lowpass", "duck"] and tracks["kick"]["effects"] == []
+    assert tracks["bass"]["effects"] == ["spread", "width", "gate", "echo", "reverb"]
+
+
+@pytest.mark.parametrize(
+    ("track", "change", "message"),
+    [
+        ("pad", {"duck": "kik"}, "tracks.pad.duck: no track 'kik'; did you mean 'kick'?"),
+        ("kick", {"duck": "kick"}, "cannot duck under itself"),
+        ("pad", {"lowpass": [[4, 500], [0, 900]]}, "must not go back"),
+        ("pad", {"lowpass": 20}, "tracks.pad.lowpass: 20 is out of range"),
+        ("pad", {"lowpass": "bright"}, "expected a number, {from: a, to: b}"),
+        ("pad", {"volume": {"from": -6}}, "a ramp needs from and to"),
+        ("bass", {"echo": {"dela": 1}}, "did you mean 'delay'"),
+        ("bass", {"echo": {"pingpong": "yes"}}, "pingpong: expected true or false"),
+        ("bass", {"gate": "x.3."}, "a gate pattern has no pitch"),
+        ("bass", {"reverb": {"mix": 2}}, "reverb.mix: 2 is out of range"),
+        ("bass", {"sections": {"b": {"rever": 0.2}}}, "did you mean 'reverb'"),
+        ("bass", {"gate": {"duty": 0.5}}, "gate needs steps"),
+    ],
+)
+def test_effect_problems(track: str, change: dict[str, Any], message: str) -> None:
+    data = _score()
+    data["tracks"][track].update(change)
+    assert message in _problems(data)
+
+
+def test_ducking_pumps_on_the_kick_or_the_beat() -> None:
+    beat = 24000
+    for tracks in (
+        {"pad": {**_PAD, "duck": {"to": "kick", "depth": 0.8}}, "kick": {"instrument": "kick", "steps": "xxxx", "volume": -60}},
+        {"pad": {**_PAD, "duck": {"to": "beat", "depth": 0.8}}},
+    ):
+        score, x = _fx(tracks)
+        y = _band(x, 300, 3000).reshape(-1, beat, 2)
+        dip, mid = _rms(y[:, beat // 16 : beat // 8]), _rms(y[:, beat // 2 : 3 * beat // 4])
+        assert dip < 0.5 * mid and _seamless(x)
+        assert loudness.integrated_loudness(x) == pytest.approx(-28.0, abs=0.05)
+
+
+def test_gate_sweep_volume_and_width_move_the_sound() -> None:
+    beat = 24000
+    _, x = _fx({"pad": {**_PAD, "gate": {"steps": "x...x...x...x...", "duty": 0.5, "floor": 0}}})
+    y = x.reshape(-1, beat, 2)
+    assert _rms(y[:, beat // 2 + 2000 : beat - 500]) < 0.05 * _rms(y[:, 500 : beat // 8]) and _seamless(x)
+    _, x = _fx({"pad": {**_PAD, "lowpass": [[0, 300], [4, 4000]]}})
+    high = _band(x, 1200, 5000)
+    assert _rms(high[3 * 4 * beat :]) > 10 * _rms(high[: 4 * beat])
+    _, x = _fx({"pad": {**_PAD, "volume": {"from": -20, "to": 0}}})
+    assert _rms(x[3 * 4 * beat :]) > 4 * _rms(x[: 4 * beat])
+    _, x = _fx({"pad": {**_PAD, "width": 0}})
+    assert np.allclose(x[:, 0], x[:, 1], atol=1e-6)
+
+
+def test_echo_ping_pongs_and_reverb_leaves_a_tail() -> None:
+    beat = 24000
+    pluck = {"instrument": "pluck", "steps": "1... | .... | .... | ....", "settings": {"decay": 0.05, "ring": 0.1}, "pan": -0.8}
+    _, dry = _fx({"p": pluck})
+    _, wet = _fx({"p": {**pluck, "echo": {"delay": 1, "feedback": 0.5, "repeats": 2}}})
+    first, second = wet[beat : beat + 4000], wet[2 * beat : 2 * beat + 4000]
+    assert _rms(first[:, 1]) > 3 * _rms(first[:, 0]) and _rms(second[:, 0]) > 3 * _rms(second[:, 1])
+    assert _rms(dry[beat : beat + 4000]) < 0.01 * _rms(first)
+    _, dry = _fx({"p": pluck}, loop=False)
+    _, wet = _fx({"p": {**pluck, "reverb": {"size": 3.0, "mix": 0.5}}}, loop=False)
+    assert _rms(wet[RATE : 2 * RATE]) > 20 * _rms(dry[RATE : 2 * RATE])
+    assert abs(np.corrcoef(wet[RATE : 2 * RATE, 0], wet[RATE : 2 * RATE, 1])[0, 1]) < 0.5  # a different tail per side
+
+
+def test_the_beds_sounds_can_be_written() -> None:
+    """Everything momentum, ascent, horizon, beacon and neon do (DESIGN.md §93.7), in one score."""
+    tracks = {
+        "saws": {"instrument": "supersaw", "play": "chords", "lowpass": {"from": 900, "to": 3200}, "duck": {"to": "beat", "depth": 0.55, "release": 0.13},
+                 "sections": {"b": {"gate": "XooXooXoXooXooXo", "octave": 4, "lowpass": 3400}}},
+        "pad": {"instrument": "saw_pad", "play": "chords", "duck": "kick", "volume": [[0, -6], [2, 0]]},
+        "glass": {"instrument": "glass", "play": "chords", "volume": [[0, -12], [1, 0], [2, -12]]},
+        "kick": {"instrument": "kick", "steps": "x... x... x... x...", "sections": {"b": {"steps": "x... x... x... x.xx"}}},
+        "snare": {"instrument": "gated_snare", "steps": "....x.......x..."},
+        "hat": {"instrument": "hat", "steps": "o.x.o.x.o.x.o.x.", "spread": 0.25},
+        "bass": {"instrument": "analog_bass", "steps": "1 8 1 8 1 8 1 8"},
+        "sub": {"instrument": "sub", "steps": ".x.x.x.x", "settings": {"second": 0.3, "third": 0.1}},
+        "arp": {"instrument": "square_pluck", "steps": "1358 5315 1358 5318", "accent": "3+3+2", "spread": 0.3},
+        "fm": {"instrument": "fm_pluck", "steps": "x..x..x.x..x..x.", "echo": {"delay": 0.75, "feedback": 0.35, "repeats": 2}},
+        "pulsar": {"instrument": "pulsar", "steps": "x..x..x.x..x..x.", "spread": 0.35},
+        "static": {"instrument": "static", "steps": "x | - | - | -"},
+        "lead": {"instrument": "soft_lead", "steps": "A5 - - - C6 - B5 - | A5 - - - - - . .", "reverb": {"size": 2.5, "mix": 0.3}},
+        "tick": {"instrument": "tick", "steps": "x.x.x.x.x.x.x.x."},
+        "riser": {"instrument": "riser", "steps": ". | . | x | -"},
+        "boom": {"instrument": "boom", "steps": "x | . | . | ."},
+    }
+    data = {"key": "A minor", "tempo": 132, "progression": "i VI", "chord_bars": 2, "sections": [{"name": "a", "bars": 4}, {"name": "b", "bars": 4}], "tracks": tracks}
+    score = parse_music_score(data)
+    warnings: list[str] = []
+    x = render_music_score(score, warnings).astype(np.float64)
+    assert not warnings and np.isfinite(x).all() and _seamless(x)
+    assert loudness.integrated_loudness(x) == pytest.approx(-28.0, abs=0.05)
+
+
+def test_notes_out_of_range_are_left_out_with_a_warning(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    tracks = {"bell": {"instrument": "bell", "steps": "A4 G9 G9 A4"}, "pad": {"instrument": "pad", "play": "chords", "octave": 0, "transpose": -12}}
+    score = parse_music_score({"key": "A minor", "tempo": 120, "bars": 1, "progression": "i", "tracks": tracks})
+    warnings: list[str] = []
+    render_music_score(score, warnings)
+    assert any(w.startswith("tracks.bell: 2 notes in section 'main' left out (G9, 12544 Hz;") for w in warnings), warnings
+    assert any(w.startswith("tracks.pad: ") and "change the track's octave or transpose" in w for w in warnings), warnings
+    path = tmp_path / "high.yaml"
+    path.write_text(yaml.safe_dump({"key": "A minor", "tempo": 120, "bars": 1, "progression": "i", "tracks": {"bell": tracks["bell"]}}), encoding="utf-8")
+    assert cli.main(["music", "render", str(path), "--out", str(tmp_path / "high.wav"), "--json"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert len(doc["warnings"]) == 1 and "G9" in doc["warnings"][0]["message"]
+
+
+def test_patches_describe_every_instrument_and_effect(capsys: pytest.CaptureFixture[str]) -> None:
+    from vidgen.studio import EFFECTS
+
+    assert cli.main(["music", "patches"]) == 0
+    text = capsys.readouterr().out
+    for name in list(INSTRUMENTS) + list(EFFECTS):
+        assert f"  {name} (" in text or f"  {name}: " in text, name
+    assert cli.main(["music", "patches", "--json"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["action"] == "patches" and [i["name"] for i in doc["instruments"]] == [n for g in ("drums", "noises", "basses", "plucks and keys", "leads", "pads") for n, i in INSTRUMENTS.items() if i.group == g]
+    assert set(INSTRUMENTS) >= {"kick", "clap", "hat", "gated_snare", "synth_bass", "analog_bass", "sub", "supersaw", "pad", "saw_pad", "glass", "pluck",
+                                "bell", "piano", "soft_lead", "pulsar", "static", "riser"}
+    for i in doc["instruments"]:
+        assert i["words"] and all(s["low"] <= s["default"] <= s["high"] and s["words"] for s in i["settings"].values()), i["name"]
+    assert {e["name"] for e in doc["effects"]} == set(EFFECTS) and doc["effects"][6]["fields"]["depth"]["default"] == 0.45
+
+
+def test_music_render_writes_mp3(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "theme.yaml"
+    path.write_text(yaml.safe_dump({"key": "C", "tempo": 120, "bars": 1, "tracks": {"k": {"instrument": "kick", "steps": "x.x."}}}), encoding="utf-8")
+    out = tmp_path / "theme.mp3"
+    assert cli.main(["music", "render", str(path), "--out", str(out)]) == 0
+    assert out.read_bytes()[:2] in (b"\xff\xfb", b"\xff\xf3") and "wrote: " in capsys.readouterr().out
+    assert cli.main(["music", "render", str(path), "--out", str(tmp_path / "theme.ogg")]) == 1
+    assert "must be a .wav or .mp3 file" in capsys.readouterr().err
+
+
+SKYLINE = DEMO.parent / "skyline_lift.yaml"
+
+
+def test_effects_demo_reads() -> None:
+    outline = score_outline(load_music_score(SKYLINE))
+    tracks = {t["name"]: t for t in outline["tracks"]}
+    assert outline["title"] == "Skyline Lift" and outline["bars"] == 32 and outline["seconds"] == pytest.approx(60.0)
+    assert tracks["saws"]["effects"] == ["lowpass", "duck", "gate", "width", "volume curve"]
+    assert {"echo", "reverb"} <= set(tracks["lead"]["effects"]) and tracks["roll"]["effects"] == ["volume curve"]
+
+
+@pytest.mark.slow
+def test_effects_demo_lifts_and_loops() -> None:
+    score = load_music_score(SKYLINE)
+    x = render_music_score(score).astype(np.float64)
+    levels = {s.name: loudness.integrated_loudness(x[score.section_start(s) : score.section_start(s) + s.bars * score.bar]) for s in score.sections}
+    assert max(levels["intro"], levels["build"], levels["outro"]) + 2 < levels["lift"] and _seamless(x)

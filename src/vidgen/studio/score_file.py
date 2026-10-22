@@ -20,6 +20,7 @@ import yaml
 
 from vidgen.errors import VidgenError
 from vidgen.sfx import RATE
+from vidgen.studio.effects import EFFECTS, Curve, Duck, Echo, Gate, Reverb, is_off, parse_curve, parse_duck, parse_echo, parse_gate, parse_reverb
 from vidgen.studio.instruments import INSTRUMENTS, Instrument
 from vidgen.studio.patterns import Pattern, accent_steps, parse_accent, parse_steps
 from vidgen.studio.theory import Chord, Key, note_number, parse_chord, parse_key
@@ -28,9 +29,10 @@ from vidgen.studio.theory import Chord, Key, note_number, parse_chord, parse_key
 FORMAT_VERSION = 1
 TOP_KEYS = ("version", "title", "description", "key", "tempo", "time", "seed", "loop", "bars", "sections", "progression", "chord_bars", "tracks", "master")
 SECTION_KEYS = ("name", "bars", "key", "progression", "chord_bars")
-TRACK_KEYS = ("instrument", "steps", "play", "accent", "octave", "transpose", "volume", "pan", "settings", "rest", "only", "sections")
-#: What a track may change in one section (``sections: {lift: {...}}``).
-PART_KEYS = ("steps", "accent", "octave", "transpose", "volume", "pan", "settings")
+#: What a track may change in one section (``sections: {lift: {...}}``): its notes, its
+#: instrument's settings and its effects (:data:`vidgen.studio.effects.EFFECTS`).
+PART_KEYS = ("steps", "accent", "octave", "transpose", "settings") + tuple(EFFECTS)
+TRACK_KEYS = ("instrument", "play", "rest", "only", "sections") + PART_KEYS
 CHORD_KEYS = ("chord", "notes", "bass")
 MASTER_KEYS = ("lowpass", "highpass")
 TEMPO_RANGE = (40.0, 240.0)
@@ -68,7 +70,10 @@ class Section:
 
 @dataclass(frozen=True)
 class TrackPart:
-    """What a track plays in one section (its settings with that section's changes)."""
+    """What a track plays in one section (its settings with that section's changes).
+    ``volume_db``: a constant volume (applied to each note); ``volume_curve``: a moving one
+    (applied to the track's sound, ``volume_db`` then 0); the rest are its effects (``None``:
+    off)."""
 
     steps: Pattern | None
     accent: tuple[int, ...] | None
@@ -77,6 +82,21 @@ class TrackPart:
     volume_db: float
     pan: float
     settings: Mapping[str, float]
+    spread: float = 0.0
+    volume_curve: Curve | None = None
+    width: Curve | None = None
+    lowpass: Curve | None = None
+    highpass: Curve | None = None
+    duck: Duck | None = None
+    gate: Gate | None = None
+    echo: Echo | None = None
+    reverb: Reverb | None = None
+
+    @property
+    def effects(self) -> list[str]:
+        """The names of the effects this part uses (beyond volume / pan)."""
+        used = [n for n in ("width", "lowpass", "highpass", "duck", "gate", "echo", "reverb") if getattr(self, n) is not None]
+        return (["spread"] if self.spread else []) + (["volume curve"] if self.volume_curve is not None else []) + used
 
 
 @dataclass(frozen=True)
@@ -388,6 +408,13 @@ def _tracks(r: _Reader, raw: Mapping[str, Any], sections: list[Section], unchord
         track = _track(r, str(name), spec, where, sections, names)
         if track is not None:
             tracks.append(track)
+    track_names = [str(n) for n in raw]
+    for t in tracks:
+        for to in sorted({p.duck.to for p in t.parts.values() if p.duck is not None}):
+            if to == t.name:
+                r.add(f"tracks.{t.name}.duck", "a track cannot duck under itself; name the kick (duck: kick) or beat")
+            elif to != "beat" and to not in track_names:
+                r.add(f"tracks.{t.name}.duck", f"no track '{to}'{_close(to, track_names + ['beat'])} (tracks: {', '.join(track_names)}; or beat: every beat)")
     pitched = [t.name for t in tracks if t.instrument.kind != "drum" and set(t.parts) & set(unchorded)]
     if pitched:
         r.add("progression", f"missing: tracks {', '.join(pitched)} play notes of the chords; give a progression (e.g. progression: \"i VI III VII\") "
@@ -473,11 +500,17 @@ def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, 
         if instrument.kind == "drum":
             r.add(f"{where}.transpose", f"{instrument.name} has no pitch")
     volume = base.volume_db if base else 0.0
+    volume_curve = base.volume_curve if base else None
     if "volume" in spec:
-        volume = r.number(spec["volume"], f"{where}.volume", -60, 24) or 0.0
+        curve = parse_curve(r, spec["volume"], f"{where}.volume", -60, 24)
+        volume, volume_curve = (curve.constant or 0.0, None) if curve is not None and curve.constant is not None else (0.0, curve)
     pan = base.pan if base else 0.0
     if "pan" in spec:
         pan = r.number(spec["pan"], f"{where}.pan", -1, 1) or 0.0
+    spread = base.spread if base else 0.0
+    if "spread" in spec:
+        spread = r.number(spec["spread"], f"{where}.spread", 0, 1) or 0.0
+    effects = _effects(r, spec, where, base)
     settings = dict(base.settings) if base else {k: s.default for k, s in instrument.settings.items()}
     if "settings" in spec:
         given = r.mapping(spec["settings"], f"{where}.settings", list(instrument.settings), f"{instrument.name} settings")
@@ -488,7 +521,25 @@ def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, 
                 settings[k] = value
     if len(r.problems) > count:
         return None
-    return TrackPart(steps, accent, octave, transpose, volume, pan, settings)
+    return TrackPart(steps, accent, octave, transpose, volume, pan, settings, spread, volume_curve, **effects)
+
+
+def _effects(r: _Reader, spec: dict[str, Any], where: str, base: TrackPart | None) -> dict[str, Any]:
+    """The part's bus effects: the base's, changed by ``spec`` (an off value switches one off)."""
+    out = {name: getattr(base, name) if base else None for name in ("width", "lowpass", "highpass", "duck", "gate", "echo", "reverb")}
+    curves = {"width": (0.0, 2.0), "lowpass": (40.0, 16000.0), "highpass": (20.0, 8000.0)}
+    parsers = {"duck": parse_duck, "gate": parse_gate, "echo": parse_echo, "reverb": parse_reverb}
+    for name in out:
+        if name not in spec:
+            continue
+        value, here = spec[name], f"{where}.{name}"
+        if is_off(value):
+            out[name] = None
+        elif name in curves:
+            out[name] = parse_curve(r, value, here, *curves[name])
+        else:
+            out[name] = parsers[name](r, value, here)
+    return out
 
 
 def score_outline(score: MusicScore) -> dict[str, Any]:
@@ -514,7 +565,13 @@ def score_outline(score: MusicScore) -> dict[str, Any]:
             for s in score.sections
         ],
         "tracks": [
-            {"name": t.name, "instrument": t.instrument.name, "plays": "chords" if t.play_chords else "steps", "sections": list(t.parts)}
+            {
+                "name": t.name,
+                "instrument": t.instrument.name,
+                "plays": "chords" if t.play_chords else "steps",
+                "sections": list(t.parts),
+                "effects": list(dict.fromkeys(e for p in t.parts.values() for e in p.effects)),
+            }
             for t in score.tracks
         ],
     }

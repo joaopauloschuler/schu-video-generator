@@ -17059,3 +17059,91 @@ Known gaps / for later steps
   with `listen.write_mp3` in the scratch script, +12 dB).
 - Chord-name spelling for Roman numerals uses sharps or flats by key signature, not by degree
   (`#iv` in a flat key prints a flat name).
+
+## Step 185 — Instrument library and effects
+
+What the owner agreed (Phase S plan): the beds' building blocks as named, adjustable instruments,
+track effects and movement, `vidgen music patches`; the format must be able to express what
+`momentum`, `ascent`, `horizon`, `beacon` and `neon` do (Step 186 re-creates the 14 beds).
+
+What was built (DESIGN §93.4, §93.7)
+- `studio/instruments.py`: 26 instruments in six families (drums, noises, basses, plucks and
+  keys, leads, pads), each wrapping a `vidgen.music` function (no code moved, `music.py`
+  untouched). New: `gated_snare`, `tick` (`_clock`), `pulsar` (`_pulsar_pulse`), `static`
+  (`_static` for its held steps; sine fade-in / cosine fade-out so back-to-back holds join at
+  constant power; stereo), `analog_bass`, `square_pluck`, `pizzicato`, `music_box`, `woodblock`,
+  `soft_lead` (new synthesis: 1/h^1.5 harmonics, 5 Hz vibrato fading in, cosine release; Step
+  181 had left `_soft_lead` out of `music.py`), `saw_pad` (`_SOFT_SAW`), `glass` (beacon's
+  shimmer); `sub` gains `second` / `third`; pads gain `detune` (was a fixed width) and `fade`
+  (was the fixed 1.6 s chord cross-fade). Drums may return stereo. `Instrument.width_cents` is
+  gone (now the `detune` setting); `Instrument.group` is new.
+- `studio/effects.py`: `Curve` (number, `{from, to}` ramp over the section, `[[bar, value], ...]`
+  points; frequencies interpolated in octaves), `Duck`, `Gate`, `Echo`, `Reverb`, their
+  YAML parsing (shorthands `duck: kick`, `gate: "x.x."`, `echo: true` / a delay, `reverb: true`
+  / a mix), the `EFFECTS` catalogue, and the processing (`smooth`, `swept_filter`, `echo`,
+  `reverb`, `widen`, `duck_dip`, `gate_window`).
+- `score_file.py`: track / section keys `spread width lowpass highpass duck gate echo reverb`,
+  `volume` may be a curve; `none` / `off` / `false` / `null` switches an effect off in a section;
+  `duck.to` checked against the tracks (did-you-mean, not itself, or `beat`); `score_outline`'s
+  tracks list their `effects`.
+- `render.py`: a track with a bus effect renders onto its own buffer(s) — one per (echo, reverb)
+  setting, so each section's notes get their own and the tails carry over — then filters, gate,
+  ducking, volume curve and width along the piece; a track without is summed straight into the
+  mix exactly as in Step 184. `spread` alternates the pan by step. Notes outside 20 Hz–12 kHz
+  (also `play: chords` tones, which were not filtered before) are left out and described in
+  `render_music_score(score, warnings)`. `CHORD_FADE_SECONDS` became `BEFORE_SECONDS` (the
+  one-shot's room before 0) since the fade is now a setting.
+- `studio/patches.py` + `vidgen music patches [--json]` (`cli._music_patches`,
+  `jsonout.music_patches_document`): every instrument (family, kind, words, level, octave,
+  settings with default / range / words) and effect (words, example, fields).
+- `vidgen music render`: `--out x.mp3` writes MP3 (`listen.write_mp3`, −28 LUFS as the WAV);
+  warnings on stderr / in the JSON `warnings` (`{scene: null, message}`); the tracks line names
+  each track's effects.
+- `vidgen.api` exports `patch_catalog` (DESIGN §6.4).
+- Demo `tests/data/studio/skyline_lift.yaml` (original; D minor, 128 BPM, 32 bars: intro /
+  build / lift / outro; 14 tracks using every effect: a pumping, swept and gated supersaw, ducked
+  pad, kick roll with a volume ramp, hats with spread, clap in a room, pulsar ticks and static in
+  the intro, rolling analog bass, echoed FM arp, soft lead with echo and reverb, riser, boom).
+- Docs: DESIGN §93 (plan line, layout, §93.3 keys, §93.4 rewritten, §93.6 not-done, new §93.7
+  with the bed mapping and measurements, §6.4), CONFIG (score files: instruments table, effects
+  example and table, MP3, warnings, patches JSON, render JSON `effects` / `warnings`), README
+  commands, CHANGELOG (0.3.0 now Steps 61–185), tasklist. Guide and `AGENTS.md` unchanged
+  (score files are not usable in videos until Step 188).
+
+Compatibility
+- The 14 beds: `music.py` not edited; `test_music.py -k "approved or every_bed_has or facts"` 17
+  passed (fingerprints unchanged).
+- Step 184 scores: `tidewater` rendered with HEAD's code (from `git archive`) and with this
+  step's, as a loop and as a one-shot: sha256 identical (`<scratchpad>/s185/hash_demo.py`).
+
+Demo measurements (`<scratchpad>/s185/demo.py`, `look.py`): render 12 s for 60 s (two thirds in
+the filter sweeps), twice identical, no warnings; −28.00 LUFS, true peak −14.8 dBTP; seam step
+0.11–0.12 of the 99.9th-percentile step, 50 ms RMS −33.4 / −31.9 dB either side; sections intro
+−29.8, build −29.2, lift −26.2, outro −30.0 LUFS; 63 % of the power under 150 Hz, 300 Hz–3 kHz
+16 %, above 5 kHz −42.8 dB; L/R correlation 0.37; lift 300 Hz–3 kHz level by sixteenth of the
+beat −1.6 / −0.7 / −0.1 / 0 dB (the pump). Spectrogram looked at (`out/skyline_lift-look-a.png`,
+`-look-b.png`, section lines): the dark intro saws and the sub; the build's gate stripes, the
+sweep opening and the riser in its last four bars; the bright pumping lift with the lead and
+arp; the outro's filter closing with pulsar ticks on top.
+
+Tests (one at a time, under `capped` / `capped3g`): `tests/test_studio.py` 51 passed (32 s; new:
+effects read with defaults and switched off per section, 12 effect problems with did-you-mean,
+ducking to a track and to the beat, gate / sweep / volume ramp / width 0, ping-pong echo and a
+decorrelated reverb tail, one score using every feature the five energetic beds need, the
+out-of-range warning in the API and the JSON, `patches` text and JSON, MP3 output, the demo's
+outline and its lift / seam); `test_docs.py` + `test_api.py` 72 passed; `test_json_output.py` +
+`test_guide.py` + `test_listen.py` 87 passed; `test_cli.py` + `test_composer.py -k "music or help
+or parser"` 4 passed; `test_music.py -k "approved or every_bed_has or facts"` 17 passed. Not run:
+the full suite, `test_mcp.py` (no MCP change).
+
+Known gaps / for later steps
+- A hold still cannot run past its section's end (a `static` or pad note held across sections is
+  two notes; `static`'s fades join them at constant power).
+- No `air` swell LFO for pads (`_pads`' `air_cycles`) and no voicing-relative figure tones
+  (`sorted(notes)[2]`): a second pad track with a volume curve and written voicings stand in.
+- Filter sweeps cost a full-length FFT per half-octave of range (about 0.3 s per copy for a
+  minute); fine for beds-length pieces, slow for 10-minute ones.
+- Duck triggers are the trigger track's note starts, whatever their level (a muted kick still
+  pumps — handy, but a soft hit pumps as deep as an accented one).
+- The MP3 is at −28 LUFS like the WAV (quiet for listening on its own; `<scratchpad>/s185/out/
+  skyline_lift-plus12dB.mp3` is a +12 dB copy for listening).

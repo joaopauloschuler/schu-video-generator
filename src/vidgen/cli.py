@@ -1380,6 +1380,8 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
         return _music_page(args)
     if args.action == "render":
         return _music_render(args)
+    if args.action == "patches":
+        return _music_patches(args)
     settings: dict[str, Any] = {}
     setting, root = None, Path.cwd()
     if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
@@ -1417,9 +1419,7 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
 
 
 def _music_render(args: argparse.Namespace) -> CommandResult:
-    """``vidgen music render SCORE.yaml [--out FILE.wav]``: play a score file (DESIGN.md §93)."""
-    import math
-
+    """``vidgen music render SCORE.yaml [--out FILE.wav|FILE.mp3]``: play a score file (DESIGN.md §93)."""
     from vidgen import loudness
     from vidgen.sfx import RATE, write_wav
     from vidgen.studio import load_music_score, render_music_score, score_outline
@@ -1427,23 +1427,42 @@ def _music_render(args: argparse.Namespace) -> CommandResult:
     if args.project == ".":
         raise VidgenError("music render: give the score file, e.g. vidgen music render my_theme.yaml --out my_theme.wav")
     path = Path(args.project)
-    score = load_music_score(path)
-    audio = render_music_score(score)
     out = Path(args.out) if args.out else Path(path.stem + ".wav")
-    if out.suffix.lower() != ".wav":
-        raise VidgenError(f"music render: --out must be a .wav file, got {out}")
-    write_wav(out, audio)
+    if out.suffix.lower() not in (".wav", ".mp3"):
+        raise VidgenError(f"music render: --out must be a .wav or .mp3 file, got {out}")
+    score = load_music_score(path)
+    notes: list[str] = []
+    audio = render_music_score(score, notes)
+    if out.suffix.lower() == ".mp3":
+        from vidgen.listen import write_mp3
+
+        write_mp3(audio, out)
+    else:
+        write_wav(out, audio)
     meter = loudness.measure(len(audio), lambda a, b: audio[a:b])
     outline = score_outline(score)
     if args.json:
-        return jsonout.music_render_document(outline, out, len(audio) / RATE, meter.integrated, meter.true_peak)
+        warnings = [{"scene": None, "message": n} for n in notes]
+        return jsonout.music_render_document(outline, out, len(audio) / RATE, meter.integrated, meter.true_peak, warnings)
+    for note in notes:
+        print(f"warning: {note}", file=sys.stderr)
     print(f"{outline['title'] or path.stem}: {score.key.name}, {score.tempo:g} BPM, {outline['time']}, {score.bars} bars = {score.seconds:.2f} s "
           f"({'a seamless loop' if score.loop else f'one pass, {len(audio) / RATE:.2f} s with its ending'})")
     for s in outline["sections"]:
         print(f"    {s['start']:7.2f} s  {s['name']:<10} {s['bars']:>3} bars  {s['key']:<10} {' '.join(s['chords'])}")
-    print("tracks: " + ", ".join(f"{t['name']} ({t['instrument']})" for t in outline["tracks"]))
+    print("tracks: " + ", ".join(f"{t['name']} ({t['instrument']}{': ' + ', '.join(t['effects']) if t['effects'] else ''})" for t in outline["tracks"]))
     print(f"loudness: {meter.integrated:.1f} LUFS integrated, true peak {meter.true_peak:.1f} dBTP")
     print(f"wrote: {out}")
+    return 0
+
+
+def _music_patches(args: argparse.Namespace) -> CommandResult:
+    """``vidgen music patches``: every score-file instrument, setting and effect in words (§93.4, §93.7)."""
+    from vidgen.studio import patch_catalog, patch_text
+
+    if args.json:
+        return jsonout.music_patches_document(patch_catalog())
+    print(patch_text())
     return 0
 
 
@@ -1715,11 +1734,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "music",
-        help="music tools: preview writes a composed piece in a mood as WAV and .mid (needs the music extra); render plays a score file; page writes the Listen page",
+        help="music tools: preview writes a composed piece in a mood as WAV and .mid (needs the music extra); render plays a score file; "
+        "patches describes the score files' instruments and effects; page writes the Listen page",
     )
     p.add_argument(
-        "action", choices=["preview", "render", "page"],
-        help="preview: compose the project's compose: music (or --mood) and write it; render: play a score file (YAML) to a WAV; "
+        "action", choices=["preview", "render", "patches", "page"],
+        help="preview: compose the project's compose: music (or --mood) and write it; render: play a score file (YAML) to a WAV or MP3; "
+        "patches: every score-file instrument, setting and effect in words; "
         "page: write the Listen page (a clip and spectrogram of every bed, the sound effects, ambience and composed moods; default --out docs/music)",
     )
     p.add_argument("project", nargs="?", default=".", help="preview: project dir or config file (default: .); render: the score file")
@@ -1730,7 +1751,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tempo", type=float, metavar="BPM", help="quarter notes per minute (default: the mood's)")
     p.add_argument(
         "--out", metavar="PATH",
-        help="preview: folder for <mood>-seed<N>.wav and .mid (default: .); render: the WAV (default: <score>.wav here); page: the page's folder (default: docs/music)",
+        help="preview: folder for <mood>-seed<N>.wav and .mid (default: .); render: the .wav or .mp3 (default: <score>.wav here); "
+        "page: the page's folder (default: docs/music)",
     )
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
     p.set_defaults(func=cmd_music)

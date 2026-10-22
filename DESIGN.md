@@ -57,9 +57,11 @@ src/vidgen/
   studio/                 # score files: music written in YAML, rendered with the beds' synthesizer; no video code (§93, Phase S)
     theory.py             #   notes, keys and modes, Roman numerals and chord names, degrees, voicings
     patterns.py           #   step patterns ("x... x...", "1 3 5 8", "E5 - - .") and 3+3+2 accents
-    instruments.py        #   the starter instruments and their settings (the full library is Step 185)
+    instruments.py        #   the instrument library (26 instruments) and their settings (§93.4)
+    effects.py            #   curves, filter sweeps, ducking, gates, echo, reverb, width; their catalogue (§93.7)
+    patches.py            #   `vidgen music patches`: every instrument, setting and effect in words / JSON
     score_file.py         #   reading and checking a score (MusicScore; every problem at once, did-you-mean)
-    render.py             #   render_music_score: seamless loop or one-shot, 48 kHz, -28 LUFS, deterministic
+    render.py             #   render_music_score: seamless loop or one-shot, track effects, 48 kHz, -28 LUFS, deterministic
   outline.py              # Markdown outline / plain-text script -> blocks; inline Markdown removal (§61; no manim)
   prose.py                # sentences (language-aware), beats of 6-15 words, on-screen label compression (§61; no manim)
   plan.py                 # `vidgen plan`: blocks -> planned scenes (cue -> type, beats fitted to steps, TODOs) (§61; no manim)
@@ -1010,6 +1012,8 @@ level jump's touch-down) and the built-in sounds `unlock`, `coin`, `twinkle`. Co
 `PlayedAction` without them gives the same cues; a stage without a level sounds as before.
 Step 184 (§93) adds `MusicScore`, `load_music_score`, `parse_music_score` and
 `render_music_score` (score files; from `vidgen.studio`, which imports no video code).
+Step 185 (§93.7) adds `patch_catalog` (the instruments and effects as data) and an optional
+`warnings` list argument to `render_music_score` (compatible: without it, it renders as before).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -13044,12 +13048,13 @@ Term: a **score file** (YAML, this section; class `MusicScore`) is not the compo
 
 - **184 Score format and rendering** (this step, §93.2–93.6): the YAML, its checks, a starter
   instrument set, `vidgen music render`.
-- **185 Instrument library**: today's building blocks as named, adjustable instruments (analog
-  bass, square pluck, gated snare, music box, pizzicato, woodblock, soft lead, pulsar tick, radio
-  static, piano, bells...) and track effects: filter sweeps along sections, side-chain ducking to
-  the kick (`_pump`), trance gate (`_gate`), echo (`_echoed`), reverb, stereo spread, volume
-  curves; `vidgen music patches` (+ `--json`) describes every instrument and setting in words.
-  The new keys go on a track (and in its `sections:` changes), next to `volume` / `pan`.
+- **185 Instrument library** (done, §93.4, §93.7): today's building blocks as named, adjustable
+  instruments (analog bass, square pluck, gated snare, music box, pizzicato, woodblock, soft lead,
+  pulsar tick, radio static, piano, bells...) and track effects: filter sweeps along sections,
+  side-chain ducking to the kick (`_pump`), trance gate (`_gate`), echo (`_echoed`), reverb,
+  stereo spread and width, volume curves; `vidgen music patches` (+ `--json`) describes every
+  instrument, setting and effect in words. The new keys go on a track (and in its `sections:`
+  changes), next to `volume` / `pan`.
 - **186 Templates from the 14 beds**: `vidgen music template <bed> --out my_theme.yaml`, a close
   re-creation of each bed as an editable score file (not bit-identical; the beds stay unchanged);
   tested by measurements (tempo, key / chroma, loudness curve, spectrum balance, clean loop).
@@ -13066,7 +13071,7 @@ byte-identical (`tests/test_music.py` fingerprints).
 
 ### 93.2 Where it lives
 
-`src/vidgen/studio/` (theory, patterns, instruments, score_file, render). Self-contained: it
+`src/vidgen/studio/` (theory, patterns, instruments, effects, patches, score_file, render). Self-contained: it
 imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...),
 `vidgen.sfx` (`RATE`), `vidgen.loudness` and `vidgen.errors`; never manim, scenes, the project or
 the render pipeline (`tests/test_studio.py::test_studio_imports_no_video_code`), so it can become
@@ -13129,7 +13134,9 @@ tracks:
   where a chord's lowest note sits, voice-led to the nearest inversion); `transpose` (semitones,
   also to written notes); `volume` (dB); `pan` (−1 left .. 1 right); `settings` (the
   instrument's, range-checked); `rest: [sections]` or `only: [sections]`; `sections: {name:
-  {steps, accent, octave, transpose, volume, pan, settings}}` changes for one section.
+  {steps, accent, octave, transpose, volume, pan, settings}}` changes for one section. Step 185
+  adds the effect keys `spread width lowpass highpass duck gate echo reverb` (and curves for
+  `volume`) on a track and in its section changes (§93.7).
 - **Steps** (`patterns.parse_steps`): `|` between bars; each bar is split into as many equal steps
   as it has symbols (16 = sixteenths in 4/4, 12 = triplet eighths, 1 = the whole bar), bars may
   differ; the pattern repeats from each section's start. `x` hit (a pitched instrument plays the
@@ -13144,17 +13151,37 @@ tracks:
   `_grid` since Step 181), so sixteenths are whole samples; a bar is the beat × `n · 4 / d`; a
   step starts at `round(k · bar / steps)`. The loop is exactly `bars × bar` samples.
 
-### 93.4 Instruments (starter set)
+### 93.4 Instruments (the library, Steps 184–185)
 
-`instruments.INSTRUMENTS`, from the beds' functions with their defaults: drums `kick` (high, low,
-decay, click), `clap` (tone), `hat`, `open_hat` (decay, tone), `riser` (low, high; swells over
-its held length), `boom` (low, decay); notes `synth_bass`, `sub`, `pluck`, `fm_pluck`, `bell`,
-`piano` (decay, tone, ring — seconds a note sounds on after its held steps — and `bright` /
-`index`); pads `pad` (warm PADsynth, `air`, `sub`, `tone`, `attack`, `release`) and `supersaw`.
-Each has a `level` (its normal hit's amplitude before the piece is set to −28 LUFS), so the
-default balance is the beds' (kick 0.75, hat 0.06, bass 0.45, pad 0.3...). A drum given a
-degree, a note, `*`, `octave` or `transpose` is a problem ("hat has no pitch"); `play: chords`
-is for pads only (others play `*` in steps).
+`instruments.INSTRUMENTS`: 26 instruments in six families, each a thin wrapper over a
+`vidgen.music` function with its defaults (the beds' values), every setting with a range and a
+sentence (`vidgen music patches`):
+
+- **drums**: `kick` (high, low, decay, click), `clap` (tone), `hat`, `open_hat` (decay, tone),
+  `gated_snare` (gate, body; stereo, `_gated_snare`), `tick` (tone; `_clock`), `boom` (low, decay);
+- **noises**: `riser` (low, high; swells over its held steps), `pulsar` (high, low, sweep, noise,
+  tone; `_pulsar_pulse`), `static` (low, high, wander, fade; `_static` for its held steps, a sine
+  fade-in and a cosine fade-out after them, so back-to-back holds join at constant power);
+- **basses**: `synth_bass`, `analog_bass` (tone → closed cutoff, snap, detune; `_analog_bass`),
+  `sub` (+ second, third harmonic levels);
+- **plucks and keys**: `pluck` (bright), `fm_pluck` (index), `square_pluck`, `pizzicato`,
+  `music_box`, `woodblock` (tone only, 60 ms), `bell`, `piano`;
+- **leads**: `soft_lead` (attack, vibrato, tone, ring) — new code, not a bed function (Step 181
+  left `_soft_lead` out of `music.py`): harmonics at 1/h^1.5 shaped by `_shape`, a 5 Hz vibrato
+  fading in over 0.35 s, a cosine release over `ring`; it sustains while held;
+- **pads**: `pad` (`_WARM`), `supersaw` (`_SAW`), `saw_pad` (`_SOFT_SAW`, the synthwave pad),
+  `glass` (near-sines spread 45 cents, octave 5: `beacon`'s shimmer); all with tone, air, sub,
+  attack, release, `detune` (the PADsynth spread in cents, was a fixed width) and `fade` (the
+  `play: chords` cross-fade, was a fixed 1.6 s; `saw_pad` 0.5, `glass` 0.8).
+
+Notes play `held + ring` seconds (`ring` 0 for instruments without it). Each instrument has a
+`level` (its normal hit's amplitude before the piece is set to −28 LUFS), so the default balance
+is the beds' (kick 0.75, hat 0.06, bass 0.45, pad 0.3, static 0.008...). A drum given a degree, a
+note, `*`, `octave` or `transpose` is a problem ("hat has no pitch"); `play: chords` is for pads
+only (others play `*` in steps). Decision: the instruments wrap the bed functions rather than
+moving them into `studio/`, so `music.py` (and the 14 beds) are untouched. Step 184's scores
+render byte-identically (the pads' `detune` / `fade` defaults are the old fixed values; checked
+on the `tidewater` demo, loop and one-shot).
 
 ### 93.5 Checks
 
@@ -13194,6 +13221,94 @@ the riser in the last two bars of the build, the pad opening and the bell line i
   render SCORE.yaml [--out FILE.wav] [--json]` writes the WAV (default `<score>.wav` in the
   current folder) and prints the facts, the sections (start, bars, key, chords), the tracks and
   the measured loudness and true peak; `--json` adds them to the document (`action: render`).
-- **Not done here** (later steps): effects, the full instrument library, templates, analysis,
-  project pieces in videos, MCP tools; no humanising; a hold cannot run past its section's end;
-  notes outside 20 Hz–12 kHz are skipped silently.
+- **Not done here** (later steps): effects, the full instrument library (both Step 185, §93.7),
+  templates, analysis, project pieces in videos, MCP tools; no humanising; a hold cannot run past
+  its section's end; notes outside 20 Hz–12 kHz are skipped (with a warning since Step 185).
+
+### 93.7 Effects and movement (Step 185)
+
+Every key goes on a track and in its `sections: {name: {...}}` changes (`none` / `off` / `false`
+/ `null` there switches an effect off); `effects.EFFECTS` describes them for `vidgen music
+patches`. Example (`tests/data/studio/skyline_lift.yaml`, shortened):
+
+```yaml
+saws:
+  instrument: supersaw
+  play: chords
+  lowpass: {from: 600, to: 1000}             # a ramp over each section
+  duck: {to: kick, depth: 0.55, release: 0.13}
+  sections:
+    build:
+      lowpass: [[0, 1000], [8, 3600]]        # [bar from the section's start, Hz] points
+      gate: {steps: "X..x..x.X..x..x.", duty: 0.5, floor: 0.08}
+    lift: {lowpass: 4000, volume: 2, width: 1.4}
+    outro: {lowpass: {from: 3000, to: 600}, volume: {from: 0, to: -10}}
+arp:  {instrument: fm_pluck, steps: "1 5 8 1 5 8 5 3 ...", echo: {delay: 0.75, feedback: 0.35, repeats: 2}}
+lead: {instrument: soft_lead, reverb: {size: 2.8, mix: 0.3}, steps: ["F5 - - - D5 - - - | ..."]}
+hat:  {instrument: hat, steps: "o.x. o.x. o.x. o.xo", spread: 0.3}
+roll: {instrument: kick, steps: ". | ... | .... .... x.x. xxxx", volume: [[7.5, -14], [8, -3]]}
+```
+
+- **Curves** (`volume` dB, `width`, `lowpass` / `highpass` Hz): a number; `{from, to}` (straight
+  over the section); `[[bar, value], ...]` points (bars from the section's start, fractions
+  allowed, not going back), straight between them — in octaves for frequencies — and held outside
+  them. Section by section the curve jumps; jumps are smoothed over 20 ms. A constant `volume`
+  scales each note as before (Step 184 scores unchanged); a moving one is applied to the track's
+  sound.
+- **`spread`** (0–1): odd steps (`k % 2`) sit `spread` right of `pan`, even ones as far left (the
+  beds' alternating hats and ostinatos). **`pan`** as before.
+- **`width`** (0 mono .. 1 as is .. 2): mid / side, the side times the curve.
+- **`lowpass` / `highpass`**: the beds' gentle second-order zero-phase filters. A moving cutoff
+  is done as the beds' `_sweep_mix` generalised: the track's sound filtered (one FFT over the
+  whole buffer, circular for a loop) at cutoffs half an octave apart over the curve's range, the
+  neighbouring two cross-faded along the curve. A section without the filter passes the sound
+  unfiltered (cross-faded in 20 ms).
+- **`duck`**: `{to: <track> | beat, depth 0.45, release 0.15 s}` or `duck: kick`. At every hit of
+  the trigger track (its notes' starts; chord starts for `play: chords`; every beat for `beat`)
+  that falls in a section that ducks, `_pump`'s dip (8 ms attack, exponential release, at most
+  two beats long) is subtracted from 1; the gain is clipped at 0 and circular for a loop. A
+  missing / misspelt trigger track or the track itself is a problem with did-you-mean.
+- **`gate`**: `{steps, duty 0.55, floor 0.08}` or `gate: "x.x."`: a drum pattern (repeating like
+  steps); each hit opens `_gate`'s window (3 ms attack, open `duty` of its last step — `-` keeps it
+  open longer — 18 ms release), `x` / `X` fully, `o` / `x?` to 0.4; `floor + (1 − floor) ·
+  window` in the gated sections, 1 elsewhere, smoothed over 3 ms (no click at section edges).
+- **`echo`**: `{delay 0.75 beats, feedback 0.35, repeats 2, pingpong true}` (or `echo: true`, or a
+  number: the delay). Repeat k is the track's sound `k · delay` later times `feedback^k`, with
+  left and right swapped on odd repeats when ping-pong (the beds' `_echoed` mirrors the pan).
+- **`reverb`**: `{size 1.8 s, mix 0.2, tone 4000 Hz, predelay 0.02 s}` (or `reverb: true`, or a
+  number: the mix). Each side is convolved (FFT) with its own seeded decaying noise (−60 dB at
+  `size`, 5 ms onset, unit energy, so the tail's level is `mix` of the sound's), low-passed at
+  `tone` and high-passed at 120 Hz; circular for a loop, the tail kept for a one-shot.
+- **Processing order** (decision): a track with any bus effect is rendered onto its own buffer —
+  its notes summed per (echo, reverb) setting, so each section's notes get their own echo /
+  reverb and the tails carry on into the next section — then filters, gate, ducking, volume curve
+  and width are applied along the piece, and the result is added to the mix. A track with none
+  is summed straight into the mix, as in Step 184.
+- **Warnings**: notes (and chord tones) outside 20 Hz–12 kHz are still left out, now reported per
+  track and section (`render_music_score(score, warnings)`; `vidgen music render` prints them on
+  stderr, `--json` puts them in `warnings` as `{scene: null, message}`).
+- **MP3**: `vidgen music render ... --out FILE.mp3` writes an MP3 through `listen.write_mp3`
+  (ffmpeg with libmp3lame, 128 kbps CBR, at the same −28 LUFS as the WAV).
+- **How the beds map** (Step 186 writes the templates): `momentum` — pad `duck: {to: kick, depth:
+  0.45, release: 0.14}`, hats with `spread: 0.25`, the ostinato with `spread: 0.15` and
+  `accent: "3+3+2"`, a riser in a last section; `ascent` — `supersaw` with a `lowpass` curve
+  (900 → 3200 Hz over the groove and build, open in the lift, closing in the settle), `duck: {to:
+  beat, depth: 0.55}`, the open hat's and clap's level by section, the clap roll a track with a
+  `volume` ramp, the arp lead `fm_pluck` with `echo: {delay: 0.75, feedback: 0.35, repeats: 2}`;
+  `horizon` — the gated supersaw `gate: {steps: "XooXooXoXooXooXo", duty: 0.5, floor: 0.05}`
+  with `octave: 4` and its sweep, `saw_pad` with a `volume` lift, the sixteenth kick build a
+  track with a `volume` ramp; `beacon` — `glass` (octave 5) with `volume` points for its slow
+  swell, `static`, `pulsar` on the accents with `spread`, `sub` with `third`; `neon` — `saw_pad`
+  (fade 0.5), `analog_bass` `"1 8 1 8 ..."`, `gated_snare`, `square_pluck` with `spread: 0.3`.
+  Not expressible exactly: a pad's `air` swell (`_pads`' `air_cycles`) — a second pad track with a
+  volume curve stands in; voicing-relative figure tones (`sorted(notes)[2]`) — degrees or written
+  `{chord, notes}` stand in.
+- **Measured** on the demo (`skyline_lift`, D minor, 128 BPM, 32 bars, 60 s; 14 tracks; render
+  12 s, twice identical): −28.00 LUFS, true peak −14.8 dBTP; seam step 0.11–0.12 of the
+  99.9th-percentile step; sections intro −29.8, build −29.2, lift −26.2, outro −30.0 LUFS; 63 %
+  of the power under 150 Hz, 300 Hz–3 kHz 16 %, above 5 kHz −42.8 dB; L/R correlation 0.37; in
+  the lift the 300 Hz–3 kHz band is 1.6 dB down in the first sixteenth after each beat (the
+  pump). The spectrogram shows the dark intro, the gate's sixteenth stripes and the sweep opening
+  through the build with the riser in its last four bars, the bright pumping lift, and the filter
+  closing in the outro. Two thirds of the render time are the filter sweeps (full-length FFTs per
+  half-octave); fine for pieces of a minute.
