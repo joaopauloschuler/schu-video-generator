@@ -1,0 +1,31 @@
+// The studio's JSON API (DESIGN.md §94.2): every call returns `result` or throws an Error whose
+// message is the server's (a score's problems, a bad request...).
+
+async function call(method, path, body) {
+  const options = { method, headers: {} };
+  if (body !== undefined) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch(path, options);
+  let doc;
+  try {
+    doc = await response.json();
+  } catch {
+    throw new Error(`${path}: HTTP ${response.status}`);
+  }
+  if (!doc.ok) throw new Error(doc.error || `${path}: HTTP ${response.status}`);
+  return doc.result;
+}
+
+export const api = {
+  info: () => call("GET", "/api/info"),
+  presets: () => call("GET", "/api/presets"),
+  patches: () => call("GET", "/api/patches"),
+  session: () => call("GET", "/api/session"),
+  score: (version) => call("GET", `/api/score?version=${encodeURIComponent(version)}`),
+  load: (preset) => call("POST", "/api/load", { preset }),
+  loadText: (text) => call("POST", "/api/load", { text }),
+  validate: (text) => call("POST", "/api/validate", { text }),
+  render: (version, section) => call("POST", "/api/render", { version, section: section || null }),
+};

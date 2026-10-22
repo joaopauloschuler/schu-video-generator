@@ -13830,3 +13830,272 @@ the schema's `source` text, `vidgen music render` / `check` by name, the Listen 
   file byte-identical; a second run into the scratchpad identical.
 - **Not changed**: the other 16 beds (fingerprints), the renderer, `PIECE_RENDER_VERSION`, the
   check's limits (`time_of_flight` was in Step 191's calibration as "the piece").
+
+## 94. vidgen studio: a local music workstation (Phase T, Steps 193–201)
+
+Goal: people (not only agents) make music with the score format. `vidgen studio [PROJECT]
+[--port N] [--no-browser]` starts a small web app on 127.0.0.1 and opens it in the browser:
+load any of the 17 built-in beds as an editable score file (its template, §93.8), change it,
+listen, check it, keep versions, export YAML / MP3 / WAV or save it into a project's
+`assets/music/`. **The sound is always vidgen's own renderer** (`vidgen.studio`, the one videos
+use); the browser only plays rendered audio and never synthesises sound itself.
+
+Terms (a collision, guide rule 14): **the studio** is this web app — the `vidgen studio`
+command and the package `vidgen.studio_app`; `vidgen.studio` (§93) is the score-file package
+(format, instruments, renderer, check) it calls. The package name `studio_app` exists only
+because `studio` was taken. A **session** is one piece being worked on (a folder); a **version**
+is one state of its score file (a file in that folder, never changed once written); a
+**render** is the audio of a version (in the session's render cache); a **preset** is a
+built-in bed's template.
+
+### 94.1 The phase (plan)
+
+- **193 Architecture and skeleton** (done, §94.2–§94.7, §94.11): the command, the server, the
+  JSON API (presets, patches, load, validate, render whole or a section, audio with range
+  requests), sessions on disk, the page: top bar with the preset picker, song strip, transport,
+  timeline, track list, a read-only inspector, the score file highlighted; load a preset and play
+  its render.
+- **194 Song strip, timeline, track list**: chords in Roman numerals with names, live; loop the
+  whole piece or a section; playhead; energy curve (from the render's loudness per bar); drag a
+  section edge to change its bars; click a section to loop it; mute / solo, volume, pan, pattern
+  text editable in place, level meters; `[+ track]`.
+- **195 Inspector and editing**: instrument picker; sliders from `patch_catalog()` (ranges,
+  units, hover help); octave, accent; effects as chips; per-section changes; a step grid synced
+  both ways with the steps text; the YAML editable both ways (type YAML, the controls follow);
+  inline problems with the CLI's did-you-mean messages — a bad edit never stops playback (the
+  last good render keeps playing).
+- **196 Fast re-render** (§94.6): per-track stem cache, re-render only changed tracks and remix;
+  section-only render; playback continues at the same moment; the "under narration" toggle;
+  level meters from real data; latency of typical edits measured and reported.
+- **197 Check, versions, exports**: the check panel (`check.check_music_score`: verdict, headline
+  numbers, spectrogram with section marks, advice with [Apply] where the fix is mechanical,
+  the full report); versions, undo / redo, A/B against the original preset and any version
+  (§94.4); exports YAML / MP3 / WAV and save to a project's `assets/music/` with the Step 188
+  name-clash rule (a bed's name is refused).
+- **198 Listening notes and "Ask an agent"** (§94.8).
+- **199 Variations** (§94.9).
+- **200 Docs and polish**: CONFIG, guide (agents may be handed studio sessions through MCP),
+  README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout
+  (inspector and check as tabs below the track list in narrow windows), the light theme,
+  keyboard shortcuts (space play / stop, Ctrl+Z), accessibility basics (labels, focus, contrast).
+- **201 Review**: a critical review with fixes; security (localhost only, no path traversal,
+  safe file writes, no code run from requests), compatibility, determinism; the phase's tests
+  and related suites; `tests/test_mcp.py` in full.
+
+Compatibility (hard rule): additive. The 17 beds' fingerprints, the templates' renders, existing
+projects' mixes, the Listen page and every existing command stay unchanged. The studio writes
+only inside its session folders, a chosen export path, or a project's `assets/music/` when the
+person asks (Step 197).
+
+### 94.2 Process and server
+
+- **Modules** (`src/vidgen/studio_app/`): `__init__.py` (`run_studio`: the command's loop),
+  `app.py` (`StudioApp`: what each API call does, with no HTTP — tests call it directly),
+  `server.py` (`StudioServer`, the HTTP layer only), `session.py` (sessions on disk), `static/`
+  (the page, package data). Later steps add modules beside them (`edits.py` 195, `stems.py` 196,
+  `exports.py` 197, `notes.py` / `agent.py` 198, `variations.py` 199) and keep `server.py` a thin
+  router. Boundary: `studio_app` may import any of vidgen; `vidgen.studio` never imports
+  `studio_app` (it stays a self-contained package, §93.2, checked by its allow-list test).
+- **Server** (decision: the standard library, no new dependency): `http.server.ThreadingHTTPServer`
+  bound to `127.0.0.1` only, port 0 by default (the OS picks a free one) or `--port N` (a port in
+  use is a `VidgenError` that says to pick another; on Windows `SO_EXCLUSIVEADDRUSE`, so no other
+  process shares it). `webbrowser.open` 0.3 s after the server is bound (Windows, macOS, Linux);
+  `--no-browser` only prints the address. Ctrl+C stops it (`studio stopped`), removing
+  `open.json` (§94.3). Each request runs on its own thread; renders take a lock (one at a time:
+  the development machine has 3 GB), session changes another.
+- **Guards**: the `Host` header must be `127.0.0.1:<port>` or `localhost:<port>` (403 otherwise:
+  no DNS rebinding); a POST must be `Content-Type: application/json` (415 otherwise — a cross-site
+  form cannot send that without a CORS preflight, which the server never answers) and, when it has
+  an `Origin`, from this server (403); bodies at most 2 MB. Files are served only from
+  allow-lists: the page's files (the `static/` folder listed once at start), three bundled fonts,
+  and renders whose names match `<20 hex>.wav` or `<20 hex>-<section>.wav` in the open session's
+  `renders/` — no path from a request reaches the file system. Every response has
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and a CSP of `'self'` only
+  (no inline script, no `eval`; styles set from JS through the CSSOM). A dropped connection (the
+  browser seeking) is ignored, an unexpected error is logged and answered with 500 — one bad
+  request never stops the studio.
+- **Errors**: a `VidgenError` (a score's problems, an unknown preset with did-you-mean) is HTTP
+  400 with its message; the page shows it in the status line.
+
+### 94.3 Sessions on disk
+
+```
+<studio>/open.json                         the running studio: url, session id, pid, started
+<studio>/sessions/<id>/session.json        format, id, created, preset, title, current, versions
+<studio>/sessions/<id>/versions/v0001.yaml  each version's score text, exactly as written
+<studio>/sessions/<id>/renders/<key>.wav    a render (audition level), <key>.json its facts,
+                                            <key>-<section>.wav a section cut from it
+```
+
+- **Where** (`session.studio_dir`): a project's `build/studio/` (the project is `PROJECT` or the
+  current folder when it holds a `video.yaml`; found with `project.find_config_file`, the config
+  is not read, so a broken `video.yaml` does not stop the studio), else `studio/` in vidgen's
+  cache folder (`soundfont.cache_dir()`: `VIDGEN_CACHE_DIR`, `%LOCALAPPDATA%\vidgen`,
+  `~/Library/Caches/vidgen`, `~/.cache/vidgen`). `build/` is a cache by the project's rules
+  (never committed); a person keeps a piece by exporting it (197).
+- **Sessions**: loading a preset (or a score's text) starts a new session (id
+  `YYYYMMDD-HHMMSS-xxxx`, checked by a pattern before any path is built from it); older sessions
+  stay on disk (Step 197 lists and reopens them). `session.json` (format 1) holds the facts and the
+  version list `{number, parent, origin, label, created}`; `origin` is `preset` or `text` in Step
+  193, then `edit` (195), `agent` (198), `variation` (199). All writes are atomic
+  (`fileio.write_text_atomic`).
+- **`open.json`** (decision, for Step 198): the running studio writes its URL, open session and
+  pid; it removes the file on exit only if its pid is still the one in it (a second studio may
+  have replaced it). MCP tools read it to find "the open session".
+- Later steps add, per session: `notes.json` (198), `inbox/` (agent proposals, 198),
+  `variations/<batch>/` (199), `stems/` (196), `checks/` (197).
+
+### 94.4 Versions, undo / redo and A/B (plan for Steps 195 and 197)
+
+- **The score text is the source of truth** and keeps its comments: a version is the text as
+  written. Controls never rewrite the whole file: Step 195's `edits.py` changes one value in
+  place, finding it with `yaml.compose`'s node marks (start / end offsets) and replacing that
+  span with the new value written in flow style — a key added to a block or flow mapping is
+  inserted next to its siblings. So a slider move changes one line of the YAML view, and typing
+  YAML is the same operation the other way round (the page re-reads the text through
+  `/api/validate` and the controls follow).
+- **Every committed edit is a new version** (a slider's release, a step grid click, typed YAML
+  once it is valid for 0.8 s); invalid text is never a version — the page keeps it as a draft
+  with its problems and the last good render keeps playing. Versions are a few KB.
+- **Undo / redo** move the session's `current` pointer: undo to the current version's parent,
+  redo back down the branch last undone (a `redo` list in `session.json`); a new edit after an
+  undo starts a branch (nothing is deleted). The page's "v3 ▾" lists versions with their labels.
+- **A/B**: A is the preset's template (or version 1 for a score given as text), B the current
+  version or any picked one; both rendered, the player swaps sources at the same moment
+  (`Player.setSource` keeps the position). Every render plays at the same audition gain, so A/B
+  is level-matched.
+
+### 94.5 The JSON API
+
+Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<message>"}` (HTTP
+400 for a `VidgenError`, 403 / 404 / 415 / 416 for the guards, 500 for a bug).
+
+| Call | Step | What it does |
+|---|---|---|
+| `GET /api/info` | 193 | vidgen version, project, studio folder, default preset (`momentum`), audition gain, open session id |
+| `GET /api/presets` | 193 | the 17 beds in order: name, title, `one_line` (the description's first clause, ≤ 110 characters), `bed_description`, `use`, key, tempo, time, bars, seconds, sections, tracks, `score_bed` |
+| `GET /api/patches` | 193 | `vidgen.studio.patch_catalog()` (instruments, settings with ranges and words, effects) |
+| `GET /api/session` | 193 | the open session (`session.json` + folder) and its current version's score, or nulls |
+| `GET /api/score?version=N` | 193 | a version: text, outline (`score_outline` + per track the steps text, volume, pan and settings as written; each section's first bar; the progression when it is one string), problems, render key |
+| `POST /api/load {preset} \| {text}` | 193 | a new session whose version 1 is the preset's template or the text (bad text refused with its problems) |
+| `POST /api/validate {text}` | 193 | `ok`, problems `{where, message, line}` (did-you-mean as the CLI; YAML syntax errors with their line), outline |
+| `POST /api/render {version?, section?}` | 193 | render a version (default current) or one section; `{key, url, seconds, samples, loop, loudness, true_peak, audition_gain_db, warnings, render_seconds, cached, section}` |
+| `GET /audio/<key>.wav`, `/audio/<key>-<section>.wav` | 193 | the render, with `Range` (206, `Content-Range`; 416 outside the file) |
+| `POST /api/edit {version, ops}` / `POST /api/text {version, text}` | 195 | a new version from value edits (paths like `tracks.bass.volume`) or from typed text |
+| `POST /api/undo`, `/api/redo`, `/api/current {version}` | 197 | move the current version |
+| `POST /api/check {version}`; `GET /media/<key>-check.png` | 197 | `check.check_dict` of the version, its spectrogram |
+| `POST /api/export {version, format, name?}` | 197 | YAML / MP3 / WAV to a chosen path, or `assets/music/<name>.yaml` |
+| `GET /api/session?since=R` | 198 | polled every 1.5 s: a revision counter, so versions added by an agent appear |
+| `GET/POST /api/notes` | 198 | listening notes `{id, seconds, bar, text, version}` |
+| `POST /api/variations {version}`, `/api/variations/pick` | 199 | four siblings, rendered and checked; picking one makes it the next version |
+
+### 94.6 Renders and playback
+
+- **A render** (`StudioApp.render`): `render_music_score` of the version's score (−28 LUFS,
+  float32), written as a 16-bit WAV (`sfx.wav_bytes`, added for this: `write_wav` now writes its
+  bytes, the same file as before) at the **audition level**: +12 dB (`listen.MUSIC_GAIN_DB`, the
+  Listen page's −16 LUFS), clipped at full scale (the beds' true peaks are −14 to −16 dBTP, so
+  nothing clips), the same gain for every version. Its facts (`<key>.json`): seconds, samples,
+  loop, loudness and true peak of the −28 LUFS render, warnings (notes out of range), render
+  time.
+- **The cache key** (`render_key`): SHA-256 of `{score: the YAML's data, renderer:
+  STUDIO_RENDER_VERSION (1), vidgen: __version__}` — so comments and layout do not re-render,
+  and a new vidgen does. The cache lives in the session (no sharing between sessions in Step 193).
+- **A section** is cut from the whole render, bit-exact (`_slice_wav`), from the section's first
+  sample for its bars (the last section of a one-pass piece keeps the tail): it sounds as in the
+  piece, with the notes ringing on from before it. Step 196 decides whether rendering only the
+  section's notes is worth it (measured).
+- **Playback** (`static/player.js`): an `<audio>` element on the render's URL, streamed with range
+  requests so seeking works without loading everything; `loop` for a loop piece. Decision: not
+  the Web Audio API in Step 193 — `<audio>` streams and seeks for free; Step 194 may move section
+  loops to an `AudioBufferSourceNode` (sample-exact `loopStart` / `loopEnd`) if the `<audio>`
+  loop's gap is audible, keeping the same server files. `setSource` keeps the playing position,
+  which is how a re-render (196) and A/B (197) continue at the same moment.
+- **Stems (plan for Step 196)**: `render.render_music_stems` already renders each track alone
+  (before the master filter and final level) and sums them. The studio factors the per-track part
+  into a function `vidgen.studio` exposes (bit-identical, tested) and caches each track's stem as
+  float32 in `stems/<track key>.npy`; the track key hashes the score's shared data (key, tempo,
+  time, seed, loop, sections, progression, chord_bars), the track's own spec and, for `duck`, the
+  trigger track's spec. A change to one track re-renders that track and remixes (sum, master
+  filter, `_finish`), the same within 1e-5 as `render_music_score` (as the check's stems are);
+  exports render with `render_music_score` itself. Mute / solo remix the cached stems at the full
+  mix's gain (muting a part does not make the rest louder). Level meters: each stem's RMS per
+  50 ms, sent with the render. "Under narration": a second WAV of the render with the shipped
+  narration sample ducked by `check.duck_gain_db`, as the check's demo; the player swaps to it at
+  the same moment. Target: an edit of one track plays in about the time to render that track plus
+  a remix (well under the 1.2–2.2 s of a whole template).
+
+### 94.7 The page
+
+- **Files** (`studio_app/static/`, package data): `index.html`, `studio.css`, ES modules `app.js`
+  (the page), `api.js` (the JSON calls), `player.js` (playback), `yaml_view.js` (the highlighted
+  score file), `favicon.svg`. Vanilla JS, no build step, no CDN, no external fonts (Inter and
+  JetBrains Mono come from vidgen's bundled fonts at `/fonts/...`), so it works offline.
+- **Look** (decision: vidgen's own): the `dark_tech` theme's colours (background `#0E1116`,
+  surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
+  #F2A541 #C792EA #83C167` for sections and tracks) and, for the light option (a toggle kept in
+  `localStorage`, polished in Step 200), `light_academic`'s. Layout as agreed: top bar (brand,
+  preset picker, A/B, versions, undo / redo, YAML toggle, Export, theme), song strip (key,
+  tempo, time, seed, bars and length, the progression as written and the chord names of the
+  section under the playhead), transport (play / pause, stop, loop, "under narration", position
+  slider, time), timeline (sections coloured, sized by bars, playhead; click to seek), then three
+  columns — tracks, inspector, score file — and the check panel at the bottom with the status
+  line. Under 980 px wide the columns stack and the page scrolls.
+- **Step 193's state of each part**: the preset picker works (a listbox: name, key, tempo,
+  length and the one-line description; arrow keys, Enter, Escape); play / pause / stop, seek and
+  timeline clicks work; tracks show name, instrument, volume bar, pan knob and the steps text
+  (M / S disabled); the inspector shows the selected track's instrument (its words from
+  `patch_catalog`), what it plays, sections, effects as chips and its settings as disabled
+  sliders at the written or default values; the score file is shown highlighted with line
+  numbers (problem lines marked). A/B, versions, undo / redo, export, loop by section, "under
+  narration", `[+ track]` and the check are visible but disabled, with a title naming their step.
+- On opening, the page shows the open session (a reload keeps the piece) or loads the default
+  preset (`momentum`) and renders it; playing needs a click (browsers' autoplay rule).
+
+### 94.8 Listening notes and agents (plan for Step 198)
+
+- **Notes**: clicking the timeline while playing pins a note `{seconds, bar, text, version}` to
+  the session (`notes.json`), shown as markers on the timeline and as comments; notes stay with
+  the version they were made on and carry over to its descendants.
+- **MCP** (decision: through the disk, not the studio's HTTP): `vidgen mcp` tools `studio_sessions`
+  (the sessions under the root's `build/studio/` and the cache folder's `studio/`, the open one
+  from `open.json`), `studio_read` (a session's current score, its notes, the last check report,
+  the patches summary) and `studio_propose` (score text plus one line per note on what changed and
+  why; validated with `check_text`, then written atomically as `sessions/<id>/inbox/<n>.json`). The
+  running studio turns inbox files into versions (`origin: agent`, parent the version the agent
+  read) when the page polls `/api/session`, so the proposal appears in the studio for the person
+  to A/B. Why the disk: no port or token to discover, it works when the studio is closed (picked up
+  when it opens), and the MCP server's root policy already confines what it may write.
+- **Optional provider**: "Ask an agent" with OpenRouter (the provider vidgen already supports,
+  key from `OPENROUTER_API_KEY`, sent through `httpapi.post_with_retries`), a model the person
+  names; the prompt holds the score, the notes, the check report and the patches summary; the
+  reply (YAML + one line per note) goes through the same validation as an MCP proposal. Never
+  called in development or tests (mocked).
+
+### 94.9 Variations (plan for Step 199)
+
+One click makes four siblings of the current version by fixed, deterministic edits of its data
+(the same version always gives the same four, no random numbers): another `seed` (the pads'
+phases and noises); an altered ostinato (the busiest pitched step pattern turned by a step or
+its degrees swapped); another voicing (pitched pads and plucks an octave or an inversion apart);
+a darker or brighter mix (the master `lowpass` and the pads' `tone` down or up). Each is written
+as a candidate (`variations/<batch>/a.yaml`...), rendered (one at a time, the stems reused) and
+checked, and shown side by side to listen and pick; picking one makes it the next version
+(`origin: variation`, parent the version varied).
+
+### 94.10 Not done in Step 193
+
+Editing, mute / solo, loops by section, the energy curve, meters, the check panel, versions,
+undo / redo, A/B, exports, notes, agents and variations (Steps 194–199, above). No session
+list or reopening of older sessions yet (197). Renders are not pruned (a minute of music is
+about 11 MB of WAV per version rendered; 197 adds a limit).
+
+### 94.11 Step 193: facts
+
+- Measured (two cores): the page's first load with `momentum` (load, render 1.8 s, page ready)
+  3.4 s; templates render in 1.2 s (`pulse`) to 2.2 s (`tidewater`); a cached render answers at
+  once; the catalogue of the 17 presets 0.2 s.
+- Public: no new `vidgen.api` names (the studio is a command, not an extension surface); new
+  `vidgen.sfx.wav_bytes`; `studio_app` is in `render.fingerprint.NOT_RENDER_INPUTS` (it changes
+  no scene's picture); package data `studio_app/static/*`; pytest marker `ui` (browser tests,
+  skipped without Playwright).

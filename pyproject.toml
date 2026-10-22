@@ -35,11 +35,12 @@ vidgen-mcp = "vidgen.mcp_server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/**/*","data/openrouter/*", "data/kokoro/*", "data/sets/*", "data/pronunciation/*", "studio/beds/*.yaml", "studio/data/*"]
+vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/**/*","data/openrouter/*", "data/kokoro/*", "data/sets/*", "data/pronunciation/*", "studio/beds/*.yaml", "studio/data/*", "studio_app/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
     "render: invokes Manim rendering (slow; deselect with -m \"not render\")",
     "slow: the slowest render tests, several seconds each (quick run: -m \"not slow\")",
+    "ui: browser tests of vidgen studio's page (headless Chromium through Playwright; skipped without it)",
 ]

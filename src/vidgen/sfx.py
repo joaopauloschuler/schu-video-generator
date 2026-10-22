@@ -23,6 +23,7 @@ narration track (no Manim sound mixing involved).
 from __future__ import annotations
 
 import difflib
+import io
 import logging
 import math
 import re
@@ -1277,12 +1278,19 @@ def read_wav(path: Path) -> np.ndarray:
     return (data.reshape(-1, channels) / 32768).astype(np.float32)
 
 
-def write_wav(path: Path, samples: np.ndarray) -> None:
-    """Write float samples (mono ``(n,)`` or ``(n, c)``, 48 kHz) as a 16-bit PCM WAV."""
+def wav_bytes(samples: np.ndarray) -> bytes:
+    """Float samples (mono ``(n,)`` or ``(n, c)``, 48 kHz) as the bytes of a 16-bit PCM WAV file."""
     x = samples.reshape(len(samples), -1)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(path), "wb") as out:
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as out:
         out.setnchannels(x.shape[1])
         out.setsampwidth(2)
         out.setframerate(RATE)
         out.writeframes(np.clip(np.round(x * 32767), -32768, 32767).astype("<i2").tobytes())
+    return buffer.getvalue()
+
+
+def write_wav(path: Path, samples: np.ndarray) -> None:
+    """Write float samples (mono ``(n,)`` or ``(n, c)``, 48 kHz) as a 16-bit PCM WAV."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(wav_bytes(samples))

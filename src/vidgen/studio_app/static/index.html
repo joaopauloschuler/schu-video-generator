@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vidgen studio</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/studio.css">
+<script type="module" src="/static/app.js"></script>
+</head>
+<body>
+<div class="studio" id="studio">
+  <header class="topbar">
+    <div class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5a2.5 2.5 0 1 1-2-2.45V5l11-2v11.5a2.5 2.5 0 1 1-2-2.45V6.4L9 7.7z"/></svg><span>vidgen <b>studio</b></span></div>
+    <div class="picker">
+      <button class="btn select" id="preset-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="preset-list">
+        <span class="dim">Preset</span> <span id="preset-name">…</span> <span class="caret" aria-hidden="true">▾</span>
+      </button>
+      <ul class="menu" id="preset-list" role="listbox" aria-label="Presets: the built-in beds" tabindex="-1" hidden></ul>
+    </div>
+    <button class="btn" id="ab" disabled title="Compare with the original preset (coming in Step 197)">A/B original</button>
+    <span class="spacer"></span>
+    <button class="btn select" id="versions" disabled title="Versions (Step 197)"><span id="version-name">v–</span> <span class="caret" aria-hidden="true">▾</span></button>
+    <button class="btn icon" id="undo" disabled aria-label="Undo" title="Undo (Step 197)">↶</button>
+    <button class="btn icon" id="redo" disabled aria-label="Redo" title="Redo (Step 197)">↷</button>
+    <button class="btn" id="yaml-toggle" aria-pressed="true" title="Show or hide the score file">YAML</button>
+    <button class="btn" id="export" disabled title="YAML, MP3, WAV or save to the project (Step 197)">Export <span class="caret" aria-hidden="true">▾</span></button>
+    <button class="btn icon" id="theme" aria-label="Switch light or dark theme" title="Light or dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 2v14a7 7 0 0 1 0-14z"/></svg></button>
+  </header>
+
+  <section class="strip" aria-label="Song">
+    <div class="facts">
+      <span class="fact"><span class="label">Key</span> <span class="value" id="f-key">–</span></span>
+      <span class="fact"><span class="label">Tempo</span> <span class="value" id="f-tempo">–</span></span>
+      <span class="fact"><span class="label">Time</span> <span class="value" id="f-time">–</span></span>
+      <span class="fact"><span class="label">Seed</span> <span class="value" id="f-seed">–</span></span>
+      <span class="fact"><span class="label">Bars</span> <span class="value" id="f-bars">–</span></span>
+      <span class="fact chords"><span class="label">Chords</span> <span class="value" id="f-roman"></span> <span class="value names" id="f-chords"></span></span>
+    </div>
+    <div class="transport">
+      <button class="btn play" id="play" aria-label="Play" title="Play / pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pause" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+      <button class="btn icon" id="stop" aria-label="Stop" title="Stop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z"/></svg></button>
+      <label class="loop"><span aria-hidden="true">⟳</span> loop
+        <select id="loop" aria-label="Loop"><option value="">whole</option></select>
+      </label>
+      <label class="narration" title="Play under the narration sample (Step 196)"><input type="checkbox" id="narration" disabled> under narration</label>
+      <input type="range" class="seek" id="seek" min="0" max="1000" value="0" step="1" aria-label="Position">
+      <span class="time" id="time">0:00 / 0:00</span>
+    </div>
+  </section>
+
+  <section class="timeline-wrap" aria-label="Timeline">
+    <div class="timeline" id="timeline">
+      <div class="playhead" id="playhead" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <main class="work" id="work">
+    <section class="panel tracks" aria-labelledby="tracks-title">
+      <h2 id="tracks-title">Tracks</h2>
+      <div class="track-list" id="tracks" role="list"></div>
+      <button class="btn add" disabled title="Add a track (Step 194)">+ track</button>
+    </section>
+    <section class="panel inspector" aria-labelledby="inspector-title">
+      <h2 id="inspector-title">Inspector <span class="dim" id="inspector-track"></span></h2>
+      <div id="inspector"><p class="placeholder">Select a track to see its instrument and settings.</p></div>
+    </section>
+    <section class="panel yaml" id="yaml-panel" aria-labelledby="yaml-title">
+      <h2 id="yaml-title">Score file <span class="dim" id="yaml-name"></span></h2>
+      <pre class="code" id="yaml" tabindex="0" aria-label="The score file (YAML)"></pre>
+    </section>
+  </main>
+
+  <footer class="check" aria-labelledby="check-title">
+    <h2 id="check-title">Check</h2>
+    <span class="placeholder">verdict, spectrogram and advice for the voice (Step 197)</span>
+    <span class="status" id="status" role="status" aria-live="polite"></span>
+  </footer>
+</div>
+<audio id="audio" preload="none"></audio>
+</body>
+</html>

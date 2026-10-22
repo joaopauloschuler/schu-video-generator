@@ -1077,6 +1077,45 @@ advice; a human makes the final choice (DESIGN §93).
 - [x] The GPS example plays the bed and keeps no project copy (it would clash); its README keeps the log and check report; its mix is byte-identical; the redundant `studio/pieces/` copy removed
 - [x] Listen page: the bed's row (clip into its lift, spectrogram: the Step 189 piece files, byte-identical, renamed); "Made with the score format" stays as the showcase of how it was made, linking the example's log and the bed's clip (no second copy of the media); regenerated twice identically (6.33 MB)
 
+## Phase T — vidgen studio: a local music workstation for humans
+
+Goal: `vidgen studio [PROJECT] [--port N] [--no-browser]` starts a small local web app
+(127.0.0.1 only) and opens it in the browser. People load any of the 17 built-in beds as an
+editable score file, change it, listen, check it and export YAML / MP3 / WAV or save it into a
+project's `assets/music/`. The sound is always vidgen's own renderer; the browser only plays the
+rendered audio. A compact "mini DAW" in vidgen's look (dark theme, light option). Additive: the
+beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN §94).
+
+### Step 193 — Architecture and skeleton
+- [x] Phase T plan here and DESIGN §94 for the whole phase: modules, server and its guards, sessions and versions on disk, the JSON API (including the calls of Steps 194–199), the render cache and the Step 196 stem plan, the page, how MCP reaches an open session (Step 198), variations (Step 199)
+- [x] `vidgen studio`: a standard-library HTTP server on 127.0.0.1 (a free port by default), opens the browser, Ctrl+C stops it; sessions in the project's `build/studio/` or vidgen's cache folder; JSON API: presets with one-line descriptions, patches, load a preset or text, validate (problems with lines and did-you-mean), render whole or one section (cached by the notes), audio with range requests; Host / Origin / JSON guards, allow-listed files (`src/vidgen/studio_app/`)
+- [x] The page as package data (vanilla JS modules, no build, no CDN, bundled fonts): top bar with the preset picker, song strip, transport (play / pause / stop / seek), timeline with sections and playhead, track list, read-only inspector, the highlighted score file; placeholders for the later parts; load a preset and play its render
+- [x] Tests: `tests/test_studio_app.py` (API logic and the HTTP server), `tests/test_studio_ui.py` (`ui`: headless Chromium through Playwright — the page loads, a preset loads, play streams audio); screenshots looked at
+
+### Step 194 — Song strip, timeline and track list
+- [ ] Chords in Roman numerals with names, live; loop whole or a section; playhead; energy curve; drag a section edge to change its bars; click a section to loop it; mute / solo, volume, pan, pattern text editable in place, level meters; `[+ track]`
+
+### Step 195 — Inspector and editing
+- [ ] Instrument picker; sliders from the patches metadata (ranges, units, hover help); octave and accent; effects as chips; per-section changes; a step grid synced both ways with the steps text; the YAML editable both ways (edits change values in place, comments kept); inline validation with the CLI's did-you-mean — a bad edit never stops playback
+
+### Step 196 — Fast re-render
+- [ ] Per-track stem cache (re-render only the changed tracks, remix); section-only render; playback continues at the same moment; the "under narration" toggle; level meters from real data; latency of typical edits measured and reported
+
+### Step 197 — Check, versions and exports
+- [ ] Check panel (spectrogram, verdict, advice, [Apply] for mechanical fixes); versions, undo / redo, A/B against the original preset and any version; exports YAML / MP3 / WAV and save to a project's `assets/music/` (the Step 188 name-clash rule); reopen older sessions
+
+### Step 198 — Listening notes and "Ask an agent"
+- [ ] Notes pinned on the timeline while playing, kept with the version; MCP tools to read an open session's score, notes and check and to propose a version that appears in the studio; optionally OpenRouter through the existing key (mocked in tests, never called)
+
+### Step 199 — Variations
+- [ ] One click: four deterministic siblings of the current piece (another seed, an altered ostinato, another voicing, a darker or brighter mix), each rendered and checked, side by side; picking one makes it the next version
+
+### Step 200 — Docs and polish
+- [ ] CONFIG, guide (agents may be handed studio sessions through MCP) + `AGENTS.md`, README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout (inspector and check as tabs when narrow), light theme, keyboard shortcuts, accessibility basics
+
+### Step 201 — Review of Phase T
+- [ ] Critical review with fixes recorded in HANDOFF; security (localhost only, no path traversal, safe file writes, no code run from requests); compatibility; determinism; the phase tests and related suites; `tests/test_mcp.py` in full
+
 ---
 
 ## Backlog (after Step 60)

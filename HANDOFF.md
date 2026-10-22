@@ -17776,3 +17776,94 @@ Files to listen to / look at
 Known gaps
 - As for the other score beds: rendered per process, not cached on disk (about 7 s).
 - The example's lint no longer runs `music_check` on its music (beds are not checked by it).
+
+## Step 193 — vidgen studio: architecture and skeleton (Phase T starts)
+
+What was built (DESIGN §94)
+- **The plan for the whole phase**: tasklist Phase T (Steps 193–201) and DESIGN §94 — modules,
+  server and guards, sessions and versions on disk, the JSON API including the calls Steps
+  194–199 will add (§94.5), the render cache and Step 196's stem plan (§94.6), versions / undo /
+  A/B (§94.4: the score text is the source of truth; controls change one value in place via
+  `yaml.compose` marks so comments survive), how MCP reaches an open session (§94.8: through the
+  disk — `open.json` and a session `inbox/`, not HTTP), variations (§94.9).
+- **`vidgen studio [PROJECT] [--port N] [--no-browser]`** (`cli.cmd_studio`,
+  `studio_app.run_studio`): a standard-library `ThreadingHTTPServer` on 127.0.0.1 (a free port by
+  default; `SO_EXCLUSIVEADDRUSE` on Windows; a port in use is a clear `VidgenError`), opens the
+  browser with `webbrowser`, Ctrl+C stops it and removes `open.json`. Checked as a real process
+  (`<scratchpad>/s193/cli_run.py`): address printed, `/api/info` answered, SIGINT → "studio
+  stopped", exit 0, `open.json` gone.
+- **`StudioApp`** (`studio_app/app.py`, no HTTP): presets (the 17 beds with a one-line
+  description ≤ 110 characters, their use, and the templates' facts), patches, `load` (preset or
+  text → a new session, version 1), `validate` (problems as `{where, message, line}`: the
+  score's did-you-mean messages, the line found from `where` with `yaml.compose`; YAML syntax
+  errors with their line), `score`, `render` (whole or one section; cached by
+  `render_key` = SHA-256 of the YAML data + `STUDIO_RENDER_VERSION` + vidgen version, so comments
+  do not re-render; a 16-bit WAV at +12 dB = the Listen page's −16 LUFS for every version; a
+  section is cut bit-exact from the whole render), `audio_file` (names checked by pattern).
+- **`StudioServer`** (`studio_app/server.py`): routes, JSON envelope `{ok, result|error}`, static
+  files and three bundled fonts from allow-lists, audio with single `Range` requests (206 / 416),
+  guards (Host must be 127.0.0.1 / localhost with the port; POST must be JSON and same-origin; 2
+  MB bodies; CSP `'self'`, nosniff, no-referrer), dropped connections ignored.
+- **Sessions** (`studio_app/session.py`): `<project>/build/studio/` or `studio/` in vidgen's
+  cache folder; `sessions/<id>/session.json`, `versions/v0001.yaml` (text as written),
+  `renders/`; `open.json` (url, session, pid) while running.
+- **The page** (`studio_app/static/`, package data; vanilla ES modules, no build, no CDN):
+  top bar (preset picker as a listbox with key / tempo / length and the one-line description;
+  A/B, versions, undo / redo, Export disabled with their step in the title; YAML toggle; theme
+  toggle), song strip (key, tempo, time, seed, bars and length, the progression as written, the
+  chord names of the section under the playhead), transport (play / pause, stop, loop (whole),
+  "under narration" disabled, seek slider, time), timeline (coloured sections sized by bars,
+  playhead, click to seek), tracks (name, instrument, volume bar, pan knob, steps text; M / S
+  disabled), inspector (instrument words, plays, sections, effect chips, settings as disabled
+  sliders at the written / default values), the score file highlighted with line numbers
+  (problem lines marked), check panel placeholder and status line. The page auto-loads
+  `momentum` when no session is open; a reload keeps the open piece.
+
+Files touched
+- New: `src/vidgen/studio_app/__init__.py`, `app.py`, `server.py`, `session.py`,
+  `static/index.html`, `studio.css`, `app.js`, `api.js`, `player.js`, `yaml_view.js`,
+  `favicon.svg`; `tests/test_studio_app.py` (20), `tests/test_studio_ui.py` (3, marker `ui`).
+- Changed: `src/vidgen/cli.py` (the `studio` command), `src/vidgen/sfx.py` (`wav_bytes`;
+  `write_wav` writes its bytes — the same file), `src/vidgen/render/fingerprint.py`
+  (`studio_app` in `NOT_RENDER_INPUTS`, so scene caches stay valid), `pyproject.toml` (package
+  data `studio_app/static/*`, marker `ui`), `docs/CONFIG.md` ("Music studio"), `DESIGN.md`
+  (§94), `tasklist.md` (Phase T).
+
+Public interfaces
+- No new `vidgen.api` names (the studio is a command, not an extension surface). New command
+  `vidgen studio`; `vidgen.sfx.wav_bytes`; the HTTP API of §94.5 (internal to the page, may
+  change during the phase).
+
+Decisions
+- Package `vidgen.studio_app` (the name `studio` is the score-file package; the collision is
+  named in §94).
+- Standard library only for the server; `<audio>` with range requests for playback (Web Audio
+  only if section loops need it, Step 194).
+- A preset load starts a new session (older ones stay on disk); versions are immutable files.
+- Agents reach the studio through the disk (Step 198), so no port / token discovery.
+
+How to test (one at a time, capped)
+- `tests/test_studio_app.py`: 20 passed in 3.5 s (presets, session folders, load, problems with
+  lines, render key, render cache and bit-exact section cut, audio name checks, open marker,
+  server: page / API / fonts, refused Host, Origin, content type, traversal; ranges; port in use;
+  CLI options).
+- `tests/test_studio_ui.py` (`-m ui`, headless Chromium through Playwright, skipped without it): 3
+  passed in 5.3 s — the page shows the open session (17 presets, sections, tracks, YAML, facts),
+  choosing `pulse` loads and renders it, play streams the WAV with range requests and time
+  advances, stop resets.
+- Related: `test_sfx` + `test_storyboard` (`-m "not render" -k "not slow"`) 144 passed; `test_studio`
+  51 passed; `test_docs` + `test_guide` + `test_packaging` 119 passed; `test_cli` +
+  `test_json_output` (`-m "not render"`) 31 passed. Not run: the full suite.
+
+Files to look at
+- Screenshots (1440 × 900 unless said): `<scratchpad>/s193/shots/1-momentum.png` (first load),
+  `2-picker.png` (the preset picker), `3-tidewater-playing.png`, `4-seeked.png` (playhead in the
+  lift), `5-light.png`, `6-no-yaml.png`, `7-narrow.png` (420 px, full page). Made by
+  `<scratchpad>/s193/shots.py`.
+
+Known gaps
+- Everything §94.10 lists for later steps. Chords show in Roman numerals only when the
+  progression is one string (the templates of the 14 Python beds write `{chord, notes}`
+  voicings, so they show names only; Step 194). The top-level progression is shown even in a
+  section with its own. Headless Chromium fetched the WAV before play although `preload="none"`
+  (harmless). Renders are not pruned.

@@ -1641,6 +1641,18 @@ def _music_page(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_studio(args: argparse.Namespace) -> int:
+    """``vidgen studio [PROJECT] [--port N] [--no-browser]``: serve the music studio on
+    127.0.0.1 until Ctrl+C (DESIGN.md §94)."""
+    from vidgen.studio_app import run_studio
+    from vidgen.studio_app.session import find_project_root
+
+    if not 0 <= args.port <= 65535:
+        raise VidgenError(f"studio: --port must be 0 (a free port) to 65535, got {args.port}")
+    run_studio(find_project_root(args.project, Path.cwd()), port=args.port, open_browser=args.browser)
+    return 0
+
+
 def cmd_soundfont(args: argparse.Namespace) -> int:
     """``fetch``: download the default SoundFont into vidgen's cache (checked) unless it is there;
     ``info``: show the SoundFont a project (or any project) uses (DESIGN.md §81)."""
@@ -1930,6 +1942,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists")
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
     p.set_defaults(func=cmd_music)
+
+    p = sub.add_parser(
+        "studio",
+        help="a local music workstation in the browser: load a built-in bed as an editable score, change it, listen (127.0.0.1 only; Ctrl+C stops it)",
+    )
+    p.add_argument("project", nargs="?", default=None, help="the project whose build/studio keeps the sessions (default: this folder if it holds a video.yaml, else vidgen's cache folder)")
+    p.add_argument("--port", type=int, default=0, metavar="N", help="the port on 127.0.0.1 (default: a free one)")
+    p.add_argument("--no-browser", dest="browser", action="store_false", help="do not open the page in the browser (the address is printed)")
+    p.set_defaults(func=cmd_studio)
 
     p = sub.add_parser("soundfont", help="the SoundFont composed music is played with: fetch downloads GeneralUser GS into vidgen's cache, info shows it")
     p.add_argument("action", choices=["fetch", "info"], help="fetch: download it (once; checked against its SHA-256); info: path, size, hash, licence")

@@ -3402,6 +3402,27 @@ music:                                          # the piece follows the video: i
 - **Listing.** `vidgen list-music` lists the pieces (origin `score`) with key, tempo, time, bars,
   length, chords, sections and the score's `title` and `description`, or their problems.
 
+### Music studio (`vidgen studio`)
+
+`vidgen studio [PROJECT] [--port N] [--no-browser]` starts a small web app on this computer and
+opens it in the browser: load any of the 17 built-in beds as an editable score file (its
+template), look at its sections, tracks and score file, and listen. The sound is always vidgen's
+own renderer, the one videos use; the page only plays the rendered audio (a WAV, 12 dB louder
+than in a mix: −16 LUFS, the same for every version). Ctrl+C in the terminal stops it.
+
+- **Where it listens**: `http://127.0.0.1:<port>/`, this computer only. `--port N` picks the
+  port (default: a free one, printed); `--no-browser` only prints the address. It needs no
+  internet connection (the page and its fonts ship with vidgen).
+- **Where it keeps its work**: with a project (`PROJECT`, or the current folder when it holds a
+  `video.yaml`), in `<project>/build/studio/`; without one, in `studio/` in vidgen's cache folder
+  (`VIDGEN_CACHE_DIR`, else `%LOCALAPPDATA%\vidgen` on Windows, `~/Library/Caches/vidgen` on
+  macOS, `~/.cache/vidgen` on Linux). Each piece loaded is a **session**:
+  `sessions/<id>/versions/v0001.yaml` (each version of the score as written),
+  `session.json` and `renders/` (rendered audio, reused while the notes are unchanged). While it
+  runs, `open.json` names its address and session. The studio writes nowhere else.
+- Being built in Phase T (`tasklist.md`): editing, fast re-rendering, the check panel,
+  versions and exports, listening notes and agents, variations come in the next steps.
+
 ### Loudness of the final mix (`audio`)
 
 ```yaml
