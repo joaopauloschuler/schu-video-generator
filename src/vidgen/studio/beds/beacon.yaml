@@ -1,0 +1,78 @@
+# Beacon: a score-file template of vidgen's built-in bed `beacon` (vidgen music template beacon).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, parts and levels,
+# but the pads' random phases and some details differ, so it sounds very like the bed.
+# A cosmic bed built on a ticking beacon like a radio pulsar: dispersed pulses on the 3+3+2
+# sixteenths (a strong one on 1 and 3 in the centre, weaker ones left and right), a deep kick,
+# off-beat sub bass, a low soft ostinato, a dark space pad, a high shimmer and faint radio static.
+# Change one thing at a time and listen: vidgen music render beacon.yaml --out beacon.mp3
+version: 1
+title: Beacon (template)
+description: Cosmic bed in E minor at 120 BPM - pulsar ticks on the 3+3+2 accents, deep kick, sub, space pad, shimmer, static.
+key: E minor
+tempo: 120
+seed: 1
+bars: 24
+chord_bars: 2                  # a chord every two bars (4 s)
+progression:                   # the bed's voicings (notes: the ostinato's v3, the shimmer's v3-v5) and bass notes
+  - {chord: Em(add9),   notes: [E2, E3, F#3, G3, B3], bass: E2}
+  - {chord: Cmaj9,      notes: [C2, E3, G3, B3, D4], bass: C2}
+  - {chord: G/D,        notes: [D2, D3, G3, B3, F#4], bass: D2}
+  - {chord: Bm7sus4,    notes: [B2, F#3, A3, B3, E4], bass: B2}
+  - {chord: Em9,        notes: [E2, D3, G3, B3, F#4], bass: E2}
+  - {chord: Am(add9),   notes: [A2, E3, A3, B3, C4], bass: A2}
+  - {chord: Cmaj7(#11), notes: [C2, E3, F#3, B3, E4], bass: C2}
+  - {chord: Dsus2,      notes: [D2, D3, A3, D4, E4], bass: D2}
+  - {chord: Em(add9),   notes: [E2, E3, F#3, G3, B3], bass: E2}
+  - {chord: Cmaj9,      notes: [C2, E3, G3, B3, D4], bass: C2}
+  - {chord: Asus2,      notes: [A2, E3, A3, B3, E4], bass: A2}
+  - {chord: B7sus4,     notes: [B2, E3, F#3, A3, E4], bass: B2}    # leads back to E minor
+master: {lowpass: 4200}
+tracks:
+  # A deep space pad (low-passed at 1.3 kHz), breathing with a slow side-chain on every beat.
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 1300, air: 0.15, swell: 24, sub: 0.55}
+    volume: 1.1
+    duck: {to: beat, depth: 0.3, release: 0.22}
+  # The shimmer: the voicing's upper three notes two octaves up (v3''+v4''+v5'' played together),
+  # held for each chord, swelling to its loudest halfway through the loop ([bar, dB] points).
+  shimmer:
+    instrument: glass
+    steps: "v3''+v4''+v5'' | -"
+    settings: {attack: 0.8, release: 0.8}
+    volume: [[0, -8.0], [3, -6.2], [6, -3.1], [9, -0.8], [12, 0.0], [15, -0.8], [18, -3.1], [21, -6.2], [24, -8.0]]
+    duck: {to: beat, depth: 0.3, release: 0.22}
+  static:                               # faint radio static, held through the whole loop
+    instrument: static
+    steps: "x | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | -"
+    volume: -2.5
+  kick:
+    instrument: kick
+    settings: {high: 80, low: 44, decay: 0.2, click: 0.03}
+    steps: "x... x... x... x..."
+  # The beacon: a main pulse on beats 1 and 3, weaker pulses on the other 3+3+2 accents,
+  # alternating right / left (spread). The same in every bar, like a lighthouse.
+  pulse:
+    instrument: pulsar
+    steps: "x....... x......."
+  interpulse:
+    instrument: pulsar
+    settings: {high: 1100, low: 200, sweep: 0.025, noise: 0.8}
+    steps: "...x..x. ...x..x."
+    spread: 0.35
+    volume: -4.9
+  # A low, soft ostinato: root (1), fifth (5), octave (8) in octave 3 and the voicing's third note
+  # (v3) in sixteenths, accented 3+3+2.
+  ostinato:
+    instrument: synth_bass
+    octave: 3
+    steps: "1 5 8 1 5 v3 1 5 8 1 5 v3 8 5 1 5"
+    accent: "3+3+2"
+    volume: -11.5
+    spread: 0.2
+    settings: {decay: 0.05, tone: 900, ring: 0.035}
+  sub:                                  # the chord's bass note on the off-beat eighths
+    instrument: sub
+    steps: ".x.x.x.x"
+    settings: {decay: 0.12, tone: 500, second: 0.3, third: 0.1, ring: 0}

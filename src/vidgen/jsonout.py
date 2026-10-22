@@ -732,6 +732,15 @@ def music_patches_document(catalog: Mapping[str, Any], warnings: Iterable[Mappin
     return envelope("music", True, warnings, action="patches", **dict(catalog))
 
 
+def music_template_document(
+    catalog: Iterable[Mapping[str, Any]], written: Mapping[str, Any] | None = None, path: Path | None = None, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen music template --json`` document: every bed's template (``catalog`` from
+    :func:`vidgen.studio.music_template_catalog`) and, when one was written, its facts and path."""
+    extra: dict[str, Any] = {} if written is None else {"template": dict(written), "path": _path(path) if path is not None else None}
+    return envelope("music", True, warnings, action="template", templates=[dict(t) for t in catalog], **extra)
+
+
 def listen_page_document(result: Any, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The ``vidgen music page --json`` document (``result`` a ``vidgen.listen.ListenResult``):
     the page, its clips and spectrograms, their size, and whether composed clips were made."""

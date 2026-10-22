@@ -17147,3 +17147,90 @@ Known gaps / for later steps
   pumps — handy, but a soft hit pumps as deep as an accented one).
 - The MP3 is at −28 LUFS like the WAV (quiet for listening on its own; `<scratchpad>/s185/out/
   skyline_lift-plus12dB.mp3` is a +12 dB copy for listening).
+
+## Step 186 — Templates from the 14 beds
+
+What the owner agreed (Phase S plan): each built-in bed exported as an editable score file, a
+close re-creation (not bit-identical; the beds unchanged), `vidgen music template <bed> --out
+my_theme.yaml`, tested by measurements (tempo, key / chroma, loudness curve, spectrum balance).
+
+What was built (DESIGN §93.8)
+- `src/vidgen/studio/beds/<bed>.yaml` (14, package data: `pyproject.toml` `studio/beds/*.yaml`):
+  each bed's key, tempo, bars, chords with the bed's voicings and bass notes written out,
+  sections where the bed has them, every part as a track at the bed's level, the bed's random
+  arpeggio / bell choices written out, comments on every part. Filter openings are dark / bright
+  copies cross-faded by `volume` curves, as the beds make them.
+- `studio/templates.py`: `template_names`, `template_path` (did-you-mean), `music_template_text`,
+  `music_template_catalog`; `vidgen.api` exports the last two (DESIGN §6.4).
+- `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` (`cli._music_template`,
+  `jsonout.music_template_document`): no bed lists the templates; a bed writes `<bed>.yaml` (or
+  `--out`), refusing to overwrite without `--force`.
+- What the templates needed, added to the format: `v1`–`v9` voicing notes (`patterns.Step` kind
+  `voice`, `render._Voicer.voicing` voices once per chord), `+` stacks (kind `stack`, `parts`),
+  `x'` / `x,` (a hit's `octaves`; a pitch, so drums refuse it), pad `swell` (bars per swell of
+  the airy layer; `render._pad_layers` returns the airy layer apart when it swells,
+  `_pad_sound`), the `snap` drum (new code in `instruments.py`; 27 instruments).
+- Fix (changes Step 185 renders of scores whose pads use `sub`): the pad's sub is now one wave on
+  both channels (it had independent phases per side: wide and −3 dB in mono, unlike the beds)
+  and plays the chord's written `bass` note when there is one (`render._sub_note`). `tidewater`
+  (no sub) is byte-identical (loop and one-shot); `skyline_lift` changes slightly (true peak
+  −14.8 → −14.9 dBTP, 63 → 64 % under 150 Hz, L/R correlation 0.37 → 0.41; sections, seam and
+  pump unchanged; DESIGN §93.7). Without `swell` and `sub` a pad renders exactly as before.
+- `studio/measure.py`: `onset_strength`, `tempo`, `chroma`, `chroma_similarity`, `key_fits`,
+  `key`, `loudness_curve`, `band_balance` (for the tests now, Step 187's `vidgen music check`
+  next).
+- Docs: DESIGN §93.1–93.4, §93.7 (bed mapping note, skyline numbers), new §93.8 (with the
+  closeness table), layout lines, §6.4; CONFIG (steps `v1`–`v9`, `+`, `x'`; `snap`; pad `swell`
+  / `sub`; a Templates subsection; the JSON table); README commands row; CHANGELOG (0.3.0 now
+  Steps 61–186); tasklist. Guide and `AGENTS.md` unchanged (score files reach videos in 188).
+
+Decisions / deviations
+- `calm` has no tempo: its template uses 64 BPM so 16 bars are the bed's 60 s (bars of 3.75 s,
+  a chord every 7.5 s).
+- Beds without a final filter get `master: {lowpass: 16000, highpass: 10}` (the format always
+  filters; the range's ends are the nearest to "none").
+- Equal levels where the beds use ×0.72 / ×0.8 / ×1.25 accents: the format has ×1.5 and ×0.5;
+  each template picks the pair and `volume` that keep the average (comments say so where it
+  matters, e.g. `neon`'s arpeggio writes its soft steps with `?`).
+- The closeness test keeps the beds' measurements in `tests/data/studio/bed_measures.json` (40 KB,
+  made by `<scratchpad>/s186/make_bed_measures.py` from the test's own `profile`): the beds are
+  fingerprinted byte-identical, so only the templates are rendered (90 s instead of 150 s); one
+  bed is measured again (`test_bed_measures_are_current`).
+
+Closeness (each template against its bed; tolerances justified in the test file and §93.8):
+detected tempo identical for all 11 with a beat (none for `calm`, `pulse`, `enigma` in both);
+chroma cosine 0.980 (`lab`) – 1.000; per chord 0.968 – 0.993 on average; the bed's key fits the
+template within 0.08 (`lab`; others ≤ 0.05, several fit better); two-bar loudness within
+0.30 – 1.35 dB (`beacon`), 0.11 – 0.46 dB on average; bands below 6 kHz within 0.7 dB, above
+within 3.7 dB (`lab`'s clicks); seam 0.03 – 0.40 of the 99.9th-percentile step; −28.00 LUFS.
+Full table in DESIGN §93.8. Comparison images (bed above, template below, same palette as the
+Listen page) and +12 dB MP3 pairs of every bed: `<scratchpad>/s186/out/<bed>-bed-vs-template.png`,
+`<bed>-bed-plus12dB.mp3`, `<bed>-template-plus12dB.mp3` (`compare.py`); all 14 images looked at.
+
+Tests (one at a time, under `capped3g`): `tests/test_music_templates.py` 21 passed (91 s: the
+new step symbols and their errors, voicing notes on written and voice-led chords, swell and the
+centred sub, the sub on the written bass, every template reads with its header and the bed's
+facts, the command with list / write / refuse / `--force` / `--json` / did-you-mean, the kept
+bed measures, and the 14 closeness tests, `slow`); `tests/test_studio.py` 51 passed;
+`test_docs.py` + `test_api.py` 72 passed; `test_json_output.py` + `test_guide.py` +
+`test_listen.py` 87 passed; `test_cli.py` + `test_composer.py -k "music or help or parser"` 4
+passed; `test_music.py -k "approved or every_bed_has or facts"` 17 passed (the 14 beds'
+fingerprints; `music.py` not edited; sha256 of all 14 loops identical before / after,
+`<scratchpad>/s186/hash_before.txt`, `hash_after.txt`); `test_soundfont.py -k no_soundfont_ships`
+1 passed. Not run: the full suite, `test_mcp.py` (no MCP change).
+
+Known gaps / for later steps
+- Measurement noise: a bed's per-chord low end depends on how its pads' random phases add (a
+  low note and the sub on the same pitch); templates differ there by a few dB per chord (`lab`'s
+  key fit 0.08 lower). Not audible as a different piece; Step 187's checks should not read
+  meaning into one chord's bass weight.
+- The onset tempo can show 2/3 of a 3+3+2 bed's tempo (`lab` 72, `beacon` 80) or its eighths
+  (`lullaby` 128); Step 187 should compare it with the score's tempo allowing ×2, ×1/2, ×2/3.
+- `ascent`'s ostinato sits an octave low on its two C chords (degrees count from the track's
+  octave; a written bass in octave 3 is above it). A per-chord octave or degrees relative to
+  the written bass would fix it.
+- Still open from 185: holds cannot cross a section's end (no template needed it), filter sweeps
+  are slow (templates avoid them), ducking ignores hit level.
+- Rendering a template takes 2–7 s (`ascent`, `horizon`: four or more held-chord tracks of 16
+  chords, each a fresh 2^18-sample PADsynth wave per channel); a wave cache would help 188's
+  render-at-join.

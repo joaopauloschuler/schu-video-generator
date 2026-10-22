@@ -128,6 +128,7 @@ class _Voicer:
 
     def __init__(self) -> None:
         self.previous: tuple[int, ...] | None = None
+        self.voiced: tuple[ChordSlot, TrackPart, tuple[int, ...]] | None = None
 
     def chord(self, slot: ChordSlot, part: TrackPart) -> tuple[int, ...]:
         if slot.notes is not None:
@@ -137,16 +138,28 @@ class _Voicer:
         self.previous = notes
         return tuple(n + part.transpose for n in notes)
 
+    def voicing(self, slot: ChordSlot, part: TrackPart) -> tuple[int, ...]:
+        """The chord as ``*`` plays it, voiced once per chord (``v1``-``v9`` pick from it)."""
+        if self.voiced is None or self.voiced[0] is not slot or self.voiced[1] is not part:
+            self.voiced = (slot, part, tuple(sorted(self.chord(slot, part))))
+        return self.voiced[2]
+
     def pitches(self, step: Step, slot: ChordSlot | None, part: TrackPart) -> tuple[int, ...]:
         octave = part.octave if part.octave is not None else 3
         if step.kind == "note":
             return (step.value + part.transpose,)
         assert slot is not None
+        if step.kind == "stack":
+            return tuple(p for s in step.parts for p in self.pitches(s, slot, part))
         if step.kind == "chord":
             return self.chord(slot, part)
+        if step.kind == "voice":
+            notes = self.voicing(slot, part)
+            k = step.value - 1
+            return (notes[k % len(notes)] + 12 * (k // len(notes) + step.octaves),)
         if step.kind == "hit":
             note = slot.bass_note if slot.bass_note is not None else 12 * (octave + 1) + slot.chord.bass
-            return (note + part.transpose,)
+            return (note + 12 * step.octaves + part.transpose,)
         root = 12 * (octave + 1) + slot.chord.root
         return (root + degree_interval(slot.chord, slot.key, step.value) + 12 * step.octaves + part.transpose,)
 
@@ -216,20 +229,50 @@ def _render_hits(canvas_for: CanvasFor, score: MusicScore, track: Track, skipped
                 canvas.add(event.start, instrument.make(_hz(p), n, part.settings) * scale, pan)
 
 
-def _pad_layers(instrument: Instrument, settings: Mapping[str, float], notes: tuple[int, ...], bass_pc: int | None, seed: str) -> np.ndarray:
-    """``(PAD_TABLE, 2)``: the pad's periodic wave of ``notes`` (an airy layer an octave up and a
-    sub on ``bass_pc`` in octave 2 when its settings ask), independent phases per channel."""
+def _sub_note(slot: ChordSlot | None) -> int | None:
+    """The pad's sub: the chord's written bass note, else its bass in octave 2."""
+    if slot is None:
+        return None
+    return slot.bass_note if slot.bass_note is not None else 36 + slot.chord.bass
+
+
+def _pad_layers(
+    instrument: Instrument, settings: Mapping[str, float], notes: tuple[int, ...], sub_note: int | None, seed: str
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """``(PAD_TABLE, 2)`` waves: the pad's periodic wave of ``notes`` (an airy layer an octave up
+    and a sub on ``sub_note`` when its settings ask), independent phases per channel (wide) but
+    the same sub in both (centred, as the beds'); and, when the pad swells (``swell`` > 0), the
+    airy layer on its own (``None`` otherwise)."""
     tone = settings["tone"]
     out = np.zeros((PAD_TABLE, 2))
+    airy = np.zeros((PAD_TABLE, 2)) if settings["swell"] > 0 else None
+    sub: np.ndarray | None = None
     for c in range(2):
         rng = np.random.default_rng(zlib.crc32(f"{seed}:{c}".encode("utf-8")))
         out[:, c] = _pad_wave(list(notes), PAD_TABLE, rng, instrument.harmonics, settings["detune"], tone)
         if settings["air"] > 0:
             upper = [n + 12 for n in (notes[1:] or notes)]
-            out[:, c] += settings["air"] * _pad_wave(upper, PAD_TABLE, rng, AIRY_HARMONICS, AIRY_WIDTH_CENTS, tone)
-        if settings["sub"] > 0 and bass_pc is not None:
-            out[:, c] += settings["sub"] * _pad_wave([36 + bass_pc], PAD_TABLE, rng, (1.0, 0.15), 4.0, tone)
-    return out
+            layer = settings["air"] * _pad_wave(upper, PAD_TABLE, rng, AIRY_HARMONICS, AIRY_WIDTH_CENTS, tone)
+            if airy is None:
+                out[:, c] += layer
+            else:
+                airy[:, c] = layer
+        if settings["sub"] > 0 and sub_note is not None:
+            if sub is None:
+                sub = settings["sub"] * _pad_wave([sub_note], PAD_TABLE, rng, (1.0, 0.15), 4.0, tone)
+            out[:, c] += sub
+    return out, airy
+
+
+def _pad_sound(score: MusicScore, settings: Mapping[str, float], waves: tuple[np.ndarray, np.ndarray | None], first: int, n: int) -> np.ndarray:
+    """``n`` samples of a pad's waves from piece sample ``first`` on; the airy layer swelling
+    from silence to full and back every ``swell`` bars (counted from the piece's start)."""
+    wave, airy = waves
+    at = first + np.arange(n)
+    sound = wave[at % PAD_TABLE]
+    if airy is not None:
+        sound = sound + airy[at % PAD_TABLE] * (0.5 - 0.5 * np.cos(2 * np.pi * at / (settings["swell"] * score.bar)))[:, None]
+    return sound
 
 
 def _add_pad_note(canvas: _Canvas, score: MusicScore, track: Track, part: TrackPart, pitches: list[int], slot: ChordSlot | None, event: _Event, level: float) -> None:
@@ -241,8 +284,8 @@ def _add_pad_note(canvas: _Canvas, score: MusicScore, track: Track, part: TrackP
     t = np.arange(n)
     env = np.clip((t + 0.5) / attack, 0.0, 1.0) * np.where(t < event.length, 1.0, np.cos(0.5 * np.pi * np.clip((t - event.length) / release, 0, 1)))
     seed = f"studio:{score.seed}:{track.name}:{tuple(pitches)}"
-    wave = _pad_layers(track.instrument, s, tuple(pitches), slot.chord.bass if slot else None, seed)
-    sound = wave[(event.start + t) % PAD_TABLE] * env[:, None] * (level * event.gain) * _pan_gains(part.pan)
+    waves = _pad_layers(track.instrument, s, tuple(pitches), _sub_note(slot), seed)
+    sound = _pad_sound(score, s, waves, event.start, n) * env[:, None] * (level * event.gain) * _pan_gains(part.pan)
     canvas.add_stereo(event.start, sound)
 
 
@@ -256,26 +299,26 @@ def _render_held_chords(canvas_for: CanvasFor, score: MusicScore, track: Track, 
         if part is None:
             voicer.previous = None
             continue
-        held: list[tuple[int, int, tuple[int, ...], int]] = []
+        held: list[tuple[int, int, tuple[int, ...], int | None]] = []
         for slot in section.chords:
             notes = tuple(skipped.audible(track.name, section.name, voicer.chord(slot, part)))
-            if held and held[-1][2] == notes and held[-1][3] == slot.chord.bass:
-                start, length, _, bass = held[-1]
-                held[-1] = (start, length + slot.length, notes, bass)
+            if held and held[-1][2] == notes and held[-1][3] == _sub_note(slot):
+                start, length, _, sub = held[-1]
+                held[-1] = (start, length + slot.length, notes, sub)
             else:
-                held.append((slot.start, slot.length, notes, slot.chord.bass))
+                held.append((slot.start, slot.length, notes, _sub_note(slot)))
         level = track.instrument.level * _db(part.volume_db)
         canvas = canvas_for(section.name)
-        for start, length, notes, bass in held:
+        for start, length, notes, sub in held:
             if not notes:
                 continue
             fade = 2 * (min(int(part.settings["fade"] * RATE), length) // 2)
             env = _xfade_window(length, fade)
             first = start - fade // 2
-            wave = _pad_layers(track.instrument, part.settings, notes, bass, f"studio:{score.seed}:{track.name}:span{span}")
+            waves = _pad_layers(track.instrument, part.settings, notes, sub, f"studio:{score.seed}:{track.name}:span{span}")
             span += 1
-            idx = (first + np.arange(length + fade)) % PAD_TABLE
-            canvas.add_stereo(first, wave[idx] * env[:, None] * level * _pan_gains(part.pan))
+            sound = _pad_sound(score, part.settings, waves, first, length + fade)
+            canvas.add_stereo(first, sound * env[:, None] * level * _pan_gains(part.pan))
 
 
 # ----- the track's effects ---------------------------------------------------------------------

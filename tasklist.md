@@ -1045,8 +1045,9 @@ advice; a human makes the final choice (DESIGN §93).
 - [x] `vidgen music patches` (and `--json`) describes every instrument, setting and effect in words; `vidgen music render` warns about notes outside 20 Hz–12 kHz and writes MP3 (`--out x.mp3`); demo `tests/data/studio/skyline_lift.yaml` (a pumping supersaw lift) rendered, measured and its spectrogram looked at; the 14 beds and Step 184's scores byte-identical
 
 ### Step 186 — Templates from the 14 beds
-- [ ] `vidgen music template <bed> --out my_theme.yaml`: each built-in bed as an editable score file, a close re-creation (not bit-identical; the beds unchanged)
-- [ ] Tests: each template renders, loops cleanly and is close to its bed by measurements (tempo, key / chroma, loudness curve, spectrum balance)
+- [x] `vidgen music template <bed> --out my_theme.yaml` (and the list without a bed, `--json`, `--force`): each built-in bed as a commented, editable score file in `studio/beds/` (package data), a close re-creation (not bit-identical; the beds byte-identical); `vidgen.api` exports `music_template_text`, `music_template_catalog` (DESIGN §93.8)
+- [x] What the templates needed: voicing notes `v1`–`v9`, notes together `+`, `x'` / `x,`, pad `swell`, the `snap` drum; the pad's sub plays the written bass and is centred (a fix: Step 185 scores with a pad `sub` render differently, reported in HANDOFF); holds across sections were not needed
+- [x] Tests (`tests/test_music_templates.py`): each template renders, loops cleanly, −28 LUFS, close to its bed by measurements (tempo, key / chroma, loudness curve, spectrum balance; `studio/measure.py`) with the tolerances justified; a bed-vs-template spectrogram per bed looked at
 
 ### Step 187 — Analysis
 - [ ] `vidgen music check <score|wav>`: a report in words and JSON — loudness and steadiness, true peak, clipping, tempo vs the score, loop-seam click, voice-range (300 Hz–3 kHz) share, bass weight, harsh highs, section energy (does the lift lift?)

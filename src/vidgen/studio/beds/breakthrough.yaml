@@ -1,0 +1,119 @@
+# Breakthrough: a score-file template of vidgen's built-in bed `breakthrough` (vidgen music template breakthrough).
+# A close re-creation, not the bed itself: the same keys, tempo, chords, voicings, parts and levels,
+# but the pad's random phases and filter are approximated, so it sounds very like the bed.
+# Two parts: 12 bars of tension in C minor (kick on 1 and 3, staccato bass, a dark arpeggio, a
+# growing tick, a riser) that lift to 12 bars of release in E-flat major (a boom, a kick on every
+# beat, driving bass, the arpeggio an octave up, an open pumping pad, hats).
+# Change one thing at a time and listen: vidgen music render breakthrough.yaml --out breakthrough.mp3
+version: 1
+title: Breakthrough (template)
+description: Two-part documentary bed at 112 BPM - tension in C minor lifting to a release in E-flat major halfway.
+key: C minor
+tempo: 112
+seed: 1
+chord_bars: 2                  # a chord every two bars (4.3 s)
+sections:
+  - name: tension
+    bars: 12
+    progression:               # the bed's voicings (notes: the arpeggios' v1-v5) and bass notes
+      - {chord: Cm(add9),    notes: [C3, G3, C4, D4, Eb4], bass: C2}
+      - {chord: Abmaj7,      notes: [Ab2, Eb3, G3, C4, Eb4], bass: Ab2}
+      - {chord: Fm9,         notes: [F2, C3, G3, Ab3, C4], bass: F2}
+      - {chord: Cm(add9)/G,  notes: [G2, G3, C4, D4, Eb4], bass: G2}
+      - {chord: Abmaj7(#11), notes: [Ab2, Eb3, G3, C4, D4], bass: Ab2}
+      - {chord: G7sus4,      notes: [G2, D3, F3, G3, C4], bass: G2}
+  - name: release              # the lift, 25.7 s in
+    bars: 12
+    key: Eb major
+    progression:
+      - {chord: Eb(add9),    notes: [Eb3, Bb3, Eb4, F4, G4], bass: Eb2}
+      - {chord: Bb(add9)/D,  notes: [D3, F3, Bb3, C4, F4], bass: D2}
+      - {chord: Abmaj9,      notes: [Ab2, Eb3, G3, Bb3, C4], bass: Ab2}
+      - {chord: Eb/G,        notes: [G2, Eb3, G3, Bb3, Eb4], bass: G2}
+      - {chord: Bb(add9),    notes: [Bb2, F3, Bb3, C4, D4], bass: Bb2}
+      - {chord: G,           notes: [G2, D3, G3, B3, D4], bass: G2}   # turns back to C minor at the top
+master: {lowpass: 4300}
+tracks:
+  # The pad, as the bed makes it: a dark pad (low-passed at 900 Hz) that carries the tension, a
+  # bright one (3.2 kHz, with an airy layer) mostly hidden in the tension and alone in the
+  # release, where it pumps on every beat.
+  pad_dark:
+    instrument: pad
+    play: chords
+    only: [tension]
+    settings: {tone: 900, air: 0, sub: 0.55}
+    volume: 2.3
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 3200, air: 0.35, swell: 24, sub: 0.55}
+    volume: -10.1
+    sections:
+      release: {volume: 2.5, duck: {to: beat, depth: 0.35, release: 0.16}}
+  # The dark arpeggio: the voicing in eighths, one of four figures per bar (as the bed chose them);
+  # quieter in the release, where the bright one takes over.
+  arp:
+    instrument: pluck
+    accent: "2"
+    spread: 0.25
+    volume: -4.9
+    settings: {decay: 0.18, bright: 0.3, tone: 1900, ring: 0.63}
+    sections:
+      tension:
+        steps: ["v5 v4 v3 v2 v1 v2 v3 v4", "v1 v2 v3 v5 v4 v3 v2 v3", "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v2 v3 v4 v5 v4 v3 v2",
+                "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v3 v2 v4 v3 v5 v4 v2",
+                "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v3 v2 v4 v3 v5 v4 v2"]
+      release:
+        volume: -12.9
+        steps: ["v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v5 v4 v3 v2 v3", "v1 v3 v2 v4 v3 v5 v4 v2",
+                "v1 v2 v3 v5 v4 v3 v2 v3", "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v5 v4 v3 v2 v3",
+                "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v3 v2 v4 v3 v5 v4 v2"]
+  arp_bright:                 # the arpeggio an octave up (v1'-v5'), only in the release
+    instrument: pluck
+    only: [release]
+    accent: "2"
+    spread: 0.25
+    volume: -8.4
+    settings: {decay: 0.2, bright: 0.45, tone: 3200, ring: 0.73}
+    steps: ["v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v3' v2' v4' v3' v5' v4' v2'",
+            "v5' v4' v3' v2' v1' v2' v3' v4'", "v5' v4' v3' v2' v1' v2' v3' v4'", "v1' v2' v3' v4' v5' v4' v3' v2'",
+            "v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v3' v2' v4' v3' v5' v4' v2'", "v1' v3' v2' v4' v3' v5' v4' v2'",
+            "v1' v3' v2' v4' v3' v5' v4' v2'", "v1' v2' v3' v4' v5' v4' v3' v2'", "v5' v4' v3' v2' v1' v2' v3' v4'"]
+  kick:
+    instrument: kick
+    steps: "x... .... x... ...."            # beats 1 and 3 in the tension
+    volume: -0.6
+    sections:
+      release: {steps: "x... x... x... x...", volume: -0.4}
+  hat:
+    instrument: hat
+    only: [release]
+    steps: "..x. ..x. ..x. ..x."
+    pan: 0.3
+    volume: 4.4
+  # A quiet sixteenth tick that grows through the tension (a volume ramp over the section).
+  tick:
+    instrument: tick
+    only: [tension]
+    steps: "Xxxx Xxxx Xxxx Xxxx"
+    pan: -0.3
+    volume: {from: -14, to: -3.1}
+  # The bass: staccato quarter notes in the tension, driving eighths in the release.
+  bass:
+    instrument: synth_bass
+    steps: "X x X x"
+    volume: -3.5
+    settings: {decay: 0.09, tone: 600, ring: 0}
+    sections:
+      release: {steps: "X x X x X x X x", volume: -4.1, settings: {decay: 0.1, tone: 700}}
+  riser:                       # the last four bars of the tension
+    instrument: riser
+    only: [tension]
+    steps: ". | . | . | . | . | . | . | . | x | - | - | -"
+    settings: {low: 250, high: 2200}
+  boom:                        # a deep low boom on the lift
+    instrument: boom
+    only: [release]
+    steps: "x | . | . | . | . | . | . | . | . | . | . | ."
+    volume: 0.8
+    settings: {low: 38, decay: 0.9}

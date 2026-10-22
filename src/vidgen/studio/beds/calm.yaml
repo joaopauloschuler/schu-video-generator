@@ -1,0 +1,31 @@
+# Calm: a score-file template of vidgen's built-in bed `calm` (vidgen music template calm).
+# A close re-creation, not the bed itself: the same chords, voicings and pad, but the pad's random
+# phases differ, so it sounds very like the bed.
+# A slow, warm ambient pad with no beat: each chord held 7.5 s and cross-faded into the next over a
+# quiet sub; an airy layer an octave up swells and fades twice per minute.
+# Change one thing at a time and listen: vidgen music render calm.yaml --out calm.mp3
+version: 1
+title: Calm (template)
+description: Slow ambient pad in D major, no beat - warm chords of 7.5 s over a sub, an airy layer swelling twice a minute.
+key: D major
+tempo: 64                      # there is no beat: the tempo only sets the bar (3.75 s)
+seed: 1
+bars: 16                       # 60 s
+chord_bars: 2                  # a chord every two bars (7.5 s)
+progression:                   # the bed's voicings (notes) and bass notes (the sub)
+  - {chord: Dmaj9,    notes: [D3, A3, C#4, E4, F#4], bass: D2}
+  - {chord: Bm9,      notes: [B2, F#3, A3, C#4, D4], bass: B1}
+  - {chord: Gmaj9,    notes: [G3, B3, D4, F#4, A4], bass: G2}
+  - {chord: A6sus2,   notes: [E3, A3, B3, E4, F#4], bass: A2}
+  - {chord: F#m7,     notes: [F#3, A3, C#4, E4, A4], bass: F#2}
+  - {chord: Em9,      notes: [E3, G3, B3, D4, F#4], bass: E2}
+  - {chord: Gmaj7#11, notes: [G3, B3, D4, F#4, C#5], bass: G2}
+  - {chord: Asus4,    notes: [E3, A3, D4, E4, A4], bass: A2}
+master: {lowpass: 16000, highpass: 10}   # the bed has no final filter: the pad is shaped at 3.8 kHz itself
+tracks:
+  # The only part: a warm pad (tone: its low-pass), a sub on each chord's bass note, and the airy
+  # layer (air) swelling over 8 bars, twice per loop. Try a slower swell (16) or more air (0.5).
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 3800, air: 0.35, swell: 8, sub: 0.55}

@@ -477,7 +477,7 @@ def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, 
     if "steps" in spec:
         steps = r.attempt(f"{where}.steps", parse_steps, spec["steps"], f"{where}.steps")
         if steps is not None and instrument.kind == "drum" and any(s.pitched for bar in steps for s in bar):
-            r.add(f"{where}.steps", f"{instrument.name} has no pitch: use x, X, o, '.' and '-' (no degrees, notes or '*')")
+            r.add(f"{where}.steps", f"{instrument.name} has no pitch: use x, X, o, '.' and '-' (no degrees, voicing notes, notes, '*' or ' / , octave marks)")
     accent = base.accent if base else None
     if "accent" in spec:
         accent = r.attempt(f"{where}.accent", parse_accent, spec["accent"], f"{where}.accent")

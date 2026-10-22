@@ -1,0 +1,150 @@
+# Ascent: a score-file template of vidgen's built-in bed `ascent` (vidgen music template ascent).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, sections, parts
+# and levels, but the pads' random phases and some details differ, so it sounds very like the bed.
+# Uplifting trance that builds and lifts: a groove (kick, off-beat bass, a low 3+3+2 ostinato, a
+# half-open supersaw pumping with the kick), a build (the supersaw opens, riser, clap roll, the last
+# kick dropped), the lift (boom, bright chords, rolling bass, an echoing FM arpeggio) and a settle.
+# Change one thing at a time and listen: vidgen music render ascent.yaml --out ascent.mp3
+version: 1
+title: Ascent (template)
+description: Uplifting trance in A minor at 136 BPM - groove, build with riser and clap roll, a bright lift, a settle.
+key: A minor
+tempo: 136
+seed: 1
+chord_bars: 2                  # a chord every two bars (3.5 s)
+sections:                      # the bed's voicings (notes: the ostinato's v3, the arpeggio's v3-v5) and bass notes
+  - name: groove               # bars 1-12
+    bars: 12
+    progression:
+      - {chord: Am(add9),   notes: [A2, E3, A3, B3, C4], bass: A2}
+      - {chord: Fmaj7,      notes: [F2, F3, A3, C4, E4], bass: F2}
+      - {chord: C(add9),    notes: [C3, G3, C4, D4, E4], bass: C3}
+      - {chord: Gsus4,      notes: [G2, D3, G3, C4, D4], bass: G2}
+      - {chord: Am7,        notes: [A2, E3, G3, C4, E4], bass: A2}
+      - {chord: Fmaj9,      notes: [F2, C3, G3, A3, C4], bass: F2}
+  - name: build                # bars 13-16
+    bars: 4
+    progression:
+      - {chord: Dm7,        notes: [D2, D3, F3, A3, C4], bass: D2}
+      - {chord: E,          notes: [E2, E3, G#3, B3, E4], bass: E2}
+  - name: lift                 # bars 17-28, 28.2 s in
+    bars: 12
+    progression:
+      - &F {chord: F(add9), notes: [F2, F3, A3, C4, G4], bass: F2}
+      - {chord: C,          notes: [C3, G3, C4, E4, G4], bass: C3}
+      - {chord: G(add9)/B,  notes: [B2, G3, A3, D4, G4], bass: B2}
+      - {chord: Am(add9),   notes: [A2, E3, A3, B3, E4], bass: A2}
+      - *F
+      - {chord: C/E,        notes: [E2, E3, G3, C4, E4], bass: E2}
+  - name: settle               # bars 29-32, back to A minor at the top
+    bars: 4
+    progression:
+      - {chord: Gsus4,      notes: [G2, D3, G3, C4, D4], bass: G2}
+      - {chord: G,          notes: [G2, D3, G3, B3, D4], bass: G2}
+master: {lowpass: 4600}
+tracks:
+  # The supersaw, as the bed makes its filter opening: a dark one (900 Hz) and a bright one
+  # (3.2 kHz) cross-faded by their volume curves ([bar, dB] points from the section's start): half
+  # open in the groove, opening through the build, wide open in the lift, closing in the settle.
+  # Both pump hard on every beat.
+  saw_dark:
+    instrument: supersaw
+    play: chords
+    rest: [lift]
+    settings: {tone: 900, detune: 28, fade: 0.5}
+    volume: [[0, -1.0], [6, -1.8], [12, -3.0]]
+    duck: {to: beat, depth: 0.55, release: 0.13}
+    sections:
+      build: {volume: [[0, -3.0], [2, -6.2], [4, -12.6]]}
+      settle: {volume: [[0, -60], [1, -11.3], [2, -5.6], [3, -2.7], [4, -1.0]]}
+  saw_bright:
+    instrument: supersaw
+    play: chords
+    settings: {tone: 3200, detune: 34, fade: 0.5}
+    volume: [[0, -6.9], [6, -4.6], [12, -3.0]]
+    duck: {to: beat, depth: 0.55, release: 0.13}
+    sections:
+      build: {volume: [[0, -3.0], [2, -1.2], [4, -0.2]]}
+      lift: {volume: 0}
+      settle: {volume: [[0, 0], [1, -0.3], [2, -1.4], [3, -3.4], [4, -6.9]]}
+  pad:                                  # a warm body and sub under the saws
+    instrument: pad
+    play: chords
+    settings: {tone: 700, air: 0, sub: 0.55}
+    volume: -5.5
+    duck: {to: beat, depth: 0.55, release: 0.13}
+  kick:
+    instrument: kick
+    settings: {high: 118, low: 50, decay: 0.16, click: 0.08}
+    steps: "x... x... x... x..."
+    volume: 0.3
+    sections:                           # the last kick before the lift is dropped
+      build: {steps: ["x... x... x... x...", "x... x... x... x...", "x... x... x... x...", "x... x... x... ...."]}
+  open_hat:
+    instrument: open_hat
+    steps: "..x. ..x. ..x. ..x."
+    pan: 0.2
+    volume: -1.9
+    sections:
+      lift: {volume: 1.6}
+      settle: {volume: {from: 1.6, to: -1.9}}
+  hat:                                  # off-beat sixteenths in the lift, fading in the settle
+    instrument: hat
+    only: [lift, settle]
+    steps: ".x.x .x.x .x.x .x.x"
+    volume: -4.7
+    sections:
+      settle: {volume: {from: -4.7, to: -40}}
+  clap:
+    instrument: clap
+    steps: "....x.......x..."
+    volume: -1.2
+    sections:
+      lift: {volume: 0}
+      settle: {volume: {from: 0, to: -1.2}}
+  roll:                                 # the clap roll: eighths in bar 15, sixteenths in bar 16, growing
+    instrument: clap
+    only: [build]
+    pan: 0.1
+    steps: ". | . | xxxxxxxx | xxxxxxxxxxxxxxxx"
+    volume: [[2, -16.3], [4, -4.2]]
+  # The ostinato: root (1), fifth (5) and octave (8) in octave 3 and the voicing's third note (v3)
+  # in sixteenths, accented 3+3+2; a little softer in the lift.
+  ostinato:
+    instrument: synth_bass
+    octave: 3
+    steps: "1 5 8 1 5 v3 1 5 8 1 5 v3 8 5 1 5"
+    accent: "3+3+2"
+    volume: -7.5
+    spread: 0.15
+    settings: {decay: 0.05, tone: 1300, ring: 0.06}
+    sections:
+      lift: {volume: -9.4}
+  # The bass: the chord's bass note on the off-beat eighths; rolling on the three sixteenths after
+  # each kick in the lift.
+  bass:
+    instrument: synth_bass
+    steps: ".x.x.x.x"
+    volume: -0.2
+    settings: {decay: 0.09, tone: 560, ring: 0}
+    sections:
+      lift: {steps: ".xxx .xxx .xxx .xxx", volume: -3.2, settings: {decay: 0.06, tone: 600}}
+  # The lift's arpeggio: the voicing's upper notes an octave up (v3'-v5') on the 3+3+2 accents,
+  # with dotted-eighth ping-pong echoes.
+  arp:
+    instrument: fm_pluck
+    only: [lift]
+    pan: 0.35
+    volume: -3.7
+    echo: {delay: 0.75, feedback: 0.35, repeats: 2}
+    settings: {decay: 0.14, index: 1.4, tone: 3000, ring: 0.34}
+    steps: ["v3' . . v4' . . v5' . v3' . . v4' . . v5' .", "v4' . . v5' . . v3' . v4' . . v5' . . v3' ."]
+  riser:
+    instrument: riser
+    only: [build]
+    steps: "x | - | - | -"
+    settings: {low: 300, high: 3000}
+  boom:
+    instrument: boom
+    only: [lift]
+    steps: "x | . | . | . | . | . | . | . | . | . | . | ."

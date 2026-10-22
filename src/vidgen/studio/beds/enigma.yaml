@@ -1,0 +1,66 @@
+# Enigma: a score-file template of vidgen's built-in bed `enigma` (vidgen music template enigma).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, motif, parts and
+# levels, but the pad's random phases and some details differ, so it sounds very like the bed.
+# A dark, mysterious bed: a deep sub pulse on every beat, a soft felt kick on 1 and 3, a muffled
+# pad breathing with the pulse, a sparse piano motif with ping-pong echoes and a faint high bell.
+# Change one thing at a time and listen: vidgen music render enigma.yaml --out enigma.mp3
+version: 1
+title: Enigma (template)
+description: Dark, mysterious bed in B minor at 96 BPM - sub pulse, felt kick, muffled pad, echoing piano motif.
+key: B minor
+tempo: 96
+seed: 1
+bars: 20
+chord_bars: 2                  # a chord every two bars (5 s)
+progression:                   # the bed's voicings (notes) and bass notes (the sub pulse)
+  - {chord: Bm(add9),    notes: [B2, F#3, C#4, D4, F#4], bass: B1}
+  - {chord: Gmaj7(#11),  notes: [G2, D3, F#3, C#4, D4], bass: G2}
+  - {chord: Esus2,       notes: [E2, B2, F#3, B3, F#4], bass: E2}
+  - {chord: F#sus4,      notes: [F#2, C#3, F#3, B3, C#4], bass: F#2}
+  - {chord: Bm(add9),    notes: [B2, F#3, C#4, D4, F#4], bass: B1}
+  - {chord: Dmaj7/A,     notes: [A2, D3, F#3, A3, C#4], bass: A1}
+  - {chord: Gmaj7(#11),  notes: [G2, D3, F#3, C#4, D4], bass: G2}
+  - {chord: Em9,         notes: [E2, B2, G3, D4, F#4], bass: E2}
+  - {chord: Cmaj7(#11),  notes: [C2, G2, B2, F#3, B3], bass: C2}   # the Neapolitan colour
+  - {chord: F#sus4,      notes: [F#2, C#3, F#3, B3, C#4], bass: F#2}  # leads back to the top
+master: {lowpass: 3600}
+tracks:
+  # A dark pad (low-passed at 1.4 kHz) that dips on every beat with a slow release: it breathes.
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 1400, air: 0.1, swell: 20, sub: 0.55}
+    volume: 2.1
+    duck: {to: beat, depth: 0.3, release: 0.25}
+  kick:
+    instrument: kick
+    settings: {high: 75, low: 42, decay: 0.22, click: 0.03}
+    steps: "X... .... x... ...."           # beats 1 and 3, the first stronger
+    volume: -4.4
+  # The sub pulse: the chord's bass note on every beat, stronger on 1 and 3.
+  sub:
+    instrument: sub
+    steps: "X x X x"
+    volume: -2.2
+    settings: {decay: 0.3, tone: 600, ring: 0.075}
+  # The piano motif: a few notes every two bars, one phrase per four bars (eighth notes; '.' rests
+  # while the note and its echoes ring), with dotted-eighth ping-pong echoes.
+  piano:
+    instrument: piano
+    pan: 0.25
+    echo: {delay: 0.75, feedback: 0.38, repeats: 3}
+    settings: {decay: 0.7, tone: 2400, ring: 2.09}
+    steps:
+      - "F#4 . . C#4 . . D4 . | . | F#4 . . C#4 . . B3 . | ."
+      - "F#4 . . E4 . . B3 . | . | C#4 . . F#4 . . . . | C#5 . . . . . . ."
+      - "F#4 . . C#4 . . D4 . | . | A4 . . F#4 . . E4 . | ."
+      - "G4 . . D4 . . B3 . | . | E4 . . B3 . . D4 . | ."
+      - "F#4 . . B4 . . C5 . | . | F#4 . . . C#4 . . . | ."
+  # A faint high glint every four bars, B5 then F#5, with echoes on the left.
+  bell:
+    instrument: bell
+    pan: -0.4
+    volume: -11.3
+    echo: {delay: 0.75, feedback: 0.4, repeats: 3}
+    settings: {decay: 0.6, tone: 3000, ring: 1.375}
+    steps: ". | . | . . B5 . | . | . | . | . . F#5 . | ."

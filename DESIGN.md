@@ -57,11 +57,14 @@ src/vidgen/
   studio/                 # score files: music written in YAML, rendered with the beds' synthesizer; no video code (§93, Phase S)
     theory.py             #   notes, keys and modes, Roman numerals and chord names, degrees, voicings
     patterns.py           #   step patterns ("x... x...", "1 3 5 8", "E5 - - .") and 3+3+2 accents
-    instruments.py        #   the instrument library (26 instruments) and their settings (§93.4)
+    instruments.py        #   the instrument library (27 instruments) and their settings (§93.4)
     effects.py            #   curves, filter sweeps, ducking, gates, echo, reverb, width; their catalogue (§93.7)
     patches.py            #   `vidgen music patches`: every instrument, setting and effect in words / JSON
     score_file.py         #   reading and checking a score (MusicScore; every problem at once, did-you-mean)
     render.py             #   render_music_score: seamless loop or one-shot, track effects, 48 kHz, -28 LUFS, deterministic
+    templates.py          #   `vidgen music template`: the built-in beds as score files (§93.8)
+    beds/                 #   the 14 templates (<bed>.yaml, package data)
+    measure.py            #   tempo, chroma and key, loudness curve, band balance (§93.8; Step 187 builds on it)
   outline.py              # Markdown outline / plain-text script -> blocks; inline Markdown removal (§61; no manim)
   prose.py                # sentences (language-aware), beats of 6-15 words, on-screen label compression (§61; no manim)
   plan.py                 # `vidgen plan`: blocks -> planned scenes (cue -> type, beats fitted to steps, TODOs) (§61; no manim)
@@ -1014,6 +1017,8 @@ Step 184 (§93) adds `MusicScore`, `load_music_score`, `parse_music_score` and
 `render_music_score` (score files; from `vidgen.studio`, which imports no video code).
 Step 185 (§93.7) adds `patch_catalog` (the instruments and effects as data) and an optional
 `warnings` list argument to `render_music_score` (compatible: without it, it renders as before).
+Step 186 (§93.8) adds `music_template_text(bed)` (a built-in bed's score-file template, YAML
+text) and `music_template_catalog()` (every template's facts).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -13055,9 +13060,10 @@ Term: a **score file** (YAML, this section; class `MusicScore`) is not the compo
   stereo spread and width, volume curves; `vidgen music patches` (+ `--json`) describes every
   instrument, setting and effect in words. The new keys go on a track (and in its `sections:`
   changes), next to `volume` / `pan`.
-- **186 Templates from the 14 beds**: `vidgen music template <bed> --out my_theme.yaml`, a close
-  re-creation of each bed as an editable score file (not bit-identical; the beds stay unchanged);
-  tested by measurements (tempo, key / chroma, loudness curve, spectrum balance, clean loop).
+- **186 Templates from the 14 beds** (done, §93.8): `vidgen music template <bed> --out
+  my_theme.yaml`, a close re-creation of each bed as an editable score file (not bit-identical;
+  the beds stay unchanged); tested by measurements (tempo, key / chroma, loudness curve, spectrum
+  balance, clean loop).
 - **187 Analysis**: `vidgen music check <score|wav>`: loudness and steadiness, true peak,
   clipping, tempo, loop seam, voice-range share, bass weight, harsh highs, section energy (does
   the lift lift?), a spectrogram with section marks, a demo under narration, advice, compare two.
@@ -13071,12 +13077,15 @@ byte-identical (`tests/test_music.py` fingerprints).
 
 ### 93.2 Where it lives
 
-`src/vidgen/studio/` (theory, patterns, instruments, effects, patches, score_file, render). Self-contained: it
-imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...),
-`vidgen.sfx` (`RATE`), `vidgen.loudness` and `vidgen.errors`; never manim, scenes, the project or
-the render pipeline (`tests/test_studio.py::test_studio_imports_no_video_code`), so it can become
-a package of its own. Public through `vidgen.api`: `MusicScore`, `load_music_score(path)`,
-`parse_music_score(data, origin)`, `render_music_score(score)`.
+`src/vidgen/studio/` (theory, patterns, instruments, effects, patches, score_file, render,
+templates, measure; the templates in `beds/`). Self-contained: it
+imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...,
+and `BUILTIN_BEDS` for the templates' names), `vidgen.sfx` (`RATE`, filters), `vidgen.loudness`
+and `vidgen.errors`; never manim, scenes, the project or the render pipeline
+(`tests/test_studio.py::test_studio_imports_no_video_code`), so it can become a package of its
+own. Public through `vidgen.api`: `MusicScore`, `load_music_score(path)`,
+`parse_music_score(data, origin)`, `render_music_score(score)`, `patch_catalog()` (185),
+`music_template_text(bed)`, `music_template_catalog()` (186).
 
 ### 93.3 The format
 
@@ -13146,19 +13155,26 @@ tracks:
   root, 3 third, 5 fifth, 7 seventh, 8 octave, 9 ninth; the chord's own tone, a sus chord's 3 is
   its suspended tone, else the key's scale tone; `'` / `,` after it an octave up / down), notes
   with octave (`E5`, `F#3`, `Bb4`); `!` / `?` after a hit accent / soften it. Spaces only help
-  reading.
+  reading. Step 186 adds (for the templates, §93.8): `v1`–`v9` the notes of the chord's voicing
+  counted from the lowest (the written `notes`, else the voicing `*` plays in the track's octave,
+  voiced once per chord; `vN` past the top starts again an octave up; `'` / `,`), so a figure
+  can follow each chord's own voicing (the beds' `sorted(notes)[2]`); `+` joins notes, degrees
+  and voicing notes into one step played together (`v2+v3+v4`, `C4+E4+G4`; a marked part sets
+  the gain); `x'` / `x,` the bass note an octave up / down (a pitch: a drum may not have it).
 - **Timing**: the beat is `int(48000 · 60 / tempo)` rounded down to a multiple of 4 (as
   `_grid` since Step 181), so sixteenths are whole samples; a bar is the beat × `n · 4 / d`; a
   step starts at `round(k · bar / steps)`. The loop is exactly `bars × bar` samples.
 
 ### 93.4 Instruments (the library, Steps 184–185)
 
-`instruments.INSTRUMENTS`: 26 instruments in six families, each a thin wrapper over a
+`instruments.INSTRUMENTS`: 27 instruments in six families, each a thin wrapper over a
 `vidgen.music` function with its defaults (the beds' values), every setting with a range and a
 sentence (`vidgen music patches`):
 
 - **drums**: `kick` (high, low, decay, click), `clap` (tone), `hat`, `open_hat` (decay, tone),
-  `gated_snare` (gate, body; stereo, `_gated_snare`), `tick` (tone; `_clock`), `boom` (low, decay);
+  `gated_snare` (gate, body; stereo, `_gated_snare`), `snap` (tone, decay; Step 186: band-passed
+  noise, 80 ms, new code in `instruments.py` standing for `cartoon`'s tick and `lab`'s snap,
+  which `music.py` builds inline), `tick` (tone; `_clock`), `boom` (low, decay);
 - **noises**: `riser` (low, high; swells over its held steps), `pulsar` (high, low, sweep, noise,
   tone; `_pulsar_pulse`), `static` (low, high, wander, fade; `_static` for its held steps, a sine
   fade-in and a cosine fade-out after them, so back-to-back holds join at constant power);
@@ -13172,7 +13188,12 @@ sentence (`vidgen music patches`):
 - **pads**: `pad` (`_WARM`), `supersaw` (`_SAW`), `saw_pad` (`_SOFT_SAW`, the synthwave pad),
   `glass` (near-sines spread 45 cents, octave 5: `beacon`'s shimmer); all with tone, air, sub,
   attack, release, `detune` (the PADsynth spread in cents, was a fixed width) and `fade` (the
-  `play: chords` cross-fade, was a fixed 1.6 s; `saw_pad` 0.5, `glass` 0.8).
+  `play: chords` cross-fade, was a fixed 1.6 s; `saw_pad` 0.5, `glass` 0.8). Step 186: `swell`
+  (bars of one swell of the airy layer, `air · (0.5 − 0.5 cos(2π t / (swell · bar)))` with `t`
+  from the piece's start, the beds' `air_cycles`; 0 steady, the default, renders as before); the
+  `sub` plays the chord's written `bass` note when there is one (else the bass in octave 2, as
+  before) and is the same wave on both sides (centred, as the beds' `_pads`; it was a different
+  phase per side, which cancels to −3 dB in mono: a fix, see §93.8).
 
 Notes play `held + ring` seconds (`ring` 0 for instruments without it). Each instrument has a
 `level` (its normal hit's amplitude before the piece is set to −28 LUFS), so the default balance
@@ -13300,9 +13321,8 @@ roll: {instrument: kick, steps: ". | ... | .... .... x.x. xxxx", volume: [[7.5, 
   track with a `volume` ramp; `beacon` — `glass` (octave 5) with `volume` points for its slow
   swell, `static`, `pulsar` on the accents with `spread`, `sub` with `third`; `neon` — `saw_pad`
   (fade 0.5), `analog_bass` `"1 8 1 8 ..."`, `gated_snare`, `square_pluck` with `spread: 0.3`.
-  Not expressible exactly: a pad's `air` swell (`_pads`' `air_cycles`) — a second pad track with a
-  volume curve stands in; voicing-relative figure tones (`sorted(notes)[2]`) — degrees or written
-  `{chord, notes}` stand in.
+  Not expressible exactly in Step 185: a pad's `air` swell (`_pads`' `air_cycles`) and
+  voicing-relative figure tones (`sorted(notes)[2]`); Step 186 adds both (`swell`, `v3`).
 - **Measured** on the demo (`skyline_lift`, D minor, 128 BPM, 32 bars, 60 s; 14 tracks; render
   12 s, twice identical): −28.00 LUFS, true peak −14.8 dBTP; seam step 0.11–0.12 of the
   99.9th-percentile step; sections intro −29.8, build −29.2, lift −26.2, outro −30.0 LUFS; 63 %
@@ -13311,4 +13331,83 @@ roll: {instrument: kick, steps: ". | ... | .... .... x.x. xxxx", volume: [[7.5, 
   pump). The spectrogram shows the dark intro, the gate's sixteenth stripes and the sweep opening
   through the build with the riser in its last four bars, the bright pumping lift, and the filter
   closing in the outro. Two thirds of the render time are the filter sweeps (full-length FFTs per
-  half-octave); fine for pieces of a minute.
+  half-octave); fine for pieces of a minute. (With Step 186's centred pad sub: true peak −14.9
+  dBTP, 64 % under 150 Hz, 300 Hz–3 kHz 15 %, L/R correlation 0.41; the rest unchanged.)
+
+### 93.8 Templates of the built-in beds (Step 186)
+
+`vidgen music template` lists the 14 templates (key, tempo, time, bars, seconds, sections);
+`vidgen music template BED [--out FILE.yaml] [--force] [--json]` writes one (default
+`<bed>.yaml` here; an existing file is kept unless `--force`; JSON `action: template`,
+`templates`, and `template` + `path` when one was written). The templates are package data,
+`studio/beds/<bed>.yaml`; `studio/templates.py` lists and reads them (`template_path` with
+did-you-mean, `music_template_text`, `music_template_catalog`).
+
+- **What a template is** (decision): a close re-creation of the bed in the score format, not the
+  bed (which stays byte-identical, still generated by `music.py`): the same key, tempo, bars,
+  chords with the bed's voicings and bass notes written out (`{chord, notes, bass}`; chord
+  names corrected where the bed's label did not match its notes, e.g. `calm`'s "D/F#" is
+  `F#m7`), sections where the bed has them (`breakthrough` tension / release with its own key,
+  `ascent` / `horizon` groove / build / lift / settle, `momentum` drive / turn, `cartoon`'s six
+  phrases, `lullaby`'s four), every part as a track at the bed's level (`volume` dB =
+  `20 log10(bed level / instrument level)`), the bed's random choices (arpeggio figures per
+  bar, `bright`'s bell) written out as the steps the bed played, and comments saying what each
+  part does and how to change it. Each file starts `# <Name>: a score-file template of vidgen's
+  built-in bed ...`.
+- **What differs**: the pads' random phases (another seed scheme), the noises' seeds (riser,
+  clicks), some per-note levels (accents are ×1.5 or ×0.5, the beds use e.g. ×0.72; chosen to
+  keep the average), a few note lengths (a step's length plus `ring`), the old beds' beat (not a
+  whole number of sixteenths: up to 0.01 % shorter), `ascent`'s ostinato an octave low on its
+  two C chords (degrees count from the track's octave), `lab`'s click pans (two tracks for five
+  slots), the strum of `cartoon`'s chords (60 samples) and the beds without a final filter
+  (`calm`, `pulse`, `bright`, `cartoon`, `lullaby`: `master: {lowpass: 16000, highpass: 10}`).
+- **Filter openings** are written as the beds make them: a dark and a bright copy of the pad
+  (`discovery`, `breakthrough`) or supersaw (`ascent`, `horizon`: the bright one an octave up in
+  `horizon`) cross-faded with equal-power `volume` curves (`20 log10(cos / sin(π/2 · open))` at
+  a few bars) — closer than a `lowpass` sweep (which takes the highs away the bed keeps at
+  `sin` level) and cheaper. The `lowpass` sweep stays for new pieces.
+- **What the format gained** (§93.3, §93.4): voicing notes `v1`–`v9` (the beds' figures pick
+  voicing notes: `sorted(notes)[2]`, `sorted(notes)[1:]`), `+` stacks (`cartoon`'s oom-pah
+  `v2+v3+v4`, `beacon`'s shimmer `v3''+v4''+v5''` on `glass`), `x'` (`discovery`'s octave on the
+  last eighth, `horizon`'s pickup), pad `swell` (the beds' `air_cycles`), the `snap` drum
+  (`cartoon`'s tick, `lab`'s snap). Fixes: the pad's `sub` was a different phase per channel
+  (mono-summed −3 dB, wide where the beds keep it centred) and ignored a written `bass`: now one
+  wave on both sides on the written bass note (Step 185 scores with a pad `sub` render
+  differently: `skyline_lift` measured above; `tidewater` has none and is byte-identical).
+  Not needed: holds across sections (every held note of the beds fits in its section), faster
+  sweeps, level-dependent ducking.
+- **Measurements** (`studio/measure.py`, used by the tests; Step 187 builds on it):
+  `tempo` (the onset envelope's autocorrelation peak, 70–180 BPM: a 3+3+2 bed can show 2/3 of
+  its tempo, `lab` 72, `beacon` 80, and `lullaby` its eighths, 128), `chroma` (power per pitch
+  class, 60 Hz–2.5 kHz), `key_fits` / `key` (Krumhansl-Kessler correlations), `loudness_curve`
+  (LUFS per block), `band_balance` (dB share of 20–150, 150–300, 300–1000, 1000–3000, 3000–6000,
+  6000–20000 Hz). The test (`tests/test_music_templates.py`) renders each template once and
+  compares it with the bed's kept measurements (`tests/data/studio/bed_measures.json`, made from
+  the fingerprinted beds; one bed is measured again to keep it current): length, −28 LUFS, a
+  clean seam, the detected tempo within 1 %, chroma cosine ≥ 0.97 (per chord ≥ 0.95 on average),
+  the bed's key fitting the template within 0.1 of how it fits the bed, the loudness of every
+  two bars within 2 dB (0.75 dB on average), the bands below 6 kHz within 1.5 dB and above
+  within 5 dB (the test file says why each limit is what it is). Measured:
+
+| bed | tempo (detected) | chroma | per chord | key fit bed / template | 2-bar loudness max / mean dB | bands < 6 kHz max dB | > 6 kHz dB | seam |
+|---|---|---|---|---|---|---|---|---|
+| calm | none | 0.998 | 0.990 | 0.84 / 0.84 | 0.30 / 0.11 | 0.3 | −0.1 | 0.14 |
+| pulse | none | 0.995 | 0.990 | 0.91 / 0.93 | 0.47 / 0.17 | 0.4 | −0.7 | 0.03 |
+| bright | 120.0 / 120.0 | 0.999 | 0.991 | 0.84 / 0.83 | 0.40 / 0.20 | 0.2 | −0.1 | 0.08 |
+| cartoon | 127.9 / 127.9 | 1.000 | 0.992 | 0.91 / 0.92 | 0.32 / 0.15 | 0.4 | −0.2 | 0.11 |
+| lullaby | 127.9 / 127.9 | 0.998 | 0.986 | 0.95 / 0.94 | 0.61 / 0.36 | 0.4 | −0.5 | 0.27 |
+| discovery | 103.9 / 103.9 | 0.991 | 0.968 | 0.94 / 0.95 | 0.90 / 0.38 | 0.3 | +0.3 | 0.34 |
+| breakthrough | 111.9 / 111.9 | 0.993 | 0.980 | 0.80 / 0.78 | 1.02 / 0.39 | 0.4 | +0.0 | 0.06 |
+| enigma | none | 0.996 | 0.993 | 0.72 / 0.72 | 0.63 / 0.26 | 0.4 | −0.4 | 0.22 |
+| momentum | 120.0 / 120.0 | 0.996 | 0.987 | 0.62 / 0.66 | 0.41 / 0.21 | 0.7 | +0.1 | 0.26 |
+| lab | 72.1 / 72.1 | 0.980 | 0.968 | 0.78 / 0.70 | 1.00 / 0.33 | 0.3 | −3.7 | 0.07 |
+| ascent | 136.1 / 136.1 | 0.998 | 0.990 | 0.61 / 0.66 | 0.57 / 0.26 | 0.2 | −0.0 | 0.05 |
+| horizon | 132.1 / 132.1 | 0.999 | 0.991 | 0.81 / 0.83 | 0.51 / 0.15 | 0.2 | +0.4 | 0.07 |
+| beacon | 80.0 / 80.0 | 0.995 | 0.977 | 0.76 / 0.73 | 1.35 / 0.46 | 0.7 | +0.1 | 0.09 |
+| neon | 115.8 / 115.8 | 0.990 | 0.970 | 0.65 / 0.64 | 0.46 / 0.16 | 0.2 | −2.2 | 0.40 |
+
+  (seam: the step across the loop's end over the 99.9th-percentile step; under 1 is clean.)
+  Bed-against-template spectrograms of all 14 were looked at: the same parts in the same places
+  (the build-up and lift of `ascent` and `horizon`, `beacon`'s pulses, `cartoon`'s phrases,
+  `lullaby`'s bass notes). Rendering a template takes 2–7 s; the closeness test about 90 s
+  (`slow`).

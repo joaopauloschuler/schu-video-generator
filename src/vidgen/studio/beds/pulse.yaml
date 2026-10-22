@@ -1,0 +1,48 @@
+# Pulse: a score-file template of vidgen's built-in bed `pulse` (vidgen music template pulse).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, parts and levels,
+# but the pad's random phases and some details differ, so it sounds very like the bed.
+# A soft rhythmic bed: a plucked arpeggio in eighths over a muted pad and a low thump on every beat
+# (stronger on 1 and 3) like a heartbeat.
+# Change one thing at a time and listen: vidgen music render pulse.yaml --out pulse.mp3
+version: 1
+title: Pulse (template)
+description: Soft rhythmic bed in A minor at 96 BPM - plucked eighth-note arpeggio, muted pad, heartbeat thump.
+key: A minor
+tempo: 96
+seed: 1
+bars: 16                       # 40 s
+chord_bars: 2                  # a chord every two bars (5 s)
+progression:                   # the bed's voicings (notes, which the arpeggio's v1-v5 pick from) and bass notes
+  - {chord: Am9,          notes: [A3, C4, E4, G4, B4], bass: A2}
+  - {chord: Fmaj9,        notes: [F3, A3, C4, E4, G4], bass: F2}
+  - {chord: Cadd9,        notes: [C3, G3, C4, D4, E4], bass: C3}
+  - {chord: G6/9,         notes: [G3, B3, D4, E4, A4], bass: G2}
+  - {chord: Am7,          notes: [A3, C4, E4, G4, C5], bass: A2}
+  - {chord: Fmaj7(add13), notes: [F3, A3, C4, E4, A4], bass: F2}
+  - {chord: Dm7,          notes: [D3, A3, C4, D4, F4], bass: D2}
+  - {chord: E7sus4,       notes: [E3, A3, B3, E4, G#4], bass: E2}   # leads back to A minor
+master: {lowpass: 16000, highpass: 10}   # the bed has no final filter: every part is shaped at 3.5 kHz itself
+tracks:
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 3500, air: 0.2, swell: 16, sub: 0.55}
+    volume: 5.3
+  # The arpeggio: the voicing's notes, lowest v1 to highest v5, in eighths; one of four figures per
+  # bar (as the bed chose them); on-beat notes louder (accent "2"), alternating left / right.
+  arp:
+    instrument: pluck
+    accent: "2"
+    volume: 0.4
+    spread: 0.25
+    settings: {decay: 0.22, bright: 0.6, tone: 3500, ring: 0.79}
+    steps: ["v1 v2 v3 v5 v4 v3 v2 v3", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v5 v4 v3 v2 v3", "v5 v4 v3 v2 v1 v2 v3 v4",
+            "v1 v2 v3 v4 v5 v4 v3 v2", "v5 v4 v3 v2 v1 v2 v3 v4", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v5 v4 v3 v2 v3",
+            "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v2 v3 v5 v4 v3 v2 v3", "v1 v2 v3 v4 v5 v4 v3 v2", "v5 v4 v3 v2 v1 v2 v3 v4",
+            "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v5 v4 v3 v2 v3", "v1 v2 v3 v4 v5 v4 v3 v2"]
+  # The heartbeat: the chord's bass note on every beat, stronger on 1 and 3.
+  thump:
+    instrument: pluck
+    steps: "X x X x"
+    volume: 2.5
+    settings: {decay: 0.16, bright: 0.3, tone: 3500, ring: 0}

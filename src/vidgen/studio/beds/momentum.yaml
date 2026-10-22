@@ -1,0 +1,73 @@
+# Momentum: a score-file template of vidgen's built-in bed `momentum` (vidgen music template momentum).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, parts and levels,
+# but the pads' random phases and some details differ, so it sounds very like the bed.
+# The most energetic documentary bed: a driving sixteenth-note ostinato accented 3+3+2 over a kick
+# on every beat, off-beat bass, a pumping pad and a riser into the top of the loop.
+# Change one thing at a time and listen: vidgen music render momentum.yaml --out momentum.mp3
+version: 1
+title: Momentum (template)
+description: Driving documentary bed in G minor at 120 BPM - 3+3+2 synth ostinato, four-on-the-floor kick, off-beat bass, pumping pad.
+key: G minor
+tempo: 120
+seed: 1
+chord_bars: 2                  # a chord every two bars (4 s)
+# The chords as the bed voices them: notes for the pad (and v1-v5 below), bass for the bass line.
+progression:
+  - {chord: Gm(add9),    notes: [G2, D3, A3, Bb3, D4], bass: G2}
+  - {chord: Ebmaj7,      notes: [Eb3, G3, Bb3, D4, Eb4], bass: Eb2}
+  - {chord: Cm9,         notes: [C3, G3, Bb3, D4, Eb4], bass: C2}
+  - {chord: Dsus4(add9), notes: [D3, G3, A3, D4, E4], bass: D2}
+  - {chord: Gm7,         notes: [G2, D3, F3, Bb3, D4], bass: G2}
+  - {chord: Ebmaj9,      notes: [Eb3, G3, Bb3, D4, F4], bass: Eb2}
+  - {chord: Bb(add9),    notes: [Bb2, F3, Bb3, C4, D4], bass: Bb2}
+  - {chord: F(add9),     notes: [F2, C3, G3, A3, C4], bass: F2}
+  - {chord: Cm9,         notes: [C3, G3, Bb3, D4, Eb4], bass: C2}
+  - {chord: Ebmaj7,      notes: [Eb3, G3, Bb3, D4, Eb4], bass: Eb2}
+  - {chord: Dsus4(add9), notes: [D3, G3, A3, D4, E4], bass: D2}
+sections:
+  - {name: drive, bars: 22}    # bars 1-22: the groove
+  - name: turn                 # bars 23-24: D major and the riser lead back to G minor at the top
+    bars: 2
+    progression: [{chord: D, notes: [D3, F#3, A3, D4, F#4], bass: D2}]
+master: {lowpass: 4500}        # the bed's final roll-off
+tracks:
+  # A warm pad holding the chords, a sub under it, an airy layer an octave up swelling twice per
+  # loop; it dips on every beat (side-chain pump) so the kick punches through.
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 2600, air: 0.3, swell: 12, sub: 0.55}
+    volume: 0.6
+    duck: {to: beat, depth: 0.45, release: 0.14}
+  kick:
+    instrument: kick
+    settings: {high: 100, low: 50, decay: 0.14, click: 0.08}
+    steps: "x... x... x... x..."
+  clap:
+    instrument: clap
+    steps: "....x.......x..."           # beats 2 and 4
+  # Sixteenth-note hats, louder on the off-beat eighth, alternating left / right.
+  hat:
+    instrument: hat
+    steps: "ooXo ooXo ooXo ooXo"
+    spread: 0.25
+  # The ostinato: the chord's root (1), fifth (5) and octave (8) in octave 3 and the third note of
+  # the voicing (v3), in sixteenths; accented 3+3+2. Change the figure here to change the piece's drive.
+  ostinato:
+    instrument: synth_bass
+    octave: 3
+    steps: "1 5 8 1 5 v3 1 5 8 1 5 v3 8 5 1 5"
+    accent: "3+3+2"
+    volume: -6.2
+    spread: 0.15
+    settings: {decay: 0.06, tone: 1500, ring: 0.075}
+  # The bass: the chord's bass note on the off-beat eighths.
+  bass:
+    instrument: synth_bass
+    steps: ".x.x.x.x"
+    settings: {decay: 0.1, tone: 550, ring: 0}
+  riser:
+    instrument: riser
+    only: [turn]
+    steps: "x | -"                      # held for the two bars of the turn
+    volume: -1.3

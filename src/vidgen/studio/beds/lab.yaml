@@ -1,0 +1,96 @@
+# Lab: a score-file template of vidgen's built-in bed `lab` (vidgen music template lab).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, parts and levels,
+# but the pad's random phases and the clicks' sounds differ a little, so it sounds very like the bed.
+# A modern tech bed: a steady kick, a rolling syncopated bass, syncopated FM plucks with ping-pong
+# echoes, light glitchy clicks (a rising stutter every fourth bar), a snap on 2 and 4, a thin
+# pumping pad.
+# Change one thing at a time and listen: vidgen music render lab.yaml --out lab.mp3
+version: 1
+title: Lab (template)
+description: Modern tech bed in F minor at 108 BPM - steady kick, syncopated bass, echoing FM plucks, glitchy clicks.
+key: F minor
+tempo: 108
+seed: 1
+bars: 20
+chord_bars: 2                  # a chord every two bars (4.4 s)
+progression:                   # the bed's voicings (notes: the plucks' v2-v5) and bass notes
+  - {chord: Fm9,         notes: [F2, C3, G3, Ab3, C4], bass: F2}
+  - {chord: Dbmaj7,      notes: [Db3, Ab3, C4, F4], bass: Db2}
+  - {chord: Bbm9,        notes: [Bb2, F3, Ab3, C4, Db4], bass: Bb2}
+  - {chord: Ebsus2,      notes: [Eb3, Bb3, Eb4, F4], bass: Eb2}
+  - {chord: Fm9,         notes: [F2, C3, G3, Ab3, C4], bass: F2}
+  - {chord: Abmaj7,      notes: [Ab2, Eb3, G3, C4, Eb4], bass: Ab2}
+  - {chord: Dbmaj7(#11), notes: [Db3, Ab3, C4, G4], bass: Db2}
+  - {chord: Bbm7,        notes: [Bb2, F3, Ab3, Db4], bass: Bb2}
+  - {chord: Gm7b5,       notes: [G2, Db3, F3, Bb3], bass: G2}
+  - {chord: C7,          notes: [C3, E3, G3, Bb3], bass: C2}       # leads back to F minor
+master: {lowpass: 4800}
+tracks:
+  pad:                                  # thin, pumping hard on every beat
+    instrument: pad
+    play: chords
+    settings: {tone: 2000, air: 0.2, swell: 20, sub: 0.55}
+    volume: -1.2
+    duck: {to: beat, depth: 0.5, release: 0.13}
+  kick:
+    instrument: kick
+    settings: {high: 105, low: 50, decay: 0.13, click: 0.08}
+    steps: "x... x... x... x..."
+    volume: -0.35
+  snap:
+    instrument: snap                    # a soft snap on 2 and 4
+    steps: "....x.......x..."
+    pan: 0.1
+  # Glitchy clicks on fixed off-grid sixteenths, low ones right, high ones in the middle.
+  click_low:
+    instrument: tick
+    settings: {tone: 3800}
+    steps: "..x. .... ..x. ..x."
+    pan: 0.5
+    volume: 1.9
+  click_high:
+    instrument: tick
+    settings: {tone: 5200}
+    steps: "...x .... .... .x.."
+    volume: 1.9
+  # Every fourth bar a stutter: 32nd-note clicks through the last beat, rising in level.
+  stutter:
+    instrument: tick
+    settings: {tone: 5200}
+    pan: -0.2
+    steps: ". | . | . | ........ ........ ........ xxxxxxxx"
+    volume: [[3.75, -6], [4, 3.8], [7.75, -6], [8, 3.8], [11.75, -6], [12, 3.8], [15.75, -6], [16, 3.8], [19.75, -6], [20, 3.8]]
+  # The rolling bass: the chord's bass note on syncopated sixteenths, two of them accented.
+  bass:
+    instrument: synth_bass
+    steps: "..Xx ..x. ..Xx ..x."
+    volume: -3.5
+    settings: {decay: 0.08, tone: 450, ring: 0.04}
+  # The plucks: the voicing's upper notes an octave up (v2'-v5') on syncopated sixteenths, the
+  # order shifted by one in the chord's second bar; dotted-eighth ping-pong echoes.
+  plucks:
+    instrument: fm_pluck
+    pan: 0.35
+    echo: {delay: 0.75, feedback: 0.33, repeats: 2}
+    settings: {ring: 0.36}
+    steps:
+      - "v2' . . v3' . . v4' . v5' . v2' . . v3' . ."
+      - "v3' . . v4' . . v5' . v2' . v3' . . v4' . ."
+      - "v2' . . v3' . . v4' . v2' . v3' . . v4' . ."
+      - "v3' . . v4' . . v2' . v3' . v4' . . v2' . ."
+      - "v2' . . v3' . . v4' . v5' . v2' . . v3' . ."
+      - "v3' . . v4' . . v5' . v2' . v3' . . v4' . ."
+      - "v2' . . v3' . . v4' . v2' . v3' . . v4' . ."
+      - "v3' . . v4' . . v2' . v3' . v4' . . v2' . ."
+      - "v2' . . v3' . . v4' . v5' . v2' . . v3' . ."
+      - "v3' . . v4' . . v5' . v2' . v3' . . v4' . ."
+      - "v2' . . v3' . . v4' . v5' . v2' . . v3' . ."
+      - "v3' . . v4' . . v5' . v2' . v3' . . v4' . ."
+      - "v2' . . v3' . . v4' . v2' . v3' . . v4' . ."
+      - "v3' . . v4' . . v2' . v3' . v4' . . v2' . ."
+      - "v2' . . v3' . . v4' . v2' . v3' . . v4' . ."
+      - "v3' . . v4' . . v2' . v3' . v4' . . v2' . ."
+      - "v2' . . v3' . . v4' . v2' . v3' . . v4' . ."
+      - "v3' . . v4' . . v2' . v3' . v4' . . v2' . ."
+      - "v2' . . v3' . . v4' . v2' . v3' . . v4' . ."
+      - "v3' . . v4' . . v2' . v3' . v4' . . v2' . ."

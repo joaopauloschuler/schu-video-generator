@@ -1,0 +1,79 @@
+# Lullaby: a score-file template of vidgen's built-in bed `lullaby` (vidgen music template lullaby).
+# A close re-creation, not the bed itself: the same key, tempo, chords, melody, parts and levels,
+# but the pad's random phases and some details differ, so it sounds very like the bed.
+# A gentle waltz: a music-box melody over a softer music-box broken chord, a warm pad and a low
+# plucked bass note on each bar's first beat. Four four-bar phrases (the sections), a chord per bar.
+# Change one thing at a time and listen: vidgen music render lullaby.yaml --out lullaby.mp3
+version: 1
+title: Lullaby (template)
+description: Gentle waltz in F major at 64 BPM, 3/4 - music-box melody and broken chords, warm pad, soft bass.
+key: F major
+tempo: 64
+time: 3/4                      # waltz time: bars of 2.8 s
+seed: 1
+chord_bars: 1                  # a chord per bar
+# The chords as the bed voices them (&name marks a chord to reuse as *name below).
+sections:
+  - name: p1
+    bars: 4
+    progression:
+      - &F   {chord: F,    notes: [F3, A3, C4, F4], bass: F2}
+      - {chord: Bb/F, notes: [F3, Bb3, D4, F4], bass: F2}
+      - *F
+      - &C7  {chord: C7,   notes: [E3, G3, Bb3, C4], bass: C2}
+  - name: p2
+    bars: 4
+    progression:
+      - *F
+      - {chord: Dm,   notes: [F3, A3, D4, F4], bass: D2}
+      - &Gm7 {chord: Gm7,  notes: [F3, Bb3, D4, G4], bass: G2}
+      - *C7
+  - name: p3
+    bars: 4
+    progression:
+      - {chord: Bb,   notes: [F3, Bb3, D4, F4], bass: Bb2}
+      - {chord: F/A,  notes: [F3, A3, C4, F4], bass: A2}
+      - *Gm7
+      - *C7
+  - name: p4                   # ends on C7, which leads back to the top
+    bars: 4
+    progression:
+      - *F
+      - {chord: Dm7,  notes: [F3, A3, C4, D4], bass: D2}
+      - *Gm7
+      - *C7
+master: {lowpass: 16000, highpass: 10}   # the bed has no final filter: every part is shaped at 3.6 kHz itself
+tracks:
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 3600, air: 0.3, swell: 8, sub: 0.55}
+    volume: -2.7
+  # The bass: the chord's bass note on beat 1, ringing through the bar.
+  bass:
+    instrument: pluck
+    steps: "x . ."
+    volume: 2.2
+    settings: {decay: 0.9, bright: 0.2, tone: 3600, ring: 1.56}
+  # The broken chord: the voicing an octave up (v1'-v4') in eighths, its first note louder (!);
+  # one figure per phrase.
+  broken:
+    instrument: music_box
+    volume: -2.2
+    pan: -0.25
+    settings: {decay: 0.7, tone: 3600, ring: 1.53}
+    steps: "v1'! v3' v2' v3' v4' v3'"
+    sections:
+      p2: {steps: "v1'! v2' v3' v4' v3' v2'"}
+      p4: {steps: "v1'! v3' v4' v3' v2' v3'"}
+  # The melody: one note per beat at most ('.' lets the note before ring on), slightly right.
+  melody:
+    instrument: music_box
+    volume: 7.4
+    pan: 0.2
+    settings: {decay: 1.3, tone: 3600, ring: 2.06}
+    sections:
+      p1: {steps: ["A5 . G5", "F5 Bb5 A5", "C6 . A5", "G5 . E5"]}
+      p2: {steps: ["F5 A5 C6", "D6 . C6", "Bb5 A5 G5", "G5 . ."]}
+      p3: {steps: ["F5 Bb5 D6", "C6 A5 F5", "Bb5 G5 F5", "E5 . G5"]}
+      p4: {steps: ["A5 . C6", "D6 C6 A5", "Bb5 . G5", "E5 . C5"]}

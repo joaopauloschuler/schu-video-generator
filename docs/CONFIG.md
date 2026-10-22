@@ -3200,20 +3200,22 @@ Steps: `|` separates bars and each bar is split into as many equal steps as it h
 instrument plays the chord's bass note), `X` accented, `o` soft, `.` rest, `-` holds the note
 before it (also across `|`: `"x | - | - | -"` lasts four bars), `*` the whole chord, `1`–`9`
 chord degrees (1 root, 3 third, 5 fifth, 7 seventh, 8 octave; `'` after it an octave up, `,`
-down), notes like `E5`, `F#3`, `Bb4`; `!` / `?` after a hit accents / softens it. Spaces only help
-reading.
+down), `v1`–`v9` the notes of the chord's voicing from the lowest (the written `notes`, else the
+chord as `*` plays it; past the top it starts again an octave up; `'` / `,` too), notes like `E5`,
+`F#3`, `Bb4`; `x'` / `x,` the bass note an octave up / down; `+` plays notes together in one step
+(`v2+v3+v4`, `C4+E4+G4`); `!` / `?` after a hit accents / softens it. Spaces only help reading.
 
 Instruments (settings in brackets; `vidgen music patches` lists defaults, ranges and what each
 does):
 
 | family | instruments |
 |---|---|
-| drums | `kick` (high, low, decay, click), `clap` (tone), `hat` and `open_hat` (decay, tone), `gated_snare` (gate, body: the 80s snare), `tick` (tone: a clock tick), `boom` (low, decay) |
+| drums | `kick` (high, low, decay, click), `clap` (tone), `hat` and `open_hat` (decay, tone), `gated_snare` (gate, body: the 80s snare), `snap` (tone, decay: a soft snare-like snap), `tick` (tone: a clock tick), `boom` (low, decay) |
 | noises | `riser` (low, high; swells over its held steps), `pulsar` (high, low, sweep, noise, tone: a pulsar's chirp), `static` (low, high, wander, fade: radio static for its held steps, `"x \| - \| - \| -"`) |
 | basses | `synth_bass` (decay, tone, ring), `analog_bass` (decay, tone, closed, snap, detune, ring), `sub` (decay, tone, second, third, ring) |
 | plucks and keys | `pluck` (+ bright), `fm_pluck` (+ index), `square_pluck`, `pizzicato`, `music_box`, `bell`, `piano` (decay, tone, ring: seconds a note sounds on after its held steps), `woodblock` (tone) |
 | leads | `soft_lead` (attack, vibrato, tone, ring: it sustains while held) |
-| pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, sub, attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
+| pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):
@@ -3250,6 +3252,19 @@ hat: {instrument: hat, steps: "o.x. o.x. o.x. o.xo", spread: 0.3}
 A curve's points are bars from the section's start (fractions allowed); between them the value
 moves in a straight line (frequencies in octaves). The demo `tests/data/studio/skyline_lift.yaml`
 uses every effect: a pumping supersaw lift.
+
+#### Templates of the built-in beds (`vidgen music template`)
+
+Every built-in bed is also a score file to start from: `vidgen music template` lists them (key,
+tempo, time, bars, sections), and `vidgen music template BED [--out FILE.yaml] [--force]
+[--json]` writes one (default `<bed>.yaml` in the current folder; an existing file is kept
+unless `--force`). Each is a close re-creation of its bed, not the bed itself — the same key,
+tempo, chords (voicings and bass written out), sections, parts and levels, measured close to the
+bed (tempo, key, loudness over time, spectrum), but the pads' random phases and a few sounds
+differ — with comments saying what each part does. Change one thing at a time and listen
+(`vidgen music render my_theme.yaml --out my_theme.mp3`). The beds themselves are unchanged.
+A filter opening is written as the beds do it: a dark and a bright copy of the pad cross-faded
+by their `volume` curves.
 
 ### Loudness of the final mix (`audio`)
 
@@ -9850,6 +9865,15 @@ difference between two palette colours).
 | `action` | str | `patches` |
 | `instruments` | list | `{name, group, kind, plays, words, level, octave, settings}`; `settings` maps a name to `{default, low, high, words}` |
 | `effects` | list | `{name, words, example, fields}`; `fields` maps a name to `{default, low, high, words}` (`low` / `high` null for words such as `to`, `steps`, `pingpong`) |
+
+`vidgen music template --json` ([Templates](#templates-of-the-built-in-beds-vidgen-music-template)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `template` |
+| `templates` | list | `{name, title, key, tempo, time, bars, seconds, sections, tracks, description}`, one per bed |
+| `template` | object | when one was written: its entry of `templates` |
+| `path` | str | when one was written: the file |
 
 `vidgen music page --json` ([Listen page](#listen-page-vidgen-music-page)):
 

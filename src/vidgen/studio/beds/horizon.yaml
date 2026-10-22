@@ -1,0 +1,144 @@
+# Horizon: a score-file template of vidgen's built-in bed `horizon` (vidgen music template horizon).
+# A close re-creation, not the bed itself: the same keys, tempo, chords, voicings, sections, parts
+# and levels, but the pads' random phases and some details differ, so it sounds very like the bed.
+# Anthemic uplifting trance whose hook is a gated supersaw (chords chopped into sixteenths, accented
+# 3+3+2): a groove, a build (the bass rests, the gate opens, a long riser, sixteenth kicks), a lift
+# to F major (boom, the gate an octave up and bright over a soft saw pad) and a short settle.
+# Change one thing at a time and listen: vidgen music render horizon.yaml --out horizon.mp3
+version: 1
+title: Horizon (template)
+description: Anthemic trance at 132 BPM - a gated supersaw hook, a build, a lift from D minor to F major.
+key: D minor
+tempo: 132
+seed: 1
+chord_bars: 2                  # a chord every two bars (3.6 s)
+sections:                      # the bed's voicings (notes) and bass notes
+  - name: groove               # bars 1-8
+    bars: 8
+    progression:
+      - &Dm9 {chord: Dm9,    notes: [D2, D3, F3, A3, E4], bass: D2}
+      - {chord: Bbmaj7,      notes: [Bb2, D3, F3, A3, D4], bass: Bb2}
+      - &Gm9 {chord: Gm9,    notes: [G2, D3, F3, A3, Bb3], bass: G2}
+      - {chord: A7sus4,      notes: [A2, E3, G3, A3, D4], bass: A2}
+  - name: build                # bars 9-16
+    bars: 8
+    progression:
+      - {chord: Dm(add9),    notes: [D2, E3, F3, A3, D4], bass: D2}
+      - {chord: Bb(add9),    notes: [Bb2, F3, Bb3, C4, D4], bass: Bb2}
+      - {chord: C(add9),     notes: [C3, G3, C4, D4, E4], bass: C3}
+      - {chord: A,           notes: [A2, E3, A3, C#4, E4], bass: A2}
+  - name: lift                 # bars 17-30, 29.1 s in
+    bars: 14
+    key: F major
+    progression:
+      - {chord: F(add9),     notes: [F2, F3, A3, C4, G4], bass: F2}
+      - {chord: C(add9)/E,   notes: [E2, E3, G3, D4, E4], bass: E2}
+      - *Dm9
+      - {chord: Bb(add9),    notes: [Bb2, F3, Bb3, C4, F4], bass: Bb2}
+      - {chord: F/A,         notes: [A2, F3, A3, C4, F4], bass: A2}
+      - *Gm9
+      - {chord: Bbmaj7(#11), notes: [Bb2, F3, A3, D4, E4], bass: Bb2}
+  - name: settle               # bars 31-32: C7sus4 leads back to the top
+    bars: 2
+    key: F major
+    progression:
+      - {chord: C7sus4,      notes: [C3, G3, Bb3, C4, F4], bass: C3}
+master: {lowpass: 4600}
+tracks:
+  # The hook: the chords through a trance gate (16 sixteenths a bar: x open, o a third open),
+  # pumping on every beat. As the bed makes its filter opening, it is a dark supersaw (1.1 kHz) and
+  # a bright one an octave up (3.4 kHz, transpose 12) cross-faded by their volume curves ([bar, dB]
+  # points from the section's start): dark in the groove, opening through the build, bright in the lift.
+  hook_dark:
+    instrument: supersaw
+    play: chords
+    rest: [lift]
+    settings: {tone: 1100, detune: 22, fade: 0.5}
+    gate: {steps: "xooxooxoxooxooxo", duty: 0.5, floor: 0.05}
+    duck: {to: beat, depth: 0.45, release: 0.15}
+    volume: 2.5
+    sections:
+      build: {volume: [[0, 2.5], [2, 1.1], [4, -1.1], [6, -4.8], [8, -12.6]]}
+      settle: {volume: [[0, -56.5], [1, -2.1], [2, 2.5]]}
+  hook_bright:
+    instrument: supersaw
+    play: chords
+    transpose: 12
+    settings: {tone: 3400, detune: 26, fade: 0.5}
+    gate: {steps: "xooxooxoxooxooxo", duty: 0.5, floor: 0.05}
+    duck: {to: beat, depth: 0.45, release: 0.15}
+    volume: -3.4
+    sections:
+      build: {volume: [[0, -3.4], [2, -0.2], [4, 1.7], [6, 2.8], [8, 3.4]]}
+      lift: {volume: 3.5}
+      settle: {volume: [[0, 3.5], [1, 2.1], [2, -3.4]]}
+  strings:                              # a soft saw pad that comes up in the lift
+    instrument: saw_pad
+    play: chords
+    settings: {tone: 1800, detune: 40, fade: 0.5}
+    volume: -10.7
+    duck: {to: beat, depth: 0.45, release: 0.15}
+    sections:
+      lift: {volume: -4.7}
+      settle: {volume: {from: -4.7, to: -10.7}}
+  pad:                                  # a warm low pad and sub
+    instrument: pad
+    play: chords
+    settings: {tone: 900, air: 0.25, swell: 32, sub: 0.55}
+    volume: -12.6
+    duck: {to: beat, depth: 0.45, release: 0.15}
+  kick:
+    instrument: kick
+    settings: {high: 110, low: 48, decay: 0.17, click: 0.07}
+    steps: "x... x... x... x..."
+    volume: -1.1
+  kick_roll:                            # sixteenth kicks growing through the build's last half bar
+    instrument: kick
+    only: [build]
+    settings: {high: 110, low: 48, decay: 0.17, click: 0.07}
+    steps: ". | . | . | . | . | . | . | ......... xxxxxxx"
+    volume: [[7.5625, -10.3], [7.9375, -3.0]]
+  open_hat:
+    instrument: open_hat
+    settings: {decay: 0.06, tone: 6800}
+    steps: "..x. ..x. ..x. ..x."
+    pan: -0.2
+    volume: -4.9
+    sections:
+      build: {volume: {from: -4.9, to: 0}}
+      lift: {volume: 2.2}
+      settle: {volume: {from: 2.2, to: -4.9}}
+  clap:
+    instrument: clap
+    settings: {tone: 1500}
+    steps: "....x.......x..."
+    volume: -6.7
+    sections:
+      lift: {volume: -2.3}
+      settle: {volume: {from: -2.3, to: -6.7}}
+  # The bass: the chord's bass note on the off-beat eighths; in the build it rests on one long
+  # note per chord.
+  bass:
+    instrument: synth_bass
+    steps: ".x.x.x.x"
+    volume: -1.5
+    settings: {decay: 0.1, tone: 560, ring: 0}
+    sections:
+      build: {steps: "x | .", volume: -1.0, settings: {decay: 0.6, tone: 450}}
+  pickup:                               # a pickup sixteenth an octave up (x') before each bar
+    instrument: synth_bass
+    rest: [build]
+    steps: "............... x'"
+    volume: -4.8
+    settings: {decay: 0.05, tone: 700, ring: 0}
+  riser:                                # the whole build
+    instrument: riser
+    only: [build]
+    steps: "x | - | - | - | - | - | - | -"
+    volume: -0.6
+    settings: {low: 250, high: 3200}
+  boom:
+    instrument: boom
+    only: [lift]
+    steps: "x | . | . | . | . | . | . | . | . | . | . | . | . | ."
+    settings: {low: 37, decay: 0.9}

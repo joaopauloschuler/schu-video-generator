@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–185)
+## 0.3.0 (Steps 61–186)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -360,6 +360,11 @@ matters only for projects made with development builds between Steps 67 and 131)
   track or section: filter sweeps, side-chain ducking to the kick, trance gates, echo, reverb,
   stereo spread and width, volume curves. `vidgen music patches` describes them all; `vidgen
   music render` writes MP3 too and warns about notes it cannot play (185).
+- Templates: every built-in bed as a commented score file to start from, a close re-creation
+  measured against the bed (tempo, key, loudness over time, spectrum): `vidgen music template
+  momentum --out my_theme.yaml`. Score files gain voicing notes `v1`–`v9`, notes played together
+  (`v2+v3+v4`), the bass an octave up (`x'`), a pad `swell` and a `snap`; a pad's sub now plays
+  the written bass note and sits in the centre (186).
 
 ### Narration and pictures
 

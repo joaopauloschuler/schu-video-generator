@@ -1,0 +1,60 @@
+# Bright: a score-file template of vidgen's built-in bed `bright` (vidgen music template bright).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, parts and levels,
+# but the pad's random phases and some details differ, so it sounds very like the bed.
+# An uplifting, light bed: a shimmering pad, a plucked arpeggio an octave up in eighths and a sparse
+# soft bell melody two octaves up on beats 1 and 3.
+# Change one thing at a time and listen: vidgen music render bright.yaml --out bright.mp3
+version: 1
+title: Bright (template)
+description: Uplifting light bed in C major at 120 BPM - shimmering pad, plucked arpeggio, sparse bell melody.
+key: C major
+tempo: 120
+seed: 1
+bars: 24                       # 48 s
+chord_bars: 2                  # a chord every two bars (4 s)
+progression:                   # the bed's voicings (notes: the arpeggio's and bell's v1-v5) and bass notes
+  - {chord: Cmaj9,  notes: [C4, E4, G4, B4, D5], bass: C3}
+  - {chord: G/B,    notes: [B3, D4, G4, A4, D5], bass: B2}
+  - {chord: Am7,    notes: [A3, E4, G4, C5, E5], bass: A2}
+  - {chord: Fmaj7,  notes: [F3, C4, E4, F4, A4], bass: F2}
+  - {chord: Cadd9,  notes: [C4, E4, G4, C5, D5], bass: C3}
+  - {chord: G,      notes: [G3, D4, G4, B4, D5], bass: G2}
+  - {chord: Am9,    notes: [A3, C4, E4, G4, B4], bass: A2}
+  - {chord: Fmaj9,  notes: [F3, A3, E4, G4, C5], bass: F2}
+  - {chord: Dm7,    notes: [D3, A3, C4, F4, A4], bass: D2}
+  - {chord: G,      notes: [G3, B3, D4, G4, D5], bass: G2}
+  - {chord: Em7,    notes: [E3, B3, D4, G4, B4], bass: E2}
+  - {chord: F,      notes: [F3, C4, F4, A4, C5], bass: F2}
+master: {lowpass: 16000, highpass: 10}   # the bed has no final filter: every part is shaped at 4.5 kHz itself
+tracks:
+  # A bright pad whose airy upper layer swells three times per loop (every 8 bars).
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 4500, air: 0.5, swell: 8, sub: 0.55}
+    volume: 6
+  # The arpeggio: the voicing an octave up (v1'-v5') in eighths, one of four figures per bar (as the
+  # bed chose them); on-beat notes louder, alternating left / right.
+  arp:
+    instrument: pluck
+    accent: "2"
+    volume: -1.9
+    spread: 0.25
+    settings: {decay: 0.18, bright: 0.5, tone: 4500, ring: 0.65}
+    steps: ["v1' v2' v3' v4' v5' v4' v3' v2'", "v5' v4' v3' v2' v1' v2' v3' v4'", "v5' v4' v3' v2' v1' v2' v3' v4'",
+            "v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v3' v2' v4' v3' v5' v4' v2'", "v1' v2' v3' v4' v5' v4' v3' v2'",
+            "v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v3' v2' v4' v3' v5' v4' v2'", "v1' v2' v3' v5' v4' v3' v2' v3'",
+            "v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v2' v3' v5' v4' v3' v2' v3'", "v1' v2' v3' v5' v4' v3' v2' v3'",
+            "v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v2' v3' v5' v4' v3' v2' v3'",
+            "v5' v4' v3' v2' v1' v2' v3' v4'", "v1' v3' v2' v4' v3' v5' v4' v2'", "v5' v4' v3' v2' v1' v2' v3' v4'",
+            "v1' v2' v3' v4' v5' v4' v3' v2'", "v1' v3' v2' v4' v3' v5' v4' v2'", "v1' v2' v3' v5' v4' v3' v2' v3'",
+            "v5' v4' v3' v2' v1' v2' v3' v4'", "v1' v3' v2' v4' v3' v5' v4' v2'", "v1' v3' v2' v4' v3' v5' v4' v2'"]
+  # The bell melody: half notes on beats 1 and 3, a chord tone two octaves up (v2''-v5''), some
+  # rests; beat 1 a little left, beat 3 a little right. Rewrite these bars to make your own tune.
+  bell:
+    instrument: bell
+    spread: 0.15
+    settings: {decay: 0.5, tone: 4500, ring: 0.6}
+    steps: ["v4'' v3''", ". v2''", "v4'' v3''", "v4'' v5''", "v2'' v5''", "v3'' v2''", "v2'' v5''", "v2'' v5''",
+            "v4'' v5''", "v5'' .", "v5'' v2''", "v5'' v3''", "v5'' v2''", "v4'' .", "v5'' v4''", "v2'' v5''",
+            ". v2''", ". v5''", ". v3''", "v4'' v3''", "v2'' v2''", "v2'' .", "v3'' .", "v5'' ."]

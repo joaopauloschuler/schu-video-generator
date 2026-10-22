@@ -1,0 +1,78 @@
+# Discovery: a score-file template of vidgen's built-in bed `discovery` (vidgen music template discovery).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, parts and levels,
+# but the pad's random phases and filter opening are approximated, so it sounds very like the bed.
+# A steady documentary bed that builds: a soft kick on every beat, pulsing eighth-note bass, a
+# plucked minor arpeggio, off-beat hats, and a pad that opens from dark to bright over the loop
+# (brightest about three quarters through) and dips with each kick.
+# Change one thing at a time and listen: vidgen music render discovery.yaml --out discovery.mp3
+version: 1
+title: Discovery (template)
+description: Forward-moving documentary bed in D minor at 104 BPM - kick, pulsing bass, plucked arpeggio, a pad opening over the loop.
+key: D minor
+tempo: 104
+seed: 1
+bars: 24
+chord_bars: 2                  # a chord every two bars (4.6 s)
+progression:                   # the bed's voicings (notes: the arpeggio's v1-v5) and bass notes
+  - {chord: Dm(add9),   notes: [D3, A3, D4, E4, F4], bass: D2}
+  - {chord: Bbmaj7,     notes: [Bb2, F3, A3, D4, F4], bass: Bb1}
+  - {chord: Fadd9,      notes: [F3, A3, C4, F4, G4], bass: F2}
+  - {chord: Csus2,      notes: [C3, G3, C4, D4, G4], bass: C2}
+  - {chord: Dm7,        notes: [D3, A3, C4, F4, A4], bass: D2}
+  - {chord: Gm9,        notes: [G2, D3, A3, Bb3, D4], bass: G2}
+  - {chord: Bbmaj9,     notes: [Bb2, F3, A3, C4, D4], bass: Bb1}
+  - {chord: Asus4,      notes: [A2, E3, A3, D4, E4], bass: A1}
+  - {chord: Dm(add9),   notes: [D3, A3, D4, E4, F4], bass: D2}
+  - {chord: Bb(add#11), notes: [Bb2, F3, Bb3, D4, E4], bass: Bb1}
+  - {chord: Gm7,        notes: [G2, D3, Bb3, D4, F4], bass: G2}
+  - {chord: A,          notes: [A2, E3, A3, C#4, E4], bass: A1}   # A major leads back to D minor
+master: {lowpass: 4200}
+tracks:
+  # The pad opens slowly from dark to bright and back, as the bed does it: a dark pad (low-passed
+  # at 800 Hz) and a bright one (3 kHz, with an airy layer) cross-faded by their volume curves
+  # ([bar, dB] points; brightest at bar 17). Both dip on each beat.
+  pad_dark:
+    instrument: pad
+    play: chords
+    settings: {tone: 800, air: 0, sub: 0.55}
+    volume: [[0, 2.9], [3, 2.8], [4, 2.7], [6, 2.1], [8, 0.6], [10, -2.2], [12, -6.8], [14, -14.5], [16, -30.6], [17.28, -57.1],
+             [18, -24.2], [20, -2.7], [21, 0.9], [22, 2.5], [23, 2.9]]
+    duck: {to: beat, depth: 0.35, release: 0.16}
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 3000, air: 0.25, swell: 24, sub: 0.55}
+    volume: [[0, -57.1], [1, -34.9], [2, -22.9], [3, -16.0], [4, -11.2], [6, -4.8], [8, -1.0], [10, 1.3], [12, 2.4], [14, 2.8],
+             [16, 2.9], [18, 2.9], [20, 1.5], [21, -1.4], [22, -7.2], [23, -18.6], [24, -57.1]]
+    duck: {to: beat, depth: 0.35, release: 0.16}
+  # The arpeggio: the voicing (v1 lowest to v5) in eighths, one of four figures per bar (as the bed
+  # chose them), on-beat notes louder; a little louder as the pad opens.
+  arp:
+    instrument: pluck
+    accent: "2"
+    spread: 0.25
+    settings: {decay: 0.2, bright: 0.4, tone: 2400, ring: 0.71}
+    volume: [[0, -6.8], [4, -6.4], [8, -5.6], [12, -4.8], [16, -4.3], [20, -5.1], [24, -6.8]]
+    steps: ["v1 v2 v3 v5 v4 v3 v2 v3", "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v3 v2 v4 v3 v5 v4 v2",
+            "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v2 v3 v5 v4 v3 v2 v3",
+            "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v4 v5 v4 v3 v2", "v5 v4 v3 v2 v1 v2 v3 v4",
+            "v1 v2 v3 v4 v5 v4 v3 v2", "v5 v4 v3 v2 v1 v2 v3 v4", "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v2 v3 v4 v5 v4 v3 v2",
+            "v1 v2 v3 v4 v5 v4 v3 v2", "v1 v3 v2 v4 v3 v5 v4 v2", "v1 v2 v3 v5 v4 v3 v2 v3", "v1 v2 v3 v5 v4 v3 v2 v3",
+            "v1 v2 v3 v4 v5 v4 v3 v2", "v5 v4 v3 v2 v1 v2 v3 v4", "v1 v2 v3 v5 v4 v3 v2 v3", "v1 v3 v2 v4 v3 v5 v4 v2"]
+  kick:
+    instrument: kick
+    steps: "x... x... x... x..."
+    volume: -0.6
+  # Off-beat hats, louder as the pad opens.
+  hat:
+    instrument: hat
+    steps: "..x. ..x. ..x. ..x."
+    pan: 0.3
+    volume: [[0, -0.9], [4, 0.1], [8, 2.3], [12, 4.1], [16, 5.0], [18, 5.0], [20, 3.4], [22, 0.7], [24, -0.9]]
+  # The bass: the chord's bass note in eighths, the octave up (x') on the chord's last eighth.
+  bass:
+    instrument: synth_bass
+    accent: "2"
+    volume: -4.5
+    settings: {decay: 0.11, tone: 650, ring: 0}
+    steps: ["x x x x x x x x", "x x x x x x x x'"]

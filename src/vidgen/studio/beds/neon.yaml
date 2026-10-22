@@ -1,0 +1,73 @@
+# Neon: a score-file template of vidgen's built-in bed `neon` (vidgen music template neon).
+# A close re-creation, not the bed itself: the same key, tempo, chords, voicings, parts and levels,
+# but the pads' random phases and some details differ, so it sounds very like the bed.
+# A synthwave night drive: soft saw strings, an octave-jumping analog bass on the eighths, a
+# square-wave arpeggio on the 3+3+2 accents, an 80s gated snare and a kick on every beat.
+# Change one thing at a time and listen: vidgen music render neon.yaml --out neon.mp3
+version: 1
+title: Neon (template)
+description: Synthwave bed in F# minor at 116 BPM - saw strings, octave analog bass, square-pluck arpeggio, gated snare.
+key: F# minor
+tempo: 116
+seed: 1
+bars: 24
+chord_bars: 2                  # a chord every two bars (4.1 s)
+progression:                   # the bed's voicings (notes) and bass notes
+  - {chord: F#m(add9),  notes: [F#2, F#3, A3, C#4, G#4], bass: F#2}
+  - {chord: Dmaj7,      notes: [D2, F#3, A3, C#4, D4], bass: D2}
+  - {chord: A(add9),    notes: [A2, E3, A3, B3, C#4], bass: A2}
+  - {chord: E6,         notes: [E2, E3, G#3, B3, C#4], bass: E2}
+  - {chord: F#m7,       notes: [F#2, E3, A3, C#4, E4], bass: F#2}
+  - {chord: Dmaj9,      notes: [D2, E3, F#3, A3, C#4], bass: D2}
+  - {chord: Bm9,        notes: [B2, F#3, A3, C#4, D4], bass: B2}
+  - {chord: C#7sus4,    notes: [C#3, F#3, G#3, C#4, F#4], bass: C#2}
+  - {chord: F#m(add9),  notes: [F#2, F#3, A3, C#4, G#4], bass: F#2}
+  - {chord: Dmaj7(#11), notes: [D2, F#3, G#3, A3, C#4], bass: D2}
+  - {chord: E(add9),    notes: [E2, E3, F#3, G#3, B3], bass: E2}
+  - {chord: C#,         notes: [C#3, E#3, G#3, C#4, E#4], bass: C#2}   # major V: back to F# minor at the top
+master: {lowpass: 4400}
+tracks:
+  # Soft saw strings (the synthwave pad) and a warm pad with a sub under them; both breathe with
+  # a gentle side-chain on every beat.
+  strings:
+    instrument: saw_pad
+    play: chords
+    settings: {tone: 1700, detune: 24, fade: 1.0}
+    duck: {to: beat, depth: 0.3, release: 0.18}
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 1500, air: 0.3, swell: 12, sub: 0.55}
+    volume: -9.5
+    duck: {to: beat, depth: 0.3, release: 0.18}
+  kick:
+    instrument: kick
+    settings: {high: 95, low: 48, decay: 0.2, click: 0.06}
+    steps: "x... x... x... x..."
+  snare:
+    instrument: gated_snare             # the 80s gated-reverb snare on 2 and 4
+    steps: "....x.......x..."
+  hat:
+    instrument: hat
+    settings: {decay: 0.018, tone: 6000}
+    steps: "ooxo ooxo ooxo ooxo"            # sixteenths, the off-beat eighth louder
+    volume: -1.6
+    spread: 0.3
+  # The bass: the chord's root and its octave (1 and 8 in octave 2) on the eighths, the root louder.
+  bass:
+    instrument: analog_bass
+    octave: 2
+    steps: "1 8 1 8 1 8 1 8"
+    accent: "2"
+    volume: -2.9
+    settings: {ring: 0}
+  # The arpeggio: the voicing's upper four notes an octave up (v2'-v5') in sixteenths, the
+  # figure turned around in the chord's second bar; the 3+3+2 accents loud, the rest soft (?).
+  arp:
+    instrument: square_pluck
+    volume: 2.5
+    spread: 0.3
+    settings: {decay: 0.09, tone: 2200, ring: 0.12}
+    steps:
+      - "v2' v3'? v4'? v2' v3'? v5'? v2' v3'? v4' v2'? v3'? v5' v4'? v3'? v2' v3'?"
+      - "v5' v4'? v3'? v5' v4'? v2'? v5' v4'? v3' v5'? v4'? v2' v3'? v4'? v5' v4'?"

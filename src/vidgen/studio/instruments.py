@@ -36,7 +36,7 @@ from vidgen.music import (
     _synth_bass,
     _woodblock,
 )
-from vidgen.sfx import RATE, _tone
+from vidgen.sfx import RATE, _band, _filtered, _lowpass, _tone
 
 #: Instrument kinds: ``drum`` (no pitch: hits), ``note`` (one sound per note, a chord is its
 #: notes together), ``pad`` (sustained chords, cross-faded; can also play held notes).
@@ -108,6 +108,25 @@ def _snare(gate: float, body: float) -> np.ndarray:
 
 def _snare_sound(s: Mapping[str, float], held: float) -> np.ndarray:
     return _snare(s["gate"], s["body"])
+
+
+@lru_cache(maxsize=8)
+def _snap(tone: float, decay: float) -> np.ndarray:
+    """A soft snare-like snap (80 ms): a noise burst band-passed around ``tone`` Hz, nothing much
+    above 1.8 times it (the ``cartoon`` bed's tick, ``lab``'s snap); peak 1."""
+    n = int(0.08 * RATE)
+    t = np.arange(n) / RATE
+    burst = np.random.default_rng(31).standard_normal(n) * np.exp(-t / decay) * (1 - np.exp(-t / 0.0008))
+    snap = _filtered(burst, lambda f: _band(f, tone, 0.6) * _lowpass(f, 1.8 * tone, 4))
+    fade = int(0.01 * RATE)
+    snap[-fade:] *= np.linspace(1, 0, fade)
+    snap = snap / np.abs(snap).max()
+    snap.setflags(write=False)
+    return snap
+
+
+def _snap_sound(s: Mapping[str, float], held: float) -> np.ndarray:
+    return _snap(s["tone"], s["decay"])
 
 
 def _tick_sound(s: Mapping[str, float], held: float) -> np.ndarray:
@@ -206,7 +225,9 @@ def _pad_settings(tone: float, air: float, detune: float, fade: float) -> dict[s
     return _settings(
         tone=(tone, 300.0, 6000.0, _TONE),
         air=(air, 0.0, 1.0, "level of a soft airy layer an octave up (0 off)"),
-        sub=(0.0, 0.0, 1.0, "level of a sine-like sub bass on the chord's bass note in octave 2 (0 off)"),
+        swell=(0.0, 0.0, 512.0, "bars over which the airy layer swells from silence to `air` and back, counted from the piece's start "
+               "(0: steady; a whole number of swells per piece keeps a loop seamless)"),
+        sub=(0.0, 0.0, 1.0, "level of a sine-like sub bass on the chord's bass note (the written bass, else octave 2; 0 off)"),
         attack=(0.08, 0.005, 2.0, "seconds to fade in a note played in steps (play: chords cross-fades instead, see fade)"),
         release=(0.4, 0.02, 3.0, "seconds to fade out after a note played in steps"),
         detune=(detune, 2.0, 80.0, "spread of each harmonic in cents: more is wider, more chorused"),
@@ -242,6 +263,8 @@ INSTRUMENTS: dict[str, Instrument] = {
         _drum("gated_snare", "an 80s gated-reverb snare: a crack, a falling body tone and a wide noise room cut off after `gate` s (stereo)", 0.12,
               _settings(gate=(0.24, 0.08, 0.6, "seconds the room is held before it is cut"), body=(190.0, 120.0, 320.0, "pitch of the body in Hz")),
               _snare_sound, "drums"),
+        _drum("snap", "a soft snare-like snap: a short noise burst around `tone` Hz", 0.08,
+              _settings(tone=(1800.0, 800.0, 4000.0, "centre of the noise in Hz"), decay=(0.012, 0.004, 0.05, _DECAY)), _snap_sound, "drums"),
         _drum("tick", "a clock tick: a 4 ms click with a little ring at `tone` Hz", 0.04,
               _settings(tone=(3600.0, 1500.0, 6000.0, "pitch of the ring in Hz")), _tick_sound, "drums"),
         _drum("boom", "a deep low boom (2.4 s) to mark a lift", 0.5,

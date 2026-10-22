@@ -13,6 +13,7 @@ from vidgen.studio.instruments import INSTRUMENTS, Instrument
 from vidgen.studio.patches import patch_catalog, patch_text
 from vidgen.studio.render import render_music_score
 from vidgen.studio.score_file import MusicScore, load_music_score, parse_music_score, score_outline
+from vidgen.studio.templates import music_template_catalog, music_template_text, template_path
 
 __all__ = [
     "EFFECTS",
@@ -20,6 +21,9 @@ __all__ = [
     "Instrument",
     "MusicScore",
     "load_music_score",
+    "music_template_catalog",
+    "music_template_text",
+    "template_path",
     "parse_music_score",
     "patch_catalog",
     "patch_text",

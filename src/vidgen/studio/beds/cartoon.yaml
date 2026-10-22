@@ -1,0 +1,117 @@
+# Cartoon: a score-file template of vidgen's built-in bed `cartoon` (vidgen music template cartoon).
+# A close re-creation, not the bed itself: the same key, tempo, chords, melody, parts and levels,
+# but the pad's random phases and some details differ, so it sounds very like the bed.
+# A playful, bouncy bed: a staccato pizzicato melody on a motif that comes back varied, a plucked
+# bass bouncing root to fifth, "oom-pah" chords on 2 and 4, two woodblocks and soft ticks.
+# Six four-bar phrases (the sections), a chord per bar; each phrase's last bar is a woodblock fill.
+# Change one thing at a time and listen: vidgen music render cartoon.yaml --out cartoon.mp3
+version: 1
+title: Cartoon (template)
+description: Playful bed in G major at 128 BPM - pizzicato melody, bouncing bass, oom-pah chords, woodblocks.
+key: G major
+tempo: 128
+seed: 1
+chord_bars: 1                  # a chord per bar
+# The chords as the bed voices them (&name marks a chord to reuse as *name below).
+sections:
+  - name: a1                   # the motif
+    bars: 4
+    progression:
+      - &G  {chord: G,  notes: [G3, B3, D4, G4], bass: G2}
+      - &C  {chord: C,  notes: [G3, C4, E4, G4], bass: C3}
+      - &D7 {chord: D7, notes: [F#3, A3, C4, D4], bass: D2}
+      - *G
+  - name: a2                   # the motif again, towards the dominant
+    bars: 4
+    progression:
+      - *G
+      - &Em {chord: Em, notes: [G3, B3, E4, G4], bass: E2}
+      - {chord: A7, notes: [G3, A3, C#4, E4], bass: A2}
+      - *D7
+  - name: b                    # syncopated and lower
+    bars: 4
+    progression:
+      - *C
+      - {chord: G/B, notes: [G3, B3, D4, G4], bass: B2}
+      - &Am {chord: Am, notes: [A3, C4, E4, A4], bass: A2}
+      - *D7
+  - name: a3                   # the motif an octave up
+    bars: 4
+    progression: [*G, *C, *D7, *G]
+  - name: c                    # call and response with the woodblocks
+    bars: 4
+    progression: [*Em, *Am, *D7, *G]
+  - name: turn                 # the turnaround back to the top
+    bars: 4
+    progression: [*C, *D7, *G, *D7]
+master: {lowpass: 16000, highpass: 10}   # the bed has no final filter: every part is shaped at 4.2 kHz itself
+tracks:
+  pad:                                    # a faint pad under everything
+    instrument: pad
+    play: chords
+    settings: {tone: 4200, air: 0.15, swell: 24, sub: 0.55}
+    volume: -9.5
+  # The melody: staccato pizzicato in eighths (eight steps a bar, '.' a rest), slightly right.
+  melody:
+    instrument: pizzicato
+    volume: 5.3
+    pan: 0.2
+    settings: {decay: 0.2, tone: 4200, ring: 0.97}
+    sections:                             # every phrase has its own four bars
+      a1: {steps: ["D5 . G5 . F#5 G5 A5 .", "G5 . E5 . C5 . E5 G5", "F#5 . A5 F#5 D5 . C5 .", "B4 D5 G5 . G5 . . D5"]}
+      a2: {steps: ["D5 . G5 . F#5 G5 B5 .", "B5 . G5 . E5 . G5 B5", "A5 . C#6 A5 G5 . E5 .", "F#5 . D5 . C5 D5 F#5 A5"]}
+      b: {steps: ["E5 . . C5 G5 . . E5", "D5 . . B4 G5 . . D5", "C5 . E5 . A5 . G5 E5", "F#5 . D5 . A5 G5 F#5 E5"]}
+      a3: {steps: ["G5 . B5 . A5 B5 D6 .", "C6 . G5 . E5 . G5 C6", "A5 . C6 A5 F#5 . D5 .", "G5 . . . B4 . D5 ."]}
+      c: {steps: ["B4 D5 E5 . . . . .", "C5 E5 A5 . . . . .", "F#5 A5 C6 . A5 . F#5 .", "G5 . D5 . B4 . . ."]}
+      turn: {steps: ["E5 . G5 E5 C5 . E5 .", "F#5 . A5 F#5 D5 . F#5 .", "G5 . D5 . B4 D5 G5 .", "A5 . F#5 . D5 E5 F#5 E5"]}
+  # The bass: plucked, root on beat 1 and fifth on beat 3, a soft pickup (?) leading into some bars.
+  bass:
+    instrument: pizzicato
+    volume: 8.5
+    settings: {decay: 0.32, tone: 4200, ring: 1.27}
+    sections:
+      a1: {steps: ["G2 . . . D3 . . .", "C3 . . . G2 . . .", "D2 . . . A2 . . .", "G2 . . . D3 . . F#2?"]}
+      a2: {steps: ["G2 . . . D3 . . .", "E2 . . . B2 . . .", "A2 . . . E2 . . .", "D2 . . . A2 . . B2?"]}
+      b: {steps: ["C3 . . . G2 . . .", "B2 . . . G2 . . .", "A2 . . . E3 . . .", "D2 . . . A2 . . F#2?"]}
+      a3: {steps: ["G2 . . . D3 . . .", "C3 . . . G2 . . .", "D2 . . . A2 . . .", "G2 . . . D3 . . B2?"]}
+      c: {steps: ["E2 . . . B2 . . .", "A2 . . . E3 . . .", "D2 . . . A2 . . .", "G2 . . . D3 . . B2?"]}
+      turn: {steps: ["C3 . . . G2 . . .", "D2 . . . A2 . . .", "G2 . . . D3 . . .", "D2 . . . A2 . . F#2?"]}
+  # "Oom-pah": the voicing's upper three notes together (v2+v3+v4), short, on beats 2 and 4.
+  chords:
+    instrument: pizzicato
+    steps: ". . v2+v3+v4 . . . v2+v3+v4 ."
+    volume: 1.2
+    pan: -0.35
+    settings: {decay: 0.1, tone: 4200, ring: 0.37}
+  # Percussion: soft ticks in the centre, a high woodblock right and a low one left; the patterns
+  # change per phrase and the fourth bar is always the same fill.
+  tick:
+    instrument: snap
+    settings: {tone: 2200, decay: 0.018}
+    volume: 9.9
+    steps: ["..x...x.", "..x...x.", "..x...x.", "..x....."]
+    sections:
+      b: {steps: ["......x.", "......x.", "......x.", "..x....."]}
+      c: {steps: ["..x.....", "..x.....", "..x.....", "..x....."]}
+  wood_high:
+    instrument: woodblock
+    settings: {tone: 4200}
+    volume: 8.5
+    pan: 0.4
+    steps: ["...D#6...D#6", "...D#6...D#6", "...D#6...D#6", ".....D#6.D#6"]
+    sections:
+      a1: {steps: [".......D#6", ".......D#6", ".......D#6", ".....D#6.D#6"]}
+      b: {steps: ["........", "........", "........", ".....D#6.D#6"]}
+      c: {steps: ["....D#6D#6..", "....D#6D#6..", "....D#6D#6..", ".....D#6.D#6"]}
+      turn: {steps: [".......D#6", ".......D#6", ".......D#6", ".....D#6.D#6"]}
+  wood_low:
+    instrument: woodblock
+    settings: {tone: 4200}
+    volume: 8.5
+    pan: -0.4
+    steps: [".....A5..", ".....A5..", ".....A5..", "......A5."]
+    sections:
+      a1: {steps: ["........", "........", "........", "......A5."]}
+      b: {steps: ["...A5....", "...A5....", "...A5....", "......A5."]}
+      c: {steps: ["......A5A5", "......A5A5", "......A5A5", "......A5."]}
+      turn: {steps: ["...A5....", "...A5....", "...A5....", "......A5."]}

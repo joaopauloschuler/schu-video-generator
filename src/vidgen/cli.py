@@ -1382,6 +1382,8 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
         return _music_render(args)
     if args.action == "patches":
         return _music_patches(args)
+    if args.action == "template":
+        return _music_template(args)
     settings: dict[str, Any] = {}
     setting, root = None, Path.cwd()
     if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
@@ -1463,6 +1465,39 @@ def _music_patches(args: argparse.Namespace) -> CommandResult:
     if args.json:
         return jsonout.music_patches_document(patch_catalog())
     print(patch_text())
+    return 0
+
+
+def _music_template(args: argparse.Namespace) -> CommandResult:
+    """``vidgen music template [BED] [--out FILE.yaml]``: list the built-in beds' templates, or
+    write one out as an editable score file (DESIGN.md §93.8)."""
+    from vidgen.studio import music_template_catalog, music_template_text, template_path
+
+    catalog = music_template_catalog()
+    if args.project == ".":
+        if args.json:
+            return jsonout.music_template_document(catalog)
+        print("score-file templates of the built-in beds (vidgen music template <bed> --out my_theme.yaml):")
+        for t in catalog:
+            print(f"  {t['name']:<13} {t['key']:<10} {t['tempo']:>4g} BPM  {t['time']}  {t['bars']:>3} bars = {t['seconds']:5.1f} s  "
+                  f"sections: {', '.join(t['sections'])}")
+        return 0
+    bed = args.project
+    template_path(bed)  # an unknown bed: the error with did-you-mean
+    out = Path(args.out) if args.out else Path(f"{bed}.yaml")
+    if out.suffix.lower() not in (".yaml", ".yml"):
+        raise VidgenError(f"music template: --out must be a .yaml file, got {out}")
+    if out.exists() and not args.force:
+        raise VidgenError(f"music template: {out} exists; give another --out or --force to overwrite it")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(music_template_text(bed), encoding="utf-8")
+    facts = next(t for t in catalog if t["name"] == bed)
+    if args.json:
+        return jsonout.music_template_document(catalog, facts, out)
+    print(f"{facts['title']}: {facts['key']}, {facts['tempo']:g} BPM, {facts['time']}, {facts['bars']} bars = {facts['seconds']:.2f} s")
+    print(f"tracks: {', '.join(facts['tracks'])}")
+    print(f"wrote: {out}")
+    print(f"next: change one thing at a time and listen: vidgen music render {out} --out {out.with_suffix('.mp3')}")
     return 0
 
 
@@ -1735,15 +1770,19 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "music",
         help="music tools: preview writes a composed piece in a mood as WAV and .mid (needs the music extra); render plays a score file; "
-        "patches describes the score files' instruments and effects; page writes the Listen page",
+        "patches describes the score files' instruments and effects; template writes a built-in bed as a score file; page writes the Listen page",
     )
     p.add_argument(
-        "action", choices=["preview", "render", "patches", "page"],
+        "action", choices=["preview", "render", "patches", "template", "page"],
         help="preview: compose the project's compose: music (or --mood) and write it; render: play a score file (YAML) to a WAV or MP3; "
         "patches: every score-file instrument, setting and effect in words; "
+        "template: list the built-in beds' score-file templates, or write one (vidgen music template momentum --out my_theme.yaml); "
         "page: write the Listen page (a clip and spectrogram of every bed, the sound effects, ambience and composed moods; default --out docs/music)",
     )
-    p.add_argument("project", nargs="?", default=".", help="preview: project dir or config file (default: .); render: the score file")
+    p.add_argument(
+        "project", nargs="?", default=".",
+        help="preview: project dir or config file (default: .); render: the score file; template: the bed (none: list them)",
+    )
     p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
     p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
     p.add_argument("--bars", type=int, metavar="N", help="length in bars, a multiple of 4 (default: the mood's)")
@@ -1752,8 +1791,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--out", metavar="PATH",
         help="preview: folder for <mood>-seed<N>.wav and .mid (default: .); render: the .wav or .mp3 (default: <score>.wav here); "
-        "page: the page's folder (default: docs/music)",
+        "template: the .yaml to write (default: <bed>.yaml here); page: the page's folder (default: docs/music)",
     )
+    p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists")
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
     p.set_defaults(func=cmd_music)
 
