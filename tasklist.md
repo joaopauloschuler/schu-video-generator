@@ -1064,11 +1064,12 @@ advice; a human makes the final choice (DESIGN §93).
 
 ### Step 190 — Two score pieces become built-in beds (added to the plan: the owner approved them)
 - [x] `tidewater` (Step 184's demo) and `skyline` (Step 185's `skyline_lift`; the short name, no clash) are built-in beds like the other 14: `music: tidewater`, list-music (+ `--json`, MCP `list_music`) with plain-language descriptions, key, tempo, loop, use; did-you-mean; the schema's source text; CONFIG beds table; guide alternatives (`momentum` still first) + `AGENTS.md`; README and cookbook counts (16) (DESIGN §93.12)
-- [x] Mechanism: the score file is package data `studio/beds/<bed>.yaml` (also its template: `vidgen music template tidewater` gives the bed itself), rendered by `studio` at the join (`Bed.score`, `music._score_bed`, cached per process like the other beds); the Step 188 name-clash rule covers them; fingerprints added (the 14 unchanged); the skyline render is byte-identical to the MP3 the owner heard (`s185/out/skyline_lift.mp3`, made with Step 186's centred sub), so nothing was changed in the renderer
+- [x] Mechanism: the score file is package data `studio/beds/<bed>.yaml` (also its template: `vidgen music template tidewater` gives the bed itself), rendered by `studio` at the join (`Bed.score`, `music._score_bed`, cached per process like the other beds); the Step 188 name-clash rule covers them; fingerprints added (the 14 unchanged); the skyline bed is Step 185's render, the one the owner approved, sample for sample (the pad setting `sub_width: 1`, second commit; corrected in Step 191: this line first said the centred-sub render was the one heard)
 - [x] Listen page rows, spectrograms and clips (both lead into the lift), regenerated (6.33 MB; every other file byte-identical; a second run identical)
 
 ### Step 191 — Review of Phase S
-- [ ] Critical review with fixes recorded in HANDOFF; compatibility (the 16 beds and all existing projects' audio byte-identical — fingerprint tests); determinism across runs; phase tests and related suites one at a time; `tests/test_mcp.py` fully with a long timeout
+- [x] Critical review with fixes recorded in HANDOFF (DESIGN §93.13): holds across sections, `duck: {follow}`, a cue's `section:`, names in `vidgen music render` / `check` and MCP, the check's per-chord fit, lift against earlier sections, riser and lift advice, lint `music_check` on the part played, threaded filter sweeps (bit-identical), the module-boundary test as an allow-list, and the Step 189 caption offset (a beat now ends on its planned frame: `scene.narrate`)
+- [x] Compatibility: the 16 beds' loops, the 16 templates, the piece, the test demos and the cookbook sketches render byte-identically (SHA-256, two processes); mixes of six projects byte-identical; the Listen page regenerates identically; Phase Q baseline frames identical; phase tests and related suites one at a time; `tests/test_mcp.py` in full
 
 ---
 
@@ -1089,7 +1090,7 @@ Bugs / correctness
 - [ ] A shape swap resets that part's style: a dimmed or faded character's speaking mouth or blinking eyes show at full opacity (Steps 67, 78)
 - [ ] A walk's run time is planned when its batch starts: two walks of one character due on the same frame both start from its position then; `enter` on a character already on screen first jumps it to the edge (Step 79)
 - [ ] An SVG character or SVG prop outside `assets/` is not in the scene fingerprint; `use` elements pointing into a part are not followed when splitting an SVG character (Steps 69, 75)
-- [ ] `VideoPlan` and a rendered scene can disagree by a frame on a beat's start when `d + pad` lands on half a frame (the scene rounds the wait left after its animations) (Step 100)
+- [x] (Fixed in Step 191: `narrate` waits to the window's whole frames, as the plan counts them) `VideoPlan` and a rendered scene can disagree by a frame on a beat's start when `d + pad` lands on half a frame (the scene rounds the wait left after its animations) (Step 100)
 - [ ] `vidgen mcp`: files found by scanning a folder (`assets/sfx/`, `assets/icons/`, `audio/`) are not confined to the root; a link there can point outside (Step 102)
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
 

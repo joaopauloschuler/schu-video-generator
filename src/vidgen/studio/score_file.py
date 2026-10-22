@@ -244,7 +244,7 @@ def parse_music_score(data: Any, origin: str = "score") -> MusicScore:
         r.add("sections" if "sections" in top else "bars", f"the piece lasts {sum(s.bars for s in sections) * bar / RATE:.0f} s; at most {MAX_SECONDS:.0f} s")
     declared = {str(e.get("name")) for e in top.get("sections") or [] if isinstance(e, Mapping) and "progression" in e}
     unchorded = [] if "progression" in top else [s.name for s in sections if s.name not in declared]
-    tracks = _tracks(r, tracks_raw or {}, sections, unchorded)
+    tracks = _tracks(r, tracks_raw or {}, sections, unchorded, loop is not False)
     if r.problems:
         _raise(origin, r)
     return MusicScore(title, description, key, tempo, time, int(seed or 0), bool(loop), beat, bar, tuple(sections), tuple(tracks), lowpass, highpass, origin)
@@ -392,9 +392,9 @@ def _section_names(r: _Reader, value: Any, where: str, names: Sequence[str]) -> 
     return out
 
 
-def _tracks(r: _Reader, raw: Mapping[str, Any], sections: list[Section], unchorded: list[str]) -> list[Track]:
+def _tracks(r: _Reader, raw: Mapping[str, Any], sections: list[Section], unchorded: list[str], loop: bool) -> list[Track]:
     """The tracks; ``unchorded``: the sections without a progression (an error where a pitched
-    track plays)."""
+    track plays); ``loop``: the piece loops (a hold may go on round its end)."""
     if not raw:
         r.add("tracks", "a score needs at least one track")
     names = [s.name for s in sections]
@@ -405,7 +405,7 @@ def _tracks(r: _Reader, raw: Mapping[str, Any], sections: list[Section], unchord
             r.add(where, "a track name is lower-case letters, digits and _ (e.g. bass, lead_2)")
             continue
         spec = r.mapping(value, where, TRACK_KEYS, "track settings")
-        track = _track(r, str(name), spec, where, sections, names)
+        track = _track(r, str(name), spec, where, sections, names, loop)
         if track is not None:
             tracks.append(track)
     track_names = [str(n) for n in raw]
@@ -422,7 +422,7 @@ def _tracks(r: _Reader, raw: Mapping[str, Any], sections: list[Section], unchord
     return tracks
 
 
-def _track(r: _Reader, name: str, spec: dict[str, Any], where: str, sections: list[Section], names: list[str]) -> Track | None:
+def _track(r: _Reader, name: str, spec: dict[str, Any], where: str, sections: list[Section], names: list[str], loop: bool) -> Track | None:
     if "instrument" not in spec:
         r.add(where, f"missing instrument (instruments: {', '.join(INSTRUMENTS)})")
         return None
@@ -467,7 +467,27 @@ def _track(r: _Reader, name: str, spec: dict[str, Any], where: str, sections: li
             r.add(where, f"no steps for section '{section.name}': give steps (e.g. steps: \"x... x... x... x...\"), play: chords (pads), or rest: [{section.name}]")
             continue
         parts[section.name] = part
+    _check_lead_holds(r, where, sections, parts, overrides, loop)
     return Track(name, instrument, play_chords, parts)
+
+
+def _check_lead_holds(r: _Reader, where: str, sections: list[Section], parts: Mapping[str, TrackPart], overrides: Mapping[str, Any], loop: bool) -> None:
+    """Steps starting with ``-`` hold on the note sounding when the section starts: the track
+    must play in the section just before (round the loop's end for the first section)."""
+    for k, section in enumerate(sections):
+        part = parts.get(section.name)
+        if part is None or not part.steps or part.steps[0][0].kind != "hold":
+            continue
+        before = sections[k - 1] if k > 0 else (sections[-1] if loop else None)
+        if before is not None and before.name in parts:
+            continue
+        here = f"{where}.sections.{section.name}.steps" if isinstance(overrides.get(section.name), Mapping) and "steps" in overrides[section.name] else f"{where}.steps"
+        if before is None:
+            r.add(here, f"starts with '-' in section '{section.name}', which starts the piece (loop: false): a hold needs a note before it "
+                  "(start with a note or x)")
+        else:
+            r.add(here, f"starts with '-' in section '{section.name}' (holding on the note the track plays when it starts), but the track rests in "
+                  f"'{before.name}' just before: start with a note or x")
 
 
 def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, base: TrackPart | None) -> TrackPart | None:
@@ -475,7 +495,7 @@ def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, 
     count = len(r.problems)
     steps = base.steps if base else None
     if "steps" in spec:
-        steps = r.attempt(f"{where}.steps", parse_steps, spec["steps"], f"{where}.steps")
+        steps = r.attempt(f"{where}.steps", parse_steps, spec["steps"], f"{where}.steps", True)
         if steps is not None and instrument.kind == "drum" and any(s.pitched for bar in steps for s in bar):
             r.add(f"{where}.steps", f"{instrument.name} has no pitch: use x, X, o, '.' and '-' (no degrees, voicing notes, notes, '*' or ' / , octave marks)")
     accent = base.accent if base else None

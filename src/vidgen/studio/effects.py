@@ -9,8 +9,10 @@ between the points (frequencies in octaves), held before the first and after the
 from __future__ import annotations
 
 import math
+import os
 import zlib
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,6 +30,9 @@ SMOOTH_SECONDS = 0.02
 DUCK_ATTACK, GATE_ATTACK, GATE_RELEASE = 0.008, 0.003, 0.018
 #: A gate step written soft (``o``, ``x?``) opens this far.
 GATE_SOFT = 0.4
+#: Threads a filter sweep filters its copies in (each a full-length FFT; at most four at once,
+#: so memory stays a few copies of the track).
+SWEEP_THREADS = max(1, min(4, os.cpu_count() or 1))
 
 
 @dataclass(frozen=True)
@@ -77,11 +82,13 @@ class Curve:
 @dataclass(frozen=True)
 class Duck:
     """Side-chain ducking: the sound dips by ``depth`` at every hit of track ``to`` (or every
-    beat, ``to: beat``) and recovers over ``release`` seconds."""
+    beat, ``to: beat``) and recovers over ``release`` seconds; ``follow``: each dip scaled by the
+    hit's level (``o`` half as deep, ``X`` 1.5 times)."""
 
     to: str
     depth: float
     release: float
+    follow: bool = False
 
 
 @dataclass(frozen=True)
@@ -136,7 +143,9 @@ EFFECTS: dict[str, Effect] = {
                "duck: {to: kick, depth: 0.5, release: 0.15}   (or duck: kick)",
                {"to": Field("kick", "the track whose hits it ducks under, or beat (every beat)"),
                 "depth": Field(0.45, "how far it dips: 0 not at all, 1 to silence", 0.0, 1.0),
-                "release": Field(0.15, "seconds to swell back", 0.03, 1.0)}),
+                "release": Field(0.15, "seconds to swell back", 0.03, 1.0),
+                "follow": Field(False, "true: each dip follows the hit's level (a soft o hit dips half as deep, an accent X 1.5 times, "
+                                "at most to silence); false: every hit dips as deep")}),
         Effect("gate", "a rhythmic gate (trance gate): the sound passes on the pattern's hits and is held down between them",
                "gate: {steps: \"X.xX .xX. X.xX .x-x\", duty: 0.55}   (or gate: \"x.x.x.x.\")",
                {"steps": Field(None, "a drum pattern: x or X opens fully, o or x? opens to 0.4, - keeps it open a step longer, . closed"),
@@ -220,8 +229,11 @@ def parse_duck(r: Any, value: Any, where: str) -> Duck | None:
     f = _fields(r, True if value is True else value, where, EFFECTS["duck"], "to")
     if f is None:
         return None
+    if not isinstance(f["follow"], bool):
+        r.add(f"{where}.follow", f"expected true or false, got {f['follow']!r}")
+        return None
     to = "kick" if f["to"] is True else str(f["to"])
-    return Duck(to, f["depth"], f["release"])
+    return Duck(to, f["depth"], f["release"], f["follow"])
 
 
 def parse_gate(r: Any, value: Any, where: str) -> Gate | None:
@@ -282,11 +294,25 @@ def swept_filter(x: np.ndarray, cutoff: np.ndarray, kind: str) -> np.ndarray:
         return np.fft.irfft(spectrum * response(freqs, lo, 2)[:, None], len(x), axis=0)
     count = math.ceil(2 * math.log2(hi / lo)) + 1
     position = np.log(cutoff / lo) / math.log(hi / lo) * (count - 1)
+    cutoffs = np.geomspace(lo, hi, count)
+
+    def copy(j: int) -> tuple[int, np.ndarray] | None:
+        """The sound at cutoff ``j`` times its weight, where the weight is not 0 (from sample a)."""
+        near = np.flatnonzero(np.abs(position - j) < 1)
+        if not len(near):
+            return None
+        a, b = int(near[0]), int(near[-1]) + 1
+        weight = np.clip(1 - np.abs(position[a:b] - j), 0.0, 1.0)
+        return a, np.fft.irfft(spectrum * response(freqs, cutoffs[j], 2)[:, None], len(x), axis=0)[a:b] * weight[:, None]
+
     out = np.zeros_like(x)
-    for j, fc in enumerate(np.geomspace(lo, hi, count)):
-        weight = np.clip(1 - np.abs(position - j), 0.0, 1.0)
-        if weight.any():
-            out += np.fft.irfft(spectrum * response(freqs, fc, 2)[:, None], len(x), axis=0) * weight[:, None]
+    # the copies are independent full-length FFTs: in threads (numpy's FFT releases the GIL), summed
+    # in order, so the result is the same to the bit as one after the other
+    with ThreadPoolExecutor(max_workers=min(SWEEP_THREADS, count)) as pool:
+        for found in pool.map(copy, range(count)):
+            if found is not None:
+                a, part = found
+                out[a : a + len(part)] += part
     return out
 
 

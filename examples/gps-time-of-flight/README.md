@@ -75,7 +75,7 @@ verdict: fine under narration
   ok   voice range  23 % of the sound in 300 Hz-3 kHz, at most -29.9 dB in a bar: room for the voice
   ok   bass         54 % of the power under 150 Hz
   ok   highs        the highs (above 5 kHz) -44.2 dB under the whole: smooth
-  ok   key          97 % of the pitched sound on the key's notes (the chroma fits B minor best, 0.85)
+  ok   key          97 % of the pitched sound on the key's notes (the chroma fits B minor best, 0.85); every part fits every chord (at least 76 %)
   ok   sections     the build builds: its second half +0.9 dB, +3.3 dB brighter
   ok   sections     the lift lifts: +2.4 dB louder and +10.2 dB brighter than the build
   ok   narration    under narration_sample.mp3 with vidgen's default ducking (12 dB): voice -21.37 LUFS, music under it -42.16 LUFS; the voice's range stands 23.8 dB over the music's

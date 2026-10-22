@@ -258,8 +258,11 @@ def test_callouts_lint_clean_in_landscape_and_portrait(make_project) -> None:
         {"id": "c", "type": "bar_chart", "params": BARS,
          "beats": beats([{"callout": "bar:4K", "kind": "arrow", "label": "Slowest by far", "at": 0.3}],
                         [{"callout": "bar1", "kind": "label", "label": "Preview", "at": 0.3}, {"action": "callout", "kind": "spotlight", "area": [0.2, 0.3, 0.6, 0.5]}])},
+        # seven words: 1.75 s + the 0.2 s pad = 9.75 frames at 5 fps. (Six made 8.5 frames, which the
+        # plan rounds to 8 and the scene keeps to since Step 191: the beat's last still, 0.1 s
+        # before the end of the 1.5 s the callout fades in over, then shows it half faded in.)
         {"id": "s", "type": "bullets", "params": {**BULLETS, "reveal": "all"},
-         "beats": beats([{"callout": "item3", "kind": "box", "label": "Most time goes here", "at": 0.3}])},
+         "beats": beats([{"callout": "item3", "kind": "box", "label": "Most time goes here", "at": 0.3}], words="one two three four five six seven")},
     ]
     for preview in ({"width": 320, "height": 180, "fps": 5}, {"width": 180, "height": 320, "fps": 5}):
         project = load(make_project, scenes, preview=preview)

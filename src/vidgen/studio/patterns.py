@@ -81,8 +81,10 @@ def _gain(mark: str, default: float = 1.0) -> tuple[float, bool]:
     return default, default != 1.0
 
 
-def parse_steps(value: str | list[str], where: str) -> Pattern:
-    """A pattern (a string, or a list of strings that follow each other) as bars of steps."""
+def parse_steps(value: str | list[str], where: str, lead_hold: bool = False) -> Pattern:
+    """A pattern (a string, or a list of strings that follow each other) as bars of steps.
+    ``lead_hold``: it may start with ``-`` (a track's steps: the note sounding when its section
+    starts goes on; the score checks there is one)."""
     text = " | ".join(value) if isinstance(value, list) else value
     if not isinstance(text, str) or not text.strip():
         raise VidgenError(f"{where}: write the steps as a string, e.g. \"x... x... x... x...\" (one bar of sixteenths)")
@@ -155,7 +157,7 @@ def parse_steps(value: str | list[str], where: str) -> Pattern:
         raise VidgenError(f"{where}: {text!r} ends with '+' (it joins two notes in one step)")
     if any(not bar for bar in bars):
         raise VidgenError(f"{where}: an empty bar in {text!r} (two '|' in a row, or one at an end)")
-    if bars[0][0].kind == "hold":
+    if bars[0][0].kind == "hold" and not lead_hold:
         raise VidgenError(f"{where}: {text!r} starts with '-' (a hold needs a note before it)")
     flat = [s for bar in bars for s in bar]
     for before, step in zip(flat, flat[1:]):

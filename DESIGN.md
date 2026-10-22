@@ -13080,7 +13080,10 @@ Term: a **score file** (YAML, this section; class `MusicScore`) is not the compo
   agent-made piece, `docs/COOKBOOK-MUSIC.md`, the Listen page's score-format row.
 - **190 Two score pieces as built-in beds** (done, §93.12; added to the plan after the owner
   listened to the demos): `tidewater` and `skyline`.
-- **191 Review** (beds and existing projects byte-identical; determinism; phase tests).
+- **191 Review** (done, §93.13): fixes and small additions found by the review (holds across
+  sections, ducking by level, a cue's `section`, names in the commands, the check's per-chord
+  fit and lift / riser advice, lint on the part played, faster sweeps, a beat on its planned
+  frame); beds, scores and existing projects byte-identical; determinism; phase tests.
 
 Compatibility: additive and opt-in. Nothing that exists plays differently; the 14 beds stay
 byte-identical (`tests/test_music.py` fingerprints).
@@ -13094,8 +13097,11 @@ Self-contained: it
 imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...,
 and `BUILTIN_BEDS` for the templates' names), `vidgen.sfx` (`RATE`, filters, `decode_audio`),
 `vidgen.loudness` and `vidgen.errors`; never manim, scenes, the project or the render pipeline
-(`tests/test_studio.py::test_studio_imports_no_video_code`), so it can become a package of its
-own (the MP3 writer, `listen.write_mp3`, is called by the command, not by `studio`). Public
+(`tests/test_studio.py::test_studio_imports_no_video_code`: since Step 191 it imports every
+module of the package and allows only those four and what they import themselves —
+`vidgen.config`, `languages`, `textnorm`, `voicesounds`, `word_anchors`, through `music`'s cue
+settings — so a package of its own would take `music`'s building blocks and not its cues), so it
+can become a package of its own (the MP3 writer, `listen.write_mp3`, is called by the command, not by `studio`). Public
 through `vidgen.api`: `MusicScore`, `load_music_score(path)`,
 `parse_music_score(data, origin)`, `render_music_score(score)`, `patch_catalog()` (185),
 `music_template_text(bed)`, `music_template_catalog()` (186), `check_music_score(score)`,
@@ -13259,7 +13265,8 @@ the riser in the last two bars of the build, the pad opening and the bell line i
   the measured loudness and true peak; `--json` adds them to the document (`action: render`).
 - **Not done here** (later steps): effects, the full instrument library (both Step 185, §93.7),
   templates, analysis, project pieces in videos, MCP tools; no humanising; a hold cannot run past
-  its section's end; notes outside 20 Hz–12 kHz are skipped (with a warning since Step 185).
+  its section's end (it can since Step 191, §93.13); notes outside 20 Hz–12 kHz are skipped (with
+  a warning since Step 185).
 
 ### 93.7 Effects and movement (Step 185)
 
@@ -13498,9 +13505,9 @@ chooses; the check only says what the numbers say.
 - **Speed**: `tidewater` (53 s, 9 tracks) 7.9 s for the command (render track by track 3.7 s);
   `skyline_lift` (60 s, 14 tracks with filter sweeps) 15.1 s (render 11.7 s, the sweeps); a
   template 4–15 s; an audio file of 40 s 4.8 s. The analysis itself is 2–4 s for a minute.
-- **Not done**: no per-track picture; the key check is per section, not per chord; a lift is
-  judged against the section just before it only; audio files have no sections (the check does
-  not guess them); level-dependent masking (a real psychoacoustic model) is out of scope — the
+- **Not done**: no per-track picture; the key check is per section, not per chord (per chord
+  too since Step 191); a lift is judged against the section just before it only (Step 191 adds
+  a note against earlier sections); audio files have no sections (the check does not guess them); level-dependent masking (a real psychoacoustic model) is out of scope — the
   voice-range level per bar and the demo's clearance stand in for it.
 
 ### 93.10 Project pieces: score files in a video (Step 188)
@@ -13568,8 +13575,9 @@ music: [{source: my_theme, to: part2}, {source: assets/music/outro.yaml, from: r
   to Step 187's (`<scratchpad>/s188/mixcompare.py` with HEAD's `src` and this step's); the 14
   beds' fingerprints pass.
 - **Not done**: no per-scene `music: {mood}`-like changes for pieces (a scene's `volume` and
-  `false` work); a piece cannot follow the video's timings (composed music does); the lint check
-  runs on the whole piece, not on the part the video plays.
+  `false` work); a piece cannot follow the video's timings (composed music does; Step 191: a
+  cue's `section` lands a section on a scene); the lint check runs on the whole piece, not on the
+  part the video plays (it does since Step 191).
 
 ### 93.11 The example, the craft notes and the Listen row (Step 189)
 
@@ -13683,3 +13691,90 @@ text, the Listen page.
 - **Docs**: README (16 beds; the list), CONFIG (the beds table, intro, bass-weight paragraph, the
   `music` / `source` rows, templates, check), the guide's bed alternatives (`momentum` still the
   first suggestion), the cookbooks, the MCP `music_template` text (16 templates).
+
+### 93.13 Review of Phase S (Step 191)
+
+What the review changed, each opt-in or a fix; every score, bed and mix that existed renders to
+the same samples (below).
+
+- **Holds across sections** (`render._track_events`, `_events_and_last`;
+  `patterns.parse_steps(lead_hold=True)` for a track's steps; `score_file._check_lead_holds`). A
+  track's steps may start with `-`: the note sounding when the section starts (the last note of
+  the section before, or round a loop's end for the first section) goes on, with the sound of the
+  section it started in. Before, a pattern starting with `-` was an error, so no existing score
+  changes. A leading hold needs the track to play in the section just before (round the loop for
+  the first section of a loop); else a problem at `tracks.T.steps` or
+  `tracks.T.sections.S.steps`: "starts the piece (loop: false)" / "the track rests in 'X' just
+  before". Gates keep the old rule (a gate pattern may not start with `-`).
+- **Ducking by level**: `duck: {follow: true}` scales each dip by the trigger hit's gain (`X`
+  1.5, `x` 1, `o` / `?` 0.5; chord starts and `beat` 1); the gain is still clipped at 0. Default
+  `false` (every hit as deep — a muted trigger still pumps, which the templates use).
+- **A cue's `section`** (`MusicCue.section`; `music_pieces.cue_score`, `section_start`,
+  `section_problem`): a project piece or a score bed (`tidewater`, `skyline`, read from
+  `studio/beds/`) starts at that section, `start` counted from it. Decision: this, not fitting a
+  piece to the scenes as composed music is (a score's sections are its own; fitting would mean
+  re-timing a written piece) — with cue lists it lands a section on a scene, which is what the
+  Step 188 "cannot follow the video" gap was about. Another source, or a section the piece lacks
+  (did-you-mean), is a `music[k].section` problem in `config_problems`. Without `section` the
+  code path computes the same offset (mixes byte-identical).
+- **Names in the commands** (`music_pieces.music_source`): `vidgen music render` and `check`
+  (`--compare` too) take a path (as before) or a name: a built-in bed (the two score beds as their
+  score files; another bed as its loop — `render` writes it with its facts and the template hint,
+  `check` measures it as audio), or a project piece in the current folder's `assets/music`. A
+  name that is both a bed and a piece is refused (give the path). MCP `music_render` /
+  `music_check` pass a name (`MUSIC_NAME`: words joined by `/`, no suffix, no `..`) through when
+  no such file is under the root; the command runs in the root. `render --json` for a code bed:
+  `bed`, `bars` / `seed` null, no sections or tracks.
+- **The check** (`CHECK_VERSION` 2; `piece_check`'s cache file is `piece-<key>-check2.json`):
+  - per chord: for every chord of at least 0.5 s, each pitched track holding at least 5 % of the
+    pitched sound there (its chroma, measured on its stem) and its share on the key's scale or the
+    chord's own notes (chord tones, written voicing and bass); the worst under 25 % is a `key` fix
+    naming the track, the chord and bar, the notes off it and the chord's notes (`facts.in_chord_min`).
+    Decision: per track, not the mix — a clashing bell line over an F chord was 1 % in tune on its
+    own but only moved the mix from about 0.93 to 0.77 (good pieces go down to 0.80: saws'
+    overtones); per track the shipped scores' worst part is 0.39 (`skyline`'s analog bass) to
+    0.99, the clashing lines 0.006 and 0.039.
+  - a lift against earlier sections: still judged against the section before (for a loop's first
+    section the last one, round the loop); a `note` when an earlier section is 1 dB louder or more
+    and at least as bright ("may not feel like the high point"; its advice only when the lift
+    passed).
+    None of the shipped scores has it.
+  - lift advice brings in a resting part only if it plays elsewhere in a section that is not a
+    build and is not a riser or boom (`TRANSITION_INSTRUMENTS`) — Step 189's run was told to bring
+    in the riser; build advice, when a riser plays in the build, says how many dB under the rest of
+    the second half it sits and how far to raise it (to a tenth of the power, at most 20 dB; a
+    riser at its normal level was 30–40 dB under).
+- **Lint `music_check` on the part played** (`lint.music_rule.played_bars`, `_heard`): the bars
+  the cue plays from the video plan's scene times, `start` / `section` and loop (and whether it
+  crosses the seam). When it plays only part of the piece: a seam it never crosses, a section
+  finding about a section it never reaches and a voice-range finding whose loud bars it does not
+  play are dropped; the message says "(the video plays bars 1-2 of its 4)". Whole-piece measures
+  (steadiness, peaks, bass, highs) stay.
+- **Faster sweeps, the same samples** (`effects.swept_filter`): the filtered copies (one
+  full-length FFT each) run in a thread pool of up to four (`SWEEP_THREADS`; numpy's FFT
+  releases the GIL) and each adds only where its weight is not 0, summed in the same order —
+  bit-identical (tested against the Step 185 loop). Two cores: `skyline` 9.1 → 7.9 s,
+  `time_of_flight` 8.9 → 6.6 s, `swept_filter` itself 3.9 → 2.3 s; faster with more cores. The
+  rest of a render is the pads' PADsynth tables and reverb FFTs.
+- **Module boundary**: the test imports every module of `studio` (it only imported the package)
+  and is an allow-list (above, §93.2); `studio` imports nothing new.
+- **The caption offset of Step 189** (a real bug, not music): `NarratedScene.narrate` waited
+  `round((window − elapsed) · fps)` frames, the plan counts `round(window · fps)`. On a half-frame
+  window (Kokoro lines of whole frames plus the 0.35 s pad = x.5 frames at 30 fps; word-count
+  timings at many pads) the two differ by a frame whenever the beat's animations took an odd
+  number of frames (banker's rounding of 211.5 vs 210.5). In `gps-time-of-flight` three scenes
+  ran a frame short, so the later captions were 0.1 s early against the plan (the "starts at
+  50.37 s, planned 50.47 s" warning). Now the wait ends on the window's whole frames from the
+  beat's start, as the plan counts; the three scenes re-rendered match the plan exactly, no
+  warning, 88.80 s. Scenes with such a beat now last a frame more or less than before (no frame of
+  the Phase Q baseline changed). This was the backlog's Step 100 item.
+- **Not changed**: the beds; `PIECE_RENDER_VERSION` (no valid score renders differently). Still
+  open: a written piece is not re-timed to scenes (only a section start); the check judges
+  sections by name; a riser still measures little at its normal level (the advice says so);
+  score beds are rendered per process, not cached on disk; Roman-numeral chord names are spelled
+  by key signature.
+- **Checked**: SHA-256 of the 16 templates, the piece, the two test demos, the five cookbook
+  sketches and the 16 beds' loops — HEAD (Step 190, `git archive`) and this step, separate
+  processes — all equal; mixes of six projects (a file + `momentum`, `tidewater` + `skyline`,
+  `gradient-descent`, `iso-web-page`, `host-explainer`, `gps-time-of-flight`) byte-identical; the
+  Listen page made again equals `docs/music`; the Phase Q baseline's 31 frames identical.

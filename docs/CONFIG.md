@@ -2954,6 +2954,7 @@ beds, `skyline` is bass-heavy too (63 %, 3 dB emptier in the voice's range than 
 | `compose` | none | instead of `source`: music composed in a mood, `compose: calm` or `{mood, key, tempo, instruments, seed, bars}` ([below](#composed-music-compose)); without `bars` it is composed for the video ([follows it](#music-that-follows-the-video): `start` and `loop` do not apply); with `bars` it loops seamlessly like a bed and `start` wraps around the piece |
 | `volume` | `0` | dB, -60 to 12; at 0 the music is −28 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6.5 dB under ElevenLabs narration (≈ −21.4 LUFS) in its pauses |
 | `start` | `0` | seconds into the source where it starts; a loop restarts there |
+| `section` | none | a project piece or a score bed (`tidewater`, `skyline`) only: start at this section of the piece (`start` then counts from it). With `from`, the section begins when that scene does — how a piece [follows the video](#project-pieces-score-files-in-a-video): `[{source: my_theme, to: results}, {source: my_theme, from: results, section: lift}]`. Another source, or a section the piece does not have (did-you-mean), is a problem |
 | `loop` | `true` | repeat the source as long as the cue lasts; `false`: it plays once and fades out at its end |
 | `crossfade` | `2.0` | seconds over which a file's end cross-fades (equal power) into its start at every repeat; beds loop seamlessly |
 | `fade_in` | `1.5` | seconds of fade-in at the cue's start |
@@ -3157,7 +3158,11 @@ progression and tracks of step patterns, with effects. `vidgen music render SCOR
 FILE.wav|FILE.mp3] [--json]` writes it as a WAV or an MP3 (default `<score>.wav` in the current
 folder; 48 kHz stereo, −28 LUFS like a bed, a seamless loop unless `loop: false`; the MP3 needs an
 ffmpeg with libmp3lame) and prints the sections (start, bars, key, chords), the tracks and their
-effects, the loudness and the true peak. Notes outside 20 Hz–12 kHz are left out with a warning
+effects, the loudness and the true peak. Instead of a path it takes a name: a project piece in the
+current folder's `assets/music` (`vidgen music render my_theme`), or a built-in bed (`tidewater`
+and `skyline` are score files; another bed is written as it plays, its own code — its editable
+template is `vidgen music template BED`); a name that is both a bed and a project piece is
+refused (give the path). Notes outside 20 Hz–12 kHz are left out with a warning
 (change the track's `octave` or `transpose`). The same file and `seed` always give the same
 samples. Every mistake is reported at once with where it is and the nearest known name. `vidgen
 music patches [--json]` describes every instrument, setting and effect in words. A score file in
@@ -3211,7 +3216,10 @@ below.
 Steps: `|` separates bars and each bar is split into as many equal steps as it has symbols
 (16 = sixteenths in 4/4); the pattern repeats from each section's start. `x` a hit (a pitched
 instrument plays the chord's bass note), `X` accented, `o` soft, `.` rest, `-` holds the note
-before it (also across `|`: `"x | - | - | -"` lasts four bars), `*` the whole chord, `1`–`9`
+before it (also across `|`: `"x | - | - | -"` lasts four bars; a section's steps that start with
+`-` hold on the note the track plays as the section before ends, or round a loop's end, so a note
+can run across a section's change: `sections: {lift: {steps: "- - - - | x..."}}`; the track must
+play in the section just before), `*` the whole chord, `1`–`9`
 chord degrees (1 root, 3 third, 5 fifth, 7 seventh, 8 octave; `'` after it an octave up, `,`
 down), `v1`–`v9` the notes of the chord's voicing from the lowest (the written `notes`, else the
 chord as `*` plays it; past the top it starts again an octave up; `'` / `,` too), notes like `E5`,
@@ -3257,14 +3265,16 @@ hat: {instrument: hat, steps: "o.x. o.x. o.x. o.xo", spread: 0.3}
 | `spread` | 0 to 1 | odd steps this far right of `pan`, even steps as far left |
 | `width` | 0 to 2, or a curve | stereo width: 0 mono, 1 as it is, 2 extra wide |
 | `lowpass`, `highpass` | Hz, or a curve | gentle filters on the track; a curve is a filter sweep |
-| `duck` | `{to, depth, release}` or a track name | side-chain ducking: dips by `depth` (0.45) at every hit of track `to` (or `beat`: every beat), back in `release` s (0.15) |
+| `duck` | `{to, depth, release, follow}` or a track name | side-chain ducking: dips by `depth` (0.45) at every hit of track `to` (or `beat`: every beat), back in `release` s (0.15); `follow: true` scales each dip by the hit's level (`o` half as deep, `X` 1.5 times; default `false`: every hit as deep, so a muted kick still pumps) |
 | `gate` | `{steps, duty, floor}` or a pattern | open on the pattern's hits (`x` fully, `o` to 0.4, `-` longer) for `duty` (0.55) of the step, `floor` (0.08) between |
 | `echo` | `{delay, feedback, repeats, pingpong}` or `true` | echoes `delay` beats apart (0.75), each `feedback` (0.35) quieter, `repeats` (2), alternating sides (`pingpong: true`) |
 | `reverb` | `{size, mix, tone, predelay}` or `true` | a room: a tail of `size` s (1.8) at `mix` (0.2), low-passed at `tone` Hz (4000), after `predelay` s (0.02) |
 
 A curve's points are bars from the section's start (fractions allowed); between them the value
 moves in a straight line (frequencies in octaves). The demo `tests/data/studio/skyline_lift.yaml`
-uses every effect: a pumping supersaw lift.
+uses every effect: a pumping supersaw lift. A filter sweep is the costliest effect (the track
+filtered at cutoffs half an octave apart, each a pass over the whole piece; they run in parallel
+on up to four cores): one to two seconds per swept track for a minute of music.
 
 #### Templates of the built-in beds (`vidgen music template`)
 
@@ -3291,7 +3301,11 @@ by their `volume` curves.
 vidgen music check my_theme.yaml                         # a score file (or a WAV / MP3 / any audio file)
 vidgen music check my_theme.yaml --compare momentum.yaml # side by side with another version
 vidgen music check my_theme.yaml --narration my_voice.mp3 --out checks/ --json
+vidgen music check my_theme --compare momentum           # names: a project piece here, a built-in bed
 ```
+
+A name instead of a path is a project piece in the current folder's `assets/music` or a built-in
+bed (`tidewater` and `skyline` as their score files; another bed as audio, the loop it plays).
 
 How a piece will sit under narration, for authors who cannot listen: a report in words with a
 verdict (`fine under narration`, with notes, or `needs work`), a spectrogram PNG and a demo MP3,
@@ -3309,16 +3323,21 @@ Each line is `ok`, `note` or `FIX`:
 | voice range | share of the power in 300 Hz–3 kHz and each bar's level there | a bar over −26 dB or a share over 72 % |
 | bass | share under 150 Hz | over 85 % (under 5 %: a note, thin) |
 | highs | level above 5 kHz against the whole (and the brightest bar) | over −30 dB (−24 dB in a bar) |
-| key | share of the pitched tracks' sound on the key's notes, per section | under 75 % |
-| sections | a section named `lift` (`drop`, `chorus`, `climax`...) against the one before; one named `build` (`rise`...) second half against first | a lift less than 0.5 dB louder and 1.5 dB brighter; a build rising less than 0.5 dB and brightening less than 1 dB |
+| key | share of the pitched tracks' sound on the key's notes, per section; and under each chord, each pitched track's share on the key's or the chord's notes (a track with at least 5 % of the pitched sound there) | under 75 % in a section; a track under 25 % under a chord (a line written against its chord: the advice names the track, the notes off it and the chord's notes) |
+| sections | a section named `lift` (`drop`, `chorus`, `climax`...) against the one before (the first section of a loop: the last); one named `build` (`rise`...) second half against first | a lift less than 0.5 dB louder and 1.5 dB brighter; a build rising less than 0.5 dB and brightening less than 1 dB; a note when a lift is 1 dB or more quieter than an earlier section and no brighter (a lift after a quiet break passes against the break but may not feel like the high point) |
 | narration | the demo: the voice's 300 Hz–3 kHz over the music's while it speaks | under 15 dB |
 
 All 16 built-in beds and their templates pass with no notes. For a score, every track is also
 played on its own, so the report lists each track's share of the power, of the voice range, of
 the bass and of the highs, and the advice names the tracks and the keys to change (`` `piano`
 (piano) holds 70 % of the voice range there: lower `piano: sections: {main: {volume: -1}}`
-(−5 dB); or move `piano` an octave up (`octave: 5`) ``). Change one thing, check again, compare
-(`--compare`), and let a human listen and choose.
+(−5 dB); or move `piano` an octave up (`octave: 5`) ``). A lift that does not lift gets the
+tracks quieter there than before, its main part raised, a part that plays elsewhere but rests in
+the lift (never a riser or boom, nor a part that only plays in builds) and the section before made
+smaller; a build that does not build, a volume ramp, a filter sweep, and a riser — or, when one
+plays there, how many dB under the rest it sits and how far to raise it (at its normal level a
+riser is a hint, too quiet to count). Change one thing, check again, compare (`--compare`), and
+let a human listen and choose.
 
 The demo plays the piece from its start at volume 0 (−28 LUFS) under the narration — a 20 s
 sample shipped with vidgen (two lines spoken by Kokoro's `af_heart`), or `--narration FILE` at its
@@ -3339,6 +3358,9 @@ music: {source: assets/music/my_theme.yaml}     # the path form: any .yaml / .ym
 music:                                          # in a list of cues, with beds and files
   - {source: my_theme, to: part2}
   - {source: momentum, from: results}
+music:                                          # the piece follows the video: its lift begins with the
+  - {source: my_theme, to: setup, fade_out: 0.5}                     # scene "results", after "setup"
+  - {source: my_theme, from: results, section: lift, fade_in: 0.3}   # (short fades join the two cues)
 ```
 
 - **Names.** `NAME` is the file's path under `assets/music` without `.yaml` (`themes/night` for
@@ -3357,12 +3379,19 @@ music:                                          # in a list of cues, with beds a
   false` piece (one pass with an ending) always plays once from `start` (which must be inside
   it), then is silent; the cue's `fade_out` applies at the cue's end as usual, so end the cue
   (`to:`) near the piece's end, or let it ring out.
+- **Following the video.** A piece plays at its own pace; it is not fitted to the scenes as
+  [composed music](#music-that-follows-the-video) is. To land a section on a scene, split the
+  music into cues and start the later one at that `section` (above): the section then begins
+  exactly when its scene does (the earlier cue ends there). Scenes cannot change a piece's
+  sections otherwise; a scene's `music: {volume}` and `music: false` work.
 - **Checks.** `vidgen validate` reads every piece the video plays and reports its problems as
   `music.source: assets/music/x.yaml: <where>: <what>`; pieces the video does not play are
   checked too, as warnings. `vidgen lint`'s `music_check` rule runs `vidgen music check` (without
   the demo and the picture) on the pieces the video plays and reports its fixes on the cue's first
   scene (cached in `build/music` per version of the file; a minute of music takes 5–15 s the first
-  time). `timings.json`'s `mix.music` names them with `kind: score`.
+  time), about the part the cue plays (by the planned scene times, its `start` / `section` and
+  loop: a seam it never crosses, sections it never reaches and a voice range loud only in bars it
+  does not play are left out; the message names the bars played). `timings.json`'s `mix.music` names them with `kind: score`.
 - **Listing.** `vidgen list-music` lists the pieces (origin `score`) with key, tempo, time, bars,
   length, chords, sections and the score's `title` and `description`, or their problems.
 
@@ -9402,7 +9431,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `said_before_shown` | warning | the narration names an on-screen **label** (a scene text of at most `max_words` words with a word that names something: a diagram node, a callout, a stage, an axis title) more than `min_lead` seconds before the label is on screen, and does not name it again when it shows. When it shows is known from the layout dump: it was not there at the still before the one that first shows it (the beat-end still of the beat before, or a mid-beat still of a storyboard), or at the time of the `reveal` / `callout` / `transform` action of its beat that shows it (a callout with that label, or an action [on a word](#actions-on-a-spoken-word) the label says). Words are compared without case and accents, with English plural and verb endings (`databases` = `database`, `moving` = `moves`), without stop words and numbers; a label of several words counts as named when all its words are said close together. Not checked: overlays (captions repeat the narration), speech bubbles, maths and code, numbers (a chart's values, tick labels, live values like `slope 0.50`), texts that another text on screen already says (the heading "How a cache works" before a `Cache` node). Word times come from the beat's audio (the alignment), else the estimate. Fix: show it on the word (`{reveal: node:database, at: "@database"}`), reveal it earlier, or name it when it shows; or `lint_ignore` it (`{rule: said_before_shown, object: Database}`) |
 | `unsaid_reveal` | off (info when turned on) | a beat (not the scene's first) brings new labels, and the scene's narration names none of them (same labels and word matching as `said_before_shown`). Off by default: many labels are fine unsaid (a map's city names, a step's output); turn it on with `unsaid_reveal: {severity: info}` to review a script |
 | `iso_labels` | warning | an [`iso_diagram`](#iso_diagram) label (from the outlines of its blocks and plates and the paths of its connectors that the scene adds to the layout dump) that covers at least `min_cover` of its box over a block it does not name (a group's caption among the group's blocks; a label on its own block's top is fine), shares at least `min_overlap` of the smaller box with another label, hides part of another connector, or stands more than `max_gap` of the shorter side from what it names without a leader line. The scene places labels to avoid all of these; a finding means the diagram is crowded. Text size and contrast are `min_font`'s and `contrast`'s. Fix: more `spacing` (or `at` further apart), shorter labels, fewer blocks, or labels on a stack's side (`label_side`) |
-| `music_check` | warning; info for notes | a [project piece](#project-pieces-score-files-in-a-video) the video plays (a score file in `assets/music`) that [`vidgen music check`](#checking-a-piece-vidgen-music-check) flags in one of `topics` (default: `voice range`, `highs`, `bass`, `steadiness`, `peaks`, `loop seam`; `key`, `sections`, `tempo` can be added): its fixes at the rule's severity, its notes as info, each with the first two changes it suggests (score keys), on the first scene of the cue. Reads the config, not the stills; the check (no demo, no picture) is cached in `build/music` per version of the file, so it costs 5–15 s for a minute of music once. Fix: the change it names, then `vidgen music check` again; or `severity: off` |
+| `music_check` | warning; info for notes | a [project piece](#project-pieces-score-files-in-a-video) the video plays (a score file in `assets/music`) that [`vidgen music check`](#checking-a-piece-vidgen-music-check) flags in one of `topics` (default: `voice range`, `highs`, `bass`, `steadiness`, `peaks`, `loop seam`; `key`, `sections`, `tempo` can be added): its fixes at the rule's severity, its notes as info, each with the first two changes it suggests (score keys), on the first scene of the cue; only about the part of the piece the cue plays (a loop seam it never crosses, sections it never reaches, a voice range loud only in bars it skips are left out; the message names the bars played). Reads the config, not the stills; the check (no demo, no picture) is cached in `build/music` per version of the file, so it costs 5–15 s for a minute of music once. Fix: the change it names, then `vidgen music check` again; or `severity: off` |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -9709,9 +9738,9 @@ back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`,
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `music_preview` (`vidgen music preview`: `mood`, `seed`, `bars`, `key`, `tempo`,
 `out`), `music_template` (`bed`, `out` default `assets/music/<bed>.yaml`, `force`; no `bed`: the
-list), `music_patches`, `music_render` (`score`, `out` default `build/mcp/music/<score>.mp3`),
-`music_check` (`source`, `compare`, `narration`, `out` default `build/mcp/music`, `images`: returns
-the spectrogram as a picture), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+list), `music_patches`, `music_render` (`score`: a path or a project piece's or bed's name, `out`
+default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` given the same way,
+`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `cast` (`count`
 for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`). Their parameters are the command's
@@ -9963,6 +9992,7 @@ difference between two palette colours).
 | `sections` | list | `{name, start, bars, key, chords}` (`start` in seconds, `chords` names) |
 | `tracks` | list | `{name, instrument, plays, sections, effects}` (`plays`: `steps` or `chords`; `effects`: names such as `lowpass`, `duck`, `volume curve`) |
 | `loudness`, `true_peak` | float | of the WAV: LUFS integrated, dBTP |
+| `bed` | str | only for a built-in bed made by its own code (`vidgen music render calm`): its name; then `bars` and `seed` are `null`, `sections` and `tracks` empty, `tempo` `null` for a bed without a beat |
 
 `vidgen music patches --json` ([Score files](#score-files-vidgen-music-render)):
 
@@ -9979,7 +10009,7 @@ difference between two palette colours).
 | `action` | str | `check` |
 | `name`, `kind`, `seconds`, `loop` | | the piece: its title (or file name), `score` or `audio`, its length, whether it loops |
 | `verdict` | str | `fine under narration`, `fine under narration, N notes (...)` or `needs work: N things to fix (...)` |
-| `facts` | object | `lufs`, `short_term_p10` / `_p95`, `steadiness_db`, `true_peak`, `peak_to_loudness_db`, `clipped_runs` (audio), `file_lufs` (audio), `tempo_heard`, `seam_ratio`, `voice_share`, `voice_bar_max_db`, `bass_share`, `highs_db`, `highs_bar_max_db`, `key_heard`, `key_fit`, `in_key` (score), `bar_voice_db` and `bar_lufs` (per bar; per 2 s for audio), the score's `title key tempo time bars`, and `demo`: `{seconds, voice_lufs, music_under_voice_lufs, music_alone_lufs, voice_clear_db, narration}` |
+| `facts` | object | `lufs`, `short_term_p10` / `_p95`, `steadiness_db`, `true_peak`, `peak_to_loudness_db`, `clipped_runs` (audio), `file_lufs` (audio), `tempo_heard`, `seam_ratio`, `voice_share`, `voice_bar_max_db`, `bass_share`, `highs_db`, `highs_bar_max_db`, `key_heard`, `key_fit`, `in_key` (score), `in_chord_min` (score: `{track, share, where, chord}`, the pitched track that fits a chord worst), `bar_voice_db` and `bar_lufs` (per bar; per 2 s for audio), the score's `title key tempo time bars`, and `demo`: `{seconds, voice_lufs, music_under_voice_lufs, music_alone_lufs, voice_clear_db, narration}` |
 | `findings` | list | `{topic, level, text, fixes}`: `level` `ok`, `note` or `fix`; `fixes` the advice in words naming score keys |
 | `sections` | list | `{name, first_bar, bars, start, key, lufs, bright_db, first_half_lufs, second_half_lufs, brighter_db}`, + `lift_db`, `lift_brighter_db` for a lift, `build_db` for a build |
 | `tracks` | list | score: `{name, instrument, all_share, voice_share, bass_share, highs_share, peak_db}` |

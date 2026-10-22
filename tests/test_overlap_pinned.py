@@ -1,5 +1,6 @@
 """Step 100: beats without ``overlap`` / ``interrupt`` keep their timings and audio. The values
-below were recorded on the code before Step 100 (HEAD e312f91) and must not change."""
+below were recorded on the code before Step 100 (HEAD e312f91) and must not change — except the
+rendered timings, changed on purpose in Step 191 to match the plan (the half-frame fix)."""
 
 from __future__ import annotations
 
@@ -27,13 +28,16 @@ SCENES = [
 PLANNED = [("card_b1", 0.0, 1.5), ("card_b2", 2.0, 3.0), ("card_b3", 3.4, 5.4), ("end_b1", 0.0, 1.0)]
 SCENE_STARTS = [0.0, 5.8]
 #: ``scene.timings()`` of ``card`` rendered at 5 fps (word-count estimate, 2 words/s, pad 0.4).
+#: Step 191: the beats now start where the plan puts them (``PLANNED``); before, a window of
+#: half a frame (1.5 s + 0.4 s = 9.5 frames) was rounded as the time left after the beat's
+#: entrance, so the render started ``card_b2`` at 1.8 s, one frame before the plan's 2.0 s.
 TIMINGS = {
     "scene": "card",
-    "duration": 5.6,
+    "duration": 5.8,
     "beats": [
         {"id": "card_b1", "start": 0.0, "end": 1.5, "text": "one two three"},
-        {"id": "card_b2", "start": 1.8, "end": 2.8, "text": "four five"},
-        {"id": "card_b3", "start": 3.2, "end": 5.2, "text": "six seven eight nine"},
+        {"id": "card_b2", "start": 2.0, "end": 3.0, "text": "four five"},
+        {"id": "card_b3", "start": 3.4, "end": 5.4, "text": "six seven eight nine"},
     ],
 }
 

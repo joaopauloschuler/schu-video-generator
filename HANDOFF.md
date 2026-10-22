@@ -17578,3 +17578,125 @@ Known gaps / for Step 191
 - `check.py`'s comments and DESIGN §93.9 say the limits were calibrated on "the 14 beds": still
   true (the two pass with no notes); not reworded.
 - The two score beds are rendered per process, not cached on disk (as the other beds).
+
+## Step 191 — Review of Phase S
+
+What was reviewed and fixed (DESIGN §93.13)
+- **Module boundary**: `studio` imports no video code, but the test only imported the package's
+  `__init__` (not `check`, `templates`, `measure`, `patches`). It now imports every module and is
+  an allow-list: `music`, `sfx`, `loudness`, `errors` and what they pull in (`config`, `languages`,
+  `textnorm`, `voicesounds`, `word_anchors` — through `music`'s cue settings; noted in §93.2).
+- **Holds across sections** (Step 184's gap): a track's steps may start with `-`, holding on the
+  note sounding as the section starts (or round a loop's end); it keeps its section's sound. Was
+  a parse error, so no score changes. Checked: a hold into a section changes nothing against the
+  same note in one section; "- - C5 -" is "C5 - - -" shifted. A leading `-` where the track rested
+  before, or at a one-pass piece's start, is a problem naming the section.
+- **Ducking by level** (Step 185's gap): `duck: {follow: true}` (default false, as before).
+- **Filter sweeps** (Step 185's gap): the copies run in up to four threads and add only where
+  their weight is not 0 — bit-identical to the old loop (tested); skyline 9.1 → 7.9 s on two
+  cores (`swept_filter` 3.9 → 2.3 s). Not done: anything inexact (block-wise filtering) — the
+  owner approved `skyline` sample for sample.
+- **`vidgen music check`** (Step 187/189 gaps; `CHECK_VERSION` 2, cache `piece-<key>-check2.json`):
+  per chord, each audible pitched track's share on the key's or the chord's notes (a `key` fix
+  under 25 %: track, chord, bar, the notes off it); the first section of a loop compared with the
+  last; a note when a lift stays 1 dB under an earlier section; lift advice no longer suggests a
+  riser, a boom or a part that only plays in builds (Step 189's bad advice); build advice measures
+  a riser that is there (dB under the rest, how far to raise it). Calibration
+  (`<scratchpad>/s191/calibrate.py`, `calib3.json`): the 16 templates, the piece, both test
+  demos, the five cookbook sketches and Step 189's v1–v9: no new finding; worst part per chord
+  0.39 (`skyline`'s bass) – 0.99; the bad scores (`s187/bad`, new `s191/bad/bad_chord`,
+  `bad_break`, `bad_riser`) flagged as meant (bad_chord's bell 0.006; bad_break's note and advice
+  without the riser; the riser "39 dB under"). A riser still measures little at its normal level;
+  `bad_riser`'s build passes on +1.08 dB of brightness from the chord cycle (the build limit is
+  near the beds' own swing; not changed).
+- **A cue's `section`** (Step 188's gap "pieces cannot follow the video"; decision: a section
+  start, not re-timing a written piece): `music: [{source: theme, to: setup}, {source: theme,
+  from: results, section: lift}]` lands the lift on `results`. Pieces and the two score beds;
+  other sources and unknown sections are problems with did-you-mean.
+- **Lint `music_check` on the part played** (Step 188's gap): `played_bars` from the video plan,
+  `start` / `section`, loop; findings about a seam never crossed, sections never reached or loud
+  voice-range bars never played are dropped; messages name the bars played.
+- **Names** (Step 188's gap): `vidgen music render` / `check` / `--compare` and MCP
+  `music_render` / `music_check` take a project piece's or a bed's name (a code bed rendered or
+  checked as its audio).
+- **Step 189's caption offset — a real bug** (not music, not `stat`): `narrate` rounded the time
+  left in a beat, the plan rounds the beat's window; on a window of x.5 frames they differ by a
+  frame when the beat's animations took an odd number of frames (banker's rounding). Kokoro lines
+  of whole frames + 0.35 s pad at 30 fps hit it; `gps-time-of-flight`'s intro, orbit and timing
+  ran a frame short (captions 0.1 s early after them, the overlay warning). Fixed in
+  `scene.py` (wait to the window's whole frames from the beat's start); it was the backlog's
+  Step 100 item (ticked). `<scratchpad>/s191/plan_vs_render.py` on a copy of the example
+  (`s191/gps`, those three scenes re-rendered at 1080p): every beat and scene now equals the plan,
+  no warning, 88.80 s (the README's 88.7 s is Step 189's render). Behaviour change (CHANGELOG):
+  a scene with such a beat is now a frame longer or shorter. Tests updated on purpose:
+  `test_overlap_pinned` (the pinned render was the plan-disagreeing one: `card_b2` 1.8 → 2.0 s,
+  as planned), `test_actions.beat_total` (whole frames per beat, as the plan), and
+  `test_callout_action`'s lint test (7 words instead of 6: at 5 fps and pad 0.2 the 8.5-frame
+  beat now has 8 frames and its last still caught the callout half faded in).
+- Docs: CONFIG (holds, `follow`, `section` row and the "following the video" paragraph, names in
+  render / check, the check's key and sections rows and advice, sweep cost, lint row and pieces
+  paragraph, MCP tools, render / check JSON), guide recipe + `AGENTS.md`, COOKBOOK-MUSIC (riser,
+  holds, placing the lift by section, `follow`, per-chord key, names, two mistakes rows), README
+  command rows, the example README's key line, CHANGELOG (0.3.0 now Steps 61–191), tasklist
+  (also corrects Step 190's line about the skyline render), DESIGN §93.1, §93.2, §93.6, §93.9,
+  §93.10, new §93.13.
+
+Files touched
+- New: `tests/test_phase_s_review.py` (11, 1 render).
+- Changed: `src/vidgen/studio/render.py`, `effects.py`, `patterns.py`, `score_file.py`,
+  `check.py`, `measure.py` (`chroma_power`); `src/vidgen/music_pieces.py`, `music.py`, `config.py`
+  (`MusicCue.section`), `cli.py`, `mcp_server.py`, `lint/music_rule.py`, `lint/run.py`,
+  `scene.py`; tests `test_studio.py`, `test_music_pieces.py`, `test_overlap_pinned.py`,
+  `test_actions.py`, `test_callout_action.py`; the docs above.
+
+Public interfaces
+- No new `vidgen.api` names. Config: `music: {section}`. Score files: leading `-` in a track's
+  steps, `duck.follow`. Commands: names for `music render` / `check` / `--compare`; `render --json`
+  of a code bed adds `bed`. Check JSON: `facts.in_chord_min`. Module functions:
+  `music_pieces.music_source`, `cue_score`, `section_start`, `section_problem`;
+  `lint.music_rule.played_bars`; `check.CHECK_VERSION`; `effects.SWEEP_THREADS`;
+  `mcp_server.MUSIC_NAME`.
+
+Compatibility
+- SHA-256 of the render of the 16 templates, `time_of_flight`, both test demos, the five
+  cookbook sketches and the 16 beds' loops: HEAD (`git archive` of Step 190's `src` into
+  `<scratchpad>/s191/head`) and this step, separate processes, all equal
+  (`s191/hashes.py`, `hash_before.json` = `hash_after.json`; a third run `hash_after1.json` too).
+- Mixes byte-identical, HEAD vs now (`s191/mixcompare.py`): a file + `momentum`, `tidewater` +
+  `skyline` (start 20), `gradient-descent`, `iso-web-page`, `host-explainer` (composed),
+  `gps-time-of-flight` (the piece).
+- The Listen page made again (`s191/listen`) equals `docs/music` file for file.
+- Phase Q baseline (`s191/qscene.sh`, one scene per call): 31 frames, max difference 0.
+- `PIECE_RENDER_VERSION` not bumped (no valid score renders differently).
+
+How to test (one file or group at a time, `capped3g`)
+- `test_phase_s_review` (11), `test_studio` + `test_music_check` (+ review: 76), `test_music_pieces`
+  + `test_listen` (20), `test_music_templates -m "not slow"` (8) and `-k "score_bed_is_its_template
+  or momentum"` (3), `test_music` (78, 323 s), `test_docs` + `test_guide` (117), `test_json_output`
+  + `test_api` + `test_config` (54), `test_cli` + `test_composer` + `test_score` (99), `test_schema`
+  + `test_lint` + `test_narration_rule` (101), `test_overlays` + `test_overlap` + `test_captions`
+  (65), `test_chapters_progress` + `test_word_anchors` + `test_overlap_pinned` + `test_review3`
+  (55), `test_review4` + `test_transitions` + `test_dubbing` + `test_cartoon_cards` (64),
+  `test_scene` + `test_render` (32), `test_actions` (28), the 17 files using `beat_total` (in four
+  groups, 211 + 188 + 197 + 159), `test_vector_images` + `test_introspect` + `test_imagegen` +
+  `test_sfx` (208), cartoon effects / holding / rain / vehicles (101), snow-fog / foley / fire /
+  storm / sounds / iso_mood (90), `test_actions_coverage` (84), `test_builtin_scenes` (206),
+  timing lint / subtitles / stat_chapter / frames / push_wipe_carry (122), storyboard / animatic /
+  musicfit / kphi3 (62), host / host_acting / emotions / review2 / jobs (95), iso_story /
+  iso_staging / phase Q / R reviews (57), phase P / O / L / K reviews (33), phase I / H / F
+  reviews + cartoon_directing (70), gallery / translation / cartoon shots / reframe /
+  iso_diagram_actions (135), `test_mcp` in full (19, 118 s). All pass. Not run: the full suite.
+
+Files to look at / listen to
+- `<scratchpad>/s191/gps/output/gps_time_of_flight.mp4` (the example with the timing fix: three
+  scenes re-rendered; captions on the plan); `<scratchpad>/s191/calib3.json` (every check);
+  `<scratchpad>/s191/bad/*.yaml` (the new bad scores).
+
+Known gaps
+- A piece is not re-timed to scenes (only a section start per cue; cue joins fade); scenes cannot
+  change a piece's sections. The check judges sections by name; the build limit sits near the
+  chord cycle's own brightness swing; a riser measures little at its normal level. Whole-piece
+  lint findings (steadiness, peaks, bass, highs) are not recomputed for the part played. Score
+  beds are rendered per process (skyline ~8 s on two cores). Chord names from Roman numerals are
+  spelled by key signature. The beat-window rounding is the plan's (half a frame rounds to even),
+  so a tie can shorten a beat's pad by half a frame (at 30 fps 17 ms).

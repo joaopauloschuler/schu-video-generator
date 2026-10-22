@@ -96,8 +96,17 @@ def _pan_gains(pan: float) -> np.ndarray:
 
 def _events(score: MusicScore, section: Section, steps: Pattern, accent: tuple[int, ...] | None) -> list[_Event]:
     """The section's notes and hits from ``steps`` (repeated from the section's start)."""
+    return _events_and_last(score, section, steps, accent, None)[0]
+
+
+def _events_and_last(
+    score: MusicScore, section: Section, steps: Pattern, accent: tuple[int, ...] | None, carry: _Event | None
+) -> tuple[list[_Event], _Event | None]:
+    """:func:`_events` and the note still sounding at the section's end (``None`` after a rest).
+    ``carry``: the note sounding when the section starts (the section before's last); holds
+    (``-``) before the section's first note or rest extend it (DESIGN.md §93.13)."""
     events: list[_Event] = []
-    current: _Event | None = None
+    current: _Event | None = carry
     for b in range(section.bars):
         bar_steps = steps[b % len(steps)]
         accents = accent_steps(accent, len(bar_steps)) if accent else None
@@ -115,7 +124,7 @@ def _events(score: MusicScore, section: Section, steps: Pattern, accent: tuple[i
             gain = ACCENT_GAIN if accents is not None and k in accents and not step.marked else step.gain
             current = _Event(t0, t1 - t0, step, gain, k, t1 - t0)
             events.append(current)
-    return events
+    return events, current
 
 
 def _slot_at(section: Section, t: int) -> ChordSlot:
@@ -193,19 +202,36 @@ class _Skipped:
 CanvasFor = Callable[[str], _Canvas]
 
 
+def _track_events(score: MusicScore, track: Track) -> list[tuple[Section, TrackPart, list[_Event]]]:
+    """Each section's part and notes of a ``steps`` track. A note held (``-``) at the start of
+    the next section the track plays in (right after it) goes on sounding — around the loop's end
+    into the first section's leading holds too; it keeps the sound of the section it started in."""
+    out: list[tuple[Section, TrackPart, list[_Event]]] = []
+    carry: _Event | None = None
+    for section in score.sections:
+        part = track.parts.get(section.name)
+        if part is None:
+            carry = None
+            continue
+        assert part.steps is not None
+        events, carry = _events_and_last(score, section, part.steps, part.accent, carry)
+        out.append((section, part, events))
+    if score.loop and carry is not None and out[0][0] is score.sections[0]:
+        first, part, _ = out[0]
+        assert part.steps is not None
+        _events_and_last(score, first, part.steps, part.accent, carry)  # only its leading holds matter: they extend `carry`
+    return out
+
+
 def _render_hits(canvas_for: CanvasFor, score: MusicScore, track: Track, skipped: _Skipped) -> None:
     """A drum or note track: each event synthesised alone and added at its time."""
     instrument = track.instrument
     voicer = _Voicer()
     drums: dict[tuple[object, ...], np.ndarray] = {}
-    for section in score.sections:
-        part = track.parts.get(section.name)
-        if part is None:
-            continue
-        assert part.steps is not None
+    for section, part, events in _track_events(score, track):
         canvas = canvas_for(section.name)
         level = instrument.level * _db(part.volume_db)
-        for event in _events(score, section, part.steps, part.accent):
+        for event in events:
             held = event.length / RATE
             pan = float(np.clip(part.pan + (part.spread if event.index % 2 else -part.spread), -1, 1))
             if instrument.kind == "drum":
@@ -377,21 +403,21 @@ def _filter_curve(score: MusicScore, track: Track, kind: str) -> tuple[np.ndarra
     return np.exp(fx.smooth(np.log(cutoff), fx.SMOOTH_SECONDS, score.loop)), fx.smooth(unfiltered, fx.SMOOTH_SECONDS, score.loop)
 
 
-def _hit_times(score: MusicScore, tracks: Mapping[str, Track], name: str) -> list[int]:
+def _hit_times(score: MusicScore, tracks: Mapping[str, Track], name: str) -> list[tuple[int, float]]:
     """When track ``name`` sounds (its hits and notes; its chords for ``play: chords``), or
-    every beat for ``beat``."""
+    every beat for ``beat``, with each hit's level (1 a plain hit, 1.5 an accent, 0.5 soft)."""
     if name == "beat":
-        return list(range(0, score.samples, score.beat))
+        return [(t, 1.0) for t in range(0, score.samples, score.beat)]
     track = tracks[name]
-    times: list[int] = []
+    times: list[tuple[int, float]] = []
     for section in score.sections:
         part = track.parts.get(section.name)
         if part is None:
             continue
         if part.steps is None:
-            times.extend(s.start for s in section.chords)
+            times.extend((s.start, 1.0) for s in section.chords)
         else:
-            times.extend(e.start for e in _events(score, section, part.steps, part.accent))
+            times.extend((e.start, e.gain) for e in _events(score, section, part.steps, part.accent))
     return times
 
 
@@ -407,13 +433,14 @@ def _duck_gain(score: MusicScore, track: Track, tracks: Mapping[str, Track]) -> 
             continue
         a, b = score.section_start(section), score.section_start(section) + section.bars * score.bar
         dip = fx.duck_dip(part.duck.depth, part.duck.release, 2 * score.beat)
-        for t in _hit_times(score, tracks, part.duck.to):
+        for t, level in _hit_times(score, tracks, part.duck.to):
             if a <= t < b:
+                this = dip * level if part.duck.follow and level != 1.0 else dip
                 if score.loop:
-                    _circular_add(dips, t, dip)
+                    _circular_add(dips, t, this)
                 else:
-                    end = min(t + len(dip), score.samples)
-                    dips[t:end] += dip[: end - t]
+                    end = min(t + len(this), score.samples)
+                    dips[t:end] += this[: end - t]
     return np.clip(1.0 - dips, 0.0, 1.0)
 
 

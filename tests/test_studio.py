@@ -272,10 +272,19 @@ def test_studio_imports_no_video_code() -> None:
     import subprocess
     import sys
 
-    code = "import sys, vidgen.studio; print(' '.join(sorted(sys.modules)))"
+    # every module of the package (check, templates, measure... are not imported by its __init__)
+    code = (
+        "import importlib, pkgutil, sys, vidgen.studio as s\n"
+        "for m in pkgutil.iter_modules(s.__path__): importlib.import_module('vidgen.studio.' + m.name)\n"
+        "print(' '.join(sorted(sys.modules)))"
+    )
     loaded = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True).stdout.split()
-    assert "manim" not in loaded
-    assert not [m for m in loaded if m.startswith(("vidgen.scene", "vidgen.render", "vidgen.scenes", "vidgen.cartoon", "vidgen.project"))]
+    assert "manim" not in loaded and "vidgen.studio.check" in loaded and "vidgen.studio.templates" in loaded
+    # an allow-list (Step 191): the building blocks it imports (music, sfx, loudness, errors) and
+    # what those import (music reads cue settings from config; config its language rules)
+    allowed = {"vidgen", "vidgen.music", "vidgen.sfx", "vidgen.loudness", "vidgen.errors", "vidgen.config", "vidgen.languages",
+               "vidgen.textnorm", "vidgen.voicesounds", "vidgen.word_anchors"}
+    assert sorted(m for m in loaded if m.startswith("vidgen") and not m.startswith("vidgen.studio") and m not in allowed) == []
 
 
 # ----- the command ---------------------------------------------------------------------------------------

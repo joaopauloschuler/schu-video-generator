@@ -784,7 +784,10 @@ class NarratedScene(MovingCameraScene):
         try:
             yield window.body
             self.beat_busy[b.id] = float(self.renderer.time) - start
-            self.wait_seconds(window.window - (self.renderer.time - start))
+            # to the beat's planned frame: whole frames of the window, as the video plan counts them
+            # (rounding the time left instead disagreed with the plan by a frame on a half frame)
+            fps = config.frame_rate
+            self.wait_seconds((round(window.window * fps) - round((self.renderer.time - start) * fps)) / fps)
             if self._actions is not None:
                 self._actions.end_beat()
         finally:

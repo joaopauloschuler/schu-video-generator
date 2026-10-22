@@ -52,7 +52,15 @@ Ways to build, strongest first in our measurements:
 - **Bring parts in**: `rest: [intro]` on the kick and bass, `only: [build, lift]` on the hats,
   `only: [lift]` on the clap and lead.
 - **A riser** in the last two bars (`steps: ". | . | . | . | . | . | x | -"`): it is heard but
-  measures almost nothing; do not rely on it alone.
+  measures almost nothing at its normal level (30–40 dB under a full build); do not rely on
+  it alone. When a build with a riser fails, the check says how many dB under the rest it sits
+  and how far to raise it.
+- **Hold across the change**: a note can run from the build into the lift — the lift's steps
+  start with `-` (`sections: {lift: {steps: "- - - - | x..."}}`), so a pad chord or a static
+  swell started in the build carries on over the bar line.
+
+A lift after a quiet break passes the check against the break; the check adds a note when it
+stays quieter than an earlier section (the build), since it may not feel like the high point.
 
 A lift is a few dB louder **and** clearly brighter: the pad's filter open (`lowpass: none`), a
 part that only plays there, a wider stereo image (`width: 1.4`). `time_of_flight`'s lift is
@@ -77,7 +85,12 @@ A bed loops under a video longer than itself, so its end must run into its start
   moved it from 0.21 to 0.46, still clean) — that is a downbeat, not a click.
 - **Whole numbers**: a pad's `swell` should divide the piece's bars (12 for 24 bars).
 - **Placing the lift**: the cue's `start:` (seconds into the loop) moves where the video joins
-  the piece: `music: {source: time_of_flight, start: 8.9}` starts with the build.
+  the piece: `music: {source: time_of_flight, start: 8.9}` starts with the build; `section: build`
+  says the same by name. To make the lift begin with a scene, split the music into two cues and
+  start the second at the section: `[{source: time_of_flight, to: setup, fade_out: 0.5},
+  {source: time_of_flight, from: reveal, section: lift, fade_in: 0.3}]`.
+- **Pumping**: `duck: {to: kick, depth: 0.5}` dips at every kick hit alike; with `follow: true`
+  soft hits (`o`) dip half as deep and accents (`X`) half again as deep, a gentler pulse.
 - **Length**: 40–60 s loops repeat once or twice in a short video; a lift every 50 s is
   about right for an explainer.
 
@@ -104,7 +117,11 @@ vidgen music check assets/music/my_theme.yaml --compare assets/music/my_theme_v1
 - **Tempo** "heard 72 BPM = 2/3 of 108" is fine: accents or figures in threes make the onsets
   repeat in threes. "No steady beat" is fine for a calm bed.
 - **The key** line says which key the chroma fits best; a dorian piece is heard as its relative
-  major (D dorian fits G major) — that is not an error.
+  major (D dorian fits G major) — that is not an error. It also looks under every chord: a part
+  whose notes there are off both the key and the chord (a melody written against one chord) is
+  named, with the notes and the chord's own notes.
+- **Names work too**: in the project's folder `vidgen music check my_theme --compare momentum`
+  checks the project piece against the built-in bed (a bed made by code is checked as audio).
 - `vidgen lint` repeats the voice-range, highs, bass, steadiness, peaks and seam checks on the
   pieces a video plays (rule `music_check`); the demo MP3 is for the human.
 
@@ -258,6 +275,8 @@ limit: the pah chords are in octave 3–4; lower them a dB or two under dense di
 | highs flagged | open hats, master filter opened, loud ticks | `lowpass: 5000` on the hats, master `lowpass: 4500` (the default), quieter ticks |
 | unsteady | a near-silent intro before a loud lift | bring the intro up (a pad at −3 dB rather than −12), or make the lift smaller |
 | key: few notes on the key's scale | chords or a melody from another key | Roman numerals in the score's key; a section `key:` for a real modulation |
+| key: a part clashes under one chord | written notes (`F#5`) that fit neither the key nor that chord | degrees (`1 3 5 8`) follow each chord; or fix the notes the advice lists |
+| "it may not feel like the high point" | a lift after a quiet break, quieter than the build | raise the lift's main part, or make the build smaller |
 | changing a template's key sounds wrong | its progression writes out G-minor voicings (`{chord, notes, bass}`) | replace the progression with Roman numerals (a string) when you change the key |
 | a seam number near 1 | a curve ending far from where it starts, or a loud tail | end each curve on its starting value; shorter echoes or reverb at the end |
 | a piece named like a bed (`calm.yaml`) | the names would clash | rename it, or use `source: assets/music/calm.yaml` |

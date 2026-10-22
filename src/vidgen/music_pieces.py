@@ -29,7 +29,7 @@ from vidgen.errors import VidgenError
 from vidgen.music import BUILTIN_BEDS, MUSIC_LEVEL, PROJECT_MUSIC_DIR, RATE
 
 if TYPE_CHECKING:
-    from vidgen.config import VideoConfig
+    from vidgen.config import MusicCue, VideoConfig
     from vidgen.studio import MusicScore
 
 log = logging.getLogger("vidgen.music")
@@ -106,6 +106,90 @@ def bed_conflict(source: str, root: Path | None) -> str | None:
         f"'{source}' is a built-in bed and also the project piece {rel}: rename the piece (e.g. {source}_mine) or write "
         f"source: {rel} to play the piece (source: {source} plays the bed)"
     )
+
+
+def music_source(name: str, root: Path) -> tuple[str, Path | None]:
+    """What ``vidgen music render`` / ``check`` play for ``name`` (a path or a name):
+    ``("file", path)`` an existing file (a score file or audio); ``("score bed", path)`` the
+    score file of a bed written as one (``tidewater``, ``skyline``); ``("bed", None)`` another
+    built-in bed (its own code: the audio); ``("piece", path)`` a project piece under ``root``
+    (``assets/music/<name>.yaml``). :class:`VidgenError` with did-you-mean otherwise, or when the
+    name is both a bed and a project piece."""
+    from vidgen.studio.templates import TEMPLATE_DIR
+
+    path = Path(name)
+    if path.is_file():
+        return "file", path
+    if name in BUILTIN_BEDS:
+        piece = project_pieces(root).get(name)
+        if piece is not None:
+            rel = piece.relative_to(root).as_posix()
+            raise VidgenError(f"'{name}' is a built-in bed and also the project piece {rel}: give the path ({rel}) for the piece, or rename it "
+                              f"(e.g. {name}_mine)")
+        return ("score bed", TEMPLATE_DIR / f"{name}.yaml") if BUILTIN_BEDS[name].score else ("bed", None)
+    if path.suffix:
+        raise VidgenError(f"file not found: {name} (looked for {path.resolve()})")
+    return "piece", piece_path(name, root)
+
+
+def cue_score(cue: MusicCue, root: Path) -> Path | None:
+    """The score file a cue plays: its project piece, or a score bed's own file (``tidewater``,
+    ``skyline``); ``None`` for other beds, audio files and composed music (or a missing piece)."""
+    from vidgen.music import source_kind
+    from vidgen.studio.templates import TEMPLATE_DIR
+
+    if cue.source is None:
+        return None
+    kind = source_kind(cue, root)
+    if kind == "bed":
+        return TEMPLATE_DIR / f"{cue.source}.yaml" if BUILTIN_BEDS[cue.source].score else None
+    if kind != "score":
+        return None
+    try:
+        return piece_path(cue.source, root)
+    except VidgenError:
+        return None
+
+
+def section_start(cue: MusicCue, root: Path) -> float:
+    """Seconds into the piece where the cue's ``section`` starts (0 without one);
+    :class:`VidgenError` when the cue cannot start at a section or the piece has no such section."""
+    if cue.section is None:
+        return 0.0
+    problem = section_problem(cue, root)
+    if problem is not None:
+        raise VidgenError(f"music.section: {problem}")
+    from vidgen.studio import load_music_score
+
+    path = cue_score(cue, root)
+    assert path is not None
+    score = load_music_score(path)
+    section = next(s for s in score.sections if s.name == cue.section)
+    return score.section_start(section) / RATE
+
+
+def section_problem(cue: MusicCue, root: Path) -> str | None:
+    """What is wrong with the cue's ``section`` (``None``: nothing, or no section): only a score
+    (a project piece or a score bed) has sections, and the piece must have that one."""
+    from vidgen.studio import load_music_score
+
+    if cue.section is None:
+        return None
+    path = cue_score(cue, root)
+    if path is None:
+        score_beds = ", ".join(n for n, b in BUILTIN_BEDS.items() if b.score)
+        return (f"'{cue.section}': only a score file has sections — a project piece (assets/music/*.yaml) or a score bed ({score_beds}); "
+                f"{cue.label} has none (use start: seconds)")
+    try:
+        score = load_music_score(path)
+    except VidgenError:
+        return None  # the piece's own problems are reported on its source
+    names = [s.name for s in score.sections]
+    if cue.section not in names:
+        close = difflib.get_close_matches(cue.section, names, n=1, cutoff=0.6)
+        guess = f"; did you mean '{close[0]}'?" if close else ""
+        return f"{cue.label} has no section '{cue.section}'{guess} (sections: {', '.join(names)})"
+    return None
 
 
 def score_problems(path: Path) -> list[str]:
@@ -250,10 +334,11 @@ def piece_entry(name: str, path: Path, root: Path) -> dict[str, Any]:
 
 def piece_check(path: Path, cache_dir: Path | None = None) -> dict[str, Any]:
     """``vidgen music check``'s report of the piece (:func:`vidgen.studio.check.check_dict`, no
-    demo, no picture), kept in ``cache_dir`` as ``piece-<key>-check.json`` and reused."""
+    demo, no picture), kept in ``cache_dir`` as ``piece-<key>-check<N>.json`` (``N``:
+    :data:`vidgen.studio.check.CHECK_VERSION`, so a changed check is made again) and reused."""
     from vidgen.studio import check, load_music_score
 
-    cached = None if cache_dir is None else cache_dir / f"piece-{piece_key(path)}-check.json"
+    cached = None if cache_dir is None else cache_dir / f"piece-{piece_key(path)}-check{check.CHECK_VERSION}.json"
     if cached is not None and cached.is_file():
         try:
             return json.loads(cached.read_text(encoding="utf-8"))

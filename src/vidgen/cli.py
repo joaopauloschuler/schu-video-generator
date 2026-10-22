@@ -1441,12 +1441,23 @@ def _music_render(args: argparse.Namespace) -> CommandResult:
     from vidgen.sfx import RATE, write_wav
     from vidgen.studio import load_music_score, render_music_score, score_outline
 
+    from vidgen.music import BUILTIN_BEDS, bed_loop
+    from vidgen.music_pieces import music_source
+
     if args.project == ".":
-        raise VidgenError("music render: give the score file, e.g. vidgen music render my_theme.yaml --out my_theme.wav")
-    path = Path(args.project)
-    out = Path(args.out) if args.out else Path(path.stem + ".wav")
+        raise VidgenError("music render: give the score file, e.g. vidgen music render my_theme.yaml --out my_theme.wav (or a project piece's or a bed's name)")
+    kind, found = music_source(args.project, Path.cwd())
+    stem = Path(args.project).stem if kind == "file" else Path(args.project).name
+    out = Path(args.out) if args.out else Path(stem + ".wav")
     if out.suffix.lower() not in (".wav", ".mp3"):
         raise VidgenError(f"music render: --out must be a .wav or .mp3 file, got {out}")
+    if kind == "bed":  # a bed made by its own code: its loop as it plays
+        bed = BUILTIN_BEDS[args.project]
+        return _write_bed(bed, bed_loop(bed.name), out, args.json)
+    assert found is not None
+    if found.suffix.lower() not in (".yaml", ".yml"):
+        raise VidgenError(f"music render: {found} is not a score file (.yaml); vidgen music check {found} measures an audio file")
+    path = found
     score = load_music_score(path)
     notes: list[str] = []
     audio = render_music_score(score, notes)
@@ -1468,6 +1479,31 @@ def _music_render(args: argparse.Namespace) -> CommandResult:
     for s in outline["sections"]:
         print(f"    {s['start']:7.2f} s  {s['name']:<10} {s['bars']:>3} bars  {s['key']:<10} {' '.join(s['chords'])}")
     print("tracks: " + ", ".join(f"{t['name']} ({t['instrument']}{': ' + ', '.join(t['effects']) if t['effects'] else ''})" for t in outline["tracks"]))
+    print(f"loudness: {meter.integrated:.1f} LUFS integrated, true peak {meter.true_peak:.1f} dBTP")
+    print(f"wrote: {out}")
+    return 0
+
+
+def _write_bed(bed: Any, audio: Any, out: Path, as_json: bool) -> CommandResult:
+    """``vidgen music render <bed>`` for a bed made by its own code (not a score file): its loop
+    written as it plays (-28 LUFS), with the bed's facts."""
+    from vidgen import loudness
+    from vidgen.sfx import RATE, write_wav
+
+    if out.suffix.lower() == ".mp3":
+        from vidgen.listen import write_mp3
+
+        write_mp3(audio, out)
+    else:
+        write_wav(out, audio)
+    meter = loudness.measure(len(audio), lambda a, b: audio[a:b])
+    if as_json:
+        outline = {"title": bed.name, "bed": bed.name, "key": bed.key, "tempo": bed.tempo, "time": "4/4", "bars": None, "loop": True, "seed": None,
+                   "seconds": round(bed.seconds, 3), "sections": [], "tracks": []}
+        return jsonout.music_render_document(outline, out, len(audio) / RATE, meter.integrated, meter.true_peak)
+    tempo = f"{bed.tempo} BPM" if bed.tempo else "no steady beat"
+    print(f"{bed.name}: a built-in bed (its own code, not a score file): {bed.key}, {tempo}, a seamless loop of {bed.seconds:.2f} s")
+    print(f"its editable score-file template (close to it, not the same): vidgen music template {bed.name}")
     print(f"loudness: {meter.integrated:.1f} LUFS integrated, true peak {meter.true_peak:.1f} dBTP")
     print(f"wrote: {out}")
     return 0
@@ -1529,28 +1565,34 @@ def _music_check(args: argparse.Namespace) -> CommandResult:
     from vidgen.sfx import RATE, decode_audio
     from vidgen.studio import MusicScore, check, load_music_score
 
+    from vidgen.music import bed_loop
+    from vidgen.music_pieces import music_source
+
     if args.project == ".":
-        raise VidgenError("music check: give a score file or an audio file, e.g. vidgen music check my_theme.yaml")
+        raise VidgenError("music check: give a score file or an audio file, e.g. vidgen music check my_theme.yaml (or a project piece's or a bed's name)")
     began = time.perf_counter()
 
-    def load(path: Path) -> tuple[Any, float]:
-        if not path.is_file():
-            raise VidgenError(f"music check: {path} not found")
+    def load(name: str) -> tuple[Path, Any, float]:
+        """The piece ``name`` gives (a path, a project piece, a bed): its path (for the files'
+        names) and its score or audio."""
+        kind, path = music_source(name, Path.cwd())
+        if kind == "bed":  # a bed made by its own code: checked as audio, as it plays
+            audio = bed_loop(name)
+            return Path(name), audio, len(audio) / RATE
+        assert path is not None
         if path.suffix.lower() in (".yaml", ".yml"):
             score = load_music_score(path)
-            return score, score.seconds
+            return (path if kind == "file" else Path(name)), score, score.seconds
         audio = decode_audio(path)
-        return audio, len(audio) / RATE
+        return path, audio, len(audio) / RATE
 
     def run(path: Path, piece: Any, hop: int) -> check.MusicCheck:
         if isinstance(piece, MusicScore):
             return check.check_music_score(piece, hop=hop)
         return check.check_music_audio(piece, path.stem, hop=hop)
 
-    path = Path(args.project)
-    main, seconds = load(path)
-    other_path = Path(args.compare) if args.compare else None
-    other, other_seconds = load(other_path) if other_path is not None else (None, 0.0)
+    path, main, seconds = load(args.project)
+    other_path, other, other_seconds = load(args.compare) if args.compare else (None, None, 0.0)
     hop = check.frame_hop(max(seconds, other_seconds))
     voice, narration = check.load_narration(Path(args.narration) if args.narration else None)
     tail = 3.0 if args.narration else 0.0
@@ -1869,8 +1911,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "project", nargs="?", default=".",
-        help="preview: project dir or config file (default: .); render: the score file; check: a score file or an audio file; "
-        "template: the bed (none: list them)",
+        help="preview: project dir or config file (default: .); render: the score file; check: a score file or an audio file "
+        "(render and check: or a project piece's name, assets/music/NAME.yaml here, or a built-in bed's); template: the bed (none: list them)",
     )
     p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
     p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
@@ -1884,7 +1926,7 @@ def build_parser() -> argparse.ArgumentParser:
         "template: the .yaml to write (default: <bed>.yaml here); page: the page's folder (default: docs/music)",
     )
     p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with vidgen)")
-    p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file: a side-by-side table and a two-row spectrogram")
+    p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file (or a piece's or bed's name): a side-by-side table and a two-row spectrogram")
     p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists")
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
     p.set_defaults(func=cmd_music)

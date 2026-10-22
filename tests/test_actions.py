@@ -302,7 +302,9 @@ def render(project: Project, scene_id: str, media: Path, size: tuple[int, int] =
 
 
 def beat_total(scene: Any) -> float:
-    return sum(scene.beat_duration(i) + scene.pad for i in range(len(scene.beats)))
+    """The beats' length as the video plan counts it: each beat's ``d + pad`` in whole frames
+    (Step 191: a scene keeps to it; half a frame rounds to even)."""
+    return sum(round((scene.beat_duration(i) + scene.pad) * FPS) for i in range(len(scene.beats))) / FPS
 
 
 def rgb(mob: Any) -> tuple[float, ...]:

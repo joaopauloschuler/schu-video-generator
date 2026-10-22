@@ -66,15 +66,21 @@ def tempo(x: np.ndarray, low: float = 70.0, high: float = 180.0) -> float | None
     return 60 * rate / (best + shift)
 
 
-def chroma(x: np.ndarray, low: float = 60.0, high: float = 2500.0) -> np.ndarray:
-    """The share of the power in each pitch class (C first) between ``low`` and ``high`` Hz,
-    from one spectrum of the whole sound; sums to 1."""
+def chroma_power(x: np.ndarray, low: float = 60.0, high: float = 2500.0) -> np.ndarray:
+    """The power in each pitch class (C first) between ``low`` and ``high`` Hz, from one
+    spectrum of the whole sound (not normalised: the powers of two sounds can be compared)."""
     mono = _mono(x)
     power = np.abs(np.fft.rfft(mono)) ** 2
     freqs = np.fft.rfftfreq(len(mono), 1 / RATE)
     keep = (freqs >= low) & (freqs <= high)
     classes = np.round(12 * np.log2(freqs[keep] / 440.0) + 69).astype(int) % 12
-    out = np.bincount(classes, weights=power[keep], minlength=12)
+    return np.bincount(classes, weights=power[keep], minlength=12)
+
+
+def chroma(x: np.ndarray, low: float = 60.0, high: float = 2500.0) -> np.ndarray:
+    """The share of the power in each pitch class (C first) between ``low`` and ``high`` Hz,
+    from one spectrum of the whole sound; sums to 1."""
+    out = chroma_power(x, low, high)
     return out / max(float(out.sum()), 1e-30)
 
 

@@ -1594,7 +1594,12 @@ class Source:
             data = bed_loop(bed)
             self.seamless = True
             self.data = data
-            self.offset = round(cue.start * RATE) % len(data)
+            start = cue.start
+            if cue.section is not None and kind == "bed":  # a score bed's section (DESIGN.md §93.13)
+                from vidgen.music_pieces import section_start
+
+                start += section_start(cue, root)
+            self.offset = round(start * RATE) % len(data)
             self.loop = True
             self.length = len(data)
             return
@@ -1656,15 +1661,16 @@ class Source:
         a ``loop: true`` piece under a looping cue repeats seamlessly from ``start`` (wrapping
         round, as a bed); otherwise it plays once from ``start`` (a loop piece's ``start`` wraps,
         a one-shot's may not pass its end) and the cue's fade-out applies at its end."""
-        from vidgen.music_pieces import piece_audio, piece_path
+        from vidgen.music_pieces import piece_audio, piece_path, section_start
 
         assert cue.source is not None
         audio, score = piece_audio(piece_path(cue.source, root), cache_dir)
-        first = round(cue.start * RATE)
+        start = cue.start + section_start(cue, root)
+        first = round(start * RATE)
         if score.loop:
             first %= len(audio)
         elif first >= len(audio):
-            raise VidgenError(f"music: start {cue.start:g} s is past the end of {cue.source} ({len(audio) / RATE:.1f} s with its ending)")
+            raise VidgenError(f"music: start {start:g} s is past the end of {cue.source} ({len(audio) / RATE:.1f} s with its ending)")
         self.offset = 0
         self.loop = score.loop and cue.loop
         self.seamless = self.loop
@@ -1714,16 +1720,20 @@ def _crossfaded_loop(body: np.ndarray, fade: int) -> np.ndarray:
 
 def config_problems(config: VideoConfig, root: Path | None) -> list[tuple[str, str]]:
     """``(location, message)`` problems of the ``music:`` cues: a source that is neither a bed, a
-    project piece nor a file under the project, a bed's name that is also a project piece, and
-    the problems of the pieces' score files (``where: what``; ``compose:`` settings are checked
-    when the config loads)."""
-    from vidgen.music_pieces import bed_conflict, piece_path, score_problems
+    project piece nor a file under the project, a bed's name that is also a project piece, the
+    problems of the pieces' score files (``where: what``; ``compose:`` settings are checked
+    when the config loads) and a ``section`` the source does not have."""
+    from vidgen.music_pieces import bed_conflict, piece_path, score_problems, section_problem
 
     found: list[tuple[str, str]] = []
     cues = config.music_cues
     for k, cue in enumerate(cues):
         where = "music" if not isinstance(config.music, list) else f"music[{k}]"
         kind = source_kind(cue, root)
+        if cue.section is not None and root is not None:
+            problem = section_problem(cue, root)
+            if problem is not None:
+                found.append((f"{where}.section", problem))
         if root is None or kind in ("composed", "bed"):
             conflict = None if root is None or kind != "bed" else bed_conflict(cue.source or "", root)
             if conflict is not None:

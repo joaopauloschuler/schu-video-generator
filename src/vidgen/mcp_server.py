@@ -55,6 +55,9 @@ FREE_TTS = ("kokoro",)
 PROGRESS_INTERVAL = 0.5
 #: stderr lines kept for the message of a command that printed no JSON.
 TAIL_LINES = 30
+#: A project piece's or a built-in bed's name (music_render / music_check pass it on as it is):
+#: words joined by '/', no suffix, no '..'.
+MUSIC_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*(/[A-Za-z0-9_][A-Za-z0-9_-]*)*$")
 
 INSTRUCTIONS = """\
 schu-video-generator (the `vidgen` command) makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
@@ -223,6 +226,14 @@ def build_server(root: Path) -> Any:
             return policy.path(value, what)
         except VidgenError as exc:  # PathOutsideRoot included
             raise ToolError(str(exc)) from None
+
+    def piece(value: str, what: str) -> str:
+        """A music piece as ``music_render`` / ``music_check`` take it: a project piece's or a
+        built-in bed's name as given (the command finds it under the root), else a path under
+        the root."""
+        if MUSIC_NAME.match(value) and not (policy.root / value).exists():
+            return value
+        return str(where(value, what))
 
     def args_of(command: Sequence[str], positionals: Sequence[str] = (), options: dict[str, Any] | None = None) -> list[str]:
         try:
@@ -573,12 +584,13 @@ def build_server(root: Path) -> Any:
           "'where: what' with did-you-mean.", writes)
     async def music_render(
         ctx: Context,
-        score: Annotated[str, Field(description="the score file, relative to the root (e.g. assets/music/my_theme.yaml)")],
+        score: Annotated[str, Field(description="the score file, relative to the root (e.g. assets/music/my_theme.yaml), or a project "
+                                                "piece's name (my_theme) or a built-in bed's (tidewater)")],
         out: Annotated[str | None, Field(description="the .mp3 or .wav to write, relative to the root (default build/mcp/music/<score>.mp3)")] = None,
     ) -> Any:
-        path = where(score, "score")
-        target = where(out, "out") if out else policy.root / WORK_DIR / "music" / f"{path.stem}.mp3"
-        return answer(await call(ctx, args_of(["music"], ["render", str(path)], {"out": str(target)}), heavy=True))
+        path = piece(score, "score")
+        target = where(out, "out") if out else policy.root / WORK_DIR / "music" / f"{Path(path).stem}.mp3"
+        return answer(await call(ctx, args_of(["music"], ["render", path], {"out": str(target)}), heavy=True))
 
     @tool("How a piece will sit under narration, for agents that cannot listen: a score file or an audio file checked "
           "for loudness and steadiness, peaks, tempo, loop seam, voice-range level (300 Hz-3 kHz), bass, harsh highs, "
@@ -587,18 +599,19 @@ def build_server(root: Path) -> Any:
           "where the voice range is too loud). compare=OTHER puts two versions side by side. A human makes the final choice.", writes)
     async def music_check(
         ctx: Context,
-        source: Annotated[str, Field(description="a score file (.yaml) or an audio file, relative to the root")],
-        compare: Annotated[str | None, Field(description="a second score or audio file to compare with (e.g. the version before a change)")] = None,
+        source: Annotated[str, Field(description="a score file (.yaml) or an audio file, relative to the root, or a project piece's name "
+                                                 "(my_theme) or a built-in bed's (momentum)")],
+        compare: Annotated[str | None, Field(description="a second piece to compare with (e.g. the version before a change), given the same way")] = None,
         narration: Annotated[str | None, Field(description="an audio file of a voice for the demo (default: a 20 s sample shipped with vidgen)")] = None,
         out: Annotated[str, Field(description="folder for <name>-check.png and <name>-demo.mp3, relative to the root")] = str(WORK_DIR / "music"),
         images: Images = DEFAULT_IMAGES,
     ) -> Any:
         options = {
-            "compare": str(where(compare, "compare")) if compare else None,
+            "compare": piece(compare, "compare") if compare else None,
             "narration": str(where(narration, "narration")) if narration else None,
             "out": str(where(out, "out")),
         }
-        doc = await call(ctx, args_of(["music"], ["check", str(where(source, "source"))], options), heavy=True)
+        doc = await call(ctx, args_of(["music"], ["check", piece(source, "source")], options), heavy=True)
         picture = (doc.get("files") or {}).get("spectrogram")
         return answer(doc, [Path(picture)] if picture and images else [])
 

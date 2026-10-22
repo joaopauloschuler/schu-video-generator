@@ -1728,6 +1728,8 @@ class MusicCue(_Strict):
     """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""
     start: float = Field(default=0.0, ge=0)
     """Seconds into the source where the music starts (a loop restarts there too)."""
+    section: Identifier | None = None
+    """A project piece or a score bed (tidewater, skyline) only: start at this section of the piece (start then counts from it); with from, the section begins when that scene does."""
     loop: bool = True
     """Repeat the source while the cue lasts; false: it plays once and fades out at its end."""
     crossfade: float = Field(default=2.0, ge=0, le=30)

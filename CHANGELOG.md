@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–190)
+## 0.3.0 (Steps 61–191)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -110,6 +110,10 @@ matters only for projects made with development builds between Steps 67 and 131)
   `(whispering)`) also set the line's `emotion` (Step 135), so those lines get new audio; a
   `set:` line naming `bench`, `fence`, `log` and the other new outdoor props now places them
   instead of writing a `# TODO` (Step 139).
+- **A beat ends on its planned frame** (Step 191): when a beat's narration and pad came to half a
+  frame, a scene could run one frame longer or shorter than the video plan, and every caption
+  and timed overlay after it was off by that much (2–3 frames by the end of a video, with a
+  render warning). Such scenes are now a frame shorter or longer than before, as planned.
 
 ### Cartoons: characters
 
@@ -387,6 +391,14 @@ matters only for projects made with development builds between Steps 67 and 131)
   hopeful, a bell melody in its lift) and `skyline` (D minor, 128 BPM, a pumping supersaw build
   and lift). `music: tidewater` plays them like any bed; `vidgen music template tidewater` gives
   the very score the bed plays. 16 beds in all, on the Listen page too (190).
+- Review of the score format (191): a note can be held across a section's change (steps that
+  start with `-`); `duck: {follow: true}` dips by each hit's level; a cue can start at a section
+  of a piece or score bed (`section: lift`, so the lift begins with a chosen scene); `vidgen music
+  render` / `check` (and the MCP tools) take a project piece's or a bed's name; the check finds a
+  part that clashes with one chord, notes a lift that stays under an earlier section, no longer
+  suggests a riser for a lift and says how far a quiet riser is under a build; lint's
+  `music_check` reports only on the part of a piece the video plays; filter sweeps render in
+  parallel (the same samples). Every existing score, bed and mix sounds exactly as before.
 
 ### Narration and pictures
 

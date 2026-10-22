@@ -6,8 +6,9 @@ lift? does the build build?) and the key — with advice that names the score's 
 
 A score is played track by track (:func:`vidgen.studio.render.render_music_stems`), so each
 problem is put down to the tracks that cause it. The limits were set on the 14 built-in beds
-and their templates (all fine) and on deliberately bad scores (all flagged); §93.9 has the
-numbers. Pictures (:func:`spectrogram_image`) and the narration demo (:func:`narration_demo`)
+and their templates (all fine; the two score beds of Step 190 and the per-chord and lift checks
+of Step 191 calibrated on all 16 templates, the shipped piece and the cookbook's sketches) and on
+deliberately bad scores (all flagged); §93.9 and §93.13 have the numbers. Pictures (:func:`spectrogram_image`) and the narration demo (:func:`narration_demo`)
 are made here; the command writes them.
 """
 
@@ -26,7 +27,8 @@ from vidgen.music import MUSIC_LEVEL
 from vidgen.sfx import RATE, _highpass, _lowpass, decode_audio
 from vidgen.studio import measure
 from vidgen.studio.render import render_music_stems
-from vidgen.studio.score_file import MusicScore, Track
+from vidgen.studio.score_file import ChordSlot, MusicScore, Section, Track
+from vidgen.studio.theory import note_name
 
 #: The narration sample the demo plays when no ``--narration`` is given: two original lines
 #: spoken by Kokoro (``af_heart``, Apache-2.0), 20 s with the music alone at the end.
@@ -40,16 +42,21 @@ DUCK = (12.0, 0.4, 1.0, 1.5)
 DEMO_LUFS, DEMO_TRUE_PEAK = -16.0, -1.5
 #: Frequency bands (Hz) measured per frame.
 BANDS = {"bass": (20.0, 150.0), "voice": (300.0, 3000.0), "bright": (2000.0, 20000.0), "highs": (5000.0, 20000.0), "all": (20.0, 20000.0)}
+#: Bumped when the check's measures, limits or words change (cached reports of project pieces,
+#: ``vidgen.music_pieces.piece_check``, are then made again). 2: Step 191 (per-chord fit, lifts).
+CHECK_VERSION = 2
 #: Block length (s) standing in for bars when an audio file is checked.
 BLOCK_SECONDS = 2.0
 #: Section names that are meant to lift / to build.
 LIFT_NAMES = ("lift", "drop", "chorus", "climax", "peak", "high")
 BUILD_NAMES = ("build", "buildup", "build_up", "rise", "riser", "climb")
+#: Instruments that mark a change rather than carry a section (the advice does not suggest them for a lift).
+TRANSITION_INSTRUMENTS = ("riser", "boom")
 #: Ratios of the heard tempo to the score's that are the same beat heard another way: double /
 #: half time, and the 2/3 (or 4/3) a 3+3+2 figure makes the onsets show.
 TEMPO_RATIOS = {1.0: "", 2.0: "double time", 0.5: "half time", 2 / 3: "2/3", 1.5: "3/2", 4 / 3: "4/3", 0.75: "3/4"}
 
-#: The limits (calibrated: §93.9). Each is crossed by none of the 14 beds or their templates.
+#: The limits (calibrated: §93.9, §93.13). Each is crossed by none of the 16 beds or their templates.
 LIMITS = {
     "steadiness_db": 8.0,  # 3 s loudness p10..p95 range (beds 0.5-1.5, skyline_lift 4.1); over: it swings under the voice
     "plr_db": 19.0,  # true peak over integrated loudness (beds 10.8-14.5); over: single hits jump out
@@ -61,8 +68,10 @@ LIMITS = {
     "highs_db": -30.0,  # level above 5 kHz against the whole (beds -94 .. -34.8, bright); over: hiss and sizzle
     "highs_bar_db": -24.0,  # the same in the brightest bar (beds up to -28.6)
     "in_key": 0.75,  # share of the pitched sound on the key's notes (templates 0.90-1.00)
+    "in_chord": 0.25,  # under each chord, each audible pitched part's share on the key's or the chord's notes (templates 0.39-0.99, a wrong line 0.01-0.04)
     "lift_db": 0.5,  # a lift's loudness over the section before it, or
     "lift_bright_db": 1.5,  # ... its brightness (power above 2 kHz; ascent +1.9 dB at +0.3 dB louder)
+    "lift_under_db": 1.0,  # a note: a lift this much quieter (and no brighter) than an earlier section (no template or piece is)
     "build_db": 0.5,  # a build's second half over its first (loudness), or
     "build_bright_db": 1.0,  # ... its brightness (tidewater +1.3, ascent +3.0)
     "voice_clear_db": 15.0,  # demo: the voice's 300 Hz-3 kHz over the music's while it speaks (beds 17.6-26.2)
@@ -268,19 +277,23 @@ class _Stems:
 
     hop: int
     response: np.ndarray
+    spans: list[tuple[int, int]] = field(default_factory=list)
     frames: dict[str, Frames] = field(default_factory=dict)
     peaks: dict[str, float] = field(default_factory=dict)
     seams: dict[str, float] = field(default_factory=dict)
     pitched: np.ndarray | None = None
+    chord_power: dict[str, np.ndarray] = field(default_factory=dict)
 
     def add(self, name: str, sound: np.ndarray, loop: bool, is_pitched: bool) -> None:
         """A track's sound before the master filter (its response is applied to the bands; the
-        peak and seam are the unfiltered sound's)."""
+        peak and seam are the unfiltered sound's); a pitched track's chroma power under each
+        chord (``spans``: samples), to say which track plays off the chord."""
         self.frames[name] = measure_frames(sound, loop, self.hop, image=False, response=self.response)
         self.peaks[name] = float(np.abs(sound).max())
         self.seams[name] = float(np.abs(sound[0] - sound[-1]).max())
         if is_pitched:
             self.pitched = sound.copy() if self.pitched is None else self.pitched + sound
+            self.chord_power[name] = np.array([measure.chroma_power(sound[a:z]) for a, z in self.spans]).reshape(len(self.spans), 12)
 
 
 # ----- the checks ------------------------------------------------------------------------------
@@ -292,7 +305,8 @@ def check_music_score(score: MusicScore, hop: int | None = None) -> MusicCheck:
 
     began = time.perf_counter()
     hop = hop or frame_hop(score.seconds)
-    stems = _Stems(hop, master_response(score.lowpass, score.highpass))
+    slots = _chord_slots(score)
+    stems = _Stems(hop, master_response(score.lowpass, score.highpass), [(c.start, c.start + c.length) for _, c in slots])
     kinds = {t.name: t.instrument.kind for t in score.tracks}
     mix, gain = render_music_stems(score, lambda name, sound: stems.add(name, sound, score.loop, kinds[name] != "drum"))
     for f in stems.frames.values():
@@ -476,20 +490,30 @@ def _analyse(
         in_key = sum(s * c for _, _, s, c in shares) / max(sum(c for *_, c in shares), 1)
         facts["in_key"] = round(in_key, 3)
         worst = min(shares, key=lambda s: s[2])
+        chords = [c for c in (_chord_fits(score, stems) if score is not None and stems is not None else []) if c["track"] is not None]
+        clash = min(chords, key=lambda c: c["share"]) if chords else None
+        if clash is not None:
+            facts["in_chord_min"] = {"track": clash["track"], "share": round(clash["share"], 3), "where": clash["where"], "chord": clash["chord"]}
         if worst[2] < LIMITS["in_key"]:
             where = f" in the {worst[0]}" if worst[0] and len(shares) > 1 else ""
             findings.append(Finding("key", "fix", f"only {100 * worst[2]:.0f} % of the pitched sound{where} is on {worst[1].name}'s notes (limit "
                                     f"{100 * LIMITS['in_key']:.0f} %; it fits {best} best): notes clash with the key",
                                     ["check `key:` (it sets the scale the degrees use) and the written notes (`E5`, `F#3`...) and chord names in `progression`"]))
+        elif clash is not None and clash["share"] < LIMITS["in_chord"]:
+            findings.append(Finding("key", "fix", f"under the {clash['chord']} at {clash['where']} only {100 * clash['share']:.0f} % of `{clash['track']}` is on "
+                                    f"the key's or the chord's notes (limit {100 * LIMITS['in_chord']:.0f} %; the piece as a whole: {100 * in_key:.0f} % on the "
+                                    "key's notes): it clashes with the chord there", _chord_fixes(clash)))
         else:
-            findings.append(Finding("key", "ok", f"{100 * in_key:.0f} % of the pitched sound on the key's notes (the chroma fits {best} best, {fits[best]:.2f})"))
+            findings.append(Finding("key", "ok", f"{100 * in_key:.0f} % of the pitched sound on the key's notes (the chroma fits {best} best, {fits[best]:.2f})"
+                                    + (f"; every part fits every chord (at least {100 * clash['share']:.0f} %)" if clash is not None else "")))
     else:
         findings.append(Finding("key", "ok", f"the pitches fit {best} best ({fits[best]:.2f})"))
 
     # sections: does the lift lift, does the build build?
     for i, row in enumerate(section_rows):
         if row["name"] in LIFT_NAMES:
-            before = section_rows[i - 1] if i > 0 else None
+            # the section before (round the loop for the first one); a one-pass piece's first section: the rest
+            before = section_rows[i - 1] if i > 0 else (section_rows[-1] if loop and len(section_rows) > 1 else None)
             others = [r["lufs"] for r in section_rows if r is not row]
             ref = before["lufs"] if before is not None else (float(np.mean(others)) if others else None)
             if ref is None:
@@ -497,13 +521,21 @@ def _analyse(
             gain_db = row["lufs"] - ref
             brighter = row["bright_db"] - (before["bright_db"] if before is not None else float(np.mean([r["bright_db"] for r in section_rows if r is not row])))
             row["lift_db"], row["lift_brighter_db"] = round(gain_db, 2), round(brighter, 2)
-            against = f"the {before['name']}" if before is not None else "the rest"
+            against = (f"the {before['name']}" + (" (before it round the loop)" if i == 0 else "")) if before is not None else "the rest"
             if gain_db >= LIMITS["lift_db"] or brighter >= LIMITS["lift_bright_db"]:
                 findings.append(Finding("sections", "ok", f"the {row['name']} lifts: {gain_db:+.1f} dB louder and {brighter:+.1f} dB brighter than {against}"))
             else:
                 findings.append(Finding("sections", "fix", f"the {row['name']} does not lift: {gain_db:+.1f} dB louder and {brighter:+.1f} dB brighter than "
                                         f"{against} (it should be {LIMITS['lift_db']:g} dB louder or {LIMITS['lift_bright_db']:g} dB brighter)",
                                         _lift_fixes(score, stems, row["name"], before["name"] if before else None, sections, bar)))
+            # a lift after a quiet break passes against the break: it should still top what came before
+            earlier = [r for r in section_rows[:i] if r is not before and r["name"] not in LIFT_NAMES]
+            peak = max(earlier, key=lambda r: r["lufs"], default=None)
+            if peak is not None and peak["lufs"] - row["lufs"] >= LIMITS["lift_under_db"] and peak["bright_db"] >= row["bright_db"]:
+                lifted = findings[-1].level == "ok"  # else the fix above already gives the advice
+                findings.append(Finding("sections", "note", f"the {row['name']} is {peak['lufs'] - row['lufs']:.1f} dB quieter than the {peak['name']} before it, "
+                                        "and no brighter: it may not feel like the high point",
+                                        _lift_fixes(score, stems, row["name"], peak["name"], sections, bar) if lifted else []))
         if row["name"] in BUILD_NAMES and "first_half_lufs" in row:
             rise = row["second_half_lufs"] - row["first_half_lufs"]
             row["build_db"] = round(rise, 2)
@@ -511,7 +543,8 @@ def _analyse(
                 findings.append(Finding("sections", "ok", f"the {row['name']} builds: its second half {rise:+.1f} dB, {row['brighter_db']:+.1f} dB brighter"))
             else:
                 findings.append(Finding("sections", "fix", f"the {row['name']} does not build: its second half {rise:+.1f} dB, {row['brighter_db']:+.1f} dB brighter "
-                                        f"(it should rise {LIMITS['build_db']:g} dB or brighten {LIMITS['build_bright_db']:g} dB)", _build_fixes(score, row["name"])))
+                                        f"(it should rise {LIMITS['build_db']:g} dB or brighten {LIMITS['build_bright_db']:g} dB)",
+                                        _build_fixes(score, stems, row["name"], ((row["first_bar"] - 1) * bar, (row["first_bar"] - 1 + row["bars"]) * bar))))
 
     # tracks
     track_rows: list[dict[str, Any]] = []
@@ -530,6 +563,51 @@ def _analyse(
     report.facts["bar_voice_db"] = [round(float(v), 2) for v in bar_voice]
     report.facts["bar_lufs"] = [round(float(v), 2) for v in _bar_lufs(kpower, bar, bars)]
     return report
+
+
+#: The shortest chord (seconds) the per-chord key check looks at (shorter spans blur the pitches).
+CHORD_MIN_SECONDS = 0.5
+#: A pitched track counts under a chord when it holds this share of the pitched power there.
+CHORD_TRACK_SHARE = 0.05
+
+
+def _chord_slots(score: MusicScore) -> list[tuple[Section, ChordSlot]]:
+    """Every chord as it plays (section, slot) that lasts long enough to measure its pitches."""
+    return [(s, c) for s in score.sections for c in s.chords if c.length >= CHORD_MIN_SECONDS * RATE]
+
+
+def _chord_fits(score: MusicScore, stems: _Stems) -> list[dict[str, Any]]:
+    """Under each chord, the pitched track that fits it worst: its share of its own sound on the
+    key's scale or the chord's notes (a chromatic chord's tones are fine), among the tracks that
+    hold :data:`CHORD_TRACK_SHARE` of the pitched sound there, and the notes it plays off them.
+    (Per track, as a quiet melody that clashes hides in the whole: overtones of rich sounds keep
+    every part above 35 %, a wrong note line falls under 5 %.)"""
+    out = []
+    for k, (section, slot) in enumerate(_chord_slots(score)):
+        allowed = set(slot.key.scale) | set(slot.chord.pitch_classes) | {slot.chord.bass}
+        allowed |= {n % 12 for n in slot.notes or ()} | ({slot.bass_note % 12} if slot.bass_note is not None else set())
+        off = [p for p in range(12) if p not in allowed]
+        total = sum(float(power[k].sum()) for power in stems.chord_power.values()) or 1e-30
+        fits = [(1 - float(power[k][off].sum()) / float(power[k].sum()), name) for name, power in stems.chord_power.items()
+                if float(power[k].sum()) >= CHORD_TRACK_SHARE * total]
+        share, track = min(fits) if fits else (1.0, None)
+        power = stems.chord_power[track][k] if track is not None else np.zeros(12)
+        out.append({
+            "chord": slot.chord.name,
+            "where": f"bar {slot.start // score.bar + 1} ({section.name})",
+            "track": track,
+            "share": share,
+            "off_notes": [note_name(60 + p, slot.key.flats)[:-1] for p in sorted(off, key=lambda p: -power[p])[:3] if power[p] > 0.05 * power.sum()],
+            "chord_notes": [note_name(60 + p, slot.key.flats)[:-1] for p in slot.chord.pitch_classes],
+        })
+    return out
+
+
+def _chord_fixes(clash: dict[str, Any]) -> list[str]:
+    notes = f" ({', '.join(clash['off_notes'])})" if clash["off_notes"] else ""
+    return [f"`{clash['track']}` plays notes off it{notes}: check its notes there against {clash['chord']} ({', '.join(clash['chord_notes'])}) "
+            "and the key, or write degrees (1 3 5 8) that follow each chord",
+            "or change that chord in `progression` to one that holds those notes"]
 
 
 def _band_level(frames: Frames, band: str, a: int, z: int) -> float:
@@ -736,9 +814,15 @@ def _lift_fixes(score: MusicScore | None, stems: _Stems | None, name: str, befor
     main = [n for n, share in _top(stems, "all", a, z) if share > 0 and tracks[n].instrument.kind != "drum"]
     if main and not fixes:
         fixes.append(f"raise its main part: {_volume_text(tracks[main[0]], [name], 3)}")
-    resting = [t.name for t in score.tracks if name not in t.parts]
+    # a part that rests in the lift but plays elsewhere — not a transition sound (riser, boom) and
+    # not one that only plays in builds: bringing those in would not lift it
+    resting = [t for t in score.tracks if name not in t.parts and t.instrument.name not in TRANSITION_INSTRUMENTS
+               and any(s not in BUILD_NAMES for s in t.parts)]
     if resting:
-        fixes.append(f"bring in a part there: `{resting[0]}` rests in the {name} (its `rest:` / `only:`)")
+        t = max(resting, key=lambda t: float(stems.frames[t.name].bands["all"].sum()))
+        playing = [s for s in t.parts if s not in BUILD_NAMES]
+        fixes.append(f"bring in a part there: `{t.name}` ({t.instrument.name}) plays in the {' and '.join(playing)} but rests in the {name} "
+                     "(its `rest:` / `only:`)")
     else:
         fixes.append(f"add a part that plays only there (`only: [{name}]`): a bell or soft lead line, an open hat, a clap")
     if before is not None:
@@ -749,14 +833,36 @@ def _lift_fixes(score: MusicScore | None, stems: _Stems | None, name: str, befor
     return fixes
 
 
-def _build_fixes(score: MusicScore | None, name: str) -> list[str]:
+#: The share of a build's second half a riser needs to be heard rising (the advice raises it to this).
+RISER_SHARE = 0.1
+
+
+def _build_fixes(score: MusicScore | None, stems: _Stems | None, name: str, span: tuple[int, int]) -> list[str]:
     if score is None:
         return []
     pads = [t.name for t in score.tracks if t.instrument.kind == "pad" and name in t.parts]
     target = pads[0] if pads else next((t.name for t in score.tracks if name in t.parts), "pad")
-    return [f"a volume ramp: `{target}: sections: {{{name}: {{volume: {{from: -6, to: 0}}}}}}`",
-            f"or open a filter through it: `{target}: sections: {{{name}: {{lowpass: {{from: 800, to: 4000}}}}}}`",
-            f"or a riser in its last bars: `riser: {{instrument: riser, only: [{name}], steps: \". | . | x | -\"}}`"]
+    fixes = [f"a volume ramp: `{target}: sections: {{{name}: {{volume: {{from: -6, to: 0}}}}}}`",
+             f"or open a filter through it: `{target}: sections: {{{name}: {{lowpass: {{from: 800, to: 4000}}}}}}`"]
+    risers = [t for t in score.tracks if t.instrument.name == "riser" and name in t.parts]
+    if not risers or stems is None:
+        return fixes + [f"or a riser in its last bars: `riser: {{instrument: riser, only: [{name}], steps: \". | . | x | -\"}}` "
+                        "(at `volume: 6` or more: at its normal level a riser is felt more than it is measured)"]
+    # a riser that is there but too quiet to count: how far to raise it (its share of the second half)
+    mid = (span[0] + span[1]) // 2
+    shares = dict(_top(stems, "all", mid, span[1]))
+    riser = max(risers, key=lambda t: shares.get(t.name, 0.0))
+    share = shares.get(riser.name, 0.0)
+    if share < RISER_SHARE and 0 < share:
+        under = -10 * math.log10(share / (1 - share))
+        raise_db = min(MAX_CUT_DB, math.ceil(10 * math.log10(RISER_SHARE * (1 - share) / ((1 - RISER_SHARE) * share))))
+        fixes.append(f"or raise the riser: `{riser.name}` sits {under:.0f} dB under the rest of the {name}'s second half, too quiet to make it "
+                     f"build (at its normal level a riser is a hint): {_volume_text(riser, [name], raise_db)}"
+                     + (", and still use a ramp or a sweep" if raise_db >= MAX_CUT_DB else ""))
+    else:
+        fixes.append(f"the riser `{riser.name}` is {100 * share:.0f} % of the second half: let it start earlier (more bars held) or rise higher "
+                     "(`settings: {high: 5000}`)")
+    return fixes
 
 
 # ----- narration demo --------------------------------------------------------------------------

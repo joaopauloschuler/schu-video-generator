@@ -1849,9 +1849,13 @@ again only when the file changes). You cannot hear it, so work from measurements
    worked example with its log: `examples/gps-time-of-flight`.
 5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
    (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
-   on the pieces the video plays).
+   on the part of the piece the video plays). A piece keeps its own pace; to make its lift begin
+   with a scene, split it into two cues and start the second at the section:
+   `[{source: my_theme, to: setup, fade_out: 0.5}, {source: my_theme, from: results, section: lift, fade_in: 0.3}]`.
 6. **Let a human choose**: offer the demo MP3s or `vidgen music render ... --out x.mp3` of two
    versions and a bed; the numbers say whether it fits under a voice, not whether it is good.
+   (Both commands also take names: `vidgen music check my_theme --compare momentum` in the
+   project's folder.)
 Write original music: genre styles are fine, never a known tune. A piece named like a built-in bed
 is a problem (rename it, or use `source: assets/music/NAME.yaml`). `loop: false` pieces play once
 with their ending (the cue's fade-out still applies).

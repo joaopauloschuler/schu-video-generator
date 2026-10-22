@@ -196,9 +196,10 @@ def test_music_check_lint_rule(tmp_path: Path) -> None:
     project = _project(tmp_path, [{"source": "calm", "to": "s0"}, {"source": "loud", "from": "s1"}], {"loud.yaml": LOUD})
     assert music_issues(project, "s0", MusicCheckRule()) == []  # a bed is not checked
     issues = music_issues(project, "s1", MusicCheckRule())
-    assert any("music piece assets/music/loud.yaml (voice range):" in m and sev is None for m, sev in issues)
+    # the cue plays 4 s of the 9.6 s piece (Step 191: the part it plays is named)
+    assert any("music piece assets/music/loud.yaml (voice range) (the video plays bars 1-2 of its 4):" in m and sev is None for m, sev in issues)
     assert all("vidgen music check assets/music/loud.yaml" in m for m, _ in issues)
-    [cached] = (tmp_path / "build" / "music").glob("piece-*-check.json")
+    [cached] = (tmp_path / "build" / "music").glob("piece-*-check2.json")
     assert json.loads(cached.read_text(encoding="utf-8"))["verdict"].startswith("needs work")
     assert music_issues(project, "s1", MusicCheckRule(topics=["tempo"])) == []
     ctx = SceneContext("s1", {"fps": 5, "beats": []}, tmp_path, music_issues=issues)
