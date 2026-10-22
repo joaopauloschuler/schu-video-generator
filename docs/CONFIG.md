@@ -3133,7 +3133,9 @@ under the server's root).
 built-in bed a 15 s MP3 clip (128 kbps stereo, 12 dB louder than in a mix: −16 LUFS; the beds
 with a lift, `breakthrough`, `ascent`, `horizon`, start 6 s before it, `momentum` 6 s before its
 riser into the top, `discovery` near its brightest) and a spectrogram PNG of the clip (32 px per
-second, 120 px high, 40 Hz–8 kHz on a log scale); six clips that together play all the built-in
+second, 120 px high, 40 Hz–8 kHz on a log scale); the same for each piece "made with the score
+format" (shipped in vidgen, the copy an example plays: `time_of_flight`, 6 s before its lift),
+with links to the score-file docs; six clips that together play all the built-in
 sound effects (96 kbps mono) and one of the six ambience beds in turn; and, when the `music` extra
 and the SoundFont are there (the page never downloads it), the first 15 s of the `curious` and
 `playful` moods. Every clip is made by vidgen itself, so the page can be made again: the same
@@ -3153,6 +3155,8 @@ effects, the loudness and the true peak. Notes outside 20 Hz–12 kHz are left o
 samples. Every mistake is reported at once with where it is and the nearest known name. `vidgen
 music patches [--json]` describes every instrument, setting and effect in words. A score file in
 `assets/music` plays in a video like a bed ([project pieces](#project-pieces-score-files-in-a-video)).
+Craft notes and genre sketches: [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md); a worked example:
+[examples/gps-time-of-flight](../examples/gps-time-of-flight/README.md).
 
 ```yaml
 title: Tidewater
@@ -3263,8 +3267,11 @@ tempo, time, bars, sections), and `vidgen music template BED [--out FILE.yaml] [
 unless `--force`). Each is a close re-creation of its bed, not the bed itself — the same key,
 tempo, chords (voicings and bass written out), sections, parts and levels, measured close to the
 bed (tempo, key, loudness over time, spectrum), but the pads' random phases and a few sounds
-differ — with comments saying what each part does. Change one thing at a time and listen
-(`vidgen music render my_theme.yaml --out my_theme.mp3`). The beds themselves are unchanged.
+differ — with comments saying what each part does. Change one thing at a time and check it
+against the version before (`vidgen music check my_theme.yaml --compare my_theme_v1.yaml`; the
+command prints this hint after writing a template), or listen (`vidgen music render
+my_theme.yaml --out my_theme.mp3`). The chords are written out in the bed's key: to change the
+key, write the `progression` again as Roman numerals. The beds themselves are unchanged.
 A filter opening is written as the beds do it: a dark and a bright copy of the pad cross-faded
 by their `volume` curves.
 

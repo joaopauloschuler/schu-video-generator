@@ -1,7 +1,8 @@
 """The Listen page (DESIGN.md §92): ``docs/music/README.md``, written by ``vidgen music page``.
 
 Every clip on it is made by vidgen itself: a 15 s MP3 and a spectrogram of each built-in music bed
-(:data:`vidgen.music.BUILTIN_BEDS`), rows of the built-in sound effects
+(:data:`vidgen.music.BUILTIN_BEDS`) and of each piece made with the score format
+(:data:`SCORE_PIECES`, Step 189), rows of the built-in sound effects
 (:data:`vidgen.sfx.BUILTIN_SOUNDS`, every one of them) and of the ambience beds, and composed music
 in two moods when the ``music`` extra and the SoundFont are there. Deterministic: the same vidgen,
 ffmpeg (libmp3lame), Pillow and symusic give the same files, so regenerating changes nothing.
@@ -21,6 +22,7 @@ from vidgen import ambience, composer, music, sfx
 from vidgen.errors import VidgenError
 from vidgen.render.ffmpeg import find_ffmpeg, run_ffmpeg
 from vidgen.sfx import RATE
+from vidgen.studio import MusicScore, load_music_score, render_music_score
 
 #: Length of a music clip (s): a bed's, a composed mood's.
 CLIP_SECONDS = 15.0
@@ -59,6 +61,32 @@ CLIP_MOMENTS: dict[str, tuple[float, str]] = {
 CLIP_LEAD_SECONDS = 6.0
 #: The composed moods with a clip: one for explainers, one for cartoons.
 COMPOSED_MOODS = ("curious", "playful")
+
+
+@dataclass(frozen=True)
+class ScorePiece:
+    """A piece written in the score format (§93), shipped as ``studio/pieces/<name>.yaml``: its
+    clip starts :data:`CLIP_LEAD_SECONDS` before ``section`` (``moment`` says what is heard),
+    ``made`` says how it was made and ``example`` names the example project that plays it."""
+
+    name: str
+    section: str
+    moment: str
+    made: str
+    example: str
+
+
+#: The "made with the score format" rows, in page order.
+SCORE_PIECES: tuple[ScorePiece, ...] = (
+    ScorePiece(
+        "time_of_flight", "lift", "the end of the build and the lift",
+        "An AI author's piece, made from the `momentum` template one change at a time (new key, tempo, "
+        "chords, sections, arpeggio, pings and lead), checked with `vidgen music check` after each",
+        "gps-time-of-flight",
+    ),
+)
+#: Where the score pieces live (package data).
+PIECES_DIR = Path(__file__).resolve().parent / "studio" / "pieces"
 #: The page's folder and file names.
 PAGE_NAME = "README.md"
 MEDIA_DIR = "media"
@@ -178,6 +206,30 @@ def bed_clip(name: str) -> np.ndarray:
     """``(n, 2)``: :data:`CLIP_SECONDS` of a bed's loop from :func:`bed_clip_start`, faded, raised."""
     loop = music.bed_loop(name)
     first = round(bed_clip_start(name) * RATE)
+    index = (first + np.arange(round(CLIP_SECONDS * RATE))) % len(loop)
+    return _gained(_faded(loop[index], FADE_IN_SECONDS, FADE_OUT_SECONDS), MUSIC_GAIN_DB)
+
+
+def piece_score(piece: ScorePiece) -> MusicScore:
+    """The score file of a :data:`SCORE_PIECES` entry, read (not rendered)."""
+    return load_music_score(PIECES_DIR / f"{piece.name}.yaml")
+
+
+def piece_clip_start(piece: ScorePiece, score: MusicScore) -> float:
+    """Seconds into the piece's loop where its clip starts: :data:`CLIP_LEAD_SECONDS` before its
+    ``section`` (wrapping round the loop)."""
+    section = next((s for s in score.sections if s.name == piece.section), None)
+    if section is None:
+        raise VidgenError(f"listen page: {piece.name} has no section '{piece.section}'")
+    return round((score.section_start(section) / RATE - CLIP_LEAD_SECONDS) % score.seconds, 2)
+
+
+def piece_clip(piece: ScorePiece) -> np.ndarray:
+    """``(n, 2)``: :data:`CLIP_SECONDS` of a score piece's loop from :func:`piece_clip_start`,
+    faded and raised as a bed's clip."""
+    score = piece_score(piece)
+    loop = render_music_score(score)
+    first = round(piece_clip_start(piece, score) * RATE)
     index = (first + np.arange(round(CLIP_SECONDS * RATE))) % len(loop)
     return _gained(_faded(loop[index], FADE_IN_SECONDS, FADE_OUT_SECONDS), MUSIC_GAIN_DB)
 
@@ -344,9 +396,41 @@ def _events_text(row: SoundRow) -> str:
     return ", ".join(parts)
 
 
+def _piece_row(piece: ScorePiece) -> str:
+    score = piece_score(piece)
+    tempo = f"{score.tempo:g} BPM"
+    kind = "loop" if score.loop else "piece with an ending"
+    example = f"[examples/{piece.example}](../../examples/{piece.example}/README.md)"
+    return (
+        f"| `{piece.name}`<br>{score.title} | {score.key.name}, {tempo}, {score.seconds:.1f} s {kind} | "
+        f"{piece.made}; it plays under {example} | {_spectrogram_img('piece-' + piece.name, piece.name)} | "
+        f"{_clip_link('piece-' + piece.name, CLIP_SECONDS)}<br>from {piece_clip_start(piece, score):g} s: {piece.moment} |"
+    )
+
+
 def page_text(composed_pieces: Sequence[composer.Piece], composed_note: str) -> str:
     """The Listen page's Markdown (no dates, no paths: the same inputs give the same text)."""
     beds = list(music.BUILTIN_BEDS)
+    score_rows: list[str] = []
+    if SCORE_PIECES:
+        score_rows = [
+            "## Made with the score format",
+            "",
+            "Music written as a score file: YAML with a key, a tempo, sections, chords and tracks of step",
+            "patterns, played by vidgen's own instruments. Agents write them without listening: they start",
+            "from a template of a built-in bed, change one thing at a time and read `vidgen music check`'s",
+            "report after each change. A score file in a project's `assets/music/` plays like a bed",
+            "(`music: time_of_flight`). How: [score files](../CONFIG.md#score-files-vidgen-music-render),",
+            "[templates of the beds](../CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template),",
+            "[checking a piece](../CONFIG.md#checking-a-piece-vidgen-music-check),",
+            "[project pieces](../CONFIG.md#project-pieces-score-files-in-a-video) and the",
+            "[music craft notes](../COOKBOOK-MUSIC.md).",
+            "",
+            "| piece | key, tempo, length | how it was made | spectrogram | clip |",
+            "|---|---|---|---|---|",
+            *(_piece_row(piece) for piece in SCORE_PIECES),
+            "",
+        ]
     lines = [
         "# Listen: vidgen's music and sounds",
         "",
@@ -380,6 +464,7 @@ def page_text(composed_pieces: Sequence[composer.Piece], composed_note: str) -> 
         "|---|---|---|---|---|",
         *(_bed_row(name) for name in beds),
         "",
+        *score_rows,
         "## Sound effects",
         "",
         f"{len(sfx.BUILTIN_SOUNDS)} sounds, synthesised when the video is joined: `- sfx: whoosh` in a beat, a scene's `sfx:` list, or",
@@ -439,6 +524,7 @@ def make_listen_page(output: Path, composed: bool = True) -> ListenResult:
     output.mkdir(parents=True, exist_ok=True)
     result = ListenResult(output=output, page=output / PAGE_NAME)
     clips: list[tuple[str, np.ndarray]] = [("bed-" + name, bed_clip(name)) for name in music.BUILTIN_BEDS]
+    clips += [("piece-" + piece.name, piece_clip(piece)) for piece in SCORE_PIECES]
     clips += [(row.name, sound_row_clip(row)) for row in SOUND_ROWS]
     clips.append(("ambience", ambience_clip()))
     pieces: list[composer.Piece] = []

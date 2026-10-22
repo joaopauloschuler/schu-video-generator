@@ -1820,16 +1820,26 @@ again only when the file changes). You cannot hear it, so work from measurements
 1. **Start from a template**, not from nothing: `vidgen music template momentum --out
    assets/music/my_theme.yaml` (for documentaries keep `momentum` the first suggestion; `vidgen
    music template` lists all 14). Give it a `title:` and a `description:` (list-music shows them).
-2. **Change one thing at a time** — the progression, one track's steps, an instrument or a
-   setting (`vidgen music patches` describes every instrument and effect) — and keep the old
-   version (save a copy as `assets/music/my_theme_v1.yaml` first).
-3. **Check after every change and compare**: `vidgen music check assets/music/my_theme.yaml
-   --compare assets/music/my_theme_v1.yaml` (MCP `music_check` with `compare`). Read the verdict and the fixes:
-   they name the score keys to change. Look at the spectrogram PNG: sections where you meant
-   them, nothing loud between the two blue lines (the voice's 300 Hz–3 kHz), no red bars in the
-   lane under it.
+   A template writes its chords out (`{chord, notes, bass}` in the bed's key): to change the key,
+   replace the whole `progression:` with Roman numerals (`"i v VImaj7 iv9"`) in the same step.
+2. **Change one thing at a time** — the key and chords, the sections, one track's steps, an
+   instrument or a setting (`vidgen music patches` describes every instrument and effect) — and
+   keep each version (copy the file to `my_theme_v1.yaml`, `_v2`... outside `assets/music`, or
+   under another name, before each change). Name sections `intro`, `build`, `lift`, `settle`:
+   the check judges whether a `build` rises through its second half and whether a `lift` is
+   louder or brighter than the section before; other names are not judged.
+3. **Check after every change and compare** with the version before: `vidgen music check
+   assets/music/my_theme.yaml --compare my_theme_v1.yaml --out build/music-check` (MCP
+   `music_check` with `compare`; without `--out` the pictures and demos land in the current
+   folder). Read the verdict and the fixes: they name the score keys to change. In the tracks
+   table a part under about 1 % of the whole is barely there: raise it 4–8 dB. Look at the
+   spectrogram PNG: sections where you meant them, nothing loud between the two blue lines (the
+   voice's 300 Hz–3 kHz), no red bars in the lane under it. Compare the last version with the
+   template too: the piece should be clearly your own.
 4. **Keep room for the voice**: the melody sparse or out of the voice's core, pads soft there, no
-   bright highs; the check's demo MP3 plays the piece under a narration sample.
+   bright highs; the check's demo MP3 plays the piece under a narration sample. Craft notes and
+   genre sketches (documentary, trance, synthwave, cosmic, cartoon): `docs/COOKBOOK-MUSIC.md`; a
+   worked example with its log: `examples/gps-time-of-flight`.
 5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
    (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
    on the pieces the video plays).

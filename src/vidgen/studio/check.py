@@ -226,7 +226,7 @@ def _tempo_words(heard: float | None, written: float | None) -> tuple[str, str]:
         if abs(heard / (written * ratio) - 1) <= 0.02:
             if ratio == 1.0:
                 return "ok", f"heard {heard:.1f} BPM, as the score's {written:g}"
-            why = "the 3+3+2 accents make the onsets repeat in threes" if ratio in (2 / 3, 4 / 3, 1.5, 0.75) else "the same beat counted twice as fast or slow"
+            why = "accents or figures grouped in threes, such as 3+3+2, make the onsets repeat in threes" if ratio in (2 / 3, 4 / 3, 1.5, 0.75) else "the same beat counted twice as fast or slow"
             return "ok", f"heard {heard:.1f} BPM = {name} of the score's {written:g} ({why}; the same beat, fine)"
     return "note", f"heard {heard:.1f} BPM, not the score's {written:g} or a simple ratio of it"
 

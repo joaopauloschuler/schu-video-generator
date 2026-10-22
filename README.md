@@ -748,12 +748,18 @@ my_video/
   with a pointer line, crosses to the other side (the content slides over) and walks off; lines
   said with feeling (`emotion:`), composed music in the `curious` mood; about 66 s with Kokoro
   narration (no audio committed).
+- [examples/gps-time-of-flight](examples/gps-time-of-flight/README.md) — "How GPS finds you", a
+  one-minute science explainer whose music is an original score file an AI author made from the
+  `momentum` template in nine checked steps (`music: time_of_flight`); the README has the
+  iteration log and the piece's check report; about 89 s with Kokoro narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
 - [docs/COOKBOOK.md](docs/COOKBOOK.md) — craft notes from real videos (hooks, pacing, sound, QA);
   [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
-  YouTube Short about code: layout, phone-readable code, narration, checks.
+  YouTube Short about code: layout, phone-readable code, narration, checks;
+  [docs/COOKBOOK-MUSIC.md](docs/COOKBOOK-MUSIC.md) — writing music as score files: room for the
+  voice, builds and lifts, loops, check and compare, genre sketches.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

@@ -13076,8 +13076,9 @@ Term: a **score file** (YAML, this section; class `MusicScore`) is not the compo
 - **188 Using it** (done, §93.10): `assets/music/*.yaml` used like beds (`music: my_theme`),
   rendered at the join with caching; list-music / validate / lint; MCP tools; the author-guide
   recipe.
-- **189 Example and craft notes**, **190 Review** (beds and existing projects byte-identical;
-  determinism; phase tests).
+- **189 Example and craft notes** (done, §93.11): `examples/gps-time-of-flight` with an
+  agent-made piece, `docs/COOKBOOK-MUSIC.md`, the Listen page's score-format row.
+- **190 Review** (beds and existing projects byte-identical; determinism; phase tests).
 
 Compatibility: additive and opt-in. Nothing that exists plays differently; the 14 beds stay
 byte-identical (`tests/test_music.py` fingerprints).
@@ -13085,7 +13086,8 @@ byte-identical (`tests/test_music.py` fingerprints).
 ### 93.2 Where it lives
 
 `src/vidgen/studio/` (theory, patterns, instruments, effects, patches, score_file, render,
-templates, measure, check; the templates in `beds/`, the check's narration sample in `data/`).
+templates, measure, check; the templates in `beds/`, the check's narration sample in `data/`,
+the Listen page's score pieces in `pieces/` since Step 189).
 Self-contained: it
 imports only `vidgen.music`'s building blocks (`_kick`, `_pad_wave`, `_tone_filter`, `_finish`...,
 and `BUILTIN_BEDS` for the templates' names), `vidgen.sfx` (`RATE`, filters, `decode_audio`),
@@ -13565,3 +13567,47 @@ music: [{source: my_theme, to: part2}, {source: assets/music/outro.yaml, from: r
 - **Not done**: no per-scene `music: {mood}`-like changes for pieces (a scene's `volume` and
   `false` work); a piece cannot follow the video's timings (composed music does); the lint check
   runs on the whole piece, not on the part the video plays.
+
+### 93.11 The example, the craft notes and the Listen row (Step 189)
+
+- **The recipe as a test**: an agent followed the guide's "Making music" recipe literally — the
+  `momentum` template, nine versions, one change each, `vidgen music check vN --compare v(N-1)`
+  after each, spectrograms looked at — and turned it into *Time of Flight* (B minor, 108 BPM, 24
+  bars in intro / build / lift / settle, an FM-pluck arpeggio with a filter opening through the
+  build, a tick "ping" with echoes, a soft lead in the lift). The log is in the example's README.
+  What the run showed and what changed: a template's progression is written out in the bed's key
+  (`{chord, notes, bass}`), so the key cannot change alone (guide and CONFIG now say: rewrite the
+  progression in Roman numerals); only sections named like `build` / `lift` are judged (the guide
+  names them); a track under about 1 % of the tracks table is inaudible (the guide says raise it
+  4–8 dB); `vidgen music check`'s `--out` defaults to the current folder (the guide passes
+  `--out build/music-check`); `vidgen music template` printed "change one thing at a time and
+  listen" — it now prints the check-and-compare command first (and the render one after); the
+  check's tempo note said "the 3+3+2 accents" for any ratio of 2/3 even in a piece without
+  them — now "accents or figures grouped in threes, such as 3+3+2". No change to the score format
+  or the measurements.
+- **The example** (`examples/gps-time-of-flight`): six scenes (title, three `stat`, `process`,
+  `icon_grid`), Kokoro `af_heart` at 0.8 (at 0.9 and 0.85 `narration_speed` flagged short beats),
+  `music: time_of_flight` from `assets/music/time_of_flight.yaml`. Rendered 16:9 in the scratchpad
+  (no media committed): 88.7 s, −16.0 LUFS, true peak −1.8 dBTP, LRA 3.0 LU; `validate` and `lint`
+  clean (the `music_check` rule included). Tested by `tests/test_music_pieces.py` (validates a copy
+  of the example, the piece's sections / key / tempo; `slow`: the check finds nothing to fix and
+  the build builds, the lift lifts).
+- **Craft notes** (decision: a separate `docs/COOKBOOK-MUSIC.md`, linked from the cookbook, the
+  README, CONFIG, the guide recipe and the Listen page, rather than a section of the long video
+  cookbook): room for the voice, energy curves, loop design, using check and compare, five genre
+  sketches (documentary, uplifting trance, synthwave, cosmic, cartoon) as complete score files —
+  each checked `fine under narration`, measured numbers beside each, and parsed by
+  `tests/test_docs.py` — and a table of common mistakes and fixes. Original material only.
+- **The Listen page row** (§92): `listen.SCORE_PIECES` (`ScorePiece`: name, the section the clip
+  leads into, what is heard there, how it was made, the example), the score files shipped as
+  package data `studio/pieces/<name>.yaml` (the page must not depend on the repository's
+  `examples/`; a test keeps the copy byte-equal to the example's). A "Made with the score format"
+  section after the beds, linking the score-file, template, check and project-piece docs and the
+  craft notes; one row per piece with its key, tempo and length, how it was made, a spectrogram
+  and a 15 s clip from 6 s before the section (`piece_clip_start`), rendered with
+  `render_music_score` and treated as a bed's clip (fades, +12 dB). The page grew 0.27 MB to
+  5.78 MB (budget 6.5 MB); every other file is byte-identical; a second run gave identical piece
+  files.
+- **Known**: the overlay-plan warning seen on the final render ("'four' starts at 50.37 s, planned
+  50.47 s") — the 16:9 render's scene lengths differ by 2–3 frames from the plan's; pre-existing,
+  not music-related (captions 0.07–0.1 s off), left for review.

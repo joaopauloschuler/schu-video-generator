@@ -20,6 +20,7 @@ from vidgen.lint import RULES, SceneContext
 from vidgen.lint.music_rule import music_issues
 from vidgen.project import Project
 from vidgen.sfx import RATE, read_wav, write_wav
+from vidgen.studio import load_music_score
 
 #: A tiny loop: 4 bars at 120 BPM = 8 s.
 SMALL = """title: Small theme
@@ -198,3 +199,31 @@ def test_music_check_lint_rule(tmp_path: Path) -> None:
     ctx = SceneContext("s1", {"fps": 5, "beats": []}, tmp_path, music_issues=issues)
     found = list(RULES["music_check"].check(ctx, MusicCheckRule()))
     assert len(found) == len(issues) and found[0].time == 0.0
+
+
+# ----- the example (Step 189) ---------------------------------------------------------------------
+
+EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "gps-time-of-flight"
+
+
+def test_the_gps_example_validates_with_its_piece(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    import shutil
+
+    root = shutil.copytree(EXAMPLE, tmp_path / "gps", ignore=shutil.ignore_patterns("build", "output", "audio"))
+    assert main(["validate", str(root)]) == 0
+    assert "music:     time_of_flight, a project piece" in capsys.readouterr().out
+    project = Project.load(root)
+    assert project_problems(project) == []
+    assert music.source_kind(project.config.music, root) == "score"
+    score = load_music_score(root / "assets" / "music" / "time_of_flight.yaml")
+    assert [s.name for s in score.sections] == ["intro", "build", "lift", "settle"] and score.loop
+    assert score.key.name == "B minor" and score.tempo == 108   # not the template's G minor at 120
+
+
+@pytest.mark.slow
+def test_the_gps_example_piece_is_fine_under_narration() -> None:
+    from vidgen.studio import check_music_score
+
+    check = check_music_score(load_music_score(EXAMPLE / "assets" / "music" / "time_of_flight.yaml"))
+    assert [f.topic for f in check.findings if f.level != "ok"] == []
+    assert [f.text.split(":")[0] for f in check.findings if f.topic == "sections"] == ["the build builds", "the lift lifts"]

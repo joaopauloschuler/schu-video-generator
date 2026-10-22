@@ -86,7 +86,8 @@ def test_committed_page_links_only_files_that_exist_and_every_file_is_linked() -
         assert (DOCS / rel).is_file(), rel
     on_disk = {p.relative_to(DOCS).as_posix() for p in (DOCS / "media").iterdir()}
     assert on_disk == linked, f"not linked: {sorted(on_disk - linked)}"
-    names = [f"bed-{n}" for n in music.BUILTIN_BEDS] + [row.name for row in listen.SOUND_ROWS] + ["ambience"]
+    names = [f"bed-{n}" for n in music.BUILTIN_BEDS] + [f"piece-{p.name}" for p in listen.SCORE_PIECES]
+    names += [row.name for row in listen.SOUND_ROWS] + ["ambience"]
     for name in names:
         assert f"media/{name}.mp3" in linked and f"media/{name}.png" in linked
 
@@ -99,14 +100,34 @@ def test_committed_media_sizes_and_formats() -> None:
     for mp3 in DOCS.glob("media/*.mp3"):
         head = mp3.read_bytes()[:2]
         assert head[0] == 0xFF and head[1] & 0xE0 == 0xE0, f"{mp3.name}: not a bare MP3 frame (tags?)"
-        if mp3.name.startswith(("bed-", "composed-")):
+        if mp3.name.startswith(("bed-", "piece-", "composed-")):
             assert 200_000 <= mp3.stat().st_size <= 320_000, mp3.name
     for png in DOCS.glob("media/*.png"):
         assert png.stat().st_size <= 80_000, png.name
         with Image.open(png) as image:
             assert image.mode == "P" and image.height == listen.SPECTROGRAM_HEIGHT
-            if png.name.startswith("bed-"):
+            if png.name.startswith(("bed-", "piece-")):
                 assert image.width == round(listen.CLIP_SECONDS * listen.SPECTROGRAM_PX_PER_SECOND)
+
+
+def test_score_pieces_are_the_examples_files_and_the_page_shows_them() -> None:
+    page = _page()
+    section = page[page.index("## Made with the score format"): page.index("## Sound effects")]
+    for anchor in ("score-files-vidgen-music-render", "templates-of-the-built-in-beds-vidgen-music-template",
+                   "checking-a-piece-vidgen-music-check", "project-pieces-score-files-in-a-video"):
+        assert f"(../CONFIG.md#{anchor})" in section
+    assert "(../COOKBOOK-MUSIC.md)" in section
+    for piece in listen.SCORE_PIECES:
+        shipped = (listen.PIECES_DIR / f"{piece.name}.yaml").read_bytes()
+        example = ROOT / "examples" / piece.example
+        assert (example / "assets" / "music" / f"{piece.name}.yaml").read_bytes() == shipped, "copy the example's piece to studio/pieces"
+        assert (example / "README.md").is_file()
+        assert f"music: {piece.name}" in (example / "video.yaml").read_text(encoding="utf-8")
+        assert f"| `{piece.name}`<br>" in section and f"media/piece-{piece.name}.mp3" in section
+    score = listen.piece_score(listen.SCORE_PIECES[0])
+    lift = next(s for s in score.sections if s.name == "lift")
+    assert listen.piece_clip_start(listen.SCORE_PIECES[0], score) == pytest.approx(
+        score.section_start(lift) / sfx.RATE - listen.CLIP_LEAD_SECONDS, abs=0.01)
 
 
 def test_readme_names_the_real_counts_and_links_the_page() -> None:
@@ -129,6 +150,7 @@ def test_music_page_command_is_deterministic(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(music, "BUILTIN_BEDS", {"calm": music.BUILTIN_BEDS["calm"]})
     monkeypatch.setattr(listen, "SOUND_ROWS", (listen.SoundRow("sfx-two", "Two", 1.0, ((0.1, "pop", 0.0, None), (0.5, "click", 0.0, None))),))
     monkeypatch.setattr(ambience, "AMBIENCE_BEDS", ("rain",))
+    monkeypatch.setattr(listen, "SCORE_PIECES", ())
     monkeypatch.setattr(listen, "CLIP_SECONDS", 2.0)
     outputs = []
     for name in ("a", "b"):

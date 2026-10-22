@@ -135,6 +135,20 @@ def test_every_builtin_scene_and_param_is_documented() -> None:
             assert f"`{name}`" in section, f"{entry.name}.{name} missing from its CONFIG.md section"
 
 
+def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> None:
+    from vidgen.studio import parse_music_score
+
+    text = (ROOT / "docs" / "COOKBOOK-MUSIC.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    assert len(blocks) == 5   # documentary, trance, synthwave, cosmic, cartoon
+    for block in blocks:
+        score = parse_music_score(yaml.safe_load(block), "COOKBOOK-MUSIC.md")
+        assert score.loop and score.tracks
+    assert "examples/gps-time-of-flight/README.md" in text and "music/README.md" in text
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md"):
+        assert "COOKBOOK-MUSIC.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
 def test_docs_yaml_snippets_parse() -> None:
     for doc in ("docs/CONFIG.md", "docs/EXTENDING.md", "README.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")

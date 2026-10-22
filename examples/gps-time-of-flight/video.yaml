@@ -1,0 +1,110 @@
+# How GPS finds you: a one-minute science explainer whose music is a project piece, an original
+# score file made from a template by an AI author (assets/music/time_of_flight.yaml; how it was
+# made, with its check report: README.md). It plays like a built-in bed: `music: time_of_flight`.
+#
+#   vidgen validate examples/gps-time-of-flight          # reads the score file (no render)
+#   vidgen lint examples/gps-time-of-flight              # incl. music_check on the piece
+#   vidgen music check examples/gps-time-of-flight/assets/music/time_of_flight.yaml
+#   vidgen tts examples/gps-time-of-flight               # Kokoro: local and free (the kokoro extra)
+#   vidgen render examples/gps-time-of-flight [--preview]
+#
+# Facts (checked): GPS satellites orbit about 20,200 km up (about thirty in service); light covers
+# 29.98 cm per nanosecond, so 1 microsecond of clock error is about 300 m; a signal from straight
+# overhead takes about 67 ms (20,200 km / 299,792 km/s); a receiver needs four satellites, three
+# for its position and one for its own clock's error; the satellites' clocks gain about 38
+# microseconds a day (+45 from weaker gravity, -7 from their speed), which uncorrected is about
+# 11 km of range a day (38 us x 300 m/us), so their clocks are set slightly slow before launch
+# (10.22999999543 MHz instead of 10.23 MHz). No audio is committed: before `vidgen tts` beats are
+# timed from their word count.
+title: "How GPS finds you"
+output: gps_time_of_flight
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart, speed: 0.8}   # local and free; 0.8: under 3.5 words/s
+
+music: time_of_flight              # assets/music/time_of_flight.yaml, rendered at the join
+transition: {type: crossfade, duration: 0.4}
+
+overlays:
+  - type: captions
+    max_lines: 1
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "SCIENCE IN A MINUTE"
+      title: "How GPS finds you"
+      subtitle: "Clocks, light and four satellites"
+    beats:
+      - text: "Your phone knows where you are, to a few metres, by timing radio signals."
+
+  - id: orbit
+    type: stat
+    params:
+      value: 20200
+      unit: km
+      label: "how high GPS satellites fly"
+      context: "about thirty satellites in service"
+      icon: satellite
+    beats:
+      - text: "About thirty GPS satellites circle the Earth, some twenty thousand kilometres up."
+      - text: "Each one carries atomic clocks, and sends the time and its position."
+
+  - id: timing
+    type: process
+    params:
+      heading: "Distance from a delay"
+      stages:
+        - {label: "Send", icon: satellite, text: "the time it left"}
+        - {label: "Travel", icon: zap, text: "at the speed of light"}
+        - {label: "Distance", icon: smartphone, text: "delay times speed"}
+    beats:
+      - text: "First, a satellite sends out a message: the time, right now."
+      - text: "It travels at light speed: about seventy milliseconds from overhead."
+      - text: "Your phone notes when it arrives. The delay, times the speed of light, is the distance."
+
+  - id: nanosecond
+    type: stat
+    params:
+      value: 30
+      unit: cm
+      label: "how far light goes in a nanosecond"
+      context: "a clock off by a microsecond: 300 m"
+      icon: clock
+    beats:
+      - text: "In a single nanosecond, light covers about thirty centimetres."
+      - text: "So a clock off by one microsecond puts you three hundred metres away."
+
+  - id: four
+    type: icon_grid
+    params:
+      heading: "Why four satellites"
+      columns: 4
+      items:
+        - {icon: satellite, label: "One", sublabel: "a sphere"}
+        - {icon: satellite, label: "Two", sublabel: "a circle"}
+        - {icon: satellite, label: "Three", sublabel: "a point"}
+        - {icon: clock, label: "Four", sublabel: "your clock's error"}
+    beats:
+      - text: "One distance puts you on a sphere around that satellite."
+      - text: "Two spheres meet in a circle."
+      - text: "Add a third sphere, and only a point is left."
+      - text: "Your phone's clock is not perfect, so a fourth satellite solves for its error."
+
+  - id: relativity
+    type: stat
+    params:
+      value: 38
+      unit: µs
+      label: "gained by a satellite's clock each day"
+      context: "uncorrected: about 11 km of error a day"
+      icon: orbit
+    beats:
+      - text: "Relativity matters too: up in weaker gravity, the satellites' clocks run fast by thirty eight microseconds a day."
+      - text: "Uncorrected, that is ten kilometres of error a day, so every satellite clock is set to tick a little slower."

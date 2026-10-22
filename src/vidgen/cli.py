@@ -1512,7 +1512,10 @@ def _music_template(args: argparse.Namespace) -> CommandResult:
     print(f"{facts['title']}: {facts['key']}, {facts['tempo']:g} BPM, {facts['time']}, {facts['bars']} bars = {facts['seconds']:.2f} s")
     print(f"tracks: {', '.join(facts['tracks'])}")
     print(f"wrote: {out}")
-    print(f"next: change one thing at a time and listen: vidgen music render {out} --out {out.with_suffix('.mp3')}")
+    copy = out.with_name(f"{out.stem}_v1{out.suffix}")
+    print(f"next: give it a title, keep a copy ({copy.name}), change one thing at a time and check it: "
+          f"vidgen music check {out} --compare {copy}")
+    print(f"to listen: vidgen music render {out} --out {out.with_suffix('.mp3')}")
     return 0
 
 

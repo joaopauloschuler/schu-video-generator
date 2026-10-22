@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## 0.3.0 (Steps 61–188)
+## 0.3.0 (Steps 61–189)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds
 **cartoons**: original characters who talk with lip sync, move, act and react on drawn stages,
@@ -376,6 +376,13 @@ matters only for projects made with development builds between Steps 67 and 131)
   cached; `vidgen list-music`, `vidgen validate` and `vidgen lint` (rule `music_check`) include
   them; MCP tools `music_template`, `music_patches`, `music_render`, `music_check`; the author
   guide's "Making music" recipe (188).
+- An example made with it: `examples/gps-time-of-flight`, a narrated GPS explainer whose music,
+  *Time of Flight*, an AI author made from the `momentum` template in nine checked steps (the
+  README has the log and the check report); `docs/COOKBOOK-MUSIC.md`, music craft notes (room for
+  the voice, builds and lifts, loops, check and compare, five genre sketches, common mistakes);
+  the Listen page gains a "Made with the score format" row. The recipe now says how to change a
+  template's key and which section names the check judges; `vidgen music template` suggests the
+  check as the next step (189).
 
 ### Narration and pictures
 

@@ -1058,8 +1058,8 @@ advice; a human makes the final choice (DESIGN §93).
 - [x] MCP tools `music_template`, `music_patches`, `music_render`, `music_check` (the spectrogram as a picture); author guide recipe "Making music" (start from a template, change one thing at a time, check, compare, look at the spectrogram, room for the voice, let a human choose) + `AGENTS.md`; CONFIG "Project pieces"; existing projects' mixes byte-identical (beds, files, composed)
 
 ### Step 189 — Example and craft notes
-- [ ] An example project with an agent-made piece built from a template into something new, in a short narrated video (Kokoro), with its check report
-- [ ] A "music craft" cookbook section (room for the voice, energy curves and lifts, loop design, genre recipes: documentary, trance, synthwave, cosmic, cartoon); the Listen page gains a "made with the score format" row
+- [x] An example project with an agent-made piece built from a template into something new, in a short narrated video (Kokoro), with its check report (`examples/gps-time-of-flight`, *Time of Flight* from `momentum` in nine checked steps; README with the log and report; 88.7 s render in the scratchpad)
+- [x] A "music craft" cookbook section (room for the voice, energy curves and lifts, loop design, genre recipes: documentary, trance, synthwave, cosmic, cartoon); the Listen page gains a "made with the score format" row (`docs/COOKBOOK-MUSIC.md`, linked from the cookbook, README, CONFIG, guide; `listen.SCORE_PIECES`, package data `studio/pieces/`); guide recipe fixes found by following it
 
 ### Step 190 — Review of Phase S
 - [ ] Critical review with fixes recorded in HANDOFF; compatibility (the 14 beds and all existing projects' audio byte-identical — fingerprint tests); determinism across runs; phase tests and related suites one at a time; `tests/test_mcp.py` fully with a long timeout

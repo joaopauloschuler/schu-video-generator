@@ -5,7 +5,9 @@ paper explainer (narrated with ElevenLabs), a ~3-minute software showcase (Kokor
 of 9:16 shorts cut from them. The author guide (`AGENTS.md`, also printed by `vidgen guide`) and
 the config reference (`docs/CONFIG.md`) say what vidgen *can* do. This cookbook is about what made the
 videos *work*: hooks, pacing, sound, credits, labels, voice, and the QA loop. For a YouTube Short
-that shows source code, see [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md).
+that shows source code, see [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md);
+for writing your own music as score files (room for the voice, builds and lifts, loops, genre
+sketches), see [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 
@@ -289,7 +291,9 @@ energetic reveals, tech launches, montages, uplifting endings), `beacon` (a puls
 beacon: space, astronomy, science, data), `neon` (synthwave: tech at night, retro-futurism,
 cities); lighter ones: `calm` (serious, long narration), `pulse` (tech), `bright` (upbeat). The
 kick-and-bass beds are bass-heavy and sound lighter on phone and laptop speakers
-([CONFIG](CONFIG.md#background-music-music)).
+([CONFIG](CONFIG.md#background-music-music)). When no bed fits, write your own piece as a score
+file from a bed's template (`music: my_theme` plays `assets/music/my_theme.yaml`): see
+[COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md) for the craft and genre sketches.
 
 | sound | use for | gain we used |
 |---|---|---|

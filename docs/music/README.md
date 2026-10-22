@@ -42,6 +42,22 @@ or a list of cues with `from` / `to` scenes).
 | `beacon` | E minor, 120 BPM, 48.0 s loop | Space and astronomy, science, signals and data, steady explainers with a cosmic feel | <img src="media/bed-beacon.png" width="300" alt="Spectrogram: beacon"> | [▶ listen (15 s)](media/bed-beacon.mp3) |
 | `neon` | F-sharp minor, 116 BPM, 49.6 s loop | Tech at night, retro-futurism, cities, coding Shorts | <img src="media/bed-neon.png" width="300" alt="Spectrogram: neon"> | [▶ listen (15 s)](media/bed-neon.mp3) |
 
+## Made with the score format
+
+Music written as a score file: YAML with a key, a tempo, sections, chords and tracks of step
+patterns, played by vidgen's own instruments. Agents write them without listening: they start
+from a template of a built-in bed, change one thing at a time and read `vidgen music check`'s
+report after each change. A score file in a project's `assets/music/` plays like a bed
+(`music: time_of_flight`). How: [score files](../CONFIG.md#score-files-vidgen-music-render),
+[templates of the beds](../CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template),
+[checking a piece](../CONFIG.md#checking-a-piece-vidgen-music-check),
+[project pieces](../CONFIG.md#project-pieces-score-files-in-a-video) and the
+[music craft notes](../COOKBOOK-MUSIC.md).
+
+| piece | key, tempo, length | how it was made | spectrogram | clip |
+|---|---|---|---|---|
+| `time_of_flight`<br>Time of Flight | B minor, 108 BPM, 53.3 s loop | An AI author's piece, made from the `momentum` template one change at a time (new key, tempo, chords, sections, arpeggio, pings and lead), checked with `vidgen music check` after each; it plays under [examples/gps-time-of-flight](../../examples/gps-time-of-flight/README.md) | <img src="media/piece-time_of_flight.png" width="300" alt="Spectrogram: time_of_flight"> | [▶ listen (15 s)](media/piece-time_of_flight.mp3)<br>from 20.66 s: the end of the build and the lift |
+
 ## Sound effects
 
 36 sounds, synthesised when the video is joined: `- sfx: whoosh` in a beat, a scene's `sfx:` list, or

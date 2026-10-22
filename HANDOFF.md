@@ -17398,3 +17398,76 @@ Known gaps / for later steps
   narration actually in the video (`vidgen music check --narration` does, by hand).
 - `vidgen music render` / `check` take file paths, not piece names.
 - Step 189: the example project and craft notes; the Listen page row.
+
+## Step 189 — Example and craft notes: an agent-made piece in a narrated video
+
+What the owner agreed (Phase S plan): an example project with an agent-made piece built from a
+template into something new, in a short narrated video (Kokoro), with its check report; a "music
+craft" cookbook section; the Listen page gains a "made with the score format" row.
+
+What was built (DESIGN §93.11)
+- The recipe, followed literally as a test: `vidgen music template momentum`, then nine versions,
+  one change each, each checked with `--compare` against the one before (log in
+  `examples/gps-time-of-flight/README.md`): key / tempo / chords (B minor, 108,
+  `i(add9) v7 VImaj7 iv9`) → sections intro / build / lift / settle → FM-pluck arpeggio with a
+  filter sweep → the pad shaping the energy (fixed "build does not build" / "lift does not lift")
+  → arpeggio level → lift lead → lead level → a 4.8 kHz tick "ping" with echoes → its level.
+  Final: fine under narration; voice range 23 %, loudest voice bar −29.9 dB, build +0.9 dB /
+  +3.3 dB brighter, lift +2.4 dB / +10.2 dB brighter, seam 0.46, voice 23.8 dB clear.
+- `examples/gps-time-of-flight/` (new): `video.yaml` ("How GPS finds you": title, three `stat`,
+  `process`, `icon_grid`; facts checked in its header), `assets/music/time_of_flight.yaml`,
+  `README.md` (the piece, the log, the full check report with the comparison to the template, the
+  render's measurements). No audio committed.
+- `docs/COOKBOOK-MUSIC.md` (new; decision: its own page): room for the voice, energy curves,
+  loop design, check and compare, five genre sketches as complete score files (each checked fine,
+  numbers given), common mistakes. Linked from `docs/COOKBOOK.md` (intro and §9), README (docs
+  list; the example in the examples list), CONFIG (score files), the guide recipe, the Listen page.
+- Listen page: `listen.ScorePiece`, `SCORE_PIECES`, `PIECES_DIR`, `piece_score`,
+  `piece_clip_start`, `piece_clip`, `_piece_row`; a "Made with the score format" section after the
+  beds (links to the score-file / template / check / project-piece docs and the craft notes);
+  `src/vidgen/studio/pieces/time_of_flight.yaml` package data (`pyproject.toml`), byte-equal to
+  the example's (tested). `docs/music` regenerated: README + `media/piece-time_of_flight.{mp3,png}`
+  (0.27 MB; 5.78 MB in all); every other file byte-identical (git shows no change); a second run
+  into the scratchpad gave identical piece files.
+- Fixes found by following the recipe: the guide's "Making music" steps (change the key by
+  rewriting the progression as Roman numerals; name sections build / lift for the check; keep each
+  version; `--out build/music-check`; a track under ~1 % is inaudible; compare the end result with
+  the template; links to the craft notes and the example) + `AGENTS.md`; `vidgen music template`
+  now prints `next: ... vidgen music check X --compare X_v1.yaml` and then the render command
+  (`cli._music_template`); the check's tempo words no longer claim "the 3+3+2 accents" for a
+  piece without them (`studio/check.py`); CONFIG's template paragraph.
+- Docs: DESIGN §93.1, §93.2, §93.11; CONFIG (Listen page, score files, templates); CHANGELOG
+  (0.3.0 now Steps 61–189); tasklist.
+
+Rendering (all in `<scratchpad>/s189/proj`, a copy of the example): Kokoro via
+`<scratchpad>/kvenv312/bin/vidgen tts` under `capped3g` + `timeout`; render with the main venv.
+Speed 0.9 then 0.85 gave `narration_speed` warnings on short beats (3.6–4.3 words/s); 0.8 with a
+few lines merged / trimmed (the recap scene dropped) gave 0 lint findings and 88.7 s. Frames
+checked on a contact sheet (`<scratchpad>/s189/sheet.png`); video and audio both 88.700 s;
+−16.0 LUFS integrated, true peak −1.8 dBTP, LRA 3.0 LU; the mix report: music `time_of_flight`
+kind `score` from the first scene to the last, ducked 12 dB.
+
+Tests (one at a time, under `capped3g`): `test_music_pieces.py` 9 passed (20 s; two new: the
+example validates with its piece; `slow`: its check finds nothing to fix); `test_listen.py` 11
+(new: the pieces are the example's files, the section and its links, the clip start);
+`test_docs.py` + `test_guide.py` 117 (new: the cookbook's sketches parse as score files, the
+links); `test_music_check.py` 14; `test_music_templates.py -m "not slow"` 7; `test_cli.py` +
+`test_json_output.py` 33; `test_music.py -k "approved or every_bed_has or facts"` 17 (the beds'
+fingerprints; `music.py` untouched). Not run: the full suite, `test_mcp.py` (no MCP change).
+
+Files to look at / listen to: `<scratchpad>/s189/proj/output/gps_time_of_flight.mp4` (the video),
+`<scratchpad>/s189/time_of_flight.mp3` (the piece, −28 LUFS), `<scratchpad>/s189/check/` (the
+final check's spectrogram against the template and both demos), `<scratchpad>/s189/work/v1..v9.yaml`
+and `out/` (each version's check pictures and demos), `<scratchpad>/s189/genres/` (the cookbook
+sketches and their checks).
+
+Known gaps / for Step 190
+- The render warns that overlays are 2–3 frames off where scenes do not start where planned
+  ("'four' starts at 50.37 s, planned 50.47 s"): the 16:9 render's scene lengths differ slightly
+  from the plan's; seen with `stat` scenes, not music-related; captions 0.07–0.1 s off. Worth a look
+  in the review.
+- The check's lift advice can suggest bringing in "a part that rests there" that makes no sense
+  for the lift (it named the riser, which only plays in the build).
+- A riser measures almost nothing (known since 187); the cookbook says not to rely on it alone.
+- The Listen page has one score piece; `SCORE_PIECES` takes more (each needs its file in
+  `studio/pieces/` and an example).
