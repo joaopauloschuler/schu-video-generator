@@ -18645,3 +18645,89 @@ How to test
 - Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
 - Stills looked at (scratchpad `s202/proj`, 26 s tour with six zooms): 16:9, 9:16 and the
   `light_academic` theme; `vidgen lint` clean but one `dead_air` warning of the scratch script.
+
+## Step 203 — Structure library
+
+What was built (DESIGN §95.8)
+- **Morphology at every LOD**: nucleus (double envelope 30 nm apart, outer membrane continuous
+  with the rough ER — one region, no seam —, pores where the membranes join with spokes, rings
+  and baskets at the complex level, nucleolus with fibrillar centres / dense fibrillar / granular
+  parts, heterochromatin at the inner membrane); rough ER sheets joined to the outer nuclear
+  membrane and to each other, ribosomes on the cytosolic face, COPII buds at exit sites; smooth ER
+  as a tubule network with three-way junctions joined to a rough sheet; Golgi with cis / medial /
+  trans cisternae (colours, dilated rims, buds; COPI / clathrin coats); mitochondria (outer and
+  inner membrane, lamellar cristae with crista junctions, matrix, intermembrane and intracristal
+  space); lysosomes, peroxisomes, early endosomes (with tubules), late endosomes (intraluminal
+  vesicles); vesicles with clathrin (cage), COPI, COPII coats; centrosome (mother and daughter
+  centrioles at right angles, nine triplets, PCM).
+- **Plant cell** (`cell: plant`): wall with middle lamella shared by the neighbours (exact
+  walls), plasmodesmata with desmotubules through both walls, central vacuole with tonoplast,
+  chloroplasts along the wall (double envelope, grana and stroma lamellae, starch).
+  **Bacterium** (`cell: bacterium`, `gram`, `capsule`): envelope layers, nucleoid, 70S ribosomes,
+  plasmids, flagella with basal bodies, pili; colony neighbours.
+- **Cytoskeleton and motors**: microtubules radiating from the centrosome (− end there, + end
+  out; cortical in plants), actin cortex, stress fibres, intermediate filaments; kinesin (+),
+  dynein (−, animal only), myosin (on actin), optional cargo, an arrow to the end they walk to.
+- **Membrane close-ups** (views ≤ 0.45 µm): phospholipids (heads, two tails), cholesterol,
+  glycolipids with the glycocalyx, a lipid raft; `style: surface` draws things whole from outside
+  (a nucleus covered with pores, a membrane's head mosaic).
+- **Step 202 gaps fixed**: labels for each `zoom_to` view from `part_anchors` (option
+  `labels: true | false | [names]`, validated), opacity of a dim / highlight kept through LOD
+  changes during a zoom (emphasis per owner; stale colours of an action begun while a piece was
+  hidden are ignored), scale-bar texts down to 4 nm. Gallery GIFs 142 / 139 KB (snippet unchanged).
+- Render time halved (adaptive arc steps, hidden pieces and invisible label glyphs drop their
+  points); the plant build from 17 s to about 2 s (outline-only fit checks).
+
+YAML
+```yaml
+- id: plant
+  type: cell
+  params:
+    cell: plant                              # or {kind: bacterium, gram: positive, capsule: true}
+    style: section                           # surface: whole, seen from outside
+    objects:
+      - {kind: vesicle, id: ccv, coat: clathrin, size: "80 nm"}   # at [6, -2] would be in the vacuole: refused
+      - {kind: microtubule, id: mts, count: 8}
+      - {kind: kinesin, on: mts, cargo: true}
+      - {kind: chloroplast, id: big, grana: 6}
+  beats:
+    - text: "..."
+      actions:
+        - {zoom_to: chloroplasts, level: complex, labels: [granum, stroma]}
+```
+
+Files touched
+- New: `src/vidgen/cellworld/{anatomy,bilayer,build,builder,curves,filaments,morphology,regions}.py`,
+  `src/vidgen/cell_draw/{__init__,base,drawing,organelles,plant,bacteria,cytoskeleton,closeup}.py`,
+  `tests/test_cell_library.py` (30).
+- Changed: `cellworld/{__init__,catalog,geometry,model,view}.py`, `cell_vector.py` (now a shim),
+  `scenes/cell.py`, `scenes/cell_actions.py`, `api.py`, `tests/test_cell_world.py`,
+  `tests/test_cell_scene.py`, guide + `AGENTS.md`, `docs/CONFIG.md`, `docs/gallery/cell.md` and
+  media, `DESIGN.md` §95.8, `CHANGELOG.md`, `tasklist.md`.
+
+Public interfaces: `vidgen.api` adds `CELL_COATS`, `CELL_MEMBRANES`, `CellAnchor`,
+`cell_part_anchors`. Config: `cell.{gram, capsule, wall, plasmodesmata}`, scene `style`, object
+`coat`, `cargo`, `grana`, `style`, 16 new kinds, `zoom_to` `labels`. `cell.size` / `aspect`
+default by kind (the spec's `None`).
+
+Decisions / deviations
+- Membrane topology drawn with boolean regions (skia-pathops, already a manim dependency) so
+  continuous membranes (envelope + ER, rough + smooth ER) have no seams.
+- Molecules are built only near views that need them (`closeups`), not for the whole cell.
+- YAML 1.1 reads `on:` as `true`; objects and views accept it.
+
+Known gaps / TODO
+- Leader lines of a zoomed view can cross when anchors crowd one spot (9:16 most); motors are
+  static (walking: Step 205); the surface style is schematic; no tissue junctions; plant cells
+  have no cytoplasmic streaming or plastid variety (amyloplasts, chromoplasts).
+
+How to test
+- `tests/test_cell_world.py` 45, `tests/test_cell_library.py` 30, `tests/test_cell_scene.py` 23
+  (render tests at 160x90 / 90x160); `test_builtin_scenes.py -k cell` 4; `test_actions_coverage.py
+  -k cell` 1; `test_builtin_scenes` + `test_actions_coverage` not render 138; `test_translation` 72;
+  `test_api` 10; `test_guide` + `test_docs` 118; `test_gallery` not render 17; `test_schema` +
+  `test_json_output` not render 87; `test_actions` + `test_registry` 51; `test_mcp.py` 20;
+  `test_extensions` + `test_review2` + `test_introspect` not render 43. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills looked at (scratchpad `s203/close`, 37 single-view scenes; `s203/proj`, a zoom tour):
+  every level in 16:9 and 9:16, dark and `light_academic`.

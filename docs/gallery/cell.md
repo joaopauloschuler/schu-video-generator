@@ -4,7 +4,7 @@
 
 **Use it for:** a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology).
 
-A cell drawn in physical scale: a cross-section of an animal cell with its compartments (cytosol, nucleoplasm, ER and Golgi lumens, mitochondrial matrix and intermembrane space…), the membranes between them and what is in them, at textbook sizes (`contents: typical` is the textbook cell; `objects` add or replace things). Every place is checked: a ribosome in the nucleoplasm or a mitochondrion inside the nucleus is refused with the reason. The camera is in µm: `view` sets the start level (tissue, cell, organelle, complex) and the `zoom_to` action moves between levels; details appear as they grow on screen (double membranes, cristae, nuclear pores, ribosome subunits, lipid bilayers). A scale bar and labels keep their size on screen.
+A cell drawn in physical scale: a cross-section of an animal cell, a plant cell or a bacterium with its compartments (cytosol, nucleoplasm, ER and Golgi lumens, mitochondrial matrix and intermembrane space, stroma and thylakoid lumen, periplasm…), the membranes between them and what is in them, at textbook sizes (`contents: typical` is the textbook cell; `objects` add or replace things, the cytoskeleton and motors too). Every place is checked: a ribosome in the nucleoplasm, a mitochondrion inside the nucleus or a chloroplast in an animal cell is refused with the reason. The camera is in µm: `view` sets the start level (tissue, cell, organelle, complex) and the `zoom_to` action moves between levels; details appear as they grow on screen (double membranes, cristae, thylakoids, nuclear pores, ribosome subunits, coats, lipid bilayers with their lipids). A scale bar and labels keep their size on screen; a zoomed view names the parts it shows.
 
 Last beat, 16:9 and 9:16:
 
@@ -23,7 +23,7 @@ From the author guide (`vidgen guide scenes`):
   type: cell
   params:
     title: "Inside an animal cell"
-    cell: animal                                   # 20 µm; contents: typical is the textbook cell
+    cell: animal                                   # or plant, bacterium; contents: typical is the textbook cell
     objects:
       - {kind: ribosome, id: mitoribosomes, in: mitochondria, count: 6, label: false}
   beats:
@@ -38,34 +38,43 @@ From the author guide (`vidgen guide scenes`):
 | param | type | default | notes |
 |---|---|---|---|
 | `title` | `str` |  | Title (in the header band at the top). (also: heading) |
-| `cell` | `str \| CellBody` | `CellBody(kind='animal', size=20.0, aspect=1.25)` | The cell: 'animal' or {kind, size (µm or '20 um'), aspect}. |
-| `cell.kind` | `'animal'` | `'animal'` | The kind of cell (animal; plant and bacterial cells come with the structure library). |
-| `cell.size` | `float \| str` | `20.0` | Its long axis: a number of µm or a length ('20 um'); a typical animal cell is 10–30 µm. |
-| `cell.aspect` | `float` | `1.25` | Its long axis over its short axis (1: round). |
-| `contents` | `'typical' \| 'none'` | `'typical'` | typical: the textbook cell (nucleus with nucleolus and pores, rough and smooth ER, Golgi, centrosome, 8 mitochondria, lysosomes, peroxisomes, vesicles, ribosomes); none: only the objects listed. |
+| `cell` | `str \| CellBody` | `CellBody(kind='animal', size=None, aspect=None, gram=None, capsule=None, wall=None, plasmodesmata=None)` | The cell: 'animal', 'plant', 'bacterium' or {kind, size (µm or '20 um'), aspect, gram, capsule, wall, plasmodesmata}. |
+| `cell.kind` | `'animal' \| 'plant' \| 'bacterium'` | `'animal'` | The kind of cell: animal (20 µm), plant (32 µm, a wall, a central vacuole, chloroplasts) or bacterium (a 2 µm rod). |
+| `cell.size` | `float \| str \| None` |  | Its long axis: a number of µm or a length ('20 um'); default by kind (animal 20, plant 32, bacterium 2 µm). |
+| `cell.aspect` | `float \| None` |  | Its long axis over its short axis (1: round); default by kind (1.25, 1.6, 2.5). |
+| `cell.gram` | `'negative' \| 'positive' \| None` |  | Bacterium: negative (an inner and an outer membrane with the periplasm between; default) or positive (a thick peptidoglycan wall). |
+| `cell.capsule` | `bool \| None` |  | Bacterium: a polysaccharide capsule outside the wall (default false). |
+| `cell.wall` | `float \| str \| None` |  | Plant: the cell wall's thickness (default 250 nm; a primary wall is 0.1–1 µm). |
+| `cell.plasmodesmata` | `bool \| None` |  | Plant: channels through the wall to the neighbouring cells (default true). |
+| `contents` | `'typical' \| 'none'` | `'typical'` | typical: the textbook cell of its kind (animal: nucleus, ER, Golgi, centrosome, mitochondria, lysosomes, peroxisomes, endosomes, vesicles, ribosomes; plant: also a central vacuole and chloroplasts, no centrosome or lysosomes; bacterium: nucleoid, 70S ribosomes, plasmids, flagella, pili); none: only the objects listed. |
 | `objects` | `list[str \| CellObject]` |  | Things in the cell: a kind, or {kind, id, at, size, width, angle, in, on, count, label}; an id of a typical object replaces it. |
-| `objects.kind` | `str` | required | What it is: nucleus, nucleolus, rough_er, smooth_er, golgi, mitochondrion, lysosome, peroxisome, endosome, vesicle, centrosome, ribosome, proteasome, nuclear_pore. |
+| `objects.kind` | `str` | required | What it is: nucleus, nucleolus, rough_er, smooth_er, golgi, mitochondrion, lysosome, peroxisome, endosome, early_endosome, late_endosome, vesicle, centrosome, chloroplast, vacuole, nucleoid, ribosome, proteasome, nuclear_pore, plasmid, microtubule, actin_filament, actin_cortex, stress_fiber, intermediate_filament, flagellum, pilus, kinesin, dynein, myosin. |
 | `objects.id` | `str \| None` |  | Its name for actions and labels (default: the kind; an object with the id of a typical one replaces it). |
-| `objects.at` | `tuple[float \| str, float \| str] \| None` |  | Where its middle is: [x, y] in µm from the cell's centre (x right, y up), or lengths ['2 um', '-500 nm']; default: placed automatically. |
-| `objects.size` | `float \| str \| None` |  | Its length (µm or '1.5 um'); default: a typical size of its kind. |
+| `objects.at` | `tuple[float \| str, float \| str] \| None` |  | Where its middle is (a filament: its minus end): [x, y] in µm from the cell's centre (x right, y up), or lengths ['2 um', '-500 nm']; default: placed automatically. |
+| `objects.size` | `float \| str \| None` |  | Its length (µm or '1.5 um'); default: a typical size of its kind (the cortex: its thickness). |
 | `objects.width` | `float \| str \| None` |  | Its width for elongated kinds (a mitochondrion: about 0.5–1 µm). |
-| `objects.angle` | `float \| None` |  | Turn in degrees (a Golgi stack: the direction its cis face looks; default towards the nucleus). |
-| `objects.in` | `str \| None` |  | For complexes: the compartment they float in: cytosol (default), nucleoplasm, matrix, an object's id (its inside) or '<id>.<compartment>'. |
-| `objects.on` | `str \| None` |  | For complexes: the object whose membrane they sit on (ribosomes: rough_er or the nucleus; nuclear pores: the nucleus). |
-| `objects.count` | `int` | `1` | How many, scattered where they may be (no at). |
+| `objects.angle` | `float \| None` |  | Turn in degrees (a Golgi stack: the direction its cis face looks, default towards the nucleus; a filament: its direction; a flagellum or pilus: where round the cell it is anchored, 0 = the right pole). |
+| `objects.in` | `str \| None` |  | For complexes: the compartment they float in: cytosol (default), nucleoplasm, matrix, stroma, an object's id (its inside) or '<id>.<compartment>'. |
+| `objects.on` | `str \| None` |  | For complexes: the object whose membrane they sit on (ribosomes: rough_er or the nucleus) or the filament a motor walks on (kinesin, dynein: a microtubule object; myosin: actin). |
+| `objects.count` | `int` | `1` | How many, scattered where they may be (no at); microtubules radiate from the centrosome. |
 | `objects.label` | `str \| bool \| None` |  | Its label (default: its kind's name, when the scene's labels are on); false for none. |
 | `objects.sheets` | `int \| None` |  | Rough ER: how many sheets round the nucleus (default 4). |
 | `objects.span` | `float \| None` |  | Rough ER: how far round the nucleus the sheets reach (degrees, default 200). |
 | `objects.side` | `float \| None` |  | Rough ER: the direction of the sheets' middle from the nucleus (degrees; default away from the Golgi). |
 | `objects.cisternae` | `int \| None` |  | Golgi: how many cisternae in the stack (default 5), cis to trans. |
-| `objects.tubules` | `int \| None` |  | Smooth ER: how many tubules (default 6). |
+| `objects.tubules` | `int \| None` |  | Smooth ER: about how many tubules in its network (default 10). |
 | `objects.pores` | `bool \| None` |  | Nucleus: draw the nuclear pores (default true). |
 | `objects.ribosomes` | `bool \| None` |  | Nucleus and rough ER: ribosomes on the cytosolic face (default true). |
+| `objects.coat` | `'none' \| 'clathrin' \| 'copi' \| 'copii' \| None` |  | Vesicle: its coat (default none): clathrin (from the plasma membrane and the trans-Golgi), copi (Golgi → ER and within the Golgi), copii (ER → Golgi). |
+| `objects.cargo` | `bool \| None` |  | Kinesin, dynein, myosin: carry a cargo vesicle (default false). |
+| `objects.grana` | `int \| None` |  | Chloroplast: how many grana (stacks of thylakoids; default about one per µm of length). |
+| `objects.style` | `'section' \| 'surface' \| None` |  | Its drawing: section (cut open, as in a thin section) or surface (whole, seen from outside); default the scene's style. |
 | `view` | `str \| CellViewSpec` | `CellViewSpec(level='cell', on=None, width=None)` | Where the camera starts: tissue, cell (default), organelle or complex, or {level, on, width}. |
-| `view.level` | `'tissue' \| 'cell' \| 'organelle' \| 'complex'` | `'cell'` | tissue (the cell among its neighbours), cell, organelle or complex (molecular). |
-| `view.on` | `str \| None` |  | The object to centre on (organelle and complex levels; default the nucleus). |
+| `view.level` | `'tissue' \| 'cell' \| 'organelle' \| 'complex'` | `'cell'` | tissue, cell, organelle or complex (molecular). |
+| `view.on` | `str \| None` |  | The object to centre on (organelle and complex levels; default the nucleus; complex on the cell: its plasma membrane). |
 | `view.width` | `float \| str \| None` |  | What the view spans across the frame's body, shorter side (e.g. '3 um'); default: the level's. |
-| `labels` | `bool` | `True` | Name the structures (screen-sized; shown once a structure is large enough on screen). |
+| `style` | `'section' \| 'surface'` | `'section'` | section: structures cut open, as in a thin section (default); surface: drawn whole, seen from outside (the cell itself stays open). |
+| `labels` | `bool` | `True` | Name the structures (screen-sized; shown once a structure is large enough on screen) and the parts a zoom_to view shows. |
 | `scale_bar` | `bool` | `True` | A scale bar that follows the zoom (1-2-5 lengths: 5 µm, 200 nm…). |
 | `reveal` | `'all' \| 'per_beat'` | `'all'` | all: the whole cell in the first beat; per_beat: the cell, then one object per beat in order. |
 | `seed` | `int` | `1` | Changes where things without at are placed. |

@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–202)
+## Unreleased (Steps 193–203)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -23,6 +23,19 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   between far places; **level of detail** switches as things grow on screen (double membranes,
   cristae, nuclear pores, ribosome subunits, 5 nm lipid bilayers). Labels and the scale bar keep
   their size on screen, in 16:9 and 9:16. See `docs/CONFIG.md`, `cell`.
+- **The structure library** (Step 203): accurate morphology at every zoom — the nuclear envelope
+  continuous with the rough ER, pores with spokes and baskets, nucleolus parts and
+  heterochromatin; a smooth-ER tubule network; Golgi cis / medial / trans cisternae with rims and
+  buds; mitochondria with crista junctions; early and late (multivesicular) endosomes; clathrin,
+  COPI and COPII coated vesicles; centrioles with nine triplets. **Plant cells** (`cell: plant`:
+  wall with middle lamella, plasmodesmata, central vacuole, chloroplasts with grana and stroma
+  lamellae) and **bacteria** (`cell: bacterium`, Gram-negative or positive, capsule, nucleoid, 70S
+  ribosomes, plasmids, flagella, pili). The **cytoskeleton** (microtubules with − and + ends from
+  the centrosome, actin cortex and stress fibres, intermediate filaments) and **motors**
+  (kinesin, dynein, myosin, with cargo). Bilayer close-ups with phospholipids, cholesterol,
+  glycolipids, glycocalyx and a lipid raft; `style: surface` draws things whole, seen from
+  outside. Each `zoom_to` view names the parts it shows (`labels:`); a dim during a zoom keeps
+  its opacity; the scale bar has a text at any depth.
 
 ### vidgen studio: a music workstation for people (Phase T)
 

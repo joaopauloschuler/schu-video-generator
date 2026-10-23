@@ -6181,15 +6181,34 @@ colours follow the order of the blocks, which changes when one is left out).
 ### `cell`
 
 A cell in **physical scale** for cell-biology lectures and research explainers: a cross-section
-of an animal cell (as in a thin-section micrograph, in vidgen's flat style) with its compartments
-(cytosol, nucleoplasm, perinuclear space, ER and Golgi lumens, mitochondrial intermembrane space
-and matrix, lysosome and peroxisome insides), the membranes between them and what is in them, all
-at textbook sizes in µm. `contents: typical` (the default) is the textbook cell: a nucleus
-(7 × 6 µm, its two membranes 30 nm apart, nuclear pores about 1 per µm of envelope, a nucleolus),
-rough ER sheets round the nucleus studded with ribosomes, smooth ER tubules, a Golgi stack (cis
-face towards the nucleus), the centrosome beside it, 8 mitochondria (2 × 0.7 µm, with cristae),
-lysosomes, peroxisomes, vesicles and free ribosomes (25 nm). `objects` add things, or replace a
-typical one by its id. The camera is in µm: `view` sets where it starts and the
+of an animal cell, a plant cell or a bacterium (as in a thin-section micrograph, in vidgen's flat
+style) with its compartments (cytosol, nucleoplasm, perinuclear space, ER lumen, cis / medial /
+trans Golgi lumens, mitochondrial intermembrane space and matrix, lysosome, peroxisome and
+endosome insides, vacuole, chloroplast stroma and thylakoid lumen, periplasm), the membranes
+between them and what is in them, all at textbook sizes in µm. `contents: typical` (the default)
+is the textbook cell of its kind:
+
+- **animal** (20 µm): a nucleus (7 × 6 µm; a double envelope 30 nm apart whose outer membrane
+  is continuous with the rough ER, nuclear pores where the two membranes join, a nucleolus with
+  its fibrillar and granular parts, heterochromatin against the inner membrane), rough ER sheets
+  joined to the outer nuclear membrane and studded with ribosomes (COPII buds at exit sites),
+  a smooth ER network of 50 nm tubules joined to a rough sheet, a Golgi stack (cis face towards
+  the nucleus, cis / medial / trans cisternae with dilated rims and buds), the centrosome beside
+  it (two centrioles at right angles, nine triplets), 8 mitochondria (2 × 0.7 µm; outer and inner
+  membrane, lamellar cristae opening through narrow crista junctions), lysosomes, peroxisomes,
+  2 early endosomes (with tubules) and a late endosome (multivesicular: intraluminal vesicles),
+  vesicles and free ribosomes (25 nm);
+- **plant** (32 × 20 µm, `cell: plant`): a 250 nm cell wall with a middle lamella shared with the
+  neighbours, plasmodesmata through it (a desmotubule of ER in each), a central vacuole (tonoplast)
+  pressing the cytoplasm to a thin layer, 9 chloroplasts (5 × 2.2 µm lenses along the wall: a
+  double envelope, grana of stacked thylakoids joined by stroma lamellae, starch grains), nucleus,
+  ER, Golgi, mitochondria, peroxisomes; no centrosome or lysosomes;
+- **bacterium** (a 2 × 0.8 µm rod, `cell: bacterium`): Gram-negative by default (inner membrane,
+  periplasm with a thin peptidoglycan layer, outer membrane with LPS outside) or
+  `gram: positive` (a thick peptidoglycan wall), `capsule: true` for a capsule; a nucleoid, 70S
+  ribosomes (21 nm), plasmids, flagella (with their basal bodies in the envelope) and pili.
+
+`objects` add things, or replace a typical one by its id. The camera is in µm: `view` sets where it starts and the
 [`zoom_to`](#cell-actions) action moves between **levels** — `tissue` (the cell among its
 neighbours), `cell`, `organelle`, `complex` (molecular: one ribosome, one nuclear pore, a
 bilayer) — and details appear as they grow on screen. A **scale bar** (1-2-5 lengths: `2 µm`,
@@ -6219,16 +6238,25 @@ screen. Works the same in 16:9 and 9:16.
         - {zoom_to: rough_er, level: complex, at: "@ribosome"}
 ```
 
-**Params.** `title`; `cell` (`animal`, or `{kind, size, aspect}`: size 5–100 µm, a number or
-`"20 um"`; aspect 1–2.5); `contents` (`typical` or `none`); `objects`; `view` (`tissue`, `cell`
-default, `organelle`, `complex`, or `{level, on: <id>, width: "3 um"}`); `labels` (`true`);
+**Params.** `title`; `cell` (`animal`, `plant`, `bacterium`, or `{kind, size, aspect, gram,
+capsule, wall, plasmodesmata}`: size a number of µm or `"20 um"` — animal 5–100, plant 10–120,
+bacterium 0.5–10 µm; aspect 1–4, default 1.25, 1.6, 2.5; `gram: negative | positive` and
+`capsule` for a bacterium, `wall` (thickness, default `250 nm`) and `plasmodesmata` (`true`) for a
+plant; an option of another kind is refused); `contents` (`typical` or `none`); `objects`; `view`
+(`tissue`, `cell` default, `organelle`, `complex`, or `{level, on: <id>, width: "3 um"}`; `complex`
+on the cell: its plasma membrane, a plant's wall at a plasmodesma, a bacterium's envelope);
+`style` (`section`: structures cut open, default; `surface`: drawn whole, seen from outside — a
+nucleus covered with pores, a mitochondrion's or chloroplast's outer membrane, a membrane's surface
+mosaic of lipids at the complex level); `labels` (`true`);
 `scale_bar` (`true`); `reveal` (`all`: the whole cell in the first beat; `per_beat`: the cell,
 then one object per beat in order); `seed` (where things without `at` go); `title_size`,
-`label_size`. [Action targets](#beat-actions): `title`, `cell` (cytosol and plasma membrane),
-`tissue` (the neighbouring cells), `scale_bar` and each object's id (a typical one too:
-`nucleus`, `nucleolus`, `rough_er`, `smooth_er`, `golgi`, `centrosome`, `mitochondria`,
-`lysosomes`, `peroxisomes`, `vesicles`, `ribosomes`); an object of several things is one target;
-the pores and ribosomes bound to a structure belong to it.
+`label_size`. [Action targets](#beat-actions): `title`, `cell` (cytosol and plasma membrane,
+a plant's wall, a bacterium's envelope), `tissue` (the neighbouring cells), `scale_bar` and each
+object's id (a typical one too: `nucleus`, `nucleolus`, `rough_er`, `smooth_er`, `golgi`,
+`centrosome`, `mitochondria`, `lysosomes`, `peroxisomes`, `early_endosomes`, `late_endosome`,
+`vesicles`, `ribosomes`; plant `vacuole`, `chloroplasts`; bacterium `nucleoid`, `plasmids`,
+`flagella`, `pili`); an object of several things is one target; the pores, ribosomes, buds and
+motors bound to a structure belong to it.
 
 **Objects** (a kind alone is one of it, placed automatically): `kind`, `id` (default the kind;
 `kind_2` for a second), `at: [x, y]` (µm, or lengths: `["2 um", "-500 nm"]`; leave it out and the
@@ -6236,10 +6264,19 @@ thing is placed where it belongs: the typical layout's place, else scattered by 
 (its length), `width`, `angle` (degrees; a Golgi stack's: the way its cis face looks, default
 towards the nucleus), `count` (scattered; not with `at`), `label` (text, or `false`), and for
 complexes `in:` (`cytosol` default, `nucleoplasm`, `matrix`, an object's id = its inside,
-`<id>.<compartment>`) or `on:` (the structure whose membrane they sit on). Kind options: rough ER
-`sheets` (4), `span` (200°), `side` (degrees from the nucleus, default away from the Golgi);
-Golgi `cisternae` (5); smooth ER `tubules` (6); nucleus `pores` and `ribosomes`, rough ER
-`ribosomes` (default `true`).
+`<id>.<compartment>`) or `on:` (the structure whose membrane they sit on, or the filament a motor
+walks on). A filament's `at` is its minus end and `angle` its direction; `count` microtubules
+radiate from the centrosome (plant: cortical, along the wall); a flagellum's or pilus's `angle` is
+where round the cell it is anchored. Kind options: rough ER `sheets` (4), `span` (200°), `side`
+(degrees from the nucleus, default away from the Golgi); Golgi `cisternae` (5); smooth ER
+`tubules` (about how many in the network, 10); nucleus `pores` and `ribosomes`, rough ER
+`ribosomes` (default `true`); vesicle `coat` (`none`, `clathrin`: a polyhedral cage, from the
+plasma membrane and the trans-Golgi; `copi`: Golgi → ER and within the Golgi; `copii`: ER → Golgi);
+`kinesin` / `dynein` / `myosin` `cargo` (a cargo vesicle); chloroplast `grana` (about one per µm);
+any structure `style` (`section` / `surface`, default the scene's). An option of another kind is
+refused with the kinds it is for; so is a kind in a cell that has none (a chloroplast in an animal
+cell, a mitochondrion in a bacterium, a centrosome or lysosome in a plant cell, dynein in a plant)
+with the reason.
 
 | kind | default size | textbook range | may be |
 |---|---|---|---|
@@ -6252,11 +6289,27 @@ Golgi `cisternae` (5); smooth ER `tubules` (6); nucleus `pores` and `ribosomes`,
 | `lysosome` | 0.5 µm | 0.1–1.2 µm | in the cytosol |
 | `peroxisome` | 0.5 µm | 0.1–1 µm | in the cytosol |
 | `endosome` | 0.4 µm | 0.1–0.8 µm | in the cytosol |
+| `early_endosome` | 0.35 µm, with tubules | 0.1–0.5 µm | in the cytosol |
+| `late_endosome` | 0.45 µm, intraluminal vesicles | 0.25–0.6 µm | in the cytosol |
 | `vesicle` | 80 nm | 40–200 nm | in the cytosol |
-| `centrosome` | 1 µm (two 0.2 × 0.4 µm centrioles) | 0.5–2 µm | in the cytosol |
-| `ribosome` | 25 nm | 20–30 nm | in the cytosol or the mitochondrial matrix; on the rough ER or the nucleus (outer nuclear membrane) |
+| `centrosome` | 1 µm (two 0.2 × 0.4 µm centrioles) | 0.5–2 µm | in the cytosol (animal) |
+| `chloroplast` | 5 × 2.2 µm | 3–10 µm | in the cytosol (plant) |
+| `vacuole` | 18 × 14 µm (typical: fills the cell) | 5–90 µm | in the cytosol (plant) |
+| `nucleoid` | 1 × 0.45 µm | 0.3–2 µm | in the cytoplasm (bacterium) |
+| `ribosome` | 25 nm (bacterium: 21 nm) | 20–30 nm | in the cytosol, the mitochondrial matrix or the stroma; on the rough ER or the nucleus (outer nuclear membrane) |
 | `proteasome` | 45 × 20 nm | 30–50 nm | in the cytosol or the nucleoplasm |
 | `nuclear_pore` | 120 nm | 100–130 nm | on the nucleus (made with it) |
+| `plasmid` | 120 nm | 50–300 nm | in the cytoplasm (bacterium) |
+| `microtubule` | 8 µm, 25 nm wide | 0.5–50 µm | in the cytosol |
+| `actin_filament` | 2 µm, 7 nm wide | 0.1–20 µm | in the cytosol |
+| `actin_cortex` | 0.3 µm thick, under the plasma membrane | 0.1–1 µm | in the cytosol (animal) |
+| `stress_fiber` | 10 µm, 0.2 µm wide bundle | 2–30 µm | in the cytosol (animal) |
+| `intermediate_filament` | 6 µm, 10 nm wide | 0.5–30 µm | in the cytosol (animal) |
+| `flagellum` | 6 µm, 20 nm wide | 3–15 µm | outside, anchored in the envelope (bacterium) |
+| `pilus` | 1 µm, 7 nm wide | 0.2–2 µm | outside (bacterium) |
+| `kinesin` | 70 nm | 50–80 nm | on a microtubule; walks to its + end |
+| `dynein` | 50 nm | 40–60 nm | on a microtubule (animal); walks to its − end |
+| `myosin` | 35 nm | 20–50 nm | on actin (a filament, the cortex or a stress fiber); walks to its + (barbed) end |
 
 **Location rules.** Every place is checked by `vidgen validate`, and what cannot be is refused
 with the reason and what to write:
@@ -6280,16 +6333,29 @@ screen (measured on a 1080-pixel frame, so a preview shows what the video shows)
 dots from about a pixel, their large and small subunits from 10 px (the large one against the
 membrane); a nucleus's or mitochondrion's two membranes part when their gap passes 1.6 px; cristae
 from a 18 px wide mitochondrion; nuclear pores from 1.5 px; a membrane becomes its true 5 nm
-bilayer (two leaflets) from 2.5 px. Strokes keep their width on screen at any zoom. Labels are
-laid out for the start view — in columns beside the cell (16:9) or rows above and below it (9:16),
-with leader lines — name what is large enough to see, and fade out as the camera zooms away from
-that view (use a [`callout`](#beat-actions) to point at something in a zoomed view).
+bilayer (two leaflets) from 2.5 px. Closer still (a view of 0.45 µm or less) the molecules are
+drawn: the bilayer's phospholipids (heads and two tails), cholesterol and glycolipids with the
+glycocalyx outside the plasma membrane and a lipid raft (thicker, ordered); a microtubule's
+tubulin dimers, actin's two strands of monomers, a nuclear pore's spokes and baskets, a coat's
+triskelia or subunits; with `style: surface`, the membrane seen from above as a mosaic of heads.
+Thylakoids part into grana and lamellae, Golgi cisternae into their cis, medial and trans colours,
+a plant's wall into its middle lamella. Strokes keep their width on screen at any zoom.
+
+**Labels.** The start view's labels are laid out for it — in columns beside the cell (16:9) or
+rows above and below it (9:16), with leader lines — name what is large enough to see, and fade
+out as the camera zooms away. Each `zoom_to` view then gets its own labels for the parts it shows:
+an organelle view names a mitochondrion's outer and inner membrane, cristae, matrix and
+intermembrane space; a complex view a ribosome's subunits on the ER membrane, a pore's
+nuclear pore complex and the perinuclear space, a bilayer's lipids, a motor and which end it walks
+to. `labels: false` on the `zoom_to` turns them off, a list keeps only those named by part
+(`labels: [matrix, crista]`; a name the view does not have is refused by `vidgen validate`, which
+lists the ones it has).
 
 #### Cell actions
 
 | action | options | |
 |---|---|---|
-| `zoom_to` | `level` (`tissue`, `cell`, `organelle`, `complex`; default: the target's own — `organelle` for a structure, `complex` for complexes, `cell` / `tissue` for those targets), `width` (what the view spans across the body's shorter side: `"3 um"`, `"150 nm"`; default the level's) | moves the camera to the target at that level and stays there (unlike `zoom`, which goes back by the beat's end); one target: `cell`, `tissue` or an object's id (its first thing). The width changes at an even pace on a log scale, and between far places the camera zooms out on the way (van Wijk and Nuij's smooth zoom-and-pan path). Default 2 s. `until: <beat>` goes back to the view before. On `cell` scenes only. |
+| `zoom_to` | `level` (`tissue`, `cell`, `organelle`, `complex`; default: the target's own — `organelle` for a structure, `complex` for complexes, `cell` / `tissue` for those targets), `width` (what the view spans across the body's shorter side: `"3 um"`, `"150 nm"`; default the level's), `labels` (`true`: name the parts the view shows; `false`; or a list of part names) | moves the camera to the target at that level and stays there (unlike `zoom`, which goes back by the beat's end); one target: `cell`, `tissue` or an object's id (its first thing). The width changes at an even pace on a log scale, and between far places the camera zooms out on the way (van Wijk and Nuij's smooth zoom-and-pan path). Default 2 s. `until: <beat>` goes back to the view before. On `cell` scenes only. |
 
 ### `end_card`
 

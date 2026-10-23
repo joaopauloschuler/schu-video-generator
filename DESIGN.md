@@ -15011,3 +15011,54 @@ kind's range, counts, exaggerated glyphs.
   played while a zoom changes LOD can leave a piece at the wrong opacity until the next camera
   move; a scale-bar length outside the scene's planned spans (a built-in `zoom` deeper than any
   `zoom_to`) has no text; the tissue is loose round cells (no junctions).
+
+### 95.8 The structure library (Step 203)
+
+- **Modules.** `cellworld` is split by job (still no manim): `model.py` (specs, `Placed`,
+  `CellWorld`, error texts), `catalog.py` (kinds, compartments, membranes with their lipid mix,
+  textbook constants, the three typical cells), `geometry.py` (+ `RoundedBox`, `Polyline`),
+  `curves.py` (Bézier pieces of any shape, adaptive arc steps), `regions.py` (`Region`: boolean
+  unions and differences of shapes through skia-pathops, a manim dependency already, in µm about
+  a local origin, with a sequential fallback and a nudge when Skia refuses an op), `morphology.py`
+  (the shapes of each structure: cristae and crista junctions, envelopes with pores, ER necks and
+  networks, Golgi cisternae and buds, grana and lamellae, intraluminal vesicles, centrioles,
+  wavy filaments), `builder.py` (placing: cell shapes per kind, envelopes, plasmodesmata through
+  both walls, sheets joined to the outer nuclear membrane, Golgi on a curve round the nucleus,
+  chloroplasts along the wall), `filaments.py` (microtubules from the centrosome, cortical
+  arrays, cortex, stress fibres, intermediate filaments, flagella and pili; motors facing their
+  end), `build.py` (`build_cell_world`: entries, static checks, generated things),
+  `bilayer.py` (lipid layouts: phospholipids, sterols, glycolipids, rafts; a surface mosaic),
+  `anatomy.py` (`part_anchors`: the parts a view names), `view.py` (levels, focus points, LOD).
+  Drawing moved to the package `cell_draw/` (`base`, `drawing`, `organelles`, `plant`,
+  `bacteria`, `cytoskeleton`, `closeup`); `cell_vector.py` re-exports it.
+- **Morphology** follows textbook sizes (constants in `catalog.py`: bilayer 5 nm, perinuclear
+  space 30 nm, crista lumen 25 nm with 13 nm junctions, ER lumen 50 nm, Golgi lumen 30 nm at a
+  60 nm period with 55 nm rims, about 10 pores per µm² of envelope, granum period 18 nm, a plant
+  wall 250 nm, a Gram-negative periplasm 25 nm). The outer nuclear membrane and the rough ER are
+  one membrane (the region union draws no seam), and the smooth ER joins a rough sheet.
+- **Cell kinds** (`CellSpec.kind`: `animal`, `plant`, `bacterium`) with `gram`, `capsule`,
+  `wall`, `plasmodesmata`; each kind lists the cells it occurs in with the reason
+  (`Kind.cells`, `cells_why`), checked like places. Neighbours: plant cells share exact walls
+  (one middle lamella), bacteria lie in a colony, animal cells on a loose lattice.
+- **Level of detail** gains features (`lipids`, `pore_detail`, `thylakoids`, `coat_detail`,
+  `fine`, `mt_lines`, `actin_lines`, `if_lines`, `filament_detail`, `actin_detail`,
+  `mito_double`, `plastid_double`, `envelope_double`); molecules (lipids, tubulin and actin
+  beads, a surface mosaic) are built only round the views (start and every `zoom_to`) that span
+  0.45 µm or less (`closeups`), so a cell's thousands of lipids cost nothing elsewhere.
+- **Labels per view.** Each `zoom_to` view gets labels from `part_anchors` (laid out on the body's
+  edges: columns in 16:9, rows in 9:16, moved to the other edge before a second row), shown while
+  the camera is near that view; `ZoomTo.Options.labels` (`true` / `false` / names) chooses them.
+- **Emphasis kept through LOD.** `Pieces` measures what an action did to a piece against what LOD
+  last wrote (as a factor), remembers it per owner (entry), and gives it to pieces that come into
+  view later; an action still writing colours it read while a piece was hidden is ignored for
+  pieces shown within the last play. Hidden pieces drop their points (cost nothing to draw).
+- **Scale-bar texts** cover every 1-2-5 length from 4 nm to twice the largest planned span, so a
+  built-in `zoom` deeper than any `zoom_to` has its text.
+- **Public:** `vidgen.api` adds `CELL_COATS`, `CELL_MEMBRANES`, `CellAnchor`
+  (`cellworld.Anchor`), `cell_part_anchors`. Config: `cell` params `cell.{gram, capsule, wall,
+  plasmodesmata}`, `style`; object options `coat`, `cargo`, `grana`, `style`; new kinds (see
+  CONFIG); `zoom_to` option `labels`. YAML 1.1's `on:` (read as `true`) is accepted in objects and
+  views. Nothing outside the `cell` scene changes (the Phase Q baseline frames match).
+- **Gaps:** leaders in a zoomed view can cross when anchors crowd one spot; the surface style is
+  a schematic (pores and a lipid mosaic, not a rendered 3-D surface); motors are static glyphs
+  (walking is Step 205's); the tissue still has no junctions.

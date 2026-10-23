@@ -62,11 +62,11 @@ def test_the_typical_animal_cell_is_at_textbook_scale() -> None:
     # relative scale: the nucleus is a third of the cell, a ribosome about 1/80 of a mitochondrion's length
     assert sizes["nucleus"].size / w.size == pytest.approx(0.35) and sizes["mitochondria"].size / sizes["ribosomes"].size == 80
     nucleus = sizes["nucleus"]
-    outer, inner = (m[1] for m in nucleus.parts[0].membranes)
+    outer, inner = nucleus.footprint[0], nucleus.parts[0].membranes[1][1]
     assert outer.a - inner.a == pytest.approx(0.035)   # 30 nm perinuclear space + a bilayer, mid-line to mid-line
     kinds = {e.kind for e in w.entries}
     assert {"nucleus", "nucleolus", "rough_er", "smooth_er", "golgi", "centrosome", "mitochondrion", "lysosome", "peroxisome", "vesicle",
-            "ribosome", "nuclear_pore"} == kinds
+            "ribosome", "nuclear_pore", "early_endosome", "late_endosome"} == kinds
     assert len(w.members("mitochondria")) == 8 and len(w.members("nucleus.pores")) == pytest.approx(20, abs=3)
     assert len(w.members("rough_er.ribosomes")) > 400
 
@@ -87,7 +87,7 @@ def test_every_thing_is_where_it_may_be() -> None:
     for a in structures:
         assert all(inside(s, w.cell, 0.2) for s in a.footprint), a.key
         for b in structures:
-            if a.key < b.key:
+            if a.key < b.key and b.key not in a.joined and a.key not in b.joined:   # the ER is joined to the envelope on purpose
                 assert not any(overlap(s, o) for s in a.footprint for o in b.footprint), (a.key, b.key)
 
 
@@ -95,7 +95,7 @@ def test_compartments_by_point_and_topology() -> None:
     w = world()
     nucleus = w.thing("nucleus")
     assert w.compartment_at(nucleus.center) == ("nucleoplasm", "nucleus.nucleoplasm")
-    outer = nucleus.parts[0].membranes[0][1]
+    outer = nucleus.footprint[0]
     assert isinstance(outer, Ellipse)
     x, y = outer.point(0.0)
     nx, ny = outer.normal(0.0)
@@ -107,7 +107,7 @@ def test_compartments_by_point_and_topology() -> None:
     golgi = w.thing("golgi")
     nucleus_dir = math.atan2(nucleus.center[1] - golgi.center[1], nucleus.center[0] - golgi.center[0])
     assert golgi.facing == pytest.approx(nucleus_dir)   # cis face towards the nucleus (and the ER)
-    cis, trans = golgi.footprint[0], golgi.footprint[-1]
+    cis, trans = golgi.option("bands")[0], golgi.option("bands")[-1]
     assert isinstance(cis, ArcBand) and math.dist(cis.center(), nucleus.center) < math.dist(trans.center(), nucleus.center)
 
 

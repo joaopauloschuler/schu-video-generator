@@ -145,6 +145,39 @@ class Capsule:
     def outline(self, n: int = 64) -> list[Point]:
         return [p for p, _ in self._placed(self._local_outline(n))]
 
+    @property
+    def a(self) -> float:
+        """Half its length (as an ellipse's ``a``)."""
+        return self.length / 2
+
+    @property
+    def b(self) -> float:
+        """Half its width."""
+        return self.width / 2
+
+    def point(self, t: float) -> Point:
+        """The outline at ``t`` (0..1 of the perimeter, from the middle of its lower side)."""
+        return self._placed(self._local_at(t))[0][0]
+
+    def normal(self, t: float) -> Point:
+        """The outward unit normal at ``t``."""
+        return self._placed(self._local_at(t))[0][1]
+
+    def _local_at(self, t: float) -> list[tuple[Point, Point]]:
+        h, r = self.half, self.radius
+        straight, arc = 2 * h, math.pi * r
+        s = (t % 1.0) * (2 * straight + 2 * arc) + h        # 0 at the middle of the lower side
+        s %= 2 * straight + 2 * arc
+        if s < straight:
+            return [((-h + s, -r), (0.0, -1.0))]
+        if s < straight + arc:
+            phi = -math.pi / 2 + (s - straight) / r
+            return [((h + r * math.cos(phi), r * math.sin(phi)), (math.cos(phi), math.sin(phi)))]
+        if s < 2 * straight + arc:
+            return [((h - (s - straight - arc), r), (0.0, 1.0))]
+        phi = math.pi / 2 + (s - 2 * straight - arc) / r
+        return [((-h + r * math.cos(phi), r * math.sin(phi)), (math.cos(phi), math.sin(phi)))]
+
     def perimeter(self) -> float:
         return 4 * self.half + 2 * math.pi * self.radius
 
@@ -156,8 +189,9 @@ class Capsule:
         return replace(self, length=self.length - 2 * d, width=self.width - 2 * d)
 
     def bounds(self) -> Bounds:
-        xs, ys = zip(*self.outline(48))
-        return (min(xs), min(ys), max(xs), max(ys))
+        hx = self.half * abs(math.cos(self.angle)) + self.radius
+        hy = self.half * abs(math.sin(self.angle)) + self.radius
+        return (self.cx - hx, self.cy - hy, self.cx + hx, self.cy + hy)
 
 
 @dataclass(frozen=True)
@@ -230,6 +264,149 @@ class ArcBand:
                 a = self.start + (self.end - self.start) * (k + offset) / count
                 out.append(((self.cx + r * math.cos(a), self.cy + r * math.sin(a)), (sign * math.cos(a), sign * math.sin(a))))
         return out
+
+
+@dataclass(frozen=True)
+class RoundedBox:
+    """A rectangle with round corners (a plant cell, a central vacuole): centre, ``width`` and
+    ``height`` (µm), corner ``radius`` and ``angle`` (radians)."""
+
+    cx: float
+    cy: float
+    width: float
+    height: float
+    radius: float
+    angle: float = 0.0
+
+    def center(self) -> Point:
+        return (self.cx, self.cy)
+
+    @property
+    def a(self) -> float:
+        return self.width / 2
+
+    @property
+    def b(self) -> float:
+        return self.height / 2
+
+    def _corner(self) -> tuple[float, float, float]:
+        r = max(0.0, min(self.radius, self.width / 2, self.height / 2))
+        return self.width / 2 - r, self.height / 2 - r, r
+
+    def distance(self, p: Point) -> float:
+        """Signed distance from the outline (negative inside)."""
+        x, y = _rot(p[0] - self.cx, p[1] - self.cy, -self.angle)
+        hx, hy, r = self._corner()
+        qx, qy = abs(x) - hx, abs(y) - hy
+        return math.hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - r
+
+    def contains(self, p: Point, pad: float = 0.0) -> bool:
+        return self.distance(p) <= pad
+
+    def perimeter(self) -> float:
+        hx, hy, r = self._corner()
+        return 4 * (hx + hy) + 2 * math.pi * r
+
+    def _local_at(self, t: float) -> tuple[Point, Point]:
+        """Point and normal at ``t`` (0..1 of the perimeter, from the middle of the right side,
+        counter-clockwise)."""
+        hx, hy, r = self._corner()
+        pieces = [("line", (hx + r, -hy), (hx + r, hy), (1.0, 0.0)), ("arc", (hx, hy), 0.0),
+                  ("line", (hx, hy + r), (-hx, hy + r), (0.0, 1.0)), ("arc", (-hx, hy), math.pi / 2),
+                  ("line", (-hx - r, hy), (-hx - r, -hy), (-1.0, 0.0)), ("arc", (-hx, -hy), math.pi),
+                  ("line", (-hx, -hy - r), (hx, -hy - r), (0.0, -1.0)), ("arc", (hx, -hy), 1.5 * math.pi)]
+        lengths = [2 * hy, math.pi * r / 2, 2 * hx, math.pi * r / 2, 2 * hy, math.pi * r / 2, 2 * hx, math.pi * r / 2]
+        total = sum(lengths)
+        s = ((t % 1.0) * total + hy) % total
+        for piece, length in zip(pieces, lengths):
+            if s <= length or piece is pieces[-1]:
+                if piece[0] == "line":
+                    (x0, y0), (x1, y1), normal = piece[1], piece[2], piece[3]
+                    f = s / length if length > 0 else 0.0
+                    return (x0 + (x1 - x0) * f, y0 + (y1 - y0) * f), normal  # type: ignore[return-value]
+                (ox, oy), a0 = piece[1], piece[2]
+                phi = a0 + (s / r if r > 0 else 0.0)
+                return (ox + r * math.cos(phi), oy + r * math.sin(phi)), (math.cos(phi), math.sin(phi))
+            s -= length
+        raise AssertionError("unreachable")
+
+    def point(self, t: float) -> Point:
+        (x, y), _ = self._local_at(t)
+        px, py = _rot(x, y, self.angle)
+        return (self.cx + px, self.cy + py)
+
+    def normal(self, t: float) -> Point:
+        _, (nx, ny) = self._local_at(t)
+        return _rot(nx, ny, self.angle)
+
+    def outline(self, n: int = 64) -> list[Point]:
+        return [self.point(k / n) for k in range(n)]
+
+    def surface(self, spacing: float, offset: float = 0.0) -> list[tuple[Point, Point]]:
+        count = max(1, round(self.perimeter() / spacing))
+        return [(self.point((k + offset) / count), self.normal((k + offset) / count)) for k in range(count)]
+
+    def inset(self, d: float) -> "RoundedBox":
+        return replace(self, width=self.width - 2 * d, height=self.height - 2 * d, radius=max(0.0, self.radius - d))
+
+    def bounds(self) -> Bounds:
+        hx, hy, r = self._corner()
+        c, s = abs(math.cos(self.angle)), abs(math.sin(self.angle))
+        ex, ey = hx * c + hy * s + r, hx * s + hy * c + r
+        return (self.cx - ex, self.cy - ey, self.cx + ex, self.cy + ey)
+
+
+@dataclass(frozen=True)
+class Polyline:
+    """A thin line through ``points`` (a filament: a microtubule, an actin filament, a flagellum)
+    ``width`` µm across; its first point is its start (a filament's minus end)."""
+
+    points: tuple[Point, ...]
+    width: float
+
+    def lengths(self) -> list[float]:
+        return [math.dist(p, q) for p, q in zip(self.points, self.points[1:])]
+
+    @property
+    def length(self) -> float:
+        return sum(self.lengths())
+
+    def at(self, s: float) -> tuple[Point, Point]:
+        """The point ``s`` µm from the start and the unit direction there."""
+        for (p, q), length in zip(zip(self.points, self.points[1:]), self.lengths()):
+            if s <= length or q is self.points[-1]:
+                f = min(max(s / length, 0.0), 1.0) if length > 0 else 0.0
+                d = ((q[0] - p[0]) / length, (q[1] - p[1]) / length) if length > 0 else (1.0, 0.0)
+                return (p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f), d
+            s -= length
+        return self.points[-1], (1.0, 0.0)
+
+    def center(self) -> Point:
+        return self.at(self.length / 2)[0]
+
+    def distance(self, p: Point) -> float:
+        best = math.inf
+        for a, b in zip(self.points, self.points[1:]):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            length2 = dx * dx + dy * dy
+            f = 0.0 if length2 == 0 else min(max(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length2, 0.0), 1.0)
+            best = min(best, math.hypot(p[0] - a[0] - f * dx, p[1] - a[1] - f * dy))
+        return best
+
+    def contains(self, p: Point, pad: float = 0.0) -> bool:
+        return self.distance(p) <= self.width / 2 + pad
+
+    def outline(self, n: int = 64) -> list[Point]:
+        total = self.length
+        return [self.at(total * k / max(n - 1, 1))[0] for k in range(n)]
+
+    def inset(self, d: float) -> "Polyline":
+        return replace(self, width=max(self.width - 2 * d, 0.0))
+
+    def bounds(self) -> Bounds:
+        xs, ys = zip(*self.points)
+        h = self.width / 2
+        return (min(xs) - h, min(ys) - h, max(xs) + h, max(ys) + h)
 
 
 def inside(shape: Shape, host: Shape, margin: float = 0.0) -> bool:

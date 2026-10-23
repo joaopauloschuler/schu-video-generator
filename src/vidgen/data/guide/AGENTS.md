@@ -295,7 +295,7 @@ project's own scene types, in its theme).
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
-| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count), `view`, `labels`; the action zoom_to |
+| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style), `view`, `labels`; animal, plant or bacterium; the action zoom_to |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
@@ -483,7 +483,7 @@ drawn as large as its labels let it.
   type: cell
   params:
     title: "Inside an animal cell"
-    cell: animal                                   # 20 µm; contents: typical is the textbook cell
+    cell: animal                                   # or plant, bacterium; contents: typical is the textbook cell
     objects:
       - {kind: ribosome, id: mitoribosomes, in: mitochondria, count: 6, label: false}
   beats:
@@ -496,8 +496,15 @@ drawn as large as its labels let it.
 A `cell` is drawn at real sizes in µm and every place is checked: a ribosome in the nucleoplasm,
 a mitochondrion inside the nucleus or a ribosome on the Golgi is refused with the textbook reason
 (`vidgen validate`). Leave `at` out and things go where they belong; `at: [x, y]` is in µm from
-the cell's centre. `zoom_to` moves between levels (tissue, cell, organelle, complex); the scale
-bar and the details follow the zoom, labels belong to the start view.
+the cell's centre. `cell: plant` adds the wall, plasmodesmata, the central vacuole and
+chloroplasts; `cell: bacterium` (`{kind: bacterium, gram: negative, capsule: true}`) a nucleoid,
+70S ribosomes, plasmids, a flagellum and pili. Kinds beyond the typical cell: `early_endosome`,
+`late_endosome`, `vesicle` with `coat: clathrin|copi|copii`, `microtubule`, `actin_cortex`,
+`stress_fiber`, `intermediate_filament` and the motors `kinesin`, `dynein`, `myosin` (`on:` a
+filament; `vidgen guide config` lists them all). `zoom_to` moves between levels (tissue, cell,
+organelle, complex) and names what the new view shows (`labels: false` or a list of part names);
+the scale bar and the details follow the zoom; `style: surface` (the scene's or an object's) draws
+things whole, seen from outside (a nucleus with its pores, a membrane's surface), instead of cut open.
 
 ```yaml
 # data
@@ -934,7 +941,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `flow` | on an `iso_diagram`: dots (`style: packets`: small cubes) run along connectors (`- flow: "edge:*"`, `chain: true` one after another, `back`, `count`) | when the voice follows data or a request |
 | `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; labels it would cut fade out; `focus: diagram` goes back to the whole frame | at most one or two per scene |
 | `relabel` | on an `iso_diagram`: a label or value changes in place (`- relabel: "block:cache"`, `text: "Cache: hit"`) | a new value, a state change |
-| `zoom_to` | on a `cell`: the camera moves in µm to a level on an object and stays (`- zoom_to: mitochondria`; `level: tissue`, `cell`, `organelle`, `complex`; `width: "2 um"`); details appear as they grow, the scale bar follows; `zoom_to: cell` goes back | one level change per idea, on the word that names the target |
+| `zoom_to` | on a `cell`: the camera moves in µm to a level on an object and stays (`- zoom_to: mitochondria`; `level: tissue`, `cell`, `organelle`, `complex`; `width: "2 um"`; `labels: false` or a list of the parts to name); details appear as they grow, the scale bar follows; `zoom_to: cell` goes back | one level change per idea, on the word that names the target |
 
 ```yaml
 - id: speeds

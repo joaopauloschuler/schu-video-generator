@@ -595,6 +595,7 @@ from vidgen.cellworld import CELL_KINDS, CellSpec, CellView, CellWorld, build_ce
 from vidgen.cellworld import COMPARTMENTS as CELL_COMPARTMENTS, KINDS as CELL_OBJECT_KINDS, LEVELS as CELL_LEVELS, ObjectSpec as CellObjectSpec  # noqa: E402
 from vidgen.cellworld import default_level as cell_default_level, label_weight as cell_label_weight, level_view as cell_level_view  # noqa: E402
 from vidgen.cellworld import lod_weights as cell_lod_weights, scale_bar as cell_scale_bar, zoom_path as cell_zoom_path  # noqa: E402
+from vidgen.cellworld import Anchor as CellAnchor, COAT_NAMES as CELL_COATS, MEMBRANES as CELL_MEMBRANES, part_anchors as cell_part_anchors  # noqa: E402
 from vidgen.cell_vector import CellColors, CellDrawing  # noqa: E402
 
 
@@ -1481,6 +1482,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "cell_lod_weights",
     "cell_scale_bar",
     "cell_zoom_path",
+    "CELL_COATS",
+    "CELL_MEMBRANES",
+    "CellAnchor",
+    "cell_part_anchors",
     "did_you_mean",
     "format_length",
     "parse_coordinate",

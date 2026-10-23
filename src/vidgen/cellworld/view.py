@@ -1,4 +1,4 @@
-"""The camera of a cell world in physical scale (DESIGN.md §95.4): named zoom levels (tissue →
+"""The camera of a cell world in physical scale (DESIGN.md §95.5): named zoom levels (tissue →
 cell → organelle → molecular complex), the view each gives on a target, the level of detail at
 a view (what is drawn, from the size things take on screen) and the automatic scale bar. No
 manim: the scene turns a :class:`CellView` into a camera frame, lint reads the same numbers."""
@@ -9,9 +9,13 @@ import math
 from dataclasses import dataclass
 from typing import Literal
 
-from .catalog import BILAYER, KINDS, MITO_GAP, PERINUCLEAR_GAP
-from .geometry import ArcBand, Ellipse, Point
+from .catalog import (
+    ACTIN, BILAYER, CHLOROPLAST_GAP, GRANUM_PERIOD, INTERMEDIATE, KINDS, LIPID_HEAD, MICROTUBULE, MITO_GAP, PERINUCLEAR_GAP, PERIPLASM,
+    PORES_PER_UM2,
+)
+from .geometry import ArcBand, Capsule, Ellipse, Point, Polyline
 from .model import CellWorld, Placed
+from .morphology import cristae, surface_pores
 from .units import format_length, nice_length
 
 Level = Literal["tissue", "cell", "organelle", "complex"]
@@ -20,10 +24,11 @@ LEVELS: tuple[Level, ...] = ("tissue", "cell", "organelle", "complex")
 FILL = {"tissue": 1.0, "cell": 0.93, "organelle": 0.62, "complex": 0.2}
 #: The tissue view shows this many cell lengths across the body's shorter side.
 TISSUE_CELLS = 3.2
-#: An organelle-level view of a sheet or a tubule network shows this much of it (µm).
+#: An organelle-level view of a sheet, a tubule network or filaments shows this much (µm).
 SHEET_VIEW = 2.6
-#: A complex-level view on a membrane (no complex to centre on) shows this much (µm).
-MEMBRANE_VIEW = 0.16
+#: A complex-level view on a membrane (no complex to centre on) shows this much (µm): enough
+#: to see its lipids one by one.
+MEMBRANE_VIEW = 0.06
 
 #: Level of detail: each feature is drawn when its size on screen (pixels) passes the first
 #: number and fully from the second (faded between, on a log scale). See :func:`lod_weights`.
@@ -32,8 +37,16 @@ LOD: dict[str, tuple[float, float]] = {
     "particle_detail": (9.0, 16.0),   # a complex's subunits (ribosome: large and small)
     "double_membrane": (1.6, 3.2),    # the two membranes of an envelope apart (their gap)
     "bilayer": (2.5, 5.0),            # a membrane drawn as its bilayer (its thickness)
+    "lipids": (2.6, 5.0),             # the lipids of a bilayer (a head group, 0.8 nm)
     "pores": (1.5, 3.0),              # nuclear pores (their diameter)
+    "pore_detail": (30.0, 55.0),      # a pore complex's rings, spokes, filaments and basket
     "cristae": (18.0, 32.0),          # a mitochondrion's cristae (its width)
+    "thylakoids": (1.4, 2.8),         # single thylakoids in a granum (their period)
+    "coat_detail": (2.0, 4.0),        # a vesicle's coat (its thickness)
+    "fine": (2.5, 5.0),               # small inner details (intraluminal vesicles, fibrillar centres: 50 nm)
+    "lines": (0.15, 0.45),            # a filament as a line (its width)
+    "filament_detail": (12.0, 20.0),  # a microtubule's tubulin dimers (its width)
+    "actin_detail": (14.0, 24.0),     # an actin filament's subunits (its width)
     "labels": (8.0, 14.0),            # a structure's label (its length)
 }
 #: Neighbouring cells fade in as the view grows from 1.25 to 1.7 cell lengths.
@@ -67,33 +80,111 @@ def _box(thing: Placed) -> tuple[float, float, float, float]:
     return (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
 
 
+def membrane_focus(world: CellWorld) -> tuple[Point, float]:
+    """Where a complex-level view of the cell itself looks: its plasma membrane (with a raft
+    there), a plant cell's wall at a plasmodesma, a bacterium's envelope on its side."""
+    if world.channels:
+        channel = world.channels[len(world.channels) // 2]
+        return channel.center(), 0.16
+    if world.kind == "bacterium":
+        assert isinstance(world.cell, Capsule)
+        x, y = world.cell.point(0.5)
+        depth = max(_layer_depth(world), default=0.0)
+        return (x, y + depth / 2), max(MEMBRANE_VIEW, depth * 2.4) * FILL["complex"]
+    point = world.cell.point(0.12)  # type: ignore[attr-defined]
+    return point, MEMBRANE_VIEW * FILL["complex"]
+
+
+def _layer_depth(world: CellWorld) -> list[float]:
+    x0 = world.cell.bounds()[3]
+    return [shape.bounds()[3] - x0 for _name, shape in world.envelope]
+
+
 def focus_point(world: CellWorld, entry_id: str, level: Level) -> tuple[Point, float]:
     """Where a view of ``entry_id`` at ``level`` centres and the size (µm) it frames: a
-    structure's middle and length; a rough ER's or smooth ER's middle sheet; at the complex level
-    a complex bound to the structure (a ribosome on the rough ER, a pore of a nucleus) or a point
-    on its outer membrane. An entry of several things takes its first."""
+    structure's middle and length; a rough ER's or smooth ER's middle sheet; filaments near
+    their start; at the complex level a complex bound to the structure (a ribosome on the rough
+    ER, a pore of a nucleus, a motor on a filament), a bud of the Golgi, a crista junction, a
+    granum, the daughter centriole, or a point on its outer membrane. An entry of several things
+    takes its first."""
     things = world.members(entry_id)
     first = things[0]
     kind = KINDS[first.kind]
     if kind.category == "complex":
         return first.center, first.size
+    keys = {t.key for t in things}
+    if kind.category == "filament":
+        line = first.footprint[0]
+        assert isinstance(line, Polyline)
+        if level == "complex":
+            motors = [p for p in world.placed if p.surface in keys]
+            if motors:
+                return motors[0].center, motors[0].size * 1.4
+            base = first.option("base")
+            if base is not None:
+                return base, 0.05
+            return line.at(line.length * 0.5)[0], max(first.width, 0.025)
+        start = line.at(min(1.0, line.length / 2))[0] if first.option("base") is None else line.at(min(1.2, line.length / 2))[0]
+        return start, SHEET_VIEW * FILL["organelle"]
     if level == "complex":
-        bound = [p for p in world.placed if p.surface == first.key]
-        preferred = [p for p in bound if p.kind == "nuclear_pore"] or [p for p in bound if p.kind == "ribosome"] or bound
-        if preferred:
-            mx, my = first.center
-            near = min(preferred, key=lambda p: (p.center[0] - mx) ** 2 + (p.center[1] - my) ** 2)
-            return near.center, near.size
-        shape = first.footprint[0]
-        if isinstance(shape, Ellipse):
-            return shape.point(0.12), MEMBRANE_VIEW * FILL["complex"]
-        outline = shape.outline(16)
-        return outline[len(outline) // 3], MEMBRANE_VIEW * FILL["complex"]
+        return _structure_complex(world, first)
     if kind.shape in ("sheets", "tubules") and level == "organelle":
-        band = first.footprint[len(first.footprint) // 2]
-        return (band.center() if isinstance(band, ArcBand) else first.center), SHEET_VIEW * FILL["organelle"]
+        band = first.footprint[len(first.footprint) // 2] if kind.shape == "sheets" else first.footprint[0]
+        center = band.center() if isinstance(band, ArcBand) else first.center
+        return center, SHEET_VIEW * FILL["organelle"]
     x0, y0, x1, y1 = _box(first)
     return ((x0 + x1) / 2, (y0 + y1) / 2), max(x1 - x0, y1 - y0)
+
+
+def surface_focus(first: Placed) -> tuple[Point, float]:
+    """Where a complex-level view of a structure drawn whole (``style: surface``) looks: a
+    nucleus's pore complex seen from above, else a patch of its outer membrane face on."""
+    shape = first.footprint[0]
+    x0, y0, x1, y1 = shape.bounds()
+    face = ((x0 + x1) / 2 - (x1 - x0) * 0.15, (y0 + y1) / 2 + (y1 - y0) * 0.12)
+    if first.kind == "nucleus" and isinstance(shape, Ellipse):
+        pores = surface_pores(shape, first.key, PORES_PER_UM2)
+        best = min((p for p in pores if p[1] > 0.8), key=lambda p: math.dist(p[0], face), default=None)
+        if best is not None:
+            return best[0], 0.06
+    return face, MEMBRANE_VIEW * FILL["complex"]
+
+
+def _structure_complex(world: CellWorld, first: Placed) -> tuple[Point, float]:
+    if first.option("style") == "surface":
+        return surface_focus(first)
+    bound = [p for p in world.placed if p.surface == first.key]
+    preferred = [p for p in bound if p.kind == "nuclear_pore"] or [p for p in bound if p.kind == "ribosome"] or bound
+    if preferred:
+        mx, my = first.center
+        near = min(preferred, key=lambda p: (p.center[0] - mx) ** 2 + (p.center[1] - my) ** 2)
+        return near.center, near.size
+    buds = first.option("buds")
+    if buds:
+        center, radius, coat, _k = buds[-1] if first.kind == "golgi" else buds[0]
+        return center, radius * 2.2
+    shape = first.footprint[0]
+    if first.kind == "mitochondrion" and isinstance(shape, Capsule):
+        inner = shape.inset(MITO_GAP + BILAYER)
+        folds = cristae(inner, first.key)
+        if folds:
+            neck = folds[len(folds) // 2 // 2 * 2]
+            return neck.center(), 0.05
+    if first.kind == "chloroplast":
+        discs = first.option("discs", ())
+        if discs:
+            disc = discs[len(discs) // 2]
+            return disc.center(), 0.08
+    if first.kind == "centrosome":
+        return first.center, 0.12
+    if first.kind == "smooth_er":
+        nodes = first.option("nodes", ())
+        if nodes:
+            return nodes[0], 0.05
+    if isinstance(shape, Ellipse):
+        return shape.point(0.12), MEMBRANE_VIEW * FILL["complex"]
+    outline = shape.outline(16)
+    return outline[len(outline) // 3], MEMBRANE_VIEW * FILL["complex"]
 
 
 def default_level(world: CellWorld, entry_id: str) -> Level:
@@ -108,24 +199,31 @@ def default_level(world: CellWorld, entry_id: str) -> Level:
 
 def level_view(world: CellWorld, level: Level, body_aspect: float, entry_id: str | None = None, span: float | None = None) -> CellView:
     """The view at ``level`` on ``entry_id`` (``None``, ``cell`` or ``tissue``: the cell) for a
-    body of aspect ``body_aspect`` (width over height); ``span`` (µm) overrides the level's."""
-    middle = (world.cell.cx, world.cell.cy)
+    body of aspect ``body_aspect`` (width over height); ``span`` (µm) overrides the level's. The
+    complex level on the cell looks at its plasma membrane (or a plant's wall, a bacterium's
+    envelope); the organelle level on it at the nucleus (a bacterium's nucleoid)."""
+    x0, y0, x1, y1 = world.cell.bounds()
+    middle = ((x0 + x1) / 2, (y0 + y1) / 2)
     if level == "tissue":                   # the wide levels always show the cell in the middle
         return CellView(middle, span or TISSUE_CELLS * world.size, level)
     if level == "cell":
-        return CellView(middle, span or fit_span(2 * world.cell.a, 2 * world.cell.b, body_aspect, FILL["cell"]), level)
+        ox0, oy0, ox1, oy1 = world.outside.bounds()
+        return CellView(middle, span or fit_span(ox1 - ox0, oy1 - oy0, body_aspect, FILL["cell"]), level)
     if entry_id in (None, "cell", "tissue"):
-        entry_id = next((e.id for e in world.entries if e.kind == "nucleus"), None)
+        if level == "complex":
+            center, size = membrane_focus(world)
+            return CellView(center, span or max(size / FILL[level], 0.02), level)
+        entry_id = next((e.id for e in world.entries if e.kind in ("nucleus", "nucleoid") and e.owner is None), None)
         if entry_id is None:
-            return CellView(middle, span or (world.size / 4 if level == "organelle" else MEMBRANE_VIEW), level)
+            return CellView(middle, span or world.size / 4, level)
     center, size = focus_point(world, entry_id, level)
     auto = size / FILL[level]
     if level == "organelle":
         things = world.members(entry_id)
-        if KINDS[things[0].kind].shape not in ("sheets", "tubules"):
+        if KINDS[things[0].kind].shape not in ("sheets", "tubules") and KINDS[things[0].kind].category != "filament":
             x0, y0, x1, y1 = _box(things[0])
             auto = fit_span(max(x1 - x0, 1e-3), max(y1 - y0, 1e-3), body_aspect, FILL["organelle"])
-    return CellView(center, span or max(auto, 0.05), level)
+    return CellView(center, span or max(auto, 0.02), level)
 
 
 #: The zoom path's trade-off between zooming and panning (van Wijk and Nuij's ρ; √2 is their
@@ -173,19 +271,38 @@ def smooth_fade(value: float, lo: float, hi: float) -> float:
 def lod_weights(px_per_um: float, cell_size: float, span: float) -> dict[str, float]:
     """How much of each level-of-detail feature is drawn at ``px_per_um`` (pixels per µm on
     screen) with ``span`` µm across the body: ``particles`` (ribosomes as dots, at their 25 nm),
-    ``ribosome_detail``, ``double_membrane`` (an envelope's two membranes apart at their 30 nm
-    gap; a mitochondrion's at 20 nm: ``mito_double``), ``bilayer`` (5 nm), ``pores`` (120 nm),
-    ``cristae`` (at a 0.7 µm mitochondrion's width), ``labels`` (per structure length: see
-    :func:`label_weight`), ``neighbours`` (the tissue)."""
+    ``particle_detail``, ``double_membrane`` (an envelope's two membranes apart at their 30 nm
+    gap; a mitochondrion's at 20 nm: ``mito_double``; a chloroplast's: ``plastid_double``; a
+    bacterium's inner and outer membrane: ``envelope_double``), ``bilayer`` (5 nm), ``lipids``,
+    ``pores`` (120 nm) and ``pore_detail``, ``cristae`` (at a 0.7 µm mitochondrion's width),
+    ``thylakoids``, ``coat_detail``, ``fine`` (50 nm details), filaments as lines
+    (``mt_lines``, ``actin_lines``, ``if_lines``) and their subunits (``filament_detail``,
+    ``actin_detail``), ``neighbours`` (the tissue). Labels: :func:`label_weight`."""
     ribosome = KINDS["ribosome"].size * px_per_um
+
+    def fade(size: float, feature: str) -> float:
+        return smooth_fade(size * px_per_um, *LOD[feature])
+
     return {
         "particles": smooth_fade(ribosome, *LOD["particles"]),
         "particle_detail": smooth_fade(ribosome, *LOD["particle_detail"]),
-        "double_membrane": smooth_fade((PERINUCLEAR_GAP + BILAYER) * px_per_um, *LOD["double_membrane"]),
-        "mito_double": smooth_fade((MITO_GAP + BILAYER) * px_per_um, *LOD["double_membrane"]),
-        "bilayer": smooth_fade(BILAYER * px_per_um, *LOD["bilayer"]),
-        "pores": smooth_fade(KINDS["nuclear_pore"].size * px_per_um, *LOD["pores"]),
-        "cristae": smooth_fade((KINDS["mitochondrion"].width or 0.7) * px_per_um, *LOD["cristae"]),
+        "double_membrane": fade(PERINUCLEAR_GAP + BILAYER, "double_membrane"),
+        "mito_double": fade(MITO_GAP + BILAYER, "double_membrane"),
+        "plastid_double": fade(CHLOROPLAST_GAP + BILAYER, "double_membrane"),
+        "envelope_double": fade(PERIPLASM, "double_membrane"),
+        "bilayer": fade(BILAYER, "bilayer"),
+        "lipids": fade(LIPID_HEAD, "lipids"),
+        "pores": fade(KINDS["nuclear_pore"].size, "pores"),
+        "pore_detail": fade(KINDS["nuclear_pore"].size, "pore_detail"),
+        "cristae": fade(KINDS["mitochondrion"].width or 0.7, "cristae"),
+        "thylakoids": fade(GRANUM_PERIOD, "thylakoids"),
+        "coat_detail": fade(0.012, "coat_detail"),
+        "fine": fade(0.05, "fine"),
+        "mt_lines": fade(MICROTUBULE, "lines"),
+        "actin_lines": fade(ACTIN, "lines"),
+        "if_lines": fade(INTERMEDIATE, "lines"),
+        "filament_detail": fade(MICROTUBULE, "filament_detail"),
+        "actin_detail": fade(ACTIN, "actin_detail"),
         "neighbours": smooth_fade(span / cell_size, *NEIGHBOURS),
     }
 
