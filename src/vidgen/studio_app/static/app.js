@@ -1,10 +1,15 @@
-// vidgen studio, the page (DESIGN.md §94.5): the top bar's preset picker, the song strip and
-// transport, the timeline, the track list, the inspector (read-only until Step 195), the score
-// file and the status line. State lives on the server (the session); this file shows it.
+// vidgen studio, the page (DESIGN.md §94.7, §94.12): the top bar's preset picker, the song strip
+// (strip.js), transport, the timeline (timeline.js), the track list (tracks.js), the inspector
+// (read-only until Step 195), the score file and the status line. State lives on the server
+// (the session); every committed edit is a new version, then rendered and played on from the
+// same moment.
 
 import { api } from "./api.js";
 import { Player } from "./player.js";
-import { escapeHtml, showYaml } from "./yaml_view.js";
+import { initStrip, showChords, showFacts, tickChords } from "./strip.js";
+import { initTimeline, setRendering, showEnergy, showLoop, showTimeline, tickTimeline } from "./timeline.js";
+import { initTracks, mutedTracks, showMuted, showTracks, tickMeters } from "./tracks.js";
+import { changedLines, escapeHtml, showYaml } from "./yaml_view.js";
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ["--c1", "--c2", "--c3", "--c4"];
@@ -14,10 +19,17 @@ const state = {
   patches: null,
   info: null,
   session: null,
-  score: null,     // {version, text, outline, problems, render_key}
-  render: null,    // the last render's result
-  selected: null,  // the selected track's name
-  rendering: null, // the promise of a render in progress
+  score: null,          // {version, text, outline, problems, render_key}
+  render: null,         // the render playing (its facts)
+  selected: null,       // the selected track's name
+  selectedSection: null,
+  loop: null,           // the section looped, or null: the whole piece
+  mute: new Set(),      // listening aid only: never written to the score
+  solo: new Set(),
+  rendering: false,
+  wantAudio: false,
+  seekAfter: null,      // a moment to play from once the next source is in
+  time: 0,              // the moment of the piece shown
 };
 
 // ----- small helpers ----------------------------------------------------------------------
@@ -33,6 +45,15 @@ function status(text, kind = "") {
   el.className = `status ${kind}`;
 }
 
+let problemTimer = 0;
+function problem(text) {
+  const el = $("strip-problem");
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(problemTimer);
+  problemTimer = setTimeout(() => { el.hidden = true; }, 6000);
+}
+
 function colour(i) {
   return `var(${PALETTE[i % PALETTE.length]})`;
 }
@@ -45,6 +66,21 @@ function storage(key, value) {
     return null;
   }
   return value;
+}
+
+const outline = () => state.score?.outline ?? null;
+
+function sectionAt(seconds) {
+  const sections = outline()?.sections || [];
+  let found = sections[0];
+  for (const s of sections) if (s.start <= seconds + 1e-6) found = s;
+  return found;
+}
+
+// The section the strip's chords follow: the one looped, else the one under the playhead.
+function activeSection() {
+  const sections = outline()?.sections || [];
+  return sections.find((s) => s.name === state.loop) || sectionAt(state.time);
 }
 
 // ----- theme ------------------------------------------------------------------------------
@@ -123,8 +159,12 @@ async function choosePreset(name) {
   player.stop();
   status(`loading ${name}…`, "busy");
   try {
-    show(await api.load(name));
-    await renderCurrent();
+    const doc = await api.load(name);
+    Object.assign(state, { render: null, loop: null, selectedSection: null, time: 0 });
+    state.mute.clear();
+    state.solo.clear();
+    show(doc);
+    await refreshAudio();
   } catch (err) {
     status(err.message, "error");
   }
@@ -132,122 +172,39 @@ async function choosePreset(name) {
 
 // ----- showing the score ------------------------------------------------------------------
 
-function show(doc) {
+function show(doc, before = null) {
   state.session = doc.session;
   state.score = doc.score;
-  const outline = state.score?.outline;
+  const o = outline();
   picker.mark(state.session?.preset);
   $("version-name").textContent = state.score ? `v${state.score.version}` : "v–";
+  const versions = state.session?.versions || [];
+  $("versions").title = versions.length ? `${versions.length} version${versions.length > 1 ? "s" : ""}; this one: ${versions.find((v) => v.number === state.score?.version)?.label || ""} (the list comes in Step 197)` : "";
   $("yaml-name").textContent = state.session ? `· ${state.session.title} · v${state.score?.version ?? "–"}` : "";
-  showFacts(outline);
-  showTimeline(outline);
-  if (outline && !outline.tracks.some((t) => t.name === state.selected)) state.selected = outline.tracks[0]?.name ?? null;
-  showTracks(outline);
+  if (o && !o.tracks.some((t) => t.name === state.selected)) state.selected = o.tracks[0]?.name ?? null;
+  showFacts();
+  showTimeline();
+  showTracks();
   showInspector();
   const bad = new Set((state.score?.problems || []).map((p) => p.line).filter(Boolean));
-  showYaml($("yaml"), state.score?.text || "", bad);
-}
-
-function showFacts(outline) {
-  $("f-key").textContent = outline ? outline.key : "–";
-  $("f-tempo").textContent = outline ? `${outline.tempo} BPM` : "–";
-  $("f-time").textContent = outline ? outline.time : "–";
-  $("f-seed").textContent = outline ? outline.seed : "–";
-  $("f-bars").textContent = outline ? `${outline.bars} · ${clock(outline.seconds)}` : "–";
-  $("f-roman").textContent = outline?.progression || "";
-  showChords(0);
-}
-
-function sectionAt(seconds) {
-  const sections = state.score?.outline?.sections || [];
-  let found = sections[0];
-  for (const s of sections) if (s.start <= seconds) found = s;
-  return found;
-}
-
-function showChords(seconds) {
-  const section = sectionAt(seconds);
-  if (!section) {
-    $("f-chords").textContent = "";
-    return;
-  }
-  const names = section.chords.filter((c, i) => i === 0 || c !== section.chords[i - 1]);
-  const text = names.join(" ");
-  if ($("f-chords").textContent !== text) $("f-chords").textContent = state.score.outline.progression ? `(${text})` : text;
-}
-
-function showTimeline(outline) {
-  const timeline = $("timeline");
-  for (const el of timeline.querySelectorAll(".section, .empty")) el.remove();
-  const loop = $("loop");
-  loop.innerHTML = '<option value="">whole</option>';
-  if (!outline) {
-    timeline.insertAdjacentHTML("afterbegin", '<span class="empty">pick a preset</span>');
-    return;
-  }
-  outline.sections.forEach((s, i) => {
-    const el = document.createElement("div");
-    el.className = "section";
-    el.dataset.name = s.name;
-    el.style.flexGrow = String(s.bars);
-    el.style.flexBasis = "0";
-    el.style.setProperty("--sec", colour(i));
-    el.title = `${s.name}: bars ${s.first_bar}–${s.first_bar + s.bars - 1}, ${s.key}, from ${clock(s.start)}`;
-    el.innerHTML = `<span class="name">${escapeHtml(s.name)}</span><span class="bars">${s.bars} bars · ${escapeHtml(s.key)}</span>`;
-    timeline.insertBefore(el, $("playhead"));
-    loop.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(s.name)}" disabled>${escapeHtml(s.name)} (Step 194)</option>`);
-  });
-}
-
-function volumeShare(volume) {
-  if (typeof volume !== "number") return 0.6;
-  return Math.max(0.05, Math.min(1, (volume + 30) / 36)); // -30 dB .. +6 dB
-}
-
-function showTracks(outline) {
-  const list = $("tracks");
-  if (!outline) {
-    list.innerHTML = '<p class="placeholder">No score open.</p>';
-    return;
-  }
-  list.innerHTML = "";
-  outline.tracks.forEach((t, i) => {
-    const row = document.createElement("div");
-    row.className = "track";
-    row.setAttribute("role", "listitem");
-    row.tabIndex = 0;
-    row.dataset.name = t.name;
-    row.setAttribute("aria-selected", String(t.name === state.selected));
-    row.style.setProperty("--tc", colour(i));
-    const pan = typeof t.pan === "number" ? t.pan : 0;
-    row.innerHTML = `
-      <span class="dot" aria-hidden="true"></span>
-      <span class="name">${escapeHtml(t.name)}<small>${t.instrument === t.name ? "&nbsp;" : escapeHtml(t.instrument)}</small></span>
-      <span class="ms"><button disabled title="Mute (Step 194)">M</button><button disabled title="Solo (Step 194)">S</button></span>
-      <span class="vol" title="volume ${typeof t.volume === "number" ? t.volume + " dB" : "(a curve)"}"><i></i></span>
-      <span class="pan" title="pan ${pan}"><i></i></span>
-      <span class="pattern" title="${escapeHtml(t.steps)}">${escapeHtml(t.steps)}</span>`;
-    row.querySelector(".vol i").style.width = `${Math.round(volumeShare(t.volume) * 100)}%`;
-    row.querySelector(".pan i").style.transform = `rotate(${Math.round(pan * 135)}deg)`;
-    list.appendChild(row);
-  });
+  showYaml($("yaml"), state.score?.text || "", bad, changedLines(before, state.score?.text || ""));
 }
 
 function selectTrack(name) {
   state.selected = name;
-  for (const row of $("tracks").children) row.setAttribute("aria-selected", String(row.dataset.name === name));
+  for (const row of $("tracks").querySelectorAll(".track")) row.setAttribute("aria-selected", String(row.dataset.name === name));
   showInspector();
 }
 
 function showInspector() {
   const box = $("inspector");
-  const track = state.score?.outline?.tracks.find((t) => t.name === state.selected);
+  const track = outline()?.tracks.find((t) => t.name === state.selected);
   $("inspector-track").textContent = track ? `· ${track.name}` : "";
   if (!track) {
     box.innerHTML = '<p class="placeholder">Select a track to see its instrument and settings.</p>';
     return;
   }
-  const index = state.score.outline.tracks.indexOf(track);
+  const index = outline().tracks.indexOf(track);
   box.style.setProperty("--tc", colour(index));
   const patch = state.patches?.instruments.find((p) => p.name === track.instrument);
   const written = track.settings || {};
@@ -271,50 +228,154 @@ function showInspector() {
       <dt>effects</dt><dd class="chips">${effects}</dd>
     </dl>
     ${settings}
-    <p class="note">Editing the settings, octave, accent, effects and steps comes in Step 195.</p>`;
+    <p class="note">Volume, pan and the steps are edited in the track list; the settings, octave, accent and effects in Step 195.</p>`;
+}
+
+// ----- edits ------------------------------------------------------------------------------
+
+let editChain = Promise.resolve();
+let busyCount = 0;
+
+// `data-busy` on <body> while an edit or a render is under way (tests and screenshots wait on it).
+function busy(delta) {
+  busyCount += delta;
+  if (busyCount > 0) document.body.dataset.busy = "1";
+  else delete document.body.dataset.busy;
+}
+
+// Commit `ops` as the next version (one at a time, each on the version before), show it and
+// render it. Resolves to the server's answer: {ok, problems} when the edit has problems.
+function commit(ops, label) {
+  const run = async () => {
+    if (!state.score) return { ok: false, problems: [{ where: "", message: "no score open" }] };
+    const before = state.score.text;
+    try {
+      const r = await api.edit(state.score.version, ops, label);
+      if (!r.ok) {
+        const p = r.problems[0];
+        status(`not changed: ${p.where ? p.where + ": " : ""}${p.message}`, "error");
+        return r;
+      }
+      if (r.unchanged) return r;
+      show(r, before);
+      const version = r.session.versions.find((v) => v.number === r.score.version);
+      status(`v${r.score.version} · ${version?.label || "edited"} · rendering…`, "busy");
+      refreshAudio();
+      return r;
+    } catch (err) {
+      status(err.message, "error");
+      problem(err.message);
+      return { ok: false, problems: [{ where: "", message: err.message }] };
+    } finally {
+      busy(-1);
+    }
+  };
+  busy(1);
+  editChain = editChain.then(run, run);
+  return editChain;
+}
+
+// Check `ops` on the current version without keeping them: {ok, problems, outline}.
+async function check(ops) {
+  try {
+    return await api.edit(state.score.version, ops, null, true);
+  } catch (err) {
+    return { ok: false, problems: [{ where: "", message: err.message }] };
+  }
 }
 
 // ----- rendering and playback -------------------------------------------------------------
 
-async function renderCurrent() {
-  if (!state.score || state.score.problems.length) return null;
-  if (state.rendering) return state.rendering;
-  const version = state.score.version;
-  status(`rendering v${version}…`, "busy");
-  state.rendering = api
-    .render(version)
-    .then((r) => {
-      state.render = r;
-      player.setSource(r.url, r.loop);
-      const how = r.cached ? "from the cache" : `rendered in ${r.render_seconds.toFixed(1)} s`;
-      status(`v${r.version} ${how} · ${clock(r.seconds)} · ${r.loudness.toFixed(1)} LUFS in a video, plays at ${(r.loudness + r.audition_gain_db).toFixed(0)} here`);
-      return r;
-    })
-    .catch((err) => {
-      status(err.message, "error");
-      return null;
-    })
-    .finally(() => {
-      state.rendering = null;
-    });
-  return state.rendering;
+// Render what should play (the current version, the section looped, without the muted tracks)
+// and switch to it at the same moment. Renders run one at a time; a newer wish replaces an
+// older one that has not started.
+async function refreshAudio() {
+  state.wantAudio = true;
+  if (state.rendering) return;
+  state.rendering = true;
+  busy(1);
+  const badge = setTimeout(() => {
+    $("render-badge").hidden = false;
+    setRendering(true);
+  }, 120);
+  try {
+    while (state.wantAudio) {
+      state.wantAudio = false;
+      if (!state.score || state.score.problems.length) break;
+      const r = await api.render(state.score.version, state.loop, mutedTracks());
+      if (state.wantAudio) continue;
+      applyRender(r);
+    }
+  } catch (err) {
+    status(err.message, "error");
+  } finally {
+    clearTimeout(badge);
+    state.rendering = false;
+    busy(-1);
+    $("render-badge").hidden = true;
+    setRendering(false);
+  }
+}
+
+function applyRender(r) {
+  state.render = r;
+  const at = state.seekAfter;
+  state.seekAfter = null;
+  player.setSource(r.url, { loop: r.section ? true : r.loop, offset: r.section ? r.section.start : 0, at });
+  showEnergy();
+  const how = r.cached ? "from the cache" : `rendered in ${r.render_seconds.toFixed(1)} s`;
+  const where = r.section ? ` · looping ${r.section.name}` : "";
+  const muted = r.muted?.length ? ` · without ${r.muted.join(", ")}` : "";
+  status(`v${r.version} ${how} · ${clock(r.seconds)}${where}${muted} · ${r.loudness.toFixed(1)} LUFS in a video, plays at ${(r.loudness + r.audition_gain_db).toFixed(0)} here`);
+}
+
+function setLoop(name) {
+  state.loop = name || null;
+  if (name) state.selectedSection = name;
+  showLoop();
+  showChords(activeSection());
+  refreshAudio();
+}
+
+// Go to moment `seconds` of the piece; outside the section looped, the whole piece plays.
+function seekTo(seconds) {
+  const o = outline();
+  if (!o) return;
+  seconds = Math.max(0, Math.min(seconds, o.seconds));
+  const looped = o.sections.find((s) => s.name === state.loop);
+  if (looped && (seconds < looped.start || seconds >= looped.start + looped.bars * o.bar_seconds)) {
+    state.seekAfter = seconds;
+    setLoop(null);
+    return;
+  }
+  player.seek(seconds);
 }
 
 function onTick(seconds) {
-  const duration = player.duration || state.render?.seconds || state.score?.outline?.seconds || 0;
-  $("time").textContent = `${clock(seconds)} / ${clock(duration)}`;
-  if (!seeking) $("seek").value = duration ? String(Math.round((seconds / duration) * 1000)) : "0";
-  const piece = state.score?.outline?.seconds || duration;
-  const share = piece ? Math.min(1, (seconds % (piece + 1e-9)) / piece) : 0;
-  $("playhead").style.left = `calc(${(share * 100).toFixed(3)}% - 1px)`;
+  state.time = seconds;
+  const whole = state.render?.seconds || outline()?.seconds || 0;
+  $("time").textContent = `${clock(seconds)} / ${clock(whole)}`;
+  if (!seeking) $("seek").value = whole ? String(Math.round((seconds / whole) * 1000)) : "0";
   const section = sectionAt(seconds);
-  for (const el of $("timeline").querySelectorAll(".section")) el.classList.toggle("current", el.dataset.name === section?.name);
-  showChords(seconds);
+  tickTimeline(seconds, section);
+  tickChords(activeSection(), seconds);
+  tickMeters(seconds, section, player.playing);
 }
 
 function onPlayState(playing) {
   $("play").setAttribute("aria-pressed", String(playing));
   $("play").setAttribute("aria-label", playing ? "Pause" : "Play");
+  if (!playing) setTimeout(() => onTick(player.time), 0);
+  if (!playing) fadeMeters();
+}
+
+function fadeMeters() {
+  let frames = 30;
+  const step = () => {
+    tickMeters(state.time, sectionAt(state.time), false);
+    if (--frames > 0 && !player.playing) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 const player = new Player($("audio"), onTick, onPlayState);
@@ -322,44 +383,31 @@ let seeking = false;
 
 async function togglePlay() {
   if (player.playing) return player.pause();
-  if (!player.url) await renderCurrent();
+  if (!player.url) await refreshAudio();
   return player.play();
 }
 
 function wireTransport() {
   $("play").addEventListener("click", togglePlay);
   $("stop").addEventListener("click", () => player.stop());
+  $("loop").addEventListener("change", (e) => setLoop(e.target.value));
   const seek = $("seek");
   seek.addEventListener("input", () => {
     seeking = true;
-    const duration = player.duration || state.render?.seconds || 0;
-    $("time").textContent = `${clock((seek.value / 1000) * duration)} / ${clock(duration)}`;
+    const whole = state.render?.seconds || 0;
+    $("time").textContent = `${clock((seek.value / 1000) * whole)} / ${clock(whole)}`;
   });
   seek.addEventListener("change", () => {
     seeking = false;
-    player.seek((seek.value / 1000) * (player.duration || 0));
-  });
-  $("timeline").addEventListener("click", (e) => {
-    const box = $("timeline").getBoundingClientRect();
-    const share = (e.clientX - box.left) / box.width;
-    player.seek(share * (state.score?.outline?.seconds || 0));
-  });
-  $("tracks").addEventListener("click", (e) => {
-    const row = e.target.closest(".track");
-    if (row) selectTrack(row.dataset.name);
-  });
-  $("tracks").addEventListener("keydown", (e) => {
-    const row = e.target.closest(".track");
-    if (!row) return;
-    if (e.key === "Enter" || e.key === " ") selectTrack(row.dataset.name);
-    else if (e.key === "ArrowDown") row.nextElementSibling?.focus();
-    else if (e.key === "ArrowUp") row.previousElementSibling?.focus();
-    else return;
-    e.preventDefault();
+    seekTo((seek.value / 1000) * (state.render?.seconds || 0));
   });
 }
 
 // ----- start --------------------------------------------------------------------------------
+
+const ctx = {
+  state, outline, commit, check, status, problem, colour, clock, setLoop, seekTo, refreshAudio, selectTrack, activeSection,
+};
 
 async function start() {
   setTheme(storage("vidgen-studio-theme") || "dark");
@@ -370,16 +418,23 @@ async function start() {
   });
   wirePicker();
   wireTransport();
+  initStrip(ctx);
+  initTimeline(ctx);
+  initTracks(ctx);
   status("starting…", "busy");
+  busy(1);
   try {
     [state.info, state.presets, state.patches] = await Promise.all([api.info(), api.presets(), api.patches()]);
     picker.fill(state.presets);
     const doc = await api.session();
     if (doc.session) show(doc);
     else show(await api.load(state.info.default_preset));
-    await renderCurrent();
+    showMuted();
+    await refreshAudio();
   } catch (err) {
     status(err.message, "error");
+  } finally {
+    busy(-1);
   }
 }
 

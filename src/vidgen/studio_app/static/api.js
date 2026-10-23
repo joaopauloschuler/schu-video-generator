@@ -27,5 +27,6 @@ export const api = {
   load: (preset) => call("POST", "/api/load", { preset }),
   loadText: (text) => call("POST", "/api/load", { text }),
   validate: (text) => call("POST", "/api/validate", { text }),
-  render: (version, section) => call("POST", "/api/render", { version, section: section || null }),
+  render: (version, section, mute) => call("POST", "/api/render", { version, section: section || null, mute: mute || [] }),
+  edit: (version, ops, label, dryRun = false) => call("POST", "/api/edit", { version, ops, label: label || null, dry_run: dryRun }),
 };

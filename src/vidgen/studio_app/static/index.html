@@ -30,12 +30,21 @@
 
   <section class="strip" aria-label="Song">
     <div class="facts">
-      <span class="fact"><span class="label">Key</span> <span class="value" id="f-key">–</span></span>
-      <span class="fact"><span class="label">Tempo</span> <span class="value" id="f-tempo">–</span></span>
+      <span class="fact"><label class="label" for="f-tonic">Key</label>
+        <select id="f-tonic" class="field" aria-label="Key: tonic"></select><select id="f-mode" class="field" aria-label="Key: mode"></select></span>
+      <span class="fact"><label class="label" for="f-tempo">Tempo</label>
+        <input id="f-tempo" class="field num" type="number" min="40" max="240" step="1" inputmode="decimal"><span class="unit">BPM</span></span>
       <span class="fact"><span class="label">Time</span> <span class="value" id="f-time">–</span></span>
-      <span class="fact"><span class="label">Seed</span> <span class="value" id="f-seed">–</span></span>
+      <span class="fact"><label class="label" for="f-seed">Seed</label>
+        <input id="f-seed" class="field num seed" type="number" min="0" step="1" inputmode="numeric" title="The pads' phases and the noises: another seed, another take of the same notes"></span>
       <span class="fact"><span class="label">Bars</span> <span class="value" id="f-bars">–</span></span>
-      <span class="fact chords"><span class="label">Chords</span> <span class="value" id="f-roman"></span> <span class="value names" id="f-chords"></span></span>
+      <span class="fact problem" id="strip-problem" role="alert" hidden></span>
+    </div>
+    <div class="chords-row">
+      <span class="label" id="chords-label">Chords</span>
+      <div class="chords" id="chords" role="button" tabindex="0" aria-describedby="chords-hint" title="Click to edit the chords (Roman numerals of the key, or chord names)"></div>
+      <input class="field chords-input" id="chords-input" type="text" spellcheck="false" autocomplete="off" aria-label="Chord progression" hidden>
+      <span class="hint" id="chords-hint"></span>
     </div>
     <div class="transport">
       <button class="btn play" id="play" aria-label="Play" title="Play / pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pause" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
@@ -46,20 +55,26 @@
       <label class="narration" title="Play under the narration sample (Step 196)"><input type="checkbox" id="narration" disabled> under narration</label>
       <input type="range" class="seek" id="seek" min="0" max="1000" value="0" step="1" aria-label="Position">
       <span class="time" id="time">0:00 / 0:00</span>
+      <span class="render-badge" id="render-badge" hidden>rendering…</span>
     </div>
   </section>
 
   <section class="timeline-wrap" aria-label="Timeline">
     <div class="timeline" id="timeline">
+      <svg class="energy" id="energy" aria-hidden="true" preserveAspectRatio="none"></svg>
       <div class="playhead" id="playhead" aria-hidden="true"></div>
     </div>
+    <div class="section-bar" id="section-bar" aria-label="Section"></div>
   </section>
 
   <main class="work" id="work">
     <section class="panel tracks" aria-labelledby="tracks-title">
-      <h2 id="tracks-title">Tracks</h2>
+      <h2 id="tracks-title">Tracks <span class="dim" id="mute-note"></span></h2>
       <div class="track-list" id="tracks" role="list"></div>
-      <button class="btn add" disabled title="Add a track (Step 194)">+ track</button>
+      <div class="add-wrap">
+        <button class="btn add" id="add-track" aria-haspopup="listbox" aria-expanded="false" aria-controls="instrument-list">+ track</button>
+        <ul class="menu instruments" id="instrument-list" role="listbox" aria-label="Instrument of the new track" tabindex="-1" hidden></ul>
+      </div>
     </section>
     <section class="panel inspector" aria-labelledby="inspector-title">
       <h2 id="inspector-title">Inspector <span class="dim" id="inspector-track"></span></h2>

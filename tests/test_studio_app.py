@@ -89,7 +89,7 @@ def test_load_a_preset_starts_a_session_with_version_1(app: StudioApp) -> None:
     outline = score["outline"]
     assert [s["name"] for s in outline["sections"]] == ["intro", "build", "lift", "outro"]
     assert [s["first_bar"] for s in outline["sections"]] == [1, 5, 13, 21]
-    assert outline["progression"] == "i VI III VII"
+    assert outline["progression"]["text"] == "i VI III VII" and outline["progression"]["written"] == "text"
     tracks = {t["name"]: t for t in outline["tracks"]}
     assert tracks["kick"]["steps"] == "x... x... x... x..." and tracks["pad"]["steps"] == "chords"
     assert tracks["pad"]["settings"] == {"tone": 1800, "air": 0.3}

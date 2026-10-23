@@ -17867,3 +17867,85 @@ Known gaps
   voicings, so they show names only; Step 194). The top-level progression is shown even in a
   section with its own. Headless Chromium fetched the WAV before play although `preload="none"`
   (harmless). Renders are not pruned.
+
+## Step 194 — vidgen studio: song strip, timeline and track list
+
+What was built (DESIGN §94.12)
+- **Edits in place** (`studio_app/edits.py`): `set` / `delete` / `insert` / `rename` on the
+  score's text by path (`tracks.bass.volume`, `sections[2].bars`), found with `yaml.compose`
+  marks, so one value changes and comments and layout stay (a missing key is added by its
+  siblings; a quoted string keeps its quotes). Built here rather than in 195 because every
+  control of this step edits.
+- **Song edits** (`studio_app/song.py`): add a track (default pattern per instrument and time
+  signature, `volume: -6`), delete a track, add / remove / rename a section (references in
+  `only`, `rest` and per-section changes follow; a track that plays only in a removed section
+  goes with it, named in the label; a new section takes the chords before it when there is no
+  score progression, and is a rest for tracks with per-section steps only).
+- **Chords as Roman numerals with names for every template** (`song.roman_numeral`,
+  `analyse_progression`): the 14 Python beds' `{chord, notes}` voicings now show numerals too;
+  each section's own progression is in the outline and shown when the loop or playhead is in it.
+- **`POST /api/edit`** (`StudioApp.edit`): every committed edit is a version (`origin: edit`,
+  parent the version edited, a label); problems write nothing (`{ok: false, problems}`);
+  `dry_run` for live checks. `POST /api/render` takes `mute` (a listening mix: the other
+  tracks' stems at the whole mix's gain, `<key>.m<tag>.wav`). Renders carry `energy` (LUFS per
+  bar; `STUDIO_RENDER_VERSION` 2).
+- **The page** (new `strip.js`, `timeline.js`, `tracks.js`; `app.js`, `player.js`,
+  `yaml_view.js`, `index.html`, `studio.css` changed): key (tonic + mode), tempo and seed
+  edited in place; chord chips (numeral, name, the one playing lit), click to type, names live,
+  problems inline; transport loop select (whole or a section); timeline with section names (click
+  = loop it, again = whole), drag a right edge for bars (or arrow keys), energy curve, playhead,
+  a sweep while rendering; a section bar (rename, bars, own chords / the score's, loop, add
+  after, remove); track rows with a meter, M / S, a volume bar, pan knob, steps edited in place
+  with the problem under the row, delete; `[+ track]` instrument menu (two columns, by kind). The
+  YAML view flashes the lines an edit changed. Player keeps the piece's time across sources
+  (`offset`), so a re-render, a loop switch or a mute continue at the same moment.
+
+Decisions
+- Mute / solo are a listening aid only (the page's state sent with renders), never written to
+  the score; exports (197) render the score as written. Making it permanent = delete the track
+  or lower its volume.
+- Section loops play the section file cut from the render with `<audio loop>` (no Web Audio).
+- Meters are rough, computed from the score's steps (gain, accents, holds, volume) under the
+  playhead; Step 196 replaces them with stem RMS.
+- Removing a section removes tracks that play only there (labelled; the earlier version keeps
+  them) instead of refusing — refusing blocked every template with lift-only parts.
+
+Files touched
+- New: `src/vidgen/studio_app/edits.py`, `song.py`, `static/strip.js`, `static/timeline.js`,
+  `static/tracks.js`; `tests/test_studio_song.py` (15).
+- Changed: `studio_app/app.py` (edit, mute mixes, energy; `describe_score` moved to `song.py`),
+  `server.py` (`/api/edit`, `mute`), the static files above, `tests/test_studio_app.py` (the
+  progression is now `{text, written, chords}`), `tests/test_studio_ui.py` (+3 flows),
+  `DESIGN.md` (§94.12, §94.5 table, §94.2 / §94.7 module lists), `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. The page's HTTP API grows (`/api/edit`, `mute`, `energy`); still internal.
+
+Facts measured (two cores, no browser running)
+- `momentum`: whole render 3.1 s (synthesis 2.0 s), a mute mix 2.3 s more; `time_of_flight`:
+  9.2 s (synthesis 7.5 s), a mix 8.2 s. An edit (text → version → outline) 30 ms. With the
+  browser on the same cores, `time_of_flight` edits re-render in 5–7 s. Step 196's stem cache
+  is the fix.
+
+How to test (one at a time, capped)
+- `tests/test_studio_song.py`: 15 passed in 2.4 s (edits, numerals of all 17 templates read back,
+  outline facts, default tracks for every instrument in 4/4, 3/4, 6/8, section edits, versions,
+  energy and mixes, the route).
+- `tests/test_studio_app.py`: 20 passed; `tests/test_studio_ui.py -m ui`: 6 passed in 11.5 s
+  (strip tempo + chords with live names and an error; loop a section, drag an edge, rename;
+  mute mix, volume click, steps with a problem then fixed, add a bell from the menu, delete it).
+- Related: `test_studio` 51 passed; `test_packaging` + `test_docs` + `test_guide` 119 passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s194/shots/1-time-of-flight.png`, `2-loop-lift-playing.png`,
+  `3-tempo-100.png`, `4-pattern-problem.png`, `5-chords-editing.png`, `6-solo-playing.png`,
+  `7-instrument-menu.png`, `8-track-added.png`, `9-dragging-edge.png`, `10-after-drag.png`,
+  `11-light.png`, `12-narrow.png` (420 px, full page), `13-momentum.png`; made by
+  `<scratchpad>/s194/shots.py`.
+
+Known gaps
+- No undo / version list yet (197; every edit is on disk as a version). Mute mixes re-render all
+  stems (196). Meters are from the score, not the audio (196). A one-shot's tails are left out of
+  a mute mix. Time signature is shown, not edited (changing it would break every pattern).
+  Removing a section can leave a `duck: {to: <removed track>}` problem — reported, nothing
+  written. Volume bar spans −30..+6 dB (a louder or quieter value shows clamped until moved).

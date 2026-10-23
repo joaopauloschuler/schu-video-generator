@@ -197,7 +197,12 @@ class _Handler(BaseHTTPRequestHandler):
             result = app.validate(_req_str(body, "text"))
         elif path == "/api/render":
             version = body.get("version")
-            result = app.render(_int(version, "version") if version is not None else None, _opt_str(body, "section"))
+            result = app.render(_int(version, "version") if version is not None else None, _opt_str(body, "section"), _str_list(body, "mute"))
+        elif path == "/api/edit":
+            version, ops = body.get("version"), body.get("ops")
+            if not isinstance(ops, list):
+                raise _ApiError(HTTPStatus.BAD_REQUEST, "ops: expected a list of edits")
+            result = app.edit(_int(version, "version") if version is not None else None, ops, _opt_str(body, "label"), bool(body.get("dry_run", False)))
         else:
             raise _ApiError(HTTPStatus.NOT_FOUND, f"not found: {path}")
         self._send_json({"ok": True, "result": result})
@@ -279,6 +284,13 @@ def _opt_str(body: dict[str, Any], name: str) -> str | None:
     value = body.get(name)
     if value is not None and not isinstance(value, str):
         raise _ApiError(HTTPStatus.BAD_REQUEST, f"{name}: expected text")
+    return value
+
+
+def _str_list(body: dict[str, Any], name: str) -> list[str]:
+    value = body.get(name) or []
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise _ApiError(HTTPStatus.BAD_REQUEST, f"{name}: expected a list of names")
     return value
 
 

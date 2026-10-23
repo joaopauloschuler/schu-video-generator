@@ -1093,7 +1093,9 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 - [x] Tests: `tests/test_studio_app.py` (API logic and the HTTP server), `tests/test_studio_ui.py` (`ui`: headless Chromium through Playwright — the page loads, a preset loads, play streams audio); screenshots looked at
 
 ### Step 194 — Song strip, timeline and track list
-- [ ] Chords in Roman numerals with names, live; loop whole or a section; playhead; energy curve; drag a section edge to change its bars; click a section to loop it; mute / solo, volume, pan, pattern text editable in place, level meters; `[+ track]`
+- [x] Chords in Roman numerals with names, live (every template's chords analysed against the key; a section's own progression shown when the playhead or loop is in it); key, tempo, seed and the chords editable; loop whole or a section; playhead; energy curve; drag a section edge to change its bars; click a section to loop it; add / remove / rename sections; mute / solo (a listening mix, never the score), volume, pan, pattern text editable in place with its problem shown, level meters (rough, from the steps); `[+ track]` with an instrument picker and a default pattern; delete a track
+- [x] Every committed edit is a version (`POST /api/edit`, `studio_app/edits.py`: one value changed in place, comments kept; `studio_app/song.py`: the edits of tracks and sections); a bad edit writes nothing and keeps playing the last good render; re-render whole after an edit, at the same moment
+- [x] Tests: `tests/test_studio_song.py` (edits, numerals, song edits, versions, energy, mute mixes, the route), `tests/test_studio_ui.py` (`ui`: strip, timeline, track list flows); screenshots looked at
 
 ### Step 195 — Inspector and editing
 - [ ] Instrument picker; sliders from the patches metadata (ranges, units, hover help); octave and accent; effects as chips; per-section changes; a step grid synced both ways with the steps text; the YAML editable both ways (edits change values in place, comments kept); inline validation with the CLI's did-you-mean — a bad edit never stops playback

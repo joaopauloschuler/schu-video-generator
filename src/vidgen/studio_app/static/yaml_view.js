@@ -43,10 +43,35 @@ export function highlightLine(line) {
   return highlightCode(code) + comment;
 }
 
-// Show `text` in `pre`; `badLines` (1-based) are marked.
-export function showYaml(pre, text, badLines = new Set()) {
+// The lines (1-based) of `text` that `before` did not have: what an edit changed.
+export function changedLines(before, text) {
+  if (!before) return new Set();
+  const left = new Map();
+  for (const line of before.split("\n")) left.set(line, (left.get(line) || 0) + 1);
+  const out = new Set();
+  text.split("\n").forEach((line, i) => {
+    const n = left.get(line) || 0;
+    if (n) left.set(line, n - 1);
+    else if (line.trim()) out.add(i + 1);
+  });
+  return out;
+}
+
+// Show `text` in `pre`; `badLines` (1-based) are marked, `changed` lines flash and the first
+// one is scrolled into view (the line a control just changed).
+export function showYaml(pre, text, badLines = new Set(), changed = new Set()) {
   const lines = text.replace(/\n$/, "").split("\n");
   pre.innerHTML = lines
-    .map((line, i) => `<span class="ln${badLines.has(i + 1) ? " bad" : ""}">${highlightLine(line) || " "}</span>`)
+    .map((line, i) => {
+      const cls = `ln${badLines.has(i + 1) ? " bad" : ""}${changed.has(i + 1) ? " changed" : ""}`;
+      return `<span class="${cls}">${highlightLine(line) || " "}</span>`;
+    })
     .join("");
+  const first = pre.querySelector(".ln.changed");
+  const panel = pre.parentElement;
+  if (first && panel && panel.scrollHeight > panel.clientHeight) {
+    // scroll the panel only (never the page, never sideways) so the changed line is in view
+    const top = first.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop;
+    if (top < panel.scrollTop + 30 || top > panel.scrollTop + panel.clientHeight - 40) panel.scrollTop = Math.max(0, top - panel.clientHeight / 3);
+  }
 }

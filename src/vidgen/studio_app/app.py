@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import threading
 import time
 import wave
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -25,18 +26,25 @@ import yaml
 from vidgen import __version__
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_bytes_atomic, write_text_atomic
+from vidgen.studio_app import song
+from vidgen.studio_app.edits import apply_edits
 from vidgen.studio_app.session import StudioSession, studio_dir, write_open_marker
+from vidgen.studio_app.song import describe_score
 
 #: Bump when the studio's renders of the same score change (their cache key includes it).
-STUDIO_RENDER_VERSION = 1
+#: 2 (Step 194): a render's facts hold its loudness per bar (the timeline's energy curve).
+STUDIO_RENDER_VERSION = 2
+#: The lowest loudness the energy curve shows (a silent bar), LUFS.
+ENERGY_FLOOR = -70.0
 #: The preset loaded when the page opens without a session (the guide's first suggestion).
 DEFAULT_PRESET = "momentum"
 #: Longest one-line preset description (characters).
 ONE_LINE_CHARS = 110
 #: A render cache key (hex digits of a SHA-256).
 RENDER_KEY = re.compile(r"^[0-9a-f]{20}$")
-#: Audio file names the server may send: ``<key>.wav`` or ``<key>-<section>.wav``.
-AUDIO_NAME = re.compile(r"^([0-9a-f]{20})(?:-([a-z][a-z0-9_]*))?\.wav$")
+#: Audio file names the server may send: ``<key>.wav``, a listening mix with tracks muted
+#: ``<key>.m<tag>.wav``, and a section of either, ``<key>[.m<tag>]-<section>.wav``.
+AUDIO_NAME = re.compile(r"^([0-9a-f]{20})(?:\.m([0-9a-f]{10}))?(?:-([a-z][a-z0-9_]*))?\.wav$")
 
 
 def one_line(description: str) -> str:
@@ -124,34 +132,9 @@ def check_text(text: str) -> tuple[Any, Any, list[dict[str, Any]]]:
     return data, score, []
 
 
-def _steps_text(spec: Any) -> str:
-    steps = spec.get("steps") if isinstance(spec, Mapping) else None
-    if isinstance(steps, list):
-        return " ‖ ".join(str(s) for s in steps)
-    return "" if steps is None else str(steps)
-
-
-def describe_score(score: Any, data: Mapping[str, Any]) -> dict[str, Any]:
-    """The facts the page shows: :func:`vidgen.studio.score_outline` plus, per track, its steps
-    text, volume, pan and settings as written, each section's first bar, and the progression
-    as written (when it is one string)."""
-    from vidgen.studio import score_outline
-
-    outline = score_outline(score)
-    raw = data.get("tracks") or {}
-    for track in outline["tracks"]:
-        spec = raw.get(track["name"], {})
-        track["steps"] = "chords" if track["plays"] == "chords" else _steps_text(spec)
-        track["volume"] = spec.get("volume", 0) if isinstance(spec.get("volume", 0), (int, float)) else None
-        track["pan"] = spec.get("pan", 0)
-        track["settings"] = dict(spec.get("settings") or {})
-    first_bar = 1
-    for section in outline["sections"]:
-        section["first_bar"] = first_bar
-        first_bar += section["bars"]
-    outline["progression"] = data.get("progression") if isinstance(data.get("progression"), str) else None
-    outline["description"] = score.description
-    return outline
+def mute_tag(muted: Iterable[str]) -> str:
+    """The file-name tag of a listening mix without the ``muted`` tracks (10 hex digits)."""
+    return hashlib.sha256(",".join(sorted(set(muted))).encode("utf-8")).hexdigest()[:10]
 
 
 def render_key(data: Any) -> str:
@@ -167,6 +150,52 @@ def audition_gain_db() -> float:
     from vidgen.listen import MUSIC_GAIN_DB
 
     return MUSIC_GAIN_DB
+
+
+#: Edits that change more than one value (:mod:`vidgen.studio_app.song`), by op name.
+SONG_OPS = ("add_track", "delete_track", "add_section", "remove_section", "rename_section")
+
+
+def _op_label(op: Mapping[str, Any]) -> str:
+    from vidgen.studio_app.edits import flow
+
+    kind, path = op.get("op"), op.get("path")
+    if kind == "set":
+        text = flow(op.get("value"))
+        return f"{path} {text if len(text) <= 40 else text[:39] + '…'}"
+    return f"{kind} {path}"
+
+
+def _apply_ops(text: str, ops: Sequence[Mapping[str, Any]]) -> tuple[str, list[str]]:
+    """``text`` with ``ops`` applied in order, and a label for each: the song edits are turned
+    into value edits against the text as it is when their turn comes."""
+    labels = []
+    for op in ops:
+        kind = op.get("op") if isinstance(op, Mapping) else None
+        if kind not in SONG_OPS:
+            text = apply_edits(text, [op])
+            labels.append(_op_label(op))
+            continue
+        data, score, problems = check_text(text)
+        if score is None:
+            raise VidgenError(f"{kind}: the score has problems to fix first ({problems[0]['where']}: {problems[0]['message']})")
+        name = op.get("name")
+        if kind == "add_track":
+            values, label = song.add_track(data, score, str(op.get("instrument", "")), name)
+        elif kind == "delete_track":
+            values, label = song.delete_track(data, str(name))
+        elif kind == "add_section":
+            after, bars = op.get("after"), op.get("bars", 4)
+            if not isinstance(bars, int) or isinstance(bars, bool) or not 1 <= bars <= 64:
+                raise VidgenError("add section: bars is a whole number from 1 to 64")
+            values, label = song.add_section(data, after if isinstance(after, int) and not isinstance(after, bool) else None, name, bars)
+        elif kind == "remove_section":
+            values, label = song.remove_section(data, str(name))
+        else:
+            values, label = song.rename_section(data, str(name), op.get("to"))
+        text = apply_edits(text, values)
+        labels.append(label)
+    return text, labels
 
 
 def _slice_wav(source: Path, target: Path, first: int, count: int) -> None:
@@ -271,12 +300,42 @@ class StudioApp:
             raise VidgenError("no score is open: load a preset first")
         return self.session
 
+    # ----- edits ----------------------------------------------------------------------------
+
+    def edit(self, version: int | None, ops: Sequence[Mapping[str, Any]], label: str | None = None, dry_run: bool = False) -> dict[str, Any]:
+        """Apply the edits ``ops`` to version ``version`` of the open session (default: the
+        current one). A valid result becomes the next version (``origin: edit``, its parent the
+        version edited) and the session's current one: ``{ok: true, session, score}``. A result
+        with problems writes nothing: ``{ok: false, problems}`` (the page shows them by the
+        control; the last good version keeps playing). ``dry_run``: check only (``{ok,
+        problems, outline}``). Besides :mod:`vidgen.studio_app.edits`' ops: ``add_track``
+        (``instrument``, ``name``?), ``delete_track`` (``name``), ``add_section`` (``after``,
+        ``name``?, ``bars``?), ``remove_section`` (``name``), ``rename_section`` (``name``,
+        ``to``)."""
+        if not isinstance(ops, Sequence) or not ops:
+            raise VidgenError("edit: give a list of edits (ops)")
+        with self._lock:
+            session = self._session()
+            base = version if version is not None else session.current
+            assert base is not None
+            text = session.text(base)
+            new_text, labels = _apply_ops(text, ops)
+            data, score, problems = check_text(new_text)
+            if dry_run or score is None:
+                return {"ok": score is not None, "problems": problems, "outline": describe_score(score, data) if score is not None else None}
+            if new_text == text:
+                return {"ok": True, "unchanged": True, **self.state()}
+            session.add_version(new_text, "edit", (label or "; ".join(labels) or "an edit")[:120], base)
+            return {"ok": True, **self.state()}
+
     # ----- rendering ----------------------------------------------------------------------
 
-    def render(self, version: int | None = None, section: str | None = None) -> dict[str, Any]:
+    def render(self, version: int | None = None, section: str | None = None, mute: Sequence[str] = ()) -> dict[str, Any]:
         """Render a version of the open session (default: the current one), or one section of
         it, into the render cache (reused when the notes are unchanged). The section is cut from
-        the whole piece's render, so it sounds as in the piece (tails from before it)."""
+        the whole piece's render, so it sounds as in the piece (tails from before it).
+        ``mute``: tracks left out of what plays — a listening mix (§94.12), never the score;
+        names that are not tracks are ignored."""
         from vidgen.sfx import RATE
 
         session = self._session()
@@ -287,7 +346,11 @@ class StudioApp:
             raise VidgenError(f"version {number} has problems; fix them before playing it")
         key = render_key(data)
         meta = self._render_whole(session, key, score)
-        result = {"version": number, "key": key, **meta, "url": f"/audio/{key}.wav", "section": None}
+        muted = sorted(set(mute) & {t.name for t in score.tracks})
+        name = f"{key}.m{mute_tag(muted)}" if muted else key
+        if muted:
+            self._render_mix(session, name, score, muted, meta["samples"])
+        result = {"version": number, "key": key, **meta, "url": f"/audio/{name}.wav", "section": None, "muted": muted}
         if section is not None:
             found = next((s for s in score.sections if s.name == section), None)
             if found is None:
@@ -296,17 +359,47 @@ class StudioApp:
             first = score.section_start(found)
             last = found is score.sections[-1]
             count = (meta["samples"] - first) if last else found.bars * score.bar
-            target = session.renders / f"{key}-{section}.wav"
+            target = session.renders / f"{name}-{section}.wav"
             if not target.is_file():
-                _slice_wav(session.renders / f"{key}.wav", target, first, count)
+                _slice_wav(session.renders / f"{name}.wav", target, first, count)
             result.update(url=f"/audio/{target.name}", section={"name": section, "start": first / RATE, "seconds": count / RATE})
         return result
+
+    def _render_mix(self, session: StudioSession, name: str, score: Any, muted: Sequence[str], samples: int) -> None:
+        """The listening mix ``name`` without the ``muted`` tracks: the other tracks' stems summed,
+        through the master filter, at the whole piece's gain (muting a part does not make the
+        rest louder). Step 196 caches the stems; here each mix renders them again."""
+        from vidgen.music import _tone_filter
+        from vidgen.sfx import wav_bytes
+        from vidgen.studio.render import render_music_stems
+
+        path = session.renders / f"{name}.wav"
+        with self._render_lock:
+            if path.is_file():
+                return
+            kept: list[np.ndarray] = []
+
+            def keep(track: str, stem: np.ndarray) -> None:
+                if track not in muted:
+                    if kept:
+                        kept[0] = kept[0] + stem
+                    else:
+                        kept.append(np.array(stem, dtype=np.float64))
+
+            _, gain = render_music_stems(score, keep)
+            mix = kept[0] if kept else np.zeros((score.samples, 2))
+            mix = _tone_filter(mix, score.lowpass, score.highpass) * gain
+            if len(mix) < samples:  # a one-shot's tail after its last bar
+                mix = np.concatenate([mix, np.zeros((samples - len(mix), 2))])
+            level = 10 ** (audition_gain_db() / 20)
+            write_bytes_atomic(path, wav_bytes(np.clip(mix[:samples] * level, -1.0, 1.0)))
 
     def _render_whole(self, session: StudioSession, key: str, score: Any) -> dict[str, Any]:
         """The cached render ``key`` (rendered now if missing): its facts."""
         from vidgen import loudness
         from vidgen.sfx import RATE, wav_bytes
         from vidgen.studio import render_music_score
+        from vidgen.studio.measure import loudness_curve
 
         meta_path, wav_path = session.renders / f"{key}.json", session.renders / f"{key}.wav"
         with self._render_lock:
@@ -317,6 +410,7 @@ class StudioApp:
             audio = render_music_score(score, warnings)
             render_seconds = time.perf_counter() - began
             meter = loudness.measure(len(audio), lambda a, b: audio[a:b])
+            energy = [round(v, 1) if math.isfinite(v) and v > ENERGY_FLOOR else ENERGY_FLOOR for v in loudness_curve(audio[: score.samples], score.bar)]
             gain = 10 ** (audition_gain_db() / 20)
             write_bytes_atomic(wav_path, wav_bytes(np.clip(audio * gain, -1.0, 1.0)))
             meta = {
@@ -328,6 +422,7 @@ class StudioApp:
                 "audition_gain_db": audition_gain_db(),
                 "warnings": warnings,
                 "render_seconds": round(render_seconds, 2),
+                "energy": energy,
             }
             write_text_atomic(meta_path, json.dumps(meta, indent=2) + "\n")
             return {**meta, "cached": False}

@@ -13855,7 +13855,7 @@ built-in bed's template.
   requests), sessions on disk, the page: top bar with the preset picker, song strip, transport,
   timeline, track list, a read-only inspector, the score file highlighted; load a preset and play
   its render.
-- **194 Song strip, timeline, track list**: chords in Roman numerals with names, live; loop the
+- **194 Song strip, timeline, track list** (done, §94.12): chords in Roman numerals with names, live; loop the
   whole piece or a section; playhead; energy curve (from the render's loudness per bar); drag a
   section edge to change its bars; click a section to loop it; mute / solo, volume, pan, pattern
   text editable in place, level meters; `[+ track]`.
@@ -13892,7 +13892,7 @@ person asks (Step 197).
 - **Modules** (`src/vidgen/studio_app/`): `__init__.py` (`run_studio`: the command's loop),
   `app.py` (`StudioApp`: what each API call does, with no HTTP — tests call it directly),
   `server.py` (`StudioServer`, the HTTP layer only), `session.py` (sessions on disk), `static/`
-  (the page, package data). Later steps add modules beside them (`edits.py` 195, `stems.py` 196,
+  (the page, package data). Later steps add modules beside them (`edits.py` and `song.py` 194, `stems.py` 196,
   `exports.py` 197, `notes.py` / `agent.py` 198, `variations.py` 199) and keep `server.py` a thin
   router. Boundary: `studio_app` may import any of vidgen; `vidgen.studio` never imports
   `studio_app` (it stays a self-contained package, §93.2, checked by its allow-list test).
@@ -13979,9 +13979,10 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 | `GET /api/score?version=N` | 193 | a version: text, outline (`score_outline` + per track the steps text, volume, pan and settings as written; each section's first bar; the progression when it is one string), problems, render key |
 | `POST /api/load {preset} \| {text}` | 193 | a new session whose version 1 is the preset's template or the text (bad text refused with its problems) |
 | `POST /api/validate {text}` | 193 | `ok`, problems `{where, message, line}` (did-you-mean as the CLI; YAML syntax errors with their line), outline |
-| `POST /api/render {version?, section?}` | 193 | render a version (default current) or one section; `{key, url, seconds, samples, loop, loudness, true_peak, audition_gain_db, warnings, render_seconds, cached, section}` |
-| `GET /audio/<key>.wav`, `/audio/<key>-<section>.wav` | 193 | the render, with `Range` (206, `Content-Range`; 416 outside the file) |
-| `POST /api/edit {version, ops}` / `POST /api/text {version, text}` | 195 | a new version from value edits (paths like `tracks.bass.volume`) or from typed text |
+| `POST /api/render {version?, section?, mute?}` | 193, 194 | render a version (default current) or one section; `mute`: tracks left out (a listening mix, §94.12); `{key, url, seconds, samples, loop, loudness, true_peak, audition_gain_db, warnings, render_seconds, energy, cached, section, muted}` |
+| `GET /audio/<key>.wav`, `/audio/<key>[.m<tag>]-<section>.wav`, `/audio/<key>.m<tag>.wav` | 193, 194 | the render (or a listening mix), with `Range` (206, `Content-Range`; 416 outside the file) |
+| `POST /api/edit {version?, ops, label?, dry_run?}` | 194 | a new version from value edits (paths like `tracks.bass.volume`) and song edits (§94.12); `{ok: false, problems}` writes nothing; `dry_run` checks only |
+| `POST /api/text {version, text}` | 195 | a new version from typed text |
 | `POST /api/undo`, `/api/redo`, `/api/current {version}` | 197 | move the current version |
 | `POST /api/check {version}`; `GET /media/<key>-check.png` | 197 | `check.check_dict` of the version, its spectrogram |
 | `POST /api/export {version, format, name?}` | 197 | YAML / MP3 / WAV to a chosen path, or `assets/music/<name>.yaml` |
@@ -14029,7 +14030,8 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 
 - **Files** (`studio_app/static/`, package data): `index.html`, `studio.css`, ES modules `app.js`
   (the page), `api.js` (the JSON calls), `player.js` (playback), `yaml_view.js` (the highlighted
-  score file), `favicon.svg`. Vanilla JS, no build step, no CDN, no external fonts (Inter and
+  score file), `favicon.svg`; Step 194 adds `strip.js` (key, tempo, seed, chords), `timeline.js`
+  (sections, energy, loops, the section bar) and `tracks.js` (the track list). Vanilla JS, no build step, no CDN, no external fonts (Inter and
   JetBrains Mono come from vidgen's bundled fonts at `/fonts/...`), so it works offline.
 - **Look** (decision: vidgen's own): the `dark_tech` theme's colours (background `#0E1116`,
   surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
@@ -14099,3 +14101,74 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
   `vidgen.sfx.wav_bytes`; `studio_app` is in `render.fingerprint.NOT_RENDER_INPUTS` (it changes
   no scene's picture); package data `studio_app/static/*`; pytest marker `ui` (browser tests,
   skipped without Playwright).
+
+### 94.12 Step 194: song strip, timeline, track list
+
+- **Edits** (`studio_app/edits.py`, §94.4 made real one step early, since every control here
+  edits): `set` (replace a value, a quoted string keeping its quotes; a missing key, and its
+  missing parent mappings, added after its siblings — in a flow mapping before its `}`, in a block
+  one as a new line at its indentation; a block value replaced by a flow one after the key's
+  `:`), `delete` (a key or list item with the comment lines just above it; in a flow collection
+  with its comma), `insert` (a list item, block or flow), `rename` (a key). Nodes are found with
+  `yaml.compose` marks; a block collection's text ends at its last value (its end mark is after
+  the comments that follow). New strings are written plain only when they are a name or a key
+  (`fm_pluck`, `G minor`), else double-quoted, as the templates write steps and progressions.
+- **Song edits** (`studio_app/song.py`), turned into value edits against the text as it is when
+  their turn comes: `add_track` (name = the instrument, or `_2`...; a default pattern per
+  instrument for the time signature — kick on the beats, clap on 2 and 4, hats on the off-beat,
+  bass roots on 1 and 3, a sub and a piano held, plucks a broken chord `1 3 5 8` in eighths,
+  music box and bell sparse, a riser held and `only` in the last section, pads `play: chords`;
+  `volume: -6`), `delete_track` (not the last), `add_section` (4 bars after the one selected,
+  named `part`, `part_2`...; it takes the chords of the section before when the score has no
+  progression; a track whose steps are all written per section gets it in `rest`),
+  `remove_section` (not the last; its name leaves `only` / `rest` / per-section changes; a track
+  that plays only there is removed with it and the label says so), `rename_section` (everywhere
+  the name appears). A score that gives `bars:` instead of a section list allows only its bars.
+- **`POST /api/edit`** (`StudioApp.edit`): the edits applied to the version edited (default
+  current); a valid result is the next version (`origin: edit`, `parent` the version edited, a
+  label like `tempo 96` or `+ track bell (bell)`) and the current one; problems write nothing
+  (`{ok: false, problems}` shown by the control, the last good render keeps playing); `dry_run`
+  checks (the chords' names while typing, the steps' problem while typing); an unchanged text is
+  `{unchanged: true}`. The page sends edits one at a time, each on the version before.
+- **Chords** (decision: analysed in Python, `song.roman_numeral`): the root's degree in the key
+  (`b` / `#` outside the scale), lower case when minor (a third of 3 semitones and no 4, or a
+  name written `m...`), then the name's suffix and a slash bass as written (`Gm(add9)` →
+  `i(add9)`, `Dsus4(add9)` → `Vsus4(add9)`, `D/F#` → `V/F#`). Every chord of the 17 templates
+  reads back as the same notes (tested). The outline gives the score's progression and each
+  section's (`own_progression`, `{text, written, chords: [{symbol, numeral, name}]}`; `written`
+  `voicings` when items are `{chord, notes}`: typing replaces them with plain chords, the hint
+  says so). The strip shows the section looped, else the one under the playhead (its own
+  chords when it has them, tagged with its name), the chord playing lit; clicking edits the
+  text (the section's own progression or the score's) with the names shown while typing.
+- **Energy curve**: the render's loudness per bar (`measure.loudness_curve` of the −28 LUFS
+  audio, one pass; silent bars −70), in the render's facts (`STUDIO_RENDER_VERSION` 2); drawn
+  under the section names, the loudest bar at the top, 6–24 LU tall.
+- **Loops**: the whole piece (`<audio loop>` when the score loops) or one section — the section
+  file cut from the render (§94.6) with `<audio loop>`; the player keeps the piece's time
+  (`offset`), so switching between whole and section, and a re-render, continue at the same
+  moment; seeking outside a looped section plays the whole piece. Clicking a section's name
+  loops it and selects it in the section bar (name, bars, own chords or the score's, loop, add
+  after, remove); clicking it again plays the whole. Dragging a section's right edge (or the
+  arrow keys on it) changes its bars (1–64), shown live, written on release.
+- **Mute / solo** (decision: a listening aid, never the score; exports in Step 197 render the
+  score as written): the page's state, sent with each render as `mute` (the muted tracks and,
+  with any solo, every track not soloed). A **listening mix** `<key>.m<tag>.wav` (`tag` 10 hex
+  of the sorted names) sums the other tracks' stems (`render_music_stems`), through the master
+  filter, at the whole mix's gain — muting a part never makes the rest louder; a one-shot's
+  tails after its last bar are left out of a mix. Each mix renders every stem again (about 2×
+  a render); Step 196 caches stems. The tracks heading names what is left out, "the score keeps
+  it". To make it permanent the person deletes the track or lowers its volume.
+- **Track list**: volume bar (−30 to +6 dB, drag or arrows, 0.5 dB steps; a volume curve is
+  shown hatched and edited in the score file), pan knob (drag up / down, arrows, double-click
+  centre; steps of 0.05), steps text edited in place (a list of strings is shown and written
+  back joined by `|`, which reads the same; problems under the row while typing; Enter keeps
+  it, Escape or a bad text leaves it), delete (×, Delete key), `[+ track]` (instruments by kind
+  with their words). **Meters** are rough until Step 196: from the score (`levels` in the
+  outline: each step's gain with accents, 0 a rest, −1 a hold), the step under the playhead
+  decaying after its hit, times the volume; a pad is steady while it plays.
+- **Rendering state**: an edit shows its version at once (the changed YAML lines flash), then
+  renders the whole piece (or the section looped, or the mix) while the last render keeps
+  playing; a "rendering…" badge and a sweep on the timeline after 120 ms; `data-busy` on
+  `<body>` while an edit or render is under way (the browser tests wait on it).
+- Not yet: undo / redo and the version list (197) — every edit is already a version on disk;
+  meters from the audio and fast stems (196); the inspector's controls (195).
