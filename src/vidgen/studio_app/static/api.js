@@ -27,8 +27,8 @@ export const api = {
   load: (preset) => call("POST", "/api/load", { preset }),
   loadText: (text) => call("POST", "/api/load", { text }),
   validate: (text) => call("POST", "/api/validate", { text }),
-  render: (version, section, mute, narration = false) =>
-    call("POST", "/api/render", { version, section: section || null, mute: mute || [], narration: Boolean(narration) }),
+  render: (version, section, mute, narration = false, variation = null) =>
+    call("POST", "/api/render", { version, section: section || null, mute: mute || [], narration: Boolean(narration), variation: variation || null }),
   facts: (key) => call("GET", `/api/facts?key=${encodeURIComponent(key)}`),
   edit: (version, ops, label, dryRun = false) => call("POST", "/api/edit", { version, ops, label: label || null, dry_run: dryRun }),
   text: (version, text) => call("POST", "/api/text", { version, text }),
@@ -49,4 +49,7 @@ export const api = {
   pasteReply: (reply) => call("POST", "/api/proposal/paste", { reply }),
   sendToProvider: (model) => call("POST", "/api/proposal/send", { model }),
   decideProposal: (id, keep) => call("POST", "/api/proposal/decide", { id, keep }),
+  variations: (request) => call("POST", "/api/variations", request),
+  variationBatch: (batch) => call("GET", `/api/variations?batch=${encodeURIComponent(batch)}`),
+  keepVariation: (batch, letter) => call("POST", "/api/variations/keep", { batch, letter }),
 };

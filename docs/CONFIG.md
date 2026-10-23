@@ -3478,7 +3478,22 @@ than in a mix: −16 LUFS, the same for every version). Ctrl+C in the terminal s
      page or given by `VIDGEN_STUDIO_MODEL` (e.g. `VIDGEN_STUDIO_MODEL=vendor/model`), **Send**
      asks for confirmation, sends the hand-off and turns the reply into a proposal. Without the
      key the button is disabled and says how to set it.
-- Being built in Phase T (`tasklist.md`): variations come in the next step.
+- **Variations** (top bar): four siblings of the current version, each a different kind of
+  change — **harmony** (the written chords re-voiced, one chord replaced by a relative in the
+  same key or put in first inversion, another seed), **pattern** (the busiest figure turned by a
+  step, its degrees swapped or its accents regrouped, ghost notes on the hat), **mix** (darker or
+  brighter: the master low-pass, the pads' tone, the hat's level; the lead forward or back) and
+  **energy** (a sparser first section, a stronger lift, the drums building in, the pad
+  breathing). Each card says in words what changed ("darker mix: master low-pass 4500 → 3250,
+  pad tone 2600 → 1800, hat −2 dB"). They are rendered (only the tracks a variation changed;
+  the others' sound is reused) and checked in the background, the cards filling in as they are
+  ready. **▶ Play** plays one at the same moment as what was playing (again: back to the current
+  version), **Keep** makes it the next version (`variation: …`, its parent the version varied),
+  **More like this** makes four variations of that one, **Shuffle** four others of the same
+  version. The same version and shuffle always give the same four; tempo and key are never
+  changed. Variations not kept never become versions (they stay in the session's
+  `variations/<batch>/`). Through MCP, `studio_variations` gives an agent the same four as
+  whole scores.
 
 ### Loudness of the final mix (`audio`)
 
@@ -9831,8 +9846,9 @@ default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` gi
 for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`), and the studio's
 hand-offs (Step 198, "Music studio" above): `studio_sessions`, `studio_read` (`session`,
 `version`), `studio_check` (`session`, `score`, `compare`, `images`: `vidgen music check` of the
-score you mean to propose, in `build/mcp/studio/`) and `studio_propose` (`score`,
-`explanations` `{n1: ...}`, `summary`, `agent`, `session`, `base`) — these four work on files
+score you mean to propose, in `build/mcp/studio/`), `studio_variations` (`session`, `version`,
+`shuffle`: four variations as whole scores with labels, Step 199) and `studio_propose` (`score`,
+`explanations` `{n1: ...}`, `summary`, `agent`, `session`, `base`) — these five work on files
 in the studio's session folders, in the server's process. Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:

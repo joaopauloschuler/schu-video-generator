@@ -13,6 +13,7 @@ import { Player } from "./player.js";
 import { initStrip, showChords, showFacts, tickChords } from "./strip.js";
 import { initTimeline, setRendering, showEnergy, showLoop, showTimeline, tickTimeline } from "./timeline.js";
 import { initTracks, mutedTracks, showMuted, showTracks, tickMeters } from "./tracks.js";
+import { initVariations, showVariationsButton } from "./variations.js";
 import { initVersions, playingVersion, showAB, showVersions } from "./versions.js";
 import { initYamlEditor, showScoreText } from "./yaml_edit.js";
 import { escapeHtml } from "./yaml_view.js";
@@ -185,6 +186,7 @@ function show(doc, before = null) {
   showVersions();
   showExports();
   showCheckVersion();
+  showVariationsButton();
   setNotes(doc);
   $("yaml-name").textContent = state.session ? `· ${state.session.title} · v${state.score?.version ?? "–"}` : "";
   if (o && !o.tracks.some((t) => t.name === state.selected)) state.selected = o.tracks[0]?.name ?? null;
@@ -238,6 +240,7 @@ function commitWith(send) {
       }
       if (r.unchanged) return r;
       state.ab.on = false; // a new version: B (it) plays
+      state.variation = null;
       show(r, before);
       const version = r.session.versions.find((v) => v.number === r.score.version);
       status(`v${r.score.version} · ${version?.label || "edited"} · rendering…`, "busy");
@@ -283,7 +286,7 @@ async function refreshAudio() {
     while (state.wantAudio) {
       state.wantAudio = false;
       if (!state.score || state.score.problems.length) break;
-      const r = await api.render(playingVersion(), state.loop, mutedTracks(), state.narration);
+      const r = await api.render(playingVersion(), state.loop, mutedTracks(), state.narration, state.variation);
       if (state.wantAudio) continue;
       applyRender(r);
     }
@@ -320,7 +323,8 @@ function renderStatus(r) {
   const level = typeof r.loudness === "number"
     ? ` · ${r.loudness.toFixed(1)} LUFS in a video, ${r.narration ? "here as in a video under the voice" : `plays at ${(r.loudness + r.audition_gain_db).toFixed(0)} here`}`
     : "";
-  status(`v${r.version} ${howMade(r)} · ${clock(r.seconds)}${where}${muted}${voice}${level}`);
+  const what = r.variation ? `variation ${r.variation.split("/")[1]}` : `v${r.version}`;
+  status(`${what} ${howMade(r)} · ${clock(r.seconds)}${where}${muted}${voice}${level}`);
 }
 
 function applyRender(r) {
@@ -456,6 +460,7 @@ function resetListening() {
   state.solo.clear();
   state.ab.on = false;
   state.ab.version = null;
+  state.variation = null;
 }
 
 const ctx = {
@@ -481,6 +486,7 @@ async function start() {
   initCheck(ctx);
   initExports(ctx);
   initNotes(ctx);
+  initVariations(ctx);
   status("starting…", "busy");
   busy(1);
   try {

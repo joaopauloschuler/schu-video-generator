@@ -13873,7 +13873,7 @@ built-in bed's template.
   (§94.4); exports YAML / MP3 / WAV and save to a project's `assets/music/` with the Step 188
   name-clash rule (a bed's name is refused).
 - **198 Listening notes and "Ask an agent"** (done, §94.16; plan §94.8).
-- **199 Variations** (§94.9).
+- **199 Variations** (done, §94.17; plan §94.9).
 - **200 Docs and polish**: CONFIG, guide (agents may be handed studio sessions through MCP),
   README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout
   (inspector and check as tabs below the track list in narrow windows), the light theme,
@@ -13999,7 +13999,8 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 | `POST /api/notes {version?, seconds, text}`, `/api/notes/update {id, text?, status?, delete?}` | 198 | listening notes (§94.16) |
 | `POST /api/ask {version?}` | 198 | write the hand-off: `{request, prompt, provider, file}` |
 | `POST /api/proposal/paste {reply}`, `/api/proposal/send {model}`, `/api/proposal/decide {id, keep}` | 198 | a pasted reply or OpenRouter's as a proposal; keep / discard |
-| `POST /api/variations {version}`, `/api/variations/pick` | 199 | four siblings, rendered and checked; picking one makes it the next version |
+| `POST /api/variations {version? \| batch, letter; shuffle?}`, `GET /api/variations?batch=B` | 199 | four siblings of a version (or "more like" a candidate), rendered and checked in the background: the batch document (§94.17) |
+| `POST /api/variations/keep {batch, letter}`; `/api/render {variation: "b0001/c"}` | 199 | a candidate as the next version (`origin: variation`); a candidate played like a version |
 
 ### 94.6 Renders and playback
 
@@ -14045,7 +14046,7 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
   (sections, energy, loops, the section bar) and `tracks.js` (the track list); Step 195 `inspector.js`,
   `stepgrid.js` (the steps text read into cells) and `yaml_edit.js` (the score file typed); Step 197
   `versions.js` (versions, undo / redo, A/B), `check.js` (the check panel), `exports.js`; Step 198
-  `notes.js` (notes, the Notes tab, Ask an agent, proposals, polling). Vanilla JS, no build step, no CDN, no external fonts (Inter and
+  `notes.js` (notes, the Notes tab, Ask an agent, proposals, polling); Step 199 `variations.js`. Vanilla JS, no build step, no CDN, no external fonts (Inter and
   JetBrains Mono come from vidgen's bundled fonts at `/fonts/...`), so it works offline.
 - **Look** (decision: vidgen's own): the `dark_tech` theme's colours (background `#0E1116`,
   surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
@@ -14088,7 +14089,7 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
   reply (YAML + one line per note) goes through the same validation as an MCP proposal. Never
   called in development or tests (mocked).
 
-### 94.9 Variations (plan for Step 199)
+### 94.9 Variations (plan for Step 199; what was built: §94.17)
 
 One click makes four siblings of the current version by fixed, deterministic edits of its data
 (the same version always gives the same four, no random numbers): another `seed` (the pads'
@@ -14505,3 +14506,86 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
 - Public: no `vidgen.api` names; MCP tools `studio_sessions`, `studio_read`, `studio_check`,
   `studio_propose`; `checks.kept_check`; `StudioSession.add_version(current=)`, `revision`,
   `touch`.
+
+### 94.17 Step 199: variations
+
+- **Operators** (`studio_app/variations.py`): pure functions `op(piece, v)` of the parsed score
+  (`Piece`: text, data, checked score) giving a `Variation(kind, name, label, ops)` or `None`
+  when they change nothing for the piece; `ops` are `edits.py` value edits, so comments and
+  layout stay (a list of steps strings is edited item by item). `v` (0–2) picks a variant. No
+  random numbers: the same text gives the same variations. Four kinds:
+  - **harmony**: `revoice` (every written voicing `{chord, notes}`: the lowest note an octave up,
+    or the top one down; the spelling kept, a chord whose moved note would double another left
+    alone), `substitute` (one numeral of a progression written as text — not the first —
+    replaced by a relative sharing two tones: minor `VI↔iv`, `VII↔v`, `III→v`, `i→VI`; major
+    `IV↔ii`, `V↔iii`, `vi→IV`, `I→vi`; its suffix dropped), `invert` (a chord with a real third
+    in first inversion, `VI → VI/3`), `reseed` (another seed when a pad or a reverb uses it);
+  - **pattern** on the **figure** (the busiest pitched track with its own steps that is not a
+    pad or the bass — a bass instrument in octave 2 or lower, a `sub`, or named `bass` —
+    degrees or voicing notes ranked before note names, at least four notes a bar): `rotate`
+    (each bar's cells turned 1–3 steps; the accents then fall on other notes), `reaccent`
+    (`3+3+2`, `4+4+2+3+3`, `3+3+3+3+4`, `2+2+3+3+2+2+2`, `4`: the first that fills its bars and
+    differs), `swap_degrees` (3↔5, 5↔8, v2↔v3, 1↔8: the first that changes it), `hat_touch` (soft
+    ghost notes on a hat's free off-sixteenths, or its soft hits taken out);
+  - **mix**: `tone` (darker: master low-pass ×0.72, at most 6000; pads' `tone` ×0.7; the hat −2
+    dB — brighter: ×1.4 / ×1.4 / +1.5 dB; the other way when one has no room; frequencies
+    rounded to 10 / 50 Hz, kept in the settings' ranges), `balance` (the top voice +2.5 dB and
+    the pads −2 dB, or the other way; only tracks whose volume is one number);
+  - **energy**: `sparser_intro` (the beat drums — and with `v` 1 the bass — rest in the first
+    section, when it is at most half the piece and something pitched still plays; each track
+    only if the score stays valid), `stronger_lift` (the peak — a section named lift, drop,
+    release, chorus, peak, else the one where most tracks play, never the first — its drums
+    +2 dB there, hats only when nothing else; or the pads' tone ×1.5 there), `build_in` and
+    `breathe` (one-section pieces written with `bars:`: the drums fade in from 18 dB under over
+    the first half — a volume curve; the pads dip 5 dB to the middle and back).
+  **Tempo and key are never changed** (a tempo whose length has a large prime factor makes the
+  renderer's FFTs 5–12× slower, §94.14; a tempo change also re-renders every track).
+- **Choosing four** (`make_variations(text, shuffle, first)`): per kind, every valid candidate
+  (each operator's first variant, then their second ones...; applied, checked with `check_text`,
+  a render key different from the base's, no duplicate text), turned by `shuffle`; then one per
+  kind in the order harmony, pattern, mix, energy (`first`: that kind first — "more like this"
+  starts with the kind of the candidate it varies), then the kinds' next ones when a kind has
+  none. Measured: 0.1–1.7 s for a template (`check_text` of each candidate). All 17 templates get
+  four valid, different variations of at least three kinds (tested), e.g. `momentum`: chords
+  re-voiced (G2 → G3), ostinato turned by a step, darker mix (low-pass 4500 → 3250, pad tone
+  2600 → 1800, hat −2 dB), stronger turn (kick, clap +2 dB); `tidewater`: the lift's i → VI
+  (Em → C), the arp turned, darker, stronger lift. `calm` (one pad) gets re-voiced, darker, the pad
+  breathing and another seed.
+- **Batches** (`VariationBatches`, the session's `variations/b0001/`: `a.yaml`…`d.yaml` and
+  `batch.json` — root version, base (`{version}` or `{batch, letter}`), shuffle, the chain of
+  labels it descends from, state `running | done | stopped`, progress, per candidate
+  `{letter, kind, name, label, status waiting|rendering|rendered|checking|done|failed, key,
+  render, check, kept}`, timing). One worker thread: a new batch stops the one under way at its
+  next step. It renders the four first (so they play as soon as possible), each through
+  `_render_whole` into the session's render cache — the stems of unchanged tracks are reused,
+  a volume-only change scales a kept stem (§94.14) — without asking for the late facts (they
+  would push the playing render's aside), then checks each through a **second `Checker`**
+  (the current version's check and a batch's never supersede each other; both give way to
+  renders), kept in `checks/` like any check (`check_brief`: verdict, level, headline,
+  picture, counts).
+- **Keep** (`keep_variation`): the candidate's text as the next version, `origin: variation`,
+  parent the batch's root version (also for "more like this" chains), label `variation: <the
+  chain's labels>; <its label>`, current; the batch records `kept` (a second Keep goes to it).
+  **Decision: candidates not kept never become versions** (the version list stays the person's
+  history; the candidates stay on disk in `variations/`). A candidate plays through
+  `/api/render {variation}` like a version (sections, mutes, narration work), `version` `null`.
+- **The page** (`variations.js`): **Variations** in the top bar; a panel under the timeline:
+  "Variations of v1" (or "more like c of b0001", "after: <chain>", "shuffle N"), progress
+  ("rendering b (2/4)", then "done · rendered in 5.5 s, checked in 13.2 s"), **Shuffle**, ×; a
+  card per candidate coloured by kind (a class: the CSP allows no inline styles): letter, kind,
+  label, verdict and headline numbers, the spectrogram (58 px, cropped), what was rendered,
+  **▶ Play** / **■ back** (`state.variation`: the player swaps at the same moment, the A/B badge
+  says "▶ variation b · …", `data-ab="V"`), **Keep** (then "Go to vN"), **More like this**. Polls
+  `GET /api/variations` every 0.6 s while running; `data-variations` on `<body>`. A new version,
+  undo / redo, A/B or a new batch stops playing a candidate.
+- **MCP**: `studio_variations(session?, version?, shuffle?)` (`agent_variations`): the four as
+  whole scores with labels; nothing rendered or written — a starting point to change further
+  and `studio_propose`.
+- **Timings** (two cores, headless Chromium, `<scratchpad>/s199/shots.py`, `smoke.py`):
+  `momentum` from the click: the first card playable 3.5 s, all four 6.5–7 s, all checked
+  19–20 s (renders 4.4–5.5 s: re-voiced 1.7 s — every track, as any chord change —, ostinato
+  0.5 s, darker 1.5 s, stronger turn 0.6 s; checks 2.7–3.8 s each); "more like this" and
+  shuffle 20–21 s; `tidewater` renders 4.9 s, checks 20 s (4–6 s each). A candidate already
+  rendered plays at once (from the cache) and the playing position carries over.
+- Public: no `vidgen.api` names; MCP tool `studio_variations`; `StudioApp.render(variation=)`,
+  `make_variations`, `variation_batch`, `keep_variation`.

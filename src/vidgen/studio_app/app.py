@@ -272,11 +272,19 @@ class StudioApp:
         # the mixes of the last renders (−28 LUFS float32 and gain), which the check reuses
         self._mixes: OrderedDict[str, tuple[np.ndarray, float]] = OrderedDict()
         self.checker = Checker(self._render_idle, self._check_stems)
+        # variations (Step 199): their own check worker, so the current version's check and a
+        # batch's do not stop each other
+        from vidgen.studio_app.variations import VariationBatches
+
+        self.variation_checker = Checker(self._render_idle, self._check_stems)
+        self.variations = VariationBatches(self._render_candidate, self._check_candidate)
 
     def close(self) -> None:
-        """Stop the late-facts and check workers (a job under way finishes; queued ones are dropped)."""
+        """Stop the late-facts, check and variation workers (a job under way finishes; queued ones are dropped)."""
         self._facts_pool.shutdown(wait=False, cancel_futures=True)
         self.checker.close()
+        self.variations.close()
+        self.variation_checker.close()
 
     # ----- facts ---------------------------------------------------------------------------
 
@@ -653,25 +661,107 @@ class StudioApp:
         path = self.session.folder / "exports" / name
         return path if path.is_file() else None
 
+    # ----- variations (Step 199) -----------------------------------------------------------
+
+    def make_variations(self, version: int | None = None, batch: str | None = None, letter: str | None = None, shuffle: int = 0) -> dict[str, Any]:
+        """Four variations of ``version`` (default: the current one) — or, "more like this", of
+        candidate ``letter`` of ``batch`` — rendered and checked in the background
+        (:mod:`vidgen.studio_app.variations`): the batch's document, polled with
+        :meth:`variation_batch` until its ``state`` is ``done``. ``shuffle``: a counter giving
+        four others (the same counter, the same four)."""
+        with self._lock:
+            session = self._session()
+            if batch is not None:
+                if letter is None:
+                    raise VidgenError("variations: more like this needs the batch and the candidate's letter")
+                item = self.variations.item(session, batch, letter)
+                text = self.variations.text(session, batch, letter)
+                root, base, first, chain = item["root"], {"batch": batch, "letter": letter}, item["kind"], [*item["chain"], item["label"]]
+            else:
+                root = version if version is not None else session.current
+                assert root is not None
+                text = session.text(root)
+                base, first, chain = {"version": root}, None, []
+        return self.variations.start(session, text, root, base, shuffle, first, chain)
+
+    def variation_batch(self, batch: str) -> dict[str, Any]:
+        """A batch's document as the worker last wrote it (progress, renders, checks)."""
+        return self.variations.read(self._session(), batch)
+
+    def keep_variation(self, batch: str, letter: str) -> dict[str, Any]:
+        """Keep candidate ``letter`` of ``batch``: it becomes the next version (``origin:
+        variation``, its parent the version varied) and the current one."""
+        with self._lock:
+            session = self._session()
+            item = self.variations.item(session, batch, letter)
+            if item.get("kept") is not None:
+                session.set_current(int(item["kept"]))
+                return self.state()
+            text = self.variations.text(session, batch, letter)
+            _, score, problems = check_text(text)
+            if score is None:
+                raise VidgenError(f"variations: candidate {letter} has problems ({problems[0]['message']})")
+            label = "variation: " + "; ".join([*item["chain"], item["label"]])
+            version = session.add_version(text, "variation", label if len(label) <= 120 else label[:119] + "…", int(item["root"]))
+            self.variations.mark_kept(session, batch, letter, version.number)
+            return self.state()
+
+    def _render_candidate(self, session: StudioSession, text: str) -> dict[str, Any]:
+        """Render a variation's text into the session's render cache (the stems of the tracks it
+        did not change are reused): what its card shows."""
+        data, score, problems = check_text(text)
+        if score is None:
+            raise VidgenError(f"variations: a candidate has problems ({problems[0]['message']})")
+        key = render_key(data)
+        self._last_render = time.monotonic()
+        meta, timing = self._render_whole(session, key, data, score, late_facts=False)
+        self._last_render = time.monotonic()
+        return {"key": key, "url": f"/audio/{key}.wav", "seconds": meta["seconds"], "loop": meta["loop"], "cached": meta["cached"],
+                "render_seconds": meta["render_seconds"] if not meta["cached"] else 0.0, "tracks": sorted(timing.get("tracks", {})),
+                "scaled": sorted(timing.get("scaled", {}))}
+
+    def _check_candidate(self, session: StudioSession, text: str, wanted: Any) -> dict[str, Any] | None:
+        """Check a variation's text (kept as the session's checks are); ``None`` when the batch
+        is no longer wanted."""
+        from vidgen.studio_app.variations import check_brief
+
+        data, score, _ = check_text(text)
+        key = render_key(data)
+        folder = session.folder / "checks"
+        doc = self.checker.kept(folder, key)
+        if doc is None:
+            job = self.variation_checker.want(folder, key, data, score)
+            while doc is None and wanted():
+                doc = self.variation_checker.wait(job, 0.5)
+                if job.done() and doc is None:
+                    return None
+        return check_brief(doc) if doc is not None else None
+
     # ----- rendering ----------------------------------------------------------------------
 
-    def render(self, version: int | None = None, section: str | None = None, mute: Sequence[str] = (), narration: bool = False) -> dict[str, Any]:
+    def render(self, version: int | None = None, section: str | None = None, mute: Sequence[str] = (), narration: bool = False,
+               variation: tuple[str, str] | None = None) -> dict[str, Any]:
         """Render a version of the open session (default: the current one), or one section of
         it, into the render cache (reused when the notes are unchanged): mixed from the tracks'
         stems, only the tracks whose stems are not kept rendered (§94.14). The section is cut
         from the whole piece's render, so it sounds as in the piece (tails from before it).
         ``mute``: tracks left out of what plays — a listening mix (§94.12), never the score;
         names that are not tracks are ignored. ``narration``: under the narration sample.
-        ``timing`` says what took how long; ``facts_pending``: the loudness, true peak and
-        energy curve come later (:meth:`facts`)."""
+        ``variation``: ``(batch, letter)``, a variation's candidate instead of a version (Step
+        199; ``version`` is then ``null`` in the answer). ``timing`` says what took how long;
+        ``facts_pending``: the loudness, true peak and energy curve come later (:meth:`facts`)."""
         from vidgen.sfx import RATE
 
         began = time.perf_counter()
         self._last_render = time.monotonic()
         session = self._session()
-        number = version if version is not None else session.current
-        assert number is not None
-        data, score, problems = check_text(session.text(number))
+        if variation is not None:
+            number = None
+            data, score, problems = check_text(self.variations.text(session, *variation))
+        else:
+            number = version if version is not None else session.current
+            assert number is not None
+            data, score, problems = check_text(session.text(number))
         if score is None:
             raise VidgenError(f"version {number} has problems; fix them before playing it")
         key = render_key(data)
@@ -686,6 +776,7 @@ class StudioApp:
         self._last_render = time.monotonic()
         result = {
             "version": number,
+            "variation": f"{variation[0]}/{variation[1]}" if variation is not None else None,
             "key": key,
             **meta,
             "url": f"/audio/{name}.wav",
@@ -709,9 +800,11 @@ class StudioApp:
             result.update(url=f"/audio/{target.name}", section={"name": section, "start": first / RATE, "seconds": count / RATE})
         return result
 
-    def _render_whole(self, session: StudioSession, key: str, data: Any, score: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _render_whole(self, session: StudioSession, key: str, data: Any, score: Any, late_facts: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
         """The cached render ``key`` (mixed now from the stems if missing): its facts and what
-        took how long (``tracks``: the stems rendered now, seconds each)."""
+        took how long (``tracks``: the stems rendered now, seconds each). ``late_facts``: ask
+        for its loudness and energy curve now (not for a variation rendered in the background:
+        they would push the playing render's aside)."""
         from vidgen.sfx import RATE, wav_bytes
         from vidgen.studio.render import mix_track_stems
         from vidgen.studio_app.stems import METER_SECONDS
@@ -753,7 +846,8 @@ class StudioApp:
                 "mix": round(writing - mixing, 3),
                 "write": round(time.perf_counter() - writing, 3),
             }
-        self._want_facts(session.renders, key, audio)
+        if late_facts:
+            self._want_facts(session.renders, key, audio)
         return {**meta, "cached": False}, timing
 
     def _render_mix(self, session: StudioSession, name: str, data: Any, score: Any, muted: Sequence[str], meta: Mapping[str, Any]) -> float:

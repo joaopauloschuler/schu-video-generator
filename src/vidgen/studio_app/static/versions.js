@@ -52,9 +52,18 @@ export function showAB() {
     : `<b>B</b> v${current} current`;
   ind.title = state.ab.on ? `Playing A: ${versionName(a)}. Click A/B to go back to the current version.` : "Playing B: the current version";
   document.body.dataset.ab = state.ab.on ? "A" : "B";
+  if (state.variation) { // a variation's card is playing (Step 199)
+    ind.hidden = false;
+    ind.dataset.side = "V";
+    const words = `variation ${state.variationLabel || state.variation}`;
+    ind.innerHTML = `<b>▶</b> <span class="ab-text">${escapeHtml(words)}</span>`;
+    ind.title = `Playing ${words} (not a version yet). Its card's ■ back returns to v${current}.`;
+    document.body.dataset.ab = "V";
+  }
 }
 
 function toggleAB(on = !ctx.state.ab.on) {
+  ctx.state.variation = null;
   ctx.state.ab.on = on;
   showAB();
   ctx.onAB?.();
@@ -89,6 +98,7 @@ async function move(call, words) {
     const doc = await call();
     if (doc.score?.version === from) return;
     state.ab.on = false;
+    state.variation = null;
     ctx.show(doc, before);
     ctx.status(`${words} → v${doc.score.version} · ${currentLabel()}`, "busy");
     ctx.refreshAudio();
@@ -144,7 +154,7 @@ function renderMenu() {
     return `<li class="version${current ? " current" : ""}${onBranch.has(v.number) ? "" : " off-branch"}" data-version="${v.number}" role="none">
       <button class="v-main" data-act="current" role="menuitemradio" aria-checked="${current}" title="${current ? "The current version" : `Make v${v.number} the current version`}">
         <span class="v-num">v${v.number}</span>${label}
-        <span class="v-meta">${escapeHtml(clockOf(v.created))}${parentNote ? ` · ${escapeHtml(parentNote)}` : ""}${v.origin === "check" ? " · check" : ""}</span>
+        <span class="v-meta">${escapeHtml(clockOf(v.created))}${parentNote ? ` · ${escapeHtml(parentNote)}` : ""}${v.origin === "check" || v.origin === "variation" ? ` · ${v.origin}` : ""}</span>
       </button>
       <button class="v-act star${v.starred ? " on" : ""}" data-act="star" aria-pressed="${Boolean(v.starred)}" aria-label="Star v${v.number}" title="${v.starred ? "Unstar" : "Star (keep it in mind)"}">${v.starred ? "★" : "☆"}</button>
       <button class="v-act" data-act="rename" aria-label="Rename v${v.number}" title="Rename">✎</button>

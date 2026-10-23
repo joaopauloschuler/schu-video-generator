@@ -1124,7 +1124,8 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 - [x] Guide section on answering a studio hand-off; tests `tests/test_studio_agent.py` (11), `tests/test_mcp.py` (+1), `tests/test_studio_ui.py` (+2 `ui`); screenshots looked at
 
 ### Step 199 — Variations
-- [ ] One click: four deterministic siblings of the current piece (another seed, an altered ostinato, another voicing, a darker or brighter mix), each rendered and checked, side by side; picking one makes it the next version
+- [x] One click: four deterministic siblings of the current piece, one per kind (harmony: re-voiced / substituted / inverted chord / seed; pattern: the figure turned, re-accented, degrees swapped, hat ghost notes; mix: darker / brighter, lead forward / back; energy: sparser intro, stronger lift, drums building in, pad breathing), labelled in words, each rendered (kept stems reused) and checked in the background, side by side; Play at the same moment, Keep (the next version, parent the version varied), More like this, Shuffle (a counter); un-kept candidates never become versions
+- [x] MCP tool `studio_variations`; tests `tests/test_studio_variations.py` (22: operators, the 17 templates, batches, keep, routes, MCP side), `tests/test_studio_ui.py` (+1 `ui`), `tests/test_mcp.py` (tool list, a call); screenshots looked at
 
 ### Step 200 — Docs and polish
 - [ ] CONFIG, guide (agents may be handed studio sessions through MCP) + `AGENTS.md`, README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout (inspector and check as tabs when narrow), light theme, keyboard shortcuts, accessibility basics

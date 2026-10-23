@@ -177,7 +177,7 @@ commands are tools with the same JSON documents: `guide`, `plan`, `init`, `valid
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`,
 `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
 `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic`, and `studio_sessions`, `studio_read`,
-`studio_check`, `studio_propose` for music a person hands you from `vidgen studio` (options in snake_case: `per_beat`,
+`studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio` (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
@@ -1872,7 +1872,9 @@ the check worse) → `studio_propose` with the whole score, `explanations: {n1: 
 why", ...}` (one line per note, also when you changed nothing for it) and a short `summary`. The
 proposal is validated (a score with problems comes back with them: fix and propose again) and
 appears in the studio as a new version the person A/Bs and keeps or discards; it never replaces a
-version. Without MCP the person copies the same hand-off as a prompt: answer with
+version. `studio_variations` gives four variations of a version (another voicing, an altered
+figure, a darker or brighter mix, another arrangement) as whole scores with a label: a starting
+point when a note asks for "something different". Without MCP the person copies the same hand-off as a prompt: answer with
 `summary: ...`, the whole score in one ```yaml block, then one `n1: ...` line per note.
 
 Write original music: genre styles are fine, never a known tune. A piece named like a built-in bed

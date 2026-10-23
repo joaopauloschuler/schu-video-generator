@@ -206,7 +206,7 @@ TOOLS = {
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview",
     "music_template", "music_patches", "music_render", "music_check",
-    "studio_sessions", "studio_read", "studio_check", "studio_propose",
+    "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
 }
 
 
@@ -416,6 +416,8 @@ def test_server_studio_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         assert doc["command"] == "studio_read" and doc["base"] == 1 and doc["score"] == TINY_SCORE
         assert doc["notes"][0]["id"] == "n1" and doc["notes"][0]["text"] == "the kick is too plain" and "studio_propose" in doc["how_to_answer"]
         assert "no studio session" in error_text(await client.call_tool("studio_read", {"session": "20990101-000000-abcd"}))
+        doc = doc_of(await client.call_tool("studio_variations", {}))  # Step 199
+        assert doc["version"] == 1 and doc["variations"] and all(v["label"] and "tracks:" in v["score"] for v in doc["variations"])
         result = await client.call_tool("studio_check", {"score": louder, "images": 1})
         doc = doc_of(result)
         assert doc["action"] == "check" and doc["verdict"] and doc["base"] == 1 and [c.type for c in result.content] == ["text", "image"]

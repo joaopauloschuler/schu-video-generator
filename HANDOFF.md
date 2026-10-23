@@ -18269,3 +18269,77 @@ Known gaps
   (the point in the bar is kept as `frac`). The hand-off card is per page load (re-ask after a
   reload). Proposals' lines are not editable; a kept proposal's notes can be reopened by hand.
   Old renders / exports still not pruned.
+
+## Step 199 — vidgen studio: variations
+
+What was built (DESIGN §94.17)
+- **Variation operators** (`studio_app/variations.py`): pure, deterministic functions of the parsed
+  score giving `edits.py` value edits (comments and layout kept) and a label in words, in four
+  kinds — harmony (re-voice the written voicings, substitute one numeral by a relative in the
+  key, first inversion, another seed), pattern (the figure — busiest pitched non-bass track —
+  turned 1–3 steps, re-accented 3+3+2 ↔ 4+4+2+3+3..., degrees swapped, hat ghost notes / soft
+  hits out), mix (darker / brighter: master low-pass, pads' tone, hat level; lead forward /
+  back), energy (sparser first section, stronger lift, drums building in / pad breathing in
+  one-section pieces). Never tempo or key. `make_variations(text, shuffle, first)` picks one of
+  each kind that changes something (others' next ones when a kind has none); shuffle is a
+  counter turning each kind's candidate list.
+- **Batches** (`VariationBatches`, `variations/b0001/{a..d}.yaml, batch.json`): one worker renders
+  the four (kept stems reused; no late facts), then checks them on a second `Checker`; progress
+  in the document. **Keep** → next version (`origin: variation`, parent the version varied,
+  label `variation: …`); "more like this" varies a candidate (its kind first, the chain of labels
+  kept); un-kept candidates never become versions. `/api/render {variation: "b0001/c"}` plays a
+  candidate like a version.
+- **Page** (`static/variations.js`): Variations button; a panel of four cards (kind colour,
+  label, verdict + headline numbers, mini spectrogram, what was rendered), ▶ Play / ■ back at the
+  same moment (badge "▶ variation b · …"), Keep, More like this, Shuffle, progress and timings.
+- **MCP** `studio_variations` (`agent_variations`): the four as whole scores with labels, nothing
+  written.
+
+Files touched
+- New: `src/vidgen/studio_app/variations.py`, `static/variations.js`, `tests/test_studio_variations.py` (22).
+- Changed: `studio_app/app.py` (second checker, batches, `make_variations` / `variation_batch` /
+  `keep_variation`, `render(variation=)`, `_render_whole(late_facts=)`), `server.py` (routes),
+  `static/app.js`, `api.js`, `versions.js` (badge for a candidate, `variation` origin shown),
+  `index.html`, `studio.css`; `mcp_server.py` (tool, instructions); `tests/test_mcp.py` (tool list,
+  a call), `tests/test_studio_ui.py` (+1); guide + `AGENTS.md`, `README.md` (MCP tool list),
+  `docs/CONFIG.md`, `DESIGN.md` (§94.17, §94.1/.5/.7/.9), `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. MCP tool `studio_variations`; the page's API rows of §94.5 for Step 199.
+
+Decisions
+- Variations are value edits of the text (not a re-generated score), so they keep comments and
+  read as a small diff; tempo / key are never touched (slow FFT lengths, every track re-rendered).
+- Un-kept candidates are not versions (not even "discarded" ones): the version list stays the
+  person's history; the candidates remain on disk in the batch folder.
+- Keep's parent is the batch's root version, also for "more like this" chains (the label carries
+  the chain).
+- A second `Checker` for batches so the current version's check and a batch's never cancel each
+  other; renders all four before checking so all are playable after ~7 s.
+
+Timings (two cores; `<scratchpad>/s199/shots.py`, `smoke.py`)
+- momentum, from the click: first card playable 3.5 s, all four 6.5–7 s, all checked 19–20 s
+  (renders: re-voiced 1.7 s — every track —, ostinato 0.5 s, darker 1.5 s, stronger turn 0.6 s;
+  checks 2.7–3.8 s each). More like this / shuffle ~20 s. tidewater: renders 4.9 s, checks 20 s.
+  Making the four (operators + validation) 0.1–1.7 s per template.
+
+How to test (one at a time, capped)
+- `tests/test_studio_variations.py`: 22 passed in 25 s.
+- `tests/test_studio_ui.py -m ui`: 16 passed in 55 s (new: variations → play b → back → keep).
+- `tests/test_mcp.py` in full: 20 passed in 134 s (before the added call; the studio test with
+  it passed again alone).
+- `test_studio_app` + `test_studio_agent` + `test_studio_song` + `test_studio_inspector`: 55
+  passed; `test_studio_check` + `test_studio_stems` (not slow, `PYTHONPATH=<repo>`): 27 passed;
+  `test_guide` + `test_docs` + `test_packaging`: 119 passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s199/shots/1-variations-rendering.png`,
+  `2-variations-checked.png`, `3-playing-b.png`, `4-kept.png`, `5-more-like-c.png`,
+  `6-shuffle.png`, `7-light.png`, `8-narrow.png` (420 px, full page).
+
+Known gaps
+- The mini spectrogram is the check picture cropped (58 px), a look rather than a reading.
+- A batch is shown only while the page is open (a reload does not bring the panel back; the
+  batch stays on disk). "Discarded" candidates are not listed anywhere in the page.
+- Substitutions / inversions apply only to progressions written in numerals; written voicings
+  get re-voiced instead. Pieces with no figure, pads or sections get fewer kinds (still four).

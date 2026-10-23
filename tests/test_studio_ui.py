@@ -586,3 +586,35 @@ def test_ask_an_agent_proposal_ab_and_keep(page: Any, tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(5)
+
+
+VARI = TINY.replace('progression: "i VI"', 'progression: "i VI III VII"').replace(
+    "{name: a, bars: 1}, {name: b, bars: 1}", "{name: a, bars: 1}, {name: b, bars: 2}") + '  arp: {instrument: pluck, steps: "1358 5315 1358 5318", accent: "3+3+2"}\n'
+
+
+def test_variations_play_one_and_keep_it(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    """Step 199: Variations → four cards rendered and checked → play one at the same moment (A/B
+    against the current version) → back → keep it as the next version."""
+    app, server = studio
+    app.load(text=VARI)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    page.click("#variations-btn")
+    page.wait_for_function("document.body.dataset.variations === 'done'", timeout=120_000)
+    cards = page.locator("#variations-cards .v-card")
+    assert cards.count() == 4 and page.locator("#variations-cards .v-verdict").count() == 4
+    assert [cards.nth(k).get_attribute("class").split()[1] for k in range(4)] == ["kind-harmony", "kind-pattern", "kind-mix", "kind-energy"]
+    page.click("#play")
+    page.click("#variations-cards .v-card[data-letter='b'] .v-play")
+    page.wait_for_function("document.body.dataset.ab === 'V' && !document.body.dataset.busy", timeout=30_000)
+    assert page.text_content("#status").startswith("variation b ") and "variation b" in page.text_content("#ab-state")
+    page.click("#variations-cards .v-card[data-letter='b'] .v-play")  # back to the current version
+    page.wait_for_function("document.body.dataset.ab !== 'V' && !document.body.dataset.busy", timeout=30_000)
+    assert page.text_content("#status").startswith("v1 ")
+    page.click("#variations-cards .v-card[data-letter='b'] .v-keep")
+    wait_idle(page, 2)
+    assert app.session is not None and app.session.versions[-1].origin == "variation" and app.session.current == 2
+    page.wait_for_selector("#variations-cards .v-card[data-letter='b'].kept")
+    assert "arp" in page.input_value("#yaml-input")
+    page.click("#play")
+    assert page.errors == []

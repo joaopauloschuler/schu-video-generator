@@ -73,7 +73,7 @@ poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon
 `music_template` / `music_patches` / `music_render` / `music_check` write and check original music as score files \
 (assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe). A person shaping music in \
 `vidgen studio` may hand you a session with listening notes: `studio_sessions` -> `studio_read` -> `studio_check` -> \
-`studio_propose` (one line per note). Every \
+`studio_propose` (one line per note; `studio_variations` gives four variations to start from). Every \
 tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
 
 Progress = Callable[[str], Awaitable[None]]
@@ -880,6 +880,20 @@ def build_server(root: Path) -> Any:
         doc = await call(ctx, args_of(["music"], ["check", str(target)], options), heavy=True)
         picture = (doc.get("files") or {}).get("spectrogram")
         return answer({**doc, "session": read["session"], "base": read["base"]}, [Path(picture)] if picture and images else [])
+
+    @tool("Four variations of a studio session's version (the studio's Variations button: another voicing or chord, an "
+          "altered figure, a darker or brighter mix, another arrangement), each a whole score with a one-line label. Pure "
+          "edits of the score (nothing rendered or written); shuffle=N gives four others. Start from one, change it "
+          "further if the notes ask, then studio_propose it.", read_only)
+    async def studio_variations(
+        ctx: Context,
+        session: Session = None,
+        version: Annotated[int | None, Field(ge=1, description="the version to vary (default: the current one)")] = None,
+        shuffle: Annotated[int, Field(ge=0, le=999, description="a counter: the same one always gives the same four")] = 0,
+    ) -> Any:
+        from vidgen.studio_app.variations import agent_variations
+
+        return await studio("studio_variations", lambda: agent_variations(policy.root, session, version, shuffle))
 
     @tool("Propose a new version of a studio session's score, answering the person's notes: the WHOLE score text and "
           "one line per note id on what you changed and why. It is validated (a score with problems is refused with "

@@ -203,6 +203,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send_json({"ok": True, "result": app.score(_int(query.get("version", [""])[0], "version"))})
         if path == "/api/facts":
             return self._send_json({"ok": True, "result": app.facts(query.get("key", [""])[0])})
+        if path == "/api/variations":
+            return self._send_json({"ok": True, "result": app.variation_batch(query.get("batch", [""])[0])})
         raise _ApiError(HTTPStatus.NOT_FOUND, f"not found: {path}")
 
     def _post(self, path: str, query: dict[str, list[str]]) -> None:
@@ -214,7 +216,14 @@ class _Handler(BaseHTTPRequestHandler):
             result = app.validate(_req_str(body, "text"))
         elif path == "/api/render":
             version = body.get("version")
-            result = app.render(_int(version, "version") if version is not None else None, _opt_str(body, "section"), _str_list(body, "mute"), bool(body.get("narration", False)))
+            variation = _opt_str(body, "variation")
+            result = app.render(_int(version, "version") if version is not None else None, _opt_str(body, "section"), _str_list(body, "mute"),
+                                bool(body.get("narration", False)), _variation_id(variation) if variation else None)
+        elif path == "/api/variations":
+            shuffle = _opt_int(body, "shuffle") or 0
+            result = app.make_variations(_opt_int(body, "version"), _opt_str(body, "batch"), _opt_str(body, "letter"), shuffle)
+        elif path == "/api/variations/keep":
+            result = app.keep_variation(_req_str(body, "batch"), _req_str(body, "letter"))
         elif path == "/api/edit":
             version, ops = body.get("version"), body.get("ops")
             if not isinstance(ops, list):
@@ -364,6 +373,14 @@ def _str_list(body: dict[str, Any], name: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
         raise _ApiError(HTTPStatus.BAD_REQUEST, f"{name}: expected a list of names")
     return value
+
+
+def _variation_id(value: str) -> tuple[str, str]:
+    """``b0003/c`` → ``("b0003", "c")`` (checked again by the app before any path is built)."""
+    batch, sep, letter = value.partition("/")
+    if not sep:
+        raise _ApiError(HTTPStatus.BAD_REQUEST, f"variation: expected <batch>/<letter> like b0001/a, got {value!r}")
+    return batch, letter
 
 
 def _req_str(body: dict[str, Any], name: str) -> str:
