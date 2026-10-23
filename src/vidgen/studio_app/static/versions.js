@@ -5,6 +5,7 @@
 // picked) at the same moment, level-matched; the indicator says which one is playing.
 
 import { api } from "./api.js";
+import { batchLine } from "./variations.js";
 import { escapeHtml } from "./yaml_view.js";
 
 const $ = (id) => document.getElementById(id);
@@ -130,7 +131,7 @@ function lineage(versions, current) {
   return out;
 }
 
-const menuState = { renaming: null, sessions: null, drawing: false };
+const menuState = { renaming: null, sessions: null, batches: null, disk: null, drawing: false };
 
 function renderMenu() {
   const { state } = ctx;
@@ -169,7 +170,7 @@ function renderMenu() {
         <button class="v-main" data-act="open" data-session="${escapeHtml(x.id)}" role="menuitem" title="Open this session (its current version)">
           <span class="v-label">${escapeHtml(x.title || x.preset || x.id)}</span>
           <span class="v-meta">${escapeHtml((x.created || "").replace("T", " ").slice(0, 16))} · ${x.versions} version${x.versions === 1 ? "" : "s"}</span>
-        </button></li>`).join("") : "");
+        </button></li>`).join("") : "") + extrasHtml();
   menuState.drawing = false;
   const input = $("rename-input");
   if (input && typed) {
@@ -205,11 +206,47 @@ async function openMenu() {
   $("versions").setAttribute("aria-expanded", "true");
   renderMenu();
   try {
-    menuState.sessions = await api.sessions();
+    [menuState.sessions, menuState.batches, menuState.disk] = await Promise.all([api.sessions(), api.variationBatches(), api.disk()]);
     if (!$("version-list").hidden) renderMenu();
   } catch {
-    // the list of earlier sessions is a nicety
+    // the lists of earlier sessions and batches are a nicety
   }
+}
+
+function megabytes(bytes) {
+  return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`;
+}
+
+// Old renders and exports out (never a version, note or check): the server's rule (§94.18).
+async function cleanUp() {
+  ctx.status("cleaning up old renders and exports…", "busy");
+  try {
+    const r = await api.cleanUp();
+    menuState.disk = r.disk;
+    const busy = r.removed.busy ? ` (${r.removed.busy} in use, left for later)` : "";
+    ctx.status(`removed ${r.removed.files} old render and export files, ${megabytes(r.removed.bytes)}${busy}; versions, notes and checks are kept`);
+    if (!$("version-list").hidden) renderMenu();
+  } catch (err) {
+    ctx.status(err.message, "error");
+  }
+}
+
+function extrasHtml() {
+  const batches = (menuState.batches || []).slice(0, 6);
+  const disk = menuState.disk;
+  let html = "";
+  if (batches.length) {
+    html += `<li class="menu-head" role="none">Variations <span class="dim">· candidates not kept stay playable</span></li>` + batches.map((b) => {
+      const line = batchLine(b);
+      return `<li class="session-row" role="none"><button class="v-main" data-act="batch" data-batch="${escapeHtml(b.id)}" role="menuitem" title="Show this batch's four candidates">
+        <span class="v-label">${escapeHtml(b.id)} · ${escapeHtml(line.what)}</span><span class="v-meta">${escapeHtml(line.more)}</span></button></li>`;
+    }).join("");
+  }
+  if (disk) {
+    html += `<li class="menu-head disk-row" role="none"><span>Disk <span class="dim">· renders ${megabytes(disk.session_renders)} here, ${megabytes(disk.studio_renders)} in all sessions · exports ${megabytes(disk.studio_exports)}</span></span>
+      <button class="btn small" data-act="cleanup" role="menuitem" title="Remove renders of old versions (kept: current, first, starred, the last 8, the newest variations) and exports older than an hour. Versions, notes and checks are never removed; a render is made again when needed.">Clean up</button></li>`;
+  }
+  return html;
 }
 
 function closeMenu() {
@@ -259,6 +296,11 @@ async function onMenuClick(e) {
   } else if (act === "open") {
     closeMenu();
     await ctx.openSession(button.dataset.session);
+  } else if (act === "batch") {
+    closeMenu();
+    await ctx.openBatch(button.dataset.batch);
+  } else if (act === "cleanup") {
+    await cleanUp();
   }
 }
 

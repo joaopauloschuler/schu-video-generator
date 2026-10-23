@@ -618,3 +618,104 @@ def test_variations_play_one_and_keep_it(studio: tuple[StudioApp, StudioServer],
     assert "arp" in page.input_value("#yaml-input")
     page.click("#play")
     assert page.errors == []
+
+
+# ----- Step 200: shortcuts, first-run hint, layout, the server gone ------------------------------
+
+
+def playing(page: Any) -> bool:
+    return page.get_attribute("#play", "aria-pressed") == "true"
+
+
+def test_keyboard_shortcuts_and_the_first_run_hint(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    """Space plays / pauses outside text fields; ? opens the list; L loops the section playing;
+    M / S mute / solo the selected track; V makes variations, shown again after a reload; the
+    first-run hint goes for good once dismissed."""
+    app, server = studio
+    app.load(text=VARI)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    assert page.is_visible("#hint")
+    page.click("#hint-close")
+    page.click("#tracks .track[data-name='bass'] .name")  # selects bass (focus: not visible)
+    page.keyboard.press("Space")
+    page.wait_for_function("document.getElementById('play').getAttribute('aria-pressed') === 'true'", timeout=15_000)
+    page.keyboard.press("Space")
+    page.wait_for_function("document.getElementById('play').getAttribute('aria-pressed') === 'false'")
+    page.focus("#f-tempo")  # typing: Space and letters are text
+    page.keyboard.press("Space")
+    page.keyboard.press("m")
+    assert not playing(page) and page.get_attribute("#tracks .track[data-name='bass'] .mute", "aria-pressed") == "false"
+    page.keyboard.press("Escape")
+    page.evaluate("document.activeElement.blur()")
+    page.keyboard.press("?")
+    assert page.is_visible("#shortcuts") and page.get_attribute("#help-btn", "aria-expanded") == "true"
+    page.keyboard.press("Escape")
+    assert page.is_hidden("#shortcuts")
+    page.keyboard.press("l")
+    wait_idle(page)
+    assert page.input_value("#loop") == "a"
+    page.keyboard.press("l")
+    wait_idle(page)
+    assert page.input_value("#loop") == ""
+    page.keyboard.press("m")
+    wait_idle(page)
+    assert page.get_attribute("#tracks .track[data-name='bass'] .mute", "aria-pressed") == "true"
+    assert "listening without bass" in page.text_content("#mute-note")
+    page.keyboard.press("m")
+    page.keyboard.press("s")
+    wait_idle(page)
+    assert page.get_attribute("#tracks .track[data-name='bass'] .solo", "aria-pressed") == "true"
+    assert "kick" in page.text_content("#mute-note")
+    page.keyboard.press("s")
+    wait_idle(page)
+    page.keyboard.press("v")
+    page.wait_for_function("document.body.dataset.variations === 'done'", timeout=120_000)
+    page.reload()
+    wait_idle(page, 1)
+    page.wait_for_selector("#variations-panel:not([hidden]) .v-card[data-letter='d']", timeout=30_000)
+    assert page.is_hidden("#hint")  # dismissed once: not again
+    assert page.errors == []
+
+
+def test_layout_at_window_widths_and_both_themes(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    """No sideways scrolling from 420 to 1920 px; below 1320 px the inspector, score file and
+    notes are tabs; the theme switch flips every colour token."""
+    app, server = studio
+    app.load(text=TINY)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    for width in (1920, 1440, 1280, 1024, 420):
+        page.set_viewport_size({"width": width, "height": 900})
+        page.wait_for_timeout(100)
+        overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+        assert overflow <= 0, f"{width} px: {overflow} px sideways"
+        tabs = page.is_visible("#pane-tabs")
+        assert tabs == (width <= 1320), width
+        if tabs:
+            page.click("#pane-yaml")
+            assert page.is_visible("#yaml-input") and page.is_hidden("#inspector")
+            page.click("#pane-inspector")
+            assert page.is_visible("#inspector") and page.is_hidden("#yaml-input")
+    dark = page.evaluate("getComputedStyle(document.body).backgroundColor")
+    page.click("#theme")
+    assert page.evaluate("document.documentElement.dataset.theme") == "light"
+    assert page.evaluate("getComputedStyle(document.body).backgroundColor") != dark
+    page.click("#theme")
+    assert page.errors == []
+
+
+def test_server_not_answering_shows_how_to_restart(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    """Every API call failing (the server stopped) → a banner saying how to start it again; when
+    it answers again the banner goes by itself (Retry polls at once)."""
+    app, server = studio
+    app.load(text=TINY)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    page.route("**/api/**", lambda route: route.abort())
+    page.wait_for_selector("#offline:not([hidden])", timeout=15_000)
+    assert "vidgen studio" in page.text_content("#offline")
+    page.unroute("**/api/**")
+    page.click("#offline-retry")
+    page.wait_for_selector("#offline", state="hidden", timeout=15_000)
+    assert page.errors == []

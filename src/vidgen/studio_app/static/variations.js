@@ -11,9 +11,11 @@ const $ = (id) => document.getElementById(id);
 const MARK = { ok: "✓", note: "•", fix: "!" };
 const KINDS = ["harmony", "pattern", "mix", "energy"];
 const POLL_MS = 600;
+const POLL_HIDDEN_MS = 5000;
 
 let ctx = null;
 let batch = null;      // the batch shown (the server's document)
+let batchSession = null; // the session it belongs to
 let polling = 0;
 
 function setBusy(on) {
@@ -66,7 +68,8 @@ function cardHtml(item) {
   const picture = check
     ? `<img class="v-spectro" src="${escapeHtml(check.image.url)}" alt="Spectrogram of variation ${item.letter}">`
     : `<div class="v-spectro pending" aria-hidden="true"></div>`;
-  const ready = Boolean(render) && item.status !== "failed";
+  // a stopped batch's candidate not rendered yet plays all the same (rendered when asked for)
+  const ready = item.status !== "failed" && (Boolean(render) || batch.state !== "running");
   const kept = item.kept != null;
   // the kind's colour comes from a class (the page's CSP allows no inline styles)
   const kind = KINDS.includes(item.kind) ? item.kind : "pattern";
@@ -84,6 +87,12 @@ function cardHtml(item) {
       <button class="btn small v-more" data-act="more" title="Four new variations of this one">More like this</button>
     </div>
   </article>`;
+}
+
+const STORE = "vidgen-studio-variations"; // the batch shown, so a reload shows it again
+
+function remember() {
+  ctx.storage(STORE, batch ? JSON.stringify({ session: batchSession, batch: batch.id }) : "");
 }
 
 function draw() {
@@ -112,7 +121,8 @@ async function poll(id) {
     const finished = batch.state === "running" && doc.state !== "running";
     batch = doc;
     draw();
-    if (doc.state === "running") polling = setTimeout(() => poll(id), POLL_MS);
+    // a hidden tab asks less often (the batch goes on on the server either way)
+    if (doc.state === "running") polling = setTimeout(() => poll(id), document.hidden ? POLL_HIDDEN_MS : POLL_MS);
     else if (finished) {
       const t = doc.timing || {};
       ctx.status(`variations ${baseWords(doc)}: ${doc.items.length} rendered in ${t.render ?? "–"} s and checked in ${t.check ?? "–"} s`);
@@ -133,6 +143,8 @@ async function start(request, words) {
   try {
     stopAudition(true);
     batch = await api.variations(request);
+    batchSession = ctx.state.session?.id ?? null;
+    remember();
     draw();
     ctx.status(`${words}: ${batch.items.length} made, rendering and checking them`, "busy");
     poll(batch.id);
@@ -187,15 +199,98 @@ function onCardClick(e) {
   else if (button.dataset.act === "more") start({ batch: batch.id, letter }, `four more like ${letter}`);
 }
 
-// A version is shown (an edit, undo, a kept candidate...): the button and the cards' Play state.
+// A version is shown (an edit, undo, a kept candidate...): the button and the cards' Play state;
+// another session's batch is put away.
 export function showVariationsButton() {
   $("variations-btn").disabled = !ctx.state.session || Boolean(document.body.dataset.draft);
-  if (batch) draw();
+  if (batch && batchSession !== (ctx.state.session?.id ?? null)) {
+    clearTimeout(polling);
+    batch = null;
+    setBusy(false);
+  }
+  draw();
+}
+
+// Show batch `id` of the open session (an earlier one from the list, or the one shown before a
+// reload); a batch still running is followed.
+export async function openBatch(id) {
+  try {
+    const doc = await api.variationBatch(id);
+    clearTimeout(polling);
+    batch = doc;
+    batchSession = ctx.state.session?.id ?? null;
+    remember();
+    draw();
+    if (doc.state === "running") poll(id);
+  } catch (err) {
+    ctx.status(err.message, "error");
+  }
+}
+
+// After the page (re)loads: the batch that was open in this session, if any.
+export function restoreVariations() {
+  let saved = null;
+  try {
+    saved = JSON.parse(ctx.storage(STORE) || "null");
+  } catch {
+    saved = null;
+  }
+  if (saved?.batch && saved.session === ctx.state.session?.id) openBatch(saved.batch);
+}
+
+// One line per batch: what it varied, its candidates, which was kept.
+export function batchLine(b) {
+  const what = b.base?.batch ? `more like ${b.base.letter} of ${b.base.batch}` : `of v${b.root}`;
+  const kept = b.items.filter((i) => i.kept != null).map((i) => `${i.letter} → v${i.kept}`);
+  const kinds = b.items.map((i) => i.kind).join(", ");
+  return { what: `${what}${b.shuffle ? ` · shuffle ${b.shuffle}` : ""}`, more: `${kinds}${kept.length ? ` · kept ${kept.join(", ")}` : " · none kept"}` };
+}
+
+async function toggleBatches() {
+  const list = $("variations-list");
+  if (!list.hidden) return closeBatches();
+  list.hidden = false;
+  $("variations-earlier").setAttribute("aria-expanded", "true");
+  list.innerHTML = '<li class="menu-head" role="none">loading…</li>';
+  try {
+    const all = await api.variationBatches();
+    list.innerHTML = all.length ? all.map((b) => {
+      const line = batchLine(b);
+      return `<li role="none"><button class="v-main batch-row${batch?.id === b.id ? " on" : ""}" role="menuitem" data-batch="${escapeHtml(b.id)}">
+        <span class="v-num">${escapeHtml(b.id)}</span><span class="v-label">${escapeHtml(line.what)}<br><span class="dim">${escapeHtml(line.more)}</span></span>
+        <span class="v-meta">${escapeHtml(String(b.created || "").slice(11, 16))}</span></button></li>`;
+    }).join("") : '<li class="menu-head" role="none">no batches yet</li>';
+    list.querySelector("button")?.focus();
+  } catch (err) {
+    list.innerHTML = `<li class="menu-head" role="none">${escapeHtml(err.message)}</li>`;
+  }
+}
+
+function closeBatches() {
+  $("variations-list").hidden = true;
+  $("variations-earlier").setAttribute("aria-expanded", "false");
 }
 
 export function initVariations(c) {
   ctx = c;
   ctx.state.variation = null;
+  ctx.openBatch = openBatch;
+  $("variations-earlier").addEventListener("click", toggleBatches);
+  $("variations-list").addEventListener("click", (e) => {
+    const row = e.target.closest("button[data-batch]");
+    if (!row) return;
+    closeBatches();
+    openBatch(row.dataset.batch);
+  });
+  $("variations-list").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeBatches();
+      $("variations-earlier").focus();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("variations-list").hidden && !e.composedPath().some((el) => el.classList?.contains("batches-wrap"))) closeBatches();
+  });
   $("variations-btn").addEventListener("click", () => {
     const version = ctx.state.score?.version;
     if (version != null) start({ version }, `variations of v${version}`);
@@ -209,6 +304,7 @@ export function initVariations(c) {
     clearTimeout(polling);
     stopAudition(true);
     batch = null;
+    remember();
     draw();
     setBusy(false);
   });

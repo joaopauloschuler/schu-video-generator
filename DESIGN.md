@@ -13874,7 +13874,7 @@ built-in bed's template.
   name-clash rule (a bed's name is refused).
 - **198 Listening notes and "Ask an agent"** (done, §94.16; plan §94.8).
 - **199 Variations** (done, §94.17; plan §94.9).
-- **200 Docs and polish**: CONFIG, guide (agents may be handed studio sessions through MCP),
+- **200 Docs and polish** (done, §94.18): CONFIG, guide (agents may be handed studio sessions through MCP),
   README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout
   (inspector and check as tabs below the track list in narrow windows), the light theme,
   keyboard shortcuts (space play / stop, Ctrl+Z), accessibility basics (labels, focus, contrast).
@@ -14001,6 +14001,8 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 | `POST /api/proposal/paste {reply}`, `/api/proposal/send {model}`, `/api/proposal/decide {id, keep}` | 198 | a pasted reply or OpenRouter's as a proposal; keep / discard |
 | `POST /api/variations {version? \| batch, letter; shuffle?}`, `GET /api/variations?batch=B` | 199 | four siblings of a version (or "more like" a candidate), rendered and checked in the background: the batch document (§94.17) |
 | `POST /api/variations/keep {batch, letter}`; `/api/render {variation: "b0001/c"}` | 199 | a candidate as the next version (`origin: variation`); a candidate played like a version |
+| `GET /api/variations` (no `batch`), `GET /api/ask` | 200 | the session's batches, newest first; the last hand-off (or `null`) |
+| `GET /api/disk`, `POST /api/cleanup` | 200 | renders and exports in bytes (the session's, the studio's); remove old ones by the rule (§94.18) |
 
 ### 94.6 Renders and playback
 
@@ -14589,3 +14591,66 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
   rendered plays at once (from the cache) and the playing position carries over.
 - Public: no `vidgen.api` names; MCP tool `studio_variations`; `StudioApp.render(variation=)`,
   `make_variations`, `variation_batch`, `keep_variation`.
+
+### 94.18 Step 200: docs and polish
+
+- **Keyboard** (`app.js` `wireKeys`, the list in `#shortcuts`, **?**): Space play / pause, N a
+  note (`notes.js`), L loop the section under the playhead (again: the whole piece), M / S
+  mute / solo the selected track, V variations, Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y (`versions.js`),
+  ? the list, Esc closes it. None act while focus is in an input, textarea, select or
+  contenteditable. **Decision: Space plays unless the focused control was reached with the
+  keyboard** — tracked by the last pointer press vs Tab / arrow key (`focusByPointer`), not by
+  `:focus-visible`, which Chrome turns on at any key press and so cannot tell; a mouse-clicked
+  button's Space keyup is cancelled so it is not pressed too. A track row reached with Tab keeps
+  Space to select itself.
+- **Window sizes** (`studio.css`): ≥ 1320 px three columns; 980–1320 px the tracks beside a pane
+  with tabs **Inspector / Score file / Notes** (`#pane-tabs`, `data-pane` on `.work`, remembered
+  in `localStorage`, ← → between tabs); < 980 px one column, the tabs below the tracks, the page
+  scrolls. The studio grid gives the work row at least 300 px, so with a proposal, variations
+  and the check details open on a short window the page scrolls instead of squeezing the tracks
+  away (a bug the 1440 × 900 screenshots showed). Checked at 1920, 1440, 1280, 1024 and 420 px:
+  no sideways scroll.
+- **Contrast**: an in-page audit (every visible text against its first opaque background,
+  WCAG ratio) over both themes, every width and the panels (variations, a proposal, check
+  details, export, notes): no text under 4.5:1 after darkening the light theme's secondary /
+  tertiary (`#B13C0B`, `#136F37`), comments (`#636A74` light, `#8B94A2` dark), and removing an
+  `opacity` on the inspector's group notes. Light-theme sections and the energy area are
+  lighter tints. Every control has a name (an audit found none without); `:focus-visible`
+  outlines in `--focus`.
+- **First-run hint** (`#hint`, four steps: preset and Space, change one thing, check and A/B,
+  notes / agent / variations / export): shown until **Got it** (`localStorage`
+  `vidgen-studio-hint-seen`).
+- **The server gone** (`api.js` `onConnection`): a `fetch` that fails (not an HTTP error) marks
+  the studio offline: a banner says it is not answering, how to start it again, that versions
+  are on disk, with **Retry now**; the notes poll keeps looking every 4 s (1.5 s otherwise, none
+  while the tab is hidden). When it answers, a studio started again (no session open) reopens
+  the page's session (`reconnect`), so the piece carries on. A render error says "could not
+  render: …" and the last good render keeps playing.
+- **Gaps of 199 closed**: the open batch is remembered per session (`localStorage`) and shown
+  again after a reload; a batch a closed studio left `running` reads as `stopped` (its
+  candidates still play: rendered on demand); `GET /api/variations` (no `batch`) lists the
+  session's batches, newest first, with what they varied and what was kept — **Batches ▾** on
+  the panel and the version menu show them, so candidates not kept can be heard and kept later.
+  The last hand-off is shown again after a reload (`GET /api/ask` → `last_handoff`), with **Ask
+  again (about vN)**.
+- **Disk rule** (`studio_app/cleanup.py`; decision: renders are a cache, nothing else is): a
+  session keeps the renders (all files whose name starts with the render key: the WAV, its
+  facts, sections, listening mixes) of its current, first and starred versions, its last
+  `KEEP_VERSIONS` (8) versions and its newest batch's candidates, most wanted first, capped at
+  `CAP_BYTES` (1 GB; the current, first, starred and just-played renders are never dropped by
+  the cap); exports older than a day go (`EXPORT_AGE`). Run after a new render at most once a
+  minute (`_auto_clean`, under the render lock); at start for every session with no recent
+  versions kept; **Clean up** in the version menu (`POST /api/cleanup`: the open session by the
+  rule, the others by the start rule, exports older than an hour; `GET /api/disk` the sizes);
+  `vidgen studio --clean [PROJECT]` (`clean_studio_folder`) without a server. Never removed:
+  versions, notes, hand-offs, proposals, candidates' texts, checks, `session.json`. A file that
+  cannot be removed (streamed, on Windows) is counted as busy and left for next time.
+- **Docs**: CONFIG "Music studio" (start, the page, editing, keyboard, disk, sizes and themes,
+  errors, security), the author guide (when to suggest the studio; sessions handed over MCP),
+  README (a section and `docs/images/studio.png`, 1440 × 900 quantised to 160 colours, 74 KB;
+  no GIF: a still says it and stays light), COOKBOOK-MUSIC §7 (a person and an agent: preset →
+  notes → ask → A/B → variations → save), the Listen page (a paragraph after the score pieces,
+  in `listen.page_text` and the committed page alike), CHANGELOG "Unreleased".
+- Public: no `vidgen.api` names; `vidgen studio --clean`; `vidgen.studio_app.clean_studio_folder`;
+  `StudioApp.last_handoff`, `disk`, `clean_up`, `variation_batches`; API rows `GET /api/ask`,
+  `GET /api/disk`, `POST /api/cleanup`, `GET /api/variations` without `batch`.

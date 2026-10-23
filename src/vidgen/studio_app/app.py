@@ -56,6 +56,8 @@ AUDIO_NAME = re.compile(r"^([0-9a-f]{20})(?:\.m([0-9a-f]{10}))?(\.n)?(?:-([a-z][
 #: no render has been under way for this long (s).
 LATE_FACTS = ("loudness", "true_peak", "energy")
 FACTS_AFTER_SECONDS = 0.3
+#: Old renders of the open session are removed at most this often (s), after a new render.
+AUTO_CLEAN_SECONDS = 60.0
 
 
 def one_line(description: str) -> str:
@@ -269,6 +271,7 @@ class StudioApp:
         self._facts_wanted: str | None = None
         self._facts_lock = threading.Lock()
         self._last_render = 0.0  # time.monotonic() when a render was last asked for or made
+        self._last_clean = time.monotonic()  # old renders are removed at most once a minute (§94.18)
         # the mixes of the last renders (−28 LUFS float32 and gain), which the check reuses
         self._mixes: OrderedDict[str, tuple[np.ndarray, float]] = OrderedDict()
         self.checker = Checker(self._render_idle, self._check_stems)
@@ -416,6 +419,20 @@ class StudioApp:
             session.touch()
             return {"request": {k: v for k, v in request.items() if k != "score"}, "prompt": prompt_text(request),
                     "provider": provider_info(), "file": str(session.folder / "request.json")}
+
+    def last_handoff(self) -> dict[str, Any] | None:
+        """The open session's last hand-off as :meth:`ask` gave it (a reloaded page shows it
+        again), or ``None``."""
+        from vidgen.studio_app.agent import prompt_text, provider_info, read_request
+
+        with self._lock:
+            if self.session is None:
+                return None
+            request = read_request(self.session.folder)
+            if request is None or request.get("session") != self.session.id:
+                return None
+            return {"request": {k: v for k, v in request.items() if k != "score"}, "prompt": prompt_text(request),
+                    "provider": provider_info(), "file": str(self.session.folder / "request.json")}
 
     def _request(self) -> dict[str, Any]:
         from vidgen.studio_app.agent import read_request
@@ -661,6 +678,38 @@ class StudioApp:
         path = self.session.folder / "exports" / name
         return path if path.is_file() else None
 
+    # ----- disk (Step 200) ------------------------------------------------------------------
+
+    def disk(self) -> dict[str, Any]:
+        """Bytes of renders and exports, the open session's and the studio's (§94.18)."""
+        from vidgen.studio_app.cleanup import disk_use
+
+        return disk_use(self.studio, self.session)
+
+    def clean_up(self) -> dict[str, Any]:
+        """The person's "clean up": old renders of the open session and of the studio's other
+        sessions, and exports older than an hour, removed by :mod:`~vidgen.studio_app.cleanup`'s
+        rule (never a version, note or check): what was removed and the disk use after."""
+        from vidgen.studio_app.cleanup import ASKED_EXPORT_AGE, clean_session, clean_studio
+
+        with self._lock, self._render_lock:
+            mine = clean_session(self.session, export_age=ASKED_EXPORT_AGE) if self.session is not None else {"files": 0, "bytes": 0, "busy": 0}
+            others = clean_studio(self.studio, self.session.id if self.session else None, ASKED_EXPORT_AGE)
+            self._last_clean = time.monotonic()
+        removed = {k: mine[k] + others[k] for k in ("files", "bytes", "busy")}
+        return {"removed": removed, "disk": self.disk()}
+
+    def _auto_clean(self, session: StudioSession, playing: str) -> None:
+        """Keep the open session's renders within the rule, at most once a minute (after a new
+        render; render ``playing``, just made, is kept whatever version it is)."""
+        from vidgen.studio_app.cleanup import clean_session
+
+        if time.monotonic() - self._last_clean < AUTO_CLEAN_SECONDS:
+            return
+        self._last_clean = time.monotonic()
+        with self._lock, self._render_lock:
+            clean_session(session, extra=[playing])
+
     # ----- variations (Step 199) -----------------------------------------------------------
 
     def make_variations(self, version: int | None = None, batch: str | None = None, letter: str | None = None, shuffle: int = 0) -> dict[str, Any]:
@@ -687,6 +736,11 @@ class StudioApp:
     def variation_batch(self, batch: str) -> dict[str, Any]:
         """A batch's document as the worker last wrote it (progress, renders, checks)."""
         return self.variations.read(self._session(), batch)
+
+    def variation_batches(self) -> list[dict[str, Any]]:
+        """The open session's variation batches, newest first (Step 200: the page lists them, so
+        candidates not kept can be heard again)."""
+        return self.variations.batches(self._session()) if self.session is not None else []
 
     def keep_variation(self, batch: str, letter: str) -> dict[str, Any]:
         """Keep candidate ``letter`` of ``batch``: it becomes the next version (``origin:
@@ -766,6 +820,8 @@ class StudioApp:
             raise VidgenError(f"version {number} has problems; fix them before playing it")
         key = render_key(data)
         meta, timing = self._render_whole(session, key, data, score)
+        if not meta["cached"]:
+            self._auto_clean(session, key)
         muted = sorted(set(mute) & {t.name for t in score.tracks})
         name = f"{key}.m{mute_tag(muted)}" if muted else key
         if muted:

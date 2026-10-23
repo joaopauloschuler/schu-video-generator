@@ -14,12 +14,14 @@ import { escapeHtml } from "./yaml_view.js";
 const $ = (id) => document.getElementById(id);
 const LEAD_SECONDS = 1.5;   // a note plays from this long before its moment
 const POLL_MS = 1500;       // how often the page asks whether an agent proposed something
+const OFFLINE_POLL_MS = 4000; // how often it looks for the server again while it does not answer
 const MAX_CHARS = 500;
 
 let ctx = null;
 let editor = null;          // the note being written or edited: {id: null | "n3", seconds}
 let polling = false;
 let handoff = null;         // the last "Ask an agent" answer: {request, prompt, provider}
+let handoffFor = undefined; // the session whose hand-off was looked for
 
 // ----- where a moment is (as the server's notes.locate) ------------------------------------------
 
@@ -60,12 +62,16 @@ export function showNotes() {
   drawProposals();
   const count = openCount();
   $("notes-count").textContent = count ? String(count) : "";
+  $("pane-notes-count").textContent = count ? String(count) : "";
   $("ask").disabled = !ctx.state.session;
   $("ask").textContent = count ? `Ask an agent about ${count} note${count > 1 ? "s" : ""}` : "Ask an agent";
-  if (handoff && handoff.request.session !== ctx.state.session?.id) {
-    handoff = null; // another piece
+  const sessionId = ctx.state.session?.id ?? null;
+  if (handoffFor !== sessionId) {
+    handoffFor = sessionId; // another piece (or the page just loaded): its last hand-off, if any
+    handoff = null;
     drawHandoff();
-  }
+    if (sessionId) loadHandoff(sessionId);
+  } else if (handoff) askAgainLabel(); // the version shown changed: "Ask again about vN"
   const waiting = $("handoff").querySelector(".waiting");
   if (handoff && waiting && (ctx.state.proposals || []).some((x) => x.request === handoff.request.id)) {
     waiting.classList.add("done");
@@ -146,6 +152,8 @@ function openEditor(id, seconds) {
 
 function closeEditor() {
   editor = null;
+  // focus leaves the editor for the page, so Space plays / pauses again at once
+  if ($("note-editor").contains(document.activeElement)) document.activeElement.blur();
   $("note-editor").hidden = true;
   drawPins();
 }
@@ -244,6 +252,7 @@ export function showTab(name) {
   $("tab-notes").setAttribute("aria-selected", String(notesTab));
   $("yaml-panel").classList.toggle("on-notes", notesTab);
   $("notes-panel").hidden = !notesTab;
+  ctx.showPane?.(notesTab ? "notes" : "yaml"); // narrow windows: the tab below the tracks
   if (notesTab) {
     $("work").classList.remove("no-yaml");
     $("yaml-toggle").setAttribute("aria-pressed", "true");
@@ -264,6 +273,19 @@ async function ask() {
   }
 }
 
+// The session's last hand-off (kept in its folder), shown again after a reload.
+async function loadHandoff(sessionId) {
+  try {
+    const found = await api.lastHandoff();
+    if (found && handoffFor === sessionId && !handoff && found.request.session === sessionId) {
+      handoff = found;
+      drawHandoff();
+    }
+  } catch {
+    // the card is a nicety: Ask an agent makes it again
+  }
+}
+
 function drawHandoff() {
   const box = $("handoff");
   if (!handoff) {
@@ -275,10 +297,13 @@ function drawHandoff() {
   const answered = (ctx.state.proposals || []).some((x) => x.request === r.id);
   const kb = (new Blob([handoff.prompt]).size / 1024).toFixed(1);
   const why = !p.key_set ? `set ${p.key_env} (your OpenRouter key; vidgen never stores it) and start the studio again` : "";
+  const made = typeof r.created === "string" ? r.created.slice(11, 16) : "";
   box.hidden = false;
   box.innerHTML = `
-    <p class="ho-line">Hand-off for <b>v${r.base}</b>: ${r.notes.length} open note${r.notes.length === 1 ? "" : "s"},
-      ${r.check ? "the check" : "no check yet"}${r.diff ? `, the change from v${r.diff.parent}` : ""}. Answer it with:</p>
+    <p class="ho-line">Hand-off for <b>v${r.base}</b>${made ? ` <span class="dim">made at ${escapeHtml(made)}</span>` : ""}: ${r.notes.length} open note${r.notes.length === 1 ? "" : "s"},
+      ${r.check ? "the check" : "no check yet"}${r.diff ? `, the change from v${r.diff.parent}` : ""}.
+      <button class="btn small" id="ask-again"></button>
+      Answer it with:</p>
     <ol class="ways">
       <li><b>An agent through vidgen's MCP</b> (<code>vidgen mcp</code>): ask it to <i>answer my studio notes</i>; it uses
         <code>studio_read</code> and <code>studio_propose</code>, and the proposal appears above the tracks.
@@ -297,6 +322,15 @@ function drawHandoff() {
         aria-label="The assistant's reply"></textarea>
       <div class="ne-actions"><button class="btn small primary" id="paste-make">Make the proposal</button><button class="btn small" id="paste-cancel">Cancel</button></div>
     </div>`;
+  askAgainLabel();
+}
+
+function askAgainLabel() {
+  const button = $("ask-again");
+  if (!button || !handoff) return;
+  const now = ctx.state.score?.version ?? "–";
+  button.textContent = handoff.request.base !== now ? `Ask again about v${now}` : "Ask again";
+  button.title = `Make the hand-off again from v${now} with the notes open now`;
 }
 
 async function copyPrompt() {
@@ -331,8 +365,9 @@ async function makeFrom(call, words) {
 }
 
 async function onHandoffClick(e) {
-  const id = e.target.id;
-  if (id === "copy-prompt") copyPrompt();
+  const id = e.target.closest("button")?.id || e.target.id;
+  if (id === "ask-again") ask();
+  else if (id === "copy-prompt") copyPrompt();
   else if (id === "paste-open") {
     $("paste-box").hidden = false;
     $("paste-text").focus();
@@ -455,8 +490,38 @@ function applyState(doc) {
   showNotes();
 }
 
+// The poll runs every POLL_MS while the tab is visible (every OFFLINE_POLL_MS while the server
+// does not answer: it is also how the page notices the server is back), and not at all while the
+// tab is hidden; showing the tab again polls at once.
+let pollTimer = 0;
+let offline = false;
+
+function schedulePoll(ms = offline ? OFFLINE_POLL_MS : POLL_MS) {
+  clearTimeout(pollTimer);
+  if (!document.hidden) pollTimer = setTimeout(pollAndNext, ms);
+}
+
+async function pollAndNext() {
+  await poll();
+  schedulePoll();
+}
+
+// Poll now (the offline banner's Retry; the tab shown again).
+export function pollNow() {
+  clearTimeout(pollTimer);
+  pollAndNext();
+}
+
+export function setOffline(value) {
+  offline = value;
+}
+
 async function poll() {
-  if (polling || document.hidden || !ctx.state.session) return;
+  if (polling || document.hidden) return;
+  if (!ctx.state.session) {
+    if (offline) await api.info().catch(() => null); // only to learn whether the server is back
+    return;
+  }
   polling = true;
   try {
     const since = ctx.state.revision;
@@ -531,5 +596,6 @@ export function initNotes(context) {
     pin();
   });
   showTab(ctx.storage("vidgen-studio-tab") === "notes" ? "notes" : "yaml");
-  setInterval(poll, POLL_MS);
+  document.addEventListener("visibilitychange", () => (document.hidden ? clearTimeout(pollTimer) : pollNow()));
+  schedulePoll();
 }

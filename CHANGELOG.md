@@ -5,6 +5,41 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
+## Unreleased (Steps 193–201)
+
+### vidgen studio: a music workstation for people (Phase T)
+
+- **`vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]`** (Steps 193–200) opens a
+  small web app on 127.0.0.1 in your browser, offline, with no new dependency: load any of the
+  17 built-in beds as an editable score file and change it with controls (key, tempo, seed and
+  chords; sections dragged, looped and edited; tracks with mute / solo, volume, pan, steps
+  text; an inspector with every instrument's settings as sliders, effects as chips, per-section
+  changes and a step grid) or by typing the YAML; problems show inline with the command line's
+  did-you-mean messages while the last good render keeps playing. The sound is always vidgen's
+  own renderer: an edit renders only the tracks it changes and plays on from the same moment,
+  also under the narration sample. See `docs/CONFIG.md`, "Music studio".
+- **Check, versions, A/B, export** (Step 197): `vidgen music check` after each render (verdict,
+  spectrogram with sections, advice with **Apply** where the fix is mechanical); every change is
+  a version (undo / redo, rename, star, branches); A/B against the original or any version at
+  the same moment and level; export YAML / WAV / MP3 or save into `assets/music/`.
+- **Listening notes and "Ask an agent"** (Step 198): pin notes on the timeline while listening;
+  an AI agent answers them through new MCP tools (`studio_sessions`, `studio_read`,
+  `studio_check`, `studio_propose`) with a new version and one line per note, which you A/B and
+  keep or discard; or copy the prompt into any chat assistant; or (optional, paid) OpenRouter.
+- **Variations** (Step 199): four deterministic siblings of a version — harmony, pattern, mix,
+  energy — rendered and checked side by side; play, keep, "more like this", shuffle; MCP
+  `studio_variations`.
+- **Polish** (Step 200): keyboard shortcuts (Space, N, L, M / S, V, Ctrl+Z / Ctrl+Shift+Z, ? for
+  the list), tabs for the inspector, score file and notes in medium and narrow windows, a light
+  theme checked for WCAG AA contrast, a first-run hint, a clear message (and automatic
+  reconnection) when the studio server stops, the open variations and the last hand-off shown
+  again after a reload, every variation batch listed to come back to, and a disk rule for old
+  renders and exports (versions, notes and checks are never removed) with **Clean up** and
+  `vidgen studio --clean`. The Listen page and the README link to the studio; the author guide
+  tells agents when to suggest it; `docs/COOKBOOK-MUSIC.md` §7 walks through a session.
+- Compatibility: additive. The beds, their templates, existing projects' mixes and every
+  existing command are unchanged.
+
 ## 0.3.0 (Steps 61–192)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds

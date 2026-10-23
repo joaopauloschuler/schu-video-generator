@@ -3404,12 +3404,40 @@ music:                                          # the piece follows the video: i
 
 ### Music studio (`vidgen studio`)
 
-`vidgen studio [PROJECT] [--port N] [--no-browser]` starts a small web app on this computer and
-opens it in the browser: load any of the 17 built-in beds as an editable score file (its
-template), look at its sections, tracks and score file, and listen. The sound is always vidgen's
-own renderer, the one videos use; the page only plays the rendered audio (a WAV, 12 dB louder
-than in a mix: −16 LUFS, the same for every version). Ctrl+C in the terminal stops it.
+`vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` starts a small web app on this
+computer and opens it in the browser: load any of the 17 built-in beds as an editable score file
+(its template), change it with controls or by typing, listen, check, keep versions, pin
+listening notes for an AI agent, try variations, and export the piece or save it into a
+project. The sound is always vidgen's own renderer, the one videos use; the page only plays the
+rendered audio (a WAV, 12 dB louder than in a mix: −16 LUFS, the same for every version).
+Ctrl+C in the terminal stops it.
 
+![The studio: momentum loaded, two listening notes and an agent's proposal](images/studio.png)
+
+- **Start**: `vidgen studio` in a project folder (the one with `video.yaml`) — or anywhere, for
+  pieces not tied to a video. The page opens with `momentum`; **Preset ▾** loads another bed (each
+  with a one-line description). Press Space (or ▶) to listen; a small "how to start" card shows
+  the first time (**Got it** hides it for good).
+- **The page**: the top bar (preset, **A/B original**, **Variations**, the version menu `v3 ▾`,
+  undo / redo, **YAML** (show / hide the score file), **Export**, the theme, **?** for the
+  shortcuts); the song strip (key, tempo, time, seed, length, the chords in Roman numerals with
+  their names, the one playing lit); the transport (play / pause, stop, loop the whole piece or a
+  section, **+ note**, **under narration**, position); the timeline (sections coloured and sized
+  by bars, the playhead, an energy curve, the notes lane); then the **tracks**, the
+  **inspector** of the selected track and the **score file** / **Notes** tab; the **check** at
+  the bottom with the status line.
+- **Editing**: key, tempo and seed in the song strip; click the chords to type them (the names
+  follow as you type); click a
+  section's name to loop it and edit it in the bar below the timeline (rename, bars, its own
+  progression, add or remove a section); drag a section's right edge (or ← → on it) to change
+  its bars. A track's volume bar and pan knob (drag, arrow keys, double-click: centre), its steps
+  text (click it, type, Enter), **×** to delete it, **+ track** to add one (an instrument
+  picker). The inspector: the instrument, sliders made from `vidgen music patches` (ranges,
+  units, hover help), octave, transpose and accent, effects as chips (echo, duck, gate, reverb,
+  filter curves), the track per section (plays / rests, its own changes) and a step grid that
+  follows the steps text both ways. The score file is editable: type YAML and the controls
+  follow; a problem is shown inline with the same did-you-mean message as the command line, and
+  the last good render keeps playing until it is fixed.
 - **Where it listens**: `http://127.0.0.1:<port>/`, this computer only. `--port N` picks the
   port (default: a free one, printed); `--no-browser` only prints the address. It needs no
   internet connection (the page and its fonts ship with vidgen).
@@ -3492,8 +3520,50 @@ than in a mix: −16 LUFS, the same for every version). Ctrl+C in the terminal s
   **More like this** makes four variations of that one, **Shuffle** four others of the same
   version. The same version and shuffle always give the same four; tempo and key are never
   changed. Variations not kept never become versions (they stay in the session's
-  `variations/<batch>/`). Through MCP, `studio_variations` gives an agent the same four as
-  whole scores.
+  `variations/<batch>/`): **Batches ▾** on the panel, and the version menu, list the session's
+  batches, so a candidate not kept can be played and kept later; a reload shows the batch that
+  was open. Through MCP, `studio_variations` gives an agent the same four as whole scores.
+- **Keyboard** (**?** shows the list; none of these act while typing in a field):
+
+  | key | does |
+  |---|---|
+  | Space | play / pause (a button reached with Tab keeps Space for itself) |
+  | N | pin a listening note at the moment playing |
+  | L | loop the section playing; again: the whole piece |
+  | M / S | mute / solo the selected track (what plays, not the score) |
+  | V | four variations of the version shown |
+  | Ctrl+Z, Ctrl+Shift+Z (or Ctrl+Y) | undo, redo (⌘ on a Mac) |
+  | ← → ↑ ↓ | move in the step grid (a symbol key writes it, Backspace a rest); on a section's edge, a volume bar or a pan knob: a step |
+  | Enter / Esc | keep / leave what is being typed; Esc also closes menus |
+
+- **Disk**: renders are a cache (about 9 MB a minute of music each, more with their listening
+  mixes); score versions, notes, checks, hand-offs and proposals are small and **never removed**.
+  The studio keeps a session's renders of its current, first and starred versions, its last 8
+  versions and its newest variations, up to 1 GB a session, and removes the others (at most once
+  a minute, after a new render; a removed render is made again when played). When the studio
+  starts, every session keeps only the renders of its current, first and starred versions;
+  exports go after a day. **Clean up** in the version menu (it shows the disk used) does it now
+  and also removes exports older than an hour; `vidgen studio --clean [PROJECT]` does the same
+  for every session of the folder without starting the studio, and prints what it removed.
+- **Window sizes and themes**: wide windows show tracks, inspector and score file side by side;
+  under 1320 px the inspector, score file and notes are tabs beside the tracks; under 980 px
+  everything stacks and the page scrolls. The theme button switches dark / light (remembered in
+  the browser). Controls have labels for screen readers, the focused one is outlined, and text
+  meets WCAG AA contrast (4.5:1) in both themes.
+- **When something goes wrong**: a score with problems shows them where they are and plays the
+  last good render; a render that fails says so in the status line (the last good render keeps
+  playing). When the studio stops (Ctrl+C, a closed terminal, the computer asleep) the page
+  shows **The studio server is not answering** with how to start it again — run `vidgen studio`
+  in the same folder: the page reconnects by itself (or **Retry now**) and reopens its session,
+  nothing lost. A studio started without a project cannot save into one (the Export panel says
+  how: start it in the project folder).
+- **Security**: the server listens on 127.0.0.1 only and answers only requests addressed to
+  `127.0.0.1:<port>` or `localhost:<port>` (no DNS rebinding); changes must be JSON POSTs from
+  its own page (another web site cannot send them); files are served only from fixed lists (the
+  page, its fonts, the open session's renders by name), never from a path in a request; it runs
+  no code from requests and has no login, so anyone who can use this computer can use it while
+  it runs. It writes only into its studio folder, the exports you download, and a project's
+  `assets/music/` when you save there.
 
 ### Loudness of the final mix (`audio`)
 

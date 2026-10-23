@@ -149,6 +149,8 @@ function onKey(e) {
     return;
   }
   if (e.target !== row) return;
+  // Space on a row clicked with the mouse plays / pauses (the page's shortcut); reached with Tab it selects
+  if (e.key === " " && ctx.focusByPointer()) return;
   if (e.key === "Enter" || e.key === " ") ctx.selectTrack(name);
   else if (e.key === "ArrowDown") row.nextElementSibling?.focus();
   else if (e.key === "ArrowUp") row.previousElementSibling?.focus();

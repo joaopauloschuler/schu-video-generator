@@ -65,6 +65,10 @@ a built-in bed (hear it in the beds table above).
 |---|---|---|---|
 | `time_of_flight`<br>Time of Flight | B minor, 108 BPM, 53.3 s loop | An AI author's piece, made from the `momentum` template one change at a time (new key, tempo, chords, sections, arpeggio, pings and lead), checked with `vidgen music check` after each; approved as a built-in bed; it plays under [examples/gps-time-of-flight](../../examples/gps-time-of-flight/README.md), whose README keeps the log of every version and the check report | the bed `time_of_flight` above: [▶ listen (15 s)](media/bed-time_of_flight.mp3) |
 
+To do the same by ear, [`vidgen studio`](../CONFIG.md#music-studio-vidgen-studio) opens any
+bed above as an editable score in your browser: change it, listen as you go, A/B versions,
+try variations, pin notes for an AI agent to answer, and save it into your project.
+
 ## Sound effects
 
 36 sounds, synthesised when the video is joined: `- sfx: whoosh` in a beat, a scene's `sfx:` list, or

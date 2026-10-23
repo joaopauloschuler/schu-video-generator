@@ -18343,3 +18343,90 @@ Known gaps
   batch stays on disk). "Discarded" candidates are not listed anywhere in the page.
 - Substitutions / inversions apply only to progressions written in numerals; written voicings
   get re-voiced instead. Pieces with no figure, pads or sections get fewer kinds (still four).
+
+## Step 200 — vidgen studio: docs and polish
+
+What was built (DESIGN §94.18)
+- Docs: CONFIG "Music studio" rewritten into a complete section (start, the page, editing, where
+  it keeps its work, listening, check, versions / A/B, export / save, notes, Ask an agent,
+  variations, keyboard table, disk rule, window sizes and themes, what happens when something
+  goes wrong, security model); the author guide (both copies) says when to suggest the studio to
+  a person and that sessions may be handed over MCP unprompted; README: a "vidgen studio"
+  paragraph after the music list with `docs/images/studio.png` (1440 × 900, 160 colours, 74 KB;
+  no GIF) and a Commands row; COOKBOOK-MUSIC §7 "A person and an agent in the studio"; the
+  Listen page links to the studio (a paragraph after the score-pieces table, in
+  `listen.page_text` and the committed `docs/music/README.md`); CHANGELOG "Unreleased (Steps
+  193–201)".
+- Keyboard: Space, N, L (loop the section playing / the whole piece), M / S (selected track), V,
+  Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, ? (overlay `#shortcuts`, Esc closes). Space after a mouse click
+  plays even when a control has focus; a control reached with Tab / arrows keeps Space
+  (`focusByPointer`; `:focus-visible` cannot tell, Chrome sets it on any key). Track rows: Space
+  only selects when reached with the keyboard.
+- Layout: tabs Inspector / Score file / Notes from 1320 px down, one column under 980 px; the
+  work row keeps ≥ 300 px (with proposal + variations + check details open at 1440 × 900 the
+  tracks had been squeezed to nothing — fixed: the page scrolls). No sideways scroll at 1920,
+  1440, 1280, 1024, 420 px.
+- Accessibility: every control named (audit: 0 unnamed), focus outlines, contrast audit of every
+  visible text: 0 under 4.5:1 in both themes, every width, and the panels (variations, proposal,
+  check details, export, notes); light-theme colours darkened where needed.
+- States: first-run hint (dismissed for good); "the studio server is not answering" banner with
+  how to restart, Retry now, slow polling while offline and reconnection that reopens the page's
+  session in a new studio process; "could not render: … · the last good render keeps playing".
+- 199 gaps: the open batch comes back after a reload (per session, `localStorage`); a batch left
+  `running` by a closed studio reads `stopped`; `GET /api/variations` lists batches —
+  **Batches ▾** on the panel and a "Variations" block in the version menu, so candidates not kept
+  can be replayed and kept; the last hand-off comes back after a reload (`GET /api/ask`), with
+  **Ask again about vN**.
+- Disk: `studio_app/cleanup.py` — renders kept for current, first, starred, the last 8 versions
+  and the newest batch, ≤ 1 GB a session (current / first / starred / just played never
+  dropped); exports older than a day; run after a new render at most once a minute, at studio
+  start for all sessions (current, first, starred only), on **Clean up** in the version menu
+  (with the disk sizes; exports older than an hour), and `vidgen studio --clean [PROJECT]`.
+  Never removed: versions, notes, hand-offs, proposals, candidates' texts, checks.
+
+Files touched
+- `src/vidgen/studio_app/`: `__init__.py` (`clean_studio_folder`, cleaning at start), `app.py`
+  (`last_handoff`, `disk`, `clean_up`, `_auto_clean`, `variation_batches`), `cleanup.py` (new),
+  `server.py` (routes), `variations.py` (`batches`, stopped state); `static/`: `index.html`,
+  `studio.css`, `app.js`, `api.js`, `notes.js`, `tracks.js`, `variations.js`, `versions.js`.
+- `src/vidgen/cli.py` (`--clean`), `src/vidgen/listen.py` (the studio paragraph).
+- Docs: `docs/CONFIG.md`, `README.md`, `docs/images/studio.png` (new), `docs/COOKBOOK-MUSIC.md`,
+  `docs/music/README.md`, `CHANGELOG.md`, `AGENTS.md` + `src/vidgen/data/guide/AGENTS.md`,
+  `DESIGN.md` (§94.1, §94.5 rows, §94.18), `tasklist.md`.
+- Tests: `tests/test_studio_cleanup.py` (new, 6), `tests/test_studio_ui.py` (+3 `ui`: shortcuts
+  and first-run hint and reload of variations; layout at five widths and the theme switch; the
+  server not answering).
+
+Public interfaces: no `vidgen.api` names. `vidgen studio --clean`;
+`vidgen.studio_app.clean_studio_folder`; `StudioApp.last_handoff / disk / clean_up /
+variation_batches`; API `GET /api/ask`, `GET /api/disk`, `POST /api/cleanup`, `GET
+/api/variations` without `batch`.
+
+Decisions / deviations
+- No GIF in the README: one still shows the whole idea, and the existing media rule keeps the
+  README light (kphi3's GIF is 1.3 MB).
+- The Listen page gained a paragraph (an explicit request of this step); the page's beds,
+  clips and table are unchanged and `test_listen` still matches the generator.
+- The startup clean keeps only current / first / starred renders of every session, also the one
+  the page reopens (its other versions render again when played).
+
+How to test (one at a time, capped)
+- `tests/test_studio_cleanup.py`: 6 passed in 1 s. `tests/test_studio_ui.py`: 19 passed in 61 s.
+- `test_studio_app` 20, `test_studio_variations` + `test_studio_agent` 33, `test_guide` 54,
+  `test_docs` 63, `test_listen` 11, `test_packaging` 2: all passed.
+- Browser scripts: `<scratchpad>/s200/shots.py` (five widths × two themes, panels in both
+  themes, contrast audit → `shots/after/contrast.json`), `flows.py` (shortcuts, reload, batches,
+  disk / clean up, server stopped and started again), `readme_shot.py` (the README picture).
+
+Files to look at
+- `<scratchpad>/s200/shots/after/`: `1920-*.png`, `1440-*.png`, `1280-*.png`, `1024-*.png`,
+  `narrow420-*.png` (dark and light), `panels-*.png`, `panels420-*.png`, `export-*.png`,
+  `help-*.png`, `0-first-run-hint.png`; `<scratchpad>/s200/shots/flows/1-shortcuts.png` …
+  `7-light-help.png`; `docs/images/studio.png`.
+
+Known gaps
+- Contrast is measured for text only (not for non-text controls such as slider tracks).
+- The offline banner tells "not answering" apart from errors only by a failed `fetch`; a studio
+  restarted on another port is not found (the page must be opened at the new address).
+- `vidgen studio --clean` while a studio runs on the same folder cleans its open session by the
+  start rule too (renders come back when played).

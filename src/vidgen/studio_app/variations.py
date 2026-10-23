@@ -867,9 +867,28 @@ class VariationBatches:
             if doc is not None:
                 return json.loads(json.dumps(doc))
         try:
-            return json.loads((folder / "batch.json").read_text(encoding="utf-8"))
+            doc = json.loads((folder / "batch.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             raise VidgenError(f"variations: no batch {batch} in this session") from None
+        if doc.get("state") == "running":  # written by a studio that stopped before it finished
+            doc.update(state="stopped", progress="stopped (the studio was closed); a candidate plays once rendered")
+        return doc
+
+    def batches(self, session: Any) -> list[dict[str, Any]]:
+        """The session's batches, newest first: id, when, what they vary, state and, per
+        candidate, its letter, kind, label and the version it was kept as (if it was)."""
+        top = session.folder / "variations"
+        if not top.is_dir():
+            return []
+        out = []
+        for path in sorted((p for p in top.iterdir() if BATCH_ID.match(p.name)), key=lambda p: p.name, reverse=True):
+            try:
+                doc = self.read(session, path.name)
+            except VidgenError:
+                continue
+            out.append({k: doc.get(k) for k in ("id", "created", "root", "base", "shuffle", "chain", "state")}
+                       | {"items": [{k: i.get(k) for k in ("letter", "kind", "label", "kept", "status")} for i in doc.get("items", [])]})
+        return out
 
     def text(self, session: Any, batch: str, letter: str) -> str:
         if letter not in LETTERS:

@@ -1,5 +1,23 @@
 // The studio's JSON API (DESIGN.md §94.2): every call returns `result` or throws an Error whose
-// message is the server's (a score's problems, a bad request...).
+// message is the server's (a score's problems, a bad request...). When the server does not answer
+// at all (stopped, or the computer slept), the error says so and the page hears about it through
+// `onConnection` (Step 200: the "not answering" banner and its retry).
+
+const listeners = new Set();
+let online = true;
+
+// Call `fn(online)` whenever the server stops or starts answering again.
+export function onConnection(fn) {
+  listeners.add(fn);
+}
+
+function setOnline(value) {
+  if (value === online) return;
+  online = value;
+  for (const fn of listeners) fn(value);
+}
+
+export const OFFLINE_MESSAGE = "the studio server is not answering (was vidgen studio stopped?)";
 
 async function call(method, path, body) {
   const options = { method, headers: {} };
@@ -7,7 +25,14 @@ async function call(method, path, body) {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(body);
   }
-  const response = await fetch(path, options);
+  let response;
+  try {
+    response = await fetch(path, options);
+  } catch {
+    setOnline(false);
+    throw new Error(OFFLINE_MESSAGE);
+  }
+  setOnline(true);
   let doc;
   try {
     doc = await response.json();
@@ -52,4 +77,8 @@ export const api = {
   variations: (request) => call("POST", "/api/variations", request),
   variationBatch: (batch) => call("GET", `/api/variations?batch=${encodeURIComponent(batch)}`),
   keepVariation: (batch, letter) => call("POST", "/api/variations/keep", { batch, letter }),
+  variationBatches: () => call("GET", "/api/variations"),
+  lastHandoff: () => call("GET", "/api/ask"),
+  disk: () => call("GET", "/api/disk"),
+  cleanUp: () => call("POST", "/api/cleanup", {}),
 };

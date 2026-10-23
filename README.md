@@ -69,6 +69,21 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
 Reference: [music](docs/CONFIG.md#background-music-music), [composed music](docs/CONFIG.md#composed-music-compose),
 [sound effects](docs/CONFIG.md#sound-effects-sfx).
 
+**vidgen studio.** `vidgen studio` opens a small music workstation in your browser (on this
+computer only, offline): load any built-in bed as an editable score, change it with sliders, step
+grids or the YAML itself, listen under a narration sample, read the check, A/B any two versions,
+try four variations at a click, and export WAV / MP3 / YAML or save the piece into your project.
+Pin listening notes while it plays ("I want goosebumps at the turn") and **ask an agent**: an AI
+agent connected through `vidgen mcp` reads the notes and proposes a new version with one line per
+note, which you A/B and keep or discard. The sound is always vidgen's own renderer, the one your
+videos use ([reference](docs/CONFIG.md#music-studio-vidgen-studio),
+[a person and an agent in the studio](docs/COOKBOOK-MUSIC.md#7-a-person-and-an-agent-in-the-studio)).
+
+<p align="center">
+  <img src="docs/images/studio.png" width="720"
+       alt="vidgen studio: the momentum bed's sections on a timeline, its tracks, the inspector of the ostinato, two listening notes and an agent's proposal answering them">
+</p>
+
 Everything is built around what an agent can and cannot do:
 
 - **Text in, video out.** A video is one `video.yaml` file: narration written as short *beats*
@@ -572,6 +587,7 @@ narration.
 | `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
 | `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
+| `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
 | `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when the `music` extra and the SoundFont are there |
 | `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |

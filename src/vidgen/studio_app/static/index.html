@@ -74,7 +74,40 @@
       </div>
     </div>
     <button class="btn icon" id="theme" aria-label="Switch light or dark theme" title="Light or dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 2v14a7 7 0 0 1 0-14z"/></svg></button>
+    <button class="btn icon" id="help-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="shortcuts" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
   </header>
+  <div class="offline" id="offline" role="alert" hidden>
+    <b>The studio server is not answering.</b>
+    <span>Was <code>vidgen studio</code> stopped (Ctrl+C, a closed terminal, the computer asleep)? Start it again in the same folder; this page reconnects by itself. Your versions are on disk.</span>
+    <button class="btn small" id="offline-retry">Retry now</button>
+  </div>
+  <section class="shortcuts" id="shortcuts" role="dialog" aria-labelledby="shortcuts-title" hidden>
+    <div class="ex-head"><h2 id="shortcuts-title">Keyboard shortcuts</h2><button class="btn icon small" id="shortcuts-close" aria-label="Close the shortcuts">×</button></div>
+    <dl class="keys">
+      <dt><kbd>Space</kbd></dt><dd>play / pause (outside text fields)</dd>
+      <dt><kbd>N</kbd></dt><dd>pin a listening note at the moment playing</dd>
+      <dt><kbd>L</kbd></dt><dd>loop the section playing; again: the whole piece</dd>
+      <dt><kbd>M</kbd> · <kbd>S</kbd></dt><dd>mute / solo the selected track (what plays, not the score)</dd>
+      <dt><kbd>V</kbd></dt><dd>four variations of the version shown</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>undo: back to the version before</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Z</kbd> · <kbd>Ctrl</kbd> <kbd>Y</kbd></dt><dd>redo</dd>
+      <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>move in the step grid; a symbol key writes it, <kbd>Backspace</kbd> a rest</dd>
+      <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>on a section's edge: one bar shorter / longer; on a volume bar or pan knob: a step</dd>
+      <dt><kbd>Enter</kbd> · <kbd>Esc</kbd></dt><dd>keep / leave what is being typed; Esc also closes menus</dd>
+      <dt><kbd>?</kbd></dt><dd>this list</dd>
+    </dl>
+    <p class="dim small">On a Mac, <kbd>⌘</kbd> works for <kbd>Ctrl</kbd>.</p>
+  </section>
+  <aside class="first-hint" id="hint" aria-labelledby="hint-title" hidden>
+    <h2 id="hint-title">Welcome to vidgen studio</h2>
+    <ol>
+      <li>Pick a <b>preset</b> (a built-in bed) and press <kbd>Space</kbd> to listen.</li>
+      <li>Change <b>one thing</b>: a track's pattern, a slider, the tempo. Each change is a new version, rendered by vidgen.</li>
+      <li>Read the <b>Check</b> at the bottom, then <b>A/B</b> it against the original.</li>
+      <li>Pin <b>notes</b> with <kbd>N</kbd>, <b>Ask an agent</b>, try <b>Variations</b>, then <b>Export</b>.</li>
+    </ol>
+    <div class="hint-acts"><span class="dim small">Shortcuts: <kbd>?</kbd></span><button class="btn small primary" id="hint-close">Got it</button></div>
+  </aside>
 
   <section class="strip" aria-label="Song">
     <div class="facts">
@@ -123,6 +156,10 @@
         <span class="v-chain dim" id="variations-chain"></span>
         <span class="v-progress" id="variations-progress" role="status" aria-live="polite"></span>
         <span class="spacer"></span>
+        <div class="batches-wrap">
+          <button class="btn small" id="variations-earlier" aria-haspopup="menu" aria-expanded="false" aria-controls="variations-list" title="Every batch of this session: candidates not kept can still be played and kept">Batches <span class="caret" aria-hidden="true">▾</span></button>
+          <ul class="menu batches-menu" id="variations-list" role="menu" aria-label="Variation batches" hidden></ul>
+        </div>
         <button class="btn small" id="variations-shuffle" title="Four other variations of the same version (the same shuffle always gives the same four)">⤮ Shuffle</button>
         <button class="btn icon small" id="variations-close" aria-label="Close the variations">×</button>
       </div>
@@ -130,7 +167,12 @@
     </section>
   </section>
 
-  <main class="work" id="work">
+  <main class="work" id="work" data-pane="inspector">
+    <div class="pane-tabs" id="pane-tabs" role="tablist" aria-label="Inspector, score file or notes">
+      <button class="pane-tab" role="tab" id="pane-inspector" data-pane="inspector" aria-selected="true" aria-controls="inspector-panel">Inspector</button>
+      <button class="pane-tab" role="tab" id="pane-yaml" data-pane="yaml" aria-selected="false" aria-controls="yaml-panel">Score file</button>
+      <button class="pane-tab" role="tab" id="pane-notes" data-pane="notes" aria-selected="false" aria-controls="yaml-panel">Notes <span class="count" id="pane-notes-count"></span></button>
+    </div>
     <section class="panel tracks" aria-labelledby="tracks-title">
       <h2 id="tracks-title">Tracks <span class="dim" id="mute-note"></span></h2>
       <div class="track-list" id="tracks" role="list"></div>
@@ -139,7 +181,7 @@
         <ul class="menu instruments" id="instrument-list" role="listbox" aria-label="Instrument of the new track" tabindex="-1" hidden></ul>
       </div>
     </section>
-    <section class="panel inspector" aria-labelledby="inspector-title">
+    <section class="panel inspector" id="inspector-panel" aria-labelledby="inspector-title">
       <h2 id="inspector-title">Inspector <span class="dim" id="inspector-track"></span></h2>
       <p class="draft-note" role="status">The score file has typed text with problems: fix it or revert it there, then the controls follow again.</p>
       <div id="inspector"><p class="placeholder">Select a track to see its instrument and settings.</p></div>

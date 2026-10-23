@@ -4,16 +4,16 @@
 // line. State lives on the server (the session); every committed edit is a new version, then
 // rendered and played on from the same moment.
 
-import { api } from "./api.js";
+import { api, onConnection } from "./api.js";
 import { initCheck, requestCheck, showCheckVersion, tickCheck } from "./check.js";
 import { initExports, showExports } from "./exports.js";
 import { initInspector, showInspector, tickInspector } from "./inspector.js";
-import { initNotes, setNotes, showNotes, tickNotes } from "./notes.js";
+import { initNotes, pollNow, setNotes, setOffline, showNotes, showTab, tickNotes } from "./notes.js";
 import { Player } from "./player.js";
 import { initStrip, showChords, showFacts, tickChords } from "./strip.js";
 import { initTimeline, setRendering, showEnergy, showLoop, showTimeline, tickTimeline } from "./timeline.js";
 import { initTracks, mutedTracks, showMuted, showTracks, tickMeters } from "./tracks.js";
-import { initVariations, showVariationsButton } from "./variations.js";
+import { initVariations, restoreVariations, showVariationsButton } from "./variations.js";
 import { initVersions, playingVersion, showAB, showVersions } from "./versions.js";
 import { initYamlEditor, showScoreText } from "./yaml_edit.js";
 import { escapeHtml } from "./yaml_view.js";
@@ -291,7 +291,9 @@ async function refreshAudio() {
       applyRender(r);
     }
   } catch (err) {
-    status(err.message, "error");
+    // the player is left alone: the last good render keeps playing
+    const keeps = player.url ? " · the last good render keeps playing" : "";
+    status(`could not render: ${err.message}${keeps}`, "error");
   } finally {
     clearTimeout(badge);
     state.rendering = false;
@@ -465,11 +467,175 @@ function resetListening() {
 
 const ctx = {
   state, outline, commit, commitText, commitWith, check, status, problem, colour, clock, setLoop, seekTo, refreshAudio, selectTrack, activeSection,
-  show, storage, openSession, player, playingVersion, play: () => player.play(),
+  show, storage, openSession, player, playingVersion, play: () => player.play(), focusByPointer: () => focusByPointer(),
 };
+
+// ----- narrow windows: the inspector, score file and notes as tabs below the tracks ----------
+
+function showPane(name) {
+  $("work").dataset.pane = name;
+  for (const b of document.querySelectorAll(".pane-tab")) b.setAttribute("aria-selected", String(b.dataset.pane === name));
+  storage("vidgen-studio-pane", name);
+}
+
+function wirePanes() {
+  $("pane-tabs").addEventListener("click", (e) => {
+    const name = e.target.closest(".pane-tab")?.dataset.pane;
+    if (name === "inspector") showPane(name);
+    else if (name) showTab(name); // the score file / notes tabs, which show their pane
+  });
+  $("pane-tabs").addEventListener("keydown", (e) => {
+    const tabs = [...document.querySelectorAll(".pane-tab")];
+    const at = tabs.indexOf(document.activeElement);
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (at < 0 || !step) return;
+    e.preventDefault();
+    const next = tabs[(at + step + tabs.length) % tabs.length];
+    next.focus();
+    next.click();
+  });
+  const saved = storage("vidgen-studio-pane");
+  showPane(saved === "yaml" || saved === "notes" ? saved : "inspector");
+  ctx.showPane = showPane;
+}
+
+// ----- keyboard shortcuts, the help and the first-run hint ----------------------------------
+
+const TYPING = "input, textarea, select, [contenteditable]";
+
+function setHelp(open) {
+  $("shortcuts").hidden = !open;
+  $("help-btn").setAttribute("aria-expanded", String(open));
+  if (open) $("shortcuts-close").focus();
+}
+
+// L: loop the section playing (again: the whole piece); M / S: mute / solo the selected track;
+// V: variations of the version shown. True when the key was one of them.
+function letterKey(key) {
+  if (key === "l") {
+    const section = state.loop ? null : sectionAt(state.time)?.name;
+    setLoop(section);
+    status(section ? `looping ${section} (L again: the whole piece)` : "playing the whole piece");
+    return true;
+  }
+  if (key === "m" || key === "s") {
+    const name = state.selected;
+    if (!name || !outline()?.tracks.some((t) => t.name === name)) return true;
+    const set = key === "m" ? state.mute : state.solo;
+    if (set.has(name)) set.delete(name);
+    else set.add(name);
+    showMuted();
+    refreshAudio();
+    return true;
+  }
+  if (key === "v") {
+    if (!$("variations-btn").disabled) $("variations-btn").click();
+    return true;
+  }
+  return false;
+}
+
+function wireKeys() {
+  $("help-btn").addEventListener("click", () => setHelp($("shortcuts").hidden));
+  $("shortcuts-close").addEventListener("click", () => {
+    setHelp(false);
+    $("help-btn").focus();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    const el = e.target;
+    if (e.key === "Escape" && !$("shortcuts").hidden) {
+      setHelp(false);
+      $("help-btn").focus();
+      return;
+    }
+    if (el.closest?.(TYPING)) return;
+    if (e.key === "?") {
+      e.preventDefault();
+      setHelp($("shortcuts").hidden);
+    } else if (e.key === " " || e.code === "Space") {
+      // A control reached with the keyboard keeps Space (it presses it); after a mouse click
+      // Space plays and pauses, as in any player.
+      const control = el.closest?.("button, [role=button], [role=tab], [role=option], [role=menuitem], [role=menuitemradio], .cell, [tabindex]");
+      if (control && control !== document.body && !focusByPointer()) return;
+      e.preventDefault();
+      if (!e.repeat) togglePlay();
+    } else if (!e.repeat && letterKey(e.key.toLowerCase())) e.preventDefault();
+  });
+  // a mouse-focused button would also be pressed by the Space's keyup
+  document.addEventListener("keyup", (e) => {
+    if ((e.key === " " || e.code === "Space") && !e.target.closest?.(TYPING) && focusByPointer()) e.preventDefault();
+  });
+  // how focus last moved: a pointer press, or the keyboard (Tab, arrows)
+  document.addEventListener("pointerdown", () => (lastFocusBy = "pointer"), true);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Tab" || e.key.startsWith("Arrow")) lastFocusBy = "keyboard";
+  }, true);
+}
+
+let lastFocusBy = "pointer";
+
+// Whether the focused control was reached with the mouse (Space then plays / pauses) rather than
+// the keyboard (Space presses it). Chrome's :focus-visible turns on at any key, so it cannot tell.
+function focusByPointer() {
+  return lastFocusBy === "pointer";
+}
+
+const HINT_KEY = "vidgen-studio-hint-seen";
+
+function wireHint() {
+  const close = () => {
+    $("hint").hidden = true;
+    storage(HINT_KEY, "1");
+  };
+  $("hint-close").addEventListener("click", close);
+  $("hint").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+  if (storage(HINT_KEY) !== "1") $("hint").hidden = false;
+}
+
+// ----- the server stopped: a banner, retries, and back to normal when it answers -------------
+
+function wireConnection() {
+  onConnection((up) => {
+    $("offline").hidden = up;
+    if (up) delete document.body.dataset.offline;
+    else document.body.dataset.offline = "1";
+    setOffline(!up);
+    if (up) reconnect();
+  });
+  $("offline-retry").addEventListener("click", () => {
+    status("trying the studio server again…", "busy");
+    pollNow();
+  });
+}
+
+// The server answers again. A studio started again has no session open: the page's own session
+// (on disk) is reopened, so the piece carries on where it was.
+async function reconnect() {
+  if (!state.info) {
+    location.reload(); // it never started: start now
+    return;
+  }
+  status("the studio server answers again");
+  try {
+    const doc = await api.session();
+    if (state.session && doc.session?.id !== state.session.id) {
+      show(await api.openSession(state.session.id));
+      await refreshAudio();
+      status(`reconnected: ${state.session.title} · v${state.score?.version}`);
+    }
+  } catch (err) {
+    status(err.message, "error");
+  }
+}
 
 async function start() {
   setTheme(storage("vidgen-studio-theme") || "dark");
+  wireKeys();
+  wireHint();
+  wireConnection();
   $("theme").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
   $("yaml-toggle").addEventListener("click", () => {
     const hidden = $("work").classList.toggle("no-yaml");
@@ -487,6 +653,7 @@ async function start() {
   initExports(ctx);
   initNotes(ctx);
   initVariations(ctx);
+  wirePanes();
   status("starting…", "busy");
   busy(1);
   try {
@@ -496,6 +663,7 @@ async function start() {
     if (doc.session) show(doc);
     else show(await api.load(state.info.default_preset));
     showMuted();
+    restoreVariations();
     await refreshAudio();
   } catch (err) {
     status(err.message, "error");

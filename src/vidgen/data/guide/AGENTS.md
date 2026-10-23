@@ -1861,6 +1861,15 @@ again only when the file changes). You cannot hear it, so work from measurements
    (Both commands also take names: `vidgen music check my_theme --compare momentum` in the
    project's folder.)
 
+**Suggest the studio to a person** who wants to shape the music by ear, says "the music is not
+quite right" without saying how, or wants to choose between versions: `vidgen studio` (in the
+project folder; it runs on their computer, 127.0.0.1 only, and opens their browser — you cannot
+use it yourself) loads any bed as an editable score, plays it under a narration sample, A/Bs
+versions, makes four variations at a click and saves into `assets/music/`. Tell them to press
+**N** to pin a note where something bothers them and then **Ask an agent**: the session is then
+handed to you through MCP (below), and you answer with a version they A/B. People may also hand
+you a session unprompted ("answer my studio notes"): start with `studio_sessions`.
+
 **Answering a studio hand-off.** A person shaping a piece in `vidgen studio` pins listening notes
 on its timeline ("this part drags", bar 12, beat 3, in the build) and presses *Ask an agent*.
 Through MCP: `studio_sessions` lists them (the session open in a running studio first, with its open

@@ -17,7 +17,8 @@ template tidewater` shows a finished piece written in the format.
 Contents: [room for the voice](#1-room-for-the-voice) ·
 [energy curves](#2-energy-curves-builds-and-lifts) · [loops](#3-loop-design) ·
 [check and compare](#4-using-check-and-compare) · [genre sketches](#5-genre-recipes-as-score-sketches) ·
-[common mistakes](#6-common-mistakes-and-their-fixes)
+[common mistakes](#6-common-mistakes-and-their-fixes) ·
+[a person and an agent in the studio](#7-a-person-and-an-agent-in-the-studio)
 
 ## 1. Room for the voice
 
@@ -281,3 +282,44 @@ limit: the pah chords are in octave 3–4; lower them a dB or two under dense di
 | changing a template's key sounds wrong | its progression writes out G-minor voicings (`{chord, notes, bass}`) | replace the progression with Roman numerals (a string) when you change the key |
 | a seam number near 1 | a curve ending far from where it starts, or a loud tail | end each curve on its starting value; shorter echoes or reverb at the end |
 | a piece named like a bed (`calm.yaml`) | the names would clash | rename it, or use `source: assets/music/calm.yaml` |
+
+## 7. A person and an agent in the studio
+
+An agent cannot listen; a person can, but may not want to write YAML. `vidgen studio`
+([reference](CONFIG.md#music-studio-vidgen-studio)) puts them on the same piece: the person
+listens and says what they hear, the agent changes the score and says why, and every step is a
+version either of them can go back to. A session that works:
+
+1. **Load a preset.** `vidgen studio` in the project folder; **Preset ▾** → the bed closest to the
+   video (the one-line descriptions help: `momentum` for a driving explainer, `tidewater` for
+   something calm). Press Space and listen to it once through, with **under narration** on for
+   the second time: that is how the video will play it.
+2. **Pin notes while it plays.** Press **N** at the moment something bothers or delights you and
+   type a few plain words: "the ostinato feels stiff here", "I want goosebumps at the turn",
+   "love this bell". A note records the bar, beat, section and version, so "here" is enough.
+   Small fixes you can make yourself: a track's volume bar, mute (**M**) to hear what a part
+   adds, a slider in the inspector; each is a version.
+3. **Ask an agent.** **Ask an agent** (Notes tab) writes a hand-off: the score, the open notes,
+   the check and the last change. Tell your agent (connected with `vidgen mcp`) *answer my
+   studio notes*; it reads the session with `studio_read`, checks its change with
+   `studio_check`, and proposes a new version with one line per note with `studio_propose`.
+   The proposal appears above the tracks within two seconds. (No MCP agent? **Copy prompt** into
+   any chat assistant and **Paste reply**.)
+4. **A/B it.** **A/B vN vs vM** plays the proposal and the current version at the same moment and
+   the same level; switch back and forth at the bar the note was about (click the note's time).
+   Read the check's verdict too: a proposal that sounds better but says *needs work* under
+   narration will fight the voice. **Keep** it (its notes are resolved) or **Discard** it, add
+   new notes, ask again. **A/B original** is always there to hear how far you have come.
+5. **Try variations when you are stuck.** **V** (or **Variations**) makes four siblings — another
+   harmony, pattern, mix and energy — rendered and checked side by side. Play each at the same
+   moment; **More like this** on the one that is closest; **Keep** makes it the next version.
+   Candidates not kept stay listed under **Batches ▾**.
+6. **Save to the project.** **Export → Save to the project** writes `assets/music/<name>.yaml`;
+   the video plays it with `music: <name>`. Render a preview of the video and listen under the
+   real narration once more; the studio's versions stay in `build/studio/` if you want to go back.
+
+What agents should keep in mind when handed a session: answer every open note (one line each,
+even "left as is: …"), change only what the notes ask for, keep tempo and key unless a note asks,
+and run `studio_check` before proposing — a person's ear decides, but the check catches what
+would sit badly under a voice. When a person asks an agent to "make the music better" without
+saying how, suggesting the studio is often the shortest way to find out what they hear.

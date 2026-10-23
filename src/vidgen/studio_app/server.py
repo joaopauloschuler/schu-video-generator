@@ -193,6 +193,8 @@ class _Handler(BaseHTTPRequestHandler):
             "/api/presets": app.presets,
             "/api/patches": app.patches,
             "/api/sessions": app.sessions,
+            "/api/ask": app.last_handoff,
+            "/api/disk": app.disk,
         }
         if path in routes:
             return self._send_json({"ok": True, "result": routes[path]()})
@@ -204,7 +206,8 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/api/facts":
             return self._send_json({"ok": True, "result": app.facts(query.get("key", [""])[0])})
         if path == "/api/variations":
-            return self._send_json({"ok": True, "result": app.variation_batch(query.get("batch", [""])[0])})
+            batch = query.get("batch", [""])[0]
+            return self._send_json({"ok": True, "result": app.variation_batch(batch) if batch else app.variation_batches()})
         raise _ApiError(HTTPStatus.NOT_FOUND, f"not found: {path}")
 
     def _post(self, path: str, query: dict[str, list[str]]) -> None:
@@ -265,6 +268,8 @@ class _Handler(BaseHTTPRequestHandler):
             result = app.paste_reply(_req_str(body, "reply"))
         elif path == "/api/proposal/send":
             result = app.send_to_provider(_req_str(body, "model"))
+        elif path == "/api/cleanup":
+            result = app.clean_up()
         elif path == "/api/proposal/decide":
             keep = body.get("keep")
             if not isinstance(keep, bool):
