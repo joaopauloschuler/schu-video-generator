@@ -9,7 +9,10 @@ An edit is ``{"op": ..., "path": ...}`` with ``path`` as a score problem's ``whe
   or add the key (and any missing parents) next to its siblings;
 - ``delete``: remove a mapping's key or a list's item (with the comment lines just above it);
 - ``insert`` ``index`` ``value``: put an item into a list at ``index`` (its length: at the end);
-- ``rename`` ``to``: rename a mapping's key.
+- ``rename`` ``to``: rename a mapping's key;
+- ``unset`` ``keep``?: remove a mapping's key (nothing when it is not there) and the mappings
+  it leaves empty, up to the first ``keep`` parts of the path (default 2: ``tracks.bass`` stays);
+  a mapping at that depth left empty is written ``{}`` (a reset to the default, Step 195).
 """
 
 from __future__ import annotations
@@ -182,9 +185,41 @@ def apply_edits(text: str, ops: Sequence[Mapping[str, Any]]) -> str:
             text = insert_item(text, path, op.get("index"), op.get("value"))
         elif kind == "rename":
             text = rename_key(text, path, op.get("to"))
+        elif kind == "unset":
+            keep = op.get("keep", 2)
+            if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
+                raise VidgenError(f"edit: unset {path}: keep is a whole number of path parts (at least 1)")
+            text = unset_value(text, path, keep)
         else:
-            raise VidgenError(f"edit: unknown op {kind!r} (set, delete, insert, rename)")
+            raise VidgenError(f"edit: unknown op {kind!r} (set, delete, insert, rename, unset)")
     return text
+
+
+def unset_value(text: str, path: str, keep: int = 2) -> str:
+    """Remove the key at ``path`` (``text`` unchanged when it is not there) and every parent
+    mapping it leaves empty, keeping the first ``keep`` parts of the path; a kept mapping left
+    empty becomes ``{}``."""
+    parts = parse_path(path)
+    if not isinstance(parts[-1], str):
+        raise VidgenError(f"edit: unset {path}: name a key, not a list item")
+    nodes = _walk(_compose(text), parts, path)
+    if len(nodes) != len(parts) + 1:
+        return text
+    k = len(parts)
+    # nodes[i] is the node at parts[:i]: the parent of parts[:k] is nodes[k - 1]
+    while k - 1 > keep and isinstance(nodes[k - 1], yaml.MappingNode) and len(nodes[k - 1].value) == 1 and isinstance(parts[k - 2], str):
+        k -= 1
+    parent = nodes[k - 1]
+    if isinstance(parent, yaml.MappingNode) and len(parent.value) == 1 and k - 1 >= 1:
+        return set_value(text, _path_text(parts[: k - 1]), {})
+    return delete_value(text, _path_text(parts[:k]))
+
+
+def _path_text(parts: Sequence[str | int]) -> str:
+    out = ""
+    for part in parts:
+        out += f"[{part}]" if isinstance(part, int) else (f".{part}" if out else part)
+    return out
 
 
 def set_value(text: str, path: str, value: Any) -> str:

@@ -146,6 +146,7 @@ def describe_score(score: Any, data: Mapping[str, Any]) -> dict[str, Any]:
         track["settings"] = dict(spec.get("settings") or {})
         track["kind"] = by_name[track["name"]].instrument.kind
         track["levels"] = {name: _step_levels(part) for name, part in by_name[track["name"]].parts.items()}
+        track["spec"] = _json_safe(spec)  # the track as written: the inspector's values (Step 195)
     raw_sections = data.get("sections") if isinstance(data.get("sections"), list) else None
     for k, section in enumerate(outline["sections"]):
         found = score.sections[k]
@@ -161,6 +162,17 @@ def describe_score(score: Any, data: Mapping[str, Any]) -> dict[str, Any]:
     outline["bar_seconds"] = round(score.bar / RATE, 6)
     outline["steps_per_bar"] = steps_per_bar(score.time)
     return outline
+
+
+def _json_safe(value: Any) -> Any:
+    """YAML data as JSON can carry it (keys as text; a date or other scalar as its text)."""
+    if isinstance(value, Mapping):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)
 
 
 # ----- new tracks -----------------------------------------------------------------------------

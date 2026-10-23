@@ -13859,7 +13859,7 @@ built-in bed's template.
   whole piece or a section; playhead; energy curve (from the render's loudness per bar); drag a
   section edge to change its bars; click a section to loop it; mute / solo, volume, pan, pattern
   text editable in place, level meters; `[+ track]`.
-- **195 Inspector and editing**: instrument picker; sliders from `patch_catalog()` (ranges,
+- **195 Inspector and editing** (done, §94.13): instrument picker; sliders from `patch_catalog()` (ranges,
   units, hover help); octave, accent; effects as chips; per-section changes; a step grid synced
   both ways with the steps text; the YAML editable both ways (type YAML, the controls follow);
   inline problems with the CLI's did-you-mean messages — a bad edit never stops playback (the
@@ -13892,7 +13892,7 @@ person asks (Step 197).
 - **Modules** (`src/vidgen/studio_app/`): `__init__.py` (`run_studio`: the command's loop),
   `app.py` (`StudioApp`: what each API call does, with no HTTP — tests call it directly),
   `server.py` (`StudioServer`, the HTTP layer only), `session.py` (sessions on disk), `static/`
-  (the page, package data). Later steps add modules beside them (`edits.py` and `song.py` 194, `stems.py` 196,
+  (the page, package data). Later steps add modules beside them (`edits.py` and `song.py` 194, `inspector.py` 195, `stems.py` 196,
   `exports.py` 197, `notes.py` / `agent.py` 198, `variations.py` 199) and keep `server.py` a thin
   router. Boundary: `studio_app` may import any of vidgen; `vidgen.studio` never imports
   `studio_app` (it stays a self-contained package, §93.2, checked by its allow-list test).
@@ -13974,15 +13974,15 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 |---|---|---|
 | `GET /api/info` | 193 | vidgen version, project, studio folder, default preset (`momentum`), audition gain, open session id |
 | `GET /api/presets` | 193 | the 17 beds in order: name, title, `one_line` (the description's first clause, ≤ 110 characters), `bed_description`, `use`, key, tempo, time, bars, seconds, sections, tracks, `score_bed` |
-| `GET /api/patches` | 193 | `vidgen.studio.patch_catalog()` (instruments, settings with ranges and words, effects) |
+| `GET /api/patches` | 193, 195 | `vidgen.studio.patch_catalog()` (instruments, settings with ranges and words, effects), each ranged field with `unit`, `scale` and `integer` (195) |
 | `GET /api/session` | 193 | the open session (`session.json` + folder) and its current version's score, or nulls |
 | `GET /api/score?version=N` | 193 | a version: text, outline (`score_outline` + per track the steps text, volume, pan and settings as written; each section's first bar; the progression when it is one string), problems, render key |
 | `POST /api/load {preset} \| {text}` | 193 | a new session whose version 1 is the preset's template or the text (bad text refused with its problems) |
 | `POST /api/validate {text}` | 193 | `ok`, problems `{where, message, line}` (did-you-mean as the CLI; YAML syntax errors with their line), outline |
 | `POST /api/render {version?, section?, mute?}` | 193, 194 | render a version (default current) or one section; `mute`: tracks left out (a listening mix, §94.12); `{key, url, seconds, samples, loop, loudness, true_peak, audition_gain_db, warnings, render_seconds, energy, cached, section, muted}` |
 | `GET /audio/<key>.wav`, `/audio/<key>[.m<tag>]-<section>.wav`, `/audio/<key>.m<tag>.wav` | 193, 194 | the render (or a listening mix), with `Range` (206, `Content-Range`; 416 outside the file) |
-| `POST /api/edit {version?, ops, label?, dry_run?}` | 194 | a new version from value edits (paths like `tracks.bass.volume`) and song edits (§94.12); `{ok: false, problems}` writes nothing; `dry_run` checks only |
-| `POST /api/text {version, text}` | 195 | a new version from typed text |
+| `POST /api/edit {version?, ops, label?, dry_run?}` | 194, 195 | a new version from value edits (paths like `tracks.bass.volume`; `unset` 195) and song edits (§94.12; `change_instrument`, `play_mode`, `section_plays` 195, §94.13); `{ok: false, problems}` writes nothing; `dry_run` checks only; `notes`: what changes beyond the value named |
+| `POST /api/text {version?, text}` | 195 | a new version from typed text (`origin: edit`); `{ok: false, problems}` writes nothing; the same text `unchanged` |
 | `POST /api/undo`, `/api/redo`, `/api/current {version}` | 197 | move the current version |
 | `POST /api/check {version}`; `GET /media/<key>-check.png` | 197 | `check.check_dict` of the version, its spectrogram |
 | `POST /api/export {version, format, name?}` | 197 | YAML / MP3 / WAV to a chosen path, or `assets/music/<name>.yaml` |
@@ -14031,7 +14031,8 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 - **Files** (`studio_app/static/`, package data): `index.html`, `studio.css`, ES modules `app.js`
   (the page), `api.js` (the JSON calls), `player.js` (playback), `yaml_view.js` (the highlighted
   score file), `favicon.svg`; Step 194 adds `strip.js` (key, tempo, seed, chords), `timeline.js`
-  (sections, energy, loops, the section bar) and `tracks.js` (the track list). Vanilla JS, no build step, no CDN, no external fonts (Inter and
+  (sections, energy, loops, the section bar) and `tracks.js` (the track list); Step 195 `inspector.js`,
+  `stepgrid.js` (the steps text read into cells) and `yaml_edit.js` (the score file typed). Vanilla JS, no build step, no CDN, no external fonts (Inter and
   JetBrains Mono come from vidgen's bundled fonts at `/fonts/...`), so it works offline.
 - **Look** (decision: vidgen's own): the `dark_tech` theme's colours (background `#0E1116`,
   surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
@@ -14172,3 +14173,77 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
   `<body>` while an edit or render is under way (the browser tests wait on it).
 - Not yet: undo / redo and the version list (197) — every edit is already a version on disk;
   meters from the audio and fast stems (196); the inspector's controls (195).
+
+### 94.13 Step 195: the inspector, the step grid, the score file typed
+
+- **Where the controls write** ("Edit for"): the whole track (`tracks.<t>.<key>`) or one section
+  (`tracks.<t>.sections.<s>.<key>`, a `PART_KEYS` change). In a section the controls show the
+  section's own value where it has one (labels in the section's colour) and the track's
+  otherwise; ↺ removes the section's value (back to the track's). A banner names the section;
+  a section where the track rests shows "rests in …" and [Play in …].
+- **`unset`** (`edits.py`): removes a key — nothing when it is not there — and the mappings it
+  leaves empty, keeping the first `keep` parts of the path (default 2, the track): a reset of
+  `tracks.pad.sections.b.settings.tone` removes `settings`, `b` and `sections` when they hold
+  nothing else; a kept mapping left empty is written `{}` (an effect's last field reset).
+- **Sliders** are generated from `/api/patches`: the catalogue with `unit` (from the words: cents,
+  Hz, s, bars, beats, dB), `scale` (`log` for a frequency spanning two octaves or more) and
+  `integer` (`studio_app.inspector.studio_catalog`; `music patches --json` is unchanged). A range
+  input of 0..1000 maps to the value (log or linear; rounded to 3 significant figures on a log
+  scale, else to a step of about 1/200 of the range), a tick marks the default, a number field
+  takes a typed value (checked by the score: out of range is refused by the control with the
+  score's message), the help line under the group shows the words, range and default of the
+  setting under the pointer or focus. **One version per drag**: written on `change` (the
+  release), keyboard steps 0.35 s after the last.
+- **Instrument change** (`inspector.change_instrument`, op `change_instrument`): settings the new
+  instrument also has are kept (moved into its range when outside it), the others dropped —
+  for the track and each section's changes; a drum loses `octave`, `transpose`, pitched steps
+  (a first pattern of the new drum instead, `song.default_steps`) and pitched section steps; a
+  pad's `play: chords` becomes a first pattern on an instrument that cannot hold chords. The
+  page shows the dry run's notes ("keeps decay, ring · drops index (sub has no such setting) ·
+  tone 5800 → 1500 (sub's range is 200 to 1500)") with [Change to …] / [Keep …] before the version is made.
+- **Notes** (octave, transpose, accent with common groups offered) and **play** for a pad
+  (`play_mode`: chords ↔ steps, steps `* - - -` in x/4; back to chords drops the steps).
+- **Effects as chips** (summary on the chip: `echo 0.75 beat ×2`, `lowpass 1.2→2.6 kHz`): click
+  opens its editor — sliders for the ranged fields, `duck`'s track or every beat and `follow`,
+  `echo`'s `pingpong`, `gate`'s own small step grid (click a step: open / closed) and its text;
+  curves (`lowpass`, `highpass`, `width`, `volume`) as fixed / ramp over the section / points,
+  drawn over the section's bars. [+ effect] adds one with the catalogue's defaults (duck under
+  the score's kick, else every beat). Shorthands (`duck: kick`, `gate: "x.x."`, `echo: true`)
+  are read as their fields; a field edit on a shorthand writes the whole effect as a mapping,
+  else only that field. In a section, × on the track's effect writes `none` (off there; shown
+  struck through with ↺), on the section's own removes it; a section that changes an inherited
+  effect's field gets a copy of the track's effect with the change.
+- **Per section** (table): plays (a switch → `section_plays`: written as the track writes it,
+  `only` when it lists where it plays, else `rest`; never nowhere; resting drops that section's
+  changes, which would never play), the changes there in words, × (remove them), [edit] (the
+  section as "Edit for").
+- **The step grid** (`stepgrid.js`): the steps text read with the same tokens as
+  `studio.patterns` (one cell per step; `+` stacks are one cell) into bars, each bar a row whose
+  cells share its width (bars of 1, 8 or 16 steps line up in time), grouped by beat, accent
+  dots from `accent`, holds drawn as the note going on, degrees and note names written in the
+  cell. Editing replaces **only the cell's characters** in the text, so spacing, `|` and the
+  rest stay as written. Brushes: `x X o - .` (drums) plus `* 1-9` and any one step typed
+  (`A4`, `5'`, `v2`, `C4+E4`) for pitched tracks; click paints (the brush again: a rest), drag
+  paints one version; keys: arrows move, a symbol writes it (a burst = one version 0.7 s after
+  the last), Backspace a rest. + bar copies the last bar, − bar removes it; a bar's step count
+  (1–32) resamples it (a step on the new grid keeps its symbol, a new step inside a note holds
+  it on pitched tracks and the riser / static, else rests; a hold after a rest rests). A text
+  field under the grid shows the steps: typing shows them in the grid at once, Enter or leaving
+  keeps them. While playing, the step under the playhead is outlined (when the grid shows the
+  steps that play there). Problems (e.g. an accent that no longer fits) show under the grid
+  with the score's message and the grid goes back to the version's.
+- **The score file typed** (`yaml_edit.js`): a transparent textarea over the highlighted text
+  (same font and metrics; the line numbers stay), re-highlighted on each key; 0.3 s after the
+  last key `/api/validate` marks bad lines (the message as their tooltip) and lists the
+  problems above with their line (click: the caret goes there) — the CLI's messages with
+  did-you-mean, YAML syntax errors with their line. Valid text unchanged for 0.8 s in all
+  becomes a version through `/api/text` and every control follows. **Text with problems is a
+  draft**: never a version; the last good version keeps playing; `data-draft` on `<body>` dims
+  and disables the controls that edit (track list, inspector, song strip, section bar) with a
+  note, until the text is fixed or [Revert to vN]. A new version from a control replaces the
+  editor's text unless the person is typing a different text there.
+- **Outline**: each track carries `spec`, the track as written (JSON-safe), which the inspector
+  reads (written vs default values, sections' changes, effects as written).
+- Not in this step: the re-render stays whole-piece (196); undo / redo and the version list
+  (197). Effects written as a mapping of two or more fields into a block track are added as
+  block lines (as `edits.py` writes new mappings), into a flow track inline.

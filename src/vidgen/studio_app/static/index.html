@@ -78,11 +78,19 @@
     </section>
     <section class="panel inspector" aria-labelledby="inspector-title">
       <h2 id="inspector-title">Inspector <span class="dim" id="inspector-track"></span></h2>
+      <p class="draft-note" role="status">The score file has typed text with problems: fix it or revert it there, then the controls follow again.</p>
       <div id="inspector"><p class="placeholder">Select a track to see its instrument and settings.</p></div>
     </section>
     <section class="panel yaml" id="yaml-panel" aria-labelledby="yaml-title">
-      <h2 id="yaml-title">Score file <span class="dim" id="yaml-name"></span></h2>
-      <pre class="code" id="yaml" tabindex="0" aria-label="The score file (YAML)"></pre>
+      <div class="yaml-head">
+        <h2 id="yaml-title">Score file <span class="dim" id="yaml-name"></span><span class="yaml-state" id="yaml-state" aria-live="polite"></span></h2>
+        <div class="yaml-problems" id="yaml-problems" role="alert" hidden></div>
+      </div>
+      <div class="code-wrap">
+        <pre class="code" id="yaml" aria-hidden="true"></pre>
+        <textarea class="code-input" id="yaml-input" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"
+          aria-label="The score file (YAML): type to change it; valid text becomes the next version"></textarea>
+      </div>
     </section>
   </main>
 

@@ -152,8 +152,9 @@ def audition_gain_db() -> float:
     return MUSIC_GAIN_DB
 
 
-#: Edits that change more than one value (:mod:`vidgen.studio_app.song`), by op name.
-SONG_OPS = ("add_track", "delete_track", "add_section", "remove_section", "rename_section")
+#: Edits that change more than one value (:mod:`vidgen.studio_app.song` and
+#: :mod:`vidgen.studio_app.inspector`), by op name.
+SONG_OPS = ("add_track", "delete_track", "add_section", "remove_section", "rename_section", "change_instrument", "play_mode", "section_plays")
 
 
 def _op_label(op: Mapping[str, Any]) -> str:
@@ -166,10 +167,14 @@ def _op_label(op: Mapping[str, Any]) -> str:
     return f"{kind} {path}"
 
 
-def _apply_ops(text: str, ops: Sequence[Mapping[str, Any]]) -> tuple[str, list[str]]:
-    """``text`` with ``ops`` applied in order, and a label for each: the song edits are turned
-    into value edits against the text as it is when their turn comes."""
-    labels = []
+def _apply_ops(text: str, ops: Sequence[Mapping[str, Any]]) -> tuple[str, list[str], list[str]]:
+    """``text`` with ``ops`` applied in order, a label for each and notes on what changed beyond
+    the value named (an instrument change): the song edits are turned into value edits against
+    the text as it is when their turn comes."""
+    from vidgen.studio_app import inspector
+
+    labels: list[str] = []
+    notes: list[str] = []
     for op in ops:
         kind = op.get("op") if isinstance(op, Mapping) else None
         if kind not in SONG_OPS:
@@ -180,7 +185,17 @@ def _apply_ops(text: str, ops: Sequence[Mapping[str, Any]]) -> tuple[str, list[s
         if score is None:
             raise VidgenError(f"{kind}: the score has problems to fix first ({problems[0]['where']}: {problems[0]['message']})")
         name = op.get("name")
-        if kind == "add_track":
+        track = str(op.get("track", ""))
+        if kind == "change_instrument":
+            values, label, more = inspector.change_instrument(data, score, track, str(op.get("instrument", "")))
+            notes += more
+        elif kind == "play_mode":
+            values, label, more = inspector.set_play_mode(data, score, track, str(op.get("mode", "")))
+            notes += more
+        elif kind == "section_plays":
+            values, label, more = inspector.set_section_plays(data, track, str(op.get("section", "")), bool(op.get("plays")))
+            notes += more
+        elif kind == "add_track":
             values, label = song.add_track(data, score, str(op.get("instrument", "")), name)
         elif kind == "delete_track":
             values, label = song.delete_track(data, str(name))
@@ -194,8 +209,9 @@ def _apply_ops(text: str, ops: Sequence[Mapping[str, Any]]) -> tuple[str, list[s
         else:
             values, label = song.rename_section(data, str(name), op.get("to"))
         text = apply_edits(text, values)
-        labels.append(label)
-    return text, labels
+        if label:
+            labels.append(label)
+    return text, labels, notes
 
 
 def _slice_wav(source: Path, target: Path, first: int, count: int) -> None:
@@ -246,9 +262,11 @@ class StudioApp:
         return self._presets
 
     def patches(self) -> dict[str, Any]:
+        """The patch catalogue with each setting's unit and slider scale (Step 195)."""
         from vidgen.studio import patch_catalog
+        from vidgen.studio_app.inspector import studio_catalog
 
-        return patch_catalog()
+        return studio_catalog(patch_catalog())
 
     # ----- sessions and versions ----------------------------------------------------------
 
@@ -319,13 +337,30 @@ class StudioApp:
             base = version if version is not None else session.current
             assert base is not None
             text = session.text(base)
-            new_text, labels = _apply_ops(text, ops)
+            new_text, labels, notes = _apply_ops(text, ops)
             data, score, problems = check_text(new_text)
             if dry_run or score is None:
-                return {"ok": score is not None, "problems": problems, "outline": describe_score(score, data) if score is not None else None}
+                outline = describe_score(score, data) if score is not None else None
+                return {"ok": score is not None, "problems": problems, "outline": outline, "notes": notes, "labels": labels}
             if new_text == text:
-                return {"ok": True, "unchanged": True, **self.state()}
+                return {"ok": True, "unchanged": True, "notes": notes, **self.state()}
             session.add_version(new_text, "edit", (label or "; ".join(labels) or "an edit")[:120], base)
+            return {"ok": True, "notes": notes, **self.state()}
+
+    def text(self, version: int | None, text: str) -> dict[str, Any]:
+        """Typed score ``text`` (the YAML view) as the next version after ``version`` (default:
+        the current one), like an edit: ``{ok: false, problems}`` writes nothing (the page keeps
+        the text as a draft and the last good version plays); the same text is ``unchanged``."""
+        with self._lock:
+            session = self._session()
+            base = version if version is not None else session.current
+            assert base is not None
+            data, score, problems = check_text(text)
+            if score is None:
+                return {"ok": False, "problems": problems, "outline": None}
+            if text == session.text(base):
+                return {"ok": True, "unchanged": True, **self.state()}
+            session.add_version(text, "edit", "typed in the score file", base)
             return {"ok": True, **self.state()}
 
     # ----- rendering ----------------------------------------------------------------------

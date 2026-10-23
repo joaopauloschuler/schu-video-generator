@@ -29,4 +29,5 @@ export const api = {
   validate: (text) => call("POST", "/api/validate", { text }),
   render: (version, section, mute) => call("POST", "/api/render", { version, section: section || null, mute: mute || [] }),
   edit: (version, ops, label, dryRun = false) => call("POST", "/api/edit", { version, ops, label: label || null, dry_run: dryRun }),
+  text: (version, text) => call("POST", "/api/text", { version, text }),
 };

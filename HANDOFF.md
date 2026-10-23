@@ -17949,3 +17949,79 @@ Known gaps
   a mute mix. Time signature is shown, not edited (changing it would break every pattern).
   Removing a section can leave a `duck: {to: <removed track>}` problem — reported, nothing
   written. Volume bar spans −30..+6 dB (a louder or quieter value shows clamped until moved).
+
+## Step 195 — vidgen studio: inspector, step grid, the score file typed
+
+What was built (DESIGN §94.13)
+- **Inspector** (`static/inspector.js`): instrument picker (a dry run explains what the change
+  keeps, drops or moves into range, then [Change to …]); "Edit for" the whole track or one
+  section (writes `sections: {s: {...}}`; the section's own values in its colour, the track's
+  otherwise, ↺ back); **Sound** sliders generated from the catalogue (units, log scale for
+  frequencies, default tick, typed values, reset, help line on hover / focus) plus volume and
+  pan; **Notes** (octave, transpose, accent; a pad's play mode chords / steps); **Steps** (the
+  grid); **Effects** chips (echo, reverb, duck to a track or beat with follow, gate with its own
+  step pattern, lowpass / highpass / width / volume curves as fixed / ramp / points with a
+  drawing, spread; off in one section and back); **Per section** table (plays switch via
+  `rest` / `only`, the changes there, clear, edit).
+- **Step grid** (`static/stepgrid.js`): the steps text read with the patterns' tokens into bars
+  of cells (bars of different step counts line up in time), beat groups, accent dots, holds
+  drawn; a cell edit replaces only its characters in the text; brushes, drag-paint (one
+  version), keys (a burst = one version), + / − bar, steps per bar (resampled), a text field
+  live both ways, the step under the playhead lit.
+- **The score file typed** (`static/yaml_edit.js`): transparent textarea over the highlighted
+  text; checked 0.3 s after typing (bad lines marked, problems listed with line links and the
+  CLI's did-you-mean), valid for 0.8 s → a version (`POST /api/text`), the controls follow; a
+  draft with problems is never a version, dims the editing controls, [Revert to vN].
+- **Server**: `edits.unset` (removes a key and the mappings it empties, `keep` parts kept);
+  `studio_app/inspector.py`: `studio_catalog` (units, scale, integer), `change_instrument`,
+  `set_play_mode`, `set_section_plays` as ops `change_instrument`, `play_mode`,
+  `section_plays` of `/api/edit` (its answers carry `notes`); `StudioApp.text`; the outline's
+  tracks carry `spec` (the track as written).
+
+Decisions
+- Units come from the settings' words (the catalogue has none); `music patches --json` stays as
+  it was (the studio decorates a copy). Instrument settings are never "integer" (the catalogue
+  writes 2600.0 as 2600).
+- A grid edit rewrites only the cell's characters (the text's spacing and `|` stay); resizing a
+  bar rewrites that bar only.
+- A typed text with problems blocks the other controls (instead of being overwritten by them).
+- A field edit on an inherited effect in a section copies the track's effect into the section
+  (an effect in a section replaces the track's whole, as the score reads it).
+
+Files touched
+- New: `src/vidgen/studio_app/inspector.py`, `static/inspector.js`, `static/stepgrid.js`,
+  `static/yaml_edit.js`; `tests/test_studio_inspector.py` (9).
+- Changed: `studio_app/edits.py` (`unset`), `app.py` (ops, notes, `text`, patches), `server.py`
+  (`/api/text`), `song.py` (`spec`), `static/app.js`, `api.js`, `index.html`, `studio.css`,
+  `yaml_view.js`; `tests/test_studio_ui.py` (+3); `DESIGN.md` (§94.13, §94.1/.2/.5/.7);
+  `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. The page's API: `/api/text`, `unset`, three ops, `notes`, `spec`,
+  catalogue fields `unit` / `scale` / `integer`.
+
+How to test (one at a time, capped)
+- `tests/test_studio_inspector.py`: 9 passed (unset and pruning, catalogue units, instrument
+  change incl. drums and pads, play mode, section plays, dry-run notes, typed text, routes).
+- `tests/test_studio_ui.py -m ui`: 9 passed in 23 s (+ sliders / reset / out-of-range problem /
+  instrument change / effects in a section / plays switch; the grid by click, keys, + bar, steps
+  per bar, text field, a degree; the score file: a bad name with did-you-mean and line, revert,
+  valid text → version and controls follow, a control → the text).
+- `tests/test_studio_app.py` + `test_studio_song.py`: 35 passed.
+
+Files to look at
+- Screenshots (1440 × 900; `*-panel`-like ones are the inspector at full height):
+  `<scratchpad>/s195/shots/1-arp-inspector.png`, `1b-arp-inspector-panel.png`,
+  `3-grid-painted.png`, `4-scope-build.png`, `5-lowpass-editor.png`, `6-instrument-change.png`,
+  `7-echo-added.png`, `7b-build-own-decay.png`, `7c0-accent-problem.png`,
+  `7c-grid-keys-and-8.png`, `8-yaml-problem.png`, `9-yaml-typed-version.png`, `10-pad.png`,
+  `10b-pad-gate.png`, `10c-pad-duck.png`, `10d-pad-lift-no-gate.png`, `10e-pad-steps.png`,
+  `11-lead-playing.png` (the lead's piano-roll-like grid with the playhead step),
+  `12-light.png`, `13-narrow.png`, `14-overlay-check.png` (typed text in red over the
+  highlighting: they match); made by `<scratchpad>/s195/shots.py`.
+
+Known gaps
+- Re-render is still the whole piece (196). No undo / version list (197; every change is a
+  version on disk). A new effect mapping in a block-style track is written as block lines.
+  No per-cell note dropdown: a pitched cell takes a brush or a typed step (`A4`, `5'`, `v2`).
+  The YAML editor has no line wrapping or search (the browser's undo works in it).

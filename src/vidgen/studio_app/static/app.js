@@ -1,15 +1,17 @@
-// vidgen studio, the page (DESIGN.md §94.7, §94.12): the top bar's preset picker, the song strip
-// (strip.js), transport, the timeline (timeline.js), the track list (tracks.js), the inspector
-// (read-only until Step 195), the score file and the status line. State lives on the server
-// (the session); every committed edit is a new version, then rendered and played on from the
-// same moment.
+// vidgen studio, the page (DESIGN.md §94.7, §94.12, §94.13): the top bar's preset picker, the
+// song strip (strip.js), transport, the timeline (timeline.js), the track list (tracks.js), the
+// inspector (inspector.js), the score file editable both ways (yaml_edit.js) and the status
+// line. State lives on the server (the session); every committed edit is a new version, then
+// rendered and played on from the same moment.
 
 import { api } from "./api.js";
+import { initInspector, showInspector, tickInspector } from "./inspector.js";
 import { Player } from "./player.js";
 import { initStrip, showChords, showFacts, tickChords } from "./strip.js";
 import { initTimeline, setRendering, showEnergy, showLoop, showTimeline, tickTimeline } from "./timeline.js";
 import { initTracks, mutedTracks, showMuted, showTracks, tickMeters } from "./tracks.js";
-import { changedLines, escapeHtml, showYaml } from "./yaml_view.js";
+import { initYamlEditor, showScoreText } from "./yaml_edit.js";
+import { escapeHtml } from "./yaml_view.js";
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ["--c1", "--c2", "--c3", "--c4"];
@@ -186,49 +188,13 @@ function show(doc, before = null) {
   showTimeline();
   showTracks();
   showInspector();
-  const bad = new Set((state.score?.problems || []).map((p) => p.line).filter(Boolean));
-  showYaml($("yaml"), state.score?.text || "", bad, changedLines(before, state.score?.text || ""));
+  showScoreText(state.score?.text || "", state.score?.problems || [], before);
 }
 
 function selectTrack(name) {
   state.selected = name;
   for (const row of $("tracks").querySelectorAll(".track")) row.setAttribute("aria-selected", String(row.dataset.name === name));
   showInspector();
-}
-
-function showInspector() {
-  const box = $("inspector");
-  const track = outline()?.tracks.find((t) => t.name === state.selected);
-  $("inspector-track").textContent = track ? `· ${track.name}` : "";
-  if (!track) {
-    box.innerHTML = '<p class="placeholder">Select a track to see its instrument and settings.</p>';
-    return;
-  }
-  const index = outline().tracks.indexOf(track);
-  box.style.setProperty("--tc", colour(index));
-  const patch = state.patches?.instruments.find((p) => p.name === track.instrument);
-  const written = track.settings || {};
-  const settings = patch
-    ? Object.entries(patch.settings)
-        .map(([name, s]) => {
-          const value = written[name] ?? s.default;
-          return `<div class="setting" title="${escapeHtml(s.words)}">
-            <label for="set-${name}">${escapeHtml(name)}</label>
-            <input type="range" id="set-${name}" min="${s.low}" max="${s.high}" step="any" value="${value}" disabled>
-            <output>${value}</output></div>`;
-        })
-        .join("")
-    : "";
-  const effects = track.effects.length ? track.effects.map((e) => `<span class="chip">${escapeHtml(e)}</span>`).join("") : '<span class="dim">none</span>';
-  box.innerHTML = `
-    <dl>
-      <dt>instrument</dt><dd><b>${escapeHtml(track.instrument)}</b>${patch ? ` <span class="dim">— ${escapeHtml(patch.words)}</span>` : ""}</dd>
-      <dt>plays</dt><dd>${track.plays === "chords" ? "the chords (held)" : `<span class="mono">${escapeHtml(track.steps)}</span>`}</dd>
-      <dt>sections</dt><dd>${track.sections.map(escapeHtml).join(", ")}</dd>
-      <dt>effects</dt><dd class="chips">${effects}</dd>
-    </dl>
-    ${settings}
-    <p class="note">Volume, pan and the steps are edited in the track list; the settings, octave, accent and effects in Step 195.</p>`;
 }
 
 // ----- edits ------------------------------------------------------------------------------
@@ -246,11 +212,20 @@ function busy(delta) {
 // Commit `ops` as the next version (one at a time, each on the version before), show it and
 // render it. Resolves to the server's answer: {ok, problems} when the edit has problems.
 function commit(ops, label) {
+  return commitWith((version) => api.edit(version, ops, label));
+}
+
+// Typed score text (the score file) as the next version, as an edit.
+function commitText(text) {
+  return commitWith((version) => api.text(version, text));
+}
+
+function commitWith(send) {
   const run = async () => {
     if (!state.score) return { ok: false, problems: [{ where: "", message: "no score open" }] };
     const before = state.score.text;
     try {
-      const r = await api.edit(state.score.version, ops, label);
+      const r = await send(state.score.version);
       if (!r.ok) {
         const p = r.problems[0];
         status(`not changed: ${p.where ? p.where + ": " : ""}${p.message}`, "error");
@@ -360,6 +335,7 @@ function onTick(seconds) {
   tickTimeline(seconds, section);
   tickChords(activeSection(), seconds);
   tickMeters(seconds, section, player.playing);
+  tickInspector(seconds, section, player.playing);
 }
 
 function onPlayState(playing) {
@@ -406,7 +382,7 @@ function wireTransport() {
 // ----- start --------------------------------------------------------------------------------
 
 const ctx = {
-  state, outline, commit, check, status, problem, colour, clock, setLoop, seekTo, refreshAudio, selectTrack, activeSection,
+  state, outline, commit, commitText, check, status, problem, colour, clock, setLoop, seekTo, refreshAudio, selectTrack, activeSection,
 };
 
 async function start() {
@@ -421,6 +397,8 @@ async function start() {
   initStrip(ctx);
   initTimeline(ctx);
   initTracks(ctx);
+  initInspector(ctx);
+  initYamlEditor(ctx);
   status("starting…", "busy");
   busy(1);
   try {

@@ -1098,7 +1098,13 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 - [x] Tests: `tests/test_studio_song.py` (edits, numerals, song edits, versions, energy, mute mixes, the route), `tests/test_studio_ui.py` (`ui`: strip, timeline, track list flows); screenshots looked at
 
 ### Step 195 — Inspector and editing
-- [ ] Instrument picker; sliders from the patches metadata (ranges, units, hover help); octave and accent; effects as chips; per-section changes; a step grid synced both ways with the steps text; the YAML editable both ways (edits change values in place, comments kept); inline validation with the CLI's did-you-mean — a bad edit never stops playback
+- [x] Instrument picker; sliders from the patches metadata (ranges, units, hover help); octave and accent; effects as chips; per-section changes; a step grid synced both ways with the steps text; the YAML editable both ways (edits change values in place, comments kept); inline validation with the CLI's did-you-mean — a bad edit never stops playback
+- [x] Instrument change previewed with what it keeps / drops / moves (`studio_app/inspector.py`), then one version; sliders with units, log scale for frequencies, default ticks, reset (`unset` prunes empty mappings), typed values; transpose, play mode (pads: chords / steps)
+- [x] "Edit for": the whole track or one section (writes `sections: {name: {...}}`, the track's values shown where the section has none); per-section table (plays / rests via `rest` or `only`, its changes, clear, edit)
+- [x] Effects chips: echo, reverb, duck (track or beat, follow), gate (its own step pattern), lowpass / highpass / width / volume curves (fixed, ramp, points, drawn), spread; off in one section (`none`) and back
+- [x] Step grid: bars × steps (bars of different lengths, `|`), brushes (hits, degrees, notes, chord, hold, rest), drag-paint, keys, + / − bar, steps per bar resampled; edits replace only the cell's characters; the playhead step lit
+- [x] Score file typed: checked as you type (problems with line numbers, did-you-mean), valid for 0.8 s → a version (`POST /api/text`); a draft with problems is never a version, the controls wait, Revert
+- [x] Tests: `tests/test_studio_inspector.py` (9), `tests/test_studio_ui.py` (+3 `ui` flows); screenshots looked at
 
 ### Step 196 — Fast re-render
 - [ ] Per-track stem cache (re-render only the changed tracks, remix); section-only render; playback continues at the same moment; the "under narration" toggle; level meters from real data; latency of typical edits measured and reported

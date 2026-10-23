@@ -57,14 +57,15 @@ export function changedLines(before, text) {
   return out;
 }
 
-// Show `text` in `pre`; `badLines` (1-based) are marked, `changed` lines flash and the first
-// one is scrolled into view (the line a control just changed).
+// Show `text` in `pre`; `badLines` (1-based; a Map gives each line's message) are marked,
+// `changed` lines flash and the first one is scrolled into view (the line a control just changed).
 export function showYaml(pre, text, badLines = new Set(), changed = new Set()) {
-  const lines = text.replace(/\n$/, "").split("\n");
+  const lines = text.split("\n"); // a last empty line too: the editor's caret can be there
   pre.innerHTML = lines
     .map((line, i) => {
       const cls = `ln${badLines.has(i + 1) ? " bad" : ""}${changed.has(i + 1) ? " changed" : ""}`;
-      return `<span class="${cls}">${highlightLine(line) || " "}</span>`;
+      const why = badLines instanceof Map && badLines.get(i + 1) ? ` title="${escapeHtml(badLines.get(i + 1))}"` : "";
+      return `<span class="${cls}"${why}>${highlightLine(line) || " "}</span>`;
     })
     .join("");
   const first = pre.querySelector(".ln.changed");

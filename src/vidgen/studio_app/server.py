@@ -203,6 +203,9 @@ class _Handler(BaseHTTPRequestHandler):
             if not isinstance(ops, list):
                 raise _ApiError(HTTPStatus.BAD_REQUEST, "ops: expected a list of edits")
             result = app.edit(_int(version, "version") if version is not None else None, ops, _opt_str(body, "label"), bool(body.get("dry_run", False)))
+        elif path == "/api/text":
+            version = body.get("version")
+            result = app.text(_int(version, "version") if version is not None else None, _req_str(body, "text"))
         else:
             raise _ApiError(HTTPStatus.NOT_FOUND, f"not found: {path}")
         self._send_json({"ok": True, "result": result})
