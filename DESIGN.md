@@ -14818,7 +14818,7 @@ checked by `vidgen validate` (and from Step 209 by `vidgen lint`), in 16:9 and 9
   `carry:`.
 - **Step 209, the accuracy lint** reads the model, not pixels, where it can: `vidgen lint`
   rebuilds each `cell` scene's world from its params (`Params.world()`, no render) and checks the
-  rules that are judgements rather than impossibilities — sizes or counts far outside a kind's
+  rules that are judgements rather than impossibilities (done: §95.14) — sizes or counts far outside a kind's
   `size_range` (the catalog already holds it) without the scene's `not_to_scale: true` (which
   then shows a small "not to scale" note), a drawn exaggeration (the layout dump's `cell` key
   gives each still's µm span and LOD weights: a glyph drawn larger than its thing), wrong
@@ -15415,3 +15415,86 @@ kind's range, counts, exaggerated glyphs.
   electrons per run (not a Q cycle animation); β-oxidation, gluconeogenesis and the Calvin cycle
   are not drawn; the gallery shows meiosis and the citric acid cycle (the GIF budget is nearly
   spent: about 27 KB left).
+
+### 95.14 Scientific accuracy lint and references (Step 209)
+
+- **Where the knowledge lives.** `vidgen.cellworld.accuracy` (no manim): text checks of narration
+  against textbook facts — `direction_claims` (nucleic acids made 3′→5′, a ribosome reading mRNA
+  3′→5′, proteins made C→N, kinesin to minus / dynein to plus, protons pumped into the matrix or
+  stroma, Na⁺ pumped in / K⁺ out), `location_claims` (the `PLACES` table: glycolysis, the citric
+  acid cycle, pyruvate oxidation, the respiratory chain, transcription, splicing, translation, the
+  Calvin cycle, the light reactions, replication, β-oxidation; eukaryotic facts skipped for a
+  prokaryote and in sentences about bacteria), `count_claims` (glycolysis net ATP / NADH /
+  pyruvate; NADH, FADH₂, CO₂, GTP per turn or per glucose; Na⁺ / K⁺ per pump cycle; H⁺ per NADH,
+  FADH₂ and complex; cells after mitosis / meiosis; stop codons, human chromosomes, bp per turn and
+  per nucleosome), `placement_claims` (a cell scene's things said to be where the scene has none),
+  `pathway_claims` (an arc's sign or (de)phosphorylation against "A activates B" / "B is
+  inhibited by A"), `naming_claims` (gene vs protein forms per species with `protein_form`, wrong
+  case, italics in markup), the transport words (`says_active`, `says_passive`, `transport_mode`).
+  **False positives are avoided by narrowness**: text is normalised (primes, arrows, "five
+  prime", sub/superscripts), split into sentences and `;` clauses; a sentence with a negation, a
+  contrast ("but", "rather than", "whereas") or a question is skipped; each claim needs its
+  context words (a synthesis verb and a nucleic acid; a protein word and a synthesis verb; the
+  pump named; "per turn" or "per glucose" accepted either way when unsaid), and contexts that make
+  a direction right (the template, proofreading, the lagging strand overall, kinesin-14, an
+  anticodon written 3′-…-5′) exempt it. Lint run over every example and the Phase U scratch
+  projects (about 260 scenes): 0 findings.
+- **The rules** (`vidgen.lint.science_rule`, scene scope, default warning, each a `RuleConfig` in
+  `LintRules`, after `music_check` in `LINT_RULES`): `science_scale` (`factor` 1.5: a `cell`
+  object's size or width outside its kind's `size_range` / `WIDTH_RANGES` by the factor, the cell
+  outside `CELL_TYPICAL`, only while `scale_bar` and not `not_to_scale`; `MOST_PER_CELL` counts of
+  nuclei, centrosomes, nucleoli, vacuoles, nucleoids always), `science_location`,
+  `science_direction`, `science_energy` (molecule scenes: a beat's `transport` targets all passive
+  but called active, all pumps but called passive; "active transport" with no pump, coupled
+  carrier or ATP in a molecule or cell scene; cell scenes with motors exempt), `science_naming`
+  (declared genes: molecule `gene`, the `gene:` param, pathway nodes' genes; texts: title, molecule
+  labels with markup, cell labels, callout labels, narration), `science_pathway`,
+  `science_counts`. `science_issues(project, scene_id, rules)` validates the scene's params through
+  its registered type (no render; a world is rebuilt from the lru cache) and the runner fills
+  `SceneContext.science` once per scene. Hard impossibilities stay validation errors; the lint
+  takes judgements and words. Decided: config-level, not pixels — the drawn-exaggeration check
+  planned in §95.1 (a glyph larger than its thing at LOD) is left out: the LOD minimum sizes are
+  deliberate (a ribosome dot keeps 0.8 px) and would only add noise.
+- **`not_to_scale: true`** on a `cell` scene: a pinned "not to scale" note on a plate in the body's
+  lower right (part of the `cell` target's group) and no `science_scale` size findings.
+- **Narration–picture rules (Phase P) know the new scenes.** `SHOWING_ACTIONS` gains the cell
+  biology actions (`zoom_to`, `advance`, `checkpoint`, `signal`, `knockout`, `drug`, `inhibit`,
+  `amplify`, the gene steps, the transport actions, `motor_walk`, `endocytosis`, `exocytosis`); an
+  action without a `label` of its own shows its single target's on-screen name, from the scene
+  type's optional classmethod `target_text(params, name)` (`cell`: an object's label or kind name;
+  `pathway`: a node's plain label), so `said_before_shown` narrows a label's arrival to that action.
+- **References** (`vidgen.references`, no manim): `ReferenceConfig` (`label` ≤ 120 characters, at
+  least one of `doi` / `pmid` / `isbn` / `url`, `id`), `FigureCreditConfig` (`text`, `license`, the
+  same identifiers; a string is its text), checked offline: DOI `10.<4–9 digits>/<suffix>`
+  (prefixes `doi:`, `https://doi.org/` taken off), PMID 1–8 digits, ISBN-10/13 check digits, http(s)
+  URL with a dotted host. No network: no `vidgen refs check` (decided: resolving DOIs is not
+  offline-safe and adds nothing the format check and the author's copy-paste do not). Scene keys
+  `references` (≤ 12) and `figure_credit`; beat key `cite` (ids or 1-based places; checked);
+  video key `citations: {show: footer | marker | card | none, card_seconds: 4, description: true}`.
+  Numbers are video-wide in order of first appearance (`video_references`; the same identifier
+  keeps its number). Docs and tests use only clearly fake placeholders in valid formats
+  (`10.0000/example`, PMID `12345678`, ISBN `978-0-00-000000-2`).
+- **On screen** (`vidgen/citations.py`, core: not a built-in scene module): a `Citations` overlay (not a registered type: no
+  `overlays:` entry needed) that `overlays.scene_overlays` adds for each scene with references or a
+  credit; `Scene._build_overlays` builds overlays when any scene has citations. States: the numbers
+  of the beat in effect (its `cite`s; all of the scene's when no beat cites; hidden in a beat that
+  cites nothing while others do), or the card for the scene's last `min(card_seconds, duration/2)`;
+  each look built once (readable caption size, a plate in the background colour at 0.88). The
+  footer and the marker reserve their room (`default_reserve`), so layouts keep clear; the card
+  lies over the end (`lint_skip = ("overlay_overlap",)`).
+- **Description**: `write_chapter_list` writes `<output>_chapters.txt` when there are chapters or
+  citations; `chapter_export.write_youtube_list(path, chapters, references)` puts the chapter list,
+  a blank line, then `description_text` (`References` with `[n] label https://doi.org/… / PMID: … /
+  ISBN …`, `Figure credits`). No references: byte-identical to before.
+- **Compatibility**: the fingerprint leaves out `citations`, the scene's `references` /
+  `figure_credit` and beats' `cite`, and adds a `citations` entry only when the scene or the next
+  one (crossfades draw the next scene's overlays) has citations: projects without references keep
+  every fingerprint and frame (Phase Q baseline: 31 frames, max difference 0).
+- **Public:** `vidgen.api` adds the modules `cell_accuracy` (`vidgen.cellworld.accuracy`) and
+  `video_references` (`vidgen.references`). Config: `citations`, scene `references` /
+  `figure_credit`, beat `cite`, `cell` param `not_to_scale`, the seven `science_*` lint rules.
+- **Gaps:** the text checks are English only; claims spread over two sentences, or behind a comma,
+  are not read; pathway names are matched by label and gene only (not "protein kinase A" for PKA);
+  molecule scenes have no `target_text`; the citations reserve room even in beats that show none
+  (a scene's layout cannot change between beats); the metabolism scene writes enzyme names in
+  italics (a stylistic choice of Step 208, not a gene symbol; left for Step 211's review).

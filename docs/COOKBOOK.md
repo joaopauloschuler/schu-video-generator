@@ -358,6 +358,12 @@ Use -10 and below for repeated sounds (ticks, typing).
   `Author et al. Year, Journal Vol:Page, arXiv:ID` or a `doi:`. Put dataset sources there too.
 - Keep a header comment in `video.yaml` listing every source and where your local copy lives
   (e.g. a `papers/` folder in the project).
+- **`references:` on a scene** does the tag, the numbers and the list for you: `{label, doi |
+  pmid | isbn | url}` per source (copied from the paper or the book, never typed from memory),
+  `cite: [id]` on the beat that states the claim; the scene shows `[1] Label` (or `[1]` alone,
+  or an end card: `citations: {show: marker | card}`), and the render appends the numbered list
+  to `<output>_chapters.txt` for the video description. A real micrograph gets `figure_credit:
+  {text, license, url}` (docs/CONFIG.md "References and figure credits").
 - If papers disagree with each other (e.g. iridium 1–7 vs 7–8 ppm), use the safer rounded
   statement ("about 10,000× crust") and note it.
 
@@ -402,6 +408,30 @@ reference:
 - on the sources card (§11).
 
 Never present such a result as settled fact.
+
+**Cell biology: stylised, never wrong.** The cell scenes draw at real sizes and refuse
+impossible places (`vidgen validate`); `vidgen lint`'s `science_*` rules read the narration
+and the scenes for what validation cannot judge:
+
+- Sizes: draw at real size, or say `not_to_scale: true` when a vesicle or a molecule must be
+  larger to be seen (the scene then shows "not to scale").
+- Directions are where scripts go wrong most: nucleic acids are made 5′→3′ (the template is
+  read 3′→5′), proteins N→C, a ribosome reads mRNA 5′→3′; kinesin walks to the plus end
+  (outwards), dynein to the minus end (to the centrosome); the respiratory chain pumps protons
+  out of the matrix, the Na⁺/K⁺ pump moves 3 Na⁺ out and 2 K⁺ in per ATP.
+- Places: glycolysis in the cytosol; pyruvate oxidation and the citric acid cycle in the matrix;
+  the respiratory chain in the inner membrane; transcription and splicing in the nucleus,
+  translation in the cytosol; the Calvin cycle in the stroma (all eukaryotic; bacteria differ).
+- Numbers: net 2 ATP, 2 NADH, 2 pyruvate per glucose from glycolysis; 3 NADH, 1 FADH₂, 1 GTP,
+  2 CO₂ per turn of the cycle (twice per glucose); about 10 H⁺ per NADH.
+- Words: active transport needs ATP or an ion going down its gradient (a channel is passive);
+  say "inhibits" for a T-bar; a gene is italic (*TP53*), its protein roman (TP53, p53), mouse
+  *Trp53* / TRP53.
+- Level of detail: one process per beat, the right zoom for it (`zoom_to`), labels only for
+  what the narration names; dense pathways split into two scenes rather than shrinking text.
+
+Run `vidgen lint` (on the preview) before rendering the final cut: the science rules read the
+config and the narration, not the pictures, and give the textbook fix with each finding.
 
 ## 13. Editorial options (example style choices)
 

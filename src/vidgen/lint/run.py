@@ -195,12 +195,16 @@ def _timing_findings(
         from vidgen.lint.music_rule import music_issues
 
         ctx.music_issues = music_issues(project, scene_id, lint.rules.music_check, preview)
+    from vidgen.lint.science_rule import SCIENCE_RULES, science_issues
+
+    if any(n in names and getattr(lint.rules, n).severity != "off" for n in SCIENCE_RULES):
+        ctx.science = science_issues(project, scene_id, lint.rules)
     narration_rules = [n for n in ("said_before_shown", "unsaid_reveal") if n in names and getattr(lint.rules, n).severity != "off"]
     if narration_rules and layout is not None and activity["beats"]:
         from vidgen.lint.narration_rule import narration_picture
 
         max_words = max(getattr(lint.rules, n).max_words for n in narration_rules)
-        ctx.narration = narration_picture(project, layout, activity, max_words)
+        ctx.narration = narration_picture(project, layout, activity, max_words, scene_id)
     ignores = project.scene(scene_id).lint_ignores()
     findings: list[Finding] = []
     groups: dict[tuple[Any, ...], Finding] = {}

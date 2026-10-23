@@ -626,6 +626,8 @@ from vidgen.cellworld.pathway import BANDS as PATHWAY_BANDS, EDGE_TYPES as PATHW
 from vidgen.cellworld.pathway import Pathway, PathwaySpec, build_pathway  # noqa: E402
 from vidgen.cellworld.pathway_templates import TEMPLATES as PATHWAY_TEMPLATES  # noqa: E402
 from vidgen.cellworld import cycle as cell_cycle_model, division as cell_division, energy as cell_energy  # noqa: E402
+from vidgen.cellworld import accuracy as cell_accuracy  # noqa: E402
+from vidgen import references as video_references  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -1593,6 +1595,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "cell_cycle_model",
     "cell_division",
     "cell_energy",
+    "cell_accuracy",
+    "video_references",
     "did_you_mean",
     "format_length",
     "parse_coordinate",

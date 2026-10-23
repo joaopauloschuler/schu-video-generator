@@ -202,6 +202,12 @@ class PathwayScene(PathwayPlay, NarratedScene):
         return names + ["pathway"]
 
     @classmethod
+    def target_text(cls, params: Any, name: str) -> str | None:
+        """What target ``name`` is called on screen (a node's label), for the narration lint rules."""
+        node = params.pathway().nodes.get(name)
+        return node.plain if node is not None else None
+
+    @classmethod
     def target_kind(cls, name: str) -> str:
         """``node``, ``edge``, ``band``, ``title`` or ``pathway``."""
         if name.startswith("edge:"):

@@ -19274,3 +19274,108 @@ How to test
 - Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
 - Stills (scratchpad `s208/sheets`): cycle, mitosis, plant mitosis, meiosis, glycolysis + link,
   TCA, ETC, light reactions in 16:9 and 9:16, dark and `light_academic`, mid-action stills.
+
+## Step 209 — Scientific accuracy lint and references
+
+What was built (DESIGN §95.14)
+- **Seven lint rules** (`vidgen lint`, scene scope, default warning, configurable like the others
+  in `lint.rules`, documented in CONFIG "Lint"): `science_scale` (`factor` 1.5; a `cell` with a
+  scale bar and without `not_to_scale` drawing an object or the cell far outside its textbook
+  size range; too many nuclei / centrosomes / nucleoli / vacuoles / nucleoids), `science_location`
+  (a process where it never is; a thing where the `cell` scene has none of it),
+  `science_direction` (3′→5′ synthesis, mRNA read 3′→5′, C→N, kinesin to minus, dynein to plus,
+  protons pumped into the matrix / stroma, Na⁺ in / K⁺ out), `science_energy` (a passive
+  `transport` called active, a pump called passive, "active transport" with no energy source in a
+  molecule / cell scene), `science_naming` (declared genes: gene vs protein form per species,
+  wrong case, italics in markup labels), `science_pathway` (narration vs an arc's sign or
+  (de)phosphorylation), `science_counts` (glycolysis, TCA per turn / per glucose, pump
+  stoichiometry, protons per NADH / FADH₂ / complex, mitosis / meiosis cells, stop codons, human
+  chromosomes, bp per turn and per nucleosome). Each message quotes the sentence (or names
+  `objects[k] (kind 'id')`) and gives the textbook fix. Knowledge in `cellworld/accuracy.py` (no
+  manim); glue in `lint/science_rule.py` (params validated through the scene type, no render).
+- **Narration–picture rules** (Phase P) know the new scenes: the cell-biology actions count as
+  showing actions, and an action's single target shows its on-screen name via the new optional
+  scene classmethod `target_text(params, name)` (`cell`, `pathway`).
+- **`not_to_scale: true`** on `cell`: a pinned "not to scale" note in the body's lower right.
+- **References**: scene `references` (`{label, doi | pmid | isbn | url, id}`, ≤ 12; offline format
+  and check-digit validation, did-you-mean for `cite` ids), beat `cite`, scene `figure_credit`
+  (text or `{text, license, …}`), video `citations: {show: footer | marker | card | none,
+  card_seconds, description}`. Numbered across the video (same identifier, same number). Drawn
+  by `vidgen/citations.py` (a `Citations` overlay added by `overlays.scene_overlays` for scenes
+  with citations; footer / marker reserve room; card at the scene's end). The render appends
+  `References` and `Figure credits` to `<output>_chapters.txt` (written for references alone too).
+
+YAML
+```yaml
+citations: {show: footer}                 # marker: [1, 2] in a corner; card: an end card; none
+scenes:
+  - id: er
+    type: cell
+    params:
+      objects: [{kind: vesicle, id: big_vesicle, size: "400 nm"}]
+      not_to_scale: true                  # else science_scale reports the 400 nm vesicle
+    references:
+      - {id: book, label: "Example textbook (placeholder)", isbn: "978-0-00-000000-2"}
+      - {label: "Example review (placeholder)", doi: "10.0000/example"}
+    figure_credit: {text: "Micrograph: Example Lab (placeholder)", license: "CC BY 4.0"}
+    beats:
+      - text: "Transport vesicles carry cargo from the ER to the Golgi."
+        cite: [book]
+lint: {rules: {science_scale: {factor: 2.0}, science_naming: {severity: info}}}
+```
+
+Files touched
+- New: `src/vidgen/cellworld/accuracy.py`, `src/vidgen/lint/science_rule.py`,
+  `src/vidgen/references.py`, `src/vidgen/citations.py`, `tests/test_accuracy.py` (38, 2 render).
+- Changed: `config.py` (rule configs, `ReferenceConfig`, `FigureCreditConfig`, `CitationsConfig`,
+  scene / beat keys, `LINT_RULES`), `lint/{__init__,rules,run,narration_rule}.py`, `overlays.py`,
+  `scene.py`, `render/{fingerprint,pipeline}.py`, `chapter_export.py`, `scenes/cell.py`
+  (`not_to_scale`, `target_text`), `scenes/pathway.py` (`target_text`), `api.py`, docs
+  (`CONFIG.md`: Lint rules + example output, "References and figure credits", scene / beat keys,
+  `citations`, `cell` `not_to_scale`; `COOKBOOK.md` §11–12), guide + `AGENTS.md` (an "accuracy and
+  references" section and snippet, troubleshooting rows, outputs), `DESIGN.md` §95.14,
+  `CHANGELOG.md`, `tasklist.md`; tests `test_narration_rule.py`, `test_music_pieces.py`,
+  `test_iso_diagram_actions.py` (rule-order assertions no longer assume their rules are last).
+
+Public interfaces: `vidgen.api` adds the modules `cell_accuracy` and `video_references`. Config:
+`citations`, scene `references` / `figure_credit`, beat `cite`, `cell` `not_to_scale`, lint rules
+`science_scale` (`factor`), `science_location`, `science_direction`, `science_energy`,
+`science_naming`, `science_pathway`, `science_counts`. Scene types may define
+`target_text(params, name)`.
+
+Decisions / deviations
+- The lint reads the config, not pixels; DESIGN §95.1's "drawn exaggeration" check (glyphs drawn
+  larger than their thing by LOD) is left out: the LOD minimum sizes are deliberate.
+- No `vidgen refs check`: resolving DOIs needs the network; formats and check digits are checked
+  offline instead.
+- Citations are a core overlay (`vidgen/citations.py`), not a registered overlay type: they need
+  no `overlays:` entry and cannot be added twice. They reserve room for the whole scene (a
+  layout cannot change between beats), so a scene whose beats cite only some references still
+  keeps the footer's room in the others.
+- Fingerprints change only for scenes with citations (or before one, for crossfades): projects
+  without references re-render nothing.
+- Text checks are narrow on purpose (negations, contrasts, questions, commas skip a claim): run
+  over every example and the Phase U scratch projects (about 260 scenes) they find nothing.
+
+Known gaps / TODO (for Step 210 / 211)
+- English only; claims across two sentences or after a comma are not read; pathway names are
+  matched by label and gene only; molecule scenes have no `target_text`.
+- The `metabolism` scene sets enzyme names in italics (Step 208's style, not a gene symbol):
+  review in Step 211.
+- Step 210's example should carry real references only where certain (e.g. a textbook by title
+  and authors with an identifier copied from the book), or none.
+
+How to test
+- `tests/test_accuracy.py` 38 (2 render: the citation footer with `cite`, the not-to-scale note).
+- Related (not render): `test_lint` + `test_timing_lint` + `test_narration_rule` +
+  `test_chapter_export` 53; `test_docs` + `test_guide` 124; `test_schema` + `test_json_output` +
+  `test_overlays` 103 (render: `test_overlays` 10); `test_translation` + `test_project` +
+  `test_pathway` 147; `test_cell_scene` + `test_chapters_progress` + `test_storyboard` 49 (render:
+  `test_cell_scene` + `test_accuracy` 9); `test_builtin_scenes` + `test_actions_coverage` +
+  `test_registry` + `test_extensions` 194; `test_review2` + `test_introspect` + `test_gallery`;
+  `test_music_pieces` + `test_iso_diagram_actions`; `test_api`; `test_mcp.py` in full 20. Not run:
+  the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Lint demo (scratchpad `s209/demo`, Kokoro audio): every science rule fires on its planted
+  mistake; stills of the footer (16:9 and 9:16), marker + end card (`--variant card`), and
+  `s209/nts` (not-to-scale note with a marker, 16:9 and 9:16).

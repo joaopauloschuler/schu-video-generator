@@ -252,6 +252,8 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
         """Name the structures (screen-sized; shown once a structure is large enough on screen) and the parts a zoom_to view shows."""
         scale_bar: bool = True
         """A scale bar that follows the zoom (1-2-5 lengths: 5 µm, 200 nm…)."""
+        not_to_scale: bool = False
+        """Some sizes are drawn larger than real on purpose: a small 'not to scale' note shows in the lower right (and the accuracy lint does not report the sizes)."""
         reveal: Literal["all", "per_beat"] = "all"
         """all: the whole cell in the first beat; per_beat: the cell, then one object per beat in order."""
         seed: int = 1
@@ -296,6 +298,20 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
         names += [e.id for e in world.entries if e.owner is None]
         names += [params.gene.id] if params.gene is not None else []
         return names + (["scale_bar"] if params.scale_bar else [])
+
+    @classmethod
+    def target_text(cls, params: Any, name: str) -> str | None:
+        """What target ``name`` is called on screen (its label), for the narration lint rules."""
+        if name in ("cell", "tissue", "title", "scale_bar"):
+            return None
+        spec = next((o for o in params.objects if (o.id or None) == name), None)
+        if spec is not None and spec.label is False:
+            return None
+        if spec is not None and isinstance(spec.label, str) and spec.label:
+            return spec.label
+        entry = params.world().entry(name)
+        kind = CELL_OBJECT_KINDS[entry.kind]
+        return kind.plural if len(entry.keys) > 1 else kind.label
 
     @classmethod
     def action_sequence_problems(cls, spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
@@ -354,6 +370,7 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
             title = VGroup(plate, title)    # readable over the tissue when the camera zooms out
             self.pin(title, title.get_center())
         bar = self._scale_bar() if p.scale_bar else None
+        note = self._scale_note() if p.not_to_scale else None
         # a start view on the cell names its objects; a zoomed start view names the parts it shows
         labels = self._make_labels() if p.labels and self.start.level in ("tissue", "cell") else {}
         start_parts, views = self._make_view_labels() if p.labels else (VGroup(), VGroup())
@@ -367,7 +384,7 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
             base.append(chain.add("title", title, lambda: [FadeIn(title)], []))
         tissue = self.drawing.tissue
         base.append(chain.add("tissue", tissue, lambda: [FadeIn(tissue)], list(base)))
-        cell_group = VGroup(self.drawing.cell, *labels.get("cell", []))
+        cell_group = VGroup(self.drawing.cell, *labels.get("cell", []), *([note] if note is not None else []))
         base.append(chain.add("cell", cell_group, lambda: [FadeIn(cell_group)], list(base)))
         if bar is not None:
             base.append(chain.add("scale_bar", bar, lambda: [FadeIn(bar)], list(base)))
@@ -514,6 +531,17 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
         self._bar_label = VGroup(*self._bar_texts.values()).set_z_index(OVERLAY_Z + 1)
         self._bar_corner = np.array([self.body.x0 + BAR_MARGIN, self.body.y0 + BAR_MARGIN, 0.0])
         return VGroup(self._bar_plate, self._bar, self._bar_label)
+
+    def _scale_note(self) -> VGroup:
+        """'not to scale' on a plate in the body's lower right corner, pinned to the screen."""
+        text = self.text("not to scale", size=self.params.label_size, color="text")
+        plate = RoundedRectangle(width=text.width + 0.24, height=text.height + 0.2, corner_radius=0.06, stroke_width=0,
+                                 fill_color=self.theme.background, fill_opacity=PLATE_OPACITY)
+        note = VGroup(plate, text.move_to(plate))
+        corner = np.array([self.body.x1 - BAR_MARGIN - plate.width / 2, self.body.y0 + BAR_MARGIN + plate.height / 2, 0.0])
+        note.move_to(corner)
+        self.pin(note, corner)
+        return note
 
     def _update_bar(self, span: float, s: float, center: np.ndarray) -> None:
         length, text = cell_scale_bar(span)

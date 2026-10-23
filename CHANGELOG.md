@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–208)
+## Unreleased (Steps 193–209)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -110,6 +110,20 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   gradient through ATP synthase) and `checkpoint` (pass or arrest with its cause; regulators lit
   in order). `vidgen validate` refuses wrong counts after meiosis (`expect`), G0 after R, passing
   an arrested checkpoint, a chain in the wrong membrane and protons pumped the wrong way.
+- **Scientific accuracy lint and references** (Step 209): seven `vidgen lint` rules read the
+  config and the narration — `science_scale` (a `cell` with a scale bar drawing something far
+  outside its textbook size; new `not_to_scale: true` shows a "not to scale" note instead),
+  `science_location` ("glycolysis in the mitochondria", "ribosomes in the nucleus" while the
+  scene shows them in the cytosol), `science_direction` (RNA made 3′→5′, proteins C→N, kinesin to
+  the minus end, protons pumped into the matrix), `science_energy` (active transport through a
+  channel, or with no energy source shown), `science_naming` (mouse *Trp53* gene vs TRP53
+  protein, the wrong case, a gene label without italics), `science_pathway` (narration against an
+  arc's effect) and `science_counts` (net 2 ATP from glycolysis, 3 NADH per turn, 3 Na⁺ / 2 K⁺ per
+  pump cycle…), each with the textbook fix; 0 findings on the examples. `said_before_shown` knows
+  the cell-biology actions and targets. Scenes take **`references:`** (`{label, doi | pmid | isbn |
+  url}`, formats checked offline) and `figure_credit:`; beats `cite:` them; they show as small
+  citations (`citations: {show: footer | marker | card | none}`, numbered across the video) and
+  as a numbered list in `<output>_chapters.txt`.
 
 ### vidgen studio: a music workstation for people (Phase T)
 

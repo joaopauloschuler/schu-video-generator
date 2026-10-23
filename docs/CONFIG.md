@@ -57,6 +57,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
 | `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color`, `push`, `wipe` or `{type, duration, color, direction, soft}`; see [transitions](#transitions-transition) |
 | `chapters` | `{metadata: true, youtube: true, intro: Intro}` | what the render writes about the chapters: MP4 chapter entries, the YouTube list `<output>_chapters.txt`, the chapter at 0:00; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
+| `citations` | `{show: footer, card_seconds: 4, description: true}` | how scenes' [`references`](#references-and-figure-credits-references-figure_credit-citations) show on screen: a `footer` line, a `marker` (`[1, 2]`), a `card` at the scene's end, or `none`; `description`: the numbered list in `<output>_chapters.txt` |
 | `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
@@ -129,6 +130,8 @@ scenes:
 | `set` | none | a `stage` scene's set: a name from [`sets:`](#shared-casts-and-sets-include-and-sets) or a [built-in set](#ready-made-sets-set-city_street) (`city_street`, `park`, `beach`, `forest`, `snowy_hills`; rooms: `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`) whose params this scene starts from; its own `params` win |
 | `host` | the video's | the [host](#a-host-beside-any-scene-host) beside this scene's content: `false` for none, a character name, or a mapping of the keys that change here (`{side: left}`, `{expression: thinking}`; with `character` when the video has no host) |
 | `terms` | `true` | `false`: this scene draws the video's [terms](#one-colour-per-concept-terms) in their usual colours (its captions too) |
+| `references` | `[]` | sources of what the scene shows: `{label, doi \| pmid \| isbn \| url, id}` (at most 12), numbered across the video, shown as small citations and listed in the description; see [references](#references-and-figure-credits-references-figure_credit-citations) |
+| `figure_credit` | none | who made a real image the scene shows (a micrograph, a structure): its text, or `{text, license, doi \| pmid \| isbn \| url}` |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. `*word*` in it marks a
@@ -152,7 +155,7 @@ the beat before has ended, and `interrupt: true` (default `false`) cuts that lin
 `emotion` (default: its voice's, else none) says how the line feels — `excited`, `sad`,
 `whisper`... — and changes how it is spoken (Kokoro: speed, pitch, loudness and pauses;
 ElevenLabs: an audio tag or voice settings; OpenRouter: an instruction), see [voices with
-feeling](#voices-with-feeling-emotion).
+feeling](#voices-with-feeling-emotion). A beat's `cite` (default `[]`) names the scene's references it cites (ids or 1-based places): while it plays, the citation shows only their numbers, see [references](#references-and-figure-credits-references-figure_credit-citations).
 
 ## Chapters
 
@@ -223,7 +226,7 @@ metadata:              # optional tags of the MP4 (unset ones are not written)
 | key | default | |
 |---|---|---|
 | `metadata` | `true` | write the chapters into the MP4 (`false`: the MP4 has none; its tags are still written) |
-| `youtube` | `true` | write `<output>_chapters.txt` (`false`: none, an old one is removed) and check YouTube's rules |
+| `youtube` | `true` | write the chapter list into `<output>_chapters.txt` (`false`: none; without [references](#references-and-figure-credits-references-figure_credit-citations) either, an old file is removed) and check YouTube's rules; the scenes' references and figure credits follow the list in the same file |
 | `intro` | `Intro` | title of the chapter added at 0:00 when the first chapter starts later (the video opens with a title scene); `false`: no intro chapter, the first chapter starts at 0:00 instead |
 
 - **Times** are where the chapter's scene starts in the joined video, with transitions: a
@@ -253,6 +256,51 @@ metadata:              # optional tags of the MP4 (unset ones are not written)
 - `timings.json` and `vidgen render --json` list the chapters as published (with the intro
   chapter), `{title, number, scene, start, end, index, count, card, intro}`, also when
   `metadata` and `youtube` are off. Changing `chapters:` or `metadata:` re-renders no scene.
+
+## References and figure credits (`references`, `figure_credit`, `citations`)
+
+A scene can name the sources of what it shows. Each reference has a short `label` (shown on
+screen and in the description) and at least one identifier, **copied from the source, never
+made up**: a `doi`, a PubMed ID (`pmid`), an `isbn` or a `url`. Formats are checked offline (no
+look-ups): a DOI is `10.<registrant>/<suffix>` (a `doi:` or `https://doi.org/` prefix is taken
+off), a PMID 1–8 digits, an ISBN-10 or ISBN-13 with a correct check digit (hyphens allowed), a
+URL `http(s)://host/...`. An `id` lets beats cite it by name.
+
+```yaml
+scenes:
+  - id: er
+    type: cell
+    params: {...}
+    references:               # placeholders in valid formats: copy the real identifiers from your sources
+      - {id: book, label: "Example textbook (placeholder)", isbn: "978-0-00-000000-2"}
+      - {label: "Example review (placeholder)", doi: "10.0000/example"}
+    figure_credit: {text: "Micrograph: Example Lab (placeholder)", license: "CC BY 4.0", url: "https://example.org/micrograph"}
+    beats:
+      - text: "Ribosomes on the rough ER make secreted proteins."
+        cite: [book]          # this beat shows [1]; a beat without cite shows none while others cite
+```
+
+- **Numbers** are the video's: references are numbered in order of first appearance, scene by
+  scene; the same reference in another scene (the same DOI, PMID, ISBN or URL) keeps its number.
+- **On screen** (`citations:` at the top level): `show: footer` (default) draws a small line at
+  the bottom of the scene, `[1] Label · [2] Label` (and the figure credit), on a plate, at the
+  readable text size; `marker` only the numbers (`[1, 2]`, `[1–3]`) and the credit in the lower
+  right corner; `card` the numbers, then for the scene's last `card_seconds` (default 4, at most
+  half the scene) a card listing the references; `none` nothing on screen. The footer and the
+  marker keep the scene's layout clear of them (like an overlay with `reserve: true`); the card
+  lies over the scene's end. When a scene's beats `cite`, each beat shows only what it cites.
+  Scenes without references or a credit are unchanged (and keep their render fingerprints).
+- **In the description**: with `citations.description: true` (default) the render appends
+  `References` (`[n] Label https://doi.org/…`, `PMID: …`, `ISBN …`) and `Figure credits` to the
+  description file `<output>_chapters.txt`, after the YouTube chapter list (the file is written
+  for references alone too).
+- `figure_credit` (any scene; meant for an [`image`](#image) of a real micrograph or structure)
+  is its text or `{text, license, doi | pmid | isbn | url}`; it is shown with the citations (its
+  text and licence) and listed in the description.
+
+```yaml
+citations: {show: footer, card_seconds: 4, description: true}
+```
 
 ## Thumbnail (`thumbnail`, `vidgen thumbnail`)
 
@@ -6248,8 +6296,10 @@ on the cell: its plasma membrane, a plant's wall at a plasmodesma, a bacterium's
 `style` (`section`: structures cut open, default; `surface`: drawn whole, seen from outside — a
 nucleus covered with pores, a mitochondrion's or chloroplast's outer membrane, a membrane's surface
 mosaic of lipids at the complex level); `labels` (`true`);
-`scale_bar` (`true`); `reveal` (`all`: the whole cell in the first beat; `per_beat`: the cell,
-then one object per beat in order); `seed` (where things without `at` go); `title_size`,
+`scale_bar` (`true`); `not_to_scale` (`false`; `true` when sizes are drawn larger than real on
+purpose: a small "not to scale" note shows in the lower right and the
+[`science_scale`](#lint-vidgen-lint) lint does not report the sizes); `reveal` (`all`: the whole
+cell in the first beat; `per_beat`: the cell, then one object per beat in order); `seed` (where things without `at` go); `title_size`,
 `label_size`; `gene` (a gene whose products its steps follow, see [a gene in a cell](#a-gene-in-a-cell)).
 [Action targets](#beat-actions): `title`, `cell` (cytosol and plasma membrane,
 a plant's wall, a bacterium's envelope), `tissue` (the neighbouring cells), `scale_bar` and each
@@ -10456,10 +10506,17 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `talked_over` | warning | a beat with [`overlap`](#overlapping-lines-overlap-interrupt) that starts speaking before whole words of the line before it are said: those words are spoken entirely under the new line (word times from the alignment, else estimated). The message names the words and the largest overlap that keeps them clear. With `interrupt`: words of a line with audio that the cut removes before they start (the interrupt should cut at most the end of the last word). Fix: a shorter `overlap`, or `interrupt: true`; for an interrupt, a shorter `overlap` or none |
 | `readback` | warning | a beat whose MP3, transcribed by [`vidgen readback`](#readback-vidgen-readback), differs from its spoken text by a word error rate above `max_wer`; the message quotes the first differences and a suggested fix. Reads only the transcripts `vidgen readback` cached for the beats' current MP3s and the `stt:` settings (it never runs speech to text): nothing is reported until that command has run |
 | `unclear_speech` | warning; info for doubtful words | only with `--readback`: each [word to check](#readback-vidgen-readback) of `vidgen readback` — a word heard with a probability below `min_probability` (info: below `doubtful_probability`), after a pause longer than `max_gap` seconds inside a sentence, or differently from the text — at its time (the beat's start + the word's time in the MP3), with the fix (a respelling in `pronunciation:`, another voice, speed or emotion). `value` / `limit` are the probability or the pause and its threshold |
-| `said_before_shown` | warning | the narration names an on-screen **label** (a scene text of at most `max_words` words with a word that names something: a diagram node, a callout, a stage, an axis title) more than `min_lead` seconds before the label is on screen, and does not name it again when it shows. When it shows is known from the layout dump: it was not there at the still before the one that first shows it (the beat-end still of the beat before, or a mid-beat still of a storyboard), or at the time of the `reveal` / `callout` / `transform` action of its beat that shows it (a callout with that label, or an action [on a word](#actions-on-a-spoken-word) the label says). Words are compared without case and accents, with English plural and verb endings (`databases` = `database`, `moving` = `moves`), without stop words and numbers; a label of several words counts as named when all its words are said close together. Not checked: overlays (captions repeat the narration), speech bubbles, maths and code, numbers (a chart's values, tick labels, live values like `slope 0.50`), texts that another text on screen already says (the heading "How a cache works" before a `Cache` node). Word times come from the beat's audio (the alignment), else the estimate. Fix: show it on the word (`{reveal: node:database, at: "@database"}`), reveal it earlier, or name it when it shows; or `lint_ignore` it (`{rule: said_before_shown, object: Database}`) |
+| `said_before_shown` | warning | the narration names an on-screen **label** (a scene text of at most `max_words` words with a word that names something: a diagram node, a callout, a stage, an axis title) more than `min_lead` seconds before the label is on screen, and does not name it again when it shows. When it shows is known from the layout dump: it was not there at the still before the one that first shows it (the beat-end still of the beat before, or a mid-beat still of a storyboard), or at the time of the `reveal` / `callout` / `transform` action of its beat that shows it (a callout with that label, or an action [on a word](#actions-on-a-spoken-word) the label says). The cell-biology actions (`zoom_to`, `advance`, `checkpoint`, `signal`, `transcribe`, `translate`, `transport`, …) count as showing too, and an action on a `cell` object or a `pathway` node shows that target's on-screen name (its label). Words are compared without case and accents, with English plural and verb endings (`databases` = `database`, `moving` = `moves`), without stop words and numbers; a label of several words counts as named when all its words are said close together. Not checked: overlays (captions repeat the narration), speech bubbles, maths and code, numbers (a chart's values, tick labels, live values like `slope 0.50`), texts that another text on screen already says (the heading "How a cache works" before a `Cache` node). Word times come from the beat's audio (the alignment), else the estimate. Fix: show it on the word (`{reveal: node:database, at: "@database"}`), reveal it earlier, or name it when it shows; or `lint_ignore` it (`{rule: said_before_shown, object: Database}`) |
 | `unsaid_reveal` | off (info when turned on) | a beat (not the scene's first) brings new labels, and the scene's narration names none of them (same labels and word matching as `said_before_shown`). Off by default: many labels are fine unsaid (a map's city names, a step's output); turn it on with `unsaid_reveal: {severity: info}` to review a script |
 | `iso_labels` | warning | an [`iso_diagram`](#iso_diagram) label (from the outlines of its blocks and plates and the paths of its connectors that the scene adds to the layout dump) that covers at least `min_cover` of its box over a block it does not name (a group's caption among the group's blocks; a label on its own block's top is fine), shares at least `min_overlap` of the smaller box with another label, hides part of another connector, or stands more than `max_gap` of the shorter side from what it names without a leader line. The scene places labels to avoid all of these; a finding means the diagram is crowded. Text size and contrast are `min_font`'s and `contrast`'s. Fix: more `spacing` (or `at` further apart), shorter labels, fewer blocks, or labels on a stack's side (`label_side`) |
 | `music_check` | warning; info for notes | a [project piece](#project-pieces-score-files-in-a-video) the video plays (a score file in `assets/music`) that [`vidgen music check`](#checking-a-piece-vidgen-music-check) flags in one of `topics` (default: `voice range`, `highs`, `bass`, `steadiness`, `peaks`, `loop seam`; `key`, `sections`, `tempo` can be added): its fixes at the rule's severity, its notes as info, each with the first two changes it suggests (score keys), on the first scene of the cue; only about the part of the piece the cue plays (a loop seam it never crosses, sections it never reaches, a voice range loud only in bars it skips are left out; the message names the bars played). Reads the config, not the stills; the check (no demo, no picture) is cached in `build/music` per version of the file, so it costs 5–15 s for a minute of music once. Fix: the change it names, then `vidgen music check` again; or `severity: off` |
+| `science_scale` | warning | on a [`cell`](#cell) scene that shows a scale bar and does not say `not_to_scale: true`: an object whose `size` (or a mitochondrion's or chloroplast's `width`) is more than `factor` (1.5) times outside its kind's textbook range (the catalog's, CONFIG's sizes table: a ribosome 20–30 nm, a mitochondrion 0.5–4 µm long), or a cell `size` more than `factor` outside a typical cell of its kind (animal 10–30 µm, plant 10–100 µm, bacterium 0.5–5 µm); on any `cell` scene, more than two nuclei or centrosomes, four nucleoli, one central vacuole or two nucleoids. Fix: a real size, or `not_to_scale: true` (the scene then says "not to scale"); `lint_ignore` a real exception (an oocyte, centrosome amplification) |
+| `science_location` | warning | narration that places a process where it never is — glycolysis in the mitochondria; the citric acid cycle, pyruvate oxidation, the respiratory chain, transcription, splicing or DNA replication in the cytosol (eukaryotes only: not in a scene of a bacterium or a sentence about bacteria); translation in the nucleus; the Calvin cycle in the thylakoids; the light reactions in the stroma — or, in a `cell` scene, a thing the scene shows (ribosomes, a molecule…) in a compartment where the scene has none of them ("ribosomes in the nucleus" while all its ribosomes are in the cytosol). Fix: say where it is, or place it there (`in:`, `on:`) |
+| `science_direction` | warning | narration giving a wrong direction: RNA or DNA made (synthesised, grown, extended) 3′ to 5′ (they grow 5′→3′; reading the template 3′→5′, proofreading and the lagging strand's overall growth are fine), a ribosome reading mRNA 3′ to 5′, a protein made from C to N, kinesin walking to the minus end (kinesin-14 named is fine) or dynein to the plus end, protons pumped into the matrix or the stroma, the Na⁺/K⁺ pump moving Na⁺ into or K⁺ out of the cell. Arrows (→), `5′`, `5'`, "five prime" are all read |
+| `science_energy` | warning | on a `molecule` or `cell` scene: a beat calling transport active (or "against its gradient", "uphill") while its `transport` moves solutes only through channels, aquaporins or uniporters; a beat calling a pump's transport passive; "active transport" in a scene that shows no energy source (no pump, no symporter / antiporter, no ATP; a `cell` scene with motors is left alone: motors walking on ATP are active transport in the cell-biology sense). Secondary active transport, co-transport, symport and antiport wording is not read as primary |
+| `science_naming` | warning | for the genes a scene declares (a molecule's `gene`, the scene's `gene:` param, a pathway node's `gene`): the gene written as its protein next to "gene" (mouse `TRP53 gene`: the gene is *Trp53*) or the protein as the gene next to "protein" (`Trp53 protein`: TRP53), a symbol in a case the species does not use (`trp53` in a mouse scene), and in a molecule's `label` (Pango markup) a gene next to "gene" without `<i>` or a protein in italics. Checked in titles, labels, callout labels and narration |
+| `science_pathway` | warning | in a [`pathway`](#pathway) scene, narration that says one node activates another (or "B is activated by A") where the scene's arc A → B inhibits (a T-bar, or `effect: inhibits` such as Akt's phosphorylation of TSC2), inhibits where it activates, phosphorylates where it dephosphorylates or the reverse. Only direct arcs between two named nodes (labels or genes) with a few words between are read |
+| `science_counts` | warning | a number in the narration against the textbook: the net ATP (2), NADH (2) or pyruvate (2) of glycolysis per glucose; NADH (3), FADH₂ (1), CO₂ (2) or GTP (1) per turn of the citric acid cycle (twice that per glucose); Na⁺ (3) and K⁺ (2) per Na⁺/K⁺ pump cycle; protons pumped per NADH (10), per FADH₂ (6), by complex I (4), II (none), III (4), IV (2); cells after mitosis (2) or meiosis (4); stop codons (3); human chromosomes (46, 23 in a gamete); base pairs per turn of B-DNA (10–10.5) and per nucleosome (145–147) |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -10501,6 +10558,34 @@ lint:
     unsaid_reveal: {max_words: 4}                        # off unless given a severity ("info")
     iso_labels: {min_cover: 0.1, min_overlap: 0.05, max_gap: 0.06}   # iso_diagram labels: shares of a label's box; fraction of the shorter side
     music_check: {topics: [voice range, highs, bass, steadiness, peaks, loop seam]}   # project pieces: vidgen music check's topics reported
+    science_scale: {factor: 1.5}            # how far outside a textbook size range is reported
+    science_location: {}
+    science_direction: {}
+    science_energy: {}
+    science_naming: {}
+    science_pathway: {}
+    science_counts: {}
+```
+
+**Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
+narration): they read the config — each scene's params, its cell world rebuilt where needed, and
+its beats' text — not the stills, and report on the beat whose narration says it (scale on the
+scene's first beat). Hard impossibilities (a ribosome in the nucleoplasm, F₁
+facing the intermembrane space, kinesin walking to minus) are refused by `vidgen validate`; the
+lint reports what is a judgement or lives only in the words. Each check reads a clear claim
+only: a sentence with a negation or a contrast ("not", "never", "rather than", "but"), or a
+question, is left alone, so correct material gives no findings. Example:
+
+```
+$ vidgen lint demo
+tour:
+  warning science_scale     tour_b1 @ 0.0s: objects[0] (mitochondrion 'giant'): size 7 µm is far outside the textbook 500 nm–4 µm, and the scene shows a scale bar; draw it at a real size, or set the scene's not_to_scale: true (it then says so on screen)
+  warning science_location  tour_b1 @ 0.0s: "Ribosomes in the nucleus translate the message from the C-terminus to the N-terminus.": the narration puts the ribosomes in the nucleus, but the scene shows them in the cytosol: say where they are, or place them there (in:, on:)
+  warning science_direction tour_b1 @ 0.0s: "Ribosomes in the nucleus translate the message from the C-terminus to the N-terminus.": a protein is made from its N-terminus to its C-terminus (each amino acid is added to the C-terminal end): write N to C
+gly:
+  warning science_counts    gly_b1 @ 0.0s: "Glycolysis yields a net four ATP per glucose.": glycolysis yields a net 2 ATP per glucose (4 made, 2 invested), not four
+akt:
+  warning science_pathway   akt_b1 @ 0.0s: "Akt activates TSC2, and the signal reaches mTORC1.": the scene's arc akt → tsc2 inhibits (phosphorylates), but the narration says it activates: say inhibits, or change the arc
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The

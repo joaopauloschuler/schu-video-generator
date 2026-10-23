@@ -693,6 +693,36 @@ protons were pumped.
       actions: [{advance: tca, to: oxaloacetate}]
 ```
 
+Accuracy and sources. `vidgen lint` checks the science of these scenes (and of any narration)
+with the `science_*` rules: sizes far off scale on a `cell` with a scale bar (set `not_to_scale:
+true` when you exaggerate on purpose: the scene then says so), places ("glycolysis in the
+mitochondria", "ribosomes in the nucleus" while the picture has them in the cytosol), directions
+(RNA made 3′ to 5′, a protein made C to N, kinesin to the minus end, protons pumped into the
+matrix), active transport through a channel or with no energy source shown, gene / protein names
+(mouse *Trp53* gene, TRP53 protein; `<i>…</i>` for a gene in a label), narration against a
+pathway arc ("Akt activates TSC2" where Akt's arc inhibits it) and numbers (net 2 ATP from
+glycolysis, 3 NADH per turn, 3 Na⁺ out and 2 K⁺ in per pump cycle). Fix the words, or the
+picture. Give a scene `references:` — `{label, doi | pmid | isbn | url, id}` copied from your real
+sources, **never invented** (no identifier you have not seen; leave a reference out rather than
+guess) — and they appear as small citations (`citations: {show: footer | marker | card | none}`,
+numbered across the video; a beat's `cite: [id]` shows only what it cites) and as a numbered list
+in the description file `<output>_chapters.txt`. A real micrograph shown with an `image` scene
+gets `figure_credit: {text, license, url}`.
+
+```yaml
+# accuracy and references
+- id: er
+  type: cell
+  params:
+    objects: [{kind: vesicle, id: big_vesicle, size: "400 nm"}]   # larger than real: say so
+    not_to_scale: true
+  references:                          # placeholders here: copy the real identifiers from your sources
+    - {id: book, label: "Example textbook (placeholder)", isbn: "978-0-00-000000-2"}
+  beats:
+    - text: "Transport vesicles carry cargo from the ER to the Golgi."
+      cite: [book]
+```
+
 ```yaml
 # data
 - id: users
@@ -2305,7 +2335,8 @@ Good: the result first, then the context.
   or `--output-dir DIR` moves them. `build/` and `exports/` stay put.
 - **Chapters**: with `chapter` cards or `chapter:` keys the MP4 gets chapter marks and
   `<output>_chapters.txt` the YouTube list (`0:00 Intro`...); `vidgen validate` warns when
-  YouTube would ignore it (fewer than 3 chapters, one under 10 s). `metadata:` adds tags.
+  YouTube would ignore it (fewer than 3 chapters, one under 10 s). `metadata:` adds tags. The
+  scenes' `references:` and `figure_credit:` are appended to that file as a numbered list.
 - **Thumbnail**: a designed card reads best small. Keep its title ≤ 6 words. `vidgen render`
   writes it with the video, `vidgen thumbnail` alone; open the small copy it names
   (`build/.../thumbnail/<name>_small.png`, YouTube's 320 px) and fix the checks it prints. A
@@ -2443,6 +2474,13 @@ install; `vidgen validate` warns when it is missing.
 | `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |
 | `iso_labels` | an `iso_diagram` label over a block it does not name (a group's caption among its blocks), over another label or a connector, or far from what it names | more `spacing` or `at` further apart, shorter labels, fewer blocks; a stack's `label_side` |
 | `music_check` | a project piece (`assets/music/NAME.yaml`) the video plays is loud in the voice's range, too bright, boomy, unsteady, peaky or clicks at its loop (`vidgen music check`'s fixes; its notes are info) | the fix the message names (a track's `volume`, an octave, `lowpass`), then `vidgen music check` again; or `severity: off` in `lint.rules.music_check` |
+| `science_scale` | a `cell` with a scale bar draws something far outside its real size, or too many nuclei / centrosomes | a real `size`, or `not_to_scale: true` (the scene says so); `lint_ignore` a real exception |
+| `science_location` | the narration puts a process where it never is (glycolysis in the mitochondria) or a thing where the `cell` does not show it | say where it is, or place it there (`in:`, `on:`) |
+| `science_direction` | a wrong direction: RNA made 3′→5′, a protein made C→N, kinesin to minus, protons pumped into the matrix | the textbook direction the message gives |
+| `science_energy` | "active transport" through a channel or uniporter, or with no pump, symporter or ATP in the scene | call it facilitated diffusion, or show the pump / coupled carrier |
+| `science_naming` | a scene's gene written as its protein (mouse `TRP53 gene`), the wrong case, a gene label without `<i>` | the form the message gives (mouse: gene *Trp53*, protein TRP53) |
+| `science_pathway` | the narration says activates where the pathway's arc inhibits (or the reverse) | fix the words, or the arc (`effect:`) |
+| `science_counts` | a number against the textbook (net 4 ATP from glycolysis) | the number the message gives |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

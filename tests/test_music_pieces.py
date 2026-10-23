@@ -192,7 +192,7 @@ def test_loop_and_one_pass_sources(tmp_path: Path) -> None:
 
 
 def test_music_check_lint_rule(tmp_path: Path) -> None:
-    assert LINT_RULES[-1] == "music_check" and RULES["music_check"].scope == "scene"
+    assert "music_check" in LINT_RULES and RULES["music_check"].scope == "scene"
     project = _project(tmp_path, [{"source": "calm", "to": "s0"}, {"source": "loud", "from": "s1"}], {"loud.yaml": LOUD})
     assert music_issues(project, "s0", MusicCheckRule()) == []  # a bed is not checked
     issues = music_issues(project, "s1", MusicCheckRule())

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -31,8 +31,14 @@ from vidgen.textnorm import fold
 if TYPE_CHECKING:
     from vidgen.project import Project
 
-#: Actions that bring something on screen at their time.
-SHOWING_ACTIONS = frozenset({"reveal", "callout", "transform"})
+#: Actions that bring something on screen at their time: the built-in ones, and the cell-biology
+#: scenes' actions that bring labels, captions, badges or a zoomed view's part names (§95.14).
+SHOWING_ACTIONS = frozenset({
+    "reveal", "callout", "transform",
+    "zoom_to", "advance", "checkpoint", "signal", "knockout", "drug", "inhibit", "amplify", "transcribe", "cap", "splice", "polyadenylate",
+    "export", "translate", "target_er", "glycosylate", "fold", "to_golgi", "secrete", "transport", "set_state", "diffuse", "osmosis",
+    "action_potential", "motor_walk", "endocytosis", "exocytosis",
+})
 
 _WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)*")
 _STOP_WORDS: dict[str, frozenset[str]] = {
@@ -223,14 +229,42 @@ class NarrationPicture:
     first_beat: str | None
 
 
-def narration_picture(project: Project, layout: dict[str, Any], activity: dict[str, Any], max_words: int) -> NarrationPicture:
+def target_texts(project: Project, scene_id: str | None) -> Callable[[str], str | None]:
+    """What each action target of scene ``scene_id`` is called on screen, from its scene type's
+    ``target_text(params, name)`` when it has one (the cell-biology scenes: a cell object's
+    label, a pathway node's, a molecule's); ``None`` for the others."""
+    from vidgen import registry
+    from vidgen.errors import VidgenError
+
+    spec = next((s for s in project.config.scenes if s.id == scene_id), None)
+    entry = registry.find(spec.type) if spec is not None else None
+    hook = getattr(entry.cls, "target_text", None) if entry is not None else None
+    if spec is None or hook is None:
+        return lambda name: None
+    try:
+        params = entry.cls.parse_params(spec.params, spec.id)
+    except VidgenError:
+        return lambda name: None
+
+    def text(name: str) -> str | None:
+        try:
+            return hook(params, name)
+        except (VidgenError, KeyError, ValueError):
+            return None
+
+    return text
+
+
+def narration_picture(project: Project, layout: dict[str, Any], activity: dict[str, Any], max_words: int, scene_id: str | None = None) -> NarrationPicture:
     """The :class:`NarrationPicture` of a rendered scene: word times from the beats' audio
-    (else the estimate) over the narration times of the activity file."""
+    (else the estimate) over the narration times of the activity file; an action without a
+    ``label`` of its own shows its target's on-screen name (:func:`target_texts`)."""
     from vidgen.word_anchors import beat_words, parse_word_anchor
 
     language = project.config.language
     spoken: list[SpokenWord] = []
     actions: list[ShowingAction] = []
+    named = target_texts(project, scene_id)
     for entry in activity["beats"]:
         beat = project.beat(entry["id"])
         seconds = max(float(entry["end"]) - float(entry["start"]), 0.0)
@@ -241,6 +275,8 @@ def narration_picture(project: Project, layout: dict[str, Any], activity: dict[s
             if act.action not in SHOWING_ACTIONS:
                 continue
             label = (act.model_extra or {}).get("label")
+            if not isinstance(label, str) and len(act.targets()) == 1:
+                label = named(act.targets()[0])
             anchor = parse_word_anchor(act.anchor).words if act.anchor else None
             actions.append(
                 ShowingAction(
