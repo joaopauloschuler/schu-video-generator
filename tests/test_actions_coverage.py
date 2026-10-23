@@ -57,6 +57,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "chapter": {"number": 2, "title": "Results", "subtitle": "Sub", "icon": "rocket"},
     "card": {"text": "Later that day", "subtitle": "Sub"},
     "cell": {"title": "Cell", "contents": "none", "objects": ["nucleus", {"kind": "mitochondrion", "id": "mito", "count": 2}]},
+    "molecule": {"title": "Molecules", "membrane": "plasma", "molecules": [{"kind": "gpcr", "id": "receptor"}, "atp"]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -175,6 +176,7 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("iso_diagram") == ["heading", "diagram", "block1", "block:a", "block2", "block:b", "block3", "block:l1", "block4", "block:l2",
                                     "stack:s", "group:g", "edge:a->b"]
     assert names("cell") == ["title", "cell", "tissue", "nucleus", "mito", "scale_bar"]
+    assert names("molecule") == ["title", "membrane", "receptor", "atp", "scale_bar"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

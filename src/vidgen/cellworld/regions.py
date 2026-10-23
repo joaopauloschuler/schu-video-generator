@@ -2,7 +2,9 @@
 is not one simple shape — a mitochondrion's inner membrane folded into cristae, the ER's sheets
 joined to the nuclear envelope, a smooth-ER network, a nuclear envelope opened by its pores.
 Backed by Skia's path operations (``skia-pathops``, which Manim needs too) in local
-coordinates near the region, so float precision stays far below a nanometre. No manim."""
+coordinates near the region and in nanometres, so float precision stays far below a nanometre
+and features are the size Skia's tolerances are made for (in µm, two 10 nm thylakoid pieces
+overlapping at their ends lost one of them in a union). No manim."""
 
 from __future__ import annotations
 
@@ -14,9 +16,13 @@ import pathops
 from .curves import Cubic, flatten, shape_curves
 from .geometry import Bounds, Point
 
+#: Skia paths are in nanometres (the region's points are µm).
+NM = 1000.0
+
 
 def _path(curves: Iterable[Cubic], origin: Point) -> pathops.Path:
-    """A Skia path of closed outlines (pieces end to end; a gap starts a new outline)."""
+    """A Skia path of closed outlines (pieces end to end; a gap starts a new outline), in nm
+    from ``origin``."""
     path = pathops.Path()
     ox, oy = origin
     last: Point | None = None
@@ -25,9 +31,9 @@ def _path(curves: Iterable[Cubic], origin: Point) -> pathops.Path:
         if last is None or math.dist(last, p0) > 1e-9:
             if last is not None:
                 path.close()
-            path.moveTo(p0[0] - ox, p0[1] - oy)
+            path.moveTo((p0[0] - ox) * NM, (p0[1] - oy) * NM)
             first = p0
-        path.cubicTo(p1[0] - ox, p1[1] - oy, p2[0] - ox, p2[1] - oy, p3[0] - ox, p3[1] - oy)
+        path.cubicTo((p1[0] - ox) * NM, (p1[1] - oy) * NM, (p2[0] - ox) * NM, (p2[1] - oy) * NM, (p3[0] - ox) * NM, (p3[1] - oy) * NM)
         last = p3
     if first is not None:
         path.close()
@@ -112,7 +118,7 @@ class Region:
         start: Point | None = None
 
         def world(p: tuple[float, float]) -> Point:
-            return (p[0] + ox, p[1] + oy)
+            return (p[0] / NM + ox, p[1] / NM + oy)
 
         def straight(a: Point, b: Point) -> Cubic:
             return (a, (a[0] + (b[0] - a[0]) / 3, a[1] + (b[1] - a[1]) / 3), (a[0] + 2 * (b[0] - a[0]) / 3, a[1] + 2 * (b[1] - a[1]) / 3), b)
@@ -156,7 +162,7 @@ class Region:
         return [c for contour in self.contours() for c in contour]
 
     def contains(self, p: Point, pad: float = 0.0) -> bool:
-        inside = self.path.contains((p[0] - self.origin[0], p[1] - self.origin[1]))
+        inside = self.path.contains(((p[0] - self.origin[0]) * NM, (p[1] - self.origin[1]) * NM))
         if pad == 0.0:
             return bool(inside)
         near = self.distance(p) <= abs(pad)
@@ -177,14 +183,14 @@ class Region:
     def bounds(self) -> Bounds:
         x0, y0, x1, y1 = self.path.bounds
         ox, oy = self.origin
-        return (x0 + ox, y0 + oy, x1 + ox, y1 + oy)
+        return (x0 / NM + ox, y0 / NM + oy, x1 / NM + ox, y1 / NM + oy)
 
     def center(self) -> Point:
         x0, y0, x1, y1 = self.bounds()
         return ((x0 + x1) / 2, (y0 + y1) / 2)
 
     def area(self) -> float:
-        return abs(self.path.area)
+        return abs(self.path.area) / NM / NM
 
     def inset(self, d: float) -> "Region":
         raise NotImplementedError("a region is not inset; build the inner region from inset shapes")

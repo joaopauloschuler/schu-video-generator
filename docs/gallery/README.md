@@ -38,6 +38,7 @@ Regenerate with `vidgen gallery`.
 | type | preview | use it for |
 |---|---|---|
 | [`cell`](cell.md) | <a href="cell.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell-16x9.png"><img src="media/cell-16x9.gif" height="180" alt="cell at 16:9"></picture></a> <a href="cell.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell-9x16.png"><img src="media/cell-9x16.gif" height="180" alt="cell at 9:16"></picture></a> | a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) |
+| [`molecule`](molecule.md) | <a href="molecule.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/molecule-16x9.png"><img src="media/molecule-16x9.gif" height="180" alt="molecule at 16:9"></picture></a> <a href="molecule.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/molecule-9x16.png"><img src="media/molecule-9x16.gif" height="180" alt="molecule at 9:16"></picture></a> | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked) |
 
 ## Data
 

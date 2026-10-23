@@ -83,8 +83,9 @@ def lipids(d: "CellDrawing", curves: list[Cubic], feature: str | None) -> tuple[
                 zig = 0.00022 * (1 if k % 2 else -1)
                 sugars.append(Ellipse(*_p(h, o, r + 0.0003 + k * 0.00062, t, zig), 0.00029, 0.00029))
         if lipid.raft and lipid.leaflet == "exo":
-            # the raft: a glow round the bilayer where it is (thicker and more ordered there)
-            raft_patch.append(Ellipse(*_p(h, o, -BILAYER / 2 + r, t, 0.0), BILAYER * 0.75, BILAYER * 0.75))
+            # the raft: a glow behind the bilayer where it is (thicker and more ordered there),
+            # within the bilayer and its head groups: a raft is a domain of the membrane itself
+            raft_patch.append(Ellipse(*_p(h, o, -BILAYER / 2 + r, t, 0.0), BILAYER * 0.75, BILAYER * 0.56, math.atan2(t[1], t[0])))
     c = d.colors
     under = VGroup()
     if raft_patch:

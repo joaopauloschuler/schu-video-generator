@@ -324,20 +324,74 @@ def thylakoids(lens: Ellipse, grana: int, key: str) -> tuple[list[Capsule], list
             lo = y0 - height / 2
             for k in range(n):
                 discs.append(_lens_capsule(lens, x, lo + k * GRANUM_PERIOD, width, thickness))
-            stacks[row].append((x, lo, n))
+            stacks[row].append((x, lo, n, width))
+    # stroma lamellae leave single granal thylakoids at the stack's margin (their lumens join
+    # there; in 3-D they wind round the granum as helices) and run through the stroma to a
+    # thylakoid of the next granum — never through a stack
+    # each margin of a thylakoid takes one lamella at most (two leaving one margin would share
+    # outlines, which Skia's union cannot resolve)
+    used: set[tuple[float, int, float]] = set()
+
+    def free(stack: tuple[float, float, int, float], side: float, order: list[int]) -> int | None:
+        k = next((k for k in order if (stack[0], k, side) not in used), None)
+        if k is not None:
+            used.add((stack[0], k, side))
+        return k
+
     for row in stacks:
-        for (x0, lo0, n0), (x1, lo1, n1) in zip(row, row[1:]):
-            for _ in range(2):
-                k0, k1 = rng.randrange(n0), rng.randrange(n1)
-                lamellae.append(_lens_segment(lens, (x0 + GRANUM_WIDTH * 0.3, lo0 + k0 * GRANUM_PERIOD),
-                                              (x1 - GRANUM_WIDTH * 0.3, lo1 + k1 * GRANUM_PERIOD), thickness))
+        for a, b in zip(row, row[1:]):
+            (x0, lo0, n0, w0), (x1, lo1, n1, w1) = a, b
+            pairs = sorted(zip(sorted(rng.sample(range(n0), min(2, n0))), sorted(rng.sample(range(n1), min(2, n1)))))
+            for k0, k1 in pairs:
+                used.update({(x0, k0, 1.0), (x1, k1, -1.0)})
+                lamellae += _lamella(lens, (x0 + w0 / 2, lo0 + k0 * GRANUM_PERIOD), (1.0, 0.0), (x1 - w1 / 2, lo1 + k1 * GRANUM_PERIOD), (-1.0, 0.0),
+                                     thickness)
     for below, above in zip(stacks, stacks[1:]):
-        for (x0, lo0, n0) in below:
+        for stack in below:
+            x0, lo0, n0, w0 = stack
             near = min(above, key=lambda s: abs(s[0] - x0), default=None)
             if near is not None and abs(near[0] - x0) < usable / max(grana, 1):
-                x1, lo1, _n1 = near
-                lamellae.append(_lens_segment(lens, (x0, lo0 + (n0 - 1) * GRANUM_PERIOD), (x1, lo1), thickness))
+                x1, lo1, n1, w1 = near
+                side = 1.0 if x1 >= x0 else -1.0       # from a top thylakoid's margin to a bottom one's of the granum above
+                k0, k1 = free(stack, side, [n0 - 1]), free(near, side, [0])
+                if k0 is not None and k1 is not None:
+                    lamellae += _lamella(lens, (x0 + side * w0 / 2, lo0 + k0 * GRANUM_PERIOD), (side * 0.7, 1.0),
+                                         (x1 + side * w1 / 2, lo1 + k1 * GRANUM_PERIOD), (side * 0.7, -1.0), thickness)
     return discs, lamellae
+
+
+#: How far a stroma lamella runs straight out of a granum's margin before it turns (µm).
+LAMELLA_STUB = 0.03
+
+
+def _lamella(lens: Ellipse, a: Point, leave_a: Point, b: Point, leave_b: Point, thickness: float) -> list[Capsule]:
+    """A stroma lamella from the margin point ``a`` of one granal thylakoid to the margin point
+    ``b`` of another (lens coordinates), leaving each the way ``leave_a`` / ``leave_b`` say
+    (``(1, 0)``: out to the right; ``(1, 1)``: out and up, from the top thylakoid of a stack),
+    then across the stroma. It starts inside each disc's end and is a little thinner than the
+    disc, so the lumens join without outlines on top of each other (which Skia's union cannot
+    resolve); bends of less than 20° are dropped for the same reason (two pieces nearly in line
+    overlap along their length), and each piece runs a little past its bend."""
+    t = thickness * 0.8
+    out_a, out_b = (1.0 if leave_a[0] > 0 else -1.0), (1.0 if leave_b[0] > 0 else -1.0)
+    points = [(a[0] - out_a * thickness, a[1]), (a[0] + leave_a[0] * LAMELLA_STUB, a[1] + leave_a[1] * LAMELLA_STUB),
+              (b[0] + leave_b[0] * LAMELLA_STUB, b[1] + leave_b[1] * LAMELLA_STUB), (b[0] - out_b * thickness, b[1])]
+    if out_a != out_b and (points[2][0] - points[1][0]) * out_a <= 0:      # grana too close for a bend: straight across
+        points = [points[0], points[3]]
+    k = 1
+    while k < len(points) - 1:
+        (x0, y0), (x1, y1), (x2, y2) = points[k - 1], points[k], points[k + 1]
+        turn = abs(math.remainder(math.atan2(y2 - y1, x2 - x1) - math.atan2(y1 - y0, x1 - x0), 2 * math.pi))
+        if turn < math.radians(20):
+            del points[k]
+        else:
+            k += 1
+    out = []
+    for p, q in zip(points, points[1:]):
+        d = math.dist(p, q) or 1.0
+        past = (q[0] + (q[0] - p[0]) / d * t * 0.3, q[1] + (q[1] - p[1]) / d * t * 0.3) if q != points[-1] else q
+        out.append(_lens_segment(lens, p, past, t))
+    return out
 
 
 def _lens_capsule(lens: Ellipse, x: float, y: float, length: float, width: float) -> Capsule:

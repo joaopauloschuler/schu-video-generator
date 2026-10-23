@@ -44,6 +44,12 @@ def cell_shape(kind: str, size: float, aspect: float) -> Shape:
     return Ellipse(0.0, 0.0, size / 2, short / 2)
 
 
+def _capsule_ends(c: Capsule) -> tuple[Point, Point]:
+    """The centres of a capsule's two round ends."""
+    dx, dy = c.half * math.cos(c.angle), c.half * math.sin(c.angle)
+    return (c.cx - dx, c.cy - dy), (c.cx + dx, c.cy + dy)
+
+
 def grown(shape: Shape, d: float) -> Shape:
     """``shape`` grown outwards by ``d`` µm (its next layer out)."""
     return shape.inset(-d)
@@ -457,7 +463,16 @@ class Builder:
             if link:
                 pieces += link[1]
                 joined = (link[0],)
-            region = Region.of(*pieces, *joints, origin=center)
+            # the joints first, and a joint on every bend: tubule ends meeting at one point have
+            # identical round ends, which Skia's union could not resolve (a ring of tubules came
+            # out filled)
+            bends: dict[tuple[float, float], Point] = {}
+            for piece in pieces:
+                for end in _capsule_ends(piece):
+                    if all(math.dist(end, q) > ER_TUBULE for q in nodes):
+                        bends.setdefault((round(end[0], 6), round(end[1], 6)), end)
+            joints += [Ellipse(x, y, ER_TUBULE * 0.55, ER_TUBULE * 0.55) for x, y in bends.values()]
+            region = Region.of(*joints, *pieces, origin=center)
             return [Placed(entry_id, entry_id, kind.name, center, size, size, 0.0, tuple(pieces), (Part((("er_membrane", region),), ("er_lumen",)),),
                            "cytosol", joined=joined, options=(("nodes", tuple(nodes)), ("edges", tuple(edges))))]
         raise fail(spec, entry_id, f"no room for the smooth ER ({format_length(size)} across): {last}; give it another at or a smaller size")

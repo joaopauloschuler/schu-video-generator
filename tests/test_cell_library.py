@@ -15,7 +15,7 @@ from vidgen.cellworld import (
 )
 from vidgen.cellworld.bilayer import lipid_layout, membrane_between, mosaic, lipids_of, plasma_rafts
 from vidgen.cellworld.curves import shape_curves
-from vidgen.cellworld.morphology import cristae, pore_channel
+from vidgen.cellworld.morphology import cristae, heterochromatin, nucleolus_parts, pore_channel
 from vidgen.errors import VidgenError
 
 ASPECT = 16 / 9 * 0.8
@@ -247,6 +247,138 @@ def test_part_anchors(entry: str | None, level: str, expected: set[str]) -> None
     anchors = part_anchors(w, entry, view, half)
     assert expected <= {a.name for a in anchors}
     assert all(abs(a.point[0] - view.center[0]) <= half[0] and abs(a.point[1] - view.center[1]) <= half[1] for a in anchors)
+
+
+MEMBRANE = "membrane"
+#: Each zoomed view's parts and where their labels must point: a compartment (well inside it,
+#: at least 3 nm from its edge) or a membrane (in its bilayer: within 2.6 nm of the mid-line
+#: between its two sides).
+ANCHOR_PLACES = [
+    ("animal", None, "complex", {"phospholipid": (MEMBRANE, "extracellular", "cytosol"), "glycolipid": (MEMBRANE, "extracellular", "cytosol"),
+                                 "sterol": (MEMBRANE, "extracellular", "cytosol"), "glycocalyx": "extracellular",
+                                 "extracellular": "extracellular", "cytosol": "cytosol"}),
+    ("animal", "rough_er", "complex", {"ribosome": "cytosol", "membrane": (MEMBRANE, "cytosol", "er_lumen"), "lumen": "er_lumen",
+                                       "cytosol": "cytosol"}),
+    ("animal", "nucleus", "complex", {"outer_nuclear_membrane": (MEMBRANE, "cytosol", "perinuclear_space"), "perinuclear_space": "perinuclear_space",
+                                      "inner_nuclear_membrane": (MEMBRANE, "perinuclear_space", "nucleoplasm"), "cytosol": "cytosol",
+                                      "nucleoplasm": "nucleoplasm"}),
+    ("animal", "golgi", "organelle", {"cis": "cis_golgi_lumen", "medial": "medial_golgi_lumen", "trans": "trans_golgi_lumen", "copi": "vesicle_lumen",
+                                      "clathrin": "vesicle_lumen", "secretory": "vesicle_lumen"}),
+    ("animal", "golgi", "complex", {"coat": "cytosol", "bud": "trans_golgi_lumen", "membrane": (MEMBRANE, "cytosol", "trans_golgi_lumen"),
+                                    "lumen": "trans_golgi_lumen"}),
+    ("animal", "mitochondria", "organelle", {"outer_membrane": (MEMBRANE, "cytosol", "intermembrane_space"), "intermembrane_space": "intermembrane_space",
+                                             "inner_membrane": (MEMBRANE, "intermembrane_space", "matrix"), "crista": "intermembrane_space",
+                                             "matrix": "matrix"}),
+    ("animal", "mitochondria", "complex", {"crista_junction": "intermembrane_space", "intracristal_space": "intermembrane_space",
+                                           "outer_membrane": (MEMBRANE, "cytosol", "intermembrane_space"), "intermembrane_space": "intermembrane_space",
+                                           "matrix": "matrix"}),
+    ("animal", "nucleus", "organelle", {"envelope": (MEMBRANE, "cytosol", "perinuclear_space"), "nucleoplasm": "nucleoplasm", "er_junction": "er_lumen"}),
+    ("plant", "chloroplasts", "organelle", {"outer_envelope": (MEMBRANE, "cytosol", "chloroplast_intermembrane_space"),
+                                            "inner_envelope": (MEMBRANE, "chloroplast_intermembrane_space", "stroma"), "granum": "thylakoid_lumen",
+                                            "stroma_lamella": "thylakoid_lumen", "stroma": "stroma"}),
+    ("plant", "chloroplasts", "complex", {"thylakoid_membrane": (MEMBRANE, "stroma", "thylakoid_lumen"), "thylakoid_lumen": "thylakoid_lumen",
+                                          "stroma": "stroma"}),
+    ("plant", None, "complex", {"plasmodesma": "cytosol", "wall": "cell_wall", "membrane": (MEMBRANE, "cytosol", "cell_wall"), "cytosol": "cytosol"}),
+    ("bacterium", None, "complex", {"outer_membrane": (MEMBRANE, "extracellular", "periplasm"), "periplasm": "periplasm",
+                                    "inner_membrane": (MEMBRANE, "periplasm", "cytosol"), "cytoplasm": "cytosol"}),
+    ("animal", "smooth_er", "organelle", {"tubule": "er_lumen", "junction": "er_lumen", "rough_er": "er_lumen"}),
+    ("animal", "late_endosome", "organelle", {"ilv": "intraluminal_vesicle", "membrane": (MEMBRANE, "cytosol", "endosome_lumen"),
+                                              "lumen": "endosome_lumen"}),
+    ("animal", "lysosomes", "organelle", {"membrane": (MEMBRANE, "cytosol", "lysosome_lumen"), "lumen": "lysosome_lumen"}),
+]
+
+
+def _ring(w: object, p: tuple[float, float], r: float) -> set[str]:
+    return {w.compartment_at((p[0] + r * math.cos(a * math.pi / 8), p[1] + r * math.sin(a * math.pi / 8)))[0] for a in range(16)}  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("aspect", [ASPECT, 9 / 16 * 1.15])
+@pytest.mark.parametrize("kind, entry, level, places", ANCHOR_PLACES)
+def test_labels_point_at_what_they_name(kind: str, entry: str | None, level: str, places: dict[str, object], aspect: float) -> None:
+    """Every label's leader ends on its part: a space's label well inside that space (the
+    matrix round the cristae, not a crista's lumen), a membrane's on that membrane."""
+    w = built(kind)
+    view = level_view(w, level, aspect, entry)
+    half = (view.span * aspect / 2, view.span / 2) if aspect >= 1 else (view.span / 2, view.span / aspect / 2)
+    anchors = {a.name: a.point for a in part_anchors(w, entry, view, half)}
+    for name, place in places.items():
+        if name not in anchors:
+            continue
+        p = anchors[name]
+        here = w.compartment_at(p)[0]
+        if isinstance(place, tuple):
+            _, a, b = place
+            near = {here} | _ring(w, p, 0.001) | _ring(w, p, 0.0026)       # within the 5 nm bilayer
+            assert near == {a, b}, f"{name}: {sorted(near)} round its point, not the membrane between {a} and {b}"
+        else:
+            assert here == place and _ring(w, p, 0.003) == {place}, f"{name}: in {here}, within 3 nm of {sorted(_ring(w, p, 0.003))}, not well inside {place}"
+    assert set(places) & set(anchors)
+
+
+def test_plasma_membrane_labels_stay_on_their_side() -> None:
+    """The glycocalyx is the coat outside the bilayer (3–8 nm out); its label and the
+    extracellular space's sit on the side of the view their space is on, so their leaders do
+    not cross the membrane (columns: left / right; rows: above / below)."""
+    w = built()
+    for aspect, axis in ((ASPECT, 0), (9 / 16 * 1.15, 1)):
+        view = level_view(w, "complex", aspect, None)
+        half = (view.span * aspect / 2, view.span / 2) if aspect >= 1 else (view.span / 2, view.span / aspect / 2)
+        anchors = {a.name: a.point for a in part_anchors(w, None, view, half)}
+        n = w.cell.normal(0.12)
+        glyco = anchors["glycocalyx"]
+        depth = (glyco[0] - view.center[0]) * n[0] + (glyco[1] - view.center[1]) * n[1]
+        assert 0.003 < depth < 0.008
+        for name, sign in (("glycocalyx", 1), ("extracellular", 1), ("cytosol", -1)):
+            assert (anchors[name][axis] - view.center[axis]) * n[axis] * sign > 0, name
+
+
+def test_nucleolus_and_heterochromatin_labels() -> None:
+    w = built()
+    nucleus = w.thing("nucleus")
+    inner = nucleus.footprint[0].inset(0.035)
+    view = level_view(w, "organelle", ASPECT, "nucleus")
+    anchors = {a.name: a.point for a in part_anchors(w, "nucleus", view, (view.span, view.span))}
+    chromatin = heterochromatin(inner, list(nucleus.option("pores", ())), [w.thing("nucleolus").footprint[0]], nucleus.key)
+    assert chromatin.contains(anchors["heterochromatin"])
+    assert not chromatin.contains(anchors["nucleoplasm"]) and w.compartment_at(anchors["nucleoplasm"])[0] == "nucleoplasm"
+    nucleolus = w.thing("nucleolus")
+    view = level_view(w, "organelle", ASPECT, "nucleolus")
+    anchors = {a.name: a.point for a in part_anchors(w, "nucleolus", view, (view.span, view.span))}
+    centres, rims = nucleolus_parts(nucleolus.footprint[0], nucleolus.key)
+    assert any(c.contains(anchors["fibrillar_centre"]) for c in centres)
+    assert any(r.contains(anchors["dense_fibrillar"]) and not c.contains(anchors["dense_fibrillar"]) for c, r in zip(centres, rims))
+    granular = anchors["granular"]
+    assert nucleolus.contains(granular) and not any(r.contains(granular) for r in rims)
+
+
+def test_stroma_lamellae_join_grana_at_their_margins() -> None:
+    """A stroma lamella enters a granal thylakoid only at its margin (the disc's end), never
+    crossing the stack; and the thylakoids' lumen stays one space."""
+    w = built("plant")
+    for chloroplast in w.members("chloroplasts")[:3]:
+        discs = chloroplast.option("discs")
+        lamellae = chloroplast.option("lamellae")
+        assert lamellae
+        for piece in lamellae:
+            ends = [(piece.cx + s * piece.half * math.cos(piece.angle), piece.cy + s * piece.half * math.sin(piece.angle)) for s in (-1, 1)]
+            for k in range(21):
+                p = (ends[0][0] + (ends[1][0] - ends[0][0]) * k / 20, ends[0][1] + (ends[1][1] - ends[0][1]) * k / 20)
+                inside = [d for d in discs if d.contains(p)]
+                assert len(inside) <= 1
+                for d in inside:
+                    rims = [(d.cx + s * d.half * math.cos(d.angle), d.cy + s * d.half * math.sin(d.angle)) for s in (-1, 1)]
+                    assert min(math.dist(p, r) for r in rims) < d.width * 1.6, "a lamella crosses a granum"
+            assert w.compartment_at(piece.center())[0] == "thylakoid_lumen"
+
+
+def test_a_ring_of_smooth_er_tubules_is_not_filled() -> None:
+    """The union of a tubule network keeps its holes (Skia failed on tubule ends meeting at one
+    point and filled a ring of tubules)."""
+    w = built()
+    ser = w.thing("smooth_er")
+    region = ser.parts[0].membranes[0][1]
+    tubes = sum(math.pi * (s.width / 2) ** 2 + 2 * s.half * s.width for s in ser.footprint)
+    assert region.area() < tubes
 
 
 def test_regions() -> None:

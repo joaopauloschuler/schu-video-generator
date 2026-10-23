@@ -295,7 +295,8 @@ project's own scene types, in its theme).
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
-| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style), `view`, `labels`; animal, plant or bacterium; the action zoom_to |
+| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the action zoom_to |
+| molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked) | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, modifications…), `species`, `compartment` |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
@@ -491,6 +492,16 @@ drawn as large as its labels let it.
     - text: "Inside one mitochondrion, the inner membrane folds into cristae."
       actions:
         - {zoom_to: mitochondria, at: "@mitochondrion"}   # {zoom_to: rough_er, level: complex}: one ribosome
+- id: synthase
+  type: molecule
+  params:
+    title: "ATP synthase"
+    membrane: inner_mitochondrial                  # the bilayer between the intermembrane space and the matrix
+    molecules:
+      - {kind: atp_synthase, parts: true}          # F1 faces the matrix (faces: intermembrane_space is refused)
+      - {kind: atp, in: matrix}
+  beats:
+    - text: "Protons flow back into the matrix through ATP synthase, turning its rotor, and F1 makes ATP."
 ```
 
 A `cell` is drawn at real sizes in µm and every place is checked: a ribosome in the nucleoplasm,
@@ -505,6 +516,22 @@ filament; `vidgen guide config` lists them all). `zoom_to` moves between levels 
 organelle, complex) and names what the new view shows (`labels: false` or a list of part names);
 the scale bar and the details follow the zoom; `style: surface` (the scene's or an object's) draws
 things whole, seen from outside (a nucleus with its pores, a membrane's surface), instead of cut open.
+
+Molecules are kinds too: in a `cell` (`{kind: gpcr, on: cell, count: 3, state: active}`,
+`{kind: atp_synthase, on: mitochondria}` on the cristae, `{kind: dna, in: nucleus}`; drawn whole once
+a zoom makes them a few pixels wide) and up close in a `molecule` scene (nm; a `membrane` across the
+view, the molecules in a row unless `at` places them). Kinds: `dna` (`sequence` 5′→3′, its partner
+drawn antiparallel; 5′/3′ ends, grooves), `mrna`, `trna` (`anticodon` 5′→3′ and `amino_acid`,
+checked against the genetic code; `style: l_shape`), `rrna`, `nucleosome` (`marks: [H3K4me3,
+H3K27ac]`, checked against the histone sequence), `chromatin` (`state: compact`), `protein`
+(`domains`, `mass` in kDa), `kinase`, `phosphatase`, `g_protein`, `gpcr`, `rtk` (`state: dimer`),
+`ion_channel` (`state: open`, `gating`, `ion`), `carrier` (`mode: symport`, `substrates`, `moves`),
+`na_k_atpase`, `atp_synthase`, `atp`, `adp`, `pi`, `gtp`, `gdp`, `camp`, `glucose`, `ligand`, `ion`
+(`ion: Ca2+`). Membrane proteins keep their textbook orientation (a GPCR's N-terminus outside, F1 in
+the matrix or stroma); `faces:` states it and is checked. Names: `gene: TP53` is set in italics and
+checked for the `species` (mouse `Trp53`, yeast `CDC28`), `protein: p53` in roman;
+`modifications: [{mark: P, at: Ser15}]` (P, Ub, Ac, Me; phosphate never on Lys). Labels take Pango
+markup: `β<sub>2</sub>`, `Ca<sup>2+</sup>`, `<i>lacZ</i>`.
 
 ```yaml
 # data

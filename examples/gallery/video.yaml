@@ -474,6 +474,17 @@ scenes:
         actions:
           - {zoom_to: mitochondria, at: "@mitochondrion"}   # the camera in µm; the scale bar follows
 
+  - id: synthase
+    type: molecule      # a molecular close-up in nm; orientations checked (F1 must face the matrix)
+    params:
+      title: "ATP synthase"
+      membrane: inner_mitochondrial   # the bilayer between the intermembrane space and the matrix
+      molecules:
+        - {kind: atp_synthase, parts: true}
+        - {kind: atp, in: matrix}
+    beats:
+      - text: "Protons flow back into the matrix through ATP synthase, turning its rotor, and F1 makes ATP."
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)

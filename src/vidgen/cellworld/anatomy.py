@@ -10,11 +10,13 @@ import math
 from dataclasses import dataclass
 
 from .bilayer import lipid_layout, lipids_of, mosaic, plasma_rafts
-from .catalog import BILAYER, COAT_LABELS, CHLOROPLAST_GAP, KINDS, MEMBRANES, MITO_GAP, PERINUCLEAR_GAP, PERIPLASM
+from .catalog import BILAYER, COAT_LABELS, COATS, COMPARTMENTS, CHLOROPLAST_GAP, KINDS, MEMBRANES, MITO_GAP, PERINUCLEAR_GAP, PERIPLASM
 from .curves import shape_curves
 from .geometry import ArcBand, Capsule, Ellipse, Point, Polyline
+from .glyphs import anchor_point, molecule_glyph
 from .model import CellWorld, Placed
-from .morphology import cristae, nucleolus_parts
+from .molecules import MOLECULES, membrane_sides
+from .morphology import cristae, heterochromatin, nucleolus_parts
 from .view import CellView, membrane_focus
 
 
@@ -41,6 +43,45 @@ def _nearest(points: list[Point], center: Point) -> Point | None:
     return min(points, key=lambda q: math.dist(q, center)) if points else None
 
 
+def _settle(world: CellWorld, p: Point, compartment: str, margin: float = 0.008, reach: float = 0.2) -> Point:
+    """The point nearest ``p`` that lies in ``compartment`` at least ``margin`` µm from any
+    other (a label points well inside the space it names, not at its edge); ``p`` itself when
+    none is found within ``reach``."""
+
+    def clear(q: Point) -> bool:
+        if world.compartment_at(q)[0] != compartment:
+            return False
+        return all(world.compartment_at((q[0] + margin * math.cos(a * math.pi / 4), q[1] + margin * math.sin(a * math.pi / 4)))[0] == compartment
+                   for a in range(8))
+
+    if clear(p):
+        return p
+    step = margin / 2
+    for ring in range(1, int(reach / step) + 1):
+        r = ring * step
+        count = max(8, int(2 * math.pi * r / step))
+        for k in range(count):
+            q = (p[0] + r * math.cos(2 * math.pi * k / count), p[1] + r * math.sin(2 * math.pi * k / count))
+            if clear(q):
+                return q
+    return p
+
+
+def _beside(p: Point, n: Point, depth: float, sideways: float, axis: int) -> Point:
+    """A point ``depth`` µm from ``p`` along the normal ``n`` and ``sideways`` µm along the
+    membrane, the way that keeps it on its side of ``p`` along ``axis`` (0: x, 1: y) — so its
+    label, laid out on that side of the view, does not reach across the membrane to it."""
+    t = (-n[1], n[0])
+    best = None
+    for sign in (1.0, -1.0):
+        q = (p[0] + n[0] * depth + t[0] * sideways * sign, p[1] + n[1] * depth + t[1] * sideways * sign)
+        score = (q[axis] - p[axis]) * (1.0 if n[axis] * depth >= 0 else -1.0)
+        if best is None or score > best[0]:
+            best = (score, q)
+    assert best is not None
+    return best[1]
+
+
 def _ellipse_t(shape: Ellipse, point: Point) -> float:
     x, y = shape.local(point)
     return (math.atan2(y / shape.b, x / shape.a) / (2 * math.pi)) % 1.0
@@ -52,7 +93,8 @@ def part_anchors(world: CellWorld, entry_id: str | None, view: CellView, half: t
     middle first."""
     center = view.center
     if entry_id in (None, "cell", "tissue"):
-        found = _cell_parts(world, view) if view.level == "complex" else []
+        # labels go to the view's left and right in a wide frame, above and below in a tall one
+        found = _cell_parts(world, view, 0 if half[0] >= half[1] else 1) if view.level == "complex" else []
         if view.level == "organelle":
             nucleus = next((e.id for e in world.entries if e.kind in ("nucleus", "nucleoid") and e.owner is None), None)
             found = _parts(world, world.members(nucleus)[0], view) if nucleus else []
@@ -116,12 +158,18 @@ def _parts(world: CellWorld, thing: Placed, view: CellView) -> list[Anchor]:
         if level == "complex" and neck is not None:
             out.append(Anchor("crista_junction", "Crista junction", neck.center()))
             if lamella is not None:
-                out.append(Anchor("intracristal_space", "Intracristal space", _toward(neck.center(), lamella.center(), 0.07)))
+                # the intracristal space: inside the crista's lumen, past its junction
+                q = _toward(neck.center(), lamella.center(), 0.11)
+                out.append(Anchor("intracristal_space", "Intracristal space", q if lamella.contains(q, -0.004) else lamella.center()))
             q = _nearest(_on_capsule(shape, c), c) or p
             out += [Anchor("outer_membrane", "Outer membrane", q),
                     Anchor("intermembrane_space", "Intermembrane space", _toward(q, thing.center, (MITO_GAP + BILAYER) / 2)),
-                    Anchor("matrix", "Matrix", _toward(neck.center(), thing.center, 0.07))]
+                    # the matrix lies round the cristae, inside the inner membrane: beside this crista, not in it
+                    Anchor("matrix", "Matrix", _settle(world, _toward(neck.center(), thing.center, 0.07), "matrix", 0.012, 0.12))]
             return out
+        # a stretch of the boundary membranes with no crista junction in it
+        t = next((u for u in (0.08, 0.1, 0.06, 0.12, 0.04, 0.14, 0.02, 0.16) if not any(f.contains(shape.point(u), MITO_GAP * 2.5) for f in folds)), 0.08)
+        p, n = shape.point(t), shape.normal(t)
         out += [Anchor("outer_membrane", "Outer membrane", p),
                 Anchor("inner_membrane", "Inner membrane", _off(p, n, -(MITO_GAP + BILAYER))),
                 Anchor("intermembrane_space", "Intermembrane space", _off(p, n, -(MITO_GAP + BILAYER) / 2))]
@@ -174,6 +222,18 @@ def _parts(world: CellWorld, thing: Placed, view: CellView) -> list[Anchor]:
         if plasmid is not None:
             out.append(Anchor("plasmid", "Plasmid", plasmid))
         return out
+    if kind in MOLECULES and thing.option("molecule") is not None:
+        glyph = molecule_glyph(thing.option("molecule"))
+        out = [Anchor(name, label, anchor_point(glyph, name, thing.center, thing.angle, 0.001)) for name, (label, _p) in glyph.anchors.items()]
+        membrane = thing.option("membrane")
+        if membrane:
+            exo, cyto = membrane_sides(membrane)
+            n = thing.normal or (0.0, 1.0)
+            step = min(thing.size * 0.4, 0.008)                # inside a crista's 25 nm lumen too
+            sides = [Anchor(exo, COMPARTMENTS[exo].label, _settle(world, _off(thing.center, n, step), exo, 0.002, 0.03)),
+                     Anchor(cyto, COMPARTMENTS[cyto].label, _settle(world, _off(thing.center, n, -step), cyto, 0.002, 0.03))]
+            out = out[:4] + sides + out[4:]                    # a view names at most seven: the two sides among them
+        return out
     info = KINDS[kind]
     if info.category == "filament":
         return _filament(world, thing, view)
@@ -213,10 +273,25 @@ def _nucleus(world: CellWorld, thing: Placed, shape: Ellipse, view: CellView) ->
     nucleolus = next((p for p in world.placed if p.kind == "nucleolus" and p.host == f"{thing.key}.nucleoplasm"), None)
     if nucleolus is not None:
         out.append(Anchor("nucleolus", "Nucleolus", nucleolus.center))
-    t = 0.62
-    p, n = inner.point(t), inner.normal(t)
-    out.append(Anchor("heterochromatin", "Heterochromatin", _off(p, n, -0.07)))
-    out.append(Anchor("nucleoplasm", "Nucleoplasm", _toward(thing.center, inner.point(0.85), inner.a * 0.45)))
+    # heterochromatin: on one of its patches along the inner membrane; the nucleoplasm clear of them
+    nucleoli = [p.footprint[0] for p in world.placed if p.kind == "nucleolus" and p.host == f"{thing.key}.nucleoplasm"]
+    chromatin = heterochromatin(inner, list(thing.option("pores", ())), [n for n in nucleoli if isinstance(n, Ellipse)], thing.key)
+    patch = None
+    for k in range(60):
+        t = 0.62 + (k // 2) * 0.006 * (1 if k % 2 == 0 else -1)
+        for depth in (0.07, 0.05, 0.1):
+            q = _off(inner.point(t), inner.normal(t), -depth)
+            if chromatin.contains(q):
+                patch = q
+                break
+        if patch is not None:
+            break
+    if patch is not None:
+        out.append(Anchor("heterochromatin", "Heterochromatin", patch))
+    plasm = next((q for f in (0.45, 0.35, 0.55, 0.25, 0.65) for u in (0.85, 0.8, 0.9, 0.75)
+                  if not chromatin.contains(q := _toward(thing.center, inner.point(u), inner.a * f)) and not any(n.contains(q, 0.1) for n in nucleoli)),
+                 _toward(thing.center, inner.point(0.85), inner.a * 0.45))
+    out.append(Anchor("nucleoplasm", "Nucleoplasm", plasm))
     er = next((p for p in world.placed if p.kind == "rough_er" and thing.key in p.joined), None)
     if er is not None:
         necks = er.option("necks", ())
@@ -266,10 +341,24 @@ def _golgi(world: CellWorld, thing: Placed, view: CellView) -> list[Anchor]:
     if view.level == "complex" and buds:
         center, radius, coat, k = min(buds, key=lambda b: math.dist(b[0], c))
         names = ["cis", *["medial"] * (len(bands) - 2), "trans"]
-        out += [Anchor("coat", f"{COAT_LABELS[coat]} coat", _off(center, (0.0, 1.0), radius + 0.01)),
+        band = bands[k]
+        end = min(band.ends(), key=lambda e: math.dist(e, center))
+        away = (center[0] - end[0], center[1] - end[1])
+        length = math.hypot(*away) or 1.0
+        away = (away[0] / length, away[1] / length)          # the coat is on the bud's free side, away from its cisterna
+        # along the cisterna, back from the rim the bud grows from: its lumen and a membrane
+        a_end = band.end if math.dist(end, band.ends()[-1]) < math.dist(end, band.ends()[0]) else band.start
+        inward = 1.0 if a_end == band.start else -1.0
+
+        def on_band(arc: float, r: float) -> Point:
+            a = a_end + inward * arc / band.radius
+            return (band.cx + r * math.cos(a), band.cy + r * math.sin(a))
+
+        lumen = _settle(world, on_band(0.1, band.radius), f"{names[k]}_golgi_lumen", 0.004, 0.06)
+        out += [Anchor("coat", f"{COAT_LABELS[coat]} coat", _off(center, away, radius + BILAYER / 2 + COATS[coat] / 2)),
                 Anchor("bud", "Budding vesicle", center),
-                Anchor("membrane", "Golgi membrane", bands[k].center() if math.dist(bands[k].center(), c) < 0.3 else _toward(center, bands[k].center(), 0.06)),
-                Anchor("lumen", f"{names[k]}-Golgi lumen", _toward(center, bands[k].center(), 0.09))]
+                Anchor("membrane", "Golgi membrane", on_band(0.16, band.radius + band.thickness / 2)),
+                Anchor("lumen", f"{names[k]}-Golgi lumen", lumen)]
         return out
     if bands:
         out += [Anchor("cis", "cis face", bands[0].center()), Anchor("medial", "Medial cisternae", bands[len(bands) // 2].center()),
@@ -330,7 +419,7 @@ def _chloroplast(thing: Placed, shape: Ellipse, view: CellView) -> list[Anchor]:
            Anchor("inner_envelope", "Inner envelope membrane", _off(p, n, -(CHLOROPLAST_GAP + BILAYER)))]
     if disc is not None:
         out.append(Anchor("granum", "Granum", disc.center()))
-    lamella = _nearest([l.center() for l in lamellae], c)
+    lamella = _nearest([l.center() for l in lamellae if l.length > 0.1], c)   # a run across the stroma, not a stub at a granum
     if lamella is not None:
         out.append(Anchor("stroma_lamella", "Stroma lamella", lamella))
     starch = thing.option("starch", ())
@@ -395,7 +484,7 @@ def _motor(world: CellWorld, thing: Placed) -> list[Anchor]:
     return out
 
 
-def _cell_parts(world: CellWorld, view: CellView) -> list[Anchor]:
+def _cell_parts(world: CellWorld, view: CellView, axis: int = 0) -> list[Anchor]:
     """The cell's own envelope seen close: a bilayer's lipids, a plant's wall and plasmodesma, a
     bacterium's layers."""
     focus, _ = membrane_focus(world)
@@ -439,11 +528,11 @@ def _cell_parts(world: CellWorld, view: CellView) -> list[Anchor]:
         if mine:
             near = min(mine, key=lambda l: math.dist(l.head, focus) + (0.03 if l.raft and kind == "phospholipid" else 0.0))
             out.append(Anchor(kind, label, near.head))
-    n = world.cell.normal(0.12)  # type: ignore[attr-defined]
-    along = (-n[1], n[0])
-    out += [Anchor("raft", "Lipid raft", _off(focus, n, -0.001)), Anchor("glycocalyx", "Glycocalyx", _off(_off(focus, n, 0.007), along, 0.014)),
-            Anchor("extracellular", "Extracellular space", _off(_off(focus, n, 0.016), along, -0.01)),
-            Anchor("cytosol", "Cytosol", _off(_off(focus, n, -0.014), along, 0.01))]
+    n = world.cell.normal(0.12)  # type: ignore[attr-defined]   # the focus is the plasma membrane's point at 0.12
+    # the glycocalyx: the sugar chains reach about 3–8 nm out from the bilayer's mid-plane
+    out += [Anchor("raft", "Lipid raft", _off(focus, n, -0.001)), Anchor("glycocalyx", "Glycocalyx", _beside(focus, n, 0.0055, 0.012, axis)),
+            Anchor("extracellular", "Extracellular space", _beside(focus, n, 0.018, 0.01, axis)),
+            Anchor("cytosol", "Cytosol", _beside(focus, n, -0.014, 0.01, axis))]
     return out
 
 

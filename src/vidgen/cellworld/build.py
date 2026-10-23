@@ -17,6 +17,8 @@ from .catalog import CELL_KINDS, CELL_LABELS, CELL_SIZES, COAT_NAMES, COMPARTMEN
 from .filaments import place_filaments, place_motors
 from .geometry import Ellipse, Point
 from .model import RESERVED_IDS, CellSpec, CellWorld, ObjectSpec, Placed, at_text, did_you_mean, fail, instance_words, noun
+from .molecules import MOLECULES
+from .placing import place_on_membrane, with_molecule
 from .units import format_length
 
 #: The order kinds are placed in when nothing else decides: what others are placed by first.
@@ -75,7 +77,13 @@ def _check_static(entry_id: str, spec: ObjectSpec, cell_kind: str) -> None:
         raise fail(spec, entry_id, f"at places one thing; for {spec.count} of them leave out at (they are scattered) or write one object per place")
     if spec.inside is not None and spec.on is not None:
         raise fail(spec, entry_id, "give in (a compartment it floats in) or on (a structure whose membrane it sits on), not both")
-    if spec.on is not None and not kind.surfaces:
+    bound = spec.kind in MOLECULES and MOLECULES[spec.kind].bound
+    if bound and spec.inside is not None:
+        raise fail(spec, entry_id, f"a {MOLECULES[spec.kind].plain} sits in a membrane: give on: cell (the plasma membrane) or an object "
+                                   "(a mitochondrion, a chloroplast, the rough ER…), not in")
+    if bound and spec.at is not None:
+        raise fail(spec, entry_id, f"a {MOLECULES[spec.kind].plain} is placed in its membrane with on: (and count), not at")
+    if spec.on is not None and not kind.surfaces and not bound:
         raise fail(spec, entry_id, f"a {noun(kind.label)} does not sit on a membrane or a filament; {kind.why}")
     if spec.inside is not None and kind.category != "complex":
         raise fail(spec, entry_id, "in is for complexes (ribosomes, proteasomes); place a structure with at, or leave at out to scatter it")
@@ -175,7 +183,9 @@ def build_cell_world(spec: CellSpec) -> CellWorld:
         builder.add(entry_id, obj, place_filaments(builder, entry_id, obj, KINDS[obj.kind]))
     for _, (entry_id, obj) in complexes:
         kind = KINDS[obj.kind]
-        if kind.shape == "motor":
+        if obj.kind in MOLECULES and MOLECULES[obj.kind].bound:
+            things = place_on_membrane(builder, entry_id, obj, kind)
+        elif kind.shape == "motor":
             things = place_motors(builder, entry_id, obj, kind)
         elif obj.on is not None:
             things = _on_surface(builder, entry_id, obj, kind)
@@ -183,6 +193,8 @@ def build_cell_world(spec: CellSpec) -> CellWorld:
             things = _at_point(builder, entry_id, obj, kind)
         else:
             things = builder.scatter_complexes(entry_id, obj, kind, _resolve_in(builder, entry_id, obj, kind))
+        if obj.kind in MOLECULES and not MOLECULES[obj.kind].bound:
+            things = with_molecule(things, obj, entry_id)
         builder.add(entry_id, obj, things)
     world = builder.world()
     return CellWorld(world.kind, world.cell, world.placed, world.entries, neighbours(builder), spec.seed, world.envelope, world.membranes,

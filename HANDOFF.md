@@ -18731,3 +18731,105 @@ How to test
 - Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
 - Stills looked at (scratchpad `s203/close`, 37 single-view scenes; `s203/proj`, a zoom tour):
   every level in 16:9 and 9:16, dark and `light_academic`.
+
+## Step 204 — Molecules and notation
+
+What was built (DESIGN §95.9)
+- **Step 203 fixes first.** Part labels of zoomed views now point at their part: the matrix
+  label beside a crista (it ended in the intracristal space), the glycocalyx 3–8 nm outside the
+  bilayer and on the side its label goes to (16:9 columns, 9:16 rows), the Golgi lumen and coat
+  (they ended in the cytosol), heterochromatin on a patch, the inner mitochondrial membrane away
+  from a crista junction. A test (`test_labels_point_at_what_they_name`, 16:9 and 9:16, 15
+  views) checks every anchor against the model: in its compartment ≥ 3 nm from the edge, or in
+  its membrane's bilayer; more tests for the nucleolus parts and heterochromatin. Stroma
+  lamellae now leave single granal thylakoids at the stack's margin (horizontal between grana of
+  a row, oblique from the top / bottom thylakoid to the next row), one lamella per margin, never
+  through a stack (tested), the lumen one space. Found while checking: `Region` lost small
+  overlapping shapes and filled a ring of smooth-ER tubules — Skia's tolerances suit nm, not µm,
+  so region paths are now in nm (the smooth-ER network is also complete now); the lipid raft's
+  glow stays within the bilayer. Matrix (dark) vs intermembrane / intracristal space (lighter)
+  were already distinct; checked in both themes.
+- **Molecules** (`cellworld/notation.py`, `names.py`, `sequences.py`, `molecules.py`, `glyphs.py`,
+  `placing.py`; renderer `cell_draw/molecules.py`; scene `scenes/molecule.py`): DNA (antiparallel
+  strands, 5′/3′ ends, base pairs coloured by base, major / minor grooves, both sequences with
+  their ends), mRNA (cap, codons, poly(A)), tRNA (cloverleaf or L; anticodon checked against the
+  genetic code with wobble), rRNA, nucleosome (147 bp, 1.65 left-handed turns, tails with checked
+  histone marks), chromatin (10 nm / compact schematic), proteins with domains (size from mass),
+  kinase, phosphatase, G protein (GDP / GTP, lipid anchors), GPCR (7 TM, N out, active TM6),
+  RTK (monomer / dimer with phosphotyrosines), ion channel (closed / open; voltage, ligand,
+  mechanical gating; ion flow), carrier (alternating access; uniport / symport / antiport
+  checked), Na⁺/K⁺-ATPase (3 Na⁺ out, 2 K⁺ in per ATP), ATP synthase (Fₒ, stalks, F₁ on the N
+  side, H⁺ path, c-ring by membrane), ATP / ADP / Pᵢ / GTP / GDP / cAMP / glucose / ligand / ions.
+- **In a cell:** molecules are object kinds: soluble ones `in:` their compartments, membrane
+  proteins `on: cell` or a structure (`membrane:` chooses; ATP synthase on the cristae or the
+  stroma lamellae), oriented by probing both sides of each place; `faces:` and `state:` checked;
+  drawn as dots, then whole from about 6 px; `zoom_to` a molecule frames it and names its parts
+  and both compartments.
+
+YAML
+```yaml
+- id: synthase
+  type: molecule
+  params:
+    title: "ATP synthase"
+    membrane: inner_mitochondrial          # none, plasma, thylakoid, er, bacterial…
+    species: human                         # nomenclature of gene / protein
+    molecules:
+      - {kind: atp_synthase, parts: true}  # faces: intermembrane_space is refused (F1 faces the matrix)
+      - {kind: atp, in: matrix}
+      - {kind: protein, gene: TP53, protein: p53, modifications: [{mark: P, at: Ser15}]}
+- id: cristae
+  type: cell
+  params:
+    objects:
+      - {kind: atp_synthase, id: synthase, on: mitochondria, count: 6}
+      - {kind: gpcr, on: cell, count: 3, state: active}
+      - {kind: dna, in: nucleus, count: 4}
+    view: {level: complex, on: synthase}
+```
+
+Files touched
+- New: `src/vidgen/cellworld/{notation,names,sequences,molecules,glyphs,placing}.py`,
+  `src/vidgen/cell_draw/molecules.py`, `src/vidgen/scenes/molecule.py`, `tests/test_molecules.py`
+  (63, 2 render), `docs/gallery/molecule.md` and media.
+- Changed: `cellworld/{__init__,anatomy,build,builder,model,morphology,regions,view}.py`,
+  `cell_draw/{closeup,drawing}.py`, `scenes/{__init__,cell}.py`, `api.py`, guide + `AGENTS.md`,
+  `docs/CONFIG.md` (`molecule` section, "Molecules in a cell", targets row), `docs/gallery/` (cell
+  re-rendered, README), `examples/gallery/video.yaml` (scene `synthase`), `DESIGN.md` §95.9,
+  `CHANGELOG.md`, `tasklist.md`; tests `test_cell_library.py` (+9), `test_builtin_scenes.py`,
+  `test_translation.py`, `test_actions_coverage.py`, `test_extensions.py` (the new type in lists).
+
+Public interfaces: `vidgen.api` adds `MOLECULE_KINDS`, `MoleculeKind`, `MoleculeSpec`,
+`MoleculeGlyph`, `molecule_glyph`, `check_molecule`, `place_glyph`, `glyph_mobjects`,
+`membrane_sides`, `protein_size`, `BILAYER_NM`, `check_molecule_membrane`, `check_molecule_faces`,
+`check_molecule_place`, `SPECIES`, `MODIFICATIONS`, `nomenclature_species`, `check_gene`,
+`check_protein`, `gene_markup`, `protein_markup`, `check_modification`, `histone_mark`,
+`chem_markup`, `chem_plain`, `charge_of`, `check_markup`, `CODONS`, `check_sequence`, `check_trna`,
+`codons_read`, `reverse_complement`, `LIPID_HEAD_HUE`, `LIPID_TAIL_HUE`. Config: scene type
+`molecule`; `cell` object options `state`, `faces`, `membrane`; 25 molecule kinds.
+
+Decisions / deviations
+- A separate `molecule` scene (no cell world, a fixed nm camera) rather than a `cell` mode;
+  shared glyphs. F₀ is written Fₒ (the o of oligomycin), the usual textbook spelling.
+- Molecule kinds are registered into the cell world's `KINDS` by `molecules.py` at import (the
+  catalog stays free of molecule data); `KIND_OPTIONS` likewise.
+- Small molecules and ions are symbols at about their true size (ions at hydrated radii); the
+  accuracy lint (209) can flag exaggerations later.
+
+Known gaps / TODO
+- States are static (gating, alternating access, G-protein cycle as actions: Step 205/207); lipids
+  are drawn under membrane proteins in a `cell` close-up; several membrane proteins in one 9:16
+  row are small; nucleosome face-on only; rRNA schematic; leader lines can still cross when many
+  parts crowd one spot.
+
+How to test
+- `tests/test_molecules.py` 63 (2 render), `tests/test_cell_library.py` 64, `test_cell_world.py` 45,
+  `test_cell_scene.py` 23; `test_builtin_scenes` not render 128 + `-k "molecule or cell"` 8;
+  `test_actions_coverage` 86; `test_translation` + `test_actions_coverage` not render 84;
+  `test_registry` + `test_api` 33; `test_guide` + `test_docs` + `test_gallery` not render 135;
+  `test_schema` + `test_json_output` not render 87; `test_extensions` 25, `test_review2` +
+  `test_introspect` not render; `test_mcp.py` in full 20. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills looked at (scratchpad `s204`): the corrected 203 close-ups and every molecule family in
+  16:9 and 9:16, dark and `light_academic`; molecules in cells (cristae, thylakoids, plasma
+  membrane, nucleoplasm).

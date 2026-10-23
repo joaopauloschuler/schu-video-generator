@@ -597,6 +597,16 @@ from vidgen.cellworld import default_level as cell_default_level, label_weight a
 from vidgen.cellworld import lod_weights as cell_lod_weights, scale_bar as cell_scale_bar, zoom_path as cell_zoom_path  # noqa: E402
 from vidgen.cellworld import Anchor as CellAnchor, COAT_NAMES as CELL_COATS, MEMBRANES as CELL_MEMBRANES, part_anchors as cell_part_anchors  # noqa: E402
 from vidgen.cell_vector import CellColors, CellDrawing  # noqa: E402
+from vidgen.cellworld.glyphs import Glyph as MoleculeGlyph, MoleculeSpec, check_molecule, molecule_glyph, place as place_glyph  # noqa: E402
+from vidgen.cellworld.molecules import BILAYER_NM, MOLECULES as MOLECULE_KINDS, MoleculeKind, membrane_sides, protein_size  # noqa: E402
+from vidgen.cellworld.molecules import check_faces as check_molecule_faces, check_membrane as check_molecule_membrane  # noqa: E402
+from vidgen.cellworld.molecules import check_place as check_molecule_place  # noqa: E402
+from vidgen.cellworld.names import MODIFICATIONS, SPECIES, check_gene, check_modification, check_protein, gene_markup, histone_mark  # noqa: E402
+from vidgen.cellworld.names import protein_markup, species as nomenclature_species  # noqa: E402
+from vidgen.cellworld.notation import charge_of, check_markup, chem_markup, chem_plain  # noqa: E402
+from vidgen.cellworld.sequences import CODONS, check_sequence, check_trna, codons_read, reverse_complement  # noqa: E402
+from vidgen.cell_draw.closeup import HEAD_HUE as LIPID_HEAD_HUE, TAIL_HUE as LIPID_TAIL_HUE  # noqa: E402
+from vidgen.cell_draw.molecules import glyph_mobjects  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -1486,6 +1496,40 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "CELL_MEMBRANES",
     "CellAnchor",
     "cell_part_anchors",
+    "BILAYER_NM",
+    "CODONS",
+    "LIPID_HEAD_HUE",
+    "LIPID_TAIL_HUE",
+    "MODIFICATIONS",
+    "MOLECULE_KINDS",
+    "MoleculeGlyph",
+    "MoleculeKind",
+    "MoleculeSpec",
+    "SPECIES",
+    "charge_of",
+    "check_gene",
+    "check_markup",
+    "check_modification",
+    "check_molecule",
+    "check_molecule_faces",
+    "check_molecule_membrane",
+    "check_molecule_place",
+    "check_protein",
+    "check_sequence",
+    "check_trna",
+    "chem_markup",
+    "chem_plain",
+    "codons_read",
+    "gene_markup",
+    "glyph_mobjects",
+    "histone_mark",
+    "membrane_sides",
+    "molecule_glyph",
+    "nomenclature_species",
+    "place_glyph",
+    "protein_markup",
+    "protein_size",
+    "reverse_complement",
     "did_you_mean",
     "format_length",
     "parse_coordinate",

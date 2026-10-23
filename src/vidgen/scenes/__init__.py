@@ -52,6 +52,7 @@ from vidgen.scenes import (  # noqa: F401
     knock_action,
     light_action,
     line_chart,
+    molecule,
     moving,
     nature_action,
     network,

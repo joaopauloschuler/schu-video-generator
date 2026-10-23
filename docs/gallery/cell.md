@@ -48,14 +48,14 @@ From the author guide (`vidgen guide scenes`):
 | `cell.plasmodesmata` | `bool \| None` |  | Plant: channels through the wall to the neighbouring cells (default true). |
 | `contents` | `'typical' \| 'none'` | `'typical'` | typical: the textbook cell of its kind (animal: nucleus, ER, Golgi, centrosome, mitochondria, lysosomes, peroxisomes, endosomes, vesicles, ribosomes; plant: also a central vacuole and chloroplasts, no centrosome or lysosomes; bacterium: nucleoid, 70S ribosomes, plasmids, flagella, pili); none: only the objects listed. |
 | `objects` | `list[str \| CellObject]` |  | Things in the cell: a kind, or {kind, id, at, size, width, angle, in, on, count, label}; an id of a typical object replaces it. |
-| `objects.kind` | `str` | required | What it is: nucleus, nucleolus, rough_er, smooth_er, golgi, mitochondrion, lysosome, peroxisome, endosome, early_endosome, late_endosome, vesicle, centrosome, chloroplast, vacuole, nucleoid, ribosome, proteasome, nuclear_pore, plasmid, microtubule, actin_filament, actin_cortex, stress_fiber, intermediate_filament, flagellum, pilus, kinesin, dynein, myosin. |
+| `objects.kind` | `str` | required | What it is: nucleus, nucleolus, rough_er, smooth_er, golgi, mitochondrion, lysosome, peroxisome, endosome, early_endosome, late_endosome, vesicle, centrosome, chloroplast, vacuole, nucleoid, ribosome, proteasome, nuclear_pore, plasmid, microtubule, actin_filament, actin_cortex, stress_fiber, intermediate_filament, flagellum, pilus, kinesin, dynein, myosin; molecules (drawn up close): dna, mrna, trna, rrna, nucleosome, chromatin, protein, kinase, phosphatase, g_protein, gpcr, rtk, ion_channel, carrier, na_k_atpase, atp_synthase, atp, adp, pi, gtp, gdp, camp, glucose, ligand, ion. |
 | `objects.id` | `str \| None` |  | Its name for actions and labels (default: the kind; an object with the id of a typical one replaces it). |
 | `objects.at` | `tuple[float \| str, float \| str] \| None` |  | Where its middle is (a filament: its minus end): [x, y] in µm from the cell's centre (x right, y up), or lengths ['2 um', '-500 nm']; default: placed automatically. |
 | `objects.size` | `float \| str \| None` |  | Its length (µm or '1.5 um'); default: a typical size of its kind (the cortex: its thickness). |
 | `objects.width` | `float \| str \| None` |  | Its width for elongated kinds (a mitochondrion: about 0.5–1 µm). |
 | `objects.angle` | `float \| None` |  | Turn in degrees (a Golgi stack: the direction its cis face looks, default towards the nucleus; a filament: its direction; a flagellum or pilus: where round the cell it is anchored, 0 = the right pole). |
 | `objects.in` | `str \| None` |  | For complexes: the compartment they float in: cytosol (default), nucleoplasm, matrix, stroma, an object's id (its inside) or '<id>.<compartment>'. |
-| `objects.on` | `str \| None` |  | For complexes: the object whose membrane they sit on (ribosomes: rough_er or the nucleus) or the filament a motor walks on (kinesin, dynein: a microtubule object; myosin: actin). |
+| `objects.on` | `str \| None` |  | For complexes: the object whose membrane they sit on (ribosomes: rough_er or the nucleus; membrane proteins: cell for the plasma membrane, a mitochondrion, a chloroplast…) or the filament a motor walks on (kinesin, dynein: a microtubule object; myosin: actin). |
 | `objects.count` | `int` | `1` | How many, scattered where they may be (no at); microtubules radiate from the centrosome. |
 | `objects.label` | `str \| bool \| None` |  | Its label (default: its kind's name, when the scene's labels are on); false for none. |
 | `objects.sheets` | `int \| None` |  | Rough ER: how many sheets round the nucleus (default 4). |
@@ -69,6 +69,9 @@ From the author guide (`vidgen guide scenes`):
 | `objects.cargo` | `bool \| None` |  | Kinesin, dynein, myosin: carry a cargo vesicle (default false). |
 | `objects.grana` | `int \| None` |  | Chloroplast: how many grana (stacks of thylakoids; default about one per µm of length). |
 | `objects.style` | `'section' \| 'surface' \| None` |  | Its drawing: section (cut open, as in a thin section) or surface (whole, seen from outside); default the scene's style. |
+| `objects.state` | `str \| None` |  | A molecule's state (gpcr: inactive / active; ion_channel: closed / open; carrier: outward / inward; rtk: monomer / dimer…). |
+| `objects.faces` | `str \| None` |  | A membrane protein: the compartment its oriented part faces (ATP synthase F₁: matrix; a GPCR's N-terminus: extracellular); checked. |
+| `objects.membrane` | `str \| None` |  | A membrane protein on an object: which of its membranes (inner, outer, thylakoid, or a full name); default the first it occurs in. |
 | `view` | `str \| CellViewSpec` | `CellViewSpec(level='cell', on=None, width=None)` | Where the camera starts: tissue, cell (default), organelle or complex, or {level, on, width}. |
 | `view.level` | `'tissue' \| 'cell' \| 'organelle' \| 'complex'` | `'cell'` | tissue, cell, organelle or complex (molecular). |
 | `view.on` | `str \| None` |  | The object to centre on (organelle and complex levels; default the nucleus; complex on the cell: its plasma membrane). |

@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–203)
+## Unreleased (Steps 193–204)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -36,6 +36,20 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   glycolipids, glycocalyx and a lipid raft; `style: surface` draws things whole, seen from
   outside. Each `zoom_to` view names the parts it shows (`labels:`); a dim during a zoom keeps
   its opacity; the scale bar has a text at any depth.
+- **Molecules and notation** (Step 204): a **`molecule` scene type** for close-ups in nm — B-DNA
+  with antiparallel strands, 5′/3′ ends, A–T / G–C base pairs and major / minor grooves; mRNA
+  (cap, codons, poly(A)), tRNA (cloverleaf or L, anticodon checked against the genetic code),
+  rRNA; the nucleosome (147 bp, 1.65 turns, histone marks such as H3K27ac checked against the
+  histone sequences) and chromatin; proteins with domains, kinases, phosphatases, G proteins,
+  GPCRs, RTKs, gated ion channels, carriers (uniport / symport / antiport), the Na⁺/K⁺ pump and
+  ATP synthase in a membrane drawn between its two compartments; ATP, GTP, cAMP, Pᵢ, glucose,
+  ions — and the same molecules as `cell` objects (`{kind: atp_synthase, on: mitochondria}` lines
+  the cristae). Orientations and places are checked (*ATP synthase F₁ must face the mitochondrial
+  matrix*); gene symbols are italic and checked per species (*TP53*, *Trp53*, *CDC28*), proteins
+  roman; P / Ub / Ac / Me markers on the residues they go on; charges typeset (Ca²⁺, HCO₃⁻).
+- Step 203's zoomed views now point every label at its part (the matrix beside a crista, the
+  glycocalyx outside the bilayer), stroma lamellae join grana at their margins, and a ring of
+  smooth-ER tubules is no longer drawn filled.
 
 ### vidgen studio: a music workstation for people (Phase T)
 

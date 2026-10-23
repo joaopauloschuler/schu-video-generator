@@ -91,7 +91,7 @@ class CellObject(SceneParams):
     also_accepts = (str,)
 
     kind: str
-    """What it is: nucleus, nucleolus, rough_er, smooth_er, golgi, mitochondrion, lysosome, peroxisome, endosome, early_endosome, late_endosome, vesicle, centrosome, chloroplast, vacuole, nucleoid, ribosome, proteasome, nuclear_pore, plasmid, microtubule, actin_filament, actin_cortex, stress_fiber, intermediate_filament, flagellum, pilus, kinesin, dynein, myosin."""
+    """What it is: nucleus, nucleolus, rough_er, smooth_er, golgi, mitochondrion, lysosome, peroxisome, endosome, early_endosome, late_endosome, vesicle, centrosome, chloroplast, vacuole, nucleoid, ribosome, proteasome, nuclear_pore, plasmid, microtubule, actin_filament, actin_cortex, stress_fiber, intermediate_filament, flagellum, pilus, kinesin, dynein, myosin; molecules (drawn up close): dna, mrna, trna, rrna, nucleosome, chromatin, protein, kinase, phosphatase, g_protein, gpcr, rtk, ion_channel, carrier, na_k_atpase, atp_synthase, atp, adp, pi, gtp, gdp, camp, glucose, ligand, ion."""
     id: str | None = None
     """Its name for actions and labels (default: the kind; an object with the id of a typical one replaces it)."""
     at: tuple[Length, Length] | None = None
@@ -105,7 +105,7 @@ class CellObject(SceneParams):
     inside: str | None = Field(None, alias="in")
     """For complexes: the compartment they float in: cytosol (default), nucleoplasm, matrix, stroma, an object's id (its inside) or '<id>.<compartment>'."""
     on: str | None = None
-    """For complexes: the object whose membrane they sit on (ribosomes: rough_er or the nucleus) or the filament a motor walks on (kinesin, dynein: a microtubule object; myosin: actin)."""
+    """For complexes: the object whose membrane they sit on (ribosomes: rough_er or the nucleus; membrane proteins: cell for the plasma membrane, a mitochondrion, a chloroplast…) or the filament a motor walks on (kinesin, dynein: a microtubule object; myosin: actin)."""
     count: int = Field(1, ge=1, le=400)
     """How many, scattered where they may be (no at); microtubules radiate from the centrosome."""
     label: TranslatableStr | bool | None = None
@@ -132,6 +132,12 @@ class CellObject(SceneParams):
     """Chloroplast: how many grana (stacks of thylakoids; default about one per µm of length)."""
     style: Literal["section", "surface"] | None = None
     """Its drawing: section (cut open, as in a thin section) or surface (whole, seen from outside); default the scene's style."""
+    state: str | None = None
+    """A molecule's state (gpcr: inactive / active; ion_channel: closed / open; carrier: outward / inward; rtk: monomer / dimer…)."""
+    faces: str | None = None
+    """A membrane protein: the compartment its oriented part faces (ATP synthase F₁: matrix; a GPCR's N-terminus: extracellular); checked."""
+    membrane: str | None = None
+    """A membrane protein on an object: which of its membranes (inner, outer, thylakoid, or a full name); default the first it occurs in."""
 
     @model_validator(mode="before")
     @classmethod
@@ -165,7 +171,7 @@ class CellObject(SceneParams):
     def spec(self, where: str) -> CellObjectSpec:
         return CellObjectSpec(self.kind, self.id, self.at, self.size, self.width, self.angle, self.inside, self.on, self.count,  # type: ignore[arg-type]
                               self.sheets, self.span, self.side, self.cisternae, self.tubules, self.pores, self.ribosomes, where,
-                              self.coat, self.cargo, self.grana, self.style)
+                              self.coat, self.cargo, self.grana, self.style, self.state, self.faces, self.membrane)
 
 
 class CellViewSpec(SceneParams):
@@ -587,8 +593,8 @@ class Cell(NarratedScene):
                 continue
             width, cam = self.view_camera(view)
             s = width / self._frame[0]
-            made = [_CellLabel(self, None, self.text(a.label, size=self.params.label_size, color="text"), [], anchor=self.to_scene(a.point))
-                    for a in anchors]
+            made = [_CellLabel(self, None, (self.markup if "<" in a.label else self.text)(a.label, size=self.params.label_size, color="text"), [],
+                               anchor=self.to_scene(a.point)) for a in anchors]
             self._layout_view(made, s, cam)
             self._view_labels.append((width, cam, made))
             (start if view is self.start else everything).add(*[lab.group for lab in made])

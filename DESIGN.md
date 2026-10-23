@@ -15062,3 +15062,73 @@ kind's range, counts, exaggerated glyphs.
 - **Gaps:** leaders in a zoomed view can cross when anchors crowd one spot; the surface style is
   a schematic (pores and a lipid mosaic, not a rendered 3-D surface); motors are static glyphs
   (walking is Step 205's); the tissue still has no junctions.
+
+### 95.9 Molecules and notation (Step 204)
+
+- **Decided: a separate scene type `molecule`** for standalone close-ups (a fixed camera in nm,
+  a membrane drawn across the view between its two compartments, molecules laid out in rows)
+  and molecules as **kinds of the cell world** (complexes) for the `cell` scene. Both draw the
+  same glyphs; neither needs the other.
+- **Three layers again.** Data and rules without manim in `vidgen.cellworld`: `notation`
+  (chemical markup: `Ca2+` → Ca²⁺, `HCO3-`, `SO4 2-`, `Pi`, `F_o`; a monatomic ion's digits are
+  its charge, a polyatomic one's are counts), `names` (species nomenclature as data — HGNC, MGI,
+  RGD, SGD, PomBase, FlyBase, ZFIN, E. coli, TAIR — gene symbols italic and checked, protein
+  names roman and refused when written like their gene where the case tells them apart;
+  modification markers P / Ub / Ac / Me with the residues they go on; histone marks checked
+  against the human H2A, H2B, H3.1, H4 sequences), `sequences` (DNA / RNA alphabets, complements,
+  the standard genetic code, Crick's wobble: an anticodon must read a codon of its amino acid),
+  `molecules` (the catalog: `MoleculeKind` with label markup, family, sizes in nm with textbook
+  ranges, places or membranes with the reason, the oriented part and side — `n` the cytosolic /
+  matrix / stroma side, `p` the exoplasmic side, from each membrane's `exo` in the catalog — states,
+  cells; `check_membrane`, `check_faces`, `check_place`; each molecule also registered as a
+  `Kind` of the cell world), `glyphs` (`MoleculeSpec`, `check_molecule`, `molecule_glyph`: prims
+  in nm in a local frame — a membrane protein's +y is its exoplasmic side, the bilayer's
+  mid-plane y = 0 — with named anchors, modification sites and facts the tests read),
+  `placing` (membrane proteins `on:` the cell or a structure; each candidate place's two sides
+  probed in the world, so the glyph's exoplasmic side faces the membrane's exoplasmic
+  compartment; ATP synthase lines the cristae and the stroma lamellae). The renderer
+  `cell_draw/molecules.py` turns prims into mobjects (static for the `molecule` scene;
+  level-of-detail pieces, prims of one look merged, for the `cell` scene). Scenes:
+  `scenes/molecule.py`, and `scenes/cell.py` (molecule options `state`, `faces`, `membrane`;
+  markup labels).
+- **Sizes** (catalog): B-DNA 2 nm, 0.34 nm / bp, 10.5 bp / turn, minor groove 0.35 of a turn;
+  nucleosome 11 nm, 147 bp, 1.65 left-handed turns, ~200 bp repeat; tRNA ~7 nm per arm; protein
+  diameter 2 × 0.066 × M^⅓ nm (Erickson 2009: ~5 nm at 50 kDa); GPCR ~4 × 7 nm; RTK ~20 nm;
+  channel ~10 nm; Na⁺/K⁺-ATPase ~15 nm; ATP synthase ~22 nm, F₁ ~10 nm, c-ring 8 (animal
+  mitochondria), 10 (bacteria), 14 (chloroplasts); ions at their hydrated radii (0.28–0.43 nm).
+  Small molecules are symbols at about their size; a `molecule` scene fits the view to them.
+- **Rules** (errors with the reason): a membrane protein in a membrane it never occurs in, its
+  oriented part facing the wrong side (*ATP synthase F₁ must face the mitochondrial matrix…*),
+  `in:` / `at` for a membrane protein, a soluble molecule in a compartment it is not found in
+  (DNA in a eukaryote's cytosol; cAMP outside the cytosol), a molecule in a cell that has none
+  (Na⁺/K⁺ pump in a plant; nucleosomes in a bacterium), an option of another kind, a state the
+  kind lacks, a symport whose solutes go opposite ways, a wrong base, an anticodon that does not
+  read its amino acid, a marker on the wrong residue, a gene or protein written in the wrong case.
+- **LOD** gains `molecules` (a 10 nm molecule drawn whole from 6 px, a dot before) and
+  `molecule_detail` (40–70 px). A `zoom_to` a molecule frames its glyph at about half the view;
+  its part anchors are the glyph's plus the membrane's two compartments.
+- **Layout of the `molecule` scene:** membrane proteins in one row along the membrane, soluble
+  molecules in rows on their side (wrapped to suit the frame), each slot as wide as its name;
+  part labels in columns or rows, whichever leaves the drawing larger, the sides balanced; the
+  compartments' names by the membrane where it is free, else at the left beyond the molecules.
+- **Step 203 corrections:** part anchors are checked against the model (a test: each label's
+  point lies in its compartment, at least 3 nm from its edge, or in the bilayer of its membrane):
+  the matrix beside a crista (not in its intracristal space), the glycocalyx 3–8 nm outside the
+  bilayer on the side its label goes to, the Golgi lumen and coat, heterochromatin on a patch,
+  the inner mitochondrial membrane away from a junction. Stroma lamellae leave granal
+  thylakoids at their margins (oblique from the top and bottom ones), never through a stack.
+  `Region` paths are in nanometres: in µm Skia lost pieces of small overlapping shapes and filled
+  a ring of smooth-ER tubules. The raft glow stays within the bilayer.
+- **Public:** `vidgen.api` adds `MOLECULE_KINDS`, `MoleculeKind`, `MoleculeSpec`, `MoleculeGlyph`,
+  `molecule_glyph`, `check_molecule`, `place_glyph`, `glyph_mobjects`, `membrane_sides`,
+  `protein_size`, `BILAYER_NM`, `check_molecule_membrane`, `check_molecule_faces`,
+  `check_molecule_place`, `SPECIES`, `MODIFICATIONS`, `nomenclature_species`, `check_gene`,
+  `check_protein`, `gene_markup`, `protein_markup`, `check_modification`, `histone_mark`,
+  `chem_markup`, `chem_plain`, `charge_of`, `check_markup`, `CODONS`, `check_sequence`,
+  `check_trna`, `codons_read`, `reverse_complement`, `LIPID_HEAD_HUE`, `LIPID_TAIL_HUE`. Config:
+  the scene type `molecule`; `cell` object options `state`, `faces`, `membrane` and the molecule
+  kinds. Nothing else changes (the Phase Q baseline frames match).
+- **Gaps:** molecules are static (states change by scene, not by action: Step 205); lipids are
+  drawn under membrane proteins in a `cell` close-up (no gap in the bilayer there); a row of
+  several membrane proteins in a 9:16 frame is small (one membrane, one row); the nucleosome is
+  seen face on only; rRNA is a schematic; small-molecule glyphs are symbols (no atoms).

@@ -6357,6 +6357,112 @@ lists the ones it has).
 |---|---|---|
 | `zoom_to` | `level` (`tissue`, `cell`, `organelle`, `complex`; default: the target's own — `organelle` for a structure, `complex` for complexes, `cell` / `tissue` for those targets), `width` (what the view spans across the body's shorter side: `"3 um"`, `"150 nm"`; default the level's), `labels` (`true`: name the parts the view shows; `false`; or a list of part names) | moves the camera to the target at that level and stays there (unlike `zoom`, which goes back by the beat's end); one target: `cell`, `tissue` or an object's id (its first thing). The width changes at an even pace on a log scale, and between far places the camera zooms out on the way (van Wijk and Nuij's smooth zoom-and-pan path). Default 2 s. `until: <beat>` goes back to the view before. On `cell` scenes only. |
 
+#### Molecules in a cell
+
+The [molecule kinds](#molecule) are objects of a `cell` too: soluble ones `in:` their compartment
+(`{kind: dna, in: nucleus, count: 4}`, `{kind: camp, count: 20}` in the cytosol), membrane proteins
+`on:` the cell (its plasma membrane; a bacterium's inner membrane) or a structure, in one of its
+membranes — `{kind: atp_synthase, on: mitochondria, count: 6}` lines the cristae (the inner
+membrane), `on: chloroplasts` the thylakoids' stroma lamellae, `on: rough_er` the ER membrane;
+`membrane: inner | outer | thylakoid | <full name>` picks another. Each place is oriented from the
+world (which compartment lies on either side), so a molecule's exoplasmic side faces the
+membrane's exoplasmic compartment: a GPCR's N-terminus outside, F₁ in the matrix or the stroma.
+Object options for molecules: `state` (as in the molecule scene), `faces` (checked:
+`{kind: atp_synthase, on: mitochondria, faces: intermembrane_space}` is refused: *ATP synthase F₁
+must face the mitochondrial matrix, not the intermembrane space: F₁ makes ATP where ADP and Pᵢ are
+…*), `membrane`, `count`, `size`. They are dots at their real size from afar and drawn whole once
+about 6 px across (level of detail `molecules`, details from 40 px); a `zoom_to` a molecule
+(`level: complex`) frames it at about half the view and names its parts and the two compartments.
+A membrane protein is refused `in:` or `at` (it is placed with `on:`), in a membrane it never
+occurs in (ATP synthase in the plasma membrane of an animal cell) and in a cell that has none
+(the Na⁺/K⁺ pump in a plant cell); a soluble molecule in a compartment it is not found in (DNA in
+the cytosol of a eukaryote, nucleosomes in a bacterium).
+
+### `molecule`
+
+A **molecular close-up** in nm: molecules in a solution or in a membrane drawn across the view
+(the lipid bilayer, 5 nm, with the two compartments it separates named), each at its textbook
+size, with correctly typeset names, labels of its parts and a scale bar. The glyphs are those a
+`cell` draws when it zooms to a molecule ([Molecules in a cell](#molecules-in-a-cell)).
+
+```yaml
+- id: pump
+  type: molecule
+  params:
+    title: "Primary active transport"
+    membrane: plasma                           # extracellular above, cytosol below
+    molecules:
+      - {kind: na_k_atpase, parts: true}       # 3 Na+ out, 2 K+ in per ATP
+      - {kind: gpcr, state: active, ligand: true, gene: ADRB2, protein: "β<sub>2</sub>-adrenergic receptor"}
+      - {kind: g_protein}                      # on the cytosolic face, lipid-anchored
+      - {kind: ion, ion: Ca2+, in: extracellular}
+  beats:
+    - text: "The sodium pump spends one ATP to move three sodium ions out and two potassium ions in."
+```
+
+**Params.** `title`; `membrane` (`none`: a solution; `plasma`, `inner_mitochondrial`,
+`thylakoid`, `er`, `bacterial`, `endosomal`, `lysosomal`, `golgi`, `outer_mitochondrial`, or a full
+membrane name such as `tonoplast`) — its exoplasmic side is up (extracellular, intermembrane
+space, thylakoid lumen, ER lumen, periplasm), its cytosolic (N) side down (cytosol, matrix,
+stroma); `compartment` (without a membrane: where the molecules are, `cytosol` default,
+`nucleoplasm`, `matrix`…; checked for each); `cell` (`animal` default, `plant`, `bacterium`: checked
+— a thylakoid or bacterial membrane sets it); `species` (gene and protein nomenclature, `human`
+default); `molecules`; `width` (the view across the body's shorter side, `"30 nm"`; default: fits
+the molecules and their labels); `sides` (name the two compartments, `true`); `labels` (names
+under the molecules and part labels, `true`); `scale_bar` (`true`, in nm); `reveal` (`all`;
+`per_beat`: the membrane, then one molecule per beat); `title_size`, `label_size`.
+[Action targets](#beat-actions): `title`, `membrane` (with the compartments' names),
+`scale_bar` and each molecule's id (with its name and part labels).
+
+**Molecules** (a kind alone is one, laid out automatically: membrane proteins in a row along the
+membrane, the others in rows on their side, a long row wrapped): `kind`, `id` (default the kind,
+`kind_2` for a second), `at` (nm from the view's middle: a membrane protein's x along the
+membrane; others `[x, y]`, y up), `angle` (degrees; not membrane proteins), `in` (a soluble
+molecule's compartment: one of the membrane's two sides), `faces` (a membrane protein: the
+compartment its oriented part faces; checked), `state`, `label` (Pango markup, or `false`),
+`gene` (italic), `protein` (roman), `species`, `parts` (name its parts with leader lines: `true`,
+`false` or a list of part names; default `true` for a lone molecule), `modifications` (markers:
+`{mark: P | Ub | Ac | Me, at: Ser15, domain: kinase}` or a mark alone), and the options of its kind:
+
+| kind | drawn | textbook size | options | belongs |
+|---|---|---|---|---|
+| `dna` | B-DNA: two antiparallel backbones round A–T / G–C base pairs, major (2.2 nm) and minor (1.2 nm) grooves, 5′/3′ ends; with `letters` both sequences written with their ends | 2 nm across, 0.34 nm and 10.5 bp per turn | `bp` (21), `sequence` (top strand 5′→3′; the partner is its complement, antiparallel), `letters` | nucleoplasm, matrix, stroma (a bacterium's cytoplasm) |
+| `mrna` | one strand 5′→3′, a 5′ cap (m⁷G), bases as ticks with letters, codons from the first AUG (start green, stop red), a poly(A) tail | | `sequence` (ACGU), `cap`, `tail`, `letters` | nucleoplasm, cytosol, matrix, stroma |
+| `trna` | the cloverleaf (acceptor stem with 3′ CCA and its amino acid, D, anticodon and TψC arms) or the L (`style: l_shape`) | about 7 nm per arm | `anticodon` (5′→3′), `amino_acid` (checked against the genetic code with wobble: CAU reads AUG, Met), `style` | cytosol, nucleoplasm, matrix, stroma |
+| `rrna` | a stylised secondary structure | | `rrna` (18S, 28S, 5.8S, 5S, 16S, 23S, 12S) | cytosol, nucleoplasm, matrix, stroma |
+| `nucleosome` | 147 bp in 1.65 left-handed turns round the histone octamer (H2A, H2B, H3, H4 ×2), linker DNA, tails with their marks | 11 nm | `marks` (H3K4me3, H3K27ac, H3K9me3, H4K16ac, H2AK119ub, H3S10ph…: checked against the histone sequences) | nucleoplasm (eukaryotes) |
+| `chromatin` | the 10 nm fibre (beads on a string, ~200 bp repeat) or `state: compact` (a schematic zigzag, about 30 nm) | | `nucleosomes` | nucleoplasm |
+| `protein` | domains as lobes joined by linkers, N- and C-terminus | ~5 nm for 50 kDa (Erickson 2009) | `domains`, `mass` (kDa) | anywhere |
+| `kinase`, `phosphatase` | the bilobed kinase fold with ATP in the cleft (activation loop phosphorylated when `active`); a globular enzyme with its active site | 4–5 nm | `state` (kinase: `active`, `inactive`) | cytosol, nucleoplasm, matrix, stroma |
+| `g_protein` | Gα (GDP when `inactive`, GTP when `active`, parted from Gβγ) and Gβγ, lipid-anchored in the cytosolic leaflet | ~8 nm | `state` | the cytosolic face of the plasma membrane (endosomes, Golgi) |
+| `gpcr` | seven TM helices (N-terminus outside, ECL1–3, ICL1–3, helix 8, C-terminus in the cytosol); `active`: TM6 swings out | ~4 × 7 nm | `state`, `ligand` | plasma membrane, endosomes |
+| `rtk` | ligand-binding domain, one TM helix, kinase domain; `dimer`: ligand-bound, phosphotyrosines | ~20 nm | `state` (`monomer`, `dimer`) | plasma membrane, endosomes (animal) |
+| `ion_channel` | two subunits round the pore, selectivity filter, gate (`closed`: shut; `open`: apart), the ion flowing down its gradient | ~10 nm | `state`, `gating` (`voltage`: S4 sensors with + charges; `ligand`; `mechanical`), `ion` (K⁺ out; Na⁺, Ca²⁺, Cl⁻ in) | any membrane |
+| `carrier` | alternating access: `outward`- or `inward`-open, never both; its solutes bound and the way each moves | ~6 nm | `state`, `mode` (`uniport`: one solute; `symport`: two the same way; `antiport`: opposite ways — checked), `substrates`, `moves` (`in` / `out`) | any membrane |
+| `na_k_atpase` | α subunit (A, P, N domains), glycosylated β subunit; 3 Na⁺ out, 2 K⁺ in per ATP → ADP + Pᵢ | ~15 nm | `state` (`e1`: Na⁺ bound, `e2`: K⁺ bound) | plasma membrane (animal cells) |
+| `atp_synthase` | Fₒ (c-ring, a subunit) in the membrane, the central stalk (γ) and the peripheral stalk, F₁ (α₃β₃) on the N side; H⁺ from the P side; ADP + Pᵢ → ATP | ~22 nm | `state` (`synthesis`, `hydrolysis`), `c_subunits` (default 8 in mitochondria, 14 in chloroplasts, 10 in bacteria) | inner mitochondrial (cristae), thylakoid, bacterial membrane |
+| `atp`, `adp`, `gtp`, `gdp`, `camp`, `pi`, `glucose`, `ligand` | symbols: base, ribose and phosphates; cAMP's cyclic phosphate; Pᵢ; glucose's ring; a generic ligand | 0.5–1.6 nm | | anywhere (cAMP: cytosol, nucleoplasm) |
+| `ion` | a disc of its hydrated size with its charge | 0.28–0.43 nm (hydrated radius) | `ion` (`Na+`, `K+`, `Ca2+`, `Cl-`, `H+`, `Mg2+`) | anywhere |
+
+**Orientation and places** are checked by `vidgen validate` with the reason:
+
+```
+scenes[0].params: molecules[0] (ATP synthase 'atp_synthase'): ATP synthase F₁ must face the mitochondrial matrix, not the intermembrane space: F₁ makes ATP where ADP and Pᵢ are — the matrix, the stroma or a bacterium's cytoplasm (the N side); protons reach Fₒ from the intermembrane space, the thylakoid lumen or the periplasm
+scenes[0].params: molecules[0] (G-protein-coupled receptor 'gpcr'): a G-protein-coupled receptor sits in a membrane: give the scene a membrane (plasma, inner_mitochondrial, thylakoid…)
+scenes[0].params: molecules[1] (DNA 'dna'): DNA in the cytosol: DNA is in the nucleus (and in mitochondria and chloroplasts; a bacterium's in its cytoplasm, the nucleoid)
+```
+
+**Notation.** Names are Pango markup (`<i>`, `<sup>`, `<sub>`): ions and formulas are typeset
+with their charges and counts (`Ca2+` → Ca²⁺, `Cl-` → Cl⁻, `HCO3-` → HCO₃⁻, `SO4 2-` → SO₄²⁻,
+`Pi` → Pᵢ, `F_o` → Fₒ; `vidgen.api.chem_markup`). `gene:` is set in italics and checked against
+the species' nomenclature — human (HGNC) *TP53*, mouse (MGI) *Trp53*, rat *Tp53*, budding yeast
+(SGD) *CDC28*, fission yeast *cdc2*, zebrafish *tp53*, *E. coli* *lacZ*, Arabidopsis *AG*, fly
+(lenient) — and `protein:` in roman type, refused when written like its gene where the case tells
+them apart (mouse protein TRP53, not Trp53; yeast Cdc28, not CDC28; *E. coli* LacZ); common names
+(p53, cyclin B1, Gαs) are fine. Modification markers: **P** (phosphorylation: Ser, Thr, Tyr; His,
+Asp in two-component systems), **Ub** (ubiquitin: Lys, or Met1), **Ac** (acetyl: Lys or the
+N-terminus), **Me** (methyl: Lys, Arg); `{mark: P, at: Lys382}` is refused.
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -9060,6 +9166,7 @@ a title card, a `transform` of a bar).
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
 | `iso_diagram` | `heading`, `diagram`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, build, raise, lower, explode, collapse, flow, focus, relabel, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line or swatch; a `box` frames the shape); `block<N>` counts every block and layer in the order written, a stack's layers bottom up in its place; a stack is its layers and caption, a group its plate, caption and members, `diagram` everything; an edge its arrow or pipe and label; `dim` and `highlight` recolour blocks with their shading kept; see [the actions](#iso-diagram-actions) |
 | `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, see [the cell actions](#cell-actions) |
+| `molecule` | `title`, `membrane`, `scale_bar`, `<id>` | reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments; a molecule's id brings its name and part labels |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:

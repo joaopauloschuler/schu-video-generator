@@ -15,11 +15,11 @@ from collections.abc import Iterable, Sequence
 import numpy as np
 from manim import VGroup, VMobject
 
-from vidgen.cellworld import BILAYER, KINDS, CellWorld, Placed, lod_weights
+from vidgen.cellworld import BILAYER, KINDS, MOLECULES, CellWorld, Placed, lod_weights
 from vidgen.cellworld.catalog import CELL_HUES, MEMBRANE_HUE
 from vidgen.cellworld.curves import Cubic, shape_curves
 
-from . import bacteria, closeup, cytoskeleton, organelles, plant
+from . import bacteria, closeup, cytoskeleton, molecules, organelles, plant
 from .base import MEMBRANE_PX, PLASMA_PX, CellColors, Pieces, curves_array, path_mobject
 
 #: Drawing layers (z index) by kind: what lies over what.
@@ -192,6 +192,8 @@ class CellDrawing:
             return cytoskeleton.motors(self, kind_name, things)
         if kind_name == "plasmid":
             return bacteria.plasmids(self, things)
+        if kind_name in MOLECULES:
+            return molecules.cell_molecules(self, kind_name, things)
         return organelles.particles(self, kind_name, things)
 
     # ----- level of detail ------------------------------------------------------------------

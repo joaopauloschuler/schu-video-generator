@@ -29,7 +29,9 @@ class ObjectSpec:
     rough ER, ``cisternae`` of the Golgi, ``tubules`` of the smooth ER, ``pores`` and
     ``ribosomes`` of the nucleus and the rough ER, ``coat`` of a vesicle, ``cargo`` of a motor,
     ``grana`` of a chloroplast); ``style`` (``section`` or ``surface``, for the drawing);
-    ``where`` names it in error messages (``objects[2]``)."""
+    a molecule's ``state`` and, for one in a membrane, the ``membrane`` of its ``on`` object it
+    is in and the compartment its oriented part ``faces``; ``where`` names it in error
+    messages (``objects[2]``)."""
 
     kind: str
     id: str | None = None
@@ -52,6 +54,9 @@ class ObjectSpec:
     cargo: bool | None = None
     grana: int | None = None
     style: str | None = None
+    state: str | None = None
+    faces: str | None = None
+    membrane: str | None = None
 
 
 @dataclass(frozen=True)

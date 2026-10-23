@@ -11,6 +11,8 @@ from .catalog import (
     Membrane, main_interior,
 )
 from .geometry import ArcBand, Capsule, Ellipse, Polyline, RoundedBox, inside, overlap
+from .glyphs import Glyph, MoleculeSpec, check_molecule, molecule_glyph
+from .molecules import MOLECULES, MoleculeKind, membrane_sides
 from .model import CellSpec, CellWorld, Entry, Neighbour, ObjectSpec, Part, Placed, did_you_mean
 from .regions import Region
 from .units import format_length, nice_length, parse_coordinate, parse_length
@@ -18,8 +20,9 @@ from .view import LEVELS, LOD, CellView, focus_point, default_level, label_weigh
 
 __all__ = [
     "Anchor", "ArcBand", "BILAYER", "CELL_KINDS", "COAT_NAMES", "COMPARTMENTS", "Capsule", "CellSpec", "CellView", "CellWorld", "Compartment",
-    "Ellipse", "Entry", "KINDS", "Kind", "LEVELS", "LOD", "Lipids", "MEMBRANES", "MEMBRANE_LIPIDS", "Membrane", "Neighbour", "ObjectSpec", "Part",
-    "Placed", "Polyline", "Region", "RoundedBox", "TYPICAL", "TYPICAL_ANIMAL", "build_cell_world", "default_level", "did_you_mean",
-    "focus_point", "format_length", "inside", "label_weight", "level_view", "lod_weights", "main_interior", "nice_length", "overlap",
-    "parse_coordinate", "parse_length", "part_anchors", "scale_bar", "smooth_fade", "zoom_path",
+    "Ellipse", "Entry", "Glyph", "KINDS", "Kind", "LEVELS", "LOD", "Lipids", "MEMBRANES", "MEMBRANE_LIPIDS", "MOLECULES", "Membrane", "MoleculeKind",
+    "MoleculeSpec", "Neighbour", "ObjectSpec", "Part", "Placed", "Polyline", "Region", "RoundedBox", "TYPICAL", "TYPICAL_ANIMAL",
+    "build_cell_world", "check_molecule", "default_level", "did_you_mean", "focus_point", "format_length", "inside", "label_weight", "level_view",
+    "lod_weights", "main_interior", "membrane_sides", "molecule_glyph", "nice_length", "overlap", "parse_coordinate", "parse_length",
+    "part_anchors", "scale_bar", "smooth_fade", "zoom_path",
 ]

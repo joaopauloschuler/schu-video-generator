@@ -14,6 +14,7 @@ from .catalog import (
     PORES_PER_UM2,
 )
 from .geometry import ArcBand, Capsule, Ellipse, Point, Polyline
+from .glyphs import molecule_glyph
 from .model import CellWorld, Placed
 from .morphology import cristae, surface_pores
 from .units import format_length, nice_length
@@ -48,6 +49,8 @@ LOD: dict[str, tuple[float, float]] = {
     "filament_detail": (12.0, 20.0),  # a microtubule's tubulin dimers (its width)
     "actin_detail": (14.0, 24.0),     # an actin filament's subunits (its width)
     "labels": (8.0, 14.0),            # a structure's label (its length)
+    "molecules": (6.0, 12.0),         # a molecule drawn whole instead of a dot (10 nm)
+    "molecule_detail": (40.0, 70.0),  # its small parts: base pairs, c subunits, glycans (10 nm)
 }
 #: Neighbouring cells fade in as the view grows from 1.25 to 1.7 cell lengths.
 NEIGHBOURS = (1.25, 1.7)
@@ -110,6 +113,13 @@ def focus_point(world: CellWorld, entry_id: str, level: Level) -> tuple[Point, f
     things = world.members(entry_id)
     first = things[0]
     kind = KINDS[first.kind]
+    if kind.category == "complex" and first.option("molecule") is not None:
+        # a molecule: its drawing's middle (a membrane protein sits off its membrane point), at
+        # about half the view
+        x0, y0, x1, y1 = molecule_glyph(first.option("molecule")).bounds
+        c, s = math.cos(first.angle), math.sin(first.angle)
+        mx, my = (x0 + x1) / 2000, (y0 + y1) / 2000
+        return (first.center[0] + mx * c - my * s, first.center[1] + mx * s + my * c), max(x1 - x0, y1 - y0) / 1000 * FILL["complex"] / 0.55
     if kind.category == "complex":
         return first.center, first.size
     keys = {t.key for t in things}
@@ -304,6 +314,8 @@ def lod_weights(px_per_um: float, cell_size: float, span: float) -> dict[str, fl
         "filament_detail": fade(MICROTUBULE, "filament_detail"),
         "actin_detail": fade(ACTIN, "actin_detail"),
         "neighbours": smooth_fade(span / cell_size, *NEIGHBOURS),
+        "molecules": fade(0.01, "molecules"),
+        "molecule_detail": fade(0.01, "molecule_detail"),
     }
 
 
