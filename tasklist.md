@@ -1136,6 +1136,52 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 - [x] Critical review with fixes recorded in HANDOFF (DESIGN §94.19); security (localhost only, no path traversal, safe file writes, no code run from requests) — one test per attack in `tests/test_phase_t_review.py` (21, 2 `slow`): a negative Content-Length, NaN / Infinity numbers, `$`-anchored and `\d` name patterns, Windows device names, alias bombs / deep nesting, a session link out (MCP), the paid provider's confirmation, fixed; compatibility (17 fingerprints, templates, beds, cookbook, project mixes, Listen page: byte for byte); determinism; the phase tests and related suites; `tests/test_mcp.py` in full
 - [x] Step 196's FFT finding: quick FFT lengths in the studio only (exact samples for videos and beds; byte-identity impossible otherwise), the same 16-bit audio, time_of_flight at 112 BPM 22 → 9 s and 2.2 → 1.3 GB; long pieces' stems streamed (a 5-minute piece no longer killed at 3 GB); exports block by block, at most 10 minutes; cleaning leaves a running studio's session alone; CRLF text stored as LF
 
+## Phase U — Cell biology at university and research level
+
+Goal: 2D cell-biology presentations for lectures, science channels and researchers explaining
+their work: more detail and precise terms, scientifically correct (stylised, never wrong), in
+vidgen's clean flat style, easy for AI authors to write right in YAML (validated with clear
+errors and did-you-mean, linted where useful), in 16:9 and 9:16. Built in the three-layer design
+of Phases O–R: a cell world (plain data and rules in real units, no manim; `vidgen/cellworld/`),
+renderers apart (`vidgen/cell_vector.py`, `scenes/cell.py`). Additive and opt-in: existing
+projects, scenes, gallery frames, audio and the studio unchanged (Phase Q's 31 baseline frames
+when shared code changes). DESIGN §95. Steps 202–211.
+
+### Step 202 — Cell world model and scale system
+- [x] Phase U plan here and DESIGN §95 for the whole phase: the data model (compartments, membranes, structures and complexes with real sizes and topology), units, the camera's levels and level of detail, the location rules, how the structure library (203), molecules (204) and process actions (205–208) plug in, how the `pathway` scene (207) relates, how the accuracy lint (209) reads the model; decided: a new scene type `cell` (not a mode of `stage` or `iso_diagram`)
+- [x] World model and rules without manim (`vidgen/cellworld/`: `units`, `catalog`, `geometry`, `model`, `view`): lengths in µm from numbers or `"25 nm"`; compartments (cytosol, nucleoplasm, perinuclear space, ER / Golgi / lysosome / endosome / vesicle lumens, intermembrane space, matrix, peroxisomal matrix, extracellular) with topology; membranes as bilayer mid-lines; the typical animal cell; automatic placement (typical layout, else seeded scatter); location rules refused with the textbook reason (a ribosome in the nucleoplasm, on the Golgi or in a lumen; a structure in the nucleus, overlapping or out of the cell; an unknown kind, compartment or id with did-you-mean)
+- [x] YAML: `type: cell` with `cell`, `contents`, `objects` (`kind`, `id`, `at` in µm, `size`, `width`, `angle`, `in`, `on`, `count`, `label`, kind options), `view`, `labels`, `scale_bar`, `reveal`, `seed`; validation located at `scenes[i].params`
+- [x] First renderer: exact Bézier outlines in scene units (`cell_vector.py`), placeholder organelles at true relative scale (nucleus with pores and nucleolus, rough ER with bound ribosomes, smooth ER, Golgi cis → trans, centrosome, mitochondria with cristae, lysosomes, peroxisomes, vesicles, free ribosomes), theme-aware colours (light and dark)
+- [x] Physical-scale camera: levels tissue → cell → organelle → complex (`zoom_to` action, `level`, `width`, `until`), van Wijk–Nuij zoom path, level-of-detail switching measured on a 1080-pixel frame (dots → ribosome subunits, single → double membranes, bilayers, pores, cristae, neighbouring cells), strokes and labels kept on screen, an automatic 1-2-5 scale bar; timed to beats and `at: "@word"`
+- [x] Labels in columns (16:9) or rows (9:16) with leader lines, for the start view; gallery page and sample, guide chooser row, snippet and action + `AGENTS.md`, CONFIG section and targets row, CHANGELOG; tests `tests/test_cell_world.py`, `tests/test_cell_scene.py`; stills looked at in 16:9, 9:16 and a light theme
+
+### Step 203 — Structure library
+- [ ] Organelles with accurate morphology: nucleus (envelope continuous with the ER, nuclear pores, nucleolus), rough / smooth ER (sheets and tubules joined), Golgi (cis / medial / trans cisternae), mitochondria (cristae, matrix, intermembrane space), lysosomes, peroxisomes, early / late endosomes, vesicles (clathrin, COPI, COPII coats), centrosome; plant: chloroplast (thylakoids, grana, stroma), cell wall, vacuole; prokaryotic cell; cytoskeleton (actin, microtubules with +/− ends, intermediate filaments) and motors (kinesin, dynein, myosin); membranes: bilayer close-up with cholesterol, glycolipids, rafts; side-view and surface-view styles
+
+### Step 204 — Molecules and notation
+- [ ] DNA with 5′/3′ ends and base pairs; mRNA, tRNA with anticodon, rRNA; nucleosomes / chromatin; proteins with domains, receptors (GPCR, RTK), gated ion channels, carriers (uniport / symport / antiport), pumps (Na⁺/K⁺-ATPase), ATP synthase, kinases / phosphatases, G proteins; small molecules and ions with typeset formulas; naming conventions (italic genes, roman proteins, species-aware case, P / Ub / Ac / Me markers)
+
+### Step 205 — Transport and membrane processes as actions
+- [ ] Diffusion / osmosis with gradients; facilitated diffusion; primary and secondary active transport (ATP use shown); channel gating; clathrin- / receptor-mediated endocytosis, exocytosis, vesicle trafficking along microtubules with motors; membrane potential with ions moving and a live voltage readout tied to a `function_plot`
+
+### Step 206 — Gene expression as actions
+- [ ] Transcription (promoters, transcription factors, template read 3′→5′, mRNA made 5′→3′); RNA processing (cap, poly(A) tail, splicing, export through pores); translation (A/P/E sites, codon–anticodon pairing, peptide N→C, stop codon, release factors); protein fate (chaperones, signal peptide + SRP to the ER, glycosylation, Golgi sorting)
+
+### Step 207 — Signalling pathways
+- [ ] A `pathway` scene type with SBGN-inspired notation across compartment bands (membrane / cytosol / nucleus), automatic layout; actions: the signal propagates, nodes light up, inhibitors block, knockouts / drugs with downstream effects; GPCR–cAMP–PKA, RTK–Ras–MAPK, PI3K–Akt
+
+### Step 208 — Cell cycle, division and energy
+- [ ] Cell cycle with checkpoints and cyclin–CDK plots; mitosis (prophase → cytokinesis); meiosis I / II with crossing over; glycolysis overview, TCA cycle, electron transport chain with the proton gradient driving ATP synthase, light reactions
+
+### Step 209 — Scientific accuracy lint and references
+- [ ] Lint: sizes / counts far off scale without a "not to scale" label, impossible locations, wrong directions (5′/3′, N→C), active transport without an energy source, naming mistakes, pathway arrows against declared effects; `references:` (DOI / PubMed ID) shown as small citations and collected into the description; figure credits
+
+### Step 210 — Example, docs and gallery
+- [ ] "From gene to secreted protein" (transcription, splicing, export, translation on the rough ER, Golgi, exocytosis) narrated with Kokoro, music, 16:9 and 9:16; gallery section "Cell biology" with animated previews; guide topic; CONFIG reference; a cookbook page (accuracy, level of detail, labelling, pacing dense content)
+
+### Step 211 — Review of Phase U
+- [ ] Critical review with fixes, including a scientific-accuracy pass over the library and the example; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+
 ---
 
 ## Backlog (after Step 60)

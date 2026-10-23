@@ -56,6 +56,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "end_card": {"title": "Thanks", "lines": ["one", "two"], "icon": "rocket", "logo": "assets/pic.png"},
     "chapter": {"number": 2, "title": "Results", "subtitle": "Sub", "icon": "rocket"},
     "card": {"text": "Later that day", "subtitle": "Sub"},
+    "cell": {"title": "Cell", "contents": "none", "objects": ["nucleus", {"kind": "mitochondrion", "id": "mito", "count": 2}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -173,6 +174,7 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("network") == ["heading", "layer1", "neuron1.1", "neuron1.2", "layer2", "layer:Out", "neuron2.1", "neuron2.2", "edges1"]
     assert names("iso_diagram") == ["heading", "diagram", "block1", "block:a", "block2", "block:b", "block3", "block:l1", "block4", "block:l2",
                                     "stack:s", "group:g", "edge:a->b"]
+    assert names("cell") == ["title", "cell", "tissue", "nucleus", "mito", "scale_bar"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",
@@ -504,7 +506,7 @@ def test_a_type_without_targets_rejects_actions(make_project) -> None:
                     pass
     '''})
     (problem,) = project_problems(Project.load(root))
-    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, card, chapter, code,")
+    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, card, cell, chapter, code,")
 
 
 def test_config_md_action_examples_validate(make_project) -> None:

@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "card", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "line_chart", "map", "network", "number_line", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["bar_chart", "bullets", "card", "cell", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "line_chart", "map", "network", "number_line", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -53,6 +53,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "icon_grid": {"heading": "Grid", "items": [{"icon": "cpu", "label": "CPU", "sublabel": "compute"}, {"icon": "home", "label": "Home"}, {"icon": "cloud", "label": "Cloud"}], "highlight": 1, "icon_color": "palette"},
     "text_card": {"text": "Hello world"},
     "card": {"text": "Later that day", "subtitle": "Sub", "style": "frame"},
+    "cell": {"title": "Inside a cell", "objects": [{"kind": "ribosome", "id": "mitoribosomes", "in": "mitochondria", "count": 4, "label": False}],
+             "view": "cell"},
     "chapter": {"number": 3, "title": "Results", "subtitle": "What we found", "icon": "chart-line"},
     "comparison": {"heading": "A vs B", "columns": [{"heading": "A", "tone": "positive", "icon": "cpu", "points": ["fast", {"text": "cheap", "icon": "coins"}]}, {"heading": "B", "tone": "negative", "points": ["slow"]}], "verdict": "Pick A", "vs": "vs"},
     "table": {"title": "T", "header": ["Name", "Value"], "rows": [["a", 1.5], ["b", 1200]], "caption": "c"},

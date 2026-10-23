@@ -33,6 +33,12 @@ Regenerate with `vidgen gallery`.
 | [`network`](network.md) | <a href="network.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/network-16x9.png"><img src="media/network-16x9.gif" height="180" alt="network at 16:9"></picture></a> <a href="network.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/network-9x16.png"><img src="media/network-9x16.gif" height="180" alt="network at 9:16"></picture></a> | a neural network |
 | [`iso_diagram`](iso_diagram.md) | <a href="iso_diagram.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/iso_diagram-16x9.png"><img src="media/iso_diagram-16x9.gif" height="180" alt="iso_diagram at 16:9"></picture></a> <a href="iso_diagram.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/iso_diagram-9x16.png"><img src="media/iso_diagram-9x16.gif" height="180" alt="iso_diagram at 9:16"></picture></a> | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) |
 
+## Cell biology
+
+| type | preview | use it for |
+|---|---|---|
+| [`cell`](cell.md) | <a href="cell.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell-16x9.png"><img src="media/cell-16x9.gif" height="180" alt="cell at 16:9"></picture></a> <a href="cell.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell-9x16.png"><img src="media/cell-9x16.gif" height="180" alt="cell at 9:16"></picture></a> | a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) |
+
 ## Data
 
 | type | preview | use it for |

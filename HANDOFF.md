@@ -18548,3 +18548,100 @@ Known gaps
 - At 420 px a short last section's name is cut ("t…"), as before.
 - The disk of this workspace is almost full (about 150 MB free; old scratch venvs take most of
   it): long-piece checks and big exports were measured and their files removed at once.
+
+## Step 202 — Cell world model and scale system (Phase U begins)
+
+What was built (DESIGN §95, which also plans Steps 203–211; tasklist "Phase U")
+- **Decided: a new scene type `cell`** (not a stage or iso_diagram mode: no characters or grid,
+  a camera over five orders of magnitude). Shared cell knowledge lives in `vidgen.cellworld`, so
+  Step 207's separate `pathway` type uses the same compartment and molecule names.
+- **The cell world, no manim** (`src/vidgen/cellworld/`): `units` (µm inside; `"25 nm"`,
+  `"1.5 um"`, `"20 µm"`; 1-2-5 lengths), `catalog` (compartments with topology, membranes,
+  14 kinds with textbook sizes and ranges, where each may be and sit, the reason quoted by the
+  rules, the typical animal cell), `geometry` (ellipses, capsules, arc bands in µm; membranes
+  are bilayer mid-lines), `model` (`build_cell_world`: entries, placement — typical layout, else
+  seeded scatter —, generated pores and bound ribosomes, compartment lookup, the location rules
+  with did-you-mean), `view` (levels tissue / cell / organelle / complex, focus points, LOD
+  weights on a 1080-px reference, scale bar, the van Wijk–Nuij zoom path). A test checks manim is
+  not imported.
+- **Renderer** `src/vidgen/cell_vector.py`: exact Bézier outlines, LOD pieces with feature
+  expressions, strokes kept in pixels at any zoom, true-width bilayers, theme-aware colours;
+  placeholder organelles at true relative scale (nucleus with pores and nucleolus, rough ER with
+  bound ribosomes, smooth ER, Golgi cis→trans, centrosome, mitochondria with cristae,
+  lysosomes, peroxisomes, vesicles, free ribosomes; the tissue's neighbouring cells).
+- **Scene** `scenes/cell.py` (`cell`) and **action** `scenes/cell_actions.py` (`zoom_to`):
+  physical-scale camera, screen-sized title / labels / scale bar pinned by a camera listener,
+  labels in columns (16:9) or rows (9:16) with leader lines for the start view, fading as the
+  camera leaves it; `reveal: all | per_beat`; `layout_keys` adds `cell` (span, px/µm, scale bar,
+  LOD) for Step 209.
+
+YAML (CONFIG `cell`)
+```yaml
+- id: tour
+  type: cell
+  params:
+    title: "Inside an animal cell"
+    cell: {kind: animal, size: 20 um}          # or cell: animal
+    contents: typical                          # default; none = only objects
+    objects:
+      - {kind: mitochondrion, id: mito, at: [6, 3], angle: 30}    # µm from the centre
+      - {kind: ribosome, id: mitoribosomes, in: mito, count: 6, label: false}
+      - {kind: ribosome, id: er_bound, on: rough_er, count: 5}
+    view: cell                                 # tissue | cell | organelle | complex | {level, on, width}
+    labels: true
+    scale_bar: true
+  beats:
+    - text: "..."
+      actions:
+        - {zoom_to: mito, at: "@mitochondrion"}                  # organelle level by default
+        - {zoom_to: rough_er, level: complex, at: "@ribosome"}   # one ribosome; width: "150 nm"
+```
+
+Files touched
+- New: `src/vidgen/cellworld/{__init__,units,catalog,geometry,model,view}.py`,
+  `src/vidgen/cell_vector.py`, `src/vidgen/scenes/cell.py`, `src/vidgen/scenes/cell_actions.py`,
+  `tests/test_cell_world.py` (45), `tests/test_cell_scene.py` (13, 3 render),
+  `docs/gallery/cell.md` and `media/cell-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, guide + `AGENTS.md` (chooser
+  row, "# cell biology" snippet, `zoom_to` row), `docs/CONFIG.md` (`cell` section, targets row),
+  `docs/gallery/README.md`, `examples/gallery/video.yaml` (scene `inside`), `CHANGELOG.md`,
+  `DESIGN.md` §95, `tasklist.md` (Phase U), tests `test_builtin_scenes.py`,
+  `test_actions_coverage.py`, `test_translation.py`, `test_actions.py`, `test_registry.py` (the
+  new type and action in their lists).
+
+Public interfaces: `vidgen.api` adds `CELL_COMPARTMENTS`, `CELL_KINDS`, `CELL_LEVELS`,
+`CELL_OBJECT_KINDS`, `CellColors`, `CellDrawing`, `CellObjectSpec`, `CellSpec`, `CellView`,
+`CellWorld`, `build_cell_world`, `cell_default_level`, `cell_label_weight`, `cell_level_view`,
+`cell_lod_weights`, `cell_scale_bar`, `cell_zoom_path`, `did_you_mean`, `format_length`,
+`parse_coordinate`, `parse_length` (DESIGN §95.7). Config: scene type `cell`, action `zoom_to`.
+
+Decisions / deviations
+- LOD in pixels of a 1080-px shorter side (resolution independent; the first preview stills
+  labelled less than the final would have).
+- Manim draws an animation's family as it was when the animation began: the scale bar's texts are
+  all made up front and only shown or hidden (a text swapped mid-zoom was not drawn and the old
+  one stayed), and `CellZoom` calls the camera listener itself (a move finished without a frame
+  left labels stale).
+- Labels belong to the start view (they fade out beyond 1.2–1.6× zoom); point at things in a
+  zoomed view with `callout`. Zoom uses van Wijk–Nuij (a linear `MoveCamera` rushed a 150× zoom
+  and flew through empty cytosol between two complexes).
+- The gallery snippet has one zoom only: with a second zoom the GIFs were 185–206 KB (> 150 KB).
+
+Known gaps / TODO for later steps (DESIGN §95.7)
+- Placeholder morphology (ER not joined to the envelope, loose smooth-ER arcs, bare Golgi
+  cisternae); animal cells only (`plant`, `bacterium` in 203); no "not to scale" flag yet (209);
+  labels only for the start view; a `dim` / `highlight` while a zoom changes LOD can leave a piece's
+  opacity off until the camera moves again; a built-in `zoom` deeper than every `zoom_to` has no
+  scale-bar text; the 9:16 gallery GIF is at 149 KB of its 150 KB budget.
+
+How to test
+- `tests/test_cell_world.py` (45 passed), `tests/test_cell_scene.py` (13 passed, 3 render);
+  `test_builtin_scenes.py` not render 126 + `-k cell` 4 (renders 16:9 / 9:16);
+  `test_actions_coverage.py` not render 12 + `-k cell` 1; `test_translation.py` 72;
+  `test_api` + `test_guide` + `test_docs` 128; `test_gallery` (not render) 17; `test_schema` +
+  `test_json_output` (not render) 87; `test_actions` 28 and `test_registry` 23 (the action and
+  type lists gained `zoom_to` and `cell`); `test_extensions` + `test_review2` + `test_introspect`
+  (not render) 43; `test_mcp.py` in full 20. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills looked at (scratchpad `s202/proj`, 26 s tour with six zooms): 16:9, 9:16 and the
+  `light_academic` theme; `vidgen lint` clean but one `dead_air` warning of the scratch script.

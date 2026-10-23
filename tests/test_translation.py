@@ -292,6 +292,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
         {"values": {"DE": 1, "FR": 2}, "unit": "T:unit", "legend_label": "T:legend"},
     ],
     "network": [{"layers": [3, {"size": 2, "label": "T:hidden"}], "heading": "T:heading"}],
+    "cell": [{"title": "T:title", "contents": "none", "objects": [{"kind": "mitochondrion", "label": "T:mito"}, {"kind": "lysosome", "label": False}]}],
     "iso_diagram": [
         {
             "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],

@@ -295,6 +295,7 @@ project's own scene types, in its theme).
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
+| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count), `view`, `labels`; the action zoom_to |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
@@ -475,6 +476,28 @@ several scenes, give its blocks `at` and their own `color` so it looks the same 
 labels short ("App 1" over "Application server 1") so they sit right by their blocks, and leave
 out a group caption the blocks' labels already say: every label costs room, and the diagram is
 drawn as large as its labels let it.
+
+```yaml
+# cell biology
+- id: tour
+  type: cell
+  params:
+    title: "Inside an animal cell"
+    cell: animal                                   # 20 µm; contents: typical is the textbook cell
+    objects:
+      - {kind: ribosome, id: mitoribosomes, in: mitochondria, count: 6, label: false}
+  beats:
+    - text: "A typical animal cell is about twenty micrometres across."
+    - text: "Inside one mitochondrion, the inner membrane folds into cristae."
+      actions:
+        - {zoom_to: mitochondria, at: "@mitochondrion"}   # {zoom_to: rough_er, level: complex}: one ribosome
+```
+
+A `cell` is drawn at real sizes in µm and every place is checked: a ribosome in the nucleoplasm,
+a mitochondrion inside the nucleus or a ribosome on the Golgi is refused with the textbook reason
+(`vidgen validate`). Leave `at` out and things go where they belong; `at: [x, y]` is in µm from
+the cell's centre. `zoom_to` moves between levels (tissue, cell, organelle, complex); the scale
+bar and the details follow the zoom, labels belong to the start view.
 
 ```yaml
 # data
@@ -911,6 +934,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `flow` | on an `iso_diagram`: dots (`style: packets`: small cubes) run along connectors (`- flow: "edge:*"`, `chain: true` one after another, `back`, `count`) | when the voice follows data or a request |
 | `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; labels it would cut fade out; `focus: diagram` goes back to the whole frame | at most one or two per scene |
 | `relabel` | on an `iso_diagram`: a label or value changes in place (`- relabel: "block:cache"`, `text: "Cache: hit"`) | a new value, a state change |
+| `zoom_to` | on a `cell`: the camera moves in µm to a level on an object and stays (`- zoom_to: mitochondria`; `level: tissue`, `cell`, `organelle`, `complex`; `width: "2 um"`); details appear as they grow, the scale bar follows; `zoom_to: cell` goes back | one level change per idea, on the word that names the target |
 
 ```yaml
 - id: speeds

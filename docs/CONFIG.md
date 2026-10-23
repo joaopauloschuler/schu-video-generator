@@ -6178,6 +6178,119 @@ highlighted `until` the next beat, and collapsed. The same diagram appears in tw
 blocks have `at` and their own `color`, so it looks the same in both (by default the palette
 colours follow the order of the blocks, which changes when one is left out).
 
+### `cell`
+
+A cell in **physical scale** for cell-biology lectures and research explainers: a cross-section
+of an animal cell (as in a thin-section micrograph, in vidgen's flat style) with its compartments
+(cytosol, nucleoplasm, perinuclear space, ER and Golgi lumens, mitochondrial intermembrane space
+and matrix, lysosome and peroxisome insides), the membranes between them and what is in them, all
+at textbook sizes in µm. `contents: typical` (the default) is the textbook cell: a nucleus
+(7 × 6 µm, its two membranes 30 nm apart, nuclear pores about 1 per µm of envelope, a nucleolus),
+rough ER sheets round the nucleus studded with ribosomes, smooth ER tubules, a Golgi stack (cis
+face towards the nucleus), the centrosome beside it, 8 mitochondria (2 × 0.7 µm, with cristae),
+lysosomes, peroxisomes, vesicles and free ribosomes (25 nm). `objects` add things, or replace a
+typical one by its id. The camera is in µm: `view` sets where it starts and the
+[`zoom_to`](#cell-actions) action moves between **levels** — `tissue` (the cell among its
+neighbours), `cell`, `organelle`, `complex` (molecular: one ribosome, one nuclear pore, a
+bilayer) — and details appear as they grow on screen. A **scale bar** (1-2-5 lengths: `2 µm`,
+`500 nm`, `20 nm`) follows the zoom; labels, the title and the scale bar keep their size on
+screen. Works the same in 16:9 and 9:16.
+
+```yaml
+- id: tour
+  type: cell
+  params:
+    title: "Inside an animal cell"
+    cell: {kind: animal, size: 20 um}      # or just: cell: animal (20 µm, aspect 1.25)
+    objects:                              # added to the typical cell
+      - {kind: mitochondrion, id: mito, at: [6, 3], angle: 30}   # at: µm from the cell's centre, x right, y up
+      - {kind: ribosome, id: mitoribosomes, in: mito, count: 6, label: false}
+      - {kind: proteasome, in: nucleus, count: 8}
+  beats:
+    - text: "A typical animal cell is about twenty micrometres across."
+    - text: "Step back, and it is one of many cells in a tissue."
+      actions:
+        - {zoom_to: tissue, at: "@tissue"}
+    - text: "Back in, to one mitochondrion with its folded inner membrane."
+      actions:
+        - {zoom_to: mito, at: "@mitochondrion"}
+    - text: "Closer still: a ribosome on the rough ER, its membrane a bilayer five nanometres thick."
+      actions:
+        - {zoom_to: rough_er, level: complex, at: "@ribosome"}
+```
+
+**Params.** `title`; `cell` (`animal`, or `{kind, size, aspect}`: size 5–100 µm, a number or
+`"20 um"`; aspect 1–2.5); `contents` (`typical` or `none`); `objects`; `view` (`tissue`, `cell`
+default, `organelle`, `complex`, or `{level, on: <id>, width: "3 um"}`); `labels` (`true`);
+`scale_bar` (`true`); `reveal` (`all`: the whole cell in the first beat; `per_beat`: the cell,
+then one object per beat in order); `seed` (where things without `at` go); `title_size`,
+`label_size`. [Action targets](#beat-actions): `title`, `cell` (cytosol and plasma membrane),
+`tissue` (the neighbouring cells), `scale_bar` and each object's id (a typical one too:
+`nucleus`, `nucleolus`, `rough_er`, `smooth_er`, `golgi`, `centrosome`, `mitochondria`,
+`lysosomes`, `peroxisomes`, `vesicles`, `ribosomes`); an object of several things is one target;
+the pores and ribosomes bound to a structure belong to it.
+
+**Objects** (a kind alone is one of it, placed automatically): `kind`, `id` (default the kind;
+`kind_2` for a second), `at: [x, y]` (µm, or lengths: `["2 um", "-500 nm"]`; leave it out and the
+thing is placed where it belongs: the typical layout's place, else scattered by `seed`), `size`
+(its length), `width`, `angle` (degrees; a Golgi stack's: the way its cis face looks, default
+towards the nucleus), `count` (scattered; not with `at`), `label` (text, or `false`), and for
+complexes `in:` (`cytosol` default, `nucleoplasm`, `matrix`, an object's id = its inside,
+`<id>.<compartment>`) or `on:` (the structure whose membrane they sit on). Kind options: rough ER
+`sheets` (4), `span` (200°), `side` (degrees from the nucleus, default away from the Golgi);
+Golgi `cisternae` (5); smooth ER `tubules` (6); nucleus `pores` and `ribosomes`, rough ER
+`ribosomes` (default `true`).
+
+| kind | default size | textbook range | may be |
+|---|---|---|---|
+| `nucleus` | 7 × 6 µm | 5–10 µm | in the cytosol |
+| `nucleolus` | 1.8 µm | 1–3 µm | in the nucleoplasm (a region, no membrane) |
+| `rough_er` | 4 sheets, 50 nm lumen | | round the nucleus |
+| `smooth_er` | 3 µm cluster, 50 nm tubules | | in the cytosol |
+| `golgi` | 2 µm, 5 cisternae | 1–3 µm | in the cytosol, cis face towards the nucleus |
+| `mitochondrion` | 2 × 0.7 µm | 0.5–4 µm long, 0.5–1 µm wide | in the cytosol |
+| `lysosome` | 0.5 µm | 0.1–1.2 µm | in the cytosol |
+| `peroxisome` | 0.5 µm | 0.1–1 µm | in the cytosol |
+| `endosome` | 0.4 µm | 0.1–0.8 µm | in the cytosol |
+| `vesicle` | 80 nm | 40–200 nm | in the cytosol |
+| `centrosome` | 1 µm (two 0.2 × 0.4 µm centrioles) | 0.5–2 µm | in the cytosol |
+| `ribosome` | 25 nm | 20–30 nm | in the cytosol or the mitochondrial matrix; on the rough ER or the nucleus (outer nuclear membrane) |
+| `proteasome` | 45 × 20 nm | 30–50 nm | in the cytosol or the nucleoplasm |
+| `nuclear_pore` | 120 nm | 100–130 nm | on the nucleus (made with it) |
+
+**Location rules.** Every place is checked by `vidgen validate`, and what cannot be is refused
+with the reason and what to write:
+
+```
+scenes[0].params: objects[0] (ribosome 'ribosome'): at [-1.2, 0.6] µm: that point is in the nucleoplasm of 'nucleus'; ribosomes translate in the cytosol (free, or on the cytosolic face of the rough ER and the outer nuclear membrane) and, as mitochondria's own ribosomes, in the matrix; never in the nucleoplasm: their subunits are assembled in the nucleolus and leave through the nuclear pores, and translation starts only in the cytoplasm
+scenes[0].params: objects[1] (ribosome 'ribosome_2'): a ribosome cannot sit on a Golgi apparatus (only on a nucleus or rough ER): ...
+scenes[0].params: objects[2] (mitochondrion 'mito'): at [9.6, 0] µm, 2 µm long: it reaches the plasma membrane or out of the cell; move it (at) or make it smaller (size)
+scenes[0].params: objects[3] (lysosome 'lysosome'): at [-1.2, 4.2] µm, 600 nm long: it overlaps 'rough_er'; ...
+scenes[0].params: objects[4]: unknown kind 'mitocondrion'; did you mean 'mitochondrion'? (kinds: ...)
+```
+
+Structures may not overlap or reach the plasma membrane; a nucleolus lies inside a nucleus's inner
+membrane; the rough ER needs a nucleus (it grows from the nuclear envelope).
+
+**Levels and detail.** `tissue` shows about three cell lengths (neighbouring cells fade in as the
+view widens); `cell` fits the cell; `organelle` frames one structure (a sheet of the ER: 2.6 µm);
+`complex` shows about 125 nm round one complex: on `rough_er` a ribosome on it, on `nucleus` a
+nuclear pore, on another structure its membrane. What is drawn follows the size things take on
+screen (measured on a 1080-pixel frame, so a preview shows what the video shows): ribosomes are
+dots from about a pixel, their large and small subunits from 10 px (the large one against the
+membrane); a nucleus's or mitochondrion's two membranes part when their gap passes 1.6 px; cristae
+from a 18 px wide mitochondrion; nuclear pores from 1.5 px; a membrane becomes its true 5 nm
+bilayer (two leaflets) from 2.5 px. Strokes keep their width on screen at any zoom. Labels are
+laid out for the start view — in columns beside the cell (16:9) or rows above and below it (9:16),
+with leader lines — name what is large enough to see, and fade out as the camera zooms away from
+that view (use a [`callout`](#beat-actions) to point at something in a zoomed view).
+
+#### Cell actions
+
+| action | options | |
+|---|---|---|
+| `zoom_to` | `level` (`tissue`, `cell`, `organelle`, `complex`; default: the target's own — `organelle` for a structure, `complex` for complexes, `cell` / `tissue` for those targets), `width` (what the view spans across the body's shorter side: `"3 um"`, `"150 nm"`; default the level's) | moves the camera to the target at that level and stays there (unlike `zoom`, which goes back by the beat's end); one target: `cell`, `tissue` or an object's id (its first thing). The width changes at an even pace on a log scale, and between far places the camera zooms out on the way (van Wijk and Nuij's smooth zoom-and-pan path). Default 2 s. `until: <beat>` goes back to the view before. On `cell` scenes only. |
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -8880,6 +8993,7 @@ a title card, a `transform` of a bar).
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
 | `iso_diagram` | `heading`, `diagram`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, build, raise, lower, explode, collapse, flow, focus, relabel, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line or swatch; a `box` frames the shape); `block<N>` counts every block and layer in the order written, a stack's layers bottom up in its place; a stack is its layers and caption, a group its plate, caption and members, `diagram` everything; an edge its arrow or pipe and label; `dim` and `highlight` recolour blocks with their shading kept; see [the actions](#iso-diagram-actions) |
+| `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, see [the cell actions](#cell-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:

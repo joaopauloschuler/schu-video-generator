@@ -591,6 +591,11 @@ from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, 
 from vidgen.world.iso_view import ISO_RISE  # noqa: E402
 from vidgen.iso_vector import picture_to_scene, shapes_mobject  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
+from vidgen.cellworld import CELL_KINDS, CellSpec, CellView, CellWorld, build_cell_world, did_you_mean, format_length, parse_coordinate, parse_length  # noqa: E402
+from vidgen.cellworld import COMPARTMENTS as CELL_COMPARTMENTS, KINDS as CELL_OBJECT_KINDS, LEVELS as CELL_LEVELS, ObjectSpec as CellObjectSpec  # noqa: E402
+from vidgen.cellworld import default_level as cell_default_level, label_weight as cell_label_weight, level_view as cell_level_view  # noqa: E402
+from vidgen.cellworld import lod_weights as cell_lod_weights, scale_bar as cell_scale_bar, zoom_path as cell_zoom_path  # noqa: E402
+from vidgen.cell_vector import CellColors, CellDrawing  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -1459,6 +1464,27 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "rect_union",
     "slide_out",
     "ISO_RISE",
+    "CELL_COMPARTMENTS",
+    "CELL_KINDS",
+    "CELL_LEVELS",
+    "CELL_OBJECT_KINDS",
+    "CellColors",
+    "CellDrawing",
+    "CellObjectSpec",
+    "CellSpec",
+    "CellView",
+    "CellWorld",
+    "build_cell_world",
+    "cell_default_level",
+    "cell_label_weight",
+    "cell_level_view",
+    "cell_lod_weights",
+    "cell_scale_bar",
+    "cell_zoom_path",
+    "did_you_mean",
+    "format_length",
+    "parse_coordinate",
+    "parse_length",
     "Field",
     "field_validator",
     "model_validator",

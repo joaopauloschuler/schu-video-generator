@@ -5,7 +5,24 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–201)
+## Unreleased (Steps 193–202)
+
+### Cell biology in physical scale (Phase U, from Step 202)
+
+- **A `cell` scene type** (Step 202): a cross-section of an animal cell at textbook sizes in µm
+  — nucleus with its two membranes 30 nm apart, nuclear pores and a nucleolus, rough ER studded
+  with ribosomes, smooth ER, a Golgi stack (cis face towards the nucleus), the centrosome,
+  mitochondria with cristae, lysosomes, peroxisomes, vesicles and 25 nm ribosomes
+  (`contents: typical`), plus your own `objects` (`kind`, `at` in µm, `in:` a compartment, `on:`
+  a membrane, `count`). Every place is checked by `vidgen validate`: a ribosome in the
+  nucleoplasm, a mitochondrion inside the nucleus or a ribosome on the Golgi is refused with the
+  textbook reason, and typos get a did-you-mean.
+- **A camera in µm** with an automatic **scale bar**: the `zoom_to` action moves between levels —
+  tissue, cell, organelle, molecular complex (one ribosome on the ER, a nuclear pore) — on a
+  spoken word (`at: "@ribosome"`), zooming at an even pace on a log scale and out on the way
+  between far places; **level of detail** switches as things grow on screen (double membranes,
+  cristae, nuclear pores, ribosome subunits, 5 nm lipid bilayers). Labels and the scale bar keep
+  their size on screen, in 16:9 and 9:16. See `docs/CONFIG.md`, `cell`.
 
 ### vidgen studio: a music workstation for people (Phase T)
 

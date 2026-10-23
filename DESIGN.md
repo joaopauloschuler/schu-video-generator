@@ -14760,3 +14760,254 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
   `studio_app`: `stems.FAST_FFT`, `StemSet.streamed` / `get`, `app.MAX_YAML_NODES`,
   `expanded_nodes`, `KEEP_PLAYED`, `session.normal_text`, `exports.WINDOWS_RESERVED`; API: `confirm`
   on `/api/proposal/send`; export length at most 600 s.
+
+## 95. Cell biology in physical scale (Phase U, Steps 202–211)
+
+Reference: docs/CONFIG.md `cell`. 2D cell-biology presentations at university and research
+level: precise, stylised but never wrong, in vidgen's flat style, written by AI agents in YAML,
+checked by `vidgen validate` (and from Step 209 by `vidgen lint`), in 16:9 and 9:16.
+
+### 95.1 The phase (plan)
+
+- **Step 202, the cell world and its scale** (this section's §95.2–95.7): the model, its rules,
+  the camera in µm with its levels, level of detail and scale bar, a first renderer with
+  placeholder organelles at true relative scale, the `cell` scene type and the `zoom_to` action.
+- **Step 203, the structure library**: accurate morphology replacing the placeholders, kind by
+  kind, behind the same model: the nucleus (an envelope continuous with the ER, pores as
+  complexes spanning both membranes, the nucleolus), rough / smooth ER as one network (sheets
+  joined to the outer nuclear membrane, tubules from their edges), the Golgi (cis / medial /
+  trans with their own compartment names), mitochondria (lamellar and tubular cristae with
+  junctions: the intracristal space continuous with the intermembrane space), lysosomes,
+  peroxisomes, early / late endosomes and multivesicular bodies, vesicles with coats (clathrin,
+  COPI, COPII: a `coat` option and sizes), centrosome; plant cells (`cell: plant`: wall, central
+  vacuole and tonoplast, chloroplasts with thylakoids, grana and stroma), prokaryotes
+  (`cell: bacterium`: nucleoid, periplasm for Gram-negative, 70S ribosomes); the cytoskeleton
+  (actin 7 nm, microtubules 25 nm with + / − ends, intermediate filaments 10 nm) and motors
+  (kinesin to +, dynein to −, myosin); the bilayer close-up (phospholipids, cholesterol,
+  glycolipids on the exoplasmic leaflet, rafts) as the `complex`-level drawing of a membrane;
+  `style: section | surface` (a thin section, or a surface view of a structure). New compartments
+  and membranes are rows of `catalog.py`; new kinds are `Kind`s with sizes, places and surfaces;
+  their drawings are `cell_vector` pieces with LOD features.
+- **Step 204, molecules and notation**: molecules are `complex` kinds with a `notation` (DNA
+  with 5′/3′ ends and base pairs, mRNA, tRNA with its anticodon, rRNA, nucleosomes; proteins with
+  domains, GPCRs, RTKs, gated channels, carriers, pumps, ATP synthase, kinases, G proteins; ions
+  and small molecules typeset with charges and subscripts); `vidgen.cellworld.names` holds the
+  naming rules (italic gene vs roman protein, species-aware case: human TP53, mouse Trp53;
+  modification markers P, Ub, Ac, Me) as data, so validation and the lint use one table. A
+  membrane protein's `on:` names its membrane and the side its domains face (topology is in the
+  catalog: lumenal = exoplasmic face).
+- **Steps 205, 206, 208, processes as actions**: actions on `cell` scenes (like `zoom_to`, in
+  `scenes/cell_actions.py` against `vidgen.api`), each with a **rule** in the world first: a pure
+  function from the world and the action's options to the moves it plans (paths in µm,
+  membranes crossed, compartments entered) or a `VidgenError` naming the beat (a vesicle cannot
+  fuse with the nucleus; active transport needs ATP or a co-transported ion going down its
+  gradient; a ribosome reads mRNA 5′→3′ and the chain grows N→C), then a renderer animating the
+  plan. The world gains *state over beats* (an object's compartment after an endocytosis, a
+  channel open or closed, a membrane potential) as `World.moved`-style replaced copies, replayed
+  by `vidgen validate` in beat and `at` order as Phase O's levels are. Timing: beat starts and
+  `at: "@word"` as every action; a plot (a `function_plot` beside a `cell`, an action potential)
+  reads the same planned values.
+- **Step 207, the `pathway` scene type** (separate, decided now): signalling pathways are graphs,
+  not geometry — nodes and SBGN-inspired arcs (activation, inhibition, phosphorylation, complex
+  formation, translocation, feedback) laid out automatically in compartment bands (extracellular
+  / membrane / cytosol / nucleus). It shares `catalog.py` (compartment names and labels, the kinds
+  and naming of Step 204's molecules) and the graph layout of `diagram` (`vidgen.graph`), not the
+  cell camera; its own actions (`signal`, `knock_out`, `inhibit`…) and rules (a translocation to
+  the nucleus crosses the nuclear envelope; an inhibitor's T-bar contradicts a declared effect).
+  A `cell` scene and a `pathway` scene can carry a molecule between them with the existing
+  `carry:`.
+- **Step 209, the accuracy lint** reads the model, not pixels, where it can: `vidgen lint`
+  rebuilds each `cell` scene's world from its params (`Params.world()`, no render) and checks the
+  rules that are judgements rather than impossibilities — sizes or counts far outside a kind's
+  `size_range` (the catalog already holds it) without the scene's `not_to_scale: true` (which
+  then shows a small "not to scale" note), a drawn exaggeration (the layout dump's `cell` key
+  gives each still's µm span and LOD weights: a glyph drawn larger than its thing), wrong
+  directions in the planned moves of Steps 205–206, active transport without an energy source,
+  naming mistakes (Step 204's table), pathway arrows against declared effects. Hard
+  impossibilities stay validation errors (this step). `references:` (DOI / PMID, never invented)
+  per scene: small on-screen citations and the video description.
+- **Step 210** the example "From gene to secreted protein", the gallery section "Cell biology",
+  the guide topic, the cookbook page; **Step 211** the review with a scientific-accuracy pass.
+
+### 95.2 A new scene type `cell` (decided)
+
+Not a mode of `stage` (characters, lip sync, a ground line, tile and iso places: none of it
+applies, and a cell's camera spans five orders of magnitude) nor of `iso_diagram` (a projection
+of blocks on a grid with its own label placement). A `cell` scene has its own params, its own
+world in µm and its own camera, like `iso_diagram` was its own type next to the iso places. What
+the cell types share lives in `vidgen.cellworld` (the catalog, the geometry, the rules), so
+Step 207's `pathway` uses the same names without being a `cell`.
+
+### 95.3 The world model (`vidgen/cellworld/`, no manim)
+
+Three layers as in §86.1 / §89.1: the **model and rules** (`vidgen.cellworld`: `units`,
+`catalog`, `geometry`, `model`, `view`; a test imports them in a fresh interpreter and checks
+`manim` is not loaded), the **renderer** (`vidgen/cell_vector.py`: Manim mobjects of the world)
+and the **scene** (`scenes/cell.py`, `scenes/cell_actions.py`, written against `vidgen.api`).
+
+- **Units.** Everything inside is µm (floats). YAML writes a number (µm) or a length string
+  (`parse_length`: `"25 nm"`, `"1.5 um"`, `"20 µm"`, `"0.1 mm"`; zero or negative refused;
+  `parse_coordinate` allows signs for `at`). `format_length` writes `25 nm`, `1.5 µm`; `nice_length`
+  the 1-2-5 lengths of scale bars.
+- **The catalog** (`catalog.py`, data only): `COMPARTMENTS` (cytosol, nucleoplasm, perinuclear
+  space, ER / Golgi / lysosome / endosome / vesicle lumens, intermembrane space, matrix,
+  peroxisomal matrix, extracellular; each with a label, a one-line note and a **topology**:
+  `cytosolic`, `lumenal` — topologically outside, what exocytosis empties —, `extracellular`,
+  `mitochondrial`, `peroxisomal`, later `plastid`), `MEMBRANES` (each between an outside and an
+  inside compartment: plasma, outer / inner nuclear, ER, Golgi, outer / inner mitochondrial,
+  lysosomal, endosomal, vesicle, peroxisomal), the **kinds** (`Kind`: label and plural,
+  `structure` or `complex`, shape, default length and width, the textbook `size_range`, its own
+  membranes from the outside in and the compartments they enclose, the compartments it may be
+  in (`places`), the kinds whose membrane it may sit on (`surfaces`), the textbook reason the
+  rules quote (`why`), a hue) and the typical animal cell (`TYPICAL_ANIMAL`). Constants: bilayer
+  5 nm, perinuclear gap 30 nm (20–40), mitochondrial intermembrane gap 20 nm, ER lumen 50 nm,
+  ER tubule 50 nm, Golgi lumen 30 nm / period 90 nm, pores 1 per µm of envelope in a section,
+  ER ribosomes 6 per µm per face. Sizes are textbook consensus (Alberts, Lodish): nucleus 7 × 6 µm
+  (5–10), mitochondrion 2 × 0.7 µm (0.5–4 long, 0.5–1 wide), ribosome 25 nm (20–30), cell 20 µm
+  (5–100 allowed), and so on (CONFIG's table).
+- **Geometry** (`geometry.py`): a world is a **cross-section** (a thin-section view). Shapes in
+  µm: `Ellipse`, `Capsule` (a stadium: mitochondria), `ArcBand` (a curved band with round ends:
+  ER sheets, Golgi cisternae, ER tubules), each with `contains(p, pad)`, `outline`, `inset` (the
+  next membrane in), `bounds`, and surface points with outward normals (`surface`, `faces`);
+  `inside` / `overlap` by outline samples. **Membranes are bilayer mid-lines**: two membranes of
+  an envelope are `gap + bilayer` apart, a complex bound to a membrane sits `bilayer / 2 +` its
+  radius off the line.
+- **The world** (`model.py`): `build_cell_world(CellSpec) -> CellWorld`. A `CellSpec` (kind,
+  size, aspect, `contents`, objects as `ObjectSpec`s with a `where` for messages, seed) is what
+  the scene's params give. Entries: the typical contents (unless `contents: none`), each replaced
+  by an object of the same id, then the objects; ids default to the kind (`kind_2` for a
+  second); reserved ids (`cell`, `title`, `tissue`, `scale_bar`, `cytosol`, `extracellular`,
+  `world`). Each entry places one or more `Placed` things (`key`: the id, or `<id>#<n>`) with
+  their `footprint` shapes and `parts` (a membrane-bounded piece: its membranes outside in and
+  the compartment inside each), where it is (`host`: a compartment *instance*, `cytosol` or
+  `<key>.<compartment>`), the structure whose membrane it sits on (`surface`) and the outward
+  `normal` there, and a Golgi stack's cis direction (`facing`). Generated entries belong to a
+  structure (`owner`): `nucleus.pores`, `nucleus.ribosomes` (outer nuclear membrane),
+  `rough_er.ribosomes`. `compartment_at(p)` answers which compartment a point is in;
+  `region_at(p)` which membrane-less region (nucleolus, centrosome). The neighbouring cells of
+  the tissue are `Neighbour`s (outline and nucleus) on a stretched hexagonal lattice.
+- **Placement**: kinds in an order that lets each lean on the ones before (nucleus, Golgi,
+  centrosome, nucleolus, rough ER, smooth ER, then the rest; written `at` first within a kind):
+  the typical layout's place (the nucleus a little off centre; the Golgi 1.6 µm out from the
+  envelope towards −25°, its convex cis face towards the nucleus; the centrosome beside it; the
+  rough ER sheets round the far side of the nucleus, 200°, 0.35 µm out and 0.4 µm apart; the
+  smooth ER beyond its end), else scattered with `random.Random("<seed>:<id>")` (600 tries per
+  thing; structures keep 0.25 µm off the plasma membrane and 0.2 µm off each other). Complexes:
+  `on:` points on the host's cytosolic faces, `in:` the instances named, `at` one point.
+  Deterministic: the same spec builds the same world (tested).
+
+### 95.4 The location rules
+
+`build_cell_world` refuses with a `VidgenError` naming the object (`objects[3] (ribosome
+'ribosome')`, or `contents: typical`), what is wrong and what to write; the scene's params
+validator turns it into a `scenes[i].params` problem. Rules (Step 202): an unknown kind, an
+`in:` or `on:` target, a compartment of an object (did-you-mean over every name); a complex
+`in:` a compartment not in its kind's `places` or `on:` a kind not in its `surfaces` (with the
+`why`: "ribosomes translate in the cytosol (free, or on the cytosolic face of the rough ER and the
+outer nuclear membrane) and, as mitochondria's own ribosomes, in the matrix; never in the
+nucleoplasm: their subunits are assembled in the nucleolus and leave through the nuclear pores,
+and translation starts only in the cytoplasm"); a thing whose `at` lies in a compartment it may
+not be in ("that point is in the nucleoplasm of 'nucleus'"); a structure overlapping another or
+reaching the plasma membrane; a nucleolus not wholly inside a nucleus's inner membrane; a rough
+ER without a nucleus (it grows from the envelope); `at` with `count`, `in` with `on`, `in` on a
+structure, a kind option on another kind, a reserved or duplicate id; no room for a count. The
+`places` / `surfaces` data is what later steps extend (a kinesin `on:` a microtubule, a
+receptor `on:` the plasma membrane facing out). Not rules but lint (Step 209): sizes outside a
+kind's range, counts, exaggerated glyphs.
+
+### 95.5 The camera in µm, levels, level of detail, scale bar (`view.py`, no manim)
+
+- **Scale.** The body (the safe area under the title) shows `CellView(center, span, level)`:
+  `span` µm across the body's **shorter side**, so a YAML view means the same in 16:9 and 9:16.
+  The scene fixes `unit` = body's shorter side / the start view's span (scene units per µm); a
+  view is a camera width `frame width × span / start span` and a centre that puts the view's
+  centre on the body's centre.
+- **Levels** (`level_view`): `tissue` (3.2 cell lengths, the cell in the middle), `cell` (fits
+  the cell's box with 7 % margin, `fit_span`), `organelle` (a structure's box at 62 % of the
+  short side; a sheet or tubule network: 2.6 µm of it), `complex` (a complex at 20 %: 125 nm for a
+  ribosome; on a structure: a bound pore, else a bound ribosome, else a point of its outer
+  membrane, 160 nm). `focus_point` gives what a level centres on; an entry of several things takes
+  its first; `width` overrides the span. `default_level`: organelle for structures, complex for
+  complexes, cell / tissue for those targets.
+- **Level of detail** (`lod_weights`): each feature is drawn by the size it takes on screen, in
+  pixels of a frame whose **shorter side is 1080 px** whatever the resolution (so a preview shows
+  what the final shows), faded on a log scale between two sizes (`LOD`): ribosome dots 0.5–1.2 px
+  (a 25 nm ribosome is about 1.2 px at the cell level: real size, a rim of 0.8 px keeps it
+  visible), their large (60S) and small (40S) subunits 9–16 px, an envelope's two membranes apart
+  at a 1.6–3.2 px gap (nucleus 35 nm, mitochondrion 25 nm, mid-line to mid-line), a membrane as
+  its 5 nm bilayer at 2.5–5 px, pores 1.5–3 px, cristae at a mitochondrion 18–32 px wide,
+  neighbouring cells as the span grows from 1.25 to 1.7 cell lengths, labels 8–14 px.
+- **Scale bar** (`scale_bar`): the largest 1-2-5 length up to 22 % of the span, written
+  `format_length`.
+- **Zoom path** (`zoom_path`): van Wijk and Nuij's smooth and efficient zoom-and-pan path
+  (ρ = 1.4): an even pace on a log scale for a zoom on one point (a 150× zoom does not rush its
+  end, which Manim's linear `MoveCamera` would), and out on the way between far places (two
+  ribosomes 5 µm apart are not travelled to at 125 nm across: the first stills showed empty
+  cytosol for a second).
+
+### 95.6 Drawing (`cell_vector.py`) and the scene (`scenes/cell.py`, `scenes/cell_actions.py`)
+
+- **Exact outlines.** Shapes become cubic Bézier paths (arcs in pieces of at most 22.5°: within
+  0.1 nm of the true curve for a 20 µm membrane at any zoom); several shapes of one look are one
+  `VMobject` with subpaths (all of an entry's ribosome dots: one mobject). `CellDrawing` builds
+  `tissue`, `cell` (cytosol and plasma membrane) and one `VGroup` per structure (with its bound
+  pores and ribosomes) or entry of free complexes, in drawing order. Pieces register a LOD
+  feature expression (`"particles&!particle_detail"`, `"!double_membrane&!bilayer"`); a membrane
+  is a line (low zoom), a band of its true width and a midplane line (the two leaflets) at high
+  zoom; double membranes are one line until their gap shows. Placeholders for Step 203: the
+  nucleus (envelope band, nucleoplasm, a nucleolus without an outline: it has no membrane),
+  rough-ER arcs with bound ribosomes on both cytosolic faces, smooth-ER arcs, Golgi cisternae
+  paler cis to stronger trans, the centrosome's two centrioles at right angles in a halo,
+  mitochondria (two membranes, lamellar cristae from both sides), lysosomes with dense granules,
+  peroxisomes, vesicles; pores as a gap through both membranes with the complex's rings.
+  Colours from the theme: fills are each kind's hue mixed into the background, outlines darker
+  (light themes) or lighter (dark themes).
+- **Strokes in pixels.** Manim's moving camera scales strokes with the zoom; `update` sets every
+  piece's stroke width from pixels each time the camera moves (`stroke_unit`), so outlines stay
+  1.6 px and a bilayer is drawn its true 5 nm.
+- **The camera listener** (`Cell.on_camera`, registered with `add_camera_listener` and also
+  called by `CellZoom` on every interpolation, so a move the runner finishes without drawing a
+  frame leaves nothing stale): when the camera changed, the drawing's LOD and strokes, the pinned
+  overlays (the title on a plate, readable over the tissue; the labels; the scale bar) keep their
+  place and size on screen and lie in front (`OVERLAY_Z`), labels show by their structure's size
+  and whether their anchor is in view, the scale bar its length and text. Every text the bar can
+  show in the scene (the spans of the start and of each `zoom_to`) is made at the start and only
+  shown or hidden: Manim draws an animation's family as it was when the animation began, so a text
+  swapped in mid-zoom was not drawn and the old one stayed (seen in the first stills).
+- **Labels** are laid out for the start view: in columns left and right of the cell when the body
+  has room (16:9), else in rows above and below it (9:16, as many rows as needed), else beside
+  each thing; sides balanced, each label anchored on the outline point of the member furthest
+  towards its side, spread to keep 0.1–0.14 units apart, a leader line to the plate's nearest
+  edge. Only what is large enough to see at the start is named (`labels` weight > 0.5). Labels
+  fade out as the camera zooms more than 1.2–1.6× away from the start view and give way to the
+  tissue; a zoomed view points at things with `callout`. (Labels per view: Step 203's or 205's
+  call, when the processes need them.)
+- **Steps and targets.** `reveal: all` brings the title, tissue (unseen until zoomed out), cell,
+  scale bar and every object in the first beat; `per_beat` one object per beat (`ChainedTargets`
+  of `math_axes`, so a `reveal` action on an object brings what it stands on). Targets: `title`,
+  `cell`, `tissue`, `scale_bar`, each entry id (`target_names` builds the world, cached per spec
+  by `lru_cache`). `layout_keys` adds `cell`: the span (µm), pixels per µm, the scale bar's text
+  and the LOD weights (for Step 209).
+- **`zoom_to`** (`cell_actions.py`): one target (the cell, the tissue or an object), `level`,
+  `width`, `until`; `moves_camera`, `alters_targets = False`, 2 s; `scene_problems` refuses it on
+  other scene types, with several or wildcard targets, on `title` / `scale_bar`, and a view the
+  level cannot give; the storyboard draws its half-way still (`mid_still_actions`). `CellZoom`
+  animates the camera frame along `zoom_path`.
+
+### 95.7 Public (Step 202)
+
+- `vidgen.api` adds `CELL_COMPARTMENTS`, `CELL_KINDS`, `CELL_LEVELS`, `CELL_OBJECT_KINDS`,
+  `CellColors`, `CellDrawing`, `CellObjectSpec` (`cellworld.ObjectSpec`), `CellSpec`, `CellView`,
+  `CellWorld`, `build_cell_world`, `cell_default_level`, `cell_label_weight`, `cell_level_view`,
+  `cell_lod_weights`, `cell_scale_bar`, `cell_zoom_path`, `did_you_mean`, `format_length`,
+  `parse_coordinate`, `parse_length` (prefixed where a bare name would be vague; the geometry's
+  `Ellipse` is not exported: it would shadow Manim's). `vidgen.cellworld` is importable without
+  manim for tools and lint.
+- Config: the scene type `cell` and the action `zoom_to` (no new video-level keys). Nothing
+  existing changes: other scene types, actions and the gallery's other frames are untouched.
+- **Gaps** (for the later steps): placeholder morphology (the ER is not joined to the nuclear
+  envelope; smooth-ER tubules are loose arcs; Golgi cisternae are bare arcs without vesicles);
+  animal cells only; labels for the start view only; LOD opacities are rest states — a `dim`
+  played while a zoom changes LOD can leave a piece at the wrong opacity until the next camera
+  move; a scale-bar length outside the scene's planned spans (a built-in `zoom` deeper than any
+  `zoom_to`) has no text; the tissue is loose round cells (no junctions).
