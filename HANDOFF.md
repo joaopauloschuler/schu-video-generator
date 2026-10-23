@@ -19102,3 +19102,100 @@ How to test
 - Compatibility: the Phase Q baseline re-run gave 31 frames, with a max difference of 0.
 - Stills (scratchpad `s206`): contact sheets of every step mid-animation in 16:9 and 9:16, dark
   and light.
+
+## Step 207 — Signalling pathways
+
+What was built (DESIGN §95.12)
+- **A `pathway` scene type**: a signalling pathway in SBGN-inspired notation, laid out by itself
+  in compartment bands (extracellular space, plasma membrane, cytosol, ER, mitochondrion, nucleus;
+  columns left to right in 16:9, rows top to bottom in 9:16). Nodes by kind (proteins, kinases,
+  phosphatases, GEFs, GAPs, adaptors, enzymes, G proteins and GTPases with GDP / GTP, receptors,
+  ligands, transcription factors, complexes, small molecules, genes in italics, outcomes, drugs),
+  state badges (GDP / GTP, pS133), arcs (activates, inhibits, catalyses, (de)phosphorylates with a
+  site, binds, translocates, transcribes, expresses, converts; `feedback`, `indirect`, `label`).
+  Membrane proteins stand in a row on the bilayer, the nuclear envelope has pores where arcs cross
+  it, modifiers stand beside the node they act on; routes never cross a node; band names, arc
+  labels, drug pills and factors are placed where they cover nothing.
+- **Three templates** checked against the textbook account: `gpcr_camp_pka`, `rtk_ras_mapk`,
+  `pi3k_akt`; `nodes` / `edges` / `remove` change them.
+- **Rules** with reasons and did-you-mean (`vidgen validate`): unknown nodes, arcs against declared
+  effects (type vs `effect`, GAP / GEF, phosphatase / kinase, `role`), impossible compartments
+  (a gene outside the nucleus, a transcription factor in the cytosol on its gene, a translocation
+  within a band, cAMP in the membrane…), names in the wrong case for the species; loops not marked
+  `feedback` are warned about.
+- **Actions** `signal` (wave by wave; GDP → GTP and P marks appear; double negatives turn on;
+  `to`, a path, `feedback`), `inhibit` (`on`), `knockout`, `drug` (`name`, known drugs checked
+  against their targets), `amplify` (`from`, `count`, `factor`); `focus` (the iso action) now works
+  on pathways; `highlight` and `dim` work as on any scene. Effects of knockouts, drugs and
+  inhibitors are computed from the graph (a semi-quantitative steady state) and shown as ↑ / ↓.
+  Their order is replayed by `vidgen validate` (a node knocked out twice, a signal from an off node).
+
+YAML
+```yaml
+- id: camp
+  type: pathway
+  params:
+    title: "Glucagon signalling"
+    template: gpcr_camp_pka            # or rtk_ras_mapk, pi3k_akt
+    nodes: [{id: epac, kind: gef, label: Epac}, {id: rap1, kind: gtpase, label: Rap1}]
+    edges: ["camp -> epac", "epac -> rap1", {from: pka_n, to: creb, type: phosphorylates, site: Ser133}]
+    remove: [gluconeogenesis]
+  beats:
+    - text: "Glucagon binds its receptor, and the signal runs through cyclic AMP and PKA to the nucleus."
+      actions: [{signal: glucagon, at: "@signal"}]       # to: creb; feedback: false; [gcgr, gas, ac]
+    - text: "Each adenylyl cyclase makes many cyclic AMP molecules."
+      actions: [{amplify: camp, factor: "×100"}]
+    - text: "A phosphodiesterase inhibitor keeps cyclic AMP high."
+      actions: [{drug: pde, name: IBMX}, {focus: camp, at: 0.5}]   # knockout: ac; inhibit: pde
+```
+Nodes: `{id, kind, label, in, gene, state, marks, role}`; arcs: `"a -> b"`, `"a -| b"`, `"a -o b"`,
+`"a => b"` or `{from, to, type, effect, site, feedback, label, indirect}`.
+
+Files touched
+- New: `src/vidgen/cellworld/{pathway,pathway_layout,pathway_templates}.py`,
+  `src/vidgen/scenes/{pathway,pathway_play,pathway_actions}.py`, `tests/test_pathway.py` (50, 2 render),
+  `docs/gallery/pathway.md` and `docs/gallery/media/pathway-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `src/vidgen/scenes/iso_actions.py`
+  (`focus` on pathway scenes), the guide and `AGENTS.md` (chooser row, a "# signalling pathways"
+  section, five action rows, `focus`), `docs/CONFIG.md` (`pathway` section, targets row),
+  `docs/gallery/README.md`, `examples/gallery/video.yaml` (scene `camp`), `DESIGN.md` §95.12,
+  `CHANGELOG.md`, `tasklist.md`; tests `test_actions.py`, `test_actions_coverage.py`,
+  `test_builtin_scenes.py`, `test_extensions.py`, `test_translation.py` (the new type and actions).
+
+Public interfaces: `vidgen.api` adds `cell_pathway`, `cell_pathway_layout`, `PATHWAY_BANDS`,
+`PATHWAY_EDGE_TYPES`, `PATHWAY_NODE_KINDS`, `PATHWAY_TEMPLATES`, `Pathway`, `PathwaySpec`,
+`build_pathway`. Config: scene type `pathway`; actions `signal`, `inhibit`, `knockout`, `drug`,
+`amplify`; `focus` accepts pathway scenes.
+
+Decisions / deviations
+- The template is a scene param (`template: gpcr_camp_pka`), not a nested `pathway:` key; nodes,
+  edges and remove change it.
+- Its own band layout instead of `vidgen.graph.layered_layout`: bands fix the ranks, a membrane is
+  one rank with arcs along it, and satellites (a modifier, an outcome) share their node's rank; the
+  ideas (dummies, barycenter, isotonic fit) are the same.
+- Layout per frame: LR (bands as columns) in 16:9 and TB in 9:16, as the brief asked; 16:9 is
+  width-bound (about nine ranks at the readable size), so arc labels are dropped automatically in
+  long LR pathways and a template's labels are few.
+- Effects are a semi-quantitative steady state (geometric mean of activating inputs, divided by
+  inhibition), not a Boolean network: constitutive inhibitors (PTEN, PDE4, RasGAP) would otherwise
+  switch their targets off at rest.
+- `focus` is shared with `iso_diagram` (one action name per behaviour), `highlight` is the built-in.
+
+Known gaps / TODO
+- 16:9 holds about nine ranks at the readable size; larger pathways are drawn smaller (warned).
+- No `carry:` of a molecule between a `cell` and a `pathway` scene yet (DESIGN §95.1 mentions it).
+- Amplification copies are unnamed glyphs; satellites are one modifier and one outcome per node.
+- Lint warns in one light-theme still that a lit arc touches 2–5 % of a label (PDK1).
+
+How to test
+- `tests/test_pathway.py`: 50 (2 render: 16:9 and 9:16 with signal, drug, inhibit, amplify,
+  focus, knockout).
+- Related: `test_actions` + `test_extensions` + `test_registry` + `test_translation` 142;
+  `test_builtin_scenes` + `test_actions_coverage` + `test_api` (not render) 152 and `-k pathway` 5;
+  `test_guide` + `test_docs` + `test_gallery` (not render) 138; `test_schema` + `test_json_output` +
+  `test_review2` + `test_introspect` (not render) 105; `test_iso_diagram_actions` +
+  `test_phase_r_review` 29; `test_mcp.py` in full 20. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills (scratchpad `s207/pw`, four scenes: the three templates and the CONFIG example with
+  signal, amplify, drug, inhibit, focus, knockout): 16:9 and 9:16, dark and `light_academic`, with
+  mid-action stills; `vidgen lint` clean in all four variants but one 2 % covered-text warning.

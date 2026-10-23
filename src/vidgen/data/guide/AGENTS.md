@@ -296,6 +296,7 @@ project's own scene types, in its theme).
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
 | a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the actions zoom_to, motor_walk, endocytosis, exocytosis; with a `gene`: transcribe, export, translate, to_golgi, secrete (its products' route, the camera following) |
+| a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs | `pathway` | `title`, `template` (gpcr_camp_pka, rtk_ras_mapk, pi3k_akt), `nodes` (id, kind, label, in, gene, state, marks, role), `edges` (a -> b activates, a -o b catalyses, a => b translocates, an arrow with a bar inhibits, or {from, to, type, effect, site, feedback, label}), `remove`, `species`, `direction`; the actions signal, inhibit, knockout, drug, amplify, focus |
 | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
@@ -597,6 +598,42 @@ with enough words: a step lasts as long as what it shows (3–15 s) and a short 
       actions: [{export: ins}]
     - text: "In the cytosol a ribosome reads it codon by codon, and the chain grows from its N terminus."
       actions: [{translate: ins}]
+```
+
+A `pathway` draws a signalling pathway as a graph in SBGN-inspired notation, laid out by itself in
+compartment bands (extracellular space, plasma membrane, cytosol, ER, mitochondrion, nucleus:
+columns left to right in 16:9, rows top to bottom in 9:16; membrane proteins stand in a row on the
+bilayer, the nuclear envelope has pores where arcs cross it). Start from a template —
+`gpcr_camp_pka` (glucagon → GCGR → Gαs → adenylyl cyclase → cAMP → PKA → CREB → *PCK1*, PDE4),
+`rtk_ras_mapk` (EGF → EGFR → Grb2/SOS → Ras → Raf → MEK → ERK → Elk-1 → *FOS*, RasGAP, ERK ⊣ SOS),
+`pi3k_akt` (RTK → PI3K → PIP3, PTEN, PDK1/mTORC2 → Akt ⊣ TSC2 ⊣ Rheb → mTORC1, ⊣ GSK3β, ⊣ FOXO) —
+and change it (`nodes` with a template id change that node, `edges` between the same nodes replace
+its arc, `remove: [gluconeogenesis]`), or write your own. Nodes: `{id, kind, label, in, gene, state,
+marks}`; kinds `ligand`, `receptor`, `protein`, `kinase`, `phosphatase`, `g_protein`, `gtpase`, `gef`,
+`gap`, `adaptor`, `enzyme`, `transcription_factor`, `complex`, `small_molecule`, `gene` (italic
+symbol), `phenotype` (an outcome), `drug`; `in:` the compartment (default by kind). Arcs: `"a -> b"`
+activates, `"a -| b"` inhibits, `"a -o b"` catalyses, `"a => b"` translocates (the same label in
+another compartment), or `{from, to, type: phosphorylates, site: Ser133, effect: inhibits, feedback:
+true, label}` with types `phosphorylates`, `dephosphorylates`, `binds`, `transcribes`, `expresses`,
+`converts`. `vidgen validate` refuses what cannot be, with the reason: an unknown node, a GAP that
+activates its GTPase, a phosphatase that phosphorylates, a gene outside the nucleus, a transcription
+factor in the cytosol transcribing a gene, cAMP in the membrane, a gene or protein name in the wrong
+case for the `species`; it warns about a loop no arc declares `feedback: true`. Then the actions:
+`signal` (wave by wave: GDP → GTP, pS133 appear), `inhibit`, `knockout` and `drug` (the nodes
+downstream that change get ↑ / ↓, computed from the graph), `amplify`, `focus`, `highlight`.
+
+```yaml
+# signalling pathways
+- id: camp
+  type: pathway
+  params:
+    title: "Glucagon signalling"
+    template: gpcr_camp_pka                        # or rtk_ras_mapk, pi3k_akt; or nodes + edges
+  beats:
+    - text: "Glucagon binds its receptor, and the signal runs through cyclic AMP and PKA to the nucleus."
+      actions: [{signal: glucagon, at: "@signal"}]
+    - text: "A phosphodiesterase inhibitor keeps cyclic AMP high."
+      actions: [{drug: pde, name: IBMX}]
 ```
 
 ```yaml
@@ -1032,7 +1069,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `explode` | on an `iso_diagram`: pull a stack's layers apart (`- explode: "stack:app"`, `gap: 0.6`), labels going along; `collapse` puts them back | to show what a stack is made of |
 | `collapse` | on an `iso_diagram`: an exploded stack's layers back together | |
 | `flow` | on an `iso_diagram`: dots (`style: packets`: small cubes) run along connectors (`- flow: "edge:*"`, `chain: true` one after another, `back`, `count`) | when the voice follows data or a request |
-| `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; labels it would cut fade out; `focus: diagram` goes back to the whole frame | at most one or two per scene |
+| `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; labels it would cut fade out; `focus: diagram` goes back to the whole frame; on a `pathway`: onto nodes (`focus: ras`; `focus: pathway` goes back) | at most one or two per scene |
 | `relabel` | on an `iso_diagram`: a label or value changes in place (`- relabel: "block:cache"`, `text: "Cache: hit"`) | a new value, a state change |
 | `zoom_to` | on a `cell`: the camera moves in µm to a level on an object and stays (`- zoom_to: mitochondria`; `level: tissue`, `cell`, `organelle`, `complex`; `width: "2 um"`; `labels: false` or a list of the parts to name); details appear as they grow, the scale bar follows; `zoom_to: cell` goes back | one level change per idea, on the word that names the target |
 | `motor_walk` | on a `cell`: motors walk hand over hand along their filament with their cargo (`{motor_walk: kin, distance: 500 nm}`; kinesin to the + end, dynein to the − end; `toward` checked) | at a view of a few hundred nm to see the steps |
@@ -1054,6 +1091,11 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `fold` | on a `molecule` with a `gene`: Hsp70, the chaperonin, BiP or calnexin (`chaperone`, checked against the compartment); the chain packs its hydrophobic residues inside | after the stop codon |
 | `to_golgi` | on a `cell` with a `gene`: a COPII vesicle from an ER exit site to the cis-Golgi, then cis → trans | a folded protein made into the ER |
 | `secrete` | on a `cell` with a `gene`: from the trans-Golgi network `to: outside` (exocytosis), `membrane` or `lysosome` | after `to_golgi` |
+| `signal` | on a `pathway`: the signal runs from a node along the arcs, wave by wave: arcs light, nodes light, GDP → GTP, phosphorylated sites appear (pS133); an inhibitor of an inhibitor turns its target on (`signal: egf`; `to: creb` only the shortest path; `signal: [gcgr, gas, ac]` a path; `feedback: false`); it stops at a knocked-out, drugged or held node | about 0.75 s per step: give it a long beat, or `to:` |
+| `inhibit` | on a `pathway`: an inhibitor engages (`inhibit: pten`; `on: [pip3]`): its T-bars flash, its targets are held, the nodes downstream that change get ↑ / ↓ | the node needs an inhibitory arc |
+| `knockout` | on a `pathway`: a node is crossed out (`knockout: pten`) and every node downstream that changes gets ↑ / ↓, computed from the graph (`effects: false` leaves them out) | `until` brings it back |
+| `drug` | on a `pathway`: a pill with the drug's name blocks a protein (`{drug: mek, name: trametinib}`; a known drug on another target is refused), with the effects downstream | not on genes, messengers or outcomes |
+| `amplify` | on a `pathway`: many copies of a node stream out of the node that makes it (`{amplify: camp, factor: "×100"}`; `from`, `count`) | after the `signal` reached it |
 
 ```yaml
 - id: speeds

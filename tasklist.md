@@ -1176,7 +1176,9 @@ when shared code changes). DESIGN §95. Steps 202–211.
 - [~] Step 205 gaps not taken up (`set_state` in a cell, the endocytosed vesicle as an object, stale labels); 9:16 close-ups leave vertical space unused
 
 ### Step 207 — Signalling pathways
-- [ ] A `pathway` scene type with SBGN-inspired notation across compartment bands (membrane / cytosol / nucleus), automatic layout; actions: the signal propagates, nodes light up, inhibitors block, knockouts / drugs with downstream effects; GPCR–cAMP–PKA, RTK–Ras–MAPK, PI3K–Akt
+- [x] A `pathway` scene type with SBGN-inspired notation across compartment bands (membrane / cytosol / nucleus), automatic layout; actions: the signal propagates, nodes light up, inhibitors block, knockouts / drugs with downstream effects; GPCR–cAMP–PKA, RTK–Ras–MAPK, PI3K–Akt
+- [x] Nodes by kind (proteins, complexes, small molecules, genes, outcomes, drugs) with states (GDP / GTP, pS133 marks); arcs (activates, inhibits, catalyses, (de)phosphorylates, binds, translocates, transcribes, expresses, converts; feedback); bands extracellular / membrane / cytosol / ER / mitochondrion / nucleus, LR in 16:9 and TB in 9:16, routes never through a node; templates `gpcr_camp_pka`, `rtk_ras_mapk`, `pi3k_akt`; actions `signal`, `inhibit`, `knockout`, `drug`, `amplify` (and `focus` on pathways); rules with reasons and did-you-mean, loops not declared feedback warned; model in `cellworld/pathway*.py`; tests `tests/test_pathway.py`; gallery page `docs/gallery/pathway.md`
+- [~] 16:9 holds about nine ranks at the readable size (the pi3k_akt template fills it; bigger pathways are drawn smaller with a warning); arc labels are left out in long left-to-right pathways (`edge_labels: auto`); no `carry:` of a molecule between a `cell` and a `pathway` scene yet
 
 ### Step 208 — Cell cycle, division and energy
 - [ ] Cell cycle with checkpoints and cyclin–CDK plots; mitosis (prophase → cytokinesis); meiosis I / II with crossing over; glycolysis overview, TCA cycle, electron transport chain with the proton gradient driving ATP synthase, light reactions

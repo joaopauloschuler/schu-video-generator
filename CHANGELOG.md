@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–206)
+## Unreleased (Steps 193–207)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -82,6 +82,20 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   the rough ER), `to_golgi` (COPII, cis → trans) and `secrete` (to the outside, the membrane or a
   lysosome). The order is checked by `vidgen validate` with reasons (*only proteins made into the
   ER enter the secretory pathway*).
+- **Signalling pathways** (Step 207): a `pathway` scene type in SBGN-inspired notation — proteins,
+  complexes, second messengers, genes (italic) and outcomes, with their states (GDP / GTP, pS133);
+  arcs that activate (arrow), inhibit (T-bar), catalyse (circle), (de)phosphorylate (P), bind,
+  translocate into the nucleus, regulate transcription — laid out by itself in compartment bands
+  (extracellular space, plasma membrane, cytosol, ER, mitochondrion, nucleus: columns in 16:9, rows
+  in 9:16), routes never crossing a node, the nuclear envelope with pores where arcs pass. Three
+  templates checked against the textbook account: `gpcr_camp_pka`, `rtk_ras_mapk`, `pi3k_akt`
+  (changed with `nodes`, `edges`, `remove`). Actions: `signal` (wave by wave: GDP → GTP, marks
+  appear; an inhibitor of an inhibitor turns its target on), `inhibit`, `knockout` and `drug` (the
+  effects downstream computed from the graph, ↑ / ↓ on each node that changes; known drugs checked
+  against their targets), `amplify`, and `focus` on nodes. `vidgen validate` refuses unknown nodes,
+  arcs against declared effects (a GAP activating Ras), impossible compartments (a gene outside the
+  nucleus, a transcription factor in the cytosol on its gene) and names in the wrong case for the
+  species, and warns about loops not marked `feedback`.
 
 ### vidgen studio: a music workstation for people (Phase T)
 

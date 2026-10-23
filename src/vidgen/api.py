@@ -621,6 +621,10 @@ from vidgen.cellworld.expression_stage import ExpressionStage  # noqa: E402
 from vidgen.cellworld.expression_route import RoutePlanner as GeneRoutePlanner, route_problem as gene_route_problem  # noqa: E402
 from vidgen.cell_draw.expression import ExpressionDrawing  # noqa: E402
 from vidgen.cell_draw.expression_route import RouteDrawing as GeneRouteDrawing  # noqa: E402
+from vidgen.cellworld import pathway as cell_pathway, pathway_layout as cell_pathway_layout  # noqa: E402
+from vidgen.cellworld.pathway import BANDS as PATHWAY_BANDS, EDGE_TYPES as PATHWAY_EDGE_TYPES, NODE_KINDS as PATHWAY_NODE_KINDS  # noqa: E402
+from vidgen.cellworld.pathway import Pathway, PathwaySpec, build_pathway  # noqa: E402
+from vidgen.cellworld.pathway_templates import TEMPLATES as PATHWAY_TEMPLATES  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -1576,6 +1580,15 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "gene_route_problem",
     "ExpressionDrawing",
     "GeneRouteDrawing",
+    "cell_pathway",
+    "cell_pathway_layout",
+    "PATHWAY_BANDS",
+    "PATHWAY_EDGE_TYPES",
+    "PATHWAY_NODE_KINDS",
+    "PATHWAY_TEMPLATES",
+    "Pathway",
+    "PathwaySpec",
+    "build_pathway",
     "did_you_mean",
     "format_length",
     "parse_coordinate",

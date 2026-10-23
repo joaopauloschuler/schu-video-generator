@@ -58,6 +58,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "card": {"text": "Later that day", "subtitle": "Sub"},
     "cell": {"title": "Cell", "contents": "none", "objects": ["nucleus", {"kind": "mitochondrion", "id": "mito", "count": 2}]},
     "molecule": {"title": "Molecules", "membrane": "plasma", "molecules": [{"kind": "gpcr", "id": "receptor"}, "atp"]},
+    "pathway": {"title": "Pathway", "nodes": [{"id": "egf", "kind": "ligand", "label": "EGF"}, {"id": "egfr", "kind": "receptor", "label": "EGFR"}],
+                "edges": ["egf -> egfr"]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -177,6 +179,7 @@ def test_target_names_of_every_builtin_type() -> None:
                                     "stack:s", "group:g", "edge:a->b"]
     assert names("cell") == ["title", "cell", "tissue", "nucleus", "mito", "scale_bar"]
     assert names("molecule") == ["title", "membrane", "receptor", "atp", "scale_bar"]
+    assert names("pathway") == ["title", "egf", "egfr", "edge:egf->egfr", "band:extracellular", "band:plasma_membrane", "pathway"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

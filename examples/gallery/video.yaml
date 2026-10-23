@@ -485,6 +485,15 @@ scenes:
     beats:
       - text: "Protons flow back into the matrix through ATP synthase, turning its rotor, and F1 makes ATP."
 
+  - id: camp
+    type: pathway       # a signalling pathway in compartment bands; arcs and places checked (no gene outside the nucleus)
+    params:
+      title: "Glucagon signalling"
+      template: gpcr_camp_pka   # or rtk_ras_mapk, pi3k_akt; or nodes + edges
+    beats:
+      - text: "Glucagon binds its receptor, and the signal runs through cyclic AMP and PKA to the nucleus."
+        actions: [{signal: glucagon, at: "@signal"}]
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)

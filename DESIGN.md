@@ -15260,3 +15260,110 @@ kind's range, counts, exaggerated glyphs.
   - Caption wrapping is an estimate.
   - The Step 205 gaps remain: no `set_state` in a cell, the endocytosed vesicle is not an
     object, and labels go stale.
+
+### 95.12 Signalling pathways: the `pathway` scene (Step 207)
+
+- **Where.** A scene type of its own (decided in §95.1): a pathway is a graph, not geometry.
+  Three layers again. No manim: `cellworld/pathway.py` (bands, node kinds, arc types, specs,
+  `build_pathway` with every rule, loops, the activity model and effects, the signal's waves, the
+  drug table), `cellworld/pathway_layout.py` (the band layout and routes) and
+  `cellworld/pathway_templates.py` (the three templates as specs). Drawing and runtime:
+  `scenes/pathway.py` (params, layout choice, glyphs, label placement, targets, reveal) and
+  `scenes/pathway_play.py` (the `PathwayPlay` mixin: what the actions draw). Actions:
+  `scenes/pathway_actions.py` (`signal`, `inhibit`, `knockout`, `drug`, `amplify`; the replay of
+  their order), and `focus` (`iso_actions.py`) now also moves the camera onto pathway targets.
+- **Shared names with the cell world.** Band labels come from the catalog's compartments and
+  membranes (`extracellular`, `plasma_membrane`, `cytosol`; `nucleoplasm` and the ER / mitochondrial
+  compartment names are aliases of their bands); gene symbols are checked with `names.check_gene`
+  (italic, the species' case) and protein labels with `check_protein` (a protein written like its
+  gene is refused where the case tells them apart), marks and sites with `check_modification`,
+  small-molecule labels typeset with `notation.chem_markup` (`PIP3` → PIP₃, `Ca2+`); `Gα_s` writes
+  a subscript.
+- **Notation** (SBGN PD / AF adapted): macromolecules as rounded boxes, complexes with cut corners,
+  simple chemicals as ellipses, genes as nucleic-acid features (square top, round bottom; italic
+  symbol), phenotypes as hexagons, drugs as pills; state variables as pills on the top edge (GDP /
+  GTP, pS133 = P on Ser133); arcs: activation (filled arrowhead), inhibition (T-bar), catalysis
+  (open circle), phosphorylation (a P disc on the arc), dephosphorylation (−P), binding (a dot),
+  translocation and expression (dashed), `indirect` (dashed). Inhibitory arcs are drawn in the
+  theme's accent colour.
+- **Rules** (`VidgenError` with the reason, did-you-mean for names): unknown nodes, kinds, arc
+  types, compartments, templates; self-arcs, duplicate ids or arcs; `effect` contradicting a type
+  that cannot flip; a GAP activating / a GEF inhibiting a GTPase or G protein; a phosphatase that
+  phosphorylates, a kinase that dephosphorylates, phosphorylation by an adaptor and the like;
+  catalysis from a non-enzyme; a gene acting other than by `expresses`, regulated other than by
+  `transcribes`; `transcribes` from a non-TF, to a non-gene, or across compartments (*add a
+  translocates arc*); `translocates` between different labels, within a band, across the plasma
+  membrane, or skipping the cytosol; `converts` between non-small-molecules; a drug node activating
+  without `role: activator`; arcs against a declared `role`; a site on an arc that is not a
+  (de)phosphorylation or on a residue the mark never goes on; places: each kind's bands with the
+  reason (a gene in the nucleus or the mitochondrion, a ligand outside, a receptor in the plasma
+  membrane or the ER, G proteins at the membrane…), known small molecules' compartments (cAMP in
+  the cytosol / nucleus, DAG / PIP₂ / PIP₃ in the membrane, IP₃ in the cytosol); states the kind
+  lacks. Loops not broken by a `feedback` arc (Tarjan's strongly connected components) are warned
+  about by `vidgen validate` (`validate_project`).
+- **Layout** (`pathway_layout`, deterministic, manim-free; units of the node sizes): the main axis
+  is the flow (LR: x, bands as columns; TB: y downwards, bands as rows). Ranks: a membrane band is
+  one rank (its nodes in a row along the membrane, arcs between them lateral); other bands are
+  layered by the longest path within the band over the arcs that are neither feedback nor close an
+  undeclared loop (a source pulled to just before its nearest successor); bands follow each other.
+  **Satellites** save ranks: a node nothing upstream activates acting on a node with other inputs
+  (PDE4 on cAMP, mTORC2 on Akt) and, left to right, an outcome after its node stand beside that
+  node in its rank (a block kept together; LR: the modifier below, clear of the state badges on
+  top). Long arcs get a dummy in each rank between; order by barycenter sweeps with blocks moving
+  whole, transposition elsewhere, the order with fewest crossings kept; cross positions by a
+  weighted isotonic fit (satellites pulled next to their node). Gaps: `rank_gap` within a band,
+  `band_gap` + pads between bands (the membranes are drawn there), more where an arc label must
+  fit (labels are placed later, in the scene). **Routes** cross each rank's slab straight along
+  the main axis (at the node's port, or the dummy's place) and change cross position only in the
+  empty gaps between ranks (cubic S-curves whose tangents run along the main axis stay within the
+  gap), so no route passes through a node (`route_hits` checks it; tests for the templates in both
+  directions and a crowded custom graph). Lateral arcs join neighbours straight; non-neighbours
+  bend into the gap after the row. Ports spread along a node's side, ordered by where the arc goes.
+- **Fitting.** Label sizes are measured once (Pango markup, two lines past 9 characters); for each
+  direction (the frame's own first: LR in landscape, TB in portrait) the largest text factor from
+  1.3× down to the readable size (`readable_size()` × 1.02, as lint measures words) at which the
+  layout fits the body is kept; the other direction wins only with text 12 % larger. At the readable
+  size a layout up to 3 % too large is scaled quietly; more is drawn smaller with a warning
+  (split the pathway or `remove` nodes). `edge_labels: auto` drops the arc labels when they would cost
+  more than 10 % of the text size (long LR pathways). Small texts (badges, labels, band names) are
+  72 % of the node size, never below readable.
+- **Labels kept clear.** Band names, arc labels, drug pills and amplification factors are placed
+  at the candidate spot (corners and edges of a band; around an arc's middle; round a node) that
+  covers the least: node boxes with their badges, marks, arrowheads, earlier labels (3× the cost:
+  text over text is a lint error), arc points, the safe area's edge; arc labels also prefer to stay
+  near their arc. Nodes with badges are made taller (and, top to bottom, wider) so the badges never
+  cover their names.
+- **The logic.** `signal_waves`: breadth first from the start, each step carrying a sign (the
+  target turns on, off, or was reached: the arc only flashes), so a double negative turns its
+  target on; feedback arcs fire after the rest; `to` follows the shortest activating, non-feedback
+  path; a path given node by node is checked arc by arc; knocked-out, drugged and held nodes stop
+  it. `activity`: a semi-quantitative steady state with the stimulus on — no activating input:
+  1; else the geometric mean of the activating inputs (2 % residue for a lost one when there are
+  several); divided by 1 + 3 × the active inhibitors; off nodes 0; feedback and loop-closing arcs
+  left out. `effects` compares before and after (↑ above +25 %, ↓ below −20 %, off below 0.03).
+  Checked against the textbook: PTEN loss raises PIP₃, Akt, Rheb, mTORC1 and lowers TSC2, GSK3β,
+  FOXO; a PI3K or mTORC2 block the reverse; a MEK block switches ERK, Elk-1, *FOS* off; RasGAP loss
+  raises Ras and the cascade; PDE loss raises cAMP to *PCK1*; no adenylyl cyclase, no cAMP.
+- **Drawing the actions** (`PathwayPlay`): every change is remembered for `until`. Things that
+  appear part-way (lit arcs, badges, crosses, pills, copies) are made invisible when built and
+  drawn by animations that keep them so until their turn (`Draw`, `Appear`): Manim adds an
+  animation's mobjects when the whole `Succession` starts. A label's colour flips quickly half-way
+  through its node's fill change (never mid-tone on mid-tone). Effects appear upstream first
+  (`LaggedStart` in topological order); GTPases go back to GDP when held or down, to GTP when up.
+  Known drugs (erlotinib, trametinib, vemurafenib, rapamycin, IBMX, H-89…) must name their target
+  (a word of the node's id, label or gene).
+- **Templates** (human nomenclature; Alberts ch. 15, Lodish ch. 15–16): `gpcr_camp_pka` (glucagon,
+  GCGR, Gαs, adenylyl cyclase, cAMP, PKA ⇢ nuclear PKA, CREB pSer133, *PCK1*, gluconeogenesis; PDE4,
+  PKA → PDE4 feedback), `rtk_ras_mapk` (EGF, EGFR, Grb2, SOS, Ras at the membrane, RasGAP, Raf, MEK,
+  ERK ⇢ nuclear ERK, Elk-1, *FOS*, proliferation; ERK ⊣ SOS feedback), `pi3k_akt` (growth factor,
+  RTK, PI3K, PIP₂ → PIP₃, PTEN, PDK1 pThr308, mTORC2 pSer473, Akt ⊣ TSC2 (GAP) ⊣ Rheb → mTORC1 →
+  cell growth, Akt ⊣ GSK3β pSer9, Akt ⊣ FOXO → *BCL2L11* → apoptosis).
+- **Public:** `vidgen.api` adds `cell_pathway` and `cell_pathway_layout` (the modules), `PATHWAY_BANDS`,
+  `PATHWAY_EDGE_TYPES`, `PATHWAY_NODE_KINDS`, `PATHWAY_TEMPLATES`, `Pathway`, `PathwaySpec`,
+  `build_pathway`. Config: the scene type `pathway` and the actions `signal`, `inhibit`,
+  `knockout`, `drug`, `amplify`; `focus` accepts pathway scenes. Nothing else changes (the Phase Q
+  baseline frames match).
+- **Gaps:** 16:9 holds about nine ranks at the readable size (the `pi3k_akt` template fills it);
+  arc labels are dropped in long left-to-right pathways; satellites are one modifier and one outcome
+  per node; a molecule is not carried between a `cell` and a `pathway` scene yet (§95.1's `carry:`);
+  amplification copies are glyphs without names.

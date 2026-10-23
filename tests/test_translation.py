@@ -294,6 +294,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "network": [{"layers": [3, {"size": 2, "label": "T:hidden"}], "heading": "T:heading"}],
     "cell": [{"title": "T:title", "contents": "none", "objects": [{"kind": "mitochondrion", "label": "T:mito"}, {"kind": "lysosome", "label": False}]}],
     "molecule": [{"title": "T:title", "membrane": "plasma", "molecules": [{"kind": "gpcr", "label": "T:receptor"}, {"kind": "atp", "label": False}]}],
+    "pathway": [{"title": "T:title", "template": "gpcr_camp_pka", "edges": [{"from": "pde", "to": "camp", "type": "inhibits", "label": "T:arc"}]}],
     "iso_diagram": [
         {
             "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],

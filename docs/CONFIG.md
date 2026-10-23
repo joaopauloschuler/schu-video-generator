@@ -6698,6 +6698,127 @@ it*); introns in a bacterium; export of an mRNA not yet capped, spliced and poly
 to leave the tunnel before it ends; `glycosylate` outside the ER or without a sequon; a step played
 twice.
 
+### `pathway`
+
+A signalling pathway as a graph in a notation adapted from SBGN (Process Description / Activity
+Flow), laid out automatically in **compartment bands** — extracellular space, plasma membrane,
+cytosol, ER, mitochondrion, nucleus (only those with nodes are drawn) — as columns left to right in
+landscape frames and rows top to bottom in portrait ones (`direction: auto | LR | TB`). Proteins of a
+membrane stand in a row on the bilayer, and arcs between them run along it; a modifier nothing
+upstream activates (a phosphodiesterase) stands beside the node it acts on; an outcome comes after
+its gene; the nuclear envelope is a double membrane with a pore where an arc crosses it. Every
+route crosses ranks only through the gaps between nodes (never through a node); the layout is
+deterministic.
+
+```yaml
+- id: camp
+  type: pathway
+  params:
+    title: "Glucagon signalling"
+    template: gpcr_camp_pka             # gpcr_camp_pka, rtk_ras_mapk, pi3k_akt
+    nodes:
+      - {id: glucagon, label: Adrenaline}          # change a template node
+      - {id: gcgr, label: β2-AR, gene: ADRB2}
+      - {id: epac, kind: gef, label: Epac}         # add some (in: cytosol by default)
+      - {id: rap1, kind: gtpase, label: Rap1}
+    edges:
+      - "camp -> epac"                             # -> activates, -| inhibits, -o catalyses, => translocates
+      - "epac -> rap1"                             # a GEF: Rap1 GDP → GTP
+    remove: [gluconeogenesis]
+  beats:
+    - text: "Adrenaline binds its receptor; the signal runs through cyclic AMP and PKA to the nucleus."
+      actions: [{signal: glucagon, at: "@signal"}]
+    - text: "Each adenylyl cyclase makes many cyclic AMP molecules."
+      actions: [{amplify: camp, factor: "×100"}]
+    - text: "A phosphodiesterase inhibitor keeps cyclic AMP high."
+      actions: [{drug: pde, name: IBMX}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `template` | `gpcr_camp_pka`, `rtk_ras_mapk`, `pi3k_akt` | a built-in pathway to start from (below) |
+| `nodes` | list | an id, or `{id, kind, label, in, gene, state, marks, role}`; with a template, a node of a template id changes that node |
+| `edges` | list | `"a -> b"`, `"a -\| b"`, `"a -o b"`, `"a => b"`, or `{from, to, type, effect, site, feedback, label, indirect}`; an arc between the same two nodes replaces the template's |
+| `remove` | list | template nodes (their arcs too) or arcs (`"a->b"`) to leave out |
+| `species` | `human` | the nomenclature names are checked against (`mouse`, `rat`, `yeast`, `fission_yeast`, `fly`, `zebrafish`, `e_coli`, `arabidopsis`) |
+| `direction` | `auto` | `LR` (bands as columns), `TB` (bands as rows), `auto` (LR in landscape, TB in portrait, the other if its text is much larger) |
+| `reveal` | `all` | `all` in the first beat, `bands` one compartment per step, `nodes` one rank per step |
+| `bands` | `true` | draw and name the compartments |
+| `edge_labels` | `auto` | the arcs' labels: `true`, `false`, `auto` (left out when they would make the text much smaller, e.g. in a long left-to-right pathway) |
+| `size`, `title_size` | `body`, `heading` | node labels (grown up to 1.3× when there is room, never below the readable size) and title |
+
+**Nodes.** `kind` (the glyph): `protein` (default), `kinase`, `phosphatase`, `gef`, `gap`, `adaptor`,
+`enzyme`, `transcription_factor` (rounded boxes), `receptor`, `ligand`, `g_protein` (Gα: GDP / GTP),
+`gtpase` (Ras, Rheb: GDP / GTP), `complex` (cut corners), `small_molecule` (an ellipse: cAMP, IP3,
+DAG, PIP3, Ca2+), `gene` (its symbol in italics; a nucleic-acid feature), `phenotype` (an outcome,
+a hexagon), `drug`. `in` the compartment: `extracellular`, `plasma_membrane` (`membrane`),
+`cytosol`, `er`, `mitochondrion`, `nucleus` (`nucleoplasm`); default by kind (ligand outside,
+receptor and G protein in the membrane, gene and transcription factor in the nucleus, an outcome
+where its cause is, a drug where its target is, else the cytosol). `label`: a gene symbol (checked
+for the species: human *FOS*, mouse *Fos*), a protein (roman; `Gα_s` writes a subscript; a protein
+written like its gene is refused where the case tells them apart: mouse TRP53, yeast Cdc28),
+a molecule (`Ca2+`, `PIP3`). `gene`: a protein's gene symbol (checked). `state`: `inactive` /
+`active`, `gdp` / `gtp`. `marks`: `[{mark: P, at: Ser15}]` shown from the start. `role:
+activator | inhibitor`: its arcs must agree.
+
+**Arcs.** `type`: `activates` (filled arrowhead), `inhibits` (T-bar), `catalyses` (open circle),
+`phosphorylates` (a P on the arc; the site `site: Ser133` appears on the target as *pS133* when the
+signal passes; `effect: inhibits` for an inhibitory site: Akt → GSK3β Ser9), `dephosphorylates`
+(−P), `binds` (a dot: complex formation, recruitment), `translocates` (dashed: the same molecule, the
+same label, in another compartment — into the nucleus through a pore), `transcribes` (a
+transcription factor on its target gene; `effect: inhibits` for repression), `expresses` (dashed: a
+gene's product), `converts` (one small molecule into another: PIP2 → PIP3). `feedback: true` marks
+the arc that closes a loop (laid out against the flow; it fires after the rest); `indirect: true`
+draws it dashed (steps not shown); `label` a short note on it.
+
+**The rules** (`vidgen validate`, with the reason): an unknown node (did you mean…), an arc whose
+type and `effect` contradict, a GAP activating or a GEF inhibiting a GTPase, a phosphatase that
+phosphorylates or a kinase that dephosphorylates, a phosphorylation by an adaptor, a gene acting
+other than through `expresses` or regulated other than through `transcribes`, a transcription factor
+transcribing a gene in another compartment (*add a translocates arc that brings it there*), a
+translocation within one compartment, across the plasma membrane or skipping the cytosol, a gene
+outside the nucleus (or mitochondrion), a membrane receptor in the cytosol, a ligand inside the
+cell, cAMP in the membrane or PIP3 in the cytosol, a state the kind lacks, a site on the wrong
+residue (phosphate on Ser, Thr, Tyr), names in the wrong case for the species. A loop no arc marks
+`feedback` is a warning.
+
+**Templates** (human nomenclature; the textbook account, Alberts *Molecular Biology of the Cell*
+ch. 15, Lodish *Molecular Cell Biology* ch. 15–16):
+
+- `gpcr_camp_pka`: glucagon → GCGR (a Gs-coupled GPCR, the GEF of Gαs: GDP → GTP) → Gαs → adenylyl
+  cyclase ⊸ cAMP (from ATP) → PKA (cAMP binds the regulatory subunits and frees the catalytic ones)
+  ⇢ PKA in the nucleus → CREB (pSer133) → *PCK1* (PEPCK) → gluconeogenesis; PDE4 ⊣ cAMP (cAMP →
+  AMP), PKA → PDE4 (feedback).
+- `rtk_ras_mapk`: EGF → EGFR → Grb2 (SH2 on pTyr) → SOS (a GEF) → Ras (GDP → GTP, on the membrane)
+  → Raf → MEK → ERK (each phosphorylating the next) ⇢ ERK in the nucleus → Elk-1 → *FOS* →
+  proliferation; RasGAP ⊣ Ras (GTP → GDP); ERK ⊣ SOS (feedback).
+- `pi3k_akt`: growth factor → RTK → PI3K ⊸ PIP3 (PIP2 → PIP3), PTEN ⊣ PIP3; PIP3 recruits PDK1 and
+  Akt; PDK1 (pThr308) and mTORC2 (pSer473) → Akt ⊣ TSC2 (a GAP) ⊣ Rheb → mTORC1 → cell growth;
+  Akt ⊣ GSK3β (pSer9); Akt ⊣ FOXO (14-3-3, nuclear exclusion) → *BCL2L11* (BIM) → apoptosis.
+
+**Actions** (timed like any action; `until` undoes them):
+
+| action | options | |
+|---|---|---|
+| `signal` | `to`, `feedback` | the signal runs from a node (or `signal: [a, b, c]` along that path; `to: creb` the shortest activating path) wave by wave: each arc lights as it passes; a node it turns on lights (a G protein or GTPase swaps GDP for GTP, a phosphorylated site appears); an inhibitory arc turns its target off and an inhibitor of an inhibitor turns its target on (Akt ⊣ TSC2 ⊣ Rheb → mTORC1); it stops at a knocked-out, drugged or held node (which flashes); feedback arcs fire last (`feedback: false` leaves them out). About 0.75 s per wave. |
+| `inhibit` | `on`, `effects` | an inhibitor engages: it lights, its T-bars flash, its targets (`on`: some of them) are held (a red outline; a GTPase back to GDP) and the nodes downstream that change are marked ↑ / ↓. |
+| `knockout` | `effects` | a node is crossed out; every node downstream that changes is marked ↑ (green) or ↓ (red; dimmed when nothing is left), upstream first. |
+| `drug` | `name`, `effects` | a pill with the drug's name and a T-bar blocks a protein, with the effects downstream. A known drug on another target is refused (*trametinib is a MEK1/2 inhibitor; 'ERK' is not its target*: erlotinib, gefitinib, osimertinib, lapatinib, cetuximab, trastuzumab, imatinib, sotorasib, vemurafenib, dabrafenib, trametinib, selumetinib, ulixertinib, wortmannin, LY294002, alpelisib, capivasertib, rapamycin, everolimus, H-89, IBMX, rolipram, sildenafil, propranolol…); genes, small molecules and outcomes are not drug targets. |
+| `amplify` | `from`, `count`, `factor` | copies of a node stream out of the node that makes or activates it and gather round it; `factor: "×100"` is written beside it. |
+| `focus` | `padding`, `scale` | the camera moves onto nodes (`focus: ras`); `focus: pathway` goes back. |
+
+The effects are computed from the graph, not drawn by hand: each node's activity is the geometric
+mean of its activating inputs (1 for a node without any: a ligand, a constitutive enzyme), divided
+by 1 + 3 × its active inhibitors; a knocked-out or drugged node is 0; feedback arcs are left out. A
+node whose activity rises by more than a quarter is ↑, falls by more than a fifth ↓. So losing
+PTEN raises PIP3, Akt, Rheb and mTORC1 and lowers TSC2, GSK3β and FOXO; a MEK inhibitor switches
+off ERK, Elk-1 and *FOS*; a phosphodiesterase inhibitor raises cAMP and everything after it.
+
+The rules of the actions are checked too (`vidgen validate`, replayed in beat and `at` order): a
+node knocked out twice, a signal from a node that is off, an inhibitor without an inhibitory arc,
+`on` naming a node it does not inhibit, `amplify` on a node nothing makes.
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -9401,6 +9522,7 @@ a title card, a `transform` of a bar).
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
 | `iso_diagram` | `heading`, `diagram`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, build, raise, lower, explode, collapse, flow, focus, relabel, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line or swatch; a `box` frames the shape); `block<N>` counts every block and layer in the order written, a stack's layers bottom up in its place; a stack is its layers and caption, a group its plate, caption and members, `diagram` everything; an edge its arrow or pipe and label; `dim` and `highlight` recolour blocks with their shading kept; see [the actions](#iso-diagram-actions) |
 | `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, motor_walk, endocytosis, exocytosis, transcribe, export, translate, to_golgi, secrete, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, `motor_walk` / `endocytosis` / `exocytosis` play processes, see [the cell actions](#cell-actions); a `gene`'s id takes its steps, see [a gene in a cell](#a-gene-in-a-cell) |
+| `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
