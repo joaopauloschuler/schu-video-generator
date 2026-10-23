@@ -295,6 +295,8 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "cell": [{"title": "T:title", "contents": "none", "objects": [{"kind": "mitochondrion", "label": "T:mito"}, {"kind": "lysosome", "label": False}]}],
     "molecule": [{"title": "T:title", "membrane": "plasma", "molecules": [{"kind": "gpcr", "label": "T:receptor"}, {"kind": "atp", "label": False}]}],
     "pathway": [{"title": "T:title", "template": "gpcr_camp_pka", "edges": [{"from": "pde", "to": "camp", "type": "inhibits", "label": "T:arc"}]}],
+    "cell_cycle": [{"title": "T:title", "mode": "meiosis"}],
+    "metabolism": [{"title": "T:title", "process": "glycolysis"}],
     "iso_diagram": [
         {
             "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],

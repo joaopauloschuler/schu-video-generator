@@ -60,6 +60,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "molecule": {"title": "Molecules", "membrane": "plasma", "molecules": [{"kind": "gpcr", "id": "receptor"}, "atp"]},
     "pathway": {"title": "Pathway", "nodes": [{"id": "egf", "kind": "ligand", "label": "EGF"}, {"id": "egfr", "kind": "receptor", "label": "EGFR"}],
                 "edges": ["egf -> egfr"]},
+    "cell_cycle": {"title": "Cycle"},
+    "metabolism": {"title": "ETC", "process": "etc", "components": ["complex_iii", "cyt_c", "complex_iv"]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -180,6 +182,11 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("cell") == ["title", "cell", "tissue", "nucleus", "mito", "scale_bar"]
     assert names("molecule") == ["title", "membrane", "receptor", "atp", "scale_bar"]
     assert names("pathway") == ["title", "egf", "egfr", "edge:egf->egfr", "band:extracellular", "band:plasma_membrane", "pathway"]
+    assert names("cell_cycle") == ["title", "cycle", "marker", "phase:g1", "phase:s", "phase:g2", "phase:m", "phase:g0", "checkpoint:g1_s",
+                                   "checkpoint:g2_m", "checkpoint:spindle", "g1_s", "g2_m", "spindle", "plot", "cyclin:d", "cyclin:e",
+                                   "cyclin:a", "cyclin:b"]
+    assert names("cell_cycle", mode="mitosis") == ["title", "cell", "chromosomes", "spindle", "pair1", "pair2", "caption"]
+    assert names("metabolism") == ["title", "etc", "complex_iii", "cyt_c", "complex_iv", "membrane", "tally"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",
@@ -511,7 +518,7 @@ def test_a_type_without_targets_rejects_actions(make_project) -> None:
                     pass
     '''})
     (problem,) = project_problems(Project.load(root))
-    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, card, cell, chapter, code,")
+    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, card, cell, cell_cycle, chapter, code,")
 
 
 def test_config_md_action_examples_validate(make_project) -> None:

@@ -19199,3 +19199,78 @@ How to test
 - Stills (scratchpad `s207/pw`, four scenes: the three templates and the CONFIG example with
   signal, amplify, drug, inhibit, focus, knockout): 16:9 and 9:16, dark and `light_academic`, with
   mid-action stills; `vidgen lint` clean in all four variants but one 2 % covered-text warning.
+
+## Step 208 — Cell cycle, division and energy
+
+What was built (DESIGN §95.13)
+- **A `cell_cycle` scene type**, three modes. `cycle`: the ring G1 → S → G2 → M (stages of M
+  ticked, M drawn ≥ 12 %), the restriction point, G0 out and back, the three checkpoints (G1/S,
+  G2/M, SAC) marked; beside it (below in 9:16) the cyclin D–CDK4/6, E–CDK2, A–CDK2/1 and B–CDK1
+  levels with a "now" marker that moves with the ring's marker; the centre names the phase.
+  `mitosis`: 2n = 2–8 chromosomes, homologues in maternal / paternal colours (a shade per pair),
+  sisters joined at the centromere, interphase → cytokinesis with poles, asters, kinetochore and
+  polar fibres, the furrow and midbody; `cell: plant` with a preprophase band, broad poles, the
+  phragmoplast and cell plate. `meiosis`: prophase I (pairing, synapsis with the synaptonemal
+  complex, chiasmata with the exchanged segments in the partner's colour), independent assortment
+  at metaphase I, reductional then equational division, four haploid recombinant cells. Captions
+  per stage and a counts line (chromosomes, chromatids, ploidy, C).
+- **A `metabolism` scene type**: glycolysis (two columns, investment and payoff ×2, enzymes and
+  cofactors on every arrow, carbons; `link: true` adds the pyruvate carrier across the inner
+  membrane and PDH), `link_reaction`, the citric acid cycle as a ring (enzymes inside, products
+  outside; 3 NADH, FADH₂, GTP, 2 CO₂), the respiratory chain (I–IV, Q, cyt c in the inner
+  membrane, protons to the intermembrane space, O₂ → H₂O, Step 204's ATP synthase glyph with F₁ in
+  the matrix) and the light reactions (PSII with the OEC, PQ, b₆f, PC, PSI, Fd, FNR → NADPH, ATP
+  synthase with CF₁ in the stroma, photons). Tallies count the products; in 9:16 the membrane is
+  folded back like a crista or a thylakoid.
+- **Actions** `advance` (cycle: to a point, `into`, G0; divisions: to a stage, `expect` counts;
+  pathways: a token through the steps; chains: electrons with protons crossing, `from: fadh2`,
+  `to: atp_synthase` for the gradient through the rotor) and `checkpoint` (`outcome: pass |
+  arrest`, `cause: dna_damage | no_mitogens | unattached_kinetochore`; the regulator rows lit in
+  order; reversible with `until`).
+- **Rules** with reasons and did-you-mean (`vidgen validate`, replayed in beat order): wrong
+  counts in `expect` (after meiosis), an odd 2n, no / too many / too close crossovers, G0 after R,
+  advancing through an arrested checkpoint, a division backwards, the chain in the wrong membrane,
+  protons pumped the wrong way, components out of order or missing a carrier, the light reactions
+  in an animal cell, glycolysis outside the cytosol, ATP synthase before any gradient.
+
+Files
+- New: `src/vidgen/cellworld/cycle.py`, `division.py`, `energy.py`; `src/vidgen/scenes/
+  cell_cycle.py`, `cycle_actions.py`, `metabolism.py`, `division_draw.py`, `bio_draw.py`;
+  `tests/test_cycle_energy.py`; `docs/gallery/cell_cycle.md`, `metabolism.md` and their media.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md` (two sections,
+  targets rows), `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md` (chooser rows, prose, samples,
+  action rows), `docs/gallery/README.md`, `examples/gallery/video.yaml` (scenes `cycle`,
+  `krebs`), `DESIGN.md` §95.13, `CHANGELOG.md`, `tasklist.md`; tests `test_actions.py`,
+  `test_actions_coverage.py`, `test_builtin_scenes.py`, `test_extensions.py`, `test_registry.py`,
+  `test_translation.py` (the new types and actions).
+
+Public interfaces: `vidgen.api` adds the modules `cell_cycle_model`, `cell_division`,
+`cell_energy`. Config: scene types `cell_cycle`, `metabolism`; actions `advance`, `checkpoint`.
+
+Decisions / deviations
+- Two new scene types instead of actions on `cell` scenes (DESIGN §95.1 planned the latter): a
+  cycle is a diagram in time, a division wants the cell large, a pathway is a graph; one scene per
+  picture keeps the YAML short (`advance: cell, to: anaphase_i`).
+- The cyclin curves are stylised in the textbook order (a.u.), not data.
+- M is drawn at least 12 % of the ring (its true hour of 24 would hide its stages).
+- The gallery shows meiosis (one beat) and the citric acid cycle: the respiratory chain's GIF
+  did not fit the 10 MB budget (about 27 KB is left).
+
+Known gaps / TODO
+- Meiosis only in an animal cell; 2n ≤ 8; no non-disjunction, no checkpoint failure.
+- Chains move two electrons per run; the Q cycle is counted, not animated.
+- No β-oxidation, gluconeogenesis or Calvin cycle; no carry of a metabolite between scenes.
+- In 9:16 the light reactions' lumen label touches the b₆f glyph (the lumen is narrow).
+- Meiosis renders slowly (~40 s for 5 s at gallery size, ~110 s for 14 s at 540×960).
+
+How to test
+- `tests/test_cycle_energy.py`: 18 (4 render, 160×90 and 90×160: the cycle with an arrest and
+  meiosis to the end; the respiratory chain with ATP synthase and glycolysis with the link).
+- Related (not render): `test_actions` + `test_extensions` + `test_registry` 69; `test_docs` +
+  `test_guide` 123; `test_actions_coverage` + `test_builtin_scenes` + `test_translation` 221;
+  `test_schema` + `test_json_output` + `test_introspect` + `test_api` 111; `test_review2` +
+  `test_mcp` + `test_pathway` + `test_molecules` 131; `test_gallery` 17. Render `-k "cell_cycle
+  or metabolism"` in `test_builtin_scenes` + `test_actions_coverage` 6. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills (scratchpad `s208/sheets`): cycle, mitosis, plant mitosis, meiosis, glycolysis + link,
+  TCA, ETC, light reactions in 16:9 and 9:16, dark and `light_academic`, mid-action stills.

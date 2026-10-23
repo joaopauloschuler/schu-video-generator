@@ -296,6 +296,8 @@ project's own scene types, in its theme).
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
 | a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the actions zoom_to, motor_walk, endocytosis, exocytosis; with a `gene`: transcribe, export, translate, to_golgi, secrete (its products' route, the camera following) |
+| the cell cycle with its checkpoints and cyclin–CDK levels; mitosis and meiosis with counted chromosomes, crossing over and four haploid cells | `cell_cycle` | `title`, `mode` (cycle, mitosis, meiosis), `start`, `hours`, `chromosomes` (2n), `cell` (animal, plant), `crossovers`, `assortment`, `captions`, `counts`; the actions advance (to, into, expect) and checkpoint (outcome, cause) |
+| energy metabolism: glycolysis, pyruvate oxidation, the citric acid cycle, the electron transport chain and ATP synthase, the light reactions; flows animated, products counted | `metabolism` | `title`, `process` (glycolysis, link_reaction, tca, etc, light_reactions), `cell`, `in`, `membrane`, `protons_to`, `components`, `link`, `tallies`, `names`; the action advance (to, from) |
 | a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs | `pathway` | `title`, `template` (gpcr_camp_pka, rtk_ras_mapk, pi3k_akt), `nodes` (id, kind, label, in, gene, state, marks, role), `edges` (a -> b activates, a -o b catalyses, a => b translocates, an arrow with a bar inhibits, or {from, to, type, effect, site, feedback, label}), `remove`, `species`, `direction`; the actions signal, inhibit, knockout, drug, amplify, focus |
 | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
@@ -634,6 +636,61 @@ downstream that change get ↑ / ↓, computed from the graph), `amplify`, `focu
       actions: [{signal: glucagon, at: "@signal"}]
     - text: "A phosphodiesterase inhibitor keeps cyclic AMP high."
       actions: [{drug: pde, name: IBMX}]
+```
+
+A `cell_cycle` draws the eukaryotic cell cycle (`mode: cycle`: a ring G1 → S → G2 → M with G0, the
+restriction point and the G1/S, G2/M and spindle assembly checkpoints, beside the levels of cyclin
+D–CDK4/6, E–CDK2, A–CDK2 and B–CDK1 in their textbook order of rise and fall, a "now" marker on both)
+or a dividing cell (`mode: mitosis | meiosis`, `chromosomes: 4` = 2n: homologues in maternal and
+paternal colours, sister chromatids joined at the centromere; prophase … cytokinesis with
+condensation, envelope breakdown, kinetochore capture, bi-orientation, separase and cohesin, the
+contractile ring — `cell: plant` a cell plate; meiosis with synapsis, crossing over (`crossovers:
+[[0.75], [0.6]]`, exchanged segments shown), independent assortment (`assortment: [m, p]`) and four
+haploid cells). Captions name each stage; a counts line gives chromosomes, chromatids, n / 2n and C
+per cell. `advance` moves it on (`to:` a point of the cycle or a stage); `checkpoint` shows a
+checkpoint passing or arresting the cell with its regulators (p53 → p21 ⊣ CDK2…). `vidgen validate`
+refuses what cannot be, with the reason: G0 after the restriction point, advancing past an arrested
+checkpoint, an odd 2n, a bivalent without a crossover, wrong counts in `expect`, a stage of the
+other division.
+
+```yaml
+# cell cycle and division
+- id: meiosis
+  type: cell_cycle
+  params:
+    title: "Meiosis (2n = 4)"
+    mode: meiosis                     # or mitosis, or cycle (the cycle with its cyclins and checkpoints)
+    assortment: [m, p]                # which homologue faces the first pole at metaphase I, per pair
+  beats:
+    - text: "Homologues pair, cross over and part; then sisters: four haploid cells."
+      actions: [{advance: cell, to: cytokinesis_ii, at: "@pair"}]
+```
+
+A `metabolism` scene draws energy metabolism: `process: glycolysis` (ten steps, investment and
+payoff phases, net 2 ATP and 2 NADH per glucose; `link: true` adds pyruvate dehydrogenase in the
+matrix), `link_reaction`, `tca` (the citric acid cycle as a ring: 3 NADH, FADH₂, GTP, 2 CO₂ per
+turn), `etc` (complexes I–IV, Q and cytochrome c in the inner mitochondrial membrane, protons
+pumped into the intermembrane space, O₂ → H₂O, ATP synthase) or `light_reactions` (PSII splitting
+water, PQ, b₆f, PC, PSI, Fd, FNR making NADPH, ATP synthase with CF₁ in the stroma). Tallies count
+the products. `advance` animates it: a token through the steps (`to: pyruvate`), electrons along the
+chain with protons crossing (`to: complex_iv`, `from: fadh2`), the gradient through ATP synthase
+(`to: atp_synthase`). Checked with the reason: the membrane (`membrane: plasma` for the respiratory
+chain is refused), `protons_to` the wrong side, `components` out of order or missing a carrier,
+glycolysis outside the cytosol, the light reactions in an animal cell, ATP synthase before any
+protons were pumped.
+
+```yaml
+# energy metabolism
+- id: krebs
+  type: metabolism
+  params:
+    title: "The citric acid cycle"
+    process: tca                      # glycolysis, link_reaction, tca, etc, light_reactions
+  beats:
+    - text: "Acetyl-CoA joins oxaloacetate; two carbons leave as CO2."
+      actions: [{advance: tca, to: succinyl_coa, at: "@joins"}]
+    - text: "The cycle closes with GTP, FADH2 and NADH."
+      actions: [{advance: tca, to: oxaloacetate}]
 ```
 
 ```yaml
@@ -1096,6 +1153,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `knockout` | on a `pathway`: a node is crossed out (`knockout: pten`) and every node downstream that changes gets ↑ / ↓, computed from the graph (`effects: false` leaves them out) | `until` brings it back |
 | `drug` | on a `pathway`: a pill with the drug's name blocks a protein (`{drug: mek, name: trametinib}`; a known drug on another target is refused), with the effects downstream | not on genes, messengers or outcomes |
 | `amplify` | on a `pathway`: many copies of a node stream out of the node that makes it (`{amplify: camp, factor: "×100"}`; `from`, `count`) | after the `signal` reached it |
+| `advance` | on a `cell_cycle`: the cell moves round the cycle (`advance: cycle, to: s`; `into: 0.5`; `to: g0` only before the restriction point) or a division runs to a stage (`advance: cell, to: anaphase_i`; `expect: {chromosomes: 2, chromatids: 4}` is checked); on a `metabolism`: the token runs to a metabolite or enzyme (`advance: glycolysis, to: pyruvate`), electrons run along the chain pumping protons (`advance: etc, to: complex_iv`; `from: fadh2`), or the gradient drives ATP synthase (`to: atp_synthase`) | one stage or a few steps per beat: its length follows what it shows (up to ~8 s) |
+| `checkpoint` | on a `cell_cycle` (`mode: cycle`): a checkpoint's regulators light in a panel — `checkpoint: g1_s` passes (cyclin D–CDK4/6 ⊣ Rb ⊣ E2F → cyclin E–CDK2), `{checkpoint: g2_m, outcome: arrest, cause: dna_damage}` holds the cell (`advance` cannot pass it until the action's `until`); `spindle` (SAC: MCC ⊣ APC/C–Cdc20) | one checkpoint per beat |
 
 ```yaml
 - id: speeds

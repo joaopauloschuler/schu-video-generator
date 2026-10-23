@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "card", "cell", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "line_chart", "map", "molecule", "network", "number_line", "pathway", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["bar_chart", "bullets", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "line_chart", "map", "metabolism", "molecule", "network", "number_line", "pathway", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -57,6 +57,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
              "view": "cell"},
     "molecule": {"title": "ATP synthase", "membrane": "inner_mitochondrial", "molecules": [{"kind": "atp_synthase"}, {"kind": "atp", "in": "matrix"}]},
     "pathway": {"title": "cAMP signalling", "template": "gpcr_camp_pka"},
+    "cell_cycle": {"title": "Mitosis", "mode": "mitosis", "start": "metaphase"},
+    "metabolism": {"title": "The citric acid cycle", "process": "tca"},
     "chapter": {"number": 3, "title": "Results", "subtitle": "What we found", "icon": "chart-line"},
     "comparison": {"heading": "A vs B", "columns": [{"heading": "A", "tone": "positive", "icon": "cpu", "points": ["fast", {"text": "cheap", "icon": "coins"}]}, {"heading": "B", "tone": "negative", "points": ["slow"]}], "verdict": "Pick A", "vs": "vs"},
     "table": {"title": "T", "header": ["Name", "Value"], "rows": [["a", 1.5], ["b", 1200]], "caption": "c"},

@@ -6819,6 +6819,204 @@ The rules of the actions are checked too (`vidgen validate`, replayed in beat an
 node knocked out twice, a signal from a node that is off, an inhibitor without an inhibitory arc,
 `on` naming a node it does not inhibit, `amplify` on a node nothing makes.
 
+### `cell_cycle`
+
+The eukaryotic cell cycle and cell division at university level, scientifically correct and
+stylised (Alberts *Molecular Biology of the Cell* ch. 17, Morgan *The Cell Cycle*). Three modes:
+
+- **`mode: cycle`** (default): the cycle as a ring — G1, S, G2 and M in their colours, clockwise from
+  the top, the stages of M ticked inside the M arc (M is drawn at least 12 % of the ring: its true
+  hour of 24 would hide them), the restriction point **R** in mid-to-late G1, the exit to and from
+  **G0** — with the three **checkpoints** marked: G1/S, G2/M and the spindle assembly checkpoint (SAC,
+  at metaphase → anaphase). Beside it (16:9; below it in 9:16) the **levels of the four cyclin–CDK
+  complexes** over the cycle, stylised but in the textbook order: cyclin D–CDK4/6 rises in G1 with
+  mitogens and stays; cyclin E–CDK2 peaks at G1/S and is degraded early in S; cyclin A–CDK2 (CDK1 in
+  G2) rises from S, peaks at G2/M and is gone by metaphase; cyclin B–CDK1 rises through S and G2,
+  peaks at metaphase and is destroyed abruptly at anaphase (APC/C–Cdc20). A **"now" marker** moves on
+  the ring and the plot together; the ring's centre names the phase (or the stage of M) with its
+  length.
+- **`mode: mitosis`**: a dividing cell with `chromosomes` (2n: 2, 4, 6 or 8) — homologues in a
+  maternal and a paternal colour (a shade per pair; pairs differ in length and centromere position),
+  each chromosome two sister chromatids joined at the centromere — through interphase (G2:
+  decondensed chromatin in territories, a duplicated centrosome), prophase (condensation, centrosomes
+  separating, asters), prometaphase (the nuclear envelope breaking down, kinetochores captured: some
+  mono-oriented first), metaphase (on the plate, sister kinetochores bi-oriented), anaphase (A:
+  separase cleaves cohesin and sisters move to the poles, arms trailing; B: the spindle elongates),
+  telophase (envelopes reform, chromosomes decondense, the furrow starts) and cytokinesis (an
+  actomyosin contractile ring; two daughter cells, 2n each, with the midbody's bridge). `cell: plant`:
+  no centrosomes (broad spindle poles), a preprophase band, a phragmoplast and a cell plate growing
+  outwards inside the wall.
+- **`mode: meiosis`**: prophase I in three keyframes (leptotene–zygotene: pairing; pachytene:
+  synapsis along the synaptonemal complex; diplotene: homologues apart except at the **chiasmata**,
+  where the exchanged segments now show in the partner's colour), prometaphase I (both sister
+  kinetochores of a homologue face the same pole), metaphase I (bivalents on the plate, each oriented
+  independently — `assortment`), anaphase I (homologues separate: reductional; arm cohesin cleaved,
+  centromeric cohesin protected by shugoshin), telophase I and cytokinesis I (two cells, n, each
+  chromosome still two — now non-identical — chromatids), prophase II (no replication; new spindles
+  at right angles), metaphase II, anaphase II (sisters separate: equational), telophase II and
+  cytokinesis II: **four haploid cells**, one chromatid per chromosome, recombinant chromatids visible.
+
+Captions name each stage and say what happens in key terms; a counts line gives, per cell (per
+daughter nucleus from telophase), the chromosomes (centromeres: separated sisters count), the
+chromatids, the ploidy and the DNA content (*2n = 4 · per cell: 4 chromosomes, 8 chromatids (2n,
+4C)*). The frame follows the division: one cell is drawn large, four cells smaller; the spindle of
+the first division runs across a landscape frame and down a portrait one, the captions beside it
+(16:9) or under it (9:16).
+
+```yaml
+- id: cycle
+  type: cell_cycle
+  params: {title: "The cell cycle"}            # mode: cycle; hours: {g1: 11, s: 8, g2: 4, m: 1}
+  beats:
+    - text: "Mitogens drive cyclin D–CDK4/6, which phosphorylates Rb and frees E2F."
+      actions: [{advance: cycle, to: restriction_point}, {checkpoint: g1_s, at: "@phosphorylates"}]
+    - text: "With damaged DNA the cell would stop at G2."
+      actions: [{advance: cycle, to: s, into: 0.5}, {checkpoint: g2_m, outcome: arrest, until: go}]
+    - id: go
+      text: "Repaired, it enters mitosis; APC/C then destroys cyclin B and securin."
+      actions: [{advance: cycle, to: metaphase}, {checkpoint: spindle, at: "@destroys"}]
+- id: meiosis
+  type: cell_cycle
+  params:
+    title: "Meiosis (2n = 4)"
+    mode: meiosis                              # or mitosis (cell: plant for a plant cell)
+    chromosomes: 4
+    crossovers: [[0.75], [0.6]]                # per pair, 0 = p telomere … 1 = q telomere; default: one each
+    assortment: [m, p]                         # per pair, the homologue facing the first pole at metaphase I
+  beats:
+    - text: "Homologues pair, synapse and cross over."
+      actions: [{advance: cell, to: prophase_i}]
+    - text: "Homologues separate; sister chromatids stay together."
+      actions: [{advance: cell, to: cytokinesis_i, expect: {chromosomes: 2, chromatids: 4}}]
+    - text: "In meiosis two the sisters part: four haploid cells."
+      actions: [{advance: cell, to: cytokinesis_ii}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `mode` | `cycle` | `cycle`, `mitosis`, `meiosis` |
+| `start` | `g1` / `interphase` | where the cell is at the start: a point of the cycle (`g1`, `g0`, `restriction_point`, `g1_s`, `s`, `g2`, `g2_m`, `m`, `prophase` … `cytokinesis`) or a stage of the division |
+| `hours` | `{g1: 11, s: 8, g2: 4, m: 1}` | cycle: the phases' lengths (a typical human cell in culture, ~24 h) |
+| `cyclins` | `true` | cycle: draw the cyclin–CDK levels |
+| `chromosomes` | `4` | mitosis / meiosis: 2n (2, 4, 6, 8) |
+| `cell` | `animal` | mitosis: `animal` or `plant` |
+| `crossovers` | one per pair | meiosis: per homologous pair, one or two positions (0–1 along the chromosome from the p telomere, not at the centromere, at least 0.15 apart) |
+| `assortment` | by the seed | meiosis: per pair, `m` or `p`: the homologue facing the first pole at metaphase I |
+| `seed` | `1` | the chromosomes' places, default crossovers and assortment |
+| `captions`, `counts` | `true` | the stage captions; the counts line |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`):
+
+| action | options | |
+|---|---|---|
+| `advance` | `to`, `into`, `expect` | `mode: cycle`: `advance: cycle, to: s` moves the cell round the cycle to that point (the next time it is reached; `into: 0.5` half-way through a phase or stage; `to: g0` leaves for quiescence — only from G1 before the restriction point; from G0 any later point re-enters G1); the marker moves on the ring and the plot together (~6 s per full turn, at most 8 s). Divisions: `advance: cell, to: metaphase` runs the division to the end of that stage, keyframe by keyframe (1.5 s each), the captions and counts following; `expect: {chromosomes: 2, chromatids: 4, cells: 2, ploidy: n, dna: 2C}` states the counts there and is checked. `to` left out: the end. |
+| `checkpoint` | `outcome`, `cause` | `mode: cycle`: `checkpoint: g1_s` (`g2_m`, `spindle`) shows a panel with what it checks and its regulators, lit one after another in SBGN-like rows (→ activates, ⊣ inhibits, P a phosphorylation, Ub ubiquitination for degradation). `outcome: pass` (default): mitogens → cyclin D–CDK4/6 ⊣(P) Rb ⊣ E2F → cyclin E–CDK2 → S phase; Cdc25 → cyclin B–CDK1 → mitosis, Wee1 ⊣(P) cyclin B–CDK1; APC/C–Cdc20 ⊣(Ub) securin ⊣ separase ⊣ cohesin ⊣ anaphase, APC/C–Cdc20 ⊣(Ub) cyclin B–CDK1 ⊣ mitotic exit. `outcome: arrest` with `cause`: `dna_damage` (G1/S: ATM · Chk2 → p53 → p21 ⊣ cyclin E–CDK2; G2/M: ATR · Chk1 ⊣ Cdc25, Wee1 keeps CDK1 phosphorylated on Tyr15), `no_mitogens` (G1/S: Rb keeps E2F; G0), `unattached_kinetochore` (spindle: Mad2 · BubR1 (MCC) ⊣ APC/C–Cdc20). Its mark on the ring turns red (arrest) or green (pass); `until` ends it. |
+
+**The rules** (`vidgen validate`, replayed in beat and `at` order, each with the reason): an
+unknown point or stage (did you mean…; *meiosis has metaphase_i and metaphase_ii*); advancing past a
+checkpoint while an arrest there lasts (*the cell is held at the G2/M checkpoint…; give the
+checkpoint action an until:*); G0 after the restriction point (*past R it is committed to S phase
+and mitosis*); a division advanced backwards; an odd 2n (*a diploid cell has homologous pairs*); a
+bivalent without a crossover (*an obligate chiasma: without one the homologues are not held together
+on the metaphase I spindle and missegregate*), a crossover at the centromere, more than two, or two
+too close (interference); `expect` counts that are wrong (*after Cytokinesis II there are 4 cells,
+each with 2 chromosomes (2 chromatids, n, 1C) for 2n = 4; expect.chromosomes says 4*); params of
+another mode; `checkpoint` outside `mode: cycle`.
+
+### `metabolism`
+
+Energy metabolism at university level (Berg *Biochemistry*, Lehninger *Principles of Biochemistry*,
+Alberts ch. 14), `process`:
+
+- **`glycolysis`**: the ten steps from glucose to 2 pyruvate in the cytosol, as two columns — the
+  **investment phase** down (hexokinase and PFK-1 each use an ATP; aldolase splits the hexose into
+  DHAP and glyceraldehyde 3-phosphate; triose phosphate isomerase) and the **payoff phase** up, ×2
+  per glucose (GAPDH: NAD⁺ + Pᵢ → NADH + H⁺; phosphoglycerate kinase and pyruvate kinase make ATP by
+  substrate-level phosphorylation; enolase releases water) — each metabolite with its carbons,
+  each arrow with its enzyme (the abbreviation where the name does not fit: HK, PGI, PFK-1, TPI,
+  GAPDH, PGK, PGM, PK) and cofactors. Per glucose: ATP −2 +4 = **net +2**, **2 NADH**, 2 pyruvate.
+  `link: true` continues into the matrix: the mitochondrial pyruvate carrier across the inner
+  membrane, then pyruvate dehydrogenase (pyruvate + CoA + NAD⁺ → acetyl-CoA + CO₂ + NADH).
+- **`link_reaction`**: pyruvate oxidation alone.
+- **`tca`**: the citric acid cycle as a cycle diagram — oxaloacetate, citrate, isocitrate,
+  α-ketoglutarate, succinyl-CoA, succinate, fumarate, malate on a ring (carbons shown), acetyl-CoA
+  (2C) joining oxaloacetate at citrate synthase, each step's enzyme and what it makes (isocitrate
+  and α-ketoglutarate dehydrogenases: NADH + CO₂; succinyl-CoA synthetase: GTP; succinate
+  dehydrogenase — complex II — FADH₂; malate dehydrogenase: NADH). Per turn: **3 NADH, 1 FADH₂,
+  1 GTP, 2 CO₂**. `link: true` adds pyruvate → acetyl-CoA above it.
+- **`etc`**: the inner mitochondrial membrane with complex I (L-shaped: its arm in the matrix where
+  NADH is oxidised), complex II (succinate → fumarate, on the matrix face; no protons pumped),
+  ubiquinone (Q, in the bilayer), complex III (a dimer, cytochrome c₁ on the intermembrane side),
+  cytochrome c (on the intermembrane face), complex IV (½O₂ + 2H⁺ → H₂O in the matrix) and ATP
+  synthase (Step 204's glyph: F₁ in the matrix). Per two electrons from NADH: 4 + 4 + 2 = **10 H⁺**
+  pumped from the matrix into the intermembrane space; from FADH₂ (complex II): 6.
+- **`light_reactions`**: the thylakoid membrane with PSII (light at P680; the oxygen-evolving
+  complex splits water in the lumen: H₂O → ½O₂ + 2H⁺), plastoquinone (takes 2 H⁺ from the stroma),
+  cytochrome b₆f (the Q cycle: 4 H⁺ into the lumen), plastocyanin (in the lumen), PSI (light at
+  P700), ferredoxin and FNR (NADP⁺ + H⁺ → NADPH, in the stroma) and ATP synthase (CF₁ in the
+  stroma). Per two electrons: 6 H⁺ into the lumen, ½ O₂, 1 NADPH.
+
+The membrane runs across a landscape frame; in a portrait frame it is folded back on itself, as in
+a crista or a thylakoid — the chain goes along the upper membrane and back along the lower one, the
+P space (intermembrane space, lumen) between them. Tallies count the products; a key names the
+short labels drawn in the glyphs (I NADH dehydrogenase · Q ubiquinone · …).
+
+```yaml
+- id: etc
+  type: metabolism
+  params:
+    title: "Oxidative phosphorylation"
+    process: etc                      # glycolysis, link_reaction, tca, etc, light_reactions
+    # membrane: inner_mitochondrial   # checked; cell: bacterium → the plasma membrane
+    # protons_to: intermembrane_space # checked: the P side
+    # components: [complex_i, coq, complex_iii, cyt_c, complex_iv, atp_synthase]
+  beats:
+    - text: "Electrons from NADH pass complexes one, three and four: ten protons are pumped."
+      actions: [{advance: etc, to: complex_iv, at: "@pass"}]
+    - text: "Electrons from FADH2 enter at complex two."
+      actions: [{advance: etc, from: fadh2}]
+    - text: "The protons flow back through ATP synthase, which makes ATP."
+      actions: [{advance: etc, to: atp_synthase}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `process` | required | `glycolysis`, `link_reaction`, `tca` (also `krebs`, `citric_acid_cycle`), `etc` (`electron_transport_chain`), `light_reactions` (`photosynthesis`) |
+| `cell` | `animal` (`plant` for the light reactions) | `animal`, `plant`, `bacterium` (no mitochondria: the chain in the plasma membrane, P side the periplasm; the cycle in the cytosol) |
+| `in` (`compartment`) | | pathways: where it runs, checked (glycolysis in the cytosol; pyruvate oxidation and the cycle in the matrix) |
+| `membrane` | | chains: checked (`inner_mitochondrial`, `thylakoid`; `bacterial` in a bacterium) |
+| `protons_to` | | chains: checked against the P side (`intermembrane_space`, `thylakoid_lumen`, `periplasm`) |
+| `components` | all | chains: those drawn, in electron order (ATP synthase may be left out; a carrier between two drawn complexes is required) |
+| `link` | `false` | glycolysis / tca: add pyruvate oxidation |
+| `tallies` | `true` | count the products |
+| `names` | `auto` | metabolite and enzyme names: `full`, `short` (G6P, HK), `auto` (full where they fit) |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Action** `advance` (`to`, `from`): on a pathway the token runs to a metabolite or an enzyme (`to:
+pyruvate`, `to: pfk1`; left out: the end), each enzyme lighting as it acts and the tallies
+counting; the citric acid cycle turns on (a later `to: citrate` starts the next turn). On a chain,
+two electrons run from NADH (`from: fadh2` at complex II; the light reactions from water) to a
+component (`to: complex_iv`; left out: the end), protons crossing at each pump and staying in the P
+space (a photon reaches each photosystem first; NADH, water, O₂ and NADPH reactions appear where
+they happen); `to: atp_synthase` lets the gradient flow back: protons through Fₒ, the rotor turning,
+ADP + Pᵢ → ATP in F₁ — 3 ATP per 8 H⁺ in animal mitochondria (c₈ ring), per 14 H⁺ in chloroplasts
+(c₁₄), per 10 in *E. coli*. (With the phosphate and ADP/ATP carriers about 2.5 ATP per NADH and 1.5
+per FADH₂.)
+
+**The rules** (`vidgen validate`, with the reason): an unknown process, step, metabolite or
+component (did you mean…); a pathway in the wrong compartment (*glycolysis runs in the cytosol (its
+enzymes are soluble cytosolic proteins) in every cell*); a chain in the wrong membrane (*complexes
+I–IV and ATP synthase sit in the inner mitochondrial membrane…*); protons pumped the wrong way
+(*complexes I, III and IV move protons out of the matrix into the intermembrane space (the P side);
+the gradient then drives them back into the matrix through ATP synthase, whose F₁ head faces the
+matrix*); components out of order or a missing carrier (*complex III passes electrons to complex IV
+only through cytochrome c*); a component of the other chain (*psii is not part of the electron
+transport chain: it sits in the thylakoid membrane*); the light reactions in an animal cell; ATP
+synthase before any protons were pumped; a pathway advanced backwards.
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -9522,6 +9720,8 @@ a title card, a `transform` of a bar).
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
 | `iso_diagram` | `heading`, `diagram`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, build, raise, lower, explode, collapse, flow, focus, relabel, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line or swatch; a `box` frames the shape); `block<N>` counts every block and layer in the order written, a stack's layers bottom up in its place; a stack is its layers and caption, a group its plate, caption and members, `diagram` everything; an edge its arrow or pipe and label; `dim` and `highlight` recolour blocks with their shading kept; see [the actions](#iso-diagram-actions) |
 | `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, motor_walk, endocytosis, exocytosis, transcribe, export, translate, to_golgi, secrete, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, `motor_walk` / `endocytosis` / `exocytosis` play processes, see [the cell actions](#cell-actions); a `gene`'s id takes its steps, see [a gene in a cell](#a-gene-in-a-cell) |
+| `cell_cycle` | `title`, `cycle`, `phase:<key>`, `checkpoint:<key>`, `<checkpoint>`, `plot`, `cyclin:<key>`, `marker`, `cell`, `chromosomes`, `pair<N>`, `spindle`, `caption` | advance, checkpoint, highlight, dim, reveal, callout | `mode: cycle`: `cycle` is the ring with its marker, `phase:g1` … `phase:g0` a phase's arc, `checkpoint:g2_m` (or `g2_m`) a checkpoint's mark, `plot` the cyclin levels, `cyclin:b` one curve; divisions: `cell` the whole drawing, `chromosomes` every chromatid, `pair1` a homologous pair, `spindle` the microtubules, `caption` the captions; see [`cell_cycle`](#cell_cycle) |
+| `metabolism` | `title`, `<process>`, `<metabolite>`, `step:<key>`, `<component>`, `membrane`, `tally` | advance, highlight, dim, reveal, callout | `glycolysis` (the process's name) is the whole drawing; `pyruvate` a metabolite's box, `step:pfk1` an enzyme's arrow and label; `complex_iv` a component of a chain, `membrane` its membrane; `tally` the counters; see [`metabolism`](#metabolism) |
 | `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |

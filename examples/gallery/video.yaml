@@ -494,6 +494,23 @@ scenes:
       - text: "Glucagon binds its receptor, and the signal runs through cyclic AMP and PKA to the nucleus."
         actions: [{signal: glucagon, at: "@signal"}]
 
+  - id: cycle
+    type: cell_cycle    # the cell cycle (or mode: mitosis / meiosis); points, stages, checkpoints and counts checked
+    params:
+      title: "The cell cycle"
+    beats:
+      - text: "Cyclin E peaks at the G1/S transition, and the cell replicates its DNA."
+        actions: [{advance: cycle, to: s, into: 0.5, at: "@peaks"}]
+
+  - id: krebs
+    type: metabolism    # glycolysis, the citric acid cycle, the electron transport chain, the light reactions
+    params:
+      title: "The citric acid cycle"
+      process: tca
+    beats:
+      - text: "Each turn makes three NADH, one FADH2, one GTP and two carbon dioxide."
+        actions: [{advance: tca, to: oxaloacetate}]
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)

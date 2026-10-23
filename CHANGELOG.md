@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–207)
+## Unreleased (Steps 193–208)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -96,6 +96,20 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   arcs against declared effects (a GAP activating Ras), impossible compartments (a gene outside the
   nucleus, a transcription factor in the cytosol on its gene) and names in the wrong case for the
   species, and warns about loops not marked `feedback`.
+- **Cell cycle, division and energy** (Step 208): a `cell_cycle` scene type — the cycle as a ring
+  (G1, S, G2, M with its stages, the restriction point, G0) with the G1/S, G2/M and spindle
+  checkpoints and the cyclin–CDK levels (D–CDK4/6, E–CDK2, A–CDK2, B–CDK1) under a "now" marker;
+  mitosis (2n = 2–8, homologues coloured, sisters joined at the centromere; `cell: plant` with a
+  cell plate) and meiosis (synapsis, chiasmata with exchanged segments, independent assortment,
+  four haploid recombinant cells) with captions and counts. A `metabolism` scene type —
+  glycolysis (investment and payoff phases, net 2 ATP and 2 NADH; `link: true` adds pyruvate
+  dehydrogenase), the citric acid cycle as a ring (3 NADH, FADH₂, GTP, 2 CO₂), the respiratory
+  chain (I–IV, Q, cytochrome c, protons into the intermembrane space, ATP synthase) and the light
+  reactions (PSII, PQ, b₆f, PC, PSI, Fd, FNR → NADPH), with tallies. Actions: `advance` (round the
+  cycle, through a division's stages, along a pathway, electrons and protons down a chain, the
+  gradient through ATP synthase) and `checkpoint` (pass or arrest with its cause; regulators lit
+  in order). `vidgen validate` refuses wrong counts after meiosis (`expect`), G0 after R, passing
+  an arrested checkpoint, a chain in the wrong membrane and protons pumped the wrong way.
 
 ### vidgen studio: a music workstation for people (Phase T)
 

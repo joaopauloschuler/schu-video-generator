@@ -15367,3 +15367,51 @@ kind's range, counts, exaggerated glyphs.
   arc labels are dropped in long left-to-right pathways; satellites are one modifier and one outcome
   per node; a molecule is not carried between a `cell` and a `pathway` scene yet (§95.1's `carry:`);
   amplification copies are glyphs without names.
+
+### 95.13 Cell cycle, division and energy: the `cell_cycle` and `metabolism` scenes (Step 208)
+
+- **Decision: two scene types, not actions on `cell`** (a deviation from §95.1's plan for 208).
+  The cycle is a diagram in time (a ring and plots), a division is a cell drawn large whose
+  chromosome count matters more than its µm scale, and the energy pathways are graphs and a
+  membrane in cross-section: none sits well in the cell world's camera. So `cell_cycle` (`mode:
+  cycle | mitosis | meiosis`) and `metabolism` (`process: glycolysis | link_reaction | tca | etc |
+  light_reactions`), with two actions, `advance` (both types) and `checkpoint` (`mode: cycle`).
+  The YAML stays short: one scene per picture, `advance: <target>, to: <point or stage>`.
+- **Three layers as before.** No manim: `cellworld/cycle.py` (typical hours, the M stages, the
+  restriction point at 60 % of G1, the checkpoints as regulator rows — nodes and arcs →/⊣ with P
+  or Ub marks — for pass and per arrest cause, `cycle_geometry`, the four cyclin–CDK level curves
+  as monotone cubics over control points, `CycleState` with `advance_problem`: G0 only from G1
+  before R, no passing an arrested checkpoint), `cellworld/division.py` (stages and their
+  captions, `stage_counts` per cell or nucleus, `check_spec`, and `plan_division`: keyframes of
+  items — chromatids as point lists with a colour per segment, so crossover segments swap — cell
+  outlines with the furrow and midbody bridge or the plant cell plate, envelopes, poles, fibres,
+  labels; every keyframe has every item, missing ones copied at opacity 0, so drawing is plain
+  interpolation) and `cellworld/energy.py` (metabolites and steps with enzymes, cofactors and
+  carbons; the two chains' components with what they take and give, protons pumped, photons and
+  reactions; H⁺ per ATP for c₈, c₁₄, c₁₀ rings; `check_setting` with the reasons; `tallies`,
+  `electron_path`, `chain_effects`). Drawing: `scenes/division_draw.py` (per-keyframe zoom, the
+  portrait rotation), `scenes/bio_draw.py` (measured text blocks, regulator rows, `driven`), the
+  scenes `scenes/cell_cycle.py` and `scenes/metabolism.py`, and `scenes/cycle_actions.py`.
+- **Science** (Alberts ch. 14 and 17; Morgan *The Cell Cycle*; Berg; Lehninger): the regulators
+  and counts listed in CONFIG; mitotic anaphase has 4n chromosomes per cell (separated sisters
+  count); meiosis I is reductional (2n → n, chromatids non-identical after crossing over), II
+  equational; one obligate chiasma per bivalent, at most two with interference (≥ 0.15 apart);
+  ETC pumps 4 + 4 + 2 H⁺ per NADH into the intermembrane space, 6 from FADH₂; the light reactions
+  6 H⁺ into the lumen per two electrons, O₂ counted in halves; ATP synthase's F₁ faces the N side.
+- **Drawing notes.** Manim draws only mobjects present when an animation starts, so every text
+  that will show (tally digits, centre labels, captions) is made at build time and shown by
+  opacity, and the scenes animate through `UpdateFromAlphaFunc`. In a portrait frame the chain's
+  membrane is folded back on itself (a crista or a thylakoid) and the division's spindle runs
+  down the frame; glycolysis with pyruvate oxidation snakes into two columns with the second's
+  labels stacked on its right.
+- **Validation** is replayed in beat and `at` order (`action_sequence_problems` on the scene
+  class): checkpoint arrests and their `until`, stage order, counts in `expect`, the gradient
+  before ATP synthase, the cycle's turns.
+- **Public:** `vidgen.api` adds the modules `cell_cycle_model`, `cell_division` and `cell_energy`.
+  Config: the scene types `cell_cycle`, `metabolism`; the actions `advance`, `checkpoint`.
+  Nothing else changes (the Phase Q baseline frames match).
+- **Gaps:** the cyclin curves are stylised (a.u.); meiosis is drawn in an animal cell only;
+  2n is at most 8; no non-disjunction or checkpoint failure pictures; the chains carry two
+  electrons per run (not a Q cycle animation); β-oxidation, gluconeogenesis and the Calvin cycle
+  are not drawn; the gallery shows meiosis and the citric acid cycle (the GIF budget is nearly
+  spent: about 27 KB left).

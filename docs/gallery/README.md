@@ -46,6 +46,18 @@ Regenerate with `vidgen gallery`.
 |---|---|---|
 | [`pathway`](pathway.md) | <a href="pathway.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/pathway-16x9.png"><img src="media/pathway-16x9.gif" height="180" alt="pathway at 16:9"></picture></a> <a href="pathway.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/pathway-9x16.png"><img src="media/pathway-9x16.gif" height="180" alt="pathway at 9:16"></picture></a> | a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs |
 
+## Cell cycle and division
+
+| type | preview | use it for |
+|---|---|---|
+| [`cell_cycle`](cell_cycle.md) | <a href="cell_cycle.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell_cycle-16x9.png"><img src="media/cell_cycle-16x9.gif" height="180" alt="cell_cycle at 16:9"></picture></a> <a href="cell_cycle.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell_cycle-9x16.png"><img src="media/cell_cycle-9x16.gif" height="180" alt="cell_cycle at 9:16"></picture></a> | the cell cycle with its checkpoints and cyclin–CDK levels; mitosis and meiosis with counted chromosomes, crossing over and four haploid cells |
+
+## Energy metabolism
+
+| type | preview | use it for |
+|---|---|---|
+| [`metabolism`](metabolism.md) | <a href="metabolism.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/metabolism-16x9.png"><img src="media/metabolism-16x9.gif" height="180" alt="metabolism at 16:9"></picture></a> <a href="metabolism.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/metabolism-9x16.png"><img src="media/metabolism-9x16.gif" height="180" alt="metabolism at 9:16"></picture></a> | energy metabolism: glycolysis, pyruvate oxidation, the citric acid cycle, the electron transport chain and ATP synthase, the light reactions; flows animated, products counted |
+
 ## Data
 
 | type | preview | use it for |
