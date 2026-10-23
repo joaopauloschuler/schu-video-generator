@@ -367,9 +367,16 @@ def _pads(
     return out
 
 
-def _finish(x: np.ndarray) -> np.ndarray:
-    """The level (:data:`MUSIC_LEVEL` integrated loudness); float32, read-only."""
-    y = x * 10 ** ((MUSIC_LEVEL - integrated_loudness(x)) / 20)
+def _level_gain(x: np.ndarray, threads: int = 1) -> float:
+    """The linear gain that sets ``x`` to :data:`MUSIC_LEVEL` integrated loudness (``threads``:
+    measured on that many threads, the same result)."""
+    return 10 ** ((MUSIC_LEVEL - integrated_loudness(x, threads)) / 20)
+
+
+def _finish(x: np.ndarray, gain: float | None = None) -> np.ndarray:
+    """The level (:data:`MUSIC_LEVEL` integrated loudness, or ``gain`` when given: a part of a
+    piece at the whole piece's gain); float32, read-only."""
+    y = x * (_level_gain(x) if gain is None else gain)
     out = y.astype(np.float32)
     out.setflags(write=False)
     return out

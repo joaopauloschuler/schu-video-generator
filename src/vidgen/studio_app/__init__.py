@@ -43,4 +43,5 @@ def run_studio(project_root: Path | None, port: int = 0, open_browser: bool = Tr
         say("studio stopped")
     finally:
         server.server_close()
+        app.close()
         remove_open_marker(app.studio)

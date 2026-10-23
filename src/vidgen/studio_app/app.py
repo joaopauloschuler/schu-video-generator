@@ -17,6 +17,8 @@ import threading
 import time
 import wave
 from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from pathlib import Path
 from typing import Any
 
@@ -30,10 +32,12 @@ from vidgen.studio_app import song
 from vidgen.studio_app.edits import apply_edits
 from vidgen.studio_app.session import StudioSession, studio_dir, write_open_marker
 from vidgen.studio_app.song import describe_score
+from vidgen.studio_app.stems import THREADS, StemCache, meter_levels, score_stems
 
 #: Bump when the studio's renders of the same score change (their cache key includes it).
 #: 2 (Step 194): a render's facts hold its loudness per bar (the timeline's energy curve).
-STUDIO_RENDER_VERSION = 2
+#: 3 (Step 196): mixed from stems; the facts hold the mix's gain and the stems' meters.
+STUDIO_RENDER_VERSION = 3
 #: The lowest loudness the energy curve shows (a silent bar), LUFS.
 ENERGY_FLOOR = -70.0
 #: The preset loaded when the page opens without a session (the guide's first suggestion).
@@ -43,8 +47,13 @@ ONE_LINE_CHARS = 110
 #: A render cache key (hex digits of a SHA-256).
 RENDER_KEY = re.compile(r"^[0-9a-f]{20}$")
 #: Audio file names the server may send: ``<key>.wav``, a listening mix with tracks muted
-#: ``<key>.m<tag>.wav``, and a section of either, ``<key>[.m<tag>]-<section>.wav``.
-AUDIO_NAME = re.compile(r"^([0-9a-f]{20})(?:\.m([0-9a-f]{10}))?(?:-([a-z][a-z0-9_]*))?\.wav$")
+#: ``<key>.m<tag>.wav``, either under narration ``….n.wav``, and a section of any,
+#: ``<key>[.m<tag>][.n]-<section>.wav``.
+AUDIO_NAME = re.compile(r"^([0-9a-f]{20})(?:\.m([0-9a-f]{10}))?(\.n)?(?:-([a-z][a-z0-9_]*))?\.wav$")
+#: Facts of a render worked out after it plays (loudness, true peak, the energy curve), once
+#: no render has been under way for this long (s).
+LATE_FACTS = ("loudness", "true_peak", "energy")
+FACTS_AFTER_SECONDS = 0.3
 
 
 def one_line(description: str) -> str:
@@ -231,6 +240,14 @@ def _slice_wav(source: Path, target: Path, first: int, count: int) -> None:
     write_bytes_atomic(target, buffer.getvalue())
 
 
+def read_wav(path: Path) -> np.ndarray:
+    """A 16-bit WAV the studio wrote, as float64 ``(n, channels)`` in −1..1."""
+    with wave.open(str(path), "rb") as src:
+        channels = src.getnchannels()
+        frames = src.readframes(src.getnframes())
+    return np.frombuffer(frames, dtype="<i2").reshape(-1, channels) / 32767.0
+
+
 class StudioApp:
     """The studio's state for one server: its folder, the open session, the render cache.
     Thread-safe: session changes hold one lock, renders another (one render at a time)."""
@@ -243,6 +260,17 @@ class StudioApp:
         self._lock = threading.RLock()
         self._render_lock = threading.Lock()
         self._presets: list[dict[str, Any]] | None = None
+        self.stems = StemCache()
+        # the late facts: one worker, only the render last asked for (older ones give way)
+        self._facts_pool = ThreadPoolExecutor(1, thread_name_prefix="vidgen-studio-facts")
+        self._facts_jobs: dict[str, Future[dict[str, Any] | None]] = {}
+        self._facts_wanted: str | None = None
+        self._facts_lock = threading.Lock()
+        self._last_render = 0.0  # time.monotonic() when a render was last asked for or made
+
+    def close(self) -> None:
+        """Stop the late-facts worker (a job under way finishes; queued ones are dropped)."""
+        self._facts_pool.shutdown(wait=False, cancel_futures=True)
 
     # ----- facts ---------------------------------------------------------------------------
 
@@ -365,14 +393,19 @@ class StudioApp:
 
     # ----- rendering ----------------------------------------------------------------------
 
-    def render(self, version: int | None = None, section: str | None = None, mute: Sequence[str] = ()) -> dict[str, Any]:
+    def render(self, version: int | None = None, section: str | None = None, mute: Sequence[str] = (), narration: bool = False) -> dict[str, Any]:
         """Render a version of the open session (default: the current one), or one section of
-        it, into the render cache (reused when the notes are unchanged). The section is cut from
-        the whole piece's render, so it sounds as in the piece (tails from before it).
+        it, into the render cache (reused when the notes are unchanged): mixed from the tracks'
+        stems, only the tracks whose stems are not kept rendered (§94.14). The section is cut
+        from the whole piece's render, so it sounds as in the piece (tails from before it).
         ``mute``: tracks left out of what plays — a listening mix (§94.12), never the score;
-        names that are not tracks are ignored."""
+        names that are not tracks are ignored. ``narration``: under the narration sample.
+        ``timing`` says what took how long; ``facts_pending``: the loudness, true peak and
+        energy curve come later (:meth:`facts`)."""
         from vidgen.sfx import RATE
 
+        began = time.perf_counter()
+        self._last_render = time.monotonic()
         session = self._session()
         number = version if version is not None else session.current
         assert number is not None
@@ -380,12 +413,26 @@ class StudioApp:
         if score is None:
             raise VidgenError(f"version {number} has problems; fix them before playing it")
         key = render_key(data)
-        meta = self._render_whole(session, key, score)
+        meta, timing = self._render_whole(session, key, data, score)
         muted = sorted(set(mute) & {t.name for t in score.tracks})
         name = f"{key}.m{mute_tag(muted)}" if muted else key
         if muted:
-            self._render_mix(session, name, score, muted, meta["samples"])
-        result = {"version": number, "key": key, **meta, "url": f"/audio/{name}.wav", "section": None, "muted": muted}
+            timing["listening_mix"] = self._render_mix(session, name, data, score, muted, meta)
+        if narration:
+            name, timing["narration"] = self._under_narration(session, name)
+        timing["total"] = round(time.perf_counter() - began, 3)
+        self._last_render = time.monotonic()
+        result = {
+            "version": number,
+            "key": key,
+            **meta,
+            "url": f"/audio/{name}.wav",
+            "section": None,
+            "muted": muted,
+            "narration": bool(narration),
+            "timing": timing,
+            "facts_pending": any(k not in meta for k in LATE_FACTS),
+        }
         if section is not None:
             found = next((s for s in score.sections if s.name == section), None)
             if found is None:
@@ -400,67 +447,163 @@ class StudioApp:
             result.update(url=f"/audio/{target.name}", section={"name": section, "start": first / RATE, "seconds": count / RATE})
         return result
 
-    def _render_mix(self, session: StudioSession, name: str, score: Any, muted: Sequence[str], samples: int) -> None:
-        """The listening mix ``name`` without the ``muted`` tracks: the other tracks' stems summed,
-        through the master filter, at the whole piece's gain (muting a part does not make the
-        rest louder). Step 196 caches the stems; here each mix renders them again."""
-        from vidgen.music import _tone_filter
-        from vidgen.sfx import wav_bytes
-        from vidgen.studio.render import render_music_stems
-
-        path = session.renders / f"{name}.wav"
-        with self._render_lock:
-            if path.is_file():
-                return
-            kept: list[np.ndarray] = []
-
-            def keep(track: str, stem: np.ndarray) -> None:
-                if track not in muted:
-                    if kept:
-                        kept[0] = kept[0] + stem
-                    else:
-                        kept.append(np.array(stem, dtype=np.float64))
-
-            _, gain = render_music_stems(score, keep)
-            mix = kept[0] if kept else np.zeros((score.samples, 2))
-            mix = _tone_filter(mix, score.lowpass, score.highpass) * gain
-            if len(mix) < samples:  # a one-shot's tail after its last bar
-                mix = np.concatenate([mix, np.zeros((samples - len(mix), 2))])
-            level = 10 ** (audition_gain_db() / 20)
-            write_bytes_atomic(path, wav_bytes(np.clip(mix[:samples] * level, -1.0, 1.0)))
-
-    def _render_whole(self, session: StudioSession, key: str, score: Any) -> dict[str, Any]:
-        """The cached render ``key`` (rendered now if missing): its facts."""
-        from vidgen import loudness
+    def _render_whole(self, session: StudioSession, key: str, data: Any, score: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        """The cached render ``key`` (mixed now from the stems if missing): its facts and what
+        took how long (``tracks``: the stems rendered now, seconds each)."""
         from vidgen.sfx import RATE, wav_bytes
-        from vidgen.studio import render_music_score
-        from vidgen.studio.measure import loudness_curve
+        from vidgen.studio.render import mix_track_stems
+        from vidgen.studio_app.stems import METER_SECONDS
 
         meta_path, wav_path = session.renders / f"{key}.json", session.renders / f"{key}.wav"
         with self._render_lock:
             if meta_path.is_file() and wav_path.is_file():
-                return {**json.loads(meta_path.read_text(encoding="utf-8")), "cached": True}
+                return {**json.loads(meta_path.read_text(encoding="utf-8")), "cached": True}, {"tracks": {}}
             began = time.perf_counter()
+            stems = score_stems(self.stems, data, score)
+            mixing = time.perf_counter()
             warnings: list[str] = []
-            audio = render_music_score(score, warnings)
-            render_seconds = time.perf_counter() - began
-            meter = loudness.measure(len(audio), lambda a, b: audio[a:b])
-            energy = [round(v, 1) if math.isfinite(v) and v > ENERGY_FLOOR else ENERGY_FLOOR for v in loudness_curve(audio[: score.samples], score.bar)]
-            gain = 10 ** (audition_gain_db() / 20)
-            write_bytes_atomic(wav_path, wav_bytes(np.clip(audio * gain, -1.0, 1.0)))
+            audio, mix = mix_track_stems(score, [stems.stems[t.name].stem for t in score.tracks], warnings, threads=THREADS)
+            writing = time.perf_counter()
+            level = 10 ** (audition_gain_db() / 20)
+            write_bytes_atomic(wav_path, wav_bytes(np.clip(audio * level, -1.0, 1.0)))
+            frames = math.ceil(len(audio) / (METER_SECONDS * RATE))
             meta = {
                 "seconds": round(len(audio) / RATE, 3),
                 "samples": len(audio),
                 "loop": score.loop,
-                "loudness": round(meter.integrated, 2),
-                "true_peak": round(meter.true_peak, 2),
                 "audition_gain_db": audition_gain_db(),
                 "warnings": warnings,
-                "render_seconds": round(render_seconds, 2),
-                "energy": energy,
+                "render_seconds": round(time.perf_counter() - began, 2),
+                "pass_samples": score.samples,
+                "bar_samples": score.bar,
+                "mix_gain": mix.gain,
+                "meter_seconds": METER_SECONDS,
+                "meters": {t.name: meter_levels(stems.stems[t.name].power, frames, mix.gain * level) for t in score.tracks},
             }
-            write_text_atomic(meta_path, json.dumps(meta, indent=2) + "\n")
-            return {**meta, "cached": False}
+            write_text_atomic(meta_path, json.dumps(meta) + "\n")
+            timing = {
+                "tracks": stems.rendered,
+                "scaled": stems.scaled,
+                "stems": round(mixing - began, 3),
+                "mix": round(writing - mixing, 3),
+                "write": round(time.perf_counter() - writing, 3),
+            }
+        self._want_facts(session.renders, key, audio)
+        return {**meta, "cached": False}, timing
+
+    def _render_mix(self, session: StudioSession, name: str, data: Any, score: Any, muted: Sequence[str], meta: Mapping[str, Any]) -> float:
+        """The listening mix ``name`` without the ``muted`` tracks: the kept stems of the other
+        tracks summed, through the master filter, at the whole piece's gain and length (muting a
+        part never makes the rest louder; a one-shot keeps its tails). Seconds it took."""
+        from vidgen.sfx import wav_bytes
+        from vidgen.studio.render import MixFacts, mix_track_stems
+
+        path = session.renders / f"{name}.wav"
+        with self._render_lock:
+            if path.is_file():
+                return 0.0
+            began = time.perf_counter()
+            stems = score_stems(self.stems, data, score)
+            kept = [stems.stems[t.name].stem for t in score.tracks if t.name not in muted]
+            audio, _ = mix_track_stems(score, kept, whole=MixFacts(meta["mix_gain"], meta["samples"]), threads=THREADS)
+            level = 10 ** (audition_gain_db() / 20)
+            write_bytes_atomic(path, wav_bytes(np.clip(audio * level, -1.0, 1.0)))
+            return round(time.perf_counter() - began, 3)
+
+    def _under_narration(self, session: StudioSession, name: str) -> tuple[str, float]:
+        """The render ``name`` under the narration sample (``<name>.n.wav``): its name and the
+        seconds it took (0 when it was there)."""
+        from vidgen.sfx import wav_bytes
+        from vidgen.studio_app.narration import under_narration
+
+        target = session.renders / f"{name}.n.wav"
+        with self._render_lock:
+            if target.is_file():
+                return f"{name}.n", 0.0
+            began = time.perf_counter()
+            music = read_wav(session.renders / f"{name}.wav") / 10 ** (audition_gain_db() / 20)
+            write_bytes_atomic(target, wav_bytes(np.clip(under_narration(music), -1.0, 1.0)))
+            return f"{name}.n", round(time.perf_counter() - began, 3)
+
+    # ----- the late facts ---------------------------------------------------------------------
+
+    def facts(self, key: str, wait: float = 30.0) -> dict[str, Any]:
+        """The loudness, true peak and energy curve of render ``key`` of the open session,
+        worked out after it was made (waits up to ``wait`` seconds): ``{key, loudness,
+        true_peak, energy}``, or ``{key, pending: true}`` when another render was asked for
+        meanwhile (only the latest one's are worked out)."""
+        if not RENDER_KEY.match(key):
+            raise VidgenError(f"facts: not a render key: {key!r}")
+        session = self._session()
+        meta_path = session.renders / f"{key}.json"
+        if not meta_path.is_file():
+            raise VidgenError(f"facts: no render {key} in this session")
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if all(k in meta for k in LATE_FACTS):
+            return {"key": key, **{k: meta[k] for k in LATE_FACTS}}
+        try:
+            found = self._want_facts(session.renders, key, None).result(timeout=wait)
+        except FuturesTimeout:
+            found = None
+        return {"key": key, **found} if found is not None else {"key": key, "pending": True}
+
+    def _want_facts(self, renders: Path, key: str, audio: np.ndarray | None) -> Future[dict[str, Any] | None]:
+        """Ask for render ``key``'s late facts (from ``audio``, its −28 LUFS samples, or its
+        WAV): the job doing it; jobs not started for other renders are dropped."""
+        with self._facts_lock:
+            self._facts_wanted = key
+            job = self._facts_jobs.get(key)
+            if job is not None and not job.cancelled() and (not job.done() or (job.exception() is None and job.result() is not None)):
+                return job
+            for other, queued in list(self._facts_jobs.items()):
+                if other != key and (queued.cancel() or queued.done()):
+                    del self._facts_jobs[other]
+            job = self._facts_pool.submit(self._late_facts, renders, key, audio)
+            self._facts_jobs[key] = job
+            return job
+
+    def _idle_for(self, key: str) -> bool:
+        """Wait until no render is under way or just asked for (the late facts never slow the
+        next edit's render down); ``False`` when render ``key`` is no longer the one wanted."""
+        while self._facts_wanted == key:
+            if not self._render_lock.locked() and time.monotonic() - self._last_render >= FACTS_AFTER_SECONDS:
+                return True
+            time.sleep(0.05)
+        return False
+
+    def _late_facts(self, renders: Path, key: str, audio: np.ndarray | None) -> dict[str, Any] | None:
+        """Work out render ``key``'s late facts and add them to its facts file; ``None`` when
+        another render became the one wanted first."""
+        from vidgen import loudness
+
+        meta_path = renders / f"{key}.json"
+        if not self._idle_for(key):
+            return None
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if audio is None:
+            audio = read_wav(renders / f"{key}.wav") / 10 ** (meta["audition_gain_db"] / 20)
+        # bar by bar and block by block, giving way to any render between them (as
+        # measure.loudness_curve and loudness.measure do it, the same numbers)
+        x = np.asarray(audio, dtype=np.float64)
+        bar, one_pass = meta["bar_samples"], meta["pass_samples"]
+        curve = []
+        for a in range(0, one_pass - bar + 1, bar):
+            if not self._idle_for(key):
+                return None
+            curve.append(loudness.integrated_loudness(x[a : a + bar]))
+        meter = loudness.LoudnessMeter()
+        for lo, hi, ext in loudness.blocks(len(x), lambda a, b: x[a:b]):
+            if not self._idle_for(key):
+                return None
+            part = slice(loudness.MARGIN, loudness.MARGIN + hi - lo)
+            meter.add(loudness.kweighted_power(ext)[part], loudness.peak_envelope(ext)[part])
+        facts = {
+            "loudness": round(meter.integrated, 2) if math.isfinite(meter.integrated) else None,
+            "true_peak": round(meter.true_peak, 2) if math.isfinite(meter.true_peak) else None,
+            "energy": [round(v, 1) if math.isfinite(v) and v > ENERGY_FLOOR else ENERGY_FLOOR for v in curve],
+        }
+        write_text_atomic(meta_path, json.dumps({**meta, **facts}) + "\n")
+        return facts
 
     def audio_file(self, name: str) -> Path | None:
         """The rendered file ``name`` of the open session, or ``None`` (an unknown or malformed

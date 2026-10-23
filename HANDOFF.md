@@ -18025,3 +18025,90 @@ Known gaps
   version on disk). A new effect mapping in a block-style track is written as block lines.
   No per-cell note dropdown: a pitched cell takes a brush or a typed step (`A4`, `5'`, `v2`).
   The YAML editor has no line wrapping or search (the browser's undo works in it).
+
+## Step 196 — vidgen studio: fast re-render, playing on, under narration, meters
+
+What was built (DESIGN §94.14)
+- **Stems in the renderer** (`vidgen.studio.render`): `render_track_stem` (one track alone, as
+  the piece plays it), `mix_track_stems` (sum in order, master filter, level measured on the
+  mix — or a listening mix at the whole's gain and length, a one-shot's tails kept; `threads=2`
+  runs the filter's channels and the loudness's blocks in threads, bit for bit the same),
+  `TrackStem`, `MixFacts`; `render_music_stems` built on them. `render_music_score` unchanged.
+  Small additive helpers: `music._level_gain` (`_finish` takes a gain), `loudness.measure` /
+  `integrated_loudness` take `threads`.
+- **Stem cache** (`studio_app/stems.py`): keys of exactly what a track hears (shared song data,
+  its spec, a duck's trigger's hit inputs, renderer and vidgen version); in memory, LRU past
+  768 MB, room made before rendering; a plain-volume change scales a kept stem; each stem's
+  power per 50 ms for the meters. `StudioApp.render` mixes from it and reports `timing`;
+  mute / solo remix kept stems (one-shot tails kept, Step 194's gap closed).
+- **Late facts**: loudness, true peak and the energy curve after the answer, one worker that
+  gives way to renders (`GET /api/facts`); the page dims the last curve meanwhile.
+- **Under narration** (`studio_app/narration.py`, `render {narration: true}` → `….n.wav`): the
+  shipped narration sample repeated over the piece, the music ducked with the check's
+  `duck_gain_db`, at a video's balance, one gain for every version (voice true peak −1.5 dBTP).
+- **The page**: `player.js` brings a new source in on a second `<audio>` seeked ahead and
+  cross-faded at the same moment (no gap; measured offset within ±10 ms); the "under narration"
+  checkbox works; meters from each stem's audio (`meters` per 50 ms); the status line says what
+  was rendered ("pad rendered + remixed in 1.6 s", "bass at the new volume", "listening mix").
+
+Decisions
+- Exactness: the remix differs from `render_music_score` only in float addition order (plain
+  tracks' notes go straight into the piece there): ≤ 4.7e-10 measured on the 17 templates and
+  edited scores, test tolerance 1e-9, the 16-bit audio identical. Keeping the exact order would
+  need every overlapping note in memory (280 MB for tidewater's arp); changing
+  `render_music_score` instead would have moved 1–2 samples of three templates by a float32
+  step (a hard-rule break). Checked byte for byte against the code before the step: every
+  template render, the stems mix, the warnings (`<scratchpad>/s196/compare_old.py`).
+- Stems in memory, not on disk (float64 needed; ~370 MB a version). Tracks render one at a
+  time (two heavy tracks at once reached 2.8 GB). Section-only render not built (§94.14).
+
+Files touched
+- New: `src/vidgen/studio_app/stems.py`, `narration.py`; `tests/test_studio_stems.py` (15 + 17
+  `slow`).
+- Changed: `studio/render.py`, `music.py` (`_level_gain`), `loudness.py` (`threads`),
+  `studio_app/app.py` (render from stems, mixes, narration, late facts, `close`), `server.py`
+  (`narration`, `/api/facts`), `__init__.py` (`app.close()`), `static/player.js`, `app.js`,
+  `api.js`, `tracks.js`, `timeline.js`, `index.html`, `studio.css`; `tests/test_studio_app.py`,
+  `test_studio_song.py` (energy / loudness come from `facts`), `test_studio_ui.py` (+1);
+  `DESIGN.md` (§94.14, §94.1/.2/.3/.5/.6), `docs/CONFIG.md`, `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. `vidgen.studio.render`: `render_track_stem`, `mix_track_stems`,
+  `TrackStem`, `MixFacts` (not in `vidgen.studio.__all__`). The page's API: `narration`,
+  `timing`, `meters`, `mix_gain`, `facts_pending`, `GET /api/facts`, `.n` audio names.
+
+Latency (two cores; server = edit + render calls without a browser / heard = click to the new
+audio playing in headless Chromium at the same moment)
+- Single-track edits: momentum 0.6 / 1.1–1.3 s, tidewater 0.8–0.9 / 1.5–1.6 s, time_of_flight
+  0.8–0.95 / 1.55–1.7 s (a heavy track adds its own render: time_of_flight's pad 3.2 / 4.4 s);
+  volume (kept stem scaled) 0.6–0.8 / 1.1–1.6 s; mute / solo 0.3–0.5 / 0.6–0.9 s; a mix made
+  before 0.4 s heard; under narration 0.7–1.0 s; tempo +4 3.1 / 4.1 s (momentum, tidewater),
+  17 / 22 s (time_of_flight: see the FFT finding). Full table: DESIGN §94.14. Before: 3–9 s
+  every edit, 2.3–8.2 s every mute.
+
+How to test (one at a time, capped)
+- `tests/test_studio_stems.py -m "not slow"`: 15 passed in 17 s; `-m slow` (the 17 templates
+  remix to their render): 17 passed in 110 s (capped3g).
+- `tests/test_studio_ui.py -m ui`: 10 passed in 36 s (new: edit / steps / mute / narration while
+  playing, swapped at the same moment, meters from the audio).
+- `test_studio_app` + `test_studio_song` + `test_studio_inspector`: passed (59 with stems).
+- Related: `test_music.py -k bed_sounds_as_approved` 17 passed (fingerprints); `test_music.py` +
+  `test_studio.py` (rest) 115 passed; `test_music_check.py` + `test_music_templates.py` 39 passed
+  (incl. slow); `test_listen`, `test_phase_s_review`, `test_music_pieces` passed; `test_score` +
+  `test_sfx` 160 passed; `test_docs` + `test_guide` + `test_packaging` 119 passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s196/shots/1-momentum-playing-meters.png`,
+  `2-momentum-muted.png`, `3-momentum-under-narration.png`, `4-tidewater-after-tempo.png`,
+  `5-time-of-flight.png`, `6-time-of-flight-pad-inspector.png`, `7-rendering.png` (badge, a
+  heavy edit under way), `8-after-render.png`, `9-narrow.png`, `10-light.png`; made by
+  `<scratchpad>/s196/shots.py`, which also measures the "heard" latencies
+  (`browser-latency-*.json`); `latency.py` the server ones.
+
+Known gaps
+- A heavy track's edit still waits for its render (1–2.4 s on time_of_flight); a section
+  preview could help later. **Renderer finding**: a piece length with a large prime factor
+  (most tempos: time_of_flight at 112 BPM = 2⁹·3·1607 samples) makes every FFT 5–12× slower
+  and a render 2–3× slower with ~2 GB peak — videos too; worth a look in Step 201 or later (a
+  fix must keep the beds' samples). Meters are before the master filter. The late facts are
+  computed from the 16-bit WAV after a restart (rounding at 2 decimals).

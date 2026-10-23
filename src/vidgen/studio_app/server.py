@@ -186,6 +186,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send_json({"ok": True, "result": routes[path]()})
         if path == "/api/score":
             return self._send_json({"ok": True, "result": app.score(_int(query.get("version", [""])[0], "version"))})
+        if path == "/api/facts":
+            return self._send_json({"ok": True, "result": app.facts(query.get("key", [""])[0])})
         raise _ApiError(HTTPStatus.NOT_FOUND, f"not found: {path}")
 
     def _post(self, path: str, query: dict[str, list[str]]) -> None:
@@ -197,7 +199,7 @@ class _Handler(BaseHTTPRequestHandler):
             result = app.validate(_req_str(body, "text"))
         elif path == "/api/render":
             version = body.get("version")
-            result = app.render(_int(version, "version") if version is not None else None, _opt_str(body, "section"), _str_list(body, "mute"))
+            result = app.render(_int(version, "version") if version is not None else None, _opt_str(body, "section"), _str_list(body, "mute"), bool(body.get("narration", False)))
         elif path == "/api/edit":
             version, ops = body.get("version"), body.get("ops")
             if not isinstance(ops, list):

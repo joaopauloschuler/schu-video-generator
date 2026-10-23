@@ -13,13 +13,13 @@ from __future__ import annotations
 import bisect
 import math
 import zlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 
 import numpy as np
 
-from vidgen.music import _add_panned, _circular_add, _finish, _hz, _pad_wave, _tone_filter, _xfade_window
-from vidgen.sfx import RATE
+from vidgen.music import _add_panned, _circular_add, _finish, _hz, _level_gain, _pad_wave, _tone_filter, _xfade_window
+from vidgen.sfx import RATE, _highpass, _lowpass
 from vidgen.studio import effects as fx
 from vidgen.studio.instruments import AIRY_HARMONICS, AIRY_WIDTH_CENTS, Instrument
 from vidgen.studio.patterns import ACCENT_GAIN, Pattern, Step, accent_steps
@@ -521,10 +521,119 @@ def _one_shot_end(x: np.ndarray, bar_end: int) -> np.ndarray:
     return y
 
 
+@dataclass(frozen=True)
+class TrackStem:
+    """One track played alone (DESIGN.md §94.6, Step 196): ``data`` float64 ``(n, 2)``, read-only,
+    on the piece's canvas — ``score.samples`` for a loop; for a one-shot :data:`BEFORE_SECONDS`
+    of room before the start (``before`` samples), the piece, and :data:`TAIL_SECONDS` of tail —
+    before the master filter and the level. ``skipped``: the notes left out (outside 20 Hz-12
+    kHz) per ``(track, section)``, for the warnings."""
+
+    name: str
+    data: np.ndarray
+    before: int
+    skipped: Mapping[tuple[str, str], tuple[int, ...]]
+
+    @property
+    def piece(self) -> np.ndarray:
+        """The stem from the piece's start (a one-shot's tail included)."""
+        return self.data[self.before :]
+
+
+def render_track_stem(score: MusicScore, name: str) -> TrackStem:
+    """Track ``name`` of ``score`` played alone, as :func:`render_music_score` plays it (the
+    same notes and effects; see :func:`mix_track_stems` on rounding). A track's sound depends on the score's shared data (key,
+    tempo, time, seed, loop, sections, chords), its own spec and, when it ducks, the hits of the
+    track it ducks under — nothing else."""
+    tracks = {t.name: t for t in score.tracks}
+    track = tracks[name]
+    skipped = _Skipped()
+    alone = _Canvas(score)
+    if _uses_bus(track):
+        alone.data += _render_bus(score, track, tracks, skipped)
+    elif track.play_chords:
+        _render_held_chords(lambda section: alone, score, track, skipped)
+    else:
+        _render_hits(lambda section: alone, score, track, skipped)
+    alone.data.setflags(write=False)
+    return TrackStem(name, alone.data, alone.before, {k: tuple(v) for k, v in skipped.notes.items()})
+
+
+@dataclass(frozen=True)
+class MixFacts:
+    """How a mix of stems was finished: the linear ``gain`` that set the whole piece to -28 LUFS
+    and its length in samples (``samples``; a one-shot cut where its tail falls silent) — what a
+    listening mix of some of its tracks reuses, so it plays at the piece's level and length."""
+
+    gain: float
+    samples: int
+
+
+def _master_filter(x: np.ndarray, score: MusicScore, threads: int) -> np.ndarray:
+    """:func:`vidgen.music._tone_filter` with the score's master settings — with ``threads`` > 1
+    each channel on its own thread (numpy's FFT lets go of the GIL), bit for bit the same."""
+    if threads <= 1:
+        return _tone_filter(x, score.lowpass, score.highpass)
+    from concurrent.futures import ThreadPoolExecutor
+
+    freqs = np.fft.rfftfreq(len(x), 1 / RATE)
+    response = _highpass(freqs, score.highpass, 2) * _lowpass(freqs, score.lowpass, 2)
+    with ThreadPoolExecutor(min(threads, x.shape[1])) as pool:
+        channels = list(pool.map(lambda c: np.fft.irfft(np.fft.rfft(x[:, c]) * response, len(x)), range(x.shape[1])))
+    return np.stack(channels, axis=1)
+
+
+def mix_track_stems(
+    score: MusicScore, stems: Iterable[TrackStem], warnings: list[str] | None = None, whole: MixFacts | None = None, threads: int = 1
+) -> tuple[np.ndarray, MixFacts]:
+    """The stems summed in the order given, through the master filter and set to -28 LUFS (its
+    own loudness measured, as :func:`render_music_score` does): float32 ``(n, 2)``, read-only,
+    and how it was finished. Every track's stem in the score's order gives
+    :func:`render_music_score`'s samples but for the order floats were added in plain tracks
+    (at most 1 float32 step in a few samples; the same 16-bit audio). ``whole``: the
+    facts of the whole piece's mix — then the stems (some of the tracks: a listening mix) are
+    set to its gain and cut at its length with the same fades (a one-shot keeps its tails),
+    so leaving a track out never makes the rest louder. One stem at a time is held besides the
+    sum (``stems`` may be a generator). ``threads``: the master filter and the loudness on that
+    many threads (the same samples)."""
+    canvas = _Canvas(score)
+    skipped = _Skipped()
+    for stem in stems:
+        canvas.data += stem.data
+        for where, notes in stem.skipped.items():
+            skipped.notes.setdefault(where, []).extend(notes)
+    if warnings is not None:
+        warnings.extend(skipped.warnings())
+    if canvas.wrap:
+        x = _master_filter(canvas.data, score, threads)
+    else:
+        rest = canvas.data[canvas.before :]
+        filtered = _master_filter(np.concatenate([rest, np.zeros((RATE, 2))]), score, threads)[: len(rest)]
+        x = _one_shot_end(filtered, score.samples) if whole is None else _cut(filtered, whole.samples)
+    if whole is not None:
+        return _finish(x, whole.gain), whole
+    gain = _level_gain(x, threads)
+    return _finish(x, gain), MixFacts(gain, len(x))
+
+
+def _cut(x: np.ndarray, end: int) -> np.ndarray:
+    """A one-shot's listening mix cut at the whole piece's ``end`` with :func:`_one_shot_end`'s fades."""
+    y = np.concatenate([x[:end], np.zeros((max(end - len(x), 0), 2))])
+    fade_in, fade_out = int(0.005 * RATE), int(0.05 * RATE)
+    y[:fade_in] *= np.linspace(0, 1, fade_in)[:, None]
+    y[-fade_out:] *= np.linspace(1, 0, fade_out)[:, None]
+    return y
+
+
 def render_music_score(score: MusicScore, warnings: list[str] | None = None) -> np.ndarray:
     """The score's audio: float32 ``(n, 2)`` at 48 kHz, -28 LUFS integrated, read-only. A loop
     is exactly ``score.samples`` long; a one-shot adds the tails after its last bar. Notes
-    outside 20 Hz-12 kHz are left out and, when ``warnings`` is given, described in it."""
+    outside 20 Hz-12 kHz are left out and, when ``warnings`` is given, described in it.
+
+    A plain track's notes are added straight into the piece (a track with effects as one sum),
+    so :func:`mix_track_stems` of the same tracks differs from this only in the order floats
+    were added: at most 1 float32 step in a few samples of a piece (DESIGN.md §94.14). These
+    samples are kept as they were (the beds' and projects' music must not change)."""
     canvas = _Canvas(score)
     tracks = {t.name: t for t in score.tracks}
     skipped = _Skipped()
@@ -549,30 +658,16 @@ def render_music_stems(score: MusicScore, on_stem: Callable[[str, np.ndarray], N
     """The score played track by track (for ``vidgen music check``, §93.9): every track is
     rendered alone and handed to ``on_stem(name, sound)`` (float64 ``(n, 2)``, its one pass of
     ``score.samples``, *before* the master filter and the final level), then summed. Returns
-    the mix as :func:`render_music_score` makes it (the same within rounding: the tracks are
-    summed in another order) and the linear gain that set it to -28 LUFS (to apply to the
-    stems' measures, with the master filter's response). One track's buffer at a time, so
-    memory stays that of a render."""
-    tracks = {t.name: t for t in score.tracks}
-    skipped = _Skipped()
-    canvas = _Canvas(score)
-    for track in score.tracks:
-        alone = _Canvas(score)
-        if _uses_bus(track):
-            alone.data += _render_bus(score, track, tracks, skipped)
-        elif track.play_chords:
-            _render_held_chords(lambda name: alone, score, track, skipped)
-        else:
-            _render_hits(lambda name: alone, score, track, skipped)
-        on_stem(track.name, alone.data[alone.before : alone.before + score.samples])
-        canvas.data += alone.data
-    if warnings is not None:
-        warnings.extend(skipped.warnings())
-    if canvas.wrap:
-        x = _tone_filter(canvas.data, score.lowpass, score.highpass)
-    else:
-        rest = canvas.data[canvas.before :]
-        x = _one_shot_end(_tone_filter(np.concatenate([rest, np.zeros((RATE, 2))]), score.lowpass, score.highpass)[: len(rest)], score.samples)
-    out = _finish(x)
-    loudest = float(np.abs(x).max())
-    return out, float(np.abs(out).max()) / loudest if loudest > 0 else 1.0
+    the mix (:func:`mix_track_stems`: :func:`render_music_score`'s within rounding) and the
+    linear gain that set it to -28 LUFS
+    (to apply to the stems' measures, with the master filter's response). One track's buffer at
+    a time, so memory stays that of a render."""
+
+    def stems() -> Iterator[TrackStem]:
+        for track in score.tracks:
+            stem = render_track_stem(score, track.name)
+            on_stem(track.name, stem.data[stem.before : stem.before + score.samples])
+            yield stem
+
+    out, facts = mix_track_stems(score, stems(), warnings)
+    return out, facts.gain

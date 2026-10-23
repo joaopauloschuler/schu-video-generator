@@ -168,7 +168,9 @@ def test_render_writes_a_cached_audition_wav_and_cuts_sections(app: StudioApp) -
     app.load(text=TINY)
     first = app.render()
     assert not first["cached"] and first["seconds"] == 4.0 and first["loop"]
-    assert abs(first["loudness"] + 28) < 0.1 and first["audition_gain_db"] == 12.0
+    assert first["facts_pending"] and first["audition_gain_db"] == 12.0  # Step 196: worked out after it plays
+    facts = app.facts(first["key"])
+    assert abs(facts["loudness"] + 28) < 0.1 and facts["true_peak"] < -1 and len(facts["energy"]) == 2
     wav_path = app.audio_file(f"{first['key']}.wav")
     assert wav_path is not None and first["url"] == f"/audio/{first['key']}.wav"
     with wave.open(str(wav_path)) as w:

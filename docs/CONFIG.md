@@ -3420,8 +3420,13 @@ than in a mix: −16 LUFS, the same for every version). Ctrl+C in the terminal s
   `sessions/<id>/versions/v0001.yaml` (each version of the score as written),
   `session.json` and `renders/` (rendered audio, reused while the notes are unchanged). While it
   runs, `open.json` names its address and session. The studio writes nowhere else.
-- Being built in Phase T (`tasklist.md`): editing, fast re-rendering, the check panel,
-  versions and exports, listening notes and agents, variations come in the next steps.
+- **Listening while editing**: an edit renders again only the tracks it changes (the others'
+  sound is kept in the studio's memory, up to 768 MB) and plays on from the same moment;
+  mute / solo and **under narration** (the piece under the narration sample `vidgen music
+  check` uses, with vidgen's default ducking, as in a video) change what plays, never the
+  score. The meters show each track's own audio.
+- Being built in Phase T (`tasklist.md`): the check panel, versions and exports, listening
+  notes and agents, variations come in the next steps.
 
 ### Loudness of the final mix (`audio`)
 

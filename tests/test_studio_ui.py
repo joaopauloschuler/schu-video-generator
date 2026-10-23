@@ -353,3 +353,61 @@ def test_score_file_typed_both_ways(studio: tuple[StudioApp, StudioServer], page
     wait_idle(page, 3)
     assert "transpose: 2" in page.input_value("#yaml-input") and "transpose: 2" in page.text_content("#yaml")
     assert page.errors == []
+
+
+# ----- Step 196: fast re-render, playing on, under narration, meters ------------------------------------
+
+LONGER = TINY.replace("{name: a, bars: 1}, {name: b, bars: 1}", "{name: a, bars: 4}, {name: b, bars: 4}")  # 16 s
+
+
+def wait_swapped(page: Any, swaps: int) -> None:
+    page.wait_for_function(f"!document.body.dataset.switching && document.body.dataset.swaps === '{swaps}'", timeout=30_000)
+
+
+def test_edits_mutes_and_narration_play_on_at_the_same_moment(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    app, server = studio
+    app.load(text=LONGER)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    assert page.is_enabled("#narration")
+    page.click("#play")
+    page.wait_for_function("document.getElementById('audio').currentTime > 1.0", timeout=15_000)
+    # the meters show each track's own audio: levels while it plays
+    page.wait_for_function("[...document.querySelectorAll('#tracks .meter')].every(m => m.dataset.db !== '' && Number(m.dataset.db) > -60)")
+    before = page.evaluate("document.getElementById('audio').currentTime")
+    # a volume edit while playing: the kept stem at the new volume, remixed, brought in at the moment playing
+    box = page.locator("#tracks .track[data-name=bass] .vol").bounding_box()
+    page.mouse.click(box["x"] + box["width"] * 0.25, box["y"] + box["height"] / 2)
+    wait_idle(page, 2)
+    wait_swapped(page, 1)
+    after = page.evaluate("document.getElementById('audio').currentTime")
+    assert before < after < before + 10  # played on: not from the start
+    assert abs(int(page.evaluate("document.body.dataset.swapDrift"))) < 150  # the two sources lined up (ms)
+    assert "bass at the new volume" in page.text_content("#status") and page.get_attribute("#play", "aria-pressed") == "true"
+    assert page.evaluate("document.getElementById('audio').src").endswith(f"{app.render()['key']}.wav")
+    # one track's steps: only that track is rendered again
+    page.click("#tracks .track[data-name=kick] .pattern")
+    page.fill("#tracks .pattern-input", "x.x. x... x... x...")
+    page.press("#tracks .pattern-input", "Enter")
+    wait_idle(page, 3)
+    wait_swapped(page, 2)
+    assert "kick rendered + remixed" in page.text_content("#status")
+    # mute: a listening mix of the kept stems, brought in the same way; its meter rests
+    page.click("#tracks .track[data-name=kick] .mute")
+    wait_idle(page)
+    wait_swapped(page, 3)
+    assert ".m" in page.evaluate("document.getElementById('audio').src")
+    page.wait_for_function("document.querySelector('#tracks .track[data-name=kick] .meter').dataset.db === ''")
+    assert page.evaluate("document.querySelector('#tracks .track[data-name=bass] .meter').dataset.db") != ""
+    # under narration: the same mix under the narration sample, and back
+    page.check("#narration")
+    wait_idle(page)
+    wait_swapped(page, 4)
+    assert page.evaluate("document.getElementById('audio').src").endswith(".n.wav") and "under narration" in page.text_content("#status")
+    page.uncheck("#narration")
+    wait_idle(page)
+    wait_swapped(page, 5)
+    assert not page.evaluate("document.getElementById('audio').src").endswith(".n.wav")
+    assert page.get_attribute("#play", "aria-pressed") == "true" and page.evaluate("document.getElementById('audio').paused") is False
+    assert page.evaluate("document.getElementById('audio-next').paused") is True  # the other element is quiet
+    assert page.errors == []

@@ -1,7 +1,7 @@
-// The track list (DESIGN.md §94.12): per track mute / solo (a listening aid: what plays, never
-// the score), a volume bar and a pan knob (they edit the score), the steps text edited in place
-// with its problems shown under it, a level meter while playing, delete; [+ track] with an
-// instrument picker.
+// The track list (DESIGN.md §94.12, §94.14): per track mute / solo (a listening aid: what plays,
+// never the score; remixed from the kept stems), a volume bar and a pan knob (they edit the
+// score), the steps text edited in place with its problems shown under it, a level meter from
+// the track's own audio while playing, delete; [+ track] with an instrument picker.
 
 import { escapeHtml } from "./yaml_view.js";
 
@@ -305,39 +305,33 @@ function editPattern(row) {
 
 // ----- meters ----------------------------------------------------------------------------------
 
-// A rough level from the score (Step 196 measures the stems): the step under the playhead, its
-// gain (accents louder), decaying after the hit, times the track's volume.
-function levelAt(t, outline, section, seconds) {
-  if (!section || !t.sections.includes(section.name)) return 0;
-  const volume = typeof t.volume === "number" ? t.volume : 0;
-  const gain = Math.min(1, 10 ** (volume / 40));
-  const levels = t.levels?.[section.name];
-  if (!levels) return 0.55 * gain; // a pad holding the chords
-  const bar = outline.bar_seconds;
-  const into = Math.max(0, seconds - section.start);
-  const index = Math.floor(into / bar);
-  const steps = levels[index % levels.length];
-  const pos = ((into / bar) - index) * steps.length;
-  let k = Math.floor(pos);
-  while (k >= 0 && steps[k] === -1) k--;
-  if (k < 0 || steps[k] === 0) return 0;
-  const since = ((pos - k) * bar) / steps.length;
-  const tau = t.kind === "drum" ? 0.11 : 0.32;
-  return Math.min(1, 0.8 * steps[k] * gain * Math.exp(-since / tau));
+// The meters show each track's own sound as it plays (Step 196): the render's `meters`, its
+// stem's level per 50 ms in dBFS as heard (before the master filter), from METER_LOW (empty)
+// to METER_HIGH (full).
+const METER_LOW = -48;
+const METER_HIGH = -6;
+
+function levelAt(name, seconds) {
+  const r = ctx.state.render;
+  const levels = r?.meters?.[name];
+  if (!levels?.length) return null;
+  const frame = Math.max(0, Math.floor(seconds / (r.meter_seconds || 0.05)));
+  return levels[Math.min(frame, levels.length - 1)];
 }
 
 export function tickMeters(seconds, section, playing) {
-  const outline = ctx.outline();
-  if (!outline) return;
+  if (!ctx.outline()) return;
   const muted = new Set(mutedTracks());
   for (const row of document.getElementById("tracks").querySelectorAll(".track")) {
-    const t = track(row.dataset.name);
-    if (!t) continue;
-    const target = playing && !muted.has(t.name) ? levelAt(t, outline, section, seconds) : 0;
-    const shown = meters.get(t.name) || 0;
-    const level = target > shown ? target : shown * 0.86 + target * 0.14;
-    meters.set(t.name, level < 0.01 ? 0 : level);
-    row.querySelector(".meter i").style.height = `${(level * 100).toFixed(1)}%`;
+    const name = row.dataset.name;
+    const db = playing && !muted.has(name) ? levelAt(name, seconds) : null;
+    const target = db === null ? 0 : Math.max(0, Math.min(1, (db - METER_LOW) / (METER_HIGH - METER_LOW)));
+    const shown = meters.get(name) || 0;
+    const level = target > shown ? target : shown * 0.8 + target * 0.2;
+    meters.set(name, level < 0.01 ? 0 : level);
+    const meter = row.querySelector(".meter");
+    meter.querySelector("i").style.height = `${(level * 100).toFixed(1)}%`;
+    meter.dataset.db = db === null ? "" : String(db);
   }
 }
 

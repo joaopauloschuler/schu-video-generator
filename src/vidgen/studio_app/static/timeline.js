@@ -150,8 +150,10 @@ export function showEnergy() {
   const svg = document.getElementById("energy");
   const energy = ctx.state.render?.energy;
   const outline = ctx.outline();
+  const pending = Boolean(ctx.state.render?.facts_pending);
+  svg.classList.toggle("stale", pending && !energy?.length);
   if (!energy?.length || !outline) {
-    svg.innerHTML = "";
+    if (!pending) svg.innerHTML = ""; // a new render's curve comes a moment later: the last one stays, dimmed
     return;
   }
   const bars = Math.min(energy.length, outline.bars);

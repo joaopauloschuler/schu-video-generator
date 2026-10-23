@@ -1107,7 +1107,10 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 - [x] Tests: `tests/test_studio_inspector.py` (9), `tests/test_studio_ui.py` (+3 `ui` flows); screenshots looked at
 
 ### Step 196 — Fast re-render
-- [ ] Per-track stem cache (re-render only the changed tracks, remix); section-only render; playback continues at the same moment; the "under narration" toggle; level meters from real data; latency of typical edits measured and reported
+- [x] Per-track stem cache (re-render only the changed tracks, remix; keyed on what each track hears, a duck on its trigger's hits; a volume change scales a kept stem); remix = `render_music_score` within 1e-9 (the same 16-bit audio) on the 17 templates and edited scores, `render_music_score` itself unchanged; mute / solo remix kept stems (one-shot tails kept)
+- [x] Playback continues at the same moment with no gap (a second `<audio>` cross-faded in); the "under narration" toggle (narration sample, default ducking); level meters from each stem's audio; late facts (loudness, energy) after the render plays
+- [~] Section-only render: measured and not built (a section is cut from the remix; DESIGN §94.14 says why)
+- [x] Latency of typical edits measured on momentum, tidewater, time_of_flight (DESIGN §94.14); tests `tests/test_studio_stems.py` (+17 `slow`), `tests/test_studio_ui.py` (+1 `ui`); screenshots looked at
 
 ### Step 197 — Check, versions and exports
 - [ ] Check panel (spectrogram, verdict, advice, [Apply] for mechanical fixes); versions, undo / redo, A/B against the original preset and any version; exports YAML / MP3 / WAV and save to a project's `assets/music/` (the Step 188 name-clash rule); reopen older sessions

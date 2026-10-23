@@ -247,6 +247,7 @@ def wav_rms(path: Path) -> tuple[int, float]:
 def test_render_has_energy_per_bar_and_mutes_make_a_mix(app: StudioApp) -> None:
     app.load(text=TEXT)
     full = app.render()
+    full.update(app.facts(full["key"]))  # Step 196: the energy curve comes after the render plays
     assert len(full["energy"]) == 2 and all(-70 <= e < 0 for e in full["energy"]) and full["muted"] == []
     assert full["energy"][1] > full["energy"][0]  # the bass joins in section b
     mix = app.render(mute=["bass", "nope"])

@@ -28,6 +28,7 @@ const state = {
   loop: null,           // the section looped, or null: the whole piece
   mute: new Set(),      // listening aid only: never written to the score
   solo: new Set(),
+  narration: false,     // play under the narration sample (a listening aid too)
   rendering: false,
   wantAudio: false,
   seekAfter: null,      // a moment to play from once the next source is in
@@ -277,7 +278,7 @@ async function refreshAudio() {
     while (state.wantAudio) {
       state.wantAudio = false;
       if (!state.score || state.score.problems.length) break;
-      const r = await api.render(state.score.version, state.loop, mutedTracks());
+      const r = await api.render(state.score.version, state.loop, mutedTracks(), state.narration);
       if (state.wantAudio) continue;
       applyRender(r);
     }
@@ -292,16 +293,56 @@ async function refreshAudio() {
   }
 }
 
+// What a render took, in words: the tracks rendered again (the others' stems were kept), a
+// volume applied to a kept stem, the mix, a listening mix, the narration.
+function howMade(r) {
+  const t = r.timing || {};
+  const parts = [];
+  const tracks = Object.keys(t.tracks || {});
+  if (tracks.length) parts.push(tracks.length > 3 ? `${tracks.length} tracks rendered` : `${tracks.join(", ")} rendered`);
+  const scaled = Object.keys(t.scaled || {});
+  if (scaled.length) parts.push(`${scaled.join(", ")} at the new volume`);
+  if (!r.cached) parts.push(tracks.length || scaled.length ? "remixed" : "mixed");
+  if (t.listening_mix) parts.push("listening mix");
+  if (t.narration) parts.push("under narration");
+  return parts.length ? `${parts.join(" + ")} in ${(t.total || 0).toFixed(1)} s` : "from the cache";
+}
+
+function renderStatus(r) {
+  const where = r.section ? ` · looping ${r.section.name}` : "";
+  const muted = r.muted?.length ? ` · without ${r.muted.join(", ")}` : "";
+  const voice = r.narration ? " · under narration" : "";
+  const level = typeof r.loudness === "number"
+    ? ` · ${r.loudness.toFixed(1)} LUFS in a video, ${r.narration ? "here as in a video under the voice" : `plays at ${(r.loudness + r.audition_gain_db).toFixed(0)} here`}`
+    : "";
+  status(`v${r.version} ${howMade(r)} · ${clock(r.seconds)}${where}${muted}${voice}${level}`);
+}
+
 function applyRender(r) {
   state.render = r;
   const at = state.seekAfter;
   state.seekAfter = null;
   player.setSource(r.url, { loop: r.section ? true : r.loop, offset: r.section ? r.section.start : 0, at });
   showEnergy();
-  const how = r.cached ? "from the cache" : `rendered in ${r.render_seconds.toFixed(1)} s`;
-  const where = r.section ? ` · looping ${r.section.name}` : "";
-  const muted = r.muted?.length ? ` · without ${r.muted.join(", ")}` : "";
-  status(`v${r.version} ${how} · ${clock(r.seconds)}${where}${muted} · ${r.loudness.toFixed(1)} LUFS in a video, plays at ${(r.loudness + r.audition_gain_db).toFixed(0)} here`);
+  renderStatus(r);
+  if (r.facts_pending) lateFacts(r);
+}
+
+// The loudness, true peak and energy curve come a moment after the render plays (the server
+// works them out when no render is under way).
+async function lateFacts(r) {
+  busy(1);
+  try {
+    const f = await api.facts(r.key);
+    if (f.pending || state.render?.key !== r.key) return;
+    for (const done of [r, state.render]) Object.assign(done, f, { facts_pending: false });
+    showEnergy();
+    if (state.render === r) renderStatus(r);
+  } catch {
+    // the facts are a nicety: playing goes on without them
+  } finally {
+    busy(-1);
+  }
 }
 
 function setLoop(name) {
@@ -367,6 +408,10 @@ function wireTransport() {
   $("play").addEventListener("click", togglePlay);
   $("stop").addEventListener("click", () => player.stop());
   $("loop").addEventListener("change", (e) => setLoop(e.target.value));
+  $("narration").addEventListener("change", (e) => {
+    state.narration = e.target.checked;
+    refreshAudio();
+  });
   const seek = $("seek");
   seek.addEventListener("input", () => {
     seeking = true;

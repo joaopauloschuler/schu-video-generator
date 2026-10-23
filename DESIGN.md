@@ -13864,8 +13864,8 @@ built-in bed's template.
   both ways with the steps text; the YAML editable both ways (type YAML, the controls follow);
   inline problems with the CLI's did-you-mean messages — a bad edit never stops playback (the
   last good render keeps playing).
-- **196 Fast re-render** (§94.6): per-track stem cache, re-render only changed tracks and remix;
-  section-only render; playback continues at the same moment; the "under narration" toggle;
+- **196 Fast re-render** (done, §94.14): per-track stem cache, re-render only changed tracks and remix;
+  section-only render (measured, not worth it: §94.14); playback continues at the same moment; the "under narration" toggle;
   level meters from real data; latency of typical edits measured and reported.
 - **197 Check, versions, exports**: the check panel (`check.check_music_score`: verdict, headline
   numbers, spectrogram with section marks, advice with [Apply] where the fix is mechanical,
@@ -13892,7 +13892,7 @@ person asks (Step 197).
 - **Modules** (`src/vidgen/studio_app/`): `__init__.py` (`run_studio`: the command's loop),
   `app.py` (`StudioApp`: what each API call does, with no HTTP — tests call it directly),
   `server.py` (`StudioServer`, the HTTP layer only), `session.py` (sessions on disk), `static/`
-  (the page, package data). Later steps add modules beside them (`edits.py` and `song.py` 194, `inspector.py` 195, `stems.py` 196,
+  (the page, package data). Later steps add modules beside them (`edits.py` and `song.py` 194, `inspector.py` 195, `stems.py` and `narration.py` 196,
   `exports.py` 197, `notes.py` / `agent.py` 198, `variations.py` 199) and keep `server.py` a thin
   router. Boundary: `studio_app` may import any of vidgen; `vidgen.studio` never imports
   `studio_app` (it stays a self-contained package, §93.2, checked by its allow-list test).
@@ -13943,7 +13943,8 @@ person asks (Step 197).
   pid; it removes the file on exit only if its pid is still the one in it (a second studio may
   have replaced it). MCP tools read it to find "the open session".
 - Later steps add, per session: `notes.json` (198), `inbox/` (agent proposals, 198),
-  `variations/<batch>/` (199), `stems/` (196), `checks/` (197).
+  `variations/<batch>/` (199), `checks/` (197). Stems (196) are kept in the studio's memory,
+  not on disk (§94.14); `renders/` gains listening mixes under narration (`….n.wav`).
 
 ### 94.4 Versions, undo / redo and A/B (plan for Steps 195 and 197)
 
@@ -13979,8 +13980,9 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 | `GET /api/score?version=N` | 193 | a version: text, outline (`score_outline` + per track the steps text, volume, pan and settings as written; each section's first bar; the progression when it is one string), problems, render key |
 | `POST /api/load {preset} \| {text}` | 193 | a new session whose version 1 is the preset's template or the text (bad text refused with its problems) |
 | `POST /api/validate {text}` | 193 | `ok`, problems `{where, message, line}` (did-you-mean as the CLI; YAML syntax errors with their line), outline |
-| `POST /api/render {version?, section?, mute?}` | 193, 194 | render a version (default current) or one section; `mute`: tracks left out (a listening mix, §94.12); `{key, url, seconds, samples, loop, loudness, true_peak, audition_gain_db, warnings, render_seconds, energy, cached, section, muted}` |
-| `GET /audio/<key>.wav`, `/audio/<key>[.m<tag>]-<section>.wav`, `/audio/<key>.m<tag>.wav` | 193, 194 | the render (or a listening mix), with `Range` (206, `Content-Range`; 416 outside the file) |
+| `POST /api/render {version?, section?, mute?, narration?}` | 193, 194, 196 | render a version (default current) or one section; `mute`: tracks left out (a listening mix, §94.12); `narration`: under the narration sample (196); `{key, url, seconds, samples, loop, audition_gain_db, warnings, render_seconds, mix_gain, meters, meter_seconds, pass_samples, bar_samples, cached, section, muted, narration, timing, facts_pending}` and, once worked out, `loudness, true_peak, energy` (196: §94.14) |
+| `GET /api/facts?key=K` | 196 | the late facts of render `K` (`loudness, true_peak, energy`), waiting for them; `{pending: true}` when another render was asked for meanwhile |
+| `GET /audio/<key>.wav`, `/audio/<key>[.m<tag>][.n]-<section>.wav`, `/audio/<key>.m<tag>.wav`, `….n.wav` | 193, 194, 196 | the render (or a listening mix, either under narration `.n`), with `Range` (206, `Content-Range`; 416 outside the file) |
 | `POST /api/edit {version?, ops, label?, dry_run?}` | 194, 195 | a new version from value edits (paths like `tracks.bass.volume`; `unset` 195) and song edits (§94.12; `change_instrument`, `play_mode`, `section_plays` 195, §94.13); `{ok: false, problems}` writes nothing; `dry_run` checks only; `notes`: what changes beyond the value named |
 | `POST /api/text {version?, text}` | 195 | a new version from typed text (`origin: edit`); `{ok: false, problems}` writes nothing; the same text `unchanged` |
 | `POST /api/undo`, `/api/redo`, `/api/current {version}` | 197 | move the current version |
@@ -14012,7 +14014,7 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
   loops to an `AudioBufferSourceNode` (sample-exact `loopStart` / `loopEnd`) if the `<audio>`
   loop's gap is audible, keeping the same server files. `setSource` keeps the playing position,
   which is how a re-render (196) and A/B (197) continue at the same moment.
-- **Stems (plan for Step 196)**: `render.render_music_stems` already renders each track alone
+- **Stems (Step 196's plan; what was built and where it differs: §94.14)**: `render.render_music_stems` already renders each track alone
   (before the master filter and final level) and sums them. The studio factors the per-track part
   into a function `vidgen.studio` exposes (bit-identical, tested) and caches each track's stem as
   float32 in `stems/<track key>.npy`; the track key hashes the score's shared data (key, tempo,
@@ -14247,3 +14249,102 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
 - Not in this step: the re-render stays whole-piece (196); undo / redo and the version list
   (197). Effects written as a mapping of two or more fields into a block track are added as
   block lines (as `edits.py` writes new mappings), into a flow track inline.
+
+### 94.14 Step 196: fast re-render, playing on, under narration, meters
+
+- **Stems** (`vidgen.studio.render`): `render_track_stem(score, name)` → `TrackStem` (the track
+  alone on the piece's canvas, float64, before the master filter and the level; the notes it
+  left out for the warnings); `mix_track_stems(score, stems, warnings, whole=None, threads=1)`
+  → `(float32 audio, MixFacts(gain, samples))`: the stems summed in the order given, the master
+  filter, the level measured on the mix (`music._level_gain`, `_finish` now takes a gain) —
+  with `whole` (a listening mix) the whole piece's gain and length instead, a one-shot cut at
+  the whole's end with the same fades (its tails kept). `render_music_stems` is built on them
+  (the same samples as before). Not in `vidgen.studio`'s `__all__` (the studio's helpers).
+- **Exactness (decision, measured)**: `render_music_score` is **unchanged** — it adds a plain
+  track's notes straight into the piece one by one, a stem sums them first, so the remix differs
+  in the order floats are added. Reproducing that order needs every overlapping note kept
+  (measured: 280 MB for `tidewater`'s arp alone; the "layers" an ordered sum would need chain
+  through all notes), so instead the tolerance is stated and tested: on the 17 templates, the
+  two test scores and four edited ones (one-shots, notes out of range), the remix equals
+  `render_music_score` in all samples but 0–3 (one-shot fades: 125 samples of ~1e-16),
+  at most **4.7e-10 apart** (−187 dBFS; the test allows 1e-9), with the same warnings, and the
+  **16-bit WAV the studio plays is byte-identical** (`tests/test_studio_stems.py`, the 17 as
+  a `slow` test). Changing `render_music_score` to sum stems would have moved 1–2 samples of
+  three templates by one float32 step (`tidewater`, a bed itself, among them); the beds,
+  templates and projects' music stay as they were
+  (bed fingerprints and template renders checked byte for byte against the code before).
+- **Loudness**: the stems are never normalised; the mix is set to −28 LUFS by measuring the
+  mix itself (as `render_music_score`); listening mixes reuse that gain (`mix_gain` in the
+  render's facts). Threads: the master filter's two channels and the loudness's 10 s blocks on
+  two threads (numpy's FFT releases the GIL; bit for bit the same as one thread, tested), the
+  mix ~0.45–0.85 s instead of ~1.2 s. Tracks render one at a time (two heavy tracks at once
+  peaked at 2.8 GB on a tempo change).
+- **The stem key** (`studio_app.stems.track_keys`): SHA-256 of the score's top-level data but
+  `title`, `description`, `master`, `tracks`; the track's name and spec; for a track that ducks
+  under another, that track's **hit inputs** only (`steps`, `accent`, `play`, `rest`, `only`,
+  each section's `steps` / `accent`: when it hits, not how it sounds — the kick's volume does
+  not re-render the pad); `STEM_RENDER_VERSION` (1) and vidgen's version. A **volume-only
+  change** of a track whose volume is one number (no curve, no section changing it:
+  `plain_volume`) scales a kept rendered stem by the gain between them (every note is scaled
+  by the volume and every effect after is linear) — 10 ms instead of the track's render; the
+  remix stays within the tolerance (tested).
+- **The cache** (`StemCache`): in memory, least recently used out past 768 MB (`STEM_CACHE_BYTES`,
+  about two versions of a 50 s piece of nine tracks, 41 MB a stem); room is made before
+  rendering; a mix's own stems always stay. Decision: not on disk — float64 stems (the
+  tolerance needs them) would be ~370 MB a version, and a restarted studio pays one render.
+  Each stem also keeps its power per 50 ms.
+- **A render** (`StudioApp.render`): parse, stems (kept / scaled / rendered), mix, WAV, facts
+  file; `timing` (`tracks` rendered now with seconds, `scaled`, `stems`, `mix`, `write`,
+  `listening_mix`, `narration`, `total`). **Late facts**: the loudness, true peak and energy
+  curve (1.6 s of work) are worked out after the answer, on one worker, bar by bar and block by
+  block, giving way to any render (it waits until none has run for 0.3 s; only the render last
+  asked for: older jobs are dropped) — `GET /api/facts` waits for them; the page dims the last
+  energy curve meanwhile. `STUDIO_RENDER_VERSION` 3.
+- **Mute / solo** remix the kept stems at the whole's gain and length: a one-shot's tails stay
+  (fixes Step 194's gap). **Under narration** (`studio_app/narration.py`): `<name>.n.wav` from
+  the render or listening mix (its WAV read back, at −28 LUFS): the shipped narration sample
+  (`check.NARRATION_SAMPLE`, 20 s) repeated from the piece's start, the music ducked with
+  `check.duck_gain_db` (vidgen's default ducking) over `check.speech_spans`, voice and music at
+  a video's balance, both raised by one gain that puts the voice's true peak at −1.5 dBTP
+  (+3.5 dB; the same for every version: A/B under narration is level-matched). The status line
+  says so. Sections and loops work as without it (`<name>.n-<section>.wav`).
+- **Meters** from the audio: each stem's RMS per 50 ms (`meters` in the render's facts, dBFS as
+  heard: stem × mix gain × audition gain, before the master filter; floor −60), drawn −48..−6 dB
+  with a fast rise and a 0.8 fall per frame; a muted track's meter rests.
+- **Playing on** (`player.js`): a new source while playing is loaded in a second `<audio>`,
+  seeked 0.15 s ahead of the moment playing, started when the playing one gets there and
+  cross-faded over 60 ms; the playing element always has the id `audio` (the other
+  `audio-next`). Measured offset between the two at the fade: within ±10 ms in all 30 swaps of
+  the measurement below. Stopped, or a seek, switches at once as before. `data-switching` /
+  `data-swaps` / `data-swap-drift` on `<body>` for tests.
+- **Section-only render (decision: not built)**: a looped section is cut from the whole remix
+  (instant once mixed); rendering only a section's notes would not sound as in the piece at its
+  edges (tails, holds, the circular reverb and filters of a loop) and would compete with the
+  whole's render for the two cores. The slow case is a heavy track (a filtered pad: 1–2.4 s
+  alone); a preview of it is a later option.
+- **Latency** (two cores; "server": the edit and render calls, no browser; "heard": from the
+  click or Enter in headless Chromium on the same cores until the new audio plays at the same
+  moment; `<scratchpad>/s196/latency.py`, `shots.py`):
+
+| edit | momentum server / heard | tidewater | time_of_flight |
+|---|---|---|---|
+| load (every track) | 1.8 s / 4.0 s page | 2.0 / 4.4 | 6.6 / 9.6 |
+| slider on a light track (hat decay) | 0.57 / 1.11 | 0.84 / 1.59 | 0.95 / 1.55 |
+| slider on the heaviest track (pad tone) | 1.53 / 2.11 | 1.33 / 2.05 | 3.21 / 4.38 |
+| steps of one track (a kick cell) | 0.62 / 1.28 | 0.90 / 1.48 | 0.90 / 1.70 |
+| volume of a track (kept stem scaled) | 0.60 / 1.13 | 0.83 / 1.53 | 0.81 / 1.64 |
+| mute | 0.32 / 0.68 | 0.48 / 0.93 | 0.47 / 0.91 |
+| solo | 0.29 / 0.61 | 0.39 / 0.91 | 0.41 / 0.91 |
+| back to a mix made before | 0.01 / 0.41 | 0.01 / 0.39 | 0.01 / 0.38 |
+| under narration on | 0.67 / 0.99 | 0.70 / 0.70 | 0.69 / 0.67 |
+| tempo +4 (every track) | 3.1 / 4.1 | 3.1 / 4.1 | 17.2 / 21.8 |
+
+  Before (Step 194): every edit a whole render (momentum 3.1 s, time_of_flight 9.2 s; 5–7 s
+  with the browser), every mute 2.3–8.2 s. Single-track edits now play in 1.1–1.7 s with the
+  browser (0.6–0.95 s of server work), under the 1.5 s aim for momentum and at it for the
+  53 s pieces, whose mix alone is ~0.75 s (their length, 2,559,744 samples, has the factor 101:
+  a slower FFT). A heavy track's own render stays (time_of_flight's pad 2.4 s, arp 1.8 s). **A
+  finding for later**: tempos whose piece length has a large prime factor make every FFT of the
+  renderer 5–12× slower (time_of_flight at 112 BPM: 2,468,352 = 2⁹·3·1607; the swept filters
+  then take 4–5 s a track and 2.2 GB) — the 17 s above; it affects every render of such a
+  score (videos too), not only the studio.
