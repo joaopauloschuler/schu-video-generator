@@ -46,6 +46,8 @@ MIME_TYPES = {
     ".png": "image/png",
     ".ttf": "font/ttf",
     ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".yaml": "text/yaml; charset=utf-8",
     ".json": "application/json",
 }
 #: The biggest request body accepted (a score's text is a few KB).
@@ -176,11 +178,22 @@ class _Handler(BaseHTTPRequestHandler):
             if found is None:
                 raise _ApiError(HTTPStatus.NOT_FOUND, "no such render")
             return self._send_file(found, cache=True)
+        if path.startswith("/media/"):
+            found = app.media_file(path[len("/media/") :])
+            if found is None:
+                raise _ApiError(HTTPStatus.NOT_FOUND, "no such picture")
+            return self._send_file(found, cache=True)
+        if path.startswith("/download/"):
+            found = app.download_file(path[len("/download/") :])
+            if found is None:
+                raise _ApiError(HTTPStatus.NOT_FOUND, "no such export")
+            return self._send_file(found, cache=False, download=True)
         routes: dict[str, Callable[[], Any]] = {
             "/api/info": app.info,
             "/api/presets": app.presets,
             "/api/patches": app.patches,
             "/api/session": app.state,
+            "/api/sessions": app.sessions,
         }
         if path in routes:
             return self._send_json({"ok": True, "result": routes[path]()})
@@ -208,6 +221,29 @@ class _Handler(BaseHTTPRequestHandler):
         elif path == "/api/text":
             version = body.get("version")
             result = app.text(_int(version, "version") if version is not None else None, _req_str(body, "text"))
+        elif path == "/api/undo":
+            result = app.undo()
+        elif path == "/api/redo":
+            result = app.redo()
+        elif path == "/api/current":
+            result = app.set_current(_int(body.get("version"), "version"))
+        elif path == "/api/version":
+            starred = body.get("starred")
+            if starred is not None and not isinstance(starred, bool):
+                raise _ApiError(HTTPStatus.BAD_REQUEST, "starred: expected true or false")
+            result = app.update_version(_int(body.get("version"), "version"), _opt_str(body, "label"), starred)
+        elif path == "/api/open":
+            result = app.open_session(_req_str(body, "session"))
+        elif path == "/api/check":
+            result = app.check(_opt_int(body, "version"), _number(body.get("wait", 0), "wait"))
+        elif path == "/api/check/apply":
+            result = app.apply_check(_int(body.get("version"), "version"), _req_str(body, "key"), _req_str(body, "edit"))
+        elif path == "/api/export":
+            count = body.get("count")
+            result = app.export(_opt_int(body, "version"), _req_str(body, "format"), _opt_str(body, "length") or "once",
+                                _number(count, "count") if count is not None else None, _opt_str(body, "level") or "video")
+        elif path == "/api/save":
+            result = app.save_piece(_opt_int(body, "version"), _req_str(body, "name"), body.get("overwrite") is True)
         else:
             raise _ApiError(HTTPStatus.NOT_FOUND, f"not found: {path}")
         self._send_json({"ok": True, "result": result})
@@ -250,8 +286,9 @@ class _Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(data)
 
-    def _send_file(self, path: Path, cache: bool) -> None:
-        """Send ``path``, or the byte range the request asks for (206 Partial Content)."""
+    def _send_file(self, path: Path, cache: bool, download: bool = False) -> None:
+        """Send ``path``, or the byte range the request asks for (206 Partial Content);
+        ``download``: as an attachment saved under its name."""
         size = path.stat().st_size
         byte_range = _byte_range(self.headers.get("Range"), size)
         first, last = byte_range if byte_range is not None else (0, size - 1)
@@ -263,6 +300,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Range", f"bytes {first}-{last}/{size}")
         # a render's name is its content's key, so it never changes; the page's files may
         self.send_header("Cache-Control", "private, max-age=31536000, immutable" if cache else "no-cache")
+        if download:  # the name matched a strict pattern (letters, digits, - _ .), so it needs no quoting
+            self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
         self._common_headers()
         self.end_headers()
         if self.command == "HEAD" or size == 0:
@@ -283,6 +322,17 @@ def _int(value: Any, name: str) -> int:
         return int(value)
     except (TypeError, ValueError):
         raise _ApiError(HTTPStatus.BAD_REQUEST, f"{name}: expected a whole number, got {value!r}") from None
+
+
+def _opt_int(body: dict[str, Any], name: str) -> int | None:
+    value = body.get(name)
+    return None if value is None else _int(value, name)
+
+
+def _number(value: Any, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _ApiError(HTTPStatus.BAD_REQUEST, f"{name}: expected a number, got {value!r}")
+    return value
 
 
 def _opt_str(body: dict[str, Any], name: str) -> str | None:

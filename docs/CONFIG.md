@@ -3419,14 +3419,38 @@ than in a mix: −16 LUFS, the same for every version). Ctrl+C in the terminal s
   macOS, `~/.cache/vidgen` on Linux). Each piece loaded is a **session**:
   `sessions/<id>/versions/v0001.yaml` (each version of the score as written),
   `session.json` and `renders/` (rendered audio, reused while the notes are unchanged). While it
-  runs, `open.json` names its address and session. The studio writes nowhere else.
+  runs, `open.json` names its address and session. The studio writes nowhere else, but for a
+  project's `assets/music/` when you save a piece there.
 - **Listening while editing**: an edit renders again only the tracks it changes (the others'
   sound is kept in the studio's memory, up to 768 MB) and plays on from the same moment;
   mute / solo and **under narration** (the piece under the narration sample `vidgen music
   check` uses, with vidgen's default ducking, as in a video) change what plays, never the
   score. The meters show each track's own audio.
-- Being built in Phase T (`tasklist.md`): the check panel, versions and exports, listening
-  notes and agents, variations come in the next steps.
+- **Check**: after each render the studio runs `vidgen music check` on the version in the
+  background (from the sound it keeps, so nothing renders twice; an edit stops a check that is
+  no longer current). The panel at the bottom shows the verdict and the voice range, bass,
+  highs, lift / build and loudness; **details** shows the spectrogram with the sections marked
+  (click it to play from there), the advice in words and the full report. Advice that is a
+  plain change (a track's volume or octave, a filter, a volume ramp, a riser) has an
+  **Apply** button: it makes a new version named after the advice (`check: lower piano by 3 dB`).
+  Checks are kept in the session (`checks/`).
+- **Versions**: every change is a version. The version menu (`v3 ▾`) lists them with their
+  label, time and the version they came from; click one to go back to it, ✎ renames it, ☆ stars
+  it. Undo / redo (↶ ↷, Ctrl+Z / Ctrl+Shift+Z) move between a version and the one it came
+  from; a change after an undo starts a new branch and nothing is deleted. Earlier sessions are
+  listed there too and reopen with a click. **A/B** plays the original preset (or, with **A/B**
+  in the list, any version) instead of the current one at the same moment and level; the badge
+  next to it says which one is playing.
+- **Export**: the score file (YAML, as written), or audio — WAV (16-bit, 48 kHz) or MP3, the
+  piece once, N loops (a loop) or N seconds (looped as a video loops it, with a 2 s fade-out),
+  at the **video level** (−28 LUFS, how vidgen plays music at volume 0) or the **listening
+  level** (−16 LUFS, peaks under −1 dBTP). The file is made in the session's `exports/` and the
+  browser downloads it. **Save to the project** writes `assets/music/<name>.yaml` (lower-case
+  letters, digits, `_`, `-`), which a video plays with `music: <name>` (the snippet can be
+  copied); a built-in bed's name is refused (`music: calm` would be ambiguous), and an existing
+  piece is overwritten only after you confirm. It needs the studio started with a project.
+- Being built in Phase T (`tasklist.md`): listening notes and agents, variations come in the
+  next steps.
 
 ### Loudness of the final mix (`audio`)
 

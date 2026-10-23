@@ -69,6 +69,7 @@ class Version:
     origin: str
     label: str
     created: str
+    starred: bool = False
 
 
 class StudioSession:
@@ -134,20 +135,101 @@ class StudioSession:
         return self.version_path(number).read_text(encoding="utf-8")
 
     def add_version(self, text: str, origin: str, label: str, parent: int | None) -> Version:
-        """Write ``text`` as the next version and make it the current one."""
+        """Write ``text`` as the next version and make it the current one (what could be redone
+        is forgotten: a new edit after an undo starts a branch; nothing is deleted)."""
         number = 1 + max((v["number"] for v in self.data["versions"]), default=0)
         write_text_atomic(self.version_path(number), text)
         version = Version(number, parent, origin, label, _now())
         self.data["versions"].append(asdict(version))
         self.data["current"] = number
+        self.data["redo"] = []
         self._save()
         return version
 
+    def _entry(self, number: int) -> dict[str, Any]:
+        found = next((v for v in self.data["versions"] if v["number"] == number), None)
+        if found is None:
+            raise VidgenError(f"session {self.id} has no version {number}")
+        return found
+
+    def undo(self) -> int | None:
+        """Go back to the current version's parent (remembered for :meth:`redo`); the version now
+        current, or ``None`` when there is nothing to undo (the first version)."""
+        current = self.current
+        parent = self._entry(current)["parent"] if current is not None else None
+        if parent is None:
+            return None
+        self.data["redo"] = [*self.data.get("redo", []), current]
+        self.data["current"] = parent
+        self._save()
+        return parent
+
+    def redo(self) -> int | None:
+        """Go forward again down the branch last undone; ``None`` when nothing was undone."""
+        stack = list(self.data.get("redo", []))
+        if not stack or self._entry(stack[-1])["parent"] != self.current:
+            return None
+        self.data["current"] = stack.pop()
+        self.data["redo"] = stack
+        self._save()
+        return self.current
+
+    @property
+    def can_redo(self) -> bool:
+        stack = self.data.get("redo", [])
+        return bool(stack) and any(v["number"] == stack[-1] and v["parent"] == self.current for v in self.data["versions"])
+
+    def set_current(self, number: int) -> None:
+        """Make version ``number`` the current one (picked from the list; the redo trail is
+        forgotten unless it is the version redo would go to)."""
+        self._entry(number)
+        if number == self.current:
+            return
+        stack = list(self.data.get("redo", []))
+        if stack and stack[-1] == number and self._entry(number)["parent"] == self.current:
+            stack.pop()
+        else:
+            stack = []
+        self.data["current"] = number
+        self.data["redo"] = stack
+        self._save()
+
+    def update_version(self, number: int, label: str | None = None, starred: bool | None = None) -> None:
+        """Rename version ``number`` (``label``, 1–120 characters) and / or star it."""
+        entry = self._entry(number)
+        if label is not None:
+            label = " ".join(label.split())
+            if not label or len(label) > 120:
+                raise VidgenError("a version's name is 1 to 120 characters")
+            entry["label"] = label
+        if starred is not None:
+            entry["starred"] = bool(starred)
+        self._save()
+
     def to_json(self) -> dict[str, Any]:
-        return {**self.data, "folder": str(self.folder)}
+        current = self.current
+        can_undo = current is not None and self._entry(current)["parent"] is not None
+        return {"redo": [], **self.data, "folder": str(self.folder), "can_undo": can_undo, "can_redo": self.can_redo}
 
     def _save(self) -> None:
         write_text_atomic(self.folder / "session.json", json.dumps(self.data, indent=2, ensure_ascii=False) + "\n")
+
+
+def list_sessions(studio: Path, limit: int = 50) -> list[dict[str, Any]]:
+    """The sessions under ``studio``, newest first (at most ``limit``): id, title, preset,
+    created, number of versions; a folder whose ``session.json`` cannot be read is left out."""
+    folder = studio / "sessions"
+    if not folder.is_dir():
+        return []
+    out = []
+    for path in sorted((p for p in folder.iterdir() if SESSION_ID.match(p.name)), key=lambda p: p.name, reverse=True)[:limit]:
+        try:
+            data = json.loads((path / "session.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        out.append({"id": path.name, "title": data.get("title"), "preset": data.get("preset"), "created": data.get("created"),
+                    "versions": len(data.get("versions", []))})
+    return out
 
 
 def write_open_marker(studio: Path, url: str, session_id: str | None) -> None:

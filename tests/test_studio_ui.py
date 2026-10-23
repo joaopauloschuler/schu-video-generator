@@ -411,3 +411,102 @@ def test_edits_mutes_and_narration_play_on_at_the_same_moment(studio: tuple[Stud
     assert page.get_attribute("#play", "aria-pressed") == "true" and page.evaluate("document.getElementById('audio').paused") is False
     assert page.evaluate("document.getElementById('audio-next').paused") is True  # the other element is quiet
     assert page.errors == []
+
+
+# ----- Step 197: check panel, versions, A/B, exports ------------------------------------------------
+
+#: A piano too loud in the voice's range: the check advises lowering it or an octave up.
+LOUD = """\
+title: Loud
+key: A minor
+tempo: 120
+progression: "i VI"
+sections: [{name: a, bars: 2}, {name: lift, bars: 2}]
+tracks:
+  pad: {instrument: pad, play: chords, volume: -6}
+  piano: {instrument: piano, steps: "* . * . * . * .", octave: 4, volume: 4}
+"""
+
+
+def wait_checked(page: Any, version: int) -> None:
+    page.wait_for_function(f"!document.body.dataset.checking && document.getElementById('check-for').textContent === 'v{version}'", timeout=90_000)
+
+
+def test_check_panel_advice_applies_as_a_version(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    app, server = studio
+    app.load(text=LOUD)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    wait_checked(page, 1)
+    assert "needs work" in page.text_content("#check-verdict") and "voice" in page.text_content("#check-headline")
+    if page.is_hidden("#check-body"):
+        page.click("#check-toggle")
+    assert page.get_attribute("#check-image", "src").endswith("-check.png")
+    page.wait_for_function("document.getElementById('check-image').naturalWidth > 0")
+    assert "Loud:" in page.text_content("#check-report")
+    button = page.locator("#check-advice button.apply", has_text="octave up").first
+    button.click()
+    wait_idle(page, 2)
+    assert app.session is not None and app.session.versions[-1].label == "check: move piano an octave up (octave 5)"
+    assert "octave: 5" in page.input_value("#yaml-input")
+    wait_checked(page, 2)  # checked again after the new version's render
+    assert page.errors == []
+
+
+def test_versions_undo_redo_rename_star_and_ab(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    app, server = studio
+    app.load(text=TINY)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    assert page.is_disabled("#ab") and page.is_disabled("#undo")
+    page.fill("#f-tempo", "100")
+    page.press("#f-tempo", "Enter")
+    wait_idle(page, 2)
+    page.click("#undo")
+    wait_idle(page, 1)
+    assert page.input_value("#f-tempo") == "120" and page.is_enabled("#redo")
+    page.keyboard.press("Control+Shift+Z")
+    wait_idle(page, 2)
+    assert page.input_value("#f-tempo") == "100"
+    # the list: rename and star v1, then A/B against the original at the same moment
+    page.click("#versions")
+    page.locator('#version-list li[data-version="1"] button[data-act="rename"]').click()
+    page.fill("#rename-input", "the start")
+    page.press("#rename-input", "Enter")
+    page.wait_for_function("document.querySelector('#version-list li[data-version=\"1\"] .v-label')?.textContent === 'the start'")
+    page.locator('#version-list li[data-version="1"] button[data-act="star"]').click()
+    page.wait_for_function("document.querySelector('#version-list li[data-version=\"1\"] .star').getAttribute('aria-pressed') === 'true'")
+    page.keyboard.press("Escape")
+    versions = {v.number: v for v in app.session.versions}
+    assert versions[1].label == "the start" and versions[1].starred
+    page.click("#play")
+    page.wait_for_function("document.getElementById('audio').currentTime > 0.5", timeout=15_000)
+    page.click("#ab")
+    page.wait_for_function("document.body.dataset.ab === 'A' && !document.body.dataset.busy && !document.body.dataset.switching", timeout=30_000)
+    assert "v1 original" in page.text_content("#ab-state") and page.text_content("#status").startswith("v1 ")
+    page.click("#ab")
+    page.wait_for_function("document.body.dataset.ab === 'B' && !document.body.dataset.busy", timeout=30_000)
+    assert "v2 current" in page.text_content("#ab-state")
+    page.click("#play")
+    assert page.errors == []
+
+
+def test_export_yaml_audio_and_no_project(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    app, server = studio
+    app.load(text=TINY)
+    page.context.set_default_timeout(60_000)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    page.click("#export")
+    assert "started without a project" in page.text_content("#ex-save-note") and page.is_hidden("#ex-save-form")
+    with page.expect_download() as info:
+        page.click("#ex-yaml")
+    assert info.value.suggested_filename == "tiny-v1.yaml"
+    page.select_option("#ex-length", "loops")
+    page.fill("#ex-count", "2")
+    with page.expect_download() as info:
+        page.click("#ex-audio")
+    assert info.value.suggested_filename == "tiny-v1-2loops-video.wav"
+    page.wait_for_function("!document.body.dataset.exporting")
+    assert "Downloaded" in page.text_content("#ex-audio-note") and page.is_visible("#export-panel")
+    assert page.errors == []

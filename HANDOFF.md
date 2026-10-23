@@ -18112,3 +18112,76 @@ Known gaps
   and a render 2–3× slower with ~2 GB peak — videos too; worth a look in Step 201 or later (a
   fix must keep the beds' samples). Meters are before the master filter. The late facts are
   computed from the 16-bit WAV after a restart (rounding at 2 decimals).
+
+## Step 197 — vidgen studio: check panel, versions, A/B, exports
+
+What was built (DESIGN §94.15)
+- **Advice that can be applied** (`vidgen.studio.check`): `Fix` (a `str` subclass: the same
+  words) carries `(label, ops)` edits; `Finding.edits` lists them as `{fix, label, ops}` with
+  `set` ops on score paths. Mechanical advice only: volumes (track or per section), an octave up,
+  a track `lowpass` / `highpass`, `master.lowpass`, a build's volume ramp / filter sweep, add or
+  raise a riser. `music check` text and `--json` unchanged (compared byte for byte on the 17
+  templates + 8 bad scores, `<scratchpad>/s197/baseline.py`, `before/` vs `after/`).
+- **`check_music_score(score, hop, tracks=None, mix=None, between=None)`**: from kept stems and a
+  made mix (no render), with a hook between steps that may stop it; the same report as before.
+- **Check panel** (`studio_app/checks.py`, `static/check.js`): after each render of the current
+  version the page asks `POST /api/check` (long-poll); one background worker, waits for renders,
+  stops when a newer version's check is asked for, keeps `checks/<key>.json` + `-check.png`.
+  Verdict + headline numbers (voice, bass, highs, lift / build, loudness), details: spectrogram
+  with section marks and playhead (click seeks), advice with **Apply: <label>** buttons
+  (`POST /api/check/apply` → a version `origin: check`, label `check: …`), full report.
+- **Versions** (`session.py`, `static/versions.js`): undo / redo (`redo` stack in
+  `session.json`, branches kept), pick a version, rename, star; menu with label, time, parent,
+  off-branch dimmed, earlier sessions (`GET /api/sessions`, `POST /api/open`); Ctrl+Z /
+  Ctrl+Shift+Z. **A/B**: original preset (v1) or any version from the list, swapped at the same
+  moment, badge `A v1 original` / `B v5 current`.
+- **Exports** (`studio_app/exports.py`, `static/exports.js`): YAML; WAV / MP3 once, N loops or N
+  seconds (fade-out), at video level −28 LUFS or listening level −16 LUFS (peak ≤ −1 dBTP),
+  rendered with `render_music_score`, written to the session's `exports/` and downloaded
+  (`/download/<name>`, attachment). **Save to project**: `assets/music/<name>.yaml`, a bed's name
+  refused with the reason, overwrite asks, `music: <name>` snippet with Copy; without a project
+  the panel explains how to start the studio with one.
+
+Files touched
+- New: `src/vidgen/studio_app/checks.py`, `exports.py`, `static/check.js`, `static/versions.js`,
+  `static/exports.js`; `tests/test_studio_check.py` (12).
+- Changed: `src/vidgen/studio/check.py` (`Fix`, `Finding.edits`, the entry point's keywords,
+  edits beside the advice), `studio_app/app.py` (versions, sessions, check, apply, export, save,
+  media / download files, the last mixes kept, `edit(origin=)`), `session.py` (`starred`, undo,
+  redo, set_current, update_version, `list_sessions`, `can_undo` / `can_redo`), `server.py`
+  (routes, `/media/`, `/download/` with `Content-Disposition`, MIME mp3 / yaml), `static/app.js`,
+  `api.js`, `index.html`, `studio.css`; `tests/test_studio_ui.py` (+3); `DESIGN.md` (§94.15,
+  §94.1/.2/.3/.5/.7), `docs/CONFIG.md`, `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. `vidgen.studio.check`: `Fix`, `Finding.edits`, `check_music_score`'s
+  `tracks` / `mix` / `between` keywords (additive). The page's API: §94.5 rows for Step 197.
+
+Decisions
+- The CLI stays as it was: the edits ride on the advice strings and `Finding`, not in
+  `check_dict` (agents keep reading the words; the studio reads the edits).
+- Apply goes through the server (the kept check's ops by id), not ops sent by the page.
+- Exports are downloads from the session's `exports/` (the browser chooses where to save); the
+  only other place written is `assets/music/` on request.
+- A/B is page state over the same render call, so it is level-matched and swaps at the moment.
+
+How to test (one at a time, capped; from the repo, or with `PYTHONPATH=<repo>`)
+- `tests/test_studio_check.py`: 12 passed in 13 s.
+- `tests/test_studio_ui.py -m ui`: 13 passed in 48 s (new: check panel + Apply; versions undo /
+  redo / rename / star / A/B; export YAML / WAV and the no-project note).
+- `test_studio_app` + `test_studio_song` + `test_studio_inspector` + `test_studio_stems` (not
+  slow): 59 passed; `test_music_check` + `test_studio` + `test_phase_s_review` +
+  `test_music_pieces`: 85 passed; `test_docs` + `test_guide` + `test_packaging`: passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s197/shots/1-momentum-check.png`, `2-check-open.png`,
+  `3-advice.png`, `4-applied.png`, `5-versions.png`, `5b-versions-renamed.png`,
+  `6-versions-after-undo.png`, `7-ab-original.png`, `8-export.png`, `9-exported.png`,
+  `10-bed-name-refused.png`, `11-saved.png`, `12-overwrite.png`, `13-light.png`, `14-narrow.png`
+  (420 px, full page); made by `<scratchpad>/s197/shots.py`.
+
+Known gaps
+- Renders and exports are not pruned. The advice's dB estimates are the check's own: on the
+  loud-piano example "lower piano by 3 dB" leaves the voice range still flagged (33 % from 47 %),
+  a second Apply finishes it — "change one thing, check again" as the CLI says. Keyboard
+  shortcuts beyond undo / redo, the A/B shortcut and focus polish are Step 200.

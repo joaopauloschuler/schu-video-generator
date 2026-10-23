@@ -16,6 +16,7 @@ import re
 import threading
 import time
 import wave
+from collections import OrderedDict
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
@@ -29,8 +30,9 @@ from vidgen import __version__
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_bytes_atomic, write_text_atomic
 from vidgen.studio_app import song
+from vidgen.studio_app.checks import CHECK_AFTER_SECONDS, CHECK_IMAGE, Checker, find_edit
 from vidgen.studio_app.edits import apply_edits
-from vidgen.studio_app.session import StudioSession, studio_dir, write_open_marker
+from vidgen.studio_app.session import StudioSession, list_sessions, studio_dir, write_open_marker
 from vidgen.studio_app.song import describe_score
 from vidgen.studio_app.stems import THREADS, StemCache, meter_levels, score_stems
 
@@ -267,10 +269,14 @@ class StudioApp:
         self._facts_wanted: str | None = None
         self._facts_lock = threading.Lock()
         self._last_render = 0.0  # time.monotonic() when a render was last asked for or made
+        # the mixes of the last renders (−28 LUFS float32 and gain), which the check reuses
+        self._mixes: OrderedDict[str, tuple[np.ndarray, float]] = OrderedDict()
+        self.checker = Checker(self._render_idle, self._check_stems)
 
     def close(self) -> None:
-        """Stop the late-facts worker (a job under way finishes; queued ones are dropped)."""
+        """Stop the late-facts and check workers (a job under way finishes; queued ones are dropped)."""
         self._facts_pool.shutdown(wait=False, cancel_futures=True)
+        self.checker.close()
 
     # ----- facts ---------------------------------------------------------------------------
 
@@ -348,7 +354,8 @@ class StudioApp:
 
     # ----- edits ----------------------------------------------------------------------------
 
-    def edit(self, version: int | None, ops: Sequence[Mapping[str, Any]], label: str | None = None, dry_run: bool = False) -> dict[str, Any]:
+    def edit(self, version: int | None, ops: Sequence[Mapping[str, Any]], label: str | None = None, dry_run: bool = False,
+             origin: str = "edit") -> dict[str, Any]:
         """Apply the edits ``ops`` to version ``version`` of the open session (default: the
         current one). A valid result becomes the next version (``origin: edit``, its parent the
         version edited) and the session's current one: ``{ok: true, session, score}``. A result
@@ -372,7 +379,7 @@ class StudioApp:
                 return {"ok": score is not None, "problems": problems, "outline": outline, "notes": notes, "labels": labels}
             if new_text == text:
                 return {"ok": True, "unchanged": True, "notes": notes, **self.state()}
-            session.add_version(new_text, "edit", (label or "; ".join(labels) or "an edit")[:120], base)
+            session.add_version(new_text, origin, (label or "; ".join(labels) or "an edit")[:120], base)
             return {"ok": True, "notes": notes, **self.state()}
 
     def text(self, version: int | None, text: str) -> dict[str, Any]:
@@ -390,6 +397,142 @@ class StudioApp:
                 return {"ok": True, "unchanged": True, **self.state()}
             session.add_version(text, "edit", "typed in the score file", base)
             return {"ok": True, **self.state()}
+
+    # ----- versions and sessions (Step 197) -------------------------------------------------
+
+    def undo(self) -> dict[str, Any]:
+        """Back to the current version's parent (nothing to undo: unchanged)."""
+        with self._lock:
+            self._session().undo()
+            return self.state()
+
+    def redo(self) -> dict[str, Any]:
+        """Forward again down the branch last undone (nothing undone: unchanged)."""
+        with self._lock:
+            self._session().redo()
+            return self.state()
+
+    def set_current(self, version: int) -> dict[str, Any]:
+        """Make ``version`` the current one (picked from the version list)."""
+        with self._lock:
+            self._session().set_current(version)
+            return self.state()
+
+    def update_version(self, version: int, label: str | None = None, starred: bool | None = None) -> dict[str, Any]:
+        """Rename and / or star a version; the session."""
+        with self._lock:
+            session = self._session()
+            session.update_version(version, label, starred)
+            return {"session": session.to_json()}
+
+    def sessions(self) -> list[dict[str, Any]]:
+        """The sessions in this studio's folder, newest first (``open``: the one open)."""
+        open_id = self.session.id if self.session else None
+        return [{**s, "open": s["id"] == open_id} for s in list_sessions(self.studio)]
+
+    def open_session(self, session_id: str) -> dict[str, Any]:
+        """Reopen an earlier session (its current version)."""
+        with self._lock:
+            self.session = StudioSession.open(self.studio, session_id)
+            if self.url is not None:
+                write_open_marker(self.studio, self.url, self.session.id)
+            return self.state()
+
+    # ----- the check (Step 197) -------------------------------------------------------------
+
+    def _render_idle(self) -> bool:
+        return not self._render_lock.locked() and time.monotonic() - self._last_render >= CHECK_AFTER_SECONDS
+
+    def _check_stems(self, data: Any, score: Any, key: str) -> tuple[list[Any], tuple[np.ndarray, float] | None]:
+        """The version's kept stems (rendered now only if they were dropped) and its mix when
+        it is still in memory, for the check."""
+        with self._render_lock:
+            stems = score_stems(self.stems, data, score)
+            return [stems.stems[t.name].stem for t in score.tracks], self._mixes.get(key)
+
+    def _version_score(self, version: int | None) -> tuple[StudioSession, int, Any, Any, str]:
+        session = self._session()
+        number = version if version is not None else session.current
+        assert number is not None
+        data, score, _ = check_text(session.text(number))
+        if score is None:
+            raise VidgenError(f"version {number} has problems; fix them first")
+        return session, number, data, score, render_key(data)
+
+    def check(self, version: int | None = None, wait: float = 0.0) -> dict[str, Any]:
+        """``vidgen music check`` of a version (default: the current one), made in the
+        background from its kept stems (:mod:`vidgen.studio_app.checks`): ``{status: done,
+        ...the check}`` when it is made (waiting up to ``wait`` seconds), ``pending`` while it is
+        under way, ``superseded`` when another version's check was asked for meanwhile."""
+        session, number, data, score, key = self._version_score(version)
+        folder = session.folder / "checks"
+        doc = self.checker.kept(folder, key)
+        if doc is None:
+            job = self.checker.want(folder, key, data, score)
+            doc = self.checker.wait(job, min(max(wait, 0.0), 60.0)) if wait > 0 else None
+            if doc is None:
+                status = "superseded" if job.done() or not self.checker.is_wanted(key) else "pending"
+                return {"status": status, "key": key, "version": number}
+        return {**doc, "status": "done", "version": number}
+
+    def apply_check(self, version: int, key: str, edit_id: str) -> dict[str, Any]:
+        """Apply advice ``edit_id`` of the check ``key`` to ``version`` (the version checked, or
+        one with the same notes) as the next version, labelled with the advice."""
+        session, number, _, _, found = self._version_score(version)
+        if found != key:
+            raise VidgenError(f"check: that advice was for other notes than version {number}'s; check it again")
+        doc = self.checker.kept(session.folder / "checks", key)
+        if doc is None:
+            raise VidgenError("check: that check is no longer kept; check again")
+        label, ops = find_edit(doc, edit_id)
+        return self.edit(number, ops, label=f"check: {label}", origin="check")
+
+    def media_file(self, name: str) -> Path | None:
+        """A check's picture of the open session (``<key>-check.png``), or ``None``."""
+        if self.session is None or not CHECK_IMAGE.match(name):
+            return None
+        path = self.session.folder / "checks" / name
+        return path if path.is_file() else None
+
+    # ----- exports (Step 197) ---------------------------------------------------------------
+
+    def export(self, version: int | None, fmt: str, length: str = "once", count: float | None = None, level: str = "video") -> dict[str, Any]:
+        """A version as a file to download (``/download/<name>``): its score file (``yaml``) or
+        its audio (``wav`` / ``mp3``; :func:`~vidgen.studio_app.exports.export_audio`)."""
+        from vidgen.studio_app.exports import FORMATS, export_audio, file_name, write_export
+
+        if fmt not in FORMATS:
+            raise VidgenError(f"export: format is one of {', '.join(FORMATS)}, got {fmt!r}")
+        session, number, _, score, _ = self._version_score(version)
+        folder = session.folder / "exports"
+        title = score.title or session.data.get("title") or "piece"
+        if fmt == "yaml":
+            name = file_name(title, number, "yaml")
+            write_export(folder, name, "yaml", text=session.text(number))
+            return {"url": f"/download/{name}", "name": name, "format": "yaml", "version": number}
+        began = time.perf_counter()
+        with self._render_lock:
+            audio, facts = export_audio(score, length, count, level)
+        name = file_name(title, number, fmt, length, count, level)
+        write_export(folder, name, fmt, audio=audio)
+        return {"url": f"/download/{name}", "name": name, "format": fmt, "version": number, **facts, "export_seconds": round(time.perf_counter() - began, 2)}
+
+    def save_piece(self, version: int | None, name: str, overwrite: bool = False) -> dict[str, Any]:
+        """Save a version into the project's ``assets/music/<name>.yaml`` (Step 188's name rule:
+        a built-in bed's name is refused; an existing piece only with ``overwrite``)."""
+        from vidgen.studio_app.exports import save_to_project
+
+        session, number, _, _, _ = self._version_score(version)
+        return {**save_to_project(self.project_root, name, session.text(number), overwrite), "version": number}
+
+    def download_file(self, name: str) -> Path | None:
+        """An exported file of the open session, or ``None``."""
+        from vidgen.studio_app.exports import EXPORT_NAME
+
+        if self.session is None or not EXPORT_NAME.match(name):
+            return None
+        path = self.session.folder / "exports" / name
+        return path if path.is_file() else None
 
     # ----- rendering ----------------------------------------------------------------------
 
@@ -463,6 +606,9 @@ class StudioApp:
             mixing = time.perf_counter()
             warnings: list[str] = []
             audio, mix = mix_track_stems(score, [stems.stems[t.name].stem for t in score.tracks], warnings, threads=THREADS)
+            self._mixes[key] = (audio, mix.gain)
+            while len(self._mixes) > 2:
+                self._mixes.popitem(last=False)
             writing = time.perf_counter()
             level = 10 ** (audition_gain_db() / 20)
             write_bytes_atomic(wav_path, wav_bytes(np.clip(audio * level, -1.0, 1.0)))

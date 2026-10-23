@@ -15,7 +15,7 @@ are made here; the command writes them.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -26,7 +26,7 @@ from vidgen.loudness import LoudnessMeter, integrated_loudness, kweighted_power,
 from vidgen.music import MUSIC_LEVEL
 from vidgen.sfx import RATE, _highpass, _lowpass, decode_audio
 from vidgen.studio import measure
-from vidgen.studio.render import render_music_stems
+from vidgen.studio.render import TrackStem, mix_track_stems, render_music_stems
 from vidgen.studio.score_file import ChordSlot, MusicScore, Section, Track
 from vidgen.studio.theory import note_name
 
@@ -79,15 +79,41 @@ LIMITS = {
 }
 
 
+class Fix(str):
+    """A line of advice (plain text, as printed) that may carry ``edits``: the score changes that
+    do what it says, when they are mechanical (DESIGN.md §94.15) — ``(label, ops)`` pairs, each
+    op ``{"op": "set", "path": "tracks.pad.volume", "value": -8}`` (a path as a problem's
+    ``where``: the value to write there, a missing key added)."""
+
+    edits: tuple[tuple[str, tuple[dict[str, Any], ...]], ...]
+
+    def __new__(cls, text: str, edits: Sequence[tuple[str, Sequence[dict[str, Any]]] | None] = ()) -> Fix:
+        fix = super().__new__(cls, text)
+        fix.edits = tuple((label, tuple(ops)) for label, ops in (e for e in edits if e is not None) if ops)
+        return fix
+
+
+def _set(path: str, value: Any) -> dict[str, Any]:
+    return {"op": "set", "path": path, "value": round(value, 2) if isinstance(value, float) else value}
+
+
 @dataclass
 class Finding:
     """One thing the check says: its ``topic``, ``level`` (``ok``, ``note`` or ``fix``), what
-    was measured in words, and the changes that would help (naming the score's keys)."""
+    was measured in words, and the changes that would help (naming the score's keys).
+    ``edits``: the advice that can be applied as it is — ``{fix, label, ops}``, ``fix`` the
+    index of the line in ``fixes`` it does (from the lines' :class:`Fix` edits)."""
 
     topic: str
     level: str
     text: str
     fixes: list[str] = field(default_factory=list)
+    edits: list[dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.edits:
+            self.edits = [{"fix": i, "label": label, "ops": [dict(op) for op in ops]}
+                          for i, fix in enumerate(self.fixes) for label, ops in getattr(fix, "edits", ())]
 
 
 @dataclass
@@ -299,16 +325,36 @@ class _Stems:
 # ----- the checks ------------------------------------------------------------------------------
 
 
-def check_music_score(score: MusicScore, hop: int | None = None) -> MusicCheck:
-    """Play ``score`` track by track and check it (:class:`MusicCheck`)."""
+def check_music_score(
+    score: MusicScore, hop: int | None = None, tracks: Sequence[TrackStem] | None = None, mix: tuple[np.ndarray, float] | None = None,
+    between: Callable[[], None] | None = None,
+) -> MusicCheck:
+    """Play ``score`` track by track and check it (:class:`MusicCheck`).
+
+    ``tracks``: its tracks' stems already rendered (:func:`~vidgen.studio.render.render_track_stem`,
+    in the score's order: the studio's kept ones), so nothing is rendered again; ``mix``: their
+    mix and its gain (:func:`~vidgen.studio.render.mix_track_stems`) when it is made already —
+    the same report as without them. ``between``: called between the check's steps (each track,
+    the measures); it may raise to stop a check that is no longer wanted."""
     import time
 
     began = time.perf_counter()
+    pause = between or (lambda: None)
     hop = hop or frame_hop(score.seconds)
     slots = _chord_slots(score)
     stems = _Stems(hop, master_response(score.lowpass, score.highpass), [(c.start, c.start + c.length) for _, c in slots])
     kinds = {t.name: t.instrument.kind for t in score.tracks}
-    mix, gain = render_music_stems(score, lambda name, sound: stems.add(name, sound, score.loop, kinds[name] != "drum"))
+    if tracks is None:
+        mix, gain = render_music_stems(score, lambda name, sound: (stems.add(name, sound, score.loop, kinds[name] != "drum"), pause()))
+    else:
+        for t, stem in zip(score.tracks, tracks, strict=True):
+            pause()
+            stems.add(t.name, stem.data[stem.before : stem.before + score.samples], score.loop, kinds[t.name] != "drum")
+        if mix is None:
+            audio, made = mix_track_stems(score, tracks)
+            mix = (audio, made.gain)
+        mix, gain = mix
+    pause()
     for f in stems.frames.values():
         for name in f.bands:
             f.bands[name] *= gain**2
@@ -330,6 +376,7 @@ def check_music_score(score: MusicScore, hop: int | None = None) -> MusicCheck:
         stems=stems,
         score=score,
         hop=hop,
+        between=pause,
     )
     report.audio = mix
     report.facts.update(
@@ -363,11 +410,13 @@ def check_music_audio(samples: np.ndarray, name: str, loop: bool = True, hop: in
 
 def _analyse(
     name: str, kind: str, x: np.ndarray, original: np.ndarray | None, loop: bool, bar: int, unit: str, sections: list[tuple[str, int, int, Any]],
-    tempo: float | None, key: Any, stems: _Stems | None, score: MusicScore | None, hop: int,
+    tempo: float | None, key: Any, stems: _Stems | None, score: MusicScore | None, hop: int, between: Callable[[], None] | None = None,
 ) -> MusicCheck:
+    pause = between or (lambda: None)
     n = len(x)
     bars = max(1, int(math.ceil(n / bar)))
     frames = measure_frames(x, loop, hop)
+    pause()
     index = _bars_of(frames, bar, bars)
     b = frames.bands
     total = float(b["all"].sum()) or 1e-30
@@ -421,7 +470,9 @@ def _analyse(
             findings.append(Finding("clipping", "ok", "no clipping"))
 
     # tempo
+    pause()
     heard = measure.tempo(x)
+    pause()
     facts["tempo_heard"] = round(heard, 2) if heard is not None else None
     level, words = _tempo_words(heard, tempo)
     fixes = []
@@ -476,7 +527,8 @@ def _analyse(
         findings.append(Finding("highs", "ok", f"the highs (above 5 kHz) {highs_db:.1f} dB under the whole: smooth"))
 
     # key
-    chroma_source = stems.pitched if stems is not None and stems.pitched is not None else x
+    pause()
+    chroma_source =stems.pitched if stems is not None and stems.pitched is not None else x
     profile = measure.chroma(chroma_source)
     best = measure.key(profile)
     fits = measure.key_fits(profile)
@@ -688,8 +740,58 @@ def _volume_text(track: Track, sections: Sequence[str], change: float) -> str:
     return f"`{track.name}: sections: {{{items}}}` ({change:+g} dB)"
 
 
+def _volume_ops(track: Track, sections: Sequence[str], change: float) -> list[dict[str, Any]] | None:
+    """The edits :func:`_volume_text` names (``None`` when a volume curve is in the way)."""
+    playing = [s for s in sections if s in track.parts]
+    levels = {s: _part_volume(track, s) for s in track.parts}
+    if set(playing) == set(track.parts) and len(set(levels.values())) == 1 and None not in levels.values():
+        return [_set(f"tracks.{track.name}.volume", float(next(iter(levels.values())) + change))]
+    if not playing or any(levels[s] is None for s in playing):
+        return None
+    return [_set(f"tracks.{track.name}.sections.{s}.volume", float(levels[s] + change)) for s in playing]  # type: ignore[operator]
+
+
+def _volume_edit(tracks: Sequence[Track], sections: Sequence[str], change: float) -> tuple[str, list[dict[str, Any]]] | None:
+    """``(label, ops)`` moving each of ``tracks`` by ``change`` dB in ``sections`` (as
+    :func:`_volume_text` says), or ``None`` when one of them has a volume curve there."""
+    ops: list[dict[str, Any]] = []
+    for track in tracks:
+        found = _volume_ops(track, sections, change)
+        if found is None:
+            return None
+        ops += found
+    where = [s for s in sections if any(f".sections.{s}." in op["path"] for op in ops)]
+    names = " and ".join(t.name for t in tracks)
+    return f"{'raise' if change > 0 else 'lower'} {names} by {abs(change):g} dB" + (f" in the {' and '.join(where)}" if where else ""), ops
+
+
+def _filter_edit(track: Track, key: str, hz: float, label: str) -> tuple[str, list[dict[str, Any]]] | None:
+    """``key: hz`` (``lowpass`` / ``highpass``) on the track, when no part has one already."""
+    if any(getattr(p, key) is not None for p in track.parts.values()):
+        return None
+    return label, [_set(f"tracks.{track.name}.{key}", hz)]
+
+
 def _sections_of(score: MusicScore, first: int, last: int) -> list[str]:
     return [s.name for s in score.sections if s.first_bar <= last and s.first_bar + s.bars - 1 >= first]
+
+
+def _alternative_edit(track: Track, band: str) -> tuple[str, list[dict[str, Any]]] | None:
+    """The edit of :func:`_alternative`'s advice, when it is mechanical."""
+    inst = track.instrument
+    if band == "voice":
+        if inst.kind == "note" and inst.octave is not None:
+            octaves = {p.octave for p in track.parts.values()}
+            octave = next(iter(octaves)) if len(octaves) == 1 else None
+            if octave is None or octave >= 8:
+                return None
+            return f"move {track.name} an octave up (octave {octave + 1})", [_set(f"tracks.{track.name}.octave", octave + 1)]
+        if inst.kind == "pad":
+            return _filter_edit(track, "lowpass", 1500, f"darken {track.name} (lowpass 1500 Hz)")
+        return _filter_edit(track, "lowpass", 2000, f"lowpass 2000 Hz on {track.name}")
+    if band == "bass":
+        return None if "decay" in inst.settings else _filter_edit(track, "highpass", 60, f"highpass 60 Hz on {track.name}")
+    return _filter_edit(track, "lowpass", 5000, f"lowpass 5000 Hz on {track.name}")
 
 
 def _alternative(track: Track, band: str) -> str:
@@ -727,18 +829,20 @@ def _lower_tracks(score: MusicScore, stems: _Stems, band: str, excess_db: float,
         return f"{holders} {share:.0f} % of {what}; lowering them by {MAX_CUT_DB} dB is not enough: rest one of them there or swap it for a darker part"
     change = -float(_round_db(found[1]))
     lowered = "; ".join(_volume_text(tracks[n], sections, change) for n, _ in picked)
-    return f"{holders} {share:.0f} % of {what}: lower {lowered}; " + _alternative(tracks[picked[0][0]], band)
+    first = tracks[picked[0][0]]
+    return Fix(f"{holders} {share:.0f} % of {what}: lower {lowered}; " + _alternative(first, band),
+               [_volume_edit([tracks[n] for n, _ in picked], sections, change), _alternative_edit(first, band)])
 
 
 def _voice_fixes(score: MusicScore | None, stems: _Stems | None, loud: list[int], bar_voice: np.ndarray, unit: str, bar: int) -> list[str]:
     if score is None or stems is None:
         return ["turn the mid-range down (an EQ dip around 1-2 kHz) or pick a darker, sparser piece"]
-    fixes = []
+    fixes: list[str] = []
     for first, last in _ranges(loud)[:3]:
         excess = float(bar_voice[first : last + 1].max()) - LIMITS["voice_bar_db"] + 0.5
         where = _span_words(first, last, unit, bar)
-        fixes.append(f"{where}: " + _lower_tracks(score, stems, "voice", excess, _sections_of(score, first, last), "the voice range there",
-                                                  first * bar, (last + 1) * bar))
+        advice = _lower_tracks(score, stems, "voice", excess, _sections_of(score, first, last), "the voice range there", first * bar, (last + 1) * bar)
+        fixes.append(Fix(f"{where}: " + advice, getattr(advice, "edits", ())))
     return fixes
 
 
@@ -747,8 +851,8 @@ def _band_fixes(score: MusicScore | None, stems: _Stems | None, band: str, exces
         return ["an EQ shelf on the file: " + ("cut the lows under 150 Hz" if band == "bass" else "cut above 5 kHz")]
     fixes = []
     if band == "highs" and score.lowpass > 8000:
-        fixes.append(f"the score's `master: {{lowpass: {score.lowpass:g}}}` lets highs through that the default 4500 Hz would soften: "
-                     "remove it or lower it to 6000")
+        fixes.append(Fix(f"the score's `master: {{lowpass: {score.lowpass:g}}}` lets highs through that the default 4500 Hz would soften: "
+                         "remove it or lower it to 6000", [("master lowpass down to 6000 Hz", [_set("master.lowpass", 6000)])]))
     fixes.append(_lower_tracks(score, stems, band, excess_db, [s.name for s in score.sections], "the bass" if band == "bass" else "the highs"))
     return fixes
 
@@ -759,8 +863,8 @@ def _peak_fixes(score: MusicScore | None, stems: _Stems | None, plr: float) -> l
     name = max(stems.peaks.items(), key=lambda kv: kv[1])[0]
     track = next(t for t in score.tracks if t.name == name)
     change = -float(_round_db(plr - LIMITS["plr_db"] + 1))
-    return [f"`{name}` ({track.instrument.name}) makes the highest peaks: lower {_volume_text(track, list(track.parts), change)}, "
-            "or soften its hits (`o` or `?` steps)"]
+    return [Fix(f"`{name}` ({track.instrument.name}) makes the highest peaks: lower {_volume_text(track, list(track.parts), change)}, "
+                "or soften its hits (`o` or `?` steps)", [_volume_edit([track], list(track.parts), change)])]
 
 
 def _seam_fixes(stems: _Stems | None) -> list[str]:
@@ -786,8 +890,9 @@ def _steady_fixes(score: MusicScore | None, rows: list[dict[str, Any]]) -> list[
         if lower:
             diff = min(d for _, d in lower)
             where = " and ".join(f"the {s}" for s, _ in lower)
-            fixes.append(f"`{t.name}` is {diff:g} dB quieter in {where} than in the {loud['name']}: "
-                         f"{_volume_text(t, [s for s, _ in lower], round(min(diff, gap) - 3))}")
+            change = round(min(diff, gap) - 3)
+            fixes.append(Fix(f"`{t.name}` is {diff:g} dB quieter in {where} than in the {loud['name']}: {_volume_text(t, [s for s, _ in lower], change)}",
+                             [_volume_edit([t], [s for s, _ in lower], change)]))
     only_loud = [t.name for t in score.tracks if loud["name"] in t.parts and not any(s in t.parts for s in names)]
     if only_loud:
         fixes.append(f"the {loud['name']} adds {', '.join(f'`{n}`' for n in only_loud)}: let one of them play softly in the {names[0]} too, "
@@ -807,13 +912,14 @@ def _lift_fixes(score: MusicScore | None, stems: _Stems | None, name: str, befor
             if name in t.parts and before in t.parts:
                 now, prev = _part_volume(t, name), _part_volume(t, before)
                 if now is not None and prev is not None and now < prev:
-                    fixes.append(f"`{t.name}` is {prev - now:g} dB quieter in the {name} than in the {before}: {_volume_text(t, [name], prev - now + 2)}")
+                    fixes.append(Fix(f"`{t.name}` is {prev - now:g} dB quieter in the {name} than in the {before}: {_volume_text(t, [name], prev - now + 2)}",
+                                     [_volume_edit([t], [name], prev - now + 2)]))
     spans = {s: (first * bar, (first + count) * bar) for s, first, count, _ in sections}
     a, z = spans[name]
     tracks = {t.name: t for t in score.tracks}
     main = [n for n, share in _top(stems, "all", a, z) if share > 0 and tracks[n].instrument.kind != "drum"]
     if main and not fixes:
-        fixes.append(f"raise its main part: {_volume_text(tracks[main[0]], [name], 3)}")
+        fixes.append(Fix(f"raise its main part: {_volume_text(tracks[main[0]], [name], 3)}", [_volume_edit([tracks[main[0]]], [name], 3)]))
     # a part that rests in the lift but plays elsewhere — not a transition sound (riser, boom) and
     # not one that only plays in builds: bringing those in would not lift it
     resting = [t for t in score.tracks if name not in t.parts and t.instrument.name not in TRANSITION_INSTRUMENTS
@@ -829,7 +935,7 @@ def _lift_fixes(score: MusicScore | None, stems: _Stems | None, name: str, befor
         ba, bz = spans[before]
         lead = [n for n, share in _top(stems, "all", ba, bz) if share > 0 and tracks[n].instrument.kind != "drum"]
         if lead:
-            fixes.append(f"or make the {before} smaller: {_volume_text(tracks[lead[0]], [before], -3)}")
+            fixes.append(Fix(f"or make the {before} smaller: {_volume_text(tracks[lead[0]], [before], -3)}", [_volume_edit([tracks[lead[0]]], [before], -3)]))
     return fixes
 
 
@@ -842,12 +948,21 @@ def _build_fixes(score: MusicScore | None, stems: _Stems | None, name: str, span
         return []
     pads = [t.name for t in score.tracks if t.instrument.kind == "pad" and name in t.parts]
     target = pads[0] if pads else next((t.name for t in score.tracks if name in t.parts), "pad")
-    fixes = [f"a volume ramp: `{target}: sections: {{{name}: {{volume: {{from: -6, to: 0}}}}}}`",
-             f"or open a filter through it: `{target}: sections: {{{name}: {{lowpass: {{from: 800, to: 4000}}}}}}`"]
+    names = {t.name for t in score.tracks}
+    here = target in names
+    fixes: list[str] = [
+        Fix(f"a volume ramp: `{target}: sections: {{{name}: {{volume: {{from: -6, to: 0}}}}}}`",
+            [(f"volume ramp on {target} through the {name}", [_set(f"tracks.{target}.sections.{name}.volume", {"from": -6, "to": 0})]) if here else None]),
+        Fix(f"or open a filter through it: `{target}: sections: {{{name}: {{lowpass: {{from: 800, to: 4000}}}}}}`",
+            [(f"filter sweep on {target} through the {name}", [_set(f"tracks.{target}.sections.{name}.lowpass", {"from": 800, "to": 4000})]) if here else None]),
+    ]
     risers = [t for t in score.tracks if t.instrument.name == "riser" and name in t.parts]
     if not risers or stems is None:
-        return fixes + [f"or a riser in its last bars: `riser: {{instrument: riser, only: [{name}], steps: \". | . | x | -\"}}` "
-                        "(at `volume: 6` or more: at its normal level a riser is felt more than it is measured)"]
+        new = next(n for n in ("riser", *(f"riser_{k}" for k in range(2, 100))) if n not in names)
+        riser_spec = {"instrument": "riser", "only": [name], "steps": ". | . | x | -", "volume": 6}
+        return fixes + [Fix(f"or a riser in its last bars: `riser: {{instrument: riser, only: [{name}], steps: \". | . | x | -\"}}` "
+                            "(at `volume: 6` or more: at its normal level a riser is felt more than it is measured)",
+                            [(f"add a riser ({new}) in the {name}'s last bars at volume 6", [_set(f"tracks.{new}", riser_spec)])])]
     # a riser that is there but too quiet to count: how far to raise it (its share of the second half)
     mid = (span[0] + span[1]) // 2
     shares = dict(_top(stems, "all", mid, span[1]))
@@ -856,9 +971,9 @@ def _build_fixes(score: MusicScore | None, stems: _Stems | None, name: str, span
     if share < RISER_SHARE and 0 < share:
         under = -10 * math.log10(share / (1 - share))
         raise_db = min(MAX_CUT_DB, math.ceil(10 * math.log10(RISER_SHARE * (1 - share) / ((1 - RISER_SHARE) * share))))
-        fixes.append(f"or raise the riser: `{riser.name}` sits {under:.0f} dB under the rest of the {name}'s second half, too quiet to make it "
-                     f"build (at its normal level a riser is a hint): {_volume_text(riser, [name], raise_db)}"
-                     + (", and still use a ramp or a sweep" if raise_db >= MAX_CUT_DB else ""))
+        fixes.append(Fix(f"or raise the riser: `{riser.name}` sits {under:.0f} dB under the rest of the {name}'s second half, too quiet to make it "
+                         f"build (at its normal level a riser is a hint): {_volume_text(riser, [name], raise_db)}"
+                         + (", and still use a ramp or a sweep" if raise_db >= MAX_CUT_DB else ""), [_volume_edit([riser], [name], raise_db)]))
     else:
         fixes.append(f"the riser `{riser.name}` is {100 * share:.0f} % of the second half: let it start earlier (more bars held) or rise higher "
                      "(`settings: {high: 5000}`)")

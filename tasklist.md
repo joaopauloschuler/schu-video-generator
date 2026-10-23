@@ -1113,7 +1113,10 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 - [x] Latency of typical edits measured on momentum, tidewater, time_of_flight (DESIGN §94.14); tests `tests/test_studio_stems.py` (+17 `slow`), `tests/test_studio_ui.py` (+1 `ui`); screenshots looked at
 
 ### Step 197 — Check, versions and exports
-- [ ] Check panel (spectrogram, verdict, advice, [Apply] for mechanical fixes); versions, undo / redo, A/B against the original preset and any version; exports YAML / MP3 / WAV and save to a project's `assets/music/` (the Step 188 name-clash rule); reopen older sessions
+- [x] Check panel: `music check` in the background after each render from the kept stems (a newer version's check supersedes one under way; it gives way to renders), verdict and headline numbers, spectrogram with section marks and the playhead, advice with [Apply] for mechanical fixes (the check's advice carries structured edits; the CLI's text and JSON unchanged), full report
+- [x] Versions menu (label, time, parent, branch), undo / redo (Ctrl+Z / Ctrl+Shift+Z), rename, star; A/B against the original preset or any version at the same moment with an A / B badge; reopen older sessions
+- [x] Exports YAML / WAV / MP3 (once, N loops, N seconds; video −28 LUFS or listening −16 LUFS) downloaded from the session's `exports/`; save to a project's `assets/music/<name>.yaml` (a bed's name refused, overwrite asks; `music: <name>` snippet); no project explained
+- [x] Tests `tests/test_studio_check.py` (12), `tests/test_studio_ui.py` (+3 `ui`); screenshots looked at
 
 ### Step 198 — Listening notes and "Ask an agent"
 - [ ] Notes pinned on the timeline while playing, kept with the version; MCP tools to read an open session's score, notes and check and to propose a version that appears in the studio; optionally OpenRouter through the existing key (mocked in tests, never called)

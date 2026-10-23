@@ -5,11 +5,14 @@
 // rendered and played on from the same moment.
 
 import { api } from "./api.js";
+import { initCheck, requestCheck, showCheckVersion, tickCheck } from "./check.js";
+import { initExports, showExports } from "./exports.js";
 import { initInspector, showInspector, tickInspector } from "./inspector.js";
 import { Player } from "./player.js";
 import { initStrip, showChords, showFacts, tickChords } from "./strip.js";
 import { initTimeline, setRendering, showEnergy, showLoop, showTimeline, tickTimeline } from "./timeline.js";
 import { initTracks, mutedTracks, showMuted, showTracks, tickMeters } from "./tracks.js";
+import { initVersions, playingVersion, showAB, showVersions } from "./versions.js";
 import { initYamlEditor, showScoreText } from "./yaml_edit.js";
 import { escapeHtml } from "./yaml_view.js";
 
@@ -163,9 +166,7 @@ async function choosePreset(name) {
   status(`loading ${name}…`, "busy");
   try {
     const doc = await api.load(name);
-    Object.assign(state, { render: null, loop: null, selectedSection: null, time: 0 });
-    state.mute.clear();
-    state.solo.clear();
+    resetListening();
     show(doc);
     await refreshAudio();
   } catch (err) {
@@ -180,9 +181,9 @@ function show(doc, before = null) {
   state.score = doc.score;
   const o = outline();
   picker.mark(state.session?.preset);
-  $("version-name").textContent = state.score ? `v${state.score.version}` : "v–";
-  const versions = state.session?.versions || [];
-  $("versions").title = versions.length ? `${versions.length} version${versions.length > 1 ? "s" : ""}; this one: ${versions.find((v) => v.number === state.score?.version)?.label || ""} (the list comes in Step 197)` : "";
+  showVersions();
+  showExports();
+  showCheckVersion();
   $("yaml-name").textContent = state.session ? `· ${state.session.title} · v${state.score?.version ?? "–"}` : "";
   if (o && !o.tracks.some((t) => t.name === state.selected)) state.selected = o.tracks[0]?.name ?? null;
   showFacts();
@@ -233,6 +234,7 @@ function commitWith(send) {
         return r;
       }
       if (r.unchanged) return r;
+      state.ab.on = false; // a new version: B (it) plays
       show(r, before);
       const version = r.session.versions.find((v) => v.number === r.score.version);
       status(`v${r.score.version} · ${version?.label || "edited"} · rendering…`, "busy");
@@ -278,7 +280,7 @@ async function refreshAudio() {
     while (state.wantAudio) {
       state.wantAudio = false;
       if (!state.score || state.score.problems.length) break;
-      const r = await api.render(state.score.version, state.loop, mutedTracks(), state.narration);
+      const r = await api.render(playingVersion(), state.loop, mutedTracks(), state.narration);
       if (state.wantAudio) continue;
       applyRender(r);
     }
@@ -325,7 +327,9 @@ function applyRender(r) {
   player.setSource(r.url, { loop: r.section ? true : r.loop, offset: r.section ? r.section.start : 0, at });
   showEnergy();
   renderStatus(r);
+  showAB();
   if (r.facts_pending) lateFacts(r);
+  if (r.version === state.score?.version) requestCheck(r.version);
 }
 
 // The loudness, true peak and energy curve come a moment after the render plays (the server
@@ -377,6 +381,7 @@ function onTick(seconds) {
   tickChords(activeSection(), seconds);
   tickMeters(seconds, section, player.playing);
   tickInspector(seconds, section, player.playing);
+  tickCheck(seconds);
 }
 
 function onPlayState(playing) {
@@ -426,8 +431,32 @@ function wireTransport() {
 
 // ----- start --------------------------------------------------------------------------------
 
+// Reopen an earlier session (from the version list).
+async function openSession(id) {
+  player.stop();
+  status("opening the session…", "busy");
+  try {
+    const doc = await api.openSession(id);
+    resetListening();
+    show(doc);
+    await refreshAudio();
+  } catch (err) {
+    status(err.message, "error");
+  }
+}
+
+// A new piece: what was being listened to (loop, mutes, A/B) starts afresh.
+function resetListening() {
+  Object.assign(state, { render: null, loop: null, selectedSection: null, time: 0 });
+  state.mute.clear();
+  state.solo.clear();
+  state.ab.on = false;
+  state.ab.version = null;
+}
+
 const ctx = {
-  state, outline, commit, commitText, check, status, problem, colour, clock, setLoop, seekTo, refreshAudio, selectTrack, activeSection,
+  state, outline, commit, commitText, commitWith, check, status, problem, colour, clock, setLoop, seekTo, refreshAudio, selectTrack, activeSection,
+  show, storage, openSession,
 };
 
 async function start() {
@@ -444,6 +473,9 @@ async function start() {
   initTracks(ctx);
   initInspector(ctx);
   initYamlEditor(ctx);
+  initVersions(ctx);
+  initCheck(ctx);
+  initExports(ctx);
   status("starting…", "busy");
   busy(1);
   try {

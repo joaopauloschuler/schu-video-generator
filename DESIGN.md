@@ -13867,7 +13867,7 @@ built-in bed's template.
 - **196 Fast re-render** (done, §94.14): per-track stem cache, re-render only changed tracks and remix;
   section-only render (measured, not worth it: §94.14); playback continues at the same moment; the "under narration" toggle;
   level meters from real data; latency of typical edits measured and reported.
-- **197 Check, versions, exports**: the check panel (`check.check_music_score`: verdict, headline
+- **197 Check, versions, exports** (done, §94.15): the check panel (`check.check_music_score`: verdict, headline
   numbers, spectrogram with section marks, advice with [Apply] where the fix is mechanical,
   the full report); versions, undo / redo, A/B against the original preset and any version
   (§94.4); exports YAML / MP3 / WAV and save to a project's `assets/music/` with the Step 188
@@ -13893,7 +13893,7 @@ person asks (Step 197).
   `app.py` (`StudioApp`: what each API call does, with no HTTP — tests call it directly),
   `server.py` (`StudioServer`, the HTTP layer only), `session.py` (sessions on disk), `static/`
   (the page, package data). Later steps add modules beside them (`edits.py` and `song.py` 194, `inspector.py` 195, `stems.py` and `narration.py` 196,
-  `exports.py` 197, `notes.py` / `agent.py` 198, `variations.py` 199) and keep `server.py` a thin
+  `exports.py` and `checks.py` 197, `notes.py` / `agent.py` 198, `variations.py` 199) and keep `server.py` a thin
   router. Boundary: `studio_app` may import any of vidgen; `vidgen.studio` never imports
   `studio_app` (it stays a self-contained package, §93.2, checked by its allow-list test).
 - **Server** (decision: the standard library, no new dependency): `http.server.ThreadingHTTPServer`
@@ -13943,7 +13943,8 @@ person asks (Step 197).
   pid; it removes the file on exit only if its pid is still the one in it (a second studio may
   have replaced it). MCP tools read it to find "the open session".
 - Later steps add, per session: `notes.json` (198), `inbox/` (agent proposals, 198),
-  `variations/<batch>/` (199), `checks/` (197). Stems (196) are kept in the studio's memory,
+  `variations/<batch>/` (199), `checks/` and `exports/` (197; `redo` and each version's
+  `starred` in `session.json`, origin `check`). Stems (196) are kept in the studio's memory,
   not on disk (§94.14); `renders/` gains listening mixes under narration (`….n.wav`).
 
 ### 94.4 Versions, undo / redo and A/B (plan for Steps 195 and 197)
@@ -13985,9 +13986,13 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 | `GET /audio/<key>.wav`, `/audio/<key>[.m<tag>][.n]-<section>.wav`, `/audio/<key>.m<tag>.wav`, `….n.wav` | 193, 194, 196 | the render (or a listening mix, either under narration `.n`), with `Range` (206, `Content-Range`; 416 outside the file) |
 | `POST /api/edit {version?, ops, label?, dry_run?}` | 194, 195 | a new version from value edits (paths like `tracks.bass.volume`; `unset` 195) and song edits (§94.12; `change_instrument`, `play_mode`, `section_plays` 195, §94.13); `{ok: false, problems}` writes nothing; `dry_run` checks only; `notes`: what changes beyond the value named |
 | `POST /api/text {version?, text}` | 195 | a new version from typed text (`origin: edit`); `{ok: false, problems}` writes nothing; the same text `unchanged` |
-| `POST /api/undo`, `/api/redo`, `/api/current {version}` | 197 | move the current version |
-| `POST /api/check {version}`; `GET /media/<key>-check.png` | 197 | `check.check_dict` of the version, its spectrogram |
-| `POST /api/export {version, format, name?}` | 197 | YAML / MP3 / WAV to a chosen path, or `assets/music/<name>.yaml` |
+| `POST /api/undo`, `/api/redo`, `/api/current {version}` | 197 | move the current version; the session carries `redo`, `can_undo`, `can_redo` |
+| `POST /api/version {version, label?, starred?}` | 197 | rename / star a version |
+| `GET /api/sessions`, `POST /api/open {session}` | 197 | the studio's sessions (newest first), reopen one |
+| `POST /api/check {version?, wait?}`; `GET /media/<key>-check.png` | 197 | the version's check (§94.15): `{status: done, …}`, `pending`, `superseded`; its spectrogram |
+| `POST /api/check/apply {version, key, edit}` | 197 | a check's advice `edit` (`<finding>.<k>`) as the next version (`origin: check`) |
+| `POST /api/export {version?, format, length?, count?, level?}`; `GET /download/<name>` | 197 | YAML / WAV / MP3 into the session's `exports/`, downloaded as an attachment |
+| `POST /api/save {version?, name, overwrite?}` | 197 | save into the project's `assets/music/<name>.yaml` (§94.15) |
 | `GET /api/session?since=R` | 198 | polled every 1.5 s: a revision counter, so versions added by an agent appear |
 | `GET/POST /api/notes` | 198 | listening notes `{id, seconds, bar, text, version}` |
 | `POST /api/variations {version}`, `/api/variations/pick` | 199 | four siblings, rendered and checked; picking one makes it the next version |
@@ -14034,7 +14039,8 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
   (the page), `api.js` (the JSON calls), `player.js` (playback), `yaml_view.js` (the highlighted
   score file), `favicon.svg`; Step 194 adds `strip.js` (key, tempo, seed, chords), `timeline.js`
   (sections, energy, loops, the section bar) and `tracks.js` (the track list); Step 195 `inspector.js`,
-  `stepgrid.js` (the steps text read into cells) and `yaml_edit.js` (the score file typed). Vanilla JS, no build step, no CDN, no external fonts (Inter and
+  `stepgrid.js` (the steps text read into cells) and `yaml_edit.js` (the score file typed); Step 197
+  `versions.js` (versions, undo / redo, A/B), `check.js` (the check panel), `exports.js`. Vanilla JS, no build step, no CDN, no external fonts (Inter and
   JetBrains Mono come from vidgen's bundled fonts at `/fonts/...`), so it works offline.
 - **Look** (decision: vidgen's own): the `dark_tech` theme's colours (background `#0E1116`,
   surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
@@ -14348,3 +14354,75 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
   renderer 5–12× slower (time_of_flight at 112 BPM: 2,468,352 = 2⁹·3·1607; the swept filters
   then take 4–5 s a track and 2.2 GB) — the 17 s above; it affects every render of such a
   score (videos too), not only the studio.
+
+### 94.15 Step 197: the check panel, versions, A/B, exports
+
+- **Advice as edits** (`vidgen.studio.check`): a line of advice may be a `Fix` — a `str` (the
+  words exactly as before) carrying `edits`, `(label, ops)` pairs whose ops are value edits
+  `{op: set, path, value}` (paths as a problem's `where`, the studio's `edits.py` vocabulary).
+  `Finding.edits` collects them as `{fix, label, ops}` (`fix`: the line's index). Mechanical
+  advice only: a track's volume (whole or per section, as `_volume_text` words it; none when a
+  volume curve is in the way), an octave up (when every part plays one octave, ≤ 8), a
+  `lowpass` / `highpass` on a track (when no part has one), `master.lowpass: 6000`, a build's
+  volume ramp or filter sweep, a riser added (`riser`, else `riser_2`… at volume 6), a riser
+  raised. "Bring in a part", "add a part", a shorter decay are words only. **The CLI is
+  unchanged**: `music_check_text` and `check_dict` (the `--json`) give the same output (checked
+  byte for byte on the 17 templates and eight bad scores before and after,
+  `<scratchpad>/s197/baseline.py`); the edits are read from `Finding.edits` by the studio.
+- **Entry point** (decision): `check_music_score(score, hop, tracks=None, mix=None,
+  between=None)` — `tracks`: the stems already rendered (`render_track_stem`, score order) so
+  nothing is rendered again; `mix`: their mix and gain when made; `between`: called between the
+  check's steps (each track, the measures, tempo, key) and may raise to stop. Without them it is
+  the check as before; with them the same report (tested equal, `check_dict` minus timings).
+- **The studio's checker** (`studio_app/checks.py`, `Checker`): one worker; `POST /api/check`
+  asks for a version's check (`wait` long-polls up to 60 s): kept in `checks/<render key>.json`
+  + `-check.png` it answers at once (`CHECK_VERSION` and `STUDIO_CHECK_FORMAT` must match),
+  else the job starts once no render has run for 0.4 s, takes the kept stems under the render
+  lock (rendered only if the cache dropped them) and the mix of the last two renders
+  (`StudioApp._mixes`), and between its steps waits while a render runs and stops
+  (`superseded`) as soon as another version's check is asked for — so a check never competes
+  with an edit's render and a burst of edits checks only the last version. Measured on
+  `momentum`: the check 2.8 s after the render (the CLI's 4.1 s includes rendering), a kept one
+  10 ms. The page asks 0.5 s after a render of the current version plays (not for A).
+- **The panel**: verdict (✓ / • / !) and headline numbers (voice range share, bass share, highs
+  dB, each lift / build's dB, loudness; coloured by their finding's level, the finding's words
+  as the tooltip); **details** (remembered) shows the spectrogram (`spectrogram_image`, its
+  natural size, at most the column's width) with the section marks and a playhead (`image.left`,
+  `px_per_second` in the answer; a click seeks), the advice per finding with one **Apply:
+  <label>** button per edit (disabled when the check is of another version), the full report
+  (`music_check_text`). An older check stays dimmed (`.stale`) while the new one is made;
+  `data-checking` on `<body>`. **Apply** (`POST /api/check/apply {version, key, edit}`): the
+  kept check's ops applied to that version (its notes must still have the key) as the next
+  version, `origin: check`, label `check: <label>`.
+- **Versions** (`session.py`): `undo` (to the parent; the version left pushed on `redo`),
+  `redo` (only when the top of `redo` is a child of the current one), `set_current` (keeps the
+  redo trail only when it is its next step), `add_version` clears `redo` (a branch; nothing is
+  deleted), `update_version` (label 1–120 characters, `starred`). The page's menu: newest first,
+  label, time, "from vN" when the parent is not the version before, versions off the current
+  branch dimmed, ★ / ✎ / A/B per row, earlier sessions below (`list_sessions`, reopened by
+  `POST /api/open`). Undo / redo buttons and Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) outside text fields.
+- **A/B** (the page): A is the session's first version (the preset's template or the text
+  given) or the version picked with the row's A/B; the top-bar button toggles A and B; the
+  badge next to it says `A v1 original` or `B v5 current`; `data-ab` on `<body>`. A plays
+  through the same render call (`playingVersion()`), so the player swaps at the same moment and
+  every render is level-matched; a new version, undo or redo goes back to B.
+- **Exports** (`studio_app/exports.py`): `render_music_score` itself (the video's samples, under
+  the render lock); length `once` (a loop's pass, a one-pass piece with its ending), `loops` N
+  (1–64, loop pieces only: tiled exactly), `seconds` N (1–1800: looped, or a one-pass piece cut
+  or padded; a 2 s fade-out when the music goes on past the end); level `video` (−28 LUFS) or
+  `listening` (+12 dB, lowered to keep the true peak ≤ −1 dBTP). Files go only to the session's
+  `exports/` (names `<title slug>-v<N>[-<length>-<level>].<ext>`, matched by a pattern before
+  serving; MP3 through `listen.write_mp3` to a `.partial-` name, then renamed) and are served
+  by `GET /download/<name>` with `Content-Disposition: attachment`; the browser saves them
+  where the person says. YAML: the version's text as written.
+- **Save to project** (`save_to_project`): no project → a `VidgenError` that says how to start
+  the studio with one; the name `^[a-z0-9][a-z0-9_-]{0,63}$`; a built-in bed's name refused
+  with the reason (Step 188: `music: <bed>` would be ambiguous) and a suggestion (`<bed>_mine`);
+  an existing `assets/music/<name>.yaml` (or `.yml`, which is then the file written) only with
+  `overwrite` (the page asks); `assets/music` must resolve inside the project (links followed);
+  written atomically; the answer carries the snippet `music: <name>` (the page offers Copy).
+- **Fixes on the way**: menus closed by a click whose target was re-rendered (now judged by
+  `composedPath()`); a rename being typed survives the menu re-rendering.
+- Not done: renders and exports are not pruned (§94.10); the check is of the score as written
+  (mute / solo / narration are listening aids); a check made while an older stem was scaled for
+  a volume edit differs from a fresh one within the stems' tolerance (§94.14).
