@@ -15190,3 +15190,73 @@ kind's range, counts, exaggerated glyphs.
   - Part labels in a zoomed view can go stale after a process (use `labels: false`).
   - Four membrane proteins plus the action-potential plot make small drawings.
   - The plot is an inset, not a `function_plot` scene.
+
+### 95.11 Gene expression as actions (Step 206)
+
+- **Where.** A `gene:` param (in `molecule` and `cell`) makes the gene a target. The molecule
+  scene is a close-up with every base and amino acid written. It has the actions `transcribe`,
+  `cap`, `splice`, `polyadenylate`, `export`, `translate` (`codons`), `target_er`, `glycosylate`
+  and `fold` (`chaperone`). The cell scene follows the products through the cell with
+  `transcribe`, `export`, `translate`, `to_golgi` and `secrete` (`to`). The close-up steps are
+  refused in a cell, with a pointer to the molecule scene. A `molecule` scene with a gene has no
+  `molecules`, `solutes`, `membrane` or `potential`.
+- **The gene** (`GeneSpec` → `build_gene` → `Gene`):
+  - It is written as a coding-strand `sequence` (with 1-based intron spans), as a `protein`
+    (back-translated with frequent human codons), or generated from `codons` and a `seed`.
+  - A generated gene has a TATA box at −31..−24 and an Inr at +1, a Kozak context, introns
+    (GU…branch A 18–40 nt from the 3′ end…polypyrimidine tract…AG, at least 30 nt), a stop codon,
+    AAUAAA, a CA cleavage site and a GU-rich element.
+  - A bacterium has −35 and −10 boxes, a Shine–Dalgarno sequence and a terminator hairpin.
+  - The ORF is the first AUG of the mature mRNA to the first in-frame stop codon. The genetic code
+    is NCBI table 1. The anticodons are the ones human cells use (inosine at the wobble place for
+    the eight I-read boxes, checked against Crick's rules).
+  - The signal peptide is found by a von Heijne rule: an h-region of at least 7, small residues
+    at −1 and −3. Preproinsulin gives 24. Sequons are N-X-S/T with X not Pro.
+  - The validation errors are clear: bad letters, introns without GU…AG or too short, a frame
+    that does not reach a stop codon, a `protein` that does not match the sequence, and a
+    premature stop codon more than 50 nt before the last junction (an NMD target).
+- **Rules** (`ExpressionState`, `step_problem` / `advance`, replayed in beat and `at` order by
+  `vidgen validate`). Each step needs what comes before it: splicing a transcript, export after
+  processing, translation in the cytosol, `target_er` only for a signal peptide before the
+  signal leaves the tunnel unbound, `glycosylate` only in the ER with a sequon that has reached
+  the OST, a chaperone that fits the compartment. In a cell, `cell_steps` expands each step into
+  the molecular steps it implies, so the same rules apply.
+- **Three layers.**
+  - No manim: `cellworld/expression.py` (the model and rules), `expression_stage.py` (the stage
+    in nucleotide slots: `Look`, `Pose`, `Clip` of captioned phases, `Builder`; the nucleus
+    steps), `expression_cyto.py` (ribosome, tRNAs, the tunnel, the chain path, SRP/Sec61, OST,
+    chaperones) and `expression_route.py` (`RoutePlanner` in µm for the cell scene).
+  - Drawing: `cell_draw/expression.py` (`ExpressionDrawing`, one mobject per look, made up front)
+    and `cell_draw/expression_route.py` (`RouteDrawing`, markers of a fixed screen size).
+  - Scenes: `scenes/molecule_gene.py` (the `GeneExpression` mixin, `StagePlayer`),
+    `scenes/cell_expression.py` (`CellExpression`, `RoutePlayer`) and `scenes/gene_actions.py`.
+- **Scale and numbers.** DNA and RNA are stretched about 6× against the proteins so that the
+  letters can be read, and the scene says *schematic: not to scale*. The window is 36 slots
+  (16:9) or 18 (9:16). The numbers drawn:
+  - a bubble of 13 bp and an RNA–DNA hybrid of 8 bp;
+  - capping at about 25 nt;
+  - a tunnel of 30 residues and the OST about 65 residues from the PTC;
+  - 12 A in the tail (about 200 in mammals);
+  - Glc₃Man₉GlcNAc₂ in SNFG symbols.
+- **Timing.** An action's length follows its content: `run_time_for` builds and caches the clip.
+  Elongation captions its first two cycles and then runs fast (at most 7 s). A short beat
+  squeezes the action, and `run_time` overrides the length.
+- **Speed.** Texts are cached as plain shapes rather than MarkupText copies. Captions are wrapped
+  by a character-width estimate. `StageFade` replaces `FadeIn` of the whole group.
+- **Public:** `vidgen.api` adds `GENE_CELL_STEPS`, `GENE_CHAPERONES`, `GENE_STEPS`,
+  `ExpressionState`, `Gene`, `GeneSpec`, `build_gene`, `parse_protein`, `signal_peptide_length`,
+  `gene_advance`, `gene_cell_advance`, `gene_cell_step_problem`, `gene_step_problem`,
+  `ExpressionStage`, `GeneRoutePlanner`, `gene_route_problem`, `ExpressionDrawing` and
+  `GeneRouteDrawing`.
+  - Config: the `gene` param (`id`, `name`, `product`, `species`, `sequence`, `introns`,
+    `protein`, `codons`, `signal_peptide`, `glycosylation`, `seed`, `start`, `codes`) and the 11
+    actions above.
+  - The Phase Q baseline frames match.
+- **Gaps:**
+  - A 9:16 close-up leaves vertical space unused.
+  - The cell-scene markers are schematic and move cargo in straight lines.
+  - Calnexin is drawn floating, not anchored in the membrane.
+  - Several steps in one short beat get squeezed (the guide advises one step per beat).
+  - Caption wrapping is an estimate.
+  - The Step 205 gaps remain: no `set_state` in a cell, the endocytosed vesicle is not an
+    object, and labels go stale.

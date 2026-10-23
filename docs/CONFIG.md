@@ -6250,7 +6250,8 @@ nucleus covered with pores, a mitochondrion's or chloroplast's outer membrane, a
 mosaic of lipids at the complex level); `labels` (`true`);
 `scale_bar` (`true`); `reveal` (`all`: the whole cell in the first beat; `per_beat`: the cell,
 then one object per beat in order); `seed` (where things without `at` go); `title_size`,
-`label_size`. [Action targets](#beat-actions): `title`, `cell` (cytosol and plasma membrane,
+`label_size`; `gene` (a gene whose products its steps follow, see [a gene in a cell](#a-gene-in-a-cell)).
+[Action targets](#beat-actions): `title`, `cell` (cytosol and plasma membrane,
 a plant's wall, a bacterium's envelope), `tissue` (the neighbouring cells), `scale_bar` and each
 object's id (a typical one too: `nucleus`, `nucleolus`, `rough_er`, `smooth_er`, `golgi`,
 `centrosome`, `mitochondria`, `lysosomes`, `peroxisomes`, `early_endosomes`, `late_endosome`,
@@ -6364,6 +6365,47 @@ lists the ones it has).
 [molecule scene](#processes-as-actions). In a cell, label a process with `labels: false` on its
 view and point at it with `callout`: a zoomed view's labels name the parts as they were.
 
+#### A gene in a cell
+
+A `cell` with a `gene` (the same param as the [molecule scene's](#gene-expression)) follows its
+products through the cell, the camera following them (each step frames where it happens):
+
+```yaml
+- id: route
+  type: cell
+  params:
+    title: "From gene to secreted protein"
+    gene: {id: ins, name: INS, signal_peptide: true, glycosylation: true}
+    labels: false
+  beats:
+    - text: "In the nucleus the gene is transcribed and its RNA processed."
+      actions: [{transcribe: ins}]
+    - text: "The messenger RNAs leave through nuclear pores."
+      actions: [{export: ins}]
+    - text: "Ribosomes translate them on the rough ER, threading the chains into the lumen."
+      actions: [{translate: ins}]
+    - text: "COPII vesicles carry the folded protein to the Golgi."
+      actions: [{to_golgi: ins}]
+    - text: "Secretory vesicles take it to the plasma membrane, where it is released."
+      actions: [{secrete: ins}]
+```
+
+| action | options | |
+|---|---|---|
+| `transcribe` | `notes` | mRNAs appear at the gene in the nucleoplasm (capping, splicing and the tail included at this scale). |
+| `export` | `notes` | they move to the nearest nuclear pores and through them. |
+| `translate` | `notes` | ribosomes join them: with a signal peptide on the rough ER (or the outer nuclear membrane, part of it), the chains in the ER lumen — targeted, glycosylated and folded there; without one free polysomes in the cytosol. |
+| `to_golgi` | `notes` | only a folded protein made into the ER: COPII concentrates it at an ER exit site and buds a vesicle, which fuses with the cis-Golgi; the cargo passes cis → medial → trans to the trans-Golgi network as the cisternae mature (the glycans trimmed and rebuilt). |
+| `secrete` | `to` (`outside` default, `membrane`, `lysosome`), `notes` | from the trans-Golgi network: a secretory vesicle to the plasma membrane and exocytosis (the protein released outside), a vesicle whose membrane protein becomes part of the plasma membrane, or a clathrin-coated vesicle (mannose 6-phosphate receptors) to a lysosome. |
+
+Products are markers a few pixels across at any zoom (an mRNA's strand with its cap, ribosomes,
+protein chains, vesicles with their coats): their real sizes (5–100 nm) vanish at the scale of
+organelles. The order is checked as in the molecule scene (`to_golgi` for a protein without a
+signal peptide: *only proteins made into the ER enter the secretory pathway*), and the cell must
+have what a step needs (a nucleus with pores, rough ER for a signal peptide, a Golgi). `cap`,
+`splice`, `polyadenylate`, `target_er`, `glycosylate` and `fold` are close-ups: in a cell they are
+refused with a pointer to the molecule scene.
+
 #### Molecules in a cell
 
 The [molecule kinds](#molecule) are objects of a `cell` too: soluble ones `in:` their compartment
@@ -6422,8 +6464,10 @@ under the molecules and part labels, `true`); `scale_bar` (`true`, in nm); `reve
 `potential` (mV, the cytosolic side against the other: a live readout `Vₘ = −70 mV` and the
 membrane's charges, + outside and − inside at rest); `bars` (`true`: each solute's concentration on
 each side as a bar and a value beside the drawing); `seed` (where particles start and how they
-wander). [Action targets](#beat-actions): `title`, `membrane` (with the compartments' names),
-`scale_bar`, `potential`, each molecule's id (with its name and part labels) and each solute's id.
+wander); `gene` (a gene whose expression the scene shows instead, see
+[gene expression](#gene-expression)). [Action targets](#beat-actions): `title`, `membrane` (with the
+compartments' names), `scale_bar`, `potential`, each molecule's id (with its name and part labels)
+and each solute's id; with a gene: `title` and the gene's id.
 In a tall frame several membrane proteins go on membrane rows, one under the other, each a strip
 of membrane with its two compartments named and a dashed rule between rows.
 
@@ -6546,6 +6590,113 @@ scenes[0].beats[0].actions[0].target: no net water flow: both sides have the sam
 A carrier's coupled moves must gain energy overall (ΔG = Σ n·(RT ln c₂/c₁ + zFΔψ) < 0 with the
 scene's concentrations and potential): an exchanger driven uphill is refused with *active transport
 needs an energy source: ATP or an ion gradient*.
+
+#### Gene expression
+
+With a `gene` (and no `molecules`, `solutes`, `membrane` or `potential`) a `molecule` scene is a
+close-up of one gene's expression, its bases and amino acids written out, and the steps are
+actions on the gene's id. It is a schematic (*schematic: not to scale* under it): the DNA and RNA
+are stretched about six times against the proteins so the letters are legible; one slot is a
+nucleotide. The coding strand is drawn above (5′→3′, left to right), the template strand below
+(3′→5′), so RNA polymerase moves right reading the template 3′→5′ and the RNA grows 5′→3′; the
+nucleus is below, the cytosol above the nuclear envelope, the ER lumen above the ER membrane. The
+camera follows what each step is about; the protein made so far is written under the view
+(`N– Met Ala Leu … –C`).
+
+```yaml
+- id: expression
+  type: molecule
+  params:
+    title: "From gene to protein"
+    gene: {id: ins, name: INS, codons: 10, introns: 1}   # generated: TATA box, Kozak AUG, a GU…A…AG intron, AAUAAA
+  beats:
+    - text: "The general factors and RNA polymerase two assemble at the promoter and copy the gene."
+      actions: [{transcribe: ins, at: "@assemble"}]
+    - text: "The spliceosome cuts the intron out as a lariat and joins the exons."
+      actions: [{splice: ins, at: "@spliceosome"}]
+    - text: "The three prime end is cut and a poly A tail is added."
+      actions: [{polyadenylate: ins}]
+    - text: "The finished messenger RNA leaves the nucleus through a nuclear pore."
+      actions: [{export: ins, at: "@leaves"}]
+- id: secretory
+  type: molecule
+  params:
+    title: "Into the ER"
+    gene: {id: g, signal_peptide: true, glycosylation: true, start: mrna}   # 72 codons: long enough for SRP
+  beats:
+    - text: "Translation starts in the cytosol."
+      actions: [{translate: g, codons: 3}]
+    - text: "SRP brings the ribosome to the translocon; the chain enters the ER."
+      actions: [{target_er: g}]
+    - text: "The oligosaccharyltransferase adds a branched sugar tree to an asparagine of the growing chain."
+      actions: [{glycosylate: g}]
+    - text: "Translation ends inside the lumen."
+      actions: [{translate: g}]
+    - text: "Glucosidases trim the sugar and calnexin holds the protein while it folds."
+      actions: [{fold: g, at: "@calnexin"}]
+```
+
+**The gene** (`gene:`): `id` (its target, default `gene`), `name` (the gene's symbol: italic,
+checked against the species' nomenclature), `product` (the protein's name, roman), `species`
+(default the scene's), and one of:
+
+- `codons` (a generated protein of that many codons, Met included, the stop codon not; default 12,
+  72 with a signal peptide), with `introns` (how many, placed between codons), `signal_peptide`
+  (an N-terminal signal: n-region with Lys/Arg, a hydrophobic h-region, a cleavage site with small
+  residues at −1 and −3), `glycosylation` (an Asn-X-Ser/Thr sequon after it) and `seed`;
+- `protein` (one-letter `MALWMRLLPLLALLALWGPDPAAA…` or three-letter `Met-Ala-Leu`; written back
+  as a gene with frequent human codons; `introns` a count);
+- `sequence`: the coding strand of the transcribed region, 5′→3′ from the start site (+1), DNA
+  (`ACGT`), with `introns: [[start, end], …]` (1-based, inclusive, in the sequence); a `protein`
+  given too is checked against what the sequence encodes.
+
+Generated genes get a promoter with a TATA box at −31 to −24 and an initiator round +1 (a
+bacterium, `cell: bacterium`: −35 TTGACA and −10 TATAAT boxes), a 5′ UTR ending in a Kozak
+context (GCCACC**AUG**G; a bacterium: a Shine–Dalgarno AGGAGG 6 nt before the AUG), introns
+(5′ GUAAGU…branch point CUA**A**C 19 nt from the end…polypyrimidine tract…CAG 3′), a stop codon,
+a 3′ UTR with AAUAAA, a cleavage site after a CA 10–30 nt downstream and a GU-rich element (a
+bacterium: a terminator hairpin and U tract). `start: mrna` begins with a mature mRNA in the cytosol
+(skip the nucleus); `codes: one` writes amino acids as M, A, L… instead of Met, Ala, Leu.
+
+The genetic code is the standard one (NCBI table 1). The open reading frame runs from the first
+AUG of the mature mRNA (the scanning rule) to the first in-frame stop codon. tRNAs pair
+antiparallel with their codons; the anticodon drawn is the one human cells use (inosine at the
+wobble place for the eight four-codon boxes read with I: Ala, Arg CGN, Ile, Leu CUN, Pro, Ser UCN,
+Thr, Val, checked against Crick's wobble rules).
+
+| action | options | |
+|---|---|---|
+| `transcribe` | `notes` | TFIID's TATA-binding protein binds the TATA box, TFIIA and TFIIB join, RNA polymerase II with TFIIF, then TFIIE and TFIIH (the preinitiation complex); TFIIH opens a ~13 bp bubble at +1 and phosphorylates Ser5 of the CTD; elongation with an ~8 bp RNA–DNA hybrid; the 5′ end capped at ~25 nt by the capping enzyme on the CTD (unless the scene has a `cap` step); introns transcribed with the exons; the polymerase runs on past the poly(A) signal. A bacterium: σ⁷⁰ at the −35 / −10 boxes, the open complex, termination at the terminator. Its length follows the gene (about 20–25 nt a second; real RNA polymerase II makes 20–70). |
+| `cap` | `notes` | the cap as its own step: RNA triphosphatase (pppN → ppN), guanylyltransferase (GpppN, a 5′–5′ triphosphate), guanine-N7 methyltransferase with S-adenosylmethionine (m⁷GpppN). |
+| `splice` | `notes` | U1 snRNP on the 5′ splice site (GU), U2AF on the polypyrimidine tract and AG, U2 snRNP round the branch point with its A bulged; the U4/U6·U5 tri-snRNP joins, U1 and U4 leave; first transesterification (the branch A's 2′-OH attacks the 5′ splice site: the lariat, 2′–5′), second (the exon's 3′-OH attacks the 3′ splice site: the exons joined); the lariat degraded; an EJC ~24 nt upstream of each junction. All introns at once. |
+| `polyadenylate` | `notes` | CPSF on AAUAAA, CstF on the GU-rich element; CPSF73 cleaves after a CA; Xrn2 degrades the RNA still in the polymerase, which lets go (torpedo); poly(A) polymerase adds the tail (12 A drawn, ~200 in mammals), PABPN1 coats it. |
+| `export` | `notes` | the mRNP (CBC on the cap, EJCs, PABPN1) and the export receptor NXF1–NXT1 go through a nuclear pore complex 5′ end first; Dbp5 remodels it in the cytosol; eIF4E takes the cap, PABPC1 the tail. |
+| `translate` | `codons` (how many to translate now; default to the stop codon), `notes` | initiation (eIF4F on the cap, the 43S complex — 40S, eIF2·GTP·Met-tRNAᵢ, eIF3, eIF1, eIF1A — scanning to the first AUG in a good context, the 60S subunit joining: the 80S ribosome; a bacterium: 30S on the Shine–Dalgarno sequence, fMet-tRNA, 50S), then elongation codon by codon: eEF1A·GTP brings the aminoacyl-tRNA whose anticodon pairs with the A-site codon, the peptidyl transferase centre makes the peptide bond (the chain grows at its C-terminus), eEF2·GTP translocates the ribosome one codon (A and P to P and E); the first two cycles captioned, the rest fast; the chain in the exit tunnel (~30 residues, drawn as dots) and beyond it; the A, P and E codons and the start and stop codons boxed; at the stop codon eRF1·eRF3 binds, the protein is released N-terminus first, ABCE1 splits the ribosome. On the ER the ribosome stays on the translocon and the mRNA slides through it. |
+| `target_er` | `notes` | needs a signal peptide and a growing chain: elongation until the signal peptide leaves the tunnel, SRP binds it and the ribosome (elongation slows), docks on the SRP receptor in the ER membrane, hands the ribosome to Sec61 (GTP hydrolysis, SRP leaves); elongation resumes into the lumen with the signal in the lateral gate (its N-terminus in the cytosol, a loop); signal peptidase cuts it off. |
+| `glycosylate` | `notes` | in the ER: elongation until the sequon's Asn reaches the oligosaccharyltransferase (~65 residues from the peptidyl transferase centre), which transfers Glc₃Man₉GlcNAc₂ (14 sugars, drawn in SNFG symbols: GlcNAc blue squares, mannose green and glucose blue circles) from dolichol-PP onto it. |
+| `fold` | `chaperone` (`hsp70`, `chaperonin`, `bip`, `calnexin`; checked against where the protein is), `notes` | once the protein is released: Hsp70·ATP binds hydrophobic stretches and lets go (cytosol, the default), or the chaperonin TRiC (GroEL in a bacterium) folds it in its chamber; in the ER BiP, or calnexin (the default for a glycoprotein) after glucosidases trim two glucoses, glucosidase II the last. The chain packs its hydrophobic residues inside. |
+
+Each step's default length is what it shows (its phases, about 3–15 s; fast elongation at most 7 s
+in all); `run_time:` overrides it and a short beat shortens it. Every step has captions at the top
+(`notes: false` turns them off). `to_golgi` and `secrete` are steps of a [`cell`](#a-gene-in-a-cell).
+
+**The rules are checked** by `vidgen validate`, the steps replayed in beat and `at` order:
+
+```
+scenes[0].beats[0].actions[0].target: translation starts only in the cytoplasm: ribosomes are assembled in the nucleolus but join an mRNA only after export; export the mRNA through a nuclear pore first
+scenes[0].params: gene: introns[0] (17–46): an intron starts with GU (GT in the DNA: the 5′ splice site U1 snRNP pairs with); this one starts UG
+scenes[0].params: gene: a stop codon UGA in frame at codon 4 (mRNA position 15) ends the protein after 3 residues, before the end of the 4 written
+scenes[0].beats[1].actions[0].target: the protein has no signal peptide: SRP binds an N-terminal hydrophobic signal sequence as it leaves the ribosome (signal_peptide: true writes one); proteins without one are made in the cytosol
+scenes[0].beats[2].actions[0].target: hsp70 does not work in the ER lumen, where this protein is: use bip or calnexin (the ER's Hsp70 and lectin chaperone)
+```
+
+Also refused: an intron not ending AG, shorter than 30 nt or without a branch-point A 18–40 nt
+from its 3′ end; no AUG; no stop codon in frame (*the reading frame runs off the 3′ end*); a stop
+codon more than 50 nt before the last exon–exon junction (*nonsense-mediated decay destroys
+it*); introns in a bacterium; export of an mRNA not yet capped, spliced and polyadenylated;
+`target_er` after the protein is released (*SRP targets co-translationally*) or on a chain too short
+to leave the tunnel before it ends; `glycosylate` outside the ER or without a sequon; a step played
+twice.
 
 ### `end_card`
 
@@ -9249,8 +9400,8 @@ a title card, a `transform` of a bar).
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
 | `iso_diagram` | `heading`, `diagram`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, build, raise, lower, explode, collapse, flow, focus, relabel, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line or swatch; a `box` frames the shape); `block<N>` counts every block and layer in the order written, a stack's layers bottom up in its place; a stack is its layers and caption, a group its plate, caption and members, `diagram` everything; an edge its arrow or pipe and label; `dim` and `highlight` recolour blocks with their shading kept; see [the actions](#iso-diagram-actions) |
-| `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, motor_walk, endocytosis, exocytosis, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, `motor_walk` / `endocytosis` / `exocytosis` play processes, see [the cell actions](#cell-actions) |
-| `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
+| `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, motor_walk, endocytosis, exocytosis, transcribe, export, translate, to_golgi, secrete, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, `motor_walk` / `endocytosis` / `exocytosis` play processes, see [the cell actions](#cell-actions); a `gene`'s id takes its steps, see [a gene in a cell](#a-gene-in-a-cell) |
+| `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:

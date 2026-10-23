@@ -295,8 +295,8 @@ project's own scene types, in its theme).
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
-| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the actions zoom_to, motor_walk, endocytosis, exocytosis |
-| molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential |
+| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the actions zoom_to, motor_walk, endocytosis, exocytosis; with a `gene`: transcribe, export, translate, to_golgi, secrete (its products' route, the camera following) |
+| molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
@@ -561,6 +561,42 @@ transport against the gradient without ATP or an ion gradient, kinesin to the �
       actions: [{action_potential: membrane, at: "@threshold"}]
     - text: "The pump spends one ATP to move three sodium ions out and two potassium ions in."
       actions: [{transport: pump, at: "@pump"}]
+```
+
+Gene expression is a set of actions on a `gene`. In a `molecule` scene (`gene:` instead of
+molecules) it is a close-up with the bases written out: `transcribe` (promoter, TATA box, RNA
+polymerase II, the bubble; the template strand read 3′→5′, RNA made 5′→3′), `cap`, `splice`
+(lariat), `polyadenylate`, `export` (through a nuclear pore), `translate` (scanning, E/P/A sites,
+codon–anticodon pairing with the genetic code, the chain growing N→C, the stop codon and release
+factor; the protein written out under the view), `target_er` (SRP, Sec61, signal peptidase; during
+translation: `translate` with `codons: 3` first), `glycosylate` (OST, an N-glycan in SNFG symbols),
+`fold` (chaperones). In a `cell` scene with the same `gene`: `transcribe`, `export`, `translate`,
+`to_golgi`, `secrete` (`to: outside | lysosome | membrane`) follow the products through the cell,
+the camera following. Write the gene as `codons: 12` (generated; `introns: 1`, `signal_peptide:
+true`, `glycosylation: true`, `seed`), `protein: MALW…` or a `sequence` (the coding strand from +1,
+with `introns: [[31, 70]]`). `vidgen validate` checks the gene (introns GU…AG with a branch A, a
+start codon, a stop codon in frame, no premature stop) and the order (no translation before export,
+no glycosylation outside the ER, only folded proteins leave the ER). Give each step its own beat
+with enough words: a step lasts as long as what it shows (3–15 s) and a short beat squeezes it.
+
+```yaml
+# gene expression
+- id: expression
+  type: molecule
+  params:
+    title: "From gene to protein"
+    gene: {id: ins, name: INS, codons: 10, introns: 1}
+  beats:
+    - text: "RNA polymerase two copies the gene."
+      actions: [{transcribe: ins}]
+    - text: "The spliceosome cuts the intron out as a lariat."
+      actions: [{splice: ins}]
+    - text: "The three prime end is cut and the poly A tail added."
+      actions: [{polyadenylate: ins}]
+    - text: "The messenger RNA leaves the nucleus through a pore."
+      actions: [{export: ins}]
+    - text: "In the cytosol a ribosome reads it codon by codon, and the chain grows from its N terminus."
+      actions: [{translate: ins}]
 ```
 
 ```yaml
@@ -1007,6 +1043,17 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `diffuse` | on a `molecule`: a solute's particles random-walk with net flux down the gradient (`diffuse: oxygen`; across a bilayer only O₂, CO₂, water) | on the word that names the process |
 | `osmosis` | on a `molecule`: water moves to the side with more solute (`osmosis: membrane`), through aquaporins if any | |
 | `action_potential` | on a `molecule`: voltage-gated Na⁺ and K⁺ channels open, inactivate and close with a live Vₘ readout and an inset trace (`action_potential: membrane`) | |
+| `transcribe` | on a `molecule` with a `gene`: TBP on the TATA box, the general factors and RNA polymerase II assemble, a ~13 bp bubble opens, the template strand is read 3′→5′ and RNA made 5′→3′ (capped at ~25 nt); on a `cell`: mRNAs made at the gene | first step of a gene; then the others in order (validated) |
+| `cap` | on a `molecule` with a `gene`: the three enzymes of the 5′ cap (m⁷GpppN) as their own step (else `transcribe` caps) | after `transcribe` |
+| `splice` | on a `molecule` with a `gene`: snRNPs on GU / branch A / AG, the lariat, the exons joined, an EJC | the gene needs `introns` |
+| `polyadenylate` | on a `molecule` with a `gene`: CPSF / CstF, cleavage, Xrn2 termination, the poly(A) tail | before `export` |
+| `export` | on a `molecule` or `cell` with a `gene`: the mRNP through a nuclear pore, 5′ end first | only a capped, spliced, polyadenylated mRNA |
+| `translate` | on a `molecule` or `cell` with a `gene`: scanning to the AUG, the 80S ribosome, tRNAs pairing with codons, the chain growing N→C with its amino acids written out, the stop codon and release (`codons: n` stops after n) | only after `export` (refused in the nucleus) |
+| `target_er` | on a `molecule` with a `gene` (`signal_peptide: true`): SRP, its receptor, Sec61, the signal in the lateral gate, signal peptidase | while translating (`translate: g, codons: 3` before it) |
+| `glycosylate` | on a `molecule` with a `gene` (`glycosylation: true`): OST puts Glc₃Man₉GlcNAc₂ on the sequon's Asn | in the ER, after `target_er` |
+| `fold` | on a `molecule` with a `gene`: Hsp70, the chaperonin, BiP or calnexin (`chaperone`, checked against the compartment); the chain packs its hydrophobic residues inside | after the stop codon |
+| `to_golgi` | on a `cell` with a `gene`: a COPII vesicle from an ER exit site to the cis-Golgi, then cis → trans | a folded protein made into the ER |
+| `secrete` | on a `cell` with a `gene`: from the trans-Golgi network `to: outside` (exocytosis), `membrane` or `lysosome` | after `to_golgi` |
 
 ```yaml
 - id: speeds

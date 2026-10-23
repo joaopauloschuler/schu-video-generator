@@ -19004,3 +19004,101 @@ How to test
 - Compatibility: the Phase Q baseline re-run gave 31 frames, with a max difference of 0.
 - Stills looked at (scratchpad `s205`): every process mid-animation in 16:9 and 9:16, dark and
   `light_academic`, with contact sheets in `s205/sheets/`.
+
+## Step 206 — Gene expression as actions
+
+What was built
+- A `gene:` param for `molecule` and `cell` scenes. The gene is written as a coding-strand
+  `sequence` with `introns: [[start, end]]`, as a `protein`, or generated from `codons` (with
+  `introns` as a count, `signal_peptide`, `glycosylation`, `seed`). Its target id is `id`
+  (default `gene`).
+- `molecule` scene: a close-up schematic with every base and amino acid written. The camera
+  follows the step, the protein made so far is shown under the view, and the scene says
+  *schematic: not to scale*. Its actions:
+  - `transcribe`: TBP/TFIID on TATA, TFIIA/B, Pol II with TFIIF, TFIIE/H, a 13 bp bubble, the
+    template read 3′→5′, an 8 bp hybrid and co-transcriptional capping. A bacterium has σ⁷⁰ and a
+    terminator.
+  - `cap`: the three enzymes.
+  - `splice`: U1, U2AF and U2 with the bulged branch A, the tri-snRNP, the two
+    transesterifications and the lariat, and EJCs.
+  - `polyadenylate`: CPSF/CstF, cleavage after a CA, the torpedo and the poly(A) tail with
+    PABPN1.
+  - `export`: NXF1–NXT1 through the pore, 5′ end first.
+  - `translate` (`codons`): eIF4F, the 43S scans to the AUG, 80S, then the eEF1A/eEF2 cycles with
+    A/P/E sites and codon–anticodon pairing. The chain grows N→C through the tunnel. Then eRF1·eRF3
+    and ABCE1.
+  - `target_er`: SRP, SR, Sec61 and the signal peptidase.
+  - `glycosylate`: the OST transfers Glc₃Man₉GlcNAc₂.
+  - `fold` (`chaperone`): `hsp70`, `chaperonin`, `bip` or `calnexin`.
+- `cell` scene: the actions `transcribe`, `export`, `translate`, `to_golgi` and `secrete` (`to`:
+  `outside`, `membrane`, `lysosome`), with schematic markers and the camera following them.
+- Rules are replayed in beat and `at` order by `vidgen validate`, with reasons.
+
+YAML
+```yaml
+params:
+  gene: {id: ins, name: INS, codons: 10, introns: 1}        # or sequence: ACGT…, introns: [[40, 120]]
+beats:
+  - text: "RNA polymerase two copies the gene."
+    actions: [{transcribe: ins}]
+  - text: "The intron is cut out as a lariat."
+    actions: [{splice: ins}]
+```
+See `docs/CONFIG.md` "Gene expression" and "A gene in a cell".
+
+Files
+- New:
+  - `cellworld/expression.py`, `expression_stage.py`, `expression_cyto.py`, `expression_route.py`
+  - `cell_draw/expression.py`, `cell_draw/expression_route.py`
+  - `scenes/molecule_gene.py`, `scenes/cell_expression.py`, `scenes/gene_actions.py`
+  - `tests/test_expression.py`
+- Changed:
+  - `scenes/molecule.py`, `scenes/cell.py` (mixins, the `gene` param, targets, routing),
+    `scenes/__init__.py`
+  - `api.py`
+  - `docs/CONFIG.md`, the guide and `AGENTS.md`
+  - `DESIGN.md` §95.11, `CHANGELOG.md`, `tasklist.md`
+  - `tests/test_actions.py` (action lists)
+
+Public interfaces
+- `vidgen.api` adds `GENE_CELL_STEPS`, `GENE_CHAPERONES`, `GENE_STEPS`, `ExpressionState`,
+  `Gene`, `GeneSpec`, `build_gene`, `parse_protein`, `signal_peptide_length`, `gene_advance`,
+  `gene_cell_advance`, `gene_cell_step_problem`, `gene_step_problem`, `ExpressionStage`,
+  `GeneRoutePlanner`, `gene_route_problem`, `ExpressionDrawing` and `GeneRouteDrawing`.
+- Config: the `gene` param and the 11 actions.
+
+Decisions / deviations
+- The close-ups are molecule-scene actions. A cell scene refuses them with a pointer, and
+  expands its own steps into the molecular ones (`cell_steps`) so that one rule set applies.
+- The stage is in nucleotide slots, so DNA and RNA are about 6× stretched against the proteins to
+  keep the letters legible. This is labelled.
+- Every mobject is made up front (manim draws only what exists when an animation starts). Texts
+  are cached as plain shapes and captions are wrapped by estimate, because MarkupText copies made
+  a render about 6× slower.
+- `molecule.py` was only lightly wired (a mixin), so it was not split.
+
+Known gaps / TODO
+- A 9:16 close-up leaves vertical space unused.
+- Cell-scene markers are schematic and move in straight lines.
+- Calnexin is drawn floating, not membrane-anchored.
+- Several steps in one short beat get squeezed (the guide advises one step per beat).
+- Caption wrapping is an estimate.
+- The Step 205 gaps were not taken up: `set_state` in a cell, the endocytosed vesicle as an
+  object, and stale labels.
+
+How to test
+- `tests/test_expression.py`: 86 tests, 3 of them render tests. They include the whole genetic
+  code table, anticodons and wobble, the signal peptide of preproinsulin, sequons, every rule
+  and the cell expansion.
+- Related suites:
+  - `test_transport` + `test_molecules`: 85;
+  - `test_cell_scene` + `test_actions_coverage`: 28;
+  - `test_guide` + `test_docs`: 120;
+  - `test_schema` + `test_json_output` + `test_gallery`: 104;
+  - `test_api` + `test_registry` + `test_extensions` + `test_builtin_scenes`: 186;
+  - `test_actions` + `test_translation` + `test_review2` + `test_introspect`;
+  - `test_cell_world` + `test_cell_library`: 109;
+  - `test_mcp`: 20.
+- Compatibility: the Phase Q baseline re-run gave 31 frames, with a max difference of 0.
+- Stills (scratchpad `s206`): contact sheets of every step mid-animation in 16:9 and 9:16, dark
+  and light.

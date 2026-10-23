@@ -613,6 +613,14 @@ from vidgen.cell_draw.cytoskeleton import motor_curves as cell_motor_curves, mot
 from vidgen.cellworld.glyphs import ION_FLOW as MOLECULE_ION_FLOW, Prim as MoleculePrim, carrier_parts, small_prims as molecule_small_prims  # noqa: E402
 from vidgen.cellworld.molecules import IONS as MOLECULE_ION_RADII, ION_HUES as MOLECULE_ION_HUES, TRANSPORTERS as MOLECULE_TRANSPORTERS  # noqa: E402
 from vidgen.cellworld.molecules import TYPICAL_CONCENTRATIONS, pump_type as molecule_pump_type  # noqa: E402
+from vidgen.cellworld.expression import CELL_STEPS as GENE_CELL_STEPS, CHAPERONES as GENE_CHAPERONES, STEPS as GENE_STEPS  # noqa: E402
+from vidgen.cellworld.expression import ExpressionState, Gene, GeneSpec, build_gene, parse_protein, signal_peptide_length  # noqa: E402
+from vidgen.cellworld.expression import advance as gene_advance, cell_advance as gene_cell_advance  # noqa: E402
+from vidgen.cellworld.expression import cell_step_problem as gene_cell_step_problem, step_problem as gene_step_problem  # noqa: E402
+from vidgen.cellworld.expression_stage import ExpressionStage  # noqa: E402
+from vidgen.cellworld.expression_route import RoutePlanner as GeneRoutePlanner, route_problem as gene_route_problem  # noqa: E402
+from vidgen.cell_draw.expression import ExpressionDrawing  # noqa: E402
+from vidgen.cell_draw.expression_route import RouteDrawing as GeneRouteDrawing  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -1550,6 +1558,24 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "cell_motor_parts",
     "molecule_pump_type",
     "molecule_small_prims",
+    "GENE_CELL_STEPS",
+    "GENE_CHAPERONES",
+    "GENE_STEPS",
+    "ExpressionState",
+    "Gene",
+    "GeneSpec",
+    "build_gene",
+    "parse_protein",
+    "signal_peptide_length",
+    "gene_advance",
+    "gene_cell_advance",
+    "gene_cell_step_problem",
+    "gene_step_problem",
+    "ExpressionStage",
+    "GeneRoutePlanner",
+    "gene_route_problem",
+    "ExpressionDrawing",
+    "GeneRouteDrawing",
     "did_you_mean",
     "format_length",
     "parse_coordinate",

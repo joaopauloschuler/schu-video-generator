@@ -12,7 +12,9 @@ import numpy as np
 
 from vidgen.api import *
 
+from .cell_expression import CellExpression
 from .cell_traffic import CellTraffic
+from .molecule_gene import GeneParams
 from .math_axes import ChainedTargets
 
 Length = float | str
@@ -211,7 +213,7 @@ def _world(spec: CellSpec) -> CellWorld:
 
 
 @scene("cell")
-class Cell(CellTraffic, NarratedScene):
+class Cell(CellExpression, CellTraffic, NarratedScene):
     """A cell drawn in physical scale: a cross-section of an animal cell, a plant cell or a
     bacterium with its compartments (cytosol, nucleoplasm, ER and Golgi lumens, mitochondrial
     matrix and intermembrane space, stroma and thylakoid lumen, periplasm…), the membranes
@@ -231,7 +233,7 @@ class Cell(CellTraffic, NarratedScene):
     target_patterns = ("title", "cell", "tissue", "scale_bar", "<id>")
     #: The ``zoom_to``, ``motor_walk``, ``endocytosis`` and ``exocytosis`` actions act on this scene type only.
     cell_actions = True
-    mid_still_actions = frozenset({"zoom_to", "motor_walk", "endocytosis", "exocytosis"})
+    mid_still_actions = frozenset({"zoom_to", "motor_walk", "endocytosis", "exocytosis", "transcribe", "export", "translate", "to_golgi", "secrete"})
 
     class Params(SceneParams):
         title: TranslatableStr = ""
@@ -258,6 +260,8 @@ class Cell(CellTraffic, NarratedScene):
         """Title size."""
         label_size: ThemeSize = "caption"
         """Size of the labels and the scale bar's text."""
+        gene: GeneParams | None = None
+        """A gene whose products the actions transcribe, export, translate, to_golgi and secrete follow through the cell (as in a molecule scene's gene: {signal_peptide: true, glycosylation: true})."""
 
         def spec(self) -> CellSpec:
             objects = tuple(o.spec(f"objects[{k}]") for k, o in enumerate(self.objects))
@@ -276,6 +280,10 @@ class Cell(CellTraffic, NarratedScene):
                 if self.view.on is not None:
                     _check_target(world, self.view.on, "view.on")
                     cell_level_view(world, self.view.level, 16 / 9, self.view.on)
+                if self.gene is not None:
+                    if self.gene.id in (["cell", "tissue", "title", "scale_bar"] + [e.id for e in world.entries]):
+                        raise VidgenError(f"gene: id '{self.gene.id}' is taken by an object of this cell; give the gene another id")
+                    self.gene.gene(self.cell.kind, "human")
             except VidgenError as error:
                 raise ValueError(str(error)) from None
             return self
@@ -286,7 +294,13 @@ class Cell(CellTraffic, NarratedScene):
         world = params.world()
         names = (["title"] if params.title else []) + ["cell", "tissue"]
         names += [e.id for e in world.entries if e.owner is None]
+        names += [params.gene.id] if params.gene is not None else []
         return names + (["scale_bar"] if params.scale_bar else [])
+
+    @classmethod
+    def action_sequence_problems(cls, spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
+        """The motors' walks and fusions (:class:`CellTraffic`) and the gene's steps in order."""
+        return CellTraffic.action_sequence_problems.__func__(cls, spec, params, uses) + cls.expression_sequence_problems(spec, params, uses)  # type: ignore[attr-defined]
 
     @classmethod
     def zoom_problem(cls, params: Any, name: str, level: str | None, width: float | None, labels: Any = True) -> str | None:
@@ -362,6 +376,9 @@ class Cell(CellTraffic, NarratedScene):
         for entry_id in self.drawing.order:
             group = VGroup(self.drawing.groups[entry_id], *labels.get(entry_id, []))
             items.append(chain.add(entry_id, group, lambda g=group: [FadeIn(g)], list(base)))
+        if p.gene is not None:
+            self._route()           # the gene's products: markers drawn by its steps
+            items.append(chain.add(p.gene.id, self.route_drawing.group, lambda: [], list(base)))
         self.add_camera_listener(self.on_camera)
         chain.reveal(base, items, p.reveal == "all")
         self.finish()

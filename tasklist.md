@@ -1171,7 +1171,9 @@ when shared code changes). DESIGN §95. Steps 202–211.
 - [~] `set_state` in a `cell` scene not done (molecule scene only); a vesicle taken in by endocytosis is not a new object of the world
 
 ### Step 206 — Gene expression as actions
-- [ ] Transcription (promoters, transcription factors, template read 3′→5′, mRNA made 5′→3′); RNA processing (cap, poly(A) tail, splicing, export through pores); translation (A/P/E sites, codon–anticodon pairing, peptide N→C, stop codon, release factors); protein fate (chaperones, signal peptide + SRP to the ER, glycosylation, Golgi sorting)
+- [x] Transcription (promoters, transcription factors, template read 3′→5′, mRNA made 5′→3′); RNA processing (cap, poly(A) tail, splicing, export through pores); translation (A/P/E sites, codon–anticodon pairing, peptide N→C, stop codon, release factors); protein fate (chaperones, signal peptide + SRP to the ER, glycosylation, Golgi sorting)
+- [x] A `gene:` param (a written sequence, a protein, or generated from `codons` and a `seed`); `molecule` actions `transcribe`, `cap`, `splice`, `polyadenylate`, `export`, `translate`, `target_er`, `glycosylate`, `fold`; `cell` actions `transcribe`, `export`, `translate`, `to_golgi`, `secrete` with the camera following; rules replayed by `vidgen validate`; model in `cellworld/expression*.py`; tests `tests/test_expression.py`
+- [~] Step 205 gaps not taken up (`set_state` in a cell, the endocytosed vesicle as an object, stale labels); 9:16 close-ups leave vertical space unused
 
 ### Step 207 — Signalling pathways
 - [ ] A `pathway` scene type with SBGN-inspired notation across compartment bands (membrane / cytosol / nucleus), automatic layout; actions: the signal propagates, nodes light up, inhibitors block, knockouts / drugs with downstream effects; GPCR–cAMP–PKA, RTK–Ras–MAPK, PI3K–Akt

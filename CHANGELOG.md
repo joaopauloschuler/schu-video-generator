@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–205)
+## Unreleased (Steps 193–206)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -68,6 +68,20 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   molecules `h_atpase`, `abc_transporter`, `aquaporin`, `water`, `o2`, `co2`, `drug`. Lipids leave
   room for membrane proteins in cell close-ups, and several membrane proteins in a tall frame go on
   membrane rows.
+- **Gene expression as actions** (Step 206). A `gene:` param — a coding-strand `sequence` with
+  intron spans, a `protein`, or generated from `codons` and a `seed` (TATA box, Kozak AUG, GU…A…AG
+  introns, AAUAAA; a bacterium: −35/−10, Shine–Dalgarno, terminator). In a `molecule` scene, a
+  close-up with every base and amino acid written: `transcribe` (GTFs and RNA polymerase II at the
+  promoter, a ~13 bp bubble, the template read 3′→5′, an 8 bp RNA–DNA hybrid), `cap`, `splice`
+  (snRNPs, the branch A, the lariat, EJCs), `polyadenylate`, `export` through a nuclear pore,
+  `translate` (scanning to the AUG, A/P/E sites, codon–anticodon pairing with wobble and
+  inosine, the chain growing N→C through the tunnel, eRF1 at the stop codon, ribosome
+  recycling), `target_er` (SRP, its receptor, Sec61, signal peptidase), `glycosylate` (OST,
+  Glc₃Man₉GlcNAc₂ in SNFG symbols) and `fold` (Hsp70, chaperonin, BiP, calnexin). In a `cell`
+  scene the camera follows the products: `transcribe`, `export`, `translate` (free polysomes or
+  the rough ER), `to_golgi` (COPII, cis → trans) and `secrete` (to the outside, the membrane or a
+  lysosome). The order is checked by `vidgen validate` with reasons (*only proteins made into the
+  ER enter the secretory pathway*).
 
 ### vidgen studio: a music workstation for people (Phase T)
 

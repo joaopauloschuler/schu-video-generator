@@ -23,6 +23,7 @@ from vidgen.api import *
 
 from .cell import PLATE_OPACITY, _spread
 from .math_axes import ChainedTargets
+from .molecule_gene import CELL_ONLY, GENE_ACTIONS, GeneExpression, GeneParams
 from .molecule_process import Digits, Hold, Live, PlanPlayer, Segment, Track, plan_morph, voltage_at
 
 tr = cell_transport
@@ -407,7 +408,7 @@ def solute_levels(s: Solute, membrane: str | None) -> dict[str, float]:
 
 
 @scene("molecule")
-class Molecule(NarratedScene):
+class Molecule(GeneExpression, NarratedScene):
     """A molecular close-up in nm: molecules in a solution or a membrane (the lipid bilayer
     with its two compartments named), each drawn to its textbook size — the DNA double helix
     with its 5′/3′ ends, base pairs and grooves; mRNA, tRNA, rRNA; a nucleosome, chromatin;
@@ -418,13 +419,18 @@ class Molecule(NarratedScene):
     Orientations and places are checked. Solutes are drawn as particles at their concentrations;
     the actions set_state, transport, diffuse, osmosis and action_potential animate processes.
 
+    With a ``gene`` the scene is a close-up of its expression (``scenes/molecule_gene.py``): the
+    steps transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate and
+    fold are actions on the gene's id.
+
     Action targets: ``title``, ``membrane``, ``scale_bar``, ``potential`` (with a membrane
-    potential), each molecule's id and each solute's id."""
+    potential), each molecule's id and each solute's id; with a gene: ``title`` and the gene's id."""
 
     outro = 0.5
     target_patterns = ("title", "membrane", "scale_bar", "potential", "<id>", "<solute>")
     #: The process actions that act on this scene type.
-    process_actions = PROCESS_ACTIONS
+    process_actions = PROCESS_ACTIONS + GENE_ACTIONS + CELL_ONLY
+    mid_still_actions = frozenset(GENE_ACTIONS)
 
     class Params(SceneParams):
         title: TranslatableStr = ""
@@ -461,6 +467,8 @@ class Molecule(NarratedScene):
         """Title size."""
         label_size: ThemeSize = "caption"
         """Size of the labels and the scale bar's text."""
+        gene: GeneParams | None = None
+        """A gene whose expression the scene shows (then no molecules, solutes or membrane): {codons, introns, signal_peptide, glycosylation, seed} or {sequence, introns: [[start, end]]} or {protein}; its steps are actions (transcribe: gene)."""
 
         @field_validator("width", mode="before")
         @classmethod
@@ -492,6 +500,13 @@ class Molecule(NarratedScene):
                     taken.add(s.name)
                 if self.potential is not None and membrane is None:
                     raise VidgenError("potential: a membrane potential is across a membrane; give the scene a membrane")
+                if self.gene is not None:
+                    taken = [k for k, v in (("molecules", self.molecules), ("solutes", self.solutes), ("membrane", membrane),
+                                            ("potential", self.potential)) if v]
+                    if taken:
+                        raise VidgenError(f"gene: a gene close-up draws its own DNA, RNAs, ribosomes and membranes; leave out "
+                                          f"{', '.join(taken)} (put other molecules in another molecule scene)")
+                    self.gene.gene(self.cell, self.species)
             except VidgenError as error:
                 raise ValueError(str(error)) from None
             return self
@@ -511,6 +526,8 @@ class Molecule(NarratedScene):
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
+        if params.gene is not None:
+            return (["title"] if params.title else []) + [params.gene.id]
         names = (["title"] if params.title else []) + (["membrane"] if membrane_name(params.membrane) else [])
         names += [p.id for p in params.placed()] + [s.name for s in params.solutes]
         names += ["potential"] if params.potential is not None else []
@@ -522,6 +539,10 @@ class Molecule(NarratedScene):
     def process_problem(cls, params: Any, name: str, target: str, options: Any) -> str | None:
         """Why a process action ``name`` cannot act on ``target`` with ``options`` (whatever the
         state at its time: :meth:`action_sequence_problems` replays those), or ``None``."""
+        if name in GENE_ACTIONS or name in CELL_ONLY:
+            return cls.gene_problem(params, name, target, options)
+        if params.gene is not None:
+            return f"{name} needs membranes, molecules or solutes; this scene is a gene close-up (its steps: {', '.join(GENE_ACTIONS)})"
         membrane = membrane_name(params.membrane)
         placed = {p.id: p for p in params.placed()}
         solutes = {s.name: s for s in params.solutes}
@@ -583,7 +604,9 @@ class Molecule(NarratedScene):
     def action_sequence_problems(cls, spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
         """The molecules' states replayed in beat and ``at`` order: a channel must be open when
         ions pass it, an action potential starts from closed channels; ``set_state`` and the
-        transport cycles change the states."""
+        transport cycles change the states. With a gene: its steps in order."""
+        if params.gene is not None:
+            return cls.gene_sequence_problems(spec, params, uses)
         placed = {p.id: p for p in params.placed()}
         states = {k: (p.spec.state or (p.kind.states[0] if p.kind.states else None)) for k, p in placed.items()}  # type: ignore[union-attr]
         beats = [b.id for b in spec.beats]
@@ -621,6 +644,9 @@ class Molecule(NarratedScene):
 
     def construct(self) -> None:
         p = self.params
+        if p.gene is not None:
+            self.construct_gene()
+            return
         self.membrane = membrane_name(p.membrane)
         self.placed = p.placed()
         self.gradients = p.gradients()
