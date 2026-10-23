@@ -107,6 +107,20 @@ def find_edit(doc: Mapping[str, Any], edit_id: str) -> tuple[str, list[dict[str,
     raise VidgenError(f"check: no advice {edit_id!r} to apply in this check")
 
 
+def kept_check(folder: Path, key: str) -> dict[str, Any] | None:
+    """The check of render ``key`` kept in ``folder``, when it is there and current."""
+    from vidgen.studio.check import CHECK_VERSION
+
+    path = check_path(folder, key)
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if doc.get("format") != STUDIO_CHECK_FORMAT or doc.get("check_version") != CHECK_VERSION or not (folder / f"{key}-check.png").is_file():
+        return None
+    return doc
+
+
 class Checker:
     """One background worker for the session's checks. ``idle`` says whether no render is under
     way or just asked for (the studio's); ``stems`` gives a version's kept stems and mix."""
@@ -125,16 +139,7 @@ class Checker:
 
     def kept(self, folder: Path, key: str) -> dict[str, Any] | None:
         """The check of render ``key`` kept in ``folder``, when it is there and current."""
-        from vidgen.studio.check import CHECK_VERSION
-
-        path = check_path(folder, key)
-        try:
-            doc = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return None
-        if doc.get("format") != STUDIO_CHECK_FORMAT or doc.get("check_version") != CHECK_VERSION or not (folder / f"{key}-check.png").is_file():
-            return None
-        return doc
+        return kept_check(folder, key)
 
     def want(self, folder: Path, key: str, data: Any, score: Any) -> Future[dict[str, Any] | None]:
         """Ask for the check of ``score`` (render ``key``): the job doing it; jobs for other

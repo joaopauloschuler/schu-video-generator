@@ -3449,8 +3449,36 @@ than in a mix: −16 LUFS, the same for every version). Ctrl+C in the terminal s
   letters, digits, `_`, `-`), which a video plays with `music: <name>` (the snippet can be
   copied); a built-in bed's name is refused (`music: calm` would be ambiguous), and an existing
   piece is overwritten only after you confirm. It needs the studio started with a project.
-- Being built in Phase T (`tasklist.md`): listening notes and agents, variations come in the
-  next steps.
+- **Listening notes**: while listening (playing or paused), press **N**, click **+ note** or
+  click the lane under the timeline to pin a short note at that moment ("this part drags",
+  "goosebumps here"); it records the bar, beat, section and the version heard. Pins show on the
+  lane; the **Notes** tab (next to the score file) lists them: click the time to play from 1.5 s
+  before, edit, resolve (✓) or delete. Notes belong to the session (`notes.json`): when a
+  section before a note changes length, the note stays at the same bar of its section and says
+  that it moved; a note whose section became shorter or was removed says where it went.
+- **Ask an agent** (in the Notes tab) writes a hand-off into the session (`request.json`: the
+  score, the open notes, the last check, what changed from the parent version, the
+  instruction). It is answered in one of three ways, each giving a **proposal**: a new version
+  labelled `agent: …`, shown above the tracks with one line per note, never made current until
+  you press **Keep** (the notes it answered are then resolved); **A/B** plays it against the
+  current version at the same moment; **Discard** names it as discarded in the version list. A
+  proposal whose score has problems is shown with them and can only be dismissed.
+  1. An AI agent with vidgen's MCP server (`vidgen mcp --root DIR`, where `DIR` holds the
+     project, or any folder for a studio started without one): its tools `studio_sessions`,
+     `studio_read`, `studio_check` and `studio_propose` read the session and write the
+     proposal into the session's `inbox/`; the open page notices it within 2 s (a proposal made
+     while the studio is closed appears when the session is opened). The MCP server reads the
+     sessions under the root's `build/studio/`, its folders' `build/studio/` and the cache
+     folder's `studio/`, and writes only into a session's `inbox/` (and `build/mcp/studio/`
+     under the root for `studio_check`).
+  2. Any chat assistant: **Copy prompt**, paste it there, then **Paste reply** with its whole
+     answer (the score in a ```yaml block, `n1: …` lines, an optional `summary:` line).
+  3. OpenRouter (optional, **costs money**): with `OPENROUTER_API_KEY` set in the environment
+     (as for OpenRouter pictures and voices; vidgen never stores it) and a model typed on the
+     page or given by `VIDGEN_STUDIO_MODEL` (e.g. `VIDGEN_STUDIO_MODEL=vendor/model`), **Send**
+     asks for confirmation, sends the hand-off and turns the reply into a proposal. Without the
+     key the button is disabled and says how to set it.
+- Being built in Phase T (`tasklist.md`): variations come in the next step.
 
 ### Loudness of the final mix (`audio`)
 
@@ -9800,7 +9828,12 @@ default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` gi
 `narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `cast` (`count`
-for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`). Their parameters are the command's
+for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`), and the studio's
+hand-offs (Step 198, "Music studio" above): `studio_sessions`, `studio_read` (`session`,
+`version`), `studio_check` (`session`, `score`, `compare`, `images`: `vidgen music check` of the
+score you mean to propose, in `build/mcp/studio/`) and `studio_propose` (`score`,
+`explanations` `{n1: ...}`, `summary`, `agent`, `session`, `base`) — these four work on files
+in the studio's session folders, in the server's process. Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`

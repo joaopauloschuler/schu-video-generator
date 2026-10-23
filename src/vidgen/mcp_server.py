@@ -71,7 +71,9 @@ scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_i
 `list_themes` / `list_sfx` / `list_music` what exists, `character_sheet` a cartoon character's \
 poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats; \
 `music_template` / `music_patches` / `music_render` / `music_check` write and check original music as score files \
-(assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe). Every \
+(assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe). A person shaping music in \
+`vidgen studio` may hand you a session with listening notes: `studio_sessions` -> `studio_read` -> `studio_check` -> \
+`studio_propose` (one line per note). Every \
 tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
 
 Progress = Callable[[str], Awaitable[None]]
@@ -813,6 +815,88 @@ def build_server(root: Path) -> Any:
     ) -> Any:
         options = {"variant": variant, "language": language, "output": str(where(output, "output")) if output else None}
         return answer(await call(ctx, args_of(["translate-template"], [str(where(project))], options)))
+
+    # ----- the studio's hand-offs (Step 198, DESIGN.md §94.16) -------------------------------------
+    # Through files on disk, in this process (small reads and one atomic write; no Manim).
+
+    async def studio(command: str, work: Callable[[], dict[str, Any]]) -> Any:
+        import anyio
+
+        try:
+            doc = await anyio.to_thread.run_sync(work)
+        except VidgenError as exc:
+            raise ToolError(str(exc)) from None
+        return answer({"ok": True, "command": command, **doc})
+
+    Session = Annotated[str | None, Field(description="the studio session id (studio_sessions lists them; default: the one a running studio has open)")]
+
+    @tool("The vidgen studio sessions (music a person is shaping in `vidgen studio`) you can answer: the one open in a "
+          "running studio first, each with its open listening notes and whether the person asked an agent (a hand-off).", read_only)
+    async def studio_sessions(ctx: Context) -> Any:
+        from vidgen.studio_app.agent import agent_sessions
+
+        return await studio("studio_sessions", lambda: agent_sessions(policy.root))
+
+    @tool("Read a studio hand-off: the score (YAML) of the version to change, the person's open listening notes (id, "
+          "words, bar, beat, section), its last check report (text and findings), what changed from its parent "
+          "version, and the instruction. Then change the score (one thing per note when you can), studio_check it, "
+          "and studio_propose it with one line per note.", read_only)
+    async def studio_read(
+        ctx: Context,
+        session: Session = None,
+        version: Annotated[int | None, Field(ge=1, description="another version (default: the hand-off's, else the current one)")] = None,
+    ) -> Any:
+        from vidgen.studio_app.agent import agent_read
+
+        return await studio("studio_read", lambda: agent_read(policy.root, session, version))
+
+    @tool("Check a score as the studio will show it to the person (vidgen music check: how it sits under narration, a "
+          "verdict and advice; the spectrogram as a picture): give the score you mean to propose; no score: the "
+          "session's version handed off. compare=true puts it side by side with that version.", writes)
+    async def studio_check(
+        ctx: Context,
+        session: Session = None,
+        score: Annotated[str | None, Field(description="the whole score file's text to check (default: the version handed off)")] = None,
+        compare: Annotated[bool, Field(description="also check the version handed off and compare the two")] = False,
+        images: Images = DEFAULT_IMAGES,
+    ) -> Any:
+        import anyio
+
+        from vidgen.studio_app.agent import agent_read
+
+        try:
+            read = await anyio.to_thread.run_sync(lambda: agent_read(policy.root, session))
+        except VidgenError as exc:
+            raise ToolError(str(exc)) from None
+        folder = policy.root / WORK_DIR / "studio"
+        folder.mkdir(parents=True, exist_ok=True)
+        base = folder / f"{read['session']}-v{read['base']}.yaml"
+        base.write_text(read["score"], encoding="utf-8")
+        target = base
+        if score is not None:
+            target = folder / f"{read['session']}-proposal.yaml"
+            target.write_text(score, encoding="utf-8")
+        options = {"compare": str(base) if compare and target != base else None, "out": str(folder)}
+        doc = await call(ctx, args_of(["music"], ["check", str(target)], options), heavy=True)
+        picture = (doc.get("files") or {}).get("spectrogram")
+        return answer({**doc, "session": read["session"], "base": read["base"]}, [Path(picture)] if picture and images else [])
+
+    @tool("Propose a new version of a studio session's score, answering the person's notes: the WHOLE score text and "
+          "one line per note id on what you changed and why. It is validated (a score with problems is refused with "
+          "them; fix and call again) and appears in the studio as a new version 'agent: <summary>' that the person "
+          "A/Bs against the one handed off and keeps or discards. It never replaces a version.", writes)
+    async def studio_propose(
+        ctx: Context,
+        score: Annotated[str, Field(description="the whole new score file (YAML), comments kept")],
+        explanations: Annotated[dict[str, str], Field(description="note id (n1, n2...) -> one line: what you changed for it and why")],
+        summary: Annotated[str | None, Field(description="a few words naming the change (the version's name)")] = None,
+        agent: Annotated[str | None, Field(description="your name, shown with the proposal")] = None,
+        session: Session = None,
+        base: Annotated[int | None, Field(ge=1, description="the version you changed (default: the hand-off's)")] = None,
+    ) -> Any:
+        from vidgen.studio_app.agent import agent_propose
+
+        return await studio("studio_propose", lambda: agent_propose(policy.root, score, explanations, summary, agent, session, base))
 
     _add_resources(server, policy)
     return server

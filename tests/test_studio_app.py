@@ -235,7 +235,7 @@ def test_server_serves_the_page_and_the_api(server: StudioServer) -> None:
     assert status == 200 and len(json.loads(body)["result"]) == 17
     patches = json.loads(request(server, "GET", "/api/patches")[2])["result"]
     assert {"instruments", "effects"} <= set(patches)
-    assert json.loads(request(server, "GET", "/api/session")[2])["result"] == {"session": None, "score": None}
+    assert json.loads(request(server, "GET", "/api/session")[2])["result"] == {"session": None, "score": None, "notes": [], "proposals": [], "revision": 0}
 
 
 def test_server_refuses_what_it_must(server: StudioServer) -> None:

@@ -510,3 +510,79 @@ def test_export_yaml_audio_and_no_project(studio: tuple[StudioApp, StudioServer]
     page.wait_for_function("!document.body.dataset.exporting")
     assert "Downloaded" in page.text_content("#ex-audio-note") and page.is_visible("#export-panel")
     assert page.errors == []
+
+
+def test_listening_notes_while_playing(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    """Step 198: N while playing pins a note at the moment; the lane pins one where clicked; the
+    Notes tab lists them (resolve, delete; play from a little before)."""
+    app, server = studio
+    app.load(text=TINY)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    page.click("#play")
+    page.wait_for_function("document.getElementById('audio').currentTime > 0.6", timeout=15_000)
+    page.keyboard.press("n")
+    page.wait_for_selector("#note-text")
+    assert "bar 1" in page.text_content("#note-editor") and " · a · " in page.text_content("#note-editor")
+    page.keyboard.type("kick too stiff")
+    page.keyboard.press("Enter")
+    page.wait_for_function("document.getElementById('notes-count').textContent === '1'")
+    box = page.locator("#note-lane").bounding_box()
+    page.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] / 2)  # 3.2 s: bar 2, in b
+    page.keyboard.type("love this part")
+    page.keyboard.press("Enter")
+    page.wait_for_function("document.getElementById('notes-count').textContent === '2'")
+    assert page.locator("#note-lane .pin.open").count() == 2
+    page.click("#tab-notes")
+    rows = page.locator("#note-list .note")
+    assert rows.count() == 2 and "n2 · bar 2 · beat 3 · b" in rows.nth(1).text_content()
+    notes = {n["id"]: n for n in app.state()["notes"]}
+    assert notes["n1"]["text"] == "kick too stiff" and notes["n1"]["section"] == "a" and notes["n1"]["version"] == 1
+    page.locator('#note-list .note[data-id="n2"] [data-act="resolve"]').click()
+    page.wait_for_function("document.getElementById('notes-count').textContent === '1'")
+    assert page.locator("#note-lane .pin.resolved").count() == 1
+    page.locator('#note-list .note[data-id="n1"] [data-act="play"]').click()
+    page.wait_for_function("document.getElementById('note-list').querySelector('.note.lit')")
+    page.locator('#note-list .note[data-id="n1"] [data-act="delete"]').click()
+    page.wait_for_function("document.querySelectorAll('#note-list .note').length === 1")
+    page.click("#play")
+    page.click("#tab-yaml")
+    assert page.errors == []
+
+
+def test_ask_an_agent_proposal_ab_and_keep(page: Any, tmp_path: Path) -> None:
+    """Step 198: Ask an agent → an MCP agent's proposal (written as the studio_propose tool writes
+    it) appears while the page polls → A/B against the current version → keep."""
+    from vidgen.studio_app.agent import agent_propose
+
+    app = StudioApp(tmp_path, studio=tmp_path / "build" / "studio")
+    server, thread = start_in_thread(app)
+    try:
+        app.load(text=TINY)
+        page.goto(server.url)
+        wait_idle(page, 1)
+        app.add_note(None, 1.0, "kick too plain")
+        page.click("#tab-notes")
+        page.wait_for_function("document.getElementById('notes-count').textContent === '1'", timeout=10_000)  # seen by polling
+        page.click("#ask")
+        page.wait_for_selector("#copy-prompt")
+        assert "waiting for a proposal" in page.text_content("#handoff") and page.is_disabled("#provider-send")
+        busier = TINY.replace('"x... x... x... x..."', '"x... x.x. x... x.x."')
+        agent_propose(tmp_path, busier, {"n1": "two off-beat kicks"}, "busier kick", "test")
+        page.wait_for_selector("#proposal-bar .proposal.pending", timeout=10_000)
+        assert "An agent proposed v2" in page.text_content("#proposal-bar") and "two off-beat kicks" in page.text_content("#proposal-bar")
+        assert page.text_content("#version-name") == "v1" and "answered" in page.text_content("#handoff")
+        page.click("#proposal-bar [data-act=ab]")
+        page.wait_for_function("document.body.dataset.ab === 'A' && !document.body.dataset.busy", timeout=30_000)
+        assert page.text_content("#status").startswith("v2 ")
+        page.click("#proposal-bar [data-act=keep]")
+        wait_idle(page, 2)
+        assert page.is_hidden("#proposal-bar") and app.session is not None and app.session.current == 2
+        assert "kept in v2" in page.text_content("#note-list")
+        page.click("#play")
+        page.click("#tab-yaml")
+        assert page.errors == []
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(5)

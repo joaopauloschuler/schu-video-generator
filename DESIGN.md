@@ -13872,7 +13872,7 @@ built-in bed's template.
   the full report); versions, undo / redo, A/B against the original preset and any version
   (§94.4); exports YAML / MP3 / WAV and save to a project's `assets/music/` with the Step 188
   name-clash rule (a bed's name is refused).
-- **198 Listening notes and "Ask an agent"** (§94.8).
+- **198 Listening notes and "Ask an agent"** (done, §94.16; plan §94.8).
 - **199 Variations** (§94.9).
 - **200 Docs and polish**: CONFIG, guide (agents may be handed studio sessions through MCP),
   README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout
@@ -13942,7 +13942,9 @@ person asks (Step 197).
 - **`open.json`** (decision, for Step 198): the running studio writes its URL, open session and
   pid; it removes the file on exit only if its pid is still the one in it (a second studio may
   have replaced it). MCP tools read it to find "the open session".
-- Later steps add, per session: `notes.json` (198), `inbox/` (agent proposals, 198),
+- Later steps add, per session: `notes.json`, `request.json` (the last hand-off),
+  `proposals.json` and `inbox/` (agent proposals waiting to be picked up) (198; `revision` in
+  `session.json`, bumped by every change),
   `variations/<batch>/` (199), `checks/` and `exports/` (197; `redo` and each version's
   `starred` in `session.json`, origin `check`). Stems (196) are kept in the studio's memory,
   not on disk (§94.14); `renders/` gains listening mixes under narration (`….n.wav`).
@@ -13993,8 +13995,10 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 | `POST /api/check/apply {version, key, edit}` | 197 | a check's advice `edit` (`<finding>.<k>`) as the next version (`origin: check`) |
 | `POST /api/export {version?, format, length?, count?, level?}`; `GET /download/<name>` | 197 | YAML / WAV / MP3 into the session's `exports/`, downloaded as an attachment |
 | `POST /api/save {version?, name, overwrite?}` | 197 | save into the project's `assets/music/<name>.yaml` (§94.15) |
-| `GET /api/session?since=R` | 198 | polled every 1.5 s: a revision counter, so versions added by an agent appear |
-| `GET/POST /api/notes` | 198 | listening notes `{id, seconds, bar, text, version}` |
+| `GET /api/session?since=R` | 198 | polled every 1.5 s: picks up the inbox; `{revision, unchanged}` or the whole state with `made` (every session state carries `notes`, `proposals`, `revision`) |
+| `POST /api/notes {version?, seconds, text}`, `/api/notes/update {id, text?, status?, delete?}` | 198 | listening notes (§94.16) |
+| `POST /api/ask {version?}` | 198 | write the hand-off: `{request, prompt, provider, file}` |
+| `POST /api/proposal/paste {reply}`, `/api/proposal/send {model}`, `/api/proposal/decide {id, keep}` | 198 | a pasted reply or OpenRouter's as a proposal; keep / discard |
 | `POST /api/variations {version}`, `/api/variations/pick` | 199 | four siblings, rendered and checked; picking one makes it the next version |
 
 ### 94.6 Renders and playback
@@ -14040,7 +14044,8 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
   score file), `favicon.svg`; Step 194 adds `strip.js` (key, tempo, seed, chords), `timeline.js`
   (sections, energy, loops, the section bar) and `tracks.js` (the track list); Step 195 `inspector.js`,
   `stepgrid.js` (the steps text read into cells) and `yaml_edit.js` (the score file typed); Step 197
-  `versions.js` (versions, undo / redo, A/B), `check.js` (the check panel), `exports.js`. Vanilla JS, no build step, no CDN, no external fonts (Inter and
+  `versions.js` (versions, undo / redo, A/B), `check.js` (the check panel), `exports.js`; Step 198
+  `notes.js` (notes, the Notes tab, Ask an agent, proposals, polling). Vanilla JS, no build step, no CDN, no external fonts (Inter and
   JetBrains Mono come from vidgen's bundled fonts at `/fonts/...`), so it works offline.
 - **Look** (decision: vidgen's own): the `dark_tech` theme's colours (background `#0E1116`,
   surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
@@ -14063,7 +14068,7 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
 - On opening, the page shows the open session (a reload keeps the piece) or loads the default
   preset (`momentum`) and renders it; playing needs a click (browsers' autoplay rule).
 
-### 94.8 Listening notes and agents (plan for Step 198)
+### 94.8 Listening notes and agents (plan for Step 198; what was built: §94.16)
 
 - **Notes**: clicking the timeline while playing pins a note `{seconds, bar, text, version}` to
   the session (`notes.json`), shown as markers on the timeline and as comments; notes stay with
@@ -14426,3 +14431,77 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
 - Not done: renders and exports are not pruned (§94.10); the check is of the score as written
   (mute / solo / narration are listening aids); a check made while an older stem was scaled for
   a volume edit differs from a fresh one within the stems' tolerance (§94.14).
+
+### 94.16 Step 198: listening notes and "Ask an agent"
+
+- **Notes** (`studio_app/notes.py`, `NoteBook`, the session's `notes.json`): `{id n1.., text (1–500
+  characters), seconds, bar, beat, section, bar_in_section, frac, version, created, status
+  open|resolved, answers}`; `locate(outline, seconds)` finds bar / beat / section from the
+  outline (the page shows the same before saving). **Carried over** (decision): notes belong
+  to the session, not a version; every state places them in the version shown (`at`, by
+  `place`): the same bar of the same section at the same point in the bar, so a note follows
+  its music when a section before it changes length; its section shorter → its last bar; its
+  section removed → the same bar number of the piece (or the last). `moved` says so in words
+  ("was bar 24 on v1; the sections before it changed length", "the b is 1 bar now: moved to its
+  last bar", "the b is gone: kept at bar 4 (in the c)").
+- **The page**: a notes lane under the timeline (click: a note at that moment; pins coloured by
+  section, hollow when resolved, a dot when an agent answered), **+ note** and the **N** key
+  (the moment playing, playing goes on); an editor popover (Enter keeps, Esc closes; for a
+  note: ▶ from here, resolve, delete); the third column has tabs **Score file | Notes n**: the
+  notes in the piece's order with their place, `moved`, the agents' lines (`proposed in v7`,
+  `kept in v7`, `discarded`), ▶ (from 1.5 s before), ✓, ✎, ×. Notes are made on the version
+  heard (A while A/B plays A).
+- **The hand-off** (`studio_app/agent.py`, `POST /api/ask`, the session's `request.json`, id
+  `r<time>-<hex>`): base version, its score text, the open notes placed in it, the kept check of
+  it (`check_summary`: verdict, level, headline, findings with advice, the report text — `null`
+  when not checked yet), the parent → base diff (unified, ≤ 80 lines, with the parent's label),
+  the instruction (one focused change per note, keep the rest and the comments, one line per
+  note, full score, don't make the check worse) and the reply format. `prompt_text` makes it
+  one Markdown prompt for chat assistants and the provider.
+- **Proposals** (`make_proposal`, `proposals.json`): every answer is validated with `check_text`.
+  A valid score that differs from its base becomes a version (`origin: agent`, parent the base,
+  label `agent: <summary>`) added **without** becoming current (`add_version(current=False)`),
+  its lines attached to the notes (`answers`, status pending); anything else is an `invalid`
+  proposal with its problems (no version; "the same as vN" and "holds no score" included).
+  **Keep** makes its version current and resolves the notes it explained; **Discard** renames
+  the version `discarded · …` (versions are never deleted); an invalid one can only be
+  dismissed. The banner above the tracks shows pending and invalid proposals: "An agent
+  proposed v7 from v6 · through MCP (claude) · 'summary'", one line per note with the note's
+  place and words, notes it left without a line, **▶ A/B v7 vs v6** (A = the proposal, B = the
+  current version, the Step 197 A/B), **Keep v7**, **Discard**.
+- **MCP** (decision kept from §94.8: through the disk). Four tools in `vidgen mcp`, run in the
+  server's process (file reads and one atomic write; no Manim) through `anyio.to_thread`:
+  `studio_sessions` (`agent_sessions`: sessions of `studio_folders(root)` — the root's
+  `build/studio`, `build/studio` of each folder directly under the root (not through a link out
+  of it) and the cache folder's `studio/` — the open one first, with open notes, the hand-off
+  and whether it was answered, pending proposals, the studio's address), `studio_read`
+  (`agent_read`: the hand-off of the request's base, else the current version, with the
+  version list and how to answer), `studio_check` (writes the score to `build/mcp/studio/` under
+  the root and runs `vidgen music check` like `music_check`, `compare` against the base), and
+  `studio_propose` (`agent_propose`: note ids checked, the score validated — problems come back
+  as the tool's error and nothing is written — an unchanged score refused, then
+  `inbox/<time>-<hex>.json` written atomically; the answer names notes left without a line and
+  whether a studio has the session open). **The root policy** (§62) confines every other tool
+  to the root; these four also reach the cache folder's `studio/`, where a studio started
+  without a project keeps its sessions, and write only `inbox/` files there (session ids are
+  checked by pattern before a path is built).
+- **Polling** (`GET /api/session?since=R`, every 1.5 s while the tab is visible): `poll` turns
+  inbox files into proposals (oldest first; an unreadable one becomes an invalid proposal
+  saying so; each file is removed once recorded) and answers `{revision, unchanged}` or the
+  whole state. `revision` lives in `session.json` and every save bumps it (`touch` for notes and
+  proposals). The page keeps the version shown when the current one did not change (only the
+  version list, notes and proposals are redrawn) and ignores answers older than what it shows.
+- **Copy prompt / Paste reply**: the prompt to the clipboard (a textarea fallback); the reply
+  read by `parse_reply`: the ```yaml block (else the largest code block, else the whole text
+  when it reads as a score with `tracks`), `n1: …` lines in the usual shapes (`- **n1**:`,
+  `n2 —`), `summary:`.
+- **The provider** (optional): OpenRouter, the LLM provider vidgen already has (pictures,
+  voices). `ask_openrouter` posts to `/chat/completions` through `httpapi.post_with_retries`
+  (retries, the key scrubbed from errors) with the key from `OPENROUTER_API_KEY` read at that
+  moment (`read_api_key`); the model is typed on the page (remembered in `localStorage`) or
+  given by `VIDGEN_STUDIO_MODEL`. `/api/info` carries `provider {name, key_env, key_set, model,
+  model_env}` (the key's presence only). Without the key the Send button is disabled with how
+  to set it; with it, Send asks to confirm the cost first. Never called in tests (mocked).
+- Public: no `vidgen.api` names; MCP tools `studio_sessions`, `studio_read`, `studio_check`,
+  `studio_propose`; `checks.kept_check`; `StudioSession.add_version(current=)`, `revision`,
+  `touch`.

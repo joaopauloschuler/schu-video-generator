@@ -550,6 +550,101 @@ body[data-draft] .chords-row, body[data-draft] .section-bar, body[data-draft] .t
 .snippet { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
 .snippet code { padding: 2px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line); }
 
+/* ----- listening notes and agents (Step 198) ------------------------------------------- */
+kbd { font: 10px "JetBrains Mono", ui-monospace, Consolas, monospace; padding: 0 4px; border-radius: 3px; border: 1px solid var(--line); background: var(--surface); color: var(--dim); }
+.btn.add-note { gap: 6px; }
+.timeline-wrap { position: relative; }
+.note-lane {
+  position: relative; height: 18px; margin-top: 3px; border-radius: 4px; cursor: copy;
+  background: repeating-linear-gradient(90deg, transparent 0 7px, color-mix(in srgb, var(--line) 55%, transparent) 7px 8px);
+}
+.note-lane:hover { background-color: color-mix(in srgb, var(--primary) 6%, transparent); }
+.note-lane.empty::before { content: "notes: click here or press N while listening"; position: absolute; left: 8px; top: 1px; font-size: 11px; color: var(--dim); pointer-events: none; }
+.pin {
+  --pin: var(--primary);
+  position: absolute; top: 1px; width: 14px; height: 16px; margin-left: -7px; padding: 0; border: 0; cursor: pointer; background: none;
+}
+.pin::before {
+  content: ""; position: absolute; left: 1px; top: 0; width: 12px; height: 12px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: var(--pin); box-shadow: 0 0 0 1.5px var(--bg);
+}
+.pin.resolved::before { background: var(--bg); box-shadow: inset 0 0 0 2px var(--pin); opacity: .7; }
+.pin.answered::after { content: ""; position: absolute; right: -2px; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: var(--secondary); box-shadow: 0 0 0 1.5px var(--bg); }
+.pin.draft::before { background: var(--text); animation: pulse 1s ease-in-out infinite; }
+.pin.editing::before, .pin.now::before { box-shadow: 0 0 0 2px var(--text); }
+.pin:focus-visible { outline: 2px solid var(--focus); }
+.note-editor {
+  position: absolute; z-index: 15; top: calc(84px + 8px + 24px); width: 340px; padding: 8px 10px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--primary); box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+}
+.ne-head { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; }
+.ne-head .dim { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-editor textarea { width: 100%; resize: vertical; font-weight: 400; font-size: 13px; }
+.ne-moved { margin: 0 0 6px; font-size: 12px; color: var(--secondary); }
+.ne-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.ne-actions .spacer { flex: 1 1 auto; }
+
+.yaml h2 .tab { padding: 2px 8px; margin: 0 2px 0 -8px; border: 0; border-radius: 5px; background: none; cursor: pointer; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--dim); }
+.yaml h2 .tab + .tab { margin-left: 0; }
+.yaml h2 .tab[aria-selected="true"] { color: var(--text); background: var(--raised); }
+.tab .count:not(:empty) { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 3px; border-radius: 8px; background: var(--primary); color: var(--bg); font-size: 10px; letter-spacing: 0; }
+.yaml.on-notes .yaml-only, .yaml.on-notes .code-wrap { display: none !important; }
+.notes-panel { padding-top: 4px; }
+.notes-empty { font-size: 12px; margin: 4px 0 12px; }
+.note-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.note { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 6px 6px 6px 4px; border-radius: 6px; border: 1px solid transparent; }
+.note:hover { background: var(--surface); }
+.note.lit { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.note.resolved .n-text, .note.resolved .n-where { opacity: .55; }
+.note.resolved .n-text { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--dim) 70%, transparent); }
+.n-time { padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--raised); cursor: pointer; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.n-time:hover { border-color: var(--primary); color: var(--primary); }
+.n-where { font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 5px; }
+.n-where .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.n-text { margin-top: 1px; cursor: text; overflow-wrap: anywhere; }
+.n-moved { margin-top: 2px; font-size: 11.5px; color: var(--secondary); }
+.n-acts { display: inline-flex; }
+.n-acts .del:hover { color: var(--accent); }
+.answers { list-style: none; margin: 5px 0 0; padding: 0; font-size: 12px; }
+.ans { margin: 3px 0; padding: 4px 7px; border-radius: 5px; background: var(--bg); border-left: 2px solid var(--secondary); }
+.ans.kept { border-left-color: var(--tertiary); }
+.ans.kept .badge { background: var(--tertiary); }
+.ans.discarded { opacity: .55; border-left-color: var(--line); }
+.ans.discarded .badge { background: var(--dim); }
+.ans .by { color: var(--dim); }
+.ask-card { border-top: 1px solid var(--line); padding-top: 10px; }
+.ask-card h3, .p-head b { margin: 0 0 4px; }
+.ask-card h3 { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.ask-card p { margin: 0 0 8px; }
+.handoff { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); font-size: 12px; }
+.ho-line { margin: 0 0 6px; }
+.ways { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
+.ways code, .p-problems code { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 11px; color: var(--code-str); }
+.ways li { line-height: 1.6; }
+.waiting { display: inline-flex; align-items: center; gap: 6px; color: var(--secondary); white-space: nowrap; }
+.waiting::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--secondary); animation: pulse 1s ease-in-out infinite; }
+.waiting.done { color: var(--tertiary); }
+.waiting.done::before { background: var(--tertiary); animation: none; }
+.field.model { width: 160px; min-height: 24px; padding: 1px 6px; font-weight: 400; font-size: 12px; }
+.why { display: block; color: var(--dim); font-size: 11.5px; }
+#provider-confirm { display: block; margin-top: 4px; color: var(--secondary); }
+.paste-box { margin-top: 8px; }
+.paste-box textarea { width: 100%; font: 11.5px "JetBrains Mono", ui-monospace, Consolas, monospace; resize: vertical; }
+
+.proposal-bar { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.proposal { padding: 7px 10px; border-radius: 8px; font-size: 12px; background: color-mix(in srgb, var(--secondary) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--secondary) 55%, var(--line)); }
+.proposal.invalid { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.p-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.p-head b { font-size: 13px; margin: 0; }
+.p-head .spacer { flex: 1 1 auto; }
+.p-icon { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--secondary); color: var(--bg); font-weight: 700; font-size: 12px; }
+.proposal.invalid .p-icon { background: var(--accent); }
+.proposal .btn.on { background: var(--secondary); border-color: var(--secondary); color: var(--bg); font-weight: 700; }
+.p-lines, .p-problems { margin: 6px 0 0; padding-left: 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 18px; }
+.p-lines li, .p-problems li { margin: 0; }
+.p-problems { display: block; max-height: 9em; overflow: auto; }
+.p-none { margin: 4px 0 0 28px; }
+
 /* ----- narrow windows: one column, the page scrolls ----------------------------------- */
 @media (max-width: 980px) {
   .studio { height: auto; min-height: 100vh; }

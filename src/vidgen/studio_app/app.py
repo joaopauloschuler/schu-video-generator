@@ -281,6 +281,8 @@ class StudioApp:
     # ----- facts ---------------------------------------------------------------------------
 
     def info(self) -> dict[str, Any]:
+        from vidgen.studio_app.agent import provider_info
+
         return {
             "vidgen": __version__,
             "project": str(self.project_root) if self.project_root else None,
@@ -288,6 +290,7 @@ class StudioApp:
             "default_preset": DEFAULT_PRESET,
             "audition_gain_db": audition_gain_db(),
             "session": self.session.id if self.session else None,
+            "provider": provider_info(),
         }
 
     def presets(self) -> list[dict[str, Any]]:
@@ -327,12 +330,128 @@ class StudioApp:
             return self.state()
 
     def state(self) -> dict[str, Any]:
-        """The open session (``null`` when none) and its current version's score."""
+        """The open session (``null`` when none), its current version's score, the listening
+        notes placed in it and the agents' proposals (Step 198)."""
+        from vidgen.studio_app.agent import Proposals
+        from vidgen.studio_app.notes import NoteBook
+
         with self._lock:
             if self.session is None:
-                return {"session": None, "score": None}
+                return {"session": None, "score": None, "notes": [], "proposals": [], "revision": 0}
             current = self.session.current
-            return {"session": self.session.to_json(), "score": self.score(current) if current is not None else None}
+            score = self.score(current) if current is not None else None
+            notes = NoteBook(self.session.folder).shown(score["outline"] if score else None)
+            proposals = [{k: v for k, v in p.items() if k != "text"} for p in Proposals(self.session.folder).items]
+            return {"session": self.session.to_json(), "score": score, "notes": notes, "proposals": proposals, "revision": self.session.revision}
+
+    # ----- listening notes and agents (Step 198) --------------------------------------------
+
+    def poll(self, since: int | None = None) -> dict[str, Any]:
+        """What the page polls every 1.5 s: proposals MCP agents left in the session's inbox are
+        picked up; ``{revision, unchanged: true}`` when nothing changed since revision ``since``,
+        else the whole :meth:`state` (``made``: the proposals just picked up)."""
+        from vidgen.studio_app.agent import Proposals, ingest_inbox
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            if self.session is None:
+                return self.state()
+            made = ingest_inbox(self.session, NoteBook(self.session.folder), Proposals(self.session.folder))
+            if since is not None and since == self.session.revision and not made:
+                return {"revision": since, "unchanged": True}
+            return {**self.state(), "made": [p["id"] for p in made]}
+
+    def _outline_of(self, version: int) -> dict[str, Any]:
+        data, score, _ = check_text(self._session().text(version))
+        if score is None:
+            raise VidgenError(f"version {version} has problems; fix them first")
+        return describe_score(score, data)
+
+    def add_note(self, version: int | None, seconds: float, text: str) -> dict[str, Any]:
+        """Pin a listening note at moment ``seconds`` of ``version`` (default: the current one)."""
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session = self._session()
+            number = version if version is not None else session.current
+            assert number is not None
+            note = NoteBook(session.folder).add(self._outline_of(number), number, seconds, text)
+            session.touch()
+            return {**self.state(), "note": note["id"]}
+
+    def update_note(self, note_id: str, text: str | None = None, status: str | None = None, delete: bool = False) -> dict[str, Any]:
+        """Change a note's words or status (``open`` / ``resolved``), or delete it."""
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session = self._session()
+            book = NoteBook(session.folder)
+            if delete:
+                book.delete(note_id)
+            else:
+                book.update(note_id, text, status)
+            session.touch()
+            return self.state()
+
+    def ask(self, version: int | None = None) -> dict[str, Any]:
+        """"Ask an agent": write the hand-off of ``version`` (default: the current one) as the
+        session's ``request.json`` — its score, open notes, kept check, the change from its parent
+        and the instruction — and give it as a prompt to copy, with the provider's state."""
+        from vidgen.studio_app.agent import handoff, prompt_text, provider_info, write_request
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session, number, data, score, key = self._version_score(version)
+            notes = NoteBook(session.folder).shown(describe_score(score, data))
+            request = handoff(session, number, notes, self.checker.kept(session.folder / "checks", key))
+            write_request(session, request)
+            session.touch()
+            return {"request": {k: v for k, v in request.items() if k != "score"}, "prompt": prompt_text(request),
+                    "provider": provider_info(), "file": str(session.folder / "request.json")}
+
+    def _request(self) -> dict[str, Any]:
+        from vidgen.studio_app.agent import read_request
+
+        request = read_request(self._session().folder)
+        if request is None:
+            raise VidgenError("ask an agent first (the hand-off is made then)")
+        return request
+
+    def _proposal_from(self, reply: str, source: str, agent: str | None) -> dict[str, Any]:
+        from vidgen.studio_app.agent import Proposals, make_proposal, parse_reply
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session = self._session()
+            request = self._request()
+            parsed = parse_reply(reply)
+            proposal = make_proposal(session, NoteBook(session.folder), Proposals(session.folder), parsed["score"], parsed["explanations"],
+                                     parsed["summary"], agent, source, request["base"], request["id"])
+            return {**self.state(), "proposal": proposal["id"]}
+
+    def paste_reply(self, reply: str) -> dict[str, Any]:
+        """A chat assistant's reply pasted by the person, as a proposal for the last hand-off."""
+        return self._proposal_from(reply, "paste", None)
+
+    def send_to_provider(self, model: str) -> dict[str, Any]:
+        """Send the last hand-off to OpenRouter (the person asked; it costs money) and make its
+        reply a proposal. The call runs outside the session lock (it can take a minute)."""
+        from vidgen.studio_app.agent import ask_openrouter, prompt_text
+
+        with self._lock:
+            prompt = prompt_text(self._request())
+        reply = ask_openrouter(prompt, model)
+        return self._proposal_from(reply, "openrouter", model.strip())
+
+    def decide_proposal(self, proposal_id: str, keep: bool) -> dict[str, Any]:
+        """Keep a proposal (its version becomes the current one) or discard it."""
+        from vidgen.studio_app.agent import Proposals, decide
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session = self._session()
+            decide(session, NoteBook(session.folder), Proposals(session.folder), proposal_id, keep)
+            return self.state()
 
     def score(self, version: int) -> dict[str, Any]:
         """Version ``version`` of the open session: its text, facts and problems."""

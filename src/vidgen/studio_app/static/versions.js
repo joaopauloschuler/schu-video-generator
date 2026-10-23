@@ -57,7 +57,15 @@ export function showAB() {
 function toggleAB(on = !ctx.state.ab.on) {
   ctx.state.ab.on = on;
   showAB();
+  ctx.onAB?.();
   ctx.refreshAudio();
+}
+
+// Hear version `number` as A against the current one (B), or go back to B (`on` false): the
+// proposal banner's A/B (Step 198).
+export function abWith(number, on = true) {
+  ctx.state.ab.version = number;
+  toggleAB(on);
 }
 
 // Compare with version `number` (A) from now on.

@@ -18185,3 +18185,87 @@ Known gaps
   loud-piano example "lower piano by 3 dB" leaves the voice range still flagged (33 % from 47 %),
   a second Apply finishes it — "change one thing, check again" as the CLI says. Keyboard
   shortcuts beyond undo / redo, the A/B shortcut and focus polish are Step 200.
+
+## Step 198 — vidgen studio: listening notes and "Ask an agent"
+
+What was built (DESIGN §94.16)
+- **Listening notes** (`studio_app/notes.py`, session `notes.json`): pinned while playing or
+  paused by the N key, **+ note**, or a click on the new notes lane under the timeline; each
+  records seconds, bar, beat, section (and bar within it) and the version heard. Pins on the
+  lane (section colour; hollow when resolved; a dot when an agent answered), an editor popover
+  (Enter keeps, Esc closes; ▶ from here, resolve, delete) and a **Notes** tab next to the score
+  file (in the piece's order; ▶ plays from 1.5 s before; ✓ ✎ ×; the agents' lines under each).
+  Notes carry over to every version: placed at the same bar of their section, so a longer or
+  shorter section before them moves them with the music; a shorter or removed section moves
+  them to the nearest bar; `moved` says so in words.
+- **Ask an agent** (`studio_app/agent.py`): `POST /api/ask` writes the hand-off
+  (`request.json`: score, open notes placed in the base version, its kept check as text and
+  findings, the parent → base diff, the instruction, the reply format) and returns it as a
+  prompt. Answers: (a) MCP tools `studio_sessions`, `studio_read`, `studio_check`,
+  `studio_propose` in `vidgen mcp` (through the disk: validated proposals go to the session's
+  `inbox/`; the page polls `GET /api/session?since=R` every 1.5 s and they appear);
+  (b) **Copy prompt** / **Paste reply** (any chat assistant; `parse_reply` reads the ```yaml
+  block, `n1: …` lines and `summary:`); (c) optional **OpenRouter** (`OPENROUTER_API_KEY` from
+  the environment as vidgen's other OpenRouter providers, model on the page or
+  `VIDGEN_STUDIO_MODEL`; disabled with how to set the key when missing; Send asks to confirm the
+  cost).
+- **Proposals** (`proposals.json`): a valid, changed score becomes a version `agent: <summary>`
+  that is not made current; the banner above the tracks shows it with one line per note,
+  **▶ A/B vN vs vCurrent**, **Keep** (current + resolves the notes it answered) and **Discard**
+  (renamed `discarded · …`; never deleted). Invalid answers (problems, unchanged, no score) are
+  shown with their problems and can only be dismissed. Nothing ever overwrites a version.
+
+Files touched
+- New: `src/vidgen/studio_app/notes.py`, `agent.py`, `static/notes.js`;
+  `tests/test_studio_agent.py` (11).
+- Changed: `studio_app/app.py` (state carries notes / proposals / revision; poll, notes, ask,
+  paste, send, decide; `info.provider`), `server.py` (routes), `session.py`
+  (`add_version(current=)`, `revision`, `touch`), `checks.py` (`kept_check`), `mcp_server.py`
+  (four tools, instructions), `static/app.js`, `api.js`, `versions.js` (`abWith`, `onAB`),
+  `index.html`, `studio.css`; `tests/test_mcp.py` (+1, tool list), `test_studio_app.py` (empty
+  state shape), `test_studio_ui.py` (+2); guide + `AGENTS.md` (MCP tool names, "Answering a
+  studio hand-off"), `docs/CONFIG.md` (studio notes / agents, MCP tools, `VIDGEN_STUDIO_MODEL`),
+  `README.md` (MCP tool list), `DESIGN.md` (§94.16, §94.1/.3/.5/.7/.8), `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. MCP tools `studio_sessions`, `studio_read`, `studio_check`,
+  `studio_propose`; environment variable `VIDGEN_STUDIO_MODEL`; the page's API rows of §94.5.
+
+Decisions
+- Notes belong to the session and are placed per version by section + bar-in-section (the
+  musically stable anchor), not by seconds or absolute bar.
+- A proposal is a real version (so it renders and A/Bs through the existing machinery) that is
+  not current until kept; discarding renames it instead of deleting (versions are immutable).
+- The MCP studio tools run in the server's process (no CLI subcommand): they only read small
+  files and write one inbox file; `studio_check` reuses `vidgen music check` in a subprocess.
+  They may reach the cache folder's `studio/` (sessions of a studio without a project) besides
+  the root — only to read sessions and write `inbox/` files; links out of the root are not
+  followed for the root's folders.
+- Keep resolves the notes the proposal explained (they can be reopened).
+
+How to test (one at a time, capped; `PYTHONPATH=<repo>` for `test_studio_check`)
+- `tests/test_studio_agent.py`: 11 passed in 1.4 s (locate / place with longer, shorter and
+  removed sections; notes API; the hand-off; parse_reply; paste → keep; invalid / unchanged /
+  no score; discard; MCP side → inbox → poll; unreadable inbox file; mocked OpenRouter incl. no
+  key, no model, a bad reply; routes).
+- `tests/test_mcp.py` in full (capped3g): 20 passed in 136 s (new `test_server_studio_tools`
+  drives the four tools over stdio and the studio picks the proposal up).
+- `tests/test_studio_ui.py -m ui`: 15 passed in 51 s (new: notes while playing with N and the
+  lane, list, resolve, play from, delete; Ask → simulated MCP proposal via `agent_propose` →
+  banner → A/B → Keep).
+- `test_studio_app` + `test_studio_song` + `test_studio_inspector` + `test_studio_check` +
+  `test_studio_agent` (not slow): 67 passed; `test_guide` + `test_docs` + `test_packaging`: 119
+  passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s198/shots/1-note-while-playing.png`,
+  `2-notes-listed.png`, `3-notes-after-section-change.png`, `4-handoff.png`,
+  `5-proposal-arrived.png`, `6-proposal-ab.png`, `7-kept.png`, `8-invalid-proposal.png`,
+  `9-light-note-editor.png`, `10-narrow.png` (420 px, full page); made by
+  `<scratchpad>/s198/shots.py`.
+
+Known gaps
+- The OpenRouter path was only tested mocked (never called). A note's `beat` is whole beats
+  (the point in the bar is kept as `frac`). The hand-off card is per page load (re-ask after a
+  reload). Proposals' lines are not editable; a kept proposal's notes can be reopened by hand.
+  Old renders / exports still not pruned.

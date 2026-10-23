@@ -1119,7 +1119,9 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 - [x] Tests `tests/test_studio_check.py` (12), `tests/test_studio_ui.py` (+3 `ui`); screenshots looked at
 
 ### Step 198 — Listening notes and "Ask an agent"
-- [ ] Notes pinned on the timeline while playing, kept with the version; MCP tools to read an open session's score, notes and check and to propose a version that appears in the studio; optionally OpenRouter through the existing key (mocked in tests, never called)
+- [x] Notes pinned while playing or paused (notes lane, + note, N key) with time, bar, beat, section and version; pins and a Notes tab (edit, resolve, delete, play from a little before); carried over to later versions, placed by their section's bar when sections change length (and saying so)
+- [x] "Ask an agent": the hand-off (`request.json`: score, open notes, check, parent diff, instruction); MCP tools `studio_sessions`, `studio_read`, `studio_check`, `studio_propose` (validated, written to the session's `inbox/`); the page polls and shows proposals (one line per note, A/B against the current version, keep, discard; invalid ones shown with their problems, never kept; proposals never overwrite versions); Copy prompt / Paste reply; optional OpenRouter (`OPENROUTER_API_KEY`, `VIDGEN_STUDIO_MODEL`; disabled with an explanation without the key; mocked in tests)
+- [x] Guide section on answering a studio hand-off; tests `tests/test_studio_agent.py` (11), `tests/test_mcp.py` (+1), `tests/test_studio_ui.py` (+2 `ui`); screenshots looked at
 
 ### Step 199 — Variations
 - [ ] One click: four deterministic siblings of the current piece (another seed, an altered ostinato, another voicing, a darker or brighter mix), each rendered and checked, side by side; picking one makes it the next version

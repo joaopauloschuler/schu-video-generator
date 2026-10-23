@@ -8,6 +8,7 @@ import { api } from "./api.js";
 import { initCheck, requestCheck, showCheckVersion, tickCheck } from "./check.js";
 import { initExports, showExports } from "./exports.js";
 import { initInspector, showInspector, tickInspector } from "./inspector.js";
+import { initNotes, setNotes, showNotes, tickNotes } from "./notes.js";
 import { Player } from "./player.js";
 import { initStrip, showChords, showFacts, tickChords } from "./strip.js";
 import { initTimeline, setRendering, showEnergy, showLoop, showTimeline, tickTimeline } from "./timeline.js";
@@ -184,6 +185,7 @@ function show(doc, before = null) {
   showVersions();
   showExports();
   showCheckVersion();
+  setNotes(doc);
   $("yaml-name").textContent = state.session ? `· ${state.session.title} · v${state.score?.version ?? "–"}` : "";
   if (o && !o.tracks.some((t) => t.name === state.selected)) state.selected = o.tracks[0]?.name ?? null;
   showFacts();
@@ -191,6 +193,7 @@ function show(doc, before = null) {
   showTracks();
   showInspector();
   showScoreText(state.score?.text || "", state.score?.problems || [], before);
+  showNotes();
 }
 
 function selectTrack(name) {
@@ -382,6 +385,7 @@ function onTick(seconds) {
   tickMeters(seconds, section, player.playing);
   tickInspector(seconds, section, player.playing);
   tickCheck(seconds);
+  tickNotes(seconds);
 }
 
 function onPlayState(playing) {
@@ -456,7 +460,7 @@ function resetListening() {
 
 const ctx = {
   state, outline, commit, commitText, commitWith, check, status, problem, colour, clock, setLoop, seekTo, refreshAudio, selectTrack, activeSection,
-  show, storage, openSession,
+  show, storage, openSession, player, playingVersion, play: () => player.play(),
 };
 
 async function start() {
@@ -476,6 +480,7 @@ async function start() {
   initVersions(ctx);
   initCheck(ctx);
   initExports(ctx);
+  initNotes(ctx);
   status("starting…", "busy");
   busy(1);
   try {

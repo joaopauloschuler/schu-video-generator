@@ -42,4 +42,11 @@ export const api = {
   applyCheck: (version, key, edit) => call("POST", "/api/check/apply", { version, key, edit }),
   exportFile: (version, options) => call("POST", "/api/export", { version, ...options }),
   savePiece: (version, name, overwrite = false) => call("POST", "/api/save", { version, name, overwrite }),
+  poll: (since) => call("GET", `/api/session?since=${encodeURIComponent(since ?? 0)}`),
+  addNote: (version, seconds, text) => call("POST", "/api/notes", { version, seconds, text }),
+  updateNote: (id, changes) => call("POST", "/api/notes/update", { id, ...changes }),
+  ask: (version) => call("POST", "/api/ask", { version }),
+  pasteReply: (reply) => call("POST", "/api/proposal/paste", { reply }),
+  sendToProvider: (model) => call("POST", "/api/proposal/send", { model }),
+  decideProposal: (id, keep) => call("POST", "/api/proposal/decide", { id, keep }),
 };

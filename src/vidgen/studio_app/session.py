@@ -134,17 +134,29 @@ class StudioSession:
             raise VidgenError(f"session {self.id} has no version {number}")
         return self.version_path(number).read_text(encoding="utf-8")
 
-    def add_version(self, text: str, origin: str, label: str, parent: int | None) -> Version:
+    def add_version(self, text: str, origin: str, label: str, parent: int | None, current: bool = True) -> Version:
         """Write ``text`` as the next version and make it the current one (what could be redone
-        is forgotten: a new edit after an undo starts a branch; nothing is deleted)."""
+        is forgotten: a new edit after an undo starts a branch; nothing is deleted).
+        ``current=False``: only add it (an agent's proposal, to listen to before keeping it)."""
         number = 1 + max((v["number"] for v in self.data["versions"]), default=0)
         write_text_atomic(self.version_path(number), text)
         version = Version(number, parent, origin, label, _now())
         self.data["versions"].append(asdict(version))
-        self.data["current"] = number
-        self.data["redo"] = []
+        if current:
+            self.data["current"] = number
+            self.data["redo"] = []
         self._save()
         return version
+
+    @property
+    def revision(self) -> int:
+        """A counter bumped by every change of the session, its notes or its proposals (the
+        page polls it to see what an agent added)."""
+        return int(self.data.get("revision", 0))
+
+    def touch(self) -> None:
+        """Bump :attr:`revision` (the notes or proposals changed)."""
+        self._save()
 
     def _entry(self, number: int) -> dict[str, Any]:
         found = next((v for v in self.data["versions"] if v["number"] == number), None)
@@ -212,6 +224,7 @@ class StudioSession:
         return {"redo": [], **self.data, "folder": str(self.folder), "can_undo": can_undo, "can_redo": self.can_redo}
 
     def _save(self) -> None:
+        self.data["revision"] = self.revision + 1
         write_text_atomic(self.folder / "session.json", json.dumps(self.data, indent=2, ensure_ascii=False) + "\n")
 
 

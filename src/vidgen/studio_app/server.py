@@ -192,11 +192,13 @@ class _Handler(BaseHTTPRequestHandler):
             "/api/info": app.info,
             "/api/presets": app.presets,
             "/api/patches": app.patches,
-            "/api/session": app.state,
             "/api/sessions": app.sessions,
         }
         if path in routes:
             return self._send_json({"ok": True, "result": routes[path]()})
+        if path == "/api/session":
+            since = query.get("since", [""])[0]
+            return self._send_json({"ok": True, "result": app.poll(_int(since, "since") if since else None)})
         if path == "/api/score":
             return self._send_json({"ok": True, "result": app.score(_int(query.get("version", [""])[0], "version"))})
         if path == "/api/facts":
@@ -244,6 +246,21 @@ class _Handler(BaseHTTPRequestHandler):
                                 _number(count, "count") if count is not None else None, _opt_str(body, "level") or "video")
         elif path == "/api/save":
             result = app.save_piece(_opt_int(body, "version"), _req_str(body, "name"), body.get("overwrite") is True)
+        elif path == "/api/notes":
+            result = app.add_note(_opt_int(body, "version"), _number(body.get("seconds"), "seconds"), _req_str(body, "text"))
+        elif path == "/api/notes/update":
+            result = app.update_note(_req_str(body, "id"), _opt_str(body, "text"), _opt_str(body, "status"), body.get("delete") is True)
+        elif path == "/api/ask":
+            result = app.ask(_opt_int(body, "version"))
+        elif path == "/api/proposal/paste":
+            result = app.paste_reply(_req_str(body, "reply"))
+        elif path == "/api/proposal/send":
+            result = app.send_to_provider(_req_str(body, "model"))
+        elif path == "/api/proposal/decide":
+            keep = body.get("keep")
+            if not isinstance(keep, bool):
+                raise _ApiError(HTTPStatus.BAD_REQUEST, "keep: expected true or false")
+            result = app.decide_proposal(_req_str(body, "id"), keep)
         else:
             raise _ApiError(HTTPStatus.NOT_FOUND, f"not found: {path}")
         self._send_json({"ok": True, "result": result})

@@ -99,6 +99,7 @@
       <label class="loop"><span aria-hidden="true">⟳</span> loop
         <select id="loop" aria-label="Loop"><option value="">whole</option></select>
       </label>
+      <button class="btn add-note" id="add-note" title="Pin a listening note at this moment (N)">+ note <kbd>N</kbd></button>
       <label class="narration" title="Hear it under the narration sample with vidgen's default ducking (−12 dB while the voice speaks), as in a video"><input type="checkbox" id="narration"> under narration</label>
       <input type="range" class="seek" id="seek" min="0" max="1000" value="0" step="1" aria-label="Position">
       <span class="time" id="time">0:00 / 0:00</span>
@@ -111,7 +112,10 @@
       <svg class="energy" id="energy" aria-hidden="true" preserveAspectRatio="none"></svg>
       <div class="playhead" id="playhead" aria-hidden="true"></div>
     </div>
+    <div class="note-lane" id="note-lane" title="Click to pin a listening note at that moment (or press N while listening)" aria-label="Listening notes: click to pin one"></div>
+    <div class="note-editor" id="note-editor" role="dialog" aria-label="Listening note" hidden></div>
     <div class="section-bar" id="section-bar" aria-label="Section"></div>
+    <div class="proposal-bar" id="proposal-bar" aria-live="polite" hidden></div>
   </section>
 
   <main class="work" id="work">
@@ -130,8 +134,19 @@
     </section>
     <section class="panel yaml" id="yaml-panel" aria-labelledby="yaml-title">
       <div class="yaml-head">
-        <h2 id="yaml-title">Score file <span class="dim" id="yaml-name"></span><span class="yaml-state" id="yaml-state" aria-live="polite"></span></h2>
-        <div class="yaml-problems" id="yaml-problems" role="alert" hidden></div>
+        <h2 id="yaml-title" role="tablist" aria-label="Score file or notes"><button class="tab" id="tab-yaml" role="tab" aria-selected="true" aria-controls="yaml-panel">Score file</button><button class="tab" id="tab-notes" role="tab" aria-selected="false" aria-controls="notes-panel">Notes <span class="count" id="notes-count"></span></button>
+          <span class="dim yaml-only" id="yaml-name"></span><span class="yaml-state yaml-only" id="yaml-state" aria-live="polite"></span></h2>
+        <div class="yaml-problems yaml-only" id="yaml-problems" role="alert" hidden></div>
+      </div>
+      <div class="notes-panel" id="notes-panel" role="tabpanel" aria-labelledby="tab-notes" hidden>
+        <p class="notes-empty dim" id="notes-empty">No notes yet. While listening, click the lane under the timeline or press <kbd>N</kbd> to pin a note at that moment: “this part drags”, “love this bell”, “goosebumps here”.</p>
+        <ol class="note-list" id="note-list"></ol>
+        <section class="ask-card" aria-labelledby="ask-title">
+          <h3 id="ask-title">Ask an agent</h3>
+          <p class="dim small">Hands the score, the open notes, the check and the last change to an AI agent. It answers with a new version and one line per note on what it changed and why; you A/B it, keep what you like, add notes, repeat.</p>
+          <button class="btn primary" id="ask">Ask an agent</button>
+          <div class="handoff" id="handoff" hidden></div>
+        </section>
       </div>
       <div class="code-wrap">
         <pre class="code" id="yaml" aria-hidden="true"></pre>

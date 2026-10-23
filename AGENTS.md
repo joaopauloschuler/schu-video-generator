@@ -176,7 +176,8 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`,
 `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic` (options in snake_case: `per_beat`,
+`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic`, and `studio_sessions`, `studio_read`,
+`studio_check`, `studio_propose` for music a person hands you from `vidgen studio` (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
@@ -1859,6 +1860,21 @@ again only when the file changes). You cannot hear it, so work from measurements
    versions and a bed; the numbers say whether it fits under a voice, not whether it is good.
    (Both commands also take names: `vidgen music check my_theme --compare momentum` in the
    project's folder.)
+
+**Answering a studio hand-off.** A person shaping a piece in `vidgen studio` pins listening notes
+on its timeline ("this part drags", bar 12, beat 3, in the build) and presses *Ask an agent*.
+Through MCP: `studio_sessions` lists them (the session open in a running studio first, with its open
+notes) → `studio_read` gives the score of the version handed off, the notes with bar, beat and section,
+its check report and what changed from its parent → change the score: **one focused change per note**
+when you can, in the section and bar the note names, everything else kept, comments too (a note
+that says "love this" asks you to keep that part) → `studio_check` with your new score (do not make
+the check worse) → `studio_propose` with the whole score, `explanations: {n1: "what I changed and
+why", ...}` (one line per note, also when you changed nothing for it) and a short `summary`. The
+proposal is validated (a score with problems comes back with them: fix and propose again) and
+appears in the studio as a new version the person A/Bs and keeps or discards; it never replaces a
+version. Without MCP the person copies the same hand-off as a prompt: answer with
+`summary: ...`, the whole score in one ```yaml block, then one `n1: ...` line per note.
+
 Write original music: genre styles are fine, never a known tune. A piece named like a built-in bed
 is a problem (rename it, or use `source: assets/music/NAME.yaml`). `loop: false` pieces play once
 with their ending (the cue's fade-out still applies).
