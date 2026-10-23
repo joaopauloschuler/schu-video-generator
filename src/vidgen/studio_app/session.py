@@ -28,8 +28,8 @@ from vidgen.fileio import remove_file, write_text_atomic
 SESSION_FORMAT = 1
 #: The marker file a running studio writes in the studio folder.
 OPEN_FILE = "open.json"
-#: A session id: ``YYYYMMDD-HHMMSS-xxxx``.
-SESSION_ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}$")
+#: A session id: ``YYYYMMDD-HHMMSS-xxxx`` (ASCII digits; ``\Z``: no trailing newline either).
+SESSION_ID = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}\Z")
 
 
 def studio_dir(project_root: Path | None) -> Path:
@@ -53,6 +53,12 @@ def find_project_root(project: str | None, cwd: Path) -> Path | None:
     if any((cwd / name).is_file() for name in CONFIG_NAMES):
         return cwd.resolve()
     return None
+
+
+def normal_text(text: str) -> str:
+    """Score text with ``\\n`` line ends (a reply pasted on Windows may bring ``\\r\\n``): what
+    a version file holds, so reading it back gives the same text."""
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _now() -> str:
@@ -139,7 +145,7 @@ class StudioSession:
         is forgotten: a new edit after an undo starts a branch; nothing is deleted).
         ``current=False``: only add it (an agent's proposal, to listen to before keeping it)."""
         number = 1 + max((v["number"] for v in self.data["versions"]), default=0)
-        write_text_atomic(self.version_path(number), text)
+        write_text_atomic(self.version_path(number), normal_text(text))
         version = Version(number, parent, origin, label, _now())
         self.data["versions"].append(asdict(version))
         if current:

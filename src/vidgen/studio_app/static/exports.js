@@ -46,7 +46,7 @@ function showCount() {
   $("ex-count-unit").textContent = length === "loops" ? "loops" : "seconds";
   if (length === "loops" && (!count.value || Number(count.value) > 64)) count.value = "4";
   if (length === "seconds" && (!count.value || Number(count.value) < 5)) count.value = "60";
-  count.max = length === "loops" ? "64" : "1800";
+  count.max = length === "loops" ? "64" : "600";
 }
 
 function defaultName() {

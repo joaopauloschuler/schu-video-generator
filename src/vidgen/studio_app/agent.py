@@ -36,7 +36,7 @@ from typing import Any
 from vidgen.errors import VidgenError
 from vidgen.fileio import remove_file, write_text_atomic
 from vidgen.studio_app.notes import NOTE_ID, NoteBook
-from vidgen.studio_app.session import OPEN_FILE, SESSION_ID, StudioSession, list_sessions, studio_dir
+from vidgen.studio_app.session import OPEN_FILE, SESSION_ID, StudioSession, list_sessions, normal_text, studio_dir
 
 #: ``request.json`` / ``proposals.json`` / inbox files' ``format``.
 AGENT_FORMAT = 1
@@ -47,7 +47,7 @@ PROPOSALS_FILE = "proposals.json"
 #: Where MCP agents put proposals for the studio to pick up.
 INBOX = "inbox"
 #: An inbox file's name (written by :func:`agent_propose`).
-INBOX_NAME = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}\.json$")
+INBOX_NAME = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}\.json\Z")
 #: The longest score text a proposal may carry (characters).
 MAX_SCORE_CHARS = 200_000
 #: The longest explanation of one note / summary (characters).
@@ -300,6 +300,7 @@ def make_proposal(session: StudioSession, notes: NoteBook, proposals: Proposals,
     elif len(text) > MAX_SCORE_CHARS:
         proposal.update(status="invalid", problems=[{"where": "", "message": f"the score is longer than {MAX_SCORE_CHARS} characters", "line": None}])
     else:
+        text = normal_text(text)
         text = text if text.endswith("\n") else text + "\n"
         _, score, problems = check_text(text)
         if score is None:
@@ -482,14 +483,21 @@ def find_session(root: Path, session_id: str | None) -> StudioSession:
         if not markers:
             raise VidgenError("no studio has a session open; give session= (studio_sessions lists them)")
         _, folder, marker = max(markers, key=lambda x: x[0])
-        session_id = str(marker["session"])
-        return StudioSession.open(folder, session_id)
+        return _contained(StudioSession.open(folder, str(marker["session"])), folder)
     if not SESSION_ID.match(session_id):
         raise VidgenError(f"not a studio session id: {session_id!r} (studio_sessions lists them)")
     for folder in folders:
         if (folder / "sessions" / session_id / "session.json").is_file():
-            return StudioSession.open(folder, session_id)
+            return _contained(StudioSession.open(folder, session_id), folder)
     raise VidgenError(f"no studio session {session_id} (studio_sessions lists them)")
+
+
+def _contained(session: StudioSession, studio: Path) -> StudioSession:
+    """``session`` if its folder really is in ``studio``'s ``sessions/`` (a link to elsewhere is
+    refused: an agent writes its proposals there)."""
+    if not session.folder.resolve().is_relative_to((studio / "sessions").resolve()):
+        raise VidgenError(f"studio session {session.id} is a link out of {studio}; not using it")
+    return session
 
 
 def _outline(text: str) -> dict[str, Any] | None:
@@ -555,7 +563,7 @@ def agent_propose(root: Path, score: str, explanations: Any = None, summary: Any
         base = pending["base"] if pending and (request is None or request == pending["id"]) else session.current
     assert base is not None
     session.text(base)
-    if score.rstrip("\n") == session.text(base).rstrip("\n"):
+    if normal_text(score).rstrip("\n") == session.text(base).rstrip("\n"):
         raise VidgenError(f"the score is the same as v{base}: change it to answer the notes")
     open_ids = [n["id"] for n in NoteBook(session.folder).open_notes()]
     doc = {"format": AGENT_FORMAT, "created": _now(), "base": base, "score": score, "explanations": explanations, "summary": summary,

@@ -72,7 +72,8 @@ export const api = {
   updateNote: (id, changes) => call("POST", "/api/notes/update", { id, ...changes }),
   ask: (version) => call("POST", "/api/ask", { version }),
   pasteReply: (reply) => call("POST", "/api/proposal/paste", { reply }),
-  sendToProvider: (model) => call("POST", "/api/proposal/send", { model }),
+  // only after the person said "Send now" (the server refuses a send without confirm: true)
+  sendToProvider: (model) => call("POST", "/api/proposal/send", { model, confirm: true }),
   decideProposal: (id, keep) => call("POST", "/api/proposal/decide", { id, keep }),
   variations: (request) => call("POST", "/api/variations", request),
   variationBatch: (batch) => call("GET", `/api/variations?batch=${encodeURIComponent(batch)}`),

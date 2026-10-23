@@ -94,7 +94,7 @@ def _scalar_text(value: Any, node: yaml.Node) -> str:
 
 def _compose(text: str) -> yaml.Node:
     try:
-        node = yaml.compose(text)
+        node = yaml.compose(text, Loader=yaml.SafeLoader)  # nodes only, never objects
     except yaml.YAMLError as exc:
         raise VidgenError(f"edit: the score is not valid YAML ({exc})") from None
     if not isinstance(node, yaml.MappingNode):

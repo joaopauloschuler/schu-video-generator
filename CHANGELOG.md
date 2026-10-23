@@ -37,6 +37,13 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   renders and exports (versions, notes and checks are never removed) with **Clean up** and
   `vidgen studio --clean`. The Listen page and the README link to the studio; the author guide
   tells agents when to suggest it; `docs/COOKBOOK-MUSIC.md` §7 walks through a session.
+- **Review** (Step 201): hardened against hostile requests (request lengths, numbers, names
+  with a trailing newline or other scripts' digits, Windows device names when saving, YAML
+  aliases that expand to millions of values, a session folder linked elsewhere); OpenRouter is
+  called only with the person's confirmation; edits of pieces at most tempos render 2–3 times
+  faster with a third less memory (the same 16-bit audio as a video's); 5-minute pieces no
+  longer run out of memory; exports are at most 10 minutes (was 30, which ran out of memory);
+  `vidgen studio --clean` leaves a running studio's open session alone.
 - Compatibility: additive. The beds, their templates, existing projects' mixes and every
   existing command are unchanged.
 

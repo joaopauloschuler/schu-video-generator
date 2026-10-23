@@ -32,9 +32,9 @@ from vidgen.fileio import write_bytes_atomic, write_text_atomic
 from vidgen.studio_app import song
 from vidgen.studio_app.checks import CHECK_AFTER_SECONDS, CHECK_IMAGE, Checker, find_edit
 from vidgen.studio_app.edits import apply_edits
-from vidgen.studio_app.session import StudioSession, list_sessions, studio_dir, write_open_marker
+from vidgen.studio_app.session import StudioSession, list_sessions, normal_text, studio_dir, write_open_marker
 from vidgen.studio_app.song import describe_score
-from vidgen.studio_app.stems import THREADS, StemCache, meter_levels, score_stems
+from vidgen.studio_app.stems import FAST_FFT, THREADS, StemCache, meter_levels, score_stems
 
 #: Bump when the studio's renders of the same score change (their cache key includes it).
 #: 2 (Step 194): a render's facts hold its loudness per bar (the timeline's energy curve).
@@ -47,17 +47,19 @@ DEFAULT_PRESET = "momentum"
 #: Longest one-line preset description (characters).
 ONE_LINE_CHARS = 110
 #: A render cache key (hex digits of a SHA-256).
-RENDER_KEY = re.compile(r"^[0-9a-f]{20}$")
+RENDER_KEY = re.compile(r"^[0-9a-f]{20}\Z")
 #: Audio file names the server may send: ``<key>.wav``, a listening mix with tracks muted
 #: ``<key>.m<tag>.wav``, either under narration ``….n.wav``, and a section of any,
 #: ``<key>[.m<tag>][.n]-<section>.wav``.
-AUDIO_NAME = re.compile(r"^([0-9a-f]{20})(?:\.m([0-9a-f]{10}))?(\.n)?(?:-([a-z][a-z0-9_]*))?\.wav$")
+AUDIO_NAME = re.compile(r"^([0-9a-f]{20})(?:\.m([0-9a-f]{10}))?(\.n)?(?:-([a-z][a-z0-9_]*))?\.wav\Z")
 #: Facts of a render worked out after it plays (loudness, true peak, the energy curve), once
 #: no render has been under way for this long (s).
 LATE_FACTS = ("loudness", "true_peak", "energy")
 FACTS_AFTER_SECONDS = 0.3
 #: Old renders of the open session are removed at most this often (s), after a new render.
 AUTO_CLEAN_SECONDS = 60.0
+#: The renders last asked for that the automatic clean-up keeps whatever versions they are.
+KEEP_PLAYED = 6
 
 
 def one_line(description: str) -> str:
@@ -103,8 +105,8 @@ def line_of(text: str, where: str) -> int | None:
     """The line (1-based) of the YAML node a problem's ``where`` (``tracks.bass.steps``,
     ``sections[2].bars``) names, or of its nearest parent that exists; ``None`` for none."""
     try:
-        node = yaml.compose(text)
-    except yaml.YAMLError:
+        node = yaml.compose(text, Loader=yaml.SafeLoader)
+    except (yaml.YAMLError, RecursionError):
         return None
     if node is None:
         return None
@@ -123,18 +125,48 @@ def line_of(text: str, where: str) -> int | None:
     return line
 
 
+#: The most values a score's YAML may stand for, an alias counted each time it is used (Step 201):
+#: a template is under 2 000; ten lines of nested aliases stand for hundreds of millions, which
+#: took 30 s and gigabytes to check.
+MAX_YAML_NODES = 200_000
+
+
+def expanded_nodes(node: yaml.Node, seen: dict[int, int]) -> int:
+    """How many values YAML ``node`` stands for with every alias written out (``seen``: per
+    node already counted; a node that contains itself counts once)."""
+    if id(node) in seen:
+        return seen[id(node)]
+    seen[id(node)] = 1
+    total = 1
+    if isinstance(node, yaml.MappingNode):
+        total += sum(expanded_nodes(k, seen) + expanded_nodes(v, seen) for k, v in node.value)
+    elif isinstance(node, yaml.SequenceNode):
+        total += sum(expanded_nodes(v, seen) for v in node.value)
+    seen[id(node)] = total
+    return total
+
+
 def check_text(text: str) -> tuple[Any, Any, list[dict[str, Any]]]:
     """Read and check score ``text``: ``(data, score, problems)`` — ``score`` is ``None`` when
     there are problems (each ``{where, message, line}``), ``data`` when the YAML parsed."""
     from vidgen.studio import parse_music_score
 
+    loader = yaml.SafeLoader(text)  # yaml.safe_load, with a look at the document before it is built
     try:
-        data = yaml.safe_load(text)
+        node = loader.get_single_node()
+        if node is not None and expanded_nodes(node, {}) > MAX_YAML_NODES:
+            return None, None, [{"where": "", "message": f"the YAML's anchors and aliases repeat it into more than {MAX_YAML_NODES} values; "
+                                 "a score is a few thousand: write it out", "line": None}]
+        data = loader.construct_document(node) if node is not None else None
     except yaml.YAMLError as exc:
         mark = getattr(exc, "problem_mark", None)
         line = mark.line + 1 if mark is not None else None
         what = getattr(exc, "problem", None) or str(exc)
         return None, None, [{"where": f"line {line}" if line else "", "message": f"not valid YAML: {what}", "line": line}]
+    except RecursionError:
+        return None, None, [{"where": "", "message": "not valid YAML for a score: nested too deeply", "line": None}]
+    finally:
+        loader.dispose()
     try:
         score = parse_music_score(data, "score")
     except VidgenError as exc:
@@ -272,6 +304,7 @@ class StudioApp:
         self._facts_lock = threading.Lock()
         self._last_render = 0.0  # time.monotonic() when a render was last asked for or made
         self._last_clean = time.monotonic()  # old renders are removed at most once a minute (§94.18)
+        self._played: OrderedDict[str, None] = OrderedDict()  # render keys last asked for, newest last
         # the mixes of the last renders (−28 LUFS float32 and gain), which the check reuses
         self._mixes: OrderedDict[str, tuple[np.ndarray, float]] = OrderedDict()
         self.checker = Checker(self._render_idle, self._check_stems)
@@ -283,7 +316,9 @@ class StudioApp:
         self.variations = VariationBatches(self._render_candidate, self._check_candidate)
 
     def close(self) -> None:
-        """Stop the late-facts, check and variation workers (a job under way finishes; queued ones are dropped)."""
+        """Stop the late-facts, check and variation workers: queued jobs are dropped and the ones
+        under way stop at their next step (so Ctrl+C does not wait for a long piece's facts)."""
+        self._facts_wanted = None
         self._facts_pool.shutdown(wait=False, cancel_futures=True)
         self.checker.close()
         self.variations.close()
@@ -530,6 +565,7 @@ class StudioApp:
         """Typed score ``text`` (the YAML view) as the next version after ``version`` (default:
         the current one), like an edit: ``{ok: false, problems}`` writes nothing (the page keeps
         the text as a draft and the last good version plays); the same text is ``unchanged``."""
+        text = normal_text(text)
         with self._lock:
             session = self._session()
             base = version if version is not None else session.current
@@ -587,12 +623,28 @@ class StudioApp:
     def _render_idle(self) -> bool:
         return not self._render_lock.locked() and time.monotonic() - self._last_render >= CHECK_AFTER_SECONDS
 
-    def _check_stems(self, data: Any, score: Any, key: str) -> tuple[list[Any], tuple[np.ndarray, float] | None]:
+    def _check_stems(self, data: Any, score: Any, key: str) -> tuple[Iterable[Any], tuple[np.ndarray, float] | None]:
         """The version's kept stems (rendered now only if they were dropped) and its mix when
-        it is still in memory, for the check."""
+        it is still in memory, for the check. A long piece's stems (streamed) come one at a
+        time, each fetched under the render lock, after its mix is made again if it was dropped."""
         with self._render_lock:
             stems = score_stems(self.stems, data, score)
-            return [stems.stems[t.name].stem for t in score.tracks], self._mixes.get(key)
+            if not stems.streamed:
+                return [stems.stems[t.name].stem for t in score.tracks], self._mixes.get(key)
+            mix = self._mixes.get(key)
+
+        def each() -> Iterable[Any]:
+            for t in score.tracks:
+                with self._render_lock:
+                    item = stems.get(t.name)
+                yield item.stem
+
+        if mix is None:
+            from vidgen.studio.render import mix_track_stems
+
+            audio, made = mix_track_stems(score, each(), threads=THREADS, fast_fft=FAST_FFT)
+            mix = (audio, made.gain)
+        return each(), mix
 
     def _version_score(self, version: int | None) -> tuple[StudioSession, int, Any, Any, str]:
         session = self._session()
@@ -699,16 +751,17 @@ class StudioApp:
         removed = {k: mine[k] + others[k] for k in ("files", "bytes", "busy")}
         return {"removed": removed, "disk": self.disk()}
 
-    def _auto_clean(self, session: StudioSession, playing: str) -> None:
+    def _auto_clean(self, session: StudioSession, playing: Sequence[str]) -> None:
         """Keep the open session's renders within the rule, at most once a minute (after a new
-        render; render ``playing``, just made, is kept whatever version it is)."""
+        render; the renders last asked for, ``playing``, are kept whatever versions they are:
+        the page may be A/B-ing one of them)."""
         from vidgen.studio_app.cleanup import clean_session
 
         if time.monotonic() - self._last_clean < AUTO_CLEAN_SECONDS:
             return
         self._last_clean = time.monotonic()
         with self._lock, self._render_lock:
-            clean_session(session, extra=[playing])
+            clean_session(session, extra=playing)
 
     # ----- variations (Step 199) -----------------------------------------------------------
 
@@ -820,8 +873,14 @@ class StudioApp:
             raise VidgenError(f"version {number} has problems; fix them before playing it")
         key = render_key(data)
         meta, timing = self._render_whole(session, key, data, score)
+        with self._lock:  # what the page may still be playing (an A/B side, a variation)
+            self._played[key] = None
+            self._played.move_to_end(key)
+            while len(self._played) > KEEP_PLAYED:
+                self._played.popitem(last=False)
+            playing = list(self._played)
         if not meta["cached"]:
-            self._auto_clean(session, key)
+            self._auto_clean(session, playing)
         muted = sorted(set(mute) & {t.name for t in score.tracks})
         name = f"{key}.m{mute_tag(muted)}" if muted else key
         if muted:
@@ -851,8 +910,9 @@ class StudioApp:
             last = found is score.sections[-1]
             count = (meta["samples"] - first) if last else found.bars * score.bar
             target = session.renders / f"{name}-{section}.wav"
-            if not target.is_file():
-                _slice_wav(session.renders / f"{name}.wav", target, first, count)
+            with self._render_lock:  # two requests for it at once write it once (Windows cannot replace a file being sent)
+                if not target.is_file():
+                    _slice_wav(session.renders / f"{name}.wav", target, first, count)
             result.update(url=f"/audio/{target.name}", section={"name": section, "start": first / RATE, "seconds": count / RATE})
         return result
 
@@ -873,7 +933,17 @@ class StudioApp:
             stems = score_stems(self.stems, data, score)
             mixing = time.perf_counter()
             warnings: list[str] = []
-            audio, mix = mix_track_stems(score, [stems.stems[t.name].stem for t in score.tracks], warnings, threads=THREADS)
+            powers: dict[str, np.ndarray] = {}
+
+            def each() -> Iterable[Any]:  # one at a time: a long piece's stems are streamed (Step 201)
+                for t in score.tracks:
+                    item = stems.get(t.name)
+                    powers[t.name] = item.power
+                    yield item.stem
+
+            audio, mix = mix_track_stems(score, each(), warnings, threads=THREADS, fast_fft=FAST_FFT)
+            if stems.streamed:  # the stems were rendered while mixing
+                mixing = began + sum(stems.rendered.values()) + sum(stems.scaled.values())
             self._mixes[key] = (audio, mix.gain)
             while len(self._mixes) > 2:
                 self._mixes.popitem(last=False)
@@ -892,7 +962,7 @@ class StudioApp:
                 "bar_samples": score.bar,
                 "mix_gain": mix.gain,
                 "meter_seconds": METER_SECONDS,
-                "meters": {t.name: meter_levels(stems.stems[t.name].power, frames, mix.gain * level) for t in score.tracks},
+                "meters": {t.name: meter_levels(powers[t.name], frames, mix.gain * level) for t in score.tracks},
             }
             write_text_atomic(meta_path, json.dumps(meta) + "\n")
             timing = {
@@ -919,8 +989,8 @@ class StudioApp:
                 return 0.0
             began = time.perf_counter()
             stems = score_stems(self.stems, data, score)
-            kept = [stems.stems[t.name].stem for t in score.tracks if t.name not in muted]
-            audio, _ = mix_track_stems(score, kept, whole=MixFacts(meta["mix_gain"], meta["samples"]), threads=THREADS)
+            kept = (stems.get(t.name).stem for t in score.tracks if t.name not in muted)  # one at a time
+            audio, _ = mix_track_stems(score, kept, whole=MixFacts(meta["mix_gain"], meta["samples"]), threads=THREADS, fast_fft=FAST_FFT)
             level = 10 ** (audition_gain_db() / 20)
             write_bytes_atomic(path, wav_bytes(np.clip(audio * level, -1.0, 1.0)))
             return round(time.perf_counter() - began, 3)

@@ -40,7 +40,7 @@ MAX_BARS = 512
 MAX_SECONDS = 600.0
 #: Default master filter: a high-pass and a gentle low-pass over the whole piece, as the beds.
 DEFAULT_LOWPASS, DEFAULT_HIGHPASS = 4500.0, 32.0
-_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
+_NAME = re.compile(r"^[a-z][a-z0-9_]*\Z")  # \Z: a name with a newline at its end is not one (it names files)
 _TIME = re.compile(r"^(\d{1,2})/(2|4|8)$")
 
 

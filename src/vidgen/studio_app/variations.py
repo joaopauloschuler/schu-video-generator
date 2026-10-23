@@ -49,7 +49,7 @@ KINDS = ("harmony", "pattern", "mix", "energy")
 #: Candidates per batch and their letters.
 LETTERS = ("a", "b", "c", "d")
 #: A batch id: ``b0001``.
-BATCH_ID = re.compile(r"^b\d{4}$")
+BATCH_ID = re.compile(r"^b[0-9]{4}\Z")
 #: The most shuffles a page may ask for (a counter, not a seed).
 MAX_SHUFFLE = 999
 

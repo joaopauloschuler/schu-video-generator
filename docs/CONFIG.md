@@ -3453,7 +3453,13 @@ Ctrl+C in the terminal stops it.
   sound is kept in the studio's memory, up to 768 MB) and plays on from the same moment;
   mute / solo and **under narration** (the piece under the narration sample `vidgen music
   check` uses, with vidgen's default ducking, as in a video) change what plays, never the
-  score. The meters show each track's own audio.
+  score. The meters show each track's own audio. A long piece whose tracks do not fit in those
+  768 MB together (a 5-minute track is 235 MB) is rendered one track at a time and only what
+  fits is kept, so its edits take longer (a 5-minute piece of nine tracks: about 70 s, 2.3 GB at
+  most). Tempos that make the piece's length an awkward number of samples (most tempos: 112 BPM
+  over 24 bars is 2⁹·3·1607) are filtered on a quicker length in the studio — the same 16-bit
+  audio as the video's, measured; exports and videos always render the exact samples, so an
+  export of such a piece takes longer than its edits.
 - **Check**: after each render the studio runs `vidgen music check` on the version in the
   background (from the sound it keeps, so nothing renders twice; an edit stops a check that is
   no longer current). The panel at the bottom shows the verdict and the voice range, bass,
@@ -3470,11 +3476,11 @@ Ctrl+C in the terminal stops it.
   in the list, any version) instead of the current one at the same moment and level; the badge
   next to it says which one is playing.
 - **Export**: the score file (YAML, as written), or audio — WAV (16-bit, 48 kHz) or MP3, the
-  piece once, N loops (a loop) or N seconds (looped as a video loops it, with a 2 s fade-out),
-  at the **video level** (−28 LUFS, how vidgen plays music at volume 0) or the **listening
+  piece once, N loops (a loop) or N seconds (looped as a video loops it, with a 2 s fade-out;
+  at most 10 minutes either way — a video loops its music by itself), at the **video level** (−28 LUFS, how vidgen plays music at volume 0) or the **listening
   level** (−16 LUFS, peaks under −1 dBTP). The file is made in the session's `exports/` and the
   browser downloads it. **Save to the project** writes `assets/music/<name>.yaml` (lower-case
-  letters, digits, `_`, `-`), which a video plays with `music: <name>` (the snippet can be
+  letters, digits, `_`, `-`; not a name Windows keeps for a device, such as `con` or `nul`), which a video plays with `music: <name>` (the snippet can be
   copied); a built-in bed's name is refused (`music: calm` would be ambiguous), and an existing
   piece is overwritten only after you confirm. It needs the studio started with a project.
 - **Listening notes**: while listening (playing or paused), press **N**, click **+ note** or
@@ -3504,8 +3510,10 @@ Ctrl+C in the terminal stops it.
   3. OpenRouter (optional, **costs money**): with `OPENROUTER_API_KEY` set in the environment
      (as for OpenRouter pictures and voices; vidgen never stores it) and a model typed on the
      page or given by `VIDGEN_STUDIO_MODEL` (e.g. `VIDGEN_STUDIO_MODEL=vendor/model`), **Send**
-     asks for confirmation, sends the hand-off and turns the reply into a proposal. Without the
-     key the button is disabled and says how to set it.
+     asks for confirmation (the server refuses a send that was not confirmed), sends the
+     hand-off to OpenRouter only and turns the reply into a proposal. The key is read when
+     sending, never stored, shown to the page or logged. Without the key the button is disabled
+     and says how to set it.
 - **Variations** (top bar): four siblings of the current version, each a different kind of
   change — **harmony** (the written chords re-voiced, one chord replaced by a relative in the
   same key or put in first inversion, another seed), **pattern** (the busiest figure turned by a
@@ -3544,7 +3552,8 @@ Ctrl+C in the terminal stops it.
   starts, every session keeps only the renders of its current, first and starred versions;
   exports go after a day. **Clean up** in the version menu (it shows the disk used) does it now
   and also removes exports older than an hour; `vidgen studio --clean [PROJECT]` does the same
-  for every session of the folder without starting the studio, and prints what it removed.
+  for every session of the folder without starting the studio, and prints what it removed (a
+  session open in a studio running on that folder is left alone; that studio looks after it).
 - **Window sizes and themes**: wide windows show tracks, inspector and score file side by side;
   under 1320 px the inspector, score file and notes are tabs beside the tracks; under 980 px
   everything stacks and the page scrolls. The theme button switches dark / light (remembered in
@@ -3560,10 +3569,15 @@ Ctrl+C in the terminal stops it.
 - **Security**: the server listens on 127.0.0.1 only and answers only requests addressed to
   `127.0.0.1:<port>` or `localhost:<port>` (no DNS rebinding); changes must be JSON POSTs from
   its own page (another web site cannot send them); files are served only from fixed lists (the
-  page, its fonts, the open session's renders by name), never from a path in a request; it runs
-  no code from requests and has no login, so anyone who can use this computer can use it while
-  it runs. It writes only into its studio folder, the exports you download, and a project's
-  `assets/music/` when you save there.
+  page, its fonts, the open session's renders by name), never from a path in a request (names
+  and ids are checked against strict patterns first: no `..`, slashes, backslashes, drive
+  letters or device names); request bodies are at most 2 MB; score text is read as plain YAML
+  data (no tags that build objects; anchors that would repeat it into more than 200 000 values
+  are refused); it runs no code from requests and starts no program but your browser (once, at start) and ffmpeg for MP3s.
+  It has no login, so anyone who can use this computer can use it while it runs. It writes only
+  into its studio folder (every file replaced whole, never half-written), the exports you
+  download, and a project's `assets/music/` when you save there (not through a link out of the
+  project).
 
 ### Loudness of the final mix (`audio`)
 

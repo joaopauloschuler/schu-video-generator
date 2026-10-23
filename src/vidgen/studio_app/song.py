@@ -14,7 +14,7 @@ from typing import Any
 from vidgen.errors import VidgenError
 
 #: A track's or section's name in a score (as :mod:`vidgen.studio.score_file` checks it).
-NAME = re.compile(r"^[a-z][a-z0-9_]*$")
+NAME = re.compile(r"^[a-z][a-z0-9_]*\Z")
 _ROMAN = ("I", "II", "III", "IV", "V", "VI", "VII")
 _PITCH = re.compile(r"^[A-G][#b]?")
 _SHARP_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")

@@ -13878,7 +13878,7 @@ built-in bed's template.
   README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout
   (inspector and check as tabs below the track list in narrow windows), the light theme,
   keyboard shortcuts (space play / stop, Ctrl+Z), accessibility basics (labels, focus, contrast).
-- **201 Review**: a critical review with fixes; security (localhost only, no path traversal,
+- **201 Review** (done, §94.19): a critical review with fixes; security (localhost only, no path traversal,
   safe file writes, no code run from requests), compatibility, determinism; the phase's tests
   and related suites; `tests/test_mcp.py` in full.
 
@@ -14654,3 +14654,109 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
 - Public: no `vidgen.api` names; `vidgen studio --clean`; `vidgen.studio_app.clean_studio_folder`;
   `StudioApp.last_handoff`, `disk`, `clean_up`, `variation_batches`; API rows `GET /api/ask`,
   `GET /api/disk`, `POST /api/cleanup`, `GET /api/variations` without `batch`.
+
+### 94.19 Step 201: the review of Phase T
+
+- **Security, checked one attack at a time** (`tests/test_phase_t_review.py`; each is a test):
+  Host must be `127.0.0.1:<port>` / `localhost:<port>` exactly (other names, ports, `[::1]`,
+  case, a missing Host: 403); a POST with an `Origin` from anywhere else (`null`, another port,
+  look-alike names: 403) or not JSON (415); bodies at most 2 MB (413, read nothing) — **fixed**:
+  a negative `Content-Length` made `rfile.read(-1)` wait for the client to close, unbounded
+  (now 400); every 4xx / 5xx answer closes the connection (its body may be unread, so the
+  connection cannot carry another request). **Fixed**: JSON numbers must be finite (Python's
+  JSON reads `NaN` / `Infinity`; a note at NaN seconds made `notes.json` unreadable to strict
+  readers) and whole numbers whole (`version: 1.5`, `true`, `Infinity` were cast or crashed with
+  500). Names that reach the disk: render, picture and export names, session ids, batch ids,
+  letters, note ids, render keys — every pattern now ends in `\Z` (a `$` let a trailing newline
+  through; a query string is decoded, so `?key=…%0A` reached it) and uses ASCII `[0-9]` (`\d`
+  matched other scripts' digits); a section or track name in a score likewise (`vidgen.studio`'s
+  `_NAME`: a name is used in file names). URL paths are never decoded, so `%2e%2e`, `..\`,
+  `C:\`, `\\server\share` and the like all miss the allow-lists (tested on every prefix).
+  **Save to project**: piece names were already plain; **fixed**: Windows device names (`con`,
+  `nul`, `aux`, `prn`, `com0-9`, `lpt0-9`) are refused (`assets/music/con.yaml` is the console
+  on older Windows); a link from `assets/music` out of the project was already refused.
+  **YAML**: `check_text` reads with the safe loader (no object tags) — **fixed**: it looks at
+  the composed document first and refuses one whose anchors / aliases stand for more than
+  `MAX_YAML_NODES` (200 000) values (ten lines of nested aliases as a title took 30 s and
+  gigabytes in the score's checks) and one nested too deeply (a `RecursionError` was a 500);
+  `yaml.compose` (edits, problem lines) now names `SafeLoader` too (nodes only either way).
+  **Fixed**: steps written as a list of lists were a `TypeError` in `patterns.parse_steps` (a
+  500; a traceback in the CLI) — now the steps problem. No shell anywhere; files written
+  atomically (`fileio`), MP3 exports now through `replace_file` (retried while Windows holds the
+  last download) and their partial file removed on failure.
+- **MCP studio tools** (§94.16): they read sessions under the root's `build/studio`, its
+  folders' (links out of the root not followed) and the cache folder's `studio/` — ids checked
+  before any path; **fixed**: a session folder that is itself a link out of its studio folder is
+  refused (`agent._contained`; an agent writes `inbox/` files there). `studio_check` writes only
+  `<root>/build/mcp/studio/<id>-v<N>.yaml` / `-proposal.yaml`.
+- **OpenRouter**: the key is read from the environment when sending, sent only to
+  `openrouter.ai` (`httpapi.post_with_retries`, `secret=` scrubbed from errors), never stored,
+  logged or given to the page (`provider_info` says only whether it is set; tested on `/api/info`,
+  `/api/session`, `/api/ask`). **Fixed**: `POST /api/proposal/send` needs `confirm: true` (the
+  page sends it only from **Send now**), so a cost is never incurred by a request the person did
+  not confirm; and `test_studio_agent.test_routes` could have called the real provider on a
+  machine with `OPENROUTER_API_KEY` set — it now clears the variable and stubs the call.
+- **Windows**: paths are `pathlib` throughout; the browser through `webbrowser`; port 0 with
+  `SO_EXCLUSIVEADDRUSE`; renders are content-named and never replaced, so a file being streamed
+  is never overwritten — **fixed**: a section cut is now made under the render lock (two
+  requests at once wrote it twice; the second replace fails on Windows while the first is being
+  sent); cleaning counts a file in use as busy. **Fixed**: text arriving with `\r\n` (a reply
+  pasted on Windows) is stored with `\n` (`session.normal_text`), so a version reads back as
+  written and "unchanged" is found; exports are the version's text (LF; Notepad reads it).
+  Ctrl+C: measured on Linux with a check under way, the process is gone in 0.14 s (`app.close()`
+  now also stops the late facts at their next block).
+- **Cleaning races** (Step 200's gap): **fixed**: `vidgen studio --clean` and a studio's start-up
+  clean leave alone the session a running studio has open (`open.json`, `_running_session`);
+  the automatic clean keeps the last `KEEP_PLAYED` (6) renders asked for, not only the newest,
+  so an A/B side or a candidate being played is not removed under the page.
+- **Quick FFT lengths (Step 196's finding)**. A circular filter over a buffer of `n` samples is
+  numpy's FFT of length `n`; with a prime factor above ~400 that is 2–5× slower than the same
+  convolution on a quick length (`n = 2⁹·3·1607`, time_of_flight at 112 BPM: 2.7 s a stereo round
+  trip against 0.8 s) and takes far more memory. **Byte-identity is impossible** for a different
+  FFT length (or even scipy's FFT of the same length: other rounding), and the shipped scores use
+  slow lengths themselves (`ascent` 2647, `breakthrough` 1607, a cookbook sketch 2857), so no
+  rule on the length could keep videos' samples. **Decision**: the quick lengths are the
+  **studio's choice only** (`fast_fft`, default off): `effects.CircularFFT(n, fast)` zero-pads
+  to `m = fast_fft_length(2n)` (or 3n for a loop's reverb, whose two buffers both fill `n`),
+  transforms and folds the result back around `n` (what spilled past the end added at the start,
+  what spilled before the start — a zero-phase filter reaches both ways — at the end); the same
+  circular convolution, its error the filters' response beyond `n/2` samples: 5e-15 of the
+  loudest sample on time_of_flight at 112 BPM, ≤ 1e-9 at worst (white noise at the shortest
+  folded length). Used only when `slow_fft_length(n)` (a prime factor above `SLOW_FFT_PRIME` =
+  500; at 101–307 the exact length is still quicker) and `n ≥ 65536`: `swept_filter`, `reverb`,
+  the mix's master filter (`render_track_stem(..., fast_fft)`, `mix_track_stems(..., fast_fft)`;
+  the studio passes `stems.FAST_FFT`). Exports, checks made by the CLI, videos and beds render
+  exactly. Measured: the studio's audition WAV equals the one made from `render_music_score`
+  byte for byte (time_of_flight 112, ascent, breakthrough, tidewater 112, a short test score);
+  the stems' mix equals `render_music_score` within Step 196's 1e-9 (tested).
+  `STUDIO_RENDER_VERSION` not bumped: the 16-bit renders are the same.
+- **Bit-identical memory savings in the renderer** (every template, bed loop, cookbook sketch,
+  test demo and project mix compared by SHA-256 before / after): `swept_filter` works channel
+  by channel (numpy's FFT along an axis is each column's FFT, to the bit) and runs at most
+  `SWEEP_MEMORY` (400 MB) of copies at once (a 5-minute piece's copies one at a time; a
+  50-second piece's still four); `_render_bus` lets go of its groups' buffers once summed
+  (`_Canvas.release`) and blends / applies the gain in place (the same operations).
+- **Long pieces** (a score may be 10 minutes): a 5-minute time_of_flight (×5.7 bars) was killed
+  at 3 GB both in the studio (all nine 235 MB stems held for the mix) and by
+  `render_music_score` itself. Now `score_stems` **streams** a score whose stems do not fit the
+  768 MB cache together (`StemSet.streamed`, `get`): the mix, a listening mix and the check
+  take one stem at a time (kept ones from the cache, others rendered then and kept while they
+  fit, the check's under the render lock): the studio renders it in 73 s with a 2.3 GB peak
+  (its check: 2.8 GB, over a minute); `render_music_score` 88 s, 2.75 GB. Heavy 10-minute
+  pieces still need more than 3 GB (documented).
+- **Exports**: a 30-minute listening-level export was killed at 3 GB (the whole piece tiled,
+  scaled and clipped as float64 copies). Now made block by block into one float32 array (peak
+  measured per block with the margins `loudness.blocks` uses: the same numbers), the same
+  samples as before (14 cases incl. a limited peak, compared by SHA-256 and in a test against
+  the Step 197 code), and capped at `MAX_SECONDS` = 600 (10 minutes, N loops too; was 1800):
+  600 s listening MP3 803 MB peak.
+- **Timings** (two cores; `<scratchpad>/s201/latency.py`, HEAD vs this step): time_of_flight
+  tempo 108 → 112 22.1 → 9.1 s (peak 2187 → 1271 MB), then a pad filter edit 8.8 → 3.8 s; first
+  load 8.1 → 6.2 s; ascent load 7.7 → 5.6 s (1441 → 989 MB); tidewater tempo +4 4.0 → 2.8 s;
+  momentum tempo +4 4.4 → 3.1 s (1352 → 988 MB).
+- Public: no `vidgen.api` names. `vidgen.studio.effects`: `CircularFFT`, `slow_fft_length`,
+  `fast_fft_length`, `SLOW_FFT_PRIME`, `FAST_FFT_MIN`, `SWEEP_MEMORY`; `fast` / `fast_fft`
+  keywords on `swept_filter`, `reverb`, `render_track_stem`, `mix_track_stems` (default off).
+  `studio_app`: `stems.FAST_FFT`, `StemSet.streamed` / `get`, `app.MAX_YAML_NODES`,
+  `expanded_nodes`, `KEEP_PLAYED`, `session.normal_text`, `exports.WINDOWS_RESERVED`; API: `confirm`
+  on `/api/proposal/send`; export length at most 600 s.

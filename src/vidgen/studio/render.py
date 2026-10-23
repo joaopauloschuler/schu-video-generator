@@ -78,6 +78,10 @@ class _Canvas:
         if hi > lo:
             self.data[lo:hi] += sound[lo - at : hi - at]
 
+    def release(self) -> None:
+        """Let go of the samples (summed elsewhere); the layout stays for :meth:`stretch`."""
+        self.data = np.broadcast_to(np.zeros((1, 2)), self.data.shape)
+
     def stretch(self, piece: np.ndarray) -> np.ndarray:
         """A per-sample curve over the piece (``score.samples``) over this canvas's length: its
         first value before the start, its last after the end."""
@@ -468,10 +472,10 @@ def _bus_group(part: TrackPart) -> tuple[object, ...]:
     return (part.echo, part.reverb)
 
 
-def _render_bus(score: MusicScore, track: Track, tracks: Mapping[str, Track], skipped: _Skipped) -> np.ndarray:
+def _render_bus(score: MusicScore, track: Track, tracks: Mapping[str, Track], skipped: _Skipped, fast_fft: bool = False) -> np.ndarray:
     """A track with effects, on its own buffer: its notes summed per echo / reverb setting (so
     each section's notes get their own), the echoes and reverb added, then its filters, gate,
-    ducking, volume curve and width along the piece."""
+    ducking, volume curve and width along the piece (``fast_fft``: :class:`~vidgen.studio.effects.CircularFFT`)."""
     groups: dict[tuple[object, ...], _Canvas] = {}
 
     def canvas_for(name: str) -> _Canvas:
@@ -485,14 +489,24 @@ def _render_bus(score: MusicScore, track: Track, tracks: Mapping[str, Track], sk
         if isinstance(echo, fx.Echo):
             x = fx.echo(x, echo, score.beat, canvas.wrap)
         if isinstance(reverb, fx.Reverb):
-            x = fx.reverb(x, reverb, canvas.wrap, f"studio:{score.seed}:{track.name}:reverb{k}")
+            x = fx.reverb(x, reverb, canvas.wrap, f"studio:{score.seed}:{track.name}:reverb{k}", fast_fft)
         bus += x
+        canvas.release()
+    del x
+    # in place from here on (the same operations, so the same samples): a long piece holds a few
+    # buffers fewer (Step 201)
     for kind in ("lowpass", "highpass"):
         found = _filter_curve(score, track, kind)
         if found is not None:
             cutoff, unfiltered = (shape.stretch(c) for c in found)
-            filtered = fx.swept_filter(bus, cutoff, kind)
-            bus = filtered if not unfiltered.any() else filtered * (1 - unfiltered[:, None]) + bus * unfiltered[:, None]
+            filtered = fx.swept_filter(bus, cutoff, kind, fast_fft)
+            del cutoff
+            if unfiltered.any():
+                filtered *= 1 - unfiltered[:, None]
+                bus *= unfiltered[:, None]
+                filtered += bus
+            bus = filtered
+            del filtered, unfiltered
     gain = np.ones(len(bus))
     for curve in (_gate_gain(score, track), _duck_gain(score, track, tracks)):
         if curve is not None:
@@ -500,7 +514,7 @@ def _render_bus(score: MusicScore, track: Track, tracks: Mapping[str, Track], sk
     volume = _piece_curve(score, track, lambda p: p.volume_curve, 0.0)
     if volume is not None:
         gain *= shape.stretch(10 ** (volume / 20))
-    bus = bus * gain[:, None]
+    bus *= gain[:, None]
     width = _piece_curve(score, track, lambda p: p.width, 1.0)
     return fx.widen(bus, shape.stretch(width)) if width is not None else bus
 
@@ -540,17 +554,19 @@ class TrackStem:
         return self.data[self.before :]
 
 
-def render_track_stem(score: MusicScore, name: str) -> TrackStem:
+def render_track_stem(score: MusicScore, name: str, fast_fft: bool = False) -> TrackStem:
     """Track ``name`` of ``score`` played alone, as :func:`render_music_score` plays it (the
     same notes and effects; see :func:`mix_track_stems` on rounding). A track's sound depends on the score's shared data (key,
     tempo, time, seed, loop, sections, chords), its own spec and, when it ducks, the hits of the
-    track it ducks under — nothing else."""
+    track it ducks under — nothing else. ``fast_fft`` (the studio's): its filters and reverb on
+    quick FFT lengths when the piece's length is a slow one (:class:`~vidgen.studio.effects.CircularFFT`:
+    the same within about 1e-13, many times faster; DESIGN.md §94.19)."""
     tracks = {t.name: t for t in score.tracks}
     track = tracks[name]
     skipped = _Skipped()
     alone = _Canvas(score)
     if _uses_bus(track):
-        alone.data += _render_bus(score, track, tracks, skipped)
+        alone.data += _render_bus(score, track, tracks, skipped, fast_fft)
     elif track.play_chords:
         _render_held_chords(lambda section: alone, score, track, skipped)
     else:
@@ -569,22 +585,25 @@ class MixFacts:
     samples: int
 
 
-def _master_filter(x: np.ndarray, score: MusicScore, threads: int) -> np.ndarray:
+def _master_filter(x: np.ndarray, score: MusicScore, threads: int, fast_fft: bool = False) -> np.ndarray:
     """:func:`vidgen.music._tone_filter` with the score's master settings — with ``threads`` > 1
-    each channel on its own thread (numpy's FFT lets go of the GIL), bit for bit the same."""
-    if threads <= 1:
+    each channel on its own thread (numpy's FFT lets go of the GIL), bit for bit the same;
+    ``fast_fft``: on a quick length when ``len(x)`` is a slow one (:class:`~vidgen.studio.effects.CircularFFT`)."""
+    fft = fx.CircularFFT(len(x), fast_fft)
+    if threads <= 1 and not fft.folded:
         return _tone_filter(x, score.lowpass, score.highpass)
     from concurrent.futures import ThreadPoolExecutor
 
-    freqs = np.fft.rfftfreq(len(x), 1 / RATE)
+    freqs = fft.freqs()
     response = _highpass(freqs, score.highpass, 2) * _lowpass(freqs, score.lowpass, 2)
-    with ThreadPoolExecutor(min(threads, x.shape[1])) as pool:
-        channels = list(pool.map(lambda c: np.fft.irfft(np.fft.rfft(x[:, c]) * response, len(x)), range(x.shape[1])))
+    with ThreadPoolExecutor(max(1, min(threads, x.shape[1]))) as pool:
+        channels = list(pool.map(lambda c: fft.irfft(fft.rfft(x[:, c]) * response), range(x.shape[1])))
     return np.stack(channels, axis=1)
 
 
 def mix_track_stems(
-    score: MusicScore, stems: Iterable[TrackStem], warnings: list[str] | None = None, whole: MixFacts | None = None, threads: int = 1
+    score: MusicScore, stems: Iterable[TrackStem], warnings: list[str] | None = None, whole: MixFacts | None = None, threads: int = 1,
+    fast_fft: bool = False,
 ) -> tuple[np.ndarray, MixFacts]:
     """The stems summed in the order given, through the master filter and set to -28 LUFS (its
     own loudness measured, as :func:`render_music_score` does): float32 ``(n, 2)``, read-only,
@@ -595,7 +614,7 @@ def mix_track_stems(
     set to its gain and cut at its length with the same fades (a one-shot keeps its tails),
     so leaving a track out never makes the rest louder. One stem at a time is held besides the
     sum (``stems`` may be a generator). ``threads``: the master filter and the loudness on that
-    many threads (the same samples)."""
+    many threads (the same samples). ``fast_fft``: the master filter as :func:`render_track_stem`'s."""
     canvas = _Canvas(score)
     skipped = _Skipped()
     for stem in stems:
@@ -605,10 +624,10 @@ def mix_track_stems(
     if warnings is not None:
         warnings.extend(skipped.warnings())
     if canvas.wrap:
-        x = _master_filter(canvas.data, score, threads)
+        x = _master_filter(canvas.data, score, threads, fast_fft)
     else:
         rest = canvas.data[canvas.before :]
-        filtered = _master_filter(np.concatenate([rest, np.zeros((RATE, 2))]), score, threads)[: len(rest)]
+        filtered = _master_filter(np.concatenate([rest, np.zeros((RATE, 2))]), score, threads, fast_fft)[: len(rest)]
         x = _one_shot_end(filtered, score.samples) if whole is None else _cut(filtered, whole.samples)
     if whole is not None:
         return _finish(x, whole.gain), whole

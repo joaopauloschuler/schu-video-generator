@@ -171,9 +171,11 @@ def test_the_stem_cache_keeps_to_its_budget() -> None:
     data, score = score_of(EFFECTS)
     one = stem_bytes(score)
     item_bytes = one + frame_power(np.zeros((score.samples, 2))).nbytes
-    cache = StemCache(budget=3 * item_bytes)
+    cache = StemCache(budget=6 * item_bytes)
     stems = score_stems(cache, data, score)
-    assert len(cache) == 6  # a mix's stems all stay, even over the budget
+    assert len(cache) == 6 and not stems.streamed  # a mix's stems all stay
+    # (a score whose stems do not fit together is streamed: Step 201, tests/test_phase_t_review.py)
+    assert score_stems(StemCache(budget=5 * item_bytes), data, score).streamed
     item = stems.stems["kick"]
     assert isinstance(item, CachedStem) and item.nbytes == item_bytes
     # another version (every track changes): room is made first, the least recently used go

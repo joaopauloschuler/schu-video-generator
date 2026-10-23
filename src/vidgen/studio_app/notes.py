@@ -27,7 +27,7 @@ NOTES_FORMAT = 1
 #: The longest note (characters).
 MAX_NOTE_CHARS = 500
 #: A note's id: ``n1``, ``n2``...
-NOTE_ID = re.compile(r"^n[1-9][0-9]{0,4}$")
+NOTE_ID = re.compile(r"^n[1-9][0-9]{0,4}\Z")
 #: A note's states.
 STATUSES = ("open", "resolved")
 

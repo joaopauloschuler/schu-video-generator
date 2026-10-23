@@ -244,6 +244,7 @@ def test_provider_is_mocked_and_its_reply_becomes_a_proposal(app: StudioApp, mon
         return json.dumps({"choices": [{"message": {"role": "assistant", "content": reply}}]}).encode()
 
     monkeypatch.setattr(httpapi, "post_with_retries", fake_post)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(VidgenError, match="OPENROUTER_API_KEY is not set"):
         app.send_to_provider("vendor/model")
     assert sent == []
@@ -286,7 +287,12 @@ def call(srv: StudioServer, method: str, path: str, body: Any = None) -> tuple[i
     return out
 
 
-def test_routes(server: StudioServer) -> None:
+def test_routes(server: StudioServer, monkeypatch: pytest.MonkeyPatch) -> None:
+    from vidgen import httpapi
+
+    # never the real provider, whatever this machine's environment holds (Step 201)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(httpapi, "post_with_retries", lambda *a, **kw: pytest.fail("no network in tests"))
     assert call(server, "POST", "/api/load", {"text": SCORE})[0] == 200
     status, doc = call(server, "POST", "/api/notes", {"seconds": 3.0, "text": "here"})
     assert status == 200 and doc["result"]["notes"][0]["bar"] == 2
@@ -303,4 +309,6 @@ def test_routes(server: StudioServer) -> None:
     status, doc = call(server, "POST", "/api/proposal/decide", {"id": "p1", "keep": True})
     assert doc["result"]["session"]["current"] == 2
     status, doc = call(server, "POST", "/api/proposal/send", {"model": "x/y"})
+    assert status == 400 and "confirm" in doc["error"]  # it costs money: only after the person confirmed
+    status, doc = call(server, "POST", "/api/proposal/send", {"model": "x/y", "confirm": True})
     assert status == 400 and "OPENROUTER_API_KEY" in doc["error"]

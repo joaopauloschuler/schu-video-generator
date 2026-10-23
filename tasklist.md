@@ -1133,7 +1133,8 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 - [x] 199 gaps: the open batch and the last hand-off come back after a reload; every batch listed (panel and version menu) so candidates not kept can be played and kept; disk rule for old renders / exports (versions, notes and checks never removed) with Clean up and `vidgen studio --clean`; tests `tests/test_studio_cleanup.py` (6), `tests/test_studio_ui.py` (+3 `ui`); screenshots at 1920 / 1440 / 1280 / 1024 / 420 px in both themes looked at
 
 ### Step 201 — Review of Phase T
-- [ ] Critical review with fixes recorded in HANDOFF; security (localhost only, no path traversal, safe file writes, no code run from requests); compatibility; determinism; the phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Critical review with fixes recorded in HANDOFF (DESIGN §94.19); security (localhost only, no path traversal, safe file writes, no code run from requests) — one test per attack in `tests/test_phase_t_review.py` (21, 2 `slow`): a negative Content-Length, NaN / Infinity numbers, `$`-anchored and `\d` name patterns, Windows device names, alias bombs / deep nesting, a session link out (MCP), the paid provider's confirmation, fixed; compatibility (17 fingerprints, templates, beds, cookbook, project mixes, Listen page: byte for byte); determinism; the phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Step 196's FFT finding: quick FFT lengths in the studio only (exact samples for videos and beds; byte-identity impossible otherwise), the same 16-bit audio, time_of_flight at 112 BPM 22 → 9 s and 2.2 → 1.3 GB; long pieces' stems streamed (a 5-minute piece no longer killed at 3 GB); exports block by block, at most 10 minutes; cleaning leaves a running studio's session alone; CRLF text stored as LF
 
 ---
 

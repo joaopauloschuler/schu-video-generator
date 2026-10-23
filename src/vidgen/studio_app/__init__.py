@@ -25,6 +25,21 @@ def _say(text: str) -> None:
     print(text, flush=True)  # at once, also when the output is a pipe
 
 
+def _running_session(studio: Path) -> str | None:
+    """The session a studio running on this folder has open (its ``open.json``), or ``None``.
+    Cleaning leaves it alone (Step 201: ``--clean`` or a second studio used to trim the very
+    renders the first one's page was playing; that studio's own clean-up looks after them)."""
+    import json
+
+    from vidgen.studio_app.session import OPEN_FILE, SESSION_ID
+
+    try:
+        found = json.loads((studio / OPEN_FILE).read_text(encoding="utf-8")).get("session")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return found if isinstance(found, str) and SESSION_ID.match(found) else None
+
+
 def clean_studio_folder(project_root: Path | None, say: Callable[[str], None] = _say) -> dict[str, int]:
     """``vidgen studio --clean``: remove old renders of every session of the studio folder
     (those of each session's current, first and starred versions are kept) and exports older
@@ -36,11 +51,13 @@ def clean_studio_folder(project_root: Path | None, say: Callable[[str], None] = 
     if not (studio / "sessions").is_dir():
         say(f"no studio sessions in {studio}")
         return {"files": 0, "bytes": 0, "busy": 0, "kept_bytes": 0, "sessions": 0}
-    done = clean_studio(studio, None, ASKED_EXPORT_AGE)
+    open_id = _running_session(studio)
+    done = clean_studio(studio, open_id, ASKED_EXPORT_AGE)
     left = disk_use(studio, None)
     busy = f" ({done['busy']} in use, left for later)" if done["busy"] else ""
+    skipped = f"; session {open_id} is open in a running studio, left as it is" if open_id else ""
     say(f"studio {studio}: {done['sessions']} session(s); removed {done['files']} old render and export files, "
-        f"{done['bytes'] / 1e6:.0f} MB{busy}; renders left {left['studio_renders'] / 1e6:.0f} MB (versions, notes and checks are kept)")
+        f"{done['bytes'] / 1e6:.0f} MB{busy}; renders left {left['studio_renders'] / 1e6:.0f} MB (versions, notes and checks are kept){skipped}")
     return done
 
 
@@ -51,10 +68,11 @@ def run_studio(project_root: Path | None, port: int = 0, open_browser: bool = Tr
     app = StudioApp(project_root)
     server = StudioServer(app, port)
     app.studio.mkdir(parents=True, exist_ok=True)
+    other = _running_session(app.studio)  # another studio still running on this folder
     write_open_marker(app.studio, server.url, None)
     say(f"vidgen studio: {server.url}")
     say(f"sessions: {app.studio / 'sessions'}")
-    cleaned = clean_studio(app.studio, None)
+    cleaned = clean_studio(app.studio, other)
     if cleaned["bytes"]:
         say(f"removed {cleaned['bytes'] / 1e6:.0f} MB of old renders and exports (versions are kept)")
     say("press Ctrl+C to stop it")

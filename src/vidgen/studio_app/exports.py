@@ -11,6 +11,7 @@ samples a video plays.
 
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ from typing import Any
 import numpy as np
 
 from vidgen.errors import VidgenError
-from vidgen.fileio import write_bytes_atomic, write_text_atomic
+from vidgen.fileio import replace_file, write_bytes_atomic, write_text_atomic
 
 #: Formats a version exports as.
 FORMATS = ("yaml", "wav", "mp3")
@@ -26,7 +27,9 @@ FORMATS = ("yaml", "wav", "mp3")
 #: N times round the loop, or N seconds (looped as a video loops it, faded out at the end).
 LENGTHS = ("once", "loops", "seconds")
 MAX_LOOPS = 64
-MAX_SECONDS = 1800
+#: The longest export (s; N loops too): a score is at most 10 minutes, and a 30-minute export
+#: took more than 3 GB before Step 201 (a video loops its music by itself anyway).
+MAX_SECONDS = 600
 #: The fade-out at the end of an N-seconds export (s; shorter for a short one).
 FADE_OUT_SECONDS = 2.0
 #: Levels: name -> (LUFS, words). A video's music level (vidgen plays it at volume 0), or the
@@ -37,9 +40,11 @@ LEVELS: dict[str, tuple[float, str]] = {
 }
 LISTENING_PEAK_DBTP = -1.0
 #: A file the server sends from the session's exports: a name, then the format's suffix.
-EXPORT_NAME = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,95}\.(yaml|wav|mp3)$")
+EXPORT_NAME = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,95}\.(yaml|wav|mp3)\Z")
 #: A project piece's name (``assets/music/<name>.yaml``, ``music: <name>``).
-PIECE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+PIECE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}\Z")
+#: Names Windows keeps for devices (``con.yaml`` would be the console, not a file).
+WINDOWS_RESERVED = re.compile(r"^(con|prn|aux|nul|com[0-9]|lpt[0-9])\Z")
 
 
 def slug(text: str) -> str:
@@ -59,34 +64,60 @@ def export_audio(score: Any, length: str, count: float | None, level: str) -> tu
         raise VidgenError(f"export: length is one of {', '.join(LENGTHS)}, got {length!r}")
     if level not in LEVELS:
         raise VidgenError(f"export: level is one of {', '.join(LEVELS)}, got {level!r}")
-    warnings: list[str] = []
-    audio = np.asarray(render_music_score(score, warnings), dtype=np.float64)
     if length == "loops":
         if not score.loop:
             raise VidgenError("export: this piece plays once (loop: false), so it has no loops: export it once or as N seconds")
         if not isinstance(count, (int, float)) or isinstance(count, bool) or int(count) != count or not 1 <= count <= MAX_LOOPS:
             raise VidgenError(f"export: loops is a whole number from 1 to {MAX_LOOPS}")
-        audio = np.tile(audio, (int(count), 1))
+        if count * score.samples > MAX_SECONDS * RATE:
+            raise VidgenError(f"export: {int(count)} loops of {score.samples / RATE:.0f} s is longer than {MAX_SECONDS // 60} minutes; export fewer loops")
     elif length == "seconds":
-        if not isinstance(count, (int, float)) or isinstance(count, bool) or not 1 <= count <= MAX_SECONDS:
+        if not isinstance(count, (int, float)) or isinstance(count, bool) or not math.isfinite(count) or not 1 <= count <= MAX_SECONDS:
             raise VidgenError(f"export: seconds is a number from 1 to {MAX_SECONDS}")
+    warnings: list[str] = []
+    piece = np.asarray(render_music_score(score, warnings), dtype=np.float64)
+    once = len(piece)
+    # the export is made and measured block by block (a long one never holds more than one
+    # float32 copy): the same samples as tiling the whole piece, fading and scaling it at once
+    fade = 0
+    if length == "loops":
+        n = int(count) * once
+    elif length == "seconds":
         n = int(round(count * RATE))
-        cut = score.loop or n < len(audio)  # the music goes on past the end: fade it out
+        cut = score.loop or n < once  # the music goes on past the end: fade it out
+        fade = min(int(FADE_OUT_SECONDS * RATE), n // 4) if cut else 0
+    else:
+        n = once
+    ramp = np.linspace(1.0, 0.0, fade) if fade > 0 else None
+
+    def read(a: int, b: int) -> np.ndarray:
+        """Samples ``a .. b`` of the export before its gain."""
+        at = np.arange(a, b)
         if score.loop:
-            audio = np.tile(audio, (n // len(audio) + 1, 1))[:n]
+            part = piece[at % once]
         else:
-            audio = np.concatenate([audio, np.zeros((max(0, n - len(audio)), 2))])[:n]
-        fade = min(int(FADE_OUT_SECONDS * RATE), n // 4)
-        if cut and fade > 0:
-            audio[-fade:] *= np.linspace(1.0, 0.0, fade)[:, None]
+            part = np.zeros((b - a, 2))
+            inside = at < once
+            part[inside] = piece[at[inside]]
+        if ramp is not None and b > n - fade:
+            first = max(a, n - fade)
+            part[first - a :] *= ramp[first - (n - fade) : b - (n - fade)][:, None]
+        return part
+
     target, words = LEVELS[level]
     gain = 10 ** ((target - (-28.0)) / 20)
     if level == "listening":
-        peak = float(loudness.peak_envelope(audio).max()) * gain
+        peak = 0.0
+        for lo, hi, ext in loudness.blocks(n, read):
+            peak = max(peak, float(loudness.peak_envelope(ext)[loudness.MARGIN : loudness.MARGIN + hi - lo].max()))
+        peak *= gain
         limit = 10 ** (LISTENING_PEAK_DBTP / 20)
         if peak > limit:
             gain *= limit / peak
-    audio = np.clip(audio * gain, -1.0, 1.0).astype(np.float32)
+    audio = np.empty((n, 2), dtype=np.float32)
+    for lo in range(0, n, loudness.BLOCK):
+        hi = min(n, lo + loudness.BLOCK)
+        audio[lo:hi] = np.clip(read(lo, hi) * gain, -1.0, 1.0)
     meter = loudness.measure(len(audio), lambda a, b: audio[a:b])
     facts = {
         "seconds": round(len(audio) / RATE, 3),
@@ -128,8 +159,11 @@ def write_export(folder: Path, name: str, fmt: str, text: str | None = None, aud
 
         assert audio is not None
         partial = folder / f".partial-{name}"
-        write_mp3(audio, partial)
-        partial.replace(target)
+        try:
+            write_mp3(audio, partial)
+            replace_file(partial, target)  # retried while the browser still holds the last download (Windows)
+        finally:
+            partial.unlink(missing_ok=True)
     return target
 
 
@@ -157,6 +191,8 @@ def save_to_project(root: Path | None, name: str, text: str, overwrite: bool = F
     name = name.strip()
     if not PIECE_NAME.match(name):
         raise VidgenError(f"save to project: '{name}' is not a piece name: use lower-case letters, digits, '_' or '-' (e.g. my_theme), up to 64")
+    if WINDOWS_RESERVED.match(name):
+        raise VidgenError(f"save to project: '{name}' is a name Windows keeps for a device; pick another, e.g. {name}_theme")
     if name in BUILTIN_BEDS:
         raise VidgenError(
             f"save to project: '{name}' is a built-in bed's name; a piece with it would make music: {name} ambiguous (vidgen reports that as a "

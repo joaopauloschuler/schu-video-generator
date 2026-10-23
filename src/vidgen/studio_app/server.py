@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import socket
 import sys
@@ -267,6 +268,8 @@ class _Handler(BaseHTTPRequestHandler):
         elif path == "/api/proposal/paste":
             result = app.paste_reply(_req_str(body, "reply"))
         elif path == "/api/proposal/send":
+            if body.get("confirm") is not True:  # it costs money: only what the person confirmed on the page
+                raise _ApiError(HTTPStatus.BAD_REQUEST, "send: the person must confirm the cost first (confirm: true)")
             result = app.send_to_provider(_req_str(body, "model"))
         elif path == "/api/cleanup":
             result = app.clean_up()
@@ -291,6 +294,8 @@ class _Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             raise _ApiError(HTTPStatus.BAD_REQUEST, "bad Content-Length") from None
+        if length < 0:  # read(-1) would wait for the client to close (and read without limit)
+            raise _ApiError(HTTPStatus.BAD_REQUEST, "bad Content-Length")
         if length > MAX_BODY_BYTES:
             raise _ApiError(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, f"request too large (at most {MAX_BODY_BYTES} bytes)")
         try:
@@ -312,6 +317,10 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        if status >= 400:
+            # a refused request's body may not have been read: the connection cannot carry another
+            self.send_header("Connection", "close")
+            self.close_connection = True
         self._common_headers()
         self.end_headers()
         if self.command != "HEAD":
@@ -350,8 +359,10 @@ class _Handler(BaseHTTPRequestHandler):
 
 def _int(value: Any, name: str) -> int:
     try:
+        if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+            raise ValueError(value)
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise _ApiError(HTTPStatus.BAD_REQUEST, f"{name}: expected a whole number, got {value!r}") from None
 
 
@@ -361,7 +372,9 @@ def _opt_int(body: dict[str, Any], name: str) -> int | None:
 
 
 def _number(value: Any, name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    # JSON as Python reads it allows NaN and Infinity; no call wants them (a note at NaN seconds
+    # would make its file unreadable to strict JSON readers such as agents)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise _ApiError(HTTPStatus.BAD_REQUEST, f"{name}: expected a number, got {value!r}")
     return value
 

@@ -22,7 +22,7 @@ import math
 import threading
 import time
 from collections import OrderedDict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,6 +38,10 @@ STEM_CACHE_BYTES = 768 << 20
 #: Threads for the mix's master filter (one per channel) and loudness: the same samples as on
 #: one, in about half the time on two cores. Tracks render one at a time (memory).
 THREADS = 2
+#: Filters and reverb on quick FFT lengths when a piece's length is a slow one (Step 201,
+#: DESIGN.md §94.19): within about 1e-14 of the exact samples, the same 16-bit audio, 2–3 times
+#: faster and a third less memory on such pieces (exports render exactly, as videos do).
+FAST_FFT = True
 #: A meter frame (s): the level of each stem per frame.
 METER_SECONDS = 0.05
 #: The quietest level a meter reports (dBFS as heard); quieter is this.
@@ -245,28 +249,44 @@ def stem_bytes(score: Any) -> int:
 
 @dataclass
 class StemSet:
-    """The stems of one score: by track name, the keys, and which were rendered now (seconds)."""
+    """The stems of one score: by track name, the keys, and which were rendered now (seconds).
+    ``streamed`` (Step 201): the score's stems do not fit the cache together (a long piece: a
+    5-minute stem is 235 MB) — then ``stems`` is empty and :meth:`get` gives each when asked
+    (kept, or rendered then and kept while it fits), so a mix holds one stem besides its sum
+    instead of all of them; ``rendered`` / ``scaled`` fill in as they are asked for."""
 
     stems: dict[str, CachedStem]
     keys: dict[str, TrackKey]
     rendered: dict[str, float]  # tracks rendered now: seconds
     scaled: dict[str, float]  # tracks whose kept stem was set to a new volume: seconds
     seconds: float
+    streamed: bool = False
+    fetch: Callable[[str], CachedStem] | None = None
+
+    def get(self, name: str) -> CachedStem:
+        """Track ``name``'s stem (rendered now when it is streamed and not kept)."""
+        if name in self.stems:
+            return self.stems[name]
+        assert self.fetch is not None, name
+        return self.fetch(name)
 
 
 def score_stems(cache: StemCache, data: Mapping[str, Any], score: Any) -> StemSet:
     """Every track's stem of ``score``: from ``cache`` when its key is there; a kept stem of the
     track at another volume scaled when only its (plain) volume changed; else rendered and kept.
-    The stems dict is in the score's track order."""
+    The stems dict is in the score's track order. When they cannot all be kept at once
+    (:attr:`StemSet.streamed`), nothing is rendered here: :meth:`StemSet.get` does it."""
     from vidgen.studio.render import render_track_stem
 
     began = time.perf_counter()
     keys = track_keys(data, score)
-    keep = [k.key for k in keys.values()]
-    stems: dict[str, CachedStem] = {}
-    missing: list[str] = []
+    streamed = len(keys) * stem_bytes(score) > cache.budget
+    keep = [] if streamed else [k.key for k in keys.values()]
+    rendered: dict[str, float] = {}
     scaled: dict[str, float] = {}
-    for name, key in keys.items():
+
+    def kept(name: str) -> CachedStem | None:
+        key = keys[name]
         found = cache.get(key.key)
         if found is None and key.level_key is not None and key.volume is not None:
             other = cache.at_level(key.level_key)
@@ -274,21 +294,30 @@ def score_stems(cache: StemCache, data: Mapping[str, Any], score: Any) -> StemSe
                 found = other.at_volume(key.volume, key)
                 cache.put(key.key, found, keep)
                 scaled[name] = round(found.seconds, 3)
-        if found is None:
-            missing.append(name)
-        else:
-            stems[name] = found
+        return found
 
     def render(name: str) -> CachedStem:
         t0 = time.perf_counter()
-        stem = render_track_stem(score, name)
-        return CachedStem(stem, frame_power(stem.piece), time.perf_counter() - t0, keys[name].level_key, keys[name].volume)
+        stem = render_track_stem(score, name, fast_fft=FAST_FFT)
+        item = CachedStem(stem, frame_power(stem.piece), time.perf_counter() - t0, keys[name].level_key, keys[name].volume)
+        cache.put(keys[name].key, item, keep)
+        rendered[name] = round(item.seconds, 3)
+        return item
 
+    if streamed:
+        def fetch(name: str) -> CachedStem:
+            found = kept(name)
+            if found is None:
+                cache.make_room(stem_bytes(score))  # room for this one before it renders
+                found = render(name)
+            return found
+
+        return StemSet({}, keys, rendered, scaled, time.perf_counter() - began, True, fetch)
+    stems = {name: found for name in keys if (found := kept(name)) is not None}
+    missing = [name for name in keys if name not in stems]
     if missing:
         cache.make_room(len(missing) * stem_bytes(score), keep)
-    made: dict[str, CachedStem] = {}
     for name in missing:  # one at a time: a heavy track's render takes hundreds of MB while it runs
-        made[name] = stems[name] = render(name)
-        cache.put(keys[name].key, made[name], keep)
+        stems[name] = render(name)
     ordered = {name: stems[name] for name in keys}
-    return StemSet(ordered, keys, {n: round(made[n].seconds, 3) for n in missing}, scaled, time.perf_counter() - began)
+    return StemSet(ordered, keys, rendered, scaled, time.perf_counter() - began)

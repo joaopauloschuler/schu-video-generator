@@ -28,7 +28,7 @@ from vidgen.fileio import write_bytes_atomic, write_text_atomic
 #: Bumped when what the studio keeps of a check changes (older ones are made again).
 STUDIO_CHECK_FORMAT = 1
 #: A check's picture: ``<render key>-check.png``.
-CHECK_IMAGE = re.compile(r"^([0-9a-f]{20})-check\.png$")
+CHECK_IMAGE = re.compile(r"^([0-9a-f]{20})-check\.png\Z")
 #: A check starts once no render has been asked for or made for this long (s).
 CHECK_AFTER_SECONDS = 0.4
 

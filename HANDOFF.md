@@ -18430,3 +18430,121 @@ Known gaps
   restarted on another port is not found (the page must be opened at the new address).
 - `vidgen studio --clean` while a studio runs on the same folder cleans its open session by the
   start rule too (renders come back when played).
+
+## Step 201 — Review of Phase T (vidgen studio)
+
+What was reviewed and fixed (DESIGN §94.19; one test per attack in `tests/test_phase_t_review.py`)
+- **Server guards** (all held: 127.0.0.1 only, exact Host, same-origin JSON POSTs, 2 MB, CSP).
+  Fixed: a negative `Content-Length` made `rfile.read(-1)` wait for the client to close and read
+  without limit (now 400); 4xx / 5xx answers close the connection (an unread body could have been
+  read as the next request); JSON `NaN` / `Infinity` were accepted as numbers (a note at NaN
+  seconds), `version: 1.5 / true / Infinity` were cast or crashed with 500 — now 400.
+- **Path names**: URL paths are never decoded and every file comes from an allow-list or a strict
+  name pattern — held for `..`, `%2e%2e`, backslashes, drive letters, UNC paths on every prefix.
+  Fixed: every name / id pattern ended in `$` (lets a trailing newline through; a query string is
+  decoded, so `?key=…%0A` reached `RENDER_KEY`) and used `\d` (other scripts' digits): now `\Z`
+  and `[0-9]` (session, batch, inbox, note ids, render keys, audio / picture / export names, the
+  studio's and the score format's section / track names). Save to project: Windows device names
+  (`con`, `nul`, `com1`…) refused; links out of the project were already refused (tested).
+- **YAML**: safe loader everywhere (python tags are problems, tested). Fixed: an alias "bomb" as a
+  title took 30 s and gigabytes in the score's checks — refused above 200 000 expanded values
+  before the document is built; deep nesting was a `RecursionError` (500) — now a problem;
+  steps written as a list of lists were a `TypeError` in `patterns.parse_steps` (a 500 here, a
+  traceback in the CLI) — now the steps problem.
+- **MCP studio tools**: ids checked before paths; links out of the root not followed (held).
+  Fixed: a session folder that is a link out of its studio folder is refused (an agent writes
+  `inbox/` there).
+- **OpenRouter**: key only from the environment at send time, sent only to openrouter.ai, scrubbed
+  from errors, never returned (tested on `/api/info`, `/api/session`, `/api/ask`). Fixed: the
+  server now requires `confirm: true` on `/api/proposal/send` (the page sends it only from "Send
+  now"); `test_studio_agent.test_routes` would have called the real provider on a machine with
+  `OPENROUTER_API_KEY` set — it now clears it and stubs the call.
+- **Windows**: section cuts made under the render lock (two requests at once wrote one file twice;
+  the second replace fails on Windows while the first is streamed); MP3 exports replace through
+  `fileio.replace_file` (retries) and remove their partial file; text with `\r\n` (a pasted reply)
+  is stored as `\n` (`session.normal_text`), so a version reads back as written; Ctrl+C with a
+  check running: process gone in 0.14 s (Linux; `app.close()` also stops the late facts).
+- **Cleaning races** (Step 200's gap): `--clean` and a second studio's start-up clean leave the
+  session a running studio has open alone (`open.json`); the automatic clean keeps the last 6
+  renders asked for (an A/B side or a candidate playing is not removed under the page).
+- **FFT finding (Step 196)**: byte-identity is impossible with any other FFT length (even scipy's
+  FFT of the same length rounds differently), and shipped scores use slow lengths themselves
+  (ascent 2647, breakthrough 1607, a cookbook sketch 2857), so videos and beds keep the exact
+  path. The studio (only) filters slow lengths (largest prime factor > 500, ≥ 65 536 samples) on
+  a quick length ≥ 2n and folds back (`effects.CircularFFT`, `fast_fft` keywords, default off):
+  stems within 5e-15 of the exact ones on real pieces, the studio's audition WAV byte-identical
+  to one made from `render_music_score` (tested: a slow test score, ascent, breakthrough; also
+  measured on time_of_flight 112, tidewater 112). Bit-identical memory savings in the renderer
+  for everyone: `swept_filter` per channel with at most 400 MB of copies at once; `_render_bus`
+  frees its group buffers and blends in place.
+- **Long pieces**: a 5-minute time_of_flight was killed at 3 GB in the studio (all stems held)
+  and in `render_music_score` itself. Now stems that do not fit the 768 MB cache together are
+  streamed (`StemSet.streamed`): studio render 73 s / 2.3 GB, its check 2.8 GB; `render_music_score`
+  88 s / 2.75 GB. A 30-minute export was killed at 3 GB: exports are now made block by block
+  (the same samples, 14 cases by SHA-256 + a test against the Step 197 code) and capped at 10
+  minutes (was 30; the page's field too): 600 s MP3 at 803 MB.
+
+Timings (two cores, StudioApp; `<scratchpad>/s201/latency.py`, HEAD → now)
+
+| | before | after |
+|---|---|---|
+| time_of_flight tempo 108 → 112 | 22.1 s, peak 2187 MB | 9.1 s, 1271 MB |
+| then a pad filter edit | 8.8 s | 3.8 s |
+| time_of_flight first render | 8.1 s | 6.2 s |
+| ascent first render (its own tempo is slow) | 7.7 s, 1441 MB | 5.6 s, 989 MB |
+| tidewater tempo +4 | 4.0 s, 1433 MB | 2.8 s, 1041 MB |
+| momentum tempo +4 | 4.4 s, 1352 MB | 3.1 s, 988 MB |
+| stems + mix alone, time_of_flight 112 | 20.9 s, 1777 MB | 8.2 s, 1123 MB |
+
+Compatibility (hard rule)
+- SHA-256 of the 17 templates' renders, both test demos, the five cookbook sketches and the 17
+  beds' loops: HEAD (`git archive` into `<scratchpad>/s201/head`) = now (`hash_before.json` =
+  `hash_after.json`, which also cover the 17 fingerprints' sources); `test_music -k
+  bed_sounds_as_approved` 17 passed.
+- Project mixes (`s201/mixcompare.py`, s191's script deleting its files as it goes: the disk is
+  nearly full): file + momentum, tidewater + skyline, gradient-descent, iso-web-page,
+  host-explainer, gps-time-of-flight — identical HEAD vs now.
+- The Listen page made again equals `docs/music` file for file (53 files). Gallery: `studio`
+  is not a render input, nothing else changed.
+- Studio exports: 14 cases identical HEAD vs now (`export_hash.py`).
+
+Files touched
+- New: `tests/test_phase_t_review.py` (21; 2 `slow`).
+- Changed: `src/vidgen/studio/effects.py` (`CircularFFT`, `slow_fft_length`, `fast_fft_length`,
+  per-channel sweep, `SWEEP_MEMORY`), `render.py` (`fast_fft`, `_Canvas.release`, in-place bus),
+  `patterns.py`, `score_file.py`; `src/vidgen/studio_app/` `__init__.py`, `agent.py`, `app.py`,
+  `checks.py`, `edits.py`, `exports.py`, `notes.py`, `server.py`, `session.py`, `song.py`,
+  `stems.py`, `variations.py`, `static/api.js`, `static/exports.js`; tests `test_studio_agent.py`
+  (no real provider), `test_studio_stems.py` (budget test for streaming); `docs/CONFIG.md`,
+  `DESIGN.md` (§94.19, §94.1), `CHANGELOG.md`, `tasklist.md`.
+
+Public interfaces: no `vidgen.api` names; listed in DESIGN §94.19 (`fast_fft` keywords default off).
+
+How to test (one at a time, capped)
+- `test_phase_t_review` 19 + 2 slow passed; `test_studio_app` + `song` + `inspector` 44;
+  `test_studio_stems` (all, incl. the 17 templates) 32; `test_studio_stems` (not slow) +
+  `check` + `agent` + `cleanup` 44 (`PYTHONPATH=<repo>`); `test_studio_variations` +
+  `test_phase_s_review` 33; `test_studio` + `test_music_check` + `test_music_pieces` +
+  `test_listen` 85; `test_music_templates` 25; `test_music -k bed_sounds_as_approved` 17;
+  `test_studio_ui -m ui` 19; `test_mcp` in full (capped3g) 20 in 129 s; `test_docs` +
+  `test_guide` + `test_packaging` 119. Not run: the full suite.
+
+Files to look at
+- Screenshots: `<scratchpad>/s201/shots/1-export-over-600-dark.png` / `-light.png` (the
+  10-minute limit's message), `2-provider-confirm.png`, `3-provider-proposal.png` (OpenRouter
+  mocked), `4-narrow.png`. Scripts: `fast_fft.py`, `fft_bench.py`, `latency.py`,
+  `long_score.py`, `long_render.py`, `track_mem.py`, `export_hash.py`, `yaml_probe.py`,
+  `ctrl_c.py`, `listen_check.py`, `mixcompare.py`.
+
+Known gaps
+- Windows itself was not run here (Ctrl+C, file locks, `SO_EXCLUSIVEADDRUSE`, device names are
+  reasoned and unit-tested only). Closing the console window (not Ctrl+C) leaves `open.json`;
+  cleaning then skips that session until a studio runs again.
+- A heavy 10-minute piece still needs more than 3 GB to render (videos too); the studio's check
+  of a long piece renders evicted stems again (minutes). The quick FFT lengths are the studio's
+  only: exporting a slow-length piece is as slow as before.
+- The YAML expansion limit is the studio's; `vidgen music check FILE` on an alias bomb is still
+  slow (local files only). No limit on how many sessions a studio folder holds.
+- At 420 px a short last section's name is cut ("t…"), as before.
+- The disk of this workspace is almost full (about 150 MB free; old scratch venvs take most of
+  it): long-piece checks and big exports were measured and their files removed at once.
