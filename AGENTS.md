@@ -295,8 +295,8 @@ project's own scene types, in its theme).
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
-| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the action zoom_to |
-| molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked) | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, modifications…), `species`, `compartment` |
+| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the actions zoom_to, motor_walk, endocytosis, exocytosis |
+| molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
@@ -532,6 +532,36 @@ the matrix or stroma); `faces:` states it and is checked. Names: `gene: TP53` is
 checked for the `species` (mouse `Trp53`, yeast `CDC28`), `protein: p53` in roman;
 `modifications: [{mark: P, at: Ser15}]` (P, Ub, Ac, Me; phosphate never on Lys). Labels take Pango
 markup: `β<sub>2</sub>`, `Ca<sup>2+</sup>`, `<i>lacZ</i>`.
+
+Processes are actions. In a `molecule` scene give `solutes` (`[K+, Na+]`: particles at typical
+concentrations, or `{solute: o2, mM: {extracellular: 0.2, cytosol: 0.02}}`) and `potential: -70`
+for a live readout; then `set_state` (`{set_state: kv, state: open}`: ion channels closed / open /
+inactivated, carriers outward / occluded / inward, the Na⁺/K⁺ pump e1 / e1p / e2p / e2, GPCRs
+active), `transport` (an open channel's ions down their gradient; a carrier's cycles —
+`transporter: sglt1`, `ncx`, `glut1`…; the pump's Post–Albers cycle with ATP → ADP + Pᵢ;
+`h_atpase`, `abc_transporter`, `aquaporin`), `diffuse` (a solute, simple diffusion: O₂, CO₂ across
+a bilayer, anything in a solution), `osmosis: membrane` and `action_potential: membrane` (needs
+voltage-gated Na⁺ and K⁺ channels; an inset trace). In a `cell`: `motor_walk` (kinesin to the +
+end, dynein to the − end; `distance`), `endocytosis: cell` (a coated pit at a 300–500 nm view of
+the plasma membrane) and `exocytosis: <vesicle id>`. The rules are checked with the reason: Na⁺
+through a K⁺ channel, ions through a closed channel, an antiporter moving both solutes one way,
+transport against the gradient without ATP or an ion gradient, kinesin to the − end.
+
+```yaml
+# processes
+- id: firing
+  type: molecule
+  params:
+    membrane: plasma
+    potential: -70
+    solutes: [K+, Na+]
+    molecules: [{kind: ion_channel, id: nav, ion: Na+}, {kind: ion_channel, id: kv, ion: K+}, {kind: na_k_atpase, id: pump}]
+  beats:
+    - text: "At threshold the neuron fires an action potential."
+      actions: [{action_potential: membrane, at: "@threshold"}]
+    - text: "The pump spends one ATP to move three sodium ions out and two potassium ions in."
+      actions: [{transport: pump, at: "@pump"}]
+```
 
 ```yaml
 # data
@@ -969,6 +999,14 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; labels it would cut fade out; `focus: diagram` goes back to the whole frame | at most one or two per scene |
 | `relabel` | on an `iso_diagram`: a label or value changes in place (`- relabel: "block:cache"`, `text: "Cache: hit"`) | a new value, a state change |
 | `zoom_to` | on a `cell`: the camera moves in µm to a level on an object and stays (`- zoom_to: mitochondria`; `level: tissue`, `cell`, `organelle`, `complex`; `width: "2 um"`; `labels: false` or a list of the parts to name); details appear as they grow, the scale bar follows; `zoom_to: cell` goes back | one level change per idea, on the word that names the target |
+| `motor_walk` | on a `cell`: motors walk hand over hand along their filament with their cargo (`{motor_walk: kin, distance: 500 nm}`; kinesin to the + end, dynein to the − end; `toward` checked) | at a view of a few hundred nm to see the steps |
+| `endocytosis` | on a `cell`: a clathrin-coated pit buds in and is pinched off by dynamin (`endocytosis: cell`, `site: [x, y]`); captioned steps | at a 300–500 nm view of the plasma membrane, `labels: false` on it |
+| `exocytosis` | on a `cell`: a vesicle docks with SNAREs, fuses and releases its cargo (`exocytosis: <vesicle id>`, uncoated, in the cytosol) | likewise |
+| `set_state` | on a `molecule`: a molecule morphs to another state (`{set_state: kv, state: open}`; `until` turns it back) | before `transport` on a channel (ions pass only an open one) |
+| `transport` | on a `molecule`: a channel passes ions down their gradient (`count`), a carrier or pump runs its cycle (`cycles`: alternating access; the Na⁺/K⁺ pump's E1 → E1P → E2P → E2 with ATP → ADP + Pᵢ), each step captioned | one cycle per idea |
+| `diffuse` | on a `molecule`: a solute's particles random-walk with net flux down the gradient (`diffuse: oxygen`; across a bilayer only O₂, CO₂, water) | on the word that names the process |
+| `osmosis` | on a `molecule`: water moves to the side with more solute (`osmosis: membrane`), through aquaporins if any | |
+| `action_potential` | on a `molecule`: voltage-gated Na⁺ and K⁺ channels open, inactivate and close with a live Vₘ readout and an inset trace (`action_potential: membrane`) | |
 
 ```yaml
 - id: speeds

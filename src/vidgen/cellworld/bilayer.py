@@ -101,14 +101,21 @@ def samples(curves: Sequence[Cubic], center: Point, radius: float, spacing: floa
     return out
 
 
-def lipid_layout(world: CellWorld, curves: Sequence[Cubic], center: Point, radius: float, key: str, rafts: Sequence[Point] = ()) -> list[Lipid]:
+def lipid_layout(world: CellWorld, curves: Sequence[Cubic], center: Point, radius: float, key: str, rafts: Sequence[Point] = (),
+                 gaps: Sequence[tuple[Point, float, float, float]] = ()) -> list[Lipid]:
     """The lipids along ``curves`` within ``radius`` of ``center``: two per place (one per
     leaflet), each leaflet's kinds drawn from its membrane's composition; ``rafts`` are points
-    of the plasma membrane where a raft is (more sterol and glycolipid there)."""
+    of the plasma membrane where a raft is (more sterol and glycolipid there); none where a
+    membrane protein fills the bilayer (``gaps``: its centre, angle and span along the membrane
+    from its centre, µm)."""
     rng = rng_for("lipids", key, round(center[0], 4), round(center[1], 4))
     out: list[Lipid] = []
     cached: tuple[Point, tuple[str, int] | None] | None = None
     for p, n in samples(curves, center, radius, LIPID_SPACING):
+        if any(_in_gap(p, gap) for gap in gaps):
+            rng.random()
+            rng.random()                 # the lipids beyond keep their kinds
+            continue
         if cached is None or math.dist(cached[0], p) > 0.012:
             a = world.compartment_at((p[0] + n[0] * _PROBE, p[1] + n[1] * _PROBE))[0]
             b = world.compartment_at((p[0] - n[0] * _PROBE, p[1] - n[1] * _PROBE))[0]
@@ -125,6 +132,15 @@ def lipid_layout(world: CellWorld, curves: Sequence[Cubic], center: Point, radiu
             leaflet = "exo" if sign == exo else "cyto"
             out.append(Lipid(_pick(rng, lipids, leaflet, raft), head, out_dir, leaflet, membrane, raft))
     return out
+
+
+def _in_gap(p: Point, gap: tuple[Point, float, float, float]) -> bool:
+    """Whether the bilayer point ``p`` lies where a membrane protein fills the bilayer."""
+    (cx, cy), angle, x0, x1 = gap
+    dx, dy = p[0] - cx, p[1] - cy
+    c, s = math.cos(angle), math.sin(angle)
+    along, across = dx * c + dy * s, -dx * s + dy * c
+    return x0 - LIPID_SPACING * 0.6 <= along <= x1 + LIPID_SPACING * 0.6 and abs(across) < BILAYER
 
 
 def _pick(rng: object, lipids: Lipids, leaflet: str, raft: bool) -> str:

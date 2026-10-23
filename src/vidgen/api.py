@@ -607,6 +607,12 @@ from vidgen.cellworld.notation import charge_of, check_markup, chem_markup, chem
 from vidgen.cellworld.sequences import CODONS, check_sequence, check_trna, codons_read, reverse_complement  # noqa: E402
 from vidgen.cell_draw.closeup import HEAD_HUE as LIPID_HEAD_HUE, TAIL_HUE as LIPID_TAIL_HUE  # noqa: E402
 from vidgen.cell_draw.molecules import glyph_mobjects  # noqa: E402
+from vidgen.cellworld import transport as cell_transport, traffic as cell_traffic  # noqa: E402
+from vidgen.cell_draw.traffic import EventDrawing as CellEventDrawing  # noqa: E402
+from vidgen.cell_draw.cytoskeleton import motor_curves as cell_motor_curves, motor_parts as cell_motor_parts  # noqa: E402
+from vidgen.cellworld.glyphs import ION_FLOW as MOLECULE_ION_FLOW, Prim as MoleculePrim, carrier_parts, small_prims as molecule_small_prims  # noqa: E402
+from vidgen.cellworld.molecules import IONS as MOLECULE_ION_RADII, ION_HUES as MOLECULE_ION_HUES, TRANSPORTERS as MOLECULE_TRANSPORTERS  # noqa: E402
+from vidgen.cellworld.molecules import TYPICAL_CONCENTRATIONS, pump_type as molecule_pump_type  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -1530,6 +1536,20 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "protein_markup",
     "protein_size",
     "reverse_complement",
+    "MOLECULE_ION_FLOW",
+    "MOLECULE_ION_HUES",
+    "MOLECULE_ION_RADII",
+    "MOLECULE_TRANSPORTERS",
+    "MoleculePrim",
+    "TYPICAL_CONCENTRATIONS",
+    "carrier_parts",
+    "cell_transport",
+    "cell_traffic",
+    "CellEventDrawing",
+    "cell_motor_curves",
+    "cell_motor_parts",
+    "molecule_pump_type",
+    "molecule_small_prims",
     "did_you_mean",
     "format_length",
     "parse_coordinate",

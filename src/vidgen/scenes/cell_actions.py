@@ -61,3 +61,104 @@ class ZoomTo(Action):
             return []
         width, center = before
         return scene.cell_camera(width, center)  # type: ignore[attr-defined]
+
+
+def _cell_problem(action: Action, scene_cls: type[NarratedScene], params: Any, name: str) -> list[tuple[str, str]]:
+    """A cell scene, one target, then the scene's own check of this use."""
+    if not getattr(scene_cls, "cell_actions", False):
+        return [("action", f"{name} is a cell action; this scene is not a cell")]
+    targets = action.config.targets()
+    if len(targets) != 1 or any(ch in targets[0] for ch in "*?["):
+        return [("target", f"{name} acts on one target (one id, no wildcards)")]
+    problem = scene_cls.traffic_problem(params, name, targets[0], action.options)  # type: ignore[attr-defined]
+    return [("target", problem)] if problem else []
+
+
+@action("motor_walk")
+class MotorWalk(Action):
+    """Motor proteins walk along their filament, hand over hand, carrying their cargo:
+    ``{motor_walk: kin, distance: 1 um}`` — kinesin-1 in 8 nm steps to the microtubule's + end
+    (out to the cell's edge), dynein in 8 nm steps to its − end (in to the centrosome), myosin V
+    in 36 nm steps to the actin filament's barbed end; ``toward: minus`` on a kinesin is refused
+    with the reason. Up close each step shows; from afar the motor glides."""
+
+    class Options(ActionOptions):
+        distance: float | str | None = None
+        """How far ('500 nm', '1.2 um'; a number is µm); default: as far as its filament allows, at most 1 µm."""
+        toward: Literal["plus", "minus"] | None = None
+        """The end it walks to (checked: kinesin plus, dynein minus, myosin V plus)."""
+
+        @field_validator("distance", mode="before")
+        @classmethod
+        def _distance(cls, value: Any) -> float | None:
+            return None if value is None else parse_length(value, "distance")
+
+    run_time = 2.5
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        return _cell_problem(self, scene_cls, params, "motor_walk")
+
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        """At the motor's real speed (kinesin about 0.8 µm/s), between 1.5 and 8 s."""
+        return scene.walk_time(targets[0].name, self.options.distance)  # type: ignore[attr-defined]
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Walk the motors."""
+        return scene.run_motor_walk(targets[0].name, self.options.distance)  # type: ignore[attr-defined]
+
+
+@action("endocytosis")
+class Endocytosis(Action):
+    """Clathrin-mediated endocytosis at the plasma membrane (``endocytosis: cell``): receptors
+    with their ligands gather where AP2 and clathrin assemble a coated pit, the pit invaginates,
+    dynamin pinches the vesicle off and the coat comes away; each step captioned. ``site``
+    chooses the place (default: the plasma membrane nearest the middle of the view)."""
+
+    class Options(ActionOptions):
+        site: tuple[float | str, float | str] | None = None
+        """A point near the plasma membrane ([x, y] µm from the cell's centre); default: the membrane nearest the view's middle."""
+        receptors: int = Field(6, ge=0, le=12)
+        """Receptor–ligand complexes taken in."""
+        notes: bool = True
+        """Caption each step."""
+
+        @field_validator("site", mode="before")
+        @classmethod
+        def _site(cls, value: Any) -> Any:
+            if value is None:
+                return None
+            if not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise ValueError("site is [x, y] in µm from the cell's centre")
+            return (parse_coordinate(value[0], "site x"), parse_coordinate(value[1], "site y"))
+
+    run_time = 6.0
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        return _cell_problem(self, scene_cls, params, "endocytosis")
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Play the endocytosis."""
+        return scene.run_endocytosis(self.options)  # type: ignore[attr-defined]
+
+
+@action("exocytosis")
+class Exocytosis(Action):
+    """A vesicle fuses with the plasma membrane (``exocytosis: secretory``): it docks as its
+    v-SNARE zippers with the membrane's t-SNAREs, a fusion pore opens and its cargo leaves the
+    cell, and its membrane flattens into the plasma membrane. Only an uncoated vesicle in the
+    cytosol fuses (a coated one is refused: it sheds its coat first)."""
+
+    class Options(ActionOptions):
+        cargo: int = Field(10, ge=0, le=30)
+        """Cargo molecules released."""
+        notes: bool = True
+        """Caption each step."""
+
+    run_time = 5.0
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        return _cell_problem(self, scene_cls, params, "exocytosis")
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Play the fusion."""
+        return scene.run_exocytosis(targets[0].name, self.options)  # type: ignore[attr-defined]

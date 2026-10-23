@@ -22,7 +22,7 @@ from .geometry import Capsule, Ellipse, Point, RoundedBox
 from .model import did_you_mean
 from .molecules import (
     BILAYER_NM, C_RING, CARRIER_MODES, DNA_RISE, DNA_WIDTH, GATINGS, ION_HUES, IONS, MOLECULES, NUCLEOSOME_BP, NUCLEOSOME_TURNS, RRNA_TYPES,
-    molecule_kind, pitch, protein_size,
+    TRANSPORTERS, molecule_kind, pitch, protein_size, pump_type,
 )
 from .names import MODIFICATIONS, check_modification, histone_mark
 from .notation import chem_markup
@@ -82,7 +82,10 @@ class MoleculeSpec:
     channels' ``gating`` and ``ion``; carriers' ``mode``, ``substrates``, ``moves`` (in /
     out); ATP synthase ``c_subunits``; mRNA ``cap`` and ``tail``; an ion's ``ion``;
     ``modifications`` ((mark, residue or None), …); the ``membrane`` it is in (for defaults);
-    ``where`` names it in errors."""
+    ``where`` names it in errors; a carrier's ``ratio`` (how many of each substrate per cycle)
+    or a named ``transporter`` (``sglt1``: its mode, substrates, moves and ratio); ``bare``: the
+    protein alone, without its bound solutes, flow arrows and stoichiometry (a transport
+    animation moves those itself)."""
 
     kind: str
     state: str | None = None
@@ -109,6 +112,9 @@ class MoleculeSpec:
     modifications: tuple[tuple[str, ...], ...] = ()
     membrane: str | None = None
     where: str = ""
+    ratio: tuple[int, ...] = ()
+    transporter: str | None = None
+    bare: bool = False
 
 
 #: Which kinds take each option (others refuse it).
@@ -116,8 +122,8 @@ OPTION_KINDS: dict[str, tuple[str, ...]] = {
     "bp": ("dna",), "sequence": ("dna", "mrna"), "letters": ("dna", "mrna"), "anticodon": ("trna",), "amino_acid": ("trna",),
     "style": ("trna",), "rrna": ("rrna",), "marks": ("nucleosome", "chromatin"), "nucleosomes": ("chromatin",),
     "domains": ("protein",), "mass": ("protein",), "ligand": ("gpcr", "ion_channel"), "gating": ("ion_channel",),
-    "ion": ("ion_channel", "ion"), "mode": ("carrier",), "substrates": ("carrier",), "moves": ("carrier",),
-    "c_subunits": ("atp_synthase",), "cap": ("mrna",), "tail": ("mrna",),
+    "ion": ("ion_channel", "ion"), "mode": ("carrier",), "substrates": ("carrier", "abc_transporter"), "moves": ("carrier", "abc_transporter"),
+    "c_subunits": ("atp_synthase",), "cap": ("mrna",), "tail": ("mrna",), "ratio": ("carrier",), "transporter": ("carrier",),
 }
 #: Ions move this way through channels by their usual gradients (in: to the cytosolic side).
 ION_FLOW = {"K+": "out", "Na+": "in", "Ca2+": "in", "Cl-": "in", "H+": "in", "Mg2+": "in"}
@@ -157,7 +163,15 @@ def check_molecule(spec: MoleculeSpec) -> MoleculeSpec:
         raise VidgenError(f"{where}: ion '{spec.ion}': use {', '.join(IONS)}{did_you_mean(spec.ion, list(IONS))}")
     if spec.kind == "ion" and spec.ion is None:
         raise VidgenError(f"{where}: an ion needs ion: one of {', '.join(IONS)}")
+    if spec.state == "inactivated" and (spec.gating or "voltage") != "voltage":
+        raise VidgenError(f"{where}: state inactivated: only voltage-gated channels inactivate (the inactivation gate of Na⁺ channels); "
+                          f"a {spec.gating}-gated channel is closed or open")
+    if spec.kind == "h_atpase" and spec.state is not None and pump_type(spec.membrane) == "v":
+        raise VidgenError(f"{where}: state '{spec.state}': the V-type H⁺-ATPase of this membrane is a rotary pump (like ATP synthase run "
+                          f"backwards) without E1/E2 states; those belong to the P-type pump of the plasma membrane")
+    spec = _with_transporter(spec, where)
     _check_carrier(spec, where)
+    _check_abc(spec, where)
     if spec.c_subunits is not None and not 8 <= spec.c_subunits <= 17:
         raise VidgenError(f"{where}: c_subunits {spec.c_subunits}: c-rings have 8 (animal mitochondria) to 17 subunits (14 in chloroplasts)")
     if spec.mass is not None and not 5 <= spec.mass <= 3000:
@@ -171,15 +185,68 @@ def check_molecule(spec: MoleculeSpec) -> MoleculeSpec:
     return spec
 
 
+def _with_transporter(spec: MoleculeSpec, where: str) -> MoleculeSpec:
+    """A carrier named by ``transporter`` (``sglt1``) gets that carrier's mode, substrates, moves
+    and ratio (written ones must agree)."""
+    if spec.transporter is None:
+        return spec
+    name = spec.transporter.lower()
+    if name not in TRANSPORTERS:
+        raise VidgenError(f"{where}: transporter '{spec.transporter}': use {', '.join(TRANSPORTERS)}{did_you_mean(name, list(TRANSPORTERS))}")
+    t = TRANSPORTERS[name]
+    for option, value, wanted in (("mode", spec.mode, t.mode), ("substrates", spec.substrates, t.substrates), ("moves", spec.moves, t.moves),
+                                  ("ratio", spec.ratio, t.ratio)):
+        if value not in (None, ()) and value != wanted:
+            written = f"[{_listed(value)}]" if isinstance(value, tuple) else str(value)
+            raise VidgenError(f"{where}: {option} {written} does not match transporter {t.label} ({_listed(wanted)}); leave it out")
+    return replace(spec, mode=t.mode, substrates=t.substrates, moves=t.moves, ratio=t.ratio, transporter=name)
+
+
+def _listed(value: object) -> str:
+    return ", ".join(str(v) for v in value) if isinstance(value, tuple) else str(value)
+
+
+def carrier_parts(spec: MoleculeSpec) -> tuple[str, tuple[str, ...], tuple[str, ...], tuple[int, ...]]:
+    """A carrier's ``(mode, substrates, moves, ratio)`` with the defaults filled in."""
+    mode = spec.mode or "uniport"
+    solutes = spec.substrates or CARRIER_MODES[mode][0]
+    moves = spec.moves or (CARRIER_MODES[mode][1] if not spec.substrates else tuple("in" for _ in solutes) if mode != "antiport"
+                           else ("in", "out")[: len(solutes)])
+    ratio = spec.ratio or tuple(1 for _ in solutes)
+    return mode, tuple(solutes), tuple(moves), tuple(ratio)
+
+
+def abc_parts(spec: MoleculeSpec) -> tuple[str, str]:
+    """An ABC transporter's ``(substrate, way)``: a drug pumped out by default."""
+    return (spec.substrates[0] if spec.substrates else "drug"), (spec.moves[0] if spec.moves else "out")
+
+
+def _check_abc(spec: MoleculeSpec, where: str) -> None:
+    if spec.kind != "abc_transporter":
+        return
+    if len(spec.substrates) > 1 or len(spec.moves) > 1:
+        raise VidgenError(f"{where}: an ABC transporter moves one substrate (one of substrates, one of moves)")
+    substrate, way = abc_parts(spec)
+    if substrate not in IONS and substrate not in MOLECULES:
+        raise VidgenError(f"{where}: substrate '{substrate}': an ion or a small molecule (drug, glucose…){did_you_mean(substrate, [*IONS, *MOLECULES])}")
+    if way not in ("in", "out"):
+        raise VidgenError(f"{where}: moves: in or out")
+    if way == "in" and spec.membrane not in (None, "bacterial_inner_membrane"):
+        raise VidgenError(f"{where}: moves: in: ABC importers (with a periplasmic binding protein) are bacterial; eukaryotic ABC transporters "
+                          f"export from the cytosol (P-glycoprotein pumps drugs out, TAP moves peptides into the ER)")
+
+
 def _check_carrier(spec: MoleculeSpec, where: str) -> None:
     if spec.kind != "carrier":
         return
     mode = spec.mode or "uniport"
     if mode not in CARRIER_MODES:
         raise VidgenError(f"{where}: mode '{mode}': use {', '.join(CARRIER_MODES)}{did_you_mean(mode, list(CARRIER_MODES))}")
-    solutes = spec.substrates or CARRIER_MODES[mode][0]
-    moves = spec.moves or (CARRIER_MODES[mode][1] if not spec.substrates else tuple("in" for _ in solutes) if mode != "antiport"
-                           else ("in", "out")[: len(solutes)])
+    _, solutes, moves, ratio = carrier_parts(spec)
+    if len(ratio) != len(solutes) or any(not 1 <= r <= 4 for r in ratio):
+        raise VidgenError(f"{where}: ratio: one count (1 to 4) per substrate ({len(solutes)}), e.g. [2, 1] for 2 Na⁺ per glucose")
+    if mode == "uniport" and ratio != (1,):
+        raise VidgenError(f"{where}: ratio {list(ratio)}: a uniporter moves one solute per cycle (alternating access with one binding site)")
     for s in solutes:
         if s not in IONS and s not in MOLECULES:
             raise VidgenError(f"{where}: substrate '{s}': an ion ({', '.join(IONS)}) or a small molecule (glucose, atp…)"
@@ -830,20 +897,25 @@ def rtk(spec: MoleculeSpec) -> Glyph:
 
 def ion_channel(spec: MoleculeSpec) -> Glyph:
     """An ion channel cut through its pore: two of its subunits round the pore, the selectivity
-    filter at the outer mouth, the gate at the inner end (closed: the helices meet; open: apart);
-    a voltage sensor with its + charges (moved outwards when open), a ligand-binding domain or a
-    tether to the cytoskeleton by ``gating``; the ion and the way it flows."""
+    filter at the outer mouth, the activation gate at the inner end (closed: the helices meet;
+    open: apart); a voltage sensor with its + charges (moved outwards when open or inactivated),
+    a ligand-binding domain or a tether to the cytoskeleton by ``gating``; a voltage-gated Na⁺
+    channel's inactivation gate (a plug on a tether that closes the inner mouth while the
+    activation gate is still open); the ion and the way it flows."""
     hue = MOLECULES["ion_channel"].hue
-    open_ = spec.state == "open"
+    state = spec.state or "closed"
+    open_ = state in ("open", "inactivated")             # the activation gate
     gate = 0.75 if open_ else 0.06
     prims: list[Prim] = []
     for sign in (-1.0, 1.0):
         pts = [(sign * 3.3, 3.0), (sign * 0.75, 3.0), (sign * 0.3, 2.2), (sign * 0.3, 1.4), (sign * 0.9, 0.4), (sign * gate, -2.7), (sign * 1.6, -3.3),
                (sign * 3.0, -2.9)]
         prims.append(_poly(pts, hue, "solid" if sign < 0 else "fill", z=0.6))
+    gate_name = "Activation gate" if (spec.gating or "voltage") == "voltage" and (spec.ion == "Na+" or state == "inactivated") else "Gate"
     anchors: dict[str, tuple[str, Point]] = {"filter": ("Selectivity filter", (0.0, 1.8)), "pore": ("Pore", (0.0, 0.0)),
-                                             "gate": (f"Gate ({'open' if open_ else 'closed'})", (0.0, -2.6))}
+                                             "gate": (gate_name, (0.0, -2.6))}
     gating = spec.gating or "voltage"
+    ion = spec.ion or "K+"
     if gating == "voltage":
         lift = 0.9 if open_ else -0.6
         for sign in (-1.0, 1.0):
@@ -852,89 +924,259 @@ def ion_channel(spec: MoleculeSpec) -> Glyph:
             for k in range(3):
                 prims.append(_text("+", (c[0], c[1] - 1.0 + k), 0.6, "#D9534F", z=2.0))
         anchors["sensor"] = ("Voltage sensor (S4)", (4.6, lift))
+        if ion == "Na+" or state == "inactivated":
+            # the inactivation gate: a plug tethered to the channel's cytosolic side
+            tether = (-2.3, -3.4)
+            plug = (0.0, -3.45) if state == "inactivated" else (-3.3, -5.6)
+            bend = ((tether[0] + plug[0]) / 2 - 0.4, min(tether[1], plug[1]) - 0.9)
+            prims.append(_line([tether, bend, plug], "#2E7F79", 0.2, 1.3, z=0.65))
+            prims.append(_shape(Ellipse(plug[0], plug[1], 0.68, 0.6), "#2E7F79", z=0.7))
+            anchors["inactivation"] = ("Inactivation gate" + (" (closed)" if state == "inactivated" else ""), plug)
     elif gating == "ligand":
         for sign in (-1.0, 1.0):
             prims.append(_shape(Ellipse(sign * 2.4, 4.4, 1.5, 1.2), hue, "light", z=0.55))
-            if open_:
+            if open_ and not spec.bare:
                 prims += _small("ligand", (sign * 2.4, 5.2), 0.9)
         anchors["binding"] = ("Ligand-binding domain", (2.4, 4.4))
     else:
         for sign in (-1.0, 1.0):
             prims.append(_line([(sign * 2.6, -3.1), (sign * 3.6, -4.5), (sign * 4.4, -5.6)], "#8C6D4F", 0.25, 1.4, z=0.4))
-        prims += _arrow([(-5.6, 0.0), (-7.4, 0.0)], "#8C6D4F", 0.15, 0.5) + _arrow([(5.6, 0.0), (7.4, 0.0)], "#8C6D4F", 0.15, 0.5)
+        if not spec.bare:
+            prims += _arrow([(-5.6, 0.0), (-7.4, 0.0)], "#8C6D4F", 0.15, 0.5) + _arrow([(5.6, 0.0), (7.4, 0.0)], "#8C6D4F", 0.15, 0.5)
         anchors["tension"] = ("Membrane tension", (6.5, 0.4))
-    ion = spec.ion or "K+"
     flow = ION_FLOW.get(ion, "in")
-    if open_:
-        ys = (3.9, 0.3, -3.9) if flow == "out" else (-3.9, 0.3, 3.9)
-        for y in ys:
-            prims += _small("ion", (0.0, y), 0.0, ion)
-        y0, y1 = (-4.4, 4.6) if flow == "out" else (4.6, -4.4)
-        prims += _arrow([(0.0 - 1.3, y0), (-1.3, y1)], ION_HUES.get(ion, "#888888"), 0.12, 0.45)
+    if not spec.bare:
+        if state == "open":
+            ys = (3.9, 0.3, -3.9) if flow == "out" else (-3.9, 0.3, 3.9)
+            for y in ys:
+                prims += _small("ion", (0.0, y), 0.0, ion)
+            y0, y1 = (-4.4, 4.6) if flow == "out" else (4.6, -4.4)
+            prims += _arrow([(0.0 - 1.3, y0), (-1.3, y1)], ION_HUES.get(ion, "#888888"), 0.12, 0.45)
+        else:
+            prims += _small("ion", (0.0, -3.9 if flow == "out" else 3.9), 0.0, ion)
+    if state == "open":
         anchors["ion"] = (f"{chem_markup(ion)} flows {'out' if flow == 'out' else 'in'}", (0.0, 0.3))
-    else:
-        prims += _small("ion", (0.0, 3.9 if flow == "out" else -3.9) if flow == "in" else (0.0, -3.9), 0.0, ion)
+    path = ((0.0, 4.9), (0.0, 1.8), (0.0, 0.3), (0.0, -2.7), (0.0, -4.9))      # outside → cytosol
     return Glyph("ion_channel", tuple(prims), anchors, _bounds(prims), sites=(((-1.6, -3.4), (0.0, -1.0)), ((1.6, -3.4), (0.0, -1.0))),
-                 facts={"open": open_, "gate_gap": 2 * gate, "ion": ion, "flow": flow})
+                 facts={"open": state == "open", "state": state, "gate_gap": 2 * gate, "ion": ion, "flow": flow, "gating": gating, "path": path})
+
+
+#: The two halves of an alternating-access transporter (x > 0 side; the other is mirrored), as
+#: five points from the outer top corner round its inner edge: open to the outside, occluded
+#: (a closed cavity round the binding site) or open to the inside.
+_ACCESS = {
+    "outward": [(1.0, 1.0), (0.36, 1.0), (0.17, 0.2), (0.016, -0.93), (0.84, -0.97)],
+    "occluded": [(0.91, 0.98), (0.016, 0.97), (0.19, 0.0), (0.016, -0.97), (0.91, -0.98)],
+    "inward": [(0.84, 0.97), (0.016, 0.93), (0.17, -0.2), (0.36, -1.0), (1.0, -1.0)],
+}
+#: Where an alternating-access transporter's binding site is (share of its half height).
+_SITE_Y = {"outward": 0.3, "occluded": 0.0, "inward": -0.3}
+
+
+def _halves(access: str, half_w: float, half_h: float, cx: float = 0.0) -> list[list[Point]]:
+    return [[(cx + sign * x * half_w, y * half_h) for x, y in _ACCESS[access]] for sign in (-1.0, 1.0)]
+
+
+def bound_positions(center: Point, n: int, step: float = 0.72) -> list[Point]:
+    """Where ``n`` bound solutes sit round a binding site: in a row, or two rows for 3 or 4."""
+    cx, cy = center
+    if n <= 2:
+        return [(cx + (k - (n - 1) / 2) * step, cy) for k in range(n)]
+    top = (n + 1) // 2
+    out = [(cx + (k - (top - 1) / 2) * step, cy + step * 0.45) for k in range(top)]
+    return out + [(cx + (k - (n - top - 1) / 2) * step, cy - step * 0.45) for k in range(n - top)]
+
+
+def _solute_markup(s: str) -> str:
+    return chem_markup(s) if s in IONS else MOLECULES[s].label
 
 
 def carrier(spec: MoleculeSpec) -> Glyph:
     """A carrier in alternating access: its two halves round a central binding site, open to the
-    outside (``outward``) or the inside (``inward``) — never both — with its solutes bound and
-    arrows the way each moves (symport: the same way; antiport: opposite ways)."""
+    outside (``outward``), closed round its solutes (``occluded``) or open to the inside
+    (``inward``) — never open to both — with its solutes bound (``ratio`` of each) and arrows the
+    way each moves (symport: the same way; antiport: opposite ways)."""
     hue = MOLECULES["carrier"].hue
-    mode = spec.mode or "uniport"
-    solutes = spec.substrates or CARRIER_MODES[mode][0]
-    moves = spec.moves or (CARRIER_MODES[mode][1] if not spec.substrates else
-                           (("in", "out") if mode == "antiport" else tuple("in" for _ in solutes)))
-    outward = spec.state != "inward"
+    mode, solutes, moves, ratio = carrier_parts(spec)
+    state = spec.state or "outward"
     prims: list[Prim] = []
-    for sign in (-1.0, 1.0):
-        if outward:
-            pts = [(sign * 3.2, 3.0), (sign * 1.1, 3.0), (sign * 0.05, -2.8), (sign * 2.7, -2.9)]
-        else:
-            pts = [(sign * 2.7, 2.9), (sign * 0.05, 2.8), (sign * 1.1, -3.0), (sign * 3.2, -3.0)]
+    for sign, pts in zip((-1.0, 1.0), _halves(state, 3.2, 3.0)):
         prims.append(_poly(pts, hue, "solid" if sign < 0 else "fill", z=0.6))
-    site_y = 0.9 if outward else -0.9
-    anchors: dict[str, tuple[str, Point]] = {"state": ("Outward-open" if outward else "Inward-open", (0.0, 2.7 if outward else -2.7)),
-                                             "site": ("Binding site", (0.0, site_y))}
-    for k, (s, way) in enumerate(zip(solutes, moves)):
-        dx = (k - (len(solutes) - 1) / 2) * 0.9
-        prims += _small("ion" if s in IONS else s, (dx, site_y), 0.6, s if s in IONS else None)
-        x = (-4.6 - 1.4 * k) if k % 2 == 0 else (4.6 + 1.4 * (k - 1))
-        y0, y1 = (3.6, -3.6) if way == "in" else (-3.6, 3.6)
+    site = (0.0, _SITE_Y[state] * 3.0)
+    words = {"outward": "Outward-open", "occluded": "Occluded", "inward": "Inward-open"}[state]
+    anchors: dict[str, tuple[str, Point]] = {"state": (words, (0.0, 2.7 if state == "outward" else -2.7 if state == "inward" else 0.9)),
+                                             "site": ("Binding site", site)}
+    copies = [s for s, r in zip(solutes, ratio) for _ in range(r)]
+    if not spec.bare:
+        for s, p in zip(copies, bound_positions(site, len(copies))):
+            prims += _small("ion" if s in IONS else s, p, 0.6, s if s in IONS else None)
+    for k, (s, way, r) in enumerate(zip(solutes, moves, ratio)):
+        x = (-4.6 - 1.4 * (k // 2)) if k % 2 == 0 else (4.6 + 1.4 * (k // 2))
         colour = ION_HUES.get(s, MOLECULES[s].hue if s in MOLECULES else "#888888")
-        prims += _arrow([(x, y0), (x, y1)], colour, 0.13, 0.5)
-        prims.append(_text(chem_markup(s) if s in IONS else MOLECULES[s].label, (x, y0 + (0.6 if y0 > 0 else -0.6)), 0.55, colour, detail=False))
-        anchors[f"solute_{k + 1}"] = (f"{chem_markup(s) if s in IONS else MOLECULES[s].label} ({way})", (x, 0.0))
-    return Glyph("carrier", tuple(prims), anchors, _bounds(prims), sites=(((-2.7, -3.1), (0.0, -1.0)),),
-                 facts={"mode": mode, "solutes": tuple(solutes), "moves": tuple(moves), "outward": outward})
+        name = f"{r} {_solute_markup(s)}" if r > 1 else _solute_markup(s)
+        if not spec.bare:
+            y0, y1 = (3.6, -3.6) if way == "in" else (-3.6, 3.6)
+            prims += _arrow([(x, y0), (x, y1)], colour, 0.13, 0.5)
+            prims.append(_text(name, (x, y0 + (0.6 if y0 > 0 else -0.6)), 0.55, colour, detail=False))
+        anchors[f"solute_{k + 1}"] = (f"{name} ({way})", (x, 0.0))
+    facts = {"mode": mode, "solutes": solutes, "moves": moves, "ratio": ratio, "outward": state == "outward", "state": state, "site": site,
+             "sites": {a: (0.0, _SITE_Y[a] * 3.0) for a in _SITE_Y}, "mouth_out": (0.0, 3.9), "mouth_in": (0.0, -3.9)}
+    return Glyph("carrier", tuple(prims), anchors, _bounds(prims), sites=(((-2.7, -3.1), (0.0, -1.0)),), facts=facts)
+
+
+#: A P-type pump's four states: which way it is open, its cytosolic domains (A, N: where they
+#: are), and whether its P domain carries the phosphate.
+_P_STATES = {
+    "e1": ("inward", (-3.9, -4.0), (2.2, -6.4), False),
+    "e1p": ("occluded", (-3.6, -4.3), (0.9, -6.7), True),
+    "e2p": ("outward", (-1.9, -5.4), (1.9, -6.5), True),
+    "e2": ("occluded", (-2.6, -4.6), (2.1, -6.4), False),
+}
+
+
+def _p_type(spec: MoleculeSpec, hue: str, beta: bool) -> tuple[list[Prim], dict[str, tuple[str, Point]], dict[str, object]]:
+    """The common drawing of a P-type pump: the α subunit's transmembrane domain open to one
+    side round its ion sites, its A (actuator), P (phosphorylation) and N (nucleotide-binding)
+    domains in the cytosol, the phosphate on the P domain's Asp in E1P and E2P; with ``beta``
+    the glycosylated β subunit of the Na⁺/K⁺ pump."""
+    state = spec.state or "e1"
+    access, a_dom, n_dom, phospho = _P_STATES[state]
+    cx = -0.8
+    prims: list[Prim] = []
+    for sign, pts in zip((-1.0, 1.0), _halves(access, 2.9, 3.0, cx)):
+        prims.append(_poly(pts, hue, "solid" if sign < 0 else "fill", z=0.5))
+    p_dom = (cx + 0.5, -4.7)
+    prims += [_shape(Ellipse(a_dom[0], a_dom[1], 1.35, 1.15), hue, "fill", z=0.52), _shape(Ellipse(p_dom[0], p_dom[1], 1.6, 1.2), hue, "fill", z=0.55),
+              _shape(Ellipse(n_dom[0], n_dom[1], 1.45, 1.35), hue, "light", z=0.5)]
+    asp = (p_dom[0] + 0.55, p_dom[1] - 1.05)
+    if phospho:
+        prims += _marker("P", asp, 0.42)
+    anchors: dict[str, tuple[str, Point]] = {
+        "alpha": ("α subunit", (cx - 1.9, 0.8)), "n_domain": ("N domain (ATP)", n_dom), "p_domain": ("P domain (Asp)", p_dom),
+        "a_domain": ("A domain", a_dom), "state": ({"e1": "E1 (open to the cytosol)", "e1p": "E1P (occluded)", "e2p": "E2P (open outside)",
+                                                  "e2": "E2 (occluded)"}[state], (cx, 2.4 if access == "outward" else -2.4 if access == "inward" else 0.0))}
+    if beta:
+        prims += [_shape(Capsule(cx + 3.6, 0.0, 5.0, 0.8, math.pi / 2), "#C98A3A", z=0.55), _shape(Ellipse(cx + 3.9, 3.7, 1.5, 1.1), "#C98A3A", "fill", z=0.5)]
+        for k in range(4):
+            prims.append(_shape(Ellipse(cx + 4.5 + 0.35 * k, 4.9 + 0.25 * k, 0.17, 0.17), GLYCAN_HUE, z=0.7, detail=True))
+        anchors["beta"] = ("β subunit (glycan)", (cx + 3.9, 3.7))
+    site = (cx, _SITE_Y[access] * 3.0)
+    facts = {"state": state, "access": access, "phosphorylated": phospho, "site": site, "sites": {a: (cx, _SITE_Y[a] * 3.0) for a in _SITE_Y},
+             "mouth_out": (cx, 3.9), "mouth_in": (cx - 0.2, -3.5), "atp_site": (n_dom[0] + 0.2, n_dom[1] - 1.75), "asp": asp,
+             "n_domains": {k: v[2] for k, v in _P_STATES.items()}, "atp_side": "n"}
+    return prims, anchors, facts
 
 
 def na_k_atpase(spec: MoleculeSpec) -> Glyph:
-    """The Na⁺/K⁺ pump: the α subunit's transmembrane domain with its cytosolic A, P and N
-    domains (ATP binds N, phosphorylates an Asp of P), the glycosylated β subunit; per ATP
-    3 Na⁺ out and 2 K⁺ in (E1 binds Na⁺ from the cytosol, E2 K⁺ from outside)."""
+    """The Na⁺/K⁺ pump in one of the four states of its Post–Albers cycle: E1 (open to the
+    cytosol, 3 Na⁺ bound), E1P (phosphorylated, Na⁺ occluded), E2P (open outside, K⁺ bound),
+    E2 (dephosphorylated, K⁺ occluded); α subunit with its A, P and N domains, the glycosylated
+    β subunit; per ATP 3 Na⁺ out and 2 K⁺ in."""
     hue = MOLECULES["na_k_atpase"].hue
-    prims = [_shape(RoundedBox(-0.5, 0.0, 6.0, 5.4, 1.2), hue, z=0.5)]
-    prims += [_shape(Ellipse(-2.6, -4.0, 1.4, 1.2), hue, "fill", z=0.5), _shape(Ellipse(0.2, -4.4, 1.7, 1.3), hue, "fill", z=0.55),
-              _shape(Ellipse(1.0, -7.0, 1.5, 1.4), hue, "light", z=0.5)]
-    prims += [_shape(Capsule(3.4, 0.0, 5.0, 0.8, math.pi / 2), "#C98A3A", z=0.55), _shape(Ellipse(3.6, 3.7, 1.5, 1.1), "#C98A3A", "fill", z=0.5)]
-    for k in range(4):
-        prims.append(_shape(Ellipse(4.2 + 0.35 * k, 4.9 + 0.25 * k, 0.17, 0.17), GLYCAN_HUE, z=0.7, detail=True))
-    prims += _small("atp", (2.6, -7.3), 0.6)
-    e2 = spec.state == "e2"
-    bound = ("K+", "K+") if e2 else ("Na+", "Na+", "Na+")
-    for k, ion in enumerate(bound):
-        prims += _small("ion", (-1.8 + 0.85 * k, -0.4), 0.0, ion)
-    prims += _arrow([(-4.4, -3.4), (-4.4, 4.4)], ION_HUES["Na+"], 0.15, 0.55) + _arrow([(5.6, 4.4), (5.6, -3.4)], ION_HUES["K+"], 0.15, 0.55)
-    prims += [_text("3 Na<sup>+</sup>", (-4.4, 5.1), 0.6, ION_HUES["Na+"], detail=False), _text("2 K<sup>+</sup>", (5.6, -4.1), 0.6, ION_HUES["K+"], detail=False),
-              _text("ATP → ADP + P<sub>i</sub>", (2.6, -9.0), 0.5, detail=False)]
-    anchors = {"alpha": ("α subunit", (-0.5, 0.8)), "beta": ("β subunit (glycan)", (3.6, 3.7)),
-               "n_domain": ("N domain (ATP)", (1.0, -7.0)), "p_domain": ("P domain", (0.2, -4.4)),
-               "a_domain": ("A domain", (-2.6, -4.0)), "sodium": ("3 Na<sup>+</sup> out", (-4.4, 0.5)), "potassium": ("2 K<sup>+</sup> in", (5.6, 0.5))}
-    return Glyph("na_k_atpase", tuple(prims), anchors, _bounds(prims), sites=(((0.2, -5.7), (0.0, -1.0)),),
-                 facts={"na_out": 3, "k_in": 2, "atp": 1, "atp_side": "n"})
+    prims, anchors, facts = _p_type(spec, hue, beta=True)
+    state = facts["state"]
+    bound = ("Na+", "Na+", "Na+") if state in ("e1", "e1p") else ("K+", "K+")
+    if not spec.bare:
+        for ion, p in zip(bound, bound_positions(facts["site"], len(bound), 0.75)):  # type: ignore[arg-type]
+            prims += _small("ion", p, 0.0, ion)
+        if state == "e1":
+            prims += _small("atp", facts["atp_site"], 0.6)  # type: ignore[arg-type]
+        prims += _arrow([(-5.3, -3.4), (-5.3, 4.4)], ION_HUES["Na+"], 0.15, 0.55) + _arrow([(5.4, 4.4), (5.4, -3.4)], ION_HUES["K+"], 0.15, 0.55)
+        prims += [_text("3 Na<sup>+</sup>", (-5.3, 5.1), 0.6, ION_HUES["Na+"], detail=False), _text("2 K<sup>+</sup>", (5.4, -4.1), 0.6, ION_HUES["K+"], detail=False),
+                  _text("ATP → ADP + P<sub>i</sub>", (1.2, -9.0), 0.5, detail=False)]
+    anchors.update({"sodium": ("3 Na<sup>+</sup> out", (-5.3, 0.5)), "potassium": ("2 K<sup>+</sup> in", (5.4, 0.5))})
+    facts.update({"na_out": 3, "k_in": 2, "atp": 1})
+    return Glyph("na_k_atpase", tuple(prims), anchors, _bounds(prims), sites=(((-0.3, -5.9), (0.0, -1.0)),), facts=facts)
+
+
+def h_atpase(spec: MoleculeSpec) -> Glyph:
+    """An H⁺ pump: in the plasma membrane the P-type pump (like the Na⁺/K⁺ pump: E1 binds H⁺ in
+    the cytosol, is phosphorylated, opens outside as E2P), elsewhere the rotary V-type pump (V₁
+    in the cytosol hydrolyses ATP, Vₒ moves H⁺ into the lumen)."""
+    if pump_type(spec.membrane) == "v":
+        return _v_type(spec)
+    hue = MOLECULES["h_atpase"].hue
+    prims, anchors, facts = _p_type(spec, hue, beta=False)
+    state = facts["state"]
+    if not spec.bare:
+        if state in ("e1", "e1p"):
+            prims += _small("ion", facts["site"], 0.0, "H+")  # type: ignore[arg-type]
+        if state == "e1":
+            prims += _small("atp", facts["atp_site"], 0.6)  # type: ignore[arg-type]
+        prims += _arrow([(-4.6, -3.4), (-4.6, 4.4)], ION_HUES["H+"], 0.15, 0.55)
+        prims += [_text("H<sup>+</sup>", (-4.6, 5.1), 0.6, ION_HUES["H+"], detail=False), _text("ATP → ADP + P<sub>i</sub>", (1.2, -9.0), 0.5, detail=False)]
+    anchors["proton"] = ("H<sup>+</sup> out of the cytosol", (-4.6, 0.5))
+    facts.update({"type": "p", "h_out": 1, "atp": 1})
+    return Glyph("h_atpase", tuple(prims), anchors, _bounds(prims), sites=(((-0.3, -5.9), (0.0, -1.0)),), facts=facts)
+
+
+def _v_type(spec: MoleculeSpec) -> Glyph:
+    """The V-ATPase: ATP synthase's architecture run as a pump (V₁ = A₃B₃ in the cytosol, Vₒ with
+    its c-ring in the membrane), H⁺ moved from the cytosol into the lumen."""
+    base = atp_synthase(MoleculeSpec("atp_synthase", "hydrolysis", c_subunits=10, membrane="inner_mitochondrial_membrane", bare=spec.bare))
+    swap = {"α": "A", "β": "B"}
+    prims = tuple(replace(p, text=swap.get(p.text, p.text)) for p in base.prims)
+    anchors = {"v1": ("V<sub>1</sub> (A<sub>3</sub>B<sub>3</sub>)", base.anchors["f1"][1]), "vo": ("V<sub>o</sub> (c-ring)", base.anchors["fo"][1]),
+               "stalk": ("Central stalk", base.anchors["stalk"][1]), "peripheral": ("Peripheral stalks", base.anchors["peripheral"][1]),
+               "proton": ("H<sup>+</sup> into the lumen", base.anchors["proton"][1])}
+    facts = dict(base.facts, type="v", path=((2.75, -4.9), (2.75, 0.0), (2.75, 4.9)), atp_site=(2.6, -12.6))
+    return Glyph("h_atpase", prims, anchors, base.bounds, facts=facts)
+
+
+#: An ABC transporter's two states: its transmembrane halves (x > 0 side, five points) and how far
+#: apart its nucleotide-binding domains are.
+_ABC = {
+    "inward": ([(0.15, 3.2), (2.6, 3.2), (3.3, -4.0), (1.6, -4.4), (0.9, -0.9)], 2.75),
+    "outward": ([(1.25, 3.4), (3.0, 3.2), (2.25, -4.1), (0.55, -4.3), (0.15, -1.1)], 1.32),
+}
+
+
+def abc_transporter(spec: MoleculeSpec) -> Glyph:
+    """An ABC transporter: two transmembrane domains round the substrate site and two
+    nucleotide-binding domains (NBDs) in the cytosol. Inward-facing: open to the cytosol, NBDs
+    apart; with 2 ATP bound the NBDs close on them and the pump turns outward-facing (open to
+    the other side); hydrolysis (2 ATP → 2 ADP + 2 Pᵢ) resets it."""
+    hue = MOLECULES["abc_transporter"].hue
+    state = spec.state or "inward"
+    shape, nbd_x = _ABC[state]
+    prims: list[Prim] = []
+    for sign in (-1.0, 1.0):
+        prims.append(_poly([(sign * x, y) for x, y in shape], hue, "solid" if sign < 0 else "fill", z=0.6))
+        prims.append(_shape(Ellipse(sign * nbd_x, -5.7, 1.45, 1.2), hue, "light", z=0.55))
+    substrate, way = abc_parts(spec)
+    site = (0.0, -1.7) if state == "inward" else (0.0, 1.9)
+    if not spec.bare:
+        if state == "outward":
+            prims += _small("atp", (0.0, -5.2), 0.55) + _small("atp", (0.0, -6.2), 0.55)
+        prims += _small("ion" if substrate in IONS else substrate, site, 0.8, substrate if substrate in IONS else None)
+        colour = ION_HUES.get(substrate, MOLECULES[substrate].hue if substrate in MOLECULES else "#888888")
+        y0, y1 = (-3.6, 3.6) if way == "out" else (3.6, -3.6)
+        prims += _arrow([(-4.8, y0), (-4.8, y1)], colour, 0.13, 0.5)
+        prims += [_text(_solute_markup(substrate), (-4.8, y1 + (0.6 if y1 > 0 else -0.6)), 0.55, colour, detail=False),
+                  _text("2 ATP → 2 ADP + 2 P<sub>i</sub>", (0.0, -8.0), 0.5, detail=False)]
+    anchors: dict[str, tuple[str, Point]] = {
+        "tmd": ("Transmembrane domains", (-2.0, 0.6)), "nbd": ("Nucleotide-binding domains", (nbd_x, -5.7)),
+        "state": ("Inward-facing" if state == "inward" else "Outward-facing (NBDs closed on 2 ATP)", (0.0, -3.0 if state == "inward" else 2.9)),
+        "substrate": (f"{_solute_markup(substrate)} ({way})", site)}
+    facts = {"state": state, "substrate": substrate, "way": way, "site": site, "sites": {"inward": (0.0, -1.7), "outward": (0.0, 1.9)},
+             "mouth_out": (0.0, 4.2), "mouth_in": (0.0, -4.6), "nbd_x": {k: v[1] for k, v in _ABC.items()}, "atp_sites": ((0.0, -5.2), (0.0, -6.2))}
+    return Glyph("abc_transporter", tuple(prims), anchors, _bounds(prims), facts=facts)
+
+
+def aquaporin(spec: MoleculeSpec) -> Glyph:
+    """An aquaporin subunit cut through its pore: an hourglass narrowing to about 0.3 nm at its
+    NPA motifs, water molecules in single file (either way, as the osmotic gradient drives them)."""
+    hue = MOLECULES["aquaporin"].hue
+    prims: list[Prim] = []
+    for sign in (-1.0, 1.0):
+        pts = [(sign * 2.9, 3.0), (sign * 0.95, 3.0), (sign * 0.21, 0.0), (sign * 0.95, -3.0), (sign * 2.9, -3.0)]
+        prims.append(_poly(pts, hue, "solid" if sign < 0 else "fill", z=0.6))
+        prims.append(_text("NPA", (sign * 1.35, 0.0), 0.42, ON, z=2.0))
+    if not spec.bare:
+        for y in (2.3, 1.15, 0.0, -1.15, -2.3):
+            prims += _small("water", (0.0, y), 0.28)
+    anchors = {"pore": ("Water pore (single file)", (0.0, 1.6)), "npa": ("NPA motifs (constriction)", (0.0, 0.0))}
+    return Glyph("aquaporin", tuple(prims), anchors, _bounds(prims), facts={"path": ((0.0, 4.2), (0.0, 0.0), (0.0, -4.2)), "passes": "water"})
 
 
 def atp_synthase(spec: MoleculeSpec) -> Glyph:
@@ -963,12 +1205,13 @@ def atp_synthase(spec: MoleculeSpec) -> Glyph:
     prims.append(_shape(Ellipse(1.6, -16.9, 1.4, 0.8), "#8C3A3A", z=0.55))
     up = spec.state != "hydrolysis"
     path = [(2.75, 4.2), (2.75, 1.0), (2.75, -1.0), (2.75, -4.2)] if up else [(2.75, -4.2), (2.75, -1.0), (2.75, 1.0), (2.75, 4.2)]
-    prims += _arrow(path, ION_HUES["H+"], 0.15, 0.55)
-    prims.append(_text("H<sup>+</sup>", (2.75, 4.9 if up else -4.9), 0.6, ION_HUES["H+"], detail=False))
-    spin = [(-1.6 * math.cos(a), -5.2 - 0.5 * math.sin(a)) for a in [math.pi * 0.15 + k * 0.2 for k in range(8)]]
-    prims += _arrow(spin if up else spin[::-1], "#555555", 0.1, 0.4)
-    reaction = "ADP + P<sub>i</sub> → ATP" if up else "ATP → ADP + P<sub>i</sub>"
-    prims.append(_text(reaction, (-8.6, f1[1] - 0.2), 0.6, detail=False))
+    if not spec.bare:
+        prims += _arrow(path, ION_HUES["H+"], 0.15, 0.55)
+        prims.append(_text("H<sup>+</sup>", (2.75, 4.9 if up else -4.9), 0.6, ION_HUES["H+"], detail=False))
+        spin = [(-1.6 * math.cos(a), -5.2 - 0.5 * math.sin(a)) for a in [math.pi * 0.15 + k * 0.2 for k in range(8)]]
+        prims += _arrow(spin if up else spin[::-1], "#555555", 0.1, 0.4)
+        reaction = "ADP + P<sub>i</sub> → ATP" if up else "ATP → ADP + P<sub>i</sub>"
+        prims.append(_text(reaction, (-8.6, f1[1] - 0.2), 0.6, detail=False))
     anchors = {"f1": ("F<sub>1</sub> (α<sub>3</sub>β<sub>3</sub>)", (3.1, f1[1] - 1.5)),
                "fo": (f"F<sub>o</sub> (c<sub>{c}</sub> ring)", (-1.2, 0.0)), "stalk": ("Central stalk (γ)", (0.0, -6.0)),
                "peripheral": ("Peripheral stalk", (4.6, -8.6)), "a_subunit": ("a subunit", (3.8, 0.0)), "proton": ("H<sup>+</sup> path", (2.75, 2.6))}
@@ -997,6 +1240,24 @@ def _small(kind: str, at: Point, size: float, ion: str | None = None) -> list[Pr
         r = size / 2
         return [Prim(tuple(polygon([(x, y + r), (x + r * 0.8, y), (x, y - r), (x - r * 0.8, y)])), MOLECULES["ligand"].hue, "solid",
                      MOLECULES["ligand"].hue, 0.8, z=1.4)]
+    if kind == "water":
+        # O with its two H at 104.5°
+        out = [_shape(Ellipse(x, y, 0.15, 0.15), "#E06D6D", z=1.4)]
+        for a in (math.radians(90 + 52.25), math.radians(90 - 52.25)):
+            out.append(_shape(Ellipse(x + 0.17 * math.cos(a), y + 0.17 * math.sin(a), 0.085, 0.085), "#EDEDED", z=1.45))
+        return out
+    if kind == "o2":
+        return [_shape(Ellipse(x - 0.09, y, 0.13, 0.13), "#E06D6D", z=1.4), _shape(Ellipse(x + 0.09, y, 0.13, 0.13), "#E06D6D", z=1.45)]
+    if kind == "co2":
+        return [_shape(Ellipse(x - 0.17, y, 0.12, 0.12), "#E06D6D", z=1.4), _shape(Ellipse(x + 0.17, y, 0.12, 0.12), "#E06D6D", z=1.4),
+                _shape(Ellipse(x, y, 0.12, 0.12), "#6F6F6F", z=1.45)]
+    if kind == "drug":
+        r = size / 4
+        out = []
+        for dx in (-r * 0.87, r * 0.87):
+            ring = [(x + dx + r * math.cos(math.pi / 6 + k * math.pi / 3), y + r * math.sin(math.pi / 6 + k * math.pi / 3)) for k in range(6)]
+            out.append(Prim(tuple(polygon(ring)), MOLECULES["drug"].hue, "solid", MOLECULES["drug"].hue, 0.8, z=1.4))
+        return out
     phosphates = {"atp": 3, "adp": 2, "gtp": 3, "gdp": 2, "camp": 1}.get(kind, 0)
     base = "G" if kind in ("gtp", "gdp") else "A"
     scale = size / 1.6
@@ -1062,7 +1323,8 @@ def with_modifications(glyph: Glyph, mods: Sequence[tuple[str, ...]], where: str
 
 _BUILDERS = {"dna": dna, "mrna": mrna, "trna": trna, "rrna": rrna, "nucleosome": lambda s: nucleosome(s, marks=s.marks), "chromatin": chromatin,
              "protein": protein, "kinase": kinase, "phosphatase": phosphatase, "g_protein": g_protein, "gpcr": gpcr, "rtk": rtk,
-             "ion_channel": ion_channel, "carrier": carrier, "na_k_atpase": na_k_atpase, "atp_synthase": atp_synthase}
+             "ion_channel": ion_channel, "carrier": carrier, "na_k_atpase": na_k_atpase, "atp_synthase": atp_synthase, "h_atpase": h_atpase,
+             "abc_transporter": abc_transporter, "aquaporin": aquaporin}
 
 
 @lru_cache(maxsize=256)
@@ -1093,11 +1355,25 @@ def anchor_point(glyph: Glyph, name: str, center: Point, angle: float, scale: fl
     return (center[0] + scale * (x * c - y * s), center[1] + scale * (x * s + y * c))
 
 
+def bilayer_span(glyph: Glyph) -> tuple[float, float]:
+    """Where a membrane protein's glyph fills the bilayer, along the membrane (nm, local x):
+    the lipids give way there."""
+    xs = [q[0] for p in glyph.prims if p.fill and not p.text for cv in p.curves for q in cv if abs(q[1]) < BILAYER_NM / 2]
+    return (min(xs), max(xs)) if xs else (0.0, 0.0)
+
+
 def membrane_glyph_ok(glyph: Glyph) -> bool:
     """Whether a membrane protein's glyph spans the bilayer (its outline reaches both faces)."""
     x0, y0, x1, y1 = glyph.bounds
     return y0 < -BILAYER_NM / 2 and y1 > BILAYER_NM / 2
 
 
-__all__ = ["BASE_HUES", "Glyph", "HISTONE_HUES", "ION_FLOW", "MoleculeSpec", "OPTION_KINDS", "Prim", "anchor_point", "check_molecule",
-           "membrane_glyph_ok", "molecule_glyph", "place", "with_modifications"]
+__all__ = ["BASE_HUES", "Glyph", "HISTONE_HUES", "ION_FLOW", "MoleculeSpec", "OPTION_KINDS", "Prim", "abc_parts", "anchor_point", "bilayer_span",
+           "bound_positions",
+           "carrier_parts", "check_molecule", "membrane_glyph_ok", "molecule_glyph", "place", "small_prims", "with_modifications"]
+
+
+def small_prims(kind: str, at: Point, ion: str | None = None) -> list[Prim]:
+    """The symbol of a small molecule or ion ``kind`` (an ion: ``ion`` names it) at ``at``, at
+    its catalog size (a moving particle of a transport animation)."""
+    return _small(kind, at, MOLECULES[kind].size if kind in MOLECULES else 0.7, ion)

@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–204)
+## Unreleased (Steps 193–205)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -50,6 +50,24 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 - Step 203's zoomed views now point every label at its part (the matrix beside a crista, the
   glycocalyx outside the bilayer), stroma lamellae join grana at their margins, and a ring of
   smooth-ER tubules is no longer drawn filled.
+- **Transport and membrane processes as actions** (Step 205). In a `molecule` scene: `solutes`
+  (particles at their concentrations, typical mammalian values by default), `potential` (a live
+  Vₘ readout and the membrane's charges), concentration bars; `set_state` morphs a molecule
+  (a channel opens or inactivates, a carrier turns through its occluded state, the Na⁺/K⁺ pump
+  goes E1 → E1P → E2P → E2 with its phosphate shown); `transport` runs a channel (ions one by one
+  down their electrochemical gradient, only its own ion), a carrier's alternating access
+  (`transporter: sglt1`, `ncx`, `glut1`…), the pump's Post–Albers cycle with ATP → ADP + Pᵢ, H⁺
+  pumps (P- and V-type), ABC transporters and aquaporins; `diffuse` (random walks with net flux
+  down the gradient), `osmosis` and `action_potential` (channels in step with a trace from −70 to
+  +35 and −80 mV in an inset plot). In a `cell` scene: `motor_walk` (kinesin's 8 nm steps to the +
+  end, dynein's to the − end, carrying cargo), clathrin-mediated `endocytosis` (coated pit, dynamin
+  scission, uncoating) and `exocytosis` (SNARE docking, fusion pore, cargo release). The rules
+  come with reasons: *Na⁺ cannot pass a K⁺ channel*, *an antiporter moves its solutes opposite
+  ways*, *active transport needs an energy source: ATP or an ion gradient*, *kinesin-1 walks
+  towards a microtubule's + end*; states are replayed beat by beat by `vidgen validate`. New
+  molecules `h_atpase`, `abc_transporter`, `aquaporin`, `water`, `o2`, `co2`, `drug`. Lipids leave
+  room for membrane proteins in cell close-ups, and several membrane proteins in a tall frame go on
+  membrane rows.
 
 ### vidgen studio: a music workstation for people (Phase T)
 

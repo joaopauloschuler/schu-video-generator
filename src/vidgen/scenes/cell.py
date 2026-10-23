@@ -12,6 +12,7 @@ import numpy as np
 
 from vidgen.api import *
 
+from .cell_traffic import CellTraffic
 from .math_axes import ChainedTargets
 
 Length = float | str
@@ -210,7 +211,7 @@ def _world(spec: CellSpec) -> CellWorld:
 
 
 @scene("cell")
-class Cell(NarratedScene):
+class Cell(CellTraffic, NarratedScene):
     """A cell drawn in physical scale: a cross-section of an animal cell, a plant cell or a
     bacterium with its compartments (cytosol, nucleoplasm, ER and Golgi lumens, mitochondrial
     matrix and intermembrane space, stroma and thylakoid lumen, periplasm…), the membranes
@@ -228,9 +229,9 @@ class Cell(NarratedScene):
 
     outro = 0.5
     target_patterns = ("title", "cell", "tissue", "scale_bar", "<id>")
-    #: The ``zoom_to`` action acts on this scene type only.
+    #: The ``zoom_to``, ``motor_walk``, ``endocytosis`` and ``exocytosis`` actions act on this scene type only.
     cell_actions = True
-    mid_still_actions = frozenset({"zoom_to"})
+    mid_still_actions = frozenset({"zoom_to", "motor_walk", "endocytosis", "exocytosis"})
 
     class Params(SceneParams):
         title: TranslatableStr = ""
@@ -332,6 +333,7 @@ class Cell(NarratedScene):
         self._view_labels: list[tuple[float, np.ndarray, list[_CellLabel]]] = []
         self._camera_state: tuple[float, float, float] | None = None
         self._bar: Mobject | None = None
+        self.traffic_events: list[Any] = []
         if title is not None:
             plate = RoundedRectangle(width=title.width + 0.4, height=title.height + 0.2, corner_radius=0.08, stroke_width=0,
                                      fill_color=self.theme.background, fill_opacity=PLATE_OPACITY).move_to(title.get_center())
@@ -467,6 +469,10 @@ class Cell(NarratedScene):
             for label in labels:
                 extra.update(label.show(near, s, center))
         self.drawing.update(px_per_um, span, stroke_unit, extra)
+        if self.traffic_events:
+            weights = self.drawing.weights(px_per_um, span)
+            for event in self.traffic_events:          # membrane events keep their strokes and detail too
+                event.redraw(weights, px_per_um, stroke_unit)
 
     # ----- scale bar ------------------------------------------------------------------------
 

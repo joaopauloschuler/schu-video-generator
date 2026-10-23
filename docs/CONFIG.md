@@ -6356,6 +6356,13 @@ lists the ones it has).
 | action | options | |
 |---|---|---|
 | `zoom_to` | `level` (`tissue`, `cell`, `organelle`, `complex`; default: the target's own — `organelle` for a structure, `complex` for complexes, `cell` / `tissue` for those targets), `width` (what the view spans across the body's shorter side: `"3 um"`, `"150 nm"`; default the level's), `labels` (`true`: name the parts the view shows; `false`; or a list of part names) | moves the camera to the target at that level and stays there (unlike `zoom`, which goes back by the beat's end); one target: `cell`, `tissue` or an object's id (its first thing). The width changes at an even pace on a log scale, and between far places the camera zooms out on the way (van Wijk and Nuij's smooth zoom-and-pan path). Default 2 s. `until: <beat>` goes back to the view before. On `cell` scenes only. |
+| `motor_walk` | `distance` (`"500 nm"`, `"1.2 um"`; a number is µm; default as far as the filament allows, at most 1 µm), `toward` (`plus` / `minus`; checked) | the motors of an object (`kinesin`, `dynein`, `myosin`) walk hand over hand along their filament carrying their cargo: kinesin-1 in 8 nm steps to the microtubule's + end (out to the cell's edge), dynein in 8 nm steps to its − end (in to the centrosome), myosin V in 36 nm steps to the actin filament's barbed end. Up close each step shows (the trailing head swings past the bound one); from afar the motor glides. At the motor's real speed (kinesin ~0.8 µm/s), 1.5–8 s. Refused: `toward: minus` on kinesin (*kinesin-1 walks towards a microtubule's + end … use dynein*), a walk past the filament's end (walks add up beat after beat). |
+| `endocytosis` | `site` ([x, y] µm near the plasma membrane; default the membrane nearest the view's middle), `receptors` (6), `notes` (`true`) | clathrin-mediated endocytosis on target `cell`: receptor–ligand complexes gather where AP2 and clathrin assemble a coated pit, the pit invaginates, dynamin collars its neck and pinches the vesicle off, Hsc70 and auxilin strip the coat and the vesicle moves in; each step captioned. Best seen at the complex level (a view 300–500 nm across). Default 6 s. Refused in a bacterium, or where an organelle lies under the site. |
+| `exocytosis` | `cargo` (10), `notes` (`true`) | a vesicle (target: a `vesicle` object, count 1) moves to the nearest plasma membrane, docks as its v-SNARE zippers with the t-SNAREs, a fusion pore opens, its cargo leaves the cell and its membrane flattens into the plasma membrane (full collapse); the vesicle is gone afterwards. Default 5 s. Refused: a coated vesicle (*it sheds its coat first*), a vesicle not in the cytosol, a vesicle fused already. |
+
+`set_state`, `transport`, `diffuse`, `osmosis` and `action_potential` belong to the
+[molecule scene](#processes-as-actions). In a cell, label a process with `labels: false` on its
+view and point at it with `callout`: a zoomed view's labels name the parts as they were.
 
 #### Molecules in a cell
 
@@ -6410,9 +6417,15 @@ stroma); `compartment` (without a membrane: where the molecules are, `cytosol` d
 default); `molecules`; `width` (the view across the body's shorter side, `"30 nm"`; default: fits
 the molecules and their labels); `sides` (name the two compartments, `true`); `labels` (names
 under the molecules and part labels, `true`); `scale_bar` (`true`, in nm); `reveal` (`all`;
-`per_beat`: the membrane, then one molecule per beat); `title_size`, `label_size`.
-[Action targets](#beat-actions): `title`, `membrane` (with the compartments' names),
-`scale_bar` and each molecule's id (with its name and part labels).
+`per_beat`: the membrane, then one molecule per beat); `title_size`, `label_size`;
+`solutes` (free particles at their concentrations, see [processes](#processes-as-actions));
+`potential` (mV, the cytosolic side against the other: a live readout `Vₘ = −70 mV` and the
+membrane's charges, + outside and − inside at rest); `bars` (`true`: each solute's concentration on
+each side as a bar and a value beside the drawing); `seed` (where particles start and how they
+wander). [Action targets](#beat-actions): `title`, `membrane` (with the compartments' names),
+`scale_bar`, `potential`, each molecule's id (with its name and part labels) and each solute's id.
+In a tall frame several membrane proteins go on membrane rows, one under the other, each a strip
+of membrane with its two compartments named and a dashed rule between rows.
 
 **Molecules** (a kind alone is one, laid out automatically: membrane proteins in a row along the
 membrane, the others in rows on their side, a long row wrapped): `kind`, `id` (default the kind,
@@ -6437,12 +6450,16 @@ compartment its oriented part faces; checked), `state`, `label` (Pango markup, o
 | `g_protein` | Gα (GDP when `inactive`, GTP when `active`, parted from Gβγ) and Gβγ, lipid-anchored in the cytosolic leaflet | ~8 nm | `state` | the cytosolic face of the plasma membrane (endosomes, Golgi) |
 | `gpcr` | seven TM helices (N-terminus outside, ECL1–3, ICL1–3, helix 8, C-terminus in the cytosol); `active`: TM6 swings out | ~4 × 7 nm | `state`, `ligand` | plasma membrane, endosomes |
 | `rtk` | ligand-binding domain, one TM helix, kinase domain; `dimer`: ligand-bound, phosphotyrosines | ~20 nm | `state` (`monomer`, `dimer`) | plasma membrane, endosomes (animal) |
-| `ion_channel` | two subunits round the pore, selectivity filter, gate (`closed`: shut; `open`: apart), the ion flowing down its gradient | ~10 nm | `state`, `gating` (`voltage`: S4 sensors with + charges; `ligand`; `mechanical`), `ion` (K⁺ out; Na⁺, Ca²⁺, Cl⁻ in) | any membrane |
-| `carrier` | alternating access: `outward`- or `inward`-open, never both; its solutes bound and the way each moves | ~6 nm | `state`, `mode` (`uniport`: one solute; `symport`: two the same way; `antiport`: opposite ways — checked), `substrates`, `moves` (`in` / `out`) | any membrane |
-| `na_k_atpase` | α subunit (A, P, N domains), glycosylated β subunit; 3 Na⁺ out, 2 K⁺ in per ATP → ADP + Pᵢ | ~15 nm | `state` (`e1`: Na⁺ bound, `e2`: K⁺ bound) | plasma membrane (animal cells) |
+| `ion_channel` | two subunits round the pore, selectivity filter, gate (`closed`: shut; `open`: apart; `inactivated`: the activation gate open but the inactivation gate — a plug on a tether, drawn on voltage-gated Na⁺ channels — closing the inner mouth), the ion flowing down its gradient | ~10 nm | `state`, `gating` (`voltage`: S4 sensors with + charges, up when open or inactivated; `ligand`; `mechanical`), `ion` (K⁺ out; Na⁺, Ca²⁺, Cl⁻ in) | any membrane |
+| `carrier` | alternating access: `outward`-open, `occluded` (closed round its solutes) or `inward`-open, never open to both; its solutes bound and the way each moves | ~6 nm | `state`, `mode` (`uniport`: one solute; `symport`: two the same way; `antiport`: opposite ways — checked), `substrates`, `moves` (`in` / `out`), `ratio` (how many of each per cycle: `[2, 1]`), `transporter` (a named carrier setting all four: `glut1`, `glut4`, `sglt1` 2 Na⁺ + glucose in, `sglt2`, `ncx` 3 Na⁺ in / Ca²⁺ out, `nhe1`, `nkcc1`, `kcc2`) | any membrane |
+| `na_k_atpase` | α subunit (A, P, N domains: the A domain turns to the P domain in E2P), glycosylated β subunit; the transmembrane domain open to the cytosol (E1), closed round its ions (E1P, E2) or open outside (E2P), the phosphate on the P domain's Asp in E1P and E2P; 3 Na⁺ out, 2 K⁺ in per ATP → ADP + Pᵢ | ~15 nm | `state` (`e1`: 3 Na⁺ bound, `e1p`, `e2p`, `e2`: 2 K⁺ bound) | plasma membrane (animal cells) |
+| `h_atpase` | an H⁺ pump: P-type in the plasma membrane (drawn like the Na⁺/K⁺ pump without β, phosphorylated in E1P/E2P), V-type elsewhere (V₁ = A₃B₃ in the cytosol, Vₒ in the membrane; H⁺ into the lumen) | 10–25 nm | `state` (P-type only) | plasma membrane; lysosome, endosome, vacuole, vesicle, Golgi membranes |
+| `abc_transporter` | two transmembrane domains and two nucleotide-binding domains; `inward`-facing (NBDs apart) or `outward`-facing (NBDs closed on 2 ATP) | ~12 nm | `state`, `substrates` (one; default a drug), `moves` (`out`; `in` only in bacteria) | plasma membrane, ER, lysosome, inner mitochondrial, bacterial membranes |
+| `aquaporin` | an hourglass pore narrowing at its NPA motifs, water in single file | ~7 nm | | any membrane |
 | `atp_synthase` | Fₒ (c-ring, a subunit) in the membrane, the central stalk (γ) and the peripheral stalk, F₁ (α₃β₃) on the N side; H⁺ from the P side; ADP + Pᵢ → ATP | ~22 nm | `state` (`synthesis`, `hydrolysis`), `c_subunits` (default 8 in mitochondria, 14 in chloroplasts, 10 in bacteria) | inner mitochondrial (cristae), thylakoid, bacterial membrane |
 | `atp`, `adp`, `gtp`, `gdp`, `camp`, `pi`, `glucose`, `ligand` | symbols: base, ribose and phosphates; cAMP's cyclic phosphate; Pᵢ; glucose's ring; a generic ligand | 0.5–1.6 nm | | anywhere (cAMP: cytosol, nucleoplasm) |
 | `ion` | a disc of its hydrated size with its charge | 0.28–0.43 nm (hydrated radius) | `ion` (`Na+`, `K+`, `Ca2+`, `Cl-`, `H+`, `Mg2+`) | anywhere |
+| `water`, `o2`, `co2`, `drug` | H₂O (O with its two H at 104.5°), O₂, CO₂, a small two-ring drug | 0.28–1 nm | | anywhere |
 
 **Orientation and places** are checked by `vidgen validate` with the reason:
 
@@ -6462,6 +6479,73 @@ them apart (mouse protein TRP53, not Trp53; yeast Cdc28, not CDC28; *E. coli* La
 (p53, cyclin B1, Gαs) are fine. Modification markers: **P** (phosphorylation: Ser, Thr, Tyr; His,
 Asp in two-component systems), **Ub** (ubiquitin: Lys, or Met1), **Ac** (acetyl: Lys or the
 N-terminus), **Me** (methyl: Lys, Arg); `{mark: P, at: Lys382}` is refused.
+
+#### Processes as actions
+
+States change, solutes move and membranes fire as beat actions, timed like any action
+(`at: 0.4`, `at: "@opens"`). Each step of a process has a caption at the top of the drawing
+(`notes: false` turns them off); the protein's drawn solutes and arrows give way to moving
+particles as a transport starts.
+
+```yaml
+- id: firing
+  type: molecule
+  params:
+    title: "The action potential"
+    membrane: plasma
+    potential: -70                                   # live readout Vm and the membrane's charges
+    solutes:
+      - K+                                           # typical: 140 mM in the cytosol, 5 mM outside
+      - {solute: Na+, mM: {extracellular: 145, cytosol: 12}, count: 14}
+    molecules:
+      - {kind: ion_channel, id: nav, ion: Na+}       # voltage-gated (default), closed at rest
+      - {kind: ion_channel, id: kv, ion: K+}
+      - {kind: na_k_atpase, id: pump}
+      - {kind: carrier, id: ncx, transporter: ncx}   # 3 Na+ in, 1 Ca2+ out
+  beats:
+    - text: "A stimulus reaches threshold and the membrane fires."
+      actions: [{action_potential: membrane, at: "@threshold"}]     # plot: true draws the trace (mV, ms)
+    - text: "The pump restores the gradients, one ATP per turn."
+      actions: [{transport: pump, at: "@pump"}]
+    - text: "When the potassium channel opens, potassium leaves the cell."
+      actions:
+        - {set_state: kv, state: open, at: "@opens"}
+        - {transport: kv, count: 4, at: "@leaves"}
+```
+
+| action | target | options | |
+|---|---|---|---|
+| `set_state` | a molecule | `state` | morphs it to the state (each piece to its counterpart: a gate swings open, a carrier turns, the phosphate appears on the pump's P domain); `until: <beat>` turns it back. Checked against the kind's states. |
+| `transport` | a channel, carrier, pump or aquaporin | `count` (ions or water molecules through a channel or aquaporin, 4), `cycles` (carriers and pumps, 1), `ion` (a channel: default its own), `direction` (`in` / `out`; a channel or aquaporin: default and checked down the gradient), `notes` | an open channel passes its ions one after another down their electrochemical gradient (the scene's concentrations and `potential`, else the typical ones: K⁺ out, Na⁺ and Ca²⁺ in); a carrier runs alternating access cycle by cycle — open to the side its solutes come from, bind (the driving ion first), occlude, open to the other side, release; a uniporter or symporter turns back empty, an exchanger carries its other solute back (NCX: 3 Na⁺ in, then 1 Ca²⁺ out); the Na⁺/K⁺ pump runs the Post–Albers cycle (E1: 3 Na⁺ and ATP bind; ATP → ADP, the pump phosphorylates its Asp, E1P; E2P opens outside, Na⁺ leaves, 2 K⁺ bind; Pᵢ leaves, E2; ATP binds, E1 releases K⁺ inside); a P-type H⁺ pump likewise with H⁺; the V-ATPase hydrolyses ATP in V₁ while 2 H⁺ cross Vₒ into the lumen; an ABC exporter binds its substrate inward-facing, 2 ATP close its NBDs (outward-facing), the substrate leaves, 2 ATP → 2 ADP + 2 Pᵢ reset it; an aquaporin passes water in single file. Default 5 s. |
+| `diffuse` | a solute | `share` (how far towards equal concentrations, 0.6) | simple diffusion: every particle wanders (a seeded random walk); more cross from the crowded side than back, so the net flux runs down the gradient; the bars change to match. Across a membrane only what crosses a bilayer: O₂, CO₂, slowly water. Default 4 s. |
+| `osmosis` | `membrane` | `count` (6) | water moves towards the side with the higher osmolarity (the solutes' mM summed), through the aquaporins when there are any, else slowly through the bilayer; the solutes on the side water enters become more dilute. Default 4 s. |
+| `action_potential` | `membrane` | `plot` (`true`: an inset trace of mV against ms), `ions` (through each channel, 3), `notes` | a stimulus brings the membrane to threshold (−55 mV); the voltage-gated Na⁺ channels open (Na⁺ in, up to +35 mV), inactivate as the K⁺ channels open (K⁺ out: repolarisation), the K⁺ channels stay open into the undershoot (−80 mV) while the Na⁺ channels recover, and close (back to −70 mV); the readout, the membrane's charges and the trace follow. Needs voltage-gated Na⁺ and K⁺ channels in a plasma membrane, closed when it starts. Default 7 s. |
+
+**Solutes** (`solutes:`): `solute` (an ion: `Na+`, `K+`, `Ca2+`, `Cl-`, `H+`, `Mg2+`; or `glucose`,
+`water`, `o2`, `co2`, `atp`, `drug`…), `mM` (each side: the membrane's two compartments, or `left`
+and `right` without a membrane; default the typical values of a mammalian cell's plasma membrane —
+K⁺ 140 / 5, Na⁺ 12 / 145, Cl⁻ 10 / 110, Ca²⁺ 100 nM / 2 mM, H⁺ pH 7.2 / 7.4, glucose 0.5 / 5,
+cytosol / outside), `id` (default `sodium`, `potassium`, `calcium`, `chloride`, `protons`,
+`magnesium`, or the molecule's name), `count` (particles on the more concentrated side, 12; the other
+side in proportion, none below 1 %). An osmosis adds water particles.
+
+**The rules are checked** by `vidgen validate`, replaying the molecules' states in beat and `at`
+order:
+
+```
+scenes[0].beats[1].actions[0].target: 'kv': the channel is closed now: open it first (set_state: <id>, state: open); ions pass only an open channel
+scenes[0].beats[1].actions[0].target: Na⁺ cannot pass a K⁺ channel: its selectivity filter (TVGYG) holds dehydrated K⁺ in a cage of carbonyl oxygens spaced for K⁺; the smaller Na⁺ cannot shed its water shell there
+scenes[0].beats[1].actions[0].target: K⁺ flows out through an open channel here (5 mM outside and 140 mM in the cytosol, E = -89 mV at a membrane potential of -70 mV): ions in a channel only move down their electrochemical gradient; moving them in needs an energy source: ATP or an ion gradient
+scenes[0].params: molecules[0] (Carrier (transporter) 'carrier'): an antiporter moves its solutes opposite ways; the same way is symport
+scenes[0].beats[0].actions[0].target: a uniporter only lets Glucose down its gradient (facilitated diffusion is passive): …; moving it out needs an energy source: ATP or an ion gradient (a symporter)
+scenes[0].beats[0].actions[0].target: K⁺ cannot cross the lipid bilayer by simple diffusion: a charged ion is held back by its water shell in the hydrophobic core; it needs a channel or a carrier (use transport on an open K⁺ channel)
+scenes[0].beats[0].actions[0].target: an action potential starts at rest: channel 'nav' is open at this point (its state must be closed)
+scenes[0].beats[0].actions[0].target: no net water flow: both sides have the same osmolarity (300 mOsm/L, isotonic); give the solutes different concentrations on the two sides
+```
+
+A carrier's coupled moves must gain energy overall (ΔG = Σ n·(RT ln c₂/c₁ + zFΔψ) < 0 with the
+scene's concentrations and potential): an exchanger driven uphill is refused with *active transport
+needs an energy source: ATP or an ion gradient*.
 
 ### `end_card`
 
@@ -9165,8 +9249,8 @@ a title card, a `transform` of a bar).
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
 | `iso_diagram` | `heading`, `diagram`, `block<N>`, `block:<id>`, `stack:<id>`, `group:<id>`, `edge:<from>-><to>` | reveal, build, raise, lower, explode, collapse, flow, focus, relabel, dim, highlight, zoom | a block is its shape and label (a stack's layer also its leader line or swatch; a `box` frames the shape); `block<N>` counts every block and layer in the order written, a stack's layers bottom up in its place; a stack is its layers and caption, a group its plate, caption and members, `diagram` everything; an edge its arrow or pipe and label; `dim` and `highlight` recolour blocks with their shading kept; see [the actions](#iso-diagram-actions) |
-| `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, see [the cell actions](#cell-actions) |
-| `molecule` | `title`, `membrane`, `scale_bar`, `<id>` | reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments; a molecule's id brings its name and part labels |
+| `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, motor_walk, endocytosis, exocytosis, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, `motor_walk` / `endocytosis` / `exocytosis` play processes, see [the cell actions](#cell-actions) |
+| `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:

@@ -12,9 +12,10 @@ from typing import TYPE_CHECKING
 
 from manim import VGroup, VMobject
 
-from vidgen.cellworld import BILAYER, KINDS, Capsule, Ellipse, Placed, Polyline
+from vidgen.cellworld import BILAYER, KINDS, MOLECULES, Capsule, Ellipse, Placed, Polyline, molecule_glyph
 from vidgen.cellworld.bilayer import MOSAIC_REACH, RAFT_WIDTH, Lipid, lipid_layout, lipids_of, mosaic, plasma_rafts
 from vidgen.cellworld.catalog import LIPID_HEAD
+from vidgen.cellworld.glyphs import bilayer_span
 from vidgen.cellworld.curves import Cubic, line, polygon, smooth
 from vidgen.cellworld.morphology import rng_for
 
@@ -39,8 +40,9 @@ def lipids(d: "CellDrawing", curves: list[Cubic], feature: str | None) -> tuple[
         return VGroup(), VGroup()
     found: list[Lipid] = []
     rafts = plasma_rafts(d.world) if d.world.kind != "bacterium" else []
+    gaps = protein_gaps(d.world)
     for center, reach in d.near_closeup((min(xs), min(ys), max(xs), max(ys))):
-        found += lipid_layout(d.world, curves, center, reach, f"{len(curves)}:{curves[0][0]}", rafts)
+        found += lipid_layout(d.world, curves, center, reach, f"{len(curves)}:{curves[0][0]}", rafts, gaps)
     if not found:
         return VGroup(), VGroup()
     base = f"{feature}&lipids" if feature else "lipids"
@@ -98,6 +100,19 @@ def lipids(d: "CellDrawing", curves: list[Cubic], feature: str | None) -> tuple[
     if galacto:
         parts.append(d.piece(d.curves([cv for poly in galacto for cv in poly]), base, fill=c.solid(SUGAR_HUE)))
     return under, VGroup(*parts)
+
+
+def protein_gaps(world: object) -> list[tuple[tuple[float, float], float, float, float]]:
+    """Where membrane proteins fill a bilayer of the world: each one's centre, angle and the
+    span of its glyph within the bilayer (µm), so the lipids leave room for it."""
+    out = []
+    for thing in world.placed:  # type: ignore[attr-defined]
+        spec = thing.option("molecule")
+        if spec is None or thing.option("membrane") is None or MOLECULES[thing.kind].family != "membrane":
+            continue
+        x0, x1 = bilayer_span(molecule_glyph(spec))
+        out.append((thing.center, thing.angle, x0 / 1000.0, x1 / 1000.0))
+    return out
 
 
 def surface(d: "CellDrawing", thing: Placed, shape: object) -> VGroup:

@@ -311,7 +311,8 @@ def place_motors(b: "Builder", entry_id: str, spec: ObjectSpec, kind: Kind) -> l
     for n in range(spec.count):
         for _ in range(400):
             host = rng.choice(hosts)
-            line = rng.choice(host.footprint)
+            track = rng.randrange(len(host.footprint))
+            line = host.footprint[track]
             assert isinstance(line, Polyline)
             if line.length < size * 2:
                 continue
@@ -326,7 +327,8 @@ def place_motors(b: "Builder", entry_id: str, spec: ObjectSpec, kind: Kind) -> l
             key = _key(entry_id, n, spec.count)
             out.append(Placed(key, entry_id, kind.name, center, size, size * 0.45, facing, (Ellipse(center[0], center[1], size / 2, size * 0.25, facing),),
                               (), "cytosol", surface=host.key, normal=normal, facing=facing,
-                              options=(("cargo", bool(spec.cargo)), ("base", base), ("filament_width", line.width))))
+                              options=(("cargo", bool(spec.cargo)), ("base", base), ("filament_width", line.width), ("track", track), ("s", s),
+                                       ("side", side))))
             break
         else:
             raise fail(spec, entry_id, f"no room for {spec.count} of them on '{spec.on}'; use a smaller count")

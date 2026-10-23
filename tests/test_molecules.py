@@ -139,7 +139,7 @@ def test_membrane_sides_and_placement_rules() -> None:
 def test_molecule_options_are_checked() -> None:
     with pytest.raises(VidgenError, match="anticodon is for trna, not DNA"):
         check_molecule(MoleculeSpec("dna", anticodon="CAU"))
-    with pytest.raises(VidgenError, match="state 'opened' of Ion channel: use closed, open; did you mean 'open'"):
+    with pytest.raises(VidgenError, match="state 'opened' of Ion channel: use closed, open, inactivated; did you mean 'open'"):
         check_molecule(MoleculeSpec("ion_channel", state="opened"))
     with pytest.raises(VidgenError, match="a symporter moves its solutes the same way"):
         check_molecule(MoleculeSpec("carrier", mode="symport", substrates=("Na+", "glucose"), moves=("in", "out")))

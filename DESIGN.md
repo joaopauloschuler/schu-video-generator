@@ -15132,3 +15132,61 @@ kind's range, counts, exaggerated glyphs.
   drawn under membrane proteins in a `cell` close-up (no gap in the bilayer there); a row of
   several membrane proteins in a 9:16 frame is small (one membrane, one row); the nucleosome is
   seen face on only; rRNA is a schematic; small-molecule glyphs are symbols (no atoms).
+
+### 95.10 Transport and membrane processes as actions (Step 205)
+
+- **Where.** Processes at the molecule scale are actions of the `molecule` scene: `set_state`,
+  `transport`, `diffuse`, `osmosis`, `action_potential`. Processes of the whole cell are actions of
+  the `cell` scene: `motor_walk`, `endocytosis`, `exocytosis`. Each action has a duration and
+  `until` like any other action, so it is timed to beats and words. Each validates with a clear
+  error before rendering: the wrong scene, an unknown molecule, a state the kind lacks, a
+  direction against the gradient for a passive path, an ion a channel does not pass, a walk past
+  the end of a track, a vesicle fused twice.
+- **Three layers.** No manim in `vidgen.cellworld.transport` and `vidgen.cellworld.traffic`. A
+  process is a `Plan` of `Phase`s. Each phase has protein states, particle `Move`s (paths in nm,
+  with a Brownian-bridge random walk) and a caption. The membrane shapes of an event are
+  keyframes. `cell_draw/traffic.py` (`EventDrawing`) draws the event overlay.
+  `scenes/molecule_process.py` plays plans: `PlanPlayer` and `Hold`, with morphs between
+  states. Prims are matched by look and interpolated; unmatched prims fade in or out.
+- **Physics.**
+  - Nernst: E = (RT/zF) ln(c_out/c_in), RT/F = 26.7 mV at 37 °C.
+  - Free energy: ΔG = RT ln(c₂/c₁) + zFΔψ. A passive path must have ΔG < 0. A coupled carrier
+    must have total ΔG < 0 over its stoichiometry (SGLT1 2 Na⁺ : 1 glucose; NCX 3 Na⁺ : 1 Ca²⁺).
+  - Typical mammalian concentrations, in mM (cytosol / outside): K⁺ 140/5, Na⁺ 12/145, Cl⁻ 10/110,
+    Ca²⁺ 0.0001/2, glucose 0.5/5. Resting potential −70 mV.
+  - Na⁺/K⁺-ATPase: the Post–Albers cycle E1 → E1-P → E2-P → E2. 3 Na⁺ out, then 2 K⁺ in, per ATP.
+  - Carriers use alternating access, with an occluded state between the two open states.
+    Uniporters: GLUT1, GLUT4. Symporters: SGLT1, SGLT2, NKCC1, KCC2. Antiporters: NCX, NHE1.
+  - Other pumps: a P-type H⁺ pump, a V-type pump (no states), and an ABC transporter (two NBDs,
+    ATP-driven closure).
+  - Channels: selectivity by ion. Gating kinds are voltage, ligand and mechanical. Inactivation
+    (a ball-and-chain plug) only on voltage-gated channels. Aquaporin passes water in single
+    file and no ions.
+  - Simple diffusion: only bilayer-permeant molecules (O₂, CO₂, water, small lipophilic drugs).
+  - Osmosis: water moves toward the higher osmolarity.
+  - Action potential: a monotone cubic through textbook points (−70 → +40 mV, undershoot −80 mV,
+    about 4 ms). Events in ms: Na⁺ channels open at 0.8 and inactivate at 1.6; K⁺ channels open
+    at 1.5 and close at 4.6. A live readout and an optional plot inset are drawn.
+  - Kinesin and dynein take 8 nm steps hand over hand; myosin V takes 36 nm steps. Each motor
+    walks toward its end (kinesin to plus, dynein to minus).
+  - Endocytosis: a clathrin pit forms, then a neck, then dynamin scission. Exocytosis: SNARE
+    docking, then a fusion pore, then collapse into the membrane.
+- **Step 204 gaps fixed.**
+  - Lipids leave a gap around each membrane protein in a `cell` close-up
+    (`lipid_layout(gaps=)`). The random-number stream is unchanged, so earlier frames match.
+  - A `molecule` scene in a tall frame puts membrane proteins in several rows.
+- **Public:** `vidgen.api` adds `cell_transport`, `cell_traffic`, `CellEventDrawing`,
+  `cell_motor_curves`, `cell_motor_parts`, `MOLECULE_ION_FLOW`, `MoleculePrim`, `carrier_parts`,
+  `molecule_small_prims`, `MOLECULE_ION_RADII`, `MOLECULE_ION_HUES`, `MOLECULE_TRANSPORTERS`,
+  `TYPICAL_CONCENTRATIONS`, `molecule_pump_type`.
+  - Config, molecule items: `transporter`, `ratio`.
+  - Config, `molecule` params: `solutes`, `potential`, `bars`, `seed`.
+  - Config, cell motor options: `track`, `s`, `side`.
+  - Config, the eight actions above.
+  - The Phase Q baseline frames match.
+- **Gaps:**
+  - The `cell` scene has no `set_state`.
+  - An endocytosed vesicle is not added to the world as an object.
+  - Part labels in a zoomed view can go stale after a process (use `labels: false`).
+  - Four membrane proteins plus the action-potential plot make small drawings.
+  - The plot is an inset, not a `function_plot` scene.

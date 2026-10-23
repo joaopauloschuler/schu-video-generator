@@ -18833,3 +18833,174 @@ How to test
 - Stills looked at (scratchpad `s204`): the corrected 203 close-ups and every molecule family in
   16:9 and 9:16, dark and `light_academic`; molecules in cells (cristae, thylakoids, plasma
   membrane, nucleoplasm).
+
+## Step 205 — Transport and membrane processes as actions
+
+What was built (DESIGN §95.10)
+- **Molecule scene actions** (`scenes/molecule_actions.py`; runtime in `scenes/molecule.py`, players
+  in `scenes/molecule_process.py`; rules and plans without manim in `cellworld/transport.py`):
+  - `set_state` morphs a molecule to another state. Prims are matched by look and interpolated;
+    unmatched prims fade. `until` turns it back.
+  - `transport` runs one of these:
+    - a channel passing ions down their electrochemical gradient, checked for selectivity;
+    - an aquaporin passing water in single file;
+    - a carrier's alternating-access cycle (uniport, symport, antiport), with the transporters
+      GLUT1/4, SGLT1/2, NCX, NHE1, NKCC1 and KCC2;
+    - the Na⁺/K⁺-ATPase Post–Albers cycle (E1 → E1P → E2P → E2, with a phosphorylated Asp);
+    - a P-type H⁺ pump, a V-ATPase, or an ABC exporter.
+  - `diffuse` is simple diffusion by a seeded random walk, with net flux down the gradient. Only
+    bilayer-permeant molecules may cross a membrane.
+  - `osmosis` moves water toward the higher osmolarity, through aquaporins if there are any.
+  - `action_potential`:
+    - a monotone-cubic voltage trace;
+    - Na⁺ channels open, then inactivate; K⁺ channels open, then close;
+    - a live Vm readout, membrane charges and an optional inset plot.
+  - New scene params: `solutes` (concentration bars and particles, typical mammalian values by
+    default), `potential`, `bars`, `seed`.
+  - Each step of a process has a caption.
+- **Cell scene actions** (`scenes/cell_actions.py`, mixin `scenes/cell_traffic.py`; models in
+  `cellworld/traffic.py`; drawing in `cell_draw/traffic.py`):
+  - `motor_walk`: kinesin and dynein take 8 nm steps hand over hand; myosin V takes 36 nm steps,
+    at real speeds. Walks add up across beats.
+  - `endocytosis`: a clathrin-coated pit, then a neck with dynamin, scission, uncoating, and the
+    vesicle moves in.
+  - `exocytosis`: docking, SNARE zippering, a fusion pore, cargo release and full collapse.
+  - Membrane shapes are keyframes of a circle-with-neck model in nm, drawn on an overlay that
+    covers the still membrane.
+- **Validation** (`vidgen validate`): molecule states are replayed in beat and `at` order. Each
+  refusal says why. Refused:
+  - a closed channel;
+  - the wrong ion (the TVGYG filter);
+  - transport against the gradient for a passive path;
+  - a coupled carrier whose ΔG is positive overall;
+  - a uniporter driven uphill;
+  - ions by simple diffusion;
+  - isotonic osmosis;
+  - an action potential that does not start at rest;
+  - kinesin walking toward minus;
+  - a walk past a filament's end;
+  - a coated vesicle fused, or a vesicle fused twice;
+  - endocytosis in a bacterium or over an organelle;
+  - the wrong scene for an action.
+- **Step 204 gaps fixed:**
+  - Lipids leave a gap round membrane proteins in cell close-ups (`lipid_layout(gaps=)`). It uses
+    the same RNG draws, so earlier frames are unchanged.
+  - In 9:16, `molecule` scenes put membrane proteins in several rows.
+
+YAML
+```yaml
+- id: firing
+  type: molecule
+  params:
+    membrane: plasma
+    potential: -70
+    solutes: [K+, {solute: Na+, mM: {extracellular: 145, cytosol: 12}, count: 14}]
+    molecules:
+      - {kind: ion_channel, id: nav, ion: Na+}
+      - {kind: ion_channel, id: kv, ion: K+}
+      - {kind: na_k_atpase, id: pump}
+      - {kind: carrier, id: ncx, transporter: ncx}
+  beats:
+    - text: "A stimulus reaches threshold and the membrane fires."
+      actions: [{action_potential: membrane, plot: true, at: "@threshold"}]
+    - text: "The pump restores the gradients, one ATP per turn."
+      actions: [{transport: pump, at: "@pump"}]
+    - text: "When the potassium channel opens, potassium leaves the cell."
+      actions:
+        - {set_state: kv, state: open, at: "@opens"}
+        - {transport: kv, count: 4, at: "@leaves"}
+- id: motors
+  type: cell
+  params:
+    objects:
+      - {kind: microtubule, id: mts, count: 8}
+      - {kind: kinesin, id: kin, on: mts, cargo: true}
+  beats:
+    - text: "Kinesin walks hand over hand, eight nanometres per step."
+      actions:
+        - {zoom_to: kin, width: "250 nm", labels: false}
+        - {motor_walk: kin, distance: "100 nm", at: "@walks"}
+- id: endo
+  type: cell
+  params:
+    view: {level: complex, on: cell, width: "350 nm"}
+    labels: false
+  beats:
+    - text: "Receptors gather in a coated pit, which buds inwards and is pinched off."
+      actions: [{endocytosis: cell, at: "@gather"}]
+- id: exo
+  type: cell
+  params:
+    objects: [{kind: vesicle, id: sv, at: [9.65, 0.0], size: "90 nm"}]
+    view: {level: complex, on: sv, width: "450 nm"}
+  beats:
+    - text: "The vesicle docks, fuses and releases its cargo."
+      actions: [{exocytosis: sv, at: "@docks"}]
+```
+
+Files touched
+- New:
+  - `src/vidgen/cellworld/{transport,traffic}.py`
+  - `src/vidgen/cell_draw/traffic.py`
+  - `src/vidgen/scenes/{molecule_actions,molecule_process,cell_traffic}.py`
+  - `tests/test_transport.py` (27 tests, 3 of them render tests)
+- Changed:
+  - `cellworld/{molecules,glyphs,bilayer,filaments}.py`: new states and kinds, the transporter
+    catalog, gaps in the lipid layout, motor options
+  - `cell_draw/{closeup,cytoskeleton,drawing}.py`: lipid gaps, motor parts, `reshape`,
+    `hide_owner`
+  - `scenes/{__init__,cell,cell_actions,molecule}.py`
+  - `api.py`
+  - the guide and `AGENTS.md`; `docs/CONFIG.md` ("Processes as actions" and the cell actions)
+  - `DESIGN.md` §95.10, `CHANGELOG.md`, `tasklist.md`
+  - tests `test_actions.py`, `test_molecules.py`
+
+Public interfaces
+- `vidgen.api` adds `cell_transport`, `cell_traffic`, `CellEventDrawing`, `cell_motor_curves`,
+  `cell_motor_parts`, `MOLECULE_ION_FLOW`, `MoleculePrim`, `carrier_parts`,
+  `molecule_small_prims`, `MOLECULE_ION_RADII`, `MOLECULE_ION_HUES`, `MOLECULE_TRANSPORTERS`,
+  `TYPICAL_CONCENTRATIONS`, `molecule_pump_type`.
+- Config:
+  - 8 actions;
+  - molecule item options `transporter` and `ratio`;
+  - `molecule` params `solutes`, `potential`, `bars` and `seed`;
+  - motor options `track`, `s` and `side`;
+  - states: inactivated (channels), occluded (carriers), e1, e1p, e2p and e2 (Na⁺/K⁺-ATPase);
+  - kinds `h_atpase`, `abc_transporter`, `aquaporin`, `water`, `o2`, `co2` and `drug`.
+
+Decisions / deviations
+- Processes run in the scene's own mobjects. `PlanPlayer` animates the particle group, and
+  `Hold` marks the other changed mobjects as moving. A wrapper group is not used, because
+  `scene.add` detached the drawings.
+- The action-potential plot is an inset drawn by the scene (custom axes), not a `function_plot`
+  scene.
+- Processes at the molecule scale live in the `molecule` scene, and the cell scene keeps the
+  processes of the whole cell. A `set_state` in a cell is left for later.
+
+Known gaps / TODO
+- The `cell` scene has no `set_state`.
+- The endocytosed vesicle is not added to the world as an object (later actions cannot target
+  it).
+- Zoomed-view part labels go stale after a process. Advise `labels: false`.
+- Four membrane proteins plus the plot make small drawings, most of all in 9:16.
+- Dynein cargo can overlap the nuclear envelope (Step 203 placement).
+- Gallery media for `molecule` and `cell` were not regenerated. Their layout may shift a little
+  (4 layout passes, side-name avoidance).
+- `scenes/molecule.py` is large (about 1,700 lines). The process runtime could become a mixin
+  like `cell_traffic`.
+
+How to test
+- `tests/test_transport.py`: 27 tests, 3 of them render tests.
+- `test_molecules` + `test_cell_scene`: 86.
+- Not render:
+  - `test_actions`, `test_actions_coverage`, `test_builtin_scenes`, `test_schema`,
+    `test_translation`: 298;
+  - `test_guide` + `test_docs` + `test_gallery`: 136;
+  - `test_schema` + `test_json_output` + `test_review2` + `test_introspect`: 105.
+- `test_builtin_scenes` + `test_api` + `test_registry` + `test_extensions`: 185.
+- `test_mcp`: 20.
+- Render `-k "cell or molecule"`: 6.
+- `test_cell_library` + `test_cell_world` + `test_translation`: 182.
+- Compatibility: the Phase Q baseline re-run gave 31 frames, with a max difference of 0.
+- Stills looked at (scratchpad `s205`): every process mid-animation in 16:9 and 9:16, dark and
+  `light_academic`, with contact sheets in `s205/sheets/`.

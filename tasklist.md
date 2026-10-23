@@ -1165,7 +1165,10 @@ when shared code changes). DESIGN §95. Steps 202–211.
 - [x] Step 203 fixes: every label of a zoomed view points at its part (matrix beside a crista, glycocalyx outside the bilayer, Golgi lumen and coat), stroma lamellae join grana at their margins, a smooth-ER ring no longer filled (regions in nm for Skia), raft glow within the bilayer; a test checks each anchor against its compartment or membrane
 
 ### Step 205 — Transport and membrane processes as actions
-- [ ] Diffusion / osmosis with gradients; facilitated diffusion; primary and secondary active transport (ATP use shown); channel gating; clathrin- / receptor-mediated endocytosis, exocytosis, vesicle trafficking along microtubules with motors; membrane potential with ions moving and a live voltage readout tied to a `function_plot`
+- [x] Diffusion / osmosis with gradients; facilitated diffusion; primary and secondary active transport (ATP use shown); channel gating; clathrin- / receptor-mediated endocytosis, exocytosis, vesicle trafficking along microtubules with motors; membrane potential with ions moving and a live voltage readout (an inset plot of the trace in the `molecule` scene, not a separate `function_plot` scene)
+- [x] Actions `set_state`, `transport`, `diffuse`, `osmosis`, `action_potential` (molecule scene; `solutes`, `potential`, `bars`), `motor_walk`, `endocytosis`, `exocytosis` (cell scene); rules with reasons, states replayed in beat order by `vidgen validate`; model in `cellworld/transport.py` and `traffic.py`; tests `tests/test_transport.py`
+- [x] Step 204 gaps: lipids leave room for membrane proteins in cell close-ups; several membrane proteins in a tall frame on membrane rows
+- [~] `set_state` in a `cell` scene not done (molecule scene only); a vesicle taken in by endocytosis is not a new object of the world
 
 ### Step 206 — Gene expression as actions
 - [ ] Transcription (promoters, transcription factors, template read 3′→5′, mRNA made 5′→3′); RNA processing (cap, poly(A) tail, splicing, export through pores); translation (A/P/E sites, codon–anticodon pairing, peptide N→C, stop codon, release factors); protein fate (chaperones, signal peptide + SRP to the ER, glycosylation, Golgi sorting)

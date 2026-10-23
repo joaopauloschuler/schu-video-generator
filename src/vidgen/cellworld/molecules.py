@@ -134,21 +134,47 @@ MOLECULES: dict[str, MoleculeKind] = {m.name: m for m in (
                  cells=("animal",), cells_why="receptor tyrosine kinases are animal proteins"),
     MoleculeKind("ion_channel", "Ion channel", "Ion channel", "membrane", 10.0, (5.0, 20.0),
                  "a gated pore: ions flow down their electrochemical gradient when the gate is open (10⁷–10⁸ ions per second); a "
-                 "selectivity filter near the outer mouth, the gate at the inner end; gated by voltage, a ligand or stretch", "#3FA7A0",
-                 membranes=_ANY_MEMBRANE, faces_part="cytoplasmic gate", faces_side="n",
+                 "selectivity filter near the outer mouth, the gate at the inner end; gated by voltage, a ligand or stretch; a "
+                 "voltage-gated channel inactivates (its inactivation gate plugs the inner mouth) until the membrane repolarises",
+                 "#3FA7A0", membranes=_ANY_MEMBRANE, faces_part="cytoplasmic gate", faces_side="n",
                  faces_why="the gate and the voltage sensor's charges sit as in the textbook channel: gate to the cytosolic side",
-                 why="ion channels sit in membranes", states=("closed", "open")),
+                 why="ion channels sit in membranes", states=("closed", "open", "inactivated")),
     MoleculeKind("carrier", "Carrier (transporter)", "Carrier (transporter)", "membrane", 6.0, (4.0, 10.0),
-                 "binds its solutes and changes shape (alternating access: open to one side, then the other), never open to both "
-                 "at once; uniport (one solute), symport (two the same way), antiport (two opposite ways)", "#7B6BB0",
-                 membranes=_ANY_MEMBRANE, why="carriers sit in membranes", states=("outward", "inward")),
+                 "binds its solutes and changes shape (alternating access: open to one side, occluded, then open to the other), "
+                 "never open to both at once; uniport (one solute), symport (two the same way), antiport (two opposite ways)", "#7B6BB0",
+                 membranes=_ANY_MEMBRANE, why="carriers sit in membranes", states=("outward", "occluded", "inward")),
     MoleculeKind("na_k_atpase", "Na<sup>+</sup>/K<sup>+</sup>-ATPase", "Na⁺/K⁺-ATPase", "membrane", 15.0, (12.0, 18.0),
                  "the sodium pump (a P-type ATPase): per ATP it pumps 3 Na⁺ out of the cell and 2 K⁺ in; α subunit (10 TM helices, "
-                 "the ATP site on its cytosolic domains) and a glycosylated β subunit", "#E0A030",
-                 membranes=("plasma_membrane",), faces_part="ATP-binding domains", faces_side="n",
+                 "the ATP site on its cytosolic domains) and a glycosylated β subunit; the Post–Albers cycle: E1 (open to the cytosol) "
+                 "binds 3 Na⁺ and ATP, phosphorylates an Asp of its P domain (E1P, Na⁺ occluded), turns to E2P (open outside: Na⁺ "
+                 "leaves, 2 K⁺ bind), loses the phosphate (E2, K⁺ occluded) and, with ATP bound, returns to E1 (K⁺ released inside)",
+                 "#E0A030", membranes=("plasma_membrane",), faces_part="ATP-binding domains", faces_side="n",
                  faces_why="ATP is bound and hydrolysed on the cytosolic side; Na⁺ leaves to the outside, K⁺ comes in",
-                 why="the Na⁺/K⁺ pump is in the plasma membrane of animal cells", states=("e1", "e2"),
+                 why="the Na⁺/K⁺ pump is in the plasma membrane of animal cells", states=("e1", "e1p", "e2p", "e2"),
                  cells=("animal",), cells_why="plant and fungal cells use H⁺-ATPases in their plasma membrane instead"),
+    MoleculeKind("h_atpase", "H<sup>+</sup>-ATPase", "H⁺-ATPase", "membrane", 12.0, (10.0, 25.0),
+                 "a proton pump: P-type in the plasma membrane (plants and fungi; the gastric H⁺/K⁺ pump in animals; it phosphorylates "
+                 "itself like the Na⁺/K⁺ pump), V-type in lysosomes, endosomes, vacuoles and secretory vesicles (a rotary pump: V₁ "
+                 "hydrolyses ATP in the cytosol, Vₒ moves H⁺ into the lumen, acidifying it); H⁺ always leaves the cytosol",
+                 "#C9563F", membranes=("plasma_membrane", "lysosomal_membrane", "endosomal_membrane", "tonoplast", "vesicle_membrane",
+                                       "golgi_membrane"),
+                 faces_part="ATP-binding domain", faces_side="n",
+                 faces_why="ATP is hydrolysed on the cytosolic side and H⁺ is pumped out of the cytosol (out of the cell, into a lumen)",
+                 why="H⁺ pumps sit in the plasma membrane and in the membranes of lysosomes, endosomes, vacuoles and secretory vesicles",
+                 states=("e1", "e1p", "e2p", "e2")),
+    MoleculeKind("abc_transporter", "ABC transporter", "ABC transporter", "membrane", 12.0, (9.0, 16.0),
+                 "an ATP-binding cassette pump: two transmembrane domains and two nucleotide-binding domains (NBDs) in the cytosol; "
+                 "2 ATP bind and bring the NBDs together, which turns the pump from inward- to outward-facing; hydrolysis resets it. "
+                 "Eukaryotic ones export (P-glycoprotein / MDR1 pumps drugs out); bacteria also have importers", "#9A6FB0",
+                 membranes=("plasma_membrane", "er_membrane", "lysosomal_membrane", "bacterial_inner_membrane", "inner_mitochondrial_membrane"),
+                 faces_part="nucleotide-binding domains", faces_side="n",
+                 faces_why="the nucleotide-binding domains bind and hydrolyse ATP in the cytosol",
+                 why="ABC transporters sit in the plasma membrane, the ER, lysosomes, the inner mitochondrial membrane and bacterial membranes",
+                 states=("inward", "outward")),
+    MoleculeKind("aquaporin", "Aquaporin", "Aquaporin", "membrane", 7.0, (6.0, 10.0),
+                 "a water channel (a tetramer, each subunit a pore): water molecules pass in single file, about 3 × 10⁹ per second; "
+                 "the narrow pore and its NPA motifs keep out ions, even H⁺", "#4F8FD0", membranes=_ANY_MEMBRANE,
+                 why="aquaporins sit in membranes (the plasma membrane, the tonoplast)"),
     MoleculeKind("atp_synthase", "ATP synthase", "ATP synthase", "membrane", 22.0, (18.0, 26.0),
                  "F-type ATP synthase: Fₒ in the membrane (the c-ring: 8 c subunits in animal mitochondria, 10 in yeast and E. coli, "
                  "14 in chloroplasts) turned by protons flowing down their gradient; F₁ (α₃β₃, about 10 nm) makes ATP from ADP and Pᵢ "
@@ -172,7 +198,19 @@ MOLECULES: dict[str, MoleculeKind] = {m.name: m for m in (
     MoleculeKind("ligand", "Ligand", "Ligand", "small", 1.2, (0.3, 10.0), "a signal molecule that binds a receptor (a hormone, a "
                  "neurotransmitter, a growth factor)", "#E39B32"),
     MoleculeKind("ion", "Ion", "Ion", "small", 0.7, (0.5, 0.9), "an ion with its water shell (hydrated radius 0.28–0.43 nm)", "#E0A030"),
+    MoleculeKind("water", "H<sub>2</sub>O", "H₂O", "small", 0.28, (0.27, 0.3), "water (18 Da, about 0.28 nm across): it crosses a lipid "
+                 "bilayer slowly by diffusion and fast through aquaporins", "#4FA3D9"),
+    MoleculeKind("o2", "O<sub>2</sub>", "O₂", "small", 0.3, (0.28, 0.35), "oxygen: small and nonpolar, it diffuses straight through the "
+                 "lipid bilayer", "#D9534F"),
+    MoleculeKind("co2", "CO<sub>2</sub>", "CO₂", "small", 0.33, (0.3, 0.4), "carbon dioxide: small and nonpolar, it diffuses straight "
+                 "through the lipid bilayer", "#7F8C8D"),
+    MoleculeKind("drug", "Drug", "Drug", "small", 1.0, (0.5, 2.0), "a small, mostly hydrophobic drug (a chemotherapy agent that "
+                 "P-glycoprotein pumps out of the cell)", "#B04E8C"),
 )}
+
+#: What crosses a pure lipid bilayer by simple diffusion (fast: small and nonpolar; slow: water,
+#: small uncharged polar molecules); everything else needs a channel or a carrier (Alberts Fig. 11-2).
+BILAYER_PERMEANT: dict[str, str] = {"o2": "fast", "co2": "fast", "water": "slow"}
 
 #: ATP synthase c-ring sizes by where it is (c subunits; protons per turn).
 C_RING = {"inner_mitochondrial_membrane": 8, "thylakoid_membrane": 14, "bacterial_inner_membrane": 10}
@@ -182,6 +220,43 @@ CARRIER_MODES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "symport": (("Na+", "glucose"), ("in", "in")),
     "antiport": (("Na+", "H+"), ("in", "out")),
 }
+
+@dataclass(frozen=True)
+class Transporter:
+    """A named carrier (``transporter: sglt1``): its ``label``, ``mode``, ``substrates`` with the
+    way each moves and how many per cycle (``ratio``), and a note."""
+
+    label: str
+    mode: str
+    substrates: tuple[str, ...]
+    moves: tuple[str, ...]
+    ratio: tuple[int, ...]
+    note: str
+
+
+#: Carriers by name (Alberts Table 11-3, Lodish §11.3–11.5): the ratio is per transport cycle.
+TRANSPORTERS: dict[str, Transporter] = {
+    "glut1": Transporter("GLUT1", "uniport", ("glucose",), ("in",), (1,), "glucose uniporter of most cells (red cells, the blood–brain barrier)"),
+    "glut4": Transporter("GLUT4", "uniport", ("glucose",), ("in",), (1,), "insulin-regulated glucose uniporter of muscle and fat cells"),
+    "sglt1": Transporter("SGLT1", "symport", ("Na+", "glucose"), ("in", "in"), (2, 1), "Na⁺–glucose symporter of the intestine: 2 Na⁺ per glucose"),
+    "sglt2": Transporter("SGLT2", "symport", ("Na+", "glucose"), ("in", "in"), (1, 1), "Na⁺–glucose symporter of the kidney: 1 Na⁺ per glucose"),
+    "ncx": Transporter("NCX", "antiport", ("Na+", "Ca2+"), ("in", "out"), (3, 1), "Na⁺/Ca²⁺ exchanger: 3 Na⁺ in for 1 Ca²⁺ out"),
+    "nhe1": Transporter("NHE1", "antiport", ("Na+", "H+"), ("in", "out"), (1, 1), "Na⁺/H⁺ exchanger: 1 Na⁺ in for 1 H⁺ out (raises the pH)"),
+    "nkcc1": Transporter("NKCC1", "symport", ("Na+", "K+", "Cl-"), ("in", "in", "in"), (1, 1, 2), "Na⁺–K⁺–2Cl⁻ cotransporter"),
+    "kcc2": Transporter("KCC2", "symport", ("K+", "Cl-"), ("out", "out"), (1, 1), "K⁺–Cl⁻ cotransporter of neurons (driven by the K⁺ gradient)"),
+}
+
+#: Typical concentrations (mM) in a mammalian cell's cytosol and outside it (Alberts Table 11-1):
+#: ``(cytosol, extracellular)``; H⁺ from pH 7.2 inside and 7.4 outside; glucose kept low inside
+#: by hexokinase.
+TYPICAL_CONCENTRATIONS: dict[str, tuple[float, float]] = {
+    "K+": (140.0, 5.0), "Na+": (12.0, 145.0), "Cl-": (10.0, 110.0), "Ca2+": (0.0001, 2.0), "Mg2+": (0.5, 1.5), "H+": (0.000063, 0.00004),
+    "glucose": (0.5, 5.0),
+}
+#: RT/F at 37 °C (mV), for the Nernst potential E = (RT / zF) ln([out] / [in]).
+RT_OVER_F = 26.7
+#: The resting membrane potential of a typical neuron (mV, inside relative to outside).
+RESTING_POTENTIAL = -70.0
 GATINGS = ("voltage", "ligand", "mechanical")
 RRNA_TYPES = {"5S": "both", "5.8S": "eukaryote", "18S": "eukaryote", "28S": "eukaryote", "25S": "eukaryote", "16S": "prokaryote",
               "23S": "prokaryote", "12S": "mitochondrion"}
@@ -278,7 +353,7 @@ def pitch() -> float:
 def _plural(m: MoleculeKind) -> str:
     if m.name == "carrier":
         return "Carriers (transporters)"
-    if m.name == "chromatin" or (m.family in ("nucleic_acid", "small") and m.name not in ("ligand", "ion")):
+    if m.name == "chromatin" or (m.family in ("nucleic_acid", "small") and m.name not in ("ligand", "ion", "drug")):
         return m.plain                       # DNA, mRNA, ATP, glucose: the same word for several
     return m.plain + "s"
 
@@ -298,7 +373,17 @@ KIND_OPTIONS.update({"state": tuple(m.name for m in MOLECULES.values() if m.stat
                      "membrane": tuple(m.name for m in MOLECULES.values() if m.bound)})
 
 
-__all__ = ["BILAYER_NM", "CARRIER_MODES", "CORE_NM", "C_RING", "DNA_BP_PER_TURN", "DNA_RISE", "DNA_WIDTH", "GATINGS", "IONS", "ION_HUES",
-           "MOLECULES", "MoleculeKind", "NUCLEOSOME_BP", "NUCLEOSOME_DIAMETER", "NUCLEOSOME_HEIGHT", "NUCLEOSOME_TURNS", "RRNA_TYPES",
-           "bp_length", "check_faces", "check_membrane", "check_place", "ion_markup", "membrane_sides", "molecule_kind", "pitch",
-           "protein_size"]
+V_TYPE_MEMBRANES = ("lysosomal_membrane", "endosomal_membrane", "tonoplast", "vesicle_membrane", "golgi_membrane")
+
+
+def pump_type(membrane: str | None) -> str:
+    """An H⁺-ATPase's type in ``membrane``: ``v`` (rotary, in lysosomes, endosomes, vacuoles and
+    vesicles) or ``p`` (phosphorylated, in the plasma membrane)."""
+    return "v" if membrane in V_TYPE_MEMBRANES else "p"
+
+
+__all__ = ["BILAYER_NM", "BILAYER_PERMEANT", "CARRIER_MODES", "CORE_NM", "C_RING", "DNA_BP_PER_TURN", "DNA_RISE", "DNA_WIDTH", "GATINGS", "IONS",
+           "ION_HUES", "MOLECULES", "MoleculeKind", "NUCLEOSOME_BP", "NUCLEOSOME_DIAMETER", "NUCLEOSOME_HEIGHT", "NUCLEOSOME_TURNS",
+           "RESTING_POTENTIAL", "RRNA_TYPES", "RT_OVER_F", "TRANSPORTERS", "TYPICAL_CONCENTRATIONS", "Transporter", "V_TYPE_MEMBRANES",
+           "bp_length", "check_faces", "check_membrane", "check_place", "ion_markup", "membrane_sides", "molecule_kind", "pitch", "protein_size",
+           "pump_type"]

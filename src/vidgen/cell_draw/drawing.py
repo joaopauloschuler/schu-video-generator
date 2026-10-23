@@ -51,6 +51,7 @@ class CellDrawing:
         self.style = style
         self.closeups = [(c, s) for c, s in closeups if s <= CLOSEUP_SPAN]
         self.lod = Pieces()
+        self.motor_pieces: dict[str, dict[str, VMobject]] = {}
         self.groups: dict[str, VGroup] = {}
         self.order: list[str] = []
         self.lod.owner = "tissue"
@@ -213,6 +214,25 @@ class CellDrawing:
         """Keep what an action did to the pieces' opacity (a dim, a highlight) as their emphasis
         (call every frame)."""
         self.lod.sync()
+
+    def reshape(self, mob: VMobject, curves: Iterable[Cubic]) -> None:
+        """Give a registered piece new outlines (µm), also while level of detail hides it."""
+        pieces = curves_array(curves)
+        points = np.concatenate(pieces) * self.unit + self.origin if pieces else np.zeros((0, 3))
+        piece = next((p for p in self.lod.pieces if p.mobject is mob), None)
+        if piece is not None and not len(mob.points) and piece.points is not None:
+            piece.points = points                  # hidden: shown with these outlines when it comes back
+            return
+        mob.set_points(points)
+
+    def hide_owner(self, owner: str) -> None:
+        """Hide every piece of ``owner`` for good (a vesicle that fused with the plasma membrane)."""
+        for piece in self.lod.pieces:
+            if piece.owner == owner:
+                piece.emphasis = (0.0, 0.0)
+                self.lod._write(piece, max(piece.width, 0.0))
+        self.lod.recent[(owner, 0)] = 0.0
+        self.lod.recent[(owner, 1)] = 0.0
 
 
 def ring_angle(p: tuple[float, float], q: tuple[float, float]) -> float:
