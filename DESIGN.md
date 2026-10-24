@@ -15921,3 +15921,91 @@ chiasmata on the parents' chromosomes (`linkage_map`, Step 216, draws crossing o
 phenotype names in `loci` are not translatable strings; per-cell penetrance (a genotype split
 between phenotypes) shows the main phenotype in its cell (the tables are exact); the 9:16 genotype
 tree is small with 9 leaves; the lint of ratios said in narration is Step 219's.
+
+### 96.8 The `pedigree` scene (Step 215)
+
+**The chart** (`genetics/pedigree.py`, no manim): `parse_pedigree(individuals, couples)` →
+`Pedigree` (people in YAML order, couples with their children in birth order, each person's
+generation, who married in, NSGC labels). A person is a mapping (`id`, `sex`, `affected`,
+`carrier`, `deceased`, `proband`, `consultand`, `adopted: in | out`, `loss: miscarriage |
+stillbirth`, `proposed`, `parents`, `spouse`, `twin: {with, kind: MZ | DZ | unknown}`, `age`,
+`label`) or a line (`"II-3: female affected deceased of I-1 + I-2 twin II-4 MZ age 45 y"`).
+Couples come from shared children, `spouse:` and `couples:` (childless, `consanguineous`,
+`separated`); consanguinity is also found from shared ancestors. Generations are solved as
+offsets (partners equal, children +1) per connected family; a conflict (an uncle marrying his
+niece) is refused. **Married in**: a founder whose partner has parents on the chart (and an
+adopted-in child: unrelated). **NSGC ids** (`II-3` for everyone, or for no one): the numeral is
+the generation (checked), the numbers must read left to right as drawn (the layout's order is
+named in the error); other ids are numbered by the layout. Refused with the reason: two fathers or
+two mothers, one parent only, a parent without a sex, a cycle, twins who are not siblings, MZ
+twins of different sexes, affected and carrier together, a proposed child with a phenotype or
+without parents, several probands / consultands / proposed children, more than two partners.
+
+**The layout** (`genetics/pedigree_layout.py`): anchors (everyone with parents, one founder per
+cluster of founder partners: the one with most partners, then the male) own a rectangular block;
+a married-in partner stands beside its anchor (male left of female, unless an edge pull decides;
+with NSGC ids by their numbers); a sibship is its children's blocks side by side (twins adjacent,
+0.3 pitch between families) centred under the mating line; two partners on both sides of a person
+with two partners. **Joins** (two relatives as partners): their children belong to the partner
+reached later in preorder; both lines are pulled towards each other up to the common ancestors'
+sibship (the person moved to the sibship's edge, its spouse on the other side), where the two
+branches stand side by side — so the (double) mating line crosses nothing. Positions are in pitch
+units (one symbol and its gap), deterministic.
+
+**The analysis** (`genetics/pedigree_analysis.py`): one locus, two alleles; a genotype is (sex,
+copies of the disease allele): autosomal 0–2, a female's X 0–2, a male's X / Y and mtDNA 0–1;
+transmission per mode (X: the mother's X to every child, the father's to daughters; Y father to
+son; mtDNA from the mother); P(affected | genotype) = `penetrance` for the disease genotype, else
+0 (no phenocopies; XR heterozygotes unaffected). Founders follow Hardy–Weinberg with allele
+frequency q → 0 (weights as (power of q, coefficient) — an exact semiring for the leading term,
+so the posterior is the limit: the explanations needing the fewest copies entering the family,
+weighted by their probabilities); with `carrier_frequency` c (recessive modes) q = c / (2 − c),
+exact (P(heterozygote | unaffected) = 2q / (1 + q) = c). `rare: true` (default): a married-in
+founder carries no more copies than its phenotype needs. MZ twins share their genotype; a carrier
+must be heterozygous (impossible for a male's X, the Y and mtDNA). Inference is variable
+elimination (greedy smallest factor first), so consanguineous loops are exact. A mode **fits**
+when the total weight is not zero; an excluded mode's reason is the first textbook rule that
+applies (skipped generation at full penetrance, affected parents with an unaffected child under
+AR, an affected mother's unaffected son or an affected daughter's unaffected father under XR,
+father → son with a married-in mother, an affected father's unaffected daughter under XD, an
+affected female under YL, mtDNA not from the mother, discordant MZ twins, impossible carriers,
+a married-in parent who would have to carry a rare allele), else the smallest nuclear family no
+genotypes fit; "(fits with reduced penetrance)" when it would at penetrance 1/2. A fitting mode's
+note: the non-penetrant carriers it needs, or the people from outside who must carry the allele.
+`infer` gives each person's posterior, the forced genotypes, obligate carriers (forced
+heterozygotes, unaffected) and the proposed child's risk (P(affected); per sex for X / Y modes;
+the textbook factors — carrier probabilities, transmission, sex, penetrance — when the parents'
+joint posterior is the product of their marginals and the product equals the risk).
+
+**The plan** (`genetics/pedigree_plan.py`, cached by the params' JSON): chart, layout, labels,
+options, the modes tried (`analyse: [..]`), the stated mode (`mode`, or a `preset` / one `loci`
+locus: its alleles, its mode by `mode_of`, the condition = the phenotype that is not "normal…" or
+`condition`), the mode used (the stated one if the chart fits it, else the only fitting one,
+else none) and `warnings`. `declared_mode_problem(plan)` gives the reason a chart does not fit its
+stated mode, for the lint (Step 219); validation errors: a male carrier under a stated X-linked
+mode, any carrier under YL / MT, `mode` against the locus' mode, `genotypes` / `deduce` / `risk`
+without a mode.
+
+**The scene** (`scenes/pedigree.py`, symbols `scenes/pedigree_draw.py`, actions
+`scenes/pedigree_actions.py`): the pitch fits the chart's width and height (16:9 chart 60 %, the
+panel right; 9:16 chart on top up to 56 % of the body, the panel under it); symbol 0.5 pitch;
+numbers at each symbol's top corner (away from a twin line); under it the genotype slot (two lines
+— probability over genotype — when "2/3 Aa" is wider than the pitch and the height allows) and the
+age / label lines; the Roman numerals at the left; a legend of the marks used. Lines appear with
+the people they join (a mating line when both partners are on, a child's line with the child).
+The analysis card lists each mode with a tick or cross and its reason; when it does not fit the
+panel, a strip of the modes with one reason at a time (each replacing the last). The risk card:
+the factors, the product, the exact risk and per-sex risks; the risk is also written under the
+proposed child. Self-play: a generation per beat, then analysis, genotypes, risk as asked; any of
+`deduce` / `analyse` / `risk` (or a `reveal` of chart targets) makes it manual: the chart at
+once except what a `reveal` brings later (and the proposed child, which `risk` brings).
+
+**Public**: no new `vidgen.api` names (`genetics.pedigree`, `genetics.pedigree_layout`,
+`genetics.pedigree_analysis`, `genetics.pedigree_plan`); a scene type `pedigree`; actions
+`deduce`, `analyse`, `risk`; no config key. Changes from the plan (§96.5): `analyse` is a param
+(`true` or a list) and an action (`analyse: modes`); the action that shows genotypes is `deduce`;
+`reveal` / `highlight` are the built-ins on `generation:<R>` / `person:<id>`; `carrier_frequency`
+and `rare` added; `twin: {with, kind}`. Gaps: one locus; quadrants for several conditions,
+pregnancy (P) symbols other than the proposed child, infertility marks, partners from different
+generations and people who married into the family twice are not supported; heteroplasmy,
+new mutations and age-dependent penetrance not modelled.

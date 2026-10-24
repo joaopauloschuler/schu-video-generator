@@ -300,6 +300,7 @@ project's own scene types, in its theme).
 | the cell cycle with its checkpoints and cyclin–CDK levels; mitosis and meiosis with counted chromosomes, crossing over and four haploid cells | `cell_cycle` | `title`, `mode` (cycle, mitosis, meiosis), `start`, `hours`, `chromosomes` (2n), `cell` (animal, plant), `crossovers`, `assortment`, `captions`, `counts`; the actions advance (to, into, expect) and checkpoint (outcome, cause) |
 | energy metabolism: glycolysis, pyruvate oxidation, the citric acid cycle, the electron transport chain and ATP synthase, the light reactions; flows animated, products counted | `metabolism` | `title`, `process` (glycolysis, link_reaction, tca, etc, light_reactions), `cell`, `in`, `membrane`, `protons_to`, `components`, `link`, `tallies`, `names`; the action advance (to, from) |
 | a genetic cross: Punnett square or branch diagram, gametes, genotype and phenotype ratios (mono-, di-, trihybrid, test, reciprocal, P → F1 → F2, dominance, epistasis, lethal 2:1, X-linked, linked genes), a chi-square test | `cross` | `title`, `preset` (pea_dihybrid, abo, labrador, drosophila_white, hemophilia_a…) or `loci` / `linkage` / `epistasis` / `sex`, `parents` (or `mother` / `father`, or `P`), `kind` (cross, test, reciprocal), `show` (auto, punnett, branch), `branch`, `observed`, `alpha`, `notes`, `pictures`; the actions form_gametes, fill, count, ratio, chi_square |
+| a family pedigree in standard (NSGC) symbols: affected, carriers, deceased, proband, twins, consanguinity; which modes of inheritance fit and why the others are excluded, deduced genotypes, carrier probabilities, the risk for a child | `pedigree` | `title`, `individuals` (lines like "II-3: female affected of I-1 + I-2" or mappings), `couples`, `condition`, `mode`, `analyse`, `genotypes`, `penetrance`, `rare`, `carrier_frequency`, `alleles` or `preset`; the actions deduce, analyse, risk |
 | a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs | `pathway` | `title`, `template` (gpcr_camp_pka, rtk_ras_mapk, pi3k_akt), `nodes` (id, kind, label, in, gene, state, marks, role), `edges` (a -> b activates, a -o b catalyses, a => b translocates, an arrow with a bar inhibits, or {from, to, type, effect, site, feedback, label}), `remove`, `species`, `direction`; the actions signal, inhibit, knockout, drug, amplify, focus |
 | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
@@ -713,6 +714,31 @@ A `cross` scene works a genetic cross out exactly (DESIGN §96: the cross engine
       actions: [{fill: square, by: row}]
     - text: "Counted, they give nine to three to three to one."
       actions: [{count: phenotypes}, {ratio: phenotypes, at: "@nine"}]
+```
+
+A `pedigree` scene draws a family chart in standard human pedigree nomenclature (NSGC: square male, circle female, diamond sex unknown; affected filled, a carrier a dot — `carrier_style: half` for the half-shaded heterozygote —, deceased struck, the proband's arrow with P, double line for consanguinity, MZ / DZ twins, adoption brackets, a miscarriage triangle, a proposed child dashed with ?) laid out by generation (Roman numerals, individuals numbered left to right, sibships in birth order, partners from outside beside the relative), and works its genetics out exactly (DESIGN §96.8): which modes of inheritance fit (AD, AR, XD, XR, Y-linked, mitochondrial; an excluded one with its reason, e.g. *father-to-son: a son's X comes from his mother*), the genotypes the chart forces (obligate carriers), carrier probabilities by Bayes' rule on the whole chart (2/3 for an unaffected sibling under AR), and the risk for a proposed child with its factors (2/3 × 1/25 × 1/4 = 1/150). Write each person as a line — `"II-3: female affected deceased of I-1 + I-2"`, flags `carrier`, `proband`, `consultand`, `proposed`, `miscarriage`, `adopted in`, `twin II-4 MZ`, `spouse II-5`, `age 45 y` last — or as a mapping (`{id, sex, affected, parents: [I-1, I-2], twin: {with, kind}}`). Use NSGC ids (`II-3`, numbered left to right as drawn: a partner from outside stands beside the relative) or any names (vidgen numbers the chart). The analysis assumes a rare allele (people marrying in do not carry it: `rare: false` or `carrier_frequency: 1/25` for a common one) and full penetrance (`penetrance: 0.8` lets a dominant trait skip a generation). `mode` sets the mode for genotypes and risk (default: the only one that fits; `preset: hemophilia_a` gives X-linked recessive with H / h). The actions: `analyse: modes` (one by one, the people a reason names ringed; `mode:XR` for one), `deduce: genotypes` (`carriers`, `generation:II`, `person:II-3`), `risk: risk`; `reveal: "generation:II"` or `"person:II-3"` brings people in on a word, `highlight` marks them. Checked with the reason: a child with two fathers, a cycle, twins who are not siblings, numbers that do not read left to right, a male carrier under X-linked inheritance, genotypes or risk when several modes fit and none is stated.
+
+```yaml
+# genetics
+- id: family
+  type: pedigree
+  params:
+    title: "Who carries the allele?"
+    condition: cystic fibrosis
+    carrier_frequency: 1/25            # for people marrying in; mode: AR is the only mode that fits
+    individuals:
+      - "I-1: male"
+      - "I-2: female"
+      - "II-1: male of I-1 + I-2"
+      - "II-2: female affected proband of I-1 + I-2"
+      - "II-3: male of I-1 + I-2"
+      - "II-4: female"                 # married in, beside II-3
+      - "III-1: unknown proposed of II-3 + II-4"
+  beats:
+    - text: "Unaffected parents, an affected daughter: only a recessive mode fits."
+      actions: [{analyse: modes}]
+    - text: "Her brother is a carrier with probability two thirds; the risk is one in 150."
+      actions: [{deduce: genotypes}, {risk: risk, at: "@risk"}]
 ```
 
 Accuracy and sources. `vidgen lint` checks the science of these scenes (and of any narration)
@@ -1214,6 +1240,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `count` | on a `cross`: the offspring counted into classes (`count: phenotypes` or `genotypes`): rows appear as their cells flash, fractions in lowest terms, percentages, the lethal class dying | one table per beat |
 | `ratio` | on a `cross`: the whole-number ratio of a table (`ratio: phenotypes` → 9 : 3 : 3 : 1) | on the word that says it |
 | `chi_square` | on a `cross` with `observed` counts: the goodness-of-fit table, χ², df, p, the verdict (`chi_square: test`) | give it its own beat |
+| `deduce` | on a `pedigree`: the genotypes under the symbols, forced ones or the most telling with its exact probability (`deduce: genotypes`, `carriers`, `generation:II`, `person:II-3`), obligate carriers marked | on the word that says carriers |
+| `analyse` | on a `pedigree`: the modes of inheritance tried one by one, each fits or is excluded with its reason, the people it names ringed (`analyse: modes`; `mode:XR` for one) | ~1 s a mode: a beat for all six, or one mode per beat |
+| `risk` | on a `pedigree` with a `proposed` child: the child appears and the risk card with the factors of the product (`risk: risk`) | on the word that says the risk |
 
 ```yaml
 - id: speeds

@@ -63,6 +63,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "cell_cycle": {"title": "Cycle"},
     "metabolism": {"title": "ETC", "process": "etc", "components": ["complex_iii", "cyt_c", "complex_iv"]},
     "cross": {"title": "Cross", "preset": "pea_seed_shape", "parents": ["Rr", "Rr"]},
+    "pedigree": {"title": "Pedigree", "individuals": ["I-1: male", "I-2: female", "II-1: female affected proband of I-1 + I-2"],
+                 "analyse": True, "genotypes": True},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -196,6 +198,12 @@ def test_target_names_of_every_builtin_type() -> None:
         "tree", "all", "cells:normal clotting, female", "cells:normal clotting, male", "cells:hemophilia A, male", "phenotypes",
         "class1", "class:normal clotting, female", "class2", "class:normal clotting, male", "class3", "class:hemophilia A, male",
         "genotypes", "genotype:X^H X^H", "genotype:X^H X^h", "genotype:X^H Y", "genotype:X^h Y"]
+    assert names("pedigree") == ["title", "chart", "legend", "generation:I", "generation:II", "person:I-1", "person:I-2", "person:II-1",
+                                 "proband", "affected", "carriers", "genotypes", "all", "modes", "analysis", "mode:AD", "mode:AR", "mode:XD",
+                                 "mode:XR", "mode:YL", "mode:MT"]
+    assert names("pedigree", individuals=["dad: male", "mum: female", "kid: male of dad + mum", "next: unknown proposed of dad + mum"],
+                 mode="AD", title="")[:8] == ["chart", "legend", "generation:I", "generation:II", "person:dad", "person:I-1", "person:mum",
+                                              "person:I-2"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

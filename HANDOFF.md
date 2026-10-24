@@ -19811,3 +19811,127 @@ How to test
 - Stills: scratch project `scratchpad/s214/proj` (14 scenes: monohybrid from P, dihybrid on words,
   hemophilia, yellow mouse, Labradors, linked test cross, trihybrid tree, genotype tree, chi-square,
   ABO, snapdragon, squash, rabbit), sheets and end frames in `scratchpad/s214/stills/{dark,light}-{16x9,9x16}/`.
+
+## Step 215 — Pedigrees
+
+What was built
+- **A `pedigree` scene type** (`scenes/pedigree.py`, symbols `scenes/pedigree_draw.py`, actions
+  `scenes/pedigree_actions.py`): a family chart in NSGC notation (Bennett et al. 2008) — male
+  square, female circle, unknown diamond; affected filled; carrier a centre dot (NSGC; option
+  `carrier_style: half` for the textbook half-shaded heterozygote, used for declared and deduced
+  obligate carriers alike); deceased slash; proband arrow with P, consultand arrow; adoption
+  brackets (`in`: dashed line to the adoptive parents); miscarriage triangle, stillbirth SB;
+  proposed child dashed with "?"; mating line, consanguinity double line (declared or found from
+  shared ancestors), separation slashes; sibship and descent lines; twins from one point (MZ bar,
+  unknown "?"); Roman numerals, individual numbers at each symbol's top corner, ages / labels
+  under it; a legend of the marks used; an analysis card (each mode ticked or crossed with its
+  reason; a compact strip with one reason at a time when the list does not fit, e.g. 9:16) and a
+  risk card (factors, product, exact risk, per-sex risks; the risk under the child too).
+- **Pure parts** (no manim, `vidgen.genetics`): `pedigree.py` (parsing of mappings and compact
+  lines, validation, couples, generations, married-in, NSGC ids), `pedigree_layout.py`
+  (deterministic block layout, joins of relatives pulled together up to the common sibship, NSGC
+  numbering or checking), `pedigree_analysis.py` (exact inference by variable elimination over a
+  leading-order semiring for the rare-allele limit, or exact Hardy–Weinberg with
+  `carrier_frequency`; consistency of AD / AR / XD / XR / YL / MT, textbook reasons, reduced
+  penetrance notes, posteriors, obligate carriers, risk with factors; genotype notation),
+  `pedigree_plan.py` (params → plan, cached; mode from `mode`, a locus, or the only fitting one;
+  `declared_mode_problem` for Step 219's lint).
+- **Actions** `deduce` (genotypes / carriers / generation / person), `analyse` (`modes` or
+  `mode:XR`, the people a reason names ringed), `risk`; the built-in `reveal`, `highlight`, `dim`
+  on `generation:II`, `person:II-3` (or the author's id), `affected`, `carriers`, `proband`,
+  `child`, `genotypes`, `modes`, `mode:<code>`, `risk`. Without them the scene plays itself
+  (a generation per beat, then analysis / genotypes / risk as asked).
+
+YAML
+```yaml
+- id: cf
+  type: pedigree
+  params:
+    title: "Who carries the allele?"
+    condition: cystic fibrosis
+    mode: AR                         # optional when only one mode fits
+    carrier_frequency: 1/25          # people marrying in (else rare: true → they carry nothing)
+    analyse: true                    # or [AD, AR, XR]; genotypes: true; penetrance: 0.8
+    individuals:
+      - "I-1: male"
+      - "I-2: female deceased age d. 71 y"
+      - "II-1: male of I-1 + I-2"
+      - "II-2: female affected proband of I-1 + I-2"
+      - "II-3: male of I-1 + I-2"      # also: carrier consultand adopted in|out miscarriage stillbirth proposed, twin <id> MZ, spouse <id>
+      - {id: II-4, sex: female}                     # mappings work too (parents, twin: {with, kind: MZ})
+      - "III-1: unknown proposed of II-3 + II-4"
+    couples: [{partners: [I-1, I-2], separated: true}]
+  beats:
+    - text: "..."
+      actions: [{reveal: "generation:II"}, {analyse: modes}, {deduce: genotypes}, {risk: risk, at: "@risk"}]
+```
+
+Files touched
+- New: `src/vidgen/genetics/{pedigree,pedigree_layout,pedigree_analysis,pedigree_plan}.py`,
+  `src/vidgen/scenes/{pedigree,pedigree_draw,pedigree_actions}.py`, `tests/test_pedigree.py`
+  (20 + 2 render), `docs/gallery/pedigree.md` + 4 media.
+- Changed: `src/vidgen/genetics/__init__.py`, `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md`
+  (`pedigree` section, targets table row, action list), the guide (chooser row, paragraph +
+  `# genetics` sample, three action rows) copied to `AGENTS.md`, `examples/gallery/video.yaml` (a
+  pedigree scene), `docs/gallery/README.md`, `README.md`, `DESIGN.md` §96.8, `CHANGELOG.md`,
+  `tasklist.md`; tests' type / action lists (`test_actions`, `test_actions_coverage`,
+  `test_builtin_scenes`, `test_translation`, `test_extensions`).
+
+Public interfaces
+- Scene type `pedigree`; actions `deduce`, `analyse`, `risk`. No new `vidgen.api` name (modules
+  reached as `genetics.pedigree*`), no config key. No shared rendering code changed (the Phase Q
+  frame baseline was not re-run).
+
+Decisions / deviations (DESIGN §96.8 lists them)
+- Carriers: a centre dot (NSGC "carrier — not likely to manifest") by default, for declared
+  carriers and for deduced obligate carriers; `carrier_style: half` gives the half-shaded symbol.
+  XR heterozygous females are carriers (dot); a male cannot be a carrier of an X-linked allele
+  (refused when the mode is stated, an exclusion reason otherwise).
+- Exactness: consistency is decided by summing over all genotype assignments, not by rules; the
+  rules only phrase the reason (fallback: the smallest family no genotypes fit). Founders are in
+  the rare-allele limit (q → 0) unless `carrier_frequency`; `rare: true` (default, the textbook
+  assumption) keeps people marrying in from carrying the allele. The user's example "XR excluded:
+  affected father has an affected son" is therefore exact only with a married-in, non-carrier
+  mother: with `rare: false` XR fits and the note says the mother must be a carrier.
+- `analyse` is both a param (the panel in self-play) and an action; the genotype action is
+  `deduce`; `reveal` / `highlight` are the built-ins (target names cannot contain `-`, hence
+  `person:II-3` and `generation:II`).
+- NSGC ids keep the author's numbering, checked against the drawn order (the error names it);
+  other ids are numbered by the layout.
+- The stated mode against the chart is a warning in the plan (`plan.warnings`,
+  `declared_mode_problem`) for Step 219's lint, not a validation error; the scene then shows no
+  genotypes or risk (and `deduce` / `risk` are refused with the reason).
+- Gallery: the pedigree GIFs were re-encoded at 4 fps (the gallery's settings otherwise) to keep
+  `docs/gallery` under 10 MB (now 9.95 MB); a later `vidgen gallery --types pedigree` writes them
+  at 6 fps (~130 KB each), which would cross the budget — re-encode or trim then.
+
+Known gaps
+- One locus, two alleles; no new mutations, phenocopies, manifesting heterozygotes, heteroplasmy,
+  age-dependent penetrance; quadrants for several conditions, pregnancy "P" symbols (other than the
+  proposed child), infertility / no-children marks not drawn; partners from different generations
+  (uncle–niece) and a person who married into the family twice are refused; at most two partners.
+- Wide families shrink (no wrapping); "2/3 Aa" labels shrink below the readable size when the
+  pitch is small and the height cannot spare a second line (lint `min_font` warnings); full
+  analysis cards exceed `max_words` (lint warnings). Lint at preview: no errors, 17 warnings
+  (contrast fixed since; min_font, max_words, rushed beats of the scratch project).
+- Pre-existing, not from this step: a chart title with an "fi" ligature in the light_academic
+  serif heading font wraps wrongly ("Cystic fibrosis i  n a family"): `fit_text` / Paragraph
+  splits by characters while Pango draws the ligature as one glyph (seen in 9:16; worth a look in
+  Step 221).
+- Note from Step 214 still open: the cross scene's generic "animal coat" glyph looks like a mouse
+  even for Labradors.
+
+How to test
+- `tests/test_pedigree.py` (22 with render, ~90 s): textbook pedigrees for every mode with the
+  exclusion reasons, rare / carrier-frequency assumptions, reduced penetrance, MZ twins, obligate
+  carriers and 2/3, risk 1/150 and AD 1/2, Bayesian 1/9 with three unaffected sons, consanguinity
+  risk 1/4, layout determinism and NSGC order errors, validation errors, scene validation, renders
+  16:9 / 9:16.
+- Not render: `test_docs` + `test_guide` + `test_gallery` + `test_genetics_model` + `test_pedigree`
+  (242 passed); `test_actions` + `test_actions_coverage` + `test_builtin_scenes` +
+  `test_translation` + `test_registry` + `test_extensions`; `test_builtin_scenes` +
+  `test_extensions` + `test_schema` + `test_introspect` + `test_accuracy` + `test_api`. Render
+  `-k pedigree` of `test_builtin_scenes` + `test_actions_coverage` (5 passed).
+- Stills: scratch project `scratchpad/s215/proj` (cf with actions, hemophilia self-play with
+  twins and risk, first cousins with adoption / miscarriage / separation, reduced penetrance), end
+  frames and sheets in `scratchpad/s215/stills/{dark,light}-{16x9,9x16}/`.

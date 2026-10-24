@@ -521,6 +521,21 @@ scenes:
       - text: "The F1 plants make R and r gametes, and the F2 shows three round to one wrinkled."
         actions: [{form_gametes: both}, {fill: square, at: "@F2"}, {ratio: phenotypes, at: "@three"}]
 
+  - id: pedigree
+    type: pedigree      # a family chart in NSGC symbols; the modes of inheritance that fit, carriers, risks
+    params:
+      title: "An X-linked recessive family"
+      preset: hemophilia_a   # alleles H / h on the X; the condition is hemophilia A
+      individuals:
+        - "I-1: male"
+        - "I-2: female"
+        - "II-1: male affected of I-1 + I-2"
+        - "II-2: female of I-1 + I-2"
+        - "II-3: male of I-1 + I-2"
+    beats:
+      - text: "An affected son of unaffected parents: his mother is an obligate carrier."
+        actions: [{deduce: carriers, at: "@obligate"}]
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)

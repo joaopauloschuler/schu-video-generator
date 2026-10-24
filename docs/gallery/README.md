@@ -55,6 +55,7 @@ A whole lecture-style video, a protein's route from its gene to the blood throug
 | type | preview | use it for |
 |---|---|---|
 | [`cross`](cross.md) | <a href="cross.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cross-16x9.png"><img src="media/cross-16x9.gif" height="180" alt="cross at 16:9"></picture></a> <a href="cross.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cross-9x16.png"><img src="media/cross-9x16.gif" height="180" alt="cross at 9:16"></picture></a> | a genetic cross: Punnett square or branch diagram, gametes, genotype and phenotype ratios (mono-, di-, trihybrid, test, reciprocal, P → F1 → F2, dominance, epistasis, lethal 2:1, X-linked, linked genes), a chi-square test |
+| [`pedigree`](pedigree.md) | <a href="pedigree.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/pedigree-16x9.png"><img src="media/pedigree-16x9.gif" height="180" alt="pedigree at 16:9"></picture></a> <a href="pedigree.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/pedigree-9x16.png"><img src="media/pedigree-9x16.gif" height="180" alt="pedigree at 9:16"></picture></a> | a family pedigree in standard (NSGC) symbols: affected, carriers, deceased, proband, twins, consanguinity; which modes of inheritance fit and why the others are excluded, deduced genotypes, carrier probabilities, the risk for a child |
 
 ## Data
 

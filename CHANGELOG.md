@@ -5,10 +5,23 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–214)
+## Unreleased (Steps 193–215)
 
 ### Genetics (Phase V, from Step 213)
 
+- **A `pedigree` scene type** (Step 215): a family chart in standard human pedigree nomenclature
+  (NSGC: squares, circles, diamonds; affected filled, carriers dotted or half-shaded, deceased
+  struck, proband arrow with P, consanguinity double line, MZ / DZ twins, adoption brackets,
+  miscarriage triangle, a proposed child dashed with ?) laid out by generation (Roman numerals,
+  individuals numbered left to right, sibships in birth order, partners beside), written as one
+  line per person (`"II-3: female affected of I-1 + I-2"`) or mappings. Its genetics are worked
+  out exactly: which modes of inheritance fit (AD, AR, XD, XR, Y-linked, mitochondrial; each
+  excluded one with its reason, e.g. father-to-son transmission), reduced penetrance, the
+  genotypes the chart forces (obligate carriers), carrier probabilities by Bayes' rule (2/3 for an
+  unaffected sibling under AR) and the risk for a proposed child with its factors (2/3 × 1/25 ×
+  1/4 = 1/150). The actions `deduce`, `analyse` and `risk` put each step on a word; `reveal`
+  brings in generations or people. Validated with the reason (two fathers, a cycle, twins who are
+  not siblings, a male carrier under X-linked inheritance).
 - **A `cross` scene type** (Step 214): a genetic cross worked out exactly and drawn — the parents
   with their homologous chromosomes, genotypes in standard notation and phenotype pictures (peas,
   flowers, flies, coats, blood groups…), their gametes flying out to a Punnett square's headers

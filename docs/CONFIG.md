@@ -7219,6 +7219,159 @@ the tester; a Punnett square larger than 8 × 8, a genotype branch diagram over 
 without `observed`; `count: genotypes` with more than 12 genotype classes; `fill: tree` on a
 square (or a row on a tree); gametes formed twice, a cell filled twice, a table counted twice.
 
+### `pedigree`
+
+A family chart in standard human pedigree nomenclature (NSGC recommendations, Bennett et al.
+2008) with its genetic analysis worked out exactly (DESIGN §96.8), for medical genetics and
+counselling lessons:
+
+- **Symbols**: male square, female circle, sex unknown a diamond; affected filled; a carrier a
+  dot in the centre (NSGC; `carrier_style: half` draws the half-shaded heterozygote of many
+  textbooks instead — for declared and deduced obligate carriers alike); deceased a diagonal line;
+  the proband an arrow with **P**, the consultand an arrow without; adoption square brackets
+  (`adopted: in` with a dashed line to the adoptive parents, `out` solid); a miscarriage a small
+  triangle, a stillbirth its symbol struck with **SB**; a proposed child dashed with **?** (the
+  risk is for it); ages and labels under the symbols.
+- **Lines**: the mating line between partners (double for consanguinity: found from shared
+  ancestors, or declared; two short slashes for a separation), the descent line to the sibship
+  line, each child's line; twins from one point (monozygotic with a bar between the lines, zygosity
+  unknown with **?**).
+- **Layout** (deterministic: the same chart always gives the same picture): generations are rows
+  with Roman numerals at the left, individuals numbered left to right (II-3; the number at the top
+  of each symbol); sibships in birth order (YAML order) under their parents; a partner from outside
+  beside the relative (male left of female when nothing else decides); each family a block as wide
+  as its widest generation, so lines do not cross; relatives who marry each other are moved to the
+  facing edges of their sibships, up to the common ancestors, so their mating line crosses nothing.
+  With NSGC ids (`II-3`) vidgen keeps your numbering and checks it reads left to right as drawn
+  (else it says the drawn order); with other ids (`mum`, `kid1`) it numbers the chart. Wide
+  families shrink to fit (9:16: the chart on top, the panel under it).
+- **Analysis** (`analyse`): each mode of inheritance — autosomal dominant (AD) and recessive (AR),
+  X-linked dominant (XD) and recessive (XR), Y-linked (YL), mitochondrial (MT) — fits when some
+  genotypes explain every phenotype on the chart, found by summing over all assignments (variable
+  elimination; no hand-written rules decide). An excluded mode gets the textbook reason with the
+  people it names (*XR: father-to-son: affected father II-1 has an affected son III-1, but a son's X
+  comes from his mother II-2 (married in, not a carrier)*; *AD: III-2 is affected but neither
+  parent is: a dominant trait does not skip a generation (fits with reduced penetrance)*); a mode
+  that fits only with reduced penetrance names the non-penetrant carriers, one that needs a
+  partner from outside to carry the allele says so.
+- **Genotypes** (`deduce`): under each symbol the genotype the chart forces (*Aa*, X*ᴴ*X*ʰ*) or the
+  most telling one with its exact probability by Bayes' rule on the whole chart (**2/3** *Aa* for
+  an unaffected sibling of an affected child under AR; lowered by unaffected children where they
+  tell something: a possible carrier with three unaffected sons, 1/9); obligate carriers get the
+  carrier mark and the highlight colour.
+- **Risk** (`risk`) for the proposed child: the factors of the textbook product when the parents
+  are independent (*P(II-4 is Aa) = 1/25, P(II-3 is Aa) = 2/3, both pass a: 1/4, risk = 1/25 ×
+  2/3 × 1/4 = 1/150 ≈ 0.67 %*; X-linked: *a son: 1/2*, per sex), else the exact risk from the
+  whole chart (consanguineous parents).
+
+The model: one locus with two alleles; founders in Hardy–Weinberg proportions with a rare
+allele (the limit q → 0: an unaffected founder carries the allele only when the chart needs it,
+and the explanation needing the fewest copies entering the family wins); `rare: true` (the
+textbook "the trait is rare") — people who marry into the family carry nothing beyond what their
+own phenotype shows; `carrier_frequency: 1/25` gives people from outside that chance instead
+(recessive modes; it sets q = c / (2 − c)); `penetrance` (default 1); no new mutations, no
+phenocopies, no manifesting heterozygotes under XR, homoplasmic mtDNA.
+
+```yaml
+- id: cf
+  type: pedigree
+  params:
+    title: "Cystic fibrosis in a family"
+    condition: cystic fibrosis
+    mode: AR                               # genotypes and risk; default: the only mode that fits
+    carrier_frequency: 1/25                # for people marrying in
+    individuals:                           # a line each, or a mapping (below)
+      - "I-1: male"
+      - "I-2: female deceased age d. 71 y"
+      - "II-1: male of I-1 + I-2"
+      - "II-2: female affected proband of I-1 + I-2 age 24 y"
+      - "II-3: male of I-1 + I-2"
+      - "II-4: female"                     # married in (beside II-3)
+      - "III-1: unknown proposed of II-3 + II-4"
+  beats:
+    - text: "A couple with no family history has a daughter with cystic fibrosis."
+      actions: [{reveal: "generation:II", at: "@daughter"}]
+    - text: "Only autosomal recessive inheritance fits."
+      actions: [{analyse: modes}]
+    - text: "Her unaffected brother is a carrier with probability two thirds."
+      actions: [{deduce: genotypes, at: "@carrier"}]
+    - text: "Their child's risk is one in a hundred and fifty."
+      actions: [{risk: risk, at: "@risk"}]
+- id: hemophilia
+  type: pedigree
+  params:
+    preset: hemophilia_a                   # alleles H / h, X-linked recessive, condition "hemophilia A"
+    analyse: true
+    genotypes: true
+    individuals:
+      - {id: I-1, sex: male}
+      - {id: I-2, sex: female}
+      - {id: II-1, sex: male, affected: true, deceased: true, parents: [I-1, I-2]}
+      - {id: II-2, sex: female, parents: [I-1, I-2]}
+      - {id: II-3, sex: male}
+      - {id: III-1, sex: male, affected: true, proband: true, parents: [II-3, II-2]}
+      - {id: III-2, sex: male, parents: [II-3, II-2], twin: {with: III-3, kind: MZ}}
+      - {id: III-3, sex: male, parents: [II-3, II-2], twin: {with: III-2, kind: MZ}}
+  beats:
+    - text: "Two generations of an X-linked recessive trait."
+```
+
+**An individual** is a mapping or a line. The mapping: `id` (required; NSGC `II-3` or any name),
+`sex` (`female`, `male`, `unknown`; `f` / `m` / `u`), `affected`, `carrier` (a known heterozygote,
+unaffected), `deceased`, `proband`, `consultand`, `adopted` (`in`, `out`), `loss` (`miscarriage`,
+`stillbirth`), `proposed` (a child not yet born; no phenotype), `parents` (both: `[I-1, I-2]`),
+`spouse` (a partner without children together), `twin` (`II-4` or `{with: II-4, kind: MZ | DZ |
+unknown}`), `age` and `label` (text under the symbol). The line: `"<id>: <words>"` — a sex, the
+flags (`affected`, `carrier`, `deceased`, `proband`, `consultand`, `proposed`, `miscarriage`,
+`stillbirth`, `adopted in` / `out`), `of <parent> + <parent>`, `twin <id> MZ`, `spouse <id>`, and
+last `age <the rest of the line>`.
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `individuals` | required | the people (above) |
+| `couples` | | `[{partners: [II-1, II-2], consanguineous: true, separated: true}]` or `"II-1 + II-2"`: a childless couple, consanguinity whose shared ancestors are not drawn, a separation |
+| `condition` | text | the condition's name, in the legend |
+| `mode` | the only one that fits | `AD`, `AR`, `XD`, `XR`, `YL`, `MT` (or `autosomal recessive`…): the mode for genotypes and risk; a chart that does not fit it is a lint warning (Step 219) and shows no genotypes |
+| `analyse` | `false` | `true`: the analysis panel with all six modes; a list (`[AD, AR, XR]`) for some |
+| `genotypes` | `false` | show the genotypes when the scene plays itself (needs a mode) |
+| `penetrance` | `1` | P(affected \| disease genotype): `0.8`, `"80%"` |
+| `rare` | `true` | people marrying into the family do not carry the allele (unless affected or marked) |
+| `carrier_frequency` | | an outsider's chance of carrying a recessive allele (`1/25`) |
+| `alleles` | `[A, a]` | the symbols, dominant first (`[H, h]`); the disease allele is the dominant one under AD / XD |
+| `preset`, `loci` | | one locus instead (`hemophilia_a`, `drosophila_white`, or `[{gene, trait, alleles, chromosome}]`): its alleles and mode (the condition is the phenotype that is not "normal…", or `condition`) |
+| `carrier_style` | `dot` | `dot` (NSGC) or `half` (half-shaded heterozygote) |
+| `numbers` | `true` | the individual numbers (and the Roman numerals) |
+| `legend` | `true` | a legend of the marks used |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`). Without them the scene plays itself: a
+generation per beat, then the analysis (`analyse`), the genotypes (`genotypes`) and the risk (when
+there is a proposed child and a mode). With one of them (or a `reveal` of chart targets) it shows
+the chart at once except what a `reveal` brings in later (and the proposed child, which `risk`
+brings), and the actions do the rest.
+
+| action | options | |
+|---|---|---|
+| `deduce` | — | `deduce: genotypes` (`carriers`, `generation:II`, `person:II-3`): the genotypes appear under the symbols, obligate carriers marked (1.4 s); needs a mode |
+| `analyse` | — | `analyse: modes` (each in turn, 1 s each) or `mode:XR`: fits / excluded with the reason, the people it names ringed; after the last, which fit. In 9:16 (or when the list does not fit) a strip of the six modes with one reason at a time |
+| `risk` | — | `risk: risk`: the proposed child appears and the risk card with its factors and the exact risk, also written under the child (2.2 s) |
+
+`reveal` brings in `generation:II` or `person:II-3` (with their lines); `highlight` (`style: box`)
+and `dim` mark `person:<id>`, `affected`, `carriers`, `proband`, `mode:AR`.
+
+**The rules** (`vidgen validate`, each with the reason and a did-you-mean): an unknown key or word
+of the compact form; a parent who is not an individual; a child with two fathers or two mothers;
+one parent only; a parent without a sex; a cycle (someone their own ancestor); twins who are not
+siblings, monozygotic twins of different sexes; affected and carrier together; a proposed child
+with a phenotype or without parents; more than one proband, consultand or proposed child; more
+than two partners; generations that do not fit (partners of different generations); NSGC ids for
+some people only, numbers that do not read left to right as drawn, a Roman numeral out of place; a
+male carrier under a stated X-linked mode (*a male has one X: with the allele he is affected*), a
+carrier under Y-linked or mitochondrial inheritance; `mode` against the locus' own mode;
+`deduce` or `risk` when the chart fits several modes and none is stated (*the chart fits AD, XD —
+say which with mode:*); `risk` without a proposed child.
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -9872,7 +10025,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -9925,6 +10078,7 @@ a title card, a `transform` of a bar).
 | `cell_cycle` | `title`, `cycle`, `phase:<key>`, `checkpoint:<key>`, `<checkpoint>`, `plot`, `cyclin:<key>`, `marker`, `cell`, `chromosomes`, `pair<N>`, `spindle`, `caption` | advance, checkpoint, highlight, dim, reveal, callout | `mode: cycle`: `cycle` is the ring with its marker, `phase:g1` … `phase:g0` a phase's arc, `checkpoint:g2_m` (or `g2_m`) a checkpoint's mark, `plot` the cyclin levels, `cyclin:b` one curve; divisions: `cell` the whole drawing, `chromosomes` every chromatid, `pair1` a homologous pair, `spindle` the microtubules, `caption` the captions; see [`cell_cycle`](#cell_cycle) |
 | `metabolism` | `title`, `<process>`, `<metabolite>`, `step:<key>`, `<component>`, `membrane`, `tally` | advance, highlight, dim, reveal, callout | `glycolysis` (the process's name) is the whole drawing; `pyruvate` a metabolite's box, `step:pfk1` an enzyme's arrow and label; `complex_iv` a component of a chain, `membrane` its membrane; `tally` the counters; see [`metabolism`](#metabolism) |
 | `cross` | `title`, `generations`, `parents`, `parent<N>`, `mother`, `father`, `gametes`, `gametes<N>`, `square`, `tree`, `row<N>`, `col<N>`, `cell<R>.<C>`, `cells:<class>`, `phenotypes`, `genotypes`, `class<N>`, `class:<label>`, `genotype:<genotype>`, `chi_square`, `notes` | form_gametes, fill, count, ratio, chi_square, highlight, dim, reveal, callout | `parents` (also `both`) is both parents, `parent1` (`mother`) the egg parent; `gametes1` its gametes; `square` (or `tree`; both also `all`) the whole drawing; `cells:round, yellow` every cell of a phenotype class (or its leaves), `cells:RrYy` of a genotype; `class:round, yellow` a row of the phenotype table, `genotype:RrYy` of the genotype table; `chi_square` (also `test`) the test; see [`cross`](#cross) |
+| `pedigree` | `title`, `chart`, `legend`, `generation:<R>`, `person:<id>`, `proband`, `consultand`, `affected`, `carriers`, `child`, `genotypes`, `modes`, `analysis`, `mode:<code>`, `risk` | deduce, analyse, risk, reveal, highlight, dim, callout | `generation:II` a row (Roman numeral); `person:II-3` (or the author's id, `person:mum`) one person with their lines; `chart` everything (also its entrance); `affected` / `carriers` (declared and obligate) groups of people; `child` the proposed child; `genotypes` (also `all`) the deduced genotypes; `modes` (also `analysis`) the analysis card, `mode:XR` one mode's row; `risk` the risk card; see [`pedigree`](#pedigree) |
 | `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
