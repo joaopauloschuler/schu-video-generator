@@ -3452,8 +3452,9 @@ music:                                          # the piece follows the video: i
 
 ### Music studio (`vidgen studio`)
 
-`vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` starts a small web app on this
-computer and opens it in the browser: load any of the 17 built-in beds as an editable score file
+`vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` starts a small web app that runs
+locally on your own computer (offline, nothing uploaded unless you ask an online agent) and opens
+it in your web browser: load any of the 17 built-in beds as an editable score file
 (its template), change it with controls or by typing, listen, check, keep versions, pin
 listening notes for an AI agent, try variations, and export the piece or save it into a
 project. The sound is always vidgen's own renderer, the one videos use; the page only plays the
@@ -3486,7 +3487,8 @@ Ctrl+C in the terminal stops it.
   follows the steps text both ways. The score file is editable: type YAML and the controls
   follow; a problem is shown inline with the same did-you-mean message as the command line, and
   the last good render keeps playing until it is fixed.
-- **Where it listens**: `http://127.0.0.1:<port>/`, this computer only. `--port N` picks the
+- **Where it listens**: `http://127.0.0.1:<port>/`, reachable only from your own computer
+  (not from other machines on the network). `--port N` picks the
   port (default: a free one, printed); `--no-browser` only prints the address. It needs no
   internet connection (the page and its fonts ship with vidgen).
 - **Where it keeps its work**: with a project (`PROJECT`, or the current folder when it holds a
@@ -3622,7 +3624,7 @@ Ctrl+C in the terminal stops it.
   letters or device names); request bodies are at most 2 MB; score text is read as plain YAML
   data (no tags that build objects; anchors that would repeat it into more than 200 000 values
   are refused); it runs no code from requests and starts no program but your browser (once, at start) and ffmpeg for MP3s.
-  It has no login, so anyone who can use this computer can use it while it runs. It writes only
+  It has no login, so anyone who can use the computer it runs on can use it while it runs. It writes only
   into its studio folder (every file replaced whole, never half-written), the exports you
   download, and a project's `assets/music/` when you save there (not through a link out of the
   project).

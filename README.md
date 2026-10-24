@@ -2,8 +2,10 @@
 
 **A video and presentation generator built for AI agents.** See the [scene gallery](docs/gallery/README.md).
 
-**Its own music and sound synthesizer: 17 original music beds, music composed for your video, and
-36 sound effects — all generated from code, free to use.** [Listen](docs/music/README.md).
+**Its own music and sound synthesizer: 17 original music beds, music composed for your video,
+36 sound effects, and a music studio where people and AI agents write their own music — all
+generated from code, free to use.** [Listen](docs/music/README.md) ·
+[Studio](docs/CONFIG.md#music-studio-vidgen-studio)
 
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
 an MCP client) uses to produce narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
@@ -69,8 +71,10 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
 Reference: [music](docs/CONFIG.md#background-music-music), [composed music](docs/CONFIG.md#composed-music-compose),
 [sound effects](docs/CONFIG.md#sound-effects-sfx).
 
-**vidgen studio.** `vidgen studio` opens a small music workstation in your browser (on this
-computer only, offline): load any built-in bed as an editable score, change it with sliders, step
+**vidgen studio.** `vidgen studio` opens a small music workstation in your web browser. It runs
+locally on your own computer and works offline; nothing is uploaded unless you ask an online AI
+agent for help. Load any built-in bed as an
+editable score, change it with sliders, step
 grids or the YAML itself, listen under a narration sample, read the check, A/B any two versions,
 try four variations at a click, and export WAV / MP3 / YAML or save the piece into your project.
 Pin listening notes while it plays ("I want goosebumps at the turn") and **ask an agent**: an AI

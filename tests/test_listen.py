@@ -142,6 +142,7 @@ def test_readme_names_the_real_counts_and_links_the_page() -> None:
     assert f"{len(music.BUILTIN_BEDS)} original music beds" in headline
     assert f"{len(sfx.BUILTIN_SOUNDS)} sound effects" in headline
     assert "(docs/music/README.md)" in headline
+    assert "music studio" in headline and "(docs/CONFIG.md#music-studio-vidgen-studio)" in headline
     section = readme[readme.index("**Music and sound.**"): readme.index("Everything is built around")]
     assert f"**{len(music.BUILTIN_BEDS)} synthesised music beds**" in section
     assert f"**{len(sfx.BUILTIN_SOUNDS)} synthesised sound effects" in section
