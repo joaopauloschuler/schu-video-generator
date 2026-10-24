@@ -1207,6 +1207,102 @@ when shared code changes). DESIGN §95. Steps 202–211.
 - [x] Small fix: the citric acid cycle's enzyme labels keep a margin from boxes (MDH touched malate) and CS steps beside the acetyl-CoA arrow in 9:16 (`metabolism.CLEAR_PAD`)
 - [~] Lint: the same kinds of findings as Step 211 (glyph letters in ATP synthase, the Na⁺/K⁺ pump and the respiratory chain; dense showcases over 40 words), none new
 
+### Small open items after Phase U
+- [ ] Planner chapter cards: `vidgen plan` still writes chapter cards of 2.5 s; the docs now recommend 3.5 s (`duration: 3.5`) — decide whether the planner should follow the cookbook
+- [ ] Gallery polish (cosmetic, pre-existing): letters inside the ATP synthase, Na⁺/K⁺ pump and respiratory-chain drawings (α, β, Na⁺, H⁺) below the readable size; long label leaders (mitochondrion labels in the `cell` overview, Granum/Stroma in the 9:16 plant cell); "cAMP → AMP" under the dimmed PDE4 box in the 9:16 glucagon pathway
+- [ ] Phase U gaps: no `set_state` in a `cell` scene; an endocytosed vesicle is not a targetable object; zoomed-view labels go stale after a process; 9:16 close-ups of long horizontal strips (a gene, a membrane) leave height unused; the eIF4G·4A blob overlaps "40S" during scanning in 16:9
+
+---
+
+## Ideas for future phases (discussed with the owner, not planned yet)
+
+Each content area below would be a phase of its own, built like the cell-biology phase: a model
+with real rules (no manim), a renderer, actions timed to beats and words, validation with clear
+errors, an accuracy lint, docs, a gallery section, an example and a review.
+
+### Top picks
+- [ ] **Video studio (notes on whole videos).** Like the music studio's listening notes: open the
+  rendered video in a local page, pause anywhere and pin a note ("too fast here", "this label is
+  hard to read", "I want a close-up of the ribosome"); "Ask an agent" sends the notes with the
+  scene, beat and frame each points to; the agent edits the YAML, re-renders only the affected
+  scenes, and the new version plays side by side with the old one (A/B, keep/discard). Reuse the
+  studio's session/version design and MCP hand-off.
+- [ ] **Paper to video.** From a PDF of a paper: an outline, chapters and plain-language narration,
+  the key figures (with credit) and equations as equation scenes, references collected
+  automatically; run validate, lint (incl. the science rules) and a storyboard for review.
+- [ ] **A real Windows end-to-end test run** (not a feature, but the most important next step):
+  studio, Kokoro, renders and exports were tested on Linux only; a guided run on the owner's
+  Windows machine.
+
+### Genetics (suggested first: reuses most of Phase U; large student/teacher audience)
+- [ ] Mendelian genetics: Punnett squares filling in step by step; mono- and dihybrid crosses with
+  ratios; dominance, codominance, incomplete dominance, sex-linked inheritance; pedigree charts in
+  standard notation
+- [ ] Molecular genetics: mutation types (point, missense, nonsense, frameshift), CRISPR-Cas9
+  cutting and repair (NHEJ / HDR), PCR cycles, gel electrophoresis, sequencing reads aligning
+- [ ] Linkage and population genetics: recombination and genetic maps; Hardy–Weinberg, drift and
+  selection as seeded simulations with allele-frequency plots; a GWAS Manhattan plot
+- [ ] Accuracy lint: ratios that don't follow from the cross; pedigrees inconsistent with the
+  stated inheritance mode; a "dominant" trait skipping generations without explanation
+- Effort: medium (DNA, chromosomes, meiosis, naming rules and charts already exist)
+
+### Planetary and orbital mechanics (suggested second: very visual, easy to keep exactly correct)
+- [ ] Real physics: two-body Kepler orbits from orbital elements; n-body integration with an
+  energy-conserving (symplectic) method
+- [ ] Kepler's laws shown live: ellipse with the Sun at a focus, equal areas in equal times,
+  period vs distance
+- [ ] Manoeuvres: Hohmann transfers with Δv budgets, gravity assists, Lagrange points,
+  resonances, tides
+- [ ] The Solar System from published orbital elements for a given date, with honest scale
+  handling (log scales, insets, "distances not to scale" labels)
+- [ ] Accuracy lint: an orbit that wouldn't close, energy drifting, a period inconsistent with
+  its semi-major axis, a manoeuvre with impossible Δv
+- Effort: medium
+
+### Particle physics (suggested third: distinctive niche)
+- [ ] The Standard Model chart (quarks, leptons, bosons; masses, charges, spins)
+- [ ] Feynman diagrams in proper notation (fermion arrows, wavy photons, curly gluons, vertices),
+  with rules checking conservation at every vertex: charge, lepton and baryon number, colour
+- [ ] Detectors: layers (tracker, calorimeters, muon chambers), tracks curving in the magnetic
+  field (curvature direction gives the charge), showers, collisions and decays
+- [ ] Data: histograms where a resonance "bump" emerges from the background as events accumulate
+- [ ] Accuracy lint: conservation-law violations, impossible decays (lighter into heavier), wrong
+  charges
+- Effort: medium
+
+### Protein folding (suggested last, or in two parts)
+- [ ] Levels of structure (primary → quaternary); amino-acid properties (hydrophobic core,
+  charges); α-helix (3.6 residues per turn) and β-sheets with hydrogen bonds; disulfide bridges
+- [ ] Folding: the energy-landscape funnel; chaperones (Hsp70, chaperonin, calnexin already
+  exist); misfolding and amyloid aggregation
+- [ ] Real structures: load a protein from a PDB file (Protein Data Bank data is free to use) and
+  draw it as a rotating cartoon ribbon, with AlphaFold confidence colours
+- Effort: medium for the schematic version; large for real 3D ribbons (vidgen draws in 2D today;
+  Manim can do 3D)
+
+### Other content areas
+- [ ] Chemistry: molecules with correct bonding and geometry, reaction mechanisms with curly
+  arrows, energy diagrams
+- [ ] Physics: circuits, forces and fields, waves, simple simulations driven by real equations
+- [ ] Neuroscience: neurons and synapses, building on the action potential and SNAREs
+- [ ] Computer science: data structures and algorithms stepping through (sorting, graphs, trees),
+  a natural fit for coding Shorts
+
+### Cartoons and games
+- [ ] Playable levels: export the platform levels as small playable HTML5 games (the world model
+  and rules were designed for this in Phase O)
+- [ ] Isometric interactions: characters sitting, opening chests, small puzzles, as story tools
+
+### Music and sound
+- [ ] Score pieces that follow the video's timings (like composed music), with builds and lifts
+  landing on chosen scenes automatically
+- [ ] A sound-effects designer in the studio (the same editing loop, for effects)
+- [ ] Split music and sound into their own package, with vidgen depending on it
+
+### Reach and polish
+- [ ] Brand kits: a theme, fonts, intro/outro and music saved once and reused across videos
+- [ ] Faster renders: smarter caching and parallel scenes for long videos
+
 ---
 
 ## Backlog (after Step 60)
