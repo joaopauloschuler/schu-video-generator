@@ -7075,6 +7075,150 @@ only through cytochrome c*); a component of the other chain (*psii is not part o
 transport chain: it sits in the thylakoid membrane*); the light reactions in an animal cell; ATP
 synthase before any protons were pumped; a pathway advanced backwards.
 
+### `cross`
+
+A genetic cross at university level (Griffiths *Introduction to Genetic Analysis*, Hartwell
+*Genetics: From Genes to Genomes*), worked out exactly by vidgen's cross engine (DESIGN §96: exact
+fractions, segregation, independent assortment, crossing over at the recombination frequency,
+X and Y segregating in males, lethal classes removed) and drawn from it, so no ratio on screen can
+disagree with the cross:
+
+- **The parents**: each with its homologous chromosomes (one colour per homologue, the alleles as
+  bands with their symbols; X and Y drawn as such), its genotype in standard notation (alleles
+  italic, superscripts: *I*ᴬ, X*ᴴ*, *vg*⁺) and its phenotype picture. In 16:9 parent 1 (the
+  mother, the eggs) stands beside the rows of the square and parent 2 (the father, the sperm or
+  pollen) over its columns; in 9:16 both in a row on top. `P: [RRYY, rryy]` crosses a
+  true-breeding P generation to its F1 (a line *P: RRYY × rryy → F1: all RrYy*) and shows the F1
+  intercross, labelled F₁ and F₂ (with sex chromosomes the F1 female and male are crossed).
+- **The gametes** (`form_gametes`): the parent's homologues part and its gametes fly out of it to
+  the square's headers — each allele in the colour of the homologue it came from, so independent
+  assortment shows; for linked loci the recombinant gametes are ringed in the highlight colour and
+  every gamete carries its exact frequency (41.5 %, 8.5 %), parental ones first.
+- **The Punnett square** (`show: punnett`; `auto` up to 4 × 4 gametes, at most 8 × 8): the eggs
+  down the side, the sperm across the top (♀ / ♂ in the corner when the sexes matter), each cell
+  filled (`fill`) as its row's and column's gametes move in: the zygote's genotype, its phenotype
+  picture and, with sex chromosomes, ♀ or ♂; cells tinted by phenotype class; a lethal genotype
+  crossed out. Cells widen for long allele names (*b*⁺ *vg*⁺/*b vg*).
+- **The branch (forked-line) diagram** (`show: branch`; `auto` beyond 4 × 4, as for a trihybrid):
+  a column per trait (with sex chromosomes, the sex first), each branch its conditional probability
+  (3/4 round → 3/4 yellow → 3/4 purple), each leaf its product (= 27/64), percentage, pictures and
+  number of the ratio — the leaves are the class table. Conditional probabilities make it exact
+  for linked loci too. `branch: genotypes` branches locus by locus (1/4 *RR*, 1/2 *Rr*, 1/4 *rr*;
+  at most 16 leaves).
+- **The classes** (`count`, `ratio`), in a panel right of the drawing (16:9) or under it (9:16):
+  the phenotype classes (picture, name, exact fraction in lowest terms — counted up cell by cell
+  when the cells are equally likely —, percentage where the panel has room, the number of the
+  ratio) and the genotype classes (in two columns beyond six; at most 12: a trihybrid's 27 are not
+  tabled), then the ratio line (**9 : 3 : 3 : 1** phenotypic ratio). Classes are in textbook order
+  (dominant first; epistasis in its ratio's order: 9 black : 3 brown : 4 yellow; incomplete
+  dominance red : pink : white; females first). A lethal genotype's row is struck through and the
+  phenotypes are those of the survivors (*AʸAʸ dies, 1/4 of zygotes; 2 : 1*); the genotypic ratio is
+  then the one at fertilization.
+- **The chi-square test** (`observed`, `chi_square`): observed counts of the phenotype classes
+  against the expected ones (N × the exact share): a table of O, E and (O − E)²/E, then χ², the
+  degrees of freedom (classes − 1), the p-value (the upper regularized gamma function, computed
+  by vidgen), the critical value at `alpha` and the verdict (*p ≥ α: consistent with 9 : 3 : 3 : 1*,
+  or *p < α: reject*); a note when an expected count is below 5.
+- **Notes** under the drawing, from the model: the parental and recombinant gamete frequencies and
+  the recombination frequency of a linked parent (or *no crossing over* — Drosophila males), the
+  lethal class and the survivors' ratio, the tester of a test cross, the reciprocal cross, the
+  epistasis and what it does.
+
+Phenotype pictures are chosen from the trait's name and the phenotype's words: a pea (round or
+wrinkled, yellow or green; both traits in one pea), a flower (its petal colour), a fruit fly's eye
+or the whole fly (body colour, wings normal or vestigial, eye colour), an animal's coat (black,
+brown, yellow, agouti, chinchilla, himalayan, albino…), a feather, a squash (white, yellow, green;
+disc, sphere, long), a blood drop with its ABO group, a seed capsule (triangular, ovoid), an
+affected / unaffected square, or a colour swatch. `pictures: false` leaves them out.
+
+```yaml
+- id: dihybrid
+  type: cross
+  params:
+    title: "A dihybrid cross"
+    preset: pea_dihybrid                       # or loci / linkage / epistasis / sex (below)
+    parents: [RrYy, RrYy]                      # P: [RRYY, rryy] shows P → F1 → F2
+    observed: {round yellow: 315, round green: 108, wrinkled yellow: 101, wrinkled green: 32}
+  beats:
+    - text: "Each parent makes four kinds of gametes, in equal numbers."
+      actions: [{form_gametes: both, at: "@four"}]
+    - text: "Sixteen equally likely combinations fill the square."
+      actions: [{fill: square, by: row}]
+    - text: "Nine to three to three to one."
+      actions: [{count: phenotypes}, {ratio: phenotypes, at: "@Nine"}]
+    - text: "Mendel's counts fit: chi-square is small and p is large."
+      actions: [{chi_square: test, at: "@chi-square"}, {highlight: "cells:wrinkled, green", style: box}]
+- id: hemophilia
+  type: cross
+  params:
+    preset: hemophilia_a
+    mother: "X^H X^h"                          # a carrier
+    father: "X^H Y"                            # parents: [...] in any order works too (the X and Y say)
+  beats:
+    - text: "Half of the sons of a carrier mother are affected; no daughter is."
+- id: linked
+  type: cross
+  params:
+    loci:
+      - {gene: b, trait: body colour, alleles: {b^+: grey body, b: black body}}
+      - {gene: vg, trait: wings, alleles: {vg^+: normal wings, vg: vestigial wings}}
+    linkage: [{loci: [b, vg], rf: 0.17, rf_male: 0}]
+    mother: "b^+vg^+/bvg"                      # the phase is required for linked loci
+    kind: test                                 # the tester bvg/bvg is made
+  beats:
+    - text: "Seventeen percent of her gametes are recombinant."
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `preset` | | a textbook system: `pea_seed_shape`, `pea_dihybrid`, `snapdragon`, `abo`, `rabbit_coat`, `labrador`, `squash_colour`, `chicken_feathers`, `shepherds_purse`, `sweet_pea`, `squash_shape`, `yellow_mouse`, `drosophila_white`, `hemophilia_a`, `drosophila_b_vg` (each with the right dominance, epistasis or linkage) |
+| `loci` | | instead of a preset: each `{gene, trait, alleles, dominance, heterozygotes, chromosome, lethal, penetrance, normal, expressivity}` — `alleles` most dominant first (`{A: round, a: wrinkled}`), `dominance` `complete` (default), `incomplete`, `codominant` or a hierarchy `"I^A = I^B > i"` (`>` complete, `=` codominant, `~` incomplete), `heterozygotes: {C^R/C^W: pink}`, `chromosome: autosome / X / Y / mt`, `lethal: {A^Y: recessive}`, `penetrance: 0.8` with `normal`, `expressivity: variable` |
+| `linkage` | | linked loci in map order with the recombination frequency of each interval: `[{loci: [b, vg], rf: 0.17, rf_male: 0}]` (`coincidence` or `interference` for three loci); RF ≤ 0.5 |
+| `epistasis` | | `[{kind: recessive, epistatic: E, hypostatic: B}]` (`recessive` 9:3:4, `dominant` 12:3:1, `suppression` 13:3; `duplicate` 15:1, `complementary` 9:7, `cumulative` 9:6:1 take `loci: [A, B]` and `phenotypes`) |
+| `sex` | | `XY`: follow the sexes without sex-linked loci |
+| `parents` | | the two genotypes (`[RrYy, RrYy]`, `["I^A i", "I^B i"]`; with sex chromosomes in any order: `["X^H Y", "X^H X^h"]`); `kind: test` takes one |
+| `mother`, `father` | | the egg (seed) parent and the sperm (pollen) parent — needed with mitochondrial loci |
+| `P` | | a true-breeding P generation `[RRYY, rryy]`: its F1 is worked out (it must be one genotype per sex) and intercrossed |
+| `kind` | `cross` | `test`: one parent and its tester (homozygous / hemizygous for every recessive allele, the other sex); `reciprocal`: the same lines with the sexes swapped (an X-linked mother must be true-breeding) |
+| `show` | `auto` | `punnett` (up to 8 × 8), `branch`, `auto` (a square up to 4 × 4 gametes) |
+| `branch` | `phenotypes` | the branch diagram's levels: `phenotypes` (sex, then trait by trait) or `genotypes` (locus by locus, at most 16 leaves) |
+| `observed` | | counts per phenotype class for a chi-square test: `{round yellow: 315, ...}` (the class's words in any order; with sexes add `female` / `male`: `{white male: 42}`) or a list in class order |
+| `alpha` | `0.05` | the test's significance level (`0.01`, `"5%"`) |
+| `notes` | `true` | the notes under the drawing |
+| `pictures` | `true` | the phenotype pictures |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`). Without any of them the scene plays itself:
+the parents (and the empty square) in the first beat, then the gametes, the filling, the
+genotype and phenotype classes with their ratios and the chi-square test, spread over the beats.
+With one of them, it shows the parents and the empty square, and the actions do the rest (an
+action finds what it needs done first: `count` fills the cells left, `fill` forms the gametes).
+
+| action | options | |
+|---|---|---|
+| `form_gametes` | — | `form_gametes: both` (`parents`, `parent1` / `mother`, `parent2` / `father`, `gametes`): the homologues part and the gametes fly out (2.2 s; both 2.9 s) |
+| `fill` | `by` (`auto`, `cell`, `row`, `column`) | `fill: square` (`all`), `row2`, `col3`, `cell2.3`, `"cells:wrinkled, green"`, `cells:RrYy`, or patterns (`row*`): the cells fill in one after another (`by: cell`, default up to 16 cells) or a line at a time (~0.2 s a cell, 1–6 s); `fill: tree` grows a branch diagram level by level |
+| `count` | — | `count: phenotypes` or `genotypes`: the table in the panel row by row, each class's cells flashing (a branch diagram's own kind: its leaves' products appear) |
+| `ratio` | — | `ratio: phenotypes` / `genotypes`: the ratio numbers and the ratio line (counts first when needed) |
+| `chi_square` | — | `chi_square: test` (needs `observed`): the table of observed and expected counts, then χ², df, p, the critical value and the verdict |
+
+`highlight` (best with `style: box` or `fill`), `dim`, `reveal` and `callout` work on the targets:
+`cells:<class>` (`"cells:round, yellow"`: every Punnett cell of a phenotype class, or its leaves),
+`cells:<genotype>` (`cells:RrYy`), `class:<label>` / `class<N>` (a row of the phenotype table),
+`genotype:<genotype>`, `cell<R>.<C>`, `row<N>`, `col<N>`, `parent1`, `gametes2`, `notes`.
+
+**The rules** (`vidgen validate`, each with the reason and a did-you-mean): an unknown preset,
+allele, locus or epistasis kind; a genotype missing a locus or with three alleles; an X-linked
+allele written without its X (*write X^H X^h (female) or X^H Y (male)*); a female with a Y; XXY or
+X0 (a karyotype, not a cross); linked loci heterozygous at two loci without their phase (*write
+AB/ab (coupling) or Ab/aB (repulsion)*); RF above 0.5; both parents of one sex; a P generation
+that is not true-breeding; a test cross with two parents, or without a recessive allele to make
+the tester; a Punnett square larger than 8 × 8, a genotype branch diagram over 16 leaves;
+`observed` counts for a class the cross does not have, missing classes, negative counts; `alpha`
+without `observed`; `count: genotypes` with more than 12 genotype classes; `fill: tree` on a
+square (or a row on a tree); gametes formed twice, a cell filled twice, a table counted twice.
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -9728,7 +9872,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -9780,6 +9924,7 @@ a title card, a `transform` of a bar).
 | `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, motor_walk, endocytosis, exocytosis, transcribe, export, translate, to_golgi, secrete, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, `motor_walk` / `endocytosis` / `exocytosis` play processes, see [the cell actions](#cell-actions); a `gene`'s id takes its steps, see [a gene in a cell](#a-gene-in-a-cell) |
 | `cell_cycle` | `title`, `cycle`, `phase:<key>`, `checkpoint:<key>`, `<checkpoint>`, `plot`, `cyclin:<key>`, `marker`, `cell`, `chromosomes`, `pair<N>`, `spindle`, `caption` | advance, checkpoint, highlight, dim, reveal, callout | `mode: cycle`: `cycle` is the ring with its marker, `phase:g1` … `phase:g0` a phase's arc, `checkpoint:g2_m` (or `g2_m`) a checkpoint's mark, `plot` the cyclin levels, `cyclin:b` one curve; divisions: `cell` the whole drawing, `chromosomes` every chromatid, `pair1` a homologous pair, `spindle` the microtubules, `caption` the captions; see [`cell_cycle`](#cell_cycle) |
 | `metabolism` | `title`, `<process>`, `<metabolite>`, `step:<key>`, `<component>`, `membrane`, `tally` | advance, highlight, dim, reveal, callout | `glycolysis` (the process's name) is the whole drawing; `pyruvate` a metabolite's box, `step:pfk1` an enzyme's arrow and label; `complex_iv` a component of a chain, `membrane` its membrane; `tally` the counters; see [`metabolism`](#metabolism) |
+| `cross` | `title`, `generations`, `parents`, `parent<N>`, `mother`, `father`, `gametes`, `gametes<N>`, `square`, `tree`, `row<N>`, `col<N>`, `cell<R>.<C>`, `cells:<class>`, `phenotypes`, `genotypes`, `class<N>`, `class:<label>`, `genotype:<genotype>`, `chi_square`, `notes` | form_gametes, fill, count, ratio, chi_square, highlight, dim, reveal, callout | `parents` (also `both`) is both parents, `parent1` (`mother`) the egg parent; `gametes1` its gametes; `square` (or `tree`; both also `all`) the whole drawing; `cells:round, yellow` every cell of a phenotype class (or its leaves), `cells:RrYy` of a genotype; `class:round, yellow` a row of the phenotype table, `genotype:RrYy` of the genotype table; `chi_square` (also `test`) the test; see [`cross`](#cross) |
 | `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |

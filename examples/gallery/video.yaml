@@ -511,6 +511,16 @@ scenes:
       - text: "Each turn makes three NADH, one FADH2, one GTP and two carbon dioxide."
         actions: [{advance: tca, to: oxaloacetate}]
 
+  - id: cross
+    type: cross         # a genetic cross worked out exactly: gametes, a Punnett square, ratios (or a branch diagram)
+    params:
+      title: "Mendel's monohybrid cross"
+      preset: pea_seed_shape
+      P: [RR, rr]       # the true-breeding P generation; its F1 is crossed to give the F2
+    beats:
+      - text: "The F1 plants make R and r gametes, and the F2 shows three round to one wrinkled."
+        actions: [{form_gametes: both}, {fill: square, at: "@F2"}, {ratio: phenotypes, at: "@three"}]
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)

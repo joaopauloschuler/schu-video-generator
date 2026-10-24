@@ -196,6 +196,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   (`vidgen validate`, the `science_*` lint rules) and scenes carry references
   ([docs](docs/CONFIG.md#cell), [cookbook](docs/COOKBOOK-CELL-BIOLOGY.md),
   [gallery](docs/gallery/README.md#cell-biology), [example](examples/gene-to-secreted-protein/README.md)).
+- **Genetics** (Phase V, in progress): `cross` works a cross out exactly — gametes, a Punnett
+  square or a branch diagram, genotype and phenotype ratios (9 : 3 : 3 : 1, 9 : 3 : 4, a lethal
+  2 : 1, X-linked crosses by sex, linked genes with their recombinants) and a chi-square test — in
+  standard notation with phenotype pictures ([docs](docs/CONFIG.md#cross),
+  [gallery](docs/gallery/README.md#genetics)).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,

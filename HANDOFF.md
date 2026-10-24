@@ -19730,3 +19730,84 @@ How to test
 - `/home/claude/bin/capped timeout 290 /home/claude/venv/bin/python -m pytest tests/test_genetics_model.py tests/test_api.py -q -m "not render"`:
   84 passed in 4.6 s; `tests/test_docs.py tests/test_guide.py` (not render): 128 passed in 6.2 s.
   Nothing else was run (no shared code changed).
+
+## Step 214 — Crosses and Punnett squares
+
+What was built
+- **A `cross` scene type** (`scenes/cross.py`, pictures `scenes/cross_draw.py`, actions
+  `scenes/cross_actions.py`): a genetic cross worked out by the Step 213 engine and drawn — the
+  parents (homologue pairs with their alleles, genotype in standard notation, phenotype picture; P
+  line and F₁ / F₂ labels with `P:`), their gametes (each allele in its homologue's colour,
+  recombinants of linked loci ringed, exact frequencies), a Punnett square (eggs down the side,
+  sperm / pollen across; ♀ / ♂ in the corner with sex chromosomes; cells as wide as their
+  genotypes; a lethal genotype crossed out) or a branch (forked-line) diagram (conditional
+  probabilities per level, so exact for linked loci too; its leaves are the class table), the
+  phenotype and genotype tables (fractions in lowest terms counted up cell by cell, percentages
+  where the panel has room, ratio numbers, the ratio line), and a chi-square card (O, E,
+  (O − E)²/E, χ², df, p, critical value, verdict). Notes from the model: recombinant shares and RF
+  (or no crossing over in that sex), the lethal class and the survivors' ratio, the tester, the
+  reciprocal cross, each epistasis in the loci's symbols.
+- **Pure parts** (no manim, under `vidgen.genetics`): `punnett.py` (`build_plan` / `plan_cross` →
+  `CrossPlan` with `GameteView`, `Cell`, `PhenotypeClass`, `GenotypeClass`, `Tree`, notes;
+  `match_observed`, `significance`, `genotype_key`, text helpers), `stats.py` (chi-square, own
+  upper regularized gamma by series / Lentz continued fraction, critical value by bisection,
+  `p_text`), `glyphs.py` (picture from trait and phenotype words: pea, flower, eye, fly, coat,
+  feather, fruit, blood drop with ABO group, capsule, affected / unaffected, swatch).
+- **Actions** `form_gametes`, `fill` (`by: auto | cell | row | column`), `count`, `ratio`,
+  `chi_square` (target `test`); each finds what it needs done first; any of them makes the scene
+  manual (else it plays itself: parents → gametes → filling → genotype / phenotype tables with
+  ratios → test). Sequence check: gametes formed twice, a cell filled twice, a table counted
+  twice, the test twice.
+- Layouts: 16:9 parent 1 beside the rows and parent 2 over the columns, panel on the right (42 %);
+  a branch diagram without a panel takes the width with the parents and gametes in a left column;
+  9:16 parents on top, the panel below as tall as its tallest card (20–42 % of the body), notes
+  measured.
+
+Files touched
+- New: `src/vidgen/genetics/{punnett,stats,glyphs}.py`, `src/vidgen/scenes/{cross,cross_actions,cross_draw}.py`,
+  `tests/test_cross.py` (12 + 2 render), `docs/gallery/cross.md` + 4 media.
+- Changed: `src/vidgen/genetics/__init__.py`, `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md`
+  (`cross` section, targets table, action list), guide `src/vidgen/data/guide/AGENTS.md` (chooser
+  row, paragraph + `# genetics` snippet, five action rows) copied to `AGENTS.md`,
+  `examples/gallery/video.yaml` (a `cross` scene: every type is used by an example), `README.md`
+  (Genetics bullet), `docs/gallery/README.md` (Genetics section), `DESIGN.md` §96.7, `CHANGELOG.md`,
+  `tasklist.md`; tests' type / action lists (`test_actions`, `test_actions_coverage`,
+  `test_builtin_scenes`, `test_translation`).
+- `docs/gallery/chapter.md` and its two GIFs regenerated: the page still showed `duration: 2.5`
+  after the guide moved to 3.5 s (commit fc0595e7), so `test_gallery` failed at HEAD; the stills
+  are unchanged.
+
+Public interfaces
+- Scene type `cross`; actions `form_gametes`, `fill`, `count`, `ratio`, `chi_square`. No new
+  `vidgen.api` name (the modules are `genetics.punnett`, `genetics.stats`, `genetics.glyphs`), no
+  config key. Nothing existing changed (no shared rendering code edited, so the Phase Q baseline
+  was not re-run).
+
+Decisions / deviations from the plan (DESIGN §96.7 lists them)
+- `show: auto | punnett | branch` (no `gametes` / `ratios` modes); `P: [..]` instead of
+  `generations:`; `kind: cross | test | reciprocal`; `count` and `ratio` are separate actions;
+  `chi_square: test` alias.
+- Crossing over is shown by the gametes (recombinants ringed with their frequencies), not as
+  chiasmata on the parents — `linkage_map` (Step 216) draws crossing over.
+- A flash animating a cell's tint drew it over the text (manim re-adds a sub-mobject on top when an
+  animation group targets it): the count flashes a separate frame instead.
+- Lethal cells: the cross is drawn behind the genotype (readable); the genotype table marks a dying
+  class with a red band and "dies" (no strike line over text).
+
+Known gaps
+- Phenotype names written in `loci` are not translatable strings; a genotype split by penetrance
+  shows its main phenotype in its cell (the tables are exact); the 9:16 genotype branch diagram is
+  small with 9 leaves; genotype tables stop at 12 classes; gamete formation does not animate
+  crossing over itself. Lint at preview 854×480: `min_font` warnings (text between the 1.8 % error
+  and 2.5 % warning sizes: gamete shares, two-column genotype tables, small trees), `max_words`
+  warnings on full tables; no errors in the scratch scenes. Narration checks of ratios are Step 219.
+
+How to test
+- `tests/test_cross.py` (14, render included, 39 s); not render: `test_docs` + `test_guide` +
+  `test_gallery` + `test_genetics_model` (221), `test_actions` + `test_actions_coverage` +
+  `test_builtin_scenes` + `test_translation` + `test_registry` + `test_extensions` (293),
+  `test_schema` + `test_introspect` + `test_accuracy` + `test_api` (201); render `-k cross` of
+  `test_builtin_scenes` + `test_actions_coverage` (3).
+- Stills: scratch project `scratchpad/s214/proj` (14 scenes: monohybrid from P, dihybrid on words,
+  hemophilia, yellow mouse, Labradors, linked test cross, trihybrid tree, genotype tree, chi-square,
+  ABO, snapdragon, squash, rabbit), sheets and end frames in `scratchpad/s214/stills/{dark,light}-{16x9,9x16}/`.

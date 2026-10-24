@@ -15840,3 +15840,84 @@ through their decimal text: `0.1` is exactly 1/10; `"17%"` and `"1/6"` are read 
   phenotype, not age-dependent; epistasis is between two loci, one pair per locus; a dominance
   hierarchy cannot mix codominance and incomplete dominance in one level; the map functions
   (cM ↔ RF) are Step 216's.
+
+### 96.7 The `cross` scene (Step 214)
+
+**What is computed** (no manim; `genetics/punnett.py`, `stats.py`, `glyphs.py`, in
+`vidgen.genetics` and so in `vidgen.api` through `genetics`):
+
+- `punnett.build_plan(params)` → `CrossPlan` (cached by the params' JSON: `plan_cross`): the
+  system, the parents, `kind`, their roles, the P line, every gamete of each parent
+  (`GameteView`: frequency, each allele with the homologue it came from — 0, 1 or `None` when
+  both carry it —, recombinant or not; ordered by frequency, then dominance, so parental gametes
+  of linked loci come first), the Punnett cells (`Cell`: `fertilize(egg, sperm)`, probability,
+  lethal, phenotype distribution), the phenotype classes (`PhenotypeClass`: label `round,
+  yellow` / `white, male`, exact share of the survivors, its number of the whole-number ratio, its
+  cells, a cell count when every cell is equally likely, its pictures), the genotype classes of the
+  zygotes (`GenotypeClass`: key `RrYy` — one-letter alleles run together, else the YAML form —,
+  shares of zygotes and survivors, lethal), `show` resolved, the branch tree and the notes.
+- **Parents**: `parents` (two genotypes; with sex chromosomes in any order, the X and Y say who is
+  the mother), or `mother` / `father` (needed with mitochondrial loci); `P` (true-breeding: its
+  cross must give one F1 genotype per sex, else refused with the genotypes found) gives the F1
+  intercross, labelled F₁ / F₂; `kind: test` takes one parent and adds `make_tester`;
+  `kind: reciprocal` uses `reciprocal`.
+- **The branch diagram** is a probability tree of the survivors: levels sex (when the classes
+  have one) then each trait, or (`branch: genotypes`) each locus (the X / Y pair last); every node
+  carries the probability **conditional** on its path and the product. For independent traits the
+  conditionals are the forked-line method's (3/4, 1/4 everywhere); for linked loci they differ, so
+  the tree stays exact. Limits: a Punnett square up to 8 × 8 (`auto`: up to 4 × 4), at most 16
+  leaves.
+- **Chi-square** (`stats.chi_square`): expected counts exact (N × share as fractions), χ² exact, df
+  = classes − 1, p = Q(df/2, χ²/2) with the upper regularized gamma function (series below a + 1,
+  Lentz's continued fraction above; equal to SciPy's `gammaincc` to 1e-9 in the tests), the
+  critical value by bisection, rejection when p < α, classes with E < 5 flagged. `observed` is a
+  mapping matched to the classes by their words in any order (`yellow round` = `round, yellow`),
+  or a list in class order; every class once.
+- **Pictures** (`glyphs.class_glyphs`): from the trait's name and the phenotype's words — pea
+  (shape, colour; both traits in one pea), flower, eye (a fly's compound eye for red / white /
+  sepia…, else a human eye), fly (body colour, wings, eye colour), coat (an animal head), feather,
+  fruit (colour, disc / sphere / long), blood drop with the ABO group, capsule, affected /
+  unaffected square, swatch. Drawn by `scenes/cross_draw.py` (original flat shapes).
+- **Notes** from the model: a linked parent's parental and recombinant gamete shares and RF (or "no
+  crossing over in this sex"), the lethal genotype with the share of zygotes and the survivors'
+  ratio, the tester, the reciprocal cross (and when it cannot differ), each epistasis in the loci's
+  symbols (`ee masks the B locus (ee is yellow whatever B)`).
+
+**The scene** (`scenes/cross.py`): 16:9 — the drawing on the left 58 %, the panel (class tables,
+chi-square) on the right; parent 1 beside the rows and parent 2 over the columns of the square
+(the textbook figure), "×" in the corner (♀ / ♂ there with sex chromosomes). A branch diagram
+without a panel uses the whole width: the parents with their gametes in a column on the left.
+9:16 — the parents in a row on top (gametes under each for a branch diagram), the drawing, the
+panel under it. Cells are as tall as the height allows and as wide as their genotypes; gamete chips
+become pills for long alleles; a low row puts its share beside its gamete. Tables use 1.15 × the
+label size, fitted to the panel; the phenotype table drops its percentages when it would shrink
+below 85 %; genotype tables go to two columns beyond six classes and stop at 12 (a trihybrid's 27
+are not tabled). Cards stack in the panel and replace each other when the next does not fit. A
+branch diagram's leaves are the table of its kind (products, percentages in 16:9 when the tree
+keeps 90 % of its size, pictures, ratio numbers, the ratio line under the tree); the panel then
+holds only the other kind (when it fits) and the chi-square test, and is left out when empty.
+
+**Actions** (`scenes/cross_actions.py`; `needs_visible = False`, each finds what it needs done
+first): `form_gametes` (targets `both` / `parents` / `gametes`, `parent1` / `mother` /
+`gametes1`, `parent2` / `father` / `gametes2`), `fill` (`square` / `all`, `row<N>`, `col<N>`,
+`cell<R>.<C>`, `cells:<class or genotype>`, patterns; `by: auto | cell | row | column`; `tree` on a
+branch diagram), `count` / `ratio` (`phenotypes`, `genotypes`), `chi_square` (`test` /
+`chi_square`). Any of them puts the scene in manual mode (the first step shows the parents and
+the empty square only); without them the scene's own steps are the parents, the gametes, the
+filling, each table counted with its ratio, the test. `action_sequence_problems` refuses gametes
+formed twice, a cell filled twice, a table counted twice, the test twice. The built-in
+`highlight` / `dim` / `callout` work on every target (`cells:` with `style: box` or `fill`).
+
+Changes from the plan (§96.5): `show` is `auto | punnett | branch` (gametes and ratios are always
+part of the scene, so no `show: gametes | ratios`); `generations: [P, F1, F2]` became `P: [...]`
+alone (the F1 is derived, the F2 shown); `kind` (`cross`, `test`, `reciprocal`) names the
+cross; the chi-square target has the alias `test` (`chi_square: test`); the counts are a
+`count` action plus a `ratio` action (a table can be counted on one word and its ratio said on
+another). Crossing over is shown by the gametes (recombinants ringed, their frequencies), not by
+chiasmata on the parents' chromosomes (`linkage_map`, Step 216, draws crossing over).
+
+**Public**: no new `vidgen.api` names (the new modules are reached as `genetics.punnett`,
+`genetics.stats`, `genetics.glyphs`); a scene type `cross` and five actions; no config key. Gaps:
+phenotype names in `loci` are not translatable strings; per-cell penetrance (a genotype split
+between phenotypes) shows the main phenotype in its cell (the tables are exact); the 9:16 genotype
+tree is small with 9 leaves; the lint of ratios said in narration is Step 219's.

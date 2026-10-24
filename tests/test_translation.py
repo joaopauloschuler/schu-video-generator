@@ -297,6 +297,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "pathway": [{"title": "T:title", "template": "gpcr_camp_pka", "edges": [{"from": "pde", "to": "camp", "type": "inhibits", "label": "T:arc"}]}],
     "cell_cycle": [{"title": "T:title", "mode": "meiosis"}],
     "metabolism": [{"title": "T:title", "process": "glycolysis"}],
+    "cross": [{"title": "T:title", "preset": "pea_seed_shape", "parents": ["Rr", "Rr"]}],
     "iso_diagram": [
         {
             "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],

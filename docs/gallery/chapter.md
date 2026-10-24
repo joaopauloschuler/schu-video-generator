@@ -22,7 +22,7 @@ From the author guide (`vidgen guide scenes`):
 - id: part1
   type: chapter
   params: {number: 1, title: "The problem", icon: triangle-alert}
-  duration: 2.5
+  duration: 3.5
 ```
 
 ## Params

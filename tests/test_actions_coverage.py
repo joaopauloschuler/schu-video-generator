@@ -62,6 +62,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
                 "edges": ["egf -> egfr"]},
     "cell_cycle": {"title": "Cycle"},
     "metabolism": {"title": "ETC", "process": "etc", "components": ["complex_iii", "cyt_c", "complex_iv"]},
+    "cross": {"title": "Cross", "preset": "pea_seed_shape", "parents": ["Rr", "Rr"]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -187,6 +188,14 @@ def test_target_names_of_every_builtin_type() -> None:
                                    "cyclin:a", "cyclin:b"]
     assert names("cell_cycle", mode="mitosis") == ["title", "cell", "chromosomes", "spindle", "pair1", "pair2", "caption"]
     assert names("metabolism") == ["title", "etc", "complex_iii", "cyt_c", "complex_iv", "membrane", "tally"]
+    assert names("cross") == ["title", "parents", "both", "parent1", "mother", "parent2", "father", "gametes", "gametes1", "gametes2",
+                              "square", "all", "row1", "row2", "col1", "col2", "cell1.1", "cell1.2", "cell2.1", "cell2.2",
+                              "cells:round", "cells:wrinkled", "cells:RR", "cells:Rr", "cells:rr", "phenotypes", "class1", "class:round",
+                              "class2", "class:wrinkled", "genotypes", "genotype:RR", "genotype:Rr", "genotype:rr"]
+    assert names("cross", preset="hemophilia_a", parents=["X^H X^h", "X^H Y"], show="branch")[10:] == [
+        "tree", "all", "cells:normal clotting, female", "cells:normal clotting, male", "cells:hemophilia A, male", "phenotypes",
+        "class1", "class:normal clotting, female", "class2", "class:normal clotting, male", "class3", "class:hemophilia A, male",
+        "genotypes", "genotype:X^H X^H", "genotype:X^H X^h", "genotype:X^H Y", "genotype:X^h Y"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

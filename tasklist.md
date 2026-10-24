@@ -1233,8 +1233,10 @@ baseline frames when shared code changes). DESIGN §96. Steps 213–221.
 - [~] No scene type or renderer yet (the Punnett square is Step 214); ZW / X0 sex systems, heteroplasmy and age-dependent penetrance not modelled
 
 ### Step 214 — Crosses and Punnett squares
-- [ ] A `cross` scene type on the cross engine: mono-, di- and trihybrid crosses, test crosses, reciprocal crosses, P → F1 → F2; incomplete dominance, codominance, multiple alleles (ABO), epistasis (9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1), lethal 2:1, sex-linked crosses with X / Y split by sex
-- [ ] Animated gamete formation (homologues separating; crossing over for linked loci), squares filling step by step, offspring counted into genotype and phenotype ratios; branch (forked-line) diagrams for larger crosses; optional chi-square of observed against expected counts with the p-value
+- [x] A `cross` scene type on the cross engine: mono-, di- and trihybrid crosses, test crosses, reciprocal crosses, P → F1 → F2; incomplete dominance, codominance, multiple alleles (ABO), epistasis (9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1), lethal 2:1, sex-linked crosses with X / Y split by sex
+- [x] Animated gamete formation (homologues separating; crossing over for linked loci), squares filling step by step, offspring counted into genotype and phenotype ratios; branch (forked-line) diagrams for larger crosses; optional chi-square of observed against expected counts with the p-value
+- [x] Plan, Punnett cells, classes, branch tree and notes computed without manim (`genetics/punnett.py`), chi-square with its own regularized gamma (`genetics/stats.py`; matches SciPy), phenotype pictures chosen from trait and phenotype words (`genetics/glyphs.py`); actions form_gametes, fill, count, ratio, chi_square; 16:9 (parents beside / over the square) and 9:16 layouts; validation, docs (CONFIG, guide), gallery entry; tests `tests/test_cross.py`
+- [~] Phenotype names written in `loci` are not translatable (`vidgen translate-template`); percentages are left out of the phenotype table when the panel is too narrow; genotype tables stop at 12 classes (a trihybrid counts phenotypes)
 
 ### Step 215 — Pedigrees
 - [ ] A `pedigree` scene type in NSGC notation: squares / circles / diamonds, affected filled, carriers dotted or half, deceased slash, proband arrow, consanguinity double line, MZ / DZ twins, adoption, generation numerals and individual numbers; deterministic layout by generation for 16:9 and 9:16

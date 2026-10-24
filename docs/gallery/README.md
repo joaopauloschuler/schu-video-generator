@@ -50,6 +50,12 @@ A whole lecture-style video, a protein's route from its gene to the blood throug
 | [Mitosis](mitosis.md) | <a href="mitosis.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/mitosis-16x9.png"><img src="media/mitosis-16x9.gif" height="180" alt="mitosis at 16:9"></picture></a> <a href="mitosis.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/mitosis-9x16.png"><img src="media/mitosis-9x16.gif" height="180" alt="mitosis at 9:16"></picture></a> | a dividing cell: condensation, the metaphase plate, sister chromatids parting, two daughter cells |
 | [The respiratory chain](respiratory_chain.md) | <a href="respiratory_chain.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/respiratory_chain-16x9.png"><img src="media/respiratory_chain-16x9.gif" height="180" alt="respiratory_chain at 16:9"></picture></a> <a href="respiratory_chain.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/respiratory_chain-9x16.png"><img src="media/respiratory_chain-9x16.gif" height="180" alt="respiratory_chain at 9:16"></picture></a> | electrons down complexes I–IV with protons pumped, then ATP synthase turning |
 
+## Genetics
+
+| type | preview | use it for |
+|---|---|---|
+| [`cross`](cross.md) | <a href="cross.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cross-16x9.png"><img src="media/cross-16x9.gif" height="180" alt="cross at 16:9"></picture></a> <a href="cross.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cross-9x16.png"><img src="media/cross-9x16.gif" height="180" alt="cross at 9:16"></picture></a> | a genetic cross: Punnett square or branch diagram, gametes, genotype and phenotype ratios (mono-, di-, trihybrid, test, reciprocal, P → F1 → F2, dominance, epistasis, lethal 2:1, X-linked, linked genes), a chi-square test |
+
 ## Data
 
 | type | preview | use it for |

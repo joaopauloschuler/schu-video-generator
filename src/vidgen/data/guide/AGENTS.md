@@ -299,6 +299,7 @@ project's own scene types, in its theme).
 | a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the actions zoom_to, motor_walk, endocytosis, exocytosis; with a `gene`: transcribe, export, translate, to_golgi, secrete (its products' route, the camera following) |
 | the cell cycle with its checkpoints and cyclin–CDK levels; mitosis and meiosis with counted chromosomes, crossing over and four haploid cells | `cell_cycle` | `title`, `mode` (cycle, mitosis, meiosis), `start`, `hours`, `chromosomes` (2n), `cell` (animal, plant), `crossovers`, `assortment`, `captions`, `counts`; the actions advance (to, into, expect) and checkpoint (outcome, cause) |
 | energy metabolism: glycolysis, pyruvate oxidation, the citric acid cycle, the electron transport chain and ATP synthase, the light reactions; flows animated, products counted | `metabolism` | `title`, `process` (glycolysis, link_reaction, tca, etc, light_reactions), `cell`, `in`, `membrane`, `protons_to`, `components`, `link`, `tallies`, `names`; the action advance (to, from) |
+| a genetic cross: Punnett square or branch diagram, gametes, genotype and phenotype ratios (mono-, di-, trihybrid, test, reciprocal, P → F1 → F2, dominance, epistasis, lethal 2:1, X-linked, linked genes), a chi-square test | `cross` | `title`, `preset` (pea_dihybrid, abo, labrador, drosophila_white, hemophilia_a…) or `loci` / `linkage` / `epistasis` / `sex`, `parents` (or `mother` / `father`, or `P`), `kind` (cross, test, reciprocal), `show` (auto, punnett, branch), `branch`, `observed`, `alpha`, `notes`, `pictures`; the actions form_gametes, fill, count, ratio, chi_square |
 | a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs | `pathway` | `title`, `template` (gpcr_camp_pka, rtk_ras_mapk, pi3k_akt), `nodes` (id, kind, label, in, gene, state, marks, role), `edges` (a -> b activates, a -o b catalyses, a => b translocates, an arrow with a bar inhibits, or {from, to, type, effect, site, feedback, label}), `remove`, `species`, `direction`; the actions signal, inhibit, knockout, drug, amplify, focus |
 | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
@@ -693,6 +694,25 @@ protons were pumped.
       actions: [{advance: tca, to: succinyl_coa, at: "@joins"}]
     - text: "The cycle closes with GTP, FADH2 and NADH."
       actions: [{advance: tca, to: oxaloacetate}]
+```
+
+A `cross` scene works a genetic cross out exactly (DESIGN §96: the cross engine, fractions, no hand-written ratios) and draws it: the parents with their homologous chromosomes and phenotype pictures (peas, flowers, flies, coats, blood groups…), their gametes (each allele in the colour of the homologue it came from; recombinants of linked loci ringed, with their frequencies), a Punnett square up to 4 × 4 (8 × 8 with `show: punnett`) or a branch (forked-line) diagram beyond, and the offspring counted into genotype and phenotype classes — exact fractions in lowest terms, percentages, the whole-number ratio (9 : 3 : 3 : 1, 9 : 3 : 4, 2 : 1 with the lethal class crossed out; X-linked crosses split by sex, X and Y in the headers). Use a `preset` (pea_seed_shape, pea_dihybrid, snapdragon, abo, rabbit_coat, labrador, squash_colour, chicken_feathers, shepherds_purse, sweet_pea, squash_shape, yellow_mouse, drosophila_white, hemophilia_a, drosophila_b_vg) or write the `loci`. Genotypes are textbook notation: `RrYy`, `I^A i`, `X^H X^h`, `X^h Y`, linked loci with their phase `AB/ab`. `P: [RRYY, rryy]` crosses the P generation to its F1 and shows the F2; `kind: test` makes the tester; `kind: reciprocal` swaps the sexes of the lines. `observed` counts add a chi-square table (χ², df, p, the critical value, the verdict). Without cross actions the scene plays itself beat by beat; `form_gametes`, `fill` (`square`, `row2`, `cell1.3`, `"cells:wrinkled, green"`; `by: row`), `count` (`phenotypes` / `genotypes`), `ratio` and `chi_square` (`test`) put each step on a word, and `highlight` marks a class's cells (`style: box`). Checked with the reason: alleles that do not exist (did you mean…), X-linked alleles off their X, a female with a Y, linked loci without their phase, RF over 0.5, a P generation that is not true-breeding, counts for classes the cross does not have, a cell filled twice.
+
+```yaml
+# genetics
+- id: dihybrid
+  type: cross
+  params:
+    title: "A dihybrid cross"
+    preset: pea_dihybrid               # or loci: [{gene: R, trait: seed shape, alleles: {R: round, r: wrinkled}}, ...]
+    parents: [RrYy, RrYy]              # P: [RRYY, rryy] for P → F1 → F2; kind: test with one parent
+  beats:
+    - text: "Each parent makes four kinds of gametes, in equal numbers."
+      actions: [{form_gametes: both, at: "@four"}]
+    - text: "Sixteen equally likely combinations fill the square."
+      actions: [{fill: square, by: row}]
+    - text: "Counted, they give nine to three to three to one."
+      actions: [{count: phenotypes}, {ratio: phenotypes, at: "@nine"}]
 ```
 
 Accuracy and sources. `vidgen lint` checks the science of these scenes (and of any narration)
@@ -1189,6 +1209,11 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `amplify` | on a `pathway`: many copies of a node stream out of the node that makes it (`{amplify: camp, factor: "×100"}`; `from`, `count`) | after the `signal` reached it |
 | `advance` | on a `cell_cycle`: the cell moves round the cycle (`advance: cycle, to: s`; `into: 0.5`; `to: g0` only before the restriction point) or a division runs to a stage (`advance: cell, to: anaphase_i`; `expect: {chromosomes: 2, chromatids: 4}` is checked); on a `metabolism`: the token runs to a metabolite or enzyme (`advance: glycolysis, to: pyruvate`), electrons run along the chain pumping protons (`advance: etc, to: complex_iv`; `from: fadh2`), or the gradient drives ATP synthase (`to: atp_synthase`) | one stage or a few steps per beat: its length follows what it shows (up to ~8 s) |
 | `checkpoint` | on a `cell_cycle` (`mode: cycle`): a checkpoint's regulators light in a panel — `checkpoint: g1_s` passes (cyclin D–CDK4/6 ⊣ Rb ⊣ E2F → cyclin E–CDK2), `{checkpoint: g2_m, outcome: arrest, cause: dna_damage}` holds the cell (`advance` cannot pass it until the action's `until`); `spindle` (SAC: MCC ⊣ APC/C–Cdc20) | one checkpoint per beat |
+| `form_gametes` | on a `cross`: a parent's homologues part and its gametes fly out to the square's headers (`form_gametes: both`, `parent1`, `mother`…), each allele in its homologue's colour, recombinants ringed | once per parent |
+| `fill` | on a `cross`: Punnett cells fill in, the row's and column's gametes moving in (`fill: square`, `row2`, `col1`, `cell2.3`, `"cells:wrinkled, green"`; `by: row` / `column` / `cell`); `fill: tree` grows a branch diagram | a row or the square per beat (~0.2 s a cell) |
+| `count` | on a `cross`: the offspring counted into classes (`count: phenotypes` or `genotypes`): rows appear as their cells flash, fractions in lowest terms, percentages, the lethal class dying | one table per beat |
+| `ratio` | on a `cross`: the whole-number ratio of a table (`ratio: phenotypes` → 9 : 3 : 3 : 1) | on the word that says it |
+| `chi_square` | on a `cross` with `observed` counts: the goodness-of-fit table, χ², df, p, the verdict (`chi_square: test`) | give it its own beat |
 
 ```yaml
 - id: speeds

@@ -5,10 +5,23 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–213)
+## Unreleased (Steps 193–214)
 
 ### Genetics (Phase V, from Step 213)
 
+- **A `cross` scene type** (Step 214): a genetic cross worked out exactly and drawn — the parents
+  with their homologous chromosomes, genotypes in standard notation and phenotype pictures (peas,
+  flowers, flies, coats, blood groups…), their gametes flying out to a Punnett square's headers
+  (each allele in its homologue's colour; recombinants of linked genes ringed, with their exact
+  frequencies), the square filling cell by cell or row by row (up to 8 × 8; a branch, forked-line,
+  diagram for larger crosses), and the offspring counted into genotype and phenotype classes —
+  exact fractions, percentages, whole-number ratios (9 : 3 : 3 : 1, 9 : 3 : 4, 2 : 1 with the
+  lethal class crossed out; X-linked crosses split by sex). `P: [RRYY, rryy]` shows P → F1 → F2,
+  `kind: test` makes the tester, `kind: reciprocal` swaps the sexes; `observed` counts add a
+  chi-square test (χ², df, p, critical value, verdict). The actions `form_gametes`, `fill`,
+  `count`, `ratio` and `chi_square` put each step on a word; without them the scene plays itself.
+  16:9 and 9:16; validated with the reason (alleles, sexes, phase, counts for classes that do not
+  exist, a cell filled twice).
 - **The genetics model** (Step 213, no scene type yet; `vidgen.genetics`, also in `vidgen.api`):
   loci and alleles in standard notation (`A`/`a`, `I^A` shown as Iᴬ, `c^{ch}`, wild type `w^+` or
   `+`, X-linked alleles written on their chromosome, `X^H X^h`, `X^h Y`); dominance — complete,
