@@ -34,6 +34,7 @@ from vidgen import __version__, carry
 from vidgen.config import SceneConfig
 from vidgen.includes import project_relative
 from vidgen.project import Project
+from vidgen.references import has_citations
 
 #: Bumped when the fingerprint's inputs change (old renders then count as stale).
 FINGERPRINT_VERSION = 1
@@ -47,7 +48,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
-        "loudness.py", "mix.py", "music.py", "music_pieces.py", "studio", "musicfit.py", "composer.py", "score.py", "synth.py", "soundfont.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
+        "loudness.py", "mix.py", "music.py", "music_pieces.py", "studio", "studio_app", "musicfit.py", "composer.py", "score.py", "synth.py", "soundfont.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
         "slides_pdf.py", "stt", "readback.py", "speech_flags.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/openrouter.py",
         "imagegen/run.py", "guide.py", "gallery.py", "outline.py", "prose.py", "plan.py", "plan_yaml.py",
         "mcp_server.py", "mcp_tools.py", "animatic.py",
@@ -189,6 +190,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "pronunciation_defaults", "voices", "subtitles", "music", "audio",
         "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets", "soundfont",
+        # citations change pixels only on scenes with references ("citations" below)
+        "citations",
         # a draft's size and frame rate: only drafts use them, checked like any format (§74)
         "draft",
     }
@@ -201,7 +204,9 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
-        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True, "beats": {"__all__": {*JOIN_KEYS, "music_pause"}}}),
+        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True,
+                                                       "references": True, "figure_credit": True,
+                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
@@ -211,6 +216,14 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "next_transition": _next_transition(project, scene_id),
     }
     after = _next_scene(project, scene_id)
+    if has_citations([spec] + ([after] if after is not None else [])):
+        # this scene's citations (or the next scene's, drawn in a crossfade) are numbered across
+        # the video (§95.14); scenes without citations on either side keep their fingerprints
+        data["citations"] = {
+            "settings": project.config.citations.model_dump(mode="json"),
+            "scenes": [s.model_dump(mode="json", include={"id": True, "references": True, "figure_credit": True, "beats": {"__all__": {"id", "cite"}}})
+                       for s in project.config.scenes if s.references or s.figure_credit is not None or s.id == scene_id],
+        }
     if after is not None and (project.config.host is not None or spec.host is not None or after.host is not None):
         # a host the next scene shows unchanged stays in this scene's fade-out (DESIGN.md §71)
         data["next_host"] = [after.type, after.model_dump(mode="json", include={"host"})]

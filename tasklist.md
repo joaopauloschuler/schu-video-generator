@@ -1077,6 +1077,129 @@ advice; a human makes the final choice (DESIGN §93).
 - [x] The GPS example plays the bed and keeps no project copy (it would clash); its README keeps the log and check report; its mix is byte-identical; the redundant `studio/pieces/` copy removed
 - [x] Listen page: the bed's row (clip into its lift, spectrogram: the Step 189 piece files, byte-identical, renamed); "Made with the score format" stays as the showcase of how it was made, linking the example's log and the bed's clip (no second copy of the media); regenerated twice identically (6.33 MB)
 
+## Phase T — vidgen studio: a local music workstation for humans
+
+Goal: `vidgen studio [PROJECT] [--port N] [--no-browser]` starts a small local web app
+(127.0.0.1 only) and opens it in the browser. People load any of the 17 built-in beds as an
+editable score file, change it, listen, check it and export YAML / MP3 / WAV or save it into a
+project's `assets/music/`. The sound is always vidgen's own renderer; the browser only plays the
+rendered audio. A compact "mini DAW" in vidgen's look (dark theme, light option). Additive: the
+beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN §94).
+
+### Step 193 — Architecture and skeleton
+- [x] Phase T plan here and DESIGN §94 for the whole phase: modules, server and its guards, sessions and versions on disk, the JSON API (including the calls of Steps 194–199), the render cache and the Step 196 stem plan, the page, how MCP reaches an open session (Step 198), variations (Step 199)
+- [x] `vidgen studio`: a standard-library HTTP server on 127.0.0.1 (a free port by default), opens the browser, Ctrl+C stops it; sessions in the project's `build/studio/` or vidgen's cache folder; JSON API: presets with one-line descriptions, patches, load a preset or text, validate (problems with lines and did-you-mean), render whole or one section (cached by the notes), audio with range requests; Host / Origin / JSON guards, allow-listed files (`src/vidgen/studio_app/`)
+- [x] The page as package data (vanilla JS modules, no build, no CDN, bundled fonts): top bar with the preset picker, song strip, transport (play / pause / stop / seek), timeline with sections and playhead, track list, read-only inspector, the highlighted score file; placeholders for the later parts; load a preset and play its render
+- [x] Tests: `tests/test_studio_app.py` (API logic and the HTTP server), `tests/test_studio_ui.py` (`ui`: headless Chromium through Playwright — the page loads, a preset loads, play streams audio); screenshots looked at
+
+### Step 194 — Song strip, timeline and track list
+- [x] Chords in Roman numerals with names, live (every template's chords analysed against the key; a section's own progression shown when the playhead or loop is in it); key, tempo, seed and the chords editable; loop whole or a section; playhead; energy curve; drag a section edge to change its bars; click a section to loop it; add / remove / rename sections; mute / solo (a listening mix, never the score), volume, pan, pattern text editable in place with its problem shown, level meters (rough, from the steps); `[+ track]` with an instrument picker and a default pattern; delete a track
+- [x] Every committed edit is a version (`POST /api/edit`, `studio_app/edits.py`: one value changed in place, comments kept; `studio_app/song.py`: the edits of tracks and sections); a bad edit writes nothing and keeps playing the last good render; re-render whole after an edit, at the same moment
+- [x] Tests: `tests/test_studio_song.py` (edits, numerals, song edits, versions, energy, mute mixes, the route), `tests/test_studio_ui.py` (`ui`: strip, timeline, track list flows); screenshots looked at
+
+### Step 195 — Inspector and editing
+- [x] Instrument picker; sliders from the patches metadata (ranges, units, hover help); octave and accent; effects as chips; per-section changes; a step grid synced both ways with the steps text; the YAML editable both ways (edits change values in place, comments kept); inline validation with the CLI's did-you-mean — a bad edit never stops playback
+- [x] Instrument change previewed with what it keeps / drops / moves (`studio_app/inspector.py`), then one version; sliders with units, log scale for frequencies, default ticks, reset (`unset` prunes empty mappings), typed values; transpose, play mode (pads: chords / steps)
+- [x] "Edit for": the whole track or one section (writes `sections: {name: {...}}`, the track's values shown where the section has none); per-section table (plays / rests via `rest` or `only`, its changes, clear, edit)
+- [x] Effects chips: echo, reverb, duck (track or beat, follow), gate (its own step pattern), lowpass / highpass / width / volume curves (fixed, ramp, points, drawn), spread; off in one section (`none`) and back
+- [x] Step grid: bars × steps (bars of different lengths, `|`), brushes (hits, degrees, notes, chord, hold, rest), drag-paint, keys, + / − bar, steps per bar resampled; edits replace only the cell's characters; the playhead step lit
+- [x] Score file typed: checked as you type (problems with line numbers, did-you-mean), valid for 0.8 s → a version (`POST /api/text`); a draft with problems is never a version, the controls wait, Revert
+- [x] Tests: `tests/test_studio_inspector.py` (9), `tests/test_studio_ui.py` (+3 `ui` flows); screenshots looked at
+
+### Step 196 — Fast re-render
+- [x] Per-track stem cache (re-render only the changed tracks, remix; keyed on what each track hears, a duck on its trigger's hits; a volume change scales a kept stem); remix = `render_music_score` within 1e-9 (the same 16-bit audio) on the 17 templates and edited scores, `render_music_score` itself unchanged; mute / solo remix kept stems (one-shot tails kept)
+- [x] Playback continues at the same moment with no gap (a second `<audio>` cross-faded in); the "under narration" toggle (narration sample, default ducking); level meters from each stem's audio; late facts (loudness, energy) after the render plays
+- [~] Section-only render: measured and not built (a section is cut from the remix; DESIGN §94.14 says why)
+- [x] Latency of typical edits measured on momentum, tidewater, time_of_flight (DESIGN §94.14); tests `tests/test_studio_stems.py` (+17 `slow`), `tests/test_studio_ui.py` (+1 `ui`); screenshots looked at
+
+### Step 197 — Check, versions and exports
+- [x] Check panel: `music check` in the background after each render from the kept stems (a newer version's check supersedes one under way; it gives way to renders), verdict and headline numbers, spectrogram with section marks and the playhead, advice with [Apply] for mechanical fixes (the check's advice carries structured edits; the CLI's text and JSON unchanged), full report
+- [x] Versions menu (label, time, parent, branch), undo / redo (Ctrl+Z / Ctrl+Shift+Z), rename, star; A/B against the original preset or any version at the same moment with an A / B badge; reopen older sessions
+- [x] Exports YAML / WAV / MP3 (once, N loops, N seconds; video −28 LUFS or listening −16 LUFS) downloaded from the session's `exports/`; save to a project's `assets/music/<name>.yaml` (a bed's name refused, overwrite asks; `music: <name>` snippet); no project explained
+- [x] Tests `tests/test_studio_check.py` (12), `tests/test_studio_ui.py` (+3 `ui`); screenshots looked at
+
+### Step 198 — Listening notes and "Ask an agent"
+- [x] Notes pinned while playing or paused (notes lane, + note, N key) with time, bar, beat, section and version; pins and a Notes tab (edit, resolve, delete, play from a little before); carried over to later versions, placed by their section's bar when sections change length (and saying so)
+- [x] "Ask an agent": the hand-off (`request.json`: score, open notes, check, parent diff, instruction); MCP tools `studio_sessions`, `studio_read`, `studio_check`, `studio_propose` (validated, written to the session's `inbox/`); the page polls and shows proposals (one line per note, A/B against the current version, keep, discard; invalid ones shown with their problems, never kept; proposals never overwrite versions); Copy prompt / Paste reply; optional OpenRouter (`OPENROUTER_API_KEY`, `VIDGEN_STUDIO_MODEL`; disabled with an explanation without the key; mocked in tests)
+- [x] Guide section on answering a studio hand-off; tests `tests/test_studio_agent.py` (11), `tests/test_mcp.py` (+1), `tests/test_studio_ui.py` (+2 `ui`); screenshots looked at
+
+### Step 199 — Variations
+- [x] One click: four deterministic siblings of the current piece, one per kind (harmony: re-voiced / substituted / inverted chord / seed; pattern: the figure turned, re-accented, degrees swapped, hat ghost notes; mix: darker / brighter, lead forward / back; energy: sparser intro, stronger lift, drums building in, pad breathing), labelled in words, each rendered (kept stems reused) and checked in the background, side by side; Play at the same moment, Keep (the next version, parent the version varied), More like this, Shuffle (a counter); un-kept candidates never become versions
+- [x] MCP tool `studio_variations`; tests `tests/test_studio_variations.py` (22: operators, the 17 templates, batches, keep, routes, MCP side), `tests/test_studio_ui.py` (+1 `ui`), `tests/test_mcp.py` (tool list, a call); screenshots looked at
+
+### Step 200 — Docs and polish
+- [x] CONFIG ("Music studio": start, the page, editing, notes, agents, variations, versions / A/B, exports, keyboard, disk, sizes and themes, errors, security), guide (when to suggest the studio; sessions handed over MCP) + `AGENTS.md`, README (a section and `docs/images/studio.png`, 74 KB; no GIF), COOKBOOK-MUSIC §7 (a person and an agent), the Listen page links to the studio, CHANGELOG
+- [x] Responsive layout (tabs for inspector / score file / notes under 1320 px, one column under 980 px; the tracks never squeezed away), light theme checked panel by panel, keyboard shortcuts (Space, N, L, M / S, V, Ctrl+Z / Ctrl+Shift+Z, ? overlay), accessibility basics (names on every control, visible focus, WCAG AA contrast measured in both themes), first-run hint, "server not answering" banner with reconnection, render errors keep the last render playing
+- [x] 199 gaps: the open batch and the last hand-off come back after a reload; every batch listed (panel and version menu) so candidates not kept can be played and kept; disk rule for old renders / exports (versions, notes and checks never removed) with Clean up and `vidgen studio --clean`; tests `tests/test_studio_cleanup.py` (6), `tests/test_studio_ui.py` (+3 `ui`); screenshots at 1920 / 1440 / 1280 / 1024 / 420 px in both themes looked at
+
+### Step 201 — Review of Phase T
+- [x] Critical review with fixes recorded in HANDOFF (DESIGN §94.19); security (localhost only, no path traversal, safe file writes, no code run from requests) — one test per attack in `tests/test_phase_t_review.py` (21, 2 `slow`): a negative Content-Length, NaN / Infinity numbers, `$`-anchored and `\d` name patterns, Windows device names, alias bombs / deep nesting, a session link out (MCP), the paid provider's confirmation, fixed; compatibility (17 fingerprints, templates, beds, cookbook, project mixes, Listen page: byte for byte); determinism; the phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Step 196's FFT finding: quick FFT lengths in the studio only (exact samples for videos and beds; byte-identity impossible otherwise), the same 16-bit audio, time_of_flight at 112 BPM 22 → 9 s and 2.2 → 1.3 GB; long pieces' stems streamed (a 5-minute piece no longer killed at 3 GB); exports block by block, at most 10 minutes; cleaning leaves a running studio's session alone; CRLF text stored as LF
+
+## Phase U — Cell biology at university and research level
+
+Goal: 2D cell-biology presentations for lectures, science channels and researchers explaining
+their work: more detail and precise terms, scientifically correct (stylised, never wrong), in
+vidgen's clean flat style, easy for AI authors to write right in YAML (validated with clear
+errors and did-you-mean, linted where useful), in 16:9 and 9:16. Built in the three-layer design
+of Phases O–R: a cell world (plain data and rules in real units, no manim; `vidgen/cellworld/`),
+renderers apart (`vidgen/cell_vector.py`, `scenes/cell.py`). Additive and opt-in: existing
+projects, scenes, gallery frames, audio and the studio unchanged (Phase Q's 31 baseline frames
+when shared code changes). DESIGN §95. Steps 202–211.
+
+### Step 202 — Cell world model and scale system
+- [x] Phase U plan here and DESIGN §95 for the whole phase: the data model (compartments, membranes, structures and complexes with real sizes and topology), units, the camera's levels and level of detail, the location rules, how the structure library (203), molecules (204) and process actions (205–208) plug in, how the `pathway` scene (207) relates, how the accuracy lint (209) reads the model; decided: a new scene type `cell` (not a mode of `stage` or `iso_diagram`)
+- [x] World model and rules without manim (`vidgen/cellworld/`: `units`, `catalog`, `geometry`, `model`, `view`): lengths in µm from numbers or `"25 nm"`; compartments (cytosol, nucleoplasm, perinuclear space, ER / Golgi / lysosome / endosome / vesicle lumens, intermembrane space, matrix, peroxisomal matrix, extracellular) with topology; membranes as bilayer mid-lines; the typical animal cell; automatic placement (typical layout, else seeded scatter); location rules refused with the textbook reason (a ribosome in the nucleoplasm, on the Golgi or in a lumen; a structure in the nucleus, overlapping or out of the cell; an unknown kind, compartment or id with did-you-mean)
+- [x] YAML: `type: cell` with `cell`, `contents`, `objects` (`kind`, `id`, `at` in µm, `size`, `width`, `angle`, `in`, `on`, `count`, `label`, kind options), `view`, `labels`, `scale_bar`, `reveal`, `seed`; validation located at `scenes[i].params`
+- [x] First renderer: exact Bézier outlines in scene units (`cell_vector.py`), placeholder organelles at true relative scale (nucleus with pores and nucleolus, rough ER with bound ribosomes, smooth ER, Golgi cis → trans, centrosome, mitochondria with cristae, lysosomes, peroxisomes, vesicles, free ribosomes), theme-aware colours (light and dark)
+- [x] Physical-scale camera: levels tissue → cell → organelle → complex (`zoom_to` action, `level`, `width`, `until`), van Wijk–Nuij zoom path, level-of-detail switching measured on a 1080-pixel frame (dots → ribosome subunits, single → double membranes, bilayers, pores, cristae, neighbouring cells), strokes and labels kept on screen, an automatic 1-2-5 scale bar; timed to beats and `at: "@word"`
+- [x] Labels in columns (16:9) or rows (9:16) with leader lines, for the start view; gallery page and sample, guide chooser row, snippet and action + `AGENTS.md`, CONFIG section and targets row, CHANGELOG; tests `tests/test_cell_world.py`, `tests/test_cell_scene.py`; stills looked at in 16:9, 9:16 and a light theme
+
+### Step 203 — Structure library
+- [x] Organelles with accurate morphology: nucleus (envelope continuous with the ER, nuclear pores, nucleolus), rough / smooth ER (sheets and tubules joined), Golgi (cis / medial / trans cisternae), mitochondria (cristae, matrix, intermembrane space), lysosomes, peroxisomes, early / late endosomes, vesicles (clathrin, COPI, COPII coats), centrosome; plant: chloroplast (thylakoids, grana, stroma), cell wall, vacuole; prokaryotic cell; cytoskeleton (actin, microtubules with +/− ends, intermediate filaments) and motors (kinesin, dynein, myosin); membranes: bilayer close-up with cholesterol, glycolipids, rafts; side-view and surface-view styles
+- [x] Step 202's gaps: labels for each `zoom_to` view (`labels: true | false | [names]`), a dim / highlight during a zoom keeps its opacity, scale-bar texts for any zoom depth; gallery GIFs under 150 KB; stills looked at at every level in 16:9, 9:16, light and dark
+
+### Step 204 — Molecules and notation
+- [x] DNA with 5′/3′ ends and base pairs; mRNA, tRNA with anticodon, rRNA; nucleosomes / chromatin; proteins with domains, receptors (GPCR, RTK), gated ion channels, carriers (uniport / symport / antiport), pumps (Na⁺/K⁺-ATPase), ATP synthase, kinases / phosphatases, G proteins; small molecules and ions with typeset formulas; naming conventions (italic genes, roman proteins, species-aware case, P / Ub / Ac / Me markers)
+- [x] A `molecule` scene type (standalone close-ups in nm) and molecules as `cell` objects (in / on membranes, oriented, `faces:` checked); validation with reasons; gallery page, guide, CONFIG; tests `tests/test_molecules.py`
+- [x] Step 203 fixes: every label of a zoomed view points at its part (matrix beside a crista, glycocalyx outside the bilayer, Golgi lumen and coat), stroma lamellae join grana at their margins, a smooth-ER ring no longer filled (regions in nm for Skia), raft glow within the bilayer; a test checks each anchor against its compartment or membrane
+
+### Step 205 — Transport and membrane processes as actions
+- [x] Diffusion / osmosis with gradients; facilitated diffusion; primary and secondary active transport (ATP use shown); channel gating; clathrin- / receptor-mediated endocytosis, exocytosis, vesicle trafficking along microtubules with motors; membrane potential with ions moving and a live voltage readout (an inset plot of the trace in the `molecule` scene, not a separate `function_plot` scene)
+- [x] Actions `set_state`, `transport`, `diffuse`, `osmosis`, `action_potential` (molecule scene; `solutes`, `potential`, `bars`), `motor_walk`, `endocytosis`, `exocytosis` (cell scene); rules with reasons, states replayed in beat order by `vidgen validate`; model in `cellworld/transport.py` and `traffic.py`; tests `tests/test_transport.py`
+- [x] Step 204 gaps: lipids leave room for membrane proteins in cell close-ups; several membrane proteins in a tall frame on membrane rows
+- [~] `set_state` in a `cell` scene not done (molecule scene only); a vesicle taken in by endocytosis is not a new object of the world
+
+### Step 206 — Gene expression as actions
+- [x] Transcription (promoters, transcription factors, template read 3′→5′, mRNA made 5′→3′); RNA processing (cap, poly(A) tail, splicing, export through pores); translation (A/P/E sites, codon–anticodon pairing, peptide N→C, stop codon, release factors); protein fate (chaperones, signal peptide + SRP to the ER, glycosylation, Golgi sorting)
+- [x] A `gene:` param (a written sequence, a protein, or generated from `codons` and a `seed`); `molecule` actions `transcribe`, `cap`, `splice`, `polyadenylate`, `export`, `translate`, `target_er`, `glycosylate`, `fold`; `cell` actions `transcribe`, `export`, `translate`, `to_golgi`, `secrete` with the camera following; rules replayed by `vidgen validate`; model in `cellworld/expression*.py`; tests `tests/test_expression.py`
+- [~] Step 205 gaps not taken up (`set_state` in a cell, the endocytosed vesicle as an object, stale labels); 9:16 close-ups leave vertical space unused
+
+### Step 207 — Signalling pathways
+- [x] A `pathway` scene type with SBGN-inspired notation across compartment bands (membrane / cytosol / nucleus), automatic layout; actions: the signal propagates, nodes light up, inhibitors block, knockouts / drugs with downstream effects; GPCR–cAMP–PKA, RTK–Ras–MAPK, PI3K–Akt
+- [x] Nodes by kind (proteins, complexes, small molecules, genes, outcomes, drugs) with states (GDP / GTP, pS133 marks); arcs (activates, inhibits, catalyses, (de)phosphorylates, binds, translocates, transcribes, expresses, converts; feedback); bands extracellular / membrane / cytosol / ER / mitochondrion / nucleus, LR in 16:9 and TB in 9:16, routes never through a node; templates `gpcr_camp_pka`, `rtk_ras_mapk`, `pi3k_akt`; actions `signal`, `inhibit`, `knockout`, `drug`, `amplify` (and `focus` on pathways); rules with reasons and did-you-mean, loops not declared feedback warned; model in `cellworld/pathway*.py`; tests `tests/test_pathway.py`; gallery page `docs/gallery/pathway.md`
+- [~] 16:9 holds about nine ranks at the readable size (the pi3k_akt template fills it; bigger pathways are drawn smaller with a warning); arc labels are left out in long left-to-right pathways (`edge_labels: auto`); no `carry:` of a molecule between a `cell` and a `pathway` scene yet
+
+### Step 208 — Cell cycle, division and energy
+- [x] Cell cycle with checkpoints and cyclin–CDK plots; mitosis (prophase → cytokinesis); meiosis I / II with crossing over; glycolysis overview, TCA cycle, electron transport chain with the proton gradient driving ATP synthase, light reactions
+- [x] Scene types `cell_cycle` (`mode: cycle | mitosis | meiosis`; G0, R, checkpoints G1/S, G2/M, SAC with their regulators; cyclin D/E/A/B–CDK levels with a "now" marker; 2n = 2–8, homologues coloured, chiasmata, independent assortment, counts per cell; `cell: plant`) and `metabolism` (`process: glycolysis | link_reaction | tca | etc | light_reactions`, tallies, a folded membrane in 9:16); actions `advance` and `checkpoint`; rules with reasons (wrong counts after meiosis, the chain in the wrong membrane, protons pumped the wrong way, G0 after R…); model in `cellworld/cycle.py`, `division.py`, `energy.py`; tests `tests/test_cycle_energy.py`; gallery pages `docs/gallery/cell_cycle.md`, `metabolism.md`
+- [~] The cyclin curves are stylised; meiosis in an animal cell only; chains move two electrons per run (Q cycle counted, not animated); the gallery budget is nearly spent (the chain's GIF left out)
+
+### Step 209 — Scientific accuracy lint and references
+- [x] Lint: sizes / counts far off scale without a "not to scale" label, impossible locations, wrong directions (5′/3′, N→C), active transport without an energy source, naming mistakes, pathway arrows against declared effects; `references:` (DOI / PubMed ID) shown as small citations and collected into the description; figure credits
+- [x] Rules `science_scale`, `science_location`, `science_direction`, `science_energy`, `science_naming`, `science_pathway`, `science_counts` (config-level, `vidgen.lint.science_rule`; knowledge in `cellworld/accuracy.py`); counts in narration; `said_before_shown` / `unsaid_reveal` know the new scenes' actions and targets (`target_text`); `cell` param `not_to_scale`; scene `references` (DOI / PMID / ISBN / URL, offline format checks), beat `cite`, `figure_credit`, video `citations: {show: footer | marker | card | none}`; the numbered list in `<output>_chapters.txt`; 0 findings over the examples and Phase U projects; tests `tests/test_accuracy.py`
+- [~] English narration only; claims across sentences or behind a comma are not read; no `vidgen refs check` (no network by design); molecule scenes have no `target_text`
+
+### Step 210 — Example, docs and gallery
+- [x] "From gene to secreted protein" (transcription, splicing, export, translation on the rough ER, Golgi, exocytosis) narrated with Kokoro, music, 16:9 and 9:16; gallery section "Cell biology" with animated previews; guide topic; CONFIG reference; a cookbook page (accuracy, level of detail, labelling, pacing dense content)
+- [x] `examples/gene-to-secreted-protein` (α1-antitrypsin, 3:34 with Kokoro, `discovery` bed, references, terms, 9:16 variant; validate and lint clean in both); guide topic `biology`; `docs/COOKBOOK-CELL-BIOLOGY.md`; CONFIG nested options of the five types checked by a test; gallery "Cell biology" section with five showcases (stills as palette PNGs: 9.4 MB of 10); fixes: route caption, `scenery` for cropped cell worlds, the close-up's not-to-scale note; tests `tests/test_gene_to_secreted_protein.py`, `test_gallery`, `test_docs`, `test_guide`
+- [~] The exocytosis captions name neuronal SNAREs (turned off in the example; left for Step 211); a hepatocyte is drawn as the typical animal cell
+
+### Step 211 — Review of Phase U
+- [x] Critical review with fixes, including a scientific-accuracy pass over the library and the example; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Accuracy fixes (SNAREs by context, roman enzymes, anchored calnexin, subunits in the cytosol, channels named by ion); frame use (membrane rows, 9:16 close-ups by the frame, fusion framing, pathways and glycolysis grow); readable step captions (`notes: auto | full | short`); gene symbols italic in the captions; label overlaps; product curves, cargo off organelles; `scenes/molecule_runtime.py`; tests `tests/test_phase_u_review.py`
+- [~] No `set_state` in a `cell`; an endocytosed vesicle is not an object; stale zoomed-view labels after a process; glyph letters below the readable size (pre-existing lint findings); cell-biology gallery media not regenerated
+
 ---
 
 ## Backlog (after Step 60)

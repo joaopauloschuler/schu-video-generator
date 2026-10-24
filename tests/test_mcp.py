@@ -206,6 +206,7 @@ TOOLS = {
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview",
     "music_template", "music_patches", "music_render", "music_check",
+    "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
 }
 
 
@@ -389,6 +390,47 @@ def test_server_music_tools(tmp_path: Path) -> None:
         assert doc["compare"]["table"] and Path(doc["files"]["spectrogram"]).name == "tiny-vs-tiny.png"
 
     run_session(tmp_path, body)
+
+
+def test_server_studio_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Step 198: an agent answers a studio hand-off through the disk (studio_sessions / studio_read /
+    studio_check / studio_propose); the studio picks the proposal up from the session's inbox."""
+    from vidgen.studio_app.app import StudioApp
+    from vidgen.studio_app.session import write_open_marker
+
+    monkeypatch.setenv("VIDGEN_CACHE_DIR", str(tmp_path / "cache"))
+    (tmp_path / "video.yaml").write_text("title: x\n", encoding="utf-8")
+    app = StudioApp(tmp_path, studio=tmp_path / "build" / "studio")
+    app.load(text=TINY_SCORE)
+    assert app.session is not None
+    write_open_marker(app.studio, "http://127.0.0.1:9/", app.session.id)
+    app.add_note(None, 1.0, "the kick is too plain")
+    app.ask()
+    louder = TINY_SCORE.replace('steps: "x... x... x... x..."', 'steps: "x... x.x. x... x.x."')
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("studio_sessions", {}))
+        [listed] = doc["sessions"]
+        assert listed["id"] == app.session.id and listed["open"] and listed["open_notes"] == 1 and listed["request"]["answered"] is False
+        doc = doc_of(await client.call_tool("studio_read", {}))
+        assert doc["command"] == "studio_read" and doc["base"] == 1 and doc["score"] == TINY_SCORE
+        assert doc["notes"][0]["id"] == "n1" and doc["notes"][0]["text"] == "the kick is too plain" and "studio_propose" in doc["how_to_answer"]
+        assert "no studio session" in error_text(await client.call_tool("studio_read", {"session": "20990101-000000-abcd"}))
+        doc = doc_of(await client.call_tool("studio_variations", {}))  # Step 199
+        assert doc["version"] == 1 and doc["variations"] and all(v["label"] and "tracks:" in v["score"] for v in doc["variations"])
+        result = await client.call_tool("studio_check", {"score": louder, "images": 1})
+        doc = doc_of(result)
+        assert doc["action"] == "check" and doc["verdict"] and doc["base"] == 1 and [c.type for c in result.content] == ["text", "image"]
+        assert "did you mean 'kick'" in error_text(await client.call_tool("studio_propose", {
+            "score": louder.replace("instrument: kick", "instrument: kik"), "explanations": {"n1": "x"}}))
+        doc = doc_of(await client.call_tool("studio_propose", {
+            "score": louder, "explanations": {"n1": "two off-beat kicks: it pushes forward"}, "summary": "busier kick", "agent": "test"}))
+        assert doc["studio_open"] and doc["missing_notes"] == [] and Path(doc["file"]).parent.name == "inbox"
+
+    run_session(tmp_path, body)
+    polled = app.poll(None)
+    assert polled["made"] == ["p1"] and polled["session"]["versions"][1]["label"] == "agent: busier kick"
+    assert polled["notes"][0]["answers"][0]["text"] == "two off-beat kicks: it pushes forward"
 
 
 @pytest.mark.slow   # list_music makes every bed's loop (about a minute and a half)

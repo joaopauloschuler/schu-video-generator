@@ -13830,3 +13830,1781 @@ the schema's `source` text, `vidgen music render` / `check` by name, the Listen 
   file byte-identical; a second run into the scratchpad identical.
 - **Not changed**: the other 16 beds (fingerprints), the renderer, `PIECE_RENDER_VERSION`, the
   check's limits (`time_of_flight` was in Step 191's calibration as "the piece").
+
+## 94. vidgen studio: a local music workstation (Phase T, Steps 193–201)
+
+Goal: people (not only agents) make music with the score format. `vidgen studio [PROJECT]
+[--port N] [--no-browser]` starts a small web app on 127.0.0.1 and opens it in the browser:
+load any of the 17 built-in beds as an editable score file (its template, §93.8), change it,
+listen, check it, keep versions, export YAML / MP3 / WAV or save it into a project's
+`assets/music/`. **The sound is always vidgen's own renderer** (`vidgen.studio`, the one videos
+use); the browser only plays rendered audio and never synthesises sound itself.
+
+Terms (a collision, guide rule 14): **the studio** is this web app — the `vidgen studio`
+command and the package `vidgen.studio_app`; `vidgen.studio` (§93) is the score-file package
+(format, instruments, renderer, check) it calls. The package name `studio_app` exists only
+because `studio` was taken. A **session** is one piece being worked on (a folder); a **version**
+is one state of its score file (a file in that folder, never changed once written); a
+**render** is the audio of a version (in the session's render cache); a **preset** is a
+built-in bed's template.
+
+### 94.1 The phase (plan)
+
+- **193 Architecture and skeleton** (done, §94.2–§94.7, §94.11): the command, the server, the
+  JSON API (presets, patches, load, validate, render whole or a section, audio with range
+  requests), sessions on disk, the page: top bar with the preset picker, song strip, transport,
+  timeline, track list, a read-only inspector, the score file highlighted; load a preset and play
+  its render.
+- **194 Song strip, timeline, track list** (done, §94.12): chords in Roman numerals with names, live; loop the
+  whole piece or a section; playhead; energy curve (from the render's loudness per bar); drag a
+  section edge to change its bars; click a section to loop it; mute / solo, volume, pan, pattern
+  text editable in place, level meters; `[+ track]`.
+- **195 Inspector and editing** (done, §94.13): instrument picker; sliders from `patch_catalog()` (ranges,
+  units, hover help); octave, accent; effects as chips; per-section changes; a step grid synced
+  both ways with the steps text; the YAML editable both ways (type YAML, the controls follow);
+  inline problems with the CLI's did-you-mean messages — a bad edit never stops playback (the
+  last good render keeps playing).
+- **196 Fast re-render** (done, §94.14): per-track stem cache, re-render only changed tracks and remix;
+  section-only render (measured, not worth it: §94.14); playback continues at the same moment; the "under narration" toggle;
+  level meters from real data; latency of typical edits measured and reported.
+- **197 Check, versions, exports** (done, §94.15): the check panel (`check.check_music_score`: verdict, headline
+  numbers, spectrogram with section marks, advice with [Apply] where the fix is mechanical,
+  the full report); versions, undo / redo, A/B against the original preset and any version
+  (§94.4); exports YAML / MP3 / WAV and save to a project's `assets/music/` with the Step 188
+  name-clash rule (a bed's name is refused).
+- **198 Listening notes and "Ask an agent"** (done, §94.16; plan §94.8).
+- **199 Variations** (done, §94.17; plan §94.9).
+- **200 Docs and polish** (done, §94.18): CONFIG, guide (agents may be handed studio sessions through MCP),
+  README (a screenshot or short GIF), COOKBOOK-MUSIC on the studio, CHANGELOG; responsive layout
+  (inspector and check as tabs below the track list in narrow windows), the light theme,
+  keyboard shortcuts (space play / stop, Ctrl+Z), accessibility basics (labels, focus, contrast).
+- **201 Review** (done, §94.19): a critical review with fixes; security (localhost only, no path traversal,
+  safe file writes, no code run from requests), compatibility, determinism; the phase's tests
+  and related suites; `tests/test_mcp.py` in full.
+
+Compatibility (hard rule): additive. The 17 beds' fingerprints, the templates' renders, existing
+projects' mixes, the Listen page and every existing command stay unchanged. The studio writes
+only inside its session folders, a chosen export path, or a project's `assets/music/` when the
+person asks (Step 197).
+
+### 94.2 Process and server
+
+- **Modules** (`src/vidgen/studio_app/`): `__init__.py` (`run_studio`: the command's loop),
+  `app.py` (`StudioApp`: what each API call does, with no HTTP — tests call it directly),
+  `server.py` (`StudioServer`, the HTTP layer only), `session.py` (sessions on disk), `static/`
+  (the page, package data). Later steps add modules beside them (`edits.py` and `song.py` 194, `inspector.py` 195, `stems.py` and `narration.py` 196,
+  `exports.py` and `checks.py` 197, `notes.py` / `agent.py` 198, `variations.py` 199) and keep `server.py` a thin
+  router. Boundary: `studio_app` may import any of vidgen; `vidgen.studio` never imports
+  `studio_app` (it stays a self-contained package, §93.2, checked by its allow-list test).
+- **Server** (decision: the standard library, no new dependency): `http.server.ThreadingHTTPServer`
+  bound to `127.0.0.1` only, port 0 by default (the OS picks a free one) or `--port N` (a port in
+  use is a `VidgenError` that says to pick another; on Windows `SO_EXCLUSIVEADDRUSE`, so no other
+  process shares it). `webbrowser.open` 0.3 s after the server is bound (Windows, macOS, Linux);
+  `--no-browser` only prints the address. Ctrl+C stops it (`studio stopped`), removing
+  `open.json` (§94.3). Each request runs on its own thread; renders take a lock (one at a time:
+  the development machine has 3 GB), session changes another.
+- **Guards**: the `Host` header must be `127.0.0.1:<port>` or `localhost:<port>` (403 otherwise:
+  no DNS rebinding); a POST must be `Content-Type: application/json` (415 otherwise — a cross-site
+  form cannot send that without a CORS preflight, which the server never answers) and, when it has
+  an `Origin`, from this server (403); bodies at most 2 MB. Files are served only from
+  allow-lists: the page's files (the `static/` folder listed once at start), three bundled fonts,
+  and renders whose names match `<20 hex>.wav` or `<20 hex>-<section>.wav` in the open session's
+  `renders/` — no path from a request reaches the file system. Every response has
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and a CSP of `'self'` only
+  (no inline script, no `eval`; styles set from JS through the CSSOM). A dropped connection (the
+  browser seeking) is ignored, an unexpected error is logged and answered with 500 — one bad
+  request never stops the studio.
+- **Errors**: a `VidgenError` (a score's problems, an unknown preset with did-you-mean) is HTTP
+  400 with its message; the page shows it in the status line.
+
+### 94.3 Sessions on disk
+
+```
+<studio>/open.json                         the running studio: url, session id, pid, started
+<studio>/sessions/<id>/session.json        format, id, created, preset, title, current, versions
+<studio>/sessions/<id>/versions/v0001.yaml  each version's score text, exactly as written
+<studio>/sessions/<id>/renders/<key>.wav    a render (audition level), <key>.json its facts,
+                                            <key>-<section>.wav a section cut from it
+```
+
+- **Where** (`session.studio_dir`): a project's `build/studio/` (the project is `PROJECT` or the
+  current folder when it holds a `video.yaml`; found with `project.find_config_file`, the config
+  is not read, so a broken `video.yaml` does not stop the studio), else `studio/` in vidgen's
+  cache folder (`soundfont.cache_dir()`: `VIDGEN_CACHE_DIR`, `%LOCALAPPDATA%\vidgen`,
+  `~/Library/Caches/vidgen`, `~/.cache/vidgen`). `build/` is a cache by the project's rules
+  (never committed); a person keeps a piece by exporting it (197).
+- **Sessions**: loading a preset (or a score's text) starts a new session (id
+  `YYYYMMDD-HHMMSS-xxxx`, checked by a pattern before any path is built from it); older sessions
+  stay on disk (Step 197 lists and reopens them). `session.json` (format 1) holds the facts and the
+  version list `{number, parent, origin, label, created}`; `origin` is `preset` or `text` in Step
+  193, then `edit` (195), `agent` (198), `variation` (199). All writes are atomic
+  (`fileio.write_text_atomic`).
+- **`open.json`** (decision, for Step 198): the running studio writes its URL, open session and
+  pid; it removes the file on exit only if its pid is still the one in it (a second studio may
+  have replaced it). MCP tools read it to find "the open session".
+- Later steps add, per session: `notes.json`, `request.json` (the last hand-off),
+  `proposals.json` and `inbox/` (agent proposals waiting to be picked up) (198; `revision` in
+  `session.json`, bumped by every change),
+  `variations/<batch>/` (199), `checks/` and `exports/` (197; `redo` and each version's
+  `starred` in `session.json`, origin `check`). Stems (196) are kept in the studio's memory,
+  not on disk (§94.14); `renders/` gains listening mixes under narration (`….n.wav`).
+
+### 94.4 Versions, undo / redo and A/B (plan for Steps 195 and 197)
+
+- **The score text is the source of truth** and keeps its comments: a version is the text as
+  written. Controls never rewrite the whole file: Step 195's `edits.py` changes one value in
+  place, finding it with `yaml.compose`'s node marks (start / end offsets) and replacing that
+  span with the new value written in flow style — a key added to a block or flow mapping is
+  inserted next to its siblings. So a slider move changes one line of the YAML view, and typing
+  YAML is the same operation the other way round (the page re-reads the text through
+  `/api/validate` and the controls follow).
+- **Every committed edit is a new version** (a slider's release, a step grid click, typed YAML
+  once it is valid for 0.8 s); invalid text is never a version — the page keeps it as a draft
+  with its problems and the last good render keeps playing. Versions are a few KB.
+- **Undo / redo** move the session's `current` pointer: undo to the current version's parent,
+  redo back down the branch last undone (a `redo` list in `session.json`); a new edit after an
+  undo starts a branch (nothing is deleted). The page's "v3 ▾" lists versions with their labels.
+- **A/B**: A is the preset's template (or version 1 for a score given as text), B the current
+  version or any picked one; both rendered, the player swaps sources at the same moment
+  (`Player.setSource` keeps the position). Every render plays at the same audition gain, so A/B
+  is level-matched.
+
+### 94.5 The JSON API
+
+Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<message>"}` (HTTP
+400 for a `VidgenError`, 403 / 404 / 415 / 416 for the guards, 500 for a bug).
+
+| Call | Step | What it does |
+|---|---|---|
+| `GET /api/info` | 193 | vidgen version, project, studio folder, default preset (`momentum`), audition gain, open session id |
+| `GET /api/presets` | 193 | the 17 beds in order: name, title, `one_line` (the description's first clause, ≤ 110 characters), `bed_description`, `use`, key, tempo, time, bars, seconds, sections, tracks, `score_bed` |
+| `GET /api/patches` | 193, 195 | `vidgen.studio.patch_catalog()` (instruments, settings with ranges and words, effects), each ranged field with `unit`, `scale` and `integer` (195) |
+| `GET /api/session` | 193 | the open session (`session.json` + folder) and its current version's score, or nulls |
+| `GET /api/score?version=N` | 193 | a version: text, outline (`score_outline` + per track the steps text, volume, pan and settings as written; each section's first bar; the progression when it is one string), problems, render key |
+| `POST /api/load {preset} \| {text}` | 193 | a new session whose version 1 is the preset's template or the text (bad text refused with its problems) |
+| `POST /api/validate {text}` | 193 | `ok`, problems `{where, message, line}` (did-you-mean as the CLI; YAML syntax errors with their line), outline |
+| `POST /api/render {version?, section?, mute?, narration?}` | 193, 194, 196 | render a version (default current) or one section; `mute`: tracks left out (a listening mix, §94.12); `narration`: under the narration sample (196); `{key, url, seconds, samples, loop, audition_gain_db, warnings, render_seconds, mix_gain, meters, meter_seconds, pass_samples, bar_samples, cached, section, muted, narration, timing, facts_pending}` and, once worked out, `loudness, true_peak, energy` (196: §94.14) |
+| `GET /api/facts?key=K` | 196 | the late facts of render `K` (`loudness, true_peak, energy`), waiting for them; `{pending: true}` when another render was asked for meanwhile |
+| `GET /audio/<key>.wav`, `/audio/<key>[.m<tag>][.n]-<section>.wav`, `/audio/<key>.m<tag>.wav`, `….n.wav` | 193, 194, 196 | the render (or a listening mix, either under narration `.n`), with `Range` (206, `Content-Range`; 416 outside the file) |
+| `POST /api/edit {version?, ops, label?, dry_run?}` | 194, 195 | a new version from value edits (paths like `tracks.bass.volume`; `unset` 195) and song edits (§94.12; `change_instrument`, `play_mode`, `section_plays` 195, §94.13); `{ok: false, problems}` writes nothing; `dry_run` checks only; `notes`: what changes beyond the value named |
+| `POST /api/text {version?, text}` | 195 | a new version from typed text (`origin: edit`); `{ok: false, problems}` writes nothing; the same text `unchanged` |
+| `POST /api/undo`, `/api/redo`, `/api/current {version}` | 197 | move the current version; the session carries `redo`, `can_undo`, `can_redo` |
+| `POST /api/version {version, label?, starred?}` | 197 | rename / star a version |
+| `GET /api/sessions`, `POST /api/open {session}` | 197 | the studio's sessions (newest first), reopen one |
+| `POST /api/check {version?, wait?}`; `GET /media/<key>-check.png` | 197 | the version's check (§94.15): `{status: done, …}`, `pending`, `superseded`; its spectrogram |
+| `POST /api/check/apply {version, key, edit}` | 197 | a check's advice `edit` (`<finding>.<k>`) as the next version (`origin: check`) |
+| `POST /api/export {version?, format, length?, count?, level?}`; `GET /download/<name>` | 197 | YAML / WAV / MP3 into the session's `exports/`, downloaded as an attachment |
+| `POST /api/save {version?, name, overwrite?}` | 197 | save into the project's `assets/music/<name>.yaml` (§94.15) |
+| `GET /api/session?since=R` | 198 | polled every 1.5 s: picks up the inbox; `{revision, unchanged}` or the whole state with `made` (every session state carries `notes`, `proposals`, `revision`) |
+| `POST /api/notes {version?, seconds, text}`, `/api/notes/update {id, text?, status?, delete?}` | 198 | listening notes (§94.16) |
+| `POST /api/ask {version?}` | 198 | write the hand-off: `{request, prompt, provider, file}` |
+| `POST /api/proposal/paste {reply}`, `/api/proposal/send {model}`, `/api/proposal/decide {id, keep}` | 198 | a pasted reply or OpenRouter's as a proposal; keep / discard |
+| `POST /api/variations {version? \| batch, letter; shuffle?}`, `GET /api/variations?batch=B` | 199 | four siblings of a version (or "more like" a candidate), rendered and checked in the background: the batch document (§94.17) |
+| `POST /api/variations/keep {batch, letter}`; `/api/render {variation: "b0001/c"}` | 199 | a candidate as the next version (`origin: variation`); a candidate played like a version |
+| `GET /api/variations` (no `batch`), `GET /api/ask` | 200 | the session's batches, newest first; the last hand-off (or `null`) |
+| `GET /api/disk`, `POST /api/cleanup` | 200 | renders and exports in bytes (the session's, the studio's); remove old ones by the rule (§94.18) |
+
+### 94.6 Renders and playback
+
+- **A render** (`StudioApp.render`): `render_music_score` of the version's score (−28 LUFS,
+  float32), written as a 16-bit WAV (`sfx.wav_bytes`, added for this: `write_wav` now writes its
+  bytes, the same file as before) at the **audition level**: +12 dB (`listen.MUSIC_GAIN_DB`, the
+  Listen page's −16 LUFS), clipped at full scale (the beds' true peaks are −14 to −16 dBTP, so
+  nothing clips), the same gain for every version. Its facts (`<key>.json`): seconds, samples,
+  loop, loudness and true peak of the −28 LUFS render, warnings (notes out of range), render
+  time.
+- **The cache key** (`render_key`): SHA-256 of `{score: the YAML's data, renderer:
+  STUDIO_RENDER_VERSION (1), vidgen: __version__}` — so comments and layout do not re-render,
+  and a new vidgen does. The cache lives in the session (no sharing between sessions in Step 193).
+- **A section** is cut from the whole render, bit-exact (`_slice_wav`), from the section's first
+  sample for its bars (the last section of a one-pass piece keeps the tail): it sounds as in the
+  piece, with the notes ringing on from before it. Step 196 decides whether rendering only the
+  section's notes is worth it (measured).
+- **Playback** (`static/player.js`): an `<audio>` element on the render's URL, streamed with range
+  requests so seeking works without loading everything; `loop` for a loop piece. Decision: not
+  the Web Audio API in Step 193 — `<audio>` streams and seeks for free; Step 194 may move section
+  loops to an `AudioBufferSourceNode` (sample-exact `loopStart` / `loopEnd`) if the `<audio>`
+  loop's gap is audible, keeping the same server files. `setSource` keeps the playing position,
+  which is how a re-render (196) and A/B (197) continue at the same moment.
+- **Stems (Step 196's plan; what was built and where it differs: §94.14)**: `render.render_music_stems` already renders each track alone
+  (before the master filter and final level) and sums them. The studio factors the per-track part
+  into a function `vidgen.studio` exposes (bit-identical, tested) and caches each track's stem as
+  float32 in `stems/<track key>.npy`; the track key hashes the score's shared data (key, tempo,
+  time, seed, loop, sections, progression, chord_bars), the track's own spec and, for `duck`, the
+  trigger track's spec. A change to one track re-renders that track and remixes (sum, master
+  filter, `_finish`), the same within 1e-5 as `render_music_score` (as the check's stems are);
+  exports render with `render_music_score` itself. Mute / solo remix the cached stems at the full
+  mix's gain (muting a part does not make the rest louder). Level meters: each stem's RMS per
+  50 ms, sent with the render. "Under narration": a second WAV of the render with the shipped
+  narration sample ducked by `check.duck_gain_db`, as the check's demo; the player swaps to it at
+  the same moment. Target: an edit of one track plays in about the time to render that track plus
+  a remix (well under the 1.2–2.2 s of a whole template).
+
+### 94.7 The page
+
+- **Files** (`studio_app/static/`, package data): `index.html`, `studio.css`, ES modules `app.js`
+  (the page), `api.js` (the JSON calls), `player.js` (playback), `yaml_view.js` (the highlighted
+  score file), `favicon.svg`; Step 194 adds `strip.js` (key, tempo, seed, chords), `timeline.js`
+  (sections, energy, loops, the section bar) and `tracks.js` (the track list); Step 195 `inspector.js`,
+  `stepgrid.js` (the steps text read into cells) and `yaml_edit.js` (the score file typed); Step 197
+  `versions.js` (versions, undo / redo, A/B), `check.js` (the check panel), `exports.js`; Step 198
+  `notes.js` (notes, the Notes tab, Ask an agent, proposals, polling); Step 199 `variations.js`. Vanilla JS, no build step, no CDN, no external fonts (Inter and
+  JetBrains Mono come from vidgen's bundled fonts at `/fonts/...`), so it works offline.
+- **Look** (decision: vidgen's own): the `dark_tech` theme's colours (background `#0E1116`,
+  surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
+  #F2A541 #C792EA #83C167` for sections and tracks) and, for the light option (a toggle kept in
+  `localStorage`, polished in Step 200), `light_academic`'s. Layout as agreed: top bar (brand,
+  preset picker, A/B, versions, undo / redo, YAML toggle, Export, theme), song strip (key,
+  tempo, time, seed, bars and length, the progression as written and the chord names of the
+  section under the playhead), transport (play / pause, stop, loop, "under narration", position
+  slider, time), timeline (sections coloured, sized by bars, playhead; click to seek), then three
+  columns — tracks, inspector, score file — and the check panel at the bottom with the status
+  line. Under 980 px wide the columns stack and the page scrolls.
+- **Step 193's state of each part**: the preset picker works (a listbox: name, key, tempo,
+  length and the one-line description; arrow keys, Enter, Escape); play / pause / stop, seek and
+  timeline clicks work; tracks show name, instrument, volume bar, pan knob and the steps text
+  (M / S disabled); the inspector shows the selected track's instrument (its words from
+  `patch_catalog`), what it plays, sections, effects as chips and its settings as disabled
+  sliders at the written or default values; the score file is shown highlighted with line
+  numbers (problem lines marked). A/B, versions, undo / redo, export, loop by section, "under
+  narration", `[+ track]` and the check are visible but disabled, with a title naming their step.
+- On opening, the page shows the open session (a reload keeps the piece) or loads the default
+  preset (`momentum`) and renders it; playing needs a click (browsers' autoplay rule).
+
+### 94.8 Listening notes and agents (plan for Step 198; what was built: §94.16)
+
+- **Notes**: clicking the timeline while playing pins a note `{seconds, bar, text, version}` to
+  the session (`notes.json`), shown as markers on the timeline and as comments; notes stay with
+  the version they were made on and carry over to its descendants.
+- **MCP** (decision: through the disk, not the studio's HTTP): `vidgen mcp` tools `studio_sessions`
+  (the sessions under the root's `build/studio/` and the cache folder's `studio/`, the open one
+  from `open.json`), `studio_read` (a session's current score, its notes, the last check report,
+  the patches summary) and `studio_propose` (score text plus one line per note on what changed and
+  why; validated with `check_text`, then written atomically as `sessions/<id>/inbox/<n>.json`). The
+  running studio turns inbox files into versions (`origin: agent`, parent the version the agent
+  read) when the page polls `/api/session`, so the proposal appears in the studio for the person
+  to A/B. Why the disk: no port or token to discover, it works when the studio is closed (picked up
+  when it opens), and the MCP server's root policy already confines what it may write.
+- **Optional provider**: "Ask an agent" with OpenRouter (the provider vidgen already supports,
+  key from `OPENROUTER_API_KEY`, sent through `httpapi.post_with_retries`), a model the person
+  names; the prompt holds the score, the notes, the check report and the patches summary; the
+  reply (YAML + one line per note) goes through the same validation as an MCP proposal. Never
+  called in development or tests (mocked).
+
+### 94.9 Variations (plan for Step 199; what was built: §94.17)
+
+One click makes four siblings of the current version by fixed, deterministic edits of its data
+(the same version always gives the same four, no random numbers): another `seed` (the pads'
+phases and noises); an altered ostinato (the busiest pitched step pattern turned by a step or
+its degrees swapped); another voicing (pitched pads and plucks an octave or an inversion apart);
+a darker or brighter mix (the master `lowpass` and the pads' `tone` down or up). Each is written
+as a candidate (`variations/<batch>/a.yaml`...), rendered (one at a time, the stems reused) and
+checked, and shown side by side to listen and pick; picking one makes it the next version
+(`origin: variation`, parent the version varied).
+
+### 94.10 Not done in Step 193
+
+Editing, mute / solo, loops by section, the energy curve, meters, the check panel, versions,
+undo / redo, A/B, exports, notes, agents and variations (Steps 194–199, above). No session
+list or reopening of older sessions yet (197). Renders are not pruned (a minute of music is
+about 11 MB of WAV per version rendered; 197 adds a limit).
+
+### 94.11 Step 193: facts
+
+- Measured (two cores): the page's first load with `momentum` (load, render 1.8 s, page ready)
+  3.4 s; templates render in 1.2 s (`pulse`) to 2.2 s (`tidewater`); a cached render answers at
+  once; the catalogue of the 17 presets 0.2 s.
+- Public: no new `vidgen.api` names (the studio is a command, not an extension surface); new
+  `vidgen.sfx.wav_bytes`; `studio_app` is in `render.fingerprint.NOT_RENDER_INPUTS` (it changes
+  no scene's picture); package data `studio_app/static/*`; pytest marker `ui` (browser tests,
+  skipped without Playwright).
+
+### 94.12 Step 194: song strip, timeline, track list
+
+- **Edits** (`studio_app/edits.py`, §94.4 made real one step early, since every control here
+  edits): `set` (replace a value, a quoted string keeping its quotes; a missing key, and its
+  missing parent mappings, added after its siblings — in a flow mapping before its `}`, in a block
+  one as a new line at its indentation; a block value replaced by a flow one after the key's
+  `:`), `delete` (a key or list item with the comment lines just above it; in a flow collection
+  with its comma), `insert` (a list item, block or flow), `rename` (a key). Nodes are found with
+  `yaml.compose` marks; a block collection's text ends at its last value (its end mark is after
+  the comments that follow). New strings are written plain only when they are a name or a key
+  (`fm_pluck`, `G minor`), else double-quoted, as the templates write steps and progressions.
+- **Song edits** (`studio_app/song.py`), turned into value edits against the text as it is when
+  their turn comes: `add_track` (name = the instrument, or `_2`...; a default pattern per
+  instrument for the time signature — kick on the beats, clap on 2 and 4, hats on the off-beat,
+  bass roots on 1 and 3, a sub and a piano held, plucks a broken chord `1 3 5 8` in eighths,
+  music box and bell sparse, a riser held and `only` in the last section, pads `play: chords`;
+  `volume: -6`), `delete_track` (not the last), `add_section` (4 bars after the one selected,
+  named `part`, `part_2`...; it takes the chords of the section before when the score has no
+  progression; a track whose steps are all written per section gets it in `rest`),
+  `remove_section` (not the last; its name leaves `only` / `rest` / per-section changes; a track
+  that plays only there is removed with it and the label says so), `rename_section` (everywhere
+  the name appears). A score that gives `bars:` instead of a section list allows only its bars.
+- **`POST /api/edit`** (`StudioApp.edit`): the edits applied to the version edited (default
+  current); a valid result is the next version (`origin: edit`, `parent` the version edited, a
+  label like `tempo 96` or `+ track bell (bell)`) and the current one; problems write nothing
+  (`{ok: false, problems}` shown by the control, the last good render keeps playing); `dry_run`
+  checks (the chords' names while typing, the steps' problem while typing); an unchanged text is
+  `{unchanged: true}`. The page sends edits one at a time, each on the version before.
+- **Chords** (decision: analysed in Python, `song.roman_numeral`): the root's degree in the key
+  (`b` / `#` outside the scale), lower case when minor (a third of 3 semitones and no 4, or a
+  name written `m...`), then the name's suffix and a slash bass as written (`Gm(add9)` →
+  `i(add9)`, `Dsus4(add9)` → `Vsus4(add9)`, `D/F#` → `V/F#`). Every chord of the 17 templates
+  reads back as the same notes (tested). The outline gives the score's progression and each
+  section's (`own_progression`, `{text, written, chords: [{symbol, numeral, name}]}`; `written`
+  `voicings` when items are `{chord, notes}`: typing replaces them with plain chords, the hint
+  says so). The strip shows the section looped, else the one under the playhead (its own
+  chords when it has them, tagged with its name), the chord playing lit; clicking edits the
+  text (the section's own progression or the score's) with the names shown while typing.
+- **Energy curve**: the render's loudness per bar (`measure.loudness_curve` of the −28 LUFS
+  audio, one pass; silent bars −70), in the render's facts (`STUDIO_RENDER_VERSION` 2); drawn
+  under the section names, the loudest bar at the top, 6–24 LU tall.
+- **Loops**: the whole piece (`<audio loop>` when the score loops) or one section — the section
+  file cut from the render (§94.6) with `<audio loop>`; the player keeps the piece's time
+  (`offset`), so switching between whole and section, and a re-render, continue at the same
+  moment; seeking outside a looped section plays the whole piece. Clicking a section's name
+  loops it and selects it in the section bar (name, bars, own chords or the score's, loop, add
+  after, remove); clicking it again plays the whole. Dragging a section's right edge (or the
+  arrow keys on it) changes its bars (1–64), shown live, written on release.
+- **Mute / solo** (decision: a listening aid, never the score; exports in Step 197 render the
+  score as written): the page's state, sent with each render as `mute` (the muted tracks and,
+  with any solo, every track not soloed). A **listening mix** `<key>.m<tag>.wav` (`tag` 10 hex
+  of the sorted names) sums the other tracks' stems (`render_music_stems`), through the master
+  filter, at the whole mix's gain — muting a part never makes the rest louder; a one-shot's
+  tails after its last bar are left out of a mix. Each mix renders every stem again (about 2×
+  a render); Step 196 caches stems. The tracks heading names what is left out, "the score keeps
+  it". To make it permanent the person deletes the track or lowers its volume.
+- **Track list**: volume bar (−30 to +6 dB, drag or arrows, 0.5 dB steps; a volume curve is
+  shown hatched and edited in the score file), pan knob (drag up / down, arrows, double-click
+  centre; steps of 0.05), steps text edited in place (a list of strings is shown and written
+  back joined by `|`, which reads the same; problems under the row while typing; Enter keeps
+  it, Escape or a bad text leaves it), delete (×, Delete key), `[+ track]` (instruments by kind
+  with their words). **Meters** are rough until Step 196: from the score (`levels` in the
+  outline: each step's gain with accents, 0 a rest, −1 a hold), the step under the playhead
+  decaying after its hit, times the volume; a pad is steady while it plays.
+- **Rendering state**: an edit shows its version at once (the changed YAML lines flash), then
+  renders the whole piece (or the section looped, or the mix) while the last render keeps
+  playing; a "rendering…" badge and a sweep on the timeline after 120 ms; `data-busy` on
+  `<body>` while an edit or render is under way (the browser tests wait on it).
+- Not yet: undo / redo and the version list (197) — every edit is already a version on disk;
+  meters from the audio and fast stems (196); the inspector's controls (195).
+
+### 94.13 Step 195: the inspector, the step grid, the score file typed
+
+- **Where the controls write** ("Edit for"): the whole track (`tracks.<t>.<key>`) or one section
+  (`tracks.<t>.sections.<s>.<key>`, a `PART_KEYS` change). In a section the controls show the
+  section's own value where it has one (labels in the section's colour) and the track's
+  otherwise; ↺ removes the section's value (back to the track's). A banner names the section;
+  a section where the track rests shows "rests in …" and [Play in …].
+- **`unset`** (`edits.py`): removes a key — nothing when it is not there — and the mappings it
+  leaves empty, keeping the first `keep` parts of the path (default 2, the track): a reset of
+  `tracks.pad.sections.b.settings.tone` removes `settings`, `b` and `sections` when they hold
+  nothing else; a kept mapping left empty is written `{}` (an effect's last field reset).
+- **Sliders** are generated from `/api/patches`: the catalogue with `unit` (from the words: cents,
+  Hz, s, bars, beats, dB), `scale` (`log` for a frequency spanning two octaves or more) and
+  `integer` (`studio_app.inspector.studio_catalog`; `music patches --json` is unchanged). A range
+  input of 0..1000 maps to the value (log or linear; rounded to 3 significant figures on a log
+  scale, else to a step of about 1/200 of the range), a tick marks the default, a number field
+  takes a typed value (checked by the score: out of range is refused by the control with the
+  score's message), the help line under the group shows the words, range and default of the
+  setting under the pointer or focus. **One version per drag**: written on `change` (the
+  release), keyboard steps 0.35 s after the last.
+- **Instrument change** (`inspector.change_instrument`, op `change_instrument`): settings the new
+  instrument also has are kept (moved into its range when outside it), the others dropped —
+  for the track and each section's changes; a drum loses `octave`, `transpose`, pitched steps
+  (a first pattern of the new drum instead, `song.default_steps`) and pitched section steps; a
+  pad's `play: chords` becomes a first pattern on an instrument that cannot hold chords. The
+  page shows the dry run's notes ("keeps decay, ring · drops index (sub has no such setting) ·
+  tone 5800 → 1500 (sub's range is 200 to 1500)") with [Change to …] / [Keep …] before the version is made.
+- **Notes** (octave, transpose, accent with common groups offered) and **play** for a pad
+  (`play_mode`: chords ↔ steps, steps `* - - -` in x/4; back to chords drops the steps).
+- **Effects as chips** (summary on the chip: `echo 0.75 beat ×2`, `lowpass 1.2→2.6 kHz`): click
+  opens its editor — sliders for the ranged fields, `duck`'s track or every beat and `follow`,
+  `echo`'s `pingpong`, `gate`'s own small step grid (click a step: open / closed) and its text;
+  curves (`lowpass`, `highpass`, `width`, `volume`) as fixed / ramp over the section / points,
+  drawn over the section's bars. [+ effect] adds one with the catalogue's defaults (duck under
+  the score's kick, else every beat). Shorthands (`duck: kick`, `gate: "x.x."`, `echo: true`)
+  are read as their fields; a field edit on a shorthand writes the whole effect as a mapping,
+  else only that field. In a section, × on the track's effect writes `none` (off there; shown
+  struck through with ↺), on the section's own removes it; a section that changes an inherited
+  effect's field gets a copy of the track's effect with the change.
+- **Per section** (table): plays (a switch → `section_plays`: written as the track writes it,
+  `only` when it lists where it plays, else `rest`; never nowhere; resting drops that section's
+  changes, which would never play), the changes there in words, × (remove them), [edit] (the
+  section as "Edit for").
+- **The step grid** (`stepgrid.js`): the steps text read with the same tokens as
+  `studio.patterns` (one cell per step; `+` stacks are one cell) into bars, each bar a row whose
+  cells share its width (bars of 1, 8 or 16 steps line up in time), grouped by beat, accent
+  dots from `accent`, holds drawn as the note going on, degrees and note names written in the
+  cell. Editing replaces **only the cell's characters** in the text, so spacing, `|` and the
+  rest stay as written. Brushes: `x X o - .` (drums) plus `* 1-9` and any one step typed
+  (`A4`, `5'`, `v2`, `C4+E4`) for pitched tracks; click paints (the brush again: a rest), drag
+  paints one version; keys: arrows move, a symbol writes it (a burst = one version 0.7 s after
+  the last), Backspace a rest. + bar copies the last bar, − bar removes it; a bar's step count
+  (1–32) resamples it (a step on the new grid keeps its symbol, a new step inside a note holds
+  it on pitched tracks and the riser / static, else rests; a hold after a rest rests). A text
+  field under the grid shows the steps: typing shows them in the grid at once, Enter or leaving
+  keeps them. While playing, the step under the playhead is outlined (when the grid shows the
+  steps that play there). Problems (e.g. an accent that no longer fits) show under the grid
+  with the score's message and the grid goes back to the version's.
+- **The score file typed** (`yaml_edit.js`): a transparent textarea over the highlighted text
+  (same font and metrics; the line numbers stay), re-highlighted on each key; 0.3 s after the
+  last key `/api/validate` marks bad lines (the message as their tooltip) and lists the
+  problems above with their line (click: the caret goes there) — the CLI's messages with
+  did-you-mean, YAML syntax errors with their line. Valid text unchanged for 0.8 s in all
+  becomes a version through `/api/text` and every control follows. **Text with problems is a
+  draft**: never a version; the last good version keeps playing; `data-draft` on `<body>` dims
+  and disables the controls that edit (track list, inspector, song strip, section bar) with a
+  note, until the text is fixed or [Revert to vN]. A new version from a control replaces the
+  editor's text unless the person is typing a different text there.
+- **Outline**: each track carries `spec`, the track as written (JSON-safe), which the inspector
+  reads (written vs default values, sections' changes, effects as written).
+- Not in this step: the re-render stays whole-piece (196); undo / redo and the version list
+  (197). Effects written as a mapping of two or more fields into a block track are added as
+  block lines (as `edits.py` writes new mappings), into a flow track inline.
+
+### 94.14 Step 196: fast re-render, playing on, under narration, meters
+
+- **Stems** (`vidgen.studio.render`): `render_track_stem(score, name)` → `TrackStem` (the track
+  alone on the piece's canvas, float64, before the master filter and the level; the notes it
+  left out for the warnings); `mix_track_stems(score, stems, warnings, whole=None, threads=1)`
+  → `(float32 audio, MixFacts(gain, samples))`: the stems summed in the order given, the master
+  filter, the level measured on the mix (`music._level_gain`, `_finish` now takes a gain) —
+  with `whole` (a listening mix) the whole piece's gain and length instead, a one-shot cut at
+  the whole's end with the same fades (its tails kept). `render_music_stems` is built on them
+  (the same samples as before). Not in `vidgen.studio`'s `__all__` (the studio's helpers).
+- **Exactness (decision, measured)**: `render_music_score` is **unchanged** — it adds a plain
+  track's notes straight into the piece one by one, a stem sums them first, so the remix differs
+  in the order floats are added. Reproducing that order needs every overlapping note kept
+  (measured: 280 MB for `tidewater`'s arp alone; the "layers" an ordered sum would need chain
+  through all notes), so instead the tolerance is stated and tested: on the 17 templates, the
+  two test scores and four edited ones (one-shots, notes out of range), the remix equals
+  `render_music_score` in all samples but 0–3 (one-shot fades: 125 samples of ~1e-16),
+  at most **4.7e-10 apart** (−187 dBFS; the test allows 1e-9), with the same warnings, and the
+  **16-bit WAV the studio plays is byte-identical** (`tests/test_studio_stems.py`, the 17 as
+  a `slow` test). Changing `render_music_score` to sum stems would have moved 1–2 samples of
+  three templates by one float32 step (`tidewater`, a bed itself, among them); the beds,
+  templates and projects' music stay as they were
+  (bed fingerprints and template renders checked byte for byte against the code before).
+- **Loudness**: the stems are never normalised; the mix is set to −28 LUFS by measuring the
+  mix itself (as `render_music_score`); listening mixes reuse that gain (`mix_gain` in the
+  render's facts). Threads: the master filter's two channels and the loudness's 10 s blocks on
+  two threads (numpy's FFT releases the GIL; bit for bit the same as one thread, tested), the
+  mix ~0.45–0.85 s instead of ~1.2 s. Tracks render one at a time (two heavy tracks at once
+  peaked at 2.8 GB on a tempo change).
+- **The stem key** (`studio_app.stems.track_keys`): SHA-256 of the score's top-level data but
+  `title`, `description`, `master`, `tracks`; the track's name and spec; for a track that ducks
+  under another, that track's **hit inputs** only (`steps`, `accent`, `play`, `rest`, `only`,
+  each section's `steps` / `accent`: when it hits, not how it sounds — the kick's volume does
+  not re-render the pad); `STEM_RENDER_VERSION` (1) and vidgen's version. A **volume-only
+  change** of a track whose volume is one number (no curve, no section changing it:
+  `plain_volume`) scales a kept rendered stem by the gain between them (every note is scaled
+  by the volume and every effect after is linear) — 10 ms instead of the track's render; the
+  remix stays within the tolerance (tested).
+- **The cache** (`StemCache`): in memory, least recently used out past 768 MB (`STEM_CACHE_BYTES`,
+  about two versions of a 50 s piece of nine tracks, 41 MB a stem); room is made before
+  rendering; a mix's own stems always stay. Decision: not on disk — float64 stems (the
+  tolerance needs them) would be ~370 MB a version, and a restarted studio pays one render.
+  Each stem also keeps its power per 50 ms.
+- **A render** (`StudioApp.render`): parse, stems (kept / scaled / rendered), mix, WAV, facts
+  file; `timing` (`tracks` rendered now with seconds, `scaled`, `stems`, `mix`, `write`,
+  `listening_mix`, `narration`, `total`). **Late facts**: the loudness, true peak and energy
+  curve (1.6 s of work) are worked out after the answer, on one worker, bar by bar and block by
+  block, giving way to any render (it waits until none has run for 0.3 s; only the render last
+  asked for: older jobs are dropped) — `GET /api/facts` waits for them; the page dims the last
+  energy curve meanwhile. `STUDIO_RENDER_VERSION` 3.
+- **Mute / solo** remix the kept stems at the whole's gain and length: a one-shot's tails stay
+  (fixes Step 194's gap). **Under narration** (`studio_app/narration.py`): `<name>.n.wav` from
+  the render or listening mix (its WAV read back, at −28 LUFS): the shipped narration sample
+  (`check.NARRATION_SAMPLE`, 20 s) repeated from the piece's start, the music ducked with
+  `check.duck_gain_db` (vidgen's default ducking) over `check.speech_spans`, voice and music at
+  a video's balance, both raised by one gain that puts the voice's true peak at −1.5 dBTP
+  (+3.5 dB; the same for every version: A/B under narration is level-matched). The status line
+  says so. Sections and loops work as without it (`<name>.n-<section>.wav`).
+- **Meters** from the audio: each stem's RMS per 50 ms (`meters` in the render's facts, dBFS as
+  heard: stem × mix gain × audition gain, before the master filter; floor −60), drawn −48..−6 dB
+  with a fast rise and a 0.8 fall per frame; a muted track's meter rests.
+- **Playing on** (`player.js`): a new source while playing is loaded in a second `<audio>`,
+  seeked 0.15 s ahead of the moment playing, started when the playing one gets there and
+  cross-faded over 60 ms; the playing element always has the id `audio` (the other
+  `audio-next`). Measured offset between the two at the fade: within ±10 ms in all 30 swaps of
+  the measurement below. Stopped, or a seek, switches at once as before. `data-switching` /
+  `data-swaps` / `data-swap-drift` on `<body>` for tests.
+- **Section-only render (decision: not built)**: a looped section is cut from the whole remix
+  (instant once mixed); rendering only a section's notes would not sound as in the piece at its
+  edges (tails, holds, the circular reverb and filters of a loop) and would compete with the
+  whole's render for the two cores. The slow case is a heavy track (a filtered pad: 1–2.4 s
+  alone); a preview of it is a later option.
+- **Latency** (two cores; "server": the edit and render calls, no browser; "heard": from the
+  click or Enter in headless Chromium on the same cores until the new audio plays at the same
+  moment; `<scratchpad>/s196/latency.py`, `shots.py`):
+
+| edit | momentum server / heard | tidewater | time_of_flight |
+|---|---|---|---|
+| load (every track) | 1.8 s / 4.0 s page | 2.0 / 4.4 | 6.6 / 9.6 |
+| slider on a light track (hat decay) | 0.57 / 1.11 | 0.84 / 1.59 | 0.95 / 1.55 |
+| slider on the heaviest track (pad tone) | 1.53 / 2.11 | 1.33 / 2.05 | 3.21 / 4.38 |
+| steps of one track (a kick cell) | 0.62 / 1.28 | 0.90 / 1.48 | 0.90 / 1.70 |
+| volume of a track (kept stem scaled) | 0.60 / 1.13 | 0.83 / 1.53 | 0.81 / 1.64 |
+| mute | 0.32 / 0.68 | 0.48 / 0.93 | 0.47 / 0.91 |
+| solo | 0.29 / 0.61 | 0.39 / 0.91 | 0.41 / 0.91 |
+| back to a mix made before | 0.01 / 0.41 | 0.01 / 0.39 | 0.01 / 0.38 |
+| under narration on | 0.67 / 0.99 | 0.70 / 0.70 | 0.69 / 0.67 |
+| tempo +4 (every track) | 3.1 / 4.1 | 3.1 / 4.1 | 17.2 / 21.8 |
+
+  Before (Step 194): every edit a whole render (momentum 3.1 s, time_of_flight 9.2 s; 5–7 s
+  with the browser), every mute 2.3–8.2 s. Single-track edits now play in 1.1–1.7 s with the
+  browser (0.6–0.95 s of server work), under the 1.5 s aim for momentum and at it for the
+  53 s pieces, whose mix alone is ~0.75 s (their length, 2,559,744 samples, has the factor 101:
+  a slower FFT). A heavy track's own render stays (time_of_flight's pad 2.4 s, arp 1.8 s). **A
+  finding for later**: tempos whose piece length has a large prime factor make every FFT of the
+  renderer 5–12× slower (time_of_flight at 112 BPM: 2,468,352 = 2⁹·3·1607; the swept filters
+  then take 4–5 s a track and 2.2 GB) — the 17 s above; it affects every render of such a
+  score (videos too), not only the studio.
+
+### 94.15 Step 197: the check panel, versions, A/B, exports
+
+- **Advice as edits** (`vidgen.studio.check`): a line of advice may be a `Fix` — a `str` (the
+  words exactly as before) carrying `edits`, `(label, ops)` pairs whose ops are value edits
+  `{op: set, path, value}` (paths as a problem's `where`, the studio's `edits.py` vocabulary).
+  `Finding.edits` collects them as `{fix, label, ops}` (`fix`: the line's index). Mechanical
+  advice only: a track's volume (whole or per section, as `_volume_text` words it; none when a
+  volume curve is in the way), an octave up (when every part plays one octave, ≤ 8), a
+  `lowpass` / `highpass` on a track (when no part has one), `master.lowpass: 6000`, a build's
+  volume ramp or filter sweep, a riser added (`riser`, else `riser_2`… at volume 6), a riser
+  raised. "Bring in a part", "add a part", a shorter decay are words only. **The CLI is
+  unchanged**: `music_check_text` and `check_dict` (the `--json`) give the same output (checked
+  byte for byte on the 17 templates and eight bad scores before and after,
+  `<scratchpad>/s197/baseline.py`); the edits are read from `Finding.edits` by the studio.
+- **Entry point** (decision): `check_music_score(score, hop, tracks=None, mix=None,
+  between=None)` — `tracks`: the stems already rendered (`render_track_stem`, score order) so
+  nothing is rendered again; `mix`: their mix and gain when made; `between`: called between the
+  check's steps (each track, the measures, tempo, key) and may raise to stop. Without them it is
+  the check as before; with them the same report (tested equal, `check_dict` minus timings).
+- **The studio's checker** (`studio_app/checks.py`, `Checker`): one worker; `POST /api/check`
+  asks for a version's check (`wait` long-polls up to 60 s): kept in `checks/<render key>.json`
+  + `-check.png` it answers at once (`CHECK_VERSION` and `STUDIO_CHECK_FORMAT` must match),
+  else the job starts once no render has run for 0.4 s, takes the kept stems under the render
+  lock (rendered only if the cache dropped them) and the mix of the last two renders
+  (`StudioApp._mixes`), and between its steps waits while a render runs and stops
+  (`superseded`) as soon as another version's check is asked for — so a check never competes
+  with an edit's render and a burst of edits checks only the last version. Measured on
+  `momentum`: the check 2.8 s after the render (the CLI's 4.1 s includes rendering), a kept one
+  10 ms. The page asks 0.5 s after a render of the current version plays (not for A).
+- **The panel**: verdict (✓ / • / !) and headline numbers (voice range share, bass share, highs
+  dB, each lift / build's dB, loudness; coloured by their finding's level, the finding's words
+  as the tooltip); **details** (remembered) shows the spectrogram (`spectrogram_image`, its
+  natural size, at most the column's width) with the section marks and a playhead (`image.left`,
+  `px_per_second` in the answer; a click seeks), the advice per finding with one **Apply:
+  <label>** button per edit (disabled when the check is of another version), the full report
+  (`music_check_text`). An older check stays dimmed (`.stale`) while the new one is made;
+  `data-checking` on `<body>`. **Apply** (`POST /api/check/apply {version, key, edit}`): the
+  kept check's ops applied to that version (its notes must still have the key) as the next
+  version, `origin: check`, label `check: <label>`.
+- **Versions** (`session.py`): `undo` (to the parent; the version left pushed on `redo`),
+  `redo` (only when the top of `redo` is a child of the current one), `set_current` (keeps the
+  redo trail only when it is its next step), `add_version` clears `redo` (a branch; nothing is
+  deleted), `update_version` (label 1–120 characters, `starred`). The page's menu: newest first,
+  label, time, "from vN" when the parent is not the version before, versions off the current
+  branch dimmed, ★ / ✎ / A/B per row, earlier sessions below (`list_sessions`, reopened by
+  `POST /api/open`). Undo / redo buttons and Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) outside text fields.
+- **A/B** (the page): A is the session's first version (the preset's template or the text
+  given) or the version picked with the row's A/B; the top-bar button toggles A and B; the
+  badge next to it says `A v1 original` or `B v5 current`; `data-ab` on `<body>`. A plays
+  through the same render call (`playingVersion()`), so the player swaps at the same moment and
+  every render is level-matched; a new version, undo or redo goes back to B.
+- **Exports** (`studio_app/exports.py`): `render_music_score` itself (the video's samples, under
+  the render lock); length `once` (a loop's pass, a one-pass piece with its ending), `loops` N
+  (1–64, loop pieces only: tiled exactly), `seconds` N (1–1800: looped, or a one-pass piece cut
+  or padded; a 2 s fade-out when the music goes on past the end); level `video` (−28 LUFS) or
+  `listening` (+12 dB, lowered to keep the true peak ≤ −1 dBTP). Files go only to the session's
+  `exports/` (names `<title slug>-v<N>[-<length>-<level>].<ext>`, matched by a pattern before
+  serving; MP3 through `listen.write_mp3` to a `.partial-` name, then renamed) and are served
+  by `GET /download/<name>` with `Content-Disposition: attachment`; the browser saves them
+  where the person says. YAML: the version's text as written.
+- **Save to project** (`save_to_project`): no project → a `VidgenError` that says how to start
+  the studio with one; the name `^[a-z0-9][a-z0-9_-]{0,63}$`; a built-in bed's name refused
+  with the reason (Step 188: `music: <bed>` would be ambiguous) and a suggestion (`<bed>_mine`);
+  an existing `assets/music/<name>.yaml` (or `.yml`, which is then the file written) only with
+  `overwrite` (the page asks); `assets/music` must resolve inside the project (links followed);
+  written atomically; the answer carries the snippet `music: <name>` (the page offers Copy).
+- **Fixes on the way**: menus closed by a click whose target was re-rendered (now judged by
+  `composedPath()`); a rename being typed survives the menu re-rendering.
+- Not done: renders and exports are not pruned (§94.10); the check is of the score as written
+  (mute / solo / narration are listening aids); a check made while an older stem was scaled for
+  a volume edit differs from a fresh one within the stems' tolerance (§94.14).
+
+### 94.16 Step 198: listening notes and "Ask an agent"
+
+- **Notes** (`studio_app/notes.py`, `NoteBook`, the session's `notes.json`): `{id n1.., text (1–500
+  characters), seconds, bar, beat, section, bar_in_section, frac, version, created, status
+  open|resolved, answers}`; `locate(outline, seconds)` finds bar / beat / section from the
+  outline (the page shows the same before saving). **Carried over** (decision): notes belong
+  to the session, not a version; every state places them in the version shown (`at`, by
+  `place`): the same bar of the same section at the same point in the bar, so a note follows
+  its music when a section before it changes length; its section shorter → its last bar; its
+  section removed → the same bar number of the piece (or the last). `moved` says so in words
+  ("was bar 24 on v1; the sections before it changed length", "the b is 1 bar now: moved to its
+  last bar", "the b is gone: kept at bar 4 (in the c)").
+- **The page**: a notes lane under the timeline (click: a note at that moment; pins coloured by
+  section, hollow when resolved, a dot when an agent answered), **+ note** and the **N** key
+  (the moment playing, playing goes on); an editor popover (Enter keeps, Esc closes; for a
+  note: ▶ from here, resolve, delete); the third column has tabs **Score file | Notes n**: the
+  notes in the piece's order with their place, `moved`, the agents' lines (`proposed in v7`,
+  `kept in v7`, `discarded`), ▶ (from 1.5 s before), ✓, ✎, ×. Notes are made on the version
+  heard (A while A/B plays A).
+- **The hand-off** (`studio_app/agent.py`, `POST /api/ask`, the session's `request.json`, id
+  `r<time>-<hex>`): base version, its score text, the open notes placed in it, the kept check of
+  it (`check_summary`: verdict, level, headline, findings with advice, the report text — `null`
+  when not checked yet), the parent → base diff (unified, ≤ 80 lines, with the parent's label),
+  the instruction (one focused change per note, keep the rest and the comments, one line per
+  note, full score, don't make the check worse) and the reply format. `prompt_text` makes it
+  one Markdown prompt for chat assistants and the provider.
+- **Proposals** (`make_proposal`, `proposals.json`): every answer is validated with `check_text`.
+  A valid score that differs from its base becomes a version (`origin: agent`, parent the base,
+  label `agent: <summary>`) added **without** becoming current (`add_version(current=False)`),
+  its lines attached to the notes (`answers`, status pending); anything else is an `invalid`
+  proposal with its problems (no version; "the same as vN" and "holds no score" included).
+  **Keep** makes its version current and resolves the notes it explained; **Discard** renames
+  the version `discarded · …` (versions are never deleted); an invalid one can only be
+  dismissed. The banner above the tracks shows pending and invalid proposals: "An agent
+  proposed v7 from v6 · through MCP (claude) · 'summary'", one line per note with the note's
+  place and words, notes it left without a line, **▶ A/B v7 vs v6** (A = the proposal, B = the
+  current version, the Step 197 A/B), **Keep v7**, **Discard**.
+- **MCP** (decision kept from §94.8: through the disk). Four tools in `vidgen mcp`, run in the
+  server's process (file reads and one atomic write; no Manim) through `anyio.to_thread`:
+  `studio_sessions` (`agent_sessions`: sessions of `studio_folders(root)` — the root's
+  `build/studio`, `build/studio` of each folder directly under the root (not through a link out
+  of it) and the cache folder's `studio/` — the open one first, with open notes, the hand-off
+  and whether it was answered, pending proposals, the studio's address), `studio_read`
+  (`agent_read`: the hand-off of the request's base, else the current version, with the
+  version list and how to answer), `studio_check` (writes the score to `build/mcp/studio/` under
+  the root and runs `vidgen music check` like `music_check`, `compare` against the base), and
+  `studio_propose` (`agent_propose`: note ids checked, the score validated — problems come back
+  as the tool's error and nothing is written — an unchanged score refused, then
+  `inbox/<time>-<hex>.json` written atomically; the answer names notes left without a line and
+  whether a studio has the session open). **The root policy** (§62) confines every other tool
+  to the root; these four also reach the cache folder's `studio/`, where a studio started
+  without a project keeps its sessions, and write only `inbox/` files there (session ids are
+  checked by pattern before a path is built).
+- **Polling** (`GET /api/session?since=R`, every 1.5 s while the tab is visible): `poll` turns
+  inbox files into proposals (oldest first; an unreadable one becomes an invalid proposal
+  saying so; each file is removed once recorded) and answers `{revision, unchanged}` or the
+  whole state. `revision` lives in `session.json` and every save bumps it (`touch` for notes and
+  proposals). The page keeps the version shown when the current one did not change (only the
+  version list, notes and proposals are redrawn) and ignores answers older than what it shows.
+- **Copy prompt / Paste reply**: the prompt to the clipboard (a textarea fallback); the reply
+  read by `parse_reply`: the ```yaml block (else the largest code block, else the whole text
+  when it reads as a score with `tracks`), `n1: …` lines in the usual shapes (`- **n1**:`,
+  `n2 —`), `summary:`.
+- **The provider** (optional): OpenRouter, the LLM provider vidgen already has (pictures,
+  voices). `ask_openrouter` posts to `/chat/completions` through `httpapi.post_with_retries`
+  (retries, the key scrubbed from errors) with the key from `OPENROUTER_API_KEY` read at that
+  moment (`read_api_key`); the model is typed on the page (remembered in `localStorage`) or
+  given by `VIDGEN_STUDIO_MODEL`. `/api/info` carries `provider {name, key_env, key_set, model,
+  model_env}` (the key's presence only). Without the key the Send button is disabled with how
+  to set it; with it, Send asks to confirm the cost first. Never called in tests (mocked).
+- Public: no `vidgen.api` names; MCP tools `studio_sessions`, `studio_read`, `studio_check`,
+  `studio_propose`; `checks.kept_check`; `StudioSession.add_version(current=)`, `revision`,
+  `touch`.
+
+### 94.17 Step 199: variations
+
+- **Operators** (`studio_app/variations.py`): pure functions `op(piece, v)` of the parsed score
+  (`Piece`: text, data, checked score) giving a `Variation(kind, name, label, ops)` or `None`
+  when they change nothing for the piece; `ops` are `edits.py` value edits, so comments and
+  layout stay (a list of steps strings is edited item by item). `v` (0–2) picks a variant. No
+  random numbers: the same text gives the same variations. Four kinds:
+  - **harmony**: `revoice` (every written voicing `{chord, notes}`: the lowest note an octave up,
+    or the top one down; the spelling kept, a chord whose moved note would double another left
+    alone), `substitute` (one numeral of a progression written as text — not the first —
+    replaced by a relative sharing two tones: minor `VI↔iv`, `VII↔v`, `III→v`, `i→VI`; major
+    `IV↔ii`, `V↔iii`, `vi→IV`, `I→vi`; its suffix dropped), `invert` (a chord with a real third
+    in first inversion, `VI → VI/3`), `reseed` (another seed when a pad or a reverb uses it);
+  - **pattern** on the **figure** (the busiest pitched track with its own steps that is not a
+    pad or the bass — a bass instrument in octave 2 or lower, a `sub`, or named `bass` —
+    degrees or voicing notes ranked before note names, at least four notes a bar): `rotate`
+    (each bar's cells turned 1–3 steps; the accents then fall on other notes), `reaccent`
+    (`3+3+2`, `4+4+2+3+3`, `3+3+3+3+4`, `2+2+3+3+2+2+2`, `4`: the first that fills its bars and
+    differs), `swap_degrees` (3↔5, 5↔8, v2↔v3, 1↔8: the first that changes it), `hat_touch` (soft
+    ghost notes on a hat's free off-sixteenths, or its soft hits taken out);
+  - **mix**: `tone` (darker: master low-pass ×0.72, at most 6000; pads' `tone` ×0.7; the hat −2
+    dB — brighter: ×1.4 / ×1.4 / +1.5 dB; the other way when one has no room; frequencies
+    rounded to 10 / 50 Hz, kept in the settings' ranges), `balance` (the top voice +2.5 dB and
+    the pads −2 dB, or the other way; only tracks whose volume is one number);
+  - **energy**: `sparser_intro` (the beat drums — and with `v` 1 the bass — rest in the first
+    section, when it is at most half the piece and something pitched still plays; each track
+    only if the score stays valid), `stronger_lift` (the peak — a section named lift, drop,
+    release, chorus, peak, else the one where most tracks play, never the first — its drums
+    +2 dB there, hats only when nothing else; or the pads' tone ×1.5 there), `build_in` and
+    `breathe` (one-section pieces written with `bars:`: the drums fade in from 18 dB under over
+    the first half — a volume curve; the pads dip 5 dB to the middle and back).
+  **Tempo and key are never changed** (a tempo whose length has a large prime factor makes the
+  renderer's FFTs 5–12× slower, §94.14; a tempo change also re-renders every track).
+- **Choosing four** (`make_variations(text, shuffle, first)`): per kind, every valid candidate
+  (each operator's first variant, then their second ones...; applied, checked with `check_text`,
+  a render key different from the base's, no duplicate text), turned by `shuffle`; then one per
+  kind in the order harmony, pattern, mix, energy (`first`: that kind first — "more like this"
+  starts with the kind of the candidate it varies), then the kinds' next ones when a kind has
+  none. Measured: 0.1–1.7 s for a template (`check_text` of each candidate). All 17 templates get
+  four valid, different variations of at least three kinds (tested), e.g. `momentum`: chords
+  re-voiced (G2 → G3), ostinato turned by a step, darker mix (low-pass 4500 → 3250, pad tone
+  2600 → 1800, hat −2 dB), stronger turn (kick, clap +2 dB); `tidewater`: the lift's i → VI
+  (Em → C), the arp turned, darker, stronger lift. `calm` (one pad) gets re-voiced, darker, the pad
+  breathing and another seed.
+- **Batches** (`VariationBatches`, the session's `variations/b0001/`: `a.yaml`…`d.yaml` and
+  `batch.json` — root version, base (`{version}` or `{batch, letter}`), shuffle, the chain of
+  labels it descends from, state `running | done | stopped`, progress, per candidate
+  `{letter, kind, name, label, status waiting|rendering|rendered|checking|done|failed, key,
+  render, check, kept}`, timing). One worker thread: a new batch stops the one under way at its
+  next step. It renders the four first (so they play as soon as possible), each through
+  `_render_whole` into the session's render cache — the stems of unchanged tracks are reused,
+  a volume-only change scales a kept stem (§94.14) — without asking for the late facts (they
+  would push the playing render's aside), then checks each through a **second `Checker`**
+  (the current version's check and a batch's never supersede each other; both give way to
+  renders), kept in `checks/` like any check (`check_brief`: verdict, level, headline,
+  picture, counts).
+- **Keep** (`keep_variation`): the candidate's text as the next version, `origin: variation`,
+  parent the batch's root version (also for "more like this" chains), label `variation: <the
+  chain's labels>; <its label>`, current; the batch records `kept` (a second Keep goes to it).
+  **Decision: candidates not kept never become versions** (the version list stays the person's
+  history; the candidates stay on disk in `variations/`). A candidate plays through
+  `/api/render {variation}` like a version (sections, mutes, narration work), `version` `null`.
+- **The page** (`variations.js`): **Variations** in the top bar; a panel under the timeline:
+  "Variations of v1" (or "more like c of b0001", "after: <chain>", "shuffle N"), progress
+  ("rendering b (2/4)", then "done · rendered in 5.5 s, checked in 13.2 s"), **Shuffle**, ×; a
+  card per candidate coloured by kind (a class: the CSP allows no inline styles): letter, kind,
+  label, verdict and headline numbers, the spectrogram (58 px, cropped), what was rendered,
+  **▶ Play** / **■ back** (`state.variation`: the player swaps at the same moment, the A/B badge
+  says "▶ variation b · …", `data-ab="V"`), **Keep** (then "Go to vN"), **More like this**. Polls
+  `GET /api/variations` every 0.6 s while running; `data-variations` on `<body>`. A new version,
+  undo / redo, A/B or a new batch stops playing a candidate.
+- **MCP**: `studio_variations(session?, version?, shuffle?)` (`agent_variations`): the four as
+  whole scores with labels; nothing rendered or written — a starting point to change further
+  and `studio_propose`.
+- **Timings** (two cores, headless Chromium, `<scratchpad>/s199/shots.py`, `smoke.py`):
+  `momentum` from the click: the first card playable 3.5 s, all four 6.5–7 s, all checked
+  19–20 s (renders 4.4–5.5 s: re-voiced 1.7 s — every track, as any chord change —, ostinato
+  0.5 s, darker 1.5 s, stronger turn 0.6 s; checks 2.7–3.8 s each); "more like this" and
+  shuffle 20–21 s; `tidewater` renders 4.9 s, checks 20 s (4–6 s each). A candidate already
+  rendered plays at once (from the cache) and the playing position carries over.
+- Public: no `vidgen.api` names; MCP tool `studio_variations`; `StudioApp.render(variation=)`,
+  `make_variations`, `variation_batch`, `keep_variation`.
+
+### 94.18 Step 200: docs and polish
+
+- **Keyboard** (`app.js` `wireKeys`, the list in `#shortcuts`, **?**): Space play / pause, N a
+  note (`notes.js`), L loop the section under the playhead (again: the whole piece), M / S
+  mute / solo the selected track, V variations, Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y (`versions.js`),
+  ? the list, Esc closes it. None act while focus is in an input, textarea, select or
+  contenteditable. **Decision: Space plays unless the focused control was reached with the
+  keyboard** — tracked by the last pointer press vs Tab / arrow key (`focusByPointer`), not by
+  `:focus-visible`, which Chrome turns on at any key press and so cannot tell; a mouse-clicked
+  button's Space keyup is cancelled so it is not pressed too. A track row reached with Tab keeps
+  Space to select itself.
+- **Window sizes** (`studio.css`): ≥ 1320 px three columns; 980–1320 px the tracks beside a pane
+  with tabs **Inspector / Score file / Notes** (`#pane-tabs`, `data-pane` on `.work`, remembered
+  in `localStorage`, ← → between tabs); < 980 px one column, the tabs below the tracks, the page
+  scrolls. The studio grid gives the work row at least 300 px, so with a proposal, variations
+  and the check details open on a short window the page scrolls instead of squeezing the tracks
+  away (a bug the 1440 × 900 screenshots showed). Checked at 1920, 1440, 1280, 1024 and 420 px:
+  no sideways scroll.
+- **Contrast**: an in-page audit (every visible text against its first opaque background,
+  WCAG ratio) over both themes, every width and the panels (variations, a proposal, check
+  details, export, notes): no text under 4.5:1 after darkening the light theme's secondary /
+  tertiary (`#B13C0B`, `#136F37`), comments (`#636A74` light, `#8B94A2` dark), and removing an
+  `opacity` on the inspector's group notes. Light-theme sections and the energy area are
+  lighter tints. Every control has a name (an audit found none without); `:focus-visible`
+  outlines in `--focus`.
+- **First-run hint** (`#hint`, four steps: preset and Space, change one thing, check and A/B,
+  notes / agent / variations / export): shown until **Got it** (`localStorage`
+  `vidgen-studio-hint-seen`).
+- **The server gone** (`api.js` `onConnection`): a `fetch` that fails (not an HTTP error) marks
+  the studio offline: a banner says it is not answering, how to start it again, that versions
+  are on disk, with **Retry now**; the notes poll keeps looking every 4 s (1.5 s otherwise, none
+  while the tab is hidden). When it answers, a studio started again (no session open) reopens
+  the page's session (`reconnect`), so the piece carries on. A render error says "could not
+  render: …" and the last good render keeps playing.
+- **Gaps of 199 closed**: the open batch is remembered per session (`localStorage`) and shown
+  again after a reload; a batch a closed studio left `running` reads as `stopped` (its
+  candidates still play: rendered on demand); `GET /api/variations` (no `batch`) lists the
+  session's batches, newest first, with what they varied and what was kept — **Batches ▾** on
+  the panel and the version menu show them, so candidates not kept can be heard and kept later.
+  The last hand-off is shown again after a reload (`GET /api/ask` → `last_handoff`), with **Ask
+  again (about vN)**.
+- **Disk rule** (`studio_app/cleanup.py`; decision: renders are a cache, nothing else is): a
+  session keeps the renders (all files whose name starts with the render key: the WAV, its
+  facts, sections, listening mixes) of its current, first and starred versions, its last
+  `KEEP_VERSIONS` (8) versions and its newest batch's candidates, most wanted first, capped at
+  `CAP_BYTES` (1 GB; the current, first, starred and just-played renders are never dropped by
+  the cap); exports older than a day go (`EXPORT_AGE`). Run after a new render at most once a
+  minute (`_auto_clean`, under the render lock); at start for every session with no recent
+  versions kept; **Clean up** in the version menu (`POST /api/cleanup`: the open session by the
+  rule, the others by the start rule, exports older than an hour; `GET /api/disk` the sizes);
+  `vidgen studio --clean [PROJECT]` (`clean_studio_folder`) without a server. Never removed:
+  versions, notes, hand-offs, proposals, candidates' texts, checks, `session.json`. A file that
+  cannot be removed (streamed, on Windows) is counted as busy and left for next time.
+- **Docs**: CONFIG "Music studio" (start, the page, editing, keyboard, disk, sizes and themes,
+  errors, security), the author guide (when to suggest the studio; sessions handed over MCP),
+  README (a section and `docs/images/studio.png`, 1440 × 900 quantised to 160 colours, 74 KB;
+  no GIF: a still says it and stays light), COOKBOOK-MUSIC §7 (a person and an agent: preset →
+  notes → ask → A/B → variations → save), the Listen page (a paragraph after the score pieces,
+  in `listen.page_text` and the committed page alike), CHANGELOG "Unreleased".
+- Public: no `vidgen.api` names; `vidgen studio --clean`; `vidgen.studio_app.clean_studio_folder`;
+  `StudioApp.last_handoff`, `disk`, `clean_up`, `variation_batches`; API rows `GET /api/ask`,
+  `GET /api/disk`, `POST /api/cleanup`, `GET /api/variations` without `batch`.
+
+### 94.19 Step 201: the review of Phase T
+
+- **Security, checked one attack at a time** (`tests/test_phase_t_review.py`; each is a test):
+  Host must be `127.0.0.1:<port>` / `localhost:<port>` exactly (other names, ports, `[::1]`,
+  case, a missing Host: 403); a POST with an `Origin` from anywhere else (`null`, another port,
+  look-alike names: 403) or not JSON (415); bodies at most 2 MB (413, read nothing) — **fixed**:
+  a negative `Content-Length` made `rfile.read(-1)` wait for the client to close, unbounded
+  (now 400); every 4xx / 5xx answer closes the connection (its body may be unread, so the
+  connection cannot carry another request). **Fixed**: JSON numbers must be finite (Python's
+  JSON reads `NaN` / `Infinity`; a note at NaN seconds made `notes.json` unreadable to strict
+  readers) and whole numbers whole (`version: 1.5`, `true`, `Infinity` were cast or crashed with
+  500). Names that reach the disk: render, picture and export names, session ids, batch ids,
+  letters, note ids, render keys — every pattern now ends in `\Z` (a `$` let a trailing newline
+  through; a query string is decoded, so `?key=…%0A` reached it) and uses ASCII `[0-9]` (`\d`
+  matched other scripts' digits); a section or track name in a score likewise (`vidgen.studio`'s
+  `_NAME`: a name is used in file names). URL paths are never decoded, so `%2e%2e`, `..\`,
+  `C:\`, `\\server\share` and the like all miss the allow-lists (tested on every prefix).
+  **Save to project**: piece names were already plain; **fixed**: Windows device names (`con`,
+  `nul`, `aux`, `prn`, `com0-9`, `lpt0-9`) are refused (`assets/music/con.yaml` is the console
+  on older Windows); a link from `assets/music` out of the project was already refused.
+  **YAML**: `check_text` reads with the safe loader (no object tags) — **fixed**: it looks at
+  the composed document first and refuses one whose anchors / aliases stand for more than
+  `MAX_YAML_NODES` (200 000) values (ten lines of nested aliases as a title took 30 s and
+  gigabytes in the score's checks) and one nested too deeply (a `RecursionError` was a 500);
+  `yaml.compose` (edits, problem lines) now names `SafeLoader` too (nodes only either way).
+  **Fixed**: steps written as a list of lists were a `TypeError` in `patterns.parse_steps` (a
+  500; a traceback in the CLI) — now the steps problem. No shell anywhere; files written
+  atomically (`fileio`), MP3 exports now through `replace_file` (retried while Windows holds the
+  last download) and their partial file removed on failure.
+- **MCP studio tools** (§94.16): they read sessions under the root's `build/studio`, its
+  folders' (links out of the root not followed) and the cache folder's `studio/` — ids checked
+  before any path; **fixed**: a session folder that is itself a link out of its studio folder is
+  refused (`agent._contained`; an agent writes `inbox/` files there). `studio_check` writes only
+  `<root>/build/mcp/studio/<id>-v<N>.yaml` / `-proposal.yaml`.
+- **OpenRouter**: the key is read from the environment when sending, sent only to
+  `openrouter.ai` (`httpapi.post_with_retries`, `secret=` scrubbed from errors), never stored,
+  logged or given to the page (`provider_info` says only whether it is set; tested on `/api/info`,
+  `/api/session`, `/api/ask`). **Fixed**: `POST /api/proposal/send` needs `confirm: true` (the
+  page sends it only from **Send now**), so a cost is never incurred by a request the person did
+  not confirm; and `test_studio_agent.test_routes` could have called the real provider on a
+  machine with `OPENROUTER_API_KEY` set — it now clears the variable and stubs the call.
+- **Windows**: paths are `pathlib` throughout; the browser through `webbrowser`; port 0 with
+  `SO_EXCLUSIVEADDRUSE`; renders are content-named and never replaced, so a file being streamed
+  is never overwritten — **fixed**: a section cut is now made under the render lock (two
+  requests at once wrote it twice; the second replace fails on Windows while the first is being
+  sent); cleaning counts a file in use as busy. **Fixed**: text arriving with `\r\n` (a reply
+  pasted on Windows) is stored with `\n` (`session.normal_text`), so a version reads back as
+  written and "unchanged" is found; exports are the version's text (LF; Notepad reads it).
+  Ctrl+C: measured on Linux with a check under way, the process is gone in 0.14 s (`app.close()`
+  now also stops the late facts at their next block).
+- **Cleaning races** (Step 200's gap): **fixed**: `vidgen studio --clean` and a studio's start-up
+  clean leave alone the session a running studio has open (`open.json`, `_running_session`);
+  the automatic clean keeps the last `KEEP_PLAYED` (6) renders asked for, not only the newest,
+  so an A/B side or a candidate being played is not removed under the page.
+- **Quick FFT lengths (Step 196's finding)**. A circular filter over a buffer of `n` samples is
+  numpy's FFT of length `n`; with a prime factor above ~400 that is 2–5× slower than the same
+  convolution on a quick length (`n = 2⁹·3·1607`, time_of_flight at 112 BPM: 2.7 s a stereo round
+  trip against 0.8 s) and takes far more memory. **Byte-identity is impossible** for a different
+  FFT length (or even scipy's FFT of the same length: other rounding), and the shipped scores use
+  slow lengths themselves (`ascent` 2647, `breakthrough` 1607, a cookbook sketch 2857), so no
+  rule on the length could keep videos' samples. **Decision**: the quick lengths are the
+  **studio's choice only** (`fast_fft`, default off): `effects.CircularFFT(n, fast)` zero-pads
+  to `m = fast_fft_length(2n)` (or 3n for a loop's reverb, whose two buffers both fill `n`),
+  transforms and folds the result back around `n` (what spilled past the end added at the start,
+  what spilled before the start — a zero-phase filter reaches both ways — at the end); the same
+  circular convolution, its error the filters' response beyond `n/2` samples: 5e-15 of the
+  loudest sample on time_of_flight at 112 BPM, ≤ 1e-9 at worst (white noise at the shortest
+  folded length). Used only when `slow_fft_length(n)` (a prime factor above `SLOW_FFT_PRIME` =
+  500; at 101–307 the exact length is still quicker) and `n ≥ 65536`: `swept_filter`, `reverb`,
+  the mix's master filter (`render_track_stem(..., fast_fft)`, `mix_track_stems(..., fast_fft)`;
+  the studio passes `stems.FAST_FFT`). Exports, checks made by the CLI, videos and beds render
+  exactly. Measured: the studio's audition WAV equals the one made from `render_music_score`
+  byte for byte (time_of_flight 112, ascent, breakthrough, tidewater 112, a short test score);
+  the stems' mix equals `render_music_score` within Step 196's 1e-9 (tested).
+  `STUDIO_RENDER_VERSION` not bumped: the 16-bit renders are the same.
+- **Bit-identical memory savings in the renderer** (every template, bed loop, cookbook sketch,
+  test demo and project mix compared by SHA-256 before / after): `swept_filter` works channel
+  by channel (numpy's FFT along an axis is each column's FFT, to the bit) and runs at most
+  `SWEEP_MEMORY` (400 MB) of copies at once (a 5-minute piece's copies one at a time; a
+  50-second piece's still four); `_render_bus` lets go of its groups' buffers once summed
+  (`_Canvas.release`) and blends / applies the gain in place (the same operations).
+- **Long pieces** (a score may be 10 minutes): a 5-minute time_of_flight (×5.7 bars) was killed
+  at 3 GB both in the studio (all nine 235 MB stems held for the mix) and by
+  `render_music_score` itself. Now `score_stems` **streams** a score whose stems do not fit the
+  768 MB cache together (`StemSet.streamed`, `get`): the mix, a listening mix and the check
+  take one stem at a time (kept ones from the cache, others rendered then and kept while they
+  fit, the check's under the render lock): the studio renders it in 73 s with a 2.3 GB peak
+  (its check: 2.8 GB, over a minute); `render_music_score` 88 s, 2.75 GB. Heavy 10-minute
+  pieces still need more than 3 GB (documented).
+- **Exports**: a 30-minute listening-level export was killed at 3 GB (the whole piece tiled,
+  scaled and clipped as float64 copies). Now made block by block into one float32 array (peak
+  measured per block with the margins `loudness.blocks` uses: the same numbers), the same
+  samples as before (14 cases incl. a limited peak, compared by SHA-256 and in a test against
+  the Step 197 code), and capped at `MAX_SECONDS` = 600 (10 minutes, N loops too; was 1800):
+  600 s listening MP3 803 MB peak.
+- **Timings** (two cores; `<scratchpad>/s201/latency.py`, HEAD vs this step): time_of_flight
+  tempo 108 → 112 22.1 → 9.1 s (peak 2187 → 1271 MB), then a pad filter edit 8.8 → 3.8 s; first
+  load 8.1 → 6.2 s; ascent load 7.7 → 5.6 s (1441 → 989 MB); tidewater tempo +4 4.0 → 2.8 s;
+  momentum tempo +4 4.4 → 3.1 s (1352 → 988 MB).
+- Public: no `vidgen.api` names. `vidgen.studio.effects`: `CircularFFT`, `slow_fft_length`,
+  `fast_fft_length`, `SLOW_FFT_PRIME`, `FAST_FFT_MIN`, `SWEEP_MEMORY`; `fast` / `fast_fft`
+  keywords on `swept_filter`, `reverb`, `render_track_stem`, `mix_track_stems` (default off).
+  `studio_app`: `stems.FAST_FFT`, `StemSet.streamed` / `get`, `app.MAX_YAML_NODES`,
+  `expanded_nodes`, `KEEP_PLAYED`, `session.normal_text`, `exports.WINDOWS_RESERVED`; API: `confirm`
+  on `/api/proposal/send`; export length at most 600 s.
+
+## 95. Cell biology in physical scale (Phase U, Steps 202–211)
+
+Reference: docs/CONFIG.md `cell`. 2D cell-biology presentations at university and research
+level: precise, stylised but never wrong, in vidgen's flat style, written by AI agents in YAML,
+checked by `vidgen validate` (and from Step 209 by `vidgen lint`), in 16:9 and 9:16.
+
+### 95.1 The phase (plan)
+
+- **Step 202, the cell world and its scale** (this section's §95.2–95.7): the model, its rules,
+  the camera in µm with its levels, level of detail and scale bar, a first renderer with
+  placeholder organelles at true relative scale, the `cell` scene type and the `zoom_to` action.
+- **Step 203, the structure library**: accurate morphology replacing the placeholders, kind by
+  kind, behind the same model: the nucleus (an envelope continuous with the ER, pores as
+  complexes spanning both membranes, the nucleolus), rough / smooth ER as one network (sheets
+  joined to the outer nuclear membrane, tubules from their edges), the Golgi (cis / medial /
+  trans with their own compartment names), mitochondria (lamellar and tubular cristae with
+  junctions: the intracristal space continuous with the intermembrane space), lysosomes,
+  peroxisomes, early / late endosomes and multivesicular bodies, vesicles with coats (clathrin,
+  COPI, COPII: a `coat` option and sizes), centrosome; plant cells (`cell: plant`: wall, central
+  vacuole and tonoplast, chloroplasts with thylakoids, grana and stroma), prokaryotes
+  (`cell: bacterium`: nucleoid, periplasm for Gram-negative, 70S ribosomes); the cytoskeleton
+  (actin 7 nm, microtubules 25 nm with + / − ends, intermediate filaments 10 nm) and motors
+  (kinesin to +, dynein to −, myosin); the bilayer close-up (phospholipids, cholesterol,
+  glycolipids on the exoplasmic leaflet, rafts) as the `complex`-level drawing of a membrane;
+  `style: section | surface` (a thin section, or a surface view of a structure). New compartments
+  and membranes are rows of `catalog.py`; new kinds are `Kind`s with sizes, places and surfaces;
+  their drawings are `cell_vector` pieces with LOD features.
+- **Step 204, molecules and notation**: molecules are `complex` kinds with a `notation` (DNA
+  with 5′/3′ ends and base pairs, mRNA, tRNA with its anticodon, rRNA, nucleosomes; proteins with
+  domains, GPCRs, RTKs, gated channels, carriers, pumps, ATP synthase, kinases, G proteins; ions
+  and small molecules typeset with charges and subscripts); `vidgen.cellworld.names` holds the
+  naming rules (italic gene vs roman protein, species-aware case: human TP53, mouse Trp53;
+  modification markers P, Ub, Ac, Me) as data, so validation and the lint use one table. A
+  membrane protein's `on:` names its membrane and the side its domains face (topology is in the
+  catalog: lumenal = exoplasmic face).
+- **Steps 205, 206, 208, processes as actions**: actions on `cell` scenes (like `zoom_to`, in
+  `scenes/cell_actions.py` against `vidgen.api`), each with a **rule** in the world first: a pure
+  function from the world and the action's options to the moves it plans (paths in µm,
+  membranes crossed, compartments entered) or a `VidgenError` naming the beat (a vesicle cannot
+  fuse with the nucleus; active transport needs ATP or a co-transported ion going down its
+  gradient; a ribosome reads mRNA 5′→3′ and the chain grows N→C), then a renderer animating the
+  plan. The world gains *state over beats* (an object's compartment after an endocytosis, a
+  channel open or closed, a membrane potential) as `World.moved`-style replaced copies, replayed
+  by `vidgen validate` in beat and `at` order as Phase O's levels are. Timing: beat starts and
+  `at: "@word"` as every action; a plot (a `function_plot` beside a `cell`, an action potential)
+  reads the same planned values.
+- **Step 207, the `pathway` scene type** (separate, decided now): signalling pathways are graphs,
+  not geometry — nodes and SBGN-inspired arcs (activation, inhibition, phosphorylation, complex
+  formation, translocation, feedback) laid out automatically in compartment bands (extracellular
+  / membrane / cytosol / nucleus). It shares `catalog.py` (compartment names and labels, the kinds
+  and naming of Step 204's molecules) and the graph layout of `diagram` (`vidgen.graph`), not the
+  cell camera; its own actions (`signal`, `knock_out`, `inhibit`…) and rules (a translocation to
+  the nucleus crosses the nuclear envelope; an inhibitor's T-bar contradicts a declared effect).
+  A `cell` scene and a `pathway` scene can carry a molecule between them with the existing
+  `carry:`.
+- **Step 209, the accuracy lint** reads the model, not pixels, where it can: `vidgen lint`
+  rebuilds each `cell` scene's world from its params (`Params.world()`, no render) and checks the
+  rules that are judgements rather than impossibilities (done: §95.14) — sizes or counts far outside a kind's
+  `size_range` (the catalog already holds it) without the scene's `not_to_scale: true` (which
+  then shows a small "not to scale" note), a drawn exaggeration (the layout dump's `cell` key
+  gives each still's µm span and LOD weights: a glyph drawn larger than its thing), wrong
+  directions in the planned moves of Steps 205–206, active transport without an energy source,
+  naming mistakes (Step 204's table), pathway arrows against declared effects. Hard
+  impossibilities stay validation errors (this step). `references:` (DOI / PMID, never invented)
+  per scene: small on-screen citations and the video description.
+- **Step 210** the example "From gene to secreted protein", the gallery section "Cell biology",
+  the guide topic, the cookbook page; **Step 211** the review with a scientific-accuracy pass.
+
+### 95.2 A new scene type `cell` (decided)
+
+Not a mode of `stage` (characters, lip sync, a ground line, tile and iso places: none of it
+applies, and a cell's camera spans five orders of magnitude) nor of `iso_diagram` (a projection
+of blocks on a grid with its own label placement). A `cell` scene has its own params, its own
+world in µm and its own camera, like `iso_diagram` was its own type next to the iso places. What
+the cell types share lives in `vidgen.cellworld` (the catalog, the geometry, the rules), so
+Step 207's `pathway` uses the same names without being a `cell`.
+
+### 95.3 The world model (`vidgen/cellworld/`, no manim)
+
+Three layers as in §86.1 / §89.1: the **model and rules** (`vidgen.cellworld`: `units`,
+`catalog`, `geometry`, `model`, `view`; a test imports them in a fresh interpreter and checks
+`manim` is not loaded), the **renderer** (`vidgen/cell_vector.py`: Manim mobjects of the world)
+and the **scene** (`scenes/cell.py`, `scenes/cell_actions.py`, written against `vidgen.api`).
+
+- **Units.** Everything inside is µm (floats). YAML writes a number (µm) or a length string
+  (`parse_length`: `"25 nm"`, `"1.5 um"`, `"20 µm"`, `"0.1 mm"`; zero or negative refused;
+  `parse_coordinate` allows signs for `at`). `format_length` writes `25 nm`, `1.5 µm`; `nice_length`
+  the 1-2-5 lengths of scale bars.
+- **The catalog** (`catalog.py`, data only): `COMPARTMENTS` (cytosol, nucleoplasm, perinuclear
+  space, ER / Golgi / lysosome / endosome / vesicle lumens, intermembrane space, matrix,
+  peroxisomal matrix, extracellular; each with a label, a one-line note and a **topology**:
+  `cytosolic`, `lumenal` — topologically outside, what exocytosis empties —, `extracellular`,
+  `mitochondrial`, `peroxisomal`, later `plastid`), `MEMBRANES` (each between an outside and an
+  inside compartment: plasma, outer / inner nuclear, ER, Golgi, outer / inner mitochondrial,
+  lysosomal, endosomal, vesicle, peroxisomal), the **kinds** (`Kind`: label and plural,
+  `structure` or `complex`, shape, default length and width, the textbook `size_range`, its own
+  membranes from the outside in and the compartments they enclose, the compartments it may be
+  in (`places`), the kinds whose membrane it may sit on (`surfaces`), the textbook reason the
+  rules quote (`why`), a hue) and the typical animal cell (`TYPICAL_ANIMAL`). Constants: bilayer
+  5 nm, perinuclear gap 30 nm (20–40), mitochondrial intermembrane gap 20 nm, ER lumen 50 nm,
+  ER tubule 50 nm, Golgi lumen 30 nm / period 90 nm, pores 1 per µm of envelope in a section,
+  ER ribosomes 6 per µm per face. Sizes are textbook consensus (Alberts, Lodish): nucleus 7 × 6 µm
+  (5–10), mitochondrion 2 × 0.7 µm (0.5–4 long, 0.5–1 wide), ribosome 25 nm (20–30), cell 20 µm
+  (5–100 allowed), and so on (CONFIG's table).
+- **Geometry** (`geometry.py`): a world is a **cross-section** (a thin-section view). Shapes in
+  µm: `Ellipse`, `Capsule` (a stadium: mitochondria), `ArcBand` (a curved band with round ends:
+  ER sheets, Golgi cisternae, ER tubules), each with `contains(p, pad)`, `outline`, `inset` (the
+  next membrane in), `bounds`, and surface points with outward normals (`surface`, `faces`);
+  `inside` / `overlap` by outline samples. **Membranes are bilayer mid-lines**: two membranes of
+  an envelope are `gap + bilayer` apart, a complex bound to a membrane sits `bilayer / 2 +` its
+  radius off the line.
+- **The world** (`model.py`): `build_cell_world(CellSpec) -> CellWorld`. A `CellSpec` (kind,
+  size, aspect, `contents`, objects as `ObjectSpec`s with a `where` for messages, seed) is what
+  the scene's params give. Entries: the typical contents (unless `contents: none`), each replaced
+  by an object of the same id, then the objects; ids default to the kind (`kind_2` for a
+  second); reserved ids (`cell`, `title`, `tissue`, `scale_bar`, `cytosol`, `extracellular`,
+  `world`). Each entry places one or more `Placed` things (`key`: the id, or `<id>#<n>`) with
+  their `footprint` shapes and `parts` (a membrane-bounded piece: its membranes outside in and
+  the compartment inside each), where it is (`host`: a compartment *instance*, `cytosol` or
+  `<key>.<compartment>`), the structure whose membrane it sits on (`surface`) and the outward
+  `normal` there, and a Golgi stack's cis direction (`facing`). Generated entries belong to a
+  structure (`owner`): `nucleus.pores`, `nucleus.ribosomes` (outer nuclear membrane),
+  `rough_er.ribosomes`. `compartment_at(p)` answers which compartment a point is in;
+  `region_at(p)` which membrane-less region (nucleolus, centrosome). The neighbouring cells of
+  the tissue are `Neighbour`s (outline and nucleus) on a stretched hexagonal lattice.
+- **Placement**: kinds in an order that lets each lean on the ones before (nucleus, Golgi,
+  centrosome, nucleolus, rough ER, smooth ER, then the rest; written `at` first within a kind):
+  the typical layout's place (the nucleus a little off centre; the Golgi 1.6 µm out from the
+  envelope towards −25°, its convex cis face towards the nucleus; the centrosome beside it; the
+  rough ER sheets round the far side of the nucleus, 200°, 0.35 µm out and 0.4 µm apart; the
+  smooth ER beyond its end), else scattered with `random.Random("<seed>:<id>")` (600 tries per
+  thing; structures keep 0.25 µm off the plasma membrane and 0.2 µm off each other). Complexes:
+  `on:` points on the host's cytosolic faces, `in:` the instances named, `at` one point.
+  Deterministic: the same spec builds the same world (tested).
+
+### 95.4 The location rules
+
+`build_cell_world` refuses with a `VidgenError` naming the object (`objects[3] (ribosome
+'ribosome')`, or `contents: typical`), what is wrong and what to write; the scene's params
+validator turns it into a `scenes[i].params` problem. Rules (Step 202): an unknown kind, an
+`in:` or `on:` target, a compartment of an object (did-you-mean over every name); a complex
+`in:` a compartment not in its kind's `places` or `on:` a kind not in its `surfaces` (with the
+`why`: "ribosomes translate in the cytosol (free, or on the cytosolic face of the rough ER and the
+outer nuclear membrane) and, as mitochondria's own ribosomes, in the matrix; never in the
+nucleoplasm: their subunits are assembled in the nucleolus and leave through the nuclear pores,
+and translation starts only in the cytoplasm"); a thing whose `at` lies in a compartment it may
+not be in ("that point is in the nucleoplasm of 'nucleus'"); a structure overlapping another or
+reaching the plasma membrane; a nucleolus not wholly inside a nucleus's inner membrane; a rough
+ER without a nucleus (it grows from the envelope); `at` with `count`, `in` with `on`, `in` on a
+structure, a kind option on another kind, a reserved or duplicate id; no room for a count. The
+`places` / `surfaces` data is what later steps extend (a kinesin `on:` a microtubule, a
+receptor `on:` the plasma membrane facing out). Not rules but lint (Step 209): sizes outside a
+kind's range, counts, exaggerated glyphs.
+
+### 95.5 The camera in µm, levels, level of detail, scale bar (`view.py`, no manim)
+
+- **Scale.** The body (the safe area under the title) shows `CellView(center, span, level)`:
+  `span` µm across the body's **shorter side**, so a YAML view means the same in 16:9 and 9:16.
+  The scene fixes `unit` = body's shorter side / the start view's span (scene units per µm); a
+  view is a camera width `frame width × span / start span` and a centre that puts the view's
+  centre on the body's centre.
+- **Levels** (`level_view`): `tissue` (3.2 cell lengths, the cell in the middle), `cell` (fits
+  the cell's box with 7 % margin, `fit_span`), `organelle` (a structure's box at 62 % of the
+  short side; a sheet or tubule network: 2.6 µm of it), `complex` (a complex at 20 %: 125 nm for a
+  ribosome; on a structure: a bound pore, else a bound ribosome, else a point of its outer
+  membrane, 160 nm). `focus_point` gives what a level centres on; an entry of several things takes
+  its first; `width` overrides the span. `default_level`: organelle for structures, complex for
+  complexes, cell / tissue for those targets.
+- **Level of detail** (`lod_weights`): each feature is drawn by the size it takes on screen, in
+  pixels of a frame whose **shorter side is 1080 px** whatever the resolution (so a preview shows
+  what the final shows), faded on a log scale between two sizes (`LOD`): ribosome dots 0.5–1.2 px
+  (a 25 nm ribosome is about 1.2 px at the cell level: real size, a rim of 0.8 px keeps it
+  visible), their large (60S) and small (40S) subunits 9–16 px, an envelope's two membranes apart
+  at a 1.6–3.2 px gap (nucleus 35 nm, mitochondrion 25 nm, mid-line to mid-line), a membrane as
+  its 5 nm bilayer at 2.5–5 px, pores 1.5–3 px, cristae at a mitochondrion 18–32 px wide,
+  neighbouring cells as the span grows from 1.25 to 1.7 cell lengths, labels 8–14 px.
+- **Scale bar** (`scale_bar`): the largest 1-2-5 length up to 22 % of the span, written
+  `format_length`.
+- **Zoom path** (`zoom_path`): van Wijk and Nuij's smooth and efficient zoom-and-pan path
+  (ρ = 1.4): an even pace on a log scale for a zoom on one point (a 150× zoom does not rush its
+  end, which Manim's linear `MoveCamera` would), and out on the way between far places (two
+  ribosomes 5 µm apart are not travelled to at 125 nm across: the first stills showed empty
+  cytosol for a second).
+
+### 95.6 Drawing (`cell_vector.py`) and the scene (`scenes/cell.py`, `scenes/cell_actions.py`)
+
+- **Exact outlines.** Shapes become cubic Bézier paths (arcs in pieces of at most 22.5°: within
+  0.1 nm of the true curve for a 20 µm membrane at any zoom); several shapes of one look are one
+  `VMobject` with subpaths (all of an entry's ribosome dots: one mobject). `CellDrawing` builds
+  `tissue`, `cell` (cytosol and plasma membrane) and one `VGroup` per structure (with its bound
+  pores and ribosomes) or entry of free complexes, in drawing order. Pieces register a LOD
+  feature expression (`"particles&!particle_detail"`, `"!double_membrane&!bilayer"`); a membrane
+  is a line (low zoom), a band of its true width and a midplane line (the two leaflets) at high
+  zoom; double membranes are one line until their gap shows. Placeholders for Step 203: the
+  nucleus (envelope band, nucleoplasm, a nucleolus without an outline: it has no membrane),
+  rough-ER arcs with bound ribosomes on both cytosolic faces, smooth-ER arcs, Golgi cisternae
+  paler cis to stronger trans, the centrosome's two centrioles at right angles in a halo,
+  mitochondria (two membranes, lamellar cristae from both sides), lysosomes with dense granules,
+  peroxisomes, vesicles; pores as a gap through both membranes with the complex's rings.
+  Colours from the theme: fills are each kind's hue mixed into the background, outlines darker
+  (light themes) or lighter (dark themes).
+- **Strokes in pixels.** Manim's moving camera scales strokes with the zoom; `update` sets every
+  piece's stroke width from pixels each time the camera moves (`stroke_unit`), so outlines stay
+  1.6 px and a bilayer is drawn its true 5 nm.
+- **The camera listener** (`Cell.on_camera`, registered with `add_camera_listener` and also
+  called by `CellZoom` on every interpolation, so a move the runner finishes without drawing a
+  frame leaves nothing stale): when the camera changed, the drawing's LOD and strokes, the pinned
+  overlays (the title on a plate, readable over the tissue; the labels; the scale bar) keep their
+  place and size on screen and lie in front (`OVERLAY_Z`), labels show by their structure's size
+  and whether their anchor is in view, the scale bar its length and text. Every text the bar can
+  show in the scene (the spans of the start and of each `zoom_to`) is made at the start and only
+  shown or hidden: Manim draws an animation's family as it was when the animation began, so a text
+  swapped in mid-zoom was not drawn and the old one stayed (seen in the first stills).
+- **Labels** are laid out for the start view: in columns left and right of the cell when the body
+  has room (16:9), else in rows above and below it (9:16, as many rows as needed), else beside
+  each thing; sides balanced, each label anchored on the outline point of the member furthest
+  towards its side, spread to keep 0.1–0.14 units apart, a leader line to the plate's nearest
+  edge. Only what is large enough to see at the start is named (`labels` weight > 0.5). Labels
+  fade out as the camera zooms more than 1.2–1.6× away from the start view and give way to the
+  tissue; a zoomed view points at things with `callout`. (Labels per view: Step 203's or 205's
+  call, when the processes need them.)
+- **Steps and targets.** `reveal: all` brings the title, tissue (unseen until zoomed out), cell,
+  scale bar and every object in the first beat; `per_beat` one object per beat (`ChainedTargets`
+  of `math_axes`, so a `reveal` action on an object brings what it stands on). Targets: `title`,
+  `cell`, `tissue`, `scale_bar`, each entry id (`target_names` builds the world, cached per spec
+  by `lru_cache`). `layout_keys` adds `cell`: the span (µm), pixels per µm, the scale bar's text
+  and the LOD weights (for Step 209).
+- **`zoom_to`** (`cell_actions.py`): one target (the cell, the tissue or an object), `level`,
+  `width`, `until`; `moves_camera`, `alters_targets = False`, 2 s; `scene_problems` refuses it on
+  other scene types, with several or wildcard targets, on `title` / `scale_bar`, and a view the
+  level cannot give; the storyboard draws its half-way still (`mid_still_actions`). `CellZoom`
+  animates the camera frame along `zoom_path`.
+
+### 95.7 Public (Step 202)
+
+- `vidgen.api` adds `CELL_COMPARTMENTS`, `CELL_KINDS`, `CELL_LEVELS`, `CELL_OBJECT_KINDS`,
+  `CellColors`, `CellDrawing`, `CellObjectSpec` (`cellworld.ObjectSpec`), `CellSpec`, `CellView`,
+  `CellWorld`, `build_cell_world`, `cell_default_level`, `cell_label_weight`, `cell_level_view`,
+  `cell_lod_weights`, `cell_scale_bar`, `cell_zoom_path`, `did_you_mean`, `format_length`,
+  `parse_coordinate`, `parse_length` (prefixed where a bare name would be vague; the geometry's
+  `Ellipse` is not exported: it would shadow Manim's). `vidgen.cellworld` is importable without
+  manim for tools and lint.
+- Config: the scene type `cell` and the action `zoom_to` (no new video-level keys). Nothing
+  existing changes: other scene types, actions and the gallery's other frames are untouched.
+- **Gaps** (for the later steps): placeholder morphology (the ER is not joined to the nuclear
+  envelope; smooth-ER tubules are loose arcs; Golgi cisternae are bare arcs without vesicles);
+  animal cells only; labels for the start view only; LOD opacities are rest states — a `dim`
+  played while a zoom changes LOD can leave a piece at the wrong opacity until the next camera
+  move; a scale-bar length outside the scene's planned spans (a built-in `zoom` deeper than any
+  `zoom_to`) has no text; the tissue is loose round cells (no junctions).
+
+### 95.8 The structure library (Step 203)
+
+- **Modules.** `cellworld` is split by job (still no manim): `model.py` (specs, `Placed`,
+  `CellWorld`, error texts), `catalog.py` (kinds, compartments, membranes with their lipid mix,
+  textbook constants, the three typical cells), `geometry.py` (+ `RoundedBox`, `Polyline`),
+  `curves.py` (Bézier pieces of any shape, adaptive arc steps), `regions.py` (`Region`: boolean
+  unions and differences of shapes through skia-pathops, a manim dependency already, in µm about
+  a local origin, with a sequential fallback and a nudge when Skia refuses an op), `morphology.py`
+  (the shapes of each structure: cristae and crista junctions, envelopes with pores, ER necks and
+  networks, Golgi cisternae and buds, grana and lamellae, intraluminal vesicles, centrioles,
+  wavy filaments), `builder.py` (placing: cell shapes per kind, envelopes, plasmodesmata through
+  both walls, sheets joined to the outer nuclear membrane, Golgi on a curve round the nucleus,
+  chloroplasts along the wall), `filaments.py` (microtubules from the centrosome, cortical
+  arrays, cortex, stress fibres, intermediate filaments, flagella and pili; motors facing their
+  end), `build.py` (`build_cell_world`: entries, static checks, generated things),
+  `bilayer.py` (lipid layouts: phospholipids, sterols, glycolipids, rafts; a surface mosaic),
+  `anatomy.py` (`part_anchors`: the parts a view names), `view.py` (levels, focus points, LOD).
+  Drawing moved to the package `cell_draw/` (`base`, `drawing`, `organelles`, `plant`,
+  `bacteria`, `cytoskeleton`, `closeup`); `cell_vector.py` re-exports it.
+- **Morphology** follows textbook sizes (constants in `catalog.py`: bilayer 5 nm, perinuclear
+  space 30 nm, crista lumen 25 nm with 13 nm junctions, ER lumen 50 nm, Golgi lumen 30 nm at a
+  60 nm period with 55 nm rims, about 10 pores per µm² of envelope, granum period 18 nm, a plant
+  wall 250 nm, a Gram-negative periplasm 25 nm). The outer nuclear membrane and the rough ER are
+  one membrane (the region union draws no seam), and the smooth ER joins a rough sheet.
+- **Cell kinds** (`CellSpec.kind`: `animal`, `plant`, `bacterium`) with `gram`, `capsule`,
+  `wall`, `plasmodesmata`; each kind lists the cells it occurs in with the reason
+  (`Kind.cells`, `cells_why`), checked like places. Neighbours: plant cells share exact walls
+  (one middle lamella), bacteria lie in a colony, animal cells on a loose lattice.
+- **Level of detail** gains features (`lipids`, `pore_detail`, `thylakoids`, `coat_detail`,
+  `fine`, `mt_lines`, `actin_lines`, `if_lines`, `filament_detail`, `actin_detail`,
+  `mito_double`, `plastid_double`, `envelope_double`); molecules (lipids, tubulin and actin
+  beads, a surface mosaic) are built only round the views (start and every `zoom_to`) that span
+  0.45 µm or less (`closeups`), so a cell's thousands of lipids cost nothing elsewhere.
+- **Labels per view.** Each `zoom_to` view gets labels from `part_anchors` (laid out on the body's
+  edges: columns in 16:9, rows in 9:16, moved to the other edge before a second row), shown while
+  the camera is near that view; `ZoomTo.Options.labels` (`true` / `false` / names) chooses them.
+- **Emphasis kept through LOD.** `Pieces` measures what an action did to a piece against what LOD
+  last wrote (as a factor), remembers it per owner (entry), and gives it to pieces that come into
+  view later; an action still writing colours it read while a piece was hidden is ignored for
+  pieces shown within the last play. Hidden pieces drop their points (cost nothing to draw).
+- **Scale-bar texts** cover every 1-2-5 length from 4 nm to twice the largest planned span, so a
+  built-in `zoom` deeper than any `zoom_to` has its text.
+- **Public:** `vidgen.api` adds `CELL_COATS`, `CELL_MEMBRANES`, `CellAnchor`
+  (`cellworld.Anchor`), `cell_part_anchors`. Config: `cell` params `cell.{gram, capsule, wall,
+  plasmodesmata}`, `style`; object options `coat`, `cargo`, `grana`, `style`; new kinds (see
+  CONFIG); `zoom_to` option `labels`. YAML 1.1's `on:` (read as `true`) is accepted in objects and
+  views. Nothing outside the `cell` scene changes (the Phase Q baseline frames match).
+- **Gaps:** leaders in a zoomed view can cross when anchors crowd one spot; the surface style is
+  a schematic (pores and a lipid mosaic, not a rendered 3-D surface); motors are static glyphs
+  (walking is Step 205's); the tissue still has no junctions.
+
+### 95.9 Molecules and notation (Step 204)
+
+- **Decided: a separate scene type `molecule`** for standalone close-ups (a fixed camera in nm,
+  a membrane drawn across the view between its two compartments, molecules laid out in rows)
+  and molecules as **kinds of the cell world** (complexes) for the `cell` scene. Both draw the
+  same glyphs; neither needs the other.
+- **Three layers again.** Data and rules without manim in `vidgen.cellworld`: `notation`
+  (chemical markup: `Ca2+` → Ca²⁺, `HCO3-`, `SO4 2-`, `Pi`, `F_o`; a monatomic ion's digits are
+  its charge, a polyatomic one's are counts), `names` (species nomenclature as data — HGNC, MGI,
+  RGD, SGD, PomBase, FlyBase, ZFIN, E. coli, TAIR — gene symbols italic and checked, protein
+  names roman and refused when written like their gene where the case tells them apart;
+  modification markers P / Ub / Ac / Me with the residues they go on; histone marks checked
+  against the human H2A, H2B, H3.1, H4 sequences), `sequences` (DNA / RNA alphabets, complements,
+  the standard genetic code, Crick's wobble: an anticodon must read a codon of its amino acid),
+  `molecules` (the catalog: `MoleculeKind` with label markup, family, sizes in nm with textbook
+  ranges, places or membranes with the reason, the oriented part and side — `n` the cytosolic /
+  matrix / stroma side, `p` the exoplasmic side, from each membrane's `exo` in the catalog — states,
+  cells; `check_membrane`, `check_faces`, `check_place`; each molecule also registered as a
+  `Kind` of the cell world), `glyphs` (`MoleculeSpec`, `check_molecule`, `molecule_glyph`: prims
+  in nm in a local frame — a membrane protein's +y is its exoplasmic side, the bilayer's
+  mid-plane y = 0 — with named anchors, modification sites and facts the tests read),
+  `placing` (membrane proteins `on:` the cell or a structure; each candidate place's two sides
+  probed in the world, so the glyph's exoplasmic side faces the membrane's exoplasmic
+  compartment; ATP synthase lines the cristae and the stroma lamellae). The renderer
+  `cell_draw/molecules.py` turns prims into mobjects (static for the `molecule` scene;
+  level-of-detail pieces, prims of one look merged, for the `cell` scene). Scenes:
+  `scenes/molecule.py`, and `scenes/cell.py` (molecule options `state`, `faces`, `membrane`;
+  markup labels).
+- **Sizes** (catalog): B-DNA 2 nm, 0.34 nm / bp, 10.5 bp / turn, minor groove 0.35 of a turn;
+  nucleosome 11 nm, 147 bp, 1.65 left-handed turns, ~200 bp repeat; tRNA ~7 nm per arm; protein
+  diameter 2 × 0.066 × M^⅓ nm (Erickson 2009: ~5 nm at 50 kDa); GPCR ~4 × 7 nm; RTK ~20 nm;
+  channel ~10 nm; Na⁺/K⁺-ATPase ~15 nm; ATP synthase ~22 nm, F₁ ~10 nm, c-ring 8 (animal
+  mitochondria), 10 (bacteria), 14 (chloroplasts); ions at their hydrated radii (0.28–0.43 nm).
+  Small molecules are symbols at about their size; a `molecule` scene fits the view to them.
+- **Rules** (errors with the reason): a membrane protein in a membrane it never occurs in, its
+  oriented part facing the wrong side (*ATP synthase F₁ must face the mitochondrial matrix…*),
+  `in:` / `at` for a membrane protein, a soluble molecule in a compartment it is not found in
+  (DNA in a eukaryote's cytosol; cAMP outside the cytosol), a molecule in a cell that has none
+  (Na⁺/K⁺ pump in a plant; nucleosomes in a bacterium), an option of another kind, a state the
+  kind lacks, a symport whose solutes go opposite ways, a wrong base, an anticodon that does not
+  read its amino acid, a marker on the wrong residue, a gene or protein written in the wrong case.
+- **LOD** gains `molecules` (a 10 nm molecule drawn whole from 6 px, a dot before) and
+  `molecule_detail` (40–70 px). A `zoom_to` a molecule frames its glyph at about half the view;
+  its part anchors are the glyph's plus the membrane's two compartments.
+- **Layout of the `molecule` scene:** membrane proteins in one row along the membrane, soluble
+  molecules in rows on their side (wrapped to suit the frame), each slot as wide as its name;
+  part labels in columns or rows, whichever leaves the drawing larger, the sides balanced; the
+  compartments' names by the membrane where it is free, else at the left beyond the molecules.
+- **Step 203 corrections:** part anchors are checked against the model (a test: each label's
+  point lies in its compartment, at least 3 nm from its edge, or in the bilayer of its membrane):
+  the matrix beside a crista (not in its intracristal space), the glycocalyx 3–8 nm outside the
+  bilayer on the side its label goes to, the Golgi lumen and coat, heterochromatin on a patch,
+  the inner mitochondrial membrane away from a junction. Stroma lamellae leave granal
+  thylakoids at their margins (oblique from the top and bottom ones), never through a stack.
+  `Region` paths are in nanometres: in µm Skia lost pieces of small overlapping shapes and filled
+  a ring of smooth-ER tubules. The raft glow stays within the bilayer.
+- **Public:** `vidgen.api` adds `MOLECULE_KINDS`, `MoleculeKind`, `MoleculeSpec`, `MoleculeGlyph`,
+  `molecule_glyph`, `check_molecule`, `place_glyph`, `glyph_mobjects`, `membrane_sides`,
+  `protein_size`, `BILAYER_NM`, `check_molecule_membrane`, `check_molecule_faces`,
+  `check_molecule_place`, `SPECIES`, `MODIFICATIONS`, `nomenclature_species`, `check_gene`,
+  `check_protein`, `gene_markup`, `protein_markup`, `check_modification`, `histone_mark`,
+  `chem_markup`, `chem_plain`, `charge_of`, `check_markup`, `CODONS`, `check_sequence`,
+  `check_trna`, `codons_read`, `reverse_complement`, `LIPID_HEAD_HUE`, `LIPID_TAIL_HUE`. Config:
+  the scene type `molecule`; `cell` object options `state`, `faces`, `membrane` and the molecule
+  kinds. Nothing else changes (the Phase Q baseline frames match).
+- **Gaps:** molecules are static (states change by scene, not by action: Step 205); lipids are
+  drawn under membrane proteins in a `cell` close-up (no gap in the bilayer there); a row of
+  several membrane proteins in a 9:16 frame is small (one membrane, one row); the nucleosome is
+  seen face on only; rRNA is a schematic; small-molecule glyphs are symbols (no atoms).
+
+### 95.10 Transport and membrane processes as actions (Step 205)
+
+- **Where.** Processes at the molecule scale are actions of the `molecule` scene: `set_state`,
+  `transport`, `diffuse`, `osmosis`, `action_potential`. Processes of the whole cell are actions of
+  the `cell` scene: `motor_walk`, `endocytosis`, `exocytosis`. Each action has a duration and
+  `until` like any other action, so it is timed to beats and words. Each validates with a clear
+  error before rendering: the wrong scene, an unknown molecule, a state the kind lacks, a
+  direction against the gradient for a passive path, an ion a channel does not pass, a walk past
+  the end of a track, a vesicle fused twice.
+- **Three layers.** No manim in `vidgen.cellworld.transport` and `vidgen.cellworld.traffic`. A
+  process is a `Plan` of `Phase`s. Each phase has protein states, particle `Move`s (paths in nm,
+  with a Brownian-bridge random walk) and a caption. The membrane shapes of an event are
+  keyframes. `cell_draw/traffic.py` (`EventDrawing`) draws the event overlay.
+  `scenes/molecule_process.py` plays plans: `PlanPlayer` and `Hold`, with morphs between
+  states. Prims are matched by look and interpolated; unmatched prims fade in or out.
+- **Physics.**
+  - Nernst: E = (RT/zF) ln(c_out/c_in), RT/F = 26.7 mV at 37 °C.
+  - Free energy: ΔG = RT ln(c₂/c₁) + zFΔψ. A passive path must have ΔG < 0. A coupled carrier
+    must have total ΔG < 0 over its stoichiometry (SGLT1 2 Na⁺ : 1 glucose; NCX 3 Na⁺ : 1 Ca²⁺).
+  - Typical mammalian concentrations, in mM (cytosol / outside): K⁺ 140/5, Na⁺ 12/145, Cl⁻ 10/110,
+    Ca²⁺ 0.0001/2, glucose 0.5/5. Resting potential −70 mV.
+  - Na⁺/K⁺-ATPase: the Post–Albers cycle E1 → E1-P → E2-P → E2. 3 Na⁺ out, then 2 K⁺ in, per ATP.
+  - Carriers use alternating access, with an occluded state between the two open states.
+    Uniporters: GLUT1, GLUT4. Symporters: SGLT1, SGLT2, NKCC1, KCC2. Antiporters: NCX, NHE1.
+  - Other pumps: a P-type H⁺ pump, a V-type pump (no states), and an ABC transporter (two NBDs,
+    ATP-driven closure).
+  - Channels: selectivity by ion. Gating kinds are voltage, ligand and mechanical. Inactivation
+    (a ball-and-chain plug) only on voltage-gated channels. Aquaporin passes water in single
+    file and no ions.
+  - Simple diffusion: only bilayer-permeant molecules (O₂, CO₂, water, small lipophilic drugs).
+  - Osmosis: water moves toward the higher osmolarity.
+  - Action potential: a monotone cubic through textbook points (−70 → +40 mV, undershoot −80 mV,
+    about 4 ms). Events in ms: Na⁺ channels open at 0.8 and inactivate at 1.6; K⁺ channels open
+    at 1.5 and close at 4.6. A live readout and an optional plot inset are drawn.
+  - Kinesin and dynein take 8 nm steps hand over hand; myosin V takes 36 nm steps. Each motor
+    walks toward its end (kinesin to plus, dynein to minus).
+  - Endocytosis: a clathrin pit forms, then a neck, then dynamin scission. Exocytosis: SNARE
+    docking, then a fusion pore, then collapse into the membrane.
+- **Step 204 gaps fixed.**
+  - Lipids leave a gap around each membrane protein in a `cell` close-up
+    (`lipid_layout(gaps=)`). The random-number stream is unchanged, so earlier frames match.
+  - A `molecule` scene in a tall frame puts membrane proteins in several rows.
+- **Public:** `vidgen.api` adds `cell_transport`, `cell_traffic`, `CellEventDrawing`,
+  `cell_motor_curves`, `cell_motor_parts`, `MOLECULE_ION_FLOW`, `MoleculePrim`, `carrier_parts`,
+  `molecule_small_prims`, `MOLECULE_ION_RADII`, `MOLECULE_ION_HUES`, `MOLECULE_TRANSPORTERS`,
+  `TYPICAL_CONCENTRATIONS`, `molecule_pump_type`.
+  - Config, molecule items: `transporter`, `ratio`.
+  - Config, `molecule` params: `solutes`, `potential`, `bars`, `seed`.
+  - Config, cell motor options: `track`, `s`, `side`.
+  - Config, the eight actions above.
+  - The Phase Q baseline frames match.
+- **Gaps:**
+  - The `cell` scene has no `set_state`.
+  - An endocytosed vesicle is not added to the world as an object.
+  - Part labels in a zoomed view can go stale after a process (use `labels: false`).
+  - Four membrane proteins plus the action-potential plot make small drawings.
+  - The plot is an inset, not a `function_plot` scene.
+
+### 95.11 Gene expression as actions (Step 206)
+
+- **Where.** A `gene:` param (in `molecule` and `cell`) makes the gene a target. The molecule
+  scene is a close-up with every base and amino acid written. It has the actions `transcribe`,
+  `cap`, `splice`, `polyadenylate`, `export`, `translate` (`codons`), `target_er`, `glycosylate`
+  and `fold` (`chaperone`). The cell scene follows the products through the cell with
+  `transcribe`, `export`, `translate`, `to_golgi` and `secrete` (`to`). The close-up steps are
+  refused in a cell, with a pointer to the molecule scene. A `molecule` scene with a gene has no
+  `molecules`, `solutes`, `membrane` or `potential`.
+- **The gene** (`GeneSpec` → `build_gene` → `Gene`):
+  - It is written as a coding-strand `sequence` (with 1-based intron spans), as a `protein`
+    (back-translated with frequent human codons), or generated from `codons` and a `seed`.
+  - A generated gene has a TATA box at −31..−24 and an Inr at +1, a Kozak context, introns
+    (GU…branch A 18–40 nt from the 3′ end…polypyrimidine tract…AG, at least 30 nt), a stop codon,
+    AAUAAA, a CA cleavage site and a GU-rich element.
+  - A bacterium has −35 and −10 boxes, a Shine–Dalgarno sequence and a terminator hairpin.
+  - The ORF is the first AUG of the mature mRNA to the first in-frame stop codon. The genetic code
+    is NCBI table 1. The anticodons are the ones human cells use (inosine at the wobble place for
+    the eight I-read boxes, checked against Crick's rules).
+  - The signal peptide is found by a von Heijne rule: an h-region of at least 7, small residues
+    at −1 and −3. Preproinsulin gives 24. Sequons are N-X-S/T with X not Pro.
+  - The validation errors are clear: bad letters, introns without GU…AG or too short, a frame
+    that does not reach a stop codon, a `protein` that does not match the sequence, and a
+    premature stop codon more than 50 nt before the last junction (an NMD target).
+- **Rules** (`ExpressionState`, `step_problem` / `advance`, replayed in beat and `at` order by
+  `vidgen validate`). Each step needs what comes before it: splicing a transcript, export after
+  processing, translation in the cytosol, `target_er` only for a signal peptide before the
+  signal leaves the tunnel unbound, `glycosylate` only in the ER with a sequon that has reached
+  the OST, a chaperone that fits the compartment. In a cell, `cell_steps` expands each step into
+  the molecular steps it implies, so the same rules apply.
+- **Three layers.**
+  - No manim: `cellworld/expression.py` (the model and rules), `expression_stage.py` (the stage
+    in nucleotide slots: `Look`, `Pose`, `Clip` of captioned phases, `Builder`; the nucleus
+    steps), `expression_cyto.py` (ribosome, tRNAs, the tunnel, the chain path, SRP/Sec61, OST,
+    chaperones) and `expression_route.py` (`RoutePlanner` in µm for the cell scene).
+  - Drawing: `cell_draw/expression.py` (`ExpressionDrawing`, one mobject per look, made up front)
+    and `cell_draw/expression_route.py` (`RouteDrawing`, markers of a fixed screen size).
+  - Scenes: `scenes/molecule_gene.py` (the `GeneExpression` mixin, `StagePlayer`),
+    `scenes/cell_expression.py` (`CellExpression`, `RoutePlayer`) and `scenes/gene_actions.py`.
+- **Scale and numbers.** DNA and RNA are stretched about 6× against the proteins so that the
+  letters can be read, and the scene says *schematic: not to scale*. The window is 36 slots
+  (16:9) or 18 (9:16). The numbers drawn:
+  - a bubble of 13 bp and an RNA–DNA hybrid of 8 bp;
+  - capping at about 25 nt;
+  - a tunnel of 30 residues and the OST about 65 residues from the PTC;
+  - 12 A in the tail (about 200 in mammals);
+  - Glc₃Man₉GlcNAc₂ in SNFG symbols.
+- **Timing.** An action's length follows its content: `run_time_for` builds and caches the clip.
+  Elongation captions its first two cycles and then runs fast (at most 7 s). A short beat
+  squeezes the action, and `run_time` overrides the length.
+- **Speed.** Texts are cached as plain shapes rather than MarkupText copies. Captions are wrapped
+  by a character-width estimate. `StageFade` replaces `FadeIn` of the whole group.
+- **Public:** `vidgen.api` adds `GENE_CELL_STEPS`, `GENE_CHAPERONES`, `GENE_STEPS`,
+  `ExpressionState`, `Gene`, `GeneSpec`, `build_gene`, `parse_protein`, `signal_peptide_length`,
+  `gene_advance`, `gene_cell_advance`, `gene_cell_step_problem`, `gene_step_problem`,
+  `ExpressionStage`, `GeneRoutePlanner`, `gene_route_problem`, `ExpressionDrawing` and
+  `GeneRouteDrawing`.
+  - Config: the `gene` param (`id`, `name`, `product`, `species`, `sequence`, `introns`,
+    `protein`, `codons`, `signal_peptide`, `glycosylation`, `seed`, `start`, `codes`) and the 11
+    actions above.
+  - The Phase Q baseline frames match.
+- **Gaps:**
+  - A 9:16 close-up leaves vertical space unused.
+  - The cell-scene markers are schematic and move cargo in straight lines.
+  - Calnexin is drawn floating, not anchored in the membrane.
+  - Several steps in one short beat get squeezed (the guide advises one step per beat).
+  - Caption wrapping is an estimate.
+  - The Step 205 gaps remain: no `set_state` in a cell, the endocytosed vesicle is not an
+    object, and labels go stale.
+
+### 95.12 Signalling pathways: the `pathway` scene (Step 207)
+
+- **Where.** A scene type of its own (decided in §95.1): a pathway is a graph, not geometry.
+  Three layers again. No manim: `cellworld/pathway.py` (bands, node kinds, arc types, specs,
+  `build_pathway` with every rule, loops, the activity model and effects, the signal's waves, the
+  drug table), `cellworld/pathway_layout.py` (the band layout and routes) and
+  `cellworld/pathway_templates.py` (the three templates as specs). Drawing and runtime:
+  `scenes/pathway.py` (params, layout choice, glyphs, label placement, targets, reveal) and
+  `scenes/pathway_play.py` (the `PathwayPlay` mixin: what the actions draw). Actions:
+  `scenes/pathway_actions.py` (`signal`, `inhibit`, `knockout`, `drug`, `amplify`; the replay of
+  their order), and `focus` (`iso_actions.py`) now also moves the camera onto pathway targets.
+- **Shared names with the cell world.** Band labels come from the catalog's compartments and
+  membranes (`extracellular`, `plasma_membrane`, `cytosol`; `nucleoplasm` and the ER / mitochondrial
+  compartment names are aliases of their bands); gene symbols are checked with `names.check_gene`
+  (italic, the species' case) and protein labels with `check_protein` (a protein written like its
+  gene is refused where the case tells them apart), marks and sites with `check_modification`,
+  small-molecule labels typeset with `notation.chem_markup` (`PIP3` → PIP₃, `Ca2+`); `Gα_s` writes
+  a subscript.
+- **Notation** (SBGN PD / AF adapted): macromolecules as rounded boxes, complexes with cut corners,
+  simple chemicals as ellipses, genes as nucleic-acid features (square top, round bottom; italic
+  symbol), phenotypes as hexagons, drugs as pills; state variables as pills on the top edge (GDP /
+  GTP, pS133 = P on Ser133); arcs: activation (filled arrowhead), inhibition (T-bar), catalysis
+  (open circle), phosphorylation (a P disc on the arc), dephosphorylation (−P), binding (a dot),
+  translocation and expression (dashed), `indirect` (dashed). Inhibitory arcs are drawn in the
+  theme's accent colour.
+- **Rules** (`VidgenError` with the reason, did-you-mean for names): unknown nodes, kinds, arc
+  types, compartments, templates; self-arcs, duplicate ids or arcs; `effect` contradicting a type
+  that cannot flip; a GAP activating / a GEF inhibiting a GTPase or G protein; a phosphatase that
+  phosphorylates, a kinase that dephosphorylates, phosphorylation by an adaptor and the like;
+  catalysis from a non-enzyme; a gene acting other than by `expresses`, regulated other than by
+  `transcribes`; `transcribes` from a non-TF, to a non-gene, or across compartments (*add a
+  translocates arc*); `translocates` between different labels, within a band, across the plasma
+  membrane, or skipping the cytosol; `converts` between non-small-molecules; a drug node activating
+  without `role: activator`; arcs against a declared `role`; a site on an arc that is not a
+  (de)phosphorylation or on a residue the mark never goes on; places: each kind's bands with the
+  reason (a gene in the nucleus or the mitochondrion, a ligand outside, a receptor in the plasma
+  membrane or the ER, G proteins at the membrane…), known small molecules' compartments (cAMP in
+  the cytosol / nucleus, DAG / PIP₂ / PIP₃ in the membrane, IP₃ in the cytosol); states the kind
+  lacks. Loops not broken by a `feedback` arc (Tarjan's strongly connected components) are warned
+  about by `vidgen validate` (`validate_project`).
+- **Layout** (`pathway_layout`, deterministic, manim-free; units of the node sizes): the main axis
+  is the flow (LR: x, bands as columns; TB: y downwards, bands as rows). Ranks: a membrane band is
+  one rank (its nodes in a row along the membrane, arcs between them lateral); other bands are
+  layered by the longest path within the band over the arcs that are neither feedback nor close an
+  undeclared loop (a source pulled to just before its nearest successor); bands follow each other.
+  **Satellites** save ranks: a node nothing upstream activates acting on a node with other inputs
+  (PDE4 on cAMP, mTORC2 on Akt) and, left to right, an outcome after its node stand beside that
+  node in its rank (a block kept together; LR: the modifier below, clear of the state badges on
+  top). Long arcs get a dummy in each rank between; order by barycenter sweeps with blocks moving
+  whole, transposition elsewhere, the order with fewest crossings kept; cross positions by a
+  weighted isotonic fit (satellites pulled next to their node). Gaps: `rank_gap` within a band,
+  `band_gap` + pads between bands (the membranes are drawn there), more where an arc label must
+  fit (labels are placed later, in the scene). **Routes** cross each rank's slab straight along
+  the main axis (at the node's port, or the dummy's place) and change cross position only in the
+  empty gaps between ranks (cubic S-curves whose tangents run along the main axis stay within the
+  gap), so no route passes through a node (`route_hits` checks it; tests for the templates in both
+  directions and a crowded custom graph). Lateral arcs join neighbours straight; non-neighbours
+  bend into the gap after the row. Ports spread along a node's side, ordered by where the arc goes.
+- **Fitting.** Label sizes are measured once (Pango markup, two lines past 9 characters); for each
+  direction (the frame's own first: LR in landscape, TB in portrait) the largest text factor from
+  1.3× down to the readable size (`readable_size()` × 1.02, as lint measures words) at which the
+  layout fits the body is kept; the other direction wins only with text 12 % larger. At the readable
+  size a layout up to 3 % too large is scaled quietly; more is drawn smaller with a warning
+  (split the pathway or `remove` nodes). `edge_labels: auto` drops the arc labels when they would cost
+  more than 10 % of the text size (long LR pathways). Small texts (badges, labels, band names) are
+  72 % of the node size, never below readable.
+- **Labels kept clear.** Band names, arc labels, drug pills and amplification factors are placed
+  at the candidate spot (corners and edges of a band; around an arc's middle; round a node) that
+  covers the least: node boxes with their badges, marks, arrowheads, earlier labels (3× the cost:
+  text over text is a lint error), arc points, the safe area's edge; arc labels also prefer to stay
+  near their arc. Nodes with badges are made taller (and, top to bottom, wider) so the badges never
+  cover their names.
+- **The logic.** `signal_waves`: breadth first from the start, each step carrying a sign (the
+  target turns on, off, or was reached: the arc only flashes), so a double negative turns its
+  target on; feedback arcs fire after the rest; `to` follows the shortest activating, non-feedback
+  path; a path given node by node is checked arc by arc; knocked-out, drugged and held nodes stop
+  it. `activity`: a semi-quantitative steady state with the stimulus on — no activating input:
+  1; else the geometric mean of the activating inputs (2 % residue for a lost one when there are
+  several); divided by 1 + 3 × the active inhibitors; off nodes 0; feedback and loop-closing arcs
+  left out. `effects` compares before and after (↑ above +25 %, ↓ below −20 %, off below 0.03).
+  Checked against the textbook: PTEN loss raises PIP₃, Akt, Rheb, mTORC1 and lowers TSC2, GSK3β,
+  FOXO; a PI3K or mTORC2 block the reverse; a MEK block switches ERK, Elk-1, *FOS* off; RasGAP loss
+  raises Ras and the cascade; PDE loss raises cAMP to *PCK1*; no adenylyl cyclase, no cAMP.
+- **Drawing the actions** (`PathwayPlay`): every change is remembered for `until`. Things that
+  appear part-way (lit arcs, badges, crosses, pills, copies) are made invisible when built and
+  drawn by animations that keep them so until their turn (`Draw`, `Appear`): Manim adds an
+  animation's mobjects when the whole `Succession` starts. A label's colour flips quickly half-way
+  through its node's fill change (never mid-tone on mid-tone). Effects appear upstream first
+  (`LaggedStart` in topological order); GTPases go back to GDP when held or down, to GTP when up.
+  Known drugs (erlotinib, trametinib, vemurafenib, rapamycin, IBMX, H-89…) must name their target
+  (a word of the node's id, label or gene).
+- **Templates** (human nomenclature; Alberts ch. 15, Lodish ch. 15–16): `gpcr_camp_pka` (glucagon,
+  GCGR, Gαs, adenylyl cyclase, cAMP, PKA ⇢ nuclear PKA, CREB pSer133, *PCK1*, gluconeogenesis; PDE4,
+  PKA → PDE4 feedback), `rtk_ras_mapk` (EGF, EGFR, Grb2, SOS, Ras at the membrane, RasGAP, Raf, MEK,
+  ERK ⇢ nuclear ERK, Elk-1, *FOS*, proliferation; ERK ⊣ SOS feedback), `pi3k_akt` (growth factor,
+  RTK, PI3K, PIP₂ → PIP₃, PTEN, PDK1 pThr308, mTORC2 pSer473, Akt ⊣ TSC2 (GAP) ⊣ Rheb → mTORC1 →
+  cell growth, Akt ⊣ GSK3β pSer9, Akt ⊣ FOXO → *BCL2L11* → apoptosis).
+- **Public:** `vidgen.api` adds `cell_pathway` and `cell_pathway_layout` (the modules), `PATHWAY_BANDS`,
+  `PATHWAY_EDGE_TYPES`, `PATHWAY_NODE_KINDS`, `PATHWAY_TEMPLATES`, `Pathway`, `PathwaySpec`,
+  `build_pathway`. Config: the scene type `pathway` and the actions `signal`, `inhibit`,
+  `knockout`, `drug`, `amplify`; `focus` accepts pathway scenes. Nothing else changes (the Phase Q
+  baseline frames match).
+- **Gaps:** 16:9 holds about nine ranks at the readable size (the `pi3k_akt` template fills it);
+  arc labels are dropped in long left-to-right pathways; satellites are one modifier and one outcome
+  per node; a molecule is not carried between a `cell` and a `pathway` scene yet (§95.1's `carry:`);
+  amplification copies are glyphs without names.
+
+### 95.13 Cell cycle, division and energy: the `cell_cycle` and `metabolism` scenes (Step 208)
+
+- **Decision: two scene types, not actions on `cell`** (a deviation from §95.1's plan for 208).
+  The cycle is a diagram in time (a ring and plots), a division is a cell drawn large whose
+  chromosome count matters more than its µm scale, and the energy pathways are graphs and a
+  membrane in cross-section: none sits well in the cell world's camera. So `cell_cycle` (`mode:
+  cycle | mitosis | meiosis`) and `metabolism` (`process: glycolysis | link_reaction | tca | etc |
+  light_reactions`), with two actions, `advance` (both types) and `checkpoint` (`mode: cycle`).
+  The YAML stays short: one scene per picture, `advance: <target>, to: <point or stage>`.
+- **Three layers as before.** No manim: `cellworld/cycle.py` (typical hours, the M stages, the
+  restriction point at 60 % of G1, the checkpoints as regulator rows — nodes and arcs →/⊣ with P
+  or Ub marks — for pass and per arrest cause, `cycle_geometry`, the four cyclin–CDK level curves
+  as monotone cubics over control points, `CycleState` with `advance_problem`: G0 only from G1
+  before R, no passing an arrested checkpoint), `cellworld/division.py` (stages and their
+  captions, `stage_counts` per cell or nucleus, `check_spec`, and `plan_division`: keyframes of
+  items — chromatids as point lists with a colour per segment, so crossover segments swap — cell
+  outlines with the furrow and midbody bridge or the plant cell plate, envelopes, poles, fibres,
+  labels; every keyframe has every item, missing ones copied at opacity 0, so drawing is plain
+  interpolation) and `cellworld/energy.py` (metabolites and steps with enzymes, cofactors and
+  carbons; the two chains' components with what they take and give, protons pumped, photons and
+  reactions; H⁺ per ATP for c₈, c₁₄, c₁₀ rings; `check_setting` with the reasons; `tallies`,
+  `electron_path`, `chain_effects`). Drawing: `scenes/division_draw.py` (per-keyframe zoom, the
+  portrait rotation), `scenes/bio_draw.py` (measured text blocks, regulator rows, `driven`), the
+  scenes `scenes/cell_cycle.py` and `scenes/metabolism.py`, and `scenes/cycle_actions.py`.
+- **Science** (Alberts ch. 14 and 17; Morgan *The Cell Cycle*; Berg; Lehninger): the regulators
+  and counts listed in CONFIG; mitotic anaphase has 4n chromosomes per cell (separated sisters
+  count); meiosis I is reductional (2n → n, chromatids non-identical after crossing over), II
+  equational; one obligate chiasma per bivalent, at most two with interference (≥ 0.15 apart);
+  ETC pumps 4 + 4 + 2 H⁺ per NADH into the intermembrane space, 6 from FADH₂; the light reactions
+  6 H⁺ into the lumen per two electrons, O₂ counted in halves; ATP synthase's F₁ faces the N side.
+- **Drawing notes.** Manim draws only mobjects present when an animation starts, so every text
+  that will show (tally digits, centre labels, captions) is made at build time and shown by
+  opacity, and the scenes animate through `UpdateFromAlphaFunc`. In a portrait frame the chain's
+  membrane is folded back on itself (a crista or a thylakoid) and the division's spindle runs
+  down the frame; glycolysis with pyruvate oxidation snakes into two columns with the second's
+  labels stacked on its right.
+- **Validation** is replayed in beat and `at` order (`action_sequence_problems` on the scene
+  class): checkpoint arrests and their `until`, stage order, counts in `expect`, the gradient
+  before ATP synthase, the cycle's turns.
+- **Public:** `vidgen.api` adds the modules `cell_cycle_model`, `cell_division` and `cell_energy`.
+  Config: the scene types `cell_cycle`, `metabolism`; the actions `advance`, `checkpoint`.
+  Nothing else changes (the Phase Q baseline frames match).
+- **Gaps:** the cyclin curves are stylised (a.u.); meiosis is drawn in an animal cell only;
+  2n is at most 8; no non-disjunction or checkpoint failure pictures; the chains carry two
+  electrons per run (not a Q cycle animation); β-oxidation, gluconeogenesis and the Calvin cycle
+  are not drawn; the gallery shows meiosis and the citric acid cycle (the GIF budget is nearly
+  spent: about 27 KB left).
+
+### 95.14 Scientific accuracy lint and references (Step 209)
+
+- **Where the knowledge lives.** `vidgen.cellworld.accuracy` (no manim): text checks of narration
+  against textbook facts — `direction_claims` (nucleic acids made 3′→5′, a ribosome reading mRNA
+  3′→5′, proteins made C→N, kinesin to minus / dynein to plus, protons pumped into the matrix or
+  stroma, Na⁺ pumped in / K⁺ out), `location_claims` (the `PLACES` table: glycolysis, the citric
+  acid cycle, pyruvate oxidation, the respiratory chain, transcription, splicing, translation, the
+  Calvin cycle, the light reactions, replication, β-oxidation; eukaryotic facts skipped for a
+  prokaryote and in sentences about bacteria), `count_claims` (glycolysis net ATP / NADH /
+  pyruvate; NADH, FADH₂, CO₂, GTP per turn or per glucose; Na⁺ / K⁺ per pump cycle; H⁺ per NADH,
+  FADH₂ and complex; cells after mitosis / meiosis; stop codons, human chromosomes, bp per turn and
+  per nucleosome), `placement_claims` (a cell scene's things said to be where the scene has none),
+  `pathway_claims` (an arc's sign or (de)phosphorylation against "A activates B" / "B is
+  inhibited by A"), `naming_claims` (gene vs protein forms per species with `protein_form`, wrong
+  case, italics in markup), the transport words (`says_active`, `says_passive`, `transport_mode`).
+  **False positives are avoided by narrowness**: text is normalised (primes, arrows, "five
+  prime", sub/superscripts), split into sentences and `;` clauses; a sentence with a negation, a
+  contrast ("but", "rather than", "whereas") or a question is skipped; each claim needs its
+  context words (a synthesis verb and a nucleic acid; a protein word and a synthesis verb; the
+  pump named; "per turn" or "per glucose" accepted either way when unsaid), and contexts that make
+  a direction right (the template, proofreading, the lagging strand overall, kinesin-14, an
+  anticodon written 3′-…-5′) exempt it. Lint run over every example and the Phase U scratch
+  projects (about 260 scenes): 0 findings.
+- **The rules** (`vidgen.lint.science_rule`, scene scope, default warning, each a `RuleConfig` in
+  `LintRules`, after `music_check` in `LINT_RULES`): `science_scale` (`factor` 1.5: a `cell`
+  object's size or width outside its kind's `size_range` / `WIDTH_RANGES` by the factor, the cell
+  outside `CELL_TYPICAL`, only while `scale_bar` and not `not_to_scale`; `MOST_PER_CELL` counts of
+  nuclei, centrosomes, nucleoli, vacuoles, nucleoids always), `science_location`,
+  `science_direction`, `science_energy` (molecule scenes: a beat's `transport` targets all passive
+  but called active, all pumps but called passive; "active transport" with no pump, coupled
+  carrier or ATP in a molecule or cell scene; cell scenes with motors exempt), `science_naming`
+  (declared genes: molecule `gene`, the `gene:` param, pathway nodes' genes; texts: title, molecule
+  labels with markup, cell labels, callout labels, narration), `science_pathway`,
+  `science_counts`. `science_issues(project, scene_id, rules)` validates the scene's params through
+  its registered type (no render; a world is rebuilt from the lru cache) and the runner fills
+  `SceneContext.science` once per scene. Hard impossibilities stay validation errors; the lint
+  takes judgements and words. Decided: config-level, not pixels — the drawn-exaggeration check
+  planned in §95.1 (a glyph larger than its thing at LOD) is left out: the LOD minimum sizes are
+  deliberate (a ribosome dot keeps 0.8 px) and would only add noise.
+- **`not_to_scale: true`** on a `cell` scene: a pinned "not to scale" note on a plate in the body's
+  lower right (part of the `cell` target's group) and no `science_scale` size findings.
+- **Narration–picture rules (Phase P) know the new scenes.** `SHOWING_ACTIONS` gains the cell
+  biology actions (`zoom_to`, `advance`, `checkpoint`, `signal`, `knockout`, `drug`, `inhibit`,
+  `amplify`, the gene steps, the transport actions, `motor_walk`, `endocytosis`, `exocytosis`); an
+  action without a `label` of its own shows its single target's on-screen name, from the scene
+  type's optional classmethod `target_text(params, name)` (`cell`: an object's label or kind name;
+  `pathway`: a node's plain label), so `said_before_shown` narrows a label's arrival to that action.
+- **References** (`vidgen.references`, no manim): `ReferenceConfig` (`label` ≤ 120 characters, at
+  least one of `doi` / `pmid` / `isbn` / `url`, `id`), `FigureCreditConfig` (`text`, `license`, the
+  same identifiers; a string is its text), checked offline: DOI `10.<4–9 digits>/<suffix>`
+  (prefixes `doi:`, `https://doi.org/` taken off), PMID 1–8 digits, ISBN-10/13 check digits, http(s)
+  URL with a dotted host. No network: no `vidgen refs check` (decided: resolving DOIs is not
+  offline-safe and adds nothing the format check and the author's copy-paste do not). Scene keys
+  `references` (≤ 12) and `figure_credit`; beat key `cite` (ids or 1-based places; checked);
+  video key `citations: {show: footer | marker | card | none, card_seconds: 4, description: true}`.
+  Numbers are video-wide in order of first appearance (`video_references`; the same identifier
+  keeps its number). Docs and tests use only clearly fake placeholders in valid formats
+  (`10.0000/example`, PMID `12345678`, ISBN `978-0-00-000000-2`).
+- **On screen** (`vidgen/citations.py`, core: not a built-in scene module): a `Citations` overlay (not a registered type: no
+  `overlays:` entry needed) that `overlays.scene_overlays` adds for each scene with references or a
+  credit; `Scene._build_overlays` builds overlays when any scene has citations. States: the numbers
+  of the beat in effect (its `cite`s; all of the scene's when no beat cites; hidden in a beat that
+  cites nothing while others do), or the card for the scene's last `min(card_seconds, duration/2)`;
+  each look built once (readable caption size, a plate in the background colour at 0.88). The
+  footer and the marker reserve their room (`default_reserve`), so layouts keep clear; the card
+  lies over the end (`lint_skip = ("overlay_overlap",)`).
+- **Description**: `write_chapter_list` writes `<output>_chapters.txt` when there are chapters or
+  citations; `chapter_export.write_youtube_list(path, chapters, references)` puts the chapter list,
+  a blank line, then `description_text` (`References` with `[n] label https://doi.org/… / PMID: … /
+  ISBN …`, `Figure credits`). No references: byte-identical to before.
+- **Compatibility**: the fingerprint leaves out `citations`, the scene's `references` /
+  `figure_credit` and beats' `cite`, and adds a `citations` entry only when the scene or the next
+  one (crossfades draw the next scene's overlays) has citations: projects without references keep
+  every fingerprint and frame (Phase Q baseline: 31 frames, max difference 0).
+- **Public:** `vidgen.api` adds the modules `cell_accuracy` (`vidgen.cellworld.accuracy`) and
+  `video_references` (`vidgen.references`). Config: `citations`, scene `references` /
+  `figure_credit`, beat `cite`, `cell` param `not_to_scale`, the seven `science_*` lint rules.
+- **Gaps:** the text checks are English only; claims spread over two sentences, or behind a comma,
+  are not read; pathway names are matched by label and gene only (not "protein kinase A" for PKA);
+  molecule scenes have no `target_text`; the citations reserve room even in beats that show none
+  (a scene's layout cannot change between beats); the metabolism scene writes enzyme names in
+  italics (a stylistic choice of Step 208, not a gene symbol; left for Step 211's review).
+
+### 95.15 Example, guide, cookbook and gallery (Step 210)
+
+- **The example** `examples/gene-to-secreted-protein` (README with the scene table and checks):
+  eight scenes, about 3:34 with Kokoro (`af_heart`, speed 0.85), the `discovery` bed at −4 dB,
+  karaoke captions, `terms:` (messenger RNA, signal peptide, glycan), `citations: {show: marker}`,
+  a 9:16 variant `short`. **Decided: α1-antitrypsin, not insulin** — constitutively secreted and
+  N-glycosylated (three N-glycans), so every step shown is true of it; insulin (not glycosylated;
+  proinsulin cut by PC1/3, PC2 and carboxypeptidase E in regulated granules) would need other
+  scenes. The `molecule` close-ups use a generated model gene, said so in the narration (a real
+  418-residue precursor does not fit a close-up). The `pathway` is built from nodes and edges
+  (IL-6 → IL-6R–gp130 → JAK1 → STAT3 (pTyr705) ⇒ nucleus → *SERPINA1*, the transcription arc
+  `indirect`). References only where the identifier is known: Blobel & Dobberstein 1975 by DOI,
+  Alberts 6th ed. by ISBN (check digit verified).
+- **Guide topic `biology`** (aliases `cell-biology`, `science`, `lecture`, `research`): choosing the
+  scene, accuracy rules, naming, references, pacing dense content, one snippet; the `scenes`
+  topic points to it. **Cookbook** `docs/COOKBOOK-CELL-BIOLOGY.md` (linked from the README, the
+  cookbook, the guide and the gallery), its pattern validated by `tests/test_docs.py`.
+- **Gallery.** `GROUP_SECTIONS` shows the guide groups `signalling pathways`, `cell cycle and
+  division` and `energy metabolism` in the `cell biology` section, so the five types share one
+  "Cell biology" section; five showcases end it (`plant_cell`, `sodium_pump`, `mek_inhibitor`,
+  `mitosis`, `respiratory_chain`; one per type); `SECTION_NOTES` links the example and the
+  cookbook; `SECTION_FOOTERS` gives a showcase page its section's further reading (the cartoon
+  sections keep theirs). **Budget: optimised, not raised** — stills are saved as 256-colour palette
+  PNGs (median cut, no dithering; `STILL_COLORS`): 3.0 → 1.2 MB for the 100 committed stills, mean
+  error under 1/255 per channel; the gallery is 9.4 MB of its 10 MB with every GIF ≤ 150 KB (the
+  mitosis showcase starts at metaphase to fit).
+- **Fixes found while making it.** The cell route's transcription caption no longer says "(in a
+  molecule scene each step is shown up close)" (a viewer-facing caption). The cell world's
+  pieces (`drawing.tissue`, `drawing.cell`, each object group), a membrane event's overlay and a
+  gene close-up's stage are marked `scenery`; `introspect` now marks a *group* scenery when it is,
+  or holds only scenery pieces (empty groups aside), so `off_frame` no longer reports a zoomed
+  view's cropped world. The close-up's "schematic: not to scale" is drawn at the readable size
+  inside the safe area (it was scaled 0.85 and offset by its width × 0.85 twice), beside the
+  legend when it fits in 36 % of the width, else a line above it (9:16, where the protein's
+  readout takes the width).
+- **Public:** no new `vidgen.api` names. Config: none (a guide topic, showcases). `gallery`:
+  `GROUP_SECTIONS`, `SECTION_FOOTERS`, `DEFAULT_FOOTER`, `STILL_COLORS`.
+- **Gaps (for Step 211):** the exocytosis step captions name the neuronal SNAREs (the example turns
+  them off; the to-Golgi caption now says "some proteins also get O-glycans"); the 16:9
+  pathway leaves much of the frame empty; a hepatocyte is drawn as the typical animal cell.
+
+### 95.16 Review of Phase U (Step 211)
+
+- **Scientific accuracy pass** (library, templates, lint facts, example). Checked against the
+  textbook account: the three pathway templates (GPCR–cAMP–PKA with PDE4 feedback, RTK–Ras–MAPK
+  with RasGAP and ERK ⊣ SOS, PI3K–Akt: PTEN dephosphorylating PIP₃, PDK1 Thr308 / mTORC2 Ser473
+  activating, Akt ⊣ TSC2 ⊣ Rheb → mTORC1, Akt ⊣ GSK3β (Ser9) and ⊣ FOXO); an inhibitory
+  phosphorylation is drawn as a T-bar with a P on it and played as switching its target off
+  (GSK3β pS9 dimmed) — tested. The process captions (transcription, capping, splicing,
+  polyadenylation, export, translation, SRP/Sec61, OST, chaperones, COPII/Golgi/TGN, endocytosis,
+  pump cycles, the action potential), the energy counts (glycolysis, TCA, 10 / 6 H⁺ per NADH /
+  FADH₂, the light reactions' 6 H⁺, ½ O₂ and 1 NADPH per two electrons) and the accuracy lint's
+  facts are correct. **Fixed:** the exocytosis caption named the neuronal SNAREs for every cell
+  (now `snares: generic` by default, `constitutive` — a VAMP, syntaxin-4, SNAP-23 —, `neuronal`
+  with Ca²⁺ on synaptotagmin; decided: a cell-type option on the action, not a cell kind, since a
+  `cell` is one animal cell whatever its tissue); enzymes in `metabolism` were italic (proteins are
+  roman); calnexin floated in the lumen (now its lectin domain on a stalk from its helix in the ER
+  membrane when the view is tall enough to show both — a wide close-up frames the globule as
+  before, the stalk leaving the view); after termination on the ER the large subunit rose
+  through the membrane (now the subunits part in the cytosol); an ion channel was named "Ion
+  channel" (now "Na⁺ channel").
+- **Frame use.** `molecule`: three or more membrane proteins go on several rows whenever that
+  frames them larger (it was tall frames only), so a wide frame narrowed by the action-potential
+  panel draws them larger; in a tall frame the plot spans the panel, the concentrations under it
+  (they overlapped). A gene close-up decides wide or tall by the **frame** (with a 9:16 title,
+  captions and karaoke its view could be wider than tall and took the 36-slot wide layout) and
+  shows 15 slots across in a tall frame (was 18). A cytosolic vesicle within 0.6 µm of the
+  plasma membrane, viewed at the complex level, is framed with the membrane it would fuse with
+  (from its inner edge to 160 nm outside, by the body's shape) instead of a patch of its own
+  membrane; the example puts its vesicle under the top of the cell so the membrane runs across
+  16:9 and 9:16 alike. `pathway`: text grows up to 1.9× (was 1.3×) and a pathway bound by the
+  width spreads its ranks' nodes (LR) or its ranks (TB) up to 3× to use the height (`SPREAD`).
+  `metabolism`: a pathway in columns grows up to 1.6× to fill (`GROW`); the chain's tallies sit
+  low, clear of ATP synthase's name.
+- **Captions.** Step captions are never below the readable size (they were scaled to fit two
+  reserved lines); a gene close-up reserves three lines in 16:9 and four in 9:16. `notes` on every
+  process action is `auto` (default: the full caption in a wide frame, its first clause in a tall
+  one), `full` / `true`, `short`, `false`; `vidgen.cellworld.captions.short_note` cuts at the first
+  `: ` / `; ` / ` — ` outside parentheses and markup (a first clause under 32 characters takes the
+  next). **Decided:** shortening by rule, not a second hand-written text per caption — every
+  caption is written statement-first, so its first clause is the statement and the rest the
+  detail the narration or the 16:9 version carries (one caption reworded to fit: the OST reach).
+- **Gene symbols in captions.** Scene types may define `gene_symbols(params)` (`cell`: its gene's
+  `name`; `molecule`: that and its molecules' `gene`; `pathway`: its gene nodes). The captions
+  overlay (option `genes: true`) collects them over the video and sets them in italics (Manim
+  `t2s`) where the narration writes them as whole words, case-sensitive, except before "protein",
+  "kinase", "receptor"… (`names.gene_spans`, `PROTEIN_WORDS`). **Decided:** video-wide (the
+  example names *SERPINA1* in the tissue scene, declared in later scenes) and opt-out, not
+  `terms:` (a term is a colour, not a style). Scenes without declared genes build the same texts
+  as before (the Phase Q baseline is unchanged).
+- **Labels.** LR pathway band names: the membrane's at the bottom first and a word's room between
+  names; molecule rows: a side name a row's other names cover moves to the row's free end;
+  `metabolism` P/N-side names take the place (and wrap) covering the least; the cell scene's
+  label rows (9:16) untangle: a label an outer row's leader crosses steps aside, or changes rows
+  with it when both are alone in their rows; Sec61's name stands beside the channel in the
+  membrane (the chain threads its middle).
+- **Gaps closed from earlier steps:** calnexin anchored; cell-scene products (mRNAs, COPII and
+  secretory vesicles) travel on gentle curves (`expression_route.curve`); a motor's cargo vesicle
+  is placed wholly in the cytosol (it overlapped the nuclear envelope); `scenes/molecule.py`
+  split (1,825 → 1,454 lines; the process runtime is `scenes/molecule_runtime.py`, a mixin).
+- **Public:** `vidgen.api` adds `CellNoteMode`, `cell_note_text`, `gene_spans`. Config: process
+  actions' `notes` takes `auto | full | short | false` (`true` = full); `exocytosis` `snares`;
+  captions overlay `genes`; scene-type hook `gene_symbols(params)`.
+- **Gaps:** the `cell` scene has no `set_state`; an endocytosed vesicle is not a world object;
+  zoomed-view part labels go stale after a process (`labels: false` advised); molecule glyphs'
+  inner letters (ATP synthase's α/β, flow labels) are below the readable size (pre-existing lint
+  findings in the gallery's `synthase` and the showcases); a 9:16 close-up of a horizontal strip
+  (gene, membrane) still leaves height unused; gallery media of the cell-biology section were
+  not regenerated (pathway and metabolism stills differ a little from a render now).

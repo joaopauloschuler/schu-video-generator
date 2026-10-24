@@ -1,0 +1,13 @@
+title: A Drug in the MAPK Pathway
+voice: {provider: kokoro, voice: af_heart}
+scenes:
+  - id: mek_inhibitor
+    type: pathway
+    params:
+      title: "Blocking MEK"
+      template: rtk_ras_mapk             # EGF → EGFR → Grb2/SOS → Ras → Raf → MEK → ERK → Elk-1 → FOS
+    beats:
+      - text: "Growth factor signals pass from Ras through Raf, MEK and ERK to the nucleus."
+        actions: [{signal: egf, at: "@signals"}]
+      - text: "Trametinib blocks MEK, and everything downstream falls."
+        actions: [{drug: mek, name: trametinib, at: "@blocks"}]

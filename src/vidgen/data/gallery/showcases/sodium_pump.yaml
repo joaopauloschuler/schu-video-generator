@@ -1,0 +1,13 @@
+title: The Sodium Pump
+voice: {provider: kokoro, voice: af_heart}
+scenes:
+  - id: sodium_pump
+    type: molecule
+    params:
+      title: "The sodium–potassium pump"
+      membrane: plasma                   # extracellular above, cytosol below
+      solutes: [Na+, K+]                 # typical concentrations on each side
+      molecules: [{kind: na_k_atpase, id: pump}]
+    beats:
+      - text: "Each cycle the pump spends one ATP to move three sodium ions out and two potassium ions in, against their gradients."
+        actions: [{transport: pump, at: "@spends"}]

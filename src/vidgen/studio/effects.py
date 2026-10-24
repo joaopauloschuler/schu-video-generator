@@ -33,6 +33,87 @@ GATE_SOFT = 0.4
 #: Threads a filter sweep filters its copies in (each a full-length FFT; at most four at once,
 #: so memory stays a few copies of the track).
 SWEEP_THREADS = max(1, min(4, os.cpu_count() or 1))
+#: Memory the copies under way may take together (bytes): a 50-second piece's four copies fit
+#: (one channel each: 40 MB, 100 MB on a quick FFT length), a 5-minute piece's (240 MB) run one
+#: at a time.
+SWEEP_MEMORY = 400 << 20
+#: numpy's FFT of a length with a prime factor above this is slower than the same filter on a
+#: quick length twice as long (measured on 2.5 M samples: a factor 601 1.4 s against 0.8 s,
+#: 1607 2.7 s, 307 0.73 s against 0.77 s); many tempos give one (112 BPM over 24 bars is
+#: 2⁹·3·1607 samples), and its memory grows too (DESIGN.md §94.19).
+SLOW_FFT_PRIME = 500
+#: Buffers shorter than this are filtered at their own length whatever it is (quick anyway).
+FAST_FFT_MIN = 1 << 16
+
+
+def slow_fft_length(n: int) -> bool:
+    """Whether numpy's FFT of length ``n`` is slow: a prime factor above :data:`SLOW_FFT_PRIME`."""
+    p = 2
+    while p <= SLOW_FFT_PRIME and n > 1:
+        while n % p == 0:
+            n //= p
+        p += 1
+    return n > 1
+
+
+def fast_fft_length(n: int) -> int:
+    """The smallest length ``>= n`` of the form 2^a·3^b·5^c (numpy's FFT is quickest there)."""
+    best = 1 << max(n - 1, 0).bit_length()
+    p5 = 1
+    while p5 < best:
+        p35 = p5
+        while p35 < best:
+            q = p35
+            while q < n:
+                q *= 2
+            best = min(best, q)
+            p35 *= 3
+        p5 *= 5
+    return best
+
+
+class CircularFFT:
+    """Circular (around the buffer) filtering of a buffer of ``n`` samples: numpy's FFT of
+    length ``n`` — or, when ``fast`` and ``n`` is a slow length (:func:`slow_fft_length`), the
+    same circular convolution on a quick length ``m``: the buffer zero-padded to ``m``,
+    transformed, and the result folded back around ``n`` (what spilled past the end added at the
+    start, what spilled before the start at the end). The two agree to about 1e-13 of the
+    loudest sample (the filters' responses die out long before ``m - n``); ``fast`` is the
+    studio's choice (DESIGN.md §94.19), never a video's: videos and beds keep the exact
+    samples. ``spans``: how many ``n`` the linear result reaches (2 for a convolution of two
+    buffers of ``n``)."""
+
+    def __init__(self, n: int, fast: bool = False, spans: int = 1) -> None:
+        self.n = n
+        self.spans = spans
+        self.m = fast_fft_length((spans + 1) * n) if fast and n >= FAST_FFT_MIN and slow_fft_length(n) else n
+        # samples at the end of the long result that are before the start (a zero-phase
+        # filter's response reaches both ways)
+        self.before = (self.m - spans * n) // 2 if self.m != n else 0
+
+    @property
+    def folded(self) -> bool:
+        return self.m != self.n
+
+    def freqs(self) -> np.ndarray:
+        return np.fft.rfftfreq(self.m, 1 / RATE)
+
+    def rfft(self, x: np.ndarray, axis: int = 0) -> np.ndarray:
+        return np.fft.rfft(x, self.m, axis=axis) if self.folded else np.fft.rfft(x, axis=axis)
+
+    def irfft(self, spectrum: np.ndarray, axis: int = 0) -> np.ndarray:
+        """The ``n`` samples of the circular result (``axis`` 0 only when folded)."""
+        if not self.folded:
+            return np.fft.irfft(spectrum, self.n, axis=axis)
+        z = np.fft.irfft(spectrum, self.m, axis=0)
+        n, k = self.n, self.before
+        out = np.zeros((n, *z.shape[1:]))
+        out[n - k :] += z[self.m - k :]
+        ahead = z[: self.m - k]
+        for start in range(0, len(ahead), n):
+            part = ahead[start : start + n]
+            out[: len(part)] += part
+        return out
 
 
 @dataclass(frozen=True)
@@ -282,37 +363,49 @@ def smooth(x: np.ndarray, seconds: float, wrap: bool) -> np.ndarray:
     return (total[width : width + len(x)] - total[: len(x)]) / width
 
 
-def swept_filter(x: np.ndarray, cutoff: np.ndarray, kind: str) -> np.ndarray:
+def swept_filter(x: np.ndarray, cutoff: np.ndarray, kind: str, fast: bool = False) -> np.ndarray:
     """Stereo ``x`` through a gentle (second-order, zero-phase) low- or high-pass whose cutoff
     follows ``cutoff`` (Hz per sample): the sound filtered at cutoffs half an octave apart,
-    cross-faded along the curve (circular FFT over the whole buffer)."""
+    cross-faded along the curve (circular FFT over the whole buffer; ``fast``: see
+    :class:`CircularFFT`)."""
     response = _lowpass if kind == "lowpass" else _highpass
-    spectrum = np.fft.rfft(x, axis=0)
-    freqs = np.fft.rfftfreq(len(x), 1 / RATE)
+    fft = CircularFFT(len(x), fast)
+    channels = range(x.shape[1])
+    # channel by channel (numpy's FFT along an axis is each column's FFT, to the bit): half the
+    # memory of a stereo transform at a time (Step 201)
+    spectra = [fft.rfft(x[:, c]) for c in channels]
+    freqs = fft.freqs()
     lo, hi = float(cutoff.min()), float(cutoff.max())
     if hi / lo < 1.01:
-        return np.fft.irfft(spectrum * response(freqs, lo, 2)[:, None], len(x), axis=0)
+        gain = response(freqs, lo, 2)
+        return np.stack([fft.irfft(spectra[c] * gain) for c in channels], axis=1)
     count = math.ceil(2 * math.log2(hi / lo)) + 1
     position = np.log(cutoff / lo) / math.log(hi / lo) * (count - 1)
     cutoffs = np.geomspace(lo, hi, count)
 
-    def copy(j: int) -> tuple[int, np.ndarray] | None:
-        """The sound at cutoff ``j`` times its weight, where the weight is not 0 (from sample a)."""
+    def copy(task: tuple[int, int]) -> tuple[int, int, np.ndarray] | None:
+        """Channel ``c`` of the sound at cutoff ``j`` times its weight, where the weight is not
+        0 (from sample a)."""
+        j, c = task
         near = np.flatnonzero(np.abs(position - j) < 1)
         if not len(near):
             return None
         a, b = int(near[0]), int(near[-1]) + 1
         weight = np.clip(1 - np.abs(position[a:b] - j), 0.0, 1.0)
-        return a, np.fft.irfft(spectrum * response(freqs, cutoffs[j], 2)[:, None], len(x), axis=0)[a:b] * weight[:, None]
+        return a, c, fft.irfft(spectra[c] * response(freqs, cutoffs[j], 2))[a:b] * weight
 
     out = np.zeros_like(x)
-    # the copies are independent full-length FFTs: in threads (numpy's FFT releases the GIL), summed
-    # in order, so the result is the same to the bit as one after the other
-    with ThreadPoolExecutor(max_workers=min(SWEEP_THREADS, count)) as pool:
-        for found in pool.map(copy, range(count)):
+    # the copies are independent full-length FFTs: in threads (numpy's FFT releases the GIL), each
+    # channel's summed in order, so the result is the same to the bit as one after the other;
+    # fewer threads for a long piece, so the copies under way stay within SWEEP_MEMORY (Step 201:
+    # a 5-minute piece's four stereo copies alone took 1.8 GB)
+    per_copy = (fft.m // 2 + 1) * 16 + fft.m * 8 + (len(x) * 8 if fft.folded else 0)
+    threads = max(1, min(SWEEP_THREADS, count * len(channels), SWEEP_MEMORY // per_copy))
+    with ThreadPoolExecutor(max_workers=threads) as pool:
+        for found in pool.map(copy, [(j, c) for j in range(count) for c in channels]):
             if found is not None:
-                a, part = found
-                out[a : a + len(part)] += part
+                a, c, part = found
+                out[a : a + len(part), c] += part
     return out
 
 
@@ -330,16 +423,20 @@ def echo(x: np.ndarray, e: Echo, beat: int, wrap: bool) -> np.ndarray:
     return out
 
 
-def reverb(x: np.ndarray, rv: Reverb, wrap: bool, seed: str) -> np.ndarray:
+def reverb(x: np.ndarray, rv: Reverb, wrap: bool, seed: str, fast: bool = False) -> np.ndarray:
     """``x`` plus a reverb tail: each side convolved with its own decaying noise (unit energy,
     so the tail's level is ``mix`` of the sound's), low-passed at ``tone`` and high-passed at
-    120 Hz (no boom); circular around a loop, else the tail is cut at the buffer's end."""
+    120 Hz (no boom); circular around a loop, else the tail is cut at the buffer's end
+    (``fast``: see :class:`CircularFFT`)."""
     n = max(int(rv.size * RATE), 1)
     pre = int(rv.predelay * RATE)
     total = len(x) if wrap else len(x) + n + pre
     t = np.arange(n) / RATE
     envelope = np.exp(-6.91 * t / rv.size) * (1 - np.exp(-t / 0.005))
-    freqs = np.fft.rfftfreq(total, 1 / RATE)
+    # around a loop the sound and its response both fill the buffer, so their product reaches
+    # twice its length before it is folded back
+    fft = CircularFFT(total, fast, spans=2 if wrap else 1)
+    freqs = fft.freqs()
     shape = _lowpass(freqs, rv.tone, 2) * _highpass(freqs, 120.0, 2)
     rng = np.random.default_rng(zlib.crc32(seed.encode("utf-8")))
     out = x.copy()
@@ -348,7 +445,10 @@ def reverb(x: np.ndarray, rv: Reverb, wrap: bool, seed: str) -> np.ndarray:
         tail /= math.sqrt(float(np.sum(tail**2)))
         response = np.zeros(total)
         _circular_add(response, pre, tail)
-        wet = np.fft.irfft(np.fft.rfft(x[:, c], total) * np.fft.rfft(response) * shape, total)
+        if fft.folded:
+            wet = fft.irfft(fft.rfft(x[:, c]) * fft.rfft(response) * shape)
+        else:
+            wet = np.fft.irfft(np.fft.rfft(x[:, c], total) * np.fft.rfft(response) * shape, total)
         out[:, c] += rv.mix * wet[: len(x)]
     return out
 

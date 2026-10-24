@@ -34,6 +34,7 @@ from pydantic import (
 
 from vidgen.errors import Problem, VidgenError
 from vidgen.languages import LANGUAGE_TAG_PATTERN, normalize_language
+from vidgen.references import cite_index, normal_doi, normal_isbn, normal_pmid, normal_url
 from vidgen.voicesounds import VoiceSound, take_out_sounds
 from vidgen.word_anchors import ACTION_ANCHOR_PATTERN, is_word_anchor, parse_word_anchor, time_beat_anchors, time_config_anchors
 
@@ -801,6 +802,13 @@ LINT_RULES: tuple[str, ...] = (
     "unsaid_reveal",
     "iso_labels",
     "music_check",
+    "science_scale",
+    "science_location",
+    "science_direction",
+    "science_energy",
+    "science_naming",
+    "science_pathway",
+    "science_counts",
 )
 RuleName = Literal[
     "off_frame",
@@ -836,6 +844,13 @@ RuleName = Literal[
     "unsaid_reveal",
     "iso_labels",
     "music_check",
+    "science_scale",
+    "science_location",
+    "science_direction",
+    "science_energy",
+    "science_naming",
+    "science_pathway",
+    "science_counts",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1059,6 +1074,37 @@ class MusicCheckRule(RuleConfig):
     """The check's topics reported (what matters under a voice; add key, sections or tempo for the musical ones)."""
 
 
+class ScienceScaleRule(RuleConfig):
+    """``science_scale``: on a cell scene with a scale bar and without not_to_scale, an object or the cell sized far outside its textbook range; counts of one-per-cell structures far off (DESIGN.md §95.14)."""
+
+    factor: float = Field(default=1.5, ge=1.0, le=20.0)
+    """How far outside the textbook range a size must be to be reported (1.5: above 1.5 × its largest or below its smallest / 1.5)."""
+
+
+class ScienceLocationRule(RuleConfig):
+    """``science_location``: narration placing a process or a thing where it never is (glycolysis in the mitochondria, translation in the nucleus) or where the cell scene does not show it (DESIGN.md §95.14)."""
+
+
+class ScienceDirectionRule(RuleConfig):
+    """``science_direction``: narration giving a wrong direction: RNA or DNA made 3′ to 5′, a ribosome reading mRNA 3′ to 5′, a protein made C to N, kinesin to the minus end, dynein to the plus end, protons pumped into the matrix or stroma, Na⁺ pumped in or K⁺ out (DESIGN.md §95.14)."""
+
+
+class ScienceEnergyRule(RuleConfig):
+    """``science_energy``: narration calling transport active (or uphill) where the picture shows passive transport, or active transport in a scene that shows no energy source (DESIGN.md §95.14)."""
+
+
+class ScienceNamingRule(RuleConfig):
+    """``science_naming``: a scene's gene written as its protein or the other way round, in the wrong case for the species, or a gene in a label without italics (DESIGN.md §95.14)."""
+
+
+class SciencePathwayRule(RuleConfig):
+    """``science_pathway``: narration saying a pathway node activates another where the scene's arc inhibits it, or the other way round; phosphorylates where it dephosphorylates (DESIGN.md §95.14)."""
+
+
+class ScienceCountsRule(RuleConfig):
+    """``science_counts``: a number in the narration that contradicts the textbook (net 4 ATP from glycolysis, 2 NADH per turn of the citric acid cycle, 2 Na⁺ out per pump cycle…) (DESIGN.md §95.14)."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1213,6 +1259,20 @@ class LintRules(_Strict):
     """An iso_diagram label over a block it does not name, over another label or a connector, or far from what it names (default: warning)."""
     music_check: MusicCheckRule = Field(default_factory=MusicCheckRule)
     """A project piece the video plays that `vidgen music check` finds hard on the voice: its fixes (default: warning; its notes: info)."""
+    science_scale: ScienceScaleRule = Field(default_factory=ScienceScaleRule)
+    """A cell scene with a scale bar drawing something far outside its real size range, or too many of a one-per-cell structure (default: warning)."""
+    science_location: ScienceLocationRule = Field(default_factory=ScienceLocationRule)
+    """Narration placing a process or a thing where it never is, or where the cell scene does not show it (default: warning)."""
+    science_direction: ScienceDirectionRule = Field(default_factory=ScienceDirectionRule)
+    """Narration giving a wrong direction (5′/3′, N→C, motors, pumps) (default: warning)."""
+    science_energy: ScienceEnergyRule = Field(default_factory=ScienceEnergyRule)
+    """Narration calling passive transport active, or active transport shown without an energy source (default: warning)."""
+    science_naming: ScienceNamingRule = Field(default_factory=ScienceNamingRule)
+    """A scene's gene and protein names mixed up, in the wrong case for the species, or a gene without italics (default: warning)."""
+    science_pathway: SciencePathwayRule = Field(default_factory=SciencePathwayRule)
+    """Narration contradicting a pathway arc's effect (default: warning)."""
+    science_counts: ScienceCountsRule = Field(default_factory=ScienceCountsRule)
+    """A number in the narration contradicting the textbook (default: warning)."""
 
 
 class LintConfig(_Strict):
@@ -2031,6 +2091,81 @@ class ChapterConfig(_Strict):
     """Its number as shown (1, or text such as "Part II"); default its position among the chapters."""
 
 
+class _SourceIds(_Strict):
+    """The identifiers a reference or a figure credit may give (checked offline, never looked up)."""
+
+    doi: str | None = None
+    """A DOI (10.1038/…; a doi: or https://doi.org/ prefix is taken off)."""
+    pmid: str | None = None
+    """A PubMed ID (digits; a PMID: prefix is taken off)."""
+    isbn: str | None = None
+    """An ISBN-10 or ISBN-13 (hyphens allowed; its check digit is checked)."""
+    url: str | None = None
+    """A web address (http:// or https://)."""
+
+    @field_validator("doi")
+    @classmethod
+    def _doi(cls, value: str | None) -> str | None:
+        return None if value is None else normal_doi(value)
+
+    @field_validator("pmid", mode="before")
+    @classmethod
+    def _pmid(cls, value: Any) -> str | None:
+        return None if value is None else normal_pmid(value)
+
+    @field_validator("isbn", mode="before")
+    @classmethod
+    def _isbn(cls, value: Any) -> str | None:
+        return None if value is None else normal_isbn(value)
+
+    @field_validator("url")
+    @classmethod
+    def _url(cls, value: str | None) -> str | None:
+        return None if value is None else normal_url(value)
+
+
+class ReferenceConfig(_SourceIds):
+    """A scene's reference (DESIGN.md §95.14): ``{label, doi | pmid | isbn | url, id}``; never
+    invent one: copy the identifier from the source."""
+
+    label: str = Field(min_length=1, max_length=120)
+    """A short label shown on screen and in the description (Alberts et al., Molecular Biology of the Cell)."""
+    id: Identifier | None = None
+    """A name a beat's cite: uses (default: cite it by its place in the list, 1-based)."""
+
+    @model_validator(mode="after")
+    def _one_identifier(self) -> ReferenceConfig:
+        if not any((self.doi, self.pmid, self.isbn, self.url)):
+            raise ValueError(f"reference '{self.label}': give its doi, pmid, isbn or url (copied from the source, never made up)")
+        return self
+
+
+class FigureCreditConfig(_SourceIds):
+    """Who made a real image the scene shows (a micrograph, a structure): ``{text, license,
+    doi | pmid | isbn | url}`` or the text alone."""
+
+    text: str = Field(min_length=1, max_length=160)
+    """The credit as shown (Micrograph: J. Smith, Example Institute)."""
+    license: str | None = Field(default=None, min_length=1, max_length=40)
+    """Its licence (CC BY 4.0, public domain…)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_text(cls, data: Any) -> Any:
+        return {"text": data} if isinstance(data, str) else data
+
+
+class CitationsConfig(_Strict):
+    """How scenes' references and figure credits show on screen (DESIGN.md §95.14)."""
+
+    show: Literal["footer", "marker", "card", "none"] = "footer"
+    """footer: a line at the bottom of the scene ([1] Label · [2] Label); marker: only the numbers ([1, 2]) in a corner; card: the numbers, then a card listing the references for the scene's last card_seconds; none: only in the description."""
+    card_seconds: float = Field(default=4.0, gt=0, le=20)
+    """How long the end-of-scene card shows (show: card; at most half the scene)."""
+    description: bool = True
+    """Write the numbered reference list (and the figure credits) into the description file <output>_chapters.txt."""
+
+
 #: ``*word*`` (or ``*a few words*``) in a beat's text: stressed by its speaker (DESIGN.md §69.24).
 EMPHASIS = re.compile(r"(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])")
 
@@ -2094,6 +2229,8 @@ class BeatConfig(_Strict):
     """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
     emotion: EmotionSetting | None = None
     """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; Kokoro changes speed, pitch, loudness and pauses; ElevenLabs uses an audio tag (eleven_v3) or voice settings, OpenRouter an instruction or the audio's speed, pitch and loudness; default the voice's emotion."""
+    cite: list[PositiveInt | Identifier] = Field(default_factory=list)
+    """References of the scene this beat cites (their ids, or 1-based places in the scene's references): while it plays, the on-screen citation shows their numbers; default: the scene's citation shows all its references."""
 
     @model_validator(mode="after")
     def _check_interrupt(self) -> BeatConfig:
@@ -2187,6 +2324,23 @@ class SceneConfig(_Strict):
     """false: this scene draws the video's terms (one colour per concept) in their usual colours."""
     host: SceneHost | None = None
     """The cartoon host beside this scene's content: false for none, a character name, or {character, side, size, place, floor, facing, speaks, pose, expression, auto_direct} changing the video's host here; default the video's host."""
+    references: list[ReferenceConfig] = Field(default_factory=list, max_length=12)
+    """Sources of what the scene shows ({label, doi | pmid | isbn | url, id}): numbered across the video, shown as small citations (the video's citations:) and listed in the description; never invent one."""
+    figure_credit: FigureCreditConfig | None = None
+    """Who made a real image the scene shows (a micrograph, a structure): its text, or {text, license, doi | pmid | isbn | url}; shown with the citations and in the description."""
+
+    @model_validator(mode="after")
+    def _check_references(self) -> SceneConfig:
+        ids = [r.id for r in self.references if r.id]
+        twice = sorted({i for i in ids if ids.count(i) > 1})
+        if twice:
+            raise ValueError(f"references: id '{twice[0]}' is used twice in scene '{self.id}'")
+        for j, beat in enumerate(self.beats):
+            if beat.cite and not self.references:
+                raise ValueError(f"beats[{j}] cite: scene '{self.id}' has no references to cite (add references: [{{label, doi}}])")
+            for cite in beat.cite:
+                cite_index(self, cite)
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -2306,6 +2460,8 @@ class VideoConfig(_Strict):
     """Default transition between scenes (cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}); a scene's transition wins."""
     chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)
     """What the render writes about the chapters: MP4 chapter entries, the YouTube list <output>_chapters.txt, the intro chapter at 0:00 {metadata, youtube, intro}."""
+    citations: CitationsConfig = Field(default_factory=CitationsConfig)
+    """How scenes' references: and figure_credit: show {show: footer | marker | card | none, card_seconds, description}; the numbered list also goes into the description file <output>_chapters.txt."""
     metadata: MetadataConfig = Field(default_factory=MetadataConfig)
     """Tags of the final MP4 {title, artist, album, comment, description, copyright, date, genre}; title defaults to the top-level title."""
     thumbnail: ThumbnailConfig | None = None

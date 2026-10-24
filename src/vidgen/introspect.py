@@ -380,6 +380,8 @@ class LayoutRecorder:
         family = mob.get_family()[1:]
         if family and not any(_text_kind(m, True) is not None or isinstance(m, AbstractImageMobject) for m in family):
             self._emit_parts(walk, mob, path, name, "group", [m for m in mob.get_family() if _drawn(m)])
+            if _scenery(mob) and walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                walk.objects[-1]["scenery"] = True   # a cell's world in µm (§95): cropped by a zoomed view on purpose
             return
         if own:  # a group that draws something itself and contains text
             self._emit_parts(walk, mob, path, name, "shape", own)
@@ -526,6 +528,15 @@ def _narrating(scene: NarratedScene, captured: CapturedFrame) -> dict[str, bool]
 
 
 # ----- measuring -------------------------------------------------------------------------------
+
+
+def _scenery(mob: Mobject) -> bool:
+    """True if ``mob`` is marked ``scenery`` (cropped by the camera on purpose), or is a group of
+    such pieces only (empty groups beside them aside)."""
+    if getattr(mob, "scenery", False):
+        return True
+    drawn = [sub for sub in mob.submobjects if sub.family_members_with_points()]
+    return bool(drawn) and not _drawn(mob) and all(_scenery(sub) for sub in drawn)
 
 
 def _drawn(mob: Mobject) -> bool:

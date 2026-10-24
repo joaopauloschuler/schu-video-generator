@@ -20,7 +20,8 @@ narrates on the computer itself at no cost (see `vidgen guide audio`).
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
 `actions` (pointing at things), `cartoons` (characters on a stage), `platform` (platform
-stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for a story), `overlays` (overlays,
+stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for a story), `biology`
+(cell-biology lectures: choosing, accuracy, naming, references, pacing), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
 thumbnail, GIFs, translations, rights to your content), `troubleshooting` (validate and lint messages).
@@ -176,7 +177,8 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`,
 `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic` (options in snake_case: `per_beat`,
+`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic`, and `studio_sessions`, `studio_read`,
+`studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio` (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
@@ -294,6 +296,11 @@ project's own scene types, in its theme).
 | something moving through stages | `process` | `heading`, `stages`, `input`, `output`, `loop`, `token_label` |
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
+| a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the actions zoom_to, motor_walk, endocytosis, exocytosis; with a `gene`: transcribe, export, translate, to_golgi, secrete (its products' route, the camera following) |
+| the cell cycle with its checkpoints and cyclin–CDK levels; mitosis and meiosis with counted chromosomes, crossing over and four haploid cells | `cell_cycle` | `title`, `mode` (cycle, mitosis, meiosis), `start`, `hours`, `chromosomes` (2n), `cell` (animal, plant), `crossovers`, `assortment`, `captions`, `counts`; the actions advance (to, into, expect) and checkpoint (outcome, cause) |
+| energy metabolism: glycolysis, pyruvate oxidation, the citric acid cycle, the electron transport chain and ATP synthase, the light reactions; flows animated, products counted | `metabolism` | `title`, `process` (glycolysis, link_reaction, tca, etc, light_reactions), `cell`, `in`, `membrane`, `protons_to`, `components`, `link`, `tallies`, `names`; the action advance (to, from) |
+| a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs | `pathway` | `title`, `template` (gpcr_camp_pka, rtk_ras_mapk, pi3k_akt), `nodes` (id, kind, label, in, gene, state, marks, role), `edges` (a -> b activates, a -o b catalyses, a => b translocates, an arrow with a bar inhibits, or {from, to, type, effect, site, feedback, label}), `remove`, `species`, `direction`; the actions signal, inhibit, knockout, drug, amplify, focus |
+| molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
 | categories compared by size | `bar_chart` | `title`, `labels`, `values`, `unit`, `highlight`, `caption`, `changes`, `sort` |
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
@@ -474,6 +481,250 @@ several scenes, give its blocks `at` and their own `color` so it looks the same 
 labels short ("App 1" over "Application server 1") so they sit right by their blocks, and leave
 out a group caption the blocks' labels already say: every label costs room, and the diagram is
 drawn as large as its labels let it.
+
+```yaml
+# cell biology
+- id: tour
+  type: cell
+  params:
+    title: "Inside an animal cell"
+    cell: animal                                   # or plant, bacterium; contents: typical is the textbook cell
+    objects:
+      - {kind: ribosome, id: mitoribosomes, in: mitochondria, count: 6, label: false}
+  beats:
+    - text: "A typical animal cell is about twenty micrometres across."
+    - text: "Inside one mitochondrion, the inner membrane folds into cristae."
+      actions:
+        - {zoom_to: mitochondria, at: "@mitochondrion"}   # {zoom_to: rough_er, level: complex}: one ribosome
+- id: synthase
+  type: molecule
+  params:
+    title: "ATP synthase"
+    membrane: inner_mitochondrial                  # the bilayer between the intermembrane space and the matrix
+    molecules:
+      - {kind: atp_synthase, parts: true}          # F1 faces the matrix (faces: intermembrane_space is refused)
+      - {kind: atp, in: matrix}
+  beats:
+    - text: "Protons flow back into the matrix through ATP synthase, turning its rotor, and F1 makes ATP."
+```
+
+A `cell` is drawn at real sizes in µm and every place is checked: a ribosome in the nucleoplasm,
+a mitochondrion inside the nucleus or a ribosome on the Golgi is refused with the textbook reason
+(`vidgen validate`). Leave `at` out and things go where they belong; `at: [x, y]` is in µm from
+the cell's centre. `cell: plant` adds the wall, plasmodesmata, the central vacuole and
+chloroplasts; `cell: bacterium` (`{kind: bacterium, gram: negative, capsule: true}`) a nucleoid,
+70S ribosomes, plasmids, a flagellum and pili. Kinds beyond the typical cell: `early_endosome`,
+`late_endosome`, `vesicle` with `coat: clathrin|copi|copii`, `microtubule`, `actin_cortex`,
+`stress_fiber`, `intermediate_filament` and the motors `kinesin`, `dynein`, `myosin` (`on:` a
+filament; `vidgen guide config` lists them all). `zoom_to` moves between levels (tissue, cell,
+organelle, complex) and names what the new view shows (`labels: false` or a list of part names);
+the scale bar and the details follow the zoom; `style: surface` (the scene's or an object's) draws
+things whole, seen from outside (a nucleus with its pores, a membrane's surface), instead of cut open.
+
+Molecules are kinds too: in a `cell` (`{kind: gpcr, on: cell, count: 3, state: active}`,
+`{kind: atp_synthase, on: mitochondria}` on the cristae, `{kind: dna, in: nucleus}`; drawn whole once
+a zoom makes them a few pixels wide) and up close in a `molecule` scene (nm; a `membrane` across the
+view, the molecules in a row unless `at` places them). Kinds: `dna` (`sequence` 5′→3′, its partner
+drawn antiparallel; 5′/3′ ends, grooves), `mrna`, `trna` (`anticodon` 5′→3′ and `amino_acid`,
+checked against the genetic code; `style: l_shape`), `rrna`, `nucleosome` (`marks: [H3K4me3,
+H3K27ac]`, checked against the histone sequence), `chromatin` (`state: compact`), `protein`
+(`domains`, `mass` in kDa), `kinase`, `phosphatase`, `g_protein`, `gpcr`, `rtk` (`state: dimer`),
+`ion_channel` (`state: open`, `gating`, `ion`), `carrier` (`mode: symport`, `substrates`, `moves`),
+`na_k_atpase`, `atp_synthase`, `atp`, `adp`, `pi`, `gtp`, `gdp`, `camp`, `glucose`, `ligand`, `ion`
+(`ion: Ca2+`). Membrane proteins keep their textbook orientation (a GPCR's N-terminus outside, F1 in
+the matrix or stroma); `faces:` states it and is checked. Names: `gene: TP53` is set in italics and
+checked for the `species` (mouse `Trp53`, yeast `CDC28`), `protein: p53` in roman;
+`modifications: [{mark: P, at: Ser15}]` (P, Ub, Ac, Me; phosphate never on Lys). Labels take Pango
+markup: `β<sub>2</sub>`, `Ca<sup>2+</sup>`, `<i>lacZ</i>`.
+
+Processes are actions. In a `molecule` scene give `solutes` (`[K+, Na+]`: particles at typical
+concentrations, or `{solute: o2, mM: {extracellular: 0.2, cytosol: 0.02}}`) and `potential: -70`
+for a live readout; then `set_state` (`{set_state: kv, state: open}`: ion channels closed / open /
+inactivated, carriers outward / occluded / inward, the Na⁺/K⁺ pump e1 / e1p / e2p / e2, GPCRs
+active), `transport` (an open channel's ions down their gradient; a carrier's cycles —
+`transporter: sglt1`, `ncx`, `glut1`…; the pump's Post–Albers cycle with ATP → ADP + Pᵢ;
+`h_atpase`, `abc_transporter`, `aquaporin`), `diffuse` (a solute, simple diffusion: O₂, CO₂ across
+a bilayer, anything in a solution), `osmosis: membrane` and `action_potential: membrane` (needs
+voltage-gated Na⁺ and K⁺ channels; an inset trace). In a `cell`: `motor_walk` (kinesin to the +
+end, dynein to the − end; `distance`), `endocytosis: cell` (a coated pit at a 300–500 nm view of
+the plasma membrane) and `exocytosis: <vesicle id>`. The rules are checked with the reason: Na⁺
+through a K⁺ channel, ions through a closed channel, an antiporter moving both solutes one way,
+transport against the gradient without ATP or an ion gradient, kinesin to the − end.
+
+```yaml
+# processes
+- id: firing
+  type: molecule
+  params:
+    membrane: plasma
+    potential: -70
+    solutes: [K+, Na+]
+    molecules: [{kind: ion_channel, id: nav, ion: Na+}, {kind: ion_channel, id: kv, ion: K+}, {kind: na_k_atpase, id: pump}]
+  beats:
+    - text: "At threshold the neuron fires an action potential."
+      actions: [{action_potential: membrane, at: "@threshold"}]
+    - text: "The pump spends one ATP to move three sodium ions out and two potassium ions in."
+      actions: [{transport: pump, at: "@pump"}]
+```
+
+Gene expression is a set of actions on a `gene`. In a `molecule` scene (`gene:` instead of
+molecules) it is a close-up with the bases written out: `transcribe` (promoter, TATA box, RNA
+polymerase II, the bubble; the template strand read 3′→5′, RNA made 5′→3′), `cap`, `splice`
+(lariat), `polyadenylate`, `export` (through a nuclear pore), `translate` (scanning, E/P/A sites,
+codon–anticodon pairing with the genetic code, the chain growing N→C, the stop codon and release
+factor; the protein written out under the view), `target_er` (SRP, Sec61, signal peptidase; during
+translation: `translate` with `codons: 3` first), `glycosylate` (OST, an N-glycan in SNFG symbols),
+`fold` (chaperones). In a `cell` scene with the same `gene`: `transcribe`, `export`, `translate`,
+`to_golgi`, `secrete` (`to: outside | lysosome | membrane`) follow the products through the cell,
+the camera following. Write the gene as `codons: 12` (generated; `introns: 1`, `signal_peptide:
+true`, `glycosylation: true`, `seed`), `protein: MALW…` or a `sequence` (the coding strand from +1,
+with `introns: [[31, 70]]`). `vidgen validate` checks the gene (introns GU…AG with a branch A, a
+start codon, a stop codon in frame, no premature stop) and the order (no translation before export,
+no glycosylation outside the ER, only folded proteins leave the ER). Give each step its own beat
+with enough words: a step lasts as long as what it shows (3–15 s) and a short beat squeezes it.
+
+```yaml
+# gene expression
+- id: expression
+  type: molecule
+  params:
+    title: "From gene to protein"
+    gene: {id: ins, name: INS, codons: 10, introns: 1}
+  beats:
+    - text: "RNA polymerase two copies the gene."
+      actions: [{transcribe: ins}]
+    - text: "The spliceosome cuts the intron out as a lariat."
+      actions: [{splice: ins}]
+    - text: "The three prime end is cut and the poly A tail added."
+      actions: [{polyadenylate: ins}]
+    - text: "The messenger RNA leaves the nucleus through a pore."
+      actions: [{export: ins}]
+    - text: "In the cytosol a ribosome reads it codon by codon, and the chain grows from its N terminus."
+      actions: [{translate: ins}]
+```
+
+A `pathway` draws a signalling pathway as a graph in SBGN-inspired notation, laid out by itself in
+compartment bands (extracellular space, plasma membrane, cytosol, ER, mitochondrion, nucleus:
+columns left to right in 16:9, rows top to bottom in 9:16; membrane proteins stand in a row on the
+bilayer, the nuclear envelope has pores where arcs cross it). Start from a template —
+`gpcr_camp_pka` (glucagon → GCGR → Gαs → adenylyl cyclase → cAMP → PKA → CREB → *PCK1*, PDE4),
+`rtk_ras_mapk` (EGF → EGFR → Grb2/SOS → Ras → Raf → MEK → ERK → Elk-1 → *FOS*, RasGAP, ERK ⊣ SOS),
+`pi3k_akt` (RTK → PI3K → PIP3, PTEN, PDK1/mTORC2 → Akt ⊣ TSC2 ⊣ Rheb → mTORC1, ⊣ GSK3β, ⊣ FOXO) —
+and change it (`nodes` with a template id change that node, `edges` between the same nodes replace
+its arc, `remove: [gluconeogenesis]`), or write your own. Nodes: `{id, kind, label, in, gene, state,
+marks}`; kinds `ligand`, `receptor`, `protein`, `kinase`, `phosphatase`, `g_protein`, `gtpase`, `gef`,
+`gap`, `adaptor`, `enzyme`, `transcription_factor`, `complex`, `small_molecule`, `gene` (italic
+symbol), `phenotype` (an outcome), `drug`; `in:` the compartment (default by kind). Arcs: `"a -> b"`
+activates, `"a -| b"` inhibits, `"a -o b"` catalyses, `"a => b"` translocates (the same label in
+another compartment), or `{from, to, type: phosphorylates, site: Ser133, effect: inhibits, feedback:
+true, label}` with types `phosphorylates`, `dephosphorylates`, `binds`, `transcribes`, `expresses`,
+`converts`. `vidgen validate` refuses what cannot be, with the reason: an unknown node, a GAP that
+activates its GTPase, a phosphatase that phosphorylates, a gene outside the nucleus, a transcription
+factor in the cytosol transcribing a gene, cAMP in the membrane, a gene or protein name in the wrong
+case for the `species`; it warns about a loop no arc declares `feedback: true`. Then the actions:
+`signal` (wave by wave: GDP → GTP, pS133 appear), `inhibit`, `knockout` and `drug` (the nodes
+downstream that change get ↑ / ↓, computed from the graph), `amplify`, `focus`, `highlight`.
+
+```yaml
+# signalling pathways
+- id: camp
+  type: pathway
+  params:
+    title: "Glucagon signalling"
+    template: gpcr_camp_pka                        # or rtk_ras_mapk, pi3k_akt; or nodes + edges
+  beats:
+    - text: "Glucagon binds its receptor, and the signal runs through cyclic AMP and PKA to the nucleus."
+      actions: [{signal: glucagon, at: "@signal"}]
+    - text: "A phosphodiesterase inhibitor keeps cyclic AMP high."
+      actions: [{drug: pde, name: IBMX}]
+```
+
+A `cell_cycle` draws the eukaryotic cell cycle (`mode: cycle`: a ring G1 → S → G2 → M with G0, the
+restriction point and the G1/S, G2/M and spindle assembly checkpoints, beside the levels of cyclin
+D–CDK4/6, E–CDK2, A–CDK2 and B–CDK1 in their textbook order of rise and fall, a "now" marker on both)
+or a dividing cell (`mode: mitosis | meiosis`, `chromosomes: 4` = 2n: homologues in maternal and
+paternal colours, sister chromatids joined at the centromere; prophase … cytokinesis with
+condensation, envelope breakdown, kinetochore capture, bi-orientation, separase and cohesin, the
+contractile ring — `cell: plant` a cell plate; meiosis with synapsis, crossing over (`crossovers:
+[[0.75], [0.6]]`, exchanged segments shown), independent assortment (`assortment: [m, p]`) and four
+haploid cells). Captions name each stage; a counts line gives chromosomes, chromatids, n / 2n and C
+per cell. `advance` moves it on (`to:` a point of the cycle or a stage); `checkpoint` shows a
+checkpoint passing or arresting the cell with its regulators (p53 → p21 ⊣ CDK2…). `vidgen validate`
+refuses what cannot be, with the reason: G0 after the restriction point, advancing past an arrested
+checkpoint, an odd 2n, a bivalent without a crossover, wrong counts in `expect`, a stage of the
+other division.
+
+```yaml
+# cell cycle and division
+- id: meiosis
+  type: cell_cycle
+  params:
+    title: "Meiosis (2n = 4)"
+    mode: meiosis                     # or mitosis, or cycle (the cycle with its cyclins and checkpoints)
+    assortment: [m, p]                # which homologue faces the first pole at metaphase I, per pair
+  beats:
+    - text: "Homologues pair, cross over and part; then sisters: four haploid cells."
+      actions: [{advance: cell, to: cytokinesis_ii, at: "@pair"}]
+```
+
+A `metabolism` scene draws energy metabolism: `process: glycolysis` (ten steps, investment and
+payoff phases, net 2 ATP and 2 NADH per glucose; `link: true` adds pyruvate dehydrogenase in the
+matrix), `link_reaction`, `tca` (the citric acid cycle as a ring: 3 NADH, FADH₂, GTP, 2 CO₂ per
+turn), `etc` (complexes I–IV, Q and cytochrome c in the inner mitochondrial membrane, protons
+pumped into the intermembrane space, O₂ → H₂O, ATP synthase) or `light_reactions` (PSII splitting
+water, PQ, b₆f, PC, PSI, Fd, FNR making NADPH, ATP synthase with CF₁ in the stroma). Tallies count
+the products. `advance` animates it: a token through the steps (`to: pyruvate`), electrons along the
+chain with protons crossing (`to: complex_iv`, `from: fadh2`), the gradient through ATP synthase
+(`to: atp_synthase`). Checked with the reason: the membrane (`membrane: plasma` for the respiratory
+chain is refused), `protons_to` the wrong side, `components` out of order or missing a carrier,
+glycolysis outside the cytosol, the light reactions in an animal cell, ATP synthase before any
+protons were pumped.
+
+```yaml
+# energy metabolism
+- id: krebs
+  type: metabolism
+  params:
+    title: "The citric acid cycle"
+    process: tca                      # glycolysis, link_reaction, tca, etc, light_reactions
+  beats:
+    - text: "Acetyl-CoA joins oxaloacetate; two carbons leave as CO2."
+      actions: [{advance: tca, to: succinyl_coa, at: "@joins"}]
+    - text: "The cycle closes with GTP, FADH2 and NADH."
+      actions: [{advance: tca, to: oxaloacetate}]
+```
+
+Accuracy and sources. `vidgen lint` checks the science of these scenes (and of any narration)
+with the `science_*` rules: sizes far off scale on a `cell` with a scale bar (set `not_to_scale:
+true` when you exaggerate on purpose: the scene then says so), places ("glycolysis in the
+mitochondria", "ribosomes in the nucleus" while the picture has them in the cytosol), directions
+(RNA made 3′ to 5′, a protein made C to N, kinesin to the minus end, protons pumped into the
+matrix), active transport through a channel or with no energy source shown, gene / protein names
+(mouse *Trp53* gene, TRP53 protein; `<i>…</i>` for a gene in a label), narration against a
+pathway arc ("Akt activates TSC2" where Akt's arc inhibits it) and numbers (net 2 ATP from
+glycolysis, 3 NADH per turn, 3 Na⁺ out and 2 K⁺ in per pump cycle). Fix the words, or the
+picture. Give a scene `references:` — `{label, doi | pmid | isbn | url, id}` copied from your real
+sources, **never invented** (no identifier you have not seen; leave a reference out rather than
+guess) — and they appear as small citations (`citations: {show: footer | marker | card | none}`,
+numbered across the video; a beat's `cite: [id]` shows only what it cites) and as a numbered list
+in the description file `<output>_chapters.txt`. A real micrograph shown with an `image` scene
+gets `figure_credit: {text, license, url}`. How to choose, keep it correct and pace a dense
+script: `vidgen guide biology` and `docs/COOKBOOK-CELL-BIOLOGY.md` (example:
+`examples/gene-to-secreted-protein`).
+
+```yaml
+# accuracy and references
+- id: er
+  type: cell
+  params:
+    objects: [{kind: vesicle, id: big_vesicle, size: "400 nm"}]   # larger than real: say so
+    not_to_scale: true
+  references:                          # placeholders here: copy the real identifiers from your sources
+    - {id: book, label: "Example textbook (placeholder)", isbn: "978-0-00-000000-2"}
+  beats:
+    - text: "Transport vesicles carry cargo from the ER to the Golgi."
+      cite: [book]
+```
 
 ```yaml
 # data
@@ -908,8 +1159,35 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `explode` | on an `iso_diagram`: pull a stack's layers apart (`- explode: "stack:app"`, `gap: 0.6`), labels going along; `collapse` puts them back | to show what a stack is made of |
 | `collapse` | on an `iso_diagram`: an exploded stack's layers back together | |
 | `flow` | on an `iso_diagram`: dots (`style: packets`: small cubes) run along connectors (`- flow: "edge:*"`, `chain: true` one after another, `back`, `count`) | when the voice follows data or a request |
-| `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; labels it would cut fade out; `focus: diagram` goes back to the whole frame | at most one or two per scene |
+| `focus` | on an `iso_diagram`: the camera moves onto a block, stack or group and stays (`- focus: "group:web"`), clear of the captions; labels it would cut fade out; `focus: diagram` goes back to the whole frame; on a `pathway`: onto nodes (`focus: ras`; `focus: pathway` goes back) | at most one or two per scene |
 | `relabel` | on an `iso_diagram`: a label or value changes in place (`- relabel: "block:cache"`, `text: "Cache: hit"`) | a new value, a state change |
+| `zoom_to` | on a `cell`: the camera moves in µm to a level on an object and stays (`- zoom_to: mitochondria`; `level: tissue`, `cell`, `organelle`, `complex`; `width: "2 um"`; `labels: false` or a list of the parts to name); details appear as they grow, the scale bar follows; `zoom_to: cell` goes back | one level change per idea, on the word that names the target |
+| `motor_walk` | on a `cell`: motors walk hand over hand along their filament with their cargo (`{motor_walk: kin, distance: 500 nm}`; kinesin to the + end, dynein to the − end; `toward` checked) | at a view of a few hundred nm to see the steps |
+| `endocytosis` | on a `cell`: a clathrin-coated pit buds in and is pinched off by dynamin (`endocytosis: cell`, `site: [x, y]`); captioned steps | at a 300–500 nm view of the plasma membrane, `labels: false` on it |
+| `exocytosis` | on a `cell`: a vesicle docks with SNAREs, fuses and releases its cargo (`exocytosis: <vesicle id>`, uncoated, in the cytosol) | likewise |
+| `set_state` | on a `molecule`: a molecule morphs to another state (`{set_state: kv, state: open}`; `until` turns it back) | before `transport` on a channel (ions pass only an open one) |
+| `transport` | on a `molecule`: a channel passes ions down their gradient (`count`), a carrier or pump runs its cycle (`cycles`: alternating access; the Na⁺/K⁺ pump's E1 → E1P → E2P → E2 with ATP → ADP + Pᵢ), each step captioned | one cycle per idea |
+| `diffuse` | on a `molecule`: a solute's particles random-walk with net flux down the gradient (`diffuse: oxygen`; across a bilayer only O₂, CO₂, water) | on the word that names the process |
+| `osmosis` | on a `molecule`: water moves to the side with more solute (`osmosis: membrane`), through aquaporins if any | |
+| `action_potential` | on a `molecule`: voltage-gated Na⁺ and K⁺ channels open, inactivate and close with a live Vₘ readout and an inset trace (`action_potential: membrane`) | |
+| `transcribe` | on a `molecule` with a `gene`: TBP on the TATA box, the general factors and RNA polymerase II assemble, a ~13 bp bubble opens, the template strand is read 3′→5′ and RNA made 5′→3′ (capped at ~25 nt); on a `cell`: mRNAs made at the gene | first step of a gene; then the others in order (validated) |
+| `cap` | on a `molecule` with a `gene`: the three enzymes of the 5′ cap (m⁷GpppN) as their own step (else `transcribe` caps) | after `transcribe` |
+| `splice` | on a `molecule` with a `gene`: snRNPs on GU / branch A / AG, the lariat, the exons joined, an EJC | the gene needs `introns` |
+| `polyadenylate` | on a `molecule` with a `gene`: CPSF / CstF, cleavage, Xrn2 termination, the poly(A) tail | before `export` |
+| `export` | on a `molecule` or `cell` with a `gene`: the mRNP through a nuclear pore, 5′ end first | only a capped, spliced, polyadenylated mRNA |
+| `translate` | on a `molecule` or `cell` with a `gene`: scanning to the AUG, the 80S ribosome, tRNAs pairing with codons, the chain growing N→C with its amino acids written out, the stop codon and release (`codons: n` stops after n) | only after `export` (refused in the nucleus) |
+| `target_er` | on a `molecule` with a `gene` (`signal_peptide: true`): SRP, its receptor, Sec61, the signal in the lateral gate, signal peptidase | while translating (`translate: g, codons: 3` before it) |
+| `glycosylate` | on a `molecule` with a `gene` (`glycosylation: true`): OST puts Glc₃Man₉GlcNAc₂ on the sequon's Asn | in the ER, after `target_er` |
+| `fold` | on a `molecule` with a `gene`: Hsp70, the chaperonin, BiP or calnexin (`chaperone`, checked against the compartment); the chain packs its hydrophobic residues inside | after the stop codon |
+| `to_golgi` | on a `cell` with a `gene`: a COPII vesicle from an ER exit site to the cis-Golgi, then cis → trans | a folded protein made into the ER |
+| `secrete` | on a `cell` with a `gene`: from the trans-Golgi network `to: outside` (exocytosis), `membrane` or `lysosome` | after `to_golgi` |
+| `signal` | on a `pathway`: the signal runs from a node along the arcs, wave by wave: arcs light, nodes light, GDP → GTP, phosphorylated sites appear (pS133); an inhibitor of an inhibitor turns its target on (`signal: egf`; `to: creb` only the shortest path; `signal: [gcgr, gas, ac]` a path; `feedback: false`); it stops at a knocked-out, drugged or held node | about 0.75 s per step: give it a long beat, or `to:` |
+| `inhibit` | on a `pathway`: an inhibitor engages (`inhibit: pten`; `on: [pip3]`): its T-bars flash, its targets are held, the nodes downstream that change get ↑ / ↓ | the node needs an inhibitory arc |
+| `knockout` | on a `pathway`: a node is crossed out (`knockout: pten`) and every node downstream that changes gets ↑ / ↓, computed from the graph (`effects: false` leaves them out) | `until` brings it back |
+| `drug` | on a `pathway`: a pill with the drug's name blocks a protein (`{drug: mek, name: trametinib}`; a known drug on another target is refused), with the effects downstream | not on genes, messengers or outcomes |
+| `amplify` | on a `pathway`: many copies of a node stream out of the node that makes it (`{amplify: camp, factor: "×100"}`; `from`, `count`) | after the `signal` reached it |
+| `advance` | on a `cell_cycle`: the cell moves round the cycle (`advance: cycle, to: s`; `into: 0.5`; `to: g0` only before the restriction point) or a division runs to a stage (`advance: cell, to: anaphase_i`; `expect: {chromosomes: 2, chromatids: 4}` is checked); on a `metabolism`: the token runs to a metabolite or enzyme (`advance: glycolysis, to: pyruvate`), electrons run along the chain pumping protons (`advance: etc, to: complex_iv`; `from: fadh2`), or the gradient drives ATP synthase (`to: atp_synthase`) | one stage or a few steps per beat: its length follows what it shows (up to ~8 s) |
+| `checkpoint` | on a `cell_cycle` (`mode: cycle`): a checkpoint's regulators light in a panel — `checkpoint: g1_s` passes (cyclin D–CDK4/6 ⊣ Rb ⊣ E2F → cyclin E–CDK2), `{checkpoint: g2_m, outcome: arrest, cause: dna_damage}` holds the cell (`advance` cannot pass it until the action's `until`); `spindle` (SAC: MCC ⊣ APC/C–Cdc20) | one checkpoint per beat |
 
 ```yaml
 - id: speeds
@@ -1557,6 +1835,69 @@ bridge crosses it) at row 4, column 11`). A whole story: `examples/iso-story` (a
 a key, a lamp lit in the rain, flowers that bloom, a 9:16 variant). Every key: `docs/CONFIG.md`
 "Isometric places (`iso`)".
 
+<!-- topic: biology (also: cell-biology, science, lecture, research) -->
+## Cell biology: lectures and research explainers
+
+Five scene types draw cell biology at university level, stylised but checked (`vidgen guide
+scenes` has a snippet of each): `cell` (a cell in µm, zooming tissue → cell → organelle →
+complex; with a `gene`, its products' route), `molecule` (molecules in nm, processes as actions;
+with a `gene`, each step of expression up close), `pathway` (signalling in compartment bands),
+`cell_cycle` (the cycle, mitosis, meiosis) and `metabolism` (glycolysis, the citric acid cycle,
+the respiratory chain, the light reactions). The craft in full: `docs/COOKBOOK-CELL-BIOLOGY.md`
+in the schu-video-generator repository; a whole example: `examples/gene-to-secreted-protein`.
+
+**Choosing.** Where and how big → `cell`; how one molecule works → `molecule`; how a gene
+becomes a protein, step by step → `molecule` with a `gene`, then the same route at the scale of
+the cell → `cell` with the `gene`; who activates whom → `pathway`; the cycle and divisions →
+`cell_cycle`; energy → `metabolism`. Move between levels on purpose and say so ("Up close",
+"At the scale of the cell").
+
+**Accuracy rules.**
+- Pick an example that is true at every step you show (a glycoprotein secreted constitutively
+  for ER glycosylation and secretion without a trigger; insulin is neither glycosylated nor
+  constitutive). Say what is a model: a generated gene is "a short model gene"; a drawing larger
+  than real gets `not_to_scale: true`.
+- Directions: template read 3′→5′, RNA made 5′→3′, chains N→C, kinesin to +, dynein to −,
+  protons out of the matrix, 3 Na⁺ out and 2 K⁺ in per ATP. Places: translation starts in the
+  cytosol, N-glycans are added in the ER and remodelled in the Golgi, glycolysis in the cytosol.
+- On-screen step captions are claims too: choose the context (`exocytosis` `snares: constitutive`
+  in a liver cell, `neuronal` at a synapse; the default names generic v-/t-SNAREs), or
+  `notes: false`. Step captions are full in 16:9 and their first clause in 9:16 (`notes:
+  auto`; `full`, `short`). Gene symbols the video declares (a gene's `name`, a pathway's gene
+  nodes) are italic in the captions overlay, protein names roman.
+- An arc you cannot vouch for as direct is `indirect: true`.
+- `vidgen validate` refuses the impossible; `vidgen lint`'s `science_*` rules read the narration.
+
+**Naming.** Genes italic, proteins roman, by `species` (human *TP53* / p53, mouse *Trp53* /
+TRP53); `<i>…</i>` for a gene in a markup label; `Ca2+`, `Pi`, `F_o` are typeset. Let the voice
+say symbols through `pronunciation:` (`SERPINA1: serpin A one`, `STAT3: stat three`, `COPII: cop
+two`) and check with `vidgen readback`. `terms:` for three or four concepts.
+
+**References.** `references:` on the scene with an identifier copied from the source (DOI, PMID,
+ISBN), `cite:` on the beat; never invent one, leave it out instead. With karaoke captions use
+`citations: {show: marker}`.
+
+**Pacing dense content.** One process per beat with 20–35 words for a long step (a gene step lasts
+3–15 s and a short beat squeezes it); actions on the word (`at: "@scans"`); Kokoro
+`speed: 0.85`; label only what is said (`labels: [granum, stroma]`, or `labels: false` where
+processes move things); a long pathway in two scenes; a recap (`process`) at the end.
+
+```yaml
+- id: er
+  type: molecule
+  params:
+    title: "Into the endoplasmic reticulum"
+    gene: {id: gene, signal_peptide: true, glycosylation: true, start: mrna}
+  references:
+    - {id: blobel, label: "Blobel & Dobberstein, J. Cell Biol. 1975", doi: "10.1083/jcb.67.3.835"}
+  beats:
+    - text: "In the cytosol a ribosome scans to the start codon and begins the chain at its N terminus."
+      actions: [{translate: gene, codons: 3, at: "@scans"}]
+    - text: "Its first residues are a signal peptide. SRP binds it and docks the ribosome on the Sec61 translocon."
+      cite: [blobel]
+      actions: [{target_er: gene, at: "@SRP"}]
+```
+
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->
 ## Overlays, transitions and continuity
 
@@ -1859,6 +2200,32 @@ again only when the file changes). You cannot hear it, so work from measurements
    versions and a bed; the numbers say whether it fits under a voice, not whether it is good.
    (Both commands also take names: `vidgen music check my_theme --compare momentum` in the
    project's folder.)
+
+**Suggest the studio to a person** who wants to shape the music by ear, says "the music is not
+quite right" without saying how, or wants to choose between versions: `vidgen studio` (in the
+project folder; it runs on their computer, 127.0.0.1 only, and opens their browser — you cannot
+use it yourself) loads any bed as an editable score, plays it under a narration sample, A/Bs
+versions, makes four variations at a click and saves into `assets/music/`. Tell them to press
+**N** to pin a note where something bothers them and then **Ask an agent**: the session is then
+handed to you through MCP (below), and you answer with a version they A/B. People may also hand
+you a session unprompted ("answer my studio notes"): start with `studio_sessions`.
+
+**Answering a studio hand-off.** A person shaping a piece in `vidgen studio` pins listening notes
+on its timeline ("this part drags", bar 12, beat 3, in the build) and presses *Ask an agent*.
+Through MCP: `studio_sessions` lists them (the session open in a running studio first, with its open
+notes) → `studio_read` gives the score of the version handed off, the notes with bar, beat and section,
+its check report and what changed from its parent → change the score: **one focused change per note**
+when you can, in the section and bar the note names, everything else kept, comments too (a note
+that says "love this" asks you to keep that part) → `studio_check` with your new score (do not make
+the check worse) → `studio_propose` with the whole score, `explanations: {n1: "what I changed and
+why", ...}` (one line per note, also when you changed nothing for it) and a short `summary`. The
+proposal is validated (a score with problems comes back with them: fix and propose again) and
+appears in the studio as a new version the person A/Bs and keeps or discards; it never replaces a
+version. `studio_variations` gives four variations of a version (another voicing, an altered
+figure, a darker or brighter mix, another arrangement) as whole scores with a label: a starting
+point when a note asks for "something different". Without MCP the person copies the same hand-off as a prompt: answer with
+`summary: ...`, the whole score in one ```yaml block, then one `n1: ...` line per note.
+
 Write original music: genre styles are fine, never a known tune. A piece named like a built-in bed
 is a problem (rename it, or use `source: assets/music/NAME.yaml`). `loop: false` pieces play once
 with their ending (the cue's fade-out still applies).
@@ -2034,7 +2401,8 @@ Good: the result first, then the context.
   or `--output-dir DIR` moves them. `build/` and `exports/` stay put.
 - **Chapters**: with `chapter` cards or `chapter:` keys the MP4 gets chapter marks and
   `<output>_chapters.txt` the YouTube list (`0:00 Intro`...); `vidgen validate` warns when
-  YouTube would ignore it (fewer than 3 chapters, one under 10 s). `metadata:` adds tags.
+  YouTube would ignore it (fewer than 3 chapters, one under 10 s). `metadata:` adds tags. The
+  scenes' `references:` and `figure_credit:` are appended to that file as a numbered list.
 - **Thumbnail**: a designed card reads best small. Keep its title ≤ 6 words. `vidgen render`
   writes it with the video, `vidgen thumbnail` alone; open the small copy it names
   (`build/.../thumbnail/<name>_small.png`, YouTube's 320 px) and fix the checks it prints. A
@@ -2172,6 +2540,13 @@ install; `vidgen validate` warns when it is missing.
 | `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |
 | `iso_labels` | an `iso_diagram` label over a block it does not name (a group's caption among its blocks), over another label or a connector, or far from what it names | more `spacing` or `at` further apart, shorter labels, fewer blocks; a stack's `label_side` |
 | `music_check` | a project piece (`assets/music/NAME.yaml`) the video plays is loud in the voice's range, too bright, boomy, unsteady, peaky or clicks at its loop (`vidgen music check`'s fixes; its notes are info) | the fix the message names (a track's `volume`, an octave, `lowpass`), then `vidgen music check` again; or `severity: off` in `lint.rules.music_check` |
+| `science_scale` | a `cell` with a scale bar draws something far outside its real size, or too many nuclei / centrosomes | a real `size`, or `not_to_scale: true` (the scene says so); `lint_ignore` a real exception |
+| `science_location` | the narration puts a process where it never is (glycolysis in the mitochondria) or a thing where the `cell` does not show it | say where it is, or place it there (`in:`, `on:`) |
+| `science_direction` | a wrong direction: RNA made 3′→5′, a protein made C→N, kinesin to minus, protons pumped into the matrix | the textbook direction the message gives |
+| `science_energy` | "active transport" through a channel or uniporter, or with no pump, symporter or ATP in the scene | call it facilitated diffusion, or show the pump / coupled carrier |
+| `science_naming` | a scene's gene written as its protein (mouse `TRP53 gene`), the wrong case, a gene label without `<i>` | the form the message gives (mouse: gene *Trp53*, protein TRP53) |
+| `science_pathway` | the narration says activates where the pathway's arc inhibits (or the reverse) | fix the words, or the arc (`effect:`) |
+| `science_counts` | a number against the textbook (net 4 ATP from glycolysis) | the number the message gives |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

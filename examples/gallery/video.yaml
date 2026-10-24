@@ -463,6 +463,53 @@ scenes:
       - text: "Two more lands on seven, and the point slides along to meet it."
         actions:
           - {trace: "point:start", to: 7, at: "@slides"}   # the point moves on the spoken word
+  - id: inside
+    type: cell          # a cell at real sizes in µm; every place checked (no ribosome in the nucleoplasm)
+    params:
+      title: "Inside an animal cell"
+      cell: animal      # contents: typical, the textbook cell
+    beats:
+      - text: "An animal cell, about twenty micrometres across, with its nucleus and organelles."
+      - text: "Zoom in on a mitochondrion, its inner membrane folded into cristae."
+        actions:
+          - {zoom_to: mitochondria, at: "@mitochondrion"}   # the camera in µm; the scale bar follows
+
+  - id: synthase
+    type: molecule      # a molecular close-up in nm; orientations checked (F1 must face the matrix)
+    params:
+      title: "ATP synthase"
+      membrane: inner_mitochondrial   # the bilayer between the intermembrane space and the matrix
+      molecules:
+        - {kind: atp_synthase, parts: true}
+        - {kind: atp, in: matrix}
+    beats:
+      - text: "Protons flow back into the matrix through ATP synthase, turning its rotor, and F1 makes ATP."
+
+  - id: camp
+    type: pathway       # a signalling pathway in compartment bands; arcs and places checked (no gene outside the nucleus)
+    params:
+      title: "Glucagon signalling"
+      template: gpcr_camp_pka   # or rtk_ras_mapk, pi3k_akt; or nodes + edges
+    beats:
+      - text: "Glucagon binds its receptor, and the signal runs through cyclic AMP and PKA to the nucleus."
+        actions: [{signal: glucagon, at: "@signal"}]
+
+  - id: cycle
+    type: cell_cycle    # the cell cycle (or mode: mitosis / meiosis); points, stages, checkpoints and counts checked
+    params:
+      title: "The cell cycle"
+    beats:
+      - text: "Cyclin E peaks at the G1/S transition, and the cell replicates its DNA."
+        actions: [{advance: cycle, to: s, into: 0.5, at: "@peaks"}]
+
+  - id: krebs
+    type: metabolism    # glycolysis, the citric acid cycle, the electron transport chain, the light reactions
+    params:
+      title: "The citric acid cycle"
+      process: tca
+    beats:
+      - text: "Each turn makes three NADH, one FADH2, one GTP and two carbon dioxide."
+        actions: [{advance: tca, to: oxaloacetate}]
 
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about

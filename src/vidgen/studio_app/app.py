@@ -1,0 +1,1099 @@
+"""What the studio's JSON API does (DESIGN.md §94.2), without HTTP: the presets, the patches,
+loading a score into a new session, checking score text, rendering a version (whole or one
+section) into the session's render cache. The HTTP layer (:mod:`vidgen.studio_app.server`)
+only translates requests to these calls and their results to JSON.
+
+The sound is always vidgen's own renderer (:func:`vidgen.studio.render_music_score`); the browser
+only plays the WAV files written here.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import re
+import threading
+import time
+import wave
+from collections import OrderedDict
+from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import yaml
+
+from vidgen import __version__
+from vidgen.errors import VidgenError
+from vidgen.fileio import write_bytes_atomic, write_text_atomic
+from vidgen.studio_app import song
+from vidgen.studio_app.checks import CHECK_AFTER_SECONDS, CHECK_IMAGE, Checker, find_edit
+from vidgen.studio_app.edits import apply_edits
+from vidgen.studio_app.session import StudioSession, list_sessions, normal_text, studio_dir, write_open_marker
+from vidgen.studio_app.song import describe_score
+from vidgen.studio_app.stems import FAST_FFT, THREADS, StemCache, meter_levels, score_stems
+
+#: Bump when the studio's renders of the same score change (their cache key includes it).
+#: 2 (Step 194): a render's facts hold its loudness per bar (the timeline's energy curve).
+#: 3 (Step 196): mixed from stems; the facts hold the mix's gain and the stems' meters.
+STUDIO_RENDER_VERSION = 3
+#: The lowest loudness the energy curve shows (a silent bar), LUFS.
+ENERGY_FLOOR = -70.0
+#: The preset loaded when the page opens without a session (the guide's first suggestion).
+DEFAULT_PRESET = "momentum"
+#: Longest one-line preset description (characters).
+ONE_LINE_CHARS = 110
+#: A render cache key (hex digits of a SHA-256).
+RENDER_KEY = re.compile(r"^[0-9a-f]{20}\Z")
+#: Audio file names the server may send: ``<key>.wav``, a listening mix with tracks muted
+#: ``<key>.m<tag>.wav``, either under narration ``….n.wav``, and a section of any,
+#: ``<key>[.m<tag>][.n]-<section>.wav``.
+AUDIO_NAME = re.compile(r"^([0-9a-f]{20})(?:\.m([0-9a-f]{10}))?(\.n)?(?:-([a-z][a-z0-9_]*))?\.wav\Z")
+#: Facts of a render worked out after it plays (loudness, true peak, the energy curve), once
+#: no render has been under way for this long (s).
+LATE_FACTS = ("loudness", "true_peak", "energy")
+FACTS_AFTER_SECONDS = 0.3
+#: Old renders of the open session are removed at most this often (s), after a new render.
+AUTO_CLEAN_SECONDS = 60.0
+#: The renders last asked for that the automatic clean-up keeps whatever versions they are.
+KEEP_PLAYED = 6
+
+
+def one_line(description: str) -> str:
+    """The first clause of a bed's description (up to its first ``:`` or sentence end), cut at a
+    comma to at most :data:`ONE_LINE_CHARS` characters."""
+    text = re.split(r":|\.\s", description, maxsplit=1)[0].strip().rstrip(".")
+    if len(text) > ONE_LINE_CHARS:
+        cut = text[:ONE_LINE_CHARS].rfind(", ")
+        text = text[:cut] if cut > 0 else text[: ONE_LINE_CHARS - 1] + "…"
+    return text
+
+
+def preset_catalog() -> list[dict[str, Any]]:
+    """The 17 built-in beds as presets, in the beds' order: name, title, a one-line description,
+    the bed's description and use, and the template's key, tempo, time, bars, seconds, sections
+    and tracks; ``score_bed`` when the template is the bed itself (§93.12)."""
+    from vidgen.music import BUILTIN_BEDS
+    from vidgen.studio import music_template_catalog
+
+    out = []
+    for t in music_template_catalog():
+        bed = BUILTIN_BEDS[t["name"]]
+        out.append({**t, "one_line": one_line(bed.description), "bed_description": bed.description, "use": bed.use, "score_bed": bed.score})
+    return out
+
+
+def parse_problems(message: str) -> list[dict[str, Any]]:
+    """The ``where: what`` lines of a score's :class:`VidgenError` as ``{where, message}``."""
+    lines = [line[4:] for line in message.splitlines() if line.startswith("  - ")]
+    if not lines:
+        return [{"where": "", "message": message}]
+    out = []
+    for line in lines:
+        where, sep, what = line.partition(": ")
+        out.append({"where": where, "message": what} if sep and " " not in where else {"where": "", "message": line})
+    return out
+
+
+_PATH_PART = re.compile(r"([^.\[\]]+)|\[(\d+)\]")
+
+
+def line_of(text: str, where: str) -> int | None:
+    """The line (1-based) of the YAML node a problem's ``where`` (``tracks.bass.steps``,
+    ``sections[2].bars``) names, or of its nearest parent that exists; ``None`` for none."""
+    try:
+        node = yaml.compose(text, Loader=yaml.SafeLoader)
+    except (yaml.YAMLError, RecursionError):
+        return None
+    if node is None:
+        return None
+    line = None
+    for m in _PATH_PART.finditer(where):
+        if isinstance(node, yaml.MappingNode) and m[1] is not None:
+            found = next(((k, v) for k, v in node.value if isinstance(k, yaml.ScalarNode) and k.value == m[1]), None)
+            if found is None:
+                break
+            line, node = found[0].start_mark.line + 1, found[1]
+        elif isinstance(node, yaml.SequenceNode) and m[2] is not None and int(m[2]) < len(node.value):
+            node = node.value[int(m[2])]
+            line = node.start_mark.line + 1
+        else:
+            break
+    return line
+
+
+#: The most values a score's YAML may stand for, an alias counted each time it is used (Step 201):
+#: a template is under 2 000; ten lines of nested aliases stand for hundreds of millions, which
+#: took 30 s and gigabytes to check.
+MAX_YAML_NODES = 200_000
+
+
+def expanded_nodes(node: yaml.Node, seen: dict[int, int]) -> int:
+    """How many values YAML ``node`` stands for with every alias written out (``seen``: per
+    node already counted; a node that contains itself counts once)."""
+    if id(node) in seen:
+        return seen[id(node)]
+    seen[id(node)] = 1
+    total = 1
+    if isinstance(node, yaml.MappingNode):
+        total += sum(expanded_nodes(k, seen) + expanded_nodes(v, seen) for k, v in node.value)
+    elif isinstance(node, yaml.SequenceNode):
+        total += sum(expanded_nodes(v, seen) for v in node.value)
+    seen[id(node)] = total
+    return total
+
+
+def check_text(text: str) -> tuple[Any, Any, list[dict[str, Any]]]:
+    """Read and check score ``text``: ``(data, score, problems)`` — ``score`` is ``None`` when
+    there are problems (each ``{where, message, line}``), ``data`` when the YAML parsed."""
+    from vidgen.studio import parse_music_score
+
+    loader = yaml.SafeLoader(text)  # yaml.safe_load, with a look at the document before it is built
+    try:
+        node = loader.get_single_node()
+        if node is not None and expanded_nodes(node, {}) > MAX_YAML_NODES:
+            return None, None, [{"where": "", "message": f"the YAML's anchors and aliases repeat it into more than {MAX_YAML_NODES} values; "
+                                 "a score is a few thousand: write it out", "line": None}]
+        data = loader.construct_document(node) if node is not None else None
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        line = mark.line + 1 if mark is not None else None
+        what = getattr(exc, "problem", None) or str(exc)
+        return None, None, [{"where": f"line {line}" if line else "", "message": f"not valid YAML: {what}", "line": line}]
+    except RecursionError:
+        return None, None, [{"where": "", "message": "not valid YAML for a score: nested too deeply", "line": None}]
+    finally:
+        loader.dispose()
+    try:
+        score = parse_music_score(data, "score")
+    except VidgenError as exc:
+        problems = parse_problems(str(exc))
+        for p in problems:
+            p["line"] = line_of(text, p["where"]) if p["where"] else None
+        return data, None, problems
+    return data, score, []
+
+
+def mute_tag(muted: Iterable[str]) -> str:
+    """The file-name tag of a listening mix without the ``muted`` tracks (10 hex digits)."""
+    return hashlib.sha256(",".join(sorted(set(muted))).encode("utf-8")).hexdigest()[:10]
+
+
+def render_key(data: Any) -> str:
+    """The render cache key of a score's data: the same notes (comments and layout aside), the
+    same renderer and vidgen version give the same key."""
+    doc = {"score": data, "renderer": STUDIO_RENDER_VERSION, "vidgen": __version__}
+    return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:20]
+
+
+def audition_gain_db() -> float:
+    """How much louder the studio plays a piece than a video's mix does: the Listen page's
+    +12 dB (−28 → −16 LUFS), the same for every version so A/B is level-matched."""
+    from vidgen.listen import MUSIC_GAIN_DB
+
+    return MUSIC_GAIN_DB
+
+
+#: Edits that change more than one value (:mod:`vidgen.studio_app.song` and
+#: :mod:`vidgen.studio_app.inspector`), by op name.
+SONG_OPS = ("add_track", "delete_track", "add_section", "remove_section", "rename_section", "change_instrument", "play_mode", "section_plays")
+
+
+def _op_label(op: Mapping[str, Any]) -> str:
+    from vidgen.studio_app.edits import flow
+
+    kind, path = op.get("op"), op.get("path")
+    if kind == "set":
+        text = flow(op.get("value"))
+        return f"{path} {text if len(text) <= 40 else text[:39] + '…'}"
+    return f"{kind} {path}"
+
+
+def _apply_ops(text: str, ops: Sequence[Mapping[str, Any]]) -> tuple[str, list[str], list[str]]:
+    """``text`` with ``ops`` applied in order, a label for each and notes on what changed beyond
+    the value named (an instrument change): the song edits are turned into value edits against
+    the text as it is when their turn comes."""
+    from vidgen.studio_app import inspector
+
+    labels: list[str] = []
+    notes: list[str] = []
+    for op in ops:
+        kind = op.get("op") if isinstance(op, Mapping) else None
+        if kind not in SONG_OPS:
+            text = apply_edits(text, [op])
+            labels.append(_op_label(op))
+            continue
+        data, score, problems = check_text(text)
+        if score is None:
+            raise VidgenError(f"{kind}: the score has problems to fix first ({problems[0]['where']}: {problems[0]['message']})")
+        name = op.get("name")
+        track = str(op.get("track", ""))
+        if kind == "change_instrument":
+            values, label, more = inspector.change_instrument(data, score, track, str(op.get("instrument", "")))
+            notes += more
+        elif kind == "play_mode":
+            values, label, more = inspector.set_play_mode(data, score, track, str(op.get("mode", "")))
+            notes += more
+        elif kind == "section_plays":
+            values, label, more = inspector.set_section_plays(data, track, str(op.get("section", "")), bool(op.get("plays")))
+            notes += more
+        elif kind == "add_track":
+            values, label = song.add_track(data, score, str(op.get("instrument", "")), name)
+        elif kind == "delete_track":
+            values, label = song.delete_track(data, str(name))
+        elif kind == "add_section":
+            after, bars = op.get("after"), op.get("bars", 4)
+            if not isinstance(bars, int) or isinstance(bars, bool) or not 1 <= bars <= 64:
+                raise VidgenError("add section: bars is a whole number from 1 to 64")
+            values, label = song.add_section(data, after if isinstance(after, int) and not isinstance(after, bool) else None, name, bars)
+        elif kind == "remove_section":
+            values, label = song.remove_section(data, str(name))
+        else:
+            values, label = song.rename_section(data, str(name), op.get("to"))
+        text = apply_edits(text, values)
+        if label:
+            labels.append(label)
+    return text, labels, notes
+
+
+def _slice_wav(source: Path, target: Path, first: int, count: int) -> None:
+    """Write frames ``first .. first + count`` of the WAV ``source`` as ``target``, bit-exact."""
+    import io
+
+    with wave.open(str(source), "rb") as src:
+        params = src.getparams()
+        src.setpos(min(first, src.getnframes()))
+        frames = src.readframes(count)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as out:
+        out.setnchannels(params.nchannels)
+        out.setsampwidth(params.sampwidth)
+        out.setframerate(params.framerate)
+        out.writeframes(frames)
+    write_bytes_atomic(target, buffer.getvalue())
+
+
+def read_wav(path: Path) -> np.ndarray:
+    """A 16-bit WAV the studio wrote, as float64 ``(n, channels)`` in −1..1."""
+    with wave.open(str(path), "rb") as src:
+        channels = src.getnchannels()
+        frames = src.readframes(src.getnframes())
+    return np.frombuffer(frames, dtype="<i2").reshape(-1, channels) / 32767.0
+
+
+class StudioApp:
+    """The studio's state for one server: its folder, the open session, the render cache.
+    Thread-safe: session changes hold one lock, renders another (one render at a time)."""
+
+    def __init__(self, project_root: Path | None, studio: Path | None = None) -> None:
+        self.project_root = project_root
+        self.studio = studio if studio is not None else studio_dir(project_root)
+        self.session: StudioSession | None = None
+        self.url: str | None = None
+        self._lock = threading.RLock()
+        self._render_lock = threading.Lock()
+        self._presets: list[dict[str, Any]] | None = None
+        self.stems = StemCache()
+        # the late facts: one worker, only the render last asked for (older ones give way)
+        self._facts_pool = ThreadPoolExecutor(1, thread_name_prefix="vidgen-studio-facts")
+        self._facts_jobs: dict[str, Future[dict[str, Any] | None]] = {}
+        self._facts_wanted: str | None = None
+        self._facts_lock = threading.Lock()
+        self._last_render = 0.0  # time.monotonic() when a render was last asked for or made
+        self._last_clean = time.monotonic()  # old renders are removed at most once a minute (§94.18)
+        self._played: OrderedDict[str, None] = OrderedDict()  # render keys last asked for, newest last
+        # the mixes of the last renders (−28 LUFS float32 and gain), which the check reuses
+        self._mixes: OrderedDict[str, tuple[np.ndarray, float]] = OrderedDict()
+        self.checker = Checker(self._render_idle, self._check_stems)
+        # variations (Step 199): their own check worker, so the current version's check and a
+        # batch's do not stop each other
+        from vidgen.studio_app.variations import VariationBatches
+
+        self.variation_checker = Checker(self._render_idle, self._check_stems)
+        self.variations = VariationBatches(self._render_candidate, self._check_candidate)
+
+    def close(self) -> None:
+        """Stop the late-facts, check and variation workers: queued jobs are dropped and the ones
+        under way stop at their next step (so Ctrl+C does not wait for a long piece's facts)."""
+        self._facts_wanted = None
+        self._facts_pool.shutdown(wait=False, cancel_futures=True)
+        self.checker.close()
+        self.variations.close()
+        self.variation_checker.close()
+
+    # ----- facts ---------------------------------------------------------------------------
+
+    def info(self) -> dict[str, Any]:
+        from vidgen.studio_app.agent import provider_info
+
+        return {
+            "vidgen": __version__,
+            "project": str(self.project_root) if self.project_root else None,
+            "studio": str(self.studio),
+            "default_preset": DEFAULT_PRESET,
+            "audition_gain_db": audition_gain_db(),
+            "session": self.session.id if self.session else None,
+            "provider": provider_info(),
+        }
+
+    def presets(self) -> list[dict[str, Any]]:
+        if self._presets is None:
+            self._presets = preset_catalog()
+        return self._presets
+
+    def patches(self) -> dict[str, Any]:
+        """The patch catalogue with each setting's unit and slider scale (Step 195)."""
+        from vidgen.studio import patch_catalog
+        from vidgen.studio_app.inspector import studio_catalog
+
+        return studio_catalog(patch_catalog())
+
+    # ----- sessions and versions ----------------------------------------------------------
+
+    def load(self, preset: str | None = None, text: str | None = None, title: str | None = None) -> dict[str, Any]:
+        """Start a new session from a preset (a built-in bed's template) or from score ``text``;
+        its version 1 is that score. Bad text is refused with its problems (no session)."""
+        from vidgen.studio import music_template_text
+
+        if (preset is None) == (text is None):
+            raise VidgenError("load: give a preset or a score's text")
+        if preset is not None:
+            text = music_template_text(preset)  # an unknown preset: the error with did-you-mean
+        assert text is not None
+        data, score, problems = check_text(text)
+        if score is None:
+            raise VidgenError("load: the score has problems:\n" + "\n".join(f"  - {p['where']}: {p['message']}" for p in problems))
+        with self._lock:
+            name = title or score.title or (preset or "untitled")
+            self.session = StudioSession.create(self.studio, preset, name)
+            label = f"the {preset} template" if preset else "the score given"
+            self.session.add_version(text, "preset" if preset else "text", label, None)
+            if self.url is not None:
+                write_open_marker(self.studio, self.url, self.session.id)
+            return self.state()
+
+    def state(self) -> dict[str, Any]:
+        """The open session (``null`` when none), its current version's score, the listening
+        notes placed in it and the agents' proposals (Step 198)."""
+        from vidgen.studio_app.agent import Proposals
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            if self.session is None:
+                return {"session": None, "score": None, "notes": [], "proposals": [], "revision": 0}
+            current = self.session.current
+            score = self.score(current) if current is not None else None
+            notes = NoteBook(self.session.folder).shown(score["outline"] if score else None)
+            proposals = [{k: v for k, v in p.items() if k != "text"} for p in Proposals(self.session.folder).items]
+            return {"session": self.session.to_json(), "score": score, "notes": notes, "proposals": proposals, "revision": self.session.revision}
+
+    # ----- listening notes and agents (Step 198) --------------------------------------------
+
+    def poll(self, since: int | None = None) -> dict[str, Any]:
+        """What the page polls every 1.5 s: proposals MCP agents left in the session's inbox are
+        picked up; ``{revision, unchanged: true}`` when nothing changed since revision ``since``,
+        else the whole :meth:`state` (``made``: the proposals just picked up)."""
+        from vidgen.studio_app.agent import Proposals, ingest_inbox
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            if self.session is None:
+                return self.state()
+            made = ingest_inbox(self.session, NoteBook(self.session.folder), Proposals(self.session.folder))
+            if since is not None and since == self.session.revision and not made:
+                return {"revision": since, "unchanged": True}
+            return {**self.state(), "made": [p["id"] for p in made]}
+
+    def _outline_of(self, version: int) -> dict[str, Any]:
+        data, score, _ = check_text(self._session().text(version))
+        if score is None:
+            raise VidgenError(f"version {version} has problems; fix them first")
+        return describe_score(score, data)
+
+    def add_note(self, version: int | None, seconds: float, text: str) -> dict[str, Any]:
+        """Pin a listening note at moment ``seconds`` of ``version`` (default: the current one)."""
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session = self._session()
+            number = version if version is not None else session.current
+            assert number is not None
+            note = NoteBook(session.folder).add(self._outline_of(number), number, seconds, text)
+            session.touch()
+            return {**self.state(), "note": note["id"]}
+
+    def update_note(self, note_id: str, text: str | None = None, status: str | None = None, delete: bool = False) -> dict[str, Any]:
+        """Change a note's words or status (``open`` / ``resolved``), or delete it."""
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session = self._session()
+            book = NoteBook(session.folder)
+            if delete:
+                book.delete(note_id)
+            else:
+                book.update(note_id, text, status)
+            session.touch()
+            return self.state()
+
+    def ask(self, version: int | None = None) -> dict[str, Any]:
+        """"Ask an agent": write the hand-off of ``version`` (default: the current one) as the
+        session's ``request.json`` — its score, open notes, kept check, the change from its parent
+        and the instruction — and give it as a prompt to copy, with the provider's state."""
+        from vidgen.studio_app.agent import handoff, prompt_text, provider_info, write_request
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session, number, data, score, key = self._version_score(version)
+            notes = NoteBook(session.folder).shown(describe_score(score, data))
+            request = handoff(session, number, notes, self.checker.kept(session.folder / "checks", key))
+            write_request(session, request)
+            session.touch()
+            return {"request": {k: v for k, v in request.items() if k != "score"}, "prompt": prompt_text(request),
+                    "provider": provider_info(), "file": str(session.folder / "request.json")}
+
+    def last_handoff(self) -> dict[str, Any] | None:
+        """The open session's last hand-off as :meth:`ask` gave it (a reloaded page shows it
+        again), or ``None``."""
+        from vidgen.studio_app.agent import prompt_text, provider_info, read_request
+
+        with self._lock:
+            if self.session is None:
+                return None
+            request = read_request(self.session.folder)
+            if request is None or request.get("session") != self.session.id:
+                return None
+            return {"request": {k: v for k, v in request.items() if k != "score"}, "prompt": prompt_text(request),
+                    "provider": provider_info(), "file": str(self.session.folder / "request.json")}
+
+    def _request(self) -> dict[str, Any]:
+        from vidgen.studio_app.agent import read_request
+
+        request = read_request(self._session().folder)
+        if request is None:
+            raise VidgenError("ask an agent first (the hand-off is made then)")
+        return request
+
+    def _proposal_from(self, reply: str, source: str, agent: str | None) -> dict[str, Any]:
+        from vidgen.studio_app.agent import Proposals, make_proposal, parse_reply
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session = self._session()
+            request = self._request()
+            parsed = parse_reply(reply)
+            proposal = make_proposal(session, NoteBook(session.folder), Proposals(session.folder), parsed["score"], parsed["explanations"],
+                                     parsed["summary"], agent, source, request["base"], request["id"])
+            return {**self.state(), "proposal": proposal["id"]}
+
+    def paste_reply(self, reply: str) -> dict[str, Any]:
+        """A chat assistant's reply pasted by the person, as a proposal for the last hand-off."""
+        return self._proposal_from(reply, "paste", None)
+
+    def send_to_provider(self, model: str) -> dict[str, Any]:
+        """Send the last hand-off to OpenRouter (the person asked; it costs money) and make its
+        reply a proposal. The call runs outside the session lock (it can take a minute)."""
+        from vidgen.studio_app.agent import ask_openrouter, prompt_text
+
+        with self._lock:
+            prompt = prompt_text(self._request())
+        reply = ask_openrouter(prompt, model)
+        return self._proposal_from(reply, "openrouter", model.strip())
+
+    def decide_proposal(self, proposal_id: str, keep: bool) -> dict[str, Any]:
+        """Keep a proposal (its version becomes the current one) or discard it."""
+        from vidgen.studio_app.agent import Proposals, decide
+        from vidgen.studio_app.notes import NoteBook
+
+        with self._lock:
+            session = self._session()
+            decide(session, NoteBook(session.folder), Proposals(session.folder), proposal_id, keep)
+            return self.state()
+
+    def score(self, version: int) -> dict[str, Any]:
+        """Version ``version`` of the open session: its text, facts and problems."""
+        session = self._session()
+        text = session.text(version)
+        data, score, problems = check_text(text)
+        outline = describe_score(score, data) if score is not None else None
+        return {"version": version, "text": text, "outline": outline, "problems": problems, "render_key": render_key(data) if score is not None else None}
+
+    def validate(self, text: str) -> dict[str, Any]:
+        """Check score ``text`` (nothing written): ``ok``, its problems and, when ok, its facts."""
+        data, score, problems = check_text(text)
+        return {"ok": score is not None, "problems": problems, "outline": describe_score(score, data) if score is not None else None}
+
+    def _session(self) -> StudioSession:
+        if self.session is None:
+            raise VidgenError("no score is open: load a preset first")
+        return self.session
+
+    # ----- edits ----------------------------------------------------------------------------
+
+    def edit(self, version: int | None, ops: Sequence[Mapping[str, Any]], label: str | None = None, dry_run: bool = False,
+             origin: str = "edit") -> dict[str, Any]:
+        """Apply the edits ``ops`` to version ``version`` of the open session (default: the
+        current one). A valid result becomes the next version (``origin: edit``, its parent the
+        version edited) and the session's current one: ``{ok: true, session, score}``. A result
+        with problems writes nothing: ``{ok: false, problems}`` (the page shows them by the
+        control; the last good version keeps playing). ``dry_run``: check only (``{ok,
+        problems, outline}``). Besides :mod:`vidgen.studio_app.edits`' ops: ``add_track``
+        (``instrument``, ``name``?), ``delete_track`` (``name``), ``add_section`` (``after``,
+        ``name``?, ``bars``?), ``remove_section`` (``name``), ``rename_section`` (``name``,
+        ``to``)."""
+        if not isinstance(ops, Sequence) or not ops:
+            raise VidgenError("edit: give a list of edits (ops)")
+        with self._lock:
+            session = self._session()
+            base = version if version is not None else session.current
+            assert base is not None
+            text = session.text(base)
+            new_text, labels, notes = _apply_ops(text, ops)
+            data, score, problems = check_text(new_text)
+            if dry_run or score is None:
+                outline = describe_score(score, data) if score is not None else None
+                return {"ok": score is not None, "problems": problems, "outline": outline, "notes": notes, "labels": labels}
+            if new_text == text:
+                return {"ok": True, "unchanged": True, "notes": notes, **self.state()}
+            session.add_version(new_text, origin, (label or "; ".join(labels) or "an edit")[:120], base)
+            return {"ok": True, "notes": notes, **self.state()}
+
+    def text(self, version: int | None, text: str) -> dict[str, Any]:
+        """Typed score ``text`` (the YAML view) as the next version after ``version`` (default:
+        the current one), like an edit: ``{ok: false, problems}`` writes nothing (the page keeps
+        the text as a draft and the last good version plays); the same text is ``unchanged``."""
+        text = normal_text(text)
+        with self._lock:
+            session = self._session()
+            base = version if version is not None else session.current
+            assert base is not None
+            data, score, problems = check_text(text)
+            if score is None:
+                return {"ok": False, "problems": problems, "outline": None}
+            if text == session.text(base):
+                return {"ok": True, "unchanged": True, **self.state()}
+            session.add_version(text, "edit", "typed in the score file", base)
+            return {"ok": True, **self.state()}
+
+    # ----- versions and sessions (Step 197) -------------------------------------------------
+
+    def undo(self) -> dict[str, Any]:
+        """Back to the current version's parent (nothing to undo: unchanged)."""
+        with self._lock:
+            self._session().undo()
+            return self.state()
+
+    def redo(self) -> dict[str, Any]:
+        """Forward again down the branch last undone (nothing undone: unchanged)."""
+        with self._lock:
+            self._session().redo()
+            return self.state()
+
+    def set_current(self, version: int) -> dict[str, Any]:
+        """Make ``version`` the current one (picked from the version list)."""
+        with self._lock:
+            self._session().set_current(version)
+            return self.state()
+
+    def update_version(self, version: int, label: str | None = None, starred: bool | None = None) -> dict[str, Any]:
+        """Rename and / or star a version; the session."""
+        with self._lock:
+            session = self._session()
+            session.update_version(version, label, starred)
+            return {"session": session.to_json()}
+
+    def sessions(self) -> list[dict[str, Any]]:
+        """The sessions in this studio's folder, newest first (``open``: the one open)."""
+        open_id = self.session.id if self.session else None
+        return [{**s, "open": s["id"] == open_id} for s in list_sessions(self.studio)]
+
+    def open_session(self, session_id: str) -> dict[str, Any]:
+        """Reopen an earlier session (its current version)."""
+        with self._lock:
+            self.session = StudioSession.open(self.studio, session_id)
+            if self.url is not None:
+                write_open_marker(self.studio, self.url, self.session.id)
+            return self.state()
+
+    # ----- the check (Step 197) -------------------------------------------------------------
+
+    def _render_idle(self) -> bool:
+        return not self._render_lock.locked() and time.monotonic() - self._last_render >= CHECK_AFTER_SECONDS
+
+    def _check_stems(self, data: Any, score: Any, key: str) -> tuple[Iterable[Any], tuple[np.ndarray, float] | None]:
+        """The version's kept stems (rendered now only if they were dropped) and its mix when
+        it is still in memory, for the check. A long piece's stems (streamed) come one at a
+        time, each fetched under the render lock, after its mix is made again if it was dropped."""
+        with self._render_lock:
+            stems = score_stems(self.stems, data, score)
+            if not stems.streamed:
+                return [stems.stems[t.name].stem for t in score.tracks], self._mixes.get(key)
+            mix = self._mixes.get(key)
+
+        def each() -> Iterable[Any]:
+            for t in score.tracks:
+                with self._render_lock:
+                    item = stems.get(t.name)
+                yield item.stem
+
+        if mix is None:
+            from vidgen.studio.render import mix_track_stems
+
+            audio, made = mix_track_stems(score, each(), threads=THREADS, fast_fft=FAST_FFT)
+            mix = (audio, made.gain)
+        return each(), mix
+
+    def _version_score(self, version: int | None) -> tuple[StudioSession, int, Any, Any, str]:
+        session = self._session()
+        number = version if version is not None else session.current
+        assert number is not None
+        data, score, _ = check_text(session.text(number))
+        if score is None:
+            raise VidgenError(f"version {number} has problems; fix them first")
+        return session, number, data, score, render_key(data)
+
+    def check(self, version: int | None = None, wait: float = 0.0) -> dict[str, Any]:
+        """``vidgen music check`` of a version (default: the current one), made in the
+        background from its kept stems (:mod:`vidgen.studio_app.checks`): ``{status: done,
+        ...the check}`` when it is made (waiting up to ``wait`` seconds), ``pending`` while it is
+        under way, ``superseded`` when another version's check was asked for meanwhile."""
+        session, number, data, score, key = self._version_score(version)
+        folder = session.folder / "checks"
+        doc = self.checker.kept(folder, key)
+        if doc is None:
+            job = self.checker.want(folder, key, data, score)
+            doc = self.checker.wait(job, min(max(wait, 0.0), 60.0)) if wait > 0 else None
+            if doc is None:
+                status = "superseded" if job.done() or not self.checker.is_wanted(key) else "pending"
+                return {"status": status, "key": key, "version": number}
+        return {**doc, "status": "done", "version": number}
+
+    def apply_check(self, version: int, key: str, edit_id: str) -> dict[str, Any]:
+        """Apply advice ``edit_id`` of the check ``key`` to ``version`` (the version checked, or
+        one with the same notes) as the next version, labelled with the advice."""
+        session, number, _, _, found = self._version_score(version)
+        if found != key:
+            raise VidgenError(f"check: that advice was for other notes than version {number}'s; check it again")
+        doc = self.checker.kept(session.folder / "checks", key)
+        if doc is None:
+            raise VidgenError("check: that check is no longer kept; check again")
+        label, ops = find_edit(doc, edit_id)
+        return self.edit(number, ops, label=f"check: {label}", origin="check")
+
+    def media_file(self, name: str) -> Path | None:
+        """A check's picture of the open session (``<key>-check.png``), or ``None``."""
+        if self.session is None or not CHECK_IMAGE.match(name):
+            return None
+        path = self.session.folder / "checks" / name
+        return path if path.is_file() else None
+
+    # ----- exports (Step 197) ---------------------------------------------------------------
+
+    def export(self, version: int | None, fmt: str, length: str = "once", count: float | None = None, level: str = "video") -> dict[str, Any]:
+        """A version as a file to download (``/download/<name>``): its score file (``yaml``) or
+        its audio (``wav`` / ``mp3``; :func:`~vidgen.studio_app.exports.export_audio`)."""
+        from vidgen.studio_app.exports import FORMATS, export_audio, file_name, write_export
+
+        if fmt not in FORMATS:
+            raise VidgenError(f"export: format is one of {', '.join(FORMATS)}, got {fmt!r}")
+        session, number, _, score, _ = self._version_score(version)
+        folder = session.folder / "exports"
+        title = score.title or session.data.get("title") or "piece"
+        if fmt == "yaml":
+            name = file_name(title, number, "yaml")
+            write_export(folder, name, "yaml", text=session.text(number))
+            return {"url": f"/download/{name}", "name": name, "format": "yaml", "version": number}
+        began = time.perf_counter()
+        with self._render_lock:
+            audio, facts = export_audio(score, length, count, level)
+        name = file_name(title, number, fmt, length, count, level)
+        write_export(folder, name, fmt, audio=audio)
+        return {"url": f"/download/{name}", "name": name, "format": fmt, "version": number, **facts, "export_seconds": round(time.perf_counter() - began, 2)}
+
+    def save_piece(self, version: int | None, name: str, overwrite: bool = False) -> dict[str, Any]:
+        """Save a version into the project's ``assets/music/<name>.yaml`` (Step 188's name rule:
+        a built-in bed's name is refused; an existing piece only with ``overwrite``)."""
+        from vidgen.studio_app.exports import save_to_project
+
+        session, number, _, _, _ = self._version_score(version)
+        return {**save_to_project(self.project_root, name, session.text(number), overwrite), "version": number}
+
+    def download_file(self, name: str) -> Path | None:
+        """An exported file of the open session, or ``None``."""
+        from vidgen.studio_app.exports import EXPORT_NAME
+
+        if self.session is None or not EXPORT_NAME.match(name):
+            return None
+        path = self.session.folder / "exports" / name
+        return path if path.is_file() else None
+
+    # ----- disk (Step 200) ------------------------------------------------------------------
+
+    def disk(self) -> dict[str, Any]:
+        """Bytes of renders and exports, the open session's and the studio's (§94.18)."""
+        from vidgen.studio_app.cleanup import disk_use
+
+        return disk_use(self.studio, self.session)
+
+    def clean_up(self) -> dict[str, Any]:
+        """The person's "clean up": old renders of the open session and of the studio's other
+        sessions, and exports older than an hour, removed by :mod:`~vidgen.studio_app.cleanup`'s
+        rule (never a version, note or check): what was removed and the disk use after."""
+        from vidgen.studio_app.cleanup import ASKED_EXPORT_AGE, clean_session, clean_studio
+
+        with self._lock, self._render_lock:
+            mine = clean_session(self.session, export_age=ASKED_EXPORT_AGE) if self.session is not None else {"files": 0, "bytes": 0, "busy": 0}
+            others = clean_studio(self.studio, self.session.id if self.session else None, ASKED_EXPORT_AGE)
+            self._last_clean = time.monotonic()
+        removed = {k: mine[k] + others[k] for k in ("files", "bytes", "busy")}
+        return {"removed": removed, "disk": self.disk()}
+
+    def _auto_clean(self, session: StudioSession, playing: Sequence[str]) -> None:
+        """Keep the open session's renders within the rule, at most once a minute (after a new
+        render; the renders last asked for, ``playing``, are kept whatever versions they are:
+        the page may be A/B-ing one of them)."""
+        from vidgen.studio_app.cleanup import clean_session
+
+        if time.monotonic() - self._last_clean < AUTO_CLEAN_SECONDS:
+            return
+        self._last_clean = time.monotonic()
+        with self._lock, self._render_lock:
+            clean_session(session, extra=playing)
+
+    # ----- variations (Step 199) -----------------------------------------------------------
+
+    def make_variations(self, version: int | None = None, batch: str | None = None, letter: str | None = None, shuffle: int = 0) -> dict[str, Any]:
+        """Four variations of ``version`` (default: the current one) — or, "more like this", of
+        candidate ``letter`` of ``batch`` — rendered and checked in the background
+        (:mod:`vidgen.studio_app.variations`): the batch's document, polled with
+        :meth:`variation_batch` until its ``state`` is ``done``. ``shuffle``: a counter giving
+        four others (the same counter, the same four)."""
+        with self._lock:
+            session = self._session()
+            if batch is not None:
+                if letter is None:
+                    raise VidgenError("variations: more like this needs the batch and the candidate's letter")
+                item = self.variations.item(session, batch, letter)
+                text = self.variations.text(session, batch, letter)
+                root, base, first, chain = item["root"], {"batch": batch, "letter": letter}, item["kind"], [*item["chain"], item["label"]]
+            else:
+                root = version if version is not None else session.current
+                assert root is not None
+                text = session.text(root)
+                base, first, chain = {"version": root}, None, []
+        return self.variations.start(session, text, root, base, shuffle, first, chain)
+
+    def variation_batch(self, batch: str) -> dict[str, Any]:
+        """A batch's document as the worker last wrote it (progress, renders, checks)."""
+        return self.variations.read(self._session(), batch)
+
+    def variation_batches(self) -> list[dict[str, Any]]:
+        """The open session's variation batches, newest first (Step 200: the page lists them, so
+        candidates not kept can be heard again)."""
+        return self.variations.batches(self._session()) if self.session is not None else []
+
+    def keep_variation(self, batch: str, letter: str) -> dict[str, Any]:
+        """Keep candidate ``letter`` of ``batch``: it becomes the next version (``origin:
+        variation``, its parent the version varied) and the current one."""
+        with self._lock:
+            session = self._session()
+            item = self.variations.item(session, batch, letter)
+            if item.get("kept") is not None:
+                session.set_current(int(item["kept"]))
+                return self.state()
+            text = self.variations.text(session, batch, letter)
+            _, score, problems = check_text(text)
+            if score is None:
+                raise VidgenError(f"variations: candidate {letter} has problems ({problems[0]['message']})")
+            label = "variation: " + "; ".join([*item["chain"], item["label"]])
+            version = session.add_version(text, "variation", label if len(label) <= 120 else label[:119] + "…", int(item["root"]))
+            self.variations.mark_kept(session, batch, letter, version.number)
+            return self.state()
+
+    def _render_candidate(self, session: StudioSession, text: str) -> dict[str, Any]:
+        """Render a variation's text into the session's render cache (the stems of the tracks it
+        did not change are reused): what its card shows."""
+        data, score, problems = check_text(text)
+        if score is None:
+            raise VidgenError(f"variations: a candidate has problems ({problems[0]['message']})")
+        key = render_key(data)
+        self._last_render = time.monotonic()
+        meta, timing = self._render_whole(session, key, data, score, late_facts=False)
+        self._last_render = time.monotonic()
+        return {"key": key, "url": f"/audio/{key}.wav", "seconds": meta["seconds"], "loop": meta["loop"], "cached": meta["cached"],
+                "render_seconds": meta["render_seconds"] if not meta["cached"] else 0.0, "tracks": sorted(timing.get("tracks", {})),
+                "scaled": sorted(timing.get("scaled", {}))}
+
+    def _check_candidate(self, session: StudioSession, text: str, wanted: Any) -> dict[str, Any] | None:
+        """Check a variation's text (kept as the session's checks are); ``None`` when the batch
+        is no longer wanted."""
+        from vidgen.studio_app.variations import check_brief
+
+        data, score, _ = check_text(text)
+        key = render_key(data)
+        folder = session.folder / "checks"
+        doc = self.checker.kept(folder, key)
+        if doc is None:
+            job = self.variation_checker.want(folder, key, data, score)
+            while doc is None and wanted():
+                doc = self.variation_checker.wait(job, 0.5)
+                if job.done() and doc is None:
+                    return None
+        return check_brief(doc) if doc is not None else None
+
+    # ----- rendering ----------------------------------------------------------------------
+
+    def render(self, version: int | None = None, section: str | None = None, mute: Sequence[str] = (), narration: bool = False,
+               variation: tuple[str, str] | None = None) -> dict[str, Any]:
+        """Render a version of the open session (default: the current one), or one section of
+        it, into the render cache (reused when the notes are unchanged): mixed from the tracks'
+        stems, only the tracks whose stems are not kept rendered (§94.14). The section is cut
+        from the whole piece's render, so it sounds as in the piece (tails from before it).
+        ``mute``: tracks left out of what plays — a listening mix (§94.12), never the score;
+        names that are not tracks are ignored. ``narration``: under the narration sample.
+        ``variation``: ``(batch, letter)``, a variation's candidate instead of a version (Step
+        199; ``version`` is then ``null`` in the answer). ``timing`` says what took how long;
+        ``facts_pending``: the loudness, true peak and energy curve come later (:meth:`facts`)."""
+        from vidgen.sfx import RATE
+
+        began = time.perf_counter()
+        self._last_render = time.monotonic()
+        session = self._session()
+        if variation is not None:
+            number = None
+            data, score, problems = check_text(self.variations.text(session, *variation))
+        else:
+            number = version if version is not None else session.current
+            assert number is not None
+            data, score, problems = check_text(session.text(number))
+        if score is None:
+            raise VidgenError(f"version {number} has problems; fix them before playing it")
+        key = render_key(data)
+        meta, timing = self._render_whole(session, key, data, score)
+        with self._lock:  # what the page may still be playing (an A/B side, a variation)
+            self._played[key] = None
+            self._played.move_to_end(key)
+            while len(self._played) > KEEP_PLAYED:
+                self._played.popitem(last=False)
+            playing = list(self._played)
+        if not meta["cached"]:
+            self._auto_clean(session, playing)
+        muted = sorted(set(mute) & {t.name for t in score.tracks})
+        name = f"{key}.m{mute_tag(muted)}" if muted else key
+        if muted:
+            timing["listening_mix"] = self._render_mix(session, name, data, score, muted, meta)
+        if narration:
+            name, timing["narration"] = self._under_narration(session, name)
+        timing["total"] = round(time.perf_counter() - began, 3)
+        self._last_render = time.monotonic()
+        result = {
+            "version": number,
+            "variation": f"{variation[0]}/{variation[1]}" if variation is not None else None,
+            "key": key,
+            **meta,
+            "url": f"/audio/{name}.wav",
+            "section": None,
+            "muted": muted,
+            "narration": bool(narration),
+            "timing": timing,
+            "facts_pending": any(k not in meta for k in LATE_FACTS),
+        }
+        if section is not None:
+            found = next((s for s in score.sections if s.name == section), None)
+            if found is None:
+                names = ", ".join(s.name for s in score.sections)
+                raise VidgenError(f"render: no section '{section}' (sections: {names})")
+            first = score.section_start(found)
+            last = found is score.sections[-1]
+            count = (meta["samples"] - first) if last else found.bars * score.bar
+            target = session.renders / f"{name}-{section}.wav"
+            with self._render_lock:  # two requests for it at once write it once (Windows cannot replace a file being sent)
+                if not target.is_file():
+                    _slice_wav(session.renders / f"{name}.wav", target, first, count)
+            result.update(url=f"/audio/{target.name}", section={"name": section, "start": first / RATE, "seconds": count / RATE})
+        return result
+
+    def _render_whole(self, session: StudioSession, key: str, data: Any, score: Any, late_facts: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
+        """The cached render ``key`` (mixed now from the stems if missing): its facts and what
+        took how long (``tracks``: the stems rendered now, seconds each). ``late_facts``: ask
+        for its loudness and energy curve now (not for a variation rendered in the background:
+        they would push the playing render's aside)."""
+        from vidgen.sfx import RATE, wav_bytes
+        from vidgen.studio.render import mix_track_stems
+        from vidgen.studio_app.stems import METER_SECONDS
+
+        meta_path, wav_path = session.renders / f"{key}.json", session.renders / f"{key}.wav"
+        with self._render_lock:
+            if meta_path.is_file() and wav_path.is_file():
+                return {**json.loads(meta_path.read_text(encoding="utf-8")), "cached": True}, {"tracks": {}}
+            began = time.perf_counter()
+            stems = score_stems(self.stems, data, score)
+            mixing = time.perf_counter()
+            warnings: list[str] = []
+            powers: dict[str, np.ndarray] = {}
+
+            def each() -> Iterable[Any]:  # one at a time: a long piece's stems are streamed (Step 201)
+                for t in score.tracks:
+                    item = stems.get(t.name)
+                    powers[t.name] = item.power
+                    yield item.stem
+
+            audio, mix = mix_track_stems(score, each(), warnings, threads=THREADS, fast_fft=FAST_FFT)
+            if stems.streamed:  # the stems were rendered while mixing
+                mixing = began + sum(stems.rendered.values()) + sum(stems.scaled.values())
+            self._mixes[key] = (audio, mix.gain)
+            while len(self._mixes) > 2:
+                self._mixes.popitem(last=False)
+            writing = time.perf_counter()
+            level = 10 ** (audition_gain_db() / 20)
+            write_bytes_atomic(wav_path, wav_bytes(np.clip(audio * level, -1.0, 1.0)))
+            frames = math.ceil(len(audio) / (METER_SECONDS * RATE))
+            meta = {
+                "seconds": round(len(audio) / RATE, 3),
+                "samples": len(audio),
+                "loop": score.loop,
+                "audition_gain_db": audition_gain_db(),
+                "warnings": warnings,
+                "render_seconds": round(time.perf_counter() - began, 2),
+                "pass_samples": score.samples,
+                "bar_samples": score.bar,
+                "mix_gain": mix.gain,
+                "meter_seconds": METER_SECONDS,
+                "meters": {t.name: meter_levels(powers[t.name], frames, mix.gain * level) for t in score.tracks},
+            }
+            write_text_atomic(meta_path, json.dumps(meta) + "\n")
+            timing = {
+                "tracks": stems.rendered,
+                "scaled": stems.scaled,
+                "stems": round(mixing - began, 3),
+                "mix": round(writing - mixing, 3),
+                "write": round(time.perf_counter() - writing, 3),
+            }
+        if late_facts:
+            self._want_facts(session.renders, key, audio)
+        return {**meta, "cached": False}, timing
+
+    def _render_mix(self, session: StudioSession, name: str, data: Any, score: Any, muted: Sequence[str], meta: Mapping[str, Any]) -> float:
+        """The listening mix ``name`` without the ``muted`` tracks: the kept stems of the other
+        tracks summed, through the master filter, at the whole piece's gain and length (muting a
+        part never makes the rest louder; a one-shot keeps its tails). Seconds it took."""
+        from vidgen.sfx import wav_bytes
+        from vidgen.studio.render import MixFacts, mix_track_stems
+
+        path = session.renders / f"{name}.wav"
+        with self._render_lock:
+            if path.is_file():
+                return 0.0
+            began = time.perf_counter()
+            stems = score_stems(self.stems, data, score)
+            kept = (stems.get(t.name).stem for t in score.tracks if t.name not in muted)  # one at a time
+            audio, _ = mix_track_stems(score, kept, whole=MixFacts(meta["mix_gain"], meta["samples"]), threads=THREADS, fast_fft=FAST_FFT)
+            level = 10 ** (audition_gain_db() / 20)
+            write_bytes_atomic(path, wav_bytes(np.clip(audio * level, -1.0, 1.0)))
+            return round(time.perf_counter() - began, 3)
+
+    def _under_narration(self, session: StudioSession, name: str) -> tuple[str, float]:
+        """The render ``name`` under the narration sample (``<name>.n.wav``): its name and the
+        seconds it took (0 when it was there)."""
+        from vidgen.sfx import wav_bytes
+        from vidgen.studio_app.narration import under_narration
+
+        target = session.renders / f"{name}.n.wav"
+        with self._render_lock:
+            if target.is_file():
+                return f"{name}.n", 0.0
+            began = time.perf_counter()
+            music = read_wav(session.renders / f"{name}.wav") / 10 ** (audition_gain_db() / 20)
+            write_bytes_atomic(target, wav_bytes(np.clip(under_narration(music), -1.0, 1.0)))
+            return f"{name}.n", round(time.perf_counter() - began, 3)
+
+    # ----- the late facts ---------------------------------------------------------------------
+
+    def facts(self, key: str, wait: float = 30.0) -> dict[str, Any]:
+        """The loudness, true peak and energy curve of render ``key`` of the open session,
+        worked out after it was made (waits up to ``wait`` seconds): ``{key, loudness,
+        true_peak, energy}``, or ``{key, pending: true}`` when another render was asked for
+        meanwhile (only the latest one's are worked out)."""
+        if not RENDER_KEY.match(key):
+            raise VidgenError(f"facts: not a render key: {key!r}")
+        session = self._session()
+        meta_path = session.renders / f"{key}.json"
+        if not meta_path.is_file():
+            raise VidgenError(f"facts: no render {key} in this session")
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if all(k in meta for k in LATE_FACTS):
+            return {"key": key, **{k: meta[k] for k in LATE_FACTS}}
+        try:
+            found = self._want_facts(session.renders, key, None).result(timeout=wait)
+        except FuturesTimeout:
+            found = None
+        return {"key": key, **found} if found is not None else {"key": key, "pending": True}
+
+    def _want_facts(self, renders: Path, key: str, audio: np.ndarray | None) -> Future[dict[str, Any] | None]:
+        """Ask for render ``key``'s late facts (from ``audio``, its −28 LUFS samples, or its
+        WAV): the job doing it; jobs not started for other renders are dropped."""
+        with self._facts_lock:
+            self._facts_wanted = key
+            job = self._facts_jobs.get(key)
+            if job is not None and not job.cancelled() and (not job.done() or (job.exception() is None and job.result() is not None)):
+                return job
+            for other, queued in list(self._facts_jobs.items()):
+                if other != key and (queued.cancel() or queued.done()):
+                    del self._facts_jobs[other]
+            job = self._facts_pool.submit(self._late_facts, renders, key, audio)
+            self._facts_jobs[key] = job
+            return job
+
+    def _idle_for(self, key: str) -> bool:
+        """Wait until no render is under way or just asked for (the late facts never slow the
+        next edit's render down); ``False`` when render ``key`` is no longer the one wanted."""
+        while self._facts_wanted == key:
+            if not self._render_lock.locked() and time.monotonic() - self._last_render >= FACTS_AFTER_SECONDS:
+                return True
+            time.sleep(0.05)
+        return False
+
+    def _late_facts(self, renders: Path, key: str, audio: np.ndarray | None) -> dict[str, Any] | None:
+        """Work out render ``key``'s late facts and add them to its facts file; ``None`` when
+        another render became the one wanted first."""
+        from vidgen import loudness
+
+        meta_path = renders / f"{key}.json"
+        if not self._idle_for(key):
+            return None
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if audio is None:
+            audio = read_wav(renders / f"{key}.wav") / 10 ** (meta["audition_gain_db"] / 20)
+        # bar by bar and block by block, giving way to any render between them (as
+        # measure.loudness_curve and loudness.measure do it, the same numbers)
+        x = np.asarray(audio, dtype=np.float64)
+        bar, one_pass = meta["bar_samples"], meta["pass_samples"]
+        curve = []
+        for a in range(0, one_pass - bar + 1, bar):
+            if not self._idle_for(key):
+                return None
+            curve.append(loudness.integrated_loudness(x[a : a + bar]))
+        meter = loudness.LoudnessMeter()
+        for lo, hi, ext in loudness.blocks(len(x), lambda a, b: x[a:b]):
+            if not self._idle_for(key):
+                return None
+            part = slice(loudness.MARGIN, loudness.MARGIN + hi - lo)
+            meter.add(loudness.kweighted_power(ext)[part], loudness.peak_envelope(ext)[part])
+        facts = {
+            "loudness": round(meter.integrated, 2) if math.isfinite(meter.integrated) else None,
+            "true_peak": round(meter.true_peak, 2) if math.isfinite(meter.true_peak) else None,
+            "energy": [round(v, 1) if math.isfinite(v) and v > ENERGY_FLOOR else ENERGY_FLOOR for v in curve],
+        }
+        write_text_atomic(meta_path, json.dumps({**meta, **facts}) + "\n")
+        return facts
+
+    def audio_file(self, name: str) -> Path | None:
+        """The rendered file ``name`` of the open session, or ``None`` (an unknown or malformed
+        name never reaches the file system beyond the render folder)."""
+        if self.session is None or not AUDIO_NAME.match(name):
+            return None
+        path = self.session.renders / name
+        return path if path.is_file() else None

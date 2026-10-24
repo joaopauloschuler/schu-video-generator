@@ -140,19 +140,33 @@ def blocks(n: int, read: Callable[[int, int], np.ndarray], margin: int = MARGIN,
         yield lo, hi, ext
 
 
-def measure(n: int, read: Callable[[int, int], np.ndarray], peaks: bool = True) -> LoudnessMeter:
+def measure(n: int, read: Callable[[int, int], np.ndarray], peaks: bool = True, threads: int = 1) -> LoudnessMeter:
     """A :class:`LoudnessMeter` fed with a whole signal of ``n`` samples read block by block
     (``read(a, b)`` → ``(b - a, channels)`` floats); ``peaks=False`` skips the true peak (faster;
-    the meter's peak is then that of the samples)."""
-    meter = LoudnessMeter()
-    for lo, hi, ext in blocks(n, read):
+    the meter's peak is then that of the samples). ``threads`` > 1 measures that many blocks at
+    once (the same result; every block is read first, so only for a signal in memory)."""
+
+    def one(block: tuple[int, int, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+        lo, hi, ext = block
         part = slice(MARGIN, MARGIN + hi - lo)
         envelope = peak_envelope(ext)[part] if peaks else np.max(np.abs(ext[part]), axis=1)
-        meter.add(kweighted_power(ext)[part], envelope)
+        return kweighted_power(ext)[part], envelope
+
+    meter = LoudnessMeter()
+    if threads > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(threads) as pool:
+            results = list(pool.map(one, blocks(n, read)))
+    else:
+        results = map(one, blocks(n, read))  # type: ignore[assignment]
+    for power, envelope in results:
+        meter.add(power, envelope)
     return meter
 
 
-def integrated_loudness(samples: np.ndarray) -> float:
-    """Integrated loudness (LUFS) of a whole signal in memory (mono ``(n,)`` or ``(n, c)``)."""
+def integrated_loudness(samples: np.ndarray, threads: int = 1) -> float:
+    """Integrated loudness (LUFS) of a whole signal in memory (mono ``(n,)`` or ``(n, c)``);
+    ``threads``: blocks measured at once (the same result)."""
     x = samples.reshape(len(samples), -1)
-    return measure(len(x), lambda a, b: x[a:b], peaks=False).integrated
+    return measure(len(x), lambda a, b: x[a:b], peaks=False, threads=threads).integrated

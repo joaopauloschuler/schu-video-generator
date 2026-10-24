@@ -85,7 +85,7 @@ def parse_steps(value: str | list[str], where: str, lead_hold: bool = False) -> 
     """A pattern (a string, or a list of strings that follow each other) as bars of steps.
     ``lead_hold``: it may start with ``-`` (a track's steps: the note sounding when its section
     starts goes on; the score checks there is one)."""
-    text = " | ".join(value) if isinstance(value, list) else value
+    text = " | ".join(value) if isinstance(value, list) and all(isinstance(v, str) for v in value) else value
     if not isinstance(text, str) or not text.strip():
         raise VidgenError(f"{where}: write the steps as a string, e.g. \"x... x... x... x...\" (one bar of sixteenths)")
     bars: list[list[Step]] = [[]]

@@ -163,7 +163,7 @@ def box(x0: float, y0: float, x1: float, y1: float) -> list[list[float]]:
 
 def test_lint_catches_a_group_caption_among_its_blocks() -> None:
     """Step 173's still: 'Web tier' over the corner of 'Web 1'."""
-    assert list(RULES)[-2] == "iso_labels" and RULES["iso_labels"].default == "warning"
+    assert list(RULES).index("iso_labels") == list(RULES).index("music_check") - 1 and RULES["iso_labels"].default == "warning"
     ctx = frame([label("Web tier", "group", "web", [310, 150, 435, 180]), label("Web 1", "block", "web1", [385, 115, 470, 140])],
                 {"web1": box(385, 155, 470, 245), "lb": box(165, 175, 300, 250)}, plates={"web": box(240, 180, 500, 300)})
     found = list(RULES["iso_labels"].check(ctx, IsoLabelsRule()))

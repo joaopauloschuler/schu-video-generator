@@ -493,7 +493,8 @@ def check_overlays(project: Project, theme: Theme | None) -> None:
 
 def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: VideoPlan) -> list[Overlay]:
     """The overlays drawn on scene ``spec``, built for rendering it (ordered by ``layer``, then
-    config order). Raises :class:`VidgenError` for invalid overlays."""
+    config order), and its citations when it has references (DESIGN.md §95.14). Raises
+    :class:`VidgenError` for invalid overlays."""
     entries, problems = overlay_entries(project)
     if problems:
         check_overlays(project, theme)
@@ -525,6 +526,11 @@ def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: Vide
             if end <= slot.start or start >= slot.cut or not overlay.shown_in(max(start, slot.start), min(end, slot.cut)):
                 continue  # its time range does not reach this scene, or it is hidden all along
         out.append(overlay)
+    from vidgen.citations import citation_overlay
+
+    cited = citation_overlay(project, spec, context)   # the scene's references (DESIGN.md §95.14)
+    if cited is not None:
+        out.append(cited)
     return sorted(out, key=lambda o: o.layer)
 
 

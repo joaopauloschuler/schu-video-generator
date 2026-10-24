@@ -591,6 +591,45 @@ from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, 
 from vidgen.world.iso_view import ISO_RISE  # noqa: E402
 from vidgen.iso_vector import picture_to_scene, shapes_mobject  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
+from vidgen.cellworld import CELL_KINDS, CellSpec, CellView, CellWorld, build_cell_world, did_you_mean, format_length, parse_coordinate, parse_length  # noqa: E402
+from vidgen.cellworld import COMPARTMENTS as CELL_COMPARTMENTS, KINDS as CELL_OBJECT_KINDS, LEVELS as CELL_LEVELS, ObjectSpec as CellObjectSpec  # noqa: E402
+from vidgen.cellworld import default_level as cell_default_level, label_weight as cell_label_weight, level_view as cell_level_view  # noqa: E402
+from vidgen.cellworld import lod_weights as cell_lod_weights, scale_bar as cell_scale_bar, zoom_path as cell_zoom_path  # noqa: E402
+from vidgen.cellworld import Anchor as CellAnchor, COAT_NAMES as CELL_COATS, MEMBRANES as CELL_MEMBRANES, part_anchors as cell_part_anchors  # noqa: E402
+from vidgen.cell_vector import CellColors, CellDrawing  # noqa: E402
+from vidgen.cellworld.glyphs import Glyph as MoleculeGlyph, MoleculeSpec, check_molecule, molecule_glyph, place as place_glyph  # noqa: E402
+from vidgen.cellworld.molecules import BILAYER_NM, MOLECULES as MOLECULE_KINDS, MoleculeKind, membrane_sides, protein_size  # noqa: E402
+from vidgen.cellworld.molecules import check_faces as check_molecule_faces, check_membrane as check_molecule_membrane  # noqa: E402
+from vidgen.cellworld.molecules import check_place as check_molecule_place  # noqa: E402
+from vidgen.cellworld.names import MODIFICATIONS, SPECIES, check_gene, check_modification, check_protein, gene_markup, histone_mark  # noqa: E402
+from vidgen.cellworld.names import protein_markup, species as nomenclature_species  # noqa: E402
+from vidgen.cellworld.notation import charge_of, check_markup, chem_markup, chem_plain  # noqa: E402
+from vidgen.cellworld.sequences import CODONS, check_sequence, check_trna, codons_read, reverse_complement  # noqa: E402
+from vidgen.cell_draw.closeup import HEAD_HUE as LIPID_HEAD_HUE, TAIL_HUE as LIPID_TAIL_HUE  # noqa: E402
+from vidgen.cell_draw.molecules import glyph_mobjects  # noqa: E402
+from vidgen.cellworld import transport as cell_transport, traffic as cell_traffic  # noqa: E402
+from vidgen.cell_draw.traffic import EventDrawing as CellEventDrawing  # noqa: E402
+from vidgen.cell_draw.cytoskeleton import motor_curves as cell_motor_curves, motor_parts as cell_motor_parts  # noqa: E402
+from vidgen.cellworld.glyphs import ION_FLOW as MOLECULE_ION_FLOW, Prim as MoleculePrim, carrier_parts, small_prims as molecule_small_prims  # noqa: E402
+from vidgen.cellworld.molecules import IONS as MOLECULE_ION_RADII, ION_HUES as MOLECULE_ION_HUES, TRANSPORTERS as MOLECULE_TRANSPORTERS  # noqa: E402
+from vidgen.cellworld.molecules import TYPICAL_CONCENTRATIONS, pump_type as molecule_pump_type  # noqa: E402
+from vidgen.cellworld.expression import CELL_STEPS as GENE_CELL_STEPS, CHAPERONES as GENE_CHAPERONES, STEPS as GENE_STEPS  # noqa: E402
+from vidgen.cellworld.expression import ExpressionState, Gene, GeneSpec, build_gene, parse_protein, signal_peptide_length  # noqa: E402
+from vidgen.cellworld.expression import advance as gene_advance, cell_advance as gene_cell_advance  # noqa: E402
+from vidgen.cellworld.expression import cell_step_problem as gene_cell_step_problem, step_problem as gene_step_problem  # noqa: E402
+from vidgen.cellworld.expression_stage import ExpressionStage  # noqa: E402
+from vidgen.cellworld.expression_route import RoutePlanner as GeneRoutePlanner, route_problem as gene_route_problem  # noqa: E402
+from vidgen.cell_draw.expression import ExpressionDrawing  # noqa: E402
+from vidgen.cell_draw.expression_route import RouteDrawing as GeneRouteDrawing  # noqa: E402
+from vidgen.cellworld import pathway as cell_pathway, pathway_layout as cell_pathway_layout  # noqa: E402
+from vidgen.cellworld.pathway import BANDS as PATHWAY_BANDS, EDGE_TYPES as PATHWAY_EDGE_TYPES, NODE_KINDS as PATHWAY_NODE_KINDS  # noqa: E402
+from vidgen.cellworld.pathway import Pathway, PathwaySpec, build_pathway  # noqa: E402
+from vidgen.cellworld.pathway_templates import TEMPLATES as PATHWAY_TEMPLATES  # noqa: E402
+from vidgen.cellworld import cycle as cell_cycle_model, division as cell_division, energy as cell_energy  # noqa: E402
+from vidgen.cellworld import accuracy as cell_accuracy  # noqa: E402
+from vidgen.cellworld.captions import NoteMode as CellNoteMode, note_text as cell_note_text  # noqa: E402
+from vidgen.cellworld.names import gene_spans  # noqa: E402
+from vidgen import references as video_references  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -1459,6 +1498,114 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "rect_union",
     "slide_out",
     "ISO_RISE",
+    "CELL_COMPARTMENTS",
+    "CELL_KINDS",
+    "CELL_LEVELS",
+    "CELL_OBJECT_KINDS",
+    "CellColors",
+    "CellDrawing",
+    "CellObjectSpec",
+    "CellSpec",
+    "CellView",
+    "CellWorld",
+    "build_cell_world",
+    "cell_default_level",
+    "cell_label_weight",
+    "cell_level_view",
+    "cell_lod_weights",
+    "cell_scale_bar",
+    "cell_zoom_path",
+    "CELL_COATS",
+    "CELL_MEMBRANES",
+    "CellAnchor",
+    "cell_part_anchors",
+    "BILAYER_NM",
+    "CODONS",
+    "LIPID_HEAD_HUE",
+    "LIPID_TAIL_HUE",
+    "MODIFICATIONS",
+    "MOLECULE_KINDS",
+    "MoleculeGlyph",
+    "MoleculeKind",
+    "MoleculeSpec",
+    "SPECIES",
+    "charge_of",
+    "check_gene",
+    "check_markup",
+    "check_modification",
+    "check_molecule",
+    "check_molecule_faces",
+    "check_molecule_membrane",
+    "check_molecule_place",
+    "check_protein",
+    "check_sequence",
+    "check_trna",
+    "chem_markup",
+    "chem_plain",
+    "codons_read",
+    "gene_markup",
+    "glyph_mobjects",
+    "histone_mark",
+    "membrane_sides",
+    "molecule_glyph",
+    "nomenclature_species",
+    "place_glyph",
+    "protein_markup",
+    "protein_size",
+    "reverse_complement",
+    "MOLECULE_ION_FLOW",
+    "MOLECULE_ION_HUES",
+    "MOLECULE_ION_RADII",
+    "MOLECULE_TRANSPORTERS",
+    "MoleculePrim",
+    "TYPICAL_CONCENTRATIONS",
+    "carrier_parts",
+    "cell_transport",
+    "cell_traffic",
+    "CellEventDrawing",
+    "cell_motor_curves",
+    "cell_motor_parts",
+    "molecule_pump_type",
+    "molecule_small_prims",
+    "GENE_CELL_STEPS",
+    "GENE_CHAPERONES",
+    "GENE_STEPS",
+    "ExpressionState",
+    "Gene",
+    "GeneSpec",
+    "build_gene",
+    "parse_protein",
+    "signal_peptide_length",
+    "gene_advance",
+    "gene_cell_advance",
+    "gene_cell_step_problem",
+    "gene_step_problem",
+    "ExpressionStage",
+    "GeneRoutePlanner",
+    "gene_route_problem",
+    "ExpressionDrawing",
+    "GeneRouteDrawing",
+    "cell_pathway",
+    "cell_pathway_layout",
+    "PATHWAY_BANDS",
+    "PATHWAY_EDGE_TYPES",
+    "PATHWAY_NODE_KINDS",
+    "PATHWAY_TEMPLATES",
+    "Pathway",
+    "PathwaySpec",
+    "build_pathway",
+    "cell_cycle_model",
+    "cell_division",
+    "cell_energy",
+    "cell_accuracy",
+    "CellNoteMode",
+    "cell_note_text",
+    "gene_spans",
+    "video_references",
+    "did_you_mean",
+    "format_length",
+    "parse_coordinate",
+    "parse_length",
     "Field",
     "field_validator",
     "model_validator",

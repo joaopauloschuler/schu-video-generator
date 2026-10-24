@@ -172,10 +172,12 @@ def youtube_problems(chapters: Sequence[Chapter]) -> list[str]:
     return problems
 
 
-def write_youtube_list(path: Path, chapters: Sequence[Chapter]) -> list[str]:
-    """Write :func:`youtube_list` of ``chapters`` to ``path`` (UTF-8); returns
-    :func:`youtube_problems`."""
-    path.write_text(youtube_list(chapters), encoding="utf-8")
+def write_youtube_list(path: Path, chapters: Sequence[Chapter], references: str = "") -> list[str]:
+    """Write :func:`youtube_list` of ``chapters`` to ``path`` (UTF-8), then ``references`` (the
+    description's reference list, :func:`vidgen.references.description_text`) after a blank
+    line; returns :func:`youtube_problems`."""
+    parts = [part for part in (youtube_list(chapters), references) if part]
+    path.write_text("\n".join(parts), encoding="utf-8")
     return youtube_problems(chapters)
 
 

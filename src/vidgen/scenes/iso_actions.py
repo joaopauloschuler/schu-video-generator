@@ -175,10 +175,10 @@ class Flow(_IsoAction):
 
 @action("focus")
 class Focus(_IsoAction):
-    """Move the camera onto iso_diagram targets (no rotation): as close as they fit with
-    ``padding`` around them (or ``scale``), and stay there; labels the view would cut at its
-    edge fade out meanwhile; ``focus: diagram`` or ``until: <beat>`` goes back to the whole view
-    (and brings them back)."""
+    """Move the camera onto iso_diagram or pathway targets (no rotation): as close as they fit
+    with ``padding`` around them (or ``scale``), and stay there; in an iso_diagram labels the
+    view would cut at its edge fade out meanwhile; ``focus: diagram`` (``focus: pathway``) or
+    ``until: <beat>`` goes back to the whole view."""
 
     class Options(ActionOptions):
         padding: float = Field(default=0.12, ge=0, lt=0.45)
@@ -192,15 +192,27 @@ class Focus(_IsoAction):
     alters_targets = False
     kinds = ("block", "stack", "group", "edge", "diagram", "heading")
 
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        """A pathway scene's targets (nodes, arcs, bands, ``pathway``) may be focused on too."""
+        if getattr(scene_cls, "pathway_actions", False):
+            return []
+        if not getattr(scene_cls, "iso_diagram_actions", False):
+            return [("action", "focus is an action of iso_diagram and pathway scenes; this scene is neither (zoom moves the camera here)")]
+        return super().scene_problems(scene_cls, params)
+
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Move the view onto the targets."""
         self.before = camera_view(scene)
+        if getattr(scene, "pathway_actions", False):
+            return move_camera_back(scene, scene.pathway_focus_view(targets, self.options.padding, self.options.scale))  # type: ignore[attr-defined]
         width, centre = scene.iso_focus_view(targets, self.options.padding, self.options.scale)  # type: ignore[attr-defined]
         return move_camera_back(scene, (width, centre)) + scene.iso_veil(width, centre)  # type: ignore[attr-defined]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to the view before."""
         before = getattr(self, "before", None)
+        if getattr(scene, "pathway_actions", False):
+            return move_camera_back(scene, before)
         return move_camera_back(scene, before) + (scene.iso_veil(*before) if before is not None else [])  # type: ignore[attr-defined]
 
 

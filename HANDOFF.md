@@ -17776,3 +17776,1836 @@ Files to listen to / look at
 Known gaps
 - As for the other score beds: rendered per process, not cached on disk (about 7 s).
 - The example's lint no longer runs `music_check` on its music (beds are not checked by it).
+
+## Step 193 — vidgen studio: architecture and skeleton (Phase T starts)
+
+What was built (DESIGN §94)
+- **The plan for the whole phase**: tasklist Phase T (Steps 193–201) and DESIGN §94 — modules,
+  server and guards, sessions and versions on disk, the JSON API including the calls Steps
+  194–199 will add (§94.5), the render cache and Step 196's stem plan (§94.6), versions / undo /
+  A/B (§94.4: the score text is the source of truth; controls change one value in place via
+  `yaml.compose` marks so comments survive), how MCP reaches an open session (§94.8: through the
+  disk — `open.json` and a session `inbox/`, not HTTP), variations (§94.9).
+- **`vidgen studio [PROJECT] [--port N] [--no-browser]`** (`cli.cmd_studio`,
+  `studio_app.run_studio`): a standard-library `ThreadingHTTPServer` on 127.0.0.1 (a free port by
+  default; `SO_EXCLUSIVEADDRUSE` on Windows; a port in use is a clear `VidgenError`), opens the
+  browser with `webbrowser`, Ctrl+C stops it and removes `open.json`. Checked as a real process
+  (`<scratchpad>/s193/cli_run.py`): address printed, `/api/info` answered, SIGINT → "studio
+  stopped", exit 0, `open.json` gone.
+- **`StudioApp`** (`studio_app/app.py`, no HTTP): presets (the 17 beds with a one-line
+  description ≤ 110 characters, their use, and the templates' facts), patches, `load` (preset or
+  text → a new session, version 1), `validate` (problems as `{where, message, line}`: the
+  score's did-you-mean messages, the line found from `where` with `yaml.compose`; YAML syntax
+  errors with their line), `score`, `render` (whole or one section; cached by
+  `render_key` = SHA-256 of the YAML data + `STUDIO_RENDER_VERSION` + vidgen version, so comments
+  do not re-render; a 16-bit WAV at +12 dB = the Listen page's −16 LUFS for every version; a
+  section is cut bit-exact from the whole render), `audio_file` (names checked by pattern).
+- **`StudioServer`** (`studio_app/server.py`): routes, JSON envelope `{ok, result|error}`, static
+  files and three bundled fonts from allow-lists, audio with single `Range` requests (206 / 416),
+  guards (Host must be 127.0.0.1 / localhost with the port; POST must be JSON and same-origin; 2
+  MB bodies; CSP `'self'`, nosniff, no-referrer), dropped connections ignored.
+- **Sessions** (`studio_app/session.py`): `<project>/build/studio/` or `studio/` in vidgen's
+  cache folder; `sessions/<id>/session.json`, `versions/v0001.yaml` (text as written),
+  `renders/`; `open.json` (url, session, pid) while running.
+- **The page** (`studio_app/static/`, package data; vanilla ES modules, no build, no CDN):
+  top bar (preset picker as a listbox with key / tempo / length and the one-line description;
+  A/B, versions, undo / redo, Export disabled with their step in the title; YAML toggle; theme
+  toggle), song strip (key, tempo, time, seed, bars and length, the progression as written, the
+  chord names of the section under the playhead), transport (play / pause, stop, loop (whole),
+  "under narration" disabled, seek slider, time), timeline (coloured sections sized by bars,
+  playhead, click to seek), tracks (name, instrument, volume bar, pan knob, steps text; M / S
+  disabled), inspector (instrument words, plays, sections, effect chips, settings as disabled
+  sliders at the written / default values), the score file highlighted with line numbers
+  (problem lines marked), check panel placeholder and status line. The page auto-loads
+  `momentum` when no session is open; a reload keeps the open piece.
+
+Files touched
+- New: `src/vidgen/studio_app/__init__.py`, `app.py`, `server.py`, `session.py`,
+  `static/index.html`, `studio.css`, `app.js`, `api.js`, `player.js`, `yaml_view.js`,
+  `favicon.svg`; `tests/test_studio_app.py` (20), `tests/test_studio_ui.py` (3, marker `ui`).
+- Changed: `src/vidgen/cli.py` (the `studio` command), `src/vidgen/sfx.py` (`wav_bytes`;
+  `write_wav` writes its bytes — the same file), `src/vidgen/render/fingerprint.py`
+  (`studio_app` in `NOT_RENDER_INPUTS`, so scene caches stay valid), `pyproject.toml` (package
+  data `studio_app/static/*`, marker `ui`), `docs/CONFIG.md` ("Music studio"), `DESIGN.md`
+  (§94), `tasklist.md` (Phase T).
+
+Public interfaces
+- No new `vidgen.api` names (the studio is a command, not an extension surface). New command
+  `vidgen studio`; `vidgen.sfx.wav_bytes`; the HTTP API of §94.5 (internal to the page, may
+  change during the phase).
+
+Decisions
+- Package `vidgen.studio_app` (the name `studio` is the score-file package; the collision is
+  named in §94).
+- Standard library only for the server; `<audio>` with range requests for playback (Web Audio
+  only if section loops need it, Step 194).
+- A preset load starts a new session (older ones stay on disk); versions are immutable files.
+- Agents reach the studio through the disk (Step 198), so no port / token discovery.
+
+How to test (one at a time, capped)
+- `tests/test_studio_app.py`: 20 passed in 3.5 s (presets, session folders, load, problems with
+  lines, render key, render cache and bit-exact section cut, audio name checks, open marker,
+  server: page / API / fonts, refused Host, Origin, content type, traversal; ranges; port in use;
+  CLI options).
+- `tests/test_studio_ui.py` (`-m ui`, headless Chromium through Playwright, skipped without it): 3
+  passed in 5.3 s — the page shows the open session (17 presets, sections, tracks, YAML, facts),
+  choosing `pulse` loads and renders it, play streams the WAV with range requests and time
+  advances, stop resets.
+- Related: `test_sfx` + `test_storyboard` (`-m "not render" -k "not slow"`) 144 passed; `test_studio`
+  51 passed; `test_docs` + `test_guide` + `test_packaging` 119 passed; `test_cli` +
+  `test_json_output` (`-m "not render"`) 31 passed. Not run: the full suite.
+
+Files to look at
+- Screenshots (1440 × 900 unless said): `<scratchpad>/s193/shots/1-momentum.png` (first load),
+  `2-picker.png` (the preset picker), `3-tidewater-playing.png`, `4-seeked.png` (playhead in the
+  lift), `5-light.png`, `6-no-yaml.png`, `7-narrow.png` (420 px, full page). Made by
+  `<scratchpad>/s193/shots.py`.
+
+Known gaps
+- Everything §94.10 lists for later steps. Chords show in Roman numerals only when the
+  progression is one string (the templates of the 14 Python beds write `{chord, notes}`
+  voicings, so they show names only; Step 194). The top-level progression is shown even in a
+  section with its own. Headless Chromium fetched the WAV before play although `preload="none"`
+  (harmless). Renders are not pruned.
+
+## Step 194 — vidgen studio: song strip, timeline and track list
+
+What was built (DESIGN §94.12)
+- **Edits in place** (`studio_app/edits.py`): `set` / `delete` / `insert` / `rename` on the
+  score's text by path (`tracks.bass.volume`, `sections[2].bars`), found with `yaml.compose`
+  marks, so one value changes and comments and layout stay (a missing key is added by its
+  siblings; a quoted string keeps its quotes). Built here rather than in 195 because every
+  control of this step edits.
+- **Song edits** (`studio_app/song.py`): add a track (default pattern per instrument and time
+  signature, `volume: -6`), delete a track, add / remove / rename a section (references in
+  `only`, `rest` and per-section changes follow; a track that plays only in a removed section
+  goes with it, named in the label; a new section takes the chords before it when there is no
+  score progression, and is a rest for tracks with per-section steps only).
+- **Chords as Roman numerals with names for every template** (`song.roman_numeral`,
+  `analyse_progression`): the 14 Python beds' `{chord, notes}` voicings now show numerals too;
+  each section's own progression is in the outline and shown when the loop or playhead is in it.
+- **`POST /api/edit`** (`StudioApp.edit`): every committed edit is a version (`origin: edit`,
+  parent the version edited, a label); problems write nothing (`{ok: false, problems}`);
+  `dry_run` for live checks. `POST /api/render` takes `mute` (a listening mix: the other
+  tracks' stems at the whole mix's gain, `<key>.m<tag>.wav`). Renders carry `energy` (LUFS per
+  bar; `STUDIO_RENDER_VERSION` 2).
+- **The page** (new `strip.js`, `timeline.js`, `tracks.js`; `app.js`, `player.js`,
+  `yaml_view.js`, `index.html`, `studio.css` changed): key (tonic + mode), tempo and seed
+  edited in place; chord chips (numeral, name, the one playing lit), click to type, names live,
+  problems inline; transport loop select (whole or a section); timeline with section names (click
+  = loop it, again = whole), drag a right edge for bars (or arrow keys), energy curve, playhead,
+  a sweep while rendering; a section bar (rename, bars, own chords / the score's, loop, add
+  after, remove); track rows with a meter, M / S, a volume bar, pan knob, steps edited in place
+  with the problem under the row, delete; `[+ track]` instrument menu (two columns, by kind). The
+  YAML view flashes the lines an edit changed. Player keeps the piece's time across sources
+  (`offset`), so a re-render, a loop switch or a mute continue at the same moment.
+
+Decisions
+- Mute / solo are a listening aid only (the page's state sent with renders), never written to
+  the score; exports (197) render the score as written. Making it permanent = delete the track
+  or lower its volume.
+- Section loops play the section file cut from the render with `<audio loop>` (no Web Audio).
+- Meters are rough, computed from the score's steps (gain, accents, holds, volume) under the
+  playhead; Step 196 replaces them with stem RMS.
+- Removing a section removes tracks that play only there (labelled; the earlier version keeps
+  them) instead of refusing — refusing blocked every template with lift-only parts.
+
+Files touched
+- New: `src/vidgen/studio_app/edits.py`, `song.py`, `static/strip.js`, `static/timeline.js`,
+  `static/tracks.js`; `tests/test_studio_song.py` (15).
+- Changed: `studio_app/app.py` (edit, mute mixes, energy; `describe_score` moved to `song.py`),
+  `server.py` (`/api/edit`, `mute`), the static files above, `tests/test_studio_app.py` (the
+  progression is now `{text, written, chords}`), `tests/test_studio_ui.py` (+3 flows),
+  `DESIGN.md` (§94.12, §94.5 table, §94.2 / §94.7 module lists), `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. The page's HTTP API grows (`/api/edit`, `mute`, `energy`); still internal.
+
+Facts measured (two cores, no browser running)
+- `momentum`: whole render 3.1 s (synthesis 2.0 s), a mute mix 2.3 s more; `time_of_flight`:
+  9.2 s (synthesis 7.5 s), a mix 8.2 s. An edit (text → version → outline) 30 ms. With the
+  browser on the same cores, `time_of_flight` edits re-render in 5–7 s. Step 196's stem cache
+  is the fix.
+
+How to test (one at a time, capped)
+- `tests/test_studio_song.py`: 15 passed in 2.4 s (edits, numerals of all 17 templates read back,
+  outline facts, default tracks for every instrument in 4/4, 3/4, 6/8, section edits, versions,
+  energy and mixes, the route).
+- `tests/test_studio_app.py`: 20 passed; `tests/test_studio_ui.py -m ui`: 6 passed in 11.5 s
+  (strip tempo + chords with live names and an error; loop a section, drag an edge, rename;
+  mute mix, volume click, steps with a problem then fixed, add a bell from the menu, delete it).
+- Related: `test_studio` 51 passed; `test_packaging` + `test_docs` + `test_guide` 119 passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s194/shots/1-time-of-flight.png`, `2-loop-lift-playing.png`,
+  `3-tempo-100.png`, `4-pattern-problem.png`, `5-chords-editing.png`, `6-solo-playing.png`,
+  `7-instrument-menu.png`, `8-track-added.png`, `9-dragging-edge.png`, `10-after-drag.png`,
+  `11-light.png`, `12-narrow.png` (420 px, full page), `13-momentum.png`; made by
+  `<scratchpad>/s194/shots.py`.
+
+Known gaps
+- No undo / version list yet (197; every edit is on disk as a version). Mute mixes re-render all
+  stems (196). Meters are from the score, not the audio (196). A one-shot's tails are left out of
+  a mute mix. Time signature is shown, not edited (changing it would break every pattern).
+  Removing a section can leave a `duck: {to: <removed track>}` problem — reported, nothing
+  written. Volume bar spans −30..+6 dB (a louder or quieter value shows clamped until moved).
+
+## Step 195 — vidgen studio: inspector, step grid, the score file typed
+
+What was built (DESIGN §94.13)
+- **Inspector** (`static/inspector.js`): instrument picker (a dry run explains what the change
+  keeps, drops or moves into range, then [Change to …]); "Edit for" the whole track or one
+  section (writes `sections: {s: {...}}`; the section's own values in its colour, the track's
+  otherwise, ↺ back); **Sound** sliders generated from the catalogue (units, log scale for
+  frequencies, default tick, typed values, reset, help line on hover / focus) plus volume and
+  pan; **Notes** (octave, transpose, accent; a pad's play mode chords / steps); **Steps** (the
+  grid); **Effects** chips (echo, reverb, duck to a track or beat with follow, gate with its own
+  step pattern, lowpass / highpass / width / volume curves as fixed / ramp / points with a
+  drawing, spread; off in one section and back); **Per section** table (plays switch via
+  `rest` / `only`, the changes there, clear, edit).
+- **Step grid** (`static/stepgrid.js`): the steps text read with the patterns' tokens into bars
+  of cells (bars of different step counts line up in time), beat groups, accent dots, holds
+  drawn; a cell edit replaces only its characters in the text; brushes, drag-paint (one
+  version), keys (a burst = one version), + / − bar, steps per bar (resampled), a text field
+  live both ways, the step under the playhead lit.
+- **The score file typed** (`static/yaml_edit.js`): transparent textarea over the highlighted
+  text; checked 0.3 s after typing (bad lines marked, problems listed with line links and the
+  CLI's did-you-mean), valid for 0.8 s → a version (`POST /api/text`), the controls follow; a
+  draft with problems is never a version, dims the editing controls, [Revert to vN].
+- **Server**: `edits.unset` (removes a key and the mappings it empties, `keep` parts kept);
+  `studio_app/inspector.py`: `studio_catalog` (units, scale, integer), `change_instrument`,
+  `set_play_mode`, `set_section_plays` as ops `change_instrument`, `play_mode`,
+  `section_plays` of `/api/edit` (its answers carry `notes`); `StudioApp.text`; the outline's
+  tracks carry `spec` (the track as written).
+
+Decisions
+- Units come from the settings' words (the catalogue has none); `music patches --json` stays as
+  it was (the studio decorates a copy). Instrument settings are never "integer" (the catalogue
+  writes 2600.0 as 2600).
+- A grid edit rewrites only the cell's characters (the text's spacing and `|` stay); resizing a
+  bar rewrites that bar only.
+- A typed text with problems blocks the other controls (instead of being overwritten by them).
+- A field edit on an inherited effect in a section copies the track's effect into the section
+  (an effect in a section replaces the track's whole, as the score reads it).
+
+Files touched
+- New: `src/vidgen/studio_app/inspector.py`, `static/inspector.js`, `static/stepgrid.js`,
+  `static/yaml_edit.js`; `tests/test_studio_inspector.py` (9).
+- Changed: `studio_app/edits.py` (`unset`), `app.py` (ops, notes, `text`, patches), `server.py`
+  (`/api/text`), `song.py` (`spec`), `static/app.js`, `api.js`, `index.html`, `studio.css`,
+  `yaml_view.js`; `tests/test_studio_ui.py` (+3); `DESIGN.md` (§94.13, §94.1/.2/.5/.7);
+  `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. The page's API: `/api/text`, `unset`, three ops, `notes`, `spec`,
+  catalogue fields `unit` / `scale` / `integer`.
+
+How to test (one at a time, capped)
+- `tests/test_studio_inspector.py`: 9 passed (unset and pruning, catalogue units, instrument
+  change incl. drums and pads, play mode, section plays, dry-run notes, typed text, routes).
+- `tests/test_studio_ui.py -m ui`: 9 passed in 23 s (+ sliders / reset / out-of-range problem /
+  instrument change / effects in a section / plays switch; the grid by click, keys, + bar, steps
+  per bar, text field, a degree; the score file: a bad name with did-you-mean and line, revert,
+  valid text → version and controls follow, a control → the text).
+- `tests/test_studio_app.py` + `test_studio_song.py`: 35 passed.
+
+Files to look at
+- Screenshots (1440 × 900; `*-panel`-like ones are the inspector at full height):
+  `<scratchpad>/s195/shots/1-arp-inspector.png`, `1b-arp-inspector-panel.png`,
+  `3-grid-painted.png`, `4-scope-build.png`, `5-lowpass-editor.png`, `6-instrument-change.png`,
+  `7-echo-added.png`, `7b-build-own-decay.png`, `7c0-accent-problem.png`,
+  `7c-grid-keys-and-8.png`, `8-yaml-problem.png`, `9-yaml-typed-version.png`, `10-pad.png`,
+  `10b-pad-gate.png`, `10c-pad-duck.png`, `10d-pad-lift-no-gate.png`, `10e-pad-steps.png`,
+  `11-lead-playing.png` (the lead's piano-roll-like grid with the playhead step),
+  `12-light.png`, `13-narrow.png`, `14-overlay-check.png` (typed text in red over the
+  highlighting: they match); made by `<scratchpad>/s195/shots.py`.
+
+Known gaps
+- Re-render is still the whole piece (196). No undo / version list (197; every change is a
+  version on disk). A new effect mapping in a block-style track is written as block lines.
+  No per-cell note dropdown: a pitched cell takes a brush or a typed step (`A4`, `5'`, `v2`).
+  The YAML editor has no line wrapping or search (the browser's undo works in it).
+
+## Step 196 — vidgen studio: fast re-render, playing on, under narration, meters
+
+What was built (DESIGN §94.14)
+- **Stems in the renderer** (`vidgen.studio.render`): `render_track_stem` (one track alone, as
+  the piece plays it), `mix_track_stems` (sum in order, master filter, level measured on the
+  mix — or a listening mix at the whole's gain and length, a one-shot's tails kept; `threads=2`
+  runs the filter's channels and the loudness's blocks in threads, bit for bit the same),
+  `TrackStem`, `MixFacts`; `render_music_stems` built on them. `render_music_score` unchanged.
+  Small additive helpers: `music._level_gain` (`_finish` takes a gain), `loudness.measure` /
+  `integrated_loudness` take `threads`.
+- **Stem cache** (`studio_app/stems.py`): keys of exactly what a track hears (shared song data,
+  its spec, a duck's trigger's hit inputs, renderer and vidgen version); in memory, LRU past
+  768 MB, room made before rendering; a plain-volume change scales a kept stem; each stem's
+  power per 50 ms for the meters. `StudioApp.render` mixes from it and reports `timing`;
+  mute / solo remix kept stems (one-shot tails kept, Step 194's gap closed).
+- **Late facts**: loudness, true peak and the energy curve after the answer, one worker that
+  gives way to renders (`GET /api/facts`); the page dims the last curve meanwhile.
+- **Under narration** (`studio_app/narration.py`, `render {narration: true}` → `….n.wav`): the
+  shipped narration sample repeated over the piece, the music ducked with the check's
+  `duck_gain_db`, at a video's balance, one gain for every version (voice true peak −1.5 dBTP).
+- **The page**: `player.js` brings a new source in on a second `<audio>` seeked ahead and
+  cross-faded at the same moment (no gap; measured offset within ±10 ms); the "under narration"
+  checkbox works; meters from each stem's audio (`meters` per 50 ms); the status line says what
+  was rendered ("pad rendered + remixed in 1.6 s", "bass at the new volume", "listening mix").
+
+Decisions
+- Exactness: the remix differs from `render_music_score` only in float addition order (plain
+  tracks' notes go straight into the piece there): ≤ 4.7e-10 measured on the 17 templates and
+  edited scores, test tolerance 1e-9, the 16-bit audio identical. Keeping the exact order would
+  need every overlapping note in memory (280 MB for tidewater's arp); changing
+  `render_music_score` instead would have moved 1–2 samples of three templates by a float32
+  step (a hard-rule break). Checked byte for byte against the code before the step: every
+  template render, the stems mix, the warnings (`<scratchpad>/s196/compare_old.py`).
+- Stems in memory, not on disk (float64 needed; ~370 MB a version). Tracks render one at a
+  time (two heavy tracks at once reached 2.8 GB). Section-only render not built (§94.14).
+
+Files touched
+- New: `src/vidgen/studio_app/stems.py`, `narration.py`; `tests/test_studio_stems.py` (15 + 17
+  `slow`).
+- Changed: `studio/render.py`, `music.py` (`_level_gain`), `loudness.py` (`threads`),
+  `studio_app/app.py` (render from stems, mixes, narration, late facts, `close`), `server.py`
+  (`narration`, `/api/facts`), `__init__.py` (`app.close()`), `static/player.js`, `app.js`,
+  `api.js`, `tracks.js`, `timeline.js`, `index.html`, `studio.css`; `tests/test_studio_app.py`,
+  `test_studio_song.py` (energy / loudness come from `facts`), `test_studio_ui.py` (+1);
+  `DESIGN.md` (§94.14, §94.1/.2/.3/.5/.6), `docs/CONFIG.md`, `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. `vidgen.studio.render`: `render_track_stem`, `mix_track_stems`,
+  `TrackStem`, `MixFacts` (not in `vidgen.studio.__all__`). The page's API: `narration`,
+  `timing`, `meters`, `mix_gain`, `facts_pending`, `GET /api/facts`, `.n` audio names.
+
+Latency (two cores; server = edit + render calls without a browser / heard = click to the new
+audio playing in headless Chromium at the same moment)
+- Single-track edits: momentum 0.6 / 1.1–1.3 s, tidewater 0.8–0.9 / 1.5–1.6 s, time_of_flight
+  0.8–0.95 / 1.55–1.7 s (a heavy track adds its own render: time_of_flight's pad 3.2 / 4.4 s);
+  volume (kept stem scaled) 0.6–0.8 / 1.1–1.6 s; mute / solo 0.3–0.5 / 0.6–0.9 s; a mix made
+  before 0.4 s heard; under narration 0.7–1.0 s; tempo +4 3.1 / 4.1 s (momentum, tidewater),
+  17 / 22 s (time_of_flight: see the FFT finding). Full table: DESIGN §94.14. Before: 3–9 s
+  every edit, 2.3–8.2 s every mute.
+
+How to test (one at a time, capped)
+- `tests/test_studio_stems.py -m "not slow"`: 15 passed in 17 s; `-m slow` (the 17 templates
+  remix to their render): 17 passed in 110 s (capped3g).
+- `tests/test_studio_ui.py -m ui`: 10 passed in 36 s (new: edit / steps / mute / narration while
+  playing, swapped at the same moment, meters from the audio).
+- `test_studio_app` + `test_studio_song` + `test_studio_inspector`: passed (59 with stems).
+- Related: `test_music.py -k bed_sounds_as_approved` 17 passed (fingerprints); `test_music.py` +
+  `test_studio.py` (rest) 115 passed; `test_music_check.py` + `test_music_templates.py` 39 passed
+  (incl. slow); `test_listen`, `test_phase_s_review`, `test_music_pieces` passed; `test_score` +
+  `test_sfx` 160 passed; `test_docs` + `test_guide` + `test_packaging` 119 passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s196/shots/1-momentum-playing-meters.png`,
+  `2-momentum-muted.png`, `3-momentum-under-narration.png`, `4-tidewater-after-tempo.png`,
+  `5-time-of-flight.png`, `6-time-of-flight-pad-inspector.png`, `7-rendering.png` (badge, a
+  heavy edit under way), `8-after-render.png`, `9-narrow.png`, `10-light.png`; made by
+  `<scratchpad>/s196/shots.py`, which also measures the "heard" latencies
+  (`browser-latency-*.json`); `latency.py` the server ones.
+
+Known gaps
+- A heavy track's edit still waits for its render (1–2.4 s on time_of_flight); a section
+  preview could help later. **Renderer finding**: a piece length with a large prime factor
+  (most tempos: time_of_flight at 112 BPM = 2⁹·3·1607 samples) makes every FFT 5–12× slower
+  and a render 2–3× slower with ~2 GB peak — videos too; worth a look in Step 201 or later (a
+  fix must keep the beds' samples). Meters are before the master filter. The late facts are
+  computed from the 16-bit WAV after a restart (rounding at 2 decimals).
+
+## Step 197 — vidgen studio: check panel, versions, A/B, exports
+
+What was built (DESIGN §94.15)
+- **Advice that can be applied** (`vidgen.studio.check`): `Fix` (a `str` subclass: the same
+  words) carries `(label, ops)` edits; `Finding.edits` lists them as `{fix, label, ops}` with
+  `set` ops on score paths. Mechanical advice only: volumes (track or per section), an octave up,
+  a track `lowpass` / `highpass`, `master.lowpass`, a build's volume ramp / filter sweep, add or
+  raise a riser. `music check` text and `--json` unchanged (compared byte for byte on the 17
+  templates + 8 bad scores, `<scratchpad>/s197/baseline.py`, `before/` vs `after/`).
+- **`check_music_score(score, hop, tracks=None, mix=None, between=None)`**: from kept stems and a
+  made mix (no render), with a hook between steps that may stop it; the same report as before.
+- **Check panel** (`studio_app/checks.py`, `static/check.js`): after each render of the current
+  version the page asks `POST /api/check` (long-poll); one background worker, waits for renders,
+  stops when a newer version's check is asked for, keeps `checks/<key>.json` + `-check.png`.
+  Verdict + headline numbers (voice, bass, highs, lift / build, loudness), details: spectrogram
+  with section marks and playhead (click seeks), advice with **Apply: <label>** buttons
+  (`POST /api/check/apply` → a version `origin: check`, label `check: …`), full report.
+- **Versions** (`session.py`, `static/versions.js`): undo / redo (`redo` stack in
+  `session.json`, branches kept), pick a version, rename, star; menu with label, time, parent,
+  off-branch dimmed, earlier sessions (`GET /api/sessions`, `POST /api/open`); Ctrl+Z /
+  Ctrl+Shift+Z. **A/B**: original preset (v1) or any version from the list, swapped at the same
+  moment, badge `A v1 original` / `B v5 current`.
+- **Exports** (`studio_app/exports.py`, `static/exports.js`): YAML; WAV / MP3 once, N loops or N
+  seconds (fade-out), at video level −28 LUFS or listening level −16 LUFS (peak ≤ −1 dBTP),
+  rendered with `render_music_score`, written to the session's `exports/` and downloaded
+  (`/download/<name>`, attachment). **Save to project**: `assets/music/<name>.yaml`, a bed's name
+  refused with the reason, overwrite asks, `music: <name>` snippet with Copy; without a project
+  the panel explains how to start the studio with one.
+
+Files touched
+- New: `src/vidgen/studio_app/checks.py`, `exports.py`, `static/check.js`, `static/versions.js`,
+  `static/exports.js`; `tests/test_studio_check.py` (12).
+- Changed: `src/vidgen/studio/check.py` (`Fix`, `Finding.edits`, the entry point's keywords,
+  edits beside the advice), `studio_app/app.py` (versions, sessions, check, apply, export, save,
+  media / download files, the last mixes kept, `edit(origin=)`), `session.py` (`starred`, undo,
+  redo, set_current, update_version, `list_sessions`, `can_undo` / `can_redo`), `server.py`
+  (routes, `/media/`, `/download/` with `Content-Disposition`, MIME mp3 / yaml), `static/app.js`,
+  `api.js`, `index.html`, `studio.css`; `tests/test_studio_ui.py` (+3); `DESIGN.md` (§94.15,
+  §94.1/.2/.3/.5/.7), `docs/CONFIG.md`, `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. `vidgen.studio.check`: `Fix`, `Finding.edits`, `check_music_score`'s
+  `tracks` / `mix` / `between` keywords (additive). The page's API: §94.5 rows for Step 197.
+
+Decisions
+- The CLI stays as it was: the edits ride on the advice strings and `Finding`, not in
+  `check_dict` (agents keep reading the words; the studio reads the edits).
+- Apply goes through the server (the kept check's ops by id), not ops sent by the page.
+- Exports are downloads from the session's `exports/` (the browser chooses where to save); the
+  only other place written is `assets/music/` on request.
+- A/B is page state over the same render call, so it is level-matched and swaps at the moment.
+
+How to test (one at a time, capped; from the repo, or with `PYTHONPATH=<repo>`)
+- `tests/test_studio_check.py`: 12 passed in 13 s.
+- `tests/test_studio_ui.py -m ui`: 13 passed in 48 s (new: check panel + Apply; versions undo /
+  redo / rename / star / A/B; export YAML / WAV and the no-project note).
+- `test_studio_app` + `test_studio_song` + `test_studio_inspector` + `test_studio_stems` (not
+  slow): 59 passed; `test_music_check` + `test_studio` + `test_phase_s_review` +
+  `test_music_pieces`: 85 passed; `test_docs` + `test_guide` + `test_packaging`: passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s197/shots/1-momentum-check.png`, `2-check-open.png`,
+  `3-advice.png`, `4-applied.png`, `5-versions.png`, `5b-versions-renamed.png`,
+  `6-versions-after-undo.png`, `7-ab-original.png`, `8-export.png`, `9-exported.png`,
+  `10-bed-name-refused.png`, `11-saved.png`, `12-overwrite.png`, `13-light.png`, `14-narrow.png`
+  (420 px, full page); made by `<scratchpad>/s197/shots.py`.
+
+Known gaps
+- Renders and exports are not pruned. The advice's dB estimates are the check's own: on the
+  loud-piano example "lower piano by 3 dB" leaves the voice range still flagged (33 % from 47 %),
+  a second Apply finishes it — "change one thing, check again" as the CLI says. Keyboard
+  shortcuts beyond undo / redo, the A/B shortcut and focus polish are Step 200.
+
+## Step 198 — vidgen studio: listening notes and "Ask an agent"
+
+What was built (DESIGN §94.16)
+- **Listening notes** (`studio_app/notes.py`, session `notes.json`): pinned while playing or
+  paused by the N key, **+ note**, or a click on the new notes lane under the timeline; each
+  records seconds, bar, beat, section (and bar within it) and the version heard. Pins on the
+  lane (section colour; hollow when resolved; a dot when an agent answered), an editor popover
+  (Enter keeps, Esc closes; ▶ from here, resolve, delete) and a **Notes** tab next to the score
+  file (in the piece's order; ▶ plays from 1.5 s before; ✓ ✎ ×; the agents' lines under each).
+  Notes carry over to every version: placed at the same bar of their section, so a longer or
+  shorter section before them moves them with the music; a shorter or removed section moves
+  them to the nearest bar; `moved` says so in words.
+- **Ask an agent** (`studio_app/agent.py`): `POST /api/ask` writes the hand-off
+  (`request.json`: score, open notes placed in the base version, its kept check as text and
+  findings, the parent → base diff, the instruction, the reply format) and returns it as a
+  prompt. Answers: (a) MCP tools `studio_sessions`, `studio_read`, `studio_check`,
+  `studio_propose` in `vidgen mcp` (through the disk: validated proposals go to the session's
+  `inbox/`; the page polls `GET /api/session?since=R` every 1.5 s and they appear);
+  (b) **Copy prompt** / **Paste reply** (any chat assistant; `parse_reply` reads the ```yaml
+  block, `n1: …` lines and `summary:`); (c) optional **OpenRouter** (`OPENROUTER_API_KEY` from
+  the environment as vidgen's other OpenRouter providers, model on the page or
+  `VIDGEN_STUDIO_MODEL`; disabled with how to set the key when missing; Send asks to confirm the
+  cost).
+- **Proposals** (`proposals.json`): a valid, changed score becomes a version `agent: <summary>`
+  that is not made current; the banner above the tracks shows it with one line per note,
+  **▶ A/B vN vs vCurrent**, **Keep** (current + resolves the notes it answered) and **Discard**
+  (renamed `discarded · …`; never deleted). Invalid answers (problems, unchanged, no score) are
+  shown with their problems and can only be dismissed. Nothing ever overwrites a version.
+
+Files touched
+- New: `src/vidgen/studio_app/notes.py`, `agent.py`, `static/notes.js`;
+  `tests/test_studio_agent.py` (11).
+- Changed: `studio_app/app.py` (state carries notes / proposals / revision; poll, notes, ask,
+  paste, send, decide; `info.provider`), `server.py` (routes), `session.py`
+  (`add_version(current=)`, `revision`, `touch`), `checks.py` (`kept_check`), `mcp_server.py`
+  (four tools, instructions), `static/app.js`, `api.js`, `versions.js` (`abWith`, `onAB`),
+  `index.html`, `studio.css`; `tests/test_mcp.py` (+1, tool list), `test_studio_app.py` (empty
+  state shape), `test_studio_ui.py` (+2); guide + `AGENTS.md` (MCP tool names, "Answering a
+  studio hand-off"), `docs/CONFIG.md` (studio notes / agents, MCP tools, `VIDGEN_STUDIO_MODEL`),
+  `README.md` (MCP tool list), `DESIGN.md` (§94.16, §94.1/.3/.5/.7/.8), `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. MCP tools `studio_sessions`, `studio_read`, `studio_check`,
+  `studio_propose`; environment variable `VIDGEN_STUDIO_MODEL`; the page's API rows of §94.5.
+
+Decisions
+- Notes belong to the session and are placed per version by section + bar-in-section (the
+  musically stable anchor), not by seconds or absolute bar.
+- A proposal is a real version (so it renders and A/Bs through the existing machinery) that is
+  not current until kept; discarding renames it instead of deleting (versions are immutable).
+- The MCP studio tools run in the server's process (no CLI subcommand): they only read small
+  files and write one inbox file; `studio_check` reuses `vidgen music check` in a subprocess.
+  They may reach the cache folder's `studio/` (sessions of a studio without a project) besides
+  the root — only to read sessions and write `inbox/` files; links out of the root are not
+  followed for the root's folders.
+- Keep resolves the notes the proposal explained (they can be reopened).
+
+How to test (one at a time, capped; `PYTHONPATH=<repo>` for `test_studio_check`)
+- `tests/test_studio_agent.py`: 11 passed in 1.4 s (locate / place with longer, shorter and
+  removed sections; notes API; the hand-off; parse_reply; paste → keep; invalid / unchanged /
+  no score; discard; MCP side → inbox → poll; unreadable inbox file; mocked OpenRouter incl. no
+  key, no model, a bad reply; routes).
+- `tests/test_mcp.py` in full (capped3g): 20 passed in 136 s (new `test_server_studio_tools`
+  drives the four tools over stdio and the studio picks the proposal up).
+- `tests/test_studio_ui.py -m ui`: 15 passed in 51 s (new: notes while playing with N and the
+  lane, list, resolve, play from, delete; Ask → simulated MCP proposal via `agent_propose` →
+  banner → A/B → Keep).
+- `test_studio_app` + `test_studio_song` + `test_studio_inspector` + `test_studio_check` +
+  `test_studio_agent` (not slow): 67 passed; `test_guide` + `test_docs` + `test_packaging`: 119
+  passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s198/shots/1-note-while-playing.png`,
+  `2-notes-listed.png`, `3-notes-after-section-change.png`, `4-handoff.png`,
+  `5-proposal-arrived.png`, `6-proposal-ab.png`, `7-kept.png`, `8-invalid-proposal.png`,
+  `9-light-note-editor.png`, `10-narrow.png` (420 px, full page); made by
+  `<scratchpad>/s198/shots.py`.
+
+Known gaps
+- The OpenRouter path was only tested mocked (never called). A note's `beat` is whole beats
+  (the point in the bar is kept as `frac`). The hand-off card is per page load (re-ask after a
+  reload). Proposals' lines are not editable; a kept proposal's notes can be reopened by hand.
+  Old renders / exports still not pruned.
+
+## Step 199 — vidgen studio: variations
+
+What was built (DESIGN §94.17)
+- **Variation operators** (`studio_app/variations.py`): pure, deterministic functions of the parsed
+  score giving `edits.py` value edits (comments and layout kept) and a label in words, in four
+  kinds — harmony (re-voice the written voicings, substitute one numeral by a relative in the
+  key, first inversion, another seed), pattern (the figure — busiest pitched non-bass track —
+  turned 1–3 steps, re-accented 3+3+2 ↔ 4+4+2+3+3..., degrees swapped, hat ghost notes / soft
+  hits out), mix (darker / brighter: master low-pass, pads' tone, hat level; lead forward /
+  back), energy (sparser first section, stronger lift, drums building in / pad breathing in
+  one-section pieces). Never tempo or key. `make_variations(text, shuffle, first)` picks one of
+  each kind that changes something (others' next ones when a kind has none); shuffle is a
+  counter turning each kind's candidate list.
+- **Batches** (`VariationBatches`, `variations/b0001/{a..d}.yaml, batch.json`): one worker renders
+  the four (kept stems reused; no late facts), then checks them on a second `Checker`; progress
+  in the document. **Keep** → next version (`origin: variation`, parent the version varied,
+  label `variation: …`); "more like this" varies a candidate (its kind first, the chain of labels
+  kept); un-kept candidates never become versions. `/api/render {variation: "b0001/c"}` plays a
+  candidate like a version.
+- **Page** (`static/variations.js`): Variations button; a panel of four cards (kind colour,
+  label, verdict + headline numbers, mini spectrogram, what was rendered), ▶ Play / ■ back at the
+  same moment (badge "▶ variation b · …"), Keep, More like this, Shuffle, progress and timings.
+- **MCP** `studio_variations` (`agent_variations`): the four as whole scores with labels, nothing
+  written.
+
+Files touched
+- New: `src/vidgen/studio_app/variations.py`, `static/variations.js`, `tests/test_studio_variations.py` (22).
+- Changed: `studio_app/app.py` (second checker, batches, `make_variations` / `variation_batch` /
+  `keep_variation`, `render(variation=)`, `_render_whole(late_facts=)`), `server.py` (routes),
+  `static/app.js`, `api.js`, `versions.js` (badge for a candidate, `variation` origin shown),
+  `index.html`, `studio.css`; `mcp_server.py` (tool, instructions); `tests/test_mcp.py` (tool list,
+  a call), `tests/test_studio_ui.py` (+1); guide + `AGENTS.md`, `README.md` (MCP tool list),
+  `docs/CONFIG.md`, `DESIGN.md` (§94.17, §94.1/.5/.7/.9), `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. MCP tool `studio_variations`; the page's API rows of §94.5 for Step 199.
+
+Decisions
+- Variations are value edits of the text (not a re-generated score), so they keep comments and
+  read as a small diff; tempo / key are never touched (slow FFT lengths, every track re-rendered).
+- Un-kept candidates are not versions (not even "discarded" ones): the version list stays the
+  person's history; the candidates remain on disk in the batch folder.
+- Keep's parent is the batch's root version, also for "more like this" chains (the label carries
+  the chain).
+- A second `Checker` for batches so the current version's check and a batch's never cancel each
+  other; renders all four before checking so all are playable after ~7 s.
+
+Timings (two cores; `<scratchpad>/s199/shots.py`, `smoke.py`)
+- momentum, from the click: first card playable 3.5 s, all four 6.5–7 s, all checked 19–20 s
+  (renders: re-voiced 1.7 s — every track —, ostinato 0.5 s, darker 1.5 s, stronger turn 0.6 s;
+  checks 2.7–3.8 s each). More like this / shuffle ~20 s. tidewater: renders 4.9 s, checks 20 s.
+  Making the four (operators + validation) 0.1–1.7 s per template.
+
+How to test (one at a time, capped)
+- `tests/test_studio_variations.py`: 22 passed in 25 s.
+- `tests/test_studio_ui.py -m ui`: 16 passed in 55 s (new: variations → play b → back → keep).
+- `tests/test_mcp.py` in full: 20 passed in 134 s (before the added call; the studio test with
+  it passed again alone).
+- `test_studio_app` + `test_studio_agent` + `test_studio_song` + `test_studio_inspector`: 55
+  passed; `test_studio_check` + `test_studio_stems` (not slow, `PYTHONPATH=<repo>`): 27 passed;
+  `test_guide` + `test_docs` + `test_packaging`: 119 passed.
+
+Files to look at
+- Screenshots (1440 × 900): `<scratchpad>/s199/shots/1-variations-rendering.png`,
+  `2-variations-checked.png`, `3-playing-b.png`, `4-kept.png`, `5-more-like-c.png`,
+  `6-shuffle.png`, `7-light.png`, `8-narrow.png` (420 px, full page).
+
+Known gaps
+- The mini spectrogram is the check picture cropped (58 px), a look rather than a reading.
+- A batch is shown only while the page is open (a reload does not bring the panel back; the
+  batch stays on disk). "Discarded" candidates are not listed anywhere in the page.
+- Substitutions / inversions apply only to progressions written in numerals; written voicings
+  get re-voiced instead. Pieces with no figure, pads or sections get fewer kinds (still four).
+
+## Step 200 — vidgen studio: docs and polish
+
+What was built (DESIGN §94.18)
+- Docs: CONFIG "Music studio" rewritten into a complete section (start, the page, editing, where
+  it keeps its work, listening, check, versions / A/B, export / save, notes, Ask an agent,
+  variations, keyboard table, disk rule, window sizes and themes, what happens when something
+  goes wrong, security model); the author guide (both copies) says when to suggest the studio to
+  a person and that sessions may be handed over MCP unprompted; README: a "vidgen studio"
+  paragraph after the music list with `docs/images/studio.png` (1440 × 900, 160 colours, 74 KB;
+  no GIF) and a Commands row; COOKBOOK-MUSIC §7 "A person and an agent in the studio"; the
+  Listen page links to the studio (a paragraph after the score-pieces table, in
+  `listen.page_text` and the committed `docs/music/README.md`); CHANGELOG "Unreleased (Steps
+  193–201)".
+- Keyboard: Space, N, L (loop the section playing / the whole piece), M / S (selected track), V,
+  Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, ? (overlay `#shortcuts`, Esc closes). Space after a mouse click
+  plays even when a control has focus; a control reached with Tab / arrows keeps Space
+  (`focusByPointer`; `:focus-visible` cannot tell, Chrome sets it on any key). Track rows: Space
+  only selects when reached with the keyboard.
+- Layout: tabs Inspector / Score file / Notes from 1320 px down, one column under 980 px; the
+  work row keeps ≥ 300 px (with proposal + variations + check details open at 1440 × 900 the
+  tracks had been squeezed to nothing — fixed: the page scrolls). No sideways scroll at 1920,
+  1440, 1280, 1024, 420 px.
+- Accessibility: every control named (audit: 0 unnamed), focus outlines, contrast audit of every
+  visible text: 0 under 4.5:1 in both themes, every width, and the panels (variations, proposal,
+  check details, export, notes); light-theme colours darkened where needed.
+- States: first-run hint (dismissed for good); "the studio server is not answering" banner with
+  how to restart, Retry now, slow polling while offline and reconnection that reopens the page's
+  session in a new studio process; "could not render: … · the last good render keeps playing".
+- 199 gaps: the open batch comes back after a reload (per session, `localStorage`); a batch left
+  `running` by a closed studio reads `stopped`; `GET /api/variations` lists batches —
+  **Batches ▾** on the panel and a "Variations" block in the version menu, so candidates not kept
+  can be replayed and kept; the last hand-off comes back after a reload (`GET /api/ask`), with
+  **Ask again about vN**.
+- Disk: `studio_app/cleanup.py` — renders kept for current, first, starred, the last 8 versions
+  and the newest batch, ≤ 1 GB a session (current / first / starred / just played never
+  dropped); exports older than a day; run after a new render at most once a minute, at studio
+  start for all sessions (current, first, starred only), on **Clean up** in the version menu
+  (with the disk sizes; exports older than an hour), and `vidgen studio --clean [PROJECT]`.
+  Never removed: versions, notes, hand-offs, proposals, candidates' texts, checks.
+
+Files touched
+- `src/vidgen/studio_app/`: `__init__.py` (`clean_studio_folder`, cleaning at start), `app.py`
+  (`last_handoff`, `disk`, `clean_up`, `_auto_clean`, `variation_batches`), `cleanup.py` (new),
+  `server.py` (routes), `variations.py` (`batches`, stopped state); `static/`: `index.html`,
+  `studio.css`, `app.js`, `api.js`, `notes.js`, `tracks.js`, `variations.js`, `versions.js`.
+- `src/vidgen/cli.py` (`--clean`), `src/vidgen/listen.py` (the studio paragraph).
+- Docs: `docs/CONFIG.md`, `README.md`, `docs/images/studio.png` (new), `docs/COOKBOOK-MUSIC.md`,
+  `docs/music/README.md`, `CHANGELOG.md`, `AGENTS.md` + `src/vidgen/data/guide/AGENTS.md`,
+  `DESIGN.md` (§94.1, §94.5 rows, §94.18), `tasklist.md`.
+- Tests: `tests/test_studio_cleanup.py` (new, 6), `tests/test_studio_ui.py` (+3 `ui`: shortcuts
+  and first-run hint and reload of variations; layout at five widths and the theme switch; the
+  server not answering).
+
+Public interfaces: no `vidgen.api` names. `vidgen studio --clean`;
+`vidgen.studio_app.clean_studio_folder`; `StudioApp.last_handoff / disk / clean_up /
+variation_batches`; API `GET /api/ask`, `GET /api/disk`, `POST /api/cleanup`, `GET
+/api/variations` without `batch`.
+
+Decisions / deviations
+- No GIF in the README: one still shows the whole idea, and the existing media rule keeps the
+  README light (kphi3's GIF is 1.3 MB).
+- The Listen page gained a paragraph (an explicit request of this step); the page's beds,
+  clips and table are unchanged and `test_listen` still matches the generator.
+- The startup clean keeps only current / first / starred renders of every session, also the one
+  the page reopens (its other versions render again when played).
+
+How to test (one at a time, capped)
+- `tests/test_studio_cleanup.py`: 6 passed in 1 s. `tests/test_studio_ui.py`: 19 passed in 61 s.
+- `test_studio_app` 20, `test_studio_variations` + `test_studio_agent` 33, `test_guide` 54,
+  `test_docs` 63, `test_listen` 11, `test_packaging` 2: all passed.
+- Browser scripts: `<scratchpad>/s200/shots.py` (five widths × two themes, panels in both
+  themes, contrast audit → `shots/after/contrast.json`), `flows.py` (shortcuts, reload, batches,
+  disk / clean up, server stopped and started again), `readme_shot.py` (the README picture).
+
+Files to look at
+- `<scratchpad>/s200/shots/after/`: `1920-*.png`, `1440-*.png`, `1280-*.png`, `1024-*.png`,
+  `narrow420-*.png` (dark and light), `panels-*.png`, `panels420-*.png`, `export-*.png`,
+  `help-*.png`, `0-first-run-hint.png`; `<scratchpad>/s200/shots/flows/1-shortcuts.png` …
+  `7-light-help.png`; `docs/images/studio.png`.
+
+Known gaps
+- Contrast is measured for text only (not for non-text controls such as slider tracks).
+- The offline banner tells "not answering" apart from errors only by a failed `fetch`; a studio
+  restarted on another port is not found (the page must be opened at the new address).
+- `vidgen studio --clean` while a studio runs on the same folder cleans its open session by the
+  start rule too (renders come back when played).
+
+## Step 201 — Review of Phase T (vidgen studio)
+
+What was reviewed and fixed (DESIGN §94.19; one test per attack in `tests/test_phase_t_review.py`)
+- **Server guards** (all held: 127.0.0.1 only, exact Host, same-origin JSON POSTs, 2 MB, CSP).
+  Fixed: a negative `Content-Length` made `rfile.read(-1)` wait for the client to close and read
+  without limit (now 400); 4xx / 5xx answers close the connection (an unread body could have been
+  read as the next request); JSON `NaN` / `Infinity` were accepted as numbers (a note at NaN
+  seconds), `version: 1.5 / true / Infinity` were cast or crashed with 500 — now 400.
+- **Path names**: URL paths are never decoded and every file comes from an allow-list or a strict
+  name pattern — held for `..`, `%2e%2e`, backslashes, drive letters, UNC paths on every prefix.
+  Fixed: every name / id pattern ended in `$` (lets a trailing newline through; a query string is
+  decoded, so `?key=…%0A` reached `RENDER_KEY`) and used `\d` (other scripts' digits): now `\Z`
+  and `[0-9]` (session, batch, inbox, note ids, render keys, audio / picture / export names, the
+  studio's and the score format's section / track names). Save to project: Windows device names
+  (`con`, `nul`, `com1`…) refused; links out of the project were already refused (tested).
+- **YAML**: safe loader everywhere (python tags are problems, tested). Fixed: an alias "bomb" as a
+  title took 30 s and gigabytes in the score's checks — refused above 200 000 expanded values
+  before the document is built; deep nesting was a `RecursionError` (500) — now a problem;
+  steps written as a list of lists were a `TypeError` in `patterns.parse_steps` (a 500 here, a
+  traceback in the CLI) — now the steps problem.
+- **MCP studio tools**: ids checked before paths; links out of the root not followed (held).
+  Fixed: a session folder that is a link out of its studio folder is refused (an agent writes
+  `inbox/` there).
+- **OpenRouter**: key only from the environment at send time, sent only to openrouter.ai, scrubbed
+  from errors, never returned (tested on `/api/info`, `/api/session`, `/api/ask`). Fixed: the
+  server now requires `confirm: true` on `/api/proposal/send` (the page sends it only from "Send
+  now"); `test_studio_agent.test_routes` would have called the real provider on a machine with
+  `OPENROUTER_API_KEY` set — it now clears it and stubs the call.
+- **Windows**: section cuts made under the render lock (two requests at once wrote one file twice;
+  the second replace fails on Windows while the first is streamed); MP3 exports replace through
+  `fileio.replace_file` (retries) and remove their partial file; text with `\r\n` (a pasted reply)
+  is stored as `\n` (`session.normal_text`), so a version reads back as written; Ctrl+C with a
+  check running: process gone in 0.14 s (Linux; `app.close()` also stops the late facts).
+- **Cleaning races** (Step 200's gap): `--clean` and a second studio's start-up clean leave the
+  session a running studio has open alone (`open.json`); the automatic clean keeps the last 6
+  renders asked for (an A/B side or a candidate playing is not removed under the page).
+- **FFT finding (Step 196)**: byte-identity is impossible with any other FFT length (even scipy's
+  FFT of the same length rounds differently), and shipped scores use slow lengths themselves
+  (ascent 2647, breakthrough 1607, a cookbook sketch 2857), so videos and beds keep the exact
+  path. The studio (only) filters slow lengths (largest prime factor > 500, ≥ 65 536 samples) on
+  a quick length ≥ 2n and folds back (`effects.CircularFFT`, `fast_fft` keywords, default off):
+  stems within 5e-15 of the exact ones on real pieces, the studio's audition WAV byte-identical
+  to one made from `render_music_score` (tested: a slow test score, ascent, breakthrough; also
+  measured on time_of_flight 112, tidewater 112). Bit-identical memory savings in the renderer
+  for everyone: `swept_filter` per channel with at most 400 MB of copies at once; `_render_bus`
+  frees its group buffers and blends in place.
+- **Long pieces**: a 5-minute time_of_flight was killed at 3 GB in the studio (all stems held)
+  and in `render_music_score` itself. Now stems that do not fit the 768 MB cache together are
+  streamed (`StemSet.streamed`): studio render 73 s / 2.3 GB, its check 2.8 GB; `render_music_score`
+  88 s / 2.75 GB. A 30-minute export was killed at 3 GB: exports are now made block by block
+  (the same samples, 14 cases by SHA-256 + a test against the Step 197 code) and capped at 10
+  minutes (was 30; the page's field too): 600 s MP3 at 803 MB.
+
+Timings (two cores, StudioApp; `<scratchpad>/s201/latency.py`, HEAD → now)
+
+| | before | after |
+|---|---|---|
+| time_of_flight tempo 108 → 112 | 22.1 s, peak 2187 MB | 9.1 s, 1271 MB |
+| then a pad filter edit | 8.8 s | 3.8 s |
+| time_of_flight first render | 8.1 s | 6.2 s |
+| ascent first render (its own tempo is slow) | 7.7 s, 1441 MB | 5.6 s, 989 MB |
+| tidewater tempo +4 | 4.0 s, 1433 MB | 2.8 s, 1041 MB |
+| momentum tempo +4 | 4.4 s, 1352 MB | 3.1 s, 988 MB |
+| stems + mix alone, time_of_flight 112 | 20.9 s, 1777 MB | 8.2 s, 1123 MB |
+
+Compatibility (hard rule)
+- SHA-256 of the 17 templates' renders, both test demos, the five cookbook sketches and the 17
+  beds' loops: HEAD (`git archive` into `<scratchpad>/s201/head`) = now (`hash_before.json` =
+  `hash_after.json`, which also cover the 17 fingerprints' sources); `test_music -k
+  bed_sounds_as_approved` 17 passed.
+- Project mixes (`s201/mixcompare.py`, s191's script deleting its files as it goes: the disk is
+  nearly full): file + momentum, tidewater + skyline, gradient-descent, iso-web-page,
+  host-explainer, gps-time-of-flight — identical HEAD vs now.
+- The Listen page made again equals `docs/music` file for file (53 files). Gallery: `studio`
+  is not a render input, nothing else changed.
+- Studio exports: 14 cases identical HEAD vs now (`export_hash.py`).
+
+Files touched
+- New: `tests/test_phase_t_review.py` (21; 2 `slow`).
+- Changed: `src/vidgen/studio/effects.py` (`CircularFFT`, `slow_fft_length`, `fast_fft_length`,
+  per-channel sweep, `SWEEP_MEMORY`), `render.py` (`fast_fft`, `_Canvas.release`, in-place bus),
+  `patterns.py`, `score_file.py`; `src/vidgen/studio_app/` `__init__.py`, `agent.py`, `app.py`,
+  `checks.py`, `edits.py`, `exports.py`, `notes.py`, `server.py`, `session.py`, `song.py`,
+  `stems.py`, `variations.py`, `static/api.js`, `static/exports.js`; tests `test_studio_agent.py`
+  (no real provider), `test_studio_stems.py` (budget test for streaming); `docs/CONFIG.md`,
+  `DESIGN.md` (§94.19, §94.1), `CHANGELOG.md`, `tasklist.md`.
+
+Public interfaces: no `vidgen.api` names; listed in DESIGN §94.19 (`fast_fft` keywords default off).
+
+How to test (one at a time, capped)
+- `test_phase_t_review` 19 + 2 slow passed; `test_studio_app` + `song` + `inspector` 44;
+  `test_studio_stems` (all, incl. the 17 templates) 32; `test_studio_stems` (not slow) +
+  `check` + `agent` + `cleanup` 44 (`PYTHONPATH=<repo>`); `test_studio_variations` +
+  `test_phase_s_review` 33; `test_studio` + `test_music_check` + `test_music_pieces` +
+  `test_listen` 85; `test_music_templates` 25; `test_music -k bed_sounds_as_approved` 17;
+  `test_studio_ui -m ui` 19; `test_mcp` in full (capped3g) 20 in 129 s; `test_docs` +
+  `test_guide` + `test_packaging` 119. Not run: the full suite.
+
+Files to look at
+- Screenshots: `<scratchpad>/s201/shots/1-export-over-600-dark.png` / `-light.png` (the
+  10-minute limit's message), `2-provider-confirm.png`, `3-provider-proposal.png` (OpenRouter
+  mocked), `4-narrow.png`. Scripts: `fast_fft.py`, `fft_bench.py`, `latency.py`,
+  `long_score.py`, `long_render.py`, `track_mem.py`, `export_hash.py`, `yaml_probe.py`,
+  `ctrl_c.py`, `listen_check.py`, `mixcompare.py`.
+
+Known gaps
+- Windows itself was not run here (Ctrl+C, file locks, `SO_EXCLUSIVEADDRUSE`, device names are
+  reasoned and unit-tested only). Closing the console window (not Ctrl+C) leaves `open.json`;
+  cleaning then skips that session until a studio runs again.
+- A heavy 10-minute piece still needs more than 3 GB to render (videos too); the studio's check
+  of a long piece renders evicted stems again (minutes). The quick FFT lengths are the studio's
+  only: exporting a slow-length piece is as slow as before.
+- The YAML expansion limit is the studio's; `vidgen music check FILE` on an alias bomb is still
+  slow (local files only). No limit on how many sessions a studio folder holds.
+- At 420 px a short last section's name is cut ("t…"), as before.
+- The disk of this workspace is almost full (about 150 MB free; old scratch venvs take most of
+  it): long-piece checks and big exports were measured and their files removed at once.
+
+## Step 202 — Cell world model and scale system (Phase U begins)
+
+What was built (DESIGN §95, which also plans Steps 203–211; tasklist "Phase U")
+- **Decided: a new scene type `cell`** (not a stage or iso_diagram mode: no characters or grid,
+  a camera over five orders of magnitude). Shared cell knowledge lives in `vidgen.cellworld`, so
+  Step 207's separate `pathway` type uses the same compartment and molecule names.
+- **The cell world, no manim** (`src/vidgen/cellworld/`): `units` (µm inside; `"25 nm"`,
+  `"1.5 um"`, `"20 µm"`; 1-2-5 lengths), `catalog` (compartments with topology, membranes,
+  14 kinds with textbook sizes and ranges, where each may be and sit, the reason quoted by the
+  rules, the typical animal cell), `geometry` (ellipses, capsules, arc bands in µm; membranes
+  are bilayer mid-lines), `model` (`build_cell_world`: entries, placement — typical layout, else
+  seeded scatter —, generated pores and bound ribosomes, compartment lookup, the location rules
+  with did-you-mean), `view` (levels tissue / cell / organelle / complex, focus points, LOD
+  weights on a 1080-px reference, scale bar, the van Wijk–Nuij zoom path). A test checks manim is
+  not imported.
+- **Renderer** `src/vidgen/cell_vector.py`: exact Bézier outlines, LOD pieces with feature
+  expressions, strokes kept in pixels at any zoom, true-width bilayers, theme-aware colours;
+  placeholder organelles at true relative scale (nucleus with pores and nucleolus, rough ER with
+  bound ribosomes, smooth ER, Golgi cis→trans, centrosome, mitochondria with cristae,
+  lysosomes, peroxisomes, vesicles, free ribosomes; the tissue's neighbouring cells).
+- **Scene** `scenes/cell.py` (`cell`) and **action** `scenes/cell_actions.py` (`zoom_to`):
+  physical-scale camera, screen-sized title / labels / scale bar pinned by a camera listener,
+  labels in columns (16:9) or rows (9:16) with leader lines for the start view, fading as the
+  camera leaves it; `reveal: all | per_beat`; `layout_keys` adds `cell` (span, px/µm, scale bar,
+  LOD) for Step 209.
+
+YAML (CONFIG `cell`)
+```yaml
+- id: tour
+  type: cell
+  params:
+    title: "Inside an animal cell"
+    cell: {kind: animal, size: 20 um}          # or cell: animal
+    contents: typical                          # default; none = only objects
+    objects:
+      - {kind: mitochondrion, id: mito, at: [6, 3], angle: 30}    # µm from the centre
+      - {kind: ribosome, id: mitoribosomes, in: mito, count: 6, label: false}
+      - {kind: ribosome, id: er_bound, on: rough_er, count: 5}
+    view: cell                                 # tissue | cell | organelle | complex | {level, on, width}
+    labels: true
+    scale_bar: true
+  beats:
+    - text: "..."
+      actions:
+        - {zoom_to: mito, at: "@mitochondrion"}                  # organelle level by default
+        - {zoom_to: rough_er, level: complex, at: "@ribosome"}   # one ribosome; width: "150 nm"
+```
+
+Files touched
+- New: `src/vidgen/cellworld/{__init__,units,catalog,geometry,model,view}.py`,
+  `src/vidgen/cell_vector.py`, `src/vidgen/scenes/cell.py`, `src/vidgen/scenes/cell_actions.py`,
+  `tests/test_cell_world.py` (45), `tests/test_cell_scene.py` (13, 3 render),
+  `docs/gallery/cell.md` and `media/cell-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, guide + `AGENTS.md` (chooser
+  row, "# cell biology" snippet, `zoom_to` row), `docs/CONFIG.md` (`cell` section, targets row),
+  `docs/gallery/README.md`, `examples/gallery/video.yaml` (scene `inside`), `CHANGELOG.md`,
+  `DESIGN.md` §95, `tasklist.md` (Phase U), tests `test_builtin_scenes.py`,
+  `test_actions_coverage.py`, `test_translation.py`, `test_actions.py`, `test_registry.py` (the
+  new type and action in their lists).
+
+Public interfaces: `vidgen.api` adds `CELL_COMPARTMENTS`, `CELL_KINDS`, `CELL_LEVELS`,
+`CELL_OBJECT_KINDS`, `CellColors`, `CellDrawing`, `CellObjectSpec`, `CellSpec`, `CellView`,
+`CellWorld`, `build_cell_world`, `cell_default_level`, `cell_label_weight`, `cell_level_view`,
+`cell_lod_weights`, `cell_scale_bar`, `cell_zoom_path`, `did_you_mean`, `format_length`,
+`parse_coordinate`, `parse_length` (DESIGN §95.7). Config: scene type `cell`, action `zoom_to`.
+
+Decisions / deviations
+- LOD in pixels of a 1080-px shorter side (resolution independent; the first preview stills
+  labelled less than the final would have).
+- Manim draws an animation's family as it was when the animation began: the scale bar's texts are
+  all made up front and only shown or hidden (a text swapped mid-zoom was not drawn and the old
+  one stayed), and `CellZoom` calls the camera listener itself (a move finished without a frame
+  left labels stale).
+- Labels belong to the start view (they fade out beyond 1.2–1.6× zoom); point at things in a
+  zoomed view with `callout`. Zoom uses van Wijk–Nuij (a linear `MoveCamera` rushed a 150× zoom
+  and flew through empty cytosol between two complexes).
+- The gallery snippet has one zoom only: with a second zoom the GIFs were 185–206 KB (> 150 KB).
+
+Known gaps / TODO for later steps (DESIGN §95.7)
+- Placeholder morphology (ER not joined to the envelope, loose smooth-ER arcs, bare Golgi
+  cisternae); animal cells only (`plant`, `bacterium` in 203); no "not to scale" flag yet (209);
+  labels only for the start view; a `dim` / `highlight` while a zoom changes LOD can leave a piece's
+  opacity off until the camera moves again; a built-in `zoom` deeper than every `zoom_to` has no
+  scale-bar text; the 9:16 gallery GIF is at 149 KB of its 150 KB budget.
+
+How to test
+- `tests/test_cell_world.py` (45 passed), `tests/test_cell_scene.py` (13 passed, 3 render);
+  `test_builtin_scenes.py` not render 126 + `-k cell` 4 (renders 16:9 / 9:16);
+  `test_actions_coverage.py` not render 12 + `-k cell` 1; `test_translation.py` 72;
+  `test_api` + `test_guide` + `test_docs` 128; `test_gallery` (not render) 17; `test_schema` +
+  `test_json_output` (not render) 87; `test_actions` 28 and `test_registry` 23 (the action and
+  type lists gained `zoom_to` and `cell`); `test_extensions` + `test_review2` + `test_introspect`
+  (not render) 43; `test_mcp.py` in full 20. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills looked at (scratchpad `s202/proj`, 26 s tour with six zooms): 16:9, 9:16 and the
+  `light_academic` theme; `vidgen lint` clean but one `dead_air` warning of the scratch script.
+
+## Step 203 — Structure library
+
+What was built (DESIGN §95.8)
+- **Morphology at every LOD**: nucleus (double envelope 30 nm apart, outer membrane continuous
+  with the rough ER — one region, no seam —, pores where the membranes join with spokes, rings
+  and baskets at the complex level, nucleolus with fibrillar centres / dense fibrillar / granular
+  parts, heterochromatin at the inner membrane); rough ER sheets joined to the outer nuclear
+  membrane and to each other, ribosomes on the cytosolic face, COPII buds at exit sites; smooth ER
+  as a tubule network with three-way junctions joined to a rough sheet; Golgi with cis / medial /
+  trans cisternae (colours, dilated rims, buds; COPI / clathrin coats); mitochondria (outer and
+  inner membrane, lamellar cristae with crista junctions, matrix, intermembrane and intracristal
+  space); lysosomes, peroxisomes, early endosomes (with tubules), late endosomes (intraluminal
+  vesicles); vesicles with clathrin (cage), COPI, COPII coats; centrosome (mother and daughter
+  centrioles at right angles, nine triplets, PCM).
+- **Plant cell** (`cell: plant`): wall with middle lamella shared by the neighbours (exact
+  walls), plasmodesmata with desmotubules through both walls, central vacuole with tonoplast,
+  chloroplasts along the wall (double envelope, grana and stroma lamellae, starch).
+  **Bacterium** (`cell: bacterium`, `gram`, `capsule`): envelope layers, nucleoid, 70S ribosomes,
+  plasmids, flagella with basal bodies, pili; colony neighbours.
+- **Cytoskeleton and motors**: microtubules radiating from the centrosome (− end there, + end
+  out; cortical in plants), actin cortex, stress fibres, intermediate filaments; kinesin (+),
+  dynein (−, animal only), myosin (on actin), optional cargo, an arrow to the end they walk to.
+- **Membrane close-ups** (views ≤ 0.45 µm): phospholipids (heads, two tails), cholesterol,
+  glycolipids with the glycocalyx, a lipid raft; `style: surface` draws things whole from outside
+  (a nucleus covered with pores, a membrane's head mosaic).
+- **Step 202 gaps fixed**: labels for each `zoom_to` view from `part_anchors` (option
+  `labels: true | false | [names]`, validated), opacity of a dim / highlight kept through LOD
+  changes during a zoom (emphasis per owner; stale colours of an action begun while a piece was
+  hidden are ignored), scale-bar texts down to 4 nm. Gallery GIFs 142 / 139 KB (snippet unchanged).
+- Render time halved (adaptive arc steps, hidden pieces and invisible label glyphs drop their
+  points); the plant build from 17 s to about 2 s (outline-only fit checks).
+
+YAML
+```yaml
+- id: plant
+  type: cell
+  params:
+    cell: plant                              # or {kind: bacterium, gram: positive, capsule: true}
+    style: section                           # surface: whole, seen from outside
+    objects:
+      - {kind: vesicle, id: ccv, coat: clathrin, size: "80 nm"}   # at [6, -2] would be in the vacuole: refused
+      - {kind: microtubule, id: mts, count: 8}
+      - {kind: kinesin, on: mts, cargo: true}
+      - {kind: chloroplast, id: big, grana: 6}
+  beats:
+    - text: "..."
+      actions:
+        - {zoom_to: chloroplasts, level: complex, labels: [granum, stroma]}
+```
+
+Files touched
+- New: `src/vidgen/cellworld/{anatomy,bilayer,build,builder,curves,filaments,morphology,regions}.py`,
+  `src/vidgen/cell_draw/{__init__,base,drawing,organelles,plant,bacteria,cytoskeleton,closeup}.py`,
+  `tests/test_cell_library.py` (30).
+- Changed: `cellworld/{__init__,catalog,geometry,model,view}.py`, `cell_vector.py` (now a shim),
+  `scenes/cell.py`, `scenes/cell_actions.py`, `api.py`, `tests/test_cell_world.py`,
+  `tests/test_cell_scene.py`, guide + `AGENTS.md`, `docs/CONFIG.md`, `docs/gallery/cell.md` and
+  media, `DESIGN.md` §95.8, `CHANGELOG.md`, `tasklist.md`.
+
+Public interfaces: `vidgen.api` adds `CELL_COATS`, `CELL_MEMBRANES`, `CellAnchor`,
+`cell_part_anchors`. Config: `cell.{gram, capsule, wall, plasmodesmata}`, scene `style`, object
+`coat`, `cargo`, `grana`, `style`, 16 new kinds, `zoom_to` `labels`. `cell.size` / `aspect`
+default by kind (the spec's `None`).
+
+Decisions / deviations
+- Membrane topology drawn with boolean regions (skia-pathops, already a manim dependency) so
+  continuous membranes (envelope + ER, rough + smooth ER) have no seams.
+- Molecules are built only near views that need them (`closeups`), not for the whole cell.
+- YAML 1.1 reads `on:` as `true`; objects and views accept it.
+
+Known gaps / TODO
+- Leader lines of a zoomed view can cross when anchors crowd one spot (9:16 most); motors are
+  static (walking: Step 205); the surface style is schematic; no tissue junctions; plant cells
+  have no cytoplasmic streaming or plastid variety (amyloplasts, chromoplasts).
+
+How to test
+- `tests/test_cell_world.py` 45, `tests/test_cell_library.py` 30, `tests/test_cell_scene.py` 23
+  (render tests at 160x90 / 90x160); `test_builtin_scenes.py -k cell` 4; `test_actions_coverage.py
+  -k cell` 1; `test_builtin_scenes` + `test_actions_coverage` not render 138; `test_translation` 72;
+  `test_api` 10; `test_guide` + `test_docs` 118; `test_gallery` not render 17; `test_schema` +
+  `test_json_output` not render 87; `test_actions` + `test_registry` 51; `test_mcp.py` 20;
+  `test_extensions` + `test_review2` + `test_introspect` not render 43. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills looked at (scratchpad `s203/close`, 37 single-view scenes; `s203/proj`, a zoom tour):
+  every level in 16:9 and 9:16, dark and `light_academic`.
+
+## Step 204 — Molecules and notation
+
+What was built (DESIGN §95.9)
+- **Step 203 fixes first.** Part labels of zoomed views now point at their part: the matrix
+  label beside a crista (it ended in the intracristal space), the glycocalyx 3–8 nm outside the
+  bilayer and on the side its label goes to (16:9 columns, 9:16 rows), the Golgi lumen and coat
+  (they ended in the cytosol), heterochromatin on a patch, the inner mitochondrial membrane away
+  from a crista junction. A test (`test_labels_point_at_what_they_name`, 16:9 and 9:16, 15
+  views) checks every anchor against the model: in its compartment ≥ 3 nm from the edge, or in
+  its membrane's bilayer; more tests for the nucleolus parts and heterochromatin. Stroma
+  lamellae now leave single granal thylakoids at the stack's margin (horizontal between grana of
+  a row, oblique from the top / bottom thylakoid to the next row), one lamella per margin, never
+  through a stack (tested), the lumen one space. Found while checking: `Region` lost small
+  overlapping shapes and filled a ring of smooth-ER tubules — Skia's tolerances suit nm, not µm,
+  so region paths are now in nm (the smooth-ER network is also complete now); the lipid raft's
+  glow stays within the bilayer. Matrix (dark) vs intermembrane / intracristal space (lighter)
+  were already distinct; checked in both themes.
+- **Molecules** (`cellworld/notation.py`, `names.py`, `sequences.py`, `molecules.py`, `glyphs.py`,
+  `placing.py`; renderer `cell_draw/molecules.py`; scene `scenes/molecule.py`): DNA (antiparallel
+  strands, 5′/3′ ends, base pairs coloured by base, major / minor grooves, both sequences with
+  their ends), mRNA (cap, codons, poly(A)), tRNA (cloverleaf or L; anticodon checked against the
+  genetic code with wobble), rRNA, nucleosome (147 bp, 1.65 left-handed turns, tails with checked
+  histone marks), chromatin (10 nm / compact schematic), proteins with domains (size from mass),
+  kinase, phosphatase, G protein (GDP / GTP, lipid anchors), GPCR (7 TM, N out, active TM6),
+  RTK (monomer / dimer with phosphotyrosines), ion channel (closed / open; voltage, ligand,
+  mechanical gating; ion flow), carrier (alternating access; uniport / symport / antiport
+  checked), Na⁺/K⁺-ATPase (3 Na⁺ out, 2 K⁺ in per ATP), ATP synthase (Fₒ, stalks, F₁ on the N
+  side, H⁺ path, c-ring by membrane), ATP / ADP / Pᵢ / GTP / GDP / cAMP / glucose / ligand / ions.
+- **In a cell:** molecules are object kinds: soluble ones `in:` their compartments, membrane
+  proteins `on: cell` or a structure (`membrane:` chooses; ATP synthase on the cristae or the
+  stroma lamellae), oriented by probing both sides of each place; `faces:` and `state:` checked;
+  drawn as dots, then whole from about 6 px; `zoom_to` a molecule frames it and names its parts
+  and both compartments.
+
+YAML
+```yaml
+- id: synthase
+  type: molecule
+  params:
+    title: "ATP synthase"
+    membrane: inner_mitochondrial          # none, plasma, thylakoid, er, bacterial…
+    species: human                         # nomenclature of gene / protein
+    molecules:
+      - {kind: atp_synthase, parts: true}  # faces: intermembrane_space is refused (F1 faces the matrix)
+      - {kind: atp, in: matrix}
+      - {kind: protein, gene: TP53, protein: p53, modifications: [{mark: P, at: Ser15}]}
+- id: cristae
+  type: cell
+  params:
+    objects:
+      - {kind: atp_synthase, id: synthase, on: mitochondria, count: 6}
+      - {kind: gpcr, on: cell, count: 3, state: active}
+      - {kind: dna, in: nucleus, count: 4}
+    view: {level: complex, on: synthase}
+```
+
+Files touched
+- New: `src/vidgen/cellworld/{notation,names,sequences,molecules,glyphs,placing}.py`,
+  `src/vidgen/cell_draw/molecules.py`, `src/vidgen/scenes/molecule.py`, `tests/test_molecules.py`
+  (63, 2 render), `docs/gallery/molecule.md` and media.
+- Changed: `cellworld/{__init__,anatomy,build,builder,model,morphology,regions,view}.py`,
+  `cell_draw/{closeup,drawing}.py`, `scenes/{__init__,cell}.py`, `api.py`, guide + `AGENTS.md`,
+  `docs/CONFIG.md` (`molecule` section, "Molecules in a cell", targets row), `docs/gallery/` (cell
+  re-rendered, README), `examples/gallery/video.yaml` (scene `synthase`), `DESIGN.md` §95.9,
+  `CHANGELOG.md`, `tasklist.md`; tests `test_cell_library.py` (+9), `test_builtin_scenes.py`,
+  `test_translation.py`, `test_actions_coverage.py`, `test_extensions.py` (the new type in lists).
+
+Public interfaces: `vidgen.api` adds `MOLECULE_KINDS`, `MoleculeKind`, `MoleculeSpec`,
+`MoleculeGlyph`, `molecule_glyph`, `check_molecule`, `place_glyph`, `glyph_mobjects`,
+`membrane_sides`, `protein_size`, `BILAYER_NM`, `check_molecule_membrane`, `check_molecule_faces`,
+`check_molecule_place`, `SPECIES`, `MODIFICATIONS`, `nomenclature_species`, `check_gene`,
+`check_protein`, `gene_markup`, `protein_markup`, `check_modification`, `histone_mark`,
+`chem_markup`, `chem_plain`, `charge_of`, `check_markup`, `CODONS`, `check_sequence`, `check_trna`,
+`codons_read`, `reverse_complement`, `LIPID_HEAD_HUE`, `LIPID_TAIL_HUE`. Config: scene type
+`molecule`; `cell` object options `state`, `faces`, `membrane`; 25 molecule kinds.
+
+Decisions / deviations
+- A separate `molecule` scene (no cell world, a fixed nm camera) rather than a `cell` mode;
+  shared glyphs. F₀ is written Fₒ (the o of oligomycin), the usual textbook spelling.
+- Molecule kinds are registered into the cell world's `KINDS` by `molecules.py` at import (the
+  catalog stays free of molecule data); `KIND_OPTIONS` likewise.
+- Small molecules and ions are symbols at about their true size (ions at hydrated radii); the
+  accuracy lint (209) can flag exaggerations later.
+
+Known gaps / TODO
+- States are static (gating, alternating access, G-protein cycle as actions: Step 205/207); lipids
+  are drawn under membrane proteins in a `cell` close-up; several membrane proteins in one 9:16
+  row are small; nucleosome face-on only; rRNA schematic; leader lines can still cross when many
+  parts crowd one spot.
+
+How to test
+- `tests/test_molecules.py` 63 (2 render), `tests/test_cell_library.py` 64, `test_cell_world.py` 45,
+  `test_cell_scene.py` 23; `test_builtin_scenes` not render 128 + `-k "molecule or cell"` 8;
+  `test_actions_coverage` 86; `test_translation` + `test_actions_coverage` not render 84;
+  `test_registry` + `test_api` 33; `test_guide` + `test_docs` + `test_gallery` not render 135;
+  `test_schema` + `test_json_output` not render 87; `test_extensions` 25, `test_review2` +
+  `test_introspect` not render; `test_mcp.py` in full 20. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills looked at (scratchpad `s204`): the corrected 203 close-ups and every molecule family in
+  16:9 and 9:16, dark and `light_academic`; molecules in cells (cristae, thylakoids, plasma
+  membrane, nucleoplasm).
+
+## Step 205 — Transport and membrane processes as actions
+
+What was built (DESIGN §95.10)
+- **Molecule scene actions** (`scenes/molecule_actions.py`; runtime in `scenes/molecule.py`, players
+  in `scenes/molecule_process.py`; rules and plans without manim in `cellworld/transport.py`):
+  - `set_state` morphs a molecule to another state. Prims are matched by look and interpolated;
+    unmatched prims fade. `until` turns it back.
+  - `transport` runs one of these:
+    - a channel passing ions down their electrochemical gradient, checked for selectivity;
+    - an aquaporin passing water in single file;
+    - a carrier's alternating-access cycle (uniport, symport, antiport), with the transporters
+      GLUT1/4, SGLT1/2, NCX, NHE1, NKCC1 and KCC2;
+    - the Na⁺/K⁺-ATPase Post–Albers cycle (E1 → E1P → E2P → E2, with a phosphorylated Asp);
+    - a P-type H⁺ pump, a V-ATPase, or an ABC exporter.
+  - `diffuse` is simple diffusion by a seeded random walk, with net flux down the gradient. Only
+    bilayer-permeant molecules may cross a membrane.
+  - `osmosis` moves water toward the higher osmolarity, through aquaporins if there are any.
+  - `action_potential`:
+    - a monotone-cubic voltage trace;
+    - Na⁺ channels open, then inactivate; K⁺ channels open, then close;
+    - a live Vm readout, membrane charges and an optional inset plot.
+  - New scene params: `solutes` (concentration bars and particles, typical mammalian values by
+    default), `potential`, `bars`, `seed`.
+  - Each step of a process has a caption.
+- **Cell scene actions** (`scenes/cell_actions.py`, mixin `scenes/cell_traffic.py`; models in
+  `cellworld/traffic.py`; drawing in `cell_draw/traffic.py`):
+  - `motor_walk`: kinesin and dynein take 8 nm steps hand over hand; myosin V takes 36 nm steps,
+    at real speeds. Walks add up across beats.
+  - `endocytosis`: a clathrin-coated pit, then a neck with dynamin, scission, uncoating, and the
+    vesicle moves in.
+  - `exocytosis`: docking, SNARE zippering, a fusion pore, cargo release and full collapse.
+  - Membrane shapes are keyframes of a circle-with-neck model in nm, drawn on an overlay that
+    covers the still membrane.
+- **Validation** (`vidgen validate`): molecule states are replayed in beat and `at` order. Each
+  refusal says why. Refused:
+  - a closed channel;
+  - the wrong ion (the TVGYG filter);
+  - transport against the gradient for a passive path;
+  - a coupled carrier whose ΔG is positive overall;
+  - a uniporter driven uphill;
+  - ions by simple diffusion;
+  - isotonic osmosis;
+  - an action potential that does not start at rest;
+  - kinesin walking toward minus;
+  - a walk past a filament's end;
+  - a coated vesicle fused, or a vesicle fused twice;
+  - endocytosis in a bacterium or over an organelle;
+  - the wrong scene for an action.
+- **Step 204 gaps fixed:**
+  - Lipids leave a gap round membrane proteins in cell close-ups (`lipid_layout(gaps=)`). It uses
+    the same RNG draws, so earlier frames are unchanged.
+  - In 9:16, `molecule` scenes put membrane proteins in several rows.
+
+YAML
+```yaml
+- id: firing
+  type: molecule
+  params:
+    membrane: plasma
+    potential: -70
+    solutes: [K+, {solute: Na+, mM: {extracellular: 145, cytosol: 12}, count: 14}]
+    molecules:
+      - {kind: ion_channel, id: nav, ion: Na+}
+      - {kind: ion_channel, id: kv, ion: K+}
+      - {kind: na_k_atpase, id: pump}
+      - {kind: carrier, id: ncx, transporter: ncx}
+  beats:
+    - text: "A stimulus reaches threshold and the membrane fires."
+      actions: [{action_potential: membrane, plot: true, at: "@threshold"}]
+    - text: "The pump restores the gradients, one ATP per turn."
+      actions: [{transport: pump, at: "@pump"}]
+    - text: "When the potassium channel opens, potassium leaves the cell."
+      actions:
+        - {set_state: kv, state: open, at: "@opens"}
+        - {transport: kv, count: 4, at: "@leaves"}
+- id: motors
+  type: cell
+  params:
+    objects:
+      - {kind: microtubule, id: mts, count: 8}
+      - {kind: kinesin, id: kin, on: mts, cargo: true}
+  beats:
+    - text: "Kinesin walks hand over hand, eight nanometres per step."
+      actions:
+        - {zoom_to: kin, width: "250 nm", labels: false}
+        - {motor_walk: kin, distance: "100 nm", at: "@walks"}
+- id: endo
+  type: cell
+  params:
+    view: {level: complex, on: cell, width: "350 nm"}
+    labels: false
+  beats:
+    - text: "Receptors gather in a coated pit, which buds inwards and is pinched off."
+      actions: [{endocytosis: cell, at: "@gather"}]
+- id: exo
+  type: cell
+  params:
+    objects: [{kind: vesicle, id: sv, at: [9.65, 0.0], size: "90 nm"}]
+    view: {level: complex, on: sv, width: "450 nm"}
+  beats:
+    - text: "The vesicle docks, fuses and releases its cargo."
+      actions: [{exocytosis: sv, at: "@docks"}]
+```
+
+Files touched
+- New:
+  - `src/vidgen/cellworld/{transport,traffic}.py`
+  - `src/vidgen/cell_draw/traffic.py`
+  - `src/vidgen/scenes/{molecule_actions,molecule_process,cell_traffic}.py`
+  - `tests/test_transport.py` (27 tests, 3 of them render tests)
+- Changed:
+  - `cellworld/{molecules,glyphs,bilayer,filaments}.py`: new states and kinds, the transporter
+    catalog, gaps in the lipid layout, motor options
+  - `cell_draw/{closeup,cytoskeleton,drawing}.py`: lipid gaps, motor parts, `reshape`,
+    `hide_owner`
+  - `scenes/{__init__,cell,cell_actions,molecule}.py`
+  - `api.py`
+  - the guide and `AGENTS.md`; `docs/CONFIG.md` ("Processes as actions" and the cell actions)
+  - `DESIGN.md` §95.10, `CHANGELOG.md`, `tasklist.md`
+  - tests `test_actions.py`, `test_molecules.py`
+
+Public interfaces
+- `vidgen.api` adds `cell_transport`, `cell_traffic`, `CellEventDrawing`, `cell_motor_curves`,
+  `cell_motor_parts`, `MOLECULE_ION_FLOW`, `MoleculePrim`, `carrier_parts`,
+  `molecule_small_prims`, `MOLECULE_ION_RADII`, `MOLECULE_ION_HUES`, `MOLECULE_TRANSPORTERS`,
+  `TYPICAL_CONCENTRATIONS`, `molecule_pump_type`.
+- Config:
+  - 8 actions;
+  - molecule item options `transporter` and `ratio`;
+  - `molecule` params `solutes`, `potential`, `bars` and `seed`;
+  - motor options `track`, `s` and `side`;
+  - states: inactivated (channels), occluded (carriers), e1, e1p, e2p and e2 (Na⁺/K⁺-ATPase);
+  - kinds `h_atpase`, `abc_transporter`, `aquaporin`, `water`, `o2`, `co2` and `drug`.
+
+Decisions / deviations
+- Processes run in the scene's own mobjects. `PlanPlayer` animates the particle group, and
+  `Hold` marks the other changed mobjects as moving. A wrapper group is not used, because
+  `scene.add` detached the drawings.
+- The action-potential plot is an inset drawn by the scene (custom axes), not a `function_plot`
+  scene.
+- Processes at the molecule scale live in the `molecule` scene, and the cell scene keeps the
+  processes of the whole cell. A `set_state` in a cell is left for later.
+
+Known gaps / TODO
+- The `cell` scene has no `set_state`.
+- The endocytosed vesicle is not added to the world as an object (later actions cannot target
+  it).
+- Zoomed-view part labels go stale after a process. Advise `labels: false`.
+- Four membrane proteins plus the plot make small drawings, most of all in 9:16.
+- Dynein cargo can overlap the nuclear envelope (Step 203 placement).
+- Gallery media for `molecule` and `cell` were not regenerated. Their layout may shift a little
+  (4 layout passes, side-name avoidance).
+- `scenes/molecule.py` is large (about 1,700 lines). The process runtime could become a mixin
+  like `cell_traffic`.
+
+How to test
+- `tests/test_transport.py`: 27 tests, 3 of them render tests.
+- `test_molecules` + `test_cell_scene`: 86.
+- Not render:
+  - `test_actions`, `test_actions_coverage`, `test_builtin_scenes`, `test_schema`,
+    `test_translation`: 298;
+  - `test_guide` + `test_docs` + `test_gallery`: 136;
+  - `test_schema` + `test_json_output` + `test_review2` + `test_introspect`: 105.
+- `test_builtin_scenes` + `test_api` + `test_registry` + `test_extensions`: 185.
+- `test_mcp`: 20.
+- Render `-k "cell or molecule"`: 6.
+- `test_cell_library` + `test_cell_world` + `test_translation`: 182.
+- Compatibility: the Phase Q baseline re-run gave 31 frames, with a max difference of 0.
+- Stills looked at (scratchpad `s205`): every process mid-animation in 16:9 and 9:16, dark and
+  `light_academic`, with contact sheets in `s205/sheets/`.
+
+## Step 206 — Gene expression as actions
+
+What was built
+- A `gene:` param for `molecule` and `cell` scenes. The gene is written as a coding-strand
+  `sequence` with `introns: [[start, end]]`, as a `protein`, or generated from `codons` (with
+  `introns` as a count, `signal_peptide`, `glycosylation`, `seed`). Its target id is `id`
+  (default `gene`).
+- `molecule` scene: a close-up schematic with every base and amino acid written. The camera
+  follows the step, the protein made so far is shown under the view, and the scene says
+  *schematic: not to scale*. Its actions:
+  - `transcribe`: TBP/TFIID on TATA, TFIIA/B, Pol II with TFIIF, TFIIE/H, a 13 bp bubble, the
+    template read 3′→5′, an 8 bp hybrid and co-transcriptional capping. A bacterium has σ⁷⁰ and a
+    terminator.
+  - `cap`: the three enzymes.
+  - `splice`: U1, U2AF and U2 with the bulged branch A, the tri-snRNP, the two
+    transesterifications and the lariat, and EJCs.
+  - `polyadenylate`: CPSF/CstF, cleavage after a CA, the torpedo and the poly(A) tail with
+    PABPN1.
+  - `export`: NXF1–NXT1 through the pore, 5′ end first.
+  - `translate` (`codons`): eIF4F, the 43S scans to the AUG, 80S, then the eEF1A/eEF2 cycles with
+    A/P/E sites and codon–anticodon pairing. The chain grows N→C through the tunnel. Then eRF1·eRF3
+    and ABCE1.
+  - `target_er`: SRP, SR, Sec61 and the signal peptidase.
+  - `glycosylate`: the OST transfers Glc₃Man₉GlcNAc₂.
+  - `fold` (`chaperone`): `hsp70`, `chaperonin`, `bip` or `calnexin`.
+- `cell` scene: the actions `transcribe`, `export`, `translate`, `to_golgi` and `secrete` (`to`:
+  `outside`, `membrane`, `lysosome`), with schematic markers and the camera following them.
+- Rules are replayed in beat and `at` order by `vidgen validate`, with reasons.
+
+YAML
+```yaml
+params:
+  gene: {id: ins, name: INS, codons: 10, introns: 1}        # or sequence: ACGT…, introns: [[40, 120]]
+beats:
+  - text: "RNA polymerase two copies the gene."
+    actions: [{transcribe: ins}]
+  - text: "The intron is cut out as a lariat."
+    actions: [{splice: ins}]
+```
+See `docs/CONFIG.md` "Gene expression" and "A gene in a cell".
+
+Files
+- New:
+  - `cellworld/expression.py`, `expression_stage.py`, `expression_cyto.py`, `expression_route.py`
+  - `cell_draw/expression.py`, `cell_draw/expression_route.py`
+  - `scenes/molecule_gene.py`, `scenes/cell_expression.py`, `scenes/gene_actions.py`
+  - `tests/test_expression.py`
+- Changed:
+  - `scenes/molecule.py`, `scenes/cell.py` (mixins, the `gene` param, targets, routing),
+    `scenes/__init__.py`
+  - `api.py`
+  - `docs/CONFIG.md`, the guide and `AGENTS.md`
+  - `DESIGN.md` §95.11, `CHANGELOG.md`, `tasklist.md`
+  - `tests/test_actions.py` (action lists)
+
+Public interfaces
+- `vidgen.api` adds `GENE_CELL_STEPS`, `GENE_CHAPERONES`, `GENE_STEPS`, `ExpressionState`,
+  `Gene`, `GeneSpec`, `build_gene`, `parse_protein`, `signal_peptide_length`, `gene_advance`,
+  `gene_cell_advance`, `gene_cell_step_problem`, `gene_step_problem`, `ExpressionStage`,
+  `GeneRoutePlanner`, `gene_route_problem`, `ExpressionDrawing` and `GeneRouteDrawing`.
+- Config: the `gene` param and the 11 actions.
+
+Decisions / deviations
+- The close-ups are molecule-scene actions. A cell scene refuses them with a pointer, and
+  expands its own steps into the molecular ones (`cell_steps`) so that one rule set applies.
+- The stage is in nucleotide slots, so DNA and RNA are about 6× stretched against the proteins to
+  keep the letters legible. This is labelled.
+- Every mobject is made up front (manim draws only what exists when an animation starts). Texts
+  are cached as plain shapes and captions are wrapped by estimate, because MarkupText copies made
+  a render about 6× slower.
+- `molecule.py` was only lightly wired (a mixin), so it was not split.
+
+Known gaps / TODO
+- A 9:16 close-up leaves vertical space unused.
+- Cell-scene markers are schematic and move in straight lines.
+- Calnexin is drawn floating, not membrane-anchored.
+- Several steps in one short beat get squeezed (the guide advises one step per beat).
+- Caption wrapping is an estimate.
+- The Step 205 gaps were not taken up: `set_state` in a cell, the endocytosed vesicle as an
+  object, and stale labels.
+
+How to test
+- `tests/test_expression.py`: 86 tests, 3 of them render tests. They include the whole genetic
+  code table, anticodons and wobble, the signal peptide of preproinsulin, sequons, every rule
+  and the cell expansion.
+- Related suites:
+  - `test_transport` + `test_molecules`: 85;
+  - `test_cell_scene` + `test_actions_coverage`: 28;
+  - `test_guide` + `test_docs`: 120;
+  - `test_schema` + `test_json_output` + `test_gallery`: 104;
+  - `test_api` + `test_registry` + `test_extensions` + `test_builtin_scenes`: 186;
+  - `test_actions` + `test_translation` + `test_review2` + `test_introspect`;
+  - `test_cell_world` + `test_cell_library`: 109;
+  - `test_mcp`: 20.
+- Compatibility: the Phase Q baseline re-run gave 31 frames, with a max difference of 0.
+- Stills (scratchpad `s206`): contact sheets of every step mid-animation in 16:9 and 9:16, dark
+  and light.
+
+## Step 207 — Signalling pathways
+
+What was built (DESIGN §95.12)
+- **A `pathway` scene type**: a signalling pathway in SBGN-inspired notation, laid out by itself
+  in compartment bands (extracellular space, plasma membrane, cytosol, ER, mitochondrion, nucleus;
+  columns left to right in 16:9, rows top to bottom in 9:16). Nodes by kind (proteins, kinases,
+  phosphatases, GEFs, GAPs, adaptors, enzymes, G proteins and GTPases with GDP / GTP, receptors,
+  ligands, transcription factors, complexes, small molecules, genes in italics, outcomes, drugs),
+  state badges (GDP / GTP, pS133), arcs (activates, inhibits, catalyses, (de)phosphorylates with a
+  site, binds, translocates, transcribes, expresses, converts; `feedback`, `indirect`, `label`).
+  Membrane proteins stand in a row on the bilayer, the nuclear envelope has pores where arcs cross
+  it, modifiers stand beside the node they act on; routes never cross a node; band names, arc
+  labels, drug pills and factors are placed where they cover nothing.
+- **Three templates** checked against the textbook account: `gpcr_camp_pka`, `rtk_ras_mapk`,
+  `pi3k_akt`; `nodes` / `edges` / `remove` change them.
+- **Rules** with reasons and did-you-mean (`vidgen validate`): unknown nodes, arcs against declared
+  effects (type vs `effect`, GAP / GEF, phosphatase / kinase, `role`), impossible compartments
+  (a gene outside the nucleus, a transcription factor in the cytosol on its gene, a translocation
+  within a band, cAMP in the membrane…), names in the wrong case for the species; loops not marked
+  `feedback` are warned about.
+- **Actions** `signal` (wave by wave; GDP → GTP and P marks appear; double negatives turn on;
+  `to`, a path, `feedback`), `inhibit` (`on`), `knockout`, `drug` (`name`, known drugs checked
+  against their targets), `amplify` (`from`, `count`, `factor`); `focus` (the iso action) now works
+  on pathways; `highlight` and `dim` work as on any scene. Effects of knockouts, drugs and
+  inhibitors are computed from the graph (a semi-quantitative steady state) and shown as ↑ / ↓.
+  Their order is replayed by `vidgen validate` (a node knocked out twice, a signal from an off node).
+
+YAML
+```yaml
+- id: camp
+  type: pathway
+  params:
+    title: "Glucagon signalling"
+    template: gpcr_camp_pka            # or rtk_ras_mapk, pi3k_akt
+    nodes: [{id: epac, kind: gef, label: Epac}, {id: rap1, kind: gtpase, label: Rap1}]
+    edges: ["camp -> epac", "epac -> rap1", {from: pka_n, to: creb, type: phosphorylates, site: Ser133}]
+    remove: [gluconeogenesis]
+  beats:
+    - text: "Glucagon binds its receptor, and the signal runs through cyclic AMP and PKA to the nucleus."
+      actions: [{signal: glucagon, at: "@signal"}]       # to: creb; feedback: false; [gcgr, gas, ac]
+    - text: "Each adenylyl cyclase makes many cyclic AMP molecules."
+      actions: [{amplify: camp, factor: "×100"}]
+    - text: "A phosphodiesterase inhibitor keeps cyclic AMP high."
+      actions: [{drug: pde, name: IBMX}, {focus: camp, at: 0.5}]   # knockout: ac; inhibit: pde
+```
+Nodes: `{id, kind, label, in, gene, state, marks, role}`; arcs: `"a -> b"`, `"a -| b"`, `"a -o b"`,
+`"a => b"` or `{from, to, type, effect, site, feedback, label, indirect}`.
+
+Files touched
+- New: `src/vidgen/cellworld/{pathway,pathway_layout,pathway_templates}.py`,
+  `src/vidgen/scenes/{pathway,pathway_play,pathway_actions}.py`, `tests/test_pathway.py` (50, 2 render),
+  `docs/gallery/pathway.md` and `docs/gallery/media/pathway-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `src/vidgen/scenes/iso_actions.py`
+  (`focus` on pathway scenes), the guide and `AGENTS.md` (chooser row, a "# signalling pathways"
+  section, five action rows, `focus`), `docs/CONFIG.md` (`pathway` section, targets row),
+  `docs/gallery/README.md`, `examples/gallery/video.yaml` (scene `camp`), `DESIGN.md` §95.12,
+  `CHANGELOG.md`, `tasklist.md`; tests `test_actions.py`, `test_actions_coverage.py`,
+  `test_builtin_scenes.py`, `test_extensions.py`, `test_translation.py` (the new type and actions).
+
+Public interfaces: `vidgen.api` adds `cell_pathway`, `cell_pathway_layout`, `PATHWAY_BANDS`,
+`PATHWAY_EDGE_TYPES`, `PATHWAY_NODE_KINDS`, `PATHWAY_TEMPLATES`, `Pathway`, `PathwaySpec`,
+`build_pathway`. Config: scene type `pathway`; actions `signal`, `inhibit`, `knockout`, `drug`,
+`amplify`; `focus` accepts pathway scenes.
+
+Decisions / deviations
+- The template is a scene param (`template: gpcr_camp_pka`), not a nested `pathway:` key; nodes,
+  edges and remove change it.
+- Its own band layout instead of `vidgen.graph.layered_layout`: bands fix the ranks, a membrane is
+  one rank with arcs along it, and satellites (a modifier, an outcome) share their node's rank; the
+  ideas (dummies, barycenter, isotonic fit) are the same.
+- Layout per frame: LR (bands as columns) in 16:9 and TB in 9:16, as the brief asked; 16:9 is
+  width-bound (about nine ranks at the readable size), so arc labels are dropped automatically in
+  long LR pathways and a template's labels are few.
+- Effects are a semi-quantitative steady state (geometric mean of activating inputs, divided by
+  inhibition), not a Boolean network: constitutive inhibitors (PTEN, PDE4, RasGAP) would otherwise
+  switch their targets off at rest.
+- `focus` is shared with `iso_diagram` (one action name per behaviour), `highlight` is the built-in.
+
+Known gaps / TODO
+- 16:9 holds about nine ranks at the readable size; larger pathways are drawn smaller (warned).
+- No `carry:` of a molecule between a `cell` and a `pathway` scene yet (DESIGN §95.1 mentions it).
+- Amplification copies are unnamed glyphs; satellites are one modifier and one outcome per node.
+- Lint warns in one light-theme still that a lit arc touches 2–5 % of a label (PDK1).
+
+How to test
+- `tests/test_pathway.py`: 50 (2 render: 16:9 and 9:16 with signal, drug, inhibit, amplify,
+  focus, knockout).
+- Related: `test_actions` + `test_extensions` + `test_registry` + `test_translation` 142;
+  `test_builtin_scenes` + `test_actions_coverage` + `test_api` (not render) 152 and `-k pathway` 5;
+  `test_guide` + `test_docs` + `test_gallery` (not render) 138; `test_schema` + `test_json_output` +
+  `test_review2` + `test_introspect` (not render) 105; `test_iso_diagram_actions` +
+  `test_phase_r_review` 29; `test_mcp.py` in full 20. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills (scratchpad `s207/pw`, four scenes: the three templates and the CONFIG example with
+  signal, amplify, drug, inhibit, focus, knockout): 16:9 and 9:16, dark and `light_academic`, with
+  mid-action stills; `vidgen lint` clean in all four variants but one 2 % covered-text warning.
+
+## Step 208 — Cell cycle, division and energy
+
+What was built (DESIGN §95.13)
+- **A `cell_cycle` scene type**, three modes. `cycle`: the ring G1 → S → G2 → M (stages of M
+  ticked, M drawn ≥ 12 %), the restriction point, G0 out and back, the three checkpoints (G1/S,
+  G2/M, SAC) marked; beside it (below in 9:16) the cyclin D–CDK4/6, E–CDK2, A–CDK2/1 and B–CDK1
+  levels with a "now" marker that moves with the ring's marker; the centre names the phase.
+  `mitosis`: 2n = 2–8 chromosomes, homologues in maternal / paternal colours (a shade per pair),
+  sisters joined at the centromere, interphase → cytokinesis with poles, asters, kinetochore and
+  polar fibres, the furrow and midbody; `cell: plant` with a preprophase band, broad poles, the
+  phragmoplast and cell plate. `meiosis`: prophase I (pairing, synapsis with the synaptonemal
+  complex, chiasmata with the exchanged segments in the partner's colour), independent assortment
+  at metaphase I, reductional then equational division, four haploid recombinant cells. Captions
+  per stage and a counts line (chromosomes, chromatids, ploidy, C).
+- **A `metabolism` scene type**: glycolysis (two columns, investment and payoff ×2, enzymes and
+  cofactors on every arrow, carbons; `link: true` adds the pyruvate carrier across the inner
+  membrane and PDH), `link_reaction`, the citric acid cycle as a ring (enzymes inside, products
+  outside; 3 NADH, FADH₂, GTP, 2 CO₂), the respiratory chain (I–IV, Q, cyt c in the inner
+  membrane, protons to the intermembrane space, O₂ → H₂O, Step 204's ATP synthase glyph with F₁ in
+  the matrix) and the light reactions (PSII with the OEC, PQ, b₆f, PC, PSI, Fd, FNR → NADPH, ATP
+  synthase with CF₁ in the stroma, photons). Tallies count the products; in 9:16 the membrane is
+  folded back like a crista or a thylakoid.
+- **Actions** `advance` (cycle: to a point, `into`, G0; divisions: to a stage, `expect` counts;
+  pathways: a token through the steps; chains: electrons with protons crossing, `from: fadh2`,
+  `to: atp_synthase` for the gradient through the rotor) and `checkpoint` (`outcome: pass |
+  arrest`, `cause: dna_damage | no_mitogens | unattached_kinetochore`; the regulator rows lit in
+  order; reversible with `until`).
+- **Rules** with reasons and did-you-mean (`vidgen validate`, replayed in beat order): wrong
+  counts in `expect` (after meiosis), an odd 2n, no / too many / too close crossovers, G0 after R,
+  advancing through an arrested checkpoint, a division backwards, the chain in the wrong membrane,
+  protons pumped the wrong way, components out of order or missing a carrier, the light reactions
+  in an animal cell, glycolysis outside the cytosol, ATP synthase before any gradient.
+
+Files
+- New: `src/vidgen/cellworld/cycle.py`, `division.py`, `energy.py`; `src/vidgen/scenes/
+  cell_cycle.py`, `cycle_actions.py`, `metabolism.py`, `division_draw.py`, `bio_draw.py`;
+  `tests/test_cycle_energy.py`; `docs/gallery/cell_cycle.md`, `metabolism.md` and their media.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md` (two sections,
+  targets rows), `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md` (chooser rows, prose, samples,
+  action rows), `docs/gallery/README.md`, `examples/gallery/video.yaml` (scenes `cycle`,
+  `krebs`), `DESIGN.md` §95.13, `CHANGELOG.md`, `tasklist.md`; tests `test_actions.py`,
+  `test_actions_coverage.py`, `test_builtin_scenes.py`, `test_extensions.py`, `test_registry.py`,
+  `test_translation.py` (the new types and actions).
+
+Public interfaces: `vidgen.api` adds the modules `cell_cycle_model`, `cell_division`,
+`cell_energy`. Config: scene types `cell_cycle`, `metabolism`; actions `advance`, `checkpoint`.
+
+Decisions / deviations
+- Two new scene types instead of actions on `cell` scenes (DESIGN §95.1 planned the latter): a
+  cycle is a diagram in time, a division wants the cell large, a pathway is a graph; one scene per
+  picture keeps the YAML short (`advance: cell, to: anaphase_i`).
+- The cyclin curves are stylised in the textbook order (a.u.), not data.
+- M is drawn at least 12 % of the ring (its true hour of 24 would hide its stages).
+- The gallery shows meiosis (one beat) and the citric acid cycle: the respiratory chain's GIF
+  did not fit the 10 MB budget (about 27 KB is left).
+
+Known gaps / TODO
+- Meiosis only in an animal cell; 2n ≤ 8; no non-disjunction, no checkpoint failure.
+- Chains move two electrons per run; the Q cycle is counted, not animated.
+- No β-oxidation, gluconeogenesis or Calvin cycle; no carry of a metabolite between scenes.
+- In 9:16 the light reactions' lumen label touches the b₆f glyph (the lumen is narrow).
+- Meiosis renders slowly (~40 s for 5 s at gallery size, ~110 s for 14 s at 540×960).
+
+How to test
+- `tests/test_cycle_energy.py`: 18 (4 render, 160×90 and 90×160: the cycle with an arrest and
+  meiosis to the end; the respiratory chain with ATP synthase and glycolysis with the link).
+- Related (not render): `test_actions` + `test_extensions` + `test_registry` 69; `test_docs` +
+  `test_guide` 123; `test_actions_coverage` + `test_builtin_scenes` + `test_translation` 221;
+  `test_schema` + `test_json_output` + `test_introspect` + `test_api` 111; `test_review2` +
+  `test_mcp` + `test_pathway` + `test_molecules` 131; `test_gallery` 17. Render `-k "cell_cycle
+  or metabolism"` in `test_builtin_scenes` + `test_actions_coverage` 6. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Stills (scratchpad `s208/sheets`): cycle, mitosis, plant mitosis, meiosis, glycolysis + link,
+  TCA, ETC, light reactions in 16:9 and 9:16, dark and `light_academic`, mid-action stills.
+
+## Step 209 — Scientific accuracy lint and references
+
+What was built (DESIGN §95.14)
+- **Seven lint rules** (`vidgen lint`, scene scope, default warning, configurable like the others
+  in `lint.rules`, documented in CONFIG "Lint"): `science_scale` (`factor` 1.5; a `cell` with a
+  scale bar and without `not_to_scale` drawing an object or the cell far outside its textbook
+  size range; too many nuclei / centrosomes / nucleoli / vacuoles / nucleoids), `science_location`
+  (a process where it never is; a thing where the `cell` scene has none of it),
+  `science_direction` (3′→5′ synthesis, mRNA read 3′→5′, C→N, kinesin to minus, dynein to plus,
+  protons pumped into the matrix / stroma, Na⁺ in / K⁺ out), `science_energy` (a passive
+  `transport` called active, a pump called passive, "active transport" with no energy source in a
+  molecule / cell scene), `science_naming` (declared genes: gene vs protein form per species,
+  wrong case, italics in markup labels), `science_pathway` (narration vs an arc's sign or
+  (de)phosphorylation), `science_counts` (glycolysis, TCA per turn / per glucose, pump
+  stoichiometry, protons per NADH / FADH₂ / complex, mitosis / meiosis cells, stop codons, human
+  chromosomes, bp per turn and per nucleosome). Each message quotes the sentence (or names
+  `objects[k] (kind 'id')`) and gives the textbook fix. Knowledge in `cellworld/accuracy.py` (no
+  manim); glue in `lint/science_rule.py` (params validated through the scene type, no render).
+- **Narration–picture rules** (Phase P) know the new scenes: the cell-biology actions count as
+  showing actions, and an action's single target shows its on-screen name via the new optional
+  scene classmethod `target_text(params, name)` (`cell`, `pathway`).
+- **`not_to_scale: true`** on `cell`: a pinned "not to scale" note in the body's lower right.
+- **References**: scene `references` (`{label, doi | pmid | isbn | url, id}`, ≤ 12; offline format
+  and check-digit validation, did-you-mean for `cite` ids), beat `cite`, scene `figure_credit`
+  (text or `{text, license, …}`), video `citations: {show: footer | marker | card | none,
+  card_seconds, description}`. Numbered across the video (same identifier, same number). Drawn
+  by `vidgen/citations.py` (a `Citations` overlay added by `overlays.scene_overlays` for scenes
+  with citations; footer / marker reserve room; card at the scene's end). The render appends
+  `References` and `Figure credits` to `<output>_chapters.txt` (written for references alone too).
+
+YAML
+```yaml
+citations: {show: footer}                 # marker: [1, 2] in a corner; card: an end card; none
+scenes:
+  - id: er
+    type: cell
+    params:
+      objects: [{kind: vesicle, id: big_vesicle, size: "400 nm"}]
+      not_to_scale: true                  # else science_scale reports the 400 nm vesicle
+    references:
+      - {id: book, label: "Example textbook (placeholder)", isbn: "978-0-00-000000-2"}
+      - {label: "Example review (placeholder)", doi: "10.0000/example"}
+    figure_credit: {text: "Micrograph: Example Lab (placeholder)", license: "CC BY 4.0"}
+    beats:
+      - text: "Transport vesicles carry cargo from the ER to the Golgi."
+        cite: [book]
+lint: {rules: {science_scale: {factor: 2.0}, science_naming: {severity: info}}}
+```
+
+Files touched
+- New: `src/vidgen/cellworld/accuracy.py`, `src/vidgen/lint/science_rule.py`,
+  `src/vidgen/references.py`, `src/vidgen/citations.py`, `tests/test_accuracy.py` (38, 2 render).
+- Changed: `config.py` (rule configs, `ReferenceConfig`, `FigureCreditConfig`, `CitationsConfig`,
+  scene / beat keys, `LINT_RULES`), `lint/{__init__,rules,run,narration_rule}.py`, `overlays.py`,
+  `scene.py`, `render/{fingerprint,pipeline}.py`, `chapter_export.py`, `scenes/cell.py`
+  (`not_to_scale`, `target_text`), `scenes/pathway.py` (`target_text`), `api.py`, docs
+  (`CONFIG.md`: Lint rules + example output, "References and figure credits", scene / beat keys,
+  `citations`, `cell` `not_to_scale`; `COOKBOOK.md` §11–12), guide + `AGENTS.md` (an "accuracy and
+  references" section and snippet, troubleshooting rows, outputs), `DESIGN.md` §95.14,
+  `CHANGELOG.md`, `tasklist.md`; tests `test_narration_rule.py`, `test_music_pieces.py`,
+  `test_iso_diagram_actions.py` (rule-order assertions no longer assume their rules are last).
+
+Public interfaces: `vidgen.api` adds the modules `cell_accuracy` and `video_references`. Config:
+`citations`, scene `references` / `figure_credit`, beat `cite`, `cell` `not_to_scale`, lint rules
+`science_scale` (`factor`), `science_location`, `science_direction`, `science_energy`,
+`science_naming`, `science_pathway`, `science_counts`. Scene types may define
+`target_text(params, name)`.
+
+Decisions / deviations
+- The lint reads the config, not pixels; DESIGN §95.1's "drawn exaggeration" check (glyphs drawn
+  larger than their thing by LOD) is left out: the LOD minimum sizes are deliberate.
+- No `vidgen refs check`: resolving DOIs needs the network; formats and check digits are checked
+  offline instead.
+- Citations are a core overlay (`vidgen/citations.py`), not a registered overlay type: they need
+  no `overlays:` entry and cannot be added twice. They reserve room for the whole scene (a
+  layout cannot change between beats), so a scene whose beats cite only some references still
+  keeps the footer's room in the others.
+- Fingerprints change only for scenes with citations (or before one, for crossfades): projects
+  without references re-render nothing.
+- Text checks are narrow on purpose (negations, contrasts, questions, commas skip a claim): run
+  over every example and the Phase U scratch projects (about 260 scenes) they find nothing.
+
+Known gaps / TODO (for Step 210 / 211)
+- English only; claims across two sentences or after a comma are not read; pathway names are
+  matched by label and gene only; molecule scenes have no `target_text`.
+- The `metabolism` scene sets enzyme names in italics (Step 208's style, not a gene symbol):
+  review in Step 211.
+- Step 210's example should carry real references only where certain (e.g. a textbook by title
+  and authors with an identifier copied from the book), or none.
+
+How to test
+- `tests/test_accuracy.py` 38 (2 render: the citation footer with `cite`, the not-to-scale note).
+- Related (not render): `test_lint` + `test_timing_lint` + `test_narration_rule` +
+  `test_chapter_export` 53; `test_docs` + `test_guide` 124; `test_schema` + `test_json_output` +
+  `test_overlays` 103 (render: `test_overlays` 10); `test_translation` + `test_project` +
+  `test_pathway` 147; `test_cell_scene` + `test_chapters_progress` + `test_storyboard` 49 (render:
+  `test_cell_scene` + `test_accuracy` 9); `test_builtin_scenes` + `test_actions_coverage` +
+  `test_registry` + `test_extensions` 194; `test_review2` + `test_introspect` + `test_gallery`;
+  `test_music_pieces` + `test_iso_diagram_actions`; `test_api`; `test_mcp.py` in full 20. Not run:
+  the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- Lint demo (scratchpad `s209/demo`, Kokoro audio): every science rule fires on its planted
+  mistake; stills of the footer (16:9 and 9:16), marker + end card (`--variant card`), and
+  `s209/nts` (not-to-scale note with a marker, 16:9 and 9:16).
+
+## Step 210 — Example, docs and gallery
+
+What was built (DESIGN §95.15)
+- **The example** `examples/gene-to-secreted-protein` ("From gene to secreted protein", README with
+  a scene table, the choices and the checks): α1-antitrypsin (*SERPINA1*) from a liver cell's
+  nucleus to the blood in eight scenes — `title`; `cell` (tissue → cell → nucleus on the words);
+  `molecule` with a model gene (transcribe, cap, splice, polyadenylate, export); `molecule` with
+  `start: mrna` (translate 3 codons, target_er, glycosylate, translate, fold with calnexin);
+  `cell` with the gene (transcribe, export, translate, to_golgi, secrete); `cell` at the complex
+  level (exocytosis); `pathway` from nodes and edges (IL-6 → IL-6R–gp130 → JAK1 → STAT3 pTyr705 ⇒
+  nucleus → *SERPINA1*, `indirect`); `process` recap. Kokoro `af_heart` at 0.85, `discovery` at
+  −4 dB, karaoke captions, `terms:`, `citations: {show: marker}` (a footer collided with the
+  captions), pronunciations for SERPINA1, alpha-1, COPII, Sec61, STAT3, JAK. Chose α1-antitrypsin
+  over insulin (insulin is not glycosylated and is processed in regulated granules). References:
+  Blobel & Dobberstein 1975 (DOI 10.1083/jcb.67.3.835) and Alberts MBoC 6th ed. (ISBN
+  978-0-8153-4432-2, check digit verified) — owner: please confirm both identifiers once.
+- **Guide topic `biology`** (aliases cell-biology, science, lecture, research) in
+  `src/vidgen/data/guide/AGENTS.md` → `AGENTS.md`: choosing the scene, accuracy rules, naming,
+  references, pacing, a snippet; a pointer from the `scenes` topic.
+- **`docs/COOKBOOK-CELL-BIOLOGY.md`**: choosing by question, accuracy, names and notation, level of
+  detail, labelling and zooming, pacing, narration–picture timing and references, common mistakes
+  (a table), a validated pattern; linked from README, `docs/COOKBOOK.md`, the guide and the gallery.
+- **CONFIG completeness**: a test walks every param and nested option of the five types and finds
+  it in its section (added: a node mark's `domain`, the gene options listed under "A gene in a
+  cell").
+- **Gallery**: one "Cell biology" section (`GROUP_SECTIONS` merges the guide groups) with the five
+  types and five showcases (`plant_cell`, `sodium_pump`, `mek_inhibitor`, `mitosis`,
+  `respiratory_chain`; `src/vidgen/data/gallery/showcases/`), a section note linking the example
+  and the cookbook, showcase pages with their section's footer. Budget kept at 10 MB by saving
+  stills as 256-colour palette PNGs (3.0 → 1.2 MB, re-encoded in place, no visible change); the
+  gallery is 9.4 MB, every GIF ≤ 150 KB (mitosis starts at metaphase: 164 KB before).
+- **Fixes found while making it**: the route's transcription caption no longer mentions the
+  molecule scene; the route's Golgi caption says "some proteins also get O-glycans"; `scenery` on
+  a cell's world, a membrane event's overlay and a gene close-up's stage, and `introspect` marking
+  a group scenery when it holds only scenery (no more `off_frame` for a zoomed view's cropped
+  world); the close-up's "schematic: not to scale" at the readable size in the safe area, a line
+  above the readout when it does not fit beside it (9:16).
+
+Files touched
+- New: `examples/gene-to-secreted-protein/{video.yaml,README.md}`, `docs/COOKBOOK-CELL-BIOLOGY.md`,
+  five showcase YAMLs, `docs/gallery/{plant_cell,sodium_pump,mek_inhibitor,mitosis,respiratory_chain}.md`
+  and their media, `tests/test_gene_to_secreted_protein.py` (5).
+- Changed: `src/vidgen/gallery.py`, `introspect.py`, `scenes/cell.py`, `scenes/cell_traffic.py`,
+  `scenes/molecule_gene.py`, `cellworld/expression_route.py`; guide + `AGENTS.md`; `docs/CONFIG.md`,
+  `docs/COOKBOOK.md`, `docs/gallery/README.md` and every still (palette); `README.md` (a feature
+  bullet, the example, the cookbook), `CHANGELOG.md`, `DESIGN.md` §95.15, `tasklist.md`; tests
+  `test_gallery.py` (+1, sections and order), `test_docs.py` (+2), `test_guide.py` (+1).
+
+Public interfaces: no `vidgen.api` change; config unchanged. `vidgen.gallery` gains
+`GROUP_SECTIONS`, `SECTION_FOOTERS`, `DEFAULT_FOOTER`, `STILL_COLORS`; `SHOWCASES` +5.
+
+Decisions / deviations
+- Showcases rather than more guide snippets; one gallery section for the five types (the guide
+  keeps its groups).
+- Budget optimised, not raised (palette stills).
+- The final 16:9 render ran in one command (~8 min with `--jobs 2`); only 16:9 was rendered at full
+  size, the 9:16 variant was storyboarded and linted.
+
+Known gaps / TODO (Step 211)
+- `exocytosis` captions name neuronal SNAREs (synaptobrevin, SNAP-25): the example sets
+  `notes: false`; consider generic names or a cell-type option.
+- The 16:9 pathway leaves much of the frame empty; a hepatocyte is the typical animal cell (no
+  polygonal shape, one nucleus); "N terminus" is heard as "end terminus" by readback (fine by ear).
+
+How to test
+- `tests/test_gene_to_secreted_protein.py` 5; `test_gallery` 19 (1 render); `test_docs` +
+  `test_guide` + `test_expression` 214; `test_cell_scene` + `test_expression` 109;
+  `test_transport` + `test_accuracy` + `test_introspect` 80; `test_lint` + `test_storyboard` +
+  `test_schema` + `test_json_output` (not render) 129; `test_pathway` + `test_cycle_energy` +
+  `test_molecules` (not render) 123; `test_builtin_scenes` + `test_api` + `test_registry` +
+  `test_extensions` (not render) 192, render `-k "cell or molecule or metabolism or pathway"` 12;
+  `test_mcp.py` in full (with `test_gallery`) 39. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- The example (scratch copy with Kokoro audio): `vidgen validate` ok; `vidgen lint` 0 findings in
+  16:9 and `--variant short`; `vidgen readback` WER 3.7 %, none flagged. Final render 1920×1080,
+  30 fps, 214.07 s video and audio, −16.1 LUFS, true peak −1.8 dBTP, LRA 3.6 LU:
+  scratchpad `s210/gene_to_secreted_protein.mp4`, contact sheet `s210/contact_16x9.png`, 9:16
+  storyboard `s210/storyboard_9x16/`, showcase stills `s210/showcases.png`.
+
+## Step 211 — Review of Phase U
+
+What was reviewed and fixed (DESIGN §95.16)
+- **Scientific accuracy** (library, templates, captions, energy counts, lint facts, example):
+  - Pathway templates checked arc by arc. Akt ⊣ GSK3β (Ser9), Akt ⊣ TSC2 and Akt ⊣ FOXO are drawn
+    as a T-bar with a P and played as switching the target off (GSK3β pS9 dimmed; TSC2 ⊣ Rheb then
+    turns mTORC1 on; FOXO off lowers *BCL2L11*). PTEN dephosphorylates PIP₃ (inhibitory). The
+    MAPK and cAMP feedbacks have the right signs. All of this is tested.
+  - Fixed: the exocytosis captions named the neuronal SNAREs in every cell. The new `snares`
+    option has three values:
+    - `generic` (the default): v-SNARE / t-SNAREs;
+    - `constitutive`: a VAMP, syntaxin-4, SNAP-23;
+    - `neuronal`: synaptobrevin/VAMP2, syntaxin-1, SNAP-25, with Ca²⁺ on synaptotagmin triggering
+      fusion.
+    The example uses `constitutive` with its captions on again.
+  - Fixed: `metabolism` set enzyme names in italics; they are roman now (enzymes are proteins).
+  - Fixed: calnexin floated in the lumen. It is now anchored: a stalk runs from its helix in the
+    ER membrane to its lectin domain. In a 16:9 close-up the view is too low for the globule and
+    the membrane together, so it frames the globule and the stalk runs out of the view.
+  - Fixed: after termination on the ER, the 60S subunit rose through the membrane. The subunits
+    now part in the cytosol.
+  - Ion channels are named by their ion ("Na⁺ channel", was "Ion channel").
+  - One caption was reworded so that its first clause stands alone (the OST reach).
+  - Everything else checked was correct: the transcription, splicing, polyadenylation and
+    translation captions; the pump cycle; the action potential; the counts (glycolysis, TCA, 10
+    and 6 H⁺ per NADH / FADH₂, the light reactions' 6 H⁺ with ½ O₂ and 1 NADPH); the lint's
+    facts.
+- **Frame use:**
+  - Molecule scenes put three or more membrane proteins on rows whenever that frames them larger
+    (16:9 beside a plot too). In 9:16 the action-potential plot spans the panel, with the
+    concentrations under it (before, the two overlapped).
+  - A gene close-up in 9:16 shows 15 slots (was 18). It now decides wide or tall by the
+    **frame**. This fixes a real 9:16 bug: under a title, captions and karaoke the view was wider
+    than tall, and the example's Short drew a tiny 36-slot strip.
+  - A vesicle within 0.6 µm of the plasma membrane is framed with that membrane, fitted to the
+    body's shape. The example's vesicle now sits under the top of the cell, so the membrane runs
+    across both 16:9 and 9:16. The old view was mostly empty cytosol, and in 9:16 the vesicle
+    went out of frame.
+  - Pathways grow up to 1.9× and spread their ranks (`SPREAD`) to use the height.
+  - Glycolysis grows up to 1.6×.
+- **Captions** (phone readability):
+  - Step captions are never scaled below the readable size. Gene close-ups reserve 3 lines in
+    16:9 and 4 in 9:16.
+  - `notes: auto | full (true) | short | false` on every process action. The default `auto`
+    shows the full caption in 16:9 and its first clause in 9:16 (`cellworld/captions.py`).
+- **Gene symbols in italics:**
+  - Scene types declare `gene_symbols(params)`: `cell`, `molecule`, `pathway`.
+  - The captions overlay (option `genes: true`) sets the video's declared genes in italics as
+    whole words, case-sensitive. A symbol followed by "protein", "kinase", "receptor"… stays
+    roman. Example: "transcription of *SERPINA1*" in karaoke, while STAT3 stays roman.
+- **Overlaps fixed:**
+  - Sec61's name is beside the channel (the tRNA and chain covered it).
+  - 16:9 pathway band names: the membrane's name goes at the bottom, with a word's room between
+    names.
+  - The light reactions' P-side name in 9:16 takes the least-covered place (it touched b₆f).
+  - The light reactions' tallies in 16:9 sit low (they overlapped "ATP synthase").
+  - Molecule side names: one row's cytosol name and the next row's extracellular name no longer
+    overlap, and a side name covered by a molecule's name moves.
+  - The 9:16 close-up's note no longer overlaps the readout or legend line.
+  - Cell label rows in 9:16 no longer have crossing leaders: a label steps aside, or two labels
+    swap rows (bacterial envelope).
+  - The "ER membrane" label the reviewer saw under OST is a label that is never placed
+    (`lab_er`). The faint labels there are the SRP receptor's (faded once it lets go, as
+    intended).
+- **Earlier gaps:**
+  - Calnexin is anchored.
+  - Cell-scene products travel on gentle curves (`expression_route.curve`).
+  - Motor cargo is placed wholly in the cytosol.
+  - `scenes/molecule.py` is split: 1,825 lines → 1,454, with the process runtime in the new
+    `scenes/molecule_runtime.py` (`MoleculeRuntime` mixin).
+
+Files touched
+- New:
+  - `src/vidgen/cellworld/captions.py`
+  - `src/vidgen/scenes/molecule_runtime.py`
+  - `tests/test_phase_u_review.py` (14 tests)
+- Changed, `src/vidgen/`:
+  - `cellworld/`: `traffic.py`, `view.py`, `names.py`, `expression_cyto.py`,
+    `expression_stage.py`, `expression_route.py`, `filaments.py`
+  - `scenes/`: `molecule.py`, `molecule_gene.py`, `molecule_actions.py`, `gene_actions.py`,
+    `cell.py`, `cell_actions.py`, `cell_traffic.py`, `cell_expression.py`, `pathway.py`,
+    `metabolism.py`, `captions.py`
+  - `api.py`
+- Changed, elsewhere:
+  - `examples/gene-to-secreted-protein/video.yaml` (the fusion scene)
+  - `docs/CONFIG.md`: the endocytosis / exocytosis rows, the captions' `genes`, `notes: short`
+  - `docs/COOKBOOK-CELL-BIOLOGY.md`
+  - the guide and `AGENTS.md`
+  - `DESIGN.md` §95.16, `CHANGELOG.md`, `tasklist.md`
+
+Public interfaces
+- `vidgen.api` adds `CellNoteMode`, `cell_note_text` and `gene_spans`.
+- Config:
+  - `notes` takes `auto | full | short | false`;
+  - `exocytosis` takes `snares`;
+  - the captions overlay takes `genes`.
+- New scene-type hook: `gene_symbols(params)`.
+
+Decisions
+- Captions are shortened by rule (the first clause), not by a second hand-written text.
+- SNAREs are an option of the action, because a `cell` is one generic animal cell.
+- Gene italics are video-wide, from the scenes' declarations, and can be turned off. They are not
+  `terms:`, which sets colours.
+- Rows of membrane proteins are chosen by the same "frames it largest" rule in any frame.
+
+Known gaps
+- No `set_state` in a `cell` scene.
+- An endocytosed vesicle is not a world object.
+- Zoomed-view part labels go stale after a process.
+- Molecule glyphs' inner letters (ATP synthase α/β, flow labels) are below the readable size.
+  These are pre-existing lint findings in the gallery's `synthase` scene and in the
+  `sodium_pump` / `respiratory_chain` showcases; there are no new findings.
+- 9:16 close-ups of horizontal strips still leave height.
+- The 16:9 calnexin close-up cannot show the membrane.
+- The cell-biology gallery media were not regenerated; the stills of the changed layouts differ.
+- The `eIF4G·4A` blob overlaps the 40S label during scanning (16:9).
+
+How to test
+- Tests run:
+
+  | Tests | Result |
+  | --- | --- |
+  | `test_phase_u_review` | 14 |
+  | `test_transport` | 27 |
+  | `test_expression` | 86 |
+  | `test_pathway` + `test_cycle_energy` | 68 |
+  | `test_cell_scene` + `test_molecules` | 86 |
+  | `test_cell_world` + `test_cell_library` | 109 |
+  | `test_accuracy` + `test_gene_to_secreted_protein` + `test_expression` + `test_transport` | 156 |
+  | `test_captions` + `test_overlays` | 46 |
+  | `test_api` + `test_guide` + `test_docs` | 138 |
+  | `test_actions` + `test_actions_coverage` + `test_translation` + `test_registry` + `test_extensions` (not render) | 156 |
+  | `test_builtin_scenes` + `test_actions_coverage` `-k` the five types (render) | 25 |
+  | `test_builtin_scenes` + `test_schema` + `test_json_output` + `test_gallery` (not render) | 240 |
+  | `test_gallery` (render) | 1 |
+  | `test_review2` + `test_introspect` + `test_lint` + `test_narration_rule` + `test_subtitles` | 57 |
+  | `test_mcp.py`, in full | 20 |
+
+  The full suite was not run.
+- Compatibility: the Phase Q baseline re-run gave 31 frames with a max difference of 0.
+  Captions without declared genes build the same texts as before.
+- Lint, with 0 new findings:
+  - the example (scratch copy with its Kokoro audio), 16:9 and `--variant short`: 0 findings;
+  - the gallery's five cell-biology scenes (default and vertical) and the five showcases: the
+    same findings as on the code before this step, compared with a worktree at 5dab226b;
+  - the science rules over the review project (`s211/rev`): 0 findings.
+- Video: the example re-rendered at 1920×1080 from its existing Kokoro audio (no new TTS), 214.07
+  s, −16.1 LUFS, true peak −1.8 dBTP. It is at scratchpad `s211/out/gene_to_secreted_protein.mp4`,
+  with the contact sheet at `s211/contact_16x9.png`.
+- Stills of the review project: `s211/rev/build/preview{,_short}/storyboard/`.

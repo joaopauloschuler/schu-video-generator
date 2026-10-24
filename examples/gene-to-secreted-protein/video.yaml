@@ -1,0 +1,205 @@
+# From gene to secreted protein: a university-level cell-biology explainer (about 3.5 min) of the
+# secretory pathway, followed through one real protein, alpha-1 antitrypsin (gene SERPINA1), which
+# liver cells secrete constitutively (docs/CONFIG.md `cell`, `molecule`, `pathway`; DESIGN §95;
+# the craft: docs/COOKBOOK-CELL-BIOLOGY.md):
+#   - a `cell` scene zooming from the tissue to the cell and into the nucleus (zoom_to on words)
+#   - two `molecule` close-ups of a short model gene (schematic, labelled so): transcription,
+#     capping, splicing, polyadenylation and export; translation, SRP targeting to Sec61,
+#     N-glycosylation by the OST and folding with calnexin
+#   - the same route at the scale of the cell (`gene` on a `cell`): transcribe, export, translate on
+#     the rough ER, COPII to the Golgi, trans-Golgi sorting and secretion; an exocytosis close-up
+#   - a `pathway` built from nodes and edges: IL-6 -> JAK1 -> STAT3 -> SERPINA1 (acute phase)
+#   - references shown as markers and listed in the description; concept colours (terms:)
+#
+#   vidgen validate examples/gene-to-secreted-protein          # checks the short variant too
+#   vidgen lint examples/gene-to-secreted-protein [--variant short]   # incl. the science_* rules
+#   vidgen storyboard examples/gene-to-secreted-protein --per-beat 2 [--variant short]
+#   vidgen tts examples/gene-to-secreted-protein               # Kokoro: local and free (the kokoro extra)
+#   vidgen readback examples/gene-to-secreted-protein          # faster-whisper, local
+#   vidgen render examples/gene-to-secreted-protein [--preview] [--variant short]
+#
+# Facts (checked; textbook consensus, Alberts et al. Molecular Biology of the Cell): a secreted
+# protein crosses one membrane, the ER's, co-translationally through Sec61, and then travels in
+# lumens and vesicles until exocytosis. alpha-1 antitrypsin is a serpin made mainly by hepatocytes
+# and secreted constitutively (no trigger: the amount follows synthesis); it inhibits neutrophil
+# elastase, protecting the lungs; its precursor has an N-terminal signal peptide of 24 residues and
+# the mature protein carries three N-linked glycans, which are trimmed in the ER (glucosidases I
+# and II, the calnexin cycle) and made complex in the Golgi. IL-6 raises its synthesis in the acute
+# phase through JAK and STAT3 (STAT3 phosphorylated on Tyr705; the arc to the gene is drawn
+# `indirect`: other factors, C/EBP and HNF1, act too). A pre-mRNA's tail is ~200 adenines in
+# mammals. The close-up's gene is a short generated model gene, not the real SERPINA1 sequence:
+# the narration and the scene say so. References: Blobel & Dobberstein 1975 (the signal
+# hypothesis) by its DOI, Alberts 6th edition by its ISBN. No audio is committed: before
+# `vidgen tts` beats are timed from their word count.
+title: "From gene to secreted protein"
+output: gene_to_secreted_protein
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  short:                          # a 9:16 Short of the same video
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+    overlays: [{type: captions, style: karaoke}]
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart, speed: 0.85}   # local and free, word timings; 0.85: dense terms, clearly said
+stt: {provider: faster_whisper, model: base.en}
+
+pronunciation:
+  SERPINA1: serpin A one
+  alpha-1: alpha one
+  COPII: cop two
+  Sec61: sec sixty-one
+  STAT3: stat three
+  JAK: jack
+
+terms:
+  messenger RNA: primary
+  signal peptide: tertiary
+  glycan: secondary
+
+music: {source: discovery, volume: -4}
+transition: {type: crossfade, duration: 0.4}
+citations: {show: marker}
+
+overlays:
+  - type: captions
+    style: karaoke
+    max_lines: 1
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "CELL BIOLOGY"
+      title: "From gene to secreted protein"
+      highlight: "secreted protein"
+      subtitle: "The secretory pathway of α1-antitrypsin"
+    beats:
+      - text: "A secreted protein crosses a membrane only once. After that it never meets the cytosol again, until it leaves the cell."
+
+  - id: liver
+    type: cell
+    params:
+      title: "A liver cell"
+      cell: animal
+      view: tissue
+    beats:
+      - text: "Our example is alpha-1 antitrypsin, a glycoprotein that liver cells secrete into the blood."
+        actions: [{zoom_to: cell, at: "@liver"}]
+      - text: "There it protects the lungs from neutrophil elastase. Its story starts in the nucleus, at the gene SERPINA1."
+        actions: [{zoom_to: nucleus, at: "@nucleus"}]
+
+  - id: nucleus
+    type: molecule
+    params:
+      title: "Transcription and RNA processing"
+      gene: {id: gene, codons: 10, introns: 1}
+    beats:
+      - text: "Here a short model gene stands in for it. Transcription factors mark the promoter, and RNA polymerase two reads the template strand three prime to five prime, making RNA five prime to three prime."
+        actions: [{transcribe: gene, at: "@factors"}]
+      - text: "The five prime end gets a cap, a methylated guanosine joined five prime to five prime."
+        actions: [{cap: gene, at: "@cap"}]
+      - text: "The spliceosome cuts the intron out as a lariat and joins the exons."
+        actions: [{splice: gene, at: "@spliceosome"}]
+      - text: "Past the polyadenylation signal the RNA is cut, and a tail of about two hundred adenines is added."
+        actions: [{polyadenylate: gene, at: "@cut"}]
+      - text: "Capped, spliced and with its tail, the messenger RNA leaves through a nuclear pore, led by its five prime cap."
+        actions: [{export: gene, at: "@leaves"}]
+
+  - id: er
+    type: molecule
+    params:
+      title: "Into the endoplasmic reticulum"
+      gene: {id: gene, signal_peptide: true, glycosylation: true, start: mrna}
+    references:
+      - {id: blobel, label: "Blobel & Dobberstein, J. Cell Biol. 1975", doi: "10.1083/jcb.67.3.835"}
+    beats:
+      - text: "In the cytosol a ribosome scans to the start codon and begins the chain at its N terminus."
+        actions: [{translate: gene, codons: 3, at: "@scans"}]
+      - text: "Its first residues are a signal peptide. SRP binds it, pauses elongation and docks the ribosome on the Sec61 translocon in the ER membrane."
+        cite: [blobel]
+        actions: [{target_er: gene, at: "@SRP"}]
+      - text: "The chain is threaded into the ER lumen as it grows. Oligosaccharyltransferase transfers a branched glycan of fourteen sugars onto an asparagine."
+        actions: [{glycosylate: gene, at: "@Oligosaccharyltransferase"}]
+      - text: "At the stop codon, translation ends, and the finished chain is released into the lumen."
+        actions: [{translate: gene, at: "@ends"}]
+      - text: "Glucosidases trim the glycan, and the lectin chaperone calnexin holds the protein until it has folded."
+        actions: [{fold: gene, chaperone: calnexin, at: "@calnexin"}]
+
+  - id: route
+    type: cell
+    params:
+      title: "The secretory pathway"
+      gene: {id: a1at, name: SERPINA1, signal_peptide: true, glycosylation: true}
+      labels: false
+    references:
+      - {id: alberts, label: "Alberts et al., Molecular Biology of the Cell, 6th ed.", isbn: "978-0-8153-4432-2"}
+    beats:
+      - text: "Now the whole route at the scale of the cell. The messenger RNAs are made in the nucleus,"
+        actions: [{transcribe: a1at, at: "@messenger"}]
+      - text: "and leave through the nuclear pores into the cytosol."
+        actions: [{export: a1at}]
+      - text: "Ribosomes on the rough ER make the protein straight into the ER lumen."
+        actions: [{translate: a1at}]
+      - text: "Only folded protein leaves the ER. COPII vesicles carry it to the cis Golgi, and as the cisternae mature, its glycans are trimmed and rebuilt."
+        cite: [alberts]
+        actions: [{to_golgi: a1at}]
+      - text: "At the trans Golgi network it is packed into secretory vesicles, which fuse with the plasma membrane. No signal is needed: this secretion is constitutive."
+        cite: [alberts]
+        actions: [{secrete: a1at}]
+
+  - id: fusion
+    type: cell
+    params:
+      title: "Exocytosis"
+      # under the top of the cell: the membrane runs across the frame (16:9 and 9:16); a vesicle
+      # this near the membrane is framed with it (the place it fuses), by the frame's shape
+      objects: [{kind: vesicle, id: sv, at: [0.0, 7.7], size: "100 nm"}]
+      view: {level: complex, "on": sv}
+      labels: false
+    beats:
+      - text: "Up close, the vesicle docks: SNARE proteins on both membranes zip together, the membranes fuse, and the protein is released outside the cell."
+        # the SNAREs of constitutive secretion (a VAMP, syntaxin-4, SNAP-23), not the neuronal set
+        actions: [{exocytosis: sv, at: "@docks", run_time: 8, snares: constitutive}]
+
+  - id: inflammation
+    type: pathway
+    params:
+      title: "Inflammation raises its output"
+      nodes:
+        - {id: il6, kind: ligand, label: IL-6}
+        - {id: receptor, kind: receptor, label: "IL-6R–gp130"}
+        - {id: jak, kind: kinase, label: JAK1, in: plasma_membrane}   # bound to the receptor's cytoplasmic tail
+        - {id: stat3, kind: transcription_factor, label: STAT3, in: cytosol}
+        - {id: stat3_n, kind: transcription_factor, label: STAT3, in: nucleus}
+        - {id: serpina1, kind: gene, label: SERPINA1}
+        - {id: more, kind: phenotype, label: "more α1-antitrypsin"}
+      edges:
+        - "il6 -> receptor"
+        - "receptor -> jak"
+        - {from: jak, to: stat3, type: phosphorylates, site: Tyr705}
+        - "stat3 => stat3_n"
+        - {from: stat3_n, to: serpina1, type: transcribes, indirect: true}
+        - {from: serpina1, to: more, type: expresses}
+    beats:
+      - text: "Because secretion is constitutive, the cell sets the amount at the gene. During inflammation, interleukin six activates JAK kinases, which phosphorylate STAT3."
+        actions: [{signal: il6, to: stat3, at: "@interleukin"}]
+      - text: "STAT3 moves into the nucleus and helps raise transcription of SERPINA1."
+        actions: [{signal: stat3, at: "@moves"}]
+
+  - id: recap
+    type: process
+    params:
+      heading: "The route, in five stops"
+      stages: ["Nucleus", "Pore", "Rough ER", "Golgi", "Vesicle"]
+    beats:
+      - text: "In the nucleus, the gene is transcribed and its RNA processed."
+      - text: "The messenger RNA is exported through a pore."
+      - text: "On the rough ER, the protein is made into the lumen, glycosylated and folded."
+      - text: "The Golgi modifies its glycans and sorts it."
+      - text: "And a secretory vesicle releases it from the cell."

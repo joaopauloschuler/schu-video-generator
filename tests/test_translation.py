@@ -292,6 +292,11 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
         {"values": {"DE": 1, "FR": 2}, "unit": "T:unit", "legend_label": "T:legend"},
     ],
     "network": [{"layers": [3, {"size": 2, "label": "T:hidden"}], "heading": "T:heading"}],
+    "cell": [{"title": "T:title", "contents": "none", "objects": [{"kind": "mitochondrion", "label": "T:mito"}, {"kind": "lysosome", "label": False}]}],
+    "molecule": [{"title": "T:title", "membrane": "plasma", "molecules": [{"kind": "gpcr", "label": "T:receptor"}, {"kind": "atp", "label": False}]}],
+    "pathway": [{"title": "T:title", "template": "gpcr_camp_pka", "edges": [{"from": "pde", "to": "camp", "type": "inhibits", "label": "T:arc"}]}],
+    "cell_cycle": [{"title": "T:title", "mode": "meiosis"}],
+    "metabolism": [{"title": "T:title", "process": "glycolysis"}],
     "iso_diagram": [
         {
             "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],

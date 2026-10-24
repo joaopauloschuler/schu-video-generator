@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vidgen studio</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/studio.css">
+<script type="module" src="/static/app.js"></script>
+</head>
+<body>
+<div class="studio" id="studio">
+  <header class="topbar">
+    <div class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5a2.5 2.5 0 1 1-2-2.45V5l11-2v11.5a2.5 2.5 0 1 1-2-2.45V6.4L9 7.7z"/></svg><span>vidgen <b>studio</b></span></div>
+    <div class="picker">
+      <button class="btn select" id="preset-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="preset-list">
+        <span class="dim">Preset</span> <span id="preset-name">…</span> <span class="caret" aria-hidden="true">▾</span>
+      </button>
+      <ul class="menu" id="preset-list" role="listbox" aria-label="Presets: the built-in beds" tabindex="-1" hidden></ul>
+    </div>
+    <button class="btn ab" id="ab" disabled aria-pressed="false"><span id="ab-label">A/B original</span></button>
+    <span class="ab-state" id="ab-state" role="status" aria-live="polite" hidden></span>
+    <button class="btn variations-btn" id="variations-btn" disabled aria-controls="variations-panel" title="Four variations of the current version (another voicing, an altered figure, a darker or brighter mix, another arrangement), rendered and checked side by side"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Variations</button>
+    <span class="spacer"></span>
+    <div class="versions-wrap">
+      <button class="btn select" id="versions" disabled aria-haspopup="menu" aria-expanded="false" aria-controls="version-list"><span id="version-star" class="star-mark" hidden aria-label="starred">★</span><span id="version-name">v–</span> <span class="caret" aria-hidden="true">▾</span></button>
+      <ul class="menu versions-menu" id="version-list" role="menu" aria-label="Versions" hidden></ul>
+    </div>
+    <button class="btn icon" id="undo" disabled aria-label="Undo">↶</button>
+    <button class="btn icon" id="redo" disabled aria-label="Redo">↷</button>
+    <button class="btn" id="yaml-toggle" aria-pressed="true" title="Show or hide the score file">YAML</button>
+    <div class="export-wrap">
+      <button class="btn" id="export" disabled aria-haspopup="dialog" aria-expanded="false" aria-controls="export-panel" title="Score file, WAV or MP3, or save into the project">Export <span class="caret" aria-hidden="true">▾</span></button>
+      <div class="popover export-panel" id="export-panel" role="dialog" aria-labelledby="export-title" hidden>
+        <div class="ex-head"><h2 id="export-title">Export <span class="dim" id="ex-version"></span></h2><button class="btn icon small" id="ex-close" aria-label="Close">×</button></div>
+        <div class="ex-group">
+          <h3>Score file</h3>
+          <button class="btn" id="ex-yaml">Download YAML</button>
+          <span class="dim small">the version's text as written, comments kept</span>
+        </div>
+        <div class="ex-group">
+          <h3>Audio <span class="dim">rendered by vidgen</span></h3>
+          <div class="ex-row">
+            <label for="ex-format">Format</label>
+            <select id="ex-format" class="field"><option value="wav">WAV (16-bit, 48 kHz)</option><option value="mp3">MP3</option></select>
+          </div>
+          <div class="ex-row">
+            <label for="ex-length">Length</label>
+            <span class="ex-len"><select id="ex-length" class="field"></select>
+              <input id="ex-count" class="field num" type="number" min="1" step="1" aria-label="How many" hidden><span class="dim" id="ex-count-unit" hidden></span></span>
+          </div>
+          <div class="ex-row">
+            <label for="ex-level">Level</label>
+            <select id="ex-level" class="field">
+              <option value="video">video level: −28 LUFS (as vidgen plays it at volume 0)</option>
+              <option value="listening">listening level: −16 LUFS (as heard here)</option>
+            </select>
+          </div>
+          <div class="ex-row"><span></span><button class="btn primary" id="ex-audio">Download audio</button></div>
+          <p class="ex-note" id="ex-audio-note" role="status" hidden></p>
+        </div>
+        <div class="ex-group">
+          <h3>Save to the project</h3>
+          <div id="ex-save-form" class="ex-save">
+            <p class="dim small">into <code id="ex-project"></code><code>/assets/music/</code>, played in a video with <code>music: &lt;name&gt;</code></p>
+            <div class="ex-row">
+              <label for="ex-name">Name</label>
+              <span class="ex-name"><input id="ex-name" class="field" type="text" spellcheck="false" autocomplete="off" maxlength="64" placeholder="my_theme"><span class="dim">.yaml</span>
+              <button class="btn" id="ex-save">Save</button></span>
+            </div>
+          </div>
+          <p class="ex-note" id="ex-save-note" role="status" hidden></p>
+        </div>
+      </div>
+    </div>
+    <button class="btn icon" id="theme" aria-label="Switch light or dark theme" title="Light or dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 2v14a7 7 0 0 1 0-14z"/></svg></button>
+    <button class="btn icon" id="help-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="shortcuts" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
+  </header>
+  <div class="offline" id="offline" role="alert" hidden>
+    <b>The studio server is not answering.</b>
+    <span>Was <code>vidgen studio</code> stopped (Ctrl+C, a closed terminal, the computer asleep)? Start it again in the same folder; this page reconnects by itself. Your versions are on disk.</span>
+    <button class="btn small" id="offline-retry">Retry now</button>
+  </div>
+  <section class="shortcuts" id="shortcuts" role="dialog" aria-labelledby="shortcuts-title" hidden>
+    <div class="ex-head"><h2 id="shortcuts-title">Keyboard shortcuts</h2><button class="btn icon small" id="shortcuts-close" aria-label="Close the shortcuts">×</button></div>
+    <dl class="keys">
+      <dt><kbd>Space</kbd></dt><dd>play / pause (outside text fields)</dd>
+      <dt><kbd>N</kbd></dt><dd>pin a listening note at the moment playing</dd>
+      <dt><kbd>L</kbd></dt><dd>loop the section playing; again: the whole piece</dd>
+      <dt><kbd>M</kbd> · <kbd>S</kbd></dt><dd>mute / solo the selected track (what plays, not the score)</dd>
+      <dt><kbd>V</kbd></dt><dd>four variations of the version shown</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>undo: back to the version before</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Z</kbd> · <kbd>Ctrl</kbd> <kbd>Y</kbd></dt><dd>redo</dd>
+      <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>move in the step grid; a symbol key writes it, <kbd>Backspace</kbd> a rest</dd>
+      <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>on a section's edge: one bar shorter / longer; on a volume bar or pan knob: a step</dd>
+      <dt><kbd>Enter</kbd> · <kbd>Esc</kbd></dt><dd>keep / leave what is being typed; Esc also closes menus</dd>
+      <dt><kbd>?</kbd></dt><dd>this list</dd>
+    </dl>
+    <p class="dim small">On a Mac, <kbd>⌘</kbd> works for <kbd>Ctrl</kbd>.</p>
+  </section>
+  <aside class="first-hint" id="hint" aria-labelledby="hint-title" hidden>
+    <h2 id="hint-title">Welcome to vidgen studio</h2>
+    <ol>
+      <li>Pick a <b>preset</b> (a built-in bed) and press <kbd>Space</kbd> to listen.</li>
+      <li>Change <b>one thing</b>: a track's pattern, a slider, the tempo. Each change is a new version, rendered by vidgen.</li>
+      <li>Read the <b>Check</b> at the bottom, then <b>A/B</b> it against the original.</li>
+      <li>Pin <b>notes</b> with <kbd>N</kbd>, <b>Ask an agent</b>, try <b>Variations</b>, then <b>Export</b>.</li>
+    </ol>
+    <div class="hint-acts"><span class="dim small">Shortcuts: <kbd>?</kbd></span><button class="btn small primary" id="hint-close">Got it</button></div>
+  </aside>
+
+  <section class="strip" aria-label="Song">
+    <div class="facts">
+      <span class="fact"><label class="label" for="f-tonic">Key</label>
+        <select id="f-tonic" class="field" aria-label="Key: tonic"></select><select id="f-mode" class="field" aria-label="Key: mode"></select></span>
+      <span class="fact"><label class="label" for="f-tempo">Tempo</label>
+        <input id="f-tempo" class="field num" type="number" min="40" max="240" step="1" inputmode="decimal"><span class="unit">BPM</span></span>
+      <span class="fact"><span class="label">Time</span> <span class="value" id="f-time">–</span></span>
+      <span class="fact"><label class="label" for="f-seed">Seed</label>
+        <input id="f-seed" class="field num seed" type="number" min="0" step="1" inputmode="numeric" title="The pads' phases and the noises: another seed, another take of the same notes"></span>
+      <span class="fact"><span class="label">Bars</span> <span class="value" id="f-bars">–</span></span>
+      <span class="fact problem" id="strip-problem" role="alert" hidden></span>
+    </div>
+    <div class="chords-row">
+      <span class="label" id="chords-label">Chords</span>
+      <div class="chords" id="chords" role="button" tabindex="0" aria-describedby="chords-hint" title="Click to edit the chords (Roman numerals of the key, or chord names)"></div>
+      <input class="field chords-input" id="chords-input" type="text" spellcheck="false" autocomplete="off" aria-label="Chord progression" hidden>
+      <span class="hint" id="chords-hint"></span>
+    </div>
+    <div class="transport">
+      <button class="btn play" id="play" aria-label="Play" title="Play / pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pause" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+      <button class="btn icon" id="stop" aria-label="Stop" title="Stop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z"/></svg></button>
+      <label class="loop"><span aria-hidden="true">⟳</span> loop
+        <select id="loop" aria-label="Loop"><option value="">whole</option></select>
+      </label>
+      <button class="btn add-note" id="add-note" title="Pin a listening note at this moment (N)">+ note <kbd>N</kbd></button>
+      <label class="narration" title="Hear it under the narration sample with vidgen's default ducking (−12 dB while the voice speaks), as in a video"><input type="checkbox" id="narration"> under narration</label>
+      <input type="range" class="seek" id="seek" min="0" max="1000" value="0" step="1" aria-label="Position">
+      <span class="time" id="time">0:00 / 0:00</span>
+      <span class="render-badge" id="render-badge" hidden>rendering…</span>
+    </div>
+  </section>
+
+  <section class="timeline-wrap" aria-label="Timeline">
+    <div class="timeline" id="timeline">
+      <svg class="energy" id="energy" aria-hidden="true" preserveAspectRatio="none"></svg>
+      <div class="playhead" id="playhead" aria-hidden="true"></div>
+    </div>
+    <div class="note-lane" id="note-lane" title="Click to pin a listening note at that moment (or press N while listening)" aria-label="Listening notes: click to pin one"></div>
+    <div class="note-editor" id="note-editor" role="dialog" aria-label="Listening note" hidden></div>
+    <div class="section-bar" id="section-bar" aria-label="Section"></div>
+    <div class="proposal-bar" id="proposal-bar" aria-live="polite" hidden></div>
+    <section class="variations-panel" id="variations-panel" aria-labelledby="variations-title" hidden>
+      <div class="v-head">
+        <h2 id="variations-title">Variations</h2>
+        <span class="v-chain dim" id="variations-chain"></span>
+        <span class="v-progress" id="variations-progress" role="status" aria-live="polite"></span>
+        <span class="spacer"></span>
+        <div class="batches-wrap">
+          <button class="btn small" id="variations-earlier" aria-haspopup="menu" aria-expanded="false" aria-controls="variations-list" title="Every batch of this session: candidates not kept can still be played and kept">Batches <span class="caret" aria-hidden="true">▾</span></button>
+          <ul class="menu batches-menu" id="variations-list" role="menu" aria-label="Variation batches" hidden></ul>
+        </div>
+        <button class="btn small" id="variations-shuffle" title="Four other variations of the same version (the same shuffle always gives the same four)">⤮ Shuffle</button>
+        <button class="btn icon small" id="variations-close" aria-label="Close the variations">×</button>
+      </div>
+      <div class="v-cards" id="variations-cards"></div>
+    </section>
+  </section>
+
+  <main class="work" id="work" data-pane="inspector">
+    <div class="pane-tabs" id="pane-tabs" role="tablist" aria-label="Inspector, score file or notes">
+      <button class="pane-tab" role="tab" id="pane-inspector" data-pane="inspector" aria-selected="true" aria-controls="inspector-panel">Inspector</button>
+      <button class="pane-tab" role="tab" id="pane-yaml" data-pane="yaml" aria-selected="false" aria-controls="yaml-panel">Score file</button>
+      <button class="pane-tab" role="tab" id="pane-notes" data-pane="notes" aria-selected="false" aria-controls="yaml-panel">Notes <span class="count" id="pane-notes-count"></span></button>
+    </div>
+    <section class="panel tracks" aria-labelledby="tracks-title">
+      <h2 id="tracks-title">Tracks <span class="dim" id="mute-note"></span></h2>
+      <div class="track-list" id="tracks" role="list"></div>
+      <div class="add-wrap">
+        <button class="btn add" id="add-track" aria-haspopup="listbox" aria-expanded="false" aria-controls="instrument-list">+ track</button>
+        <ul class="menu instruments" id="instrument-list" role="listbox" aria-label="Instrument of the new track" tabindex="-1" hidden></ul>
+      </div>
+    </section>
+    <section class="panel inspector" id="inspector-panel" aria-labelledby="inspector-title">
+      <h2 id="inspector-title">Inspector <span class="dim" id="inspector-track"></span></h2>
+      <p class="draft-note" role="status">The score file has typed text with problems: fix it or revert it there, then the controls follow again.</p>
+      <div id="inspector"><p class="placeholder">Select a track to see its instrument and settings.</p></div>
+    </section>
+    <section class="panel yaml" id="yaml-panel" aria-labelledby="yaml-title">
+      <div class="yaml-head">
+        <h2 id="yaml-title" role="tablist" aria-label="Score file or notes"><button class="tab" id="tab-yaml" role="tab" aria-selected="true" aria-controls="yaml-panel">Score file</button><button class="tab" id="tab-notes" role="tab" aria-selected="false" aria-controls="notes-panel">Notes <span class="count" id="notes-count"></span></button>
+          <span class="dim yaml-only" id="yaml-name"></span><span class="yaml-state yaml-only" id="yaml-state" aria-live="polite"></span></h2>
+        <div class="yaml-problems yaml-only" id="yaml-problems" role="alert" hidden></div>
+      </div>
+      <div class="notes-panel" id="notes-panel" role="tabpanel" aria-labelledby="tab-notes" hidden>
+        <p class="notes-empty dim" id="notes-empty">No notes yet. While listening, click the lane under the timeline or press <kbd>N</kbd> to pin a note at that moment: “this part drags”, “love this bell”, “goosebumps here”.</p>
+        <ol class="note-list" id="note-list"></ol>
+        <section class="ask-card" aria-labelledby="ask-title">
+          <h3 id="ask-title">Ask an agent</h3>
+          <p class="dim small">Hands the score, the open notes, the check and the last change to an AI agent. It answers with a new version and one line per note on what it changed and why; you A/B it, keep what you like, add notes, repeat.</p>
+          <button class="btn primary" id="ask">Ask an agent</button>
+          <div class="handoff" id="handoff" hidden></div>
+        </section>
+      </div>
+      <div class="code-wrap">
+        <pre class="code" id="yaml" aria-hidden="true"></pre>
+        <textarea class="code-input" id="yaml-input" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"
+          aria-label="The score file (YAML): type to change it; valid text becomes the next version"></textarea>
+      </div>
+    </section>
+  </main>
+
+  <footer class="check" id="check-panel" aria-labelledby="check-title">
+    <div class="check-head">
+      <h2 id="check-title">Check <span class="dim" id="check-for"></span></h2>
+      <span class="verdict" id="check-verdict"><span class="dim">vidgen music check runs after each render</span></span>
+      <span class="headline" id="check-headline"></span>
+      <span class="check-state" id="check-state" aria-live="polite"></span>
+      <button class="btn small" id="check-toggle" aria-expanded="false" aria-controls="check-body">details<span id="check-toggle-count"></span> <span class="caret" aria-hidden="true">▾</span></button>
+      <span class="status" id="status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="check-body" id="check-body" hidden>
+      <figure class="spectro" id="check-spectro" title="Click to play from that moment">
+        <img id="check-image" alt="">
+        <span class="spectro-head" id="check-playhead" hidden></span>
+      </figure>
+      <div class="advice-col">
+        <h3>Advice</h3>
+        <div class="advice" id="check-advice"></div>
+        <details class="report"><summary>Full report</summary><pre id="check-report"></pre></details>
+      </div>
+    </div>
+  </footer>
+</div>
+<audio id="audio" preload="none"></audio>
+</body>
+</html>

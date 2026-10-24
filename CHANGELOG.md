@@ -5,6 +5,198 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
+## Unreleased (Steps 193–211)
+
+### Cell biology in physical scale (Phase U, from Step 202)
+
+- **A `cell` scene type** (Step 202): a cross-section of an animal cell at textbook sizes in µm
+  — nucleus with its two membranes 30 nm apart, nuclear pores and a nucleolus, rough ER studded
+  with ribosomes, smooth ER, a Golgi stack (cis face towards the nucleus), the centrosome,
+  mitochondria with cristae, lysosomes, peroxisomes, vesicles and 25 nm ribosomes
+  (`contents: typical`), plus your own `objects` (`kind`, `at` in µm, `in:` a compartment, `on:`
+  a membrane, `count`). Every place is checked by `vidgen validate`: a ribosome in the
+  nucleoplasm, a mitochondrion inside the nucleus or a ribosome on the Golgi is refused with the
+  textbook reason, and typos get a did-you-mean.
+- **A camera in µm** with an automatic **scale bar**: the `zoom_to` action moves between levels —
+  tissue, cell, organelle, molecular complex (one ribosome on the ER, a nuclear pore) — on a
+  spoken word (`at: "@ribosome"`), zooming at an even pace on a log scale and out on the way
+  between far places; **level of detail** switches as things grow on screen (double membranes,
+  cristae, nuclear pores, ribosome subunits, 5 nm lipid bilayers). Labels and the scale bar keep
+  their size on screen, in 16:9 and 9:16. See `docs/CONFIG.md`, `cell`.
+- **The structure library** (Step 203): accurate morphology at every zoom — the nuclear envelope
+  continuous with the rough ER, pores with spokes and baskets, nucleolus parts and
+  heterochromatin; a smooth-ER tubule network; Golgi cis / medial / trans cisternae with rims and
+  buds; mitochondria with crista junctions; early and late (multivesicular) endosomes; clathrin,
+  COPI and COPII coated vesicles; centrioles with nine triplets. **Plant cells** (`cell: plant`:
+  wall with middle lamella, plasmodesmata, central vacuole, chloroplasts with grana and stroma
+  lamellae) and **bacteria** (`cell: bacterium`, Gram-negative or positive, capsule, nucleoid, 70S
+  ribosomes, plasmids, flagella, pili). The **cytoskeleton** (microtubules with − and + ends from
+  the centrosome, actin cortex and stress fibres, intermediate filaments) and **motors**
+  (kinesin, dynein, myosin, with cargo). Bilayer close-ups with phospholipids, cholesterol,
+  glycolipids, glycocalyx and a lipid raft; `style: surface` draws things whole, seen from
+  outside. Each `zoom_to` view names the parts it shows (`labels:`); a dim during a zoom keeps
+  its opacity; the scale bar has a text at any depth.
+- **Molecules and notation** (Step 204): a **`molecule` scene type** for close-ups in nm — B-DNA
+  with antiparallel strands, 5′/3′ ends, A–T / G–C base pairs and major / minor grooves; mRNA
+  (cap, codons, poly(A)), tRNA (cloverleaf or L, anticodon checked against the genetic code),
+  rRNA; the nucleosome (147 bp, 1.65 turns, histone marks such as H3K27ac checked against the
+  histone sequences) and chromatin; proteins with domains, kinases, phosphatases, G proteins,
+  GPCRs, RTKs, gated ion channels, carriers (uniport / symport / antiport), the Na⁺/K⁺ pump and
+  ATP synthase in a membrane drawn between its two compartments; ATP, GTP, cAMP, Pᵢ, glucose,
+  ions — and the same molecules as `cell` objects (`{kind: atp_synthase, on: mitochondria}` lines
+  the cristae). Orientations and places are checked (*ATP synthase F₁ must face the mitochondrial
+  matrix*); gene symbols are italic and checked per species (*TP53*, *Trp53*, *CDC28*), proteins
+  roman; P / Ub / Ac / Me markers on the residues they go on; charges typeset (Ca²⁺, HCO₃⁻).
+- Step 203's zoomed views now point every label at its part (the matrix beside a crista, the
+  glycocalyx outside the bilayer), stroma lamellae join grana at their margins, and a ring of
+  smooth-ER tubules is no longer drawn filled.
+- **Transport and membrane processes as actions** (Step 205). In a `molecule` scene: `solutes`
+  (particles at their concentrations, typical mammalian values by default), `potential` (a live
+  Vₘ readout and the membrane's charges), concentration bars; `set_state` morphs a molecule
+  (a channel opens or inactivates, a carrier turns through its occluded state, the Na⁺/K⁺ pump
+  goes E1 → E1P → E2P → E2 with its phosphate shown); `transport` runs a channel (ions one by one
+  down their electrochemical gradient, only its own ion), a carrier's alternating access
+  (`transporter: sglt1`, `ncx`, `glut1`…), the pump's Post–Albers cycle with ATP → ADP + Pᵢ, H⁺
+  pumps (P- and V-type), ABC transporters and aquaporins; `diffuse` (random walks with net flux
+  down the gradient), `osmosis` and `action_potential` (channels in step with a trace from −70 to
+  +35 and −80 mV in an inset plot). In a `cell` scene: `motor_walk` (kinesin's 8 nm steps to the +
+  end, dynein's to the − end, carrying cargo), clathrin-mediated `endocytosis` (coated pit, dynamin
+  scission, uncoating) and `exocytosis` (SNARE docking, fusion pore, cargo release). The rules
+  come with reasons: *Na⁺ cannot pass a K⁺ channel*, *an antiporter moves its solutes opposite
+  ways*, *active transport needs an energy source: ATP or an ion gradient*, *kinesin-1 walks
+  towards a microtubule's + end*; states are replayed beat by beat by `vidgen validate`. New
+  molecules `h_atpase`, `abc_transporter`, `aquaporin`, `water`, `o2`, `co2`, `drug`. Lipids leave
+  room for membrane proteins in cell close-ups, and several membrane proteins in a tall frame go on
+  membrane rows.
+- **Gene expression as actions** (Step 206). A `gene:` param — a coding-strand `sequence` with
+  intron spans, a `protein`, or generated from `codons` and a `seed` (TATA box, Kozak AUG, GU…A…AG
+  introns, AAUAAA; a bacterium: −35/−10, Shine–Dalgarno, terminator). In a `molecule` scene, a
+  close-up with every base and amino acid written: `transcribe` (GTFs and RNA polymerase II at the
+  promoter, a ~13 bp bubble, the template read 3′→5′, an 8 bp RNA–DNA hybrid), `cap`, `splice`
+  (snRNPs, the branch A, the lariat, EJCs), `polyadenylate`, `export` through a nuclear pore,
+  `translate` (scanning to the AUG, A/P/E sites, codon–anticodon pairing with wobble and
+  inosine, the chain growing N→C through the tunnel, eRF1 at the stop codon, ribosome
+  recycling), `target_er` (SRP, its receptor, Sec61, signal peptidase), `glycosylate` (OST,
+  Glc₃Man₉GlcNAc₂ in SNFG symbols) and `fold` (Hsp70, chaperonin, BiP, calnexin). In a `cell`
+  scene the camera follows the products: `transcribe`, `export`, `translate` (free polysomes or
+  the rough ER), `to_golgi` (COPII, cis → trans) and `secrete` (to the outside, the membrane or a
+  lysosome). The order is checked by `vidgen validate` with reasons (*only proteins made into the
+  ER enter the secretory pathway*).
+- **Signalling pathways** (Step 207): a `pathway` scene type in SBGN-inspired notation — proteins,
+  complexes, second messengers, genes (italic) and outcomes, with their states (GDP / GTP, pS133);
+  arcs that activate (arrow), inhibit (T-bar), catalyse (circle), (de)phosphorylate (P), bind,
+  translocate into the nucleus, regulate transcription — laid out by itself in compartment bands
+  (extracellular space, plasma membrane, cytosol, ER, mitochondrion, nucleus: columns in 16:9, rows
+  in 9:16), routes never crossing a node, the nuclear envelope with pores where arcs pass. Three
+  templates checked against the textbook account: `gpcr_camp_pka`, `rtk_ras_mapk`, `pi3k_akt`
+  (changed with `nodes`, `edges`, `remove`). Actions: `signal` (wave by wave: GDP → GTP, marks
+  appear; an inhibitor of an inhibitor turns its target on), `inhibit`, `knockout` and `drug` (the
+  effects downstream computed from the graph, ↑ / ↓ on each node that changes; known drugs checked
+  against their targets), `amplify`, and `focus` on nodes. `vidgen validate` refuses unknown nodes,
+  arcs against declared effects (a GAP activating Ras), impossible compartments (a gene outside the
+  nucleus, a transcription factor in the cytosol on its gene) and names in the wrong case for the
+  species, and warns about loops not marked `feedback`.
+- **Cell cycle, division and energy** (Step 208): a `cell_cycle` scene type — the cycle as a ring
+  (G1, S, G2, M with its stages, the restriction point, G0) with the G1/S, G2/M and spindle
+  checkpoints and the cyclin–CDK levels (D–CDK4/6, E–CDK2, A–CDK2, B–CDK1) under a "now" marker;
+  mitosis (2n = 2–8, homologues coloured, sisters joined at the centromere; `cell: plant` with a
+  cell plate) and meiosis (synapsis, chiasmata with exchanged segments, independent assortment,
+  four haploid recombinant cells) with captions and counts. A `metabolism` scene type —
+  glycolysis (investment and payoff phases, net 2 ATP and 2 NADH; `link: true` adds pyruvate
+  dehydrogenase), the citric acid cycle as a ring (3 NADH, FADH₂, GTP, 2 CO₂), the respiratory
+  chain (I–IV, Q, cytochrome c, protons into the intermembrane space, ATP synthase) and the light
+  reactions (PSII, PQ, b₆f, PC, PSI, Fd, FNR → NADPH), with tallies. Actions: `advance` (round the
+  cycle, through a division's stages, along a pathway, electrons and protons down a chain, the
+  gradient through ATP synthase) and `checkpoint` (pass or arrest with its cause; regulators lit
+  in order). `vidgen validate` refuses wrong counts after meiosis (`expect`), G0 after R, passing
+  an arrested checkpoint, a chain in the wrong membrane and protons pumped the wrong way.
+- **Scientific accuracy lint and references** (Step 209): seven `vidgen lint` rules read the
+  config and the narration — `science_scale` (a `cell` with a scale bar drawing something far
+  outside its textbook size; new `not_to_scale: true` shows a "not to scale" note instead),
+  `science_location` ("glycolysis in the mitochondria", "ribosomes in the nucleus" while the
+  scene shows them in the cytosol), `science_direction` (RNA made 3′→5′, proteins C→N, kinesin to
+  the minus end, protons pumped into the matrix), `science_energy` (active transport through a
+  channel, or with no energy source shown), `science_naming` (mouse *Trp53* gene vs TRP53
+  protein, the wrong case, a gene label without italics), `science_pathway` (narration against an
+  arc's effect) and `science_counts` (net 2 ATP from glycolysis, 3 NADH per turn, 3 Na⁺ / 2 K⁺ per
+  pump cycle…), each with the textbook fix; 0 findings on the examples. `said_before_shown` knows
+  the cell-biology actions and targets. Scenes take **`references:`** (`{label, doi | pmid | isbn |
+  url}`, formats checked offline) and `figure_credit:`; beats `cite:` them; they show as small
+  citations (`citations: {show: footer | marker | card | none}`, numbered across the video) and
+  as a numbered list in `<output>_chapters.txt`.
+- **Example, guide, cookbook and gallery** (Step 210): `examples/gene-to-secreted-protein`, "From
+  gene to secreted protein" (about 3:34 with Kokoro): α1-antitrypsin from its gene in a liver
+  cell to the blood — a zoom into the nucleus, transcription, capping, splicing,
+  polyadenylation, export, translation, SRP targeting, N-glycosylation and calnexin up close, the
+  route through the Golgi to secretion across the cell, exocytosis and the IL-6–STAT3 pathway;
+  references, concept colours, the `discovery` bed, a 9:16 variant. A guide topic (`vidgen guide
+  biology`: choosing the scene, accuracy, naming, references, pacing) and
+  `docs/COOKBOOK-CELL-BIOLOGY.md`. The scene gallery has one **Cell biology** section with the five
+  types and five showcases (a plant cell, the sodium pump, a MEK inhibitor, mitosis, the
+  respiratory chain); gallery stills are now palette PNGs (about 40 % of their size, the room for
+  the showcases). Fixes found on the way: a cell route's transcription caption no longer mentions
+  vidgen's molecule scene; a zoomed `cell` view and a gene close-up no longer report their cropped
+  world as `off_frame`; the close-up's "schematic: not to scale" is at the readable size, in the
+  safe area and clear of the protein's readout in 9:16.
+- **Review of Phase U** (Step 211): drawings use the frame better — molecule scenes put three or
+  more membrane proteins on rows when that frames them larger (also beside a plot in 16:9), and
+  in 9:16 the action-potential plot spans the panel above the concentrations; a gene close-up in
+  9:16 shows 15 slots across (was 18) and takes a tall frame's layout even when its view is wider
+  than tall (a 36-slot strip before); a vesicle near the plasma membrane is framed with the
+  membrane it fuses with; pathways grow up to 1.9× and spread their ranks to use the height;
+  glycolysis grows to fill. Step captions are never below the readable size and are their
+  first clause in 9:16 (`notes: auto | full | short | false`). `exocytosis` names generic
+  v-/t-SNAREs by default, `snares: constitutive` (a VAMP, syntaxin-4, SNAP-23) or `neuronal`
+  (synaptobrevin/VAMP2, syntaxin-1, SNAP-25, Ca²⁺ on synaptotagmin); the example uses the
+  constitutive set with its captions on. The captions overlay sets the gene symbols the video
+  declares in italics (`genes: true`). Enzyme names in `metabolism` are roman (proteins).
+  Calnexin is anchored in the ER membrane by a stalk; ribosomal subunits part in the cytosol on
+  the ER; Sec61 is named beside the channel; ion channels are named by their ion (Na⁺ channel);
+  overlapping labels fixed (band names in 16:9 pathways, side names of membrane rows, the light
+  reactions' P side in 9:16, leader lines of label rows in 9:16); cell-scene products travel on
+  gentle curves; a motor's cargo vesicle is kept off the organelles. `scenes/molecule.py` is
+  split (the process runtime in `scenes/molecule_runtime.py`).
+
+### vidgen studio: a music workstation for people (Phase T)
+
+- **`vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]`** (Steps 193–200) opens a
+  small web app on 127.0.0.1 in your browser, offline, with no new dependency: load any of the
+  17 built-in beds as an editable score file and change it with controls (key, tempo, seed and
+  chords; sections dragged, looped and edited; tracks with mute / solo, volume, pan, steps
+  text; an inspector with every instrument's settings as sliders, effects as chips, per-section
+  changes and a step grid) or by typing the YAML; problems show inline with the command line's
+  did-you-mean messages while the last good render keeps playing. The sound is always vidgen's
+  own renderer: an edit renders only the tracks it changes and plays on from the same moment,
+  also under the narration sample. See `docs/CONFIG.md`, "Music studio".
+- **Check, versions, A/B, export** (Step 197): `vidgen music check` after each render (verdict,
+  spectrogram with sections, advice with **Apply** where the fix is mechanical); every change is
+  a version (undo / redo, rename, star, branches); A/B against the original or any version at
+  the same moment and level; export YAML / WAV / MP3 or save into `assets/music/`.
+- **Listening notes and "Ask an agent"** (Step 198): pin notes on the timeline while listening;
+  an AI agent answers them through new MCP tools (`studio_sessions`, `studio_read`,
+  `studio_check`, `studio_propose`) with a new version and one line per note, which you A/B and
+  keep or discard; or copy the prompt into any chat assistant; or (optional, paid) OpenRouter.
+- **Variations** (Step 199): four deterministic siblings of a version — harmony, pattern, mix,
+  energy — rendered and checked side by side; play, keep, "more like this", shuffle; MCP
+  `studio_variations`.
+- **Polish** (Step 200): keyboard shortcuts (Space, N, L, M / S, V, Ctrl+Z / Ctrl+Shift+Z, ? for
+  the list), tabs for the inspector, score file and notes in medium and narrow windows, a light
+  theme checked for WCAG AA contrast, a first-run hint, a clear message (and automatic
+  reconnection) when the studio server stops, the open variations and the last hand-off shown
+  again after a reload, every variation batch listed to come back to, and a disk rule for old
+  renders and exports (versions, notes and checks are never removed) with **Clean up** and
+  `vidgen studio --clean`. The Listen page and the README link to the studio; the author guide
+  tells agents when to suggest it; `docs/COOKBOOK-MUSIC.md` §7 walks through a session.
+- **Review** (Step 201): hardened against hostile requests (request lengths, numbers, names
+  with a trailing newline or other scripts' digits, Windows device names when saving, YAML
+  aliases that expand to millions of values, a session folder linked elsewhere); OpenRouter is
+  called only with the person's confirmation; edits of pieces at most tempos render 2–3 times
+  faster with a third less memory (the same 16-bit audio as a video's); 5-minute pieces no
+  longer run out of memory; exports are at most 10 minutes (was 30, which ran out of memory);
+  `vidgen studio --clean` leaves a running studio's open session alone.
+- Compatibility: additive. The beds, their templates, existing projects' mixes and every
+  existing command are unchanged.
+
 ## 0.3.0 (Steps 61–192)
 
 0.2.0 made narrated explainer videos that an AI agent can check and fix by itself. 0.3.0 adds

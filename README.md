@@ -69,6 +69,21 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
 Reference: [music](docs/CONFIG.md#background-music-music), [composed music](docs/CONFIG.md#composed-music-compose),
 [sound effects](docs/CONFIG.md#sound-effects-sfx).
 
+**vidgen studio.** `vidgen studio` opens a small music workstation in your browser (on this
+computer only, offline): load any built-in bed as an editable score, change it with sliders, step
+grids or the YAML itself, listen under a narration sample, read the check, A/B any two versions,
+try four variations at a click, and export WAV / MP3 / YAML or save the piece into your project.
+Pin listening notes while it plays ("I want goosebumps at the turn") and **ask an agent**: an AI
+agent connected through `vidgen mcp` reads the notes and proposes a new version with one line per
+note, which you A/B and keep or discard. The sound is always vidgen's own renderer, the one your
+videos use ([reference](docs/CONFIG.md#music-studio-vidgen-studio),
+[a person and an agent in the studio](docs/COOKBOOK-MUSIC.md#7-a-person-and-an-agent-in-the-studio)).
+
+<p align="center">
+  <img src="docs/images/studio.png" width="720"
+       alt="vidgen studio: the momentum bed's sections on a timeline, its tracks, the inspector of the ostinato, two listening notes and an agent's proposal answering them">
+</p>
+
 Everything is built around what an agent can and cannot do:
 
 - **Text in, video out.** A video is one `video.yaml` file: narration written as short *beats*
@@ -167,6 +182,16 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   them, dots and packets flow along connectors, a stack's layers pull apart, the camera focuses on
   a part, labels and values change in place ([docs](docs/CONFIG.md#iso_diagram),
   [example](examples/iso-web-page)).
+- **Cell biology at university level**: `cell` draws a cell in physical scale (animal, plant or
+  bacterium; organelles, membranes, the cytoskeleton, molecules) and zooms from the tissue to one
+  ribosome with a scale bar; `molecule` shows molecules in nm (DNA, receptors, channels, pumps, ATP
+  synthase) with transport, gating and action potentials, and every step of gene expression up
+  close; `pathway` lays out signalling SBGN-style with signals, inhibitors, knockouts and drugs;
+  `cell_cycle` and `metabolism` draw the cycle, mitosis, meiosis, glycolysis, the citric acid
+  cycle and the respiratory chain. Places, directions, names and counts are checked
+  (`vidgen validate`, the `science_*` lint rules) and scenes carry references
+  ([docs](docs/CONFIG.md#cell), [cookbook](docs/COOKBOOK-CELL-BIOLOGY.md),
+  [gallery](docs/gallery/README.md#cell-biology), [example](examples/gene-to-secreted-protein/README.md)).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
@@ -352,7 +377,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast` — and gets each command's JSON document
+`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).
 
@@ -572,6 +597,7 @@ narration.
 | `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
 | `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
+| `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
 | `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when the `music` extra and the SoundFont are there |
 | `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
@@ -756,6 +782,13 @@ my_video/
   `momentum` template in nine checked steps, now the built-in bed `music: time_of_flight`; the
   README has the iteration log and the piece's check report; about 89 s with Kokoro narration (no
   audio committed).
+- [examples/gene-to-secreted-protein](examples/gene-to-secreted-protein/README.md) — "From gene to
+  secreted protein", a university-level cell-biology explainer following α1-antitrypsin from its
+  gene to the blood: a zoom from the tissue into the nucleus, transcription, capping, splicing,
+  polyadenylation and export up close, translation, SRP targeting to Sec61, N-glycosylation and
+  calnexin in the ER, the route through the Golgi to secretion across the whole cell, an
+  exocytosis close-up and the IL-6–STAT3 pathway that raises its synthesis; references, karaoke
+  captions, the `discovery` bed, a 9:16 variant; about 3:34 with Kokoro narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -763,7 +796,9 @@ my_video/
   [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
   YouTube Short about code: layout, phone-readable code, narration, checks;
   [docs/COOKBOOK-MUSIC.md](docs/COOKBOOK-MUSIC.md) — writing music as score files: room for the
-  voice, builds and lifts, loops, check and compare, genre sketches.
+  voice, builds and lifts, loops, check and compare, genre sketches;
+  [docs/COOKBOOK-CELL-BIOLOGY.md](docs/COOKBOOK-CELL-BIOLOGY.md) — cell-biology lectures and
+  research explainers: choosing the scene, accuracy, labelling, zooming, pacing, references.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

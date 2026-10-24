@@ -427,6 +427,10 @@ def page_text(composed_pieces: Sequence[composer.Piece], composed_note: str) -> 
             "|---|---|---|---|",
             *(_piece_row(piece) for piece in SCORE_PIECES),
             "",
+            "To do the same by ear, [`vidgen studio`](../CONFIG.md#music-studio-vidgen-studio) opens any",
+            "bed above as an editable score in your browser: change it, listen as you go, A/B versions,",
+            "try variations, pin notes for an AI agent to answer, and save it into your project.",
+            "",
         ]
     lines = [
         "# Listen: vidgen's music and sounds",

@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 from vidgen import __version__, carry, chapter_export, hooks, mix, musicfit, sfx, transitions
 from vidgen.errors import VidgenError
 from vidgen.project import Project
+from vidgen.references import description_text
 from vidgen.render import ffmpeg as ff
 from vidgen.fileio import remove_file, write_text_atomic
 from vidgen.render.worker import (
@@ -655,16 +656,20 @@ def video_cues(project: Project, timings: dict[str, Any]) -> list[Cue]:
 
 
 def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any]) -> Path | None:
-    """Write the YouTube chapter list ``<output>_chapters.txt`` from the combined timings'
-    ``chapters`` (DESIGN.md §52) and log why YouTube would ignore it; returns its path, or
-    ``None`` (and removes an old list) when the video has no chapters or ``chapters.youtube`` is
-    false."""
+    """Write the description file ``<output>_chapters.txt``: the YouTube chapter list from the
+    combined timings' ``chapters`` (DESIGN.md §52; why YouTube would ignore it is logged) and,
+    after it, the numbered references and figure credits of the scenes (§95.14); returns its
+    path, or ``None`` (and removes an old file) when there is neither (no chapters or
+    ``chapters.youtube`` false, and no references or ``citations.description`` false)."""
     path = project.chapters_path(preview)
     chapters = [chapter_export.chapter_from_json(c) for c in timings.get("chapters", [])]
-    if not chapters or not project.config.chapters.youtube:
+    if not project.config.chapters.youtube:
+        chapters = []
+    cited = description_text(project.config.scenes) if project.config.citations.description else ""
+    if not chapters and not cited:
         remove_file(path)
         return None
-    for problem in chapter_export.write_youtube_list(path, chapters):
+    for problem in chapter_export.write_youtube_list(path, chapters, cited):
         log.warning("%s", problem)
     return path
 
