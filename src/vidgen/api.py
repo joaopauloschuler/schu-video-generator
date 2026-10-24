@@ -627,6 +627,8 @@ from vidgen.cellworld.pathway import Pathway, PathwaySpec, build_pathway  # noqa
 from vidgen.cellworld.pathway_templates import TEMPLATES as PATHWAY_TEMPLATES  # noqa: E402
 from vidgen.cellworld import cycle as cell_cycle_model, division as cell_division, energy as cell_energy  # noqa: E402
 from vidgen.cellworld import accuracy as cell_accuracy  # noqa: E402
+from vidgen.cellworld.captions import NoteMode as CellNoteMode, note_text as cell_note_text  # noqa: E402
+from vidgen.cellworld.names import gene_spans  # noqa: E402
 from vidgen import references as video_references  # noqa: E402
 
 
@@ -1596,6 +1598,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "cell_division",
     "cell_energy",
     "cell_accuracy",
+    "CellNoteMode",
+    "cell_note_text",
+    "gene_spans",
     "video_references",
     "did_you_mean",
     "format_length",

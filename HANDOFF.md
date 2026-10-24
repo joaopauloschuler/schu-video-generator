@@ -19458,3 +19458,154 @@ How to test
   30 fps, 214.07 s video and audio, −16.1 LUFS, true peak −1.8 dBTP, LRA 3.6 LU:
   scratchpad `s210/gene_to_secreted_protein.mp4`, contact sheet `s210/contact_16x9.png`, 9:16
   storyboard `s210/storyboard_9x16/`, showcase stills `s210/showcases.png`.
+
+## Step 211 — Review of Phase U
+
+What was reviewed and fixed (DESIGN §95.16)
+- **Scientific accuracy** (library, templates, captions, energy counts, lint facts, example):
+  - Pathway templates checked arc by arc. Akt ⊣ GSK3β (Ser9), Akt ⊣ TSC2 and Akt ⊣ FOXO are drawn
+    as a T-bar with a P and played as switching the target off (GSK3β pS9 dimmed; TSC2 ⊣ Rheb then
+    turns mTORC1 on; FOXO off lowers *BCL2L11*). PTEN dephosphorylates PIP₃ (inhibitory). The
+    MAPK and cAMP feedbacks have the right signs. All of this is tested.
+  - Fixed: the exocytosis captions named the neuronal SNAREs in every cell. The new `snares`
+    option has three values:
+    - `generic` (the default): v-SNARE / t-SNAREs;
+    - `constitutive`: a VAMP, syntaxin-4, SNAP-23;
+    - `neuronal`: synaptobrevin/VAMP2, syntaxin-1, SNAP-25, with Ca²⁺ on synaptotagmin triggering
+      fusion.
+    The example uses `constitutive` with its captions on again.
+  - Fixed: `metabolism` set enzyme names in italics; they are roman now (enzymes are proteins).
+  - Fixed: calnexin floated in the lumen. It is now anchored: a stalk runs from its helix in the
+    ER membrane to its lectin domain. In a 16:9 close-up the view is too low for the globule and
+    the membrane together, so it frames the globule and the stalk runs out of the view.
+  - Fixed: after termination on the ER, the 60S subunit rose through the membrane. The subunits
+    now part in the cytosol.
+  - Ion channels are named by their ion ("Na⁺ channel", was "Ion channel").
+  - One caption was reworded so that its first clause stands alone (the OST reach).
+  - Everything else checked was correct: the transcription, splicing, polyadenylation and
+    translation captions; the pump cycle; the action potential; the counts (glycolysis, TCA, 10
+    and 6 H⁺ per NADH / FADH₂, the light reactions' 6 H⁺ with ½ O₂ and 1 NADPH); the lint's
+    facts.
+- **Frame use:**
+  - Molecule scenes put three or more membrane proteins on rows whenever that frames them larger
+    (16:9 beside a plot too). In 9:16 the action-potential plot spans the panel, with the
+    concentrations under it (before, the two overlapped).
+  - A gene close-up in 9:16 shows 15 slots (was 18). It now decides wide or tall by the
+    **frame**. This fixes a real 9:16 bug: under a title, captions and karaoke the view was wider
+    than tall, and the example's Short drew a tiny 36-slot strip.
+  - A vesicle within 0.6 µm of the plasma membrane is framed with that membrane, fitted to the
+    body's shape. The example's vesicle now sits under the top of the cell, so the membrane runs
+    across both 16:9 and 9:16. The old view was mostly empty cytosol, and in 9:16 the vesicle
+    went out of frame.
+  - Pathways grow up to 1.9× and spread their ranks (`SPREAD`) to use the height.
+  - Glycolysis grows up to 1.6×.
+- **Captions** (phone readability):
+  - Step captions are never scaled below the readable size. Gene close-ups reserve 3 lines in
+    16:9 and 4 in 9:16.
+  - `notes: auto | full (true) | short | false` on every process action. The default `auto`
+    shows the full caption in 16:9 and its first clause in 9:16 (`cellworld/captions.py`).
+- **Gene symbols in italics:**
+  - Scene types declare `gene_symbols(params)`: `cell`, `molecule`, `pathway`.
+  - The captions overlay (option `genes: true`) sets the video's declared genes in italics as
+    whole words, case-sensitive. A symbol followed by "protein", "kinase", "receptor"… stays
+    roman. Example: "transcription of *SERPINA1*" in karaoke, while STAT3 stays roman.
+- **Overlaps fixed:**
+  - Sec61's name is beside the channel (the tRNA and chain covered it).
+  - 16:9 pathway band names: the membrane's name goes at the bottom, with a word's room between
+    names.
+  - The light reactions' P-side name in 9:16 takes the least-covered place (it touched b₆f).
+  - The light reactions' tallies in 16:9 sit low (they overlapped "ATP synthase").
+  - Molecule side names: one row's cytosol name and the next row's extracellular name no longer
+    overlap, and a side name covered by a molecule's name moves.
+  - The 9:16 close-up's note no longer overlaps the readout or legend line.
+  - Cell label rows in 9:16 no longer have crossing leaders: a label steps aside, or two labels
+    swap rows (bacterial envelope).
+  - The "ER membrane" label the reviewer saw under OST is a label that is never placed
+    (`lab_er`). The faint labels there are the SRP receptor's (faded once it lets go, as
+    intended).
+- **Earlier gaps:**
+  - Calnexin is anchored.
+  - Cell-scene products travel on gentle curves (`expression_route.curve`).
+  - Motor cargo is placed wholly in the cytosol.
+  - `scenes/molecule.py` is split: 1,825 lines → 1,454, with the process runtime in the new
+    `scenes/molecule_runtime.py` (`MoleculeRuntime` mixin).
+
+Files touched
+- New:
+  - `src/vidgen/cellworld/captions.py`
+  - `src/vidgen/scenes/molecule_runtime.py`
+  - `tests/test_phase_u_review.py` (14 tests)
+- Changed, `src/vidgen/`:
+  - `cellworld/`: `traffic.py`, `view.py`, `names.py`, `expression_cyto.py`,
+    `expression_stage.py`, `expression_route.py`, `filaments.py`
+  - `scenes/`: `molecule.py`, `molecule_gene.py`, `molecule_actions.py`, `gene_actions.py`,
+    `cell.py`, `cell_actions.py`, `cell_traffic.py`, `cell_expression.py`, `pathway.py`,
+    `metabolism.py`, `captions.py`
+  - `api.py`
+- Changed, elsewhere:
+  - `examples/gene-to-secreted-protein/video.yaml` (the fusion scene)
+  - `docs/CONFIG.md`: the endocytosis / exocytosis rows, the captions' `genes`, `notes: short`
+  - `docs/COOKBOOK-CELL-BIOLOGY.md`
+  - the guide and `AGENTS.md`
+  - `DESIGN.md` §95.16, `CHANGELOG.md`, `tasklist.md`
+
+Public interfaces
+- `vidgen.api` adds `CellNoteMode`, `cell_note_text` and `gene_spans`.
+- Config:
+  - `notes` takes `auto | full | short | false`;
+  - `exocytosis` takes `snares`;
+  - the captions overlay takes `genes`.
+- New scene-type hook: `gene_symbols(params)`.
+
+Decisions
+- Captions are shortened by rule (the first clause), not by a second hand-written text.
+- SNAREs are an option of the action, because a `cell` is one generic animal cell.
+- Gene italics are video-wide, from the scenes' declarations, and can be turned off. They are not
+  `terms:`, which sets colours.
+- Rows of membrane proteins are chosen by the same "frames it largest" rule in any frame.
+
+Known gaps
+- No `set_state` in a `cell` scene.
+- An endocytosed vesicle is not a world object.
+- Zoomed-view part labels go stale after a process.
+- Molecule glyphs' inner letters (ATP synthase α/β, flow labels) are below the readable size.
+  These are pre-existing lint findings in the gallery's `synthase` scene and in the
+  `sodium_pump` / `respiratory_chain` showcases; there are no new findings.
+- 9:16 close-ups of horizontal strips still leave height.
+- The 16:9 calnexin close-up cannot show the membrane.
+- The cell-biology gallery media were not regenerated; the stills of the changed layouts differ.
+- The `eIF4G·4A` blob overlaps the 40S label during scanning (16:9).
+
+How to test
+- Tests run:
+
+  | Tests | Result |
+  | --- | --- |
+  | `test_phase_u_review` | 14 |
+  | `test_transport` | 27 |
+  | `test_expression` | 86 |
+  | `test_pathway` + `test_cycle_energy` | 68 |
+  | `test_cell_scene` + `test_molecules` | 86 |
+  | `test_cell_world` + `test_cell_library` | 109 |
+  | `test_accuracy` + `test_gene_to_secreted_protein` + `test_expression` + `test_transport` | 156 |
+  | `test_captions` + `test_overlays` | 46 |
+  | `test_api` + `test_guide` + `test_docs` | 138 |
+  | `test_actions` + `test_actions_coverage` + `test_translation` + `test_registry` + `test_extensions` (not render) | 156 |
+  | `test_builtin_scenes` + `test_actions_coverage` `-k` the five types (render) | 25 |
+  | `test_builtin_scenes` + `test_schema` + `test_json_output` + `test_gallery` (not render) | 240 |
+  | `test_gallery` (render) | 1 |
+  | `test_review2` + `test_introspect` + `test_lint` + `test_narration_rule` + `test_subtitles` | 57 |
+  | `test_mcp.py`, in full | 20 |
+
+  The full suite was not run.
+- Compatibility: the Phase Q baseline re-run gave 31 frames with a max difference of 0.
+  Captions without declared genes build the same texts as before.
+- Lint, with 0 new findings:
+  - the example (scratch copy with its Kokoro audio), 16:9 and `--variant short`: 0 findings;
+  - the gallery's five cell-biology scenes (default and vertical) and the five showcases: the
+    same findings as on the code before this step, compared with a worktree at 5dab226b;
+  - the science rules over the review project (`s211/rev`): 0 findings.
+- Video: the example re-rendered at 1920×1080 from its existing Kokoro audio (no new TTS), 214.07
+  s, −16.1 LUFS, true peak −1.8 dBTP. It is at scratchpad `s211/out/gene_to_secreted_protein.mp4`,
+  with the contact sheet at `s211/contact_16x9.png`.
+- Stills of the review project: `s211/rev/build/preview{,_short}/storyboard/`.

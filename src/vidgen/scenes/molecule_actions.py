@@ -77,8 +77,8 @@ class Transport(Action):
         """Channels: the ion that passes (default: the channel's own; another is refused with the reason)."""
         direction: Literal["in", "out"] | None = None
         """Channels and aquaporins: which way (in: into the cytosol); default and checked: down the gradient."""
-        notes: bool = True
-        """Caption each step (E1P: ATP → ADP…)."""
+        notes: CellNoteMode = "auto"
+        """Caption each step: auto (the full caption in a wide frame, its first clause in a tall one), full (or true), short (the first clause), false (none)."""
 
     run_time = 5.0
 
@@ -146,8 +146,8 @@ class ActionPotential(Action):
         """Draw the voltage trace in an inset plot (mV against ms) as it happens."""
         ions: int = Field(3, ge=1, le=8)
         """Ions through each channel."""
-        notes: bool = True
-        """Caption each phase."""
+        notes: CellNoteMode = "auto"
+        """Caption each step: auto (the full caption in a wide frame, its first clause in a tall one), full (or true), short (the first clause), false (none)."""
 
     run_time = 7.0
 

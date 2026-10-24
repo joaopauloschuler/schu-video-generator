@@ -103,8 +103,9 @@ class CellExpression:
         """Play the step: the markers move, the camera follows, the captions change."""
         clip = clip or self.expression_clip(name, options)
         edges = clip.edges()
-        steps = tuple((edges[k], note) for k, (_, note, _) in enumerate(clip.phases)) if getattr(options, "notes", True) else ()
-        captions = self._captions(steps) if steps else []  # type: ignore[attr-defined]
+        mode = getattr(options, "notes", "auto")
+        steps = tuple((edges[k], note) for k, (_, note, _) in enumerate(clip.phases)) if mode is not False else ()
+        captions = self._captions(steps, mode) if steps else []  # type: ignore[attr-defined]
         return [RoutePlayer(self, clip, captions), *holds(captions)]
 
 

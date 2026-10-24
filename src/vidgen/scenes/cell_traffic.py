@@ -108,7 +108,7 @@ class CellTraffic:
         """Clathrin-mediated endocytosis at the chosen site."""
         site = tf.membrane_site(self.world, options.site or self._view_middle())  # type: ignore[attr-defined]
         event = CellEventDrawing(self.drawing, site, "endo", receptors=options.receptors)  # type: ignore[attr-defined]
-        captions = self._captions(tf.ENDO_STEPS) if options.notes else []
+        captions = self._captions(tf.ENDO_STEPS, options.notes) if options.notes is not False else []
         return [MembraneEvent(self, event, lambda t: tf.endocytosis_shape(t), captions, gather=lambda t: _ramp(t, 0.02, 0.2)), *holds(captions)]
 
     def run_exocytosis(self, entry_id: str, options: Any) -> list[Animation]:
@@ -117,7 +117,7 @@ class CellTraffic:
         site, r, depth = tf.exocytosis_start(world, entry_id)
         cargo = tf.cargo_points(options.cargo, r, f"{entry_id}:cargo")
         event = CellEventDrawing(self.drawing, site, "exo", cargo=cargo, vesicle_hue=CELL_OBJECT_KINDS["vesicle"].hue)  # type: ignore[attr-defined]
-        captions = self._captions(tf.EXO_STEPS) if options.notes else []
+        captions = self._captions(tf.exocytosis_steps(options.snares), options.notes) if options.notes is not False else []
         self.drawing.hide_owner(entry_id)  # type: ignore[attr-defined]
         rng = np.random.default_rng(abs(hash(entry_id)) % (2 ** 32))
         spread = [(float(rng.uniform(-90, 90)), float(rng.uniform(12, 70))) for _ in cargo]
@@ -132,13 +132,17 @@ class CellTraffic:
 
         return [MembraneEvent(self, event, lambda t: tf.exocytosis_shape(t, r, depth), captions, cargo=where), *holds(captions)]
 
-    def _captions(self, steps: tuple[tuple[float, str], ...]) -> list[tuple[float, float, Mobject]]:
-        """The steps' captions on plates at the top of the body (screen-sized), each with when
-        it shows (shares of the action)."""
+    def _captions(self, steps: tuple[tuple[float, str], ...], mode: CellNoteMode = "auto") -> list[tuple[float, float, Mobject]]:
+        """The steps' captions on plates at the top of the body (screen-sized; full or short by
+        ``mode``), each with when it shows (shares of the action)."""
         body = self.body  # type: ignore[attr-defined]
+        tall = self.frame_height > self.frame_width  # type: ignore[attr-defined]
         out = []
-        for k, (start, text) in enumerate(steps):
+        for k, (start, note) in enumerate(steps):
             end = steps[k + 1][0] if k + 1 < len(steps) else 1.0
+            text = cell_note_text(note, mode, tall)
+            if not text:
+                continue
             words = self.text(text, size=self.params.label_size, color="text")  # type: ignore[attr-defined]
             if words.width > body.width - 0.4:
                 words = _wrap(self, text, body.width - 0.4)

@@ -300,6 +300,12 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
         return names + (["scale_bar"] if params.scale_bar else [])
 
     @classmethod
+    def gene_symbols(cls, params: Any) -> list[str]:
+        """The gene symbols the scene declares (its gene's ``name``): set in italics where the
+        captions show them."""
+        return [params.gene.name] if params.gene is not None and params.gene.name else []
+
+    @classmethod
     def target_text(cls, params: Any, name: str) -> str | None:
         """What target ``name`` is called on screen (its label), for the narration lint rules."""
         if name in ("cell", "tissue", "title", "scale_bar"):
@@ -689,11 +695,17 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
                 count += 1
             rows = [labs[k::count] for k in range(count)]
             tall = max((lab.height for lab in labs), default=0.0)
+            spots: dict[int, np.ndarray] = {}
             for k, row in enumerate(rows):
                 edge = body.y1 - 0.08 - tall / 2 - k * (tall + 0.1) if side > 0 else body.y0 + bar_room + tall / 2 + k * (tall + 0.1)
                 xs = _spread([float(screen[id(lab)][0]) for lab in row], [lab.width for lab in row], 0.14, body.x0 + 0.05, body.x1 - 0.05)
                 for lab, x in zip(row, xs):
-                    lab.put_screen(np.array([x, edge, 0.0]), s, cam)
+                    spots[id(lab)] = np.array([x, edge, 0.0])
+            # the rows nearest the drawing first (the last ones here): out of the outer rows' leaders
+            _untangle([[(id(lab), screen[id(lab)], lab.width, lab.height) for lab in row] for row in reversed(rows)], spots,
+                      body.x0 + 0.05, body.x1 - 0.05)
+            for lab in labs:
+                lab.put_screen(spots[id(lab)], s, cam)
 
     def _sides(self, made: list["_CellLabel"], axis: int, middle: float) -> dict[int, list["_CellLabel"]]:
         """The labels of each side of the cell along ``axis``, balanced: when one side has more
@@ -747,11 +759,17 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
                 return False
             plans.append((side, rows, tall))
         for side, rows, tall in plans:
+            spots: dict[int, np.ndarray] = {}
+            lo = self.body.x0 + (bar if side < 0 else 0.0)
             for k, row in enumerate(rows):
                 edge = (cell_box[1] if side < 0 else cell_box[3]) + side * (LABEL_GAP * 2 + k * (tall + 0.1))
-                xs = _spread([lab.anchor[0] for lab in row], [lab.width for lab in row], 0.14, self.body.x0 + (bar if side < 0 else 0.0), self.body.x1)
+                xs = _spread([lab.anchor[0] for lab in row], [lab.width for lab in row], 0.14, lo, self.body.x1)
                 for lab, x in zip(row, xs):
-                    lab.put(np.array([x, edge + side * tall / 2, 0.0]))
+                    spots[id(lab)] = np.array([x, edge + side * tall / 2, 0.0])
+            _untangle([[(id(lab), lab.anchor, lab.width, lab.height) for lab in row] for row in rows], spots, lo, self.body.x1)
+            for row in rows:
+                for lab in row:
+                    lab.put(spots[id(lab)])
         return True
 
     # ----- actions --------------------------------------------------------------------------
@@ -947,6 +965,77 @@ def _bar_lengths(low_span: float, high_span: float) -> list[float]:
         out += [step * decade for step in (1.0, 2.0, 5.0) if first * (1 - 1e-9) <= step * decade <= last * (1 + 1e-9)]
         decade *= 10.0
     return out
+
+
+def _leader_x(anchor: np.ndarray, spot: np.ndarray, w: float, h: float, y: float) -> float | None:
+    """Where the leader from ``anchor`` to a label of ``w`` × ``h`` at ``spot`` passes height
+    ``y`` (``None`` when it does not reach it)."""
+    end = np.clip(anchor[:2], spot[:2] - np.array([w / 2, h / 2]), spot[:2] + np.array([w / 2, h / 2]))
+    a, b = float(anchor[1]), float(end[1])
+    if not min(a, b) <= y <= max(a, b) or abs(b - a) < 1e-9:
+        return None
+    t = (y - a) / (b - a)
+    return float(anchor[0] + (end[0] - anchor[0]) * t)
+
+
+def _untangle(rows: list[list[tuple[int, np.ndarray, float, float]]], spots: dict[int, np.ndarray], lo: float, hi: float) -> None:
+    """Rows of labels above or below a drawing (``rows`` nearest the drawing first: ``(key,
+    anchor, width, height)``; ``spots``: their places, changed in place): a label that an outer
+    row's leader line would cross moves sideways, the least it can, clear of those leaders and
+    of its row's other labels, within ``lo`` .. ``hi``; when it cannot (a wide label in a narrow
+    frame) and both are alone in their rows, it changes rows with the label whose leader crosses
+    it."""
+    rank = {key: i for i, row in enumerate(rows) for key, *_ in row}
+    items = {key: (anchor, w, h) for row in rows for key, anchor, w, h in row}
+
+    def crossing_xs(key: int, among: Any) -> list[tuple[float, int]]:
+        spot = spots[key]
+        _, w, h = items[key]
+        out = []
+        for k2 in among:
+            a2, w2, h2 = items[k2]
+            for y in (spot[1] - h / 2, spot[1], spot[1] + h / 2):
+                x = _leader_x(a2, spots[k2], w2, h2, y)
+                if x is not None:
+                    out.append((x, k2))
+        return out
+
+    swapped: set[frozenset[int]] = set()
+    for _ in range(2 * len(items) + 2):
+        changed = False
+        for key in sorted(items, key=lambda k: rank[k]):
+            spot = spots[key]
+            _, w, h = items[key]
+            xs = crossing_xs(key, [k for k in items if rank[k] > rank[key]])
+            hits = [k2 for x, k2 in xs if abs(x - spot[0]) < w / 2 + 0.06]
+            if not hits:
+                continue
+            others = [(spots[k], items[k][1]) for k in items if k != key and rank[k] == rank[key]]
+            moved = False
+            for x in sorted({x + s * (w / 2 + 0.1) for x, _ in xs for s in (-1, 1)}, key=lambda x: abs(x - spot[0])):
+                if not lo + w / 2 <= x <= hi - w / 2 or any(abs(c - x) < w / 2 + 0.06 for c, _ in xs):
+                    continue
+                if any(abs(o[0] - x) < (w + ow) / 2 + 0.1 for o, ow in others):
+                    continue
+                spots[key] = np.array([x, spot[1], 0.0])
+                moved = True
+                break
+            if moved:
+                continue
+            other = hits[0]
+            pair = frozenset((key, other))
+            if others or any(rank[k] == rank[other] for k in items if k != other) or pair in swapped:
+                continue                  # rows of several labels (or a pair tried already): left as they are
+            swapped.add(pair)
+            rank[key], rank[other] = rank[other], rank[key]     # the two change rows, each keeping its place along them
+            y_key, y_other = float(spots[key][1]), float(spots[other][1])
+            for k, y in ((key, y_other), (other, y_key)):
+                half = items[k][1] / 2
+                spots[k] = np.array([min(max(float(spots[k][0]), lo + half), hi - half), y, 0.0])
+            changed = True
+            break
+        if not changed:
+            break
 
 
 def _spread(values: list[float], sizes: list[float], gap: float, lo: float, hi: float) -> list[float]:

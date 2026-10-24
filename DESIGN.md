@@ -15539,3 +15539,72 @@ kind's range, counts, exaggerated glyphs.
 - **Gaps (for Step 211):** the exocytosis step captions name the neuronal SNAREs (the example turns
   them off; the to-Golgi caption now says "some proteins also get O-glycans"); the 16:9
   pathway leaves much of the frame empty; a hepatocyte is drawn as the typical animal cell.
+
+### 95.16 Review of Phase U (Step 211)
+
+- **Scientific accuracy pass** (library, templates, lint facts, example). Checked against the
+  textbook account: the three pathway templates (GPCR–cAMP–PKA with PDE4 feedback, RTK–Ras–MAPK
+  with RasGAP and ERK ⊣ SOS, PI3K–Akt: PTEN dephosphorylating PIP₃, PDK1 Thr308 / mTORC2 Ser473
+  activating, Akt ⊣ TSC2 ⊣ Rheb → mTORC1, Akt ⊣ GSK3β (Ser9) and ⊣ FOXO); an inhibitory
+  phosphorylation is drawn as a T-bar with a P on it and played as switching its target off
+  (GSK3β pS9 dimmed) — tested. The process captions (transcription, capping, splicing,
+  polyadenylation, export, translation, SRP/Sec61, OST, chaperones, COPII/Golgi/TGN, endocytosis,
+  pump cycles, the action potential), the energy counts (glycolysis, TCA, 10 / 6 H⁺ per NADH /
+  FADH₂, the light reactions' 6 H⁺, ½ O₂ and 1 NADPH per two electrons) and the accuracy lint's
+  facts are correct. **Fixed:** the exocytosis caption named the neuronal SNAREs for every cell
+  (now `snares: generic` by default, `constitutive` — a VAMP, syntaxin-4, SNAP-23 —, `neuronal`
+  with Ca²⁺ on synaptotagmin; decided: a cell-type option on the action, not a cell kind, since a
+  `cell` is one animal cell whatever its tissue); enzymes in `metabolism` were italic (proteins are
+  roman); calnexin floated in the lumen (now its lectin domain on a stalk from its helix in the ER
+  membrane when the view is tall enough to show both — a wide close-up frames the globule as
+  before, the stalk leaving the view); after termination on the ER the large subunit rose
+  through the membrane (now the subunits part in the cytosol); an ion channel was named "Ion
+  channel" (now "Na⁺ channel").
+- **Frame use.** `molecule`: three or more membrane proteins go on several rows whenever that
+  frames them larger (it was tall frames only), so a wide frame narrowed by the action-potential
+  panel draws them larger; in a tall frame the plot spans the panel, the concentrations under it
+  (they overlapped). A gene close-up decides wide or tall by the **frame** (with a 9:16 title,
+  captions and karaoke its view could be wider than tall and took the 36-slot wide layout) and
+  shows 15 slots across in a tall frame (was 18). A cytosolic vesicle within 0.6 µm of the
+  plasma membrane, viewed at the complex level, is framed with the membrane it would fuse with
+  (from its inner edge to 160 nm outside, by the body's shape) instead of a patch of its own
+  membrane; the example puts its vesicle under the top of the cell so the membrane runs across
+  16:9 and 9:16 alike. `pathway`: text grows up to 1.9× (was 1.3×) and a pathway bound by the
+  width spreads its ranks' nodes (LR) or its ranks (TB) up to 3× to use the height (`SPREAD`).
+  `metabolism`: a pathway in columns grows up to 1.6× to fill (`GROW`); the chain's tallies sit
+  low, clear of ATP synthase's name.
+- **Captions.** Step captions are never below the readable size (they were scaled to fit two
+  reserved lines); a gene close-up reserves three lines in 16:9 and four in 9:16. `notes` on every
+  process action is `auto` (default: the full caption in a wide frame, its first clause in a tall
+  one), `full` / `true`, `short`, `false`; `vidgen.cellworld.captions.short_note` cuts at the first
+  `: ` / `; ` / ` — ` outside parentheses and markup (a first clause under 32 characters takes the
+  next). **Decided:** shortening by rule, not a second hand-written text per caption — every
+  caption is written statement-first, so its first clause is the statement and the rest the
+  detail the narration or the 16:9 version carries (one caption reworded to fit: the OST reach).
+- **Gene symbols in captions.** Scene types may define `gene_symbols(params)` (`cell`: its gene's
+  `name`; `molecule`: that and its molecules' `gene`; `pathway`: its gene nodes). The captions
+  overlay (option `genes: true`) collects them over the video and sets them in italics (Manim
+  `t2s`) where the narration writes them as whole words, case-sensitive, except before "protein",
+  "kinase", "receptor"… (`names.gene_spans`, `PROTEIN_WORDS`). **Decided:** video-wide (the
+  example names *SERPINA1* in the tissue scene, declared in later scenes) and opt-out, not
+  `terms:` (a term is a colour, not a style). Scenes without declared genes build the same texts
+  as before (the Phase Q baseline is unchanged).
+- **Labels.** LR pathway band names: the membrane's at the bottom first and a word's room between
+  names; molecule rows: a side name a row's other names cover moves to the row's free end;
+  `metabolism` P/N-side names take the place (and wrap) covering the least; the cell scene's
+  label rows (9:16) untangle: a label an outer row's leader crosses steps aside, or changes rows
+  with it when both are alone in their rows; Sec61's name stands beside the channel in the
+  membrane (the chain threads its middle).
+- **Gaps closed from earlier steps:** calnexin anchored; cell-scene products (mRNAs, COPII and
+  secretory vesicles) travel on gentle curves (`expression_route.curve`); a motor's cargo vesicle
+  is placed wholly in the cytosol (it overlapped the nuclear envelope); `scenes/molecule.py`
+  split (1,825 → 1,454 lines; the process runtime is `scenes/molecule_runtime.py`, a mixin).
+- **Public:** `vidgen.api` adds `CellNoteMode`, `cell_note_text`, `gene_spans`. Config: process
+  actions' `notes` takes `auto | full | short | false` (`true` = full); `exocytosis` `snares`;
+  captions overlay `genes`; scene-type hook `gene_symbols(params)`.
+- **Gaps:** the `cell` scene has no `set_state`; an endocytosed vesicle is not a world object;
+  zoomed-view part labels go stale after a process (`labels: false` advised); molecule glyphs'
+  inner letters (ATP synthase's α/β, flow labels) are below the readable size (pre-existing lint
+  findings in the gallery's `synthase` and the showcases); a 9:16 close-up of a horizontal strip
+  (gene, membrane) still leaves height unused; gallery media of the cell-biology section were
+  not regenerated (pathway and metabolism stills differ a little from a render now).

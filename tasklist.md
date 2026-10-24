@@ -1196,7 +1196,9 @@ when shared code changes). DESIGN §95. Steps 202–211.
 - [~] The exocytosis captions name neuronal SNAREs (turned off in the example; left for Step 211); a hepatocyte is drawn as the typical animal cell
 
 ### Step 211 — Review of Phase U
-- [ ] Critical review with fixes, including a scientific-accuracy pass over the library and the example; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Critical review with fixes, including a scientific-accuracy pass over the library and the example; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Accuracy fixes (SNAREs by context, roman enzymes, anchored calnexin, subunits in the cytosol, channels named by ion); frame use (membrane rows, 9:16 close-ups by the frame, fusion framing, pathways and glycolysis grow); readable step captions (`notes: auto | full | short`); gene symbols italic in the captions; label overlaps; product curves, cargo off organelles; `scenes/molecule_runtime.py`; tests `tests/test_phase_u_review.py`
+- [~] No `set_state` in a `cell`; an endocytosed vesicle is not an object; stale zoomed-view labels after a process; glyph letters below the readable size (pre-existing lint findings); cell-biology gallery media not regenerated
 
 ---
 

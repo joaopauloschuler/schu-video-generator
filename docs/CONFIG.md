@@ -6408,8 +6408,8 @@ lists the ones it has).
 |---|---|---|
 | `zoom_to` | `level` (`tissue`, `cell`, `organelle`, `complex`; default: the target's own — `organelle` for a structure, `complex` for complexes, `cell` / `tissue` for those targets), `width` (what the view spans across the body's shorter side: `"3 um"`, `"150 nm"`; default the level's), `labels` (`true`: name the parts the view shows; `false`; or a list of part names) | moves the camera to the target at that level and stays there (unlike `zoom`, which goes back by the beat's end); one target: `cell`, `tissue` or an object's id (its first thing). The width changes at an even pace on a log scale, and between far places the camera zooms out on the way (van Wijk and Nuij's smooth zoom-and-pan path). Default 2 s. `until: <beat>` goes back to the view before. On `cell` scenes only. |
 | `motor_walk` | `distance` (`"500 nm"`, `"1.2 um"`; a number is µm; default as far as the filament allows, at most 1 µm), `toward` (`plus` / `minus`; checked) | the motors of an object (`kinesin`, `dynein`, `myosin`) walk hand over hand along their filament carrying their cargo: kinesin-1 in 8 nm steps to the microtubule's + end (out to the cell's edge), dynein in 8 nm steps to its − end (in to the centrosome), myosin V in 36 nm steps to the actin filament's barbed end. Up close each step shows (the trailing head swings past the bound one); from afar the motor glides. At the motor's real speed (kinesin ~0.8 µm/s), 1.5–8 s. Refused: `toward: minus` on kinesin (*kinesin-1 walks towards a microtubule's + end … use dynein*), a walk past the filament's end (walks add up beat after beat). |
-| `endocytosis` | `site` ([x, y] µm near the plasma membrane; default the membrane nearest the view's middle), `receptors` (6), `notes` (`true`) | clathrin-mediated endocytosis on target `cell`: receptor–ligand complexes gather where AP2 and clathrin assemble a coated pit, the pit invaginates, dynamin collars its neck and pinches the vesicle off, Hsc70 and auxilin strip the coat and the vesicle moves in; each step captioned. Best seen at the complex level (a view 300–500 nm across). Default 6 s. Refused in a bacterium, or where an organelle lies under the site. |
-| `exocytosis` | `cargo` (10), `notes` (`true`) | a vesicle (target: a `vesicle` object, count 1) moves to the nearest plasma membrane, docks as its v-SNARE zippers with the t-SNAREs, a fusion pore opens, its cargo leaves the cell and its membrane flattens into the plasma membrane (full collapse); the vesicle is gone afterwards. Default 5 s. Refused: a coated vesicle (*it sheds its coat first*), a vesicle not in the cytosol, a vesicle fused already. |
+| `endocytosis` | `site` ([x, y] µm near the plasma membrane; default the membrane nearest the view's middle), `receptors` (6), `notes` (`auto`: the full caption in a wide frame, its first clause in a tall one; `full`, `short`, `false`) | clathrin-mediated endocytosis on target `cell`: receptor–ligand complexes gather where AP2 and clathrin assemble a coated pit, the pit invaginates, dynamin collars its neck and pinches the vesicle off, Hsc70 and auxilin strip the coat and the vesicle moves in; each step captioned. Best seen at the complex level (a view 300–500 nm across). Default 6 s. Refused in a bacterium, or where an organelle lies under the site. |
+| `exocytosis` | `cargo` (10), `notes` (`auto`: the full caption in a wide frame, its first clause in a tall one; `full`, `short`, `false`), `snares` (`generic`: v-SNARE / t-SNAREs; `constitutive`: a VAMP, syntaxin-4, SNAP-23 — constitutive secretion of non-neuronal cells; `neuronal`: synaptobrevin/VAMP2, syntaxin-1, SNAP-25, with Ca²⁺ on synaptotagmin triggering fusion) | a vesicle (target: a `vesicle` object, count 1) moves to the nearest plasma membrane, docks as its v-SNARE zippers with the t-SNAREs, a fusion pore opens, its cargo leaves the cell and its membrane flattens into the plasma membrane (full collapse); the vesicle is gone afterwards. Default 5 s. Refused: a coated vesicle (*it sheds its coat first*), a vesicle not in the cytosol, a vesicle fused already. |
 
 `set_state`, `transport`, `diffuse`, `osmosis` and `action_potential` belong to the
 [molecule scene](#processes-as-actions). In a cell, label a process with `labels: false` on its
@@ -6580,7 +6580,7 @@ N-terminus), **Me** (methyl: Lys, Arg); `{mark: P, at: Lys382}` is refused.
 
 States change, solutes move and membranes fire as beat actions, timed like any action
 (`at: 0.4`, `at: "@opens"`). Each step of a process has a caption at the top of the drawing
-(`notes: false` turns them off); the protein's drawn solutes and arrows give way to moving
+(`notes: short` shows each one's first clause, the default in a tall frame; `notes: false` turns them off); the protein's drawn solutes and arrows give way to moving
 particles as a transport starts.
 
 ```yaml
@@ -6730,7 +6730,7 @@ Thr, Val, checked against Crick's wobble rules).
 
 Each step's default length is what it shows (its phases, about 3–15 s; fast elongation at most 7 s
 in all); `run_time:` overrides it and a short beat shortens it. Every step has captions at the top
-(`notes: false` turns them off). `to_golgi` and `secrete` are steps of a [`cell`](#a-gene-in-a-cell).
+(`notes: short` shows each one's first clause, the default in a tall frame; `notes: false` turns them off). `to_golgi` and `secrete` are steps of a [`cell`](#a-gene-in-a-cell).
 
 **The rules are checked** by `vidgen validate`, the steps replayed in beat and `at` order:
 
@@ -10170,6 +10170,7 @@ a warning).
 | `background`, `background_opacity` | `surface`, `0.8` | the plate; `background: null` for none (the text then gets an outline in the background colour) |
 | `lift` | `0`; 9:16 `0.12` | bottom captions: raised by this share of the safe height |
 | `speakers` | `subtitles.speakers` | who speaks ([multiple voices](#multiple-voices-voices)): `name` (a `Label:` tag in the speaker's colour before a beat whose speaker changed), `color` (each speaker's words in its colour), `both`, or `off` |
+| `genes` | `true` | gene symbols in italics (protein names stay roman): the symbols the video's cell-biology scenes declare as genes — a `cell` or `molecule` scene's `gene.name`, a molecule's `gene`, a `pathway`'s gene nodes — wherever the narration writes them, except where the next word makes it the protein ("SERPINA1 protein", "EGFR kinase"); `false`: as written |
 
 **Speakers.** With [named voices](#multiple-voices-voices), `speakers: name` puts the speaker's
 label (`Guest:`) at the start of the first cue of each beat whose voice differs from the beat

@@ -119,8 +119,8 @@ class Endocytosis(Action):
         """A point near the plasma membrane ([x, y] µm from the cell's centre); default: the membrane nearest the view's middle."""
         receptors: int = Field(6, ge=0, le=12)
         """Receptor–ligand complexes taken in."""
-        notes: bool = True
-        """Caption each step."""
+        notes: CellNoteMode = "auto"
+        """Caption each step: auto (the full caption in a wide frame, its first clause in a tall one), full (or true), short (the first clause), false (none)."""
 
         @field_validator("site", mode="before")
         @classmethod
@@ -151,8 +151,10 @@ class Exocytosis(Action):
     class Options(ActionOptions):
         cargo: int = Field(10, ge=0, le=30)
         """Cargo molecules released."""
-        notes: bool = True
-        """Caption each step."""
+        notes: CellNoteMode = "auto"
+        """Caption each step: auto (the full caption in a wide frame, its first clause in a tall one), full (or true), short (the first clause), false (none)."""
+        snares: Literal["generic", "constitutive", "neuronal"] = "generic"
+        """Which SNAREs the captions name: generic (v-SNARE, t-SNAREs: any cell), constitutive (a VAMP, syntaxin-4, SNAP-23: constitutive secretion of non-neuronal cells), neuronal (synaptobrevin/VAMP2, syntaxin-1, SNAP-25; Ca²⁺ on synaptotagmin triggers fusion)."""
 
     run_time = 5.0
 

@@ -27,7 +27,7 @@ CELL_ONLY = ("to_golgi", "secrete")
 #: Captions and the not-to-scale note lie over the drawing.
 NOTE_Z = 8.0
 #: The slots the view spans across: a wide frame, a tall one.
-WINDOW_WIDE, WINDOW_TALL = 36.0, 18.0
+WINDOW_WIDE, WINDOW_TALL = 36.0, 15.0
 
 
 class GeneParams(SceneParams):
@@ -153,13 +153,17 @@ class GeneExpression:
             body = body.below(title, gap=0.3)
         self.full_body = body
         self.caption_top = body.y1
-        lines = 2 if body.width >= body.height else 4
-        body = Region(body.x0, body.y0, body.x1, body.y1 - lines * (self.markup("Xg", size=p.label_size).height + 0.08) - 0.3)  # type: ignore[attr-defined]
+        # room for the step captions at the readable size: three lines of a full caption in a wide
+        # frame, four of a short one (notes: auto) in a tall frame
+        # (wide or tall by the frame: under a tall frame's title, captions and karaoke the view
+        # can be wider than tall, and must still take a tall frame's layout)
+        wide = self.frame_width >= self.frame_height  # type: ignore[attr-defined]
+        lines = 3 if wide else 4
+        body = Region(body.x0, body.y0, body.x1, body.y1 - lines * (self.markup("Xg", size=chart_label_size(p.label_size)).height + 0.08) - 0.3)  # type: ignore[attr-defined]
         self.body = body
         self.notes_layer = VGroup().set_z_index(NOTE_Z)
         self.add(self.notes_layer)  # type: ignore[attr-defined]
         gene = p.gene.gene(p.cell, p.species)
-        wide = body.width >= body.height
         window = WINDOW_WIDE if wide else WINDOW_TALL
         cap_later = bool(self.action_uses("cap"))  # type: ignore[attr-defined]
         line = self.markup("Xg", size=p.label_size).height + 0.12  # type: ignore[attr-defined]
@@ -169,7 +173,7 @@ class GeneExpression:
         strip = line + 0.13 if wide else 2 * line + 0.13
         view = Region(body.x0, body.y0 + strip, body.x1, body.y1)
         self.stage = ExpressionStage(gene, window, view.width / view.height, p.gene.codes, p.gene.start, cap_later,
-                                     (line + 0.13) / unit)
+                                     (line + 0.13) / unit, wide)
         body = view
         colors = CellColors(self.theme.background, self.theme.color("text"))  # type: ignore[attr-defined]
         self._texts: dict[tuple[str, str], Mobject] = {}
@@ -179,9 +183,10 @@ class GeneExpression:
         self.drawing.group.scenery = True   # the strands run on past the view as it follows a step (lint off_frame)
         note =self.markup("schematic: not to scale", size=p.label_size, color="dim")  # type: ignore[attr-defined]
         # the readable size, in the safe area, right of the legend / the protein's readout (which
-        # take the left 62 % of a wide view, all of a tall one); a line over them when it does not fit
+        # take the left 62 % of a wide view); in a tall frame on the strip's second line, under
+        # them (they are on its first); a line over them when it does not fit a wide one
         beside = wide and note.width <= 0.36 * body.width
-        note.move_to([body.x1 - note.width / 2, body.y0 - strip + line / 2 + 0.03 + (0.0 if beside else line + 0.05), 0.0])
+        note.move_to([body.x1 - note.width / 2, body.y0 - strip + line / 2 + 0.03 + (0.0 if beside or not wide else line + 0.05), 0.0])
         note.set_z_index(NOTE_Z)
         self._last_caption: Mobject | None = None
         chain = ChainedTargets(self)
@@ -212,7 +217,7 @@ class GeneExpression:
     def _gene_caption(self, note: str) -> Mobject:
         """A step's caption on a plate at the top of the body, wrapped by its words' share of the
         whole line's width (a text per line: making texts is slow)."""
-        size = self.params.label_size  # type: ignore[attr-defined]
+        size = chart_label_size(self.params.label_size)  # type: ignore[attr-defined]
         room = self.body.width - 0.4
         if not hasattr(self, "_char_w"):
             sample = "The polymerase reads the template strand and makes RNA, 5′→3′"
@@ -259,18 +264,20 @@ class GeneExpression:
     def run_expression(self, name: str, options: Any, clip: Any = None) -> list[Animation]:
         """Play the step ``name``: the stage's clip with its captions."""
         clip = clip or self.expression_clip(name, options)
-        notes = getattr(options, "notes", True)
+        notes = getattr(options, "notes", "auto")
         edges = clip.edges()
         captions: list[tuple[float, float, Mobject]] = []
-        if notes:
+        if notes is not False:
             k = 0
             phases = clip.phases
+            tall = self.frame_height > self.frame_width  # type: ignore[attr-defined]
             while k < len(phases):
                 j = k
                 while j + 1 < len(phases) and phases[j + 1][1] == phases[k][1]:
                     j += 1
-                if phases[k][1]:
-                    captions.append((edges[k], edges[j + 1], self._gene_caption(phases[k][1])))
+                text = cell_note_text(phases[k][1], notes, tall)
+                if text:
+                    captions.append((edges[k], edges[j + 1], self._gene_caption(text)))
                 k = j + 1
         previous = self._last_caption
         self._last_caption = captions[-1][2] if captions else None

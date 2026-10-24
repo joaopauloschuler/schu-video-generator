@@ -191,10 +191,40 @@ def _structure_complex(world: CellWorld, first: Placed) -> tuple[Point, float]:
         nodes = first.option("nodes", ())
         if nodes:
             return nodes[0], 0.05
+    if first.kind == "vesicle" and world.kind != "bacterium" and first.host == "cytosol":
+        fusion = _fusion_focus(world, first)
+        if fusion is not None:
+            return fusion[0], max(fusion[1])
     if isinstance(shape, Ellipse):
         return shape.point(0.12), MEMBRANE_VIEW * FILL["complex"]
     outline = shape.outline(16)
     return outline[len(outline) // 3], MEMBRANE_VIEW * FILL["complex"]
+
+
+#: A cytosolic vesicle this close to the plasma membrane (µm) is framed with the membrane: the
+#: place where it would fuse (exocytosis), not a patch of its own membrane.
+FUSION_REACH = 0.6
+
+
+def _fusion_focus(world: CellWorld, vesicle: Placed) -> tuple[Point, tuple[float, float]] | None:
+    """A vesicle near the plasma membrane at the complex level: the view centred between the
+    vesicle's inner edge and a little outside the membrane (where its cargo is released), and
+    the box (width, height µm) that frames both; ``None`` when it is further in."""
+    from .traffic import membrane_site
+
+    site = membrane_site(world, vesicle.center)
+    d = math.dist(site.point, vesicle.center)
+    if d > FUSION_REACH or d <= 0:
+        return None
+    ux, uy = (site.point[0] - vesicle.center[0]) / d, (site.point[1] - vesicle.center[1]) / d
+    inner = vesicle.size / 2 + 0.02
+    a = (vesicle.center[0] - ux * inner, vesicle.center[1] - uy * inner)
+    # outside: room for the released cargo (and for the step captions over the view's top)
+    b = (site.point[0] + ux * 0.16, site.point[1] + uy * 0.16)
+    across = vesicle.size * 1.6          # the docking site and the released cargo spread sideways
+    w = abs(b[0] - a[0]) + abs(uy) * across
+    h = abs(b[1] - a[1]) + abs(ux) * across
+    return ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), (w, h)
 
 
 def default_level(world: CellWorld, entry_id: str) -> Level:
@@ -233,6 +263,12 @@ def level_view(world: CellWorld, level: Level, body_aspect: float, entry_id: str
         if KINDS[things[0].kind].shape not in ("sheets", "tubules") and KINDS[things[0].kind].category != "filament":
             x0, y0, x1, y1 = _box(things[0])
             auto = fit_span(max(x1 - x0, 1e-3), max(y1 - y0, 1e-3), body_aspect, FILL["organelle"])
+    if level == "complex":
+        first = world.members(entry_id)[0]
+        if first.kind == "vesicle" and world.kind != "bacterium" and first.host == "cytosol" and first.option("style") != "surface":
+            fusion = _fusion_focus(world, first)
+            if fusion is not None:     # the vesicle with the membrane it would fuse with, by the body's shape
+                auto = fit_span(max(fusion[1][0], 1e-3), max(fusion[1][1], 1e-3), body_aspect, 0.8)
     return CellView(center, span or max(auto, 0.02), level)
 
 

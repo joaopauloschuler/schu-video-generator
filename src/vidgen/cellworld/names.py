@@ -109,6 +109,27 @@ def protein_markup(name: str, species_name: str, where: str, gene: str | None = 
     return escape(check_protein(name, species_name, where, gene), quote=False)
 
 
+#: A symbol followed by one of these words names the protein (the EGFR receptor), not the gene.
+PROTEIN_WORDS = frozenset({"protein", "proteins", "kinase", "kinases", "receptor", "receptors", "enzyme", "enzymes", "channel",
+                           "channels", "transporter", "transporters", "factor", "factors", "phosphatase", "inhibitor", "inhibitors"})
+
+
+def gene_spans(text: str, symbols: list[str] | tuple[str, ...] | set[str] | frozenset[str]) -> list[tuple[int, int]]:
+    """``(start, end)`` of each place plain ``text`` writes one of the gene ``symbols`` (whole
+    word, as written: case matters, *Trp53* is not TRP53), to be set in italics — except where
+    the next word makes it the protein (``SERPINA1 protein``, ``EGFR kinase``); in text order,
+    longer symbols first where they overlap."""
+    taken: list[tuple[int, int]] = []
+    for symbol in sorted({s for s in symbols if s}, key=len, reverse=True):
+        for m in re.finditer(rf"(?<![\w-]){re.escape(symbol)}(?![\w-])", text):
+            after = re.match(r"[’']?s?\s+([A-Za-z]+)", text[m.end():])
+            if after is not None and after.group(1).lower() in PROTEIN_WORDS:
+                continue
+            if all(m.end() <= a or m.start() >= b for a, b in taken):
+                taken.append(m.span())
+    return sorted(taken)
+
+
 # ----- modifications ------------------------------------------------------------------------------
 
 
@@ -192,5 +213,5 @@ def histone_mark(text: str, where: str) -> tuple[str, str, int, Modification, in
     return histone, code, pos, mod, count
 
 
-__all__ = ["HISTONES", "MODIFICATIONS", "SPECIES", "Modification", "Species", "check_gene", "check_modification", "check_protein",
-           "gene_markup", "histone_mark", "protein_markup", "residue", "species"]
+__all__ = ["HISTONES", "MODIFICATIONS", "PROTEIN_WORDS", "SPECIES", "Modification", "Species", "check_gene", "check_modification",
+           "check_protein", "gene_markup", "gene_spans", "histone_mark", "protein_markup", "residue", "species"]

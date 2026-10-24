@@ -157,12 +157,15 @@ scenes:
     type: cell
     params:
       title: "Exocytosis"
-      objects: [{kind: vesicle, id: sv, at: [9.7, 0.0], size: "100 nm"}]
-      view: {level: complex, "on": sv, width: "320 nm"}
+      # under the top of the cell: the membrane runs across the frame (16:9 and 9:16); a vesicle
+      # this near the membrane is framed with it (the place it fuses), by the frame's shape
+      objects: [{kind: vesicle, id: sv, at: [0.0, 7.7], size: "100 nm"}]
+      view: {level: complex, "on": sv}
       labels: false
     beats:
       - text: "Up close, the vesicle docks: SNARE proteins on both membranes zip together, the membranes fuse, and the protein is released outside the cell."
-        actions: [{exocytosis: sv, at: "@docks", run_time: 8, notes: false}]
+        # the SNAREs of constitutive secretion (a VAMP, syntaxin-4, SNAP-23), not the neuronal set
+        actions: [{exocytosis: sv, at: "@docks", run_time: 8, snares: constitutive}]
 
   - id: inflammation
     type: pathway

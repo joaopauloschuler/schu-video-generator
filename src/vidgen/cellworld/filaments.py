@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .catalog import CORTEX, KINDS, Kind
 from .geometry import Ellipse, Point, Polyline, Shape
@@ -304,7 +304,8 @@ def place_motors(b: "Builder", entry_id: str, spec: ObjectSpec, kind: Kind) -> l
     host_kind = KINDS[entries[spec.on].kind]
     if host_kind.name not in kind.surfaces:
         raise fail(spec, entry_id, f"a {noun(kind.label)} cannot walk on a {noun(host_kind.label)} (only on a {allowed}): {kind.why}")
-    hosts = [b.world().thing(k) for k in entries[spec.on].keys]
+    world = b.world()
+    hosts = [world.thing(k) for k in entries[spec.on].keys]
     rng = b.rng(entry_id, "motors")
     size = spec.size or kind.size
     out: list[Placed] = []
@@ -324,6 +325,8 @@ def place_motors(b: "Builder", entry_id: str, spec: ObjectSpec, kind: Kind) -> l
             forward = -1.0 if kind.name == "dynein" else 1.0
             facing = math.atan2(dy * forward, dx * forward)
             normal = (-dy * side, dx * side)
+            if spec.cargo and not _cargo_in_cytosol(world, center, normal):
+                continue          # its cargo vesicle would lie over the nuclear envelope or an organelle
             key = _key(entry_id, n, spec.count)
             out.append(Placed(key, entry_id, kind.name, center, size, size * 0.45, facing, (Ellipse(center[0], center[1], size / 2, size * 0.25, facing),),
                               (), "cytosol", surface=host.key, normal=normal, facing=facing,
@@ -333,6 +336,24 @@ def place_motors(b: "Builder", entry_id: str, spec: ObjectSpec, kind: Kind) -> l
         else:
             raise fail(spec, entry_id, f"no room for {spec.count} of them on '{spec.on}'; use a smaller count")
     return out
+
+
+#: Where a motor's cargo vesicle is drawn (µm): its centre this far out from the motor, its radius.
+CARGO_OUT, CARGO_R = 0.075, 0.03
+
+
+def _cargo_in_cytosol(world: Any, center: Point, normal: Point) -> bool:
+    """Whether a motor at ``center`` (its cargo out along ``normal``) has its cargo vesicle wholly
+    in the cytosol, clear of the nucleus and the organelles."""
+    c = (center[0] + normal[0] * CARGO_OUT, center[1] + normal[1] * CARGO_OUT)
+    reach = CARGO_R + 0.01
+    for dx, dy in ((0.0, 0.0), (reach, 0.0), (-reach, 0.0), (0.0, reach), (0.0, -reach)):
+        try:
+            if world.compartment_at((c[0] + dx, c[1] + dy))[0] != "cytosol":
+                return False
+        except (KeyError, ValueError):
+            return False
+    return True
 
 
 __all__ = ["place_filaments", "place_motors"]

@@ -358,10 +358,30 @@ def endocytosis_shape(t: float, r: float = PIT_RADIUS) -> Shape:
 
 #: Exocytosis: when the vesicle docks, the pore opens, the vesicle has collapsed.
 EXO_DOCK, EXO_PORE, EXO_FLAT = 0.3, 0.45, 0.95
-EXO_STEPS = ((0.0, "The vesicle reaches the plasma membrane"),
-             (0.22, "v-SNARE (synaptobrevin) and t-SNAREs (syntaxin, SNAP-25) zipper into a trans-SNARE complex: docking"),
-             (0.42, "The membranes fuse: a fusion pore opens and the cargo is released outside"),
-             (0.7, "The vesicle membrane flattens into the plasma membrane (full collapse)"))
+#: Which SNAREs the exocytosis captions name (``snares:``): generic names (any cell), the
+#: plasma-membrane SNAREs of constitutive secretion in non-neuronal cells (syntaxin-4 with
+#: SNAP-23, a VAMP on the vesicle), or the neuronal set of regulated release (synaptobrevin /
+#: VAMP2, syntaxin-1, SNAP-25), whose fusion waits for Ca²⁺ on synaptotagmin.
+EXO_SNARES = {
+    "generic": "A v-SNARE on the vesicle and t-SNAREs in the plasma membrane zipper into a trans-SNARE complex: docking",
+    "constitutive": "v-SNARE (a VAMP) and t-SNAREs (syntaxin-4, SNAP-23) zipper into a trans-SNARE complex: docking",
+    "neuronal": "v-SNARE (synaptobrevin/VAMP2) and t-SNAREs (syntaxin-1, SNAP-25) zipper into a trans-SNARE complex: docking",
+}
+_EXO_FUSE = {
+    "neuronal": "Ca²⁺ binds synaptotagmin and the membranes fuse: a fusion pore opens and the cargo is released outside",
+}
+
+
+def exocytosis_steps(snares: str = "generic") -> tuple[tuple[float, str], ...]:
+    """The exocytosis captions (share of the action, text) naming the SNAREs of ``snares``
+    (:data:`EXO_SNARES`)."""
+    return ((0.0, "The vesicle reaches the plasma membrane"),
+            (0.22, EXO_SNARES[snares]),
+            (0.42, _EXO_FUSE.get(snares, "The membranes fuse: a fusion pore opens and the cargo is released outside")),
+            (0.7, "The vesicle membrane flattens into the plasma membrane (full collapse)"))
+
+
+EXO_STEPS = exocytosis_steps()
 
 
 def exocytosis_shape(t: float, r: float, start: float) -> Shape:
@@ -420,7 +440,7 @@ def coat_thickness() -> float:
 
 
 __all__ = [
-    "ENDO_SCISSION", "ENDO_STEPS", "EXO_DOCK", "EXO_PORE", "EXO_STEPS", "MOTOR_ENDS", "MOTOR_SPEEDS", "MOTOR_STEPS", "MotorPose", "MotorTrack",
+    "ENDO_SCISSION", "ENDO_STEPS", "EXO_DOCK", "EXO_PORE", "EXO_SNARES", "EXO_STEPS", "exocytosis_steps", "MOTOR_ENDS", "MOTOR_SPEEDS", "MOTOR_STEPS", "MotorPose", "MotorTrack",
     "PIT_HALF", "PIT_RADIUS", "Shape", "Site", "cargo_points", "coat_thickness", "endocytosis_problem", "endocytosis_shape",
     "exocytosis_problem", "exocytosis_shape", "exocytosis_start", "membrane_site", "motor_track", "pit", "resample", "walk_distance",
     "walk_pose", "walk_problem",

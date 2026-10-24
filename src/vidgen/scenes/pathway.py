@@ -22,7 +22,10 @@ log = logging.getLogger("vidgen.scenes")
 
 #: Text grows up to this factor over the requested size when the pathway has room, and shrinks
 #: in these steps down to the readable size.
-GROWTH = (1.3, 1.15, 1.0, 0.9, 0.8, 0.72, 0.65, 0.58, 0.52)
+GROWTH = (1.9, 1.65, 1.45, 1.3, 1.15, 1.0, 0.9, 0.8, 0.72, 0.65, 0.58, 0.52)
+#: A left-to-right pathway bound by the frame's width spreads the nodes of a rank apart (their
+#: gaps times these factors, the largest that fits) to use the frame's height.
+SPREAD = (3.0, 2.5, 2.0, 1.6, 1.3)
 #: Covering a label costs this many times covering a node (text over text is a lint error).
 TEXT_WEIGHT = 3.0
 #: At the readable size, a layout this much too large is still drawn without a warning (scaled).
@@ -202,6 +205,11 @@ class PathwayScene(PathwayPlay, NarratedScene):
         return names + ["pathway"]
 
     @classmethod
+    def gene_symbols(cls, params: Any) -> list[str]:
+        """The symbols of the pathway's gene nodes: set in italics where the captions show them."""
+        return [n.plain for n in params.pathway().nodes.values() if n.kind.name == "gene"]
+
+    @classmethod
     def target_text(cls, params: Any, name: str) -> str | None:
         """What target ``name`` is called on screen (a node's label), for the narration lint rules."""
         node = params.pathway().nodes.get(name)
@@ -375,6 +383,13 @@ class PathwayScene(PathwayPlay, NarratedScene):
             if self._score(plan) * bias > best:
                 best, chosen = self._score(plan) * bias, plan
         assert chosen is not None
+        lr = chosen["direction"] == "LR"
+        if chosen["fits"] and (chosen["layout"].height < body.height * 0.7 if lr else chosen["layout"].height < body.height * 0.8):
+            for k in SPREAD:     # bound by the width: more room across the flow (LR) or along it (TB), to use the height
+                spread = self._plan(chosen["direction"], chosen["factor"], body, chosen["labels"], spread=k)
+                if spread["fits"] and spread["layout"].height <= body.height * 0.94:
+                    chosen = spread
+                    break
         if not chosen["fits"]:
             log.warning("scene '%s': the pathway's %d nodes do not fit this frame at the readable size; it is drawn smaller "
                         "(split it, or use remove: to leave out nodes)", self.spec.id, len(self.pathway.nodes))
@@ -384,7 +399,7 @@ class PathwayScene(PathwayPlay, NarratedScene):
         """The factor of the small texts: their reference size times it, never below readable."""
         return max(factor, readable_size() * 1.02 / self.small0)
 
-    def _plan(self, direction: str, factor: float, body: Any, labels: bool) -> dict[str, Any]:
+    def _plan(self, direction: str, factor: float, body: Any, labels: bool, spread: float = 1.0) -> dict[str, Any]:
         u = self.size0 * factor / 32
         sf = self._small_factor(factor)
         bands = list(self.pathway.bands)
@@ -406,7 +421,9 @@ class PathwayScene(PathwayPlay, NarratedScene):
         band_text = self.small0 * sf / 32
         label_room = (0.5 * band_text + 0.12 * u) if self.params.bands else 0.0
         layout = cell_pathway_layout.pathway_layout(
-            nodes, edges, direction=direction, rank_gap=0.38 * u, band_gap=0.4 * u, node_gap=0.34 * u, row_gap=0.7 * u,
+            nodes, edges, direction=direction, rank_gap=0.38 * u * (spread if direction == "TB" else 1.0),
+            band_gap=0.4 * u * (spread if direction == "TB" else 1.0), node_gap=0.34 * u * (spread if direction == "LR" else 1.0),
+            row_gap=0.7 * u * (spread if direction == "LR" else 1.0),
             band_pad=0.1 * u, label_room=label_room, port_spacing=0.16 * u, label_margin=0.08 * u,
             outcomes_beside=direction == "LR")
         shrink = min(body.width / max(layout.width, 1e-6), body.height / max(layout.height, 1e-6))
@@ -809,8 +826,8 @@ class PathwayScene(PathwayPlay, NarratedScene):
             if PATHWAY_BANDS[name].membrane:
                 m = self._row_main(name, self.at)
                 off = 0.17 * u + pad + (w / 2 if lr else h / 2)
-                if lr:
-                    cands = [np.array([m, y1 - h / 2 - pad, 0]), np.array([m, y0 + h / 2 + pad, 0]),
+                if lr:   # at the bottom first: the narrow membrane's name would crowd its neighbours' at the top
+                    cands = [np.array([m, y0 + h / 2 + pad, 0]), np.array([m, y1 - h / 2 - pad, 0]),
                              np.array([m - off, y1 - h / 2 - pad, 0]), np.array([m + off, y1 - h / 2 - pad, 0]),
                              np.array([m - off, y0 + h / 2 + pad, 0]), np.array([m + off, y0 + h / 2 + pad, 0])]
                 else:   # along the membrane, clear of the nodes in it (above or below them), wherever it is free
@@ -825,7 +842,7 @@ class PathwayScene(PathwayPlay, NarratedScene):
                 if lr:
                     corners = [((x0 + x1) / 2, y1 - h / 2 - pad), ((x0 + x1) / 2, y0 + h / 2 + pad)] + corners
                 cands = [np.array([x, y, 0]) for x, y in corners]
-            spot = self._spot(cands, w + 0.1 * u, h + 0.06 * u, boxes, points)
+            spot = self._spot(cands, w + 0.3 * u, h + 0.06 * u, boxes, points)     # a word's room from the next band's name
             label.move_to(spot)
             boxes.append(_box(label, TEXT_WEIGHT))
         for k, parts in self.edges.items():

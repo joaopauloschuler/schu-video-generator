@@ -40,6 +40,34 @@ STYLE_DEFAULTS: dict[str, dict[str, Any]] = {
 }
 
 
+_GENES: dict[int, tuple[Any, frozenset[str]]] = {}
+
+
+def video_gene_symbols(project: Any) -> frozenset[str]:
+    """The gene symbols the video's scenes declare (scene types with ``gene_symbols(params)``:
+    ``cell``, ``molecule``, ``pathway``), worked out once per project config."""
+    from vidgen import registry
+
+    config = project.config
+    cached = _GENES.get(id(config))
+    if cached is not None and cached[0] is config:
+        return cached[1]
+    found: set[str] = set()
+    for spec in config.scenes:
+        entry = registry.find(spec.type)
+        hook = getattr(entry.cls, "gene_symbols", None) if entry is not None else None
+        if hook is None:
+            continue
+        try:
+            found.update(hook(entry.cls.parse_params(spec.params, spec.id)))
+        except (VidgenError, ValueError, KeyError):
+            continue
+    result = frozenset(found)
+    _GENES.clear()
+    _GENES[id(config)] = (config, result)
+    return result
+
+
 @dataclass
 class _Part:
     """One beat's cue in a caption as built: its word start times, and for each word its line
@@ -127,6 +155,8 @@ class Captions(Overlay):
         """Bottom captions: raise them by this share of the safe height; default 0, 9:16 0.12 (phone controls)."""
         speakers: Literal["off", "name", "color", "both"] | None = None
         """Show who speaks (voices:): name (a "Label:" tag in the speaker's colour where the speaker changes), color (each speaker's words in its colour), both, off; default subtitles.speakers."""
+        genes: bool = True
+        """Gene symbols in italics (protein names stay roman): the symbols the video's cell-biology scenes declare as genes (a cell or molecule scene's gene name, a molecule's gene, a pathway's gene nodes); not where the next word makes it the protein (SERPINA1 protein)."""
 
         @field_validator("style", mode="before")
         @classmethod
@@ -289,7 +319,10 @@ class Captions(Overlay):
         """The lines as ``Text``s (each in its colour) centred on x = 0, their baselines
         ``pitch`` apart (shrunk together when a word is wider than ``max_width``)."""
         with using_terms(self._terms):
-            mobs = [T(line, size, color, weight, disable_ligatures=True) for line, color in zip(lines, colors)]
+            mobs = []
+            for line, color in zip(lines, colors):
+                italic = {f"[{a}:{b}]": ITALIC for a, b in gene_spans(line, self._genes)} if self._genes else {}
+                mobs.append(T(line, size, color, weight, disable_ligatures=True, **({"t2s": italic} if italic else {})))
         if self.options.background is None:
             for mob in mobs:
                 mob.set_stroke(current_theme().background, width=max(size / 8, 2), background=True)
@@ -317,6 +350,7 @@ class Captions(Overlay):
         max_width = max(share * area.width - 2 * pad_x, 1.0)
         color, self._highlight, opacity = self._colors()
         self._terms, opacity = self._readable_terms(opacity)
+        self._genes = video_gene_symbols(self.context.project) if o.genes else frozenset()
         lines_max = self._setting("max_lines")
         probe = T("Hxgy", size, color, weight)   # a line's full height, descenders included
         pitch = probe.height * (1 + LINE_GAP)

@@ -27,6 +27,8 @@ STEP_SECONDS, HOP_SECONDS, SYNTHASE_SECONDS = 0.9, 0.75, 2.6
 #: Protons drawn on the P side at most (more are counted, not drawn).
 MAX_PROTONS = 30
 NODE_STROKE = 2.4
+#: A pathway drawn in columns grows up to this factor to fill a frame with room to spare.
+GROW = 1.6
 
 
 @lru_cache(maxsize=32)
@@ -199,7 +201,7 @@ class Metabolism(NarratedScene):
             return [("H", "H<sup>+</sup> pumped", 0, 60), ("H2O", "H<sub>2</sub>O", 0, 6), ("ATP", "ATP", 0, 30)]
         return [("H", "H<sup>+</sup> into lumen", 0, 60), ("O2", "O<sub>2</sub>", 0, 12), ("NADPH", "NADPH", 0, 6), ("ATP", "ATP", 0, 30)]
 
-    def _build_tallies(self, area: Any, horizontal: bool) -> VGroup:
+    def _build_tallies(self, area: Any, horizontal: bool, bottom: bool = False) -> VGroup:
         """Counters: a label and a number per product; every number they may show is made now
         and shown by opacity (texts made during an animation are not drawn)."""
         self.tally_values: dict[str, int] = {}
@@ -240,6 +242,8 @@ class Metabolism(NarratedScene):
         if group.width > area.width or group.height > area.height:
             group.scale(min(area.width / group.width, area.height / group.height))
         group.move_to(area.center)
+        if bottom:      # beside a chain: low, clear of ATP synthase's name over the membrane
+            group.move_to(np.array([area.center[0], area.y0 + group.height / 2 + 0.1, 0.0]))
         self._show_tallies()
         self.parts["tally"] = group
         return group
@@ -322,7 +326,7 @@ class Metabolism(NarratedScene):
         short = en.ENZYME_SHORT.get(st.key, name)
         if self.params.names == "short" or (self.params.names == "auto" and len(name) > 10):
             name = short
-        enzyme = self.markup(f"<i>{name}</i>{times}", size=self.small, color=self.dim_ink)
+        enzyme = self.markup(f"{name}{times}", size=self.small, color=self.dim_ink)     # a protein: roman
         if not (st.inputs or st.outputs):
             return enzyme, None
         ins = [i.split(" + ")[0] for i in st.inputs[:1]]
@@ -380,8 +384,9 @@ class Metabolism(NarratedScene):
             top_room += self.small / 48 * 0.9 + 0.1
         bottom_room = self.small / 48 * 0.9 + 0.15 if ncol > 1 else 0.0                      # the triose step's name
         width = sum(left) + sum(right) + gap * (ncol - 1)
-        scale = min(1.0, (body.height - top_room - bottom_room) / max(heights), body.width / width)
-        if scale < 1.0:
+        # smaller to fit, or larger (up to GROW) to fill the frame
+        scale = min(GROW, (body.height - top_room - bottom_room) / max(heights), body.width / width)
+        if abs(scale - 1.0) > 1e-6:
             for mob in [*self.node_mobs.values(), *[m for pair in labels.values() for m in pair if m is not None]]:
                 mob.scale(scale)
             node_h *= scale
@@ -486,7 +491,7 @@ class Metabolism(NarratedScene):
         name = st.enzyme
         if self.params.names == "short" or (self.params.names == "auto" and self.markup(name, size=self.small).width > width):
             name = en.ENZYME_SHORT.get(st.key, name)
-        enzyme = self.markup(f"<i>{name}</i>", size=self.small, color=self.dim_ink)
+        enzyme = self.markup(name, size=self.small, color=self.dim_ink)     # a protein: roman
         made = [o for o in st.outputs if o != "CoA"]
         used = [i for i in st.inputs if i.startswith("H<sub>2</sub>O")]
         if not (made or used):
@@ -694,7 +699,7 @@ class Metabolism(NarratedScene):
         group = VGroup(membrane, *self.comp_mobs.values(), labels, key)
         parts = [group]
         if tally_area is not None:
-            parts.append(self._build_tallies(tally_area, portrait))
+            parts.append(self._build_tallies(tally_area, portrait, bottom=not portrait))
         self.protons = VGroup()
         self.proton_count = 0
         self.dynamic = VGroup()
@@ -767,14 +772,21 @@ class Metabolism(NarratedScene):
                                (f"{name(s.n_side)} (N side)", y1m - 4.3 * m, area.x1)):
             # on the right, clear of ATP synthase and of water splitting at the chain's start; the
             # P space's name, if a carrier reaches into it there, smaller or at the left end
-            for size, at_left in ((1.0, False), (1.0, True), (0.85, False), (0.85, True), (1.0, False)):
-                lab = text_block(self, text, area.width * 0.42, self.small * size, color=self.dim_ink,
+            best: tuple[float, Mobject] | None = None
+            for size, at_left, wrap in ((1.0, False, 0.42), (1.0, True, 0.42), (1.0, False, 0.28), (1.0, True, 0.28),
+                                        (0.85, False, 0.42), (0.85, True, 0.42), (0.85, False, 0.28), (0.85, True, 0.28)):
+                lab = text_block(self, text, area.width * wrap, max(self.small * size, readable_size() * 1.02), color=self.dim_ink,
                                  align=LEFT if at_left else RIGHT)
                 x = area.x0 + 0.1 + lab.width / 2 if at_left else right - lab.width / 2 - 0.1
                 lab.move_to(np.array([x, min(y, area.y1 - lab.height / 2), 0.0]))
-                if not any(_overlaps(lab, mob) for mob in self.comp_mobs.values()):
+                # how much of it a component covers (with a little room round them): the least wins
+                cover = sum(_overlap_area(lab, mob, 0.06) for mob in self.comp_mobs.values())
+                if best is None or cover < best[0] - 1e-9:
+                    best = (cover, lab)
+                if cover <= 0.0:
                     break
-            out.add(lab)
+            assert best is not None
+            out.add(best[1])
         self.avoid = list(out)
         return out
 
@@ -1255,3 +1267,10 @@ def _inside(p: np.ndarray, mob: Mobject, pad: float) -> bool:
 def _overlaps(a: Mobject, b: Mobject) -> bool:
     return bool(a.get_left()[0] < b.get_right()[0] and b.get_left()[0] < a.get_right()[0]
                 and a.get_bottom()[1] < b.get_top()[1] and b.get_bottom()[1] < a.get_top()[1])
+
+
+def _overlap_area(a: Mobject, b: Mobject, pad: float = 0.0) -> float:
+    """The area the boxes of ``a`` and ``b`` (``b`` grown by ``pad``) share."""
+    w = min(a.get_right()[0], b.get_right()[0] + pad) - max(a.get_left()[0], b.get_left()[0] - pad)
+    h = min(a.get_top()[1], b.get_top()[1] + pad) - max(a.get_bottom()[1], b.get_bottom()[1] - pad)
+    return float(max(0.0, w) * max(0.0, h))

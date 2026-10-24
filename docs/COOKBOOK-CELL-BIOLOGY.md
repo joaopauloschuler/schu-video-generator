@@ -45,9 +45,14 @@ cell"): a viewer who loses the scale loses the story.
   turn of the citric acid cycle. `vidgen validate` refuses the impossible (with the reason) and
   `vidgen lint`'s `science_*` rules flag what reads wrong in the narration.
 - **Notes on screen are part of the claim.** The step captions name real molecules (NXF1–NXT1,
-  calnexin, the OST). If a caption is too specific for your cell (the exocytosis caption names
-  the neuronal SNAREs), turn it off for that action (`notes: false`) and let the narration say it
-  more generally ("SNARE proteins on both membranes zip together").
+  calnexin, the OST). Give them your context where they ask for it: `exocytosis` names generic
+  v-/t-SNAREs unless you say `snares: constitutive` (a VAMP, syntaxin-4, SNAP-23: a liver cell's
+  secretion) or `neuronal` (synaptobrevin, syntaxin-1, SNAP-25, Ca²⁺ on synaptotagmin). A caption
+  still too specific for your cell: `notes: false` and let the narration say it more generally.
+- **Captions on a phone.** In 9:16 the step captions show their first clause (`notes: auto`);
+  `notes: full` keeps the details, `short` shortens them in 16:9 too. Gene symbols your scenes
+  declare (a gene's `name`, a pathway's gene nodes) are set in italics in the narration
+  captions; a symbol followed by "protein", "kinase", "receptor"… stays roman.
 - **Regulation is often indirect.** Draw an arc you cannot vouch for as direct with
   `indirect: true` (dashed): IL-6 → STAT3 → *SERPINA1* acts with other factors.
 
@@ -79,7 +84,7 @@ cell"): a viewer who loses the scale loses the story.
 
 - Start wide (`view: tissue` or `cell`), then `zoom_to` on the word that names the target:
   `{zoom_to: nucleus, at: "@nucleus"}`. The scale bar follows; say the scale once.
-- A close-up of a process at the membrane: `view: {level: complex, on: <vesicle>, width: "320 nm"}`
+- A close-up of a process at the membrane: `view: {level: complex, on: <vesicle>}` with the vesicle a few hundred nm under the membrane (it frames the vesicle with the membrane it fuses with, by the frame's shape; under the top of the cell the membrane runs across a 16:9 and a 9:16 frame alike)
   frames the vesicle and the plasma membrane together.
 - Labels stay readable in 9:16 because they are screen-sized; the drawing is not. Check
   `vidgen storyboard --variant <short>`: the 9:16 frame is half as wide, so a 16:9 row of
@@ -113,7 +118,7 @@ cell"): a viewer who loses the scale loses the story.
 | a channel doing "active transport" | channels are passive; a pump uses ATP, a symporter an ion gradient |
 | a vesicle drawn 400 nm with a scale bar | real size (50–200 nm), or `not_to_scale: true` |
 | a generated gene presented as the real one | say "model gene"; the close-up writes *schematic* |
-| neuronal SNAREs named in a liver cell | `notes: false` on `exocytosis`, generic narration |
+| neuronal SNAREs named in a liver cell | `snares: constitutive` on `exocytosis` (the default names generic v-/t-SNAREs) |
 | a footer citation under karaoke captions | `citations: {show: marker}` |
 | a 9:16 pathway whose arcs cross band names | membrane-bound kinases `in: plasma_membrane`; fewer nodes |
 | one beat for transcription, splicing and export | a beat per step, 20–35 words each |

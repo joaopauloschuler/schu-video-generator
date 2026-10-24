@@ -1860,8 +1860,11 @@ the cell → `cell` with the `gene`; who activates whom → `pathway`; the cycle
 - Directions: template read 3′→5′, RNA made 5′→3′, chains N→C, kinesin to +, dynein to −,
   protons out of the matrix, 3 Na⁺ out and 2 K⁺ in per ATP. Places: translation starts in the
   cytosol, N-glycans are added in the ER and remodelled in the Golgi, glycolysis in the cytosol.
-- On-screen step captions are claims too: `notes: false` on an action whose caption is more
-  specific than your cell (the neuronal SNAREs of `exocytosis` in a liver cell).
+- On-screen step captions are claims too: choose the context (`exocytosis` `snares: constitutive`
+  in a liver cell, `neuronal` at a synapse; the default names generic v-/t-SNAREs), or
+  `notes: false`. Step captions are full in 16:9 and their first clause in 9:16 (`notes:
+  auto`; `full`, `short`). Gene symbols the video declares (a gene's `name`, a pathway's gene
+  nodes) are italic in the captions overlay, protein names roman.
 - An arc you cannot vouch for as direct is `indirect: true`.
 - `vidgen validate` refuses the impossible; `vidgen lint`'s `science_*` rules read the narration.
 

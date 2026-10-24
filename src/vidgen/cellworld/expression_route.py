@@ -271,8 +271,8 @@ class RoutePlanner:
 
         def move(s: RoutePose, u: float) -> RoutePose:
             p = s.copy()
-            for k, q in targets.items():
-                p.els[f"m{k}"] = (*mix(starts[k], q, ease(u)), 1.0)
+            for k, q in targets.items():      # a meandering way through the cytosol
+                p.els[f"m{k}"] = (*curve(starts[k], q, ease(u), 0.08 * (1 if k % 2 else -1), 0.05, 1.3 * k), 1.0)
                 # ribosomes join the mRNA (on the ER: the first one targeted by SRP, the others with it)
                 for j in range(RIBOSOMES):
                     a = window(u, 0.45 + 0.15 * j, 0.6 + 0.15 * j)
@@ -336,7 +336,7 @@ class RoutePlanner:
 
         def carry(s: RoutePose, u: float) -> RoutePose:
             p = s.copy()
-            at = mix(bud, cis, ease(u))
+            at = curve(bud, cis, ease(u), 0.1)
             p.els["copii"] = (*at, 1.0 - window(u, 0.85, 1.0))
             for k in range(MRNAS):
                 for j in range(CHAINS):
@@ -398,7 +398,7 @@ class RoutePlanner:
 
         def go(s: RoutePose, u: float) -> RoutePose:
             p = s.copy()
-            at = mix(tgn, dest, ease(u))
+            at = curve(tgn, dest, ease(u), 0.08)
             p.els[key] = (*at, 1.0)
             for k in range(MRNAS):
                 for j in range(CHAINS):
@@ -438,6 +438,20 @@ class RoutePlanner:
 
 def _has(world: CellWorld, entry: str) -> bool:
     return any(e.id == entry for e in world.entries)
+
+
+def curve(a: Point, b: Point, t: float, bend: float = 0.12, wiggle: float = 0.0, phase: float = 0.0) -> Point:
+    """A point ``t`` (0–1) of the way from ``a`` to ``b`` along a gentle arc (``bend``: its
+    sag as a share of the distance, the side by its sign) with an optional meander
+    (``wiggle``: a share of the distance; a diffusing mRNA): products do not travel the cell in
+    ruler-straight lines."""
+    x, y = mix(a, b, t)
+    d = math.dist(a, b)
+    if d <= 0:
+        return (x, y)
+    nx, ny = -(b[1] - a[1]) / d, (b[0] - a[0]) / d
+    off = d * (bend * math.sin(math.pi * t) + wiggle * math.sin(3 * math.pi * t + phase) * math.sin(math.pi * t))
+    return (x + nx * off, y + ny * off)
 
 
 def _along(path: list[Point], t: float) -> Point:

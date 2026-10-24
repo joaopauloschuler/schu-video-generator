@@ -106,7 +106,8 @@ def make_cyto_looks(stage: ExpressionStage) -> None:
     stage.blob("abce1", "ABCE1" if euk else "RRF·EF-G", "abce1", 3.0, 1.5, z=4.3)
     # the ER
     add(Look("er", "membrane", "", HUES["membrane"], 400.0, ER_THICK, z=0.2, data=(("gap", 0.0, 3.0), ("gap", 4.4, 2.8))))
-    stage.blob("sec61", "Sec61", "sec61", 3.0, ER_THICK + 0.8, "channel", z=0.8)
+    # its name beside it in the membrane (the chain threads through the middle)
+    add(Look("sec61", "blob", "Sec61", HUES["sec61"], 3.0, ER_THICK + 0.8, "channel", 0.8, (("label_at", -3.1, 0.0),)))
     stage.blob("srp", "SRP", "srp", 8.0, 2.0, "rod", z=4.4)
     stage.blob("sr", "SRP receptor", "sr", 4.6, 1.8, z=0.9)
     stage.blob("ost", "OST", "ost", 2.8, ER_THICK + 1.4, "round", z=0.9)
@@ -123,6 +124,10 @@ def make_cyto_looks(stage: ExpressionStage) -> None:
         stage.blob(f"bip_{k}", "BiP", "bip", 2.6, 1.7, z=5.6)
     stage._add(Look("cct", "blob", "TRiC (CCT)" if euk else "GroEL", HUES["chaperonin"], 11.0, 10.0, "barrel", 4.0, (("label_at", 0.0, -5.8),)))
     stage.blob("calnexin", "calnexin", "calnexin", 3.4, 2.0, z=5.6)
+    # calnexin is a type I membrane protein: its lectin domain in the lumen, on a stalk (the P
+    # domain) from its transmembrane helix in the ER membrane
+    stage.blob("calnexin_tm", "", "calnexin", 1.0, ER_THICK + 0.6, "channel", z=0.8)
+    stage.line_names.append("cnx_arm")
     stage.blob("glucosidase", "glucosidase II", "glucosidase", 4.6, 1.6, z=5.7)
     stage.blob("pdi", "PDI", "pdi", 2.2, 1.5, z=5.7)
     for k in range(4):
@@ -327,7 +332,7 @@ def place_readout(stage: ExpressionStage, p: Pose) -> None:
     cx, cy = p.cam
     y = cy - stage.height / 2 - stage.strip / 2
     step = 1.75 if stage.codes == "three" else 0.9
-    room = stage.window * (0.62 if stage.aspect >= 1.0 else 1.0) - 2.0
+    room = stage.window * (0.62 if stage.wide else 1.0) - 2.0
     fit = max(3, int(room / step))
     shown = int(math.floor(made + 1e-9))
     first = max(0, shown - fit)
@@ -442,7 +447,7 @@ class Translation:
         if readout:
             peptide_readout(self.stage, p, made + (bond if bond > 0 else 0.0))
         chain_ends(p, whole)
-        p.cam = (xp + 1.0 + (0.0 if self.stage.aspect >= 1 else 0.5), cam_y(self.stage, self.y, self.docked))
+        p.cam = (xp + 1.0 + (0.0 if self.stage.wide else 0.5), cam_y(self.stage, self.y, self.docked))
         return p
 
 
@@ -653,8 +658,11 @@ def terminate(b: Builder, t: Translation) -> None:
     def recycle(s: Pose, u: float) -> Pose:
         p = s.copy()
         q = ease(u)
-        for key, dx, dy in (("small", -2.0, -5.0), ("large", 3.0, 7.0), ("erf", 2.0, 6.0), (f"tr{stop_k - 1}", -2.0, 6.0),
-                            ("siteE", 3.0, 7.0), ("siteP", 3.0, 7.0), ("siteA", 3.0, 7.0)):
+        # the subunits part in the cytosol: on the ER the large one cannot rise (the membrane is
+        # over it), it moves aside
+        rise = (6.0, -2.0) if t.docked else (3.0, 7.0)
+        for key, dx, dy in (("small", -2.0, -5.0), ("large", *rise), ("erf", rise[0] - 1.0, rise[1] - 1.0),
+                            (f"tr{stop_k - 1}", -2.0, -3.0 if t.docked else 6.0), ("siteE", *rise), ("siteP", *rise), ("siteA", *rise)):
             x, yy, o = s.els[key]
             p.els[key] = (x + dx * q, yy + dy * q, o * (1.0 - window(u, 0.2, 0.9)))
         for site in "EPA":
@@ -814,8 +822,8 @@ def glycosylate(b: Builder, options: dict[str, object]) -> None:
         t = Translation(stage, b.pose)
         if reach > state.translated:
             elongate(b, t, state.translated, reach, detail=False,
-                     note="Elongation goes on until the sequon's Asn is ~65 residues from the peptidyl transferase centre, at the "
-                          "oligosaccharyltransferase (OST) beside Sec61")
+                     note="Elongation goes on until the sequon's Asn reaches the oligosaccharyltransferase (OST) beside Sec61: "
+                          "~65 residues from the peptidyl transferase centre")
     s0 = b.pose
     made_now = stage.state.translated if stage.state.released else min(total - 1, max(stage.state.translated, glyco_reach(g)))
     sites = [k for k in g.sequons if k < made_now]
@@ -892,6 +900,21 @@ def fold(b: Builder, options: dict[str, object]) -> None:
     if in_er:
         # in the lumen, clear of the ER membrane
         cy = max(cy, getattr(stage, "er_y", cy) + ER_THICK / 2 + radius + 1.0)
+    er_y = getattr(stage, "er_y", None)
+    anchored = in_er and chaperone == "calnexin" and er_y is not None
+    cam_at = (cx, cy + 0.5)
+    if anchored:
+        # calnexin's lectin domain stands on its stalk over the membrane: the globule just over
+        # it, the camera between the membrane and the glycans' tops, when the view is tall
+        # enough for both (a tall frame); else (a wide one) as without the anchor, the stalk
+        # running down out of the view
+        low = er_y + ER_THICK / 2 + radius + 2.5                          # type: ignore[operator]
+        top, bottom = low + radius + 4.0, er_y - ER_THICK / 2 - 0.5       # type: ignore[operator]
+        if top - bottom <= stage.height - 0.5:
+            cy = low
+            cam_at = (cx, (top + bottom) / 2)
+        else:
+            cam_at = (cx, cy + 0.5)
     places = globule(stage, keys, (cx, cy))
     hydro = [k for k in keys if side_chain(g.protein[k]) == "hydrophobic"]
     holds = [hydro[j * len(hydro) // 3] for j in range(3)] if len(hydro) >= 3 else hydro
@@ -904,7 +927,7 @@ def fold(b: Builder, options: dict[str, object]) -> None:
             bx, by = places[k]
             p.els[f"aa{k}"] = (ax + (bx - ax) * q, ay + (by - ay) * q, 1.0)
         _ends(p, keys)
-        p.cam = mix(s.cam, (cx, cy + 0.5), ease(u))
+        p.cam = mix(s.cam, cam_at, ease(u))
         return p
 
     def hold(name: str) -> Callable[[Pose, float], Pose]:
@@ -964,20 +987,30 @@ def fold(b: Builder, options: dict[str, object]) -> None:
             if shown:
                 x, y = glycan_place(p, g.sequons[lead])
                 p.els["glucosidase"] = (x + 3.2, y + 1.2, window(u, 0.0, 0.3) * (1.0 - window(u, 0.8, 1.0)))
-            p.cam = mix(s.cam, (cx, cy + 0.5), ease(u))
+            p.cam = mix(s.cam, cam_at, ease(u))
             return p
+
+        def anchor(p: Pose, x: float, y: float, o: float) -> None:
+            """Calnexin's domain at (x, y), its helix in the membrane under it, the stalk between."""
+            p.els["calnexin"] = (x, y, o)
+            if anchored:     # its helix beside the globule: the stalk reaches up past it
+                p.els["calnexin_tm"] = (max(x, cx + radius + 1.6), er_y, o)  # type: ignore[assignment]
+                p.lines["cnx_arm"] = (("calnexin_tm", "calnexin"), 0.0, "chain", o)
 
         def bind_cnx(s: Pose, u: float) -> Pose:
             p = collapse(s, u)
             if shown:
                 x, y = glycan_place(p, g.sequons[lead])
-                p.els["calnexin"] = (x + 2.8, y + 1.2, window(u, 0.0, 0.3))
+                anchor(p, x + 2.8, y + 1.2, window(u, 0.0, 0.3))
             return p
 
         def free(s: Pose, u: float) -> Pose:
             p = s.copy()
             x, y, o = s.els["calnexin"]
-            p.els["calnexin"] = (x + 3.0 * u, y + 2.0 * u, o * (1.0 - window(u, 0.4, 0.9)))
+            if anchored:     # it stays in the membrane; its domain lets go of the glycan
+                anchor(p, x + 1.5 * u, y - 1.5 * u, o)
+            else:
+                p.els["calnexin"] = (x + 3.0 * u, y + 2.0 * u, o * (1.0 - window(u, 0.4, 0.9)))
             for _, j in shown:
                 p.fade(f"gly1_{j}", 1.0 - window(u, 0.0, 0.4))
                 p.fade(f"gly0_{j}", window(u, 0.0, 0.4))

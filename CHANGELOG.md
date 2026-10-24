@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–210)
+## Unreleased (Steps 193–211)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -138,6 +138,24 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   vidgen's molecule scene; a zoomed `cell` view and a gene close-up no longer report their cropped
   world as `off_frame`; the close-up's "schematic: not to scale" is at the readable size, in the
   safe area and clear of the protein's readout in 9:16.
+- **Review of Phase U** (Step 211): drawings use the frame better — molecule scenes put three or
+  more membrane proteins on rows when that frames them larger (also beside a plot in 16:9), and
+  in 9:16 the action-potential plot spans the panel above the concentrations; a gene close-up in
+  9:16 shows 15 slots across (was 18) and takes a tall frame's layout even when its view is wider
+  than tall (a 36-slot strip before); a vesicle near the plasma membrane is framed with the
+  membrane it fuses with; pathways grow up to 1.9× and spread their ranks to use the height;
+  glycolysis grows to fill. Step captions are never below the readable size and are their
+  first clause in 9:16 (`notes: auto | full | short | false`). `exocytosis` names generic
+  v-/t-SNAREs by default, `snares: constitutive` (a VAMP, syntaxin-4, SNAP-23) or `neuronal`
+  (synaptobrevin/VAMP2, syntaxin-1, SNAP-25, Ca²⁺ on synaptotagmin); the example uses the
+  constitutive set with its captions on. The captions overlay sets the gene symbols the video
+  declares in italics (`genes: true`). Enzyme names in `metabolism` are roman (proteins).
+  Calnexin is anchored in the ER membrane by a stalk; ribosomal subunits part in the cytosol on
+  the ER; Sec61 is named beside the channel; ion channels are named by their ion (Na⁺ channel);
+  overlapping labels fixed (band names in 16:9 pathways, side names of membrane rows, the light
+  reactions' P side in 9:16, leader lines of label rows in 9:16); cell-scene products travel on
+  gentle curves; a motor's cargo vesicle is kept off the organelles. `scenes/molecule.py` is
+  split (the process runtime in `scenes/molecule_runtime.py`).
 
 ### vidgen studio: a music workstation for people (Phase T)
 

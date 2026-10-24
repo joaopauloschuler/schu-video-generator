@@ -33,8 +33,8 @@ class GeneStep(Action):
     """A step of gene expression on a scene's gene (base of the step actions)."""
 
     class Options(ActionOptions):
-        notes: bool = True
-        """Caption each step (what the molecules do)."""
+        notes: CellNoteMode = "auto"
+        """Caption each step: auto (the full caption in a wide frame, its first clause in a tall one), full (or true), short (the first clause), false (none)."""
 
     run_time = 8.0
     #: A molecule scene's close-up and a cell scene's route both move their view.
@@ -120,8 +120,8 @@ class Translate(GeneStep):
     class Options(ActionOptions):
         codons: int | None = Field(None, ge=1, le=160)
         """How many codons to translate (default: to the stop codon)."""
-        notes: bool = True
-        """Caption each step."""
+        notes: CellNoteMode = "auto"
+        """Caption each step: auto (the full caption in a wide frame, its first clause in a tall one), full (or true), short (the first clause), false (none)."""
 
     step = "translate"
 
@@ -154,8 +154,8 @@ class Fold(GeneStep):
     class Options(ActionOptions):
         chaperone: Literal["hsp70", "chaperonin", "bip", "calnexin"] | None = None
         """Which chaperone (checked against where the protein is); default hsp70 in the cytosol, calnexin (glycoproteins) or bip in the ER."""
-        notes: bool = True
-        """Caption each step."""
+        notes: CellNoteMode = "auto"
+        """Caption each step: auto (the full caption in a wide frame, its first clause in a tall one), full (or true), short (the first clause), false (none)."""
 
     step = "fold"
 
@@ -180,7 +180,7 @@ class Secrete(GeneStep):
     class Options(ActionOptions):
         to: Literal["outside", "lysosome", "membrane"] = "outside"
         """Where the protein goes from the trans-Golgi network."""
-        notes: bool = True
-        """Caption each step."""
+        notes: CellNoteMode = "auto"
+        """Caption each step: auto (the full caption in a wide frame, its first clause in a tall one), full (or true), short (the first clause), false (none)."""
 
     step = "secrete"

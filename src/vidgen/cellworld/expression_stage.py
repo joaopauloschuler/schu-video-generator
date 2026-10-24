@@ -193,11 +193,12 @@ class ExpressionStage:
     ``codes``: ``three`` or ``one``-letter amino acids, ``start``: ``dna`` or ``mrna``."""
 
     def __init__(self, gene: Gene, window: float, aspect: float, codes: str = "three", start: str = "dna", cap_later: bool = False,
-                 strip: float = 1.4) -> None:
+                 strip: float = 1.4, wide: bool | None = None) -> None:
         self.gene, self.window, self.aspect, self.codes, self.cap_later = gene, window, aspect, codes, cap_later
         self.height = window / aspect
         self.strip = strip                       # slots under the view for the protein's readout and the legend
-        self.row = 12 if aspect >= 1.0 else 7    # beads per row of a chain outside the ribosome
+        self.wide = aspect >= 1.0 if wide is None else wide  # a wide frame's layout (a tall frame's view can be wider than tall)
+        self.row = 12 if self.wide else 7    # beads per row of a chain outside the ribosome
         self.euk = gene.eukaryote
         self.p0 = len(gene.promoter)                    # DNA index of +1
         self.dna = gene.promoter + gene.region + gene.downstream
@@ -248,7 +249,7 @@ class ExpressionStage:
         self.label("rna3", "3′", 0.62)
         for name in ("c5", "c3", "t3", "t5"):
             self.label(f"end_{name}", {"c5": "5′", "c3": "3′", "t3": "3′", "t5": "5′"}[name], 0.62)
-        self._add(Look("legend", "label", "DNA: coding strand 5′→3′ above, template strand 3′→5′ below" if self.aspect >= 1 else
+        self._add(Look("legend", "label", "DNA: coding strand 5′→3′ above, template strand 3′→5′ below" if self.wide else
                        "coding strand above, template below", "dim", h=0.55, z=7.0, data=(("anchor", "left"),)))
         # promoter and gene features on the DNA
         for name, a, b in g.boxes:
