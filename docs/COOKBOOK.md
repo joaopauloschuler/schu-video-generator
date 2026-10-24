@@ -136,8 +136,9 @@ Checklist:
   matters.") and pay it off later. Name the payoff, so people wait for it.
 - **Cliffhangers** at chapter ends: the last beat of a chapter asks the question the next chapter
   answers.
-- **Chapters** for videos over about 4 min: `type: chapter` cards (`duration: 1.8`, a
-  `fade_color` transition) plus a `chapter_indicator` overlay (`total: true`, excluding the hook,
+- **Chapters** for videos over about 4 min: `type: chapter` cards with a `fade_color`
+  transition. Show each chapter card for about 3.5 s (`duration: 3.5`) so viewers can read the
+  number and title. Add a `chapter_indicator` overlay (`total: true`, excluding the hook,
   sources and credits). Short videos (about 3 min) need only the `progress_bar`. YouTube shows
   chapters only when there are at least 3.
 - **Animated counters** for every important number: stars, forks, %, GPa, days. Use the
@@ -204,7 +205,7 @@ Viewers only see a frame for a few seconds. Every label must make sense on its o
 | type | used for | notes |
 |---|---|---|
 | custom `cold_open` / `dataflow_hook` | first 5–15 s | see §3 |
-| `chapter` | chapter cards | `number`, `title`, `icon`, `duration: 1.8` |
+| `chapter` | chapter cards | `number`, `title`, `icon`; `duration: 3.5` (about 3.5 s, so viewers can read the number and title) |
 | `process` | a sample chain, lab steps | `reveal: all` |
 | `pie` | a composition | `donut: true`, `center: "95%"`, `center_label` (set the centre; the default can look odd) |
 | `stat` | "~20 GPa", "10,000×" | actions: `highlight` the label, or underline the context |

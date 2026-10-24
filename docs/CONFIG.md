@@ -172,7 +172,7 @@ scenes:
   - id: part1
     type: chapter             # a divider card starts chapter 1 "Setup"
     params: {number: 1, title: "Setup"}
-    duration: 3
+    duration: 3.5             # about 3.5 s, so viewers can read the number and title
   - id: data                  # still chapter 1
     type: text_card
     params: {text: "Data"}
@@ -5626,8 +5626,11 @@ The chapter's name is its `title` param (what a chapter list or indicator shows;
 - id: part2
   type: chapter
   params: {number: 2, title: "Results", subtitle: "What the benchmark shows", icon: chart-line}
-  duration: 3                      # silent divider; or give it beats
+  duration: 3.5                    # silent divider; or give it beats
 ```
+
+Show each chapter card for about 3.5 s (`duration: 3.5`) so viewers can read the number and
+title.
 
 ### `comparison`
 
@@ -10786,7 +10789,8 @@ the video as a `stat` (the hook) before the title. The highest remaining heading
 sections, the next one the units inside them; each unit becomes one or more scenes, its heading
 their `heading` / `title`. Deeper headings and short lines ending with `:` (`Pros:`) label the
 block that follows. When the narration runs over 2 minutes and there are at least 3 sections,
-every section starts with a silent `chapter` card (2.5 s) and the video gets a `progress_bar`. A
+every section starts with a silent `chapter` card (2.5 s; we recommend about 3.5 s,
+`duration: 3.5`, so viewers can read the number and title) and the video gets a `progress_bar`. A
 last section called Summary, Conclusion, Recap, Takeaways, Next steps (or Resumo, Conclusão...)
 ends with an `end_card`: its last beat is the call to action, its links the card's `lines`; a
 list in it becomes the recap scene. Without one, a TODO at the top says to add an ending.

@@ -64,7 +64,7 @@ scenes:
   - id: ch1
     type: chapter
     params: {number: 1, title: "<Chapter>", icon: flame}
-    duration: 1.8
+    duration: 3.5                # about 3.5 s, so viewers can read the number and title
 
   # ... content scenes: a new visual every 3-6 s, one idea per beat ...
 

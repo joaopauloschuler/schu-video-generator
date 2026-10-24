@@ -32,6 +32,8 @@ workflow` give the rules at a glance. This page is about what is special to **co
 - The hook must be **true and checkable** (a line count, a size, a run time you measured), and
   readable without sound: the number in the accent colour, 2–4 words under it.
 - No title card, no "in this video". The first frame is the cover in the feed.
+- No chapter cards either: every second of a Short goes to new content. (In regular videos over
+  about 4 min, show each chapter card for about 3.5 s, `duration: 3.5`; see `docs/COOKBOOK.md`.)
 - End on the call to action, said once ("The full script is linked below").
 
 ## 3. Layout of the vertical frame

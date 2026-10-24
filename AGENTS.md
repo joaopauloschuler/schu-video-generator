@@ -332,7 +332,8 @@ per-beat data (`code_walkthrough`, `terminal`, `equation_derivation`, `screensho
 take a `steps` list, entry *i* for beat *i*: write as many steps as beats (`code_morph`:
 one of its `versions` per beat). A `highlight` param
 adds a last step that marks one thing and dims the rest, so give it its own beat. Silent
-scenes have a `duration` instead of beats (chapter cards: 2–3 s). Every header-band type
+scenes have a `duration` instead of beats (show each chapter card for about 3.5 s, `duration: 3.5`, so viewers can read the number
+and title). Every header-band type
 accepts `heading` and `title` alike.
 
 Minimal snippets (copy, then adapt):
@@ -346,7 +347,7 @@ Minimal snippets (copy, then adapt):
 - id: part1
   type: chapter
   params: {number: 1, title: "The problem", icon: triangle-alert}
-  duration: 2.5
+  duration: 3.5
 - id: question
   type: text_card
   params: {text: "Do we need all those parameters?", color: highlight}
@@ -1917,7 +1918,7 @@ scenes:
   - id: part1
     type: chapter
     params: {number: 1, title: "The engine"}
-    duration: 2.5
+    duration: 3.5
   - id: body
     type: text_card
     params: {text: "Cards in, numbers out"}
@@ -1947,7 +1948,7 @@ scenes:
     type: chapter
     params: {number: 2, title: "Results", icon: chart-column}
     transition: {type: fade_color, color: surface}
-    duration: 2.5
+    duration: 3.5
   - id: big
     type: stat
     transition: cut
