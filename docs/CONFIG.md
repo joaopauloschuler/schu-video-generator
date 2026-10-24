@@ -6417,7 +6417,9 @@ view and point at it with `callout`: a zoomed view's labels name the parts as th
 
 #### A gene in a cell
 
-A `cell` with a `gene` (the same param as the [molecule scene's](#gene-expression)) follows its
+A `cell` with a `gene` (the same param as the [molecule scene's](#gene-expression): `id`, `name`,
+`product`, `species`, `codons`, `introns`, `signal_peptide`, `glycosylation`, `protein`, `sequence`,
+`codes`, `start`, `seed`) follows its
 products through the cell, the camera following them (each step frames where it happens):
 
 ```yaml
@@ -6809,7 +6811,8 @@ where its cause is, a drug where its target is, else the cytosol). `label`: a ge
 for the species: human *FOS*, mouse *Fos*), a protein (roman; `Gα_s` writes a subscript; a protein
 written like its gene is refused where the case tells them apart: mouse TRP53, yeast Cdc28),
 a molecule (`Ca2+`, `PIP3`). `gene`: a protein's gene symbol (checked). `state`: `inactive` /
-`active`, `gdp` / `gtp`. `marks`: `[{mark: P, at: Ser15}]` shown from the start. `role:
+`active`, `gdp` / `gtp`. `marks`: `[{mark: P, at: Ser15}]` shown from the start (`domain` as in a molecule's
+`modifications`). `role:
 activator | inhibitor`: its arcs must agree.
 
 **Arcs.** `type`: `activates` (filled arrowhead), `inhibits` (T-bar), `catalyses` (open circle),

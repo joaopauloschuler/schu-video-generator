@@ -1,0 +1,13 @@
+title: Mitosis
+voice: {provider: kokoro, voice: af_heart}
+scenes:
+  - id: mitosis
+    type: cell_cycle
+    params:
+      title: "Mitosis (2n = 4)"
+      mode: mitosis                      # homologues in maternal and paternal colours
+      chromosomes: 4
+      start: metaphase                   # the chromosomes on the plate, sister kinetochores bi-oriented
+    beats:
+      - text: "At anaphase the sister chromatids part, and the cell divides in two."
+        actions: [{advance: cell, to: cytokinesis, at: "@anaphase", expect: {cells: 2, chromosomes: 4}}]

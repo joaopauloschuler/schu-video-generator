@@ -358,6 +358,8 @@ class Cell(CellExpression, CellTraffic, NarratedScene):
         closeups = [(v.center, v.span) for v in [self.start, *(view for _, view in self._zooms if view is not None)]]
         colors = CellColors(self.theme.background, self.theme.color("text"))
         self.drawing = CellDrawing(self.world, colors, self.unit, self.to_scene((0.0, 0.0)), closeups, p.style)
+        for piece in (self.drawing.tissue, self.drawing.cell, *self.drawing.groups.values()):
+            piece.scenery = True    # the world in µm: a zoomed view crops it on purpose (lint off_frame)
         self._pinned: list[list[Any]] = []
         self._labels: list[_CellLabel] = []
         self._view_labels: list[tuple[float, np.ndarray, list[_CellLabel]]] = []

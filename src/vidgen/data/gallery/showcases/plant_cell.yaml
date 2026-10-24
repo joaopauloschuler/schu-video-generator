@@ -1,0 +1,12 @@
+title: Inside a Plant Cell
+voice: {provider: kokoro, voice: af_heart}
+scenes:
+  - id: plant_cell
+    type: cell
+    params:
+      title: "A plant cell"
+      cell: plant                        # a wall, plasmodesmata, the central vacuole, chloroplasts
+    beats:
+      - text: "A plant cell is mostly vacuole, with its chloroplasts pressed against the wall."
+      - text: "Inside a chloroplast, thylakoids stack into grana."
+        actions: [{zoom_to: chloroplasts, at: "@chloroplast", labels: [granum, stroma]}]

@@ -17,7 +17,8 @@ from vidgen.project import Project
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs" / "gallery"
 #: What the committed gallery may weigh (stills + GIFs + pages), see HANDOFF.md Steps 57 and 182
-#: (8 MB until the showcases came: 16 GIFs and 16 stills, about 2.8 MB).
+#: (8 MB until the showcases came: 16 GIFs and 16 stills, about 2.8 MB); Step 210 saved the stills
+#: as palette PNGs (3.0 -> 1.2 MB) to make room for the five cell-biology showcases.
 BUDGET = 10_000_000
 
 
@@ -103,7 +104,9 @@ def test_showcases_are_whole_valid_configs(tmp_path: Path, monkeypatch: pytest.M
     names = [s.name for s in gallery.SHOWCASES]
     assert len(set(names)) == len(names) and not set(names) & types
     assert sorted(p.stem for p in gallery.SHOWCASES_DIR.glob("*.yaml")) == sorted(names)
-    assert {s.section for s in gallery.SHOWCASES} == {"cartoons", "isometric cartoons"}
+    assert {s.section for s in gallery.SHOWCASES} == {"cartoons", "isometric cartoons", "cell biology"}
+    cell_types = {"cell", "molecule", "pathway", "cell_cycle", "metabolism"}
+    assert {s.config()["scenes"][0]["type"] for s in gallery.SHOWCASES if s.section == "cell biology"} == cell_types
     for showcase in gallery.SHOWCASES:
         assert showcase.section in groups or showcase.section in gallery.SECTION_NOTES
         config = gallery.showcase_work_config(showcase, None)
@@ -218,6 +221,12 @@ def test_committed_gallery_has_every_showcase() -> None:
             assert gallery.preview_html(showcase.name, fmt, link=f"{showcase.name}.md") in index
             with Image.open(DOCS / "media" / gallery.media_name(showcase.name, fmt, ".png")) as image:
                 assert image.size == gallery.FORMATS[fmt]
+    cell = index[index.index("## Cell biology"):index.index("## Data")]
+    names = ["[`cell`]", "[`molecule`]", "[`pathway`]", "[`cell_cycle`]", "[`metabolism`]", "(plant_cell.md)", "(sodium_pump.md)",
+             "(mek_inhibitor.md)", "(mitosis.md)", "(respiratory_chain.md)"]
+    assert [cell.index(n) for n in names] == sorted(cell.index(n) for n in names)
+    assert "../../examples/gene-to-secreted-protein/README.md" in cell and (ROOT / "docs" / "COOKBOOK-CELL-BIOLOGY.md").is_file()
+    assert "COOKBOOK-CELL-BIOLOGY.md" in (DOCS / "mitosis.md").read_text(encoding="utf-8")
     section = index[index.index("## 2D cartoons"):]
     assert section.index("[`card`](card.md)") < section.index("(talk_in_a_room.md)") < section.index("## Isometric cartoons") < section.index("(iso_village.md)")
 
@@ -232,6 +241,19 @@ def test_committed_gifs_are_light_and_open_on_their_end() -> None:
             assert first.width == gallery.CLIP_WIDTHS["16:9" if "-16x9" in gif.name else "9:16"]
             low, high = first.getextrema()
             assert high - low > 40, f"{gif.name} opens on an empty frame"
+
+
+def test_committed_stills_are_palette_pngs(tmp_path: Path) -> None:
+    """Step 210: stills are saved with a 256-colour palette (about 40 % of the RGB PNG), which
+    made room in the budget for the cell-biology showcases."""
+    for still in (DOCS / "media").glob("*-*x*.png"):
+        with Image.open(still) as image:
+            assert image.mode == "P", still.name
+    source = tmp_path / "rgb.png"
+    Image.new("RGB", (64, 36), (12, 200, 40)).save(source)
+    gallery._save_still(source, tmp_path / "still.png")
+    with Image.open(tmp_path / "still.png") as image:
+        assert image.mode == "P" and image.convert("RGB").getpixel((5, 5)) == (12, 200, 40)
 
 
 def test_committed_gallery_is_within_its_size_budget() -> None:

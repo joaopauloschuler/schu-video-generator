@@ -19379,3 +19379,82 @@ How to test
 - Lint demo (scratchpad `s209/demo`, Kokoro audio): every science rule fires on its planted
   mistake; stills of the footer (16:9 and 9:16), marker + end card (`--variant card`), and
   `s209/nts` (not-to-scale note with a marker, 16:9 and 9:16).
+
+## Step 210 — Example, docs and gallery
+
+What was built (DESIGN §95.15)
+- **The example** `examples/gene-to-secreted-protein` ("From gene to secreted protein", README with
+  a scene table, the choices and the checks): α1-antitrypsin (*SERPINA1*) from a liver cell's
+  nucleus to the blood in eight scenes — `title`; `cell` (tissue → cell → nucleus on the words);
+  `molecule` with a model gene (transcribe, cap, splice, polyadenylate, export); `molecule` with
+  `start: mrna` (translate 3 codons, target_er, glycosylate, translate, fold with calnexin);
+  `cell` with the gene (transcribe, export, translate, to_golgi, secrete); `cell` at the complex
+  level (exocytosis); `pathway` from nodes and edges (IL-6 → IL-6R–gp130 → JAK1 → STAT3 pTyr705 ⇒
+  nucleus → *SERPINA1*, `indirect`); `process` recap. Kokoro `af_heart` at 0.85, `discovery` at
+  −4 dB, karaoke captions, `terms:`, `citations: {show: marker}` (a footer collided with the
+  captions), pronunciations for SERPINA1, alpha-1, COPII, Sec61, STAT3, JAK. Chose α1-antitrypsin
+  over insulin (insulin is not glycosylated and is processed in regulated granules). References:
+  Blobel & Dobberstein 1975 (DOI 10.1083/jcb.67.3.835) and Alberts MBoC 6th ed. (ISBN
+  978-0-8153-4432-2, check digit verified) — owner: please confirm both identifiers once.
+- **Guide topic `biology`** (aliases cell-biology, science, lecture, research) in
+  `src/vidgen/data/guide/AGENTS.md` → `AGENTS.md`: choosing the scene, accuracy rules, naming,
+  references, pacing, a snippet; a pointer from the `scenes` topic.
+- **`docs/COOKBOOK-CELL-BIOLOGY.md`**: choosing by question, accuracy, names and notation, level of
+  detail, labelling and zooming, pacing, narration–picture timing and references, common mistakes
+  (a table), a validated pattern; linked from README, `docs/COOKBOOK.md`, the guide and the gallery.
+- **CONFIG completeness**: a test walks every param and nested option of the five types and finds
+  it in its section (added: a node mark's `domain`, the gene options listed under "A gene in a
+  cell").
+- **Gallery**: one "Cell biology" section (`GROUP_SECTIONS` merges the guide groups) with the five
+  types and five showcases (`plant_cell`, `sodium_pump`, `mek_inhibitor`, `mitosis`,
+  `respiratory_chain`; `src/vidgen/data/gallery/showcases/`), a section note linking the example
+  and the cookbook, showcase pages with their section's footer. Budget kept at 10 MB by saving
+  stills as 256-colour palette PNGs (3.0 → 1.2 MB, re-encoded in place, no visible change); the
+  gallery is 9.4 MB, every GIF ≤ 150 KB (mitosis starts at metaphase: 164 KB before).
+- **Fixes found while making it**: the route's transcription caption no longer mentions the
+  molecule scene; the route's Golgi caption says "some proteins also get O-glycans"; `scenery` on
+  a cell's world, a membrane event's overlay and a gene close-up's stage, and `introspect` marking
+  a group scenery when it holds only scenery (no more `off_frame` for a zoomed view's cropped
+  world); the close-up's "schematic: not to scale" at the readable size in the safe area, a line
+  above the readout when it does not fit beside it (9:16).
+
+Files touched
+- New: `examples/gene-to-secreted-protein/{video.yaml,README.md}`, `docs/COOKBOOK-CELL-BIOLOGY.md`,
+  five showcase YAMLs, `docs/gallery/{plant_cell,sodium_pump,mek_inhibitor,mitosis,respiratory_chain}.md`
+  and their media, `tests/test_gene_to_secreted_protein.py` (5).
+- Changed: `src/vidgen/gallery.py`, `introspect.py`, `scenes/cell.py`, `scenes/cell_traffic.py`,
+  `scenes/molecule_gene.py`, `cellworld/expression_route.py`; guide + `AGENTS.md`; `docs/CONFIG.md`,
+  `docs/COOKBOOK.md`, `docs/gallery/README.md` and every still (palette); `README.md` (a feature
+  bullet, the example, the cookbook), `CHANGELOG.md`, `DESIGN.md` §95.15, `tasklist.md`; tests
+  `test_gallery.py` (+1, sections and order), `test_docs.py` (+2), `test_guide.py` (+1).
+
+Public interfaces: no `vidgen.api` change; config unchanged. `vidgen.gallery` gains
+`GROUP_SECTIONS`, `SECTION_FOOTERS`, `DEFAULT_FOOTER`, `STILL_COLORS`; `SHOWCASES` +5.
+
+Decisions / deviations
+- Showcases rather than more guide snippets; one gallery section for the five types (the guide
+  keeps its groups).
+- Budget optimised, not raised (palette stills).
+- The final 16:9 render ran in one command (~8 min with `--jobs 2`); only 16:9 was rendered at full
+  size, the 9:16 variant was storyboarded and linted.
+
+Known gaps / TODO (Step 211)
+- `exocytosis` captions name neuronal SNAREs (synaptobrevin, SNAP-25): the example sets
+  `notes: false`; consider generic names or a cell-type option.
+- The 16:9 pathway leaves much of the frame empty; a hepatocyte is the typical animal cell (no
+  polygonal shape, one nucleus); "N terminus" is heard as "end terminus" by readback (fine by ear).
+
+How to test
+- `tests/test_gene_to_secreted_protein.py` 5; `test_gallery` 19 (1 render); `test_docs` +
+  `test_guide` + `test_expression` 214; `test_cell_scene` + `test_expression` 109;
+  `test_transport` + `test_accuracy` + `test_introspect` 80; `test_lint` + `test_storyboard` +
+  `test_schema` + `test_json_output` (not render) 129; `test_pathway` + `test_cycle_energy` +
+  `test_molecules` (not render) 123; `test_builtin_scenes` + `test_api` + `test_registry` +
+  `test_extensions` (not render) 192, render `-k "cell or molecule or metabolism or pathway"` 12;
+  `test_mcp.py` in full (with `test_gallery`) 39. Not run: the full suite.
+- Compatibility: Phase Q baseline re-run — 31 frames, max difference 0.
+- The example (scratch copy with Kokoro audio): `vidgen validate` ok; `vidgen lint` 0 findings in
+  16:9 and `--variant short`; `vidgen readback` WER 3.7 %, none flagged. Final render 1920×1080,
+  30 fps, 214.07 s video and audio, −16.1 LUFS, true peak −1.8 dBTP, LRA 3.6 LU:
+  scratchpad `s210/gene_to_secreted_protein.mp4`, contact sheet `s210/contact_16x9.png`, 9:16
+  storyboard `s210/storyboard_9x16/`, showcase stills `s210/showcases.png`.

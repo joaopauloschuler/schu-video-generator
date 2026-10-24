@@ -61,12 +61,20 @@ CLIP_START_MAX = 1.0
 #: (a busy cartoon: rain, camera moves), so every GIF stays light.
 CLIP_MAX_BYTES = 150_000
 CLIP_FALLBACK_FPS = (5, 4)
+#: Stills are saved with a palette of this many colours (flat pictures: no visible loss).
+STILL_COLORS = 256
 #: The work project's variant rendering 9:16.
 PORTRAIT_VARIANT = "portrait"
 #: Index group of a project's own types.
 PROJECT_GROUP = "project types"
 #: The index heading of a group when it is not the group's own name.
 GROUP_TITLES: dict[str, str] = {"cartoons": "2D cartoons"}
+#: Guide groups shown in the index section of another (the cell-biology types in one section).
+GROUP_SECTIONS: dict[str, str] = {
+    "signalling pathways": "cell biology",
+    "cell cycle and division": "cell biology",
+    "energy metabolism": "cell biology",
+}
 #: The showcases' scenes (package data): ``<name>.yaml``, each a whole config of one scene.
 SHOWCASES_DIR = SAMPLE_ASSETS_DIR / "showcases"
 #: Showcase sections that are not a guide group, and the line under their heading.
@@ -75,7 +83,17 @@ SECTION_NOTES: dict[str, str] = {
         "A whole isometric story, a village by a stream, a room, rain and a lamp at night: "
         "[Hazel and the Lamp by the Bridge](../../examples/iso-story/video.yaml) (`examples/iso-story`)."
     ),
+    "cell biology": (
+        "A whole lecture-style video, a protein's route from its gene to the blood through every scene type here: "
+        "[From gene to secreted protein](../../examples/gene-to-secreted-protein/README.md) (`examples/gene-to-secreted-protein`). "
+        "How to make them accurate and well paced: [the cell-biology cookbook](../COOKBOOK-CELL-BIOLOGY.md)."
+    ),
 }
+#: The last line of a showcase's page, by section: where to read more.
+SECTION_FOOTERS: dict[str, str] = {
+    "cell biology": "`vidgen guide scenes` · [the cell-biology cookbook](../COOKBOOK-CELL-BIOLOGY.md)",
+}
+DEFAULT_FOOTER = "`vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`"
 
 _FENCE = re.compile(r"```(\w*)\n(.*?)```", re.S)
 _TICKED = re.compile(r"`([^`]+)`")
@@ -150,6 +168,11 @@ SHOWCASES: tuple[Showcase, ...] = (
     Showcase("iso_room", "isometric cartoons", "A cut-away room", "an isometric room seen like a dollhouse: furniture, a thing to pick up"),
     Showcase("iso_lamp", "isometric cartoons", "Lighting the lamp", "night on an isometric place: a lamp lit, a speaker's name tag"),
     Showcase("iso_snow", "isometric cartoons", "First snow", "snow settling on an isometric village: the ground, roofs and trees turn white"),
+    Showcase("plant_cell", "cell biology", "Inside a plant cell", "a plant cell's wall, vacuole and chloroplasts, then a zoom into one chloroplast's grana"),
+    Showcase("sodium_pump", "cell biology", "The sodium pump", "a membrane pump's cycle: 3 Na⁺ out and 2 K⁺ in per ATP, against their gradients"),
+    Showcase("mek_inhibitor", "cell biology", "Blocking MEK", "a signal running down the MAPK cascade, then a drug that blocks MEK and its effects downstream"),
+    Showcase("mitosis", "cell biology", "Mitosis", "a dividing cell: condensation, the metaphase plate, sister chromatids parting, two daughter cells"),
+    Showcase("respiratory_chain", "cell biology", "The respiratory chain", "electrons down complexes I–IV with protons pumped, then ATP synthase turning"),
 )
 
 
@@ -241,6 +264,7 @@ def guide_samples() -> dict[str, Sample]:
         else:
             group, items = _snippet_items(body)
             found = [(yaml.safe_load(text)[0], text, ()) for text in items]
+        group = GROUP_SECTIONS.get(group, group)
         for scene, text, characters in found:
             name = scene["type"]
             known = samples.get(name)
@@ -468,6 +492,9 @@ def _save_still(source: Path, target: Path) -> None:
 
     with Image.open(source) as image:
         picture = image.convert("RGB")
+    # a 256-colour palette, no dithering: flat pictures lose nothing visible and the PNG is about
+    # 40 % of the RGB one (the gallery's budget, HANDOFF Step 210)
+    picture = picture.quantize(colors=STILL_COLORS, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
     buffer = io.BytesIO()
     picture.save(buffer, format="PNG", optimize=True)
     write_bytes_atomic(target, buffer.getvalue())
@@ -683,7 +710,7 @@ def write_showcase_page(showcase: Showcase, output: Path, formats: list[str]) ->
     if shown:
         lines += ["Last beat:", "", _images(showcase.name, shown, 300), ""]
     lines += ["## YAML", "", "```yaml", showcase.text().rstrip(), "```", ""]
-    lines += ["[All scene types and showcases](README.md) · `vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`", ""]
+    lines += [f"[All scene types and showcases](README.md) · {SECTION_FOOTERS.get(showcase.section, DEFAULT_FOOTER)}", ""]
     path = output / f"{showcase.name}.md"
     write_text_atomic(path, "\n".join(lines))
     return path
@@ -731,8 +758,8 @@ def write_index(
         "Every vidgen scene type, rendered from its sample in the author guide (`AGENTS.md`,",
         "`vidgen guide scenes`). The previews are animated: each GIF plays the scene at 16:9 and",
         "9:16 and holds its last beat (viewers who ask for reduced motion see that still instead).",
-        "Each page has the YAML, the params, the action targets and the stills. The cartoon sections",
-        "end with showcases, small scenes written for the gallery, each a whole `video.yaml`.",
+        "Each page has the YAML, the params, the action targets and the stills. The cell-biology and",
+        "cartoon sections end with showcases, small scenes written for the gallery, each a whole `video.yaml`.",
         "Regenerate with `vidgen gallery`.",
         "",
     ]

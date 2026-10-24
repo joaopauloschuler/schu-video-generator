@@ -91,6 +91,18 @@ def test_topics_are_unique_and_resolve_by_name_and_alias() -> None:
         assert f"`{topic.name}`" in intro, topic.name
 
 
+def test_the_biology_topic_covers_the_cell_types() -> None:
+    """Step 210: a topic for cell-biology videos (choosing, accuracy, naming, references, pacing)."""
+    text = topic_text("cell-biology")
+    assert find_topic("biology").name == "biology" and text.startswith("## Cell biology")
+    for kind in ("cell", "molecule", "pathway", "cell_cycle", "metabolism"):
+        assert f"`{kind}`" in text, kind
+    for part in ("**Accuracy rules.**", "**Naming.**", "**References.**", "**Pacing dense content.**", "never invent",
+                 "COOKBOOK-CELL-BIOLOGY.md", "examples/gene-to-secreted-protein", "not_to_scale"):
+        assert part in text, part
+    assert "vidgen guide biology" in topic_text("scenes")
+
+
 def test_unknown_topic_suggests() -> None:
     with pytest.raises(VidgenError, match=r"unknown guide topic 'scene'; did you mean 'scenes'"):
         find_topic("scene")

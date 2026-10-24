@@ -149,6 +149,54 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
         assert "COOKBOOK-MUSIC.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
+def test_cell_biology_sections_name_every_nested_option() -> None:
+    """Step 210: every param of the five cell-biology types, nested options too (an object's
+    `coat`, a gene's `introns`, a node's marks' `domain`), is named in its CONFIG.md section."""
+    from vidgen.describe import nested_models
+
+    heads = {m.group(1): m.start() for m in re.finditer(r"^### `(\w+)`", CONFIG_MD, re.M)}
+    starts = sorted(heads.values())
+    missing = []
+    with registry.isolated():
+        extensions.load_builtins()
+        for kind in ("cell", "molecule", "pathway", "cell_cycle", "metabolism"):
+            start = heads[kind]
+            section = CONFIG_MD[start:min([p for p in starts if p > start] or [len(CONFIG_MD)])]
+            seen: set[type] = set()
+            todo = [(registry.get(kind).params_model, "")]
+            while todo:
+                model, prefix = todo.pop()
+                for name, info in model.model_fields.items():
+                    shown = info.alias or name
+                    if not re.search(rf"\b{re.escape(shown)}\b", section):   # `coat`, or {level, on: …}
+                        missing.append(f"{kind}: {prefix}{shown}")
+                    for nested in nested_models(info.annotation):
+                        if nested not in seen:
+                            seen.add(nested)
+                            todo.append((nested, f"{prefix}{shown}."))
+    assert not missing, missing
+
+
+def test_cell_biology_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 210: the cell-biology cookbook's pattern validates, it names all five scene types and
+    the README, the cookbook, the guide and the gallery point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-CELL-BIOLOGY.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    assert len(blocks) == 1
+    scenes = yaml.safe_load(blocks[0])
+    (tmp_path / "video.yaml").write_text(yaml.safe_dump({"title": "t", "scenes": scenes}), encoding="utf-8")
+    problems, _ = validate_all(Project.load(tmp_path), keep_going=True)
+    assert not problems, problems
+    for kind in ("cell", "molecule", "pathway", "cell_cycle", "metabolism"):
+        assert f"[`{kind}`](CONFIG.md#{kind})" in text, kind
+    assert "examples/gene-to-secreted-protein/README.md" in text
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
+        assert "COOKBOOK-CELL-BIOLOGY.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
 def test_docs_yaml_snippets_parse() -> None:
     for doc in ("docs/CONFIG.md", "docs/EXTENDING.md", "README.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")

@@ -1,0 +1,13 @@
+title: The Respiratory Chain
+voice: {provider: kokoro, voice: af_heart}
+scenes:
+  - id: respiratory_chain
+    type: metabolism
+    params:
+      title: "Oxidative phosphorylation"
+      process: etc                       # complexes I–IV, Q, cytochrome c, ATP synthase
+    beats:
+      - text: "Electrons from NADH pass complexes one, three and four, pumping ten protons."
+        actions: [{advance: etc, to: complex_iv, at: "@pass"}]
+      - text: "The protons flow back through ATP synthase, which makes ATP."
+        actions: [{advance: etc, to: atp_synthase}]

@@ -5,8 +5,8 @@
 Every vidgen scene type, rendered from its sample in the author guide (`AGENTS.md`,
 `vidgen guide scenes`). The previews are animated: each GIF plays the scene at 16:9 and
 9:16 and holds its last beat (viewers who ask for reduced motion see that still instead).
-Each page has the YAML, the params, the action targets and the stills. The cartoon sections
-end with showcases, small scenes written for the gallery, each a whole `video.yaml`.
+Each page has the YAML, the params, the action targets and the stills. The cell-biology and
+cartoon sections end with showcases, small scenes written for the gallery, each a whole `video.yaml`.
 Regenerate with `vidgen gallery`.
 
 ## Text and structure
@@ -35,28 +35,20 @@ Regenerate with `vidgen gallery`.
 
 ## Cell biology
 
-| type | preview | use it for |
+A whole lecture-style video, a protein's route from its gene to the blood through every scene type here: [From gene to secreted protein](../../examples/gene-to-secreted-protein/README.md) (`examples/gene-to-secreted-protein`). How to make them accurate and well paced: [the cell-biology cookbook](../COOKBOOK-CELL-BIOLOGY.md).
+
+| type or showcase | preview | use it for |
 |---|---|---|
 | [`cell`](cell.md) | <a href="cell.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell-16x9.png"><img src="media/cell-16x9.gif" height="180" alt="cell at 16:9"></picture></a> <a href="cell.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell-9x16.png"><img src="media/cell-9x16.gif" height="180" alt="cell at 9:16"></picture></a> | a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) |
 | [`molecule`](molecule.md) | <a href="molecule.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/molecule-16x9.png"><img src="media/molecule-16x9.gif" height="180" alt="molecule at 16:9"></picture></a> <a href="molecule.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/molecule-9x16.png"><img src="media/molecule-9x16.gif" height="180" alt="molecule at 9:16"></picture></a> | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials |
-
-## Signalling pathways
-
-| type | preview | use it for |
-|---|---|---|
 | [`pathway`](pathway.md) | <a href="pathway.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/pathway-16x9.png"><img src="media/pathway-16x9.gif" height="180" alt="pathway at 16:9"></picture></a> <a href="pathway.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/pathway-9x16.png"><img src="media/pathway-9x16.gif" height="180" alt="pathway at 9:16"></picture></a> | a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs |
-
-## Cell cycle and division
-
-| type | preview | use it for |
-|---|---|---|
 | [`cell_cycle`](cell_cycle.md) | <a href="cell_cycle.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell_cycle-16x9.png"><img src="media/cell_cycle-16x9.gif" height="180" alt="cell_cycle at 16:9"></picture></a> <a href="cell_cycle.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cell_cycle-9x16.png"><img src="media/cell_cycle-9x16.gif" height="180" alt="cell_cycle at 9:16"></picture></a> | the cell cycle with its checkpoints and cyclin–CDK levels; mitosis and meiosis with counted chromosomes, crossing over and four haploid cells |
-
-## Energy metabolism
-
-| type | preview | use it for |
-|---|---|---|
 | [`metabolism`](metabolism.md) | <a href="metabolism.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/metabolism-16x9.png"><img src="media/metabolism-16x9.gif" height="180" alt="metabolism at 16:9"></picture></a> <a href="metabolism.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/metabolism-9x16.png"><img src="media/metabolism-9x16.gif" height="180" alt="metabolism at 9:16"></picture></a> | energy metabolism: glycolysis, pyruvate oxidation, the citric acid cycle, the electron transport chain and ATP synthase, the light reactions; flows animated, products counted |
+| [Inside a plant cell](plant_cell.md) | <a href="plant_cell.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/plant_cell-16x9.png"><img src="media/plant_cell-16x9.gif" height="180" alt="plant_cell at 16:9"></picture></a> <a href="plant_cell.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/plant_cell-9x16.png"><img src="media/plant_cell-9x16.gif" height="180" alt="plant_cell at 9:16"></picture></a> | a plant cell's wall, vacuole and chloroplasts, then a zoom into one chloroplast's grana |
+| [The sodium pump](sodium_pump.md) | <a href="sodium_pump.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/sodium_pump-16x9.png"><img src="media/sodium_pump-16x9.gif" height="180" alt="sodium_pump at 16:9"></picture></a> <a href="sodium_pump.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/sodium_pump-9x16.png"><img src="media/sodium_pump-9x16.gif" height="180" alt="sodium_pump at 9:16"></picture></a> | a membrane pump's cycle: 3 Na⁺ out and 2 K⁺ in per ATP, against their gradients |
+| [Blocking MEK](mek_inhibitor.md) | <a href="mek_inhibitor.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/mek_inhibitor-16x9.png"><img src="media/mek_inhibitor-16x9.gif" height="180" alt="mek_inhibitor at 16:9"></picture></a> <a href="mek_inhibitor.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/mek_inhibitor-9x16.png"><img src="media/mek_inhibitor-9x16.gif" height="180" alt="mek_inhibitor at 9:16"></picture></a> | a signal running down the MAPK cascade, then a drug that blocks MEK and its effects downstream |
+| [Mitosis](mitosis.md) | <a href="mitosis.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/mitosis-16x9.png"><img src="media/mitosis-16x9.gif" height="180" alt="mitosis at 16:9"></picture></a> <a href="mitosis.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/mitosis-9x16.png"><img src="media/mitosis-9x16.gif" height="180" alt="mitosis at 9:16"></picture></a> | a dividing cell: condensation, the metaphase plate, sister chromatids parting, two daughter cells |
+| [The respiratory chain](respiratory_chain.md) | <a href="respiratory_chain.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/respiratory_chain-16x9.png"><img src="media/respiratory_chain-16x9.gif" height="180" alt="respiratory_chain at 16:9"></picture></a> <a href="respiratory_chain.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/respiratory_chain-9x16.png"><img src="media/respiratory_chain-9x16.gif" height="180" alt="respiratory_chain at 9:16"></picture></a> | electrons down complexes I–IV with protons pumped, then ATP synthase turning |
 
 ## Data
 

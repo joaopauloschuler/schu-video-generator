@@ -20,7 +20,8 @@ narrates on the computer itself at no cost (see `vidgen guide audio`).
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
 `actions` (pointing at things), `cartoons` (characters on a stage), `platform` (platform
-stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for a story), `overlays` (overlays,
+stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for a story), `biology`
+(cell-biology lectures: choosing, accuracy, naming, references, pacing), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
 thumbnail, GIFs, translations, rights to your content), `troubleshooting` (validate and lint messages).
@@ -707,7 +708,9 @@ sources, **never invented** (no identifier you have not seen; leave a reference 
 guess) — and they appear as small citations (`citations: {show: footer | marker | card | none}`,
 numbered across the video; a beat's `cite: [id]` shows only what it cites) and as a numbered list
 in the description file `<output>_chapters.txt`. A real micrograph shown with an `image` scene
-gets `figure_credit: {text, license, url}`.
+gets `figure_credit: {text, license, url}`. How to choose, keep it correct and pace a dense
+script: `vidgen guide biology` and `docs/COOKBOOK-CELL-BIOLOGY.md` (example:
+`examples/gene-to-secreted-protein`).
 
 ```yaml
 # accuracy and references
@@ -1831,6 +1834,66 @@ scenes:
 bridge crosses it) at row 4, column 11`). A whole story: `examples/iso-story` (a village by a stream and a room,
 a key, a lamp lit in the rain, flowers that bloom, a 9:16 variant). Every key: `docs/CONFIG.md`
 "Isometric places (`iso`)".
+
+<!-- topic: biology (also: cell-biology, science, lecture, research) -->
+## Cell biology: lectures and research explainers
+
+Five scene types draw cell biology at university level, stylised but checked (`vidgen guide
+scenes` has a snippet of each): `cell` (a cell in µm, zooming tissue → cell → organelle →
+complex; with a `gene`, its products' route), `molecule` (molecules in nm, processes as actions;
+with a `gene`, each step of expression up close), `pathway` (signalling in compartment bands),
+`cell_cycle` (the cycle, mitosis, meiosis) and `metabolism` (glycolysis, the citric acid cycle,
+the respiratory chain, the light reactions). The craft in full: `docs/COOKBOOK-CELL-BIOLOGY.md`
+in the schu-video-generator repository; a whole example: `examples/gene-to-secreted-protein`.
+
+**Choosing.** Where and how big → `cell`; how one molecule works → `molecule`; how a gene
+becomes a protein, step by step → `molecule` with a `gene`, then the same route at the scale of
+the cell → `cell` with the `gene`; who activates whom → `pathway`; the cycle and divisions →
+`cell_cycle`; energy → `metabolism`. Move between levels on purpose and say so ("Up close",
+"At the scale of the cell").
+
+**Accuracy rules.**
+- Pick an example that is true at every step you show (a glycoprotein secreted constitutively
+  for ER glycosylation and secretion without a trigger; insulin is neither glycosylated nor
+  constitutive). Say what is a model: a generated gene is "a short model gene"; a drawing larger
+  than real gets `not_to_scale: true`.
+- Directions: template read 3′→5′, RNA made 5′→3′, chains N→C, kinesin to +, dynein to −,
+  protons out of the matrix, 3 Na⁺ out and 2 K⁺ in per ATP. Places: translation starts in the
+  cytosol, N-glycans are added in the ER and remodelled in the Golgi, glycolysis in the cytosol.
+- On-screen step captions are claims too: `notes: false` on an action whose caption is more
+  specific than your cell (the neuronal SNAREs of `exocytosis` in a liver cell).
+- An arc you cannot vouch for as direct is `indirect: true`.
+- `vidgen validate` refuses the impossible; `vidgen lint`'s `science_*` rules read the narration.
+
+**Naming.** Genes italic, proteins roman, by `species` (human *TP53* / p53, mouse *Trp53* /
+TRP53); `<i>…</i>` for a gene in a markup label; `Ca2+`, `Pi`, `F_o` are typeset. Let the voice
+say symbols through `pronunciation:` (`SERPINA1: serpin A one`, `STAT3: stat three`, `COPII: cop
+two`) and check with `vidgen readback`. `terms:` for three or four concepts.
+
+**References.** `references:` on the scene with an identifier copied from the source (DOI, PMID,
+ISBN), `cite:` on the beat; never invent one, leave it out instead. With karaoke captions use
+`citations: {show: marker}`.
+
+**Pacing dense content.** One process per beat with 20–35 words for a long step (a gene step lasts
+3–15 s and a short beat squeezes it); actions on the word (`at: "@scans"`); Kokoro
+`speed: 0.85`; label only what is said (`labels: [granum, stroma]`, or `labels: false` where
+processes move things); a long pathway in two scenes; a recap (`process`) at the end.
+
+```yaml
+- id: er
+  type: molecule
+  params:
+    title: "Into the endoplasmic reticulum"
+    gene: {id: gene, signal_peptide: true, glycosylation: true, start: mrna}
+  references:
+    - {id: blobel, label: "Blobel & Dobberstein, J. Cell Biol. 1975", doi: "10.1083/jcb.67.3.835"}
+  beats:
+    - text: "In the cytosol a ribosome scans to the start codon and begins the chain at its N terminus."
+      actions: [{translate: gene, codons: 3, at: "@scans"}]
+    - text: "Its first residues are a signal peptide. SRP binds it and docks the ribosome on the Sec61 translocon."
+      cite: [blobel]
+      actions: [{target_er: gene, at: "@SRP"}]
+```
 
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->
 ## Overlays, transitions and continuity

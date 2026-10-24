@@ -15498,3 +15498,44 @@ kind's range, counts, exaggerated glyphs.
   molecule scenes have no `target_text`; the citations reserve room even in beats that show none
   (a scene's layout cannot change between beats); the metabolism scene writes enzyme names in
   italics (a stylistic choice of Step 208, not a gene symbol; left for Step 211's review).
+
+### 95.15 Example, guide, cookbook and gallery (Step 210)
+
+- **The example** `examples/gene-to-secreted-protein` (README with the scene table and checks):
+  eight scenes, about 3:34 with Kokoro (`af_heart`, speed 0.85), the `discovery` bed at −4 dB,
+  karaoke captions, `terms:` (messenger RNA, signal peptide, glycan), `citations: {show: marker}`,
+  a 9:16 variant `short`. **Decided: α1-antitrypsin, not insulin** — constitutively secreted and
+  N-glycosylated (three N-glycans), so every step shown is true of it; insulin (not glycosylated;
+  proinsulin cut by PC1/3, PC2 and carboxypeptidase E in regulated granules) would need other
+  scenes. The `molecule` close-ups use a generated model gene, said so in the narration (a real
+  418-residue precursor does not fit a close-up). The `pathway` is built from nodes and edges
+  (IL-6 → IL-6R–gp130 → JAK1 → STAT3 (pTyr705) ⇒ nucleus → *SERPINA1*, the transcription arc
+  `indirect`). References only where the identifier is known: Blobel & Dobberstein 1975 by DOI,
+  Alberts 6th ed. by ISBN (check digit verified).
+- **Guide topic `biology`** (aliases `cell-biology`, `science`, `lecture`, `research`): choosing the
+  scene, accuracy rules, naming, references, pacing dense content, one snippet; the `scenes`
+  topic points to it. **Cookbook** `docs/COOKBOOK-CELL-BIOLOGY.md` (linked from the README, the
+  cookbook, the guide and the gallery), its pattern validated by `tests/test_docs.py`.
+- **Gallery.** `GROUP_SECTIONS` shows the guide groups `signalling pathways`, `cell cycle and
+  division` and `energy metabolism` in the `cell biology` section, so the five types share one
+  "Cell biology" section; five showcases end it (`plant_cell`, `sodium_pump`, `mek_inhibitor`,
+  `mitosis`, `respiratory_chain`; one per type); `SECTION_NOTES` links the example and the
+  cookbook; `SECTION_FOOTERS` gives a showcase page its section's further reading (the cartoon
+  sections keep theirs). **Budget: optimised, not raised** — stills are saved as 256-colour palette
+  PNGs (median cut, no dithering; `STILL_COLORS`): 3.0 → 1.2 MB for the 100 committed stills, mean
+  error under 1/255 per channel; the gallery is 9.4 MB of its 10 MB with every GIF ≤ 150 KB (the
+  mitosis showcase starts at metaphase to fit).
+- **Fixes found while making it.** The cell route's transcription caption no longer says "(in a
+  molecule scene each step is shown up close)" (a viewer-facing caption). The cell world's
+  pieces (`drawing.tissue`, `drawing.cell`, each object group), a membrane event's overlay and a
+  gene close-up's stage are marked `scenery`; `introspect` now marks a *group* scenery when it is,
+  or holds only scenery pieces (empty groups aside), so `off_frame` no longer reports a zoomed
+  view's cropped world. The close-up's "schematic: not to scale" is drawn at the readable size
+  inside the safe area (it was scaled 0.85 and offset by its width × 0.85 twice), beside the
+  legend when it fits in 36 % of the width, else a line above it (9:16, where the protein's
+  readout takes the width).
+- **Public:** no new `vidgen.api` names. Config: none (a guide topic, showcases). `gallery`:
+  `GROUP_SECTIONS`, `SECTION_FOOTERS`, `DEFAULT_FOOTER`, `STILL_COLORS`.
+- **Gaps (for Step 211):** the exocytosis step captions name the neuronal SNAREs (the example turns
+  them off; the to-Golgi caption now says "some proteins also get O-glycans"); the 16:9
+  pathway leaves much of the frame empty; a hepatocyte is drawn as the typical animal cell.

@@ -217,8 +217,8 @@ class RoutePlanner:
             p.view = self._camera(s, min(1.0, u * 2.5), view)
             return p
 
-        note = ("RNA polymerase II transcribes the gene; the pre-mRNAs are capped, spliced and polyadenylated as they are made "
-                "(in a molecule scene each step is shown up close)" if euk else
+        note = ("RNA polymerase II transcribes the gene; the pre-mRNAs are capped, spliced and polyadenylated as they are made"
+                if euk else
                 "RNA polymerase transcribes the gene in the nucleoid; ribosomes start on the mRNAs at once")
         self._phase(phases, 3.0, note, fn)
 
@@ -358,7 +358,7 @@ class RoutePlanner:
                                  "site and buds a vesicle", gather)
         self._phase(phases, 1.6, "The COPII vesicle loses its coat and fuses (via the ERGIC) with the cis-Golgi", carry)
         self._phase(phases, 2.4, "Cisternae mature cis → medial → trans; enzymes trim and rebuild the N-glycans (complex glycans in the "
-                                 "medial and trans cisternae) and add O-glycans", through)
+                                 "medial and trans cisternae); some proteins also get O-glycans", through)
 
     def _cargo(self, at: Point, k: int, j: int, r: float = 0.032) -> Point:
         a = 2.4 * k + 1.7 * j

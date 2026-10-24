@@ -7,7 +7,9 @@ the config reference (`docs/CONFIG.md`) say what vidgen *can* do. This cookbook 
 videos *work*: hooks, pacing, sound, credits, labels, voice, and the QA loop. For a YouTube Short
 that shows source code, see [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md);
 for writing your own music as score files (room for the voice, builds and lifts, loops, genre
-sketches), see [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md).
+sketches), see [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md); for cell-biology lectures and research
+explainers (accuracy, level of detail, zooming, pacing dense content), see
+[COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 
@@ -431,7 +433,11 @@ and the scenes for what validation cannot judge:
   what the narration names; dense pathways split into two scenes rather than shrinking text.
 
 Run `vidgen lint` (on the preview) before rendering the final cut: the science rules read the
-config and the narration, not the pictures, and give the textbook fix with each finding.
+config and the narration, not the pictures, and give the textbook fix with each finding. The whole
+craft (choosing the scene type, level of detail, labelling, zooming, pacing dense content,
+narration–picture timing, references, common mistakes) is in
+[COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md), with the worked example
+[`examples/gene-to-secreted-protein`](../examples/gene-to-secreted-protein/README.md).
 
 ## 13. Editorial options (example style choices)
 

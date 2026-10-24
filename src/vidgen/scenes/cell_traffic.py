@@ -208,6 +208,7 @@ class MembraneEvent(Animation):
 
     def __init__(self, scene: Any, event: Any, shape_at: Any, captions: list[tuple[float, float, Mobject]], gather: Any = None, cargo: Any = None,
                  **kwargs: Any) -> None:
+        event.group.scenery = True   # it covers the still membrane: cropped by the view like the world (lint off_frame)
         scene.add(event.group)
         scene.traffic_events.append(event)
         super().__init__(event.group, rate_func=linear, **kwargs)

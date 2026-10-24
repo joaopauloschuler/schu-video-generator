@@ -1191,7 +1191,9 @@ when shared code changes). DESIGN §95. Steps 202–211.
 - [~] English narration only; claims across sentences or behind a comma are not read; no `vidgen refs check` (no network by design); molecule scenes have no `target_text`
 
 ### Step 210 — Example, docs and gallery
-- [ ] "From gene to secreted protein" (transcription, splicing, export, translation on the rough ER, Golgi, exocytosis) narrated with Kokoro, music, 16:9 and 9:16; gallery section "Cell biology" with animated previews; guide topic; CONFIG reference; a cookbook page (accuracy, level of detail, labelling, pacing dense content)
+- [x] "From gene to secreted protein" (transcription, splicing, export, translation on the rough ER, Golgi, exocytosis) narrated with Kokoro, music, 16:9 and 9:16; gallery section "Cell biology" with animated previews; guide topic; CONFIG reference; a cookbook page (accuracy, level of detail, labelling, pacing dense content)
+- [x] `examples/gene-to-secreted-protein` (α1-antitrypsin, 3:34 with Kokoro, `discovery` bed, references, terms, 9:16 variant; validate and lint clean in both); guide topic `biology`; `docs/COOKBOOK-CELL-BIOLOGY.md`; CONFIG nested options of the five types checked by a test; gallery "Cell biology" section with five showcases (stills as palette PNGs: 9.4 MB of 10); fixes: route caption, `scenery` for cropped cell worlds, the close-up's not-to-scale note; tests `tests/test_gene_to_secreted_protein.py`, `test_gallery`, `test_docs`, `test_guide`
+- [~] The exocytosis captions name neuronal SNAREs (turned off in the example; left for Step 211); a hepatocyte is drawn as the typical animal cell
 
 ### Step 211 — Review of Phase U
 - [ ] Critical review with fixes, including a scientific-accuracy pass over the library and the example; compatibility; phase tests and related suites; `tests/test_mcp.py` in full

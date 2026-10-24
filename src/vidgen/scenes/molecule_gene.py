@@ -176,8 +176,12 @@ class GeneExpression:
         self.drawing = ExpressionDrawing(self.stage, colors, unit, np.array([body.center[0], body.center[1], 0.0]),
                                          (body.width / 2, body.height / 2), self._gene_text, self.theme.color("dim"))  # type: ignore[attr-defined]
         self.drawing.apply(self.stage.pose)
-        note = self.markup("schematic: not to scale", size=p.label_size, color="dim")  # type: ignore[attr-defined]
-        note.scale(0.85).move_to([body.x1 - note.width * 0.85 / 2 - 0.1, body.y0 - strip + line / 2 + 0.03, 0.0])
+        self.drawing.group.scenery = True   # the strands run on past the view as it follows a step (lint off_frame)
+        note =self.markup("schematic: not to scale", size=p.label_size, color="dim")  # type: ignore[attr-defined]
+        # the readable size, in the safe area, right of the legend / the protein's readout (which
+        # take the left 62 % of a wide view, all of a tall one); a line over them when it does not fit
+        beside = wide and note.width <= 0.36 * body.width
+        note.move_to([body.x1 - note.width / 2, body.y0 - strip + line / 2 + 0.03 + (0.0 if beside else line + 0.05), 0.0])
         note.set_z_index(NOTE_Z)
         self._last_caption: Mobject | None = None
         chain = ChainedTargets(self)

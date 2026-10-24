@@ -182,6 +182,16 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   them, dots and packets flow along connectors, a stack's layers pull apart, the camera focuses on
   a part, labels and values change in place ([docs](docs/CONFIG.md#iso_diagram),
   [example](examples/iso-web-page)).
+- **Cell biology at university level**: `cell` draws a cell in physical scale (animal, plant or
+  bacterium; organelles, membranes, the cytoskeleton, molecules) and zooms from the tissue to one
+  ribosome with a scale bar; `molecule` shows molecules in nm (DNA, receptors, channels, pumps, ATP
+  synthase) with transport, gating and action potentials, and every step of gene expression up
+  close; `pathway` lays out signalling SBGN-style with signals, inhibitors, knockouts and drugs;
+  `cell_cycle` and `metabolism` draw the cycle, mitosis, meiosis, glycolysis, the citric acid
+  cycle and the respiratory chain. Places, directions, names and counts are checked
+  (`vidgen validate`, the `science_*` lint rules) and scenes carry references
+  ([docs](docs/CONFIG.md#cell), [cookbook](docs/COOKBOOK-CELL-BIOLOGY.md),
+  [gallery](docs/gallery/README.md#cell-biology), [example](examples/gene-to-secreted-protein/README.md)).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
@@ -772,6 +782,13 @@ my_video/
   `momentum` template in nine checked steps, now the built-in bed `music: time_of_flight`; the
   README has the iteration log and the piece's check report; about 89 s with Kokoro narration (no
   audio committed).
+- [examples/gene-to-secreted-protein](examples/gene-to-secreted-protein/README.md) — "From gene to
+  secreted protein", a university-level cell-biology explainer following α1-antitrypsin from its
+  gene to the blood: a zoom from the tissue into the nucleus, transcription, capping, splicing,
+  polyadenylation and export up close, translation, SRP targeting to Sec61, N-glycosylation and
+  calnexin in the ER, the route through the Golgi to secretion across the whole cell, an
+  exocytosis close-up and the IL-6–STAT3 pathway that raises its synthesis; references, karaoke
+  captions, the `discovery` bed, a 9:16 variant; about 3:34 with Kokoro narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -779,7 +796,9 @@ my_video/
   [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
   YouTube Short about code: layout, phone-readable code, narration, checks;
   [docs/COOKBOOK-MUSIC.md](docs/COOKBOOK-MUSIC.md) — writing music as score files: room for the
-  voice, builds and lifts, loops, check and compare, genre sketches.
+  voice, builds and lifts, loops, check and compare, genre sketches;
+  [docs/COOKBOOK-CELL-BIOLOGY.md](docs/COOKBOOK-CELL-BIOLOGY.md) — cell-biology lectures and
+  research explainers: choosing the scene, accuracy, labelling, zooming, pacing, references.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–209)
+## Unreleased (Steps 193–210)
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
@@ -124,6 +124,20 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   url}`, formats checked offline) and `figure_credit:`; beats `cite:` them; they show as small
   citations (`citations: {show: footer | marker | card | none}`, numbered across the video) and
   as a numbered list in `<output>_chapters.txt`.
+- **Example, guide, cookbook and gallery** (Step 210): `examples/gene-to-secreted-protein`, "From
+  gene to secreted protein" (about 3:34 with Kokoro): α1-antitrypsin from its gene in a liver
+  cell to the blood — a zoom into the nucleus, transcription, capping, splicing,
+  polyadenylation, export, translation, SRP targeting, N-glycosylation and calnexin up close, the
+  route through the Golgi to secretion across the cell, exocytosis and the IL-6–STAT3 pathway;
+  references, concept colours, the `discovery` bed, a 9:16 variant. A guide topic (`vidgen guide
+  biology`: choosing the scene, accuracy, naming, references, pacing) and
+  `docs/COOKBOOK-CELL-BIOLOGY.md`. The scene gallery has one **Cell biology** section with the five
+  types and five showcases (a plant cell, the sodium pump, a MEK inhibitor, mitosis, the
+  respiratory chain); gallery stills are now palette PNGs (about 40 % of their size, the room for
+  the showcases). Fixes found on the way: a cell route's transcription caption no longer mentions
+  vidgen's molecule scene; a zoomed `cell` view and a gene close-up no longer report their cropped
+  world as `off_frame`; the close-up's "schematic: not to scale" is at the readable size, in the
+  safe area and clear of the protein's readout in 9:16.
 
 ### vidgen studio: a music workstation for people (Phase T)
 
