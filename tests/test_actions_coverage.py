@@ -65,6 +65,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "cross": {"title": "Cross", "preset": "pea_seed_shape", "parents": ["Rr", "Rr"]},
     "pedigree": {"title": "Pedigree", "individuals": ["I-1: male", "I-2: female", "II-1: female affected proband of I-1 + I-2"],
                  "analyse": True, "genotypes": True},
+    "linkage_map": {"title": "Map", "loci": ["b", "vg"], "counts": {"b vg": 405, "+ +": 415, "b +": 85, "+ vg": 95}},
+    "karyotype": {"title": "Karyotype", "karyotype": "47,XX,+21"},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -204,6 +206,15 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("pedigree", individuals=["dad: male", "mum: female", "kid: male of dad + mum", "next: unknown proposed of dad + mum"],
                  mode="AD", title="")[:8] == ["chart", "legend", "generation:I", "generation:II", "person:dad", "person:I-1", "person:mum",
                                               "person:I-2"]
+    assert names("linkage_map") == ["title", "chromosomes", "table", "classes", "distances", "map", "locus:b", "locus:vg",
+                                    "interval:b-vg"]
+    assert names("linkage_map", loci=None, counts=None, map={"y": 0, "w": 1.5, "v": 33}, chromosomes=False) == [
+        "title", "map", "locus:y", "locus:w", "locus:v", "interval:y-w", "interval:y-v", "interval:w-v"]
+    kgram = names("karyotype")
+    assert kgram[:3] == ["title", "chromosomes", "group:A"] and "chromosome:X" in kgram and "chromosome:Y" not in kgram
+    assert kgram[-4:] == ["change:1", "changes", "notation", "reading"]
+    assert names("karyotype", karyotype="46,XX,t(9;22)(q34;q11.2)", bands=["9q34"], title="") == [
+        "chromosomes", "chromosome:9", "chromosome:22", "change:1", "changes", "notation", "reading", "band:9q34"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

@@ -82,6 +82,8 @@ class CellCycle(NarratedScene):
         """meiosis: per homologous pair, where its crossovers are (0 p telomere … 1 q telomere; one or two each); default one per pair, placed by the seed."""
         assortment: list[Literal["m", "p"]] | None = None
         """meiosis: per pair, the homologue facing the first pole at metaphase I (m maternal, p paternal); default by the seed."""
+        nondisjunction: dict[str, Any] | None = None
+        """meiosis: {division: I | II, pair: 1}: that pair's homologues (I) or sister chromatids (II, in the first daughter cell) fail to separate; the gametes are labelled n + 1 / n − 1 / n with their shares and the zygotes they make."""
         seed: int = 1
         """Varies the chromosomes' places and, in meiosis, the default crossovers and assortment."""
         captions: bool = True
@@ -93,10 +95,25 @@ class CellCycle(NarratedScene):
         size: ThemeSize = "caption"
         """Label size (never below the readable minimum)."""
 
+        def nd(self) -> tuple[str, int] | None:
+            """``nondisjunction`` as (``I`` / ``II``, pair index from 0), checked."""
+            spec = self.nondisjunction
+            if spec is None:
+                return None
+            for key in spec:
+                if key not in ("division", "pair"):
+                    raise VidgenError(f"nondisjunction: unknown key '{key}': use division (I or II) and pair (1…)")
+            division = str(spec.get("division", "I")).strip().upper().replace("MEIOSIS", "").strip()
+            division = {"1": "I", "2": "II"}.get(division, division)
+            pair = spec.get("pair", 1)
+            if isinstance(pair, bool) or not isinstance(pair, int):
+                raise VidgenError(f"nondisjunction.pair: {pair!r}: the number of the homologous pair (1 for the first)")
+            return division, pair - 1
+
         def division_spec(self) -> Any:
             return dv.DivisionSpec(self.mode, self.chromosomes, self.cell,
                                    tuple(tuple(x) for x in self.crossovers) if self.crossovers is not None else None,
-                                   tuple(self.assortment) if self.assortment is not None else None, self.seed)
+                                   tuple(self.assortment) if self.assortment is not None else None, self.seed, self.nd())
 
         def division(self) -> Any:
             return _division(self.division_spec())
@@ -113,7 +130,8 @@ class CellCycle(NarratedScene):
         def _check(self) -> "CellCycle.Params":
             try:
                 if self.mode == "cycle":
-                    extra = [k for k in ("chromosomes", "cell", "crossovers", "assortment", "captions", "counts") if k in self.model_fields_set]
+                    extra = [k for k in ("chromosomes", "cell", "crossovers", "assortment", "captions", "counts", "nondisjunction")
+                             if k in self.model_fields_set]
                     if extra:
                         raise VidgenError(f"{', '.join(extra)}: belong{'s' if len(extra) == 1 else ''} to mode: mitosis or meiosis")
                     self.geometry()
@@ -597,9 +615,19 @@ class CellCycle(NarratedScene):
                 rows.append(text_block(self, kf.caption, width, self.small, color=self.ink))
             if p.counts:
                 c = dv.stage_counts(div.spec.mode, kf.stage, div.spec.two_n)
-                each = "per cell" if c.cells == 1 else f"each of {c.cells} {'nuclei' if kf.stage.startswith('telophase') else 'cells'}"
-                text = (f"2n = {div.spec.two_n} · {each}: {c.chromosomes} chromosomes, {c.chromatids} chromatids "
-                        f"({c.ploidy}, {c.dna})")
+                differ = dv.nondisjunction_cells(kf.stage, div.spec.two_n, div.spec.nondisjunction) if div.spec.mode == "meiosis" else None
+                if differ is not None:
+                    n = div.spec.two_n // 2
+                    where = "nuclei" if kf.stage.startswith("telophase") else "cells"
+                    each = ", ".join(str(ch) for ch, _ in differ)
+                    text = f"2n = {div.spec.two_n} · {len(differ)} {where}: {each} chromosomes"
+                    if len(differ) == 4 or kf.stage in ("telophase_i", "cytokinesis_i", "prophase_ii", "metaphase_ii"):
+                        tags = ", ".join("n" if ch == n else (f"n + {ch - n}" if ch > n else f"n − {n - ch}") for ch, _ in differ)
+                        text += f" ({tags})"
+                else:
+                    each = "per cell" if c.cells == 1 else f"each of {c.cells} {'nuclei' if kf.stage.startswith('telophase') else 'cells'}"
+                    text = (f"2n = {div.spec.two_n} · {each}: {c.chromosomes} chromosomes, {c.chromatids} chromatids "
+                            f"({c.ploidy}, {c.dna})")
                 rows.append(text_block(self, text, width, self.small * 0.92, color=self.dim_ink))
             block = VGroup(*rows).arrange(DOWN, buff=0.16, aligned_edge=LEFT)
             if block.height > cap.height or block.width > cap.width:

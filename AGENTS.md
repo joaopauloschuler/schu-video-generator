@@ -297,10 +297,12 @@ project's own scene types, in its theme).
 | a neural network | `network` | `heading`, `layers`, `connect`, `highlight` |
 | architecture in 3D: servers, databases, layered stacks, data flow (isometric blocks) | `iso_diagram` | `heading`, `blocks` (in order; one with layers, bottom up, is a stack), `edges`, `groups`, `arrange` |
 | a cell in true scale: organelles, membranes, ribosomes; zooming from tissue to one molecule (cell biology) | `cell` | `title`, `cell`, `contents` (typical: the textbook cell), `objects` (kind, at in µm, in, on, count, coat, style; molecules: state, faces, membrane), `view`, `labels`; animal, plant or bacterium; the actions zoom_to, motor_walk, endocytosis, exocytosis; with a `gene`: transcribe, export, translate, to_golgi, secrete (its products' route, the camera following) |
-| the cell cycle with its checkpoints and cyclin–CDK levels; mitosis and meiosis with counted chromosomes, crossing over and four haploid cells | `cell_cycle` | `title`, `mode` (cycle, mitosis, meiosis), `start`, `hours`, `chromosomes` (2n), `cell` (animal, plant), `crossovers`, `assortment`, `captions`, `counts`; the actions advance (to, into, expect) and checkpoint (outcome, cause) |
+| the cell cycle with its checkpoints and cyclin–CDK levels; mitosis and meiosis with counted chromosomes, crossing over and four haploid cells | `cell_cycle` | `title`, `mode` (cycle, mitosis, meiosis), `start`, `hours`, `chromosomes` (2n), `cell` (animal, plant), `crossovers`, `assortment`, `nondisjunction` ({division: I or II, pair}: aneuploid gametes), `captions`, `counts`; the actions advance (to, into, expect) and checkpoint (outcome, cause) |
 | energy metabolism: glycolysis, pyruvate oxidation, the citric acid cycle, the electron transport chain and ATP synthase, the light reactions; flows animated, products counted | `metabolism` | `title`, `process` (glycolysis, link_reaction, tca, etc, light_reactions), `cell`, `in`, `membrane`, `protons_to`, `components`, `link`, `tallies`, `names`; the action advance (to, from) |
 | a genetic cross: Punnett square or branch diagram, gametes, genotype and phenotype ratios (mono-, di-, trihybrid, test, reciprocal, P → F1 → F2, dominance, epistasis, lethal 2:1, X-linked, linked genes), a chi-square test | `cross` | `title`, `preset` (pea_dihybrid, abo, labrador, drosophila_white, hemophilia_a…) or `loci` / `linkage` / `epistasis` / `sex`, `parents` (or `mother` / `father`, or `P`), `kind` (cross, test, reciprocal), `show` (auto, punnett, branch), `branch`, `observed`, `alpha`, `notes`, `pictures`; the actions form_gametes, fill, count, ratio, chi_square |
 | a family pedigree in standard (NSGC) symbols: affected, carriers, deceased, proband, twins, consanguinity; which modes of inheritance fit and why the others are excluded, deduced genotypes, carrier probabilities, the risk for a child | `pedigree` | `title`, `individuals` (lines like "II-3: female affected of I-1 + I-2" or mappings), `couples`, `condition`, `mode`, `analyse`, `genotypes`, `penetrance`, `rare`, `carrier_frequency`, `alleles` or `preset`; the actions deduce, analyse, risk |
+| linked genes and genetic maps: crossing over between homologues (coupling / repulsion), a two- or three-point test cross worked out from offspring counts (parental and double-crossover classes, gene order, distances in cM, coincidence and interference), map functions | `linkage_map` | `title`, `loci` + `counts` (the test-cross classes) or `map` (loci at cM positions), `map_function` (none, haldane, kosambi), `phase`, `crossover`, `chromosomes`; the actions cross_over, measure; reveal the steps (table, classes, order, distances, interference, map) |
+| a human karyotype from its ISCN notation (47,XX,+21; 45,X; 46,XY,del(5)(p15.2); t(9;22); rob(14;21)): a karyogram by groups A–G with G-banded ideograms and the change highlighted, or the chromosomes involved with structural changes played as edits | `karyotype` | `title`, `karyotype`, `show` (auto, karyogram, ideogram), `chromosomes`, `bands` ({7q31.2: CFTR}), `notation`; the action rearrange |
 | a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs | `pathway` | `title`, `template` (gpcr_camp_pka, rtk_ras_mapk, pi3k_akt), `nodes` (id, kind, label, in, gene, state, marks, role), `edges` (a -> b activates, a -o b catalyses, a => b translocates, an arrow with a bar inhibits, or {from, to, type, effect, site, feedback, label}), `remove`, `species`, `direction`; the actions signal, inhibit, knockout, drug, amplify, focus |
 | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
@@ -740,6 +742,37 @@ A `pedigree` scene draws a family chart in standard human pedigree nomenclature 
     - text: "Her brother is a carrier with probability two thirds; the risk is one in 150."
       actions: [{deduce: genotypes}, {risk: risk, at: "@risk"}]
 ```
+
+A `linkage_map` scene shows linked genes (DESIGN §96.9): the heterozygous parent's homologue pair (sister chromatids joined at the centromere, maternal and paternal colours) with its alleles, and crossing over in an interval — the non-sister chromatids meet at a chiasma and swap the segments beyond it, giving recombinant chromatids (labelled with their alleles). With `loci` and `counts` it works a two- or three-point test cross out step by step: the table of offspring classes, the parental classes (the largest reciprocal pair; they give the phase, coupling or repulsion) and the double crossovers (the smallest), the gene order (the locus at which a double crossover differs from a parental class is in the middle), each interval's recombinants, RF and distance, the expected and observed double crossovers with the coefficient of coincidence and the interference, and the map. Write each class with every locus once: the mutant allele by its symbol, the wild type as `v+` or `+` (`"v cv+ ct+": 580`). Distances are RF × 100 cM (`map_function: none`, what three-point analyses report; right below ~15 cM) or Haldane's / Kosambi's map function. With `map: {y: 0, w: 1.5, v: 33}` the loci stand at their positions; `measure: "interval:w-v"` shows a distance and the RF it gives. `cross_over: "interval:v-ct"` (or `double`) plays the crossing over on a word; `reveal: order` (or `table`, `classes`, `distances`, `interference`, `map`) plays a step. Checked with the reason: missing or doubled classes, an unknown locus, parental or double-crossover pairs that cannot be told, a crossover between loci that are not neighbours.
+
+```yaml
+# genetics
+- id: map
+  type: linkage_map
+  params:
+    title: "Mapping three genes"
+    loci: [v, cv, ct]                  # mutant alleles, any order: the order is worked out
+    counts: {"v cv+ ct+": 580, "v+ cv ct": 592, "v cv ct+": 45, "v+ cv+ ct": 40, "v cv ct": 89, "v+ cv+ ct+": 94, "v cv+ ct": 3, "v+ cv ct+": 5}
+  beats:
+    - text: "Crossing over gives recombinant gametes; the rarest classes are double crossovers."
+    - text: "So ct lies in the middle, 13.2 and 6.4 centimorgans from its neighbours."
+```
+
+A `karyotype` scene draws a human karyotype from its ISCN notation (DESIGN §96.10), checked: the count against the chromosomes listed (`47,XX` lists 46: write 46,XX), the sex chromosomes, each change and its bands (`5p16` does not exist: 5p ends at 5p15). Supported: `+21`, `-21`, `del(5)(p15.2)`, `del(1)(q21q32)`, `dup(1)(q21q32)`, `inv(9)(p12q13)`, `t(9;22)(q34;q11.2)`, `rob(14;21)(q10;q10)`; sex chromosome aneuploidy in the sex chromosomes (`45,X`, `47,XXY`). `show: karyogram` (default for numerical changes) arranges the pairs 1–22, X, Y in the Denver groups A–G with schematic G-banded ideograms (true relative lengths and centromere positions; satellites on 13, 14, 15, 21, 22) and highlights the change; `show: ideogram` (default when every change is structural, or with `chromosomes: [7]`) draws the chromosomes involved large, with p and q and `bands: {7q31.2: CFTR}` labelled, and plays each structural change as an edit — a deletion falls away, an inversion turns round, a translocation's segments swap, a Robertsonian translocation joins two long arms. A card reads the notation (and names the classic condition: Down, Turner, Klinefelter, cri-du-chat, the Philadelphia chromosome…). The band pattern is schematic: say "band q31" but do not read exact positions off it. `rearrange: change:1` plays a change on a word.
+
+```yaml
+# genetics
+- id: karyotype
+  type: karyotype
+  params:
+    title: "Trisomy 21"
+    karyotype: "47,XY,+21"             # or 46,XX,t(9;22)(q34;q11.2): its edit plays in an ideogram
+  beats:
+    - text: "A male karyotype, its chromosomes in pairs by size, three copies of chromosome twenty-one."
+    - text: "Forty-seven, X Y, plus twenty-one: Down syndrome."
+```
+
+In `cell_cycle` meiosis, `nondisjunction: {division: I, pair: 1}` makes that pair's homologues go to one pole at anaphase I (every gamete n + 1 or n − 1), `division: II` its sister chromatids stay together at anaphase II in one cell (half the gametes normal); the gametes are labelled and the last caption gives the zygotes after fertilisation (trisomic, monosomic, euploid).
 
 Accuracy and sources. `vidgen lint` checks the science of these scenes (and of any narration)
 with the `science_*` rules: sizes far off scale on a `cell` with a scale bar (set `not_to_scale:
@@ -1243,6 +1276,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `deduce` | on a `pedigree`: the genotypes under the symbols, forced ones or the most telling with its exact probability (`deduce: genotypes`, `carriers`, `generation:II`, `person:II-3`), obligate carriers marked | on the word that says carriers |
 | `analyse` | on a `pedigree`: the modes of inheritance tried one by one, each fits or is excluded with its reason, the people it names ringed (`analyse: modes`; `mode:XR` for one) | ~1 s a mode: a beat for all six, or one mode per beat |
 | `risk` | on a `pedigree` with a `proposed` child: the child appears and the risk card with the factors of the product (`risk: risk`) | on the word that says the risk |
+| `cross_over` | on a `linkage_map`: non-sister chromatids meet at a chiasma in an interval and swap the segments beyond it (`cross_over: "interval:v-ct"`, or `double`); the recombinant chromatids are labelled | ~2.4 s, on the word that says crossing over |
+| `measure` | on a `linkage_map`: a distance on the map with the RF its map function gives (`measure: "interval:w-v"`) | ~1.6 s |
+| `rearrange` | on a `karyotype`: a change of the notation (`rearrange: change:1`, or `changes`): a structural change as an edit in an ideogram, else its highlight | ~2.6 s an edit |
 
 ```yaml
 - id: speeds

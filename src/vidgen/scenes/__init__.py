@@ -14,7 +14,8 @@ switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: l
 rainbow; ``knock_action``: knock; ``hide_action``: hide; ``iso_actions``: build, raise, lower, explode, collapse, flow,
 focus, relabel; ``cell_actions``: zoom_to; ``molecule_actions``: set_state, transport, diffuse, osmosis,
 action_potential; ``gene_actions``: transcribe, cap, splice, polyadenylate, export, translate, target_er,
-glycosylate, fold, to_golgi, secrete; ``pathway_actions``: signal, inhibit, knockout, drug, amplify; ``cycle_actions``: advance, checkpoint; ``cross_actions``: form_gametes, fill, count, ratio, chi_square; ``pedigree_actions``: deduce, analyse, risk; ``host_actions``: host_point, host_look, host_react, host_move,
+glycosylate, fold, to_golgi, secrete; ``pathway_actions``: signal, inhibit, knockout, drug, amplify; ``cycle_actions``: advance, checkpoint; ``cross_actions``: form_gametes, fill, count, ratio, chi_square; ``pedigree_actions``: deduce, analyse, risk; ``linkage_actions``: cross_over, measure;
+``karyotype_actions``: rearrange; ``host_actions``: host_point, host_look, host_react, host_move,
 host_enter, host_exit) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
@@ -53,12 +54,16 @@ from vidgen.scenes import (  # noqa: F401
     host_actions,
     icon_grid,
     image,
+    karyotype,
+    karyotype_actions,
     iso_actions,
     iso_diagram,
     keyframes_action,
     knock_action,
     light_action,
     line_chart,
+    linkage_actions,
+    linkage_map,
     metabolism,
     molecule,
     molecule_actions,

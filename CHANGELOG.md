@@ -5,9 +5,23 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–215)
+## Unreleased (Steps 193–216)
 
 ### Genetics (Phase V, from Step 213)
+
+- **Chromosomes** (Step 216). A `linkage_map` scene type: the heterozygote's homologue pair with
+  its alleles (coupling or repulsion), crossing over between non-sister chromatids giving
+  recombinant chromatids, and two- or three-point test crosses worked out from offspring counts
+  step by step — parental and double-crossover classes, gene order, interval distances in cM
+  (RF × 100, Haldane or Kosambi), expected and observed double crossovers, coefficient of
+  coincidence and interference, the map; or loci at map positions with `measure`. A `karyotype`
+  scene type: ISCN notation parsed and checked (47,XX,+21; 45,X; 47,XXY; del, dup, inv,
+  t(9;22)(q34;q11.2), rob(14;21)(q10;q10)) and drawn as a karyogram in the Denver groups with
+  schematic G-banded ideograms (true relative lengths and centromeres) and the change highlighted,
+  or as ideograms with structural changes played as edits; a card reads the notation. `cell_cycle`
+  meiosis takes `nondisjunction: {division: I | II, pair}`: aneuploid gametes labelled with their
+  shares and the zygotes they make. New actions `cross_over`, `measure`, `rearrange`. The committed
+  gallery's budget is 13 MB (each entry at most 0.36 MB).
 
 - **A `pedigree` scene type** (Step 215): a family chart in standard human pedigree nomenclature
   (NSGC: squares, circles, diamonds; affected filled, carriers dotted or half-shaded, deceased

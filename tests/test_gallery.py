@@ -18,8 +18,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs" / "gallery"
 #: What the committed gallery may weigh (stills + GIFs + pages), see HANDOFF.md Steps 57 and 182
 #: (8 MB until the showcases came: 16 GIFs and 16 stills, about 2.8 MB); Step 210 saved the stills
-#: as palette PNGs (3.0 -> 1.2 MB) to make room for the five cell-biology showcases.
-BUDGET = 10_000_000
+#: as palette PNGs (3.0 -> 1.2 MB) to make room for the five cell-biology showcases. Step 216
+#: (DESIGN §96.12): the budget grows by what the entries still to come need — Phase V adds nine
+#: genetics types and a showcase, each entry at most ENTRY_MAX — so 10 MB (full at Step 215) +
+#: 8 entries after Step 216 × 0.36 MB ≈ 13 MB; every entry is held to ENTRY_MAX.
+BUDGET = 13_000_000
+#: What one entry may weigh: its two GIFs (each at most gallery.CLIP_MAX_BYTES), two stills and its
+#: page. The heaviest entries before Step 216 weighed 0.33 MB (cross, cell, rainy_evening).
+ENTRY_MAX = 360_000
 
 
 def builtin_gallery() -> list[gallery.GalleryType]:
@@ -261,6 +267,16 @@ def test_committed_gallery_is_within_its_size_budget() -> None:
     total = sum(p.stat().st_size for p in files)
     assert total < BUDGET, f"docs/gallery is {total / 1e6:.1f} MB (budget {BUDGET / 1e6:g} MB)"
     assert {p.suffix for p in files} <= {".md", ".png", ".gif"}
+
+
+def test_every_gallery_entry_is_within_its_share() -> None:
+    """Step 216: the budget grows by entries, so each entry (a type or a showcase: its GIFs,
+    stills and page) is held to ENTRY_MAX."""
+    names = [t.name for t in builtin_gallery() if t.alias_of is None] + [s.name for s in gallery.SHOWCASES]
+    for name in names:
+        parts = [DOCS / f"{name}.md"] + [DOCS / "media" / gallery.media_name(name, fmt, ext) for fmt in gallery.FORMATS for ext in (".png", ".gif")]
+        size = sum(p.stat().st_size for p in parts)
+        assert size <= ENTRY_MAX, f"the gallery entry {name} weighs {size / 1e3:.0f} kB (at most {ENTRY_MAX / 1e3:.0f} kB)"
 
 
 def test_readme_strip_links_the_gallery() -> None:

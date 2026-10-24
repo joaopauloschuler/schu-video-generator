@@ -80,7 +80,7 @@ class Advance(Action):
             except VidgenError as error:
                 return [("to", str(error))]
             if o.expect:
-                problem = dv.expect_problem(params.mode, stage, params.chromosomes, o.expect)
+                problem = dv.expect_problem(params.mode, stage, params.chromosomes, o.expect, params.nd())
                 if problem:
                     return [("expect", problem)]
             return []

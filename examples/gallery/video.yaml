@@ -536,6 +536,24 @@ scenes:
       - text: "An affected son of unaffected parents: his mother is an obligate carrier."
         actions: [{deduce: carriers, at: "@obligate"}]
 
+  - id: linkage
+    type: linkage_map   # linked genes: crossing over, a test cross worked out into a map in centimorgans
+    params:
+      title: "Two linked genes"
+      loci: [b, vg]      # Drosophila black body and vestigial wings, in coupling
+      counts: {"b vg": 405, "+ +": 415, "b +": 85, "+ vg": 95}
+    beats:
+      - text: "Crossing over between the homologues makes recombinant chromatids."
+      - text: "Eighteen percent of the offspring are recombinant: the genes are eighteen centimorgans apart."
+
+  - id: karyotype
+    type: karyotype     # a human karyotype from its ISCN notation, the change highlighted or played as an edit
+    params:
+      title: "Forty-seven, XX, plus 21"
+      karyotype: "47,XX,+21"
+    beats:
+      - text: "Three copies of chromosome twenty-one: trisomy twenty-one, Down syndrome."
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)

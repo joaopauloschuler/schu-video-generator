@@ -299,6 +299,8 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "metabolism": [{"title": "T:title", "process": "glycolysis"}],
     "cross": [{"title": "T:title", "preset": "pea_seed_shape", "parents": ["Rr", "Rr"]}],
     "pedigree": [{"title": "T:title", "condition": "T:condition", "individuals": ["a: male", "b: female", "c: female affected of a + b"]}],
+    "linkage_map": [{"title": "T:title", "map": {"y": 0, "w": 1.5}}],
+    "karyotype": [{"title": "T:title", "karyotype": "46,XX"}],
     "iso_diagram": [
         {
             "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],

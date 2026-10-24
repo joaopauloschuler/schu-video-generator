@@ -19935,3 +19935,137 @@ How to test
 - Stills: scratch project `scratchpad/s215/proj` (cf with actions, hemophilia self-play with
   twins and risk, first cousins with adoption / miscarriage / separation, reduced penetrance), end
   frames and sheets in `scratchpad/s215/stills/{dark,light}-{16x9,9x16}/`.
+
+## Step 216 — Chromosomes: linkage, maps and karyotypes
+
+What was built
+- **A `linkage_map` scene type** (`scenes/linkage_map.py`, actions `scenes/linkage_actions.py`):
+  the heterozygote's homologue pair (two sister chromatids each, pinched at the centromere, the
+  homologue colours of `cross` / `cell_cycle`) with its alleles; crossing over in an interval (the
+  inner non-sister chromatids meet at a chiasma, swap the segments beyond it, part; each chromatid
+  labelled with its alleles, coloured by origin, parental / recombinant; `double` for a two-strand
+  double crossover). With `loci` + `counts` a two- or three-point test cross is worked out step by
+  step — table → classes (parental = largest reciprocal pair, phase coupling / repulsion; DCO =
+  smallest) → gene order (the table's columns move into map order) → distances (each interval's
+  recombinant rows flash; RF exact; cM by the map function) → interference (expected DCO, c, I) →
+  the map bar. With `map` the loci stand at cM positions; `measure` gives a distance and its RF.
+- **A `karyotype` scene type** (`scenes/karyotype.py`, ideograms `scenes/karyotype_draw.py`,
+  action `scenes/karyotype_actions.py`): ISCN parsed and checked; `show: karyogram` (pairs by
+  Denver group, centromeres aligned per row, the changes highlighted: box, dashed ghost for a lost
+  chromosome, brackets on derivatives, foreign material tinted) or `show: ideogram` (the
+  chromosomes involved, large, p / q, labelled bands and breakpoints; structural changes played as
+  edits: segments `ReplacementTransform` from the normal chromosomes into the derivatives, inverted
+  ones along a half-turn, lost parts fading); a card writes and reads the notation.
+- **Pure parts** (no manim, `vidgen.genetics`): `mapping.py` (map functions none / Haldane /
+  Kosambi, class parsing, `analyse` → `MapAnalysis`, `build_linkage_plan` / `plan_linkage`,
+  `measure_interval`), `karyotype.py` (GRCh38 lengths and centromeres, classes, groups, terminal
+  bands, the schematic band scheme, `band_ref` / `parse_band_label`, `parse_karyotype` →
+  `Karyotype` with `Copy` / `Segment` derivatives, readings and classic conditions, `band_labels`).
+- **Non-disjunction** in `cell_cycle` meiosis: `nondisjunction: {division: I | II, pair: n}`
+  (`cellworld/division.py`: `DivisionSpec.nondisjunction`, daughters' / products' chromosome lists,
+  `nondisjunction_cells`, `gamete_outcomes`, captions; `expect_problem` refuses per-cell counts once
+  the cells differ); gametes labelled `n + 1 = 3`; the counts line per cell.
+
+YAML
+```yaml
+- id: map
+  type: linkage_map
+  params:
+    loci: [v, cv, ct]                  # mutant alleles, any order
+    counts: {"v cv+ ct+": 580, "v+ cv ct": 592, "v cv ct+": 45, "v+ cv+ ct": 40, "v cv ct": 89, "v+ cv+ ct+": 94, "v cv+ ct": 3, "v+ cv ct+": 5}
+    map_function: none                 # haldane | kosambi
+    crossover: auto                    # v-ct | double | none
+  beats:
+    - text: "..."
+      actions: [{cross_over: "interval:v-ct"}, {reveal: order, at: "@middle"}]
+- id: xmap
+  type: linkage_map
+  params: {map: {y: 0, w: 1.5, v: 33}, map_function: haldane, phase: coupling}
+  beats: [{text: "...", actions: [{measure: "interval:w-v"}]}]
+- id: k
+  type: karyotype
+  params:
+    karyotype: "46,XX,t(9;22)(q34;q11.2)"   # 47,XY,+21; 45,X; 47,XXY; del(5)(p15.2); dup / inv / rob(14;21)(q10;q10)
+    show: auto                              # karyogram | ideogram
+    bands: {9q34: ABL1}                     # chromosomes: [7] for chosen ideograms
+  beats: [{text: "...", actions: [{rearrange: "change:1"}]}]
+- id: nd
+  type: cell_cycle
+  params: {mode: meiosis, chromosomes: 4, nondisjunction: {division: II, pair: 2}}
+```
+
+Files touched
+- New: `src/vidgen/genetics/{mapping,karyotype}.py`, `src/vidgen/scenes/{linkage_map,linkage_actions,karyotype,karyotype_draw,karyotype_actions}.py`,
+  `tests/test_chromosomes.py` (38 + 2 render), `docs/gallery/{linkage_map,karyotype}.md` + 8 media.
+- Changed: `src/vidgen/cellworld/division.py` (non-disjunction; keyframes without it unchanged),
+  `src/vidgen/scenes/cell_cycle.py` (`nondisjunction` param, per-cell counts),
+  `src/vidgen/scenes/cycle_actions.py` (`expect` with non-disjunction), `src/vidgen/genetics/__init__.py`,
+  `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md` (two sections, cell_cycle non-disjunction,
+  targets table, action list), guide (chooser rows, cell_cycle row, two paragraphs + `# genetics`
+  samples, a non-disjunction paragraph, three action rows) copied to `AGENTS.md`,
+  `examples/gallery/video.yaml` (two scenes), `docs/gallery/README.md`, `README.md`, `DESIGN.md`
+  §96.9–96.12, `CHANGELOG.md`, `tasklist.md`; tests' lists (`test_actions`,
+  `test_actions_coverage`, `test_builtin_scenes`, `test_translation`); `tests/test_gallery.py`
+  (budget).
+
+Public interfaces
+- Scene types `linkage_map`, `karyotype`; actions `cross_over`, `measure`, `rearrange`; `cell_cycle`
+  param `nondisjunction`. No new `vidgen.api` names (`genetics.mapping`, `genetics.karyotype`,
+  `cell_division.nondisjunction_cells` / `gamete_outcomes`); no config key.
+
+Decisions / deviations (DESIGN §96.9–96.12)
+- **Gallery budget**: 10 MB → **13 MB** with a per-entry cap `ENTRY_MAX` = 0.36 MB tested for every
+  type and showcase (the heaviest entries so far weigh 0.33 MB); 13 = 10 + 8 entries still to come
+  in Phase V × 0.36. Rather than squeezing the new GIFs (worse previews than the old ones), the
+  budget grows by entries and each entry is held to its share. Now 10.6 MB (`linkage_map` 0.32 MB,
+  `karyotype` 0.31 MB; the linkage sample has two beats to keep its GIFs under 150 kB).
+- Map function default `none` (d = 100 × RF), as three-point analyses report; the scene says which
+  function it uses (the map bar names Haldane / Kosambi; the distance card adds it).
+- The chromosome of `linkage_map` is drawn in the true map order from the start (it is the parent's
+  chromosome); the table starts in the author's order and moves into map order at `order`.
+- `linkage_map` steps are built-in `reveal` targets (`reveal: order`), not new actions; the
+  scene's self-play merges steps so there are at most two per beat (short scenes do not overrun).
+- Karyotype bands are **schematic** (the arm's ISCN regions and bands split evenly, only the
+  terminal band checked against ISCN); every named band is placed by that scheme, so labels agree
+  with the drawing; said in the docs, the guide ("do not read exact positions off it") and the
+  card's note. Landmarks used in docs/tests: 7q31.2 (CFTR), Xq28, 21q22, 9q34 (ABL1), 22q11.2
+  (BCR), 5p15.2 (cri-du-chat).
+- ISCN rules enforced: count vs listed, sex chromosome aneuploidy in the complement (no ±X / ±Y),
+  lower number first in t(;), q10;q10 for Robertsonian, bands within the arm. Not enforced: the
+  order of the changes after the sex chromosomes (a lint for Step 219).
+- `show: auto`: ideogram when every change is structural or `chromosomes` is given, else karyogram.
+- The Philadelphia chromosome is named as acquired (CML); the "balanced carrier" note is left out
+  for it.
+
+Known gaps
+- Inversion loop at pairing not drawn; mosaics, rings, isochromosomes, markers, acquired ±X / ±Y
+  not supported; band positions schematic; a karyogram does not animate structural edits (an
+  ideogram does); `linkage_map` handles two or three loci from counts (more from `map`); per-cell
+  `expect` counts after non-disjunction refused (only `cells`); non-disjunction II is always in
+  the first daughter cell; the cards are long for lint's `max_words` (warnings).
+- Lint at preview on the scratch projects: no errors after fixes; warnings `min_font` (scaled
+  chromatid tags, a long card), `max_words` (full tables and cards), `said_before_shown` /
+  `rushed_animation` from the scratch narration.
+
+Compatibility
+- Shared rendering code untouched (new modules; `division.py` and `cell_cycle.py` only add
+  non-disjunction): every keyframe of the division planner without it equals Step 211's (item by
+  item, 2n = 2–8, seeds 1–3, scratch script); `tests/test_cycle_energy.py` 18 passed. The Phase Q
+  frame baseline was not re-run (its scenes use none of the changed modules).
+
+How to test
+- `tests/test_chromosomes.py` (40 with renders, ~65 s): map functions and inverses, the three-point
+  cross computed by hand in the test (191/1448, 93/1448, c = 8/E, I), two-point phases and errors,
+  plans, chromosome data and bands, 11 ISCN karyotypes, derivatives' segments, 19 ISCN errors,
+  non-disjunction labels / per-cell counts / outcomes / captions, scene validation, renders 16:9 and
+  9:16.
+- Not render: `test_gallery` + `test_docs` + `test_guide`; `test_actions` + `test_actions_coverage` +
+  `test_builtin_scenes` + `test_translation` + `test_registry` + `test_extensions` (302 passed);
+  `test_registry` + `test_schema` + `test_introspect` + `test_accuracy` + `test_api` +
+  `test_genetics_model` + `test_extensions` (249); `test_cross` + `test_pedigree` (32). Render
+  `-k "linkage or karyotype"` of `test_builtin_scenes` + `test_actions_coverage` (10);
+  `test_cycle_energy` (18).
+- Stills: scratch projects `scratchpad/s216/proj` (three-point, two-point Kosambi, Sturtevant-style
+  map with measure / cross_over, non-disjunction I and II) and `scratchpad/s216/proj2` (47,XY,+21;
+  45,X; t(9;22); rob(14;21); inv(9) + del(5); 7q31.2 CFTR), sheets and end frames in
+  `scratchpad/s216/stills/{dark,light}-{16x9,9x16}/`.

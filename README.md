@@ -202,7 +202,12 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   standard notation with phenotype pictures ([docs](docs/CONFIG.md#cross),
   [gallery](docs/gallery/README.md#genetics)); `pedigree` draws a family chart in NSGC symbols and
   works out which modes of inheritance fit (each excluded one with its reason), the obligate
-  carriers, carrier probabilities and the risk for a child ([docs](docs/CONFIG.md#pedigree)).
+  carriers, carrier probabilities and the risk for a child ([docs](docs/CONFIG.md#pedigree));
+  `linkage_map` shows crossing over and works two- and three-point test crosses into a map in
+  centimorgans (gene order, interference; Haldane / Kosambi) ([docs](docs/CONFIG.md#linkage_map));
+  `karyotype` reads ISCN notation (47,XX,+21; t(9;22)(q34;q11.2)) into a G-banded karyogram or
+  animated structural edits ([docs](docs/CONFIG.md#karyotype)); `cell_cycle` meiosis shows
+  non-disjunction and its aneuploid gametes.
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,

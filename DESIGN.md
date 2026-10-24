@@ -16009,3 +16009,139 @@ and `rare` added; `twin: {with, kind}`. Gaps: one locus; quadrants for several c
 pregnancy (P) symbols other than the proposed child, infertility marks, partners from different
 generations and people who married into the family twice are not supported; heteroplasmy,
 new mutations and age-dependent penetrance not modelled.
+
+### 96.9 The `linkage_map` scene (Step 216)
+
+**What is computed** (`genetics/mapping.py`, no manim):
+
+- **Map functions** (`MAP_FUNCTIONS`, `rf_to_cm`, `cm_to_rf`): `none` d = 100 r (what three-point
+  analyses report; `SHORT_CM` = 15 cM is where the scene warns it underestimates), `haldane`
+  d = −½ ln(1 − 2r) M (no interference), `kosambi` d = ¼ ln((1 + 2r)/(1 − 2r)) M; RF over ½ is
+  refused (a distance over 50 cM is a sum of intervals); at r = ½ the map functions give ∞ and
+  `cm_to_rf` tends to ½ (independent assortment).
+- **Test-cross classes** (`class_key`, `parse_counts`): a class names each locus once — the
+  mutant allele by its symbol, the wild type `v+` / `v^+` (any order) or `+` (by position in
+  `loci`); all 2ⁿ classes once (0 allowed).
+- **`analyse(loci, counts, function)`** → `MapAnalysis`: reciprocal pairs summed; the largest pair
+  is parental (a tie refused: the parentals cannot be told), its first class gives the phase
+  (`coupling` / `repulsion` for two loci, `mixed` for three when the mutant alleles are split);
+  for three loci the smallest pair is the double crossovers (a tie refused), the middle locus the
+  one at which a double-crossover class differs from a parental class by one locus; each interval's
+  recombinants are the classes whose two loci are combined unlike the parental class (double
+  crossovers count in both intervals); RF exact (`Fraction`), cM by the function; the outer RF
+  counted directly (it misses the double crossovers); expected double crossovers RF₁ × RF₂ × N,
+  coincidence = observed / expected, interference = 1 − coincidence (undefined when an interval has
+  no recombinants). Notes: RF ≥ 40 % (maybe unlinked: a chi-square test decides), an interval over
+  15 cM without a map function. Tested on Griffiths' *v cv ct* data computed by hand: order *v – ct
+  – cv*, 191/1448 and 93/1448, c = 8/(191·93/1448) ≈ 0.65, I ≈ 0.35.
+- **The plan** (`build_linkage_plan` / `plan_linkage`, cached by the params' JSON): `counts` (with
+  `loci`) or `map` (`{y: 0, w: 1.5}` sorted by position; two loci at one position refused);
+  the map order, positions, the heterozygote's homologues (from the parental classes, or `phase`
+  for a map), the crossovers drawn (`auto`: the first interval; `double`; `v-ct` between
+  neighbours only), `measure_interval` (any two loci: distance and the RF the function gives).
+
+**The scene** (`scenes/linkage_map.py`, actions `scenes/linkage_actions.py`): the chromosome area
+draws the heterozygote's homologue pair as four chromatids (sisters pinched at the centromere,
+the homologue colours of `cross` / `cell_cycle`), loci as bands across them, the alleles above and
+below (a second row where neighbours would touch, for both their even and their map positions).
+The chromosome is drawn in the true map order from the start (it is the parent's chromosome; the
+experimenter's ignorance of the order is the table's: its columns start in the given order and
+move into map order at the `order` step). Crossing over: the inner chromatids are pulled together
+at the chiasma (a bump in their lanes), the segments beyond it change owner half-way, they part;
+each chromatid's alleles are written beside it, coloured by origin, *parental* / *recombinant*.
+Counts: the table (classes in the author's order, numbers right-aligned, the total), the
+steps' cards replacing each other (classes; gene order; distances with the sums; interference),
+tags on the rows (parental, DCO, then SCO with its interval), the map bar (loci staggered when
+close, positions, interval braces, the unit and the function). 16:9: chromosomes and map left
+(42 %), table and card right; 9:16: chromosomes, table, card, map stacked; `map` mode: chromosomes
+on top, map and card side by side (16:9) or stacked. Self-play: chromosomes, the crossing over, the
+steps, the map (merged into at most two steps a beat so a short scene does not overrun); a
+`reveal` of a step (or `measure`) makes it manual; each step runs the steps it needs first.
+`cross_over` takes the place of the scene's own crossing over (and starts from the pair as it was).
+
+Public: no new `vidgen.api` names (`genetics.mapping`); scene type `linkage_map`; actions
+`cross_over`, `measure`. Changes from the plan (§96.5): the steps are built-in `reveal` targets
+rather than actions; `phase` and `crossover` params added.
+
+### 96.10 The `karyotype` scene (Step 216)
+
+**The model** (`genetics/karyotype.py`, no manim): the 24 chromosomes with GRCh38 lengths and
+centromere midpoints (Mb), textbook classes (metacentric 1, 3, 16, 19, 20; acrocentric 13–15,
+21, 22, Y; satellites on 13–15, 21, 22), Denver groups A–G, and each arm's last ISCN band
+(`TERMINAL`: 1p36, 1q44, …, Xq28, Yq12), the one band fact checked. **Bands are schematic**:
+each arm is split into its regions (from the terminal band's region number) and bands (the last
+region's count from the terminal band, `REGION_BANDS` = 3 for the others), widths varied by a
+fixed hash, the terminal band pale and dark bands alternating inwards (four shades),
+heterochromatin 1q12, 9q12, 16q11, Yq12 grey, p11 / p12 stalk / p13 satellite on the satellited
+acrocentrics. A named band (`band_ref`, `parse_band_label`: `7q31.2`) lies where this scheme puts it
+(a sub-band a share of its band; a band past a region's drawn count in proportion), so labels and
+breakpoints agree with the drawing; positions are near, not at, the measured ISCN ones (said in
+the card's note and the docs).
+
+**ISCN** (`parse_karyotype`): count, sex chromosomes (X, Y only, at least one X, at most five),
+then `+N` / `-N`, `del(c)(band)` (terminal) or `(bandband)` (interstitial, one arm), `dup`, `inv`
+(paracentric within an arm, pericentric across the centromere), `t(a;b)(band;band)` (sex
+chromosome or lower number first), `rob(a;b)(q10;q10)` / `der(a;b)(q10;q10)` / `rob(a;b)` between
+acrocentric autosomes; `mat` / `pat` / `dn` kept. Refused with the fix: a count that is not what is
+listed (computed: 44 + sex + gains − losses − Robertsonian fusions), lower-case or Y-only sex
+chromosomes, ±X / ±Y, `5p-`, mosaics, unknown changes (did-you-mean), bands past an arm's end,
+interstitial changes across the centromere, a change on a chromosome the cell lacks. The cell's
+chromosomes are `Copy`s by slot: a normal copy is one segment; a derivative is segments of normal
+chromosomes (`Segment(chrom, a, b)`, a > b inverted) with its centromere and marked stretches —
+terminal deletion (the rest), interstitial deletion (two pieces), tandem duplication, inversion
+(the middle reversed, the centromere moved when pericentric), reciprocal translocation (each
+derivative keeps its centromere's segment and takes the partner's distal one, oriented outwards
+whichever arms broke), Robertsonian (the first chromosome's q arm reversed above the centromere,
+the second's below; in the first's slot). Readings in words and classic conditions only where
+certain (trisomy 21 / 18 / 13, translocation Down syndrome or a balanced Robertsonian carrier,
+Turner, Klinefelter, triple X, 47,XYY, cri-du-chat for a 5p terminal deletion, the Philadelphia
+chromosome for t(9;22)(q34;q11)).
+
+**The scene** (`scenes/karyotype.py`, ideograms `scenes/karyotype_draw.py`, action
+`scenes/karyotype_actions.py`): a chromosome is a column of band polygons cut from capsules (each
+arm a capsule between telomere, centromere and stalk, so the centromere is a constriction), fixed
+neutral greys in every theme (G-banding is dark on light), the outline in the theme's ink;
+material from another chromosome tinted with the accent. `show: karyogram`: rows by group (16:9
+1–5 / 6–12, X / 13–18 / 19–22, Y; 9:16 five rows), centromeres on a line per row, one scale for
+all, width from length (slimmer when the width is short), group letters, numbers; an empty Y slot
+is left out; changes: a box round the slot, a dashed ghost for a lost chromosome (45,X: "X or Y"),
+brackets beside a derivative's marked stretch. `show: ideogram` (auto when `chromosomes` is given
+or every change is structural): the slots' copies in columns (a Robertsonian's consumed
+chromosome as a ghost column), one row (16:9) or a row per slot (9:16), p / q labels, names under
+(derivatives in the highlight colour), labels with leader lines — asked-for bands beside the first
+normal copy, a derivative's breakpoints beside it. An edit: the normal chromosome stands where its
+derivative will; its segments (`segment_piece`, bands in source order) `ReplacementTransform` into
+the derivative's (an inverted one along a half-turn arc, a translocated one along an arc), what no
+derivative keeps fades out, outlines are redrawn, names and brackets appear. The card: the notation,
+the count and sex, each change read, the conditions, notes (16:9).
+
+Public: no new `vidgen.api` names (`genetics.karyotype`); scene type `karyotype`; action
+`rearrange`. Changes from the plan: `show: auto | karyogram | ideogram` (the plan's
+`highlight: [21]` became the automatic highlight of the changes and the built-in `highlight` on
+`chromosome:21`); `bands` labels; `notation`.
+
+### 96.11 Non-disjunction in `cell_cycle` meiosis (Step 216)
+
+`DivisionSpec.nondisjunction = (I | II, pair index)` (scene param `{division, pair}` from 1),
+checked in `check_spec` (meiosis only; a pair the cell has). Meiosis I: at anaphase I the
+homologue that would go right goes left too (lifted a little so both show), the first daughter
+receives both homologues; meiosis II: in the first daughter the pair's sister chromatids both go
+to the upper pole. The daughters' and products' chromosomes are lists (`members`, `products`), so
+territories, plates and labels follow what each cell has; without `nondisjunction` every keyframe
+is unchanged (checked item by item against the Step 211 planner for 2n = 2–8, three seeds).
+Captions say what goes wrong and, at the end, the gametes and zygotes (`gamete_outcomes`: I — 2
+of 4 n + 1, 2 n − 1, trisomic and monosomic zygotes; II — 2 of 4 n, 1 n + 1, 1 n − 1);
+`nondisjunction_cells` gives each cell's (chromosomes, chromatids) once they differ (centromere
+count: an unsplit pair counts once at anaphase II), shown in the counts line and refusing `expect`
+of per-cell counts there. Gametes are labelled `n + 1 = 3`.
+
+### 96.12 The gallery budget (Step 216)
+
+The committed `docs/gallery` was at 9.95 MB of its 10 MB test budget after Step 215. Phase V adds
+nine scene types and a genetics showcase, each needing two stills and two GIFs; squeezing every
+new GIF to a lower frame rate would make the newest previews the worst. Decision: the budget grows
+by what the entries still to come need and every entry is held to a share — `ENTRY_MAX` = 0.36 MB
+per entry (its page, two palette stills, two GIFs each ≤ `CLIP_MAX_BYTES`; the heaviest entries so
+far, `cross`, `cell`, `rainy_evening`, weigh 0.33 MB), a test per entry, and `BUDGET` = 13 MB
+(10 MB + 8 entries after Step 216 × 0.36 MB). The genetics samples are kept to two or three short
+beats. After Step 216: 10.6 MB (`linkage_map` 0.32 MB, `karyotype` 0.31 MB).

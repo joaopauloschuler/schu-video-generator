@@ -6913,6 +6913,13 @@ stylised (Alberts *Molecular Biology of the Cell* ch. 17, Morgan *The Cell Cycle
   chromosome still two — now non-identical — chromatids), prophase II (no replication; new spindles
   at right angles), metaphase II, anaphase II (sisters separate: equational), telophase II and
   cytokinesis II: **four haploid cells**, one chromatid per chromosome, recombinant chromatids visible.
+- **Non-disjunction** (`nondisjunction: {division: I | II, pair: 1}`, meiosis; DESIGN §96.11): in
+  meiosis I both homologues of that pair go to one pole at anaphase I (one cell n + 1, the other
+  n − 1; **every gamete aneuploid**: 2 of 4 n + 1, 2 n − 1); in meiosis II its sister chromatids
+  stay together at anaphase II in the first cell (**2 of 4 gametes normal**, 1 n + 1, 1 n − 1).
+  The gametes are labelled (*n + 1 = 3*), the counts line gives each cell's count once they
+  differ, and the last caption says what fertilisation by a normal gamete gives (trisomic 2n + 1,
+  monosomic 2n − 1, euploid zygotes and their shares).
 
 Captions name each stage and say what happens in key terms; a counts line gives, per cell (per
 daughter nucleus from telophase), the chromosomes (centromeres: separated sisters count), the
@@ -6961,6 +6968,7 @@ the first division runs across a landscape frame and down a portrait one, the ca
 | `cell` | `animal` | mitosis: `animal` or `plant` |
 | `crossovers` | one per pair | meiosis: per homologous pair, one or two positions (0–1 along the chromosome from the p telomere, not at the centromere, at least 0.15 apart) |
 | `assortment` | by the seed | meiosis: per pair, `m` or `p`: the homologue facing the first pole at metaphase I |
+| `nondisjunction` | | meiosis: `{division: I, pair: 1}` — that pair's homologues (I) or sister chromatids (II, in the first daughter cell) fail to separate; gametes n + 1 / n − 1 / n with their shares |
 | `seed` | `1` | the chromosomes' places, default crossovers and assortment |
 | `captions`, `counts` | `true` | the stage captions; the counts line |
 | `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
@@ -6980,7 +6988,9 @@ and mitosis*); a division advanced backwards; an odd 2n (*a diploid cell has hom
 bivalent without a crossover (*an obligate chiasma: without one the homologues are not held together
 on the metaphase I spindle and missegregate*), a crossover at the centromere, more than two, or two
 too close (interference); `expect` counts that are wrong (*after Cytokinesis II there are 4 cells,
-each with 2 chromosomes (2 chromatids, n, 1C) for 2n = 4; expect.chromosomes says 4*); params of
+each with 2 chromosomes (2 chromatids, n, 1C) for 2n = 4; expect.chromosomes says 4*); with
+non-disjunction, `expect` of per-cell counts once the cells differ (only `cells` then), a
+`division` other than I / II, a pair the cell does not have, `nondisjunction` in mitosis; params of
 another mode; `checkpoint` outside `mode: cycle`.
 
 ### `metabolism`
@@ -7371,6 +7381,196 @@ male carrier under a stated X-linked mode (*a male has one X: with the allele he
 carrier under Y-linked or mitochondrial inheritance; `mode` against the locus' own mode;
 `deduce` or `risk` when the chart fits several modes and none is stated (*the chart fits AD, XD —
 say which with mode:*); `risk` without a proposed child.
+
+### `linkage_map`
+
+Linked loci, crossing over and genetic maps (DESIGN §96.9), computed by
+`vidgen.genetics.mapping`:
+
+- **The chromosomes**: the heterozygous parent's homologue pair — two sister chromatids each,
+  joined at the centromere, in the maternal / paternal colours of `cell_cycle`'s meiosis — with its
+  alleles above and below (*v*⁺ the wild type). **Crossing over** (`crossover`, or the action
+  `cross_over`): the two inner, non-sister chromatids meet at a chiasma in an interval, swap the
+  segments beyond it and part again — two recombinant and two parental chromatids, each with its
+  alleles written beside it in the colours of the homologues they came from (`double`: one in each
+  interval of three loci, a two-strand double crossover).
+- **`counts`: a test cross worked out** — the heterozygote × the homozygous recessive tester, so
+  each offspring class shows a gamete of the heterozygote. Two or three loci: the table of classes
+  (as you list them) → **classes**: the parental classes are the largest reciprocal pair (they give
+  the phase: *coupling* (cis) or *repulsion* (trans)), the double crossovers the smallest →
+  **order** (three loci): the locus at which a double crossover differs from a parental class is in
+  the middle; the table's columns move into map order → **distances**: each interval's
+  recombinants (the classes recombinant for that pair of loci, double crossovers included), RF =
+  recombinants / N, the distance (RF × 100 cM, or the map function's); the outer distance is the sum
+  → **interference**: expected double crossovers RF₁ × RF₂ × N, observed, the coefficient of
+  coincidence c = observed / expected, interference I = 1 − c → **map**: a bar with the loci at their
+  positions, the interval distances under it.
+- **`map`: loci at positions** in cM (`{y: 0, w: 1.5, v: 33}`) — the chromosome with the loci in
+  proportion, the map bar; `measure` shows a distance and the RF the map function gives.
+- **Map functions** (`map_function`): `none` (default) d = 100 × RF, what three-point analyses report
+  — right for short distances, below about 15 cM, where double crossovers are rare; `haldane` d =
+  −½ ln(1 − 2r) (no interference); `kosambi` d = ¼ ln[(1 + 2r)/(1 − 2r)] (with interference). An RF
+  is at most 50 %: loci far apart assort independently.
+
+```yaml
+- id: threepoint
+  type: linkage_map
+  params:
+    title: "A three-point test cross"
+    loci: [v, cv, ct]                    # the mutant alleles' symbols, in any order
+    counts:                              # each class once: v cv ct (mutant) or + / v+ (wild type), names in any order
+      "v cv+ ct+": 580
+      "v+ cv ct": 592
+      "v cv ct+": 45
+      "v+ cv+ ct": 40
+      "v cv ct": 89
+      "v+ cv+ ct+": 94
+      "v cv+ ct": 3
+      "v+ cv ct+": 5
+    # map_function: haldane             # or kosambi; default none (d = 100 × RF)
+  beats:
+    - text: "A female heterozygous at three linked loci is test-crossed."
+    - text: "A crossover between non-sister chromatids makes recombinant chromatids."
+    - text: "Her offspring fall into eight classes."
+    - text: "The largest pair is parental, the smallest are double crossovers."
+    - text: "A double crossover changes only the middle gene: cut lies between the other two."
+    - text: "Each interval's recombinants give its distance: 13.2 and 6.4 centimorgans."
+    - text: "Fewer double crossovers than expected: interference is 0.35."
+    - text: "The map."
+- id: xmap
+  type: linkage_map
+  params:
+    map: {y: 0, w: 1.5, v: 33, m: 36.1}
+    map_function: haldane
+    crossover: none
+  beats:
+    - text: "Between white and vermilion a crossover is likely."
+      actions: [{cross_over: "interval:w-v", at: "@crossover"}]
+    - text: "Thirty-one and a half centimorgans."
+      actions: [{measure: "interval:w-v"}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `loci` | | with `counts`: the loci, by their mutant alleles' symbols (`[v, cv, ct]`; two or three) |
+| `counts` | | the offspring classes and numbers: `{"v cv+ ct+": 580, …}` — a class names each locus once, the mutant allele by its symbol and the wild type as `v+` (any order) or `+` (by position in `loci`); all 2ⁿ classes (0 allowed) |
+| `map` | | instead of `counts`: loci at positions in cM (`{y: 0, w: 1.5, v: 33}`) |
+| `map_function` | `none` | `none` (d = 100 × RF), `haldane`, `kosambi` |
+| `phase` | `coupling` | `map`: `coupling` (the mutant alleles on one homologue) or `repulsion` (alternating); counts show their own |
+| `crossover` | `auto` | the crossing over the scene plays: an interval between neighbouring loci (`v-ct`), a list, `double`, `none`; `auto`: the first interval |
+| `chromosomes` | `true` | draw the homologue pair |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`). Without them the scene plays itself: the
+chromosomes, the crossing over, then (counts) the table, classes, order, distances, interference
+and the map, spread over the beats. `reveal: order` (any step: `table`, `classes`, `order`,
+`distances`, `interference`, `map`) puts a step on a word — the steps it needs come first — and the
+scene then shows only what the actions bring.
+
+| action | options | |
+|---|---|---|
+| `cross_over` | — | `cross_over: interval:v-ct` (neighbouring loci) or `double`: the chiasma, the exchange, the recombinant chromatids labelled (2.4 s); takes the place of the scene's own crossing over |
+| `measure` | — | `measure: interval:w-v` (any two loci): a bracket over the interval and a card with its distance and RF (map function; RF = d/100 at most 50 % with `none`, with a warning beyond 15 cM) (1.6 s) |
+
+`highlight`, `dim`, `callout` work on `locus:<name>` (its bands and alleles), `interval:<a>-<b>`
+(its brace on the map), `table`, `classes`, `map`, `chromosomes`.
+
+**The rules** (`vidgen validate`, each with the reason and a did-you-mean): `counts` without `loci`,
+or both `counts` and `map`; not two or three loci; a class naming a locus twice, an unknown locus, a
+class listed twice, missing classes; two reciprocal pairs equally large (the parental classes
+cannot be told) or equally small (the double crossovers cannot be told); an interval with 50 % or
+more recombinants; two loci at one position; `phase` with `counts`; a crossover between loci that
+are not neighbours; `measure` without one interval.
+
+### `karyotype`
+
+A human karyotype from its ISCN notation (DESIGN §96.10), parsed and checked by
+`vidgen.genetics.karyotype`:
+
+- **The chromosomes**: GRCh38 lengths and centromere positions (so 21 is shorter than 22 and every
+  arm ratio is right), the textbook classes (metacentric 1, 3, 16, 19, 20; acrocentric 13, 14, 15,
+  21, 22 with stalks and satellites, and Y) and the Denver groups A–G. **G-bands are schematic**:
+  each arm is split into its ISCN regions and bands (its last band checked: 1p36, 5p15, Xq28…)
+  with dark and pale bands alternating, heterochromatin (1q12, 9q12, 16q11, Yq12) grey — the
+  pattern is plausible, not the measured ISCN ideogram; a named band is drawn where this scheme puts
+  it. The bands are dark on light in every theme.
+- **`show: karyogram`**: the pairs in rows by group (16:9: 1–5; 6–12 and X; 13–18; 19–22 and Y),
+  the centromeres on one line per row, numbers under the pairs, group letters; the changes
+  highlighted: an extra copy boxed, a lost one as a dashed ghost, a derivative's changed stretch
+  bracketed (material from another chromosome tinted).
+- **`show: ideogram`**: the chromosomes involved (or those in `chromosomes:`), large, with p and q,
+  the bands asked for labelled (`bands: {7q31.2: CFTR}`), and each structural change played as an
+  **edit** of the normal chromosomes: the breakpoints flash, a deletion's segment falls away, a
+  duplication's is copied in, an inversion's turns round (paracentric within an arm; pericentric
+  across the centromere, changing the arm ratio), a reciprocal translocation's distal segments swap,
+  a Robertsonian translocation joins two long arms while the short arms are lost; the derivative is
+  named (`der(22)`) and its breakpoints labelled.
+- **The card**: the notation, read — the count and sex chromosomes, each change in words, and the
+  classic condition it names (Down, Edwards, Patau, Turner, Klinefelter, triple X, 47,XYY,
+  cri-du-chat, the Philadelphia chromosome, a balanced Robertsonian carrier, translocation Down
+  syndrome).
+
+ISCN supported: the count, the sex chromosomes (`XX`, `XY`, `X`, `XXY`, `XXX`, `XYY`…), then `+21`,
+`-21`, `del(5)(p15.2)` (terminal), `del(1)(q21q32)` (interstitial), `dup(1)(q21q32)`,
+`inv(9)(p12q13)` / `inv(3)(q21q26)`, `t(9;22)(q34;q11.2)`, `rob(14;21)(q10;q10)` (or
+`der(14;21)(q10;q10)`; `rob(14;21)` alone too); `mat` / `pat` / `dn` after a change. Not
+supported: mosaics (`/`), rings, isochromosomes, markers, acquired ±X / ±Y.
+
+```yaml
+- id: down
+  type: karyotype
+  params:
+    title: "Trisomy 21"
+    karyotype: "47,XY,+21"                 # show: auto -> karyogram (a numerical change)
+  beats:
+    - text: "A male karyotype, arranged by size in groups A to G."
+    - text: "Three copies of chromosome twenty-one."
+    - text: "Forty-seven, X Y, plus twenty-one: Down syndrome."
+- id: ph
+  type: karyotype
+  params:
+    title: "The Philadelphia chromosome"
+    karyotype: "46,XX,t(9;22)(q34;q11.2)"  # show: auto -> ideogram (structural changes only)
+    bands: {9q34: ABL1, 22q11.2: BCR}
+  beats:
+    - text: "Chromosomes nine and twenty-two."
+    - text: "Their long arms break and swap places."
+      actions: [{rearrange: "change:1", at: "@break"}]
+    - text: "The small derivative twenty-two is the Philadelphia chromosome."
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `karyotype` | `46,XX` | the ISCN notation (above) |
+| `show` | `auto` | `karyogram`, `ideogram`; `auto`: ideogram when `chromosomes` is given or every change is structural, else karyogram |
+| `chromosomes` | the changed ones | ideogram: which chromosomes to draw (all their copies): `[7]`, `[9, 22]` |
+| `bands` | | bands to label (ideogram): `{7q31.2: CFTR, Xq28: F8}` or `[21q22]` |
+| `notation` | `true` | the card with the notation and its reading |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`). Without them the scene plays itself: the
+chromosomes and the notation, the changes (highlights or edits), the reading. With `rearrange` (or
+a `reveal` of `change:<n>` / `reading`) the changes wait for the actions; the reading comes on the
+last beat unless revealed.
+
+| action | options | |
+|---|---|---|
+| `rearrange` | — | `rearrange: change:1` (the changes in the order written after the sex chromosomes; `changes` for all): ideogram, structural — the edit (2.6 s); otherwise the highlight (1.2 s) |
+
+`highlight`, `dim`, `callout` work on `chromosome:<21>` (a pair or slot), `group:<A…G>` (karyogram),
+`change:<n>`, `notation`, `reading`, `band:<7q31.2>`.
+
+**The rules** (`vidgen validate`, each with the reason and the fix): the count against the
+chromosomes listed (*'47,XX' says 47 chromosomes but lists 46 (44 autosomes + XX = 46); write
+46,XX*); a sex complement without an X, in lower case, or ±X / ±Y written as changes; an unknown
+change (did you mean…), the old short form `5p-`, a mosaic; a band past the end of its arm (*5p16
+does not exist: 5p ends at band 5p15*); a translocation with the higher-numbered chromosome first, or
+not one band per chromosome; a Robertsonian translocation between chromosomes that are not
+acrocentric autosomes, or not at q10;q10; an interstitial deletion or duplication across the
+centromere; a change on a chromosome the karyotype does not have (*del(Y) in 46,XX*); `chromosomes`
+with `show: karyogram`; `rearrange` on a karyotype without changes or a change it does not have.
 
 ### `end_card`
 
@@ -10025,7 +10225,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -10079,6 +10279,8 @@ a title card, a `transform` of a bar).
 | `metabolism` | `title`, `<process>`, `<metabolite>`, `step:<key>`, `<component>`, `membrane`, `tally` | advance, highlight, dim, reveal, callout | `glycolysis` (the process's name) is the whole drawing; `pyruvate` a metabolite's box, `step:pfk1` an enzyme's arrow and label; `complex_iv` a component of a chain, `membrane` its membrane; `tally` the counters; see [`metabolism`](#metabolism) |
 | `cross` | `title`, `generations`, `parents`, `parent<N>`, `mother`, `father`, `gametes`, `gametes<N>`, `square`, `tree`, `row<N>`, `col<N>`, `cell<R>.<C>`, `cells:<class>`, `phenotypes`, `genotypes`, `class<N>`, `class:<label>`, `genotype:<genotype>`, `chi_square`, `notes` | form_gametes, fill, count, ratio, chi_square, highlight, dim, reveal, callout | `parents` (also `both`) is both parents, `parent1` (`mother`) the egg parent; `gametes1` its gametes; `square` (or `tree`; both also `all`) the whole drawing; `cells:round, yellow` every cell of a phenotype class (or its leaves), `cells:RrYy` of a genotype; `class:round, yellow` a row of the phenotype table, `genotype:RrYy` of the genotype table; `chi_square` (also `test`) the test; see [`cross`](#cross) |
 | `pedigree` | `title`, `chart`, `legend`, `generation:<R>`, `person:<id>`, `proband`, `consultand`, `affected`, `carriers`, `child`, `genotypes`, `modes`, `analysis`, `mode:<code>`, `risk` | deduce, analyse, risk, reveal, highlight, dim, callout | `generation:II` a row (Roman numeral); `person:II-3` (or the author's id, `person:mum`) one person with their lines; `chart` everything (also its entrance); `affected` / `carriers` (declared and obligate) groups of people; `child` the proposed child; `genotypes` (also `all`) the deduced genotypes; `modes` (also `analysis`) the analysis card, `mode:XR` one mode's row; `risk` the risk card; see [`pedigree`](#pedigree) |
+| `linkage_map` | `title`, `chromosomes`, `table`, `classes`, `order`, `distances`, `interference`, `map`, `locus:<name>`, `interval:<a>-<b>`, `double` | cross_over, measure, reveal, highlight, dim, callout | `reveal: order` (any step) plays a step of the worked test cross with the steps it needs; `locus:v` its bands and alleles; `interval:v-ct` its brace on the map (and the target of `cross_over` / `measure`); see [`linkage_map`](#linkage_map) |
+| `karyotype` | `title`, `chromosomes`, `group:<A…G>`, `chromosome:<name>`, `change:<n>`, `changes`, `notation`, `reading`, `band:<band>` | rearrange, reveal, highlight, dim, callout | `change:1` the first change written (its highlight or edit); `chromosome:21` a pair; `group:G` a Denver group (karyogram); `band:7q31.2` a labelled band (ideogram); see [`karyotype`](#karyotype) |
 | `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
