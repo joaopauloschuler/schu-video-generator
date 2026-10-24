@@ -79,10 +79,25 @@ From the author guide (`vidgen guide scenes`):
 | `style` | `'section' \| 'surface'` | `'section'` | section: structures cut open, as in a thin section (default); surface: drawn whole, seen from outside (the cell itself stays open). |
 | `labels` | `bool` | `True` | Name the structures (screen-sized; shown once a structure is large enough on screen) and the parts a zoom_to view shows. |
 | `scale_bar` | `bool` | `True` | A scale bar that follows the zoom (1-2-5 lengths: 5 µm, 200 nm…). |
+| `not_to_scale` | `bool` | `False` | Some sizes are drawn larger than real on purpose: a small 'not to scale' note shows in the lower right (and the accuracy lint does not report the sizes). |
 | `reveal` | `'all' \| 'per_beat'` | `'all'` | all: the whole cell in the first beat; per_beat: the cell, then one object per beat in order. |
 | `seed` | `int` | `1` | Changes where things without at are placed. |
 | `title_size` | `size` | `'heading'` | Title size. (also: heading_size) |
 | `label_size` | `size` | `'caption'` | Size of the labels and the scale bar's text. |
+| `gene` | `GeneParams \| None` |  | A gene whose products the actions transcribe, export, translate, to_golgi and secrete follow through the cell (as in a molecule scene's gene: {signal_peptide: true, glycosylation: true}). |
+| `gene.id` | `str` | `'gene'` | Its name for actions (transcribe: gene). |
+| `gene.name` | `str \| None` |  | The gene's symbol (italic; checked against the species' nomenclature: human INS, mouse Ins2). |
+| `gene.product` | `str \| None` |  | The protein's name (roman; checked like a molecule's protein). |
+| `gene.species` | `str \| None` |  | For name and product: human (default: the scene's), mouse, rat, yeast… |
+| `gene.sequence` | `str \| None` |  | The coding strand of the transcribed region, 5′→3′ from the transcription start (+1), DNA (ACGT): 5′ UTR, exons and introns, 3′ UTR with the poly(A) signal AATAAA. |
+| `gene.introns` | `int \| list[tuple[int, int]] \| None` |  | With a sequence: their positions [[start, end], …] (1-based, inclusive; each must start GT and end AG); with protein or codons: how many (generated: GU…branch A…AG). |
+| `gene.protein` | `str \| None` |  | The protein (one-letter MALW… or three-letter Met-Ala-Leu…): the gene is written for it (frequent human codons); with a sequence: checked against what it encodes. |
+| `gene.codons` | `int \| None` |  | A generated protein of this many codons (Met included, the stop codon not); default 12 (72 with a signal peptide). |
+| `gene.signal_peptide` | `bool` | `False` | Generated: start with a cleavable signal peptide (n-, h- and c-region); written: checked that it has one. |
+| `gene.glycosylation` | `bool` | `False` | Generated: an N-glycosylation sequon (Asn-X-Ser/Thr) after the signal peptide; written: checked. |
+| `gene.seed` | `int` | `1` | Changes a generated gene's sequence. |
+| `gene.start` | `'dna' \| 'mrna'` | `'dna'` | What the scene shows at first: dna (the gene in the nucleus) or mrna (a mature mRNA in the cytosol, ready to be translated). |
+| `gene.codes` | `'three' \| 'one'` | `'three'` | Amino acids as three-letter (Met) or one-letter (M) codes. |
 
 ## Targets
 

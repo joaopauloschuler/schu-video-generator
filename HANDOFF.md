@@ -19609,3 +19609,59 @@ How to test
   s, −16.1 LUFS, true peak −1.8 dBTP. It is at scratchpad `s211/out/gene_to_secreted_protein.mp4`,
   with the contact sheet at `s211/contact_16x9.png`.
 - Stills of the review project: `s211/rev/build/preview{,_short}/storyboard/`.
+
+## Step 212 — Regenerate the cell-biology gallery previews
+
+What was done
+- `vidgen gallery --types cell,molecule,pathway,cell_cycle,metabolism,plant_cell,sodium_pump,mek_inhibitor,mitosis,respiratory_chain --force`
+  from the repo root (16:9 and 9:16, clips on). The stills go through the same `_save_still`
+  path as in Step 210 (256-colour palette PNGs, checked: mode `P`).
+- What changed with Step 211's drawing: the stills of `metabolism` (roman enzymes),
+  `pathway` 16:9 (grown, membrane name at the bottom), `mek_inhibitor` (grown),
+  `respiratory_chain` 16:9 (tallies low) and `sodium_pump` 9:16 (short caption), and the GIFs of
+  those plus `cell` 9:16, `cell_cycle` 9:16 and `plant_cell` 9:16. The other stills and GIFs came
+  out byte-identical. The `cell` and `molecule` pages had stale params tables (the `gene`,
+  `solutes`, `potential` options and newer kinds from Steps 205–209) and are now current;
+  `docs/gallery/README.md` did not change.
+- Small fix seen on the stills: the citric acid cycle's enzyme labels touched the boxes (MDH
+  against "malate 4C" in 16:9, CS against OAA and on the acetyl-CoA arrow in 9:16).
+  `scenes/metabolism.py`: `_clear_of` now keeps `CLEAR_PAD` (0.15) from the boxes and labels
+  already placed, and CS steps right of the acetyl-CoA arrow when it covers it. Only the ring
+  layout (TCA cycle) uses it; glycolysis, the chain and the light reactions are unchanged.
+
+Sizes
+- Every GIF ≤ 150 KB: the section's largest is `cell-9x16.gif` 141.7 KB (the gallery's largest is
+  still `rainy_evening-16x9.gif` 147.9 KB). `docs/gallery` is 9.38 MB (budget 10 MB). No gallery
+  setting (clip length, fps, start) had to change.
+
+Lint (gallery work projects, `build/gallery` and `build/gallery/showcases/<name>`, default and
+`--variant portrait`): the same findings as Step 211 reported, none new:
+- `molecule` (ATP synthase): glyph letters α/β/A, H⁺ and "ADP + Pᵢ → ATP" below the readable size
+  and low contrast; in 9:16 also a 2 px `off_frame` of a part label group and a leader line over β
+  (`covered_text`).
+- `sodium_pump`: the ions' letters (Na⁺, K⁺, Pᵢ, A) below the readable size and low contrast,
+  more than 40 words on screen; in 9:16 an Na⁺ particle's letters over "Extracellular space".
+- `respiratory_chain`: α/β and H⁺ letters, low-contrast complex numerals (I, Q, III, IV while
+  lit), the dimmed "½O₂ + 2H⁺ → H₂O", over 40 words; in 9:16 H⁺ letters over "IV".
+- `metabolism`: over 40 words on screen (the whole TCA cycle with its enzymes).
+- `cell`, `pathway`, `cell_cycle`, `plant_cell`, `mek_inhibitor`, `mitosis`: 0 findings.
+
+Files touched
+- `docs/gallery/{cell,molecule}.md` and 18 media files of the section; `src/vidgen/scenes/metabolism.py`;
+  `tasklist.md` ("After Phase U").
+
+Public interfaces: none changed (`metabolism.CLEAR_PAD` is a module constant).
+
+Known gaps
+- The 16:9 `cell` sample's Matrix / Crista labels sit at the left with long leaders across the ER
+  to the mitochondrion (unchanged since Step 210); the 9:16 `plant_cell` labels Granum and Stroma
+  from the top and bottom edges with long leaders.
+- The ATP synthase sample is small in its 16:9 frame (one membrane protein, many part labels).
+- The 9:16 glucagon pathway: "cAMP → AMP" runs under the dimmed PDE4 box.
+
+How to test
+- `tests/test_gallery.py` not render 18, render 1; `test_docs` + `test_guide` 128;
+  `test_cycle_energy` + `test_phase_u_review` 32. The Phase Q baseline was not re-run: only
+  `scenes/metabolism.py` (a Phase U scene) changed.
+- Stills: `docs/gallery/media/metabolism-{16x9,9x16}.png`, `pathway-16x9.png`,
+  `mek_inhibitor-16x9.png`; before/after pairs in the scratchpad `s212/cmp_*.png`.

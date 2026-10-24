@@ -29,6 +29,8 @@ MAX_PROTONS = 30
 NODE_STROKE = 2.4
 #: A pathway drawn in columns grows up to this factor to fill a frame with room to spare.
 GROW = 1.6
+#: The cycle's labels keep this far (scene units) from the boxes and labels already placed.
+CLEAR_PAD = 0.15
 
 
 @lru_cache(maxsize=32)
@@ -599,6 +601,9 @@ class Metabolism(NarratedScene):
         down = Arrow(start_at, join + UP * 0.03, buff=0.03, stroke_width=2.6, max_tip_length_to_length_ratio=0.3,
                      color=self.dim_ink)
         self.acetyl = acetyl
+        cs_label = self.step_mobs["citrate_synthase"][1]
+        if _overlap_area(cs_label, down, CLEAR_PAD / 2) > 0:     # beside the arrow joining there
+            cs_label.shift(RIGHT * (down.get_right()[0] + CLEAR_PAD - cs_label.get_left()[0]))
         group.add(acetyl, down)
         if path.link:
             pnode = self._entry("pyruvate", 3, self.theme.palette_color(0))
@@ -1251,12 +1256,12 @@ def _extent(mob: Mobject, direction: np.ndarray) -> float:
 
 def _clear_of(mob: Mobject, at: np.ndarray, direction: np.ndarray, gap: float, obstacles: list[Mobject]) -> None:
     """Put ``mob`` beside ``at`` towards ``direction`` (its near edge ``gap`` away), moved on
-    along it until it covers none of ``obstacles``."""
+    along it until it covers none of ``obstacles`` nor touches them (a :data:`CLEAR_PAD` margin)."""
     d = direction / (np.linalg.norm(direction) or 1.0)
     reach = abs(d[0]) * mob.width / 2 + abs(d[1]) * mob.height / 2
     for k in range(40):
         mob.move_to(at + d * (gap + reach + 0.06 * k))
-        if not any(_overlaps(mob, o) for o in obstacles):
+        if not any(_overlap_area(mob, o, CLEAR_PAD) > 0 for o in obstacles):
             return
 
 
