@@ -1212,6 +1212,55 @@ when shared code changes). DESIGN §95. Steps 202–211.
 - [ ] Gallery polish (cosmetic, pre-existing): letters inside the ATP synthase, Na⁺/K⁺ pump and respiratory-chain drawings (α, β, Na⁺, H⁺) below the readable size; long label leaders (mitochondrion labels in the `cell` overview, Granum/Stroma in the 9:16 plant cell); "cAMP → AMP" under the dimmed PDE4 box in the 9:16 glucagon pathway
 - [ ] Phase U gaps: no `set_state` in a `cell` scene; an endocytosed vesicle is not a targetable object; zoomed-view labels go stale after a process; 9:16 close-ups of long horizontal strips (a gene, a membrane) leave height unused; the eIF4G·4A blob overlaps "40S" during scanning in 16:9
 
+## Phase V — Genetics at university level
+
+Goal: genetics videos for lectures, medical and biology students and science channels: precise
+terms and standard notation (NSGC pedigrees, ISCN karyotypes, HGVS variants, HGNC symbols),
+scientifically exact — ratios, probabilities, gametes, map distances and frequencies computed
+by a model, not drawn by hand —, in vidgen's flat style, easy for AI authors to write right in
+YAML (validated with did-you-mean, linted), in 16:9 and 9:16. Built like Phase U: a model without
+manim (`vidgen/genetics/`), renderers and scene types apart; reuses Phase U (DNA and gene
+drawing, chromosomes and meiosis with crossing over, the genetic code, gene naming per species,
+`function_plot` axes, references, the science lint, narration–picture rules). Additive and
+opt-in: existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q's 31
+baseline frames when shared code changes). DESIGN §96. Steps 213–221.
+
+### Step 213 — Genetics model and plan
+- [x] Phase V plan here and DESIGN §96 for the whole phase: the data model; scene types decided (`cross`, `pedigree`, `karyotype`, `linkage_map`, `mutation`, `crispr`, `dna_lab`, `population`, `gwas`; non-disjunction as a `cell_cycle` option) and how they relate to Phase U's; how crosses (214), pedigrees (215), chromosomes (216), molecular genetics (217), population genetics (218) and the lint (219) plug in, with their planned YAML
+- [x] Model without manim (`vidgen/genetics/`: `notation`, `model`, `genotype`, `phenotype`, `cross`, `modes`, `presets`): allele notation (`I^A` → Iᴬ, `c^{ch}`, wild type `+` / `w^+`, X-linked alleles on their X: `X^H X^h`, `X^h Y`), loci with dominance (complete, incomplete, codominant, hierarchies such as `"I^A = I^B > i"`), lethal alleles, penetrance and expressivity, epistasis (recessive, dominant, suppression, duplicate, complementary, cumulative), autosomal / X / Y / mitochondrial loci, modes AD, AR, XD, XR, YL, MT with their hallmarks; 15 textbook presets
+- [x] Exact cross engine (fractions): gametes with independent assortment, linkage with recombination frequencies (coupling / repulsion, interference for three loci, `rf_male`), X and Y in males, mtDNA from eggs; offspring genotype and phenotype distributions in textbook order, lethal classes removed, ratios in lowest terms; test and reciprocal crosses
+- [x] Validation with the reason and did-you-mean (an allele not defined for its locus, an X-linked allele without its X, a female with a Y, XXY, linked loci without their phase, RF > 0.5, incomplete dominance without the heterozygote's phenotype, `+` for two loci…); `vidgen.api` names; tests `tests/test_genetics_model.py` (3:1, 1:2:1, 9:3:3:1, 1:1:1:1, 9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1, 2:1, ABO, X-linked both directions, linkage)
+- [~] No scene type or renderer yet (the Punnett square is Step 214); ZW / X0 sex systems, heteroplasmy and age-dependent penetrance not modelled
+
+### Step 214 — Crosses and Punnett squares
+- [ ] A `cross` scene type on the cross engine: mono-, di- and trihybrid crosses, test crosses, reciprocal crosses, P → F1 → F2; incomplete dominance, codominance, multiple alleles (ABO), epistasis (9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1), lethal 2:1, sex-linked crosses with X / Y split by sex
+- [ ] Animated gamete formation (homologues separating; crossing over for linked loci), squares filling step by step, offspring counted into genotype and phenotype ratios; branch (forked-line) diagrams for larger crosses; optional chi-square of observed against expected counts with the p-value
+
+### Step 215 — Pedigrees
+- [ ] A `pedigree` scene type in NSGC notation: squares / circles / diamonds, affected filled, carriers dotted or half, deceased slash, proband arrow, consanguinity double line, MZ / DZ twins, adoption, generation numerals and individual numbers; deterministic layout by generation for 16:9 and 9:16
+- [ ] Analysis by exact reasoning: which modes fit the chart, genotypes deduced where possible, carrier probabilities (2/3 for an unaffected sibling of an affected child in AR), the risk for a proposed child; actions to reveal generations, highlight individuals, show deductions
+
+### Step 216 — Chromosomes: linkage, maps and karyotypes
+- [ ] Linkage and recombination (coupling / repulsion), genetic maps in cM (map functions), three-point test crosses (gene order from double crossovers, interference, coefficient of coincidence): a `linkage_map` scene type
+- [ ] Human karyotypes: schematic G-banded ideograms (p / q arms, band names where safe), ISCN notation (47,XX,+21), aneuploidies, structural changes (deletion, duplication, paracentric / pericentric inversion, reciprocal and Robertsonian translocation): a `karyotype` scene type; non-disjunction in meiosis I vs II and the resulting gametes as a `cell_cycle` option
+
+### Step 217 — Molecular genetics
+- [ ] A `mutation` scene type: silent, missense, nonsense, frameshift, in-frame indel and splice-site variants on a real coding sequence (the genetic code reused) with HGVS notation (c.1521_1523del p.(Phe508del))
+- [ ] A `crispr` scene type (sgRNA with a ~20 nt spacer, NGG PAM 3′ of the protospacer on the non-target strand, blunt cut ~3 bp upstream of the PAM, NHEJ indels vs HDR with a template) and a `dna_lab` scene type (`method: pcr | gel | sanger | ngs`: PCR cycles, agarose gel with a ladder, Sanger peaks, NGS reads with coverage and a variant call)
+
+### Step 218 — Population genetics
+- [ ] A `population` scene type: Hardy–Weinberg with worked numbers and carrier frequency from incidence; seeded Wright–Fisher drift, selection, migration, bottleneck / founder simulations with allele-frequency plots
+- [ ] A `gwas` scene type: Manhattan plot (−log10 p by chromosome, 5 × 10⁻⁸ line), optional QQ plot
+
+### Step 219 — Accuracy lint for genetics
+- [ ] Ratios in narration / on screen that do not follow from the cross; pedigrees inconsistent with the stated mode; wrong cM / RF claims; Hardy–Weinberg arithmetic; CRISPR without a (correct) PAM; karyotype and HGVS format errors; gene naming (reused); narration–picture rules for the new targets
+
+### Step 220 — Example, docs and gallery
+- [ ] An example tracing one inherited disease from pedigree to mutation to diagnosis (cystic fibrosis: AR pedigree, carrier risks, CFTR p.(Phe508del), PCR / gel or sequencing, population carrier frequency), narrated with Kokoro, 16:9 and 9:16; gallery section "Genetics"; guide topic `genetics`; CONFIG reference; `docs/COOKBOOK-GENETICS.md`
+
+### Step 221 — Review of Phase V
+- [ ] Critical review with fixes, including a scientific-accuracy pass; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
@@ -1234,16 +1283,19 @@ errors, an accuracy lint, docs, a gallery section, an example and a review.
   studio, Kokoro, renders and exports were tested on Linux only; a guided run on the owner's
   Windows machine.
 
-### Genetics (suggested first: reuses most of Phase U; large student/teacher audience)
-- [ ] Mendelian genetics: Punnett squares filling in step by step; mono- and dihybrid crosses with
+### Genetics (suggested first: reuses most of Phase U; large student/teacher audience) — moved into Phase V (Steps 213–221)
+- [→] Mendelian genetics: Punnett squares filling in step by step; mono- and dihybrid crosses with
   ratios; dominance, codominance, incomplete dominance, sex-linked inheritance; pedigree charts in
-  standard notation
-- [ ] Molecular genetics: mutation types (point, missense, nonsense, frameshift), CRISPR-Cas9
-  cutting and repair (NHEJ / HDR), PCR cycles, gel electrophoresis, sequencing reads aligning
-- [ ] Linkage and population genetics: recombination and genetic maps; Hardy–Weinberg, drift and
-  selection as seeded simulations with allele-frequency plots; a GWAS Manhattan plot
-- [ ] Accuracy lint: ratios that don't follow from the cross; pedigrees inconsistent with the
-  stated inheritance mode; a "dominant" trait skipping generations without explanation
+  standard notation — Phase V, Steps 213–215
+- [→] Molecular genetics: mutation types (point, missense, nonsense, frameshift), CRISPR-Cas9
+  cutting and repair (NHEJ / HDR), PCR cycles, gel electrophoresis, sequencing reads aligning —
+  Phase V, Step 217
+- [→] Linkage and population genetics: recombination and genetic maps; Hardy–Weinberg, drift and
+  selection as seeded simulations with allele-frequency plots; a GWAS Manhattan plot — Phase V,
+  Steps 216 and 218
+- [→] Accuracy lint: ratios that don't follow from the cross; pedigrees inconsistent with the
+  stated inheritance mode; a "dominant" trait skipping generations without explanation — Phase V,
+  Step 219
 - Effort: medium (DNA, chromosomes, meiosis, naming rules and charts already exist)
 
 ### Planetary and orbital mechanics (suggested second: very visual, easy to keep exactly correct)

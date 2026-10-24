@@ -19665,3 +19665,68 @@ How to test
   `scenes/metabolism.py` (a Phase U scene) changed.
 - Stills: `docs/gallery/media/metabolism-{16x9,9x16}.png`, `pathway-16x9.png`,
   `mek_inhibitor-16x9.png`; before/after pairs in the scratchpad `s212/cmp_*.png`.
+
+## Step 213 — Genetics model and the Phase V plan
+
+What was built
+- **The Phase V plan**: `tasklist.md` (Steps 213–221; the "Ideas for future phases → Genetics"
+  items marked as moved, `[→]`) and `DESIGN.md` §96 for the whole phase: the data model, the
+  scene types decided (§96.2: `cross`, `pedigree`, `karyotype`, `linkage_map`, `mutation`,
+  `crispr`, `dna_lab`, `population`, `gwas`; non-disjunction as a `cell_cycle` option) with what
+  each reuses from Phase U, and how Steps 214–219 plug in with their planned YAML (§96.5).
+- **The model** `src/vidgen/genetics/` (no manim; a test checks):
+  - `notation.py`: allele symbols (`A`, `I^A`, `c^{ch}`, `w^+`, `+`), canonical form, text with
+    Unicode superscripts (Iᴬ, w⁺; the `^` form where Unicode has no superscript letter, e.g.
+    `A^Y`), Pango markup (italic alleles, roman X / Y), the YAML form.
+  - `model.py`: `Allele`, `Locus` (dominance levels: complete, codominant `=`, incomplete `~`;
+    heterozygote phenotypes; lethal; penetrance per phenotype with `normal`; expressivity),
+    `LinkageGroup` (map order, RF per interval, `rf_male`, coincidence), `Epistasis` (six kinds),
+    `Trait`, `GeneticSystem`, `build_system(spec, where)` with every check and did-you-mean.
+  - `genotype.py`: `Genotype` (autosomal groups as homologue pairs, sex chromosomes, mtDNA),
+    `Gamete`, `parse_genotype` (compact `AaBb`, `A/a B/b`, phased `AB/ab`, `X^H X^h`, `X^{H,b} Y`,
+    `Y^T`), `genotype_text` / `gamete_text` (text, markup, ascii; ascii reads back).
+  - `phenotype.py`: per-locus phenotypes with penetrance, epistatic combination, lethality,
+    the textbook class order (`phenotype_key`).
+  - `cross.py`: `gametes` (crossover patterns with coincidence; `rf_male`; X / Y in males; mtDNA
+    in eggs), `fertilize`, `cross` → `CrossResult` (zygotes, `lethal`, survivors' genotype and
+    phenotype distributions, `genotype_ratio`, `phenotype_ratio`, `phenotype_share`), `ratio`,
+    `ratio_text`, `make_tester`, `test_cross`, `reciprocal`.
+  - `modes.py`: `MODES` AD / AR / XD / XR / YL / MT with hallmarks, `parse_mode`, `mode_of`.
+  - `presets.py`: 15 textbook systems with notes and example crosses.
+
+Files touched
+- New: `src/vidgen/genetics/{__init__,notation,model,genotype,phenotype,cross,modes,presets}.py`,
+  `tests/test_genetics_model.py` (74 tests).
+- Changed: `src/vidgen/api.py` (exports), `DESIGN.md` §96, `tasklist.md`, `CHANGELOG.md`,
+  `HANDOFF.md`.
+
+Public interfaces
+- `vidgen.api` adds `genetics`, `GeneticSystem`, `CrossResult`, `build_genetic_system`,
+  `genetic_cross`, `parse_genotype`, `GENETICS_PRESETS`, `INHERITANCE_MODES`. No scene type,
+  action or config key; nothing existing changes (no shared code edited apart from the api
+  imports, so the frame baseline was not re-run).
+
+Decisions
+- Scene types are decided now (DESIGN §96.2); no renderer proof was built: the Punnett square
+  is Step 214's, and a throwaway still would not have changed the model.
+- Genotypes are strings in textbook notation, not nested YAML: authors already know `AB/ab` and
+  `X^H X^h`; the parser refuses every ambiguity with the fix (phase of linked loci, X-linked
+  alleles without X, one symbol for two loci).
+- Allele symbols are unique within a system; `X` / `Y` may be alleles only without sex
+  chromosomes (Mendel's `Y` / `y` is a preset).
+- Exact fractions everywhere; YAML floats go through their decimal text (`0.1` = 1/10).
+- Phenotype classes follow the textbook order, so the ratio reads as written in books (9:3:4,
+  12:3:1, 13:3; incomplete dominance red : pink : white).
+- `tester` would be collected by pytest as a test: the function is `make_tester`, and
+  `test_cross` sets `__test__ = False`.
+- `did_you_mean` is reused from `vidgen.cellworld.model` (searched: no other helper).
+
+Known gaps
+- No scene type yet. ZW and X0 sex systems, heteroplasmy, age-dependent penetrance, epistasis
+  among three loci and map functions (cM ↔ RF, Step 216) are not modelled. did-you-mean cannot
+  suggest for one-letter typos (`x` for `y`): the error lists the alleles instead.
+
+How to test
+- `/home/claude/bin/capped timeout 290 /home/claude/venv/bin/python -m pytest tests/test_genetics_model.py tests/test_api.py -q -m "not render"`:
+  84 passed in 4.6 s; `tests/test_docs.py tests/test_guide.py` (not render): 128 passed in 6.2 s.
+  Nothing else was run (no shared code changed).

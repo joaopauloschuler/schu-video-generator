@@ -15608,3 +15608,235 @@ kind's range, counts, exaggerated glyphs.
   findings in the gallery's `synthase` and the showcases); a 9:16 close-up of a horizontal strip
   (gene, membrane) still leaves height unused; gallery media of the cell-biology section were
   not regenerated (pathway and metabolism stills differ a little from a render now).
+
+## 96. Genetics at university level (Phase V, Steps 213–221)
+
+Genetics videos for lectures, medical and biology students and science channels: standard terms
+and notation, **computed rather than drawn by hand** (ratios, probabilities, gametes, map
+distances, frequencies come from a model), in vidgen's flat style, written by AI agents in YAML,
+checked by `vidgen validate` with did-you-mean errors and by `vidgen lint`, in 16:9 and 9:16.
+Built like Phase U (§95): a model with rules and no manim (`vidgen/genetics/`), renderers and
+scene types apart. Additive and opt-in: existing projects, scenes, gallery frames, audio and the
+studio unchanged. References for the facts: standard textbooks (Griffiths *Introduction to
+Genetic Analysis*, Hartwell *Genetics: From Genes to Genomes*, Strachan & Read *Human Molecular
+Genetics*) and nomenclatures (NSGC pedigrees, ISCN karyotypes, HGVS variants, HGNC symbols).
+
+### 96.1 The phase (plan)
+
+- **Step 213, the model and this plan** (§96.3–96.6): loci, alleles and notation, genotypes,
+  phenotypes (dominance, lethal alleles, penetrance, expressivity, epistasis), modes of
+  inheritance, the exact cross engine; scene types decided (§96.2). No scene type yet.
+- **Step 214, `cross`**: Punnett squares and branch (forked-line) diagrams on the cross engine;
+  animated gamete formation, squares filling step by step, offspring counted into ratios;
+  mono-, di-, trihybrid, test, reciprocal, P → F1 → F2; every dominance and epistasis kind,
+  lethal 2:1, X / Y crosses split by sex; optional chi-square of observed against expected
+  counts with its p-value (`genetics/stats.py`, exact upper regularized gamma; no scipy).
+- **Step 215, `pedigree`**: NSGC symbols, deterministic layout by generation, the analysis of
+  which modes fit (§96.5), deduced genotypes, carrier and risk probabilities.
+- **Step 216, `karyotype` and `linkage_map`**; non-disjunction as an option of Phase U's
+  `cell_cycle` meiosis.
+- **Step 217, `mutation`, `crispr`, `dna_lab`** (PCR, gel, Sanger, NGS).
+- **Step 218, `population` and `gwas`**.
+- **Step 219, the genetics lint** (§96.5); **Step 220** the example (cystic fibrosis from pedigree
+  to diagnosis), docs (guide topic `genetics`, CONFIG, `docs/COOKBOOK-GENETICS.md`), gallery
+  section "Genetics"; **Step 221** the review with a scientific-accuracy pass.
+
+### 96.2 Scene types (decided)
+
+| Type | Step | Shows | Relation to Phase U |
+| --- | --- | --- | --- |
+| `cross` | 214 | Punnett square, branch diagram, gametes, ratios, chi-square | new; gametes from linked loci drawn as homologue pairs with the chromatid look of `cell_cycle` (`cellworld.division`) |
+| `pedigree` | 215 | a family chart in NSGC notation, mode analysis, risks | new; its own layout (generations are rows; not `vidgen.graph`, whose layered layout does not know couples and sibships) |
+| `karyotype` | 216 | ideograms with G-bands, a karyogram, ISCN notation, aneuploidy, structural changes | new; chromosome outlines and centromeres as in `cellworld.division` |
+| `linkage_map` | 216 | chromosomes with loci in cM, crossing over between linked loci (coupling / repulsion), three-point crosses, interference | new; crossing over drawn like `cell_cycle`'s meiosis I chiasmata |
+| `cell_cycle` (existing) | 216 | meiosis with `nondisjunction: {division: I \| II, pair: n}` and the resulting gametes' counts | an option of the Phase U type, not a new type |
+| `mutation` | 217 | a coding sequence with a variant: silent, missense, nonsense, frameshift, in-frame indel, splice site; HGVS `c.` / `p.` | the genetic code `cellworld.sequences.CODONS`, the gene strip of the `molecule` scene's `gene:` (`cellworld.expression`) |
+| `crispr` | 217 | sgRNA (20 nt spacer), NGG PAM, Cas9 cut 3 bp 5′ of the PAM, NHEJ / HDR | the DNA ladder of the `molecule` scene (5′ / 3′ ends, base pairs) |
+| `dna_lab` | 217 | `method: pcr \| gel \| sanger \| ngs` | like `metabolism`'s `process:`: one type, several techniques sharing DNA drawing and plots |
+| `population` | 218 | Hardy–Weinberg, seeded drift / selection / migration / bottleneck / founder simulations, allele frequencies over generations | the axes of `function_plot` / `line_chart` (`vidgen.charts`, `math_axes`) |
+| `gwas` | 218 | Manhattan plot (−log₁₀ p by chromosome, 5 × 10⁻⁸ line), QQ plot | `vidgen.charts` |
+
+Why new types rather than modes of Phase U types: a Punnett square, a pedigree or a gel has
+nothing of a cell's µm camera or a molecule's membrane rows; each new type is one picture
+grammar with its own params, as `pathway` was next to `cell`. What they share lives in the
+model (`vidgen.genetics`) and in Phase U's `cellworld` (sequences, names, chromosome look,
+accuracy text helpers), imported, not copied. Gene symbols are italic through the existing
+`gene_symbols(params)` hook (§95.16) and HGNC / species checks through `cellworld.names`.
+
+### 96.3 The model (`vidgen/genetics/`, no manim; Step 213)
+
+Modules: `notation` (allele symbols), `model` (loci, linkage groups, epistasis, the system and
+its builder), `genotype` (genotypes, gametes, parsing and writing), `phenotype` (phenotypes,
+penetrance, epistasis, lethality, class order), `cross` (the engine), `modes` (modes of
+inheritance), `presets` (textbook systems). A test imports them in a fresh interpreter and checks
+`manim` is not loaded. Probabilities are `fractions.Fraction` everywhere (floats from YAML go
+through their decimal text: `0.1` is exactly 1/10; `"17%"` and `"1/6"` are read too).
+
+- **Allele notation.** A symbol is a base (letters and digits) with an optional superscript after
+  `^`: `A`, `a`, `I^A`, `c^{ch}` (braces for several characters), `w^+`, or `+` alone; `+` (alone
+  or as the superscript) marks the wild type. Shown three ways: text with Unicode superscripts
+  (`Iᴬ`, `w⁺`, `cᶜʰ`; where Unicode has no superscript letter — capital C F Q S X Y Z, q — the
+  `^` form stays: `A^Y`), Pango markup for drawings (alleles italic, `<i>I<sup>A</sup></i>`; the
+  chromosome letters X and Y roman) and the YAML form, which reads back (tested for every
+  preset). Symbols must differ between the loci of one system (write `vg^+` and `b^+`, not `+`
+  twice), so a genotype reads unambiguously. `X` and `Y` may be alleles (Mendel's `Y` / `y`)
+  only in a system without sex chromosomes.
+- **A locus** (`gene`, `trait`, `alleles` most dominant first, `chromosome: autosome | X | Y |
+  mt`, `dominance`, `heterozygotes`, `lethal`, `penetrance`, `normal`, `expressivity`):
+  `dominance` is `complete` (the listed order), `incomplete` or `codominant` (two alleles) or a
+  hierarchy `"I^A = I^B > i"` (`>` complete, `=` codominant, `~` incomplete). A heterozygote of a
+  codominant level shows both phenotypes (`"A and B"`, or its `heterozygotes:` name: ABO's `AB`);
+  of an incomplete level its own named phenotype (required: `heterozygotes: {C^R/C^W: pink}`);
+  naming the heterozygote of a completely dominant pair is refused with the fix. Lethal alleles:
+  `recessive` (homozygotes and hemizygotes die: the yellow mouse's Aʸ) or `dominant`.
+  Penetrance is an exact share per phenotype (a number applies to the one phenotype that is not
+  `normal`); non-penetrant carriers show `normal` (default: the wild-type allele's phenotype).
+  Expressivity (`constant` / `variable`) is a recorded property for the pedigree and the lint;
+  it does not change ratios.
+- **Linkage** (`linkage: [{loci: [A, B, C], rf: [0.1, 0.2], coincidence: 0.5, rf_male: 0}]`):
+  loci in map order on one chromosome with the recombination frequency of each adjacent
+  interval, 0 ≤ RF ≤ 0.5 (above 0.5 is refused: loci far apart assort independently; map
+  distances over 50 cM are sums of intervals, Step 216). Three loci may give `coincidence` or
+  `interference` (= 1 − coincidence). `rf_male` for sex-specific recombination (none in
+  Drosophila males). Two or more X-linked loci need their group (they share the X); Y-linked and
+  mitochondrial loci never take one.
+- **Epistasis** between two loci (`epistasis: [{kind, epistatic, hypostatic}]`, or `loci: [A, B]`
+  for the symmetric kinds), each kind with its dihybrid F2: `recessive` 9:3:4, `dominant`
+  12:3:1, `suppression` 13:3, `duplicate` 15:1, `complementary` 9:7, `cumulative` 9:6:1. The
+  first three show the loci's own phenotypes; `duplicate` / `complementary` take them from two
+  loci with the same two phenotype names, else `phenotypes: [purple, white]`; `cumulative` always
+  names its three (`[disc, sphere, long]`). The loci need two alleles with complete dominance
+  where the kind reads "dominant" / "recessive".
+- **The system** (`GeneticSystem`, built by `build_system(spec, where)` from the scene's YAML:
+  `loci`, `linkage`, `epistasis`, `sex: XY` to follow the sexes without sex-linked loci, or one
+  `preset:`): the loci, the autosomal groups (an unlinked locus is a group of one: independent
+  assortment), the X group, the Y loci, the mt loci, the epistasis entries and the **traits**
+  (phenotype columns: an independent locus, or an epistatic pair). Presets (`PRESETS`, each with
+  a note and an example cross): `pea_seed_shape`, `pea_dihybrid`, `snapdragon`, `abo`,
+  `rabbit_coat`, `labrador`, `squash_colour`, `chicken_feathers`, `shepherds_purse`,
+  `sweet_pea`, `squash_shape`, `yellow_mouse`, `drosophila_white`, `hemophilia_a`,
+  `drosophila_b_vg` (Morgan's b–vg test cross, 17 % recombinants, `rf_male: 0`).
+- **Genotypes** (`parse_genotype(system, text, where, sex)`): written `AaBb`, `A/a B/b`,
+  `I^A i`, linked loci with their phase `AB/ab` (coupling) or `Ab/aB` (repulsion) — required as
+  soon as the genotype is heterozygous at two linked loci —, sex chromosomes `X^H X^h`,
+  `X^H/Y`, several X-linked loci `X^{H,b}`, Y-linked `Y^T`, a mitochondrial allele once.
+  Canonical form: dominant haplotype first, X before Y. `genotype_text(system, g, style)` writes
+  text / markup / YAML: one-letter alleles run together (`AaBb`, `XᴴXʰ`), longer ones spaced
+  with `/` (`b⁺ vg⁺/b vg`).
+- **Errors** name the place (`parents[0]: genotype 'RrYx': …`) and the fix: an allele not
+  defined (the alleles listed, did-you-mean), an allele of another locus, an X-linked allele
+  without its X (`write X^H X^h (female) or X^H Y (male)`), a female with a Y, XXY / X0 (a
+  karyotype, Step 216), a locus missing or with three alleles, linked loci without their phase,
+  RF > 0.5, an unknown key / chromosome / epistasis kind / preset (did-you-mean), `X^w` written as
+  an allele, `+` used by two loci, incomplete dominance without the heterozygote's phenotype.
+- **Modes of inheritance** (`MODES`: `AD`, `AR`, `XD`, `XR`, `YL`, `MT`, each with its hallmarks
+  as data; `parse_mode("x-linked recessive")`; `mode_of(system, locus, phenotype)` from the
+  chromosome and the dominance): one table for the pedigree analysis and the lint.
+
+### 96.4 The cross engine (Step 213)
+
+- **Gametes** (`gametes(system, genotype, sex)`): the product over autosomal groups of each
+  group's haplotypes (segregation; independent assortment between groups), with crossing over
+  inside a group: every crossover pattern of its intervals with its probability (independent
+  intervals; for three loci the double crossovers are `C·r₁·r₂`, singles `r − C·r₁·r₂`), the
+  gamete switching homologue at each crossover. Two loci: parentals `(1 − r)/2`, recombinants
+  `r/2` each. Females recombine X-linked loci; males pass X or Y (1/2 each); `rf_male` applies to
+  male meiosis; eggs carry the mtDNA, sperm and pollen none.
+- **A cross** (`cross(system, mother, father)` → `CrossResult`): every egg × sperm, the zygotes
+  (sum 1), the share carrying a lethal genotype (`lethal`), and the survivors' genotype and
+  phenotype distributions renormalized (yellow mice: lethal 1/4, then 2/3 yellow : 1/3 agouti).
+  Phenotype classes (`Phenotype`: one phenotype per trait, plus the sex when the system has sex
+  chromosomes) are ordered as textbooks write ratios: females first, then each trait in dominance
+  order (incomplete heterozygotes between their parents: red, pink, white) or the kind's
+  epistasis order (9 black : 3 brown : 4 yellow; 12 white : 3 yellow : 1 green; 13 white : 3
+  coloured). `ratio()` gives the smallest whole numbers, `ratio_text()` `9 : 3 : 3 : 1`.
+  Without sex chromosomes or mtDNA the two parents' roles are symmetric (seed and pollen).
+- **Test cross** (`make_tester`, `test_cross`): the partner homozygous (hemizygous) for every
+  locus' single recessive allele, of the other sex; refused where the lowest level holds two
+  alleles. **Reciprocal** (`reciprocal(system, mother, father)`): the father's line as the
+  mother and the mother's line as the father (a true-breeding mother needed at X-linked loci;
+  the new father keeps the old father's Y; mtDNA goes with its line).
+- Tested exactly: 3:1, 1:2:1, 9:3:3:1, 27:9:…:1, 1:1:1:1 test cross, ABO 1:1:1:1 and 1:1:2, a
+  dominance series, 9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1 (and their test crosses 1:1:2, 1:3,
+  3:1), 2:1 lethal, penetrance 4/5, X-linked recessive both ways and F2 (white only in males),
+  a carrier mother's sons 1/2 affected, Y-linked, mitochondrial, coupling and repulsion test
+  crosses, RF = 0.5 as 1:1:1:1, Morgan's 17 % and no recombinants from Drosophila males, three
+  loci with coincidence 0.5, X-linked loci recombining in females only.
+
+### 96.5 How the later steps plug in (plan; YAML as planned)
+
+- **`cross` (214).** Params: the genetic system (`preset` or `loci` / `linkage` / `epistasis` /
+  `sex`), the parents (`parents: [RrYy, RrYy]`, or `mother:` / `father:` when the system
+  `needs_sexes`; `generations: [P, F1, F2]` with `P: [RRYY, rryy]` to derive F1 and its
+  intercross or selfing), `show: punnett | branch | gametes | ratios` (`auto`: Punnett up to 4 × 4
+  gametes, branch beyond), `observed: {round yellow: 315, …}` for the chi-square. Actions:
+  `form_gametes` (a parent's homologues separating, crossing over for linked loci), `fill`
+  (`row`, `column`, `cell`, `all`), `count` (`genotypes` / `phenotypes`, the ratio built up),
+  `highlight` (a class), `chi_square`. Everything shown comes from `CrossResult` (cells are
+  `fertilize(egg, sperm)`, tallies are its distributions), so a drawn ratio cannot disagree with
+  the cross.
+
+  ```yaml
+  - id: dihybrid
+    type: cross
+    params:
+      preset: pea_dihybrid
+      parents: [RrYy, RrYy]
+      show: punnett
+    beats:
+      - text: "Each parent makes four kinds of gametes in equal numbers."
+        actions: [{form_gametes: both}]
+      - text: "Sixteen equally likely combinations give a nine to three to three to one ratio."
+        actions: [{fill: all}, {count: phenotypes}]
+  ```
+- **`pedigree` (215).** Params: `individuals` (`id`, `sex: female | male | unknown`, `affected`,
+  `carrier`, `deceased`, `proband`, `adopted`, `parents: [I-1, I-2]`, `twins: {with, kind: MZ | DZ}`,
+  `consanguineous` couples), `mode:` (a `parse_mode` name) or `analyse: true`, the locus (a
+  `preset` or `loci` with one locus) for genotypes and risks, `penetrance`. The analysis is exact
+  reasoning on the model: each mode is tried by assigning genotypes consistent with every
+  phenotype (and penetrance), giving the consistent modes, forced genotypes and, by Bayesian
+  conditioning on the chart, carrier probabilities (2/3 for an unaffected sibling of an affected
+  child in AR) and the risk for a proposed child. Actions: `reveal` (a generation), `highlight`,
+  `deduce`, `risk`.
+- **`karyotype` / `linkage_map` (216).** `karyotype`: `karyotype: "47,XX,+21"` (ISCN parsed and
+  checked), `show: ideogram | karyogram`, `highlight: [21]`, structural changes
+  (`del(5)(p15.2)`, `inv`, `t(9;22)(q34;q11)`, `rob(14;21)`); band data schematic (ISCN 400-band
+  level names only where verified). `linkage_map`: loci with positions in cM, map functions
+  (Haldane, Kosambi) between cM and RF, a three-point test cross from counts (`counts:` of the
+  eight classes → gene order from the double crossovers, distances, coefficient of coincidence,
+  interference) computed in `genetics/mapping.py`; actions `cross_over`, `measure`.
+- **Molecular (217).** `mutation`: `sequence` (a coding sequence, `cellworld.sequences`
+  checks), `variant: c.1521_1523del` (HGVS parsed in `genetics/hgvs.py`; the protein
+  consequence computed with the genetic code and written `p.(Phe508del)`); `crispr`: `target`
+  sequence, `spacer` (20 nt), the PAM checked (NGG 3′ of the protospacer on the non-target
+  strand), the cut 3 bp 5′ of the PAM, `repair: nhej | hdr`; `dna_lab`: `method`, `primers` (5′→3′,
+  checked against the template), `cycles` (from one template molecule, 2ⁿ − 2n double-stranded copies of exactly the target length
+  after n cycles, the first two appearing in cycle 3),
+  `ladder` and fragment sizes (log-linear migration), Sanger peaks or NGS reads from a seeded
+  model with a variant call.
+- **`population` / `gwas` (218).** `population`: `model: hardy_weinberg` (p² + 2pq + q² with
+  worked numbers; carrier frequency 2pq from an incidence q²) or `drift | selection | migration |
+  bottleneck | founder` (`N`, `s`, `h`, `m`, `generations`, `replicates`, `seed`;
+  Wright–Fisher in `genetics/population.py`, deterministic per seed); `gwas`: `plot: manhattan |
+  qq`, seeded synthetic data or a CSV, the 5 × 10⁻⁸ line.
+- **The lint (219)** (`vidgen.lint.genetics_rule`, knowledge in `genetics/accuracy.py`, like
+  §95.14): rebuilds each genetics scene's model from its params (no render) and checks the
+  narration and on-screen text against it — a ratio or probability that does not follow from
+  the cross (`genetics_ratio`), a pedigree inconsistent with its stated mode (AD skipping a
+  generation without reduced penetrance, XR passed father → son: `genetics_pedigree`), RF over
+  50 % or cM / RF confusion (`genetics_linkage`), Hardy–Weinberg arithmetic (`genetics_hw`),
+  a CRISPR target without an NGG PAM (`genetics_crispr`), karyotype and HGVS format errors;
+  `science_naming` reused for gene symbols; `said_before_shown` / `unsaid_reveal` learn the new
+  targets. Hard impossibilities stay validation errors (as now: RF > 0.5, a female with a Y).
+
+### 96.6 Public (Step 213)
+
+- `vidgen.api` adds `genetics` (the package), `GeneticSystem`, `CrossResult`,
+  `build_genetic_system` (`genetics.build_system`), `genetic_cross` (`genetics.cross`),
+  `parse_genotype`, `GENETICS_PRESETS`, `INHERITANCE_MODES`. No scene type, action or config key
+  yet: nothing existing changes.
+- **Gaps** (for later steps): ZW sex determination (birds, butterflies) and X0 systems are not
+  modelled; heteroplasmy is not (one mitochondrial allele per individual); penetrance is per
+  phenotype, not age-dependent; epistasis is between two loci, one pair per locus; a dominance
+  hierarchy cannot mix codominance and incomplete dominance in one level; the map functions
+  (cM ↔ RF) are Step 216's.

@@ -5,7 +5,25 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–211)
+## Unreleased (Steps 193–213)
+
+### Genetics (Phase V, from Step 213)
+
+- **The genetics model** (Step 213, no scene type yet; `vidgen.genetics`, also in `vidgen.api`):
+  loci and alleles in standard notation (`A`/`a`, `I^A` shown as Iᴬ, `c^{ch}`, wild type `w^+` or
+  `+`, X-linked alleles written on their chromosome, `X^H X^h`, `X^h Y`); dominance — complete,
+  incomplete, codominant, or a hierarchy of multiple alleles such as `"I^A = I^B > i"`; lethal
+  alleles; penetrance and expressivity; epistasis (recessive 9:3:4, dominant 12:3:1, suppression
+  13:3, duplicate 15:1, complementary 9:7, cumulative 9:6:1); autosomal, X-, Y-linked and
+  mitochondrial loci; linkage with recombination frequencies (coupling / repulsion written
+  `AB/ab` / `Ab/aB`, interference for three loci, no crossing over in Drosophila males). An exact
+  cross engine computes gametes and offspring genotype and phenotype distributions as fractions,
+  with test and reciprocal crosses; 15 presets of textbook crosses (`abo`, `labrador`,
+  `drosophila_white`, `drosophila_b_vg`…). Mistakes are refused with the reason: an allele not
+  defined for its locus (did-you-mean), a female with a Y, an X-linked allele written without its
+  X, linked loci without their phase, a recombination frequency above 0.5. The scene types
+  (`cross`, `pedigree`, `karyotype`, `linkage_map`, `mutation`, `crispr`, `dna_lab`,
+  `population`, `gwas`) follow in Steps 214–218; plan in `DESIGN.md` §96.
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 
