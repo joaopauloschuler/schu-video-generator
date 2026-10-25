@@ -440,6 +440,24 @@ narration–picture timing, references, common mistakes) is in
 [COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md), with the worked example
 [`examples/gene-to-secreted-protein`](../examples/gene-to-secreted-protein/README.md).
 
+**Genetics: say what the model computes.** The genetics scenes compute their ratios,
+probabilities, map distances, frequencies and HGVS; `vidgen lint`'s `genetics_*` rules compare the
+narration and the on-screen text with them:
+
+- Ratios and shares: say the cross's own (a dihybrid F2 is 9 : 3 : 3 : 1; "3 : 1" only as "each
+  trait alone"); a carrier mother's sons are affected with probability 1/2, her daughters are
+  carriers with 1/2 and never affected.
+- Pedigrees: the chart must fit the stated `mode` (else an error); a dominant trait skips a
+  generation only with reduced penetrance; an X-linked trait never passes father to son; say the
+  carrier probabilities and risks the chart gives (2/3 for an unaffected sibling under AR, the
+  proposed child's 1/150), or say "if both are carriers…" for the conditional case.
+- Linkage and populations: RF is at most 50 %; distances as on the map; carriers are 2pq (≈ 2q),
+  the affected q², q = √incidence.
+- Molecular: SpCas9 needs NGG right after the protospacer and cuts both strands bluntly 3 bp
+  upstream of it; karyotypes in ISCN with their changes in chromosome order, the sex they have
+  (45,X is female); HGVS with the initiator Met counted (HbS p.(Glu7Val), "legacy Glu6Val"),
+  `ΔF508` / `R553X` only as legacy names.
+
 ## 13. Editorial options (example style choices)
 
 These are choices, not rules. Pick a stance per video and apply it consistently.

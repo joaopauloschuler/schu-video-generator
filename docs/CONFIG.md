@@ -11425,6 +11425,13 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `science_naming` | warning | for the genes a scene declares (a molecule's `gene`, the scene's `gene:` param, a pathway node's `gene`): the gene written as its protein next to "gene" (mouse `TRP53 gene`: the gene is *Trp53*) or the protein as the gene next to "protein" (`Trp53 protein`: TRP53), a symbol in a case the species does not use (`trp53` in a mouse scene), and in a molecule's `label` (Pango markup) a gene next to "gene" without `<i>` or a protein in italics. Checked in titles, labels, callout labels and narration |
 | `science_pathway` | warning | in a [`pathway`](#pathway) scene, narration that says one node activates another (or "B is activated by A") where the scene's arc A → B inhibits (a T-bar, or `effect: inhibits` such as Akt's phosphorylation of TSC2), inhibits where it activates, phosphorylates where it dephosphorylates or the reverse. Only direct arcs between two named nodes (labels or genes) with a few words between are read |
 | `science_counts` | warning | a number in the narration against the textbook: the net ATP (2), NADH (2) or pyruvate (2) of glycolysis per glucose; NADH (3), FADH₂ (1), CO₂ (2) or GTP (1) per turn of the citric acid cycle (twice that per glucose); Na⁺ (3) and K⁺ (2) per Na⁺/K⁺ pump cycle; protons pumped per NADH (10), per FADH₂ (6), by complex I (4), II (none), III (4), IV (2); cells after mitosis (2) or meiosis (4); stop codons (3); human chromosomes (46, 23 in a gamete); base pairs per turn of B-DNA (10–10.5) and per nucleosome (145–147) |
+| `genetics_ratio` | warning | in a [`cross`](#cross) scene, a ratio in the narration (`9:3:3:1`, "a three to one ratio", "three round to one wrinkled", "9 purple : 7 white") that is none of the cross's — its phenotype ratio, genotype ratio, the zygotes' (lethal genotypes included), by sex or with the sexes pooled, each parent's gametes (when the sentence says gametes), the observed counts, the ratio without the epistasis (when the sentence speaks of classes merging or masking), one trait's ratio (when the sentence says it is one trait's: "each trait alone", a trait's name, one trait's phenotypes) — or a share ("half", "a quarter of", "two thirds", "1 in 4", "25 %", "all the daughters") of a named phenotype (or of the carriers) among the offspring, sons or daughters, or a child's chance of it, that is not the cross's ("a quarter of the children are affected sons" is read jointly). Sentences about the F1 of a `P` cross, about a test cross the scene is not, or hypothetical ("would", "instead", "modified to", "unlike") are left alone; `tolerance` (0.05, relative) for shares said with "about" |
+| `genetics_pedigree` | warning; **error** for a chart against its mode | a [`pedigree`](#pedigree) whose chart does not fit its stated `mode` (the reason from the analysis, e.g. "III-1 is affected but neither parent is", and the modes that fit); narration saying a dominant trait skips a generation without reduced penetrance (said, or `penetrance:` below 1), or that an X-linked trait passes from father to son (said X-linked, or the scene's mode XR / XD); in a pedigree scene a named person's carrier probability ("II-3 is a carrier with probability one half"), an unaffected sibling's, or the proposed child's risk (per sex for "a son") that differs from the chart's computed value. Conditional sentences ("if both are carriers…") are left alone |
+| `genetics_linkage` | warning | in any scene, a recombination frequency (or a share of recombinants) said to be over 50 %; in a [`linkage_map`](#linkage_map) or a `cross` with `linkage:`, a distance in cM / map units or an RF that differs from the scene's for the two loci the sentence names (or, naming none, from every pair's), two linked loci called unlinked ("assort independently") or two unlinked loci called linked. Locus symbols are matched as written (a one-letter capital only beside "and", "gene", "locus" or a dash); `tolerance` (0.05) for "about" |
+| `genetics_hwe` | warning | Hardy–Weinberg in the narration: carriers called q² (or p²), the affected called 2pq, p² + q² = 1; numbers said in one beat that do not agree — q against the incidence (q² = incidence), the carrier frequency against q (2pq, or ≈ 2q for a rare allele: "1 in 25" for q = 1/50 is fine); in a [`population`](#population) Hardy–Weinberg scene, q and the incidence against the scene's. `tolerance` (0.1, relative) between two numbers |
+| `genetics_crispr` | warning | a PAM written for the wrong nuclease (SpCas9 NGG, SaCas9 NNGRRT, Cas12a TTTV), a cut placed downstream of (3′ of, inside) the PAM or not 3 bp upstream of it, sticky or staggered ends for Cas9 (its break is blunt), the PAM before the protospacer or on the target strand, a spacer length the enzyme does not use (SpCas9 17–24 nt). The enzyme is the [`crispr`](#crispr) scene's `cas`, or the one the sentence names; sentences naming no Cas outside a crispr scene are left alone |
+| `genetics_karyotype` | warning | ISCN notation in the narration or on screen (title, callout labels) that does not parse (the reason and fix: `47,xy,+21`, a count that is not what is listed), a [`karyotype`](#karyotype) whose changes are out of ISCN order (after the sex chromosomes by chromosome, sex chromosomes first, numerical before structural: `46,XY,del(5)(p15.2),inv(9)(p12q13)`), a karyotype or a sex-chromosome syndrome given the wrong sex ("45,X is male", "a girl with 47,XXY", "Turner syndrome in boys"; SRY named is left alone), a condition the scene's karyotype does not have ("trisomy 21" for `47,XY,+18`; comparisons with "like", "such as" are left alone) |
+| `genetics_hgvs` | warning; info for legacy shorthand | HGVS in the narration or on screen that is not valid (`c.A20T`), or in a [`mutation`](#mutation) scene not its variant (`c.20A>G`, a `p.` that does not follow from it); a protein change in the legacy numbering without the initiator Met (`p.Glu6Val`, `Glu6Val` for HbS — in a mutation scene or when the sentence names HBB, sickle cell, CFTR, cystic fibrosis) unless the sentence calls it legacy; as info, legacy shorthand (`ΔF508`, `R553X`, `G551D`) in a genetics scene or a sentence about a variant, unless called legacy (`F508del`, the community's name, is fine) |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -11473,6 +11480,13 @@ lint:
     science_naming: {}
     science_pathway: {}
     science_counts: {}
+    genetics_ratio: {tolerance: 0.05}       # relative, for shares said with "about"
+    genetics_pedigree: {}
+    genetics_linkage: {tolerance: 0.05}     # relative, for distances and RF said with "about"
+    genetics_hwe: {tolerance: 0.1}          # relative, between two Hardy–Weinberg numbers
+    genetics_crispr: {}
+    genetics_karyotype: {}
+    genetics_hgvs: {}
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -11494,6 +11508,34 @@ gly:
   warning science_counts    gly_b1 @ 0.0s: "Glycolysis yields a net four ATP per glucose.": glycolysis yields a net 2 ATP per glucose (4 made, 2 invested), not four
 akt:
   warning science_pathway   akt_b1 @ 0.0s: "Akt activates TSC2, and the signal reaches mTORC1.": the scene's arc akt → tsc2 inhibits (phosphorylates), but the narration says it activates: say inhibits, or change the arc
+```
+
+**Genetics accuracy** (the `genetics_*` rules, for the [genetics scenes](#cross) and any
+narration): each genetics scene's model is rebuilt from its params — the cross, the pedigree's
+analysis and probabilities, the map, Hardy–Weinberg, the nuclease, the karyotype, the variant —
+and what the narration and the on-screen text say is checked against it; the text checks that
+need no scene (a dominant trait skipping a generation, RF over 50 %, the Hardy–Weinberg formulas,
+Cas9's PAM and cut, karyotype notation, HGVS and legacy names) read every scene. As with the
+`science_*` rules a claim is read only when clearly there: negations, contrasts, questions and
+hypotheticals ("would", "instead", "unlike") are left alone, and a number only next to the words
+that say what it is. `science_naming` also knows the genes of `mutation` (its gene), `crispr`
+(`symbol`), `gwas` (the peaks' genes) and `karyotype` (genes at `bands`), which captions set in
+italics. Example (the planted mistakes of a demo project):
+
+```
+$ vidgen lint demo --rule genetics_ratio --rule genetics_pedigree --rule genetics_hgvs
+dihybrid:
+  warning genetics_ratio    dihybrid_b1 @ 0.0s: "The offspring show a three to one ratio.": 'three to one' does not follow from this cross: its phenotypes are 9 : 3 : 3 : 1 and its genotypes 1 : 2 : 1 : 2 : 4 : 2 : 1 : 2 : 1 (each trait alone gives that: say it is one trait's ratio); say the ratio the cross gives, or change the cross
+hemo:
+  warning genetics_ratio    hemo_b1 @ 0.0s: "Half the daughters have hemophilia A.": 'Half': in this cross 0 of the daughters (females) are hemophilia A, not 1/2 (50 %): say what the cross gives, or change the cross
+  warning genetics_pedigree hemo_b2 @ 2.7s: "The father passes the X-linked allele to his sons.": an X-linked allele never passes from father to son: a father gives his sons his Y and his daughters his X (male-to-male transmission rules X-linked inheritance out)
+skipped:
+  error   genetics_pedigree skipped_b1 @ 0.0s: the chart does not fit the stated mode AD (autosomal dominant): III-1 is affected but neither parent (II-1, II-2) is: a dominant trait does not skip a generation (fits with reduced penetrance); no mode tried fits the chart as drawn: fix the chart (affected, carrier, parents), or give penetrance: when the reason says it fits with reduced penetrance
+cf:
+  warning genetics_pedigree cf_b2 @ 3.4s: "The risk for their baby is one in four.": 'one in four': the chart gives the proposed child a risk of 1/150 (1 in 150) (under AR), not 1/4 (25 %)
+sickle:
+  warning genetics_hgvs     sickle_b1 @ 0.0s: "The hbb gene changes at c.20A>G, which gives p.Glu6Val.": 'c.20A>G' is not the scene's variant (c.20A>T)
+  info    genetics_hgvs     sickle_b2 @ 3.8s: "In cystic fibrosis, the ΔF508 variant is the commonest allele.": 'ΔF508' is the legacy name: HGVS writes CFTR c.1521_1523del p.(Phe508del) (say 'legacy name ΔF508' if you keep it)
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The

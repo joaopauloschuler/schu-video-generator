@@ -809,6 +809,13 @@ LINT_RULES: tuple[str, ...] = (
     "science_naming",
     "science_pathway",
     "science_counts",
+    "genetics_ratio",
+    "genetics_pedigree",
+    "genetics_linkage",
+    "genetics_hwe",
+    "genetics_crispr",
+    "genetics_karyotype",
+    "genetics_hgvs",
 )
 RuleName = Literal[
     "off_frame",
@@ -851,6 +858,13 @@ RuleName = Literal[
     "science_naming",
     "science_pathway",
     "science_counts",
+    "genetics_ratio",
+    "genetics_pedigree",
+    "genetics_linkage",
+    "genetics_hwe",
+    "genetics_crispr",
+    "genetics_karyotype",
+    "genetics_hgvs",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1105,6 +1119,43 @@ class ScienceCountsRule(RuleConfig):
     """``science_counts``: a number in the narration that contradicts the textbook (net 4 ATP from glycolysis, 2 NADH per turn of the citric acid cycle, 2 Na⁺ out per pump cycle…) (DESIGN.md §95.14)."""
 
 
+class GeneticsRatioRule(RuleConfig):
+    """``genetics_ratio``: in a cross scene, a ratio (3 : 1 for a dihybrid) or a share of a phenotype among the offspring, sons or daughters (half the sons affected) said in the narration that does not follow from the cross (DESIGN.md §96.18)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a share said as an approximation ("about 40 %") may differ from the cross's."""
+
+
+class GeneticsPedigreeRule(RuleConfig):
+    """``genetics_pedigree``: a pedigree chart that does not fit its stated mode (error); narration with a dominant trait skipping a generation without reduced penetrance, father-to-son transmission of an X-linked trait, or a carrier or risk probability that differs from the chart's (DESIGN.md §96.18)."""
+
+
+class GeneticsLinkageRule(RuleConfig):
+    """``genetics_linkage``: a recombination frequency said to be over 50 %, a distance in cM or an RF that differs from the scene's map or cross, close loci called unlinked or unlinked loci called linked (DESIGN.md §96.18)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a distance or RF said as an approximation ("about 18 cM") may differ from the scene's."""
+
+
+class GeneticsHweRule(RuleConfig):
+    """``genetics_hwe``: Hardy–Weinberg arithmetic in the narration: q against the incidence (q² = incidence), the carrier frequency against 2pq (≈ 2q), carriers called q², a population scene's numbers (DESIGN.md §96.18)."""
+
+    tolerance: float = Field(default=0.1, ge=0, le=0.5)
+    """How far (relative) two numbers said may disagree (1 in 25 for 2pq = 1 in 25.5 is fine)."""
+
+
+class GeneticsCrisprRule(RuleConfig):
+    """``genetics_crispr``: narration naming a wrong PAM for the Cas (TTTV for SpCas9), a cut other than 3 bp upstream of the PAM (downstream, inside it), sticky ends for Cas9, the PAM before the protospacer or on the target strand, a spacer length the enzyme does not use (DESIGN.md §96.18)."""
+
+
+class GeneticsKaryotypeRule(RuleConfig):
+    """``genetics_karyotype``: ISCN notation in narration or on screen that does not parse or lists its changes out of order, a karyotype or a sex-chromosome syndrome given the wrong sex (45,X male), a condition the karyotype scene does not show (trisomy 21 for 47,XY,+18) (DESIGN.md §96.18)."""
+
+
+class GeneticsHgvsRule(RuleConfig):
+    """``genetics_hgvs``: HGVS in narration or on screen that is invalid or not the mutation scene's variant, legacy numbering (Glu6Val for HBB) without saying it is legacy; legacy shorthand (ΔF508, R553X) as info (DESIGN.md §96.18)."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1273,6 +1324,20 @@ class LintRules(_Strict):
     """Narration contradicting a pathway arc's effect (default: warning)."""
     science_counts: ScienceCountsRule = Field(default_factory=ScienceCountsRule)
     """A number in the narration contradicting the textbook (default: warning)."""
+    genetics_ratio: GeneticsRatioRule = Field(default_factory=GeneticsRatioRule)
+    """A ratio or share in a cross scene's narration that does not follow from its cross (default: warning)."""
+    genetics_pedigree: GeneticsPedigreeRule = Field(default_factory=GeneticsPedigreeRule)
+    """A pedigree against its stated mode (error), a mode or probability stated against the chart or the textbook (default: warning)."""
+    genetics_linkage: GeneticsLinkageRule = Field(default_factory=GeneticsLinkageRule)
+    """RF over 50 %, distances or RF against the scene's map, linked loci called unlinked (default: warning)."""
+    genetics_hwe: GeneticsHweRule = Field(default_factory=GeneticsHweRule)
+    """Hardy–Weinberg arithmetic errors in the narration (default: warning)."""
+    genetics_crispr: GeneticsCrisprRule = Field(default_factory=GeneticsCrisprRule)
+    """A wrong PAM, cut site, end type or spacer length for the Cas (default: warning)."""
+    genetics_karyotype: GeneticsKaryotypeRule = Field(default_factory=GeneticsKaryotypeRule)
+    """Karyotype notation errors, the wrong sex or condition for a karyotype (default: warning)."""
+    genetics_hgvs: GeneticsHgvsRule = Field(default_factory=GeneticsHgvsRule)
+    """HGVS not valid or not the scene's variant, legacy numbering unsaid (default: warning; legacy shorthand: info)."""
 
 
 class LintConfig(_Strict):

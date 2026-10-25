@@ -5,9 +5,24 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–218)
+## Unreleased (Steps 193–219)
 
 ### Genetics (Phase V, from Step 213)
+
+- **Accuracy lint for genetics** (Step 219). Seven `vidgen lint` rules compare the narration and
+  on-screen text with what each genetics scene computes: `genetics_ratio` (a ratio or share the
+  `cross` does not give: "a 3:1 ratio" for a dihybrid, "half the daughters affected" for a carrier
+  mother), `genetics_pedigree` (a chart that does not fit its stated mode, as an error; a dominant
+  trait skipping a generation without reduced penetrance; father-to-son transmission of an X-linked
+  trait; carrier and risk probabilities against the chart), `genetics_linkage` (RF over 50 %,
+  distances and RF against the map, linked loci called unlinked), `genetics_hwe` (carriers called
+  q², q against the incidence, carriers against 2pq), `genetics_crispr` (the wrong PAM for the Cas,
+  a cut not 3 bp upstream of the PAM, sticky ends for Cas9, the spacer length), `genetics_karyotype`
+  (ISCN that does not parse or lists its changes out of order, "45,X is male", a condition the
+  karyotype does not show) and `genetics_hgvs` (HGVS invalid or not the scene's variant, legacy
+  numbering such as p.Glu6Val unannounced; `ΔF508` / `R553X` shorthand as info). `science_naming`
+  and caption italics know the genes of the new scenes; the narration–picture rules know their
+  actions and targets. No new findings on any example or the gallery.
 
 - **Population genetics** (Step 218). A `population` scene type: Hardy–Weinberg worked step by step
   with exact numbers — p and q from genotype counts, genotype frequencies, p or the incidence of a

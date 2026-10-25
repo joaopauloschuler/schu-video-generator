@@ -11,6 +11,7 @@ reads it (count, sex chromosomes, each change, the condition when it is a classi
 model is ``vidgen.genetics.karyotype``; the drawing ``scenes/karyotype_draw.py``; the action
 ``rearrange`` is in ``scenes/karyotype_actions.py``."""
 
+import re
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -127,6 +128,27 @@ class KaryotypeScene(NarratedScene):
             names += ["notation", "reading"]
         names += [f"band:{ref.label}" for ref, _ in params.labels()]
         return names
+
+    @classmethod
+    def gene_symbols(cls, params: Any) -> list[str]:
+        """The genes named at bands ({7q31.2: CFTR}): italic in captions, checked by science_naming."""
+        from vidgen.cellworld.names import check_gene
+
+        out = []
+        for _, text in params.labels():
+            try:
+                if re.fullmatch(r"[A-Z][A-Z0-9-]{1,14}", text):
+                    out.append(check_gene(text, "human", "bands"))
+            except VidgenError:
+                continue
+        return out
+
+    @classmethod
+    def target_text(cls, params: Any, name: str) -> str | None:
+        """A labelled band's text (its gene), for the narration lint rules."""
+        if not name.startswith("band:"):
+            return None
+        return next((text or None for ref, text in params.labels() if ref.label == name[5:]), None)
 
     @staticmethod
     def _ideogram_slots(params: Any) -> list[str]:

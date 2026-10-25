@@ -20307,3 +20307,88 @@ How to test
 - Stills: scratch project `scratchpad/s218/proj` (HWE from MN counts, CF carriers with a resample, drift,
   selection with drift, a bottleneck, migration, a founder effect, a synthetic GWAS with regional and QQ,
   a GWAS from a CSV), sheets and end frames in `scratchpad/s218/stills/{dark,light}-{16x9,9x16}/`.
+
+## Step 219 — Accuracy lint for genetics
+
+What was built (DESIGN §96.18)
+- **Seven lint rules** (scene scope, default warning, configurable like the others in `lint.rules`,
+  last in `LINT_RULES`), each message quoting the sentence (or naming `title` / the karyotype) and
+  giving the textbook fix:
+  - `genetics_ratio`: in a `cross`, a ratio that is none of the cross's (phenotypes, genotypes,
+    zygotes, by sex / pooled, gametes, observed, without the epistasis, one trait's — the last three
+    only with their context words) and a share of a named phenotype or of the carriers among the
+    offspring / sons / daughters (or a child's chance) that is not the cross's (`tolerance` 0.05).
+  - `genetics_pedigree`: the chart against its stated `mode` (`declared_mode_problem`, **error**, with
+    the fitting modes); "a dominant trait skips a generation" without reduced penetrance; father → son
+    for an X-linked trait; a named person's (`II-3`) or an unaffected sibling's carrier probability and
+    the proposed child's risk against the chart.
+  - `genetics_linkage`: RF / recombinants over 50 % (any scene); cM and RF against a `linkage_map`'s
+    map or a cross's `linkage:`; linked loci called unlinked and the reverse (`tolerance` 0.05).
+  - `genetics_hwe`: carriers called q², the incidence 2pq, p² + q² = 1; q vs incidence and carriers vs
+    2pq (≈ 2q) within a beat; a population scene's q and incidence (`tolerance` 0.1).
+  - `genetics_crispr`: a PAM for the wrong Cas (NGG / NNGRRT / TTTV), a cut not 3 bp upstream of the
+    PAM (downstream, inside), sticky ends for Cas9, the PAM before the protospacer or on the target
+    strand, a spacer length outside the enzyme's range.
+  - `genetics_karyotype`: ISCN in narration / on screen that does not parse, changes out of ISCN order
+    (also the scene's `karyotype`: the order Step 216 left open), the wrong sex for a karyotype or for
+    Turner / Klinefelter, a condition the karyotype scene does not have.
+  - `genetics_hgvs`: `c.` / `p.` that is invalid or not the `mutation`'s variant, the legacy numbering
+    (p.Glu6Val, Glu6Val for HbS) unless called legacy (in any scene for the reference genes' textbook
+    variants); `ΔF508`, `R553X`-style shorthand as **info**.
+- **Reused framework**: knowledge in `genetics/accuracy.py` (reuses `cellworld.accuracy`'s sentence
+  helpers and `Claim`), glue in `lint/genetics_rule.py`; the runner appends `genetics_issues` to
+  `SceneContext.science`; `ScienceIssue` has an optional `severity`.
+- **`science_naming` and captions** know the new scenes' genes through new `gene_symbols` hooks
+  (`mutation`, `crispr`, `gwas`, `karyotype`); **narration–picture rules**: the 19 genetics actions are
+  showing actions; `gwas` and `karyotype` have `target_text` (peaks, bands).
+- **Demo** (scratchpad `s219/demo`, ten scenes, one planted mistake or more per rule): `vidgen lint
+  demo` → 1 error, 20 warnings, 1 info, every rule firing (output in CONFIG "Genetics accuracy").
+
+Files touched
+- New: `src/vidgen/genetics/accuracy.py`, `src/vidgen/lint/genetics_rule.py`, `tests/test_genetics_lint.py` (49).
+- Changed: `config.py` (seven rule configs, `LINT_RULES`, `RuleName`, `LintRules`), `lint/__init__.py`,
+  `lint/run.py`, `lint/science_rule.py` (`ScienceIssue.severity`, genes of the genetics scenes),
+  `lint/narration_rule.py` (`SHOWING_ACTIONS`), `scenes/{mutation,crispr,gwas,karyotype}.py`
+  (`gene_symbols`; `target_text` for gwas / karyotype), `tests/test_accuracy.py` (rule order no longer
+  assumes the science rules are last), `docs/CONFIG.md` (rules table, config block, "Genetics accuracy"
+  with example output), guide + `AGENTS.md` (paragraph after "Accuracy and sources", seven
+  troubleshooting rows), `docs/COOKBOOK.md` §12 ("Genetics: say what the model computes"), `DESIGN.md`
+  §96.18, `CHANGELOG.md`, `tasklist.md`.
+
+Public interfaces
+- Lint rules `genetics_ratio`, `genetics_pedigree`, `genetics_linkage` (`tolerance`), `genetics_hwe`
+  (`tolerance`), `genetics_crispr`, `genetics_karyotype`, `genetics_hgvs`; `genetics_ratio`
+  `tolerance`. No new `vidgen.api` names (`genetics.accuracy` via `genetics`). Scene classmethods
+  `gene_symbols` (mutation, crispr, gwas, karyotype), `target_text` (gwas, karyotype).
+
+Decisions / deviations
+- The rule planned as `genetics_hw` (§96.5) is `genetics_hwe` (the brief's name); HGVS and karyotype
+  rules are separate (`genetics_hgvs`, `genetics_karyotype`) rather than one format rule.
+- The pedigree's stated-mode contradiction is an **error** (the video would teach a wrong mode); the
+  other findings are warnings, legacy shorthand info.
+- `F508del` is not reported: it is the CF community's accepted name (CFTR2); `ΔF508` is.
+- One-letter shorthand is read only in genetics scenes or sentences about a variant (S1P, H3K4me3 in
+  cell-biology narration are not variants).
+- Rendering unchanged (lint, config and new classmethods only); the Phase Q frame baseline was not
+  re-run. Videos with a mutation / crispr / gwas / karyotype scene now italicise those genes in captions.
+
+Known gaps
+- English only; claims across sentences only for Hardy–Weinberg numbers within one beat; shares only
+  for phenotypes and carriers (not genotype classes or gametes); pedigree probabilities only for
+  NSGC-named people, "an unaffected sibling" and the proposed child; no narration checks of GWAS
+  thresholds, PCR or gel numbers; PAMs spelled out for the TTS ("N G G") are not read.
+
+How to test
+- `tests/test_genetics_lint.py` (49, no render, ~4 s): shares / numbers / ratios, wrong and right
+  sentence lists for every check, scene rules on small projects (the pedigree error, the karyotype order
+  and title, HGVS legacy numbering, naming), rules off and severities, the gallery's genetics scenes
+  clean, the narration rules' actions and target texts, caption gene symbols.
+- Related (not render): `test_lint` + `test_accuracy` + `test_narration_rule` (70); `test_guide` +
+  `test_docs` (138); `test_schema` + `test_introspect` + `test_api` + `test_json_output` +
+  `test_timing_lint` (121); `test_cross` + `test_pedigree` + `test_chromosomes` + `test_molecular` +
+  `test_population` (120); `test_builtin_scenes` + `test_actions_coverage` + `test_registry` +
+  `test_extensions` + `test_music_pieces` + `test_iso_diagram_actions` (239); `test_captions` +
+  `test_mcp` (35).
+- False-positive sweep: scratchpad `s219/lint_all.py` (every example, `docs/`, the gallery, the Phase U
+  and V scratch projects: 229 scenes) → 1 finding, a real one (`s216/proj2` karyotype out of ISCN order).
+- Demo: `vidgen lint` on scratchpad `s219/demo` (preview renders, estimated timings).

@@ -45,15 +45,19 @@ MOST_PER_CELL: dict[str, tuple[int, str]] = {
 #: Molecule kinds that show where a cell scene's energy comes from (ATP, a pump, a coupled carrier).
 ENERGY_KINDS = frozenset({"atp", "na_k_atpase", "h_atpase", "abc_transporter", "atp_synthase", "carrier"})
 MOTOR_KINDS = frozenset({"kinesin", "dynein", "myosin"})
+#: The genetics scene types that declare gene symbols (``science_naming``, DESIGN.md §96.18).
+GENE_SCENES = ("mutation", "crispr", "gwas", "karyotype")
 
 
 @dataclass(frozen=True)
 class ScienceIssue:
-    """A finding of one science rule: the beat it is about (``None``: the scene) and the message."""
+    """A finding of one science (or genetics) rule: the beat it is about (``None``: the scene), the
+    message and, when it differs from the rule's, its severity."""
 
     rule: str
     beat: str | None
     message: str
+    severity: str | None = None
 
 
 def _params(spec: SceneConfig) -> Any:
@@ -71,6 +75,13 @@ def _params(spec: SceneConfig) -> Any:
         return None
 
 
+def _scene_class(type_name: str) -> Any:
+    from vidgen import registry
+
+    entry = registry.find(type_name)
+    return entry.cls if entry is not None else None
+
+
 def _prokaryote(spec: SceneConfig, params: Any) -> bool:
     cell = getattr(params, "cell", None)
     kind = getattr(cell, "kind", cell)
@@ -85,7 +96,7 @@ def science_issues(project: Project, scene_id: str, rules: LintRules) -> list[Sc
     """Every science finding of scene ``scene_id`` (rules turned off are skipped)."""
     spec = project.scene(scene_id)
     on = {name for name in SCIENCE_RULES if getattr(rules, name).severity != "off"}
-    params = _params(spec) if spec.type in ("cell", "molecule", "pathway", "cell_cycle", "metabolism") else None
+    params = _params(spec) if spec.type in ("cell", "molecule", "pathway", "cell_cycle", "metabolism", *GENE_SCENES) else None
     prokaryote = _prokaryote(spec, params) if params is not None else False
     out: list[ScienceIssue] = []
     for beat in spec.beats:
@@ -264,6 +275,13 @@ def _genes(spec: SceneConfig, params: Any) -> list[acc.GeneName]:
             pathway = None
         if pathway is not None:
             found += [(n.gene, pathway.species) for n in pathway.nodes.values() if n.gene]
+    if spec.type in GENE_SCENES:
+        hook = getattr(_scene_class(spec.type), "gene_symbols", None)
+        if hook is not None:
+            try:
+                found += [(symbol, species) for symbol in hook(params)]
+            except Exception:  # noqa: BLE001 - validation reports it
+                pass
     seen: dict[str, acc.GeneName] = {}
     for symbol, sp in found:
         seen.setdefault(symbol, acc.GeneName(symbol, sp, acc.protein_form(symbol, sp)))
@@ -313,7 +331,7 @@ def _issues(ctx: SceneContext, name: str) -> Iterator[Issue]:
         if found.rule != name:
             continue
         beat = found.beat or ctx.beat_at(0.0)
-        yield Issue(found.message, None, beat=beat, time=starts.get(beat, 0.0) if beat else 0.0)
+        yield Issue(found.message, None, severity=found.severity, beat=beat, time=starts.get(beat, 0.0) if beat else 0.0)
 
 
 @rule("science_scale", scope="scene")

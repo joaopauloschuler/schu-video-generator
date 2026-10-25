@@ -900,6 +900,21 @@ gets `figure_credit: {text, license, url}`. How to choose, keep it correct and p
 script: `vidgen guide biology` and `docs/COOKBOOK-CELL-BIOLOGY.md` (example:
 `examples/gene-to-secreted-protein`).
 
+The genetics scenes are checked the same way by the `genetics_*` rules, against what each scene
+computes: a ratio or share the `cross` does not give ("a 3:1 ratio" for a dihybrid — say "each
+trait alone segregates 3:1" if you mean one trait —, "half the daughters affected" for a carrier
+mother), a `pedigree` that does not fit its `mode` (an error), "a dominant trait skips a
+generation" without reduced penetrance, father-to-son transmission of an X-linked trait, a carrier
+or risk probability the chart does not give ("II-3 is a carrier with probability 1/2" where it is
+2/3), RF over 50 % or a distance against the `linkage_map`, Hardy–Weinberg slips (carriers are
+2pq, not q²; q = √incidence), a wrong PAM or cut for the Cas (SpCas9: NGG, a blunt cut 3 bp
+upstream of the PAM), karyotype notation and the condition or sex it names ("45,X is female",
+`47,XY,+18` is not trisomy 21; changes in ISCN order), and HGVS that is not the `mutation`'s
+variant or uses the legacy numbering unannounced (HbS is p.(Glu7Val); say "legacy Glu6Val");
+`ΔF508` and `R553X` are reported as info — write the HGVS form and call the old one legacy.
+Say numbers exactly as the scene computes them (or with "about"); conditional and comparative
+sentences ("if both parents are carriers…", "unlike Down syndrome…") are not read.
+
 ```yaml
 # accuracy and references
 - id: er
@@ -2754,6 +2769,13 @@ install; `vidgen validate` warns when it is missing.
 | `science_naming` | a scene's gene written as its protein (mouse `TRP53 gene`), the wrong case, a gene label without `<i>` | the form the message gives (mouse: gene *Trp53*, protein TRP53) |
 | `science_pathway` | the narration says activates where the pathway's arc inhibits (or the reverse) | fix the words, or the arc (`effect:`) |
 | `science_counts` | a number against the textbook (net 4 ATP from glycolysis) | the number the message gives |
+| `genetics_ratio` | a ratio or share the `cross` does not give ("a 3:1 ratio" for a dihybrid, "half the daughters affected") | the ratio the message gives, or "each trait alone…" for one trait's ratio |
+| `genetics_pedigree` | the chart does not fit its `mode` (error); "a dominant trait skips a generation"; an X-linked trait passed father to son; a carrier or risk probability against the chart | fix the chart or the mode; say reduced penetrance (`penetrance:`); the probability the message gives |
+| `genetics_linkage` | RF over 50 %, a distance or RF against the `linkage_map` (or `linkage:`), linked loci called unlinked | the cM / RF the message gives |
+| `genetics_hwe` | carriers called q², the incidence called 2pq, q or the carriers against the incidence | q = √incidence, carriers 2pq (≈ 2q) |
+| `genetics_crispr` | the wrong PAM for the Cas, a cut downstream of the PAM or not 3 bp upstream, sticky ends for Cas9 | SpCas9: NGG, a blunt cut 3 bp upstream (5′) of the PAM |
+| `genetics_karyotype` | ISCN that does not parse or is out of order, "45,X is male", a condition the `karyotype` does not show | the notation or the condition the message gives |
+| `genetics_hgvs` | HGVS not valid or not the `mutation`'s variant, legacy numbering unannounced (p.Glu6Val); info: `ΔF508`, `R553X` | the HGVS form; call the old name legacy |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

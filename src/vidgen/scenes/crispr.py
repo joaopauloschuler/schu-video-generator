@@ -91,6 +91,11 @@ class CrisprScene(NarratedScene):
             return self
 
     @classmethod
+    def gene_symbols(cls, params: Any) -> list[str]:
+        """The gene's ``symbol``: italic in captions, checked by science_naming."""
+        return [params.symbol] if params.symbol else []
+
+    @classmethod
     def target_names(cls, params: Any) -> list[str]:
         names = ["title"] if params.title else []
         names += ["dna", "pam", "protospacer", "cas9", "sgrna", "cut"]

@@ -16381,3 +16381,102 @@ mating; selection acts on viability only (no fecundity or sex-specific fitness);
 a display model (a few thousand variants and LD as a distance decay), not a genotype simulation; no
 gene track, recombination rate or conditional analysis in the regional plot; one regional plot per
 scene.
+
+### 96.18 The genetics accuracy lint (Step 219)
+
+Built on §95.14's framework, not beside it: the knowledge is `vidgen.genetics.accuracy` (no manim;
+it reuses `cellworld.accuracy`'s `sentences`, `plain`, `normal_text` and `Claim`), the glue
+`vidgen.lint.genetics_rule` (`GENETICS_RULES`, `genetics_issues(project, scene_id, rules)`), and the
+runner appends its findings to `SceneContext.science` after the `science_*` ones, so they are
+reported, ignored (`lint_ignore`) and configured exactly like them. `ScienceIssue` gains an optional
+`severity` (an issue's own: the pedigree error, HGVS info).
+
+- **Reading claims.** As in §95.14, narrowly: a sentence with a negation or contrast, a question or a
+  hypothetical (`HYPOTHETICAL`: would, could, instead, modified, becomes, than, unlike, compared,
+  "expected if"…) is not read. **Shares** (`shares_in`): `1/4`, `1 in 2,500`, `one in four`, `2 out
+  of 3`, `25 %`, `twenty-five percent`, `half`, `a quarter`, `three quarters`, `two thirds` (an
+  ordinal only with a numerator other than "a" or before "of": not "a third child"), `all the
+  daughters`; each knows whether it was said with "about" (`tolerance`, relative) or as a bound ("more
+  than", "up to": not compared) and how finely it was written (17 % is ±0.5 points). Numbers in digits
+  or words up to millions (`number`). **Ratios** (`ratios_said`): `9:3:3:1`, "three to one", "nine to
+  three to three to one", "three round to one wrinkled", "9 purple : 7 white" — between the numbers
+  only the cross's phenotype words; the "to" form needs those words or a ratio word.
+- **`genetics_ratio`** (`cross_claims`, cross scenes): a ratio must be one of `cross_ratios(plan)` —
+  phenotypes, genotypes, zygotes (lethal ones included: the yellow mouse's 1 : 2 : 1), by sex, sexes
+  pooled, each parent's gametes (sentence about gametes), the observed counts, without the epistasis
+  (sentence about classes merging or masking), one trait's (sentence says "each trait alone", a
+  trait's name or only one trait's phenotypes) — compared as reduced, sorted numbers. A share is
+  read when the sentence has a group word (offspring, sons, daughters, children, plants, flies…) or a
+  chance word, and names phenotypes (`CrossVocabulary`: full names, words naming only one phenotype,
+  "affected" / "unaffected" for a two-phenotype trait with a normal one, blood groups after
+  "group" / "type", "carriers" / "heterozygotes" for one two-allele locus); the group after the share
+  decides: "half the sons" is among the sons, "a quarter of the children are affected sons" the joint
+  share, "each son has a 50 % chance" among the sons. Skipped: sentences about the F1 of a `P` cross,
+  about a test cross the scene is not, about gametes.
+- **`genetics_pedigree`**: `declared_mode_problem` (Step 215) as an **error** on the first beat
+  (with the modes that fit, or the reduced-penetrance hint); `pedigree_text_claims` in every scene ("a
+  dominant trait skips a generation" without penetrance / recessive / carrier words or a
+  `penetrance:` below 1; father → son / male-to-male transmission when the sentence says X-linked or
+  the scene's mode is XR / XD, Y and autosomal sentences left alone); `pedigree_claims` in pedigree
+  scenes with an inference: a carrier probability of a person named by NSGC id, or of "an unaffected
+  sibling / brother / sister" (any unaffected person's value accepted), and the proposed child's risk
+  (per sex for a son or daughter); conditional sentences (if, given, assuming) are left alone.
+- **`genetics_linkage`** (`linkage_claims`): in any scene an RF or recombinant share over 50 %; with
+  pairs (`map_pairs` of a `linkage_map` plan: distance on the map, the interval RF, for the outer pair
+  of three loci the direct count and the sum; `cross_pairs` of a cross's linkage groups: 100 × RF
+  summed, r₁ + r₂ − 2Cr₁r₂, unlinked pairs) a distance in cM / map units or an RF for the two loci the
+  sentence names (`mentions`: symbols as written, a one-letter capital only beside and / gene / locus /
+  a dash), or any pair's when it names none; "unlinked" / "assort independently" for a pair with
+  RF < 0.4, "linked" for an unlinked pair.
+- **`genetics_hwe`** (`hw_claims`): the formulas (carriers as q² or p², the incidence as 2pq,
+  p² + q² = 1) and, per beat, q, the incidence and the carrier frequency said: q² against the
+  incidence, carriers against 2q(1 − q) or 2q (both accepted within `tolerance`, 0.1); with a
+  population Hardy–Weinberg scene q and the incidence against the scene's.
+- **`genetics_crispr`** (`crispr_claims`): the enzyme is the sentence's (SpCas9 / Cas9, SaCas9,
+  Cas12a / Cpf1) or the `crispr` scene's (no Cas, no scene: not read); a PAM token next to "PAM" that
+  is not the enzyme's (`PAMS`, or an instance of it: AGG fits NGG), a cut downstream / 3′ / after /
+  inside the PAM or N ≠ 3 bp upstream, sticky / staggered / overhang ends (Cas12a, nickases,
+  restriction enzymes named: left alone), the PAM upstream of the protospacer or on the target strand,
+  a spacer length outside `SPACER_RANGES` (SpCas9 17–24 nt).
+- **`genetics_karyotype`** (`karyotype_claims`, also on titles and callout labels; the scene's
+  `karyotype`): ISCN tokens (`47,XX,+21`, `46,XY,t(9;22)(q34;q11.2)`) parsed with
+  `genetics.karyotype.parse_karyotype` (its error and fix), out of ISCN order (`iscn_order_problem`:
+  after the sex chromosomes by chromosome, sex chromosomes first, numerical before structural on one
+  chromosome — the order Step 216 left unchecked), a token or Turner / Klinefelter said with only the
+  other sex's words (SRY named: left alone), and a condition said (trisomy / monosomy N, Down, Edwards,
+  Patau, Turner, Klinefelter, triple X, cri-du-chat, Philadelphia) that the sentence's karyotype, or the
+  karyotype scene's, does not have (`_conditions`: translocation trisomy 21 counts as Down; comparisons
+  with like / such as / other left alone).
+- **`genetics_hgvs`** (`hgvs_claims`, also on screen): `c.` and `p.` tokens parsed by `genetics.hgvs`
+  (format errors with their fix: `c.A20T`); in a `mutation` scene a `c.` that is not one of its
+  variants (canonical forms compared) and a `p.` that `check_stated` does not accept for any variant —
+  the legacy numbering (one residue lower, no initiator Met) reported unless the sentence says legacy /
+  traditional / known as / mature protein; outside a mutation scene the reference genes' textbook
+  variants (`_legacy_numbering`: HbS `Glu6Val` when the sentence names HBB, sickle cell, haemoglobin;
+  CFTR, cystic fibrosis); **info**: `ΔF508` / `delta F508` and one-letter shorthand (`R553X`, `G551D`,
+  `E6V`) with their HGVS form, in genetics scenes or sentences about a variant, unless called legacy
+  (`F508del`, the community's name, is not reported).
+- **`science_naming` reused.** `science_issues` validates the params of `mutation`, `crispr`, `gwas`,
+  `karyotype` too, and `_genes` asks their new `gene_symbols(params)` (the mutation plan's symbol,
+  `crispr`'s `symbol`, the genes of `gwas` peaks / variants / labels, `karyotype` band texts that are
+  HGNC-form symbols), which also put them in italics in captions (`video_gene_symbols`).
+- **Narration–picture rules.** `SHOWING_ACTIONS` adds the genetics actions (`form_gametes`, `fill`,
+  `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`,
+  `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`); `gwas`
+  (`peak:<label>` → the label) and `karyotype` (`band:<band>` → its text) get `target_text` (`cross`
+  and `pedigree` had one since Steps 214–215).
+- **Config.** `GeneticsRatioRule` / `GeneticsLinkageRule` (`tolerance` 0.05), `GeneticsHweRule`
+  (`tolerance` 0.1), `GeneticsPedigreeRule`, `GeneticsCrisprRule`, `GeneticsKaryotypeRule`,
+  `GeneticsHgvsRule`; all scene scope, default warning, last in `LINT_RULES`.
+- **False positives.** Every example, the gallery and the Phase U / V scratch projects (229 scenes):
+  no finding on correct material; one real finding (Step 216's scratch karyotype out of ISCN order).
+  The tests hold a correct-sentence list beside each wrong one.
+- **Public:** no new `vidgen.api` names (`genetics.accuracy` through `genetics`); seven lint rules;
+  scene types `mutation`, `crispr`, `gwas`, `karyotype` gain `gene_symbols`, `gwas` and `karyotype`
+  `target_text`. Nothing renders differently except caption italics of those genes in videos that
+  have such scenes.
+- **Gaps:** English only; a claim spread over two sentences is read only for Hardy–Weinberg numbers
+  within a beat; shares are matched to phenotypes and carriers, not to named genotype classes or
+  gametes; pedigree probabilities only for NSGC-named people, "an unaffected sibling" and the proposed
+  child; no narration checks of GWAS thresholds, PCR cycle counts or gel sizes; PAM tokens are read
+  only as written letters (not "N G G" spelled for the TTS).

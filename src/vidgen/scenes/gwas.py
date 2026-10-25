@@ -7,6 +7,7 @@ inline ``variants``, or a seeded synthetic study with the author's ``peaks`` (la
 data" on screen). Action ``regional`` (``scenes/population_actions.py``)."""
 
 import math
+import re
 from typing import Any, Literal
 
 import numpy as np
@@ -158,6 +159,18 @@ class GwasScene(NarratedScene):
         if regional and params.regional is not None:
             return [(f"{regional[0].location}.target", "the scene already shows regional: in its params; use one of the two")]
         return []
+
+    @classmethod
+    def gene_symbols(cls, params: Any) -> list[str]:
+        """The genes of the peaks, variants and labels: italic in captions, checked by science_naming."""
+        found = [str(x.get("gene")) for x in (params.peaks or []) + (params.variants or []) if isinstance(x, dict) and x.get("gene")]
+        found += [str(v) for v in (params.labels or {}).values() if v]
+        return list(dict.fromkeys(g for g in found if re.fullmatch(r"[A-Za-z][A-Za-z0-9-]{1,14}", g)))
+
+    @classmethod
+    def target_text(cls, params: Any, name: str) -> str | None:
+        """A peak's label (its gene or lead variant), for the narration lint rules."""
+        return name[5:] if name.startswith("peak:") else None
 
     @classmethod
     def _safe_plan(cls, params: Any) -> Any:

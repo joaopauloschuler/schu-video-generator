@@ -118,6 +118,12 @@ class MutationScene(NarratedScene):
             return self
 
     @classmethod
+    def gene_symbols(cls, params: Any) -> list[str]:
+        """The gene symbol (the reference gene's or ``symbol``): italic in captions, checked by science_naming."""
+        symbol = params.plan().symbol
+        return [symbol] if symbol else []
+
+    @classmethod
     def target_names(cls, params: Any) -> list[str]:
         plan = params.plan()
         names = ["title"] if params.title else []
