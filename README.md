@@ -213,7 +213,12 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   p.(Gly12Valfs*2), splice sites) ([docs](docs/CONFIG.md#mutation)); `crispr` shows Cas9 with its
   guide — the PAM, the R-loop, the blunt cut 3 bp away, and NHEJ or HDR with the repaired allele's
   change ([docs](docs/CONFIG.md#crispr)); `dna_lab` plays PCR, an agarose gel, Sanger sequencing or
-  NGS reads with a variant call ([docs](docs/CONFIG.md#dna_lab)).
+  NGS reads with a variant call ([docs](docs/CONFIG.md#dna_lab)). Population genetics: `population`
+  works Hardy–Weinberg out exactly (carriers from an incidence: 1/2500 → 1 in 25.5; a chi-square
+  test of HWE) and runs seeded drift, selection, migration, bottleneck and founder simulations
+  ([docs](docs/CONFIG.md#population)); `gwas` draws a Manhattan plot with the 5 × 10⁻⁸ line, a QQ
+  plot with λ_GC and a regional plot coloured by LD, from your CSV or a synthetic study labelled as
+  such ([docs](docs/CONFIG.md#gwas)).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,

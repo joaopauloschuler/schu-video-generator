@@ -7799,6 +7799,172 @@ ladder (did you mean…), fragment sizes outside 10 bp–50 kb, a heterozygous p
 not the one in the read, a variant whose reference base is wrong, and params that belong to another
 method (*agarose: is a param of method: gel, not pcr*).
 
+### `population`
+
+Population genetics (DESIGN §96.16; `vidgen.genetics.population`), one `model:` per scene.
+
+- **`hardy_weinberg`** (the default): the population as 100 dots coloured by genotype (a
+  heterozygote half and half; with more than 100 people a dot stands for several and the legend
+  gives the real counts) and the working, step by step: the allele frequencies p and q — from
+  genotype `counts` (p = (2n<sub>AA</sub> + n<sub>Aa</sub>) / 2N), genotype `frequencies`, `p`
+  itself or the `incidence` of a recessive condition (q = √incidence, exact when both terms are
+  squares: 1/2500 → q = 1/50) —, the expected genotype frequencies p² + 2pq + q² = 1 (with the
+  inbreeding coefficient `inbreeding` F: p² + Fpq, 2pq(1 − F), q² + Fpq), the carrier frequency
+  2pq (49/1250 ≈ 1 in 25.5 for 1/2500; ≈ 2q for a rare allele) and, from counts, the chi-square
+  test of Hardy–Weinberg proportions: χ² over the three genotypes with **df = 1** (3 classes − 1 −
+  1 allele frequency estimated from the data), its p-value, the critical value 3.84 at α = 0.05,
+  the heterozygote deficit or excess F̂ = 1 − H<sub>obs</sub>/H<sub>exp</sub> and a warning when an
+  expected count is below 5. Numbers are exact fractions with their decimals.
+- **Simulations** (seeded Wright–Fisher: N diploids, 2N gene copies sampled binomially each
+  generation after selection, mutation and migration; the same `seed` gives the same lines):
+  `drift` (several replicate lines of the allele frequency over generations from `p0`; smaller N
+  drifts faster; fixation and loss marked with a dot; heterozygosity with its expectation
+  H<sub>t</sub> = H₀(1 − 1/2N)<sup>t</sup>), `selection` (`fitness` of the three genotypes, or `s`
+  and `h`: w = 1, 1 − hs, 1 − s; the deterministic recursion as a thick line, with `N` the drifting
+  lines around it; heterozygote advantage gives p̂ = t/(s + t)), `mutation` (`mu` A → a, `nu`
+  a → A per copy per generation; equilibrium ν/(μ + ν)), `migration` (two `populations` with
+  their `p0`, a migration rate `m`, `direction: both | one_way` — continent → island: p<sub>t</sub> =
+  p<sub>c</sub> + (p₀ − p<sub>c</sub>)(1 − m)<sup>t</sup>), `bottleneck` (`{at, N, generations}`:
+  N drops, then recovers; the heterozygosity lost stays lost), `founder` (`founders` individuals
+  sampled from a source at `p0`, then N). `mu` / `nu` can be added to any simulation. The first
+  line's individuals are drawn as dots (its 2N gene copies paired at random, so the dots carry
+  that generation's allele count; 100 dots at most).
+
+```yaml
+- id: cf
+  type: population
+  params:
+    title: "Carriers of cystic fibrosis"
+    incidence: 1/2500              # or counts: {AA: 360, Aa: 480, aa: 160}, frequencies:, p:
+    condition: cystic fibrosis
+  beats:
+    - text: "One baby in two thousand five hundred has cystic fibrosis."
+    - text: "So q is one in fifty."
+      actions: [{reveal: alleles}]
+    - text: "And about one person in twenty-five is a carrier."
+      actions: [{reveal: carriers}]
+- id: drift
+  type: population
+  params: {model: drift, N: 20, p0: 0.5, generations: 100, replicates: 8, seed: 3}
+  beats:
+    - text: "Eight populations of twenty start at one half."
+    - text: "Each generation is a random sample of forty gene copies."
+      actions: [{simulate: "generation:40"}]
+    - text: "Some lines fix the allele, others lose it."
+      actions: [{simulate: lines}, {highlight: fixed, at: "@fix"}]
+```
+
+| param | model | |
+|---|---|---|
+| `title` | | in the header band |
+| `model` | | `hardy_weinberg`, `drift`, `selection`, `mutation`, `migration`, `bottleneck`, `founder` |
+| `alleles` | | the two alleles, `[A, a]` by default (`[M, N]`); p is the first one's frequency |
+| `counts`, `total` | hardy_weinberg | genotype counts `{AA: 360, Aa: 480, aa: 160}` (whole numbers ≥ 0; `Aa` or `aA`); `total` is checked against their sum |
+| `frequencies` | hardy_weinberg | genotype frequencies adding up to 1 |
+| `p` | hardy_weinberg | the first allele's frequency (0–1, `"3/5"`, `"60%"`) |
+| `incidence`, `condition` | hardy_weinberg | the incidence of the recessive condition (q² = incidence; random mating only) and its name |
+| `inbreeding` | hardy_weinberg | F (0–1) |
+| `N`, `p0`, `generations`, `replicates` | simulations | population size (2–1 000 000 diploids; needed for drift, bottleneck, founder; without it the deterministic recursion alone), starting frequency, 1–2000 generations (default 100), 1–20 lines (default 6) |
+| `fitness`, `s`, `h` | selection | `{AA: 1, Aa: 0.95, aa: 0.9}` (none negative) or s in [−1, 1] and h (default 0.5) |
+| `mu`, `nu` | simulations | mutation rates per copy per generation |
+| `populations`, `m`, `direction` | migration | `[{name: mainland, p0: 0.9}, {name: island, p0: 0.1}]` (or two numbers), the migration rate, `both` / `one_way` |
+| `bottleneck` | bottleneck | `{at: 20, N: 10, generations: 5}` |
+| `founders` | founder | how many found the new population (fewer than N) |
+| `heterozygosity` | drift, bottleneck, founder | draw H under the frequencies with its expectation H₀ Π(1 − 1/2N); default: bottleneck and founder |
+| `seed` | | the same seed gives the same lines and dots |
+| `size`, `title_size` | | |
+
+**Actions**. Without them the scene plays its steps beat by beat (Hardy–Weinberg: the dots, then
+each step; a simulation: the plot and the dots, about a third of the generations, the rest with the
+outcome card).
+
+| action | targets | |
+|---|---|---|
+| `simulate` | `generation:<t>`, `lines` (or `plot`: to the last generation) | grows every line, the deterministic curve and the heterozygosity to that generation; the dots follow; fixed and lost lines get their dot; the outcome card at the end (~1–3.2 s) |
+| `resample` | `population` | the next generation (every line one generation on, the dots redrawn), or in a Hardy–Weinberg scene a new random sample of 100 at the expected frequencies (~1.4 s) |
+
+`reveal: alleles` / `expected` / `carriers` / `chi_square` plays a Hardy–Weinberg step (the steps
+before it first); `highlight: fixed` (`lost`, `line:3`, `deterministic`, `heterozygosity`,
+`population`) marks a part.
+
+**The rules** (`vidgen validate`): a frequency outside [0, 1], genotype frequencies that do not add
+up to 1, counts that are not whole numbers or do not add up to `total`, a genotype that is not one
+of the alleles' (did you mean…), a missing genotype, two sources at once (`p` and `incidence`), a
+negative fitness, s outside [−1, 1], drift without N, a bottleneck that is not smaller than N, a
+param of another model (*s: not a param of model: drift (a param of model: selection)*), a
+`simulate` that goes back in generations, `simulate` on a Hardy–Weinberg scene.
+
+### `gwas`
+
+A genome-wide association study (DESIGN §96.17; `vidgen.genetics.gwas`). `plot: manhattan`: −log₁₀ p
+of every variant along the genome, chromosomes 1–22 (and X with `x_chromosome: true` or when your
+data has it) in alternating colours, the genome-wide significance line at **5 × 10⁻⁸** (−log₁₀ =
+7.3) and the suggestive line at 1 × 10⁻⁵, each peak ringed and labelled with its gene (italic) or
+lead variant; points above `y_max` (default: the data's, at most 40) are drawn as triangles at the
+top with their p written. `plot: qq`: observed against expected −log₁₀ p (the i-th smallest of n
+expected at (i − 0.5)/n), the diagonal, and the genomic inflation **λ<sub>GC</sub>** = median
+χ²₁ / 0.455. `plot: both`: the two side by side (16:9) or stacked (9:16). `regional` (a param or
+the action) zooms into a peak: its window boxed on the Manhattan plot and a regional plot under it,
+the variants coloured by r² with the lead (a diamond).
+
+The data: `data:` a CSV or TSV in the project (columns chromosome / `CHR`, position in bp / `BP`, p /
+`P`, and optionally variant / `SNP`, gene, r2), or `variants:` inline — lead variants are found by
+clumping (the smallest p first; nothing within `clump_kb`, default 500 kb, of a lead becomes another)
+and labelled from `labels: {rs429358: APOE}`; or a **synthetic** study (`peaks:` and nothing else): a
+seeded null background (`background` variants, default 2400, spread over the autosomes by their
+GRCh38 lengths; `inflation` λ to mimic stratification) and your peaks, each a lead variant with the
+variants around it in linkage disequilibrium (r² falling with distance; a neighbour's z = r·z<sub>lead</sub> +
+√(1 − r²)·ε). Synthetic data is written **simulated data** on the plot. p-values may be numbers or
+strings (`"3e-450"` beyond floating point); positions in bp or text (`53.8 Mb`, `420 kb`).
+
+```yaml
+- id: gwas
+  type: gwas
+  params:
+    title: "A genome-wide association study"
+    trait: body mass index
+    plot: both                         # manhattan | qq | both
+    peaks:                             # a synthetic study (or data: assoc.csv, or variants: [...])
+      - {chromosome: 16, position: 53.8 Mb, p: 1e-40, gene: FTO, variant: rs9939609}
+      - {chromosome: 18, position: 60.2 Mb, p: 2e-14, gene: MC4R}
+  beats:
+    - text: "Every dot is a variant tested for association with body mass index."
+    - text: "Genome-wide significance is five times ten to the minus eight."
+      actions: [{reveal: thresholds}, {reveal: peaks, at: "@significance"}]
+    - text: "Around FTO, the variants in linkage disequilibrium with the lead share its signal."
+      actions: [{regional: "peak:FTO"}]
+```
+
+| param | | |
+|---|---|---|
+| `title`, `trait` | | the header; the trait, in the row over the plot |
+| `plot` | | `manhattan` (default), `qq`, `both` |
+| `data` | your data | a `.csv` / `.tsv` in the project |
+| `variants` | your data | `[{chromosome, position, p, variant?, gene?, r2?}, …]` |
+| `labels`, `clump_kb` | your data | genes for lead variants; the clumping distance |
+| `peaks` | synthetic | `[{chromosome, position, p, gene?, variant?, label?}]` |
+| `background`, `inflation`, `seed` | synthetic | 200–20 000 null variants; λ of the null (0.5–3); the seed |
+| `x_chromosome` | | draw X after 22 |
+| `regional` | | a peak's label to zoom into in the scene's own steps |
+| `y_max` | | top of the −log₁₀ p axis (at least 8) |
+| `size`, `title_size` | | |
+
+**Actions**. Without them: the axes, the points chromosome by chromosome, the thresholds, the peak
+labels, the QQ plot, the regional plot (when `regional` is set).
+
+| action | targets | |
+|---|---|---|
+| `regional` | `peak:<label>` | boxes the peak's window and draws its regional plot (~2.6 s; one per scene) |
+
+`reveal: points` (`chromosome:16`, `thresholds`, `peaks`, `qq`) plays those steps on words;
+`highlight: peak:FTO` rings a peak.
+
+**The rules** (`vidgen validate`): a p-value outside (0, 1] or not a number, an unknown chromosome (1–22 and X;
+Y and mtDNA are not drawn), a position in Mb written as bp (*write 53800000 or '53.8 Mb'*) or beyond
+the chromosome's end (GRCh38), a CSV without a chromosome / position / p column, `peaks` with your own
+data, `data` with `variants`, a `regional` peak that is not on the plot (did you mean…), two
+regional plots, `y_max` below the significance line.
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -10452,7 +10618,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, `mutate`, `scan`, `cleave`, `repair`, `run`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -10511,6 +10677,8 @@ a title card, a `transform` of a bar).
 | `mutation` | `title`, `gene`, `reference`, `variant`, `variant:<n>`, `protein`, `notation`, `codon:<n>` | mutate, reveal, highlight, dim, callout | `variant` the row made by the change (`variant:2` the n-th listed); `codon:7` a codon with its amino acid; `gene` the exon strip; see [`mutation`](#mutation) |
 | `crispr` | `title`, `dna`, `pam`, `protospacer`, `cas9`, `sgrna`, `cut`, `repair`, `card` | scan, cleave, repair, reveal, highlight, dim, callout | `pam` the PAM boxed, `protospacer` its bracket, `cut` the break, `repair` the repaired allele; see [`crispr`](#crispr) |
 | `dna_lab` | `title`, and per method `template`, `primers`, `product`, `trace`, `cycle:<n>`, `counts` (pcr); `gel`, `ladder`, `lane:<label>`, `sizes` (gel); `sequence`, `fragments`, `chromatogram` (sanger); `reference`, `reads`, `coverage`, `call` (ngs) | run, reveal, highlight, dim, callout | `run: counts` (or any step's target) plays that step and the ones before it; see [`dna_lab`](#dna_lab) |
+| `population` | `title`, `population`, `alleles`, `expected`, `carriers`, `chi_square`, `plot`, `lines`, `line:<n>`, `deterministic`, `fixed`, `lost`, `heterozygosity`, `generation:<t>` | simulate, resample, reveal, highlight, dim, callout | `population` the dots and their legend; `reveal: alleles` (`expected`, `carriers`, `chi_square`) a Hardy–Weinberg step with the ones before it; `line:2` a simulated line, `fixed` / `lost` the lines that fixed or lost the allele with their end dots; `reveal: "generation:40"` grows the lines to that generation; see [`population`](#population) |
+| `gwas` | `title`, `manhattan`, `points`, `chromosome:<n>`, `thresholds`, `significance`, `suggestive`, `peaks`, `peak:<label>`, `qq`, `lambda`, `regional`, `simulated` | regional, reveal, highlight, dim, callout | `points` every variant (`chromosome:16` one chromosome's), `thresholds` both lines, `peak:FTO` a peak's ring and label (its gene, else its lead variant), `qq` the QQ plot, `lambda` λ_GC, `regional` the regional plot (with the `regional` param), `simulated` the "simulated data" tag; see [`gwas`](#gwas) |
 | `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |

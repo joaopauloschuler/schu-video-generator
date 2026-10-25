@@ -5,9 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–217)
+## Unreleased (Steps 193–218)
 
 ### Genetics (Phase V, from Step 213)
+
+- **Population genetics** (Step 218). A `population` scene type: Hardy–Weinberg worked step by step
+  with exact numbers — p and q from genotype counts, genotype frequencies, p or the incidence of a
+  recessive condition (1/2500 → q = 1/50, carriers 2pq = 49/1250 ≈ 1 in 25.5), p² + 2pq + q² with an
+  inbreeding coefficient, and a chi-square test of HWE with df = 1 — beside the population drawn as
+  dots by genotype; and seeded Wright–Fisher simulations — drift (replicate lines, fixation and loss),
+  selection (fitnesses or s and h; the deterministic course with drifting lines), mutation,
+  migration between two populations, a bottleneck and a founder effect with the heterozygosity
+  against H₀ Π(1 − 1/2N). A `gwas` scene type: a Manhattan plot (22 autosomes and X, the 5 × 10⁻⁸ and
+  1 × 10⁻⁵ lines, peaks labelled), a QQ plot with λ_GC and a regional plot coloured by r², from a CSV,
+  inline variants or a seeded synthetic study labelled "simulated data". New actions `simulate`,
+  `resample`, `regional`.
 
 - **Molecular genetics** (Step 217). A `mutation` scene type: a variant applied to a real coding
   sequence (HBB, CFTR, GJB2 reference windows with their exons and transcripts, your own sequence,

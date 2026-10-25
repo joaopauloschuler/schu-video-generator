@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "line_chart", "linkage_map", "map", "metabolism", "molecule", "mutation", "network", "number_line", "pathway", "pedigree", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["bar_chart", "bullets", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "line_chart", "linkage_map", "map", "metabolism", "molecule", "mutation", "network", "number_line", "pathway", "pedigree", "pie", "population", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -66,6 +66,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "mutation": {"title": "Sickle-cell haemoglobin", "gene": "HBB", "variant": "c.20A>T"},
     "crispr": {"title": "An edit", "target": "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAG"},
     "dna_lab": {"title": "A gel", "method": "gel", "lanes": {"patient": [450], "control": [450, 300]}},
+    "population": {"title": "Drift", "model": "drift", "N": 20, "p0": 0.5, "generations": 20, "replicates": 3},
+    "gwas": {"title": "A GWAS", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "chapter": {"number": 3, "title": "Results", "subtitle": "What we found", "icon": "chart-line"},
     "comparison": {"heading": "A vs B", "columns": [{"heading": "A", "tone": "positive", "icon": "cpu", "points": ["fast", {"text": "cheap", "icon": "coins"}]}, {"heading": "B", "tone": "negative", "points": ["slow"]}], "verdict": "Pick A", "vs": "vs"},
     "table": {"title": "T", "header": ["Name", "Value"], "rows": [["a", 1.5], ["b", 1200]], "caption": "c"},

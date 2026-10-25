@@ -16146,7 +16146,8 @@ far, `cross`, `cell`, `rainy_evening`, weigh 0.33 MB), a test per entry, and `BU
 (10 MB + 8 entries after Step 216 × 0.36 MB). The genetics samples are kept to two or three short
 beats. After Step 216: 10.6 MB (`linkage_map` 0.32 MB, `karyotype` 0.31 MB); after Step 217:
 11.5 MB (`mutation` 0.28 MB, `dna_lab` 0.26 MB, `crispr` 0.30 MB — its sample is one beat, the
-scene's many coloured tiles making heavy GIFs).
+scene's many coloured tiles making heavy GIFs); after Step 218: 12.0 MB (`population` 0.34 MB — its
+sample has three lines and no heterozygosity panel —, `gwas` 0.17 MB).
 
 ### 96.13 The `mutation` scene and HGVS (Step 217)
 
@@ -16281,3 +16282,102 @@ prime editing, no off-target search, no PAM-proximal seed weighting), and NHEJ's
 author's choice rather than a distribution; `dna_lab` has one PCR product (no multiplex, no
 nested PCR, no qPCR curve), the gel is one lane set without a running clock, Sanger peaks are
 stylised (no real mobility or peak shape) and NGS is a seeded read model, not an aligner.
+
+### 96.16 The `population` scene (Step 218)
+
+**The model** (`genetics/population.py`, no manim):
+
+- **Hardy–Weinberg** (`hardy_weinberg(spec)` → `HardyWeinberg`): one source of `counts` (genotype
+  counts: p = (2n<sub>AA</sub> + n<sub>Aa</sub>) / 2N, exact), `frequencies` (adding up to 1),
+  `p`, or `incidence` (of a recessive condition: q = √incidence, an exact `Fraction` when the
+  numerator and denominator are squares — 1/2500 → 1/50 —, else a float; refused with `inbreeding`,
+  as q² = incidence assumes random mating); the alleles (`[A, a]`; genotypes written `AA`, `Aa` /
+  `aA`, `aa`); expected genotype frequencies p² + Fpq, 2pq(1 − F), q² + Fpq; the carrier frequency
+  2pq with the rare-allele approximation 2q in the notes. From counts `hwe_test`: expected counts
+  N p², 2Npq, Nq² exact, χ² exact, **df = 1** (three classes − 1 − one allele frequency estimated),
+  p = Q(½, χ²/2) (`stats.chi_square_p`), the critical value 3.84, classes with E < 5, and
+  F̂ = 1 − H<sub>obs</sub>/H<sub>exp</sub>. Errors: a share outside [0, 1], frequencies not adding
+  up to 1, counts that are not whole numbers ≥ 0 or do not add up to `total`, a genotype not of the
+  alleles (did-you-mean), a missing genotype, two sources.
+- **Wright–Fisher** (`simulate(spec)` → `Simulation`): N diploids, each generation the expected
+  frequency after selection (p' = (p²w<sub>AA</sub> + pq w<sub>Aa</sub>)/w̄), mutation
+  (p(1 − μ) + (1 − p)ν) and migration (two populations: (1 − m)p₁ + m p₂ both ways, or one way into
+  the second) is sampled as Binomial(2N, p')/2N with `numpy.random.default_rng(seed)` (the same seed
+  gives the same lines; replicates draw in turn from one generator). Sizes per generation: N, a
+  `bottleneck` `{at, N, generations}` (then N again), a `founder` sample of `founders` from a source
+  at p₀ at generation 0. The deterministic recursion (no sampling) for selection, mutation and
+  migration; each line's fixation / loss generation (absorbing only when nothing reintroduces the
+  allele); expected heterozygosity H<sub>t</sub> = H<sub>t−1</sub>(1 − 1/2N<sub>t</sub>) (exact
+  in expectation for binomial sampling of 2N copies) and the lines' mean 2pq for drift, bottleneck
+  and founder; the first line's individuals at a generation (its 2N copies paired at random,
+  seeded, so the dots carry exactly that generation's allele count). Fitness `{AA, Aa, aa}` (none
+  negative, not all 0) or `s`, `h` (w = 1, 1 − hs, 1 − s; s in [−1, 1]). Notes per model: P(fixation)
+  = p₀ under drift, the 1/2N loss of H, heterozygote advantage p̂ = t/(s + t), 2Ns < 1, ν/(μ + ν),
+  the one-way migration closed form, the heterozygosity a bottleneck removes.
+- **The plan** (`build_population_plan` / `plan_population`, cached by the spec's JSON): the model,
+  `hw` or `sim`; a param of another model is refused naming its model.
+
+**The scene** (`scenes/population.py`, actions `scenes/population_actions.py`): Hardy–Weinberg —
+the dots left (16:9) or on top (9:16), at most 100 (a dot stands for N/100 people when there are
+more, the legend then giving the real counts), and the working as blocks stacked on the right
+(alleles, expected, carriers, chi-square; when the next block does not fit, the earlier ones leave).
+Simulations — the frequency plot (`chart_axes`, the line chart's styling: palette colours, 3–3.5 px
+lines; the deterministic course as a thick line in the text colour; populations in the primary and
+secondary colours with their names coloured in the card), optionally the heterozygosity plot
+(`heterozygosity`; default for bottleneck and founder) with its expectation and the lines' mean, the
+bottleneck as a shaded band with its N on a plate, the founder's source as a dashed line; the dots
+(the first line's individuals) and the card (the model, its notes; at the last generation the
+outcome: fixed / lost / segregating, the deterministic end, H). A generation counter beside the
+plot's title follows the lines. Lines grow by a driven animation (points to the current fractional
+generation); a fixed or lost line gets a dot where it absorbs. Self-play: the plot and dots, about a
+third of the generations, the rest; any `simulate` / `resample` (or a `reveal` of `generation:<t>`)
+makes it manual. `action_sequence_problems` refuses a `simulate` that does not go forward.
+
+Public: no new `vidgen.api` names (`genetics.population`); scene type `population`; actions
+`simulate`, `resample`. Changes from the plan (§96.5): `model` defaults to `hardy_weinberg`; the
+mutation model is its own `model: mutation` (and `mu` / `nu` add to any simulation); `heterozygosity`
+added; Hardy–Weinberg steps are built-in `reveal` targets.
+
+### 96.17 The `gwas` scene (Step 218)
+
+**The model** (`genetics/gwas.py`, no manim): p-values kept as −log₁₀ p, parsed from numbers or
+strings through `decimal` (so `"3e-450"` works; 0 < p ≤ 1); z ↔ −log₁₀ p (two-sided, `erfc`, an
+asymptotic expansion beyond z = 37, bisection for the inverse). Chromosomes 1–22 and X (`chr7`, 23 =
+X; Y / MT refused with the reason); positions in bp or `"53.8 Mb"` / `"420 kb"` (a bare number below
+1000 is refused as Mb written as bp), within GRCh38 lengths (`genetics.karyotype.LENGTH_MB`). The
+genome axis: chromosomes in order with a 12 Mb gap. **Author data**: `read_rows` (CSV / TSV, the usual
+column names CHR / BP / P / SNP / gene / r2), `author_variants`, then `clump` (smallest p first,
+nothing within `clump_kb` of a lead becomes another; leads below `label_p` = 5 × 10⁻⁸ labelled from
+`labels` or a gene column, else their id). **Synthetic**: a seeded null background (`background`,
+default 2400 variants spread by chromosome length, p uniform, optionally inflated by λ: z·√λ) and the
+author's `peaks`, each a lead with 48 variants (half within ±80 kb, half across ±400 kb), r² =
+e<sup>−d/0.15 Mb</sup> × U(0.55, 1) and z<sub>i</sub> = r<sub>i</sub> z<sub>lead</sub> + √(1 − r²)·ε, so a
+neighbour's expected χ² ≈ r² χ²<sub>lead</sub>; background variants inside a window get a small r².
+λ<sub>GC</sub> = median χ²₁ / 0.4549 (over the null background for a synthetic study: its peaks'
+variants would otherwise be a far larger share than in a real study of millions); QQ points
+(expected −log₁₀((i − 0.5)/n), the low end thinned); at most `MAX_DRAWN` = 4000 points drawn (every
+p < 0.01 kept). `build_gwas_plan` / `plan_gwas` (cached by the spec's JSON).
+
+**The scene** (`scenes/gwas.py`; action `regional` in `scenes/population_actions.py`): the
+Manhattan plot (`chart_axes` with the y title turned along the axis, so no row is spent on it;
+chromosome numbers thinned when they would touch; alternating primary and a 45 % tint; the
+significance line solid in the accent colour and the suggestive line dashed, both labelled in a margin
+right of the plot; points above `y_max` — default the data's top, at most 40 — as triangles at the
+top with their p in the label; peaks ringed and labelled, italic for gene symbols); the info row over
+it (the boxed **simulated data** tag for a synthetic study, the trait, variants, hits); the QQ plot
+(diagonal dashed, λ<sub>GC</sub> over it); the regional plot (the peak's window boxed on the Manhattan
+plot with zoom lines, r² colours fixed in every theme — five bins — and the lead a purple diamond,
+its id, gene and p). 16:9: the Manhattan plot alone, or beside the QQ plot (70 / 30), or over the
+regional plot with the QQ plot in a column at the right; 9:16 stacked. Self-play: the axes, the
+points chromosome by chromosome, the thresholds, the peak labels, the QQ plot, the regional plot (with
+the `regional` param); a `reveal` of a later target makes it manual (the `regional` action does not).
+
+Public: no new `vidgen.api` names (`genetics.gwas`); scene type `gwas`; action `regional`. Changes from
+the plan (§96.5): `plot: both`; `regional` (param and action) added; inline `variants` and `labels`.
+
+**Gaps after Step 218**: two alleles only (no multi-allelic Hardy–Weinberg, no exact HWE test for
+small counts — only the warning); no age structure, overlapping generations, selfing or assortative
+mating; selection acts on viability only (no fecundity or sex-specific fitness); the synthetic GWAS is
+a display model (a few thousand variants and LD as a distance decay), not a genotype simulation; no
+gene track, recombination rate or conditional analysis in the regional plot; one regional plot per
+scene.

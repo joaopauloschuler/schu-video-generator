@@ -306,6 +306,8 @@ project's own scene types, in its theme).
 | a mutation on a real coding sequence: the reading frame and codons, the variant made from them (substitution, deletion, insertion, frameshift with its premature stop, splice site), the protein change from the genetic code, HGVS c. and p. notation checked | `mutation` | `gene` (HBB, CFTR, GJB2, or a gene mapping) or `sequence` (+ `first`, `exons`, `length`), `variant` (c.20A>T, or {c, p, legacy, note}, or a list), `splice`, `codes`, `stop`, `codons`, `strip`, `symbol`; the action mutate |
 | CRISPR–Cas9 editing: the sgRNA's spacer, the PAM, the R-loop, the blunt cut 3 bp from the PAM, and the repair (NHEJ indel or HDR from a donor), written in HGVS on a coding target | `crispr` | `target`, `cas` (SpCas9, SaCas9), `spacer` or `guide`, `repair` (nhej, hdr, none), `indel`, `edit`, `coding_first`; the actions scan, cleave, repair |
 | the laboratory: PCR (primers, cycles, 2ⁿ copies), an agarose gel (ladder, migration by size), Sanger sequencing (a chromatogram with called bases) or NGS reads with coverage and a variant call | `dna_lab` | `method` (pcr, gel, sanger, ngs) and its params: `template` + `primers` + `temperatures` + `cycles`; `agarose` + `ladder` + `lanes`; `sequence` + `heterozygous`; `reference` + `variant` + `zygosity` + `depth`; the action run |
+| population genetics: Hardy–Weinberg worked with exact numbers (p and q, p² + 2pq + q², carriers from an incidence, a chi-square test of HWE), seeded simulations of drift, selection, mutation, migration, a bottleneck or a founder effect with allele frequencies over generations | `population` | `model` (hardy_weinberg, drift, selection, mutation, migration, bottleneck, founder), `counts` / `frequencies` / `p` / `incidence`, `inbreeding`, `alleles`; `N`, `p0`, `generations`, `replicates`, `seed`, `fitness` or `s` + `h`, `mu`, `nu`, `populations` + `m`, `bottleneck`, `founders`; the actions simulate, resample |
+| a genome-wide association study: a Manhattan plot with the 5 × 10⁻⁸ line and labelled peaks, a QQ plot with λ_GC, a regional plot of a locus coloured by LD | `gwas` | `plot` (manhattan, qq, both), `peaks` (a synthetic study, labelled "simulated data") or `data` (a CSV) or `variants`, `labels`, `trait`, `regional`, `x_chromosome`, `y_max`; the action regional |
 | a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs | `pathway` | `title`, `template` (gpcr_camp_pka, rtk_ras_mapk, pi3k_akt), `nodes` (id, kind, label, in, gene, state, marks, role), `edges` (a -> b activates, a -o b catalyses, a => b translocates, an arrow with a bar inhibits, or {from, to, type, effect, site, feedback, label}), `remove`, `species`, `direction`; the actions signal, inhibit, knockout, drug, amplify, focus |
 | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
@@ -826,6 +828,58 @@ A `dna_lab` scene shows one laboratory method (DESIGN §96.15). `method: pcr`: t
       actions: [{run: counts}]
 ```
 
+A `population` scene shows population genetics (DESIGN §96.16). `model: hardy_weinberg` (the default) draws the population as dots by genotype and works the numbers out exactly, one step a beat: p and q from genotype `counts` (or `frequencies`, `p`, or the `incidence` of a recessive condition: q = √incidence, so 1/2500 gives q = 1/50 and carriers 2pq = 49/1250 ≈ 1 in 25.5, about 2q), the expected p², 2pq, q² (with `inbreeding` F: p² + Fpq, 2pq(1 − F), q² + Fpq) and, from counts, the chi-square test of Hardy–Weinberg proportions with df = 1 (three genotypes − 1 − one estimated allele frequency). Simulations are seeded Wright–Fisher runs of N diploids (2N gene copies drawn each generation): `drift` (replicate lines from `p0`; fixation and loss; heterozygosity falling as H₀(1 − 1/2N)ᵗ), `selection` (`fitness` of AA, Aa, aa, or `s` and `h`; the deterministic course as a thick line, drifting lines around it with `N`), `mutation` (`mu`, `nu`), `migration` (two `populations` and `m`), `bottleneck` (`{at, N, generations}`) and `founder` (`founders` from a source at `p0`). `simulate: "generation:40"` grows the lines on a word, `resample: population` draws the next generation, `reveal: chi_square` plays a Hardy–Weinberg step, `highlight: fixed` marks the lines that fixed. Checked with the reason: frequencies outside [0, 1], genotype frequencies that do not add up to 1, counts that do not add up to the `total`, negative fitness, a param of another model.
+
+```yaml
+# genetics
+- id: drift
+  type: population
+  params:
+    title: "Genetic drift"
+    model: drift                       # or hardy_weinberg with counts / incidence, selection, migration, bottleneck, founder
+    N: 20
+    p0: 0.5
+    generations: 50
+    replicates: 3
+    seed: 36
+  beats:
+    - text: "Three populations of twenty individuals start at one half."
+    - text: "Each generation samples only forty gene copies: some lines fix the allele, others lose it."
+      actions: [{simulate: lines}]
+```
+
+```yaml
+# genetics
+- id: carriers
+  type: population
+  params:
+    title: "Carriers of cystic fibrosis"
+    incidence: 1/2500                  # q² = incidence for a recessive condition
+    condition: cystic fibrosis
+  beats:
+    - text: "One baby in two thousand five hundred has cystic fibrosis, so q is one in fifty."
+    - text: "Two p q: about one person in twenty-five carries the allele."
+      actions: [{reveal: carriers}]
+```
+
+A `gwas` scene draws a genome-wide association study (DESIGN §96.17): a Manhattan plot of −log₁₀ p along chromosomes 1–22 (alternating colours; X with `x_chromosome: true`), the genome-wide significance line at 5 × 10⁻⁸ and the suggestive line at 1 × 10⁻⁵, peaks labelled with their gene or lead variant; `plot: qq` or `both` adds a QQ plot with λ_GC; `regional: "peak:FTO"` (an action or a param) zooms into a locus with its variants coloured by r² with the lead. Give real data as `data: assoc.csv` (columns CHR, BP, P, SNP…; lead variants are clumped and labelled from `labels: {rs9939609: FTO}`) or `variants:` inline — or `peaks:` for a seeded synthetic study (a null background and your peaks with LD around them), which the plot labels "simulated data": never present synthetic peaks as a real study's results. Checked: p-values outside (0, 1], unknown chromosomes, positions written in Mb as bp or past the chromosome's end.
+
+```yaml
+# genetics
+- id: gwas
+  type: gwas
+  params:
+    title: "A genome-wide association study"
+    trait: body mass index
+    peaks:                             # synthetic (shown as simulated data); or data: assoc.csv
+      - {chromosome: 16, position: 53.8 Mb, p: 1e-40, gene: FTO}
+      - {chromosome: 18, position: 60.2 Mb, p: 2e-14, gene: MC4R}
+  beats:
+    - text: "Every dot is a variant tested for association with body mass index."
+    - text: "Two loci pass genome-wide significance, five times ten to the minus eight."
+      actions: [{reveal: thresholds}, {reveal: peaks, at: "@loci"}]
+```
+
 In `cell_cycle` meiosis, `nondisjunction: {division: I, pair: 1}` makes that pair's homologues go to one pole at anaphase I (every gamete n + 1 or n − 1), `division: II` its sister chromatids stay together at anaphase II in one cell (half the gametes normal); the gametes are labelled and the last caption gives the zygotes after fertilisation (trisomic, monosomic, euploid).
 
 Accuracy and sources. `vidgen lint` checks the science of these scenes (and of any narration)
@@ -1338,6 +1392,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `cleave` | on a `crispr`: the blunt double-strand break 3 bp from the PAM (`cleave: dna`) | ~1.6 s, on the word that says cut |
 | `repair` | on a `crispr`: NHEJ or HDR, with the repaired allele and its HGVS change (`repair: repair`) | ~2.8 s |
 | `run` | on a `dna_lab`: a step of its method (`run: trace`, `counts`, `ladder`, `sizes`, `fragments`, `chromatogram`, `reads`, `call`); the steps before it play first | ~2.2 s each |
+| `simulate` | on a `population` simulation: the lines grow to a generation (`simulate: "generation:40"`, or `lines` to the end); fixation and loss marked, the dots follow | ~1–3.2 s by the generations covered |
+| `resample` | on a `population`: the next generation's individuals (a simulation), or a new random sample at the Hardy–Weinberg frequencies (`resample: population`) | ~1.4 s |
+| `regional` | on a `gwas`: zoom into a peak, its variants coloured by r² with the lead (`regional: "peak:FTO"`; one per scene) | ~2.6 s |
 
 ```yaml
 - id: speeds

@@ -584,6 +584,31 @@ scenes:
       - text: "DNA runs to the anode; the smaller fragment runs furthest."
         actions: [{run: ladder}]
 
+  - id: drift
+    type: population    # Hardy–Weinberg worked exactly, or seeded drift / selection / migration / bottleneck simulations
+    params:
+      title: "Genetic drift"
+      model: drift
+      N: 20
+      p0: 0.5
+      generations: 50
+      replicates: 3
+      seed: 36
+    beats:
+      - text: "In small populations, chance alone fixes or loses an allele."
+        actions: [{simulate: lines}]
+
+  - id: gwas
+    type: gwas          # a Manhattan plot with the significance line; synthetic data is labelled as such
+    params:
+      title: "A genome-wide association study"
+      trait: body mass index
+      peaks:
+        - {chromosome: 16, position: 53.8 Mb, p: 1e-40, gene: FTO}
+        - {chromosome: 18, position: 60.2 Mb, p: 2e-14, gene: MC4R}
+    beats:
+      - text: "Two loci pass genome-wide significance, five times ten to the minus eight."
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)

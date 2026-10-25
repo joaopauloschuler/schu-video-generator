@@ -304,6 +304,8 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "mutation": [{"title": "T:title", "gene": "HBB", "variant": "c.20A>T"}],
     "crispr": [{"title": "T:title", "target": "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAG"}],
     "dna_lab": [{"title": "T:title", "method": "gel", "lanes": {"patient": [450]}}],
+    "population": [{"title": "T:title", "condition": "T:condition", "incidence": "1/2500"}],
+    "gwas": [{"title": "T:title", "trait": "T:trait", "background": 400}],
     "iso_diagram": [
         {
             "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],

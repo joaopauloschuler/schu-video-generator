@@ -1256,8 +1256,10 @@ baseline frames when shared code changes). DESIGN §96. Steps 213–221.
 - [~] One window of a transcript per `mutation` scene; splice prediction schematic (no cryptic sites); SpCas9 / SaCas9 only, no off-target search or base / prime editing; one PCR product, stylised Sanger peaks, a seeded NGS read model (not an aligner)
 
 ### Step 218 — Population genetics
-- [ ] A `population` scene type: Hardy–Weinberg with worked numbers and carrier frequency from incidence; seeded Wright–Fisher drift, selection, migration, bottleneck / founder simulations with allele-frequency plots
-- [ ] A `gwas` scene type: Manhattan plot (−log10 p by chromosome, 5 × 10⁻⁸ line), optional QQ plot
+- [x] A `population` scene type: Hardy–Weinberg with worked numbers (p, q from counts / genotype frequencies / p / incidence, exact fractions; p² + 2pq + q², inbreeding F; carriers 2pq — 1/2500 → q = 1/50, 49/1250 ≈ 1 in 25.5; chi-square of HWE with df = 1, F̂) and the population as dots by genotype; seeded Wright–Fisher drift, selection (fitness or s, h; deterministic recursion and drifting lines), mutation, migration (two populations, both / one-way), bottleneck and founder simulations with allele-frequency plots, fixation and loss marked, heterozygosity against H₀ Π(1 − 1/2N); actions simulate, resample (`genetics/population.py`)
+- [x] A `gwas` scene type: Manhattan plot (−log10 p by chromosome, alternating colours, 5 × 10⁻⁸ and 1 × 10⁻⁵ lines, peaks labelled), QQ plot with λ_GC, regional plot coloured by r²; data from a CSV, inline, or a seeded synthetic study labelled "simulated data"; action regional (`genetics/gwas.py`)
+- [x] Docs (CONFIG sections, guide rows, paragraphs and samples), gallery entries `population` (0.34 MB), `gwas` (0.17 MB) — gallery 12.0 MB —, `examples/gallery` scenes, tests `tests/test_population.py`
+- [~] Two alleles only (no multi-allelic HWE or exact HWE test); no age structure, selfing or assortative mating; the synthetic GWAS is a display model (a few thousand variants, LD as a decay with distance), not a genotype simulation; no conditional analysis, fine-mapping or gene track in the regional plot
 
 ### Step 219 — Accuracy lint for genetics
 - [ ] Ratios in narration / on screen that do not follow from the cross; pedigrees inconsistent with the stated mode; wrong cM / RF claims; Hardy–Weinberg arithmetic; CRISPR without a (correct) PAM; karyotype and HGVS format errors; gene naming (reused); narration–picture rules for the new targets

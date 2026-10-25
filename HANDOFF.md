@@ -20196,3 +20196,114 @@ How to test
 - Stills: scratch project `scratchpad/s217/proj` (sickle cell, F508del, 35delG, a splice site, three
   point mutations, two CRISPR edits, PCR, gel, Sanger, NGS), sheets and end frames in
   `scratchpad/s217/stills/{dark,light}-{16x9,9x16}/`.
+
+## Step 218 — Population genetics: Hardy–Weinberg, simulations and GWAS
+
+What was built
+- **A `population` scene type** (`scenes/population.py`, actions `scenes/population_actions.py`):
+  `model: hardy_weinberg` (default) draws the population as dots by genotype (a heterozygote half
+  and half; at most 100, one dot = N/100 people with the real counts in the legend) and works the
+  numbers out in blocks, one step a beat — p and q (from `counts`, `frequencies`, `p` or `incidence`
+  of a recessive condition), p² + 2pq + q² (with `inbreeding` F), carriers 2pq (1/2500 → q = 1/50,
+  49/1250 ≈ 1 in 25.5, ≈ 2q), the chi-square test of HWE with df = 1 and F̂. Simulations
+  (`drift`, `selection`, `mutation`, `migration`, `bottleneck`, `founder`): seeded Wright–Fisher
+  lines of the allele frequency over generations with a generation counter, fixation / loss dots,
+  the deterministic recursion as a thick line, two populations in two colours, a bottleneck band,
+  the founder's source line, an optional heterozygosity plot against H₀ Π(1 − 1/2N), the first
+  line's individuals as dots, a card with the model's facts and the outcome.
+- **A `gwas` scene type** (`scenes/gwas.py`): Manhattan plot (alternating colours, 5 × 10⁻⁸ and
+  1 × 10⁻⁵ lines labelled in the right margin, peaks ringed and labelled, capped points as triangles
+  with their p), QQ plot with λ_GC, regional plot of a peak (r² colours, the lead a diamond, zoom
+  lines from the Manhattan plot); data from a CSV in the project, inline `variants`, or a seeded
+  synthetic study (`peaks` with LD around them) labelled **simulated data**.
+- **Pure parts** (no manim): `genetics/population.py` (HWE, `hwe_test`, `simulate`, plans),
+  `genetics/gwas.py` (p-value / chromosome / position parsing, synthetic study, CSV reading, clumping,
+  λ_GC, QQ points, plans).
+- **Actions** `simulate` (`generation:<t>` or `lines`), `resample` (`population`), `regional`
+  (`peak:<label>`).
+
+YAML
+```yaml
+- id: cf
+  type: population
+  params: {incidence: 1/2500, condition: cystic fibrosis}     # or counts: {AA: 360, Aa: 480, aa: 160}, frequencies:, p:, inbreeding:
+  beats: [{text: "..."}, {text: "...", actions: [{reveal: carriers}]}]     # alleles / expected / carriers / chi_square
+- id: drift
+  type: population
+  params: {model: drift, N: 20, p0: 0.5, generations: 100, replicates: 8, seed: 3}
+  beats: [{text: "...", actions: [{simulate: "generation:40"}]}, {text: "...", actions: [{simulate: lines}, {highlight: fixed}]}]
+- id: sel
+  type: population
+  params: {model: selection, N: 200, p0: 0.05, s: 0.08, h: 0.5, generations: 150}   # or fitness: {AA: 1, Aa: 0.96, aa: 0.92}
+- id: mig
+  type: population
+  params: {model: migration, populations: [{name: mainland, p0: 0.9}, {name: island, p0: 0.1}], m: 0.05, N: 100, direction: both}
+- id: bottle
+  type: population
+  params: {model: bottleneck, N: 500, p0: 0.5, generations: 60, bottleneck: {at: 20, N: 5, generations: 3}}   # founder: founders: 6
+- id: gwas
+  type: gwas
+  params:
+    plot: both                          # manhattan | qq | both
+    trait: body mass index
+    peaks: [{chromosome: 16, position: 53.8 Mb, p: 1e-40, gene: FTO, variant: rs9939609}]   # or data: assoc.csv + labels:
+  beats: [{text: "...", actions: [{reveal: thresholds}, {regional: "peak:FTO", at: "@locus"}]}]
+```
+
+Files touched
+- New: `src/vidgen/genetics/{population,gwas}.py`, `src/vidgen/scenes/{population,gwas,population_actions}.py`,
+  `tests/test_population.py` (31 + 2 render), `docs/gallery/{population,gwas}.md` + 8 media.
+- Changed: `src/vidgen/genetics/__init__.py`, `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md` (two
+  sections, two targets rows, the action enum), the guide `src/vidgen/data/guide/AGENTS.md` (two
+  chooser rows, two paragraphs with three `# genetics` samples, three action rows) copied to
+  `AGENTS.md`, `examples/gallery/video.yaml` (two scenes), `docs/gallery/README.md`, `README.md`,
+  `DESIGN.md` §96.12 (budget) and §96.16–96.17, `CHANGELOG.md`, `tasklist.md`; tests' lists
+  (`test_actions`, `test_actions_coverage`, `test_builtin_scenes`, `test_translation`, `test_extensions`).
+
+Public interfaces
+- Scene types `population`, `gwas`; actions `simulate`, `resample`, `regional`. No new `vidgen.api`
+  names (`genetics.population`, `genetics.gwas`); no config key. No shared rendering code changed (the
+  Phase Q frame baseline was not re-run).
+
+Decisions / deviations (DESIGN §96.16–96.17)
+- **Exact where possible**: Hardy–Weinberg numbers are `Fraction`s (q = √incidence exact when both
+  terms are squares), the χ² statistic exact, df = 1 with the reason written on screen.
+- **Seeded and checkable simulations**: Wright–Fisher with `numpy.random.default_rng(seed)`; tests check
+  determinism per seed, P(fixation) ≈ p₀ and E[H_t] = H₀(1 − 1/2N)^t over many seeds, the recursions
+  against closed forms (recessive lethal q_t = q₀/(1 + tq₀), multiplicative fitness odds × (1 + s)^t,
+  heterozygote advantage t/(s + t), one-way migration, mutation equilibrium ν/(μ + ν)).
+- The dots are the first line's actual individuals (its 2N copies paired at random), so they agree with
+  the plotted frequency; a founder's 6 founders show 6 dots, a bottleneck's 5 show 5.
+- The heterozygosity panel is drawn by default only for bottleneck and founder (`heterozygosity: true`
+  adds it to drift): it doubles the plot's weight in a short scene.
+- **GWAS honesty**: synthetic data always carries the "simulated data" tag; λ_GC of a synthetic study
+  is computed over its null background (its peaks would otherwise be ~7 % of the variants instead of a
+  negligible share); LD in synthetic peaks comes from correlated z scores, so the regional plot's r²
+  colours and p-values agree.
+- The gallery sample of `population` is a three-line drift (0.34 MB for the entry; four or more lines
+  or the heterozygosity panel exceeded the 150 kB per GIF).
+
+Known gaps
+- Two alleles; no exact HWE test (a warning below E = 5); no overlapping generations, selfing or
+  assortative mating; viability selection only. The synthetic GWAS is a display model; no gene track,
+  recombination map or conditional analysis; one regional plot per scene. In 16:9 a scene with the
+  regional and QQ plots leaves the Manhattan plot short (three panels at the readable label size).
+- Lint at preview on the scratch project: 0 errors; warnings `max_words` (full cards) and
+  `rushed_animation` (a one-line scratch beat).
+
+How to test
+- `tests/test_population.py` (33 with renders, ~95 s): HWE from incidence (exact 1/50, 49/1250), counts
+  (χ² against the closed form for df = 1, critical value, F̂, small expected), frequencies and
+  inbreeding, nine HWE errors; drift determinism and the 2N grid, fixation ≈ p₀ and E[H_t] over many
+  seeds, faster drift for smaller N, selection / migration / mutation closed forms, bottleneck and
+  founder heterozygosity, eight simulation errors; GWAS p-values (`"3e-450"`), chromosomes, positions,
+  z round trips, a synthetic study (determinism, LD carrying the signal, thresholds, offsets), λ ≈ 1 for
+  a null and ≈ 1.3 inflated, CSV clumping and errors; scene validation (incl. a CSV in the project);
+  renders 16:9 / 9:16.
+- Not render: `test_population` + `test_genetics_model` + `test_schema` + `test_introspect` + `test_api`;
+  `test_actions` + `test_actions_coverage` + `test_builtin_scenes` + `test_translation` + `test_registry`
+  + `test_extensions` + `test_accuracy`; `test_gallery` + `test_docs` + `test_guide`. Render:
+  `test_builtin_scenes` + `test_actions_coverage` + `test_translation` `-k "population or gwas"`.
+- Stills: scratch project `scratchpad/s218/proj` (HWE from MN counts, CF carriers with a resample, drift,
+  selection with drift, a bottleneck, migration, a founder effect, a synthetic GWAS with regional and QQ,
+  a GWAS from a CSV), sheets and end frames in `scratchpad/s218/stills/{dark,light}-{16x9,9x16}/`.
