@@ -647,8 +647,8 @@ def linkage_claims(text: str, pairs: Mapping[frozenset[str], PairData], symbols:
 
 # ----- Hardy–Weinberg -------------------------------------------------------------------------------------
 
-_Q_SAID = re.compile(rf"(?:\bq\b\s*(?:=|is|equals|of|,)?\s*|\bfrequency\s+of\s+(?:the\s+)?(?:recessive|disease|mutant|rare|a|q)\s+allele\s*"
-                     rf"(?:=|is|of|,)?\s*(?:about\s+|approximately\s+|around\s+|roughly\s+)?|\ballele\s+frequency\s*(?:=|is|of|,)?\s*"
+_Q_SAID = re.compile(rf"(?:\bq\b\s*(?:=|is|equals|of|,)?\s*|\bfrequency\s+of\s+(?:the\s+)?(?:recessive|disease|mutant|rare|a|q)\s+alleles?\s*"
+                     rf",?\s*(?:=|is|of)?\s*(?:about\s+|approximately\s+|around\s+|roughly\s+)?|\ballele\s+frequency\s*(?:=|is|of|,)?\s*"
                      rf"(?:about\s+|approximately\s+|around\s+|roughly\s+)?)(?P<v>(?:{NUM})(?:\s*/\s*{NUM}|\s+in\s+{NUM})?|0\.\d+)", re.IGNORECASE)
 _CARRIER_FREQ = re.compile(r"\b(?:carrier\s+(?:frequency|rate)|carriers?|heterozygotes?|heterozygous|2pq)\b", re.IGNORECASE)
 _INCIDENCE = re.compile(r"\b(?:incidence|prevalence|affected|homozygous\s+recessive|q\s*(?:2|squared)|births?|newborns?|babies)\b", re.IGNORECASE)
@@ -703,10 +703,12 @@ def hw_claims(text: str, hw: Any = None, tolerance: float = 0.1) -> list[Claim]:
                 not _CARRIER_RE.search(s) and not _QSQ.search(s):
             out.append(Claim(quote, "2pq is the heterozygote (carrier) frequency; the affected (homozygous recessive) frequency is q²"))
         m = _Q_SAID.search(s)
+        q_here = False
         if m:
             v = _decimal(m.group("v"))
             if v is not None and 0 < v < 1:
                 q_said = (m.group(0).strip(), v, quote)
+                q_here = True
         for match in _CARRIER_FREQ.finditer(s):
             said = _population_share(s, match.end())
             if said is not None:
@@ -714,6 +716,8 @@ def hw_claims(text: str, hw: Any = None, tolerance: float = 0.1) -> list[Claim]:
                 break
         if _INCIDENCE.search(s) and not _CARRIER_FREQ.search(s):
             said = _population_share(s)
+            if q_here and said is not None and q_said is not None and said.value == q_said[1]:
+                said = None                   # "the incidence is q squared, so q is 1 in 50": the number is q's
             if said is not None and said.value < Fraction(1, 5):
                 inc_said = (said.text, said.value, quote)
 

@@ -149,9 +149,15 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
         assert "COOKBOOK-MUSIC.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
-def test_cell_biology_sections_name_every_nested_option() -> None:
-    """Step 210: every param of the five cell-biology types, nested options too (an object's
-    `coat`, a gene's `introns`, a node's marks' `domain`), is named in its CONFIG.md section."""
+GENETICS_TYPES = ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas")
+
+
+@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES],
+                         ids=["cell_biology", "genetics"])
+def test_science_sections_name_every_nested_option(kinds: tuple[str, ...]) -> None:
+    """Steps 210 and 220: every param of the cell-biology and the genetics types, nested options
+    too (an object's `coat`, a gene's `introns`, a node's marks' `domain`), is named in its
+    CONFIG.md section."""
     from vidgen.describe import nested_models
 
     heads = {m.group(1): m.start() for m in re.finditer(r"^### `(\w+)`", CONFIG_MD, re.M)}
@@ -159,7 +165,7 @@ def test_cell_biology_sections_name_every_nested_option() -> None:
     missing = []
     with registry.isolated():
         extensions.load_builtins()
-        for kind in ("cell", "molecule", "pathway", "cell_cycle", "metabolism"):
+        for kind in kinds:
             start = heads[kind]
             section = CONFIG_MD[start:min([p for p in starts if p > start] or [len(CONFIG_MD)])]
             seen: set[type] = set()
@@ -195,6 +201,31 @@ def test_cell_biology_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
     assert "examples/gene-to-secreted-protein/README.md" in text
     for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
         assert "COOKBOOK-CELL-BIOLOGY.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
+def test_genetics_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 220: the genetics cookbook's pattern validates and is lint-clean for the genetics_*
+    rules, it names all nine scene types and the README, the cookbook, the guide and the gallery
+    point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.lint.genetics_rule import genetics_issues
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-GENETICS.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    assert len(blocks) == 1
+    scenes = yaml.safe_load(blocks[0])
+    (tmp_path / "video.yaml").write_text(yaml.safe_dump({"title": "t", "scenes": scenes}, allow_unicode=True), encoding="utf-8")
+    project = Project.load(tmp_path)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    for scene in project.config.scenes:
+        assert not genetics_issues(project, scene.id, project.config.lint.rules), scene.id
+    for kind in GENETICS_TYPES:
+        assert f"[`{kind}`](CONFIG.md#{kind})" in text, kind
+    assert "examples/cystic-fibrosis/README.md" in text
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
+        assert "COOKBOOK-GENETICS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
 def test_docs_yaml_snippets_parse() -> None:

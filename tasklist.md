@@ -1268,7 +1268,9 @@ baseline frames when shared code changes). DESIGN §96. Steps 213–221.
 - [~] English only; claims across two sentences are read only for Hardy–Weinberg numbers within one beat; shares are matched to phenotypes by their names (and "affected" / "carriers"), not to genotype classes or gametes; pedigree probabilities only for people named by NSGC id or "unaffected sibling" and the proposed child; no check of GWAS thresholds or PCR / gel numbers in narration
 
 ### Step 220 — Example, docs and gallery
-- [ ] An example tracing one inherited disease from pedigree to mutation to diagnosis (cystic fibrosis: AR pedigree, carrier risks, CFTR p.(Phe508del), PCR / gel or sequencing, population carrier frequency), narrated with Kokoro, 16:9 and 9:16; gallery section "Genetics"; guide topic `genetics`; CONFIG reference; `docs/COOKBOOK-GENETICS.md`
+- [x] An example tracing one inherited disease from pedigree to mutation to diagnosis: `examples/cystic-fibrosis` (AR pedigree with the modes tested, obligate carriers, a Punnett square of two carriers, 2/3 and the risk 1/150, CFTR at 7q31.2, c.1521_1523del p.(Phe508del), an NGS carrier test, the carrier frequency from the incidence), Kokoro narration (4:12, −16.1 LUFS), 16:9 and 9:16, references by PMID; NGS deletions (`variant: "6_8del"`) and clipped reads in `dna_lab` for it; tests `tests/test_cystic_fibrosis.py`
+- [x] Guide topic `genetics` (and a pointer from `scenes`); `docs/COOKBOOK-GENETICS.md` linked from README, the cookbook, the guide and the gallery; README bullet and example entry; the gallery's Genetics section with a note; the CONFIG completeness test covers the nine genetics types; lint fixes found while making it (tiles in `label_spacing` / `max_words`, narrow glyphs' backdrop, a `genetics_hwe` false positive)
+- [~] In 9:16 two lint warnings remain (the pedigree's "1/25 Aa" at 2.42 % against the 2.5 % warning size; the variant card's 43 words); NGS insertions are not modelled
 
 ### Step 221 — Review of Phase V
 - [ ] Critical review with fixes, including a scientific-accuracy pass; compatibility; phase tests and related suites; `tests/test_mcp.py` in full

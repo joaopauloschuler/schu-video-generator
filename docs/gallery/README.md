@@ -52,6 +52,8 @@ A whole lecture-style video, a protein's route from its gene to the blood throug
 
 ## Genetics
 
+A whole medical-genetics video, one inherited disease from a family's pedigree to the variant, a carrier test and the population: [Cystic fibrosis: from a family to a diagnosis](../../examples/cystic-fibrosis/README.md) (`examples/cystic-fibrosis`). Notation, exact numbers and counselling tone: [the genetics cookbook](../COOKBOOK-GENETICS.md).
+
 | type | preview | use it for |
 |---|---|---|
 | [`cross`](cross.md) | <a href="cross.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cross-16x9.png"><img src="media/cross-16x9.gif" height="180" alt="cross at 16:9"></picture></a> <a href="cross.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/cross-9x16.png"><img src="media/cross-9x16.gif" height="180" alt="cross at 9:16"></picture></a> | a genetic cross: Punnett square or branch diagram, gametes, genotype and phenotype ratios (mono-, di-, trihybrid, test, reciprocal, P → F1 → F2, dominance, epistasis, lethal 2:1, X-linked, linked genes), a chi-square test |

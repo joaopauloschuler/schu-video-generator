@@ -9,7 +9,9 @@ that shows source code, see [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUT
 for writing your own music as score files (room for the voice, builds and lifts, loops, genre
 sketches), see [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md); for cell-biology lectures and research
 explainers (accuracy, level of detail, zooming, pacing dense content), see
-[COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md).
+[COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md); for genetics and medical genetics (NSGC,
+ISCN, HGVS notation, exact numbers, a counselling tone), see
+[COOKBOOK-GENETICS.md](COOKBOOK-GENETICS.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 
@@ -457,6 +459,11 @@ narration and the on-screen text with them:
   upstream of it; karyotypes in ISCN with their changes in chromosome order, the sex they have
   (45,X is female); HGVS with the initiator Met counted (HbS p.(Glu7Val), "legacy Glu6Val"),
   `ΔF508` / `R553X` only as legacy names.
+
+The whole craft (choosing among the nine types, notation, exact numbers, reading a pedigree aloud,
+a counselling tone, common mistakes with the rule that catches each) is in
+[COOKBOOK-GENETICS.md](COOKBOOK-GENETICS.md), with the worked example
+[`examples/cystic-fibrosis`](../examples/cystic-fibrosis/README.md).
 
 ## 13. Editorial options (example style choices)
 

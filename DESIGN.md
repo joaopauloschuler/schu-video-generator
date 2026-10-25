@@ -16480,3 +16480,42 @@ reported, ignored (`lint_ignore`) and configured exactly like them. `ScienceIssu
   gametes; pedigree probabilities only for NSGC-named people, "an unaffected sibling" and the proposed
   child; no narration checks of GWAS thresholds, PCR cycle counts or gel sizes; PAM tokens are read
   only as written letters (not "N G G" spelled for the TTS).
+
+### 96.19 The example, the guide topic and the cookbook (Step 220)
+
+- **`examples/cystic-fibrosis`** (README with a scene table, the choices and the checks): one
+  disease through six of the nine types — `pedigree` (AD / AR / XR tested, obligate carriers),
+  `cross` (two carriers), `pedigree` again (2/3, the partner at `carrier_frequency: 1/25`, the risk
+  1/150 with its factors), `karyotype` (ideogram of 7, `bands: {7q31.2: CFTR}`), `mutation` (CFTR
+  c.1521_1523del p.(Phe508del)), `dna_lab` `ngs` (the brother heterozygous for the deletion),
+  `population` (incidence 1/2500 → 49/1250) and a `process` recap. The family is shown twice so each
+  scene stays readable; the diagnosis is sequencing because a 3-bp difference does not show on an
+  agarose gel. Kokoro `af_heart` at 0.85 (0.9 failed `narration_speed` on two beats), `discovery`
+  at −6 dB, karaoke captions, `citations: {show: marker}`, references by PMID (Riordan et al. and
+  Kerem et al., *Science* 1989). A test validates both variants, runs the genetics lint and checks
+  the narrated numbers against the plans.
+- **NGS deletions** (`genetics.dna_lab.plan_ngs`): `variant` is `31C>T` or `a_bdel[BASES]` (1–12 bp,
+  a reference base on both sides, the bases checked); alt reads are aligned with `-` gaps; the call
+  counts only reads spanning the whole site (`NgsPlan.site_depth`; `end`, `kind`, `site` added with
+  defaults). Reads start anywhere from `MIN_OVERLAP` − L to len − `MIN_OVERLAP` and are clipped to
+  the window, so coverage is even up to its edges (a deletion at position 6 of the CFTR window
+  needs it); this changes the reads of existing `ngs` scenes (a deliberate improvement; nothing
+  committed used one). The scene draws a gapped read as two bar pieces and a bridging line (as
+  genome browsers do), drops tile letters that would touch (9:16), sizes rows up to 0.8 tile and
+  puts the verdict in the call card's heading (a short card drops lines, never the call).
+- **Lint** (shared, findings only, no rendering change): a lone character on a plate is a tile —
+  not a label for `label_spacing`, not a word for `max_words`; `introspect._backdrop` widens a
+  glyph's box narrower than half its height before sampling (an `I` read as grey on grey);
+  `genetics_hwe`'s q pattern accepts "frequency of disease alleles, is …" and a number said as q
+  is not read again as the incidence.
+- **Docs**: guide topic `genetics` (aliases heredity, inheritance, medical-genetics, punnett, hgvs:
+  choosing by question, notation NSGC / ISCN / HGVS / HGNC, exactness, the seven rules, tone,
+  pacing, a snippet), a pointer from `scenes`; `docs/COOKBOOK-GENETICS.md` (choosing, notation, exact
+  numbers, reading a pedigree aloud, counselling tone, pacing, references, a mistakes table with
+  the rule that catches each, a validated pattern) linked from README, `docs/COOKBOOK.md`, the
+  guide and the gallery; the gallery's Genetics section gets a note (`SECTION_NOTES`,
+  `SECTION_FOOTERS`); the CONFIG completeness test covers the nine genetics types (they were
+  complete). No gallery media changed (12.0 MB of 13 MB).
+- **Gaps**: in 9:16 the pedigree's "1/25 Aa" label is 2.42 % of the frame (warning size 2.5 %) and
+  the variant card with its notes has 43 words; NGS insertions and indels are not modelled; the
+  deleted residue's strike-through is a `covered_text` finding the example ignores with a reason.

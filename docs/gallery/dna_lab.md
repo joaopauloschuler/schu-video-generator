@@ -51,7 +51,7 @@ From the author guide (`vidgen guide scenes`):
 | `heterozygous` | `str \| list[str] \| None` |  | sanger: positions read as two bases, '12A>G' (one or a list). |
 | `primer` | `str \| None` |  | sanger: the sequencing primer (15–35 nt), shown before the read. |
 | `reference` | `str \| None` |  | ngs: the reference sequence the reads align to (30–120 bp). |
-| `variant` | `str \| None` |  | ngs: the variant in the sample, '31C>T' (a position in the reference). |
+| `variant` | `str \| None` |  | ngs: the variant in the sample, '31C>T' or a deletion '6_8del' (positions in the reference). |
 | `zygosity` | `'heterozygous' \| 'homozygous' \| 'absent' \| None` |  | ngs: whether the sample carries the variant on one allele (≈50 % of reads), both, or none. |
 | `read_length` | `int \| None` |  | ngs: the reads' length (default 25). |
 | `depth` | `int \| None` |  | ngs: the expected coverage (default 20; a clinical call wants ≥ 20). |

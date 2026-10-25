@@ -88,10 +88,17 @@ SECTION_NOTES: dict[str, str] = {
         "[From gene to secreted protein](../../examples/gene-to-secreted-protein/README.md) (`examples/gene-to-secreted-protein`). "
         "How to make them accurate and well paced: [the cell-biology cookbook](../COOKBOOK-CELL-BIOLOGY.md)."
     ),
+    "genetics": (
+        "A whole medical-genetics video, one inherited disease from a family's pedigree to the variant, a carrier test and "
+        "the population: [Cystic fibrosis: from a family to a diagnosis](../../examples/cystic-fibrosis/README.md) "
+        "(`examples/cystic-fibrosis`). Notation, exact numbers and counselling tone: "
+        "[the genetics cookbook](../COOKBOOK-GENETICS.md)."
+    ),
 }
 #: The last line of a showcase's page, by section: where to read more.
 SECTION_FOOTERS: dict[str, str] = {
     "cell biology": "`vidgen guide scenes` · [the cell-biology cookbook](../COOKBOOK-CELL-BIOLOGY.md)",
+    "genetics": "`vidgen guide genetics` · [the genetics cookbook](../COOKBOOK-GENETICS.md)",
 }
 DEFAULT_FOOTER = "`vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`"
 

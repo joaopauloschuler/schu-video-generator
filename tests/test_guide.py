@@ -103,6 +103,21 @@ def test_the_biology_topic_covers_the_cell_types() -> None:
     assert "vidgen guide biology" in topic_text("scenes")
 
 
+def test_the_genetics_topic_covers_the_genetics_types() -> None:
+    """Step 220: a topic for genetics videos (choosing, notation, exactness, lint rules, tone, pacing)."""
+    text = topic_text("genetics")
+    assert find_topic("hgvs").name == "genetics" and text.startswith("## Genetics")
+    for kind in ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas", "cell_cycle"):
+        assert f"`{kind}`" in text, kind
+    for part in ("**Choosing.**", "**Notation**", "**Exactness.**", "**Tone.**", "**Pacing.**", "NSGC", "ISCN", "HGVS", "HGNC",
+                 "never invented", "COOKBOOK-GENETICS.md", "examples/cystic-fibrosis"):
+        assert part in text, part
+    for rule in ("genetics_ratio", "genetics_pedigree", "genetics_linkage", "genetics_hwe", "genetics_crispr", "genetics_karyotype",
+                 "genetics_hgvs"):
+        assert f"`{rule}`" in text, rule
+    assert "vidgen guide genetics" in topic_text("scenes")
+
+
 def test_unknown_topic_suggests() -> None:
     with pytest.raises(VidgenError, match=r"unknown guide topic 'scene'; did you mean 'scenes'"):
         find_topic("scene")

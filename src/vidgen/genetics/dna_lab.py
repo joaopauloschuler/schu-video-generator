@@ -19,9 +19,13 @@
   fluorescent ddNTPs (no 3′-OH: the chain stops), one fragment per position, separated by size in a
   capillary, read as a four-colour trace whose peaks give the bases 5′→3′ of the new strand; a
   heterozygous site is two overlapping peaks of about half height, called with its IUPAC code.
-- **NGS** (:func:`ngs_reads`): seeded short reads from the two alleles aligned to a reference,
-  coverage per position, and a variant call from the share of alt reads (heterozygous ~50 %,
-  homozygous ~100 %; thresholds, not a likelihood model)."""
+- **NGS** (:func:`plan_ngs`): seeded short reads from the two alleles aligned to a reference (the
+  reference is a window of a longer sequence, so reads may run past its ends and are clipped to it:
+  the coverage is even up to the edges), coverage per position, and a variant call from the share
+  of alt reads among those covering the site (heterozygous ~50 %, homozygous ~100 %; thresholds,
+  not a likelihood model). The variant is a substitution (``31C>T``) or a deletion (``6_8del``,
+  ``6_8delCTT``, ``12del``): an alt read carries gaps (``-``) where the bases are missing, and only
+  reads spanning the whole deleted stretch count for the call."""
 
 from __future__ import annotations
 
@@ -368,7 +372,7 @@ def plan_sanger(spec: dict[str, Any]) -> SangerPlan:
 @dataclass(frozen=True)
 class Read:
     start: int
-    seq: str
+    seq: str                          # aligned to the reference: '-' where a deletion removed a base
     alt: bool                         # from the alt allele
     reverse: bool                     # mapped to the reverse strand
     errors: tuple[int, ...]           # indices (in the read) of sequencing errors
@@ -387,21 +391,59 @@ class NgsPlan:
     call: str                         # heterozygous, homozygous, none, low coverage
     vaf: float
     read_length: int
+    end: int = -1                     # 0-based index past the variant (a deletion's last base + 1)
+    kind: str = "substitution"        # or "deletion" (alt is "")
+    site_depth: int = 0               # reads covering the whole site (the call's denominator)
+
+    @property
+    def site(self) -> str:
+        """The variant in the reference's numbering: ``26G>T``, ``6_8delCTT``."""
+        if self.kind == "deletion":
+            span = f"{self.position + 1}" if self.end - self.position == 1 else f"{self.position + 1}_{self.end}"
+            return f"{span}del{self.ref}"
+        return f"{self.position + 1}{self.ref}>{self.alt}"
+
+
+#: The least a clipped read overlaps the reference (bases).
+MIN_OVERLAP = 5
+
+
+def _ngs_variant(v: str, ref_seq: str) -> tuple[int, int, str, str, str]:
+    """(0-based start, end, ref bases, alt bases, kind) of an NGS variant."""
+    n = len(ref_seq)
+    sub = re.fullmatch(r"(\d+)([ACGT])>([ACGT])", v)
+    dele = re.fullmatch(r"(\d+)(?:_(\d+))?del([ACGT]*)", v)
+    if sub:
+        pos, ref, alt = int(sub.group(1)), sub.group(2), sub.group(3)
+        if not 1 <= pos <= n:
+            raise VidgenError(f"variant: '{v}': the reference has positions 1–{n}")
+        if ref_seq[pos - 1] != ref:
+            raise VidgenError(f"variant: '{v}': position {pos} of the reference is {ref_seq[pos - 1]}, not {ref}")
+        if ref == alt:
+            raise VidgenError(f"variant: '{v}': no change")
+        return pos - 1, pos, ref, alt, "substitution"
+    if dele:
+        a = int(dele.group(1))
+        b = int(dele.group(2)) if dele.group(2) else a
+        if b < a:
+            raise VidgenError(f"variant: '{v}': write the range low to high ({b}_{a}del)")
+        if a < 1 or b > n:
+            raise VidgenError(f"variant: '{v}': the reference has positions 1–{n}")
+        if b - a + 1 > 12:
+            raise VidgenError(f"variant: '{v}': {b - a + 1} bases; deletions here are 1–12 bp (a short-read call)")
+        if a == 1 or b == n:
+            raise VidgenError(f"variant: '{v}': keep a base of the reference on both sides of the deletion")
+        ref = ref_seq[a - 1:b]
+        if dele.group(3) and dele.group(3) != ref:
+            raise VidgenError(f"variant: '{v}': positions {a}–{b} of the reference are {ref}, not {dele.group(3)}")
+        return a - 1, b, ref, "", "deletion"
+    raise VidgenError(f"variant: '{v}': write a position in the reference and the change: 31C>T, or a deletion: 6_8del")
 
 
 def plan_ngs(spec: dict[str, Any]) -> NgsPlan:
     ref_seq = _dna(spec.get("reference"), "reference", 30, 120)
     v = str(spec.get("variant") or "").strip()
-    m = re.fullmatch(r"(\d+)([ACGT])>([ACGT])", v)
-    if not m:
-        raise VidgenError(f"variant: '{v}': write a position in the reference and the change: 31C>T")
-    pos, ref, alt = int(m.group(1)), m.group(2), m.group(3)
-    if not 1 <= pos <= len(ref_seq):
-        raise VidgenError(f"variant: '{v}': the reference has positions 1–{len(ref_seq)}")
-    if ref_seq[pos - 1] != ref:
-        raise VidgenError(f"variant: '{v}': position {pos} of the reference is {ref_seq[pos - 1]}, not {ref}")
-    if ref == alt:
-        raise VidgenError(f"variant: '{v}': no change")
+    i, end, ref, alt, kind = _ngs_variant(v, ref_seq)
     zyg = str(spec.get("zygosity") or "heterozygous")
     shares = {"heterozygous": 0.5, "homozygous": 1.0, "absent": 0.0}
     if zyg not in shares:
@@ -417,28 +459,33 @@ def plan_ngs(spec: dict[str, Any]) -> NgsPlan:
     if not 0 <= err <= 0.05:
         raise VidgenError(f"error_rate: {err:g}; give 0–0.05 (per base; Illumina ~0.001–0.01)")
     rng = random.Random(f"ngs:{spec.get('seed', 1)}")
-    n_reads = max(1, round(depth_goal * (len(ref_seq) - L + 1) / L))
-    alt_seq = ref_seq[:pos - 1] + alt + ref_seq[pos:]
+    n = len(ref_seq)
+    lo, hi = MIN_OVERLAP - L, n - MIN_OVERLAP     # a read's first base (it may start before the window)
+    n_reads = max(1, round(depth_goal * (hi - lo + 1) / L))
+    alt_seq = ref_seq[:i] + (alt or "-" * (end - i)) + ref_seq[end:]   # aligned: a deletion as gaps
     reads = []
     for _ in range(n_reads):
-        s = rng.randint(0, len(ref_seq) - L)
+        s = rng.randint(lo, hi)
         is_alt = rng.random() < shares[zyg]
+        a, b = max(0, s), min(n, s + L)
         src = alt_seq if is_alt else ref_seq
-        bases = list(src[s:s + L])
+        bases = list(src[a:b])
         errs = []
-        for k in range(L):
-            if rng.random() < err:
-                bases[k] = rng.choice([b for b in "ACGT" if b != bases[k]])
+        for k in range(len(bases)):
+            if rng.random() < err and bases[k] != "-":
+                bases[k] = rng.choice([c for c in "ACGT" if c != bases[k]])
                 errs.append(k)
-        reads.append(Read(s, "".join(bases), is_alt, rng.random() < 0.5, tuple(errs)))
+        reads.append(Read(a, "".join(bases), is_alt, rng.random() < 0.5, tuple(errs)))
     reads.sort(key=lambda r: (r.start, r.reverse))
-    depth = [0] * len(ref_seq)
+    depth = [0] * n
     for r in reads:
-        for k in range(L):
+        for k in range(len(r.seq)):
             depth[r.start + k] += 1
-    i = pos - 1
-    covering = [r for r in reads if r.start <= i < r.start + L]
-    alt_n = sum(1 for r in covering if r.seq[i - r.start] == alt)
+    covering = [r for r in reads if r.start <= i and end <= r.start + len(r.seq)]
+    if kind == "deletion":
+        alt_n = sum(1 for r in covering if r.seq[i - r.start] == "-")
+    else:
+        alt_n = sum(1 for r in covering if r.seq[i - r.start] == alt)
     d = len(covering)
     vaf = alt_n / d if d else 0.0
     if d < 10:
@@ -449,7 +496,7 @@ def plan_ngs(spec: dict[str, Any]) -> NgsPlan:
         call = "heterozygous"
     else:
         call = "none"
-    return NgsPlan(ref_seq, i, ref, alt, zyg, tuple(reads), tuple(depth), alt_n, call, vaf, L)
+    return NgsPlan(ref_seq, i, ref, alt, zyg, tuple(reads), tuple(depth), alt_n, call, vaf, L, end, kind, d)
 
 
 def pack_rows(reads: tuple[Read, ...], gap: int = 1) -> list[int]:

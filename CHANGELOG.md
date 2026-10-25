@@ -5,9 +5,25 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–219)
+## Unreleased (Steps 193–220)
 
 ### Genetics (Phase V, from Step 213)
+
+- **Example, guide topic and cookbook** (Step 220). `examples/cystic-fibrosis`: "Cystic fibrosis:
+  from a family to a diagnosis" (about 4 min with Kokoro narration, a 9:16 variant) — a pedigree
+  with the modes of inheritance tested, a Punnett square of two carriers, the carrier probability
+  2/3 and the risk 1/150, *CFTR* at 7q31.2, c.1521_1523del p.(Phe508del) on the real sequence, an
+  NGS carrier test and the carrier frequency from the incidence. A guide topic `vidgen guide
+  genetics` and `docs/COOKBOOK-GENETICS.md` (choosing, NSGC / ISCN / HGVS / HGNC notation, exact
+  numbers, reading a pedigree aloud, a counselling tone, common mistakes and their lint rules); the
+  gallery's Genetics section links both. `dna_lab` NGS reads a **deletion** too (`variant:
+  "6_8del"`: gapped reads bridged by a line, the call from the reads spanning it), its reads may
+  run past the reference's ends (even coverage up to the edges; **the reads of an existing
+  `ngs` scene change**), its tiles drop their letters when they would touch and its call card
+  names the verdict in its heading. Lint: `label_spacing` and `max_words` treat a lone character
+  on a plate (a DNA base) as a tile, not a label or a word; `contrast` finds the backdrop of a
+  narrow glyph (`I`, `1`) beside it; `genetics_hwe` reads "q, the frequency of disease alleles, is
+  about one in fifty" as q, not as the incidence.
 
 - **Accuracy lint for genetics** (Step 219). Seven `vidgen lint` rules compare the narration and
   on-screen text with what each genetics scene computes: `genetics_ratio` (a ratio or share the

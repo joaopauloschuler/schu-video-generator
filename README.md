@@ -196,7 +196,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   (`vidgen validate`, the `science_*` lint rules) and scenes carry references
   ([docs](docs/CONFIG.md#cell), [cookbook](docs/COOKBOOK-CELL-BIOLOGY.md),
   [gallery](docs/gallery/README.md#cell-biology), [example](examples/gene-to-secreted-protein/README.md)).
-- **Genetics** (Phase V, in progress): `cross` works a cross out exactly — gametes, a Punnett
+- **Genetics** (Phase V): nine scene types that compute what they show, checked by `vidgen
+  validate` and the `genetics_*` lint rules, in standard notation (NSGC, ISCN, HGVS, HGNC)
+  ([cookbook](docs/COOKBOOK-GENETICS.md), [example](examples/cystic-fibrosis/README.md): cystic
+  fibrosis from a family's pedigree to the variant, a carrier test and the population). `cross` works a cross out exactly — gametes, a Punnett
   square or a branch diagram, genotype and phenotype ratios (9 : 3 : 3 : 1, 9 : 3 : 4, a lethal
   2 : 1, X-linked crosses by sex, linked genes with their recombinants) and a chi-square test — in
   standard notation with phenotype pictures ([docs](docs/CONFIG.md#cross),
@@ -816,6 +819,13 @@ my_video/
   calnexin in the ER, the route through the Golgi to secretion across the whole cell, an
   exocytosis close-up and the IL-6–STAT3 pathway that raises its synthesis; references, karaoke
   captions, the `discovery` bed, a 9:16 variant; about 3:34 with Kokoro narration (no audio committed).
+- [examples/cystic-fibrosis](examples/cystic-fibrosis/README.md) — "Cystic fibrosis: from a family
+  to a diagnosis", a university-level medical-genetics explainer: a pedigree in NSGC symbols with
+  the modes of inheritance tested (only autosomal recessive fits), obligate carriers, a Punnett
+  square of two carriers, the brother's carrier probability 2/3 and the risk 1/150 for his child,
+  *CFTR* at 7q31.2, c.1521_1523del p.(Phe508del) on the real coding sequence, an NGS carrier test
+  and the carrier frequency from Hardy–Weinberg; references, karaoke captions, a 9:16 variant;
+  about 4:12 with Kokoro narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -825,7 +835,10 @@ my_video/
   [docs/COOKBOOK-MUSIC.md](docs/COOKBOOK-MUSIC.md) — writing music as score files: room for the
   voice, builds and lifts, loops, check and compare, genre sketches;
   [docs/COOKBOOK-CELL-BIOLOGY.md](docs/COOKBOOK-CELL-BIOLOGY.md) — cell-biology lectures and
-  research explainers: choosing the scene, accuracy, labelling, zooming, pacing, references.
+  research explainers: choosing the scene, accuracy, labelling, zooming, pacing, references;
+  [docs/COOKBOOK-GENETICS.md](docs/COOKBOOK-GENETICS.md) — genetics lectures and medical genetics:
+  NSGC / ISCN / HGVS / HGNC notation, exact numbers, reading a pedigree aloud, a counselling tone,
+  common mistakes and the lint rules that catch them.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

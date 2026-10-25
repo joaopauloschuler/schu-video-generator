@@ -20392,3 +20392,81 @@ How to test
 - False-positive sweep: scratchpad `s219/lint_all.py` (every example, `docs/`, the gallery, the Phase U
   and V scratch projects: 229 scenes) → 1 finding, a real one (`s216/proj2` karyotype out of ISCN order).
 - Demo: `vidgen lint` on scratchpad `s219/demo` (preview renders, estimated timings).
+
+## Step 220 — Example, docs and gallery
+
+What was built (DESIGN §96.19)
+- **The example** `examples/cystic-fibrosis` ("Cystic fibrosis: from a family to a diagnosis", README
+  with a scene table, the choices and the checks): `title`; `pedigree` (NSGC chart, `analyse: [AD,
+  AR, XR]` on a word, obligate carriers); `cross` (two carriers, the affected square dimmed, *Aa*
+  highlighted); `pedigree` again (`deduce: genotypes` → 2/3 *Aa*, partner 1/25, `risk` 1/150 with its
+  factors); `karyotype` (ideogram of chromosome 7, `bands: {7q31.2: CFTR}`); `mutation` (CFTR
+  c.1521_1523del p.(Phe508del), legacy ΔF508 on the card); `dna_lab` `ngs` (c.1516–1555, the brother
+  heterozygous for the deletion: 10 of 19 reads); `population` (incidence 1/2500 → q = 1/50 → 49/1250
+  ≈ 1 in 25); `process` recap. Kokoro `af_heart` 0.85, `discovery` −6 dB, karaoke captions,
+  `citations: {show: marker}`, `terms:` (carrier, autosomal recessive, F508del), pronunciations for
+  the notation. References: Riordan et al., Science 1989 (PMID 2475911) and Kerem et al., Science
+  1989 (PMID 2570460) — from memory, not looked up (the network fetch was not approved): **owner,
+  please confirm both PMIDs once**; the papers themselves (Science 245, Sept 1989, the CFTR
+  identification trio) I am certain of.
+- **NGS deletions** in `dna_lab` (needed for the carrier test; a 3-bp difference does not show on
+  agarose): `variant: "6_8del"` / `"6_8delCTT"` (1–12 bp, bases checked, a reference base each side),
+  gapped alt reads bridged by a line, the call from reads spanning the site (`NgsPlan.site_depth`,
+  `end`, `kind`, `site`). Reads may start before / end after the window and are clipped
+  (`MIN_OVERLAP` = 5), so coverage is even to the edges — this changes the seeded reads of existing
+  `ngs` scenes (none committed). The scene: tile letters dropped when they would touch (9:16), rows up
+  to 0.8 tile high, the verdict in the call card's heading.
+- **Lint fixes found while making it**: `label_spacing` and `max_words` treat a lone character on a
+  plate as a tile (DNA bases were hundreds of warnings); `introspect._backdrop` samples beside a
+  narrow glyph (the pedigree's Roman "I" was read as grey on grey → a false `contrast`);
+  `genetics_hwe` read "the incidence is q squared, so q, the frequency of disease alleles, is about
+  one in fifty" as an incidence of 1/50 (q pattern now accepts plural "alleles," and a number said as
+  q is not read again as the incidence).
+- **Docs**: guide topic `genetics` (aliases heredity, inheritance, medical-genetics, punnett, hgvs)
+  in `src/vidgen/data/guide/AGENTS.md` → `AGENTS.md`, listed at the top, pointed to from `scenes`;
+  `docs/COOKBOOK-GENETICS.md` (choosing, notation, exact numbers, reading a pedigree aloud, counselling
+  tone, pacing, references, common mistakes → lint rule table, a validated pattern), linked from
+  README, `docs/COOKBOOK.md`, the guide and the gallery; README feature bullet and example entry;
+  CONFIG `dna_lab` NGS deletions; gallery Genetics section note and showcase footer
+  (`SECTION_NOTES`, `SECTION_FOOTERS`; the entries were already grouped; no media changed, 12.0 MB).
+
+Files touched
+- New: `examples/cystic-fibrosis/{video.yaml,README.md}`, `docs/COOKBOOK-GENETICS.md`,
+  `tests/test_cystic_fibrosis.py` (4).
+- Changed: `src/vidgen/genetics/dna_lab.py`, `src/vidgen/scenes/dna_lab.py`, `src/vidgen/genetics/accuracy.py`,
+  `src/vidgen/lint/layout_rules.py`, `src/vidgen/introspect.py`, `src/vidgen/gallery.py`; guide + `AGENTS.md`;
+  `docs/CONFIG.md`, `docs/COOKBOOK.md`, `docs/gallery/README.md`, `docs/gallery/dna_lab.md` (param
+  docstring), `README.md`, `CHANGELOG.md`, `DESIGN.md` §96.19, `tasklist.md`; tests `test_docs.py`
+  (completeness parametrized over the genetics types; cookbook test), `test_guide.py` (+1),
+  `test_molecular.py` (+1, clipped reads), `test_lint.py`, `test_introspect.py`, `test_genetics_lint.py`.
+
+Public interfaces: no `vidgen.api` change, no config key. `genetics.dna_lab`: `MIN_OVERLAP`,
+`NgsPlan.end / kind / site_depth / site`; `ngs` `variant` accepts deletions.
+
+Decisions / deviations
+- Diagnosis by NGS rather than PCR + gel: an agarose gel cannot show a 3-bp deletion honestly.
+- The family is drawn twice (analysis; genotypes and risk) with the Punnett square between.
+- Speed 0.85 (0.9 put two beats over `narration_speed`); the video is 4:12, a little over the
+  "3–4 min" target.
+- The variant scene ignores `covered_text` (the deleted residue struck through on purpose).
+- Compatibility: rendering code changed only in `scenes/dna_lab.py` (Phase V, NGS only); lint
+  and introspect changes alter findings, not frames, so the Phase Q baseline was not re-run.
+
+Known gaps
+- 9:16 lint: two warnings (pedigree "1/25 Aa" at 2.42 % vs the 2.5 % warning size; the variant card
+  43 words). `vidgen readback` WER 5.3 %: the flagged beats are notation Whisper normalises
+  ("fifteen twenty-one" → "one thousand five hundred twenty one", "five oh eight" → "five hundred
+  eight"). NGS insertions not modelled. Worth a look in Step 221: `reference_genes` names
+  c.1585-1G>A as legacy "1717-1G>A" (check the intron numbering); the pedigree's XR exclusion card
+  says "(fits with reduced penetrance)" for an affected daughter of an unaffected father.
+
+How to test
+- `tests/test_cystic_fibrosis.py` (4); `test_docs` + `test_guide` + `test_gallery` not render (161);
+  `test_molecular` with renders (22, 221 s); `test_genetics_lint` + `test_lint` + `test_accuracy` +
+  `test_narration_rule` + `test_introspect` not render (133); `test_introspect` + `test_lint` +
+  `test_callout_action` with renders (53); `test_builtin_scenes` + `test_actions_coverage` `-k lab` (7).
+  False-positive sweep `s219/lint_all.py`: 238 scenes, the same single real finding as Step 219.
+- The example (scratch copy with Kokoro audio, scratchpad `s220/proj`): `vidgen validate` ok; `vidgen
+  lint` 16:9 0 findings (3 ignored), `--variant short` 2 warnings. Render 1920×1080, 30 fps, 251.83 s
+  video and audio, −16.1 LUFS, true peak −1.8 dBTP, LRA 3.1 LU: scratchpad `s220/cystic_fibrosis.mp4`,
+  contact sheet `s220/contact_16x9.png`, 9:16 beat stills `s220/sheet_9x16.png`.

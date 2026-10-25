@@ -169,6 +169,10 @@ def test_hw_claims() -> None:
     hw = plan_population({"incidence": "1/2500"}).hw
     assert gacc.hw_claims("The incidence here is 1 in 900.", hw)
     assert gacc.hw_claims("The incidence here is 1 in 2,500, and about 1 in 25 people are carriers.", hw) == []
+    # Step 220: the number after "q, the frequency of disease alleles," is q's, not the incidence's
+    said_q = "With random mating the incidence is q squared, so q, the frequency of disease alleles, is about one in fifty."
+    assert gacc.hw_claims(said_q, hw) == []
+    assert gacc.hw_claims(said_q.replace("fifty", "forty"), hw)
 
 
 # ----- CRISPR, karyotypes, HGVS ------------------------------------------------------------------------

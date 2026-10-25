@@ -92,7 +92,7 @@ class DnaLabScene(NarratedScene):
         reference: str | None = None
         """ngs: the reference sequence the reads align to (30–120 bp)."""
         variant: str | None = None
-        """ngs: the variant in the sample, '31C>T' (a position in the reference)."""
+        """ngs: the variant in the sample, '31C>T' or a deletion '6_8del' (positions in the reference)."""
         zygosity: Literal["heterozygous", "homozygous", "absent"] | None = None
         """ngs: whether the sample carries the variant on one allele (≈50 % of reads), both, or none."""
         read_length: int | None = None
@@ -511,13 +511,15 @@ class DnaLabScene(NarratedScene):
         x0 = area.center[0] - len(n.reference) * u / 2
         self.ngs_x0 = x0
         y_ref = area.y1 - u * 0.7
-        self.ngs_ref = VGroup(*[base_tile(self.letters, b, u).move_to(np.array([x0 + (k + 0.5) * u, y_ref, 0]))
-                                for k, b in enumerate(n.reference)])
+        # a long reference in a narrow frame: coloured tiles without letters rather than letters that touch
+        letters_fit = self.letters.get("A").width <= u * 0.9
+        self.ngs_ref = VGroup(*[(base_tile(self.letters, b, u) if letters_fit else VGroup(base_tile(self.letters, b, u)[0]))
+                                .move_to(np.array([x0 + (k + 0.5) * u, y_ref, 0])) for k, b in enumerate(n.reference)])
         rows = lab.pack_rows(n.reads)
         n_rows = max(rows) + 1
         cov_h = min(0.9, area.height * 0.22)
         room = area.height - u * 1.6 - cov_h - 0.5
-        row_h = min(u * 0.52, room / max(1, n_rows))
+        row_h = min(max(u * 0.8, 0.16), room / max(1, n_rows))       # rows use the room there is
         self.read_mobs: list[Mobject] = []
         y0 = y_ref - u * 1.1
         for read, r in zip(n.reads, rows):
@@ -527,14 +529,19 @@ class DnaLabScene(NarratedScene):
             color = self.hi if read.alt else self.cold
             bar.set_fill(color, opacity=0.45).set_stroke(color, width=1)
             parts: list[Mobject] = [bar]
-            i = n.position
-            if read.start <= i < read.start + len(read.seq):
-                base = read.seq[i - read.start]
-                dot = Rectangle(width=u * 0.9, height=row_h * 0.62).move_to(np.array([x0 + (i + 0.5) * u, y, 0]))
-                dot.set_fill(BASE_HUE(base), opacity=0.95).set_stroke(width=0)
-                parts.append(dot)
+            site = range(n.position, n.end if n.end > n.position else n.position + 1)
+            gap = [j for j in site if read.start <= j < read.start + len(read.seq) and read.seq[j - read.start] == "-"]
+            if gap:                                   # a deletion: the bar breaks, a line bridges it (as genome browsers draw it)
+                parts = self._gapped_bar(read, gap, x0, y, u, row_h, color)
+            else:
+                for j in site:
+                    if read.start <= j < read.start + len(read.seq):
+                        base = read.seq[j - read.start]
+                        dot = Rectangle(width=u * 0.9, height=row_h * 0.62).move_to(np.array([x0 + (j + 0.5) * u, y, 0]))
+                        dot.set_fill(BASE_HUE(base), opacity=0.95).set_stroke(width=0)
+                        parts.append(dot)
             for k in read.errors:
-                if read.start + k == i:
+                if read.start + k in site:
                     continue
                 err = Rectangle(width=u * 0.5, height=row_h * 0.4).move_to(np.array([x0 + (read.start + k + 0.5) * u, y, 0]))
                 err.set_fill(self.bad, opacity=0.8).set_stroke(width=0)
@@ -553,9 +560,24 @@ class DnaLabScene(NarratedScene):
         cov_lab = self.markup(f"coverage (max {top_cov}×)", size=self.tiny, color=self.dim_ink)
         cov_lab.move_to(np.array([area.x0 + cov_lab.width / 2, bottom - cov_h - 0.02 - cov_lab.height / 2, 0]))
         self.ngs_cov.add(cov_lab)
-        x = x0 + (n.position + 0.5) * u
+        x = x0 + (n.position + max(1, n.end - n.position) / 2) * u
         self.ngs_line = DashedLine(np.array([x, y_ref - u * 0.6, 0]), np.array([x, bottom - cov_h, 0]), dash_length=0.08)
         self.ngs_line.set_stroke(self.hi, width=2)
+
+    def _gapped_bar(self, read: lab.Read, gap: list[int], x0: float, y: float, u: float, row_h: float, color: str) -> list[Mobject]:
+        """A read with a deletion: its bar in pieces either side of the gap and a line across it."""
+        a, b = read.start, read.start + len(read.seq)
+        parts: list[Mobject] = []
+        for lo, hi in ((a, gap[0]), (gap[-1] + 1, b)):
+            if hi > lo:
+                piece = Rectangle(width=(hi - lo) * u * 0.96, height=row_h * 0.62)
+                piece.move_to(np.array([x0 + (lo + hi) / 2 * u, y, 0]))
+                piece.set_fill(color, opacity=0.45).set_stroke(color, width=1)
+                parts.append(piece)
+        bridge = Line(np.array([x0 + gap[0] * u, y, 0]), np.array([x0 + (gap[-1] + 1) * u, y, 0]))
+        bridge.set_stroke(self.ink, width=2)
+        parts.append(bridge)
+        return parts
 
     # ----- targets and steps -----------------------------------------------------------------------
 
@@ -747,16 +769,21 @@ class DnaLabScene(NarratedScene):
 
     def _step_ngs_align(self) -> list[Animation]:
         n = self.plan.ngs
-        lines = [f"{len(n.reads)} reads; coverage at the site {n.depth[n.position]}×",
+        lines = [f"{len(n.reads)} reads; coverage at the site {n.site_depth}×",
                  "a base that differs in one read only is usually a sequencing error (red): real variants are in many reads"]
+        if n.kind == "deletion":
+            lines.append("a read with missing bases is aligned with a gap, bridged by a line")
         return [Succession(LaggedStart(*[FadeIn(m, shift=LEFT * 0.08) for m in self.read_mobs], lag_ratio=0.03),
                            AnimationGroup(FadeIn(self.ngs_cov), *self._swap(self._card(lines, "Alignment"))))]
 
     def _step_ngs_call(self) -> list[Animation]:
         n = self.plan.ngs
-        d = n.depth[n.position]
+        d = n.site_depth
         pct = n.vaf * 100
-        lines = [f"position {n.position + 1}: {n.ref} → {n.alt} in {n.alt_reads} of {d} reads ({pct:.0f} %)"]
+        if n.kind == "deletion":
+            lines = [f"{n.site}: {n.ref} missing in {n.alt_reads} of {d} reads ({pct:.0f} %)"]
+        else:
+            lines = [f"position {n.position + 1}: {n.ref} → {n.alt} in {n.alt_reads} of {d} reads ({pct:.0f} %)"]
         if n.call == "heterozygous":
             lines.append("about half the reads carry the alternative allele: heterozygous (one of the two copies)")
         elif n.call == "homozygous":
@@ -765,4 +792,7 @@ class DnaLabScene(NarratedScene):
             lines.append("too few reads carry it: no variant called (the reference allele)")
         else:
             lines.append("fewer than 10 reads cover the site: too little to call")
-        return [Succession(Create(self.ngs_line), AnimationGroup(*self._swap(self._card(lines, "The variant call"))))]
+        # the verdict is in the heading: a short card drops its later lines, never the call
+        verdict = {"heterozygous": "heterozygous", "homozygous": "homozygous", "none": "no variant"}.get(n.call, "low coverage")
+        head = f"The variant call: {verdict}"
+        return [Succession(Create(self.ngs_line), AnimationGroup(*self._swap(self._card(lines, head))))]

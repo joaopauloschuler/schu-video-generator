@@ -7747,7 +7747,13 @@ The laboratory methods of molecular genetics (DESIGN §96.15; `vidgen.genetics.d
   overlapping half-height peaks called with its IUPAC code (Y).
 - **`ngs`**: seeded short reads from the two alleles aligned to a reference, the coverage per
   position, sequencing errors marked, and a variant call from the share of alt reads
-  (heterozygous ≈ 50 %, homozygous ≈ 100 %, below 10× *low coverage*).
+  (heterozygous ≈ 50 %, homozygous ≈ 100 %, below 10× *low coverage*). The reference is a window
+  of a longer sequence: reads may run past its ends and are clipped, so the coverage is even up to
+  the edges. The variant is a substitution (`variant: "31C>T"`) or a deletion of 1–12 bp
+  (`"6_8del"`, `"6_8delCTT"`: the bases are checked): an alt read has a gap there, bridged by a
+  line as in a genome browser, and only reads spanning the whole deleted stretch count for the
+  call (CFTR F508del: `examples/cystic-fibrosis`). With a long reference in a narrow frame the
+  tiles are drawn without letters.
 
 ```yaml
 - id: pcr
@@ -7777,7 +7783,7 @@ The laboratory methods of molecular genetics (DESIGN §96.15; `vidgen.genetics.d
 | `template`, `primers`, `temperatures`, `cycles` | pcr | the template 5′→3′; `{forward, reverse}` 5′→3′ (15–35 nt); `{denature, anneal, extend}` °C; 1–40 cycles |
 | `agarose`, `ladder`, `lanes` | gel | 0.5–3 %; `1kb` / `100bp` / `50bp` or sizes; `{patient: [450], digest: [300, 150]}` |
 | `sequence`, `heterozygous`, `primer` | sanger | the read 5′→3′ (8–40 nt); `"8T>C"` or a list; the sequencing primer |
-| `reference`, `variant`, `zygosity`, `read_length`, `depth`, `error_rate` | ngs | 30–120 bp; `"31C>T"`; `heterozygous` / `homozygous` / `absent`; 10–…; 4–40×; 0–0.05 |
+| `reference`, `variant`, `zygosity`, `read_length`, `depth`, `error_rate` | ngs | 30–120 bp; `"31C>T"` or a deletion `"6_8del"`; `heterozygous` / `homozygous` / `absent`; 10–…; 4–40×; 0–0.05 |
 | `seed` | sanger, ngs | changes the seeded reads or peak heights |
 | `size`, `title_size` | | |
 

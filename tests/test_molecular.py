@@ -285,7 +285,8 @@ def test_ngs_reads_and_the_variant_call() -> None:
     het = lab.plan_ngs({"reference": reference, "variant": "26G>T", "depth": 20, "seed": 3})
     assert het.call == "heterozygous" and 0.15 <= het.vaf <= 0.85
     assert len(het.depth) == len(reference) and het.depth[het.position] >= 10
-    assert all(len(r.seq) == het.read_length for r in het.reads)
+    assert all(lab.MIN_OVERLAP <= len(r.seq) <= het.read_length and 0 <= r.start <= len(reference) - len(r.seq) for r in het.reads)
+    assert min(het.depth) >= 8                                             # clipped reads: even coverage up to the ends
     assert lab.plan_ngs({"reference": reference, "variant": "26G>T", "zygosity": "homozygous", "seed": 3}).call == "homozygous"
     assert lab.plan_ngs({"reference": reference, "variant": "26G>T", "zygosity": "absent", "seed": 3}).call == "none"
     assert lab.plan_ngs({"reference": reference, "variant": "26G>T", "depth": 4, "seed": 3}).call == "low coverage"
@@ -298,6 +299,26 @@ def test_ngs_reads_and_the_variant_call() -> None:
     assert [r.seq for r in same.reads] == [r.seq for r in het.reads]       # seeded: the same reads
     with pytest.raises(VidgenError, match="position 26 of the reference is G, not A"):
         lab.plan_ngs({"reference": reference, "variant": "26A>T"})
+
+
+def test_ngs_deletion_near_the_window_edge() -> None:
+    """Step 220: CFTR F508del (c.1521_1523del) read on the reference window c.1516–1575: the CTT is
+    positions 6–8; alt reads carry gaps there and only reads spanning the stretch are counted."""
+    from vidgen.genetics.reference_genes import REFERENCE_GENES
+
+    reference = REFERENCE_GENES["CFTR"].seq[:60]
+    plan = lab.plan_ngs({"reference": reference, "variant": "6_8delCTT", "depth": 24, "seed": 2})
+    assert plan.kind == "deletion" and plan.ref == "CTT" and plan.site == "6_8delCTT" and (plan.position, plan.end) == (5, 8)
+    assert plan.call == "heterozygous" and plan.site_depth >= 15
+    gapped = [r for r in plan.reads if "-" in r.seq]
+    assert gapped and all(r.alt for r in gapped)
+    assert all(r.seq[5 - r.start:8 - r.start] == "---" for r in gapped if r.start <= 5 and r.start + len(r.seq) >= 8)
+    assert plan.alt_reads == sum(1 for r in plan.reads if r.start <= 5 and r.start + len(r.seq) >= 8 and r.seq[5 - r.start] == "-")
+    assert lab.plan_ngs({"reference": reference, "variant": "6_8del", "zygosity": "homozygous", "depth": 24, "seed": 2}).call == "homozygous"
+    for bad, message in (("6_8delCAT", "are CTT, not CAT"), ("8_6del", "low to high"), ("1_3del", "both sides"),
+                         ("6_30del", "1–12 bp"), ("6-8del", "write a position")):
+        with pytest.raises(VidgenError, match=message):
+            lab.plan_ngs({"reference": reference, "variant": bad})
 
 
 def test_lab_params_belong_to_their_method() -> None:

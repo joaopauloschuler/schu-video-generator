@@ -222,6 +222,10 @@ def test_backdrop() -> None:
     pixels[:, :100, :3] = 255  # mostly text-coloured box: the rest is the backdrop
     assert _backdrop(pixels, [0, 0, 120, 90], ["#FFFFFF"]) == "#0E1116"
     assert _backdrop(pixels, [0, 0, 50, 90], ["#FFFFFF"]) == "#FFFFFF"  # text on its own colour
+    # a narrow glyph ('I', Step 220): its box is all ink and anti-aliased edges; the sides decide
+    pixels[10:30, 130:134, :3] = (0x73, 0x76, 0x7B)
+    pixels[10:30, 131:133, :3] = (0xE8, 0xEA, 0xED)
+    assert _backdrop(pixels, [130, 10, 134, 30], ["#E8EAED"]) == "#0E1116"
 
 
 def test_document_header(small_config: None) -> None:

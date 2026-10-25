@@ -193,6 +193,8 @@ def test_max_words() -> None:
     assert len(issues) == 1 and issues[0].value == 42 and issues[0].objects == ()
     assert issues[0].bbox == (0, 0, 600, 540)
     assert not check("max_words", [*texts, text("x", [0, 0, 1, 1], "and more")], max_words=50)
+    # lone characters are tiles (a row of DNA bases, Step 220), not words
+    assert not check("max_words", [*texts, *[text(f"b{i}", [0, 0, 1, 1], b) for i, b in enumerate("ATCATCTTT")]])
 
 
 def test_label_spacing() -> None:
@@ -221,6 +223,8 @@ def test_label_spacing() -> None:
     assert not check("label_spacing", [value, {**plate, "class": "Rectangle"}, label])
     badge = {**plate, "stroke": {"color": "#FF0000", "opacity": 1.0, "width_px": 2.5}}   # an outlined "Now" badge
     assert not check("label_spacing", [value, badge, label])
+    # one character on a plate is a tile (a DNA base in a sequence row, Step 220), not a label
+    assert not check("label_spacing", [value, plate, {**label, "text": "A"}])
 
 
 def test_rules_match_the_config() -> None:

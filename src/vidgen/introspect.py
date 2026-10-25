@@ -641,8 +641,12 @@ def _backdrop(pixels: np.ndarray, bbox: list[float], text_colors: list[str]) -> 
     ``None`` when the box is entirely outside the frame.
     """
     height, width = pixels.shape[:2]
-    x0, y0 = max(int(np.floor(bbox[0])), 0), max(int(np.floor(bbox[1])), 0)
-    x1, y1 = min(int(np.ceil(bbox[2])), width), min(int(np.ceil(bbox[3])), height)
+    left, top, right, bottom = bbox[:4]
+    pad = (bottom - top) * 0.5 - (right - left)
+    if pad > 0:  # a narrow glyph ('I', 'l', '1'): its box is nearly all anti-aliased ink, so look beside it too
+        left, right = left - pad / 2, right + pad / 2
+    x0, y0 = max(int(np.floor(left)), 0), max(int(np.floor(top)), 0)
+    x1, y1 = min(int(np.ceil(right)), width), min(int(np.ceil(bottom)), height)
     if x1 <= x0 or y1 <= y0:
         return None
     region = pixels[y0:y1, x0:x1, :3]
