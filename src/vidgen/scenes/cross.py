@@ -100,6 +100,8 @@ class CrossScene(NarratedScene):
         """Show the notes the cross needs (recombinant gametes, a lethal class, the tester, epistasis)."""
         pictures: bool = True
         """Draw the phenotype pictures (peas, flowers, eyes, flies, coats, blood groups…)."""
+        animal: Literal["auto", "dog", "mouse", "rabbit", "cat", "guinea pig", "none"] = "auto"
+        """The animal a coat colour is drawn on; auto: the preset's (labrador: dog) or one named in the title or traits, else a plain patch of fur."""
         title_size: ThemeSize = "heading"
         """Title size."""
         size: ThemeSize = "caption"
@@ -110,6 +112,8 @@ class CrossScene(NarratedScene):
                                                  "kind", "show", "branch") if getattr(self, k) is not None}
             if isinstance(data.get("parents"), str):
                 data["parents"] = [data["parents"]]
+            data["animal"] = self.animal
+            data["title"] = str(self.title)
             return data
 
         def plan(self) -> Any:

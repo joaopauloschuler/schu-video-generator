@@ -16,7 +16,7 @@ import numpy as np
 from vidgen.api import *
 
 from .bio_draw import small_size, text_block
-from .pedigree_draw import arrow, carrier_mark, mating_line, symbol, tick
+from .pedigree_draw import arrow, carrier_mark, letter_spots, mating_line, symbol, tick
 
 pp = genetics.pedigree_plan
 pa = genetics.pedigree_analysis
@@ -194,6 +194,8 @@ class PedigreeScene(NarratedScene):
         uses_analysis = bool(p.analyse) or bool(self.action_uses("analyse")) or any(t.startswith(("mode", "analysis")) for t in named)
         uses_risk = self.ped.proposed is not None and self.inference is not None and self.inference.risk is not None
         self.has_panel = uses_analysis or uses_risk
+        self.cards_shown = ((["modes"] if uses_analysis else [])
+                            + (["risk"] if uses_risk and (not self.manual or self.action_uses("risk") or "risk" in named) else []))
         self.show_genotype_line = self.plan.mode is not None and (p.genotypes or bool(self.action_uses("deduce")) or uses_risk
                                                                   or any(t in ("genotypes", "all", "carriers") for t in named))
         self._regions(body)
@@ -204,6 +206,7 @@ class PedigreeScene(NarratedScene):
         self._build_analysis()            # registered always (its target can be named); placed in the panel when used
         if uses_risk:
             self._build_risk()
+        self._place_letters()
         self._register()
 
     # ----- regions and scale ----------------------------------------------------------------------
@@ -220,7 +223,7 @@ class PedigreeScene(NarratedScene):
         people = list(ped.people.values())
         extra = max((bool(x.age) + bool(x.label) + (x.loss == "stillbirth") for x in people), default=0)
         self.text_lines = int(self.show_genotype_line) + extra
-        legend_h = self.markup("Ag", size=self.small * 0.85).height * 2.0 if p.legend else 0.0
+        legend_row = self.markup("Ag", size=self.small * 0.85).height * 2.0 if p.legend else 0.0
         if not self.has_panel:
             chart = body
             self.panel = None
@@ -232,9 +235,25 @@ class PedigreeScene(NarratedScene):
             chart = body
             self.panel = None
         self.roman_w = self.markup("<b>III</b>", size=self.small).width + 0.25
+        # 16:9: the legend may stand in a column beside the chart (the chart then has the whole height)
+        legend_col = self._legend_items_width() + 0.45 if p.legend and not self.is_portrait else None
+        share = 1.0
+        if self.is_portrait and self.has_panel:            # the chart gets what the cards below it leave
+            need = self._panel_need(body)
+            share = min(0.72, max(0.45, (chart.height - legend_row - need - 0.45) / max(chart.height - legend_row, 1e-6)))
         rows = ped.rows
         lh = self._lh
-        top_room = lh if p.numbers else 0.0
+        # individual numbers beside the symbol's top corner, on the side without a mating line (no
+        # height spent over each row); above the symbol only when someone has partners on both sides
+        self.number_side: dict[str, int] = {}
+        for pid in ped.people:
+            sides = {1 if lay.x[q] > lay.x[pid] else -1 for c in ped.couples if pid in c.partners for q in c.partners if q != pid}
+            twin = ped.people[pid].twin
+            if twin is not None and twin in lay.x:
+                sides.add(1 if lay.x[twin] > lay.x[pid] else -1)
+            self.number_side[pid] = -1 if -1 not in sides else (1 if 1 not in sides else 0)
+        self.numbers_above = p.numbers and any(v == 0 for v in self.number_side.values())
+        top_room = lh if self.numbers_above else 0.0
         widest = 0.0
         if self.show_genotype_line and self.inference is not None:
             widest = max((self.markup(" ".join(x for x in self._genotype_text(pid)[:2] if x), size=self.label_size).width
@@ -247,8 +266,8 @@ class PedigreeScene(NarratedScene):
         def text_h() -> float:
             return lines() * lh + (0.06 if lines() else 0.0)
 
-        def drop(P: float) -> float:          # the child's line: room for the number beside it
-            return max(DROP * P, top_room * 1.1)
+        def drop(P: float) -> float:          # the child's line: room for the number over the symbol when it stands there
+            return max(DROP * P, top_room * 1.1, 0.22)
 
         def step(P: float) -> float:
             return SYMBOL * P + text_h() + 0.1 + drop(P)
@@ -257,22 +276,40 @@ class PedigreeScene(NarratedScene):
             arrow_room = P * 0.3 if any(x.proband or x.consultand for x in people) else 0.0
             return top_room + (rows - 1) * step(P) + SYMBOL * P + max(text_h(), arrow_room)
 
-        avail_h = chart.height - legend_h
-        cap = 1.5 if not self.is_portrait else 1.9
-        def fit() -> float:
-            P = min(cap, (chart.width - self.roman_w - 0.1) / max(lay.width, 1.0))
-            while P > 0.25 and height(P) > avail_h * (0.56 if self.is_portrait and self.has_panel else 1.0):
+        cap = 1.8 if not self.is_portrait else 1.9
+        span = max(lay.width, 1.0)
+
+        def fit(width: float, avail_h: float) -> float:
+            P = min(cap, (width - self.roman_w - 0.1) / span)
+            while P > 0.25 and height(P) > avail_h * share:
                 P *= 0.97
             return P
 
-        P = fit()
-        if widest > 0.9 * P:                  # "2/3 Aa" wider than the pitch: on two lines, when that costs little height
+        def solve() -> tuple[float, bool]:
+            """The pitch, and whether the legend stands beside the chart."""
+            below = fit(chart.width, chart.height - legend_row)
+            if legend_col is not None:
+                beside = fit(chart.width - legend_col, chart.height)
+                if beside > below * 1.02:
+                    return beside, True
+            return below, False
+
+        def spread(P: float, beside: bool) -> float:
+            """Height-bound charts spread sideways (up to 1.3 pitches apart) rather than leave the width empty."""
+            room_w = chart.width - (legend_col if beside and legend_col is not None else 0.0)
+            return max(P, min(P * 1.3, (room_w - self.roman_w - 0.1) / span))
+
+        P, beside = solve()
+        if widest > 0.9 * spread(P, beside):  # "2/3 Aa" wider than the pitch: on two lines, when that costs little height
             self.stacked = True
-            stacked = fit()
-            if stacked < 0.92 * P:
+            P2, beside2 = solve()
+            if P2 < 0.92 * P:
                 self.stacked = False
             else:
-                P = stacked
+                P, beside = P2, beside2
+        self.legend_side = beside
+        legend_h = 0.0 if beside else legend_row
+        self.Px = spread(P, beside)
         T = text_h()
         self.P = P
         self.s = SYMBOL * P
@@ -285,16 +322,18 @@ class PedigreeScene(NarratedScene):
             self.panel = Region(body.x0, body.y0, body.x1, self.chart.y0 - 0.35)
         else:
             self.chart = chart
-        width = self.roman_w + lay.width * P
+        self.chart_w = lay.width * self.Px
+        width = self.roman_w + self.chart_w + (legend_col if beside and legend_col is not None else 0.0)
         self.x_left = self.chart.center[0] - width / 2 + self.roman_w
         free = self.chart.height - legend_h - H
         self.y_top = self.chart.y1 - max(0.0, free) * 0.4 - top_room - self.s / 2
         self.row_step = step(P)
         self.legend_y = self.chart.y0 + legend_h / 2
+        self.chart_bottom = self.y_top - (rows - 1) * self.row_step - self.s / 2 - T
 
     def xy(self, pid: str) -> np.ndarray:
         lay = self.plan.layout
-        return np.array([self.x_left + lay.x[pid] * self.P, self.y_top - lay.row[pid] * self.row_step, 0.0])
+        return np.array([self.x_left + lay.x[pid] * self.Px, self.y_top - lay.row[pid] * self.row_step, 0.0])
 
     # ----- the chart ---------------------------------------------------------------------------------
 
@@ -310,7 +349,7 @@ class PedigreeScene(NarratedScene):
         self.genotype_mobs: dict[str, Mobject] = {}
         self.deduced_marks: dict[str, Mobject] = {}
         self.genotype_slot: dict[str, np.ndarray] = {}
-        width = self.P * 0.92
+        width = self.Px * 0.92
         for pid, person in ped.people.items():
             c = self.xy(pid)
             sym = symbol(self, person, s, self.ink, self.bg, fill, p.carrier_style, self.stroke).move_to(c)
@@ -325,9 +364,14 @@ class PedigreeScene(NarratedScene):
             if p.numbers and not person.proposed:
                 num = self.markup(ped.label(pid).split("-")[-1], size=self.label_size, color=self.dim_ink)
                 top = c[1] + self._half_height(pid)
-                twin = ped.people.get(person.twin) if person.twin else None
-                side = 1 if twin is not None and self.plan.layout.x[twin.id] < self.plan.layout.x[pid] else -1   # away from the twin line
-                num.move_to(np.array([c[0] + side * (self._half_width(pid) * 0.55 + num.width / 2 + 0.03), top + num.height / 2 + 0.04, 0.0]))
+                if self.numbers_above:
+                    twin = ped.people.get(person.twin) if person.twin else None
+                    side = 1 if twin is not None and self.plan.layout.x[twin.id] < self.plan.layout.x[pid] else -1   # away from the twin line
+                    num.move_to(np.array([c[0] + side * (self._half_width(pid) * 0.55 + num.width / 2 + 0.03), top + num.height / 2 + 0.04, 0.0]))
+                else:                                   # beside the top corner, away from the mating line
+                    side = self.number_side[pid]
+                    half = max(self._half_width(pid), s * 0.8 if person.adopted is not None else 0.0)   # outside adoption brackets
+                    num.move_to(np.array([c[0] + side * (half + num.width / 2 + 0.06), top - num.height / 2, 0.0]))
                 parts.append(num)
             if self.show_genotype_line:
                 lines.append(None)                    # the genotype's slot
@@ -338,7 +382,7 @@ class PedigreeScene(NarratedScene):
             for text in (person.age, person.label):
                 if text:
                     lines.append(self.markup(text, size=self.label_size, color=self.ink))
-            y = c[1] - s / 2 - 0.04 - (0.08 if person.adopted else 0.0) - (s * 0.18 if person.deceased else 0.0)
+            y = c[1] - self._half_height(pid) - 0.04 - (0.08 if person.adopted else 0.0) - (s * 0.18 if person.deceased else 0.0)
             gslot = None
             for m in lines:
                 if m is None:
@@ -420,6 +464,35 @@ class PedigreeScene(NarratedScene):
                         q.move_to(np.array([apex_x, y - q.height * 0.2, 0]))
                         self.twin_bars[key] = q
 
+    def _place_letters(self) -> None:
+        """The proband's P where it touches no other mark or label (a P beside a neighbour's
+        "2/3 Aa" reads as part of it): the first free spot round the arrow's tail, else the least
+        crowded."""
+        def box(m: Mobject) -> tuple[float, float, float, float]:
+            return (m.get_left()[0], m.get_bottom()[1], m.get_right()[0], m.get_top()[1])
+
+        for pid, group in self.arrows.items():
+            if len(group) < 2:
+                continue
+            letter = group[1]
+            others: list[Mobject] = [*self.romans, *self.genotype_mobs.values()]
+            for qid, mob in self.person_mobs.items():
+                others += [m for m in mob if m is not group]
+            if getattr(self, "risk_label", None) is not None:
+                others.append(self.risk_label)
+            boxes = [box(m) for m in others if m.has_points() or len(m.submobjects)]
+            gap = max(0.1, letter.height * 0.6)        # clear of the rest, so it reads as the arrow's
+            best, best_cost = None, None
+            for spot in letter_spots(group[0].get_start(), letter.width, letter.height, self.s * 0.06):
+                x0, y0 = spot[0] - letter.width / 2 - gap, spot[1] - letter.height / 2 - gap
+                x1, y1 = spot[0] + letter.width / 2 + gap, spot[1] + letter.height / 2 + gap
+                cost = sum(max(0.0, min(x1, b[2]) - max(x0, b[0])) * max(0.0, min(y1, b[3]) - max(y0, b[1])) for b in boxes)
+                if best_cost is None or cost < best_cost - 1e-9:
+                    best, best_cost = spot, cost
+                if cost == 0:
+                    break
+            letter.move_to(best)
+
     def _half_width(self, pid: str) -> float:
         person = self.ped.people[pid]
         if person.loss == "miscarriage":
@@ -452,7 +525,7 @@ class PedigreeScene(NarratedScene):
 
     def _build_genotypes(self) -> None:
         inf = self.inference
-        width = self.P * 0.9
+        width = self.Px * 0.9
         lh = self._line_h()
         for pid, person in self.ped.people.items():
             if person.proposed:
@@ -477,10 +550,29 @@ class PedigreeScene(NarratedScene):
 
     # ----- legend ------------------------------------------------------------------------------------
 
+    def _legend_items_width(self) -> float:
+        """The width of the legend as a column (its widest entry)."""
+        return max(m.width for m in self._legend_items())
+
     def _build_legend(self) -> None:
         self.legend_mob = None
         if not self.params.legend:
             return
+        items = self._legend_items()
+        if self.legend_side:              # a column at the chart's bottom right
+            legend = VGroup(*items).arrange(DOWN, buff=0.18, aligned_edge=LEFT)
+            x = self.x_left + self.chart_w + 0.45
+            legend.move_to(np.array([x + legend.width / 2, max(self.chart_bottom, self.chart.y0) + legend.height / 2, 0.0]))
+            self.legend_mob = legend
+            return
+        legend = VGroup(*items).arrange(RIGHT, buff=0.35)
+        room = self.chart.width
+        if legend.width > room:
+            legend.scale(room / legend.width)
+        legend.move_to(np.array([self.chart.center[0], self.legend_y, 0.0]))
+        self.legend_mob = legend
+
+    def _legend_items(self) -> list[Mobject]:
         ped = self.ped
         s = self.small / 48 * 0.55
         items: list[Mobject] = []
@@ -503,12 +595,7 @@ class PedigreeScene(NarratedScene):
             items.append(entry(VGroup(sq2, sl), "deceased"))
         if any(p.proband for p in people):
             items.append(entry(arrow(self, s * 1.2, self.ink, "", 2.5), "proband"))
-        legend = VGroup(*items).arrange(RIGHT, buff=0.35)
-        room = self.chart.width
-        if legend.width > room:
-            legend.scale(room / legend.width)
-        legend.move_to(np.array([self.chart.center[0], self.legend_y, 0.0]))
-        self.legend_mob = legend
+        return items
 
     # ----- the analysis and risk cards ---------------------------------------------------------------
 
@@ -569,7 +656,7 @@ class PedigreeScene(NarratedScene):
             strip = VGroup(*chips).arrange_in_grid(cols=3, buff=(0.45, 0.15), cell_alignment=LEFT)
         for v in self.plan.verdicts:
             note = v.reason if (not v.consistent or v.reason != "fits") else "fits the chart"
-            text = f"<b>{v.mode}</b> ({MODE_NAMES[v.mode]}): " + note.replace("&", "&amp;").replace("<", "&lt;")
+            text = f"<b>{v.mode}</b>: " + note.replace("&", "&amp;").replace("<", "&lt;")      # the strip's code; the narration names it
             self.mode_reasons[v.mode] = text_block(self, text, width, size * 0.95, color=self.ink if not v.consistent else self.good)
         tallest = max(m.height for m in self.mode_reasons.values())
         top = VGroup(head, strip).arrange(DOWN, buff=0.2, aligned_edge=LEFT)
@@ -581,11 +668,45 @@ class PedigreeScene(NarratedScene):
             self.mode_rows[v.mode] = VGroup(chip, self.mode_reasons[v.mode])
         return VGroup(top, *self.mode_reasons.values(), concl)
 
+    def _panel_need(self, body: Any) -> float:
+        """9:16: the height the cards that will be shown need (the tallest; they replace each other
+        when both do not fit), measured at the panel's width."""
+        self.panel = Region(body.x0, body.y0, body.x1, body.y1)
+        self.card_mobs = {}
+        heights = [0.0]
+        if "modes" in self.cards_shown:          # the full list, or the strip with one reason at a time when shorter
+            self._build_analysis()
+            full = self.card_mobs["modes"].height
+            compact = self._compact_analysis(self.analysis_head, self.analysis_concl, self._panel_width(), self.small).height
+            heights.append(min(full, compact))
+        if "risk" in self.cards_shown:
+            heights.append(VGroup(*self._risk_lines(self._panel_width())).arrange(DOWN, buff=0.14).height)
+        self.panel = None
+        return max(heights)
+
     def _build_risk(self) -> None:
         inf = self.inference
         risk = inf.risk
-        ped = self.ped
         width = self._panel_width()
+        lines = self._risk_lines(width)
+        card = VGroup(*lines).arrange(DOWN, buff=0.14, aligned_edge=LEFT)
+        self.card_mobs["risk"] = card
+        self.risk_lines = lines
+        child = risk.child
+        label = self.markup(f"<b>{fraction_text(risk.affected)}</b>", size=self.label_size * 1.05, color=self.hi)
+        slot = self.genotype_slot.get(child)
+        slot = (slot if slot is not None else self.xy(child) - np.array([0, self.s * 0.62 + 0.04, 0])) - np.array([0, self._line_h() / 2, 0])
+        if label.width > self.Px * 0.96:
+            label.scale(self.Px * 0.96 / label.width)
+        label.move_to(slot)
+        self.risk_label = label
+        self.risk_shown = False
+
+    def _risk_lines(self, width: float) -> list[Mobject]:
+        """The risk card's lines: the factors, their product and the risk."""
+        inf = self.inference
+        risk = inf.risk
+        ped = self.ped
         size = self.small
         mode = inf.mode
         lab = ped.label
@@ -623,18 +744,7 @@ class PedigreeScene(NarratedScene):
         for m in lines:
             if m.width > width:
                 m.scale(width / m.width)
-        card = VGroup(*lines).arrange(DOWN, buff=0.14, aligned_edge=LEFT)
-        self.card_mobs["risk"] = card
-        self.risk_lines = lines
-        child = risk.child
-        label = self.markup(f"<b>{fraction_text(risk.affected)}</b>", size=self.label_size * 1.05, color=self.hi)
-        slot = self.genotype_slot.get(child)
-        slot = (slot if slot is not None else self.xy(child) - np.array([0, self.s * 0.62 + 0.04, 0])) - np.array([0, self._line_h() / 2, 0])
-        if label.width > self.P * 0.96:
-            label.scale(self.P * 0.96 / label.width)
-        label.move_to(slot)
-        self.risk_label = label
-        self.risk_shown = False
+        return lines
 
     # ----- targets and the reveal -----------------------------------------------------------------
 

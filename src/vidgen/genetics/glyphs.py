@@ -94,10 +94,34 @@ def trait_attr(trait: str, phenotype: str, normal: str | None = None) -> tuple[s
     return "status", "affected", "no" if unaffected else "yes"
 
 
-def class_glyphs(traits: list[str], phenotypes: list[str], normals: list[str | None]) -> list[GlyphSpec]:
+#: The animals a coat is drawn on (anything else: a neutral patch of fur).
+ANIMALS = ("dog", "mouse", "rabbit", "cat", "guinea pig")
+_PRESET_ANIMALS = {"labrador": "dog", "yellow_mouse": "mouse", "rabbit_coat": "rabbit"}
+_ANIMAL_WORDS = {"dog": ("dog", "dogs", "labrador", "labradors", "retriever", "retrievers", "puppy", "puppies"),
+                 "mouse": ("mouse", "mice"), "rabbit": ("rabbit", "rabbits"), "cat": ("cat", "cats", "kitten", "kittens"),
+                 "guinea pig": ("guinea pig", "guinea pigs")}
+
+
+def animal_of(choice: str | None, preset: str | None, texts: list[str]) -> str:
+    """The animal a coat is drawn on: ``choice`` when one of ``ANIMALS`` (``none``: the neutral
+    patch), else the preset's (labrador → dog), else the first animal named in ``texts`` (title,
+    traits), else ``""`` — a neutral patch of fur rather than a guess."""
+    if choice and choice != "auto":
+        return "" if choice == "none" else choice
+    if preset in _PRESET_ANIMALS:
+        return _PRESET_ANIMALS[preset]
+    low = " ".join(texts).lower()
+    for animal, words in _ANIMAL_WORDS.items():
+        if any(re.search(rf"\b{re.escape(w)}\b", low) for w in words):
+            return animal
+    return ""
+
+
+def class_glyphs(traits: list[str], phenotypes: list[str], normals: list[str | None], animal: str = "") -> list[GlyphSpec]:
     """The pictures of one phenotype class (its phenotype per trait): attributes of one subject
     go into one picture (a pea round and yellow; a fly grey with vestigial wings; an eye colour
-    joins a fly when there is one), in the order the subjects first appear."""
+    joins a fly when there is one), in the order the subjects first appear; a coat is drawn on
+    ``animal`` (``animal_of``)."""
     found: dict[str, dict[str, str]] = {}
     for trait, shown, normal in zip(traits, phenotypes, normals):
         attr = trait_attr(trait, shown, normal)
@@ -117,8 +141,10 @@ def class_glyphs(traits: list[str], phenotypes: list[str], normals: list[str | N
                 attrs[f"{key}_hex"] = COLOURS[attrs[key]]
         if attrs.get("colour") in _LIGHT:
             attrs["light"] = "yes"
+        if subject == "coat" and animal:
+            attrs["animal"] = animal
         out.append(GlyphSpec(subject, attrs))
     return out
 
 
-__all__ = ["COLOURS", "GlyphSpec", "class_glyphs", "colour_of", "trait_attr"]
+__all__ = ["ANIMALS", "COLOURS", "GlyphSpec", "animal_of", "class_glyphs", "colour_of", "trait_attr"]

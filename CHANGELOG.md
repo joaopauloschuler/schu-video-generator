@@ -5,9 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–220)
+## Unreleased (Steps 193–221)
 
 ### Genetics (Phase V, from Step 213)
+
+- **Review of Phase V** (Step 221). A scientific-accuracy pass over the presets, reference
+  sequences, HGVS, CRISPR, the lab methods, population genetics, GWAS and the lint rules found no
+  wrong data (CFTR's legacy numbering, c. + 132, is now documented). Pedigrees use the frame better
+  (the chart spreads sideways, a legend column beside it in 16:9, numbers beside the symbols, the
+  9:16 chart sized to the cards it shows), place the proband's P where it belongs to no other label,
+  and state an exclusion exactly ("— excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)").
+  Normal chromosomes in a 16:9 `karyotype` lie across the frame; `mutation` with few codons puts its
+  card beside larger rows; gel labels no longer overlap lanes or ladder bands; a coat colour is
+  drawn on a dog for Labradors (`cross` param `animal`, a neutral fur patch when no animal is
+  named); `crispr` fits a 9:16 frame. Fixed for every scene: a multi-line text in a font with
+  ligatures (the light_academic headings' "fi") no longer moves letters onto the next line.
 
 - **Example, guide topic and cookbook** (Step 220). `examples/cystic-fibrosis`: "Cystic fibrosis:
   from a family to a diagnosis" (about 4 min with Kokoro narration, a 9:16 variant) — a pedigree

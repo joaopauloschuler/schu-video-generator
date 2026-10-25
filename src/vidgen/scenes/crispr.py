@@ -161,7 +161,13 @@ class CrisprScene(NarratedScene):
             a = max(0, min(lo - (fit - (hi - lo)) // 2, n - fit))
             b = min(n, a + fit)
         self.view = (a, b)
-        self.u = u = max(u_min, min(body.width / ((b - a) + pad), 0.5))
+        # the protospacer and PAM always fit the frame (9:16: the tiles may then be a little below
+        # the readable letter size rather than run off the edges)
+        u = min(body.width / ((b - a) + pad), max(u_min, 0.5))
+        if u < u_min:              # too narrow: the tiles and their 5′ / 3′ ends inside the safe area
+            ends = self.markup("5′", size=self.tiny).width + 0.1
+            u = (body.width - 2 * ends) / ((b - a) + 0.9)
+        self.u = u
         self.letters = Letters(self, u * 0.6, self.small)
         self.lab_h = self.markup("5′", size=self.small).height
         dna_h = max(u * 9.5, body.height * (0.52 if not self.is_portrait else 0.4))

@@ -69,8 +69,9 @@ def test_textbook_pedigrees_fit_their_modes_and_others_are_excluded_with_reasons
     assert fits(AR) == {"AD": False, "AR": True, "XD": False, "XR": False, "YL": False, "MT": False}
     r = reasons(AR)
     assert r["AD"] == ("II-2 is affected but neither parent (I-1, I-2) is: a dominant trait does not skip a generation "
-                       "(fits with reduced penetrance)")
-    assert "affected daughter II-2 needs an Xᵃ from her father I-1, who is unaffected" in r["XR"]
+                       "— excluded unless I-1 or I-2 is non-penetrant (heterozygous)")
+    assert r["XR"] == ("affected daughter II-2 needs an Xᵃ from her unaffected father I-1 — excluded unless I-1 is "
+                       "non-penetrant (Xᵃ Y; very unusual)")
     assert "females have no Y" in r["YL"] and "mtDNA comes from the mother" in r["MT"]
     assert fits(AD) == {"AD": True, "AR": False, "XD": False, "XR": False, "YL": False, "MT": False}
     r = reasons(AD)
@@ -95,9 +96,9 @@ def test_rare_allele_assumption_and_carrier_frequency() -> None:
 def test_reduced_penetrance_lets_a_dominant_trait_skip_a_generation() -> None:
     skip = ["I-1: male affected", "I-2: female", "II-1: female of I-1 + I-2", "II-2: male", "III-1: male affected of II-2 + II-1"]
     r = reasons(skip)
-    assert r["AD"].endswith("a dominant trait does not skip a generation (fits with reduced penetrance)")
+    assert r["AD"].endswith("a dominant trait does not skip a generation — excluded unless II-1 is non-penetrant (heterozygous)")
     v = {x.mode: x for x in analyse(ped(skip), Options(penetrance=Fraction(4, 5)))}
-    assert v["AD"].consistent and v["AD"].reduced_penetrance and v["AD"].reason == "fits with reduced penetrance: II-1 is a non-penetrant carrier"
+    assert v["AD"].consistent and v["AD"].reduced_penetrance and v["AD"].reason == "fits with reduced penetrance: II-1 is non-penetrant (heterozygous)"
     inf = infer(ped(skip), "AD", Options(penetrance=Fraction(4, 5)))
     assert inf is not None and inf.forced["II-1"] == ("", 1)
 
@@ -268,7 +269,8 @@ def test_pedigree_scenes_render(size: tuple[int, int], make_project, media: Path
         {"id": "auto", "type": "pedigree", "params": {"title": "XR", "individuals": XR + ["III-3: male", "IV-1: unknown proposed of III-3 + III-2"],
                                                        "analyse": True, "genotypes": True, "preset": "hemophilia_a"},
          "beats": [{"text": "grandparents"}, {"text": "children"}, {"text": "grandchildren"}, {"text": "the analysis and the risk"}]},
-        {"id": "words", "type": "pedigree", "params": {"individuals": AR, "carrier_frequency": "1/25"},
+        {"id": "words", "type": "pedigree", "params": {"individuals": [x.replace("affected of", "affected proband of") for x in AR],
+                                                        "carrier_frequency": "1/25"},
          "beats": [{"text": "a daughter is affected", "actions": [{"reveal": "generation:II", "at": "@daughter"}]},
                    {"text": "two thirds and the risk", "actions": [{"deduce": "genotypes"}, {"analyse": "modes", "at": "@risk"},
                                                                   {"risk": "risk", "at": "@risk"}]}]},
@@ -279,3 +281,16 @@ def test_pedigree_scenes_render(size: tuple[int, int], make_project, media: Path
     assert auto.is_shown("genotypes") and auto.is_shown("risk")
     words = render(project, "words", media, size)
     assert words.manual and words.risk_shown and words.deduced and words.is_shown("person:II-2") and words.is_shown("child")
+    # Step 221: the chart uses the frame (pitch spread up to 1.3 when the height binds; 16:9 the
+    # legend beside it when that is larger), the proband's P touches no one else's label
+    assert words.P <= words.Px <= words.P * 1.3 + 1e-9
+    assert not words.numbers_above
+    letter = words.arrows["II-2"][1]
+    others = [*words.romans, *words.genotype_mobs.values(), words.risk_label]
+    others += [m for pid, mob in words.person_mobs.items() for m in mob if pid != "II-2"]
+
+    def apart(a: Any, b: Any) -> bool:
+        return (a.get_right()[0] <= b.get_left()[0] or b.get_right()[0] <= a.get_left()[0]
+                or a.get_top()[1] <= b.get_bottom()[1] or b.get_top()[1] <= a.get_bottom()[1])
+
+    assert all(apart(letter, m) for m in others)

@@ -161,8 +161,13 @@ class MutationScene(NarratedScene):
             self.strip_area = Region(body.x0, body.y1 - strip_h, body.x1, body.y1)
             body = Region(body.x0, body.y0, body.x1, self.strip_area.y0 - 0.25)
         self._geometry(body)
-        self.seq_area = Region(body.x0, body.y1 - self.seq_h, body.x1, body.y1)
-        self.card_area = Region(body.x0, body.y0, body.x1, self.seq_area.y0 - 0.3)
+        if self.side:              # few codons in 16:9: the rows on the left, as large as the height allows, the card beside them
+            top = body.y1 - max(0.0, body.height - self.seq_h) * 0.4
+            self.seq_area = Region(body.x0, top - self.seq_h, self.side_x, top)
+            self.card_area = Region(self.side_x + 0.6, body.y0, body.x1, top)
+        else:
+            self.seq_area = Region(body.x0, body.y1 - self.seq_h, body.x1, body.y1)
+            self.card_area = Region(body.x0, body.y0, body.x1, self.seq_area.y0 - 0.3)
         self._place_rows()
         self.current = -1            # the variant shown
         self.made: set[int] = set()
@@ -213,6 +218,25 @@ class MutationScene(NarratedScene):
             self.u = u = max(h_min / 0.62, (self.row_h - lab_h - 0.1 - num_h) / row_u)
             self.letters = Letters(self, u * 0.6, self.small)
             self.n_slots = n = max(3, min(n, int(body.width / ((3 + GAP) * u))))
+        self.side = False
+        self.side_x = body.x1
+        if not self.is_portrait:
+            # few codons leave most of the width empty: the card beside the rows lets them use the height
+            card_w = max(3.8, body.width * 0.37)
+            rows_w = body.width - card_w - 0.6
+            u_side_h = (body.height - 2 * (lab_h + 0.1 + num_h) - 0.3) / (2 * row_u)
+            u_side = min(rows_w / (n * (3 + GAP) - GAP), u_side_h, 0.62)
+            if u_side > self.u * 1.15:
+                self.side = True
+                self.u = u = u_side
+                self.letters = Letters(self, u * 0.6, self.small)
+                self.chip_scale = max(floor, min(1.0, u * 0.78 * 0.62 / ref.height))
+                self.row_h = lab_h + 0.1 + row_u * u + num_h
+                self.seq_h = 2 * self.row_h + 0.3
+                width = n * (3 + GAP) * u - GAP * u
+                self.side_x = body.x0 + max(width, rows_w * 0.8)
+                self.x0 = body.x0 + (self.side_x - body.x0 - width) / 2
+                return
         width = n * (3 + GAP) * u - GAP * u
         self.x0 = body.center[0] - width / 2
 
@@ -594,6 +618,8 @@ class MutationScene(NarratedScene):
         if card.height > area.height:
             card.scale(area.height / card.height)
         y = area.y1 - card.height / 2 if not self.is_portrait else max(area.center[1], area.y1 - card.height / 2 - 0.4)
+        if self.side:              # level with the reference row's label
+            y = area.y1 - card.height / 2
         card.move_to(np.array([area.x0 + card.width / 2, y, 0]))
         return card
 
@@ -605,6 +631,9 @@ class MutationScene(NarratedScene):
         name = f"<i>{esc(self.plan.symbol)}</i> " if self.plan.symbol else ""
         big = size * (1.5 if "big" in extras else 1.15)
         head = self.markup(f"<b>{name}{esc(view.c_text)}</b>", size=big, color=self.ink)
+        if head.width > area.width and big > size * 1.15:          # a narrow column: the notation at the smaller size
+            big = size * 1.15
+            head = self.markup(f"<b>{name}{esc(view.c_text)}</b>", size=big, color=self.ink)
         ptext = self.markup(f"<b>{esc(view.p_text)}</b>", size=big, color=self.hi if cons.kind != "synonymous" else self.ink)
         kind = cons.label
         tag_color = self.bad if cons.kind in ("nonsense", "frameshift", "start_loss", "splice_donor", "splice_acceptor") else self.hi
@@ -614,8 +643,8 @@ class MutationScene(NarratedScene):
             left_parts.append(self.markup(esc(cons.rna), size=size, color=self.ink))
         left = VGroup(*left_parts).arrange(DOWN, buff=0.12, aligned_edge=LEFT)
         # the notes (and the legacy name) stand beside the notation, so the card stays shallow
-        texts = ([f"legacy name: {esc(view.legacy)}"] if view.legacy and "legacy" in extras else []) + [esc(n) for n in notes]
-        if self.is_portrait:
+        texts = ([f"legacy: {esc(view.legacy)}"] if view.legacy and "legacy" in extras else []) + [esc(n) for n in notes]
+        if self.is_portrait or self.side:
             width = area.width
             right = VGroup(*[text_block(self, t, width, size * 0.92, color=self.ink) for t in texts]).arrange(DOWN, buff=0.1, aligned_edge=LEFT)
             if texts:

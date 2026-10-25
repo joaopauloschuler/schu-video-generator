@@ -20470,3 +20470,124 @@ How to test
   lint` 16:9 0 findings (3 ignored), `--variant short` 2 warnings. Render 1920×1080, 30 fps, 251.83 s
   video and audio, −16.1 LUFS, true peak −1.8 dBTP, LRA 3.1 LU: scratchpad `s220/cystic_fibrosis.mp4`,
   contact sheet `s220/contact_16x9.png`, 9:16 beat stills `s220/sheet_9x16.png`.
+
+## Step 221 — Review of Phase V
+
+Review of Steps 213–220 with fixes (DESIGN §96.20), like the earlier phase reviews.
+
+Scientific-accuracy pass (checked by hand; no wrong data found)
+- Reference windows: HBB (NM_000518.5 c.1–150), CFTR (NM_000492.4 c.1516–1680), GJB2
+  (NM_004004.6 c.1–66) translate to the known proteins (CFTR 506 IIFGVSYDEYRYRSVIKACQLEEDISKFAEKDNIVLGEGG…;
+  G542 / G551 / R553 at the right codons); exon spans (CFTR exon 11 c.1393–1584 = 192 bp, exon 12
+  c.1585–1679 = 95 bp, exon 13 from c.1680), CDS lengths 444 / 4443 / 681 nt; HbS / HbC / HbE /
+  codon 39 / IVS-I-1, F508del (CTT across codons 507–508, no 3′ shift possible), G542X, G551D,
+  R553X, 35delG (six Gs at c.30–35, written at the 3′-most).
+- **CFTR legacy numbering (issue 6)**: legacy = c. + 132 (A of the ATG = 133 in the 1989 cDNA
+  numbering): c.1585-1G>A ↔ 1717-1G>A is correct (also c.1624G>T ↔ 1756G>T, c.489+1G>T ↔ 621+1G>T);
+  the old exon numbering called this intron 10 (now intron 11). Documented in
+  `reference_genes.py` and the variant's note; no data change.
+- Presets and their ratios (Mendel, ABO, rabbit C series, Labrador 9:3:4, squash 12:3:1, chicken
+  13:3, shepherd's purse 15:1, sweet pea 9:7, squash 9:6:1, Cuénot 2:1, Morgan, F8, b–vg 17 %),
+  SpCas9 NGG / 20 nt and SaCas9 NNGRRT / 21–23 nt with the blunt cut 3 bp 5′ of the PAM, Tm
+  formulas, agarose ranges, ddNTPs, HWE (49/1250, df = 1), Wright–Fisher, λ_GC (χ²₁ median
+  0.4549), Haldane / Kosambi, the three-point v–ct–cv data, band landmarks, FTO / MC4R positions,
+  the lint rules' facts (TTTV is Cas12a's, staggered ends Cas12a's, ISCN order): all correct.
+- The references of the example are the owner-verified ones (Riordan et al. Science 1989, PMID
+  2475911; Kerem et al. Science 1989;245(4922):1073–1080, PMID 2570460) — unchanged.
+
+Fixes (the reviewer's issues 1–8)
+1. **Frame use**. `pedigree`: a height-bound chart spreads sideways (`Px` up to 1.3 pitches); in 16:9
+   the legend becomes a column beside the chart when that gives a larger pitch; individual numbers
+   stand beside the symbol's top corner on the side without a mating line (no height over every
+   row; above only when someone has partners on both sides), outside adoption brackets; 9:16 gives
+   the chart what the cards that will be shown leave (`_panel_need`) instead of a fixed 56 %; the
+   proposed child's label sits under the diamond (it overlapped it). The CF family is ~25 % larger
+   in 16:9 and fills the left 60 %. `karyotype`: normal chromosomes (≤ 4 copies, no changes) in 16:9
+   lie across the frame (p left, labels above with a leader through the band, p / q below) — chr 7
+   now spans ~80 % of the width; few vertical ideograms are broader with larger labels; broad
+   capsules have round ends. `mutation`: with few codons in 16:9 the card stands beside the rows,
+   which use the whole height (the example now uses `codons: 5`: tiles 30 % larger, the card keeps
+   its legacy name and notes, which the stacked layout used to drop).
+2. **Pedigree wording**: an excluded mode that reduced penetrance would allow now ends with the exact
+   condition: "XR: affected daughter II-1 needs an Xᵃ from her unaffected father I-1 — excluded
+   unless I-1 is non-penetrant (Xᵃ Y; very unusual)"; AD: "— excluded unless I-1 or I-2 is
+   non-penetrant (heterozygous)"; the same form for a fitting mode under `penetrance` ("II-1 is
+   non-penetrant (heterozygous)"; it used to call a hemizygous male a "carrier"); same text in the
+   full and the compact (9:16) card. The proband / consultand arrow points at the symbol's lower
+   half (clear of the labels under it) and the P goes to the first spot round the arrow's tail that
+   touches no other mark or label (`pedigree_draw.letter_spots`); a render test checks it.
+3. **Gel**: poles (or − / + when narrow) and ladder sizes outside the plate on the left; the lanes
+   inside the plate (they were shifted half a lane right, the last one on the edge); lane names
+   alternate heights instead of shrinking; one reading per size in a right margin with a dashed line
+   across the plate, stepped apart when close; "≈" for a size outside the resolving range (a 150-bp
+   band on 1.5 % reads ≈122 bp) and the caveats first on the card.
+4. **Coat glyphs**: `cross` param `animal` (auto | dog | mouse | rabbit | cat | guinea pig | none);
+   auto takes the preset's (labrador → dog, yellow_mouse → mouse, rabbit_coat → rabbit) or an animal
+   named in the title or traits, else a neutral patch of fur. New dog head (drooping ears, muzzle).
+5. **"fi" wrap** (cause: Manim's `Paragraph` splits the glyphs into lines by counting characters;
+   Source Serif 4 draws "fi" as one glyph, so "fibrosis in" took the next line's first letter):
+   `layout._paragraph` rebuilds a multi-line paragraph with `disable_ligatures=True` when its glyph
+   count differs from its letter count (kept as built if Manim refuses). Inter only ligates "->" and
+   "=>" (checked over all bundled fonts); one-line text and text without ligatures are built exactly
+   as before — the Phase Q baseline is 31/31 identical.
+6. CFTR legacy name: confirmed (above).
+7. **9:16 lint of the example**: the pedigree label warning is gone (wider pitch), the variant card
+   is within 40 words ("legacy: ΔF508", "3 nt lost: a multiple of 3", "codon 507 ATC → ATT: still
+   Ile"); the family card within 40 words (the compact reason starts with the code only).
+8. Others: `crispr` in 9:16 ran off both frame edges when the protospacer + PAM did not fit at the
+   readable tile size (gallery entry: 2 off_frame errors + a text overlap): the tiles now shrink to
+   fit with their 5′ / 3′ ends (min_font warnings instead). Gallery regenerated: `pedigree`,
+   `crispr` (9:16), `cross` page (param table); 12.1 MB of 13 MB, every GIF ≤ 149 kB.
+
+Files touched
+- `src/vidgen/scenes/{pedigree,pedigree_draw,karyotype,karyotype_draw,mutation,dna_lab,cross,cross_draw,crispr}.py`,
+  `src/vidgen/genetics/{pedigree_analysis,glyphs,punnett,hgvs,reference_genes}.py`, `src/vidgen/layout.py`,
+  `src/vidgen/lint/genetics_rule.py` (message wording); `examples/cystic-fibrosis/video.yaml` (`codons: 5`);
+  `docs/CONFIG.md` (pedigree reasons, `animal`, lint example output), `docs/COOKBOOK-GENETICS.md`,
+  guide + `AGENTS.md` (`animal`), `docs/gallery/{cross.md,media/pedigree-*,media/crispr-9x16.*}`,
+  `DESIGN.md` §96.8 and §96.20, `CHANGELOG.md`, `tasklist.md`; tests `test_pedigree.py` (wording,
+  P placement and pitch in the render test), `test_cross.py` (animals), `test_layout.py` (ligature
+  line split), `test_molecular.py` (card beside few codons, gel labels outside the plate),
+  `test_chromosomes.py` (chromosome 7 lying across 16:9).
+
+Public interfaces: `cross` param `animal`; `genetics.glyphs.animal_of`, `ANIMALS`;
+`class_glyphs(..., animal="")`; `pedigree_draw.letter_spots`. No `vidgen.api` change, no config key.
+
+Compatibility
+- Phase Q baseline re-run after the last shared change: 31 frames, max difference 0.
+- Phase U scenes: unchanged code; `fit_text` changes only multi-line text with ligatures (none in
+  Phase U's Inter text, which ligates only "->" / "=>").
+- Deliberately changed renders: every `pedigree` (layout), `karyotype` ideograms (16:9 normal
+  chromosomes horizontal; few columns broader), `mutation` with few codons in 16:9, `dna_lab` gel,
+  `cross` coat glyphs, `crispr` in narrow frames; light_academic / warm_editorial multi-line titles
+  with "fi" / "fl" (fixed).
+
+Lint
+- `vidgen lint` of the example (scratch copy with its Kokoro audio): 16:9 and 9:16 no layout
+  findings; 5 `readback` warnings remain from the Step 220 transcripts (Whisper normalises the
+  spoken notation: "fifteen twenty-one" → "one thousand five hundred…", "exon" → "exxon"; known
+  gap, audio unchanged).
+- Gallery: 16:9 2 errors / 17 warnings, 9:16 3 errors / 21 warnings — all in Phase U scenes
+  (synthase min_font, krebs overlap) or pre-existing warnings (max_words of full cards, cross /
+  crispr min_font, dead_air); the 9:16 crispr errors are fixed; pedigree and gel have none.
+- Config-only science + genetics sweep (`s219/lint_all.py`, 255 scenes incl. the demo): the same
+  single real finding as in Steps 219–220 plus the demo's planted ones.
+
+Known gaps
+- The `cross` 2×2 square in 16:9 is height-bound (parent card over the columns) and stays modest;
+  9:16 pedigrees with long analysis reasons are still small (the reason card takes the room);
+  reduced-penetrance notes cover single-locus charts only; the gel's migration model compresses
+  sizes outside the resolving range (readings marked ≈); readback warnings of the example (above).
+
+How to test
+- `tests/test_pedigree.py` (22, renders ~2.5 min), `test_cross.py` + `test_population.py` (47),
+  `test_molecular.py` (22), `test_chromosomes.py` (40), `test_layout.py` + `test_regions.py`
+  (93 incl. render), `test_genetics_model` + `test_genetics_lint` + `test_cystic_fibrosis` (172),
+  `test_docs` + `test_guide` + `test_gallery` (161), `test_actions` + `test_actions_coverage` +
+  `test_builtin_scenes` + `test_translation` + `test_registry` + `test_extensions` (317 not render;
+  47 render `-k` genetics types), `test_lint` + `test_accuracy` + `test_narration_rule` +
+  `test_introspect` + `test_schema` + `test_api` + `test_fonts` + `test_regions` + `test_terms`
+  (230), `tests/test_mcp.py` in full (20).
+- Video: scratchpad `s221/cystic_fibrosis.mp4` (16:9, 4:12, −16.0 LUFS, Kokoro audio of Step 220),
+  contact sheet `s221/contact_16x9.png`; checks project `s221/lab` (gel, gel2, Labradors, mice,
+  coat, cf family, first cousins, crispr) — storyboards under `s221/lab/build/`.

@@ -187,7 +187,7 @@ def genetics_issues(project: Project, scene_id: str, rules: LintRules) -> list[S
             fits = list(plan.fitting)
             fix = (f"fix the chart (affected, carrier, parents) or state a mode that fits ({', '.join(f'{m}, {MODES[m].name}' for m in fits)})"
                    if fits else "no mode tried fits the chart as drawn: fix the chart (affected, carrier, parents), or give penetrance: "
-                                "when the reason says it fits with reduced penetrance")
+                                "when the reason says it is excluded unless someone is non-penetrant")
             out.append(ScienceIssue("genetics_pedigree", first, f"the chart does not fit the stated mode {plan.declared} "
                                                                  f"({MODES[plan.declared].name}): {problem.split(': ', 1)[-1]}; {fix}", "error"))
     if "genetics_karyotype" in on and scene_kt is not None:

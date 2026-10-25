@@ -12,7 +12,9 @@ against the protein. No manim.
   (c.1393–1584), 12 (c.1585–1679) and 13 (c.1680–1766). F508del c.1521_1523del p.(Phe508del)
   (legacy ΔF508; the CTT removed spans codons 507 and 508, ATC TTT → ATT: Ile507 stays), G542X
   c.1624G>T p.(Gly542*), G551D c.1652G>A p.(Gly551Asp), R553X c.1657C>T p.(Arg553*), 1717-1G>A
-  c.1585-1G>A (acceptor of intron 11).
+  c.1585-1G>A (acceptor of intron 11; legacy CFTR numbering counts from the first base of the mRNA
+  with the A of the ATG at 133, so legacy = c. + 132 — 1585 + 132 = 1717, and G542X is 1756G>T —
+  and the old exon numbering called this intron 10; checked in Step 221).
 - **GJB2** (connexin 26, NM_004004.6; 226 residues, CDS 681 nt, all in exon 2): c.1–66. The
   common deafness allele c.35del p.(Gly12Valfs*2) (legacy 35delG; one G of the six at c.30–35,
   written at the 3′-most)."""
@@ -73,7 +75,8 @@ REFERENCE_GENES: dict[str, ReferenceGene] = {
          KnownVariant("c.1624G>T", "p.(Gly542*)", "G542X"),
          KnownVariant("c.1652G>A", "p.(Gly551Asp)", "G551D", "a gating variant"),
          KnownVariant("c.1657C>T", "p.(Arg553*)", "R553X"),
-         KnownVariant("c.1585-1G>A", "p.?", "1717-1G>A"))),
+         KnownVariant("c.1585-1G>A", "p.?", "1717-1G>A", "legacy numbers count from the mRNA's first base (c. + 132); "
+                      "intron 10 in the old exon numbering"))),
     "GJB2": ReferenceGene(
         "GJB2", "connexin 26", "NM_004004.6", _GJB2, 1, ((1, 681),), 2, 681,
         "MDWGTLQTILGGVNKHSTSIGK",

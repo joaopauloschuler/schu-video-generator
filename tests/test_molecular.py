@@ -370,6 +370,8 @@ def test_molecular_scenes_render(size: tuple[int, int], make_project, media: Pat
     scenes = [
         {"id": "mut", "type": "mutation", "params": {"title": "HbS", "gene": "HBB", "variant": {"c": "c.20A>T", "p": "p.(Glu7Val)"}},
          "beats": [{"text": "the coding sequence"}, {"text": "one base changes", "actions": [{"mutate": "variant"}]}]},
+        {"id": "few", "type": "mutation", "params": {"gene": "CFTR", "variant": "c.1521_1523del", "codons": 3},
+         "beats": [{"text": "three codons"}, {"text": "three bases go", "actions": [{"mutate": "variant"}]}]},
         {"id": "splice", "type": "mutation", "params": {"gene": "CFTR", "variant": "c.1585-1G>A"},
          "beats": [{"text": "the acceptor site"}, {"text": "the exon is skipped"}]},
         {"id": "edit", "type": "crispr", "params": {"title": "Cas9", "target": TARGET, "repair": "nhej"},
@@ -389,6 +391,10 @@ def test_molecular_scenes_render(size: tuple[int, int], make_project, media: Pat
     mut = render(project, "mut", media, size)
     assert 0 in mut.made and mut.var_row is not None and mut.card is not None
     assert mut.plan.variants[0].p_text == "p.(Glu7Val)"
+    few = render(project, "few", media, size)       # Step 221: few codons in 16:9 — the card beside larger rows
+    assert few.side == (size[0] > size[1]) and few.card is not None
+    if few.side:
+        assert few.card.get_left()[0] >= max(t.get_right()[0] for t in few.ref_row.tiles.values())
     splice = render(project, "splice", media, size)
     assert splice.mrna is not None and splice.plan.variants[0].consequence.skipped_exon == 1
     edit = render(project, "edit", media, size)
@@ -397,6 +403,9 @@ def test_molecular_scenes_render(size: tuple[int, int], make_project, media: Pat
     assert {"setup", "cycle", "count"} <= pcr.done
     gel = render(project, "gel", media, size)
     assert {"setup", "run", "read"} <= gel.done and len(gel.gel_bands) == 3
+    # Step 221: the ladder's sizes stand outside the plate, left of it; the lanes inside it
+    assert all(t.get_right()[0] <= gel.gel_x0 for t in gel.ladder_labels)
+    assert gel.gel_x0 < min(gel.lane_x) and max(gel.lane_x) < gel.gel_x0 + gel.gel_w
     sanger = render(project, "sanger", media, size)
     assert {"setup", "separate", "trace"} <= sanger.done and len(sanger.peak_groups) == 18
     ngs = render(project, "ngs", media, size)

@@ -367,40 +367,53 @@ class DnaLabScene(NarratedScene):
         size = self.tiny
         n = len(g.lanes)
         lab_h = self.markup("ladder", size=size).height
-        pole_h = self.markup("− cathode", size=size).height
-        top = area.y1 - lab_h - 0.12
-        bottom = area.y0 + pole_h + 0.3
-        plate_w = min(area.width - 2.6, n * 1.5)
-        x0 = area.center[0] - plate_w / 2 + 0.5
+        # margins outside the plate: the poles and their arrow, then the ladder's sizes (left); the
+        # sizes read off the ladder (right) — no label stands over a lane
+        num_w = max(self.markup(f"{s:g}", size=size).width for s in g.lanes[0].sizes)
+        read_w = max((self.markup(f"≈{lab.size_from_distance(lab.migration(s, g.agarose), g.ladder, g.agarose):.0f} bp", size=size).width
+                      for lane in g.lanes[1:] for s in lane.sizes), default=0.0)
+        words = (self.markup("− cathode", size=size, color=self.dim_ink), self.markup("+ anode", size=size, color=self.dim_ink))
+        signs = (self.markup("<b>−</b>", size=size * 1.2, color=self.dim_ink), self.markup("<b>+</b>", size=size * 1.2, color=self.dim_ink))
+        right_w = read_w + 0.3 if read_w else 0.2
+        poles = words
+        left_w = max(m.width for m in poles) + 0.2 + num_w + 0.2
+        if area.width - left_w - right_w < n * 0.95:          # narrow: the signs only (the card names the poles)
+            poles = signs
+            left_w = max(m.width for m in poles) + 0.35 + num_w + 0.2
+        plate_w = max(1.0, min(area.width - left_w - right_w, n * 1.5))
+        pitch = plate_w / n
+        names = [self.markup(lane.label, size=size, color=self.ink if not lane.ladder else self.dim_ink) for lane in g.lanes]
+        stagger = any(t.width > pitch * 0.95 for t in names)      # alternate heights rather than shrink below the readable size
+        top = area.y1 - lab_h * (2.3 if stagger else 1.0) - 0.12
+        bottom = area.y0 + 0.15
+        block = left_w + plate_w + right_w
+        x0 = area.center[0] - block / 2 + left_w
         self.gel_x0, self.gel_w = x0, plate_w
         self.gel_top, self.gel_bottom = top - 0.12, bottom
         plate = Rectangle(width=plate_w, height=self.gel_top - bottom)
-        plate.move_to(np.array([area.center[0], (self.gel_top + bottom) / 2, 0]))
+        plate.move_to(np.array([x0 + plate_w / 2, (self.gel_top + bottom) / 2, 0]))
         plate.set_fill(self.dim_ink, opacity=0.1).set_stroke(self.dim_ink, width=2)
-        self.lane_x = [x0 + plate_w * (k + 0.5) / n for k in range(n)]
-        lane_w = plate_w / n * 0.62
+        self.lane_x = [x0 + pitch * (k + 0.5) for k in range(n)]
+        lane_w = pitch * 0.62
         self.lane_w = lane_w
         wells = VGroup()
         labels = VGroup()
-        for k, lane in enumerate(g.lanes):
+        for k, (lane, t) in enumerate(zip(g.lanes, names)):
             well = Rectangle(width=lane_w, height=0.1).move_to(np.array([self.lane_x[k], self.gel_top - 0.07, 0]))
             well.set_fill(self.bg_color(), opacity=1).set_stroke(self.dim_ink, width=1.5)
             wells.add(well)
-            t = self.markup(lane.label, size=size, color=self.ink if not lane.ladder else self.dim_ink)
-            if t.width > plate_w / n * 0.95:
-                t.scale(plate_w / n * 0.95 / t.width)
-            t.move_to(np.array([self.lane_x[k], top + t.height / 2, 0]))
+            room = pitch * (1.9 if stagger else 0.95)
+            if t.width > room:
+                t.scale(room / t.width)
+            lift = lab_h * 1.3 if stagger and k % 2 else 0.0
+            t.move_to(np.array([self.lane_x[k], top + lift + t.height / 2, 0]))
             labels.add(t)
-        minus = self.markup("− cathode", size=size, color=self.dim_ink)
-        plus = self.markup("+ anode", size=size, color=self.dim_ink)
-        minus.move_to(np.array([x0 - 0.1 - minus.width / 2, self.gel_top - 0.1, 0])) if x0 - minus.width - 0.2 > area.x0 else \
-            minus.move_to(np.array([area.center[0], self.gel_top + 0.0, 0]))
-        minus.move_to(np.array([max(area.x0 + minus.width / 2, x0 - 0.15 - minus.width / 2), self.gel_top - 0.12, 0]))
-        plus.move_to(np.array([max(area.x0 + plus.width / 2, x0 - 0.15 - plus.width / 2), bottom + 0.05 + plus.height / 2, 0]))
-        arrow = Arrow(np.array([x0 - 0.3, self.gel_top - 0.3, 0]), np.array([x0 - 0.3, bottom + 0.3, 0]), buff=0,
+        minus, plus = poles
+        pole_x = x0 - num_w - 0.4 - max(minus.width, plus.width) / 2
+        minus.move_to(np.array([pole_x, self.gel_top - minus.height / 2, 0]))
+        plus.move_to(np.array([pole_x, bottom + plus.height / 2, 0]))
+        arrow = Arrow(np.array([pole_x, minus.get_bottom()[1] - 0.12, 0]), np.array([pole_x, plus.get_top()[1] + 0.12, 0]), buff=0,
                       stroke_width=3, max_tip_length_to_length_ratio=0.08).set_color(self.dim_ink)
-        if x0 - 0.45 < area.x0:
-            arrow = VGroup()
         self.gel_plate = VGroup(plate, wells, labels, minus, plus, arrow)
         self.gel_bands: dict[int, list[tuple[Mobject, float]]] = {}
         for k, lane in enumerate(g.lanes):
@@ -413,17 +426,15 @@ class DnaLabScene(NarratedScene):
                 band.set_fill(color, opacity=0.95 if not lane.ladder else 0.7).set_stroke(width=0)
                 items.append((band, s))
             self.gel_bands[k] = items
-        self.ladder_labels = VGroup()
+        self.ladder_labels = VGroup()           # outside the plate, right-aligned against it, level with their bands
         last_y = None
         for band, s in self.gel_bands[0]:
             y = band.get_center()[1]
-            t = self.markup(f"{s:g}", size=self.tiny, color=self.dim_ink)
-            if last_y is not None and abs(y - last_y) < t.height * 1.1:
+            t = self.markup(f"{s:g}", size=size, color=self.dim_ink)
+            if last_y is not None and abs(y - last_y) < t.height * 1.15:
                 continue                      # the ladder's close bands are not all labelled
             last_y = y
-            t.next_to(band, LEFT, buff=0.06)
-            if t.get_left()[0] < area.x0:
-                t.next_to(band, RIGHT, buff=0.06)
+            t.move_to(np.array([x0 - 0.12 - t.width / 2, y, 0]))
             self.ladder_labels.add(t)
         self.gel_group = VGroup(self.gel_plate, self.ladder_labels, *[b for items in self.gel_bands.values() for b, _ in items])
 
@@ -714,23 +725,28 @@ class DnaLabScene(NarratedScene):
         g = self.plan.gel
         marks: list[Mobject] = []
         lines: list[str] = []
-        led: set[float] = set()          # one leader line per size (the leftmost lane that has it)
-        for k, lane in enumerate(g.lanes):
-            if lane.ladder:
-                continue
-            for band, s in self.gel_bands[k]:
-                read = lab.size_from_distance(lab.migration(s, g.agarose), g.ladder, g.agarose)
-                t = self.markup(f"{read:.0f} bp", size=self.tiny, color=self.hi)
-                t.next_to(band, RIGHT, buff=0.08)
-                if t.get_right()[0] > self.main_area.x1:
-                    t.next_to(band, LEFT, buff=0.08)
-                marks.append(t)
-                if s not in led:
-                    led.add(s)
-                    line = DashedLine(np.array([self.lane_x[0], band.get_center()[1], 0]), band.get_left(), dash_length=0.06)
-                    marks.append(line.set_stroke(self.hi, width=1.5))
+        # one reading per size: a dashed line level with the bands, from the ladder across the
+        # plate, and the size read off the ladder in the margin at the plate's right
+        right = self.gel_x0 + self.gel_w
+        used: list[float] = []
+        for s in sorted({s for lane in g.lanes[1:] for s in lane.sizes}, reverse=True):
+            y = next(band.get_center()[1] for k in range(1, len(g.lanes)) for band, size in self.gel_bands[k] if size == s)
+            read = lab.size_from_distance(lab.migration(s, g.agarose), g.ladder, g.agarose)
+            lo, hi = lab.resolving_range(g.agarose)
+            t = self.markup(f"{'' if lo <= s <= hi else '≈'}{read:.0f} bp", size=self.tiny, color=self.hi)   # ≈: outside the gel's range
+            ly = y
+            for other in used:                 # close sizes: the label steps down, its line bends to it
+                if abs(ly - other) < t.height * 1.2:
+                    ly = other - t.height * 1.25
+            used.append(ly)
+            t.move_to(np.array([right + 0.22 + t.width / 2, ly, 0]))
+            line = DashedLine(np.array([self.lane_x[0] + self.lane_w / 2, y, 0]), np.array([right, y, 0]), dash_length=0.06)
+            marks += [line.set_stroke(self.hi, width=1.5), t]
+            if abs(ly - y) > 1e-6:
+                marks.append(Line(np.array([right, y, 0]), np.array([right + 0.18, ly, 0])).set_stroke(self.hi, width=1.5))
+        lines += list(g.notes)              # the caveats first: a card short of room drops its last lines
+        for lane in g.lanes[1:]:
             lines.append(f"{lane.label}: " + ", ".join(f"{s:g} bp" for s in lane.sizes))
-        lines += list(g.notes)
         return [Succession(AnimationGroup(*[FadeIn(m) for m in marks]), AnimationGroup(*self._swap(self._card(lines, "Sizes"))))]
 
     # ----- Sanger steps -----------------------------------------------------------------------------

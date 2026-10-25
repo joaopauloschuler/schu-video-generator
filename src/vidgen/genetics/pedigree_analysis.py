@@ -497,7 +497,7 @@ def _rules(ped: Pedigree, mode: str, opts: Options, lab: Callable[[str], str]) -
             if not P[d].phenotyped:
                 continue
             if mode == "XR" and full and aff(d) and sound(fa):
-                out.append((f"affected daughter {lab(d)} needs an Xᵃ from her father {lab(fa)}, who is unaffected", (d, fa)))
+                out.append((f"affected daughter {lab(d)} needs an Xᵃ from her unaffected father {lab(fa)}", (d, fa)))
             if mode == "XR" and rare and aff(d) and mo in mi and sound(mo) and not P[mo].carrier:
                 out.append((f"affected daughter {lab(d)} needs an Xᵃ from her mother {lab(mo)}, who married in (rare allele: "
                             f"not a carrier)", (d, mo)))
@@ -552,10 +552,51 @@ def analyse(ped: Pedigree, opts: Options, modes: Iterable[str] = MODE_ORDER,
             out.append(Verdict(mode, True, note, people, reduced))
         else:
             reason, people = explain(ped, mode, opts, lab)
-            if opts.penetrance == 1 and consistent(ped, mode, Options(Fraction(1, 2), opts.rare, opts.carrier_frequency)):
-                reason += " (fits with reduced penetrance)"
+            if opts.penetrance == 1:
+                reason += _unless_non_penetrant(ped, mode, opts, lab, people)
             out.append(Verdict(mode, False, reason, people))
     return tuple(out)
+
+
+#: What a non-penetrant person would have to be, per mode (and sex for the X-linked modes).
+_SILENT = {"AD": "heterozygous", "AR": "aa", "YL": "carrying the Y allele", "MT": "carrying the mutant mtDNA"}
+#: How plausible that is: reduced penetrance is a known feature of many dominant conditions, not
+#: of recessive ones.
+_SILENT_NOTE = {"AR": "; unusual", "XR": "; very unusual"}
+
+
+def _silent_genotype(mode: str, sex: str) -> str:
+    if mode == "XR":
+        return "Xᵃ Y" if sex == "male" else "Xᵃ Xᵃ"
+    if mode == "XD":
+        return "Xᴬ Y" if sex == "male" else "heterozygous"
+    return _SILENT[mode]
+
+
+def _unless_non_penetrant(ped: Pedigree, mode: str, opts: Options, lab: Callable[[str], str], named: tuple[str, ...]) -> str:
+    """For a mode excluded at full penetrance that reduced penetrance would allow: the exact
+    condition — "excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)" —
+    naming who would have to carry the disease genotype without the condition (everyone forced
+    to, else the unaffected people the reason names who might: "I-1 or I-2"). Empty when it
+    cannot fit."""
+    half = Options(Fraction(1, 2), opts.rare, opts.carrier_frequency)
+    inf = infer(ped, mode, half)
+    if inf is None:
+        return ""
+    P = ped.people
+    unaffected = [pid for pid in P if P[pid].phenotyped and not P[pid].affected and inf.posterior.get(pid)]
+    forced = [pid for pid in unaffected if all(at_risk(mode, s) for s in inf.posterior[pid])]
+    maybe = [pid for pid in unaffected if pid in named and any(at_risk(mode, s) for s in inf.posterior[pid])]
+    note = _SILENT_NOTE.get(mode, "")
+    if forced:
+        who, verb, plural = " and ".join(lab(x) for x in forced), ("is" if len(forced) == 1 else "are"), forced
+    elif 0 < len(maybe) <= 3:
+        who, verb, plural = " or ".join(lab(x) for x in maybe), "is", maybe
+    else:
+        return f" — excluded unless the condition shows reduced penetrance (someone unaffected has the disease genotype{note})"
+    kinds = {_silent_genotype(mode, P[x].sex) for x in plural}
+    what = f" ({kinds.pop()}{note})" if len(kinds) == 1 else (f" ({note[2:]})" if note else "")
+    return f" — excluded unless {who} {verb} non-penetrant{what}"
 
 
 def _fit_note(ped: Pedigree, mode: str, opts: Options, lab: Callable[[str], str], reduced: bool) -> tuple[str, tuple[str, ...]]:
@@ -568,8 +609,10 @@ def _fit_note(ped: Pedigree, mode: str, opts: Options, lab: Callable[[str], str]
         silent = [pid for pid, d in inf.posterior.items() if P[pid].phenotyped and not P[pid].affected and d
                   and all(at_risk(mode, s) for s in d)]
         if silent:
-            return (f"fits with reduced penetrance: {', '.join(lab(x) for x in silent)} "
-                    f"{'is a non-penetrant carrier' if len(silent) == 1 else 'are non-penetrant carriers'}", tuple(silent))
+            kinds = {_silent_genotype(mode, P[x].sex) for x in silent}
+            what = f" ({kinds.pop()})" if len(kinds) == 1 else ""
+            return (f"fits with reduced penetrance: {' and '.join(lab(x) for x in silent)} "
+                    f"{'is' if len(silent) == 1 else 'are'} non-penetrant{what}", tuple(silent))
         return "fits with reduced penetrance", ()
     outside = [pid for pid in ped.married_in if pid in inf.forced and P[pid].phenotyped and not P[pid].affected
                and not P[pid].carrier and inf.forced[pid][1] >= 1]

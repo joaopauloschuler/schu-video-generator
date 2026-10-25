@@ -74,9 +74,11 @@ def carrier_mark(sex: str, s: float, fill: Any, style: str) -> VMobject:
 
 
 def arrow(scene: Any, s: float, ink: Any, letter: str, stroke: float, letter_size: float = 20.0) -> VGroup:
-    """The proband's (with P) or the consultand's arrow, from the lower left to the symbol."""
-    tip = np.array([-s * 0.5, -s * 0.5, 0])
-    tail = tip + np.array([-s * 0.8, -s * 0.38, 0])
+    """The proband's (with P) or the consultand's arrow, from the lower left to the symbol (at the
+    height of the symbol's lower half, so it stays clear of the labels under it). The letter is
+    put at the tail; the scene moves it where it touches no other label (``letter_spots``)."""
+    tip = np.array([-s * 0.52, -s * 0.3, 0])
+    tail = tip + np.array([-s * 0.72, -s * 0.36, 0])
     a = Arrow(tail, tip, buff=0, stroke_width=stroke, max_tip_length_to_length_ratio=0.45, tip_length=s * 0.22).set_color(ink)
     parts: list[Mobject] = [a]
     if letter:
@@ -84,6 +86,13 @@ def arrow(scene: Any, s: float, ink: Any, letter: str, stroke: float, letter_siz
         p.next_to(tail, LEFT, buff=s * 0.04)
         parts.append(p)
     return VGroup(*parts)
+
+
+def letter_spots(tail: np.ndarray, w: float, h: float, gap: float) -> list[np.ndarray]:
+    """Where an arrow's letter (``w`` × ``h``) may stand, best first: left of the tail, under it,
+    under and to the left, over and to the left."""
+    return [tail + np.array([-gap - w / 2, 0, 0]), tail + np.array([0, -gap - h / 2, 0]),
+            tail + np.array([-gap - w / 2, -gap - h / 2, 0]), tail + np.array([-gap - w / 2, gap + h / 2, 0])]
 
 
 def mating_line(a: np.ndarray, b: np.ndarray, ink: Any, stroke: float, double: bool, separated: bool, s: float) -> VGroup:

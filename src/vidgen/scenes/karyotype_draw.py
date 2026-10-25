@@ -57,16 +57,28 @@ class Runs:
                 return self.half
         return self.half
 
+    def _round(self, ys: list[float], y0: float, y1: float) -> list[float]:
+        """``ys`` (``y0`` > ``y1``) with extra samples in the round ends when the chromosome is
+        drawn broad (a large ideogram): its ends stay round instead of faceted. Narrow
+        chromosomes (karyograms) keep their samples."""
+        if self.half < 0.25:
+            return ys
+        extra = []
+        for top, bottom in self.runs:
+            r = min(self.half, (top - bottom) / 2)
+            extra += list(np.linspace(top, top - r, 16)) + list(np.linspace(bottom + r, bottom, 16))
+        return sorted({*ys, *[y for y in extra if y1 - 1e-9 <= y <= y0 + 1e-9]}, reverse=True)
+
     def slice(self, x: float, y0: float, y1: float) -> list[np.ndarray]:
         """The outline of the capsule between heights ``y0`` > ``y1`` (a band)."""
-        ys = list(np.linspace(y0, y1, CAP_STEPS + 2))
+        ys = self._round(list(np.linspace(y0, y1, CAP_STEPS + 2)), y0, y1)
         left = [np.array([x - self.half_width(y), y, 0.0]) for y in ys]
         right = [np.array([x + self.half_width(y), y, 0.0]) for y in reversed(ys)]
         return left + right
 
     def outline(self, x: float, top: float, bottom: float) -> list[np.ndarray]:
         steps = 14
-        ys = list(np.linspace(top, bottom, steps * 3))
+        ys = self._round(list(np.linspace(top, bottom, steps * 3)), top, bottom)
         left = [np.array([x - self.half_width(y), y, 0.0]) for y in ys]
         right = [np.array([x + self.half_width(y), y, 0.0]) for y in reversed(ys)]
         return left + right + [left[0]]

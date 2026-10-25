@@ -23,7 +23,7 @@ from vidgen.errors import VidgenError
 
 from .cross import CrossResult, cross, fertilize, make_tester, ratio, reciprocal
 from .genotype import Gamete, Genotype, _simple, alleles_at, genotype_text, parse_genotype
-from .glyphs import GlyphSpec, class_glyphs
+from .glyphs import GlyphSpec, animal_of, class_glyphs
 from .model import GeneticSystem, as_fraction, build_system
 from .notation import chromosome_markup, chromosome_text, symbol_ascii, symbol_markup, symbol_text
 from .phenotype import Phenotype, is_lethal, phenotypes_of
@@ -474,6 +474,7 @@ def build_plan(data: Mapping[str, Any], where: str = "params") -> CrossPlan:
     uniform = len({c.probability for c in cells}) == 1
     single = all(len(c.phenotypes) == 1 for c in cells if not c.lethal)
     survivors_ratio = result.phenotype_ratio
+    animal = animal_of(data.get("animal"), data.get("preset"), [str(data.get("title") or "")] + [t.name for t in system.traits])
     phenotypes: list[PhenotypeClass] = []
     for k, ((ph, share), n) in enumerate(zip(result.phenotypes.items(), survivors_ratio), start=1):
         where_cells = tuple((c.row, c.col) for c in cells if any(p == ph for p, _ in c.phenotypes))
@@ -481,7 +482,7 @@ def build_plan(data: Mapping[str, Any], where: str = "params") -> CrossPlan:
         traits = [t.name for t in system.traits]
         normals = [system.locus(t.loci[0]).normal if t.epistasis is None else None for t in system.traits]
         phenotypes.append(PhenotypeClass(k, class_label(ph), ph, share, n, where_cells, count,
-                                         tuple(class_glyphs(traits, list(ph.traits), normals))))
+                                         tuple(class_glyphs(traits, list(ph.traits), normals, animal))))
     zygote_ratio = ratio(result.zygotes.values())
     genotypes: list[GenotypeClass] = []
     for k, ((z, share), n) in enumerate(zip(result.zygotes.items(), zygote_ratio), start=1):

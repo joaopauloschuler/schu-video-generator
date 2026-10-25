@@ -292,6 +292,8 @@ def test_chromosome_scenes_render(size: tuple[int, int], make_project, media: Pa
         {"id": "kgram", "type": "karyotype", "params": {"karyotype": "47,XY,+21"}, "beats": [{"text": "trisomy"}, {"text": "reading"}]},
         {"id": "ideo", "type": "karyotype", "params": {"karyotype": "46,XX,t(9;22)(q34;q11.2)", "bands": {"9q34": "ABL1"}},
          "beats": [{"text": "nine and twenty-two", "actions": [{"rearrange": "change:1", "at": 0.5}]}, {"text": "the reading"}]},
+        {"id": "seven", "type": "karyotype", "params": {"karyotype": "46,XY", "chromosomes": [7], "bands": {"7q31.2": "CFTR"}, "notation": False},
+         "beats": [{"text": "the gene", "actions": [{"highlight": "band:7q31.2"}]}]},
     ]
     project = Project.load(make_project(minimal_config(scenes=scenes, narration={"pad": 0.2, "words_per_second": 3.0})))
     three = render(project, "three", media, size)
@@ -303,3 +305,9 @@ def test_chromosome_scenes_render(size: tuple[int, int], make_project, media: Pa
     assert kgram.view == "karyogram" and 0 in kgram.marked and kgram.read_done
     ideo = render(project, "ideo", media, size)
     assert ideo.view == "ideogram" and 0 in ideo.marked and ideo.is_shown("change:1") and ideo.is_shown("band:9q34")
+    # Step 221: normal chromosomes in 16:9 lie across the frame (pter at the left), labelled bands above
+    seven = render(project, "seven", media, size)
+    landscape = size[0] > size[1]
+    assert seven.is_shown("band:7q31.2")
+    seven_7 = seven.slot_groups["7"]
+    assert (seven_7.width > seven_7.height) == landscape

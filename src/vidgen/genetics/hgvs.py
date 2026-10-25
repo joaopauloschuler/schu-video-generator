@@ -818,14 +818,14 @@ def explain(cds: CodingSequence, dna: DnaVariant, edit: Edit | None, splice: str
     if pc.kind in ("nonsense", "frameshift"):
         notes += _nmd_note(cds, pc, dna)
     if pc.kind in ("inframe_del", "inframe_dup", "inframe_ins", "inframe_delins"):
-        notes.append(f"{abs(dna.length_change)} nt {'lost' if dna.length_change < 0 else 'added'}: a multiple of 3, the reading frame "
-                     f"is kept")
+        # the class beside it says "in-frame"; the note says why
+        notes.append(f"{abs(dna.length_change)} nt {'lost' if dna.length_change < 0 else 'added'}: a multiple of 3")
         if edit is not None:
             k = (edit.start - cds.frame_start) // 3
             a0 = cds.frame_start + 3 * k
             before, after = cds.seq[a0:a0 + 3], mseq[a0:a0 + 3]
             if len(after) == 3 and before != after and translate(before) == translate(after) and translate(before) != "*":
-                notes.append(f"codon {cds.codon_number(cds.first + a0)} {before} → {after} still codes {_THREE[translate(before)]}")
+                notes.append(f"codon {cds.codon_number(cds.first + a0)} {before} → {after}: still {_THREE[translate(before)]}")
     if pc.kind == "frameshift":
         notes.append(f"{abs(dna.length_change)} nt {'lost' if dna.length_change < 0 else 'added'}: not a multiple of 3, the reading "
                      f"frame shifts")

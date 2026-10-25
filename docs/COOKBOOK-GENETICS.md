@@ -103,7 +103,8 @@ Read it the way a geneticist does, one beat per step, the action on the word:
 - Cards with full tables exceed `max_words`: reveal them step by step (`reveal: carriers`,
   `count: genotypes`) and let the narration carry the detail.
 - Leave a scene title out when the drawing needs the height (the `mutation` scene's gene strip,
-  two rows and the card), and use `codons: 6`–`8` so the tiles stay large.
+  two rows and the card), and use `codons: 5`–`8` so the tiles stay large (with about 5 or fewer
+  in 16:9 the card stands beside the rows, which then use the whole height).
 - A recap (`process`) at the end: the steps of the story, one stage per beat.
 
 ## 7. References

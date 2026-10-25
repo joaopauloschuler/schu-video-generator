@@ -7139,7 +7139,10 @@ wrinkled, yellow or green; both traits in one pea), a flower (its petal colour),
 or the whole fly (body colour, wings normal or vestigial, eye colour), an animal's coat (black,
 brown, yellow, agouti, chinchilla, himalayan, albino…), a feather, a squash (white, yellow, green;
 disc, sphere, long), a blood drop with its ABO group, a seed capsule (triangular, ovoid), an
-affected / unaffected square, or a colour swatch. `pictures: false` leaves them out.
+affected / unaffected square, or a colour swatch. A coat is drawn on its animal — `animal: dog`
+(the `labrador` preset), `mouse` (`yellow_mouse`), `rabbit` (`rabbit_coat`), `cat`, `guinea pig`, or
+one named in the title or a trait ("Labradors", "mice") — else as a plain patch of fur (`animal:
+none` always). `pictures: false` leaves them out.
 
 ```yaml
 - id: dihybrid
@@ -7197,6 +7200,7 @@ affected / unaffected square, or a colour swatch. `pictures: false` leaves them 
 | `alpha` | `0.05` | the test's significance level (`0.01`, `"5%"`) |
 | `notes` | `true` | the notes under the drawing |
 | `pictures` | `true` | the phenotype pictures |
+| `animal` | `auto` | the animal a coat colour is drawn on: `dog`, `mouse`, `rabbit`, `cat`, `guinea pig`, `none` (a patch of fur); `auto`: the preset's or one the title or traits name, else the patch |
 | `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
 
 **Actions** (timed like any action, `at: "@word"`). Without any of them the scene plays itself:
@@ -7261,9 +7265,11 @@ counselling lessons:
   elimination; no hand-written rules decide). An excluded mode gets the textbook reason with the
   people it names (*XR: father-to-son: affected father II-1 has an affected son III-1, but a son's X
   comes from his mother II-2 (married in, not a carrier)*; *AD: III-2 is affected but neither
-  parent is: a dominant trait does not skip a generation (fits with reduced penetrance)*); a mode
-  that fits only with reduced penetrance names the non-penetrant carriers, one that needs a
-  partner from outside to carry the allele says so.
+  parent is: a dominant trait does not skip a generation — excluded unless II-1 or II-2 is
+  non-penetrant (heterozygous)*; *XR: affected daughter II-1 needs an Xᵃ from her unaffected father
+  I-1 — excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)*); a mode that fits
+  only with reduced penetrance names who is non-penetrant, one that needs a partner from outside
+  to carry the allele says so.
 - **Genotypes** (`deduce`): under each symbol the genotype the chart forces (*Aa*, X*ᴴ*X*ʰ*) or the
   most telling one with its exact probability by Bayes' rule on the whole chart (**2/3** *Aa* for
   an unaffected sibling of an affected child under AR; lowered by unaffected children where they
@@ -11536,7 +11542,7 @@ hemo:
   warning genetics_ratio    hemo_b1 @ 0.0s: "Half the daughters have hemophilia A.": 'Half': in this cross 0 of the daughters (females) are hemophilia A, not 1/2 (50 %): say what the cross gives, or change the cross
   warning genetics_pedigree hemo_b2 @ 2.7s: "The father passes the X-linked allele to his sons.": an X-linked allele never passes from father to son: a father gives his sons his Y and his daughters his X (male-to-male transmission rules X-linked inheritance out)
 skipped:
-  error   genetics_pedigree skipped_b1 @ 0.0s: the chart does not fit the stated mode AD (autosomal dominant): III-1 is affected but neither parent (II-1, II-2) is: a dominant trait does not skip a generation (fits with reduced penetrance); no mode tried fits the chart as drawn: fix the chart (affected, carrier, parents), or give penetrance: when the reason says it fits with reduced penetrance
+  error   genetics_pedigree skipped_b1 @ 0.0s: the chart does not fit the stated mode AD (autosomal dominant): III-1 is affected but neither parent (II-1, II-2) is: a dominant trait does not skip a generation — excluded unless II-1 is non-penetrant (heterozygous); no mode tried fits the chart as drawn: fix the chart (affected, carrier, parents), or give penetrance: when the reason says it is excluded unless someone is non-penetrant
 cf:
   warning genetics_pedigree cf_b2 @ 3.4s: "The risk for their baby is one in four.": 'one in four': the chart gives the proposed child a risk of 1/150 (1 in 150) (under AR), not 1/4 (25 %)
 sickle:

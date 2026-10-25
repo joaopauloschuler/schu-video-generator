@@ -175,6 +175,18 @@ def test_phenotype_pictures() -> None:
     assert glyphs.class_glyphs(["eye colour", "body colour"], ["white", "black"], [None, None])[0].attrs == {
         "body": "black", "eye": "white", "body_hex": glyphs.COLOURS["black"], "eye_hex": glyphs.COLOURS["white"]}
     assert glyphs.trait_attr("fur", "chinchilla") == ("coat", "colour", "chinchilla")
+    # Step 221: a coat is drawn on its animal — the preset's, one named in the title or traits, the
+    # author's — else a neutral patch of fur (no mouse for a Labrador)
+    def animals(**kw: Any) -> set[str]:
+        return {g.attrs.get("animal", "") for c in plan(**kw).phenotypes for g in c.glyphs if g.subject == "coat"}
+
+    assert animals(preset="labrador", parents=["BbEe", "BbEe"]) == {"dog"}
+    assert animals(preset="yellow_mouse", parents=["A^Y A", "A^Y A"]) == {"mouse"}
+    assert animals(preset="rabbit_coat", parents=["C c^h", "c^ch c"]) == {"rabbit"}
+    coat = {"loci": [{"gene": "B", "trait": "coat colour", "alleles": {"B": "black", "b": "brown"}}], "parents": ["Bb", "Bb"]}
+    assert animals(**coat) == {""}
+    assert animals(**coat, title="Coat colour in cats") == {"cat"} and animals(**coat, animal="guinea pig") == {"guinea pig"}
+    assert animals(preset="labrador", parents=["BbEe", "BbEe"], animal="none") == {""}
 
 
 # ----- in projects --------------------------------------------------------------------------------

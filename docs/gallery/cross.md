@@ -55,6 +55,7 @@ From the author guide (`vidgen guide scenes`):
 | `alpha` | `float \| str` | `0.05` | The chi-square test's significance level. |
 | `notes` | `bool` | `True` | Show the notes the cross needs (recombinant gametes, a lethal class, the tester, epistasis). |
 | `pictures` | `bool` | `True` | Draw the phenotype pictures (peas, flowers, eyes, flies, coats, blood groups…). |
+| `animal` | `'auto' \| 'dog' \| 'mouse' \| 'rabbit' \| 'cat' \| 'guinea pig' \| 'none'` | `'auto'` | The animal a coat colour is drawn on; auto: the preset's (labrador: dog) or one named in the title or traits, else a plain patch of fur. |
 | `title_size` | `size` | `'heading'` | Title size. (also: heading_size) |
 | `size` | `size` | `'caption'` | Label size (never below the readable minimum). |
 

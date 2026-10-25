@@ -15970,8 +15970,12 @@ AR, an affected mother's unaffected son or an affected daughter's unaffected fat
 father → son with a married-in mother, an affected father's unaffected daughter under XD, an
 affected female under YL, mtDNA not from the mother, discordant MZ twins, impossible carriers,
 a married-in parent who would have to carry a rare allele), else the smallest nuclear family no
-genotypes fit; "(fits with reduced penetrance)" when it would at penetrance 1/2. A fitting mode's
-note: the non-penetrant carriers it needs, or the people from outside who must carry the allele.
+genotypes fit; when it would fit at penetrance 1/2 the reason ends with the exact condition
+(Step 221): "— excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)", naming the people
+forced to carry the disease genotype unaffected (else the unaffected people the reason names
+who might: "I-1 or I-2"), their genotype per mode and sex, and "unusual" (AR) / "very unusual"
+(XR) for the recessive modes, where reduced penetrance is rare (it is a known feature of many dominant ones). A fitting mode's note: who must be non-penetrant (same
+wording), or the people from outside who must carry the allele.
 `infer` gives each person's posterior, the forced genotypes, obligate carriers (forced
 heterozygotes, unaffected) and the proposed child's risk (P(affected); per sex for X / Y modes;
 the textbook factors — carrier probabilities, transmission, sex, penetrance — when the parents'
@@ -16519,3 +16523,55 @@ reported, ignored (`lint_ignore`) and configured exactly like them. `ScienceIssu
 - **Gaps**: in 9:16 the pedigree's "1/25 Aa" label is 2.42 % of the frame (warning size 2.5 %) and
   the variant card with its notes has 43 words; NGS insertions and indels are not modelled; the
   deleted residue's strike-through is a `covered_text` finding the example ignores with a reason.
+
+### 96.20 Review of Phase V (Step 221)
+
+- **Scientific-accuracy pass** (no error found in the data; checked by hand against the RefSeq
+  proteins, HGVS, ISCN and the textbooks): the HBB / CFTR / GJB2 windows translate to the known
+  proteins and every textbook variant's `p.`; CFTR's legacy numbering is c. + 132 (the A of the ATG
+  is legacy 133: c.1585-1G>A ↔ 1717-1G>A, c.1624G>T ↔ 1756G>T, c.489+1G>T ↔ 621+1G>T) and the old
+  exon numbering called intron 11 intron 10 — now in the module text and the variant's note;
+  exon spans (exon 11 = c.1393–1584, 192 bp; exon 12 = c.1585–1679, 95 bp), CDS lengths (444,
+  4443, 681 nt); the 15 presets' ratios; SpCas9 NGG / 20 nt, SaCas9 NNGRRT / 21–23 nt, blunt cut
+  3 bp 5′ of the PAM; Tm (Wallace / GC formula), the agarose ranges, ddNTPs; HWE 49/1250, df = 1;
+  λ_GC with the χ²₁ median 0.4549; Haldane / Kosambi; the three-point v–ct–cv data; band
+  landmarks (7q31.2 CFTR, 9q34 ABL1, 22q11.2 BCR, 5p15.2, Xq28 F8); FTO / MC4R positions (GRCh38).
+- **Pedigree exclusion wording**: a mode excluded at full penetrance that penetrance 1/2 would
+  allow ends with the exact condition (see §96.8 "explain"), e.g. "— excluded unless I-1 is
+  non-penetrant (Xᵃ Y; very unusual)"; the fitting note under reduced penetrance uses the same
+  form ("fits with reduced penetrance: II-1 is non-penetrant (heterozygous)"); a male is never
+  called a carrier of an X-linked allele. The compact (9:16) reason starts with the mode code only.
+  The XR daughter rule reads "needs an Xᵃ from her unaffected father I-1".
+- **Frame use**: `pedigree` spreads a height-bound chart sideways (`Px` up to 1.3 pitches), puts the
+  legend in a column beside the chart in 16:9 when that gives a larger pitch, numbers individuals
+  beside the symbol's top corner on the side without a mating line (above only when someone has
+  partners on both sides; outside adoption brackets), and in 9:16 gives the chart what the cards
+  that will be shown leave (`_panel_need`: the tallest of them, the analysis at its compact size
+  when shorter). The proband's / consultand's arrow points at the lower half of the symbol (clear
+  of the labels under it) and its P goes to the first spot round the tail that touches no other
+  mark or label (`pedigree_draw.letter_spots`). `karyotype` draws normal chromosomes (no changes,
+  ≤ 4 copies) in 16:9 lying across the frame, p arm left, labels over their band with a leader
+  through it, p / q under the last copy; few ideogram columns are drawn broader (up to the
+  metaphase share) with larger band labels; broad capsules get round ends (extra samples where
+  the half-width ≥ 0.25). `mutation` with few codons in 16:9 (when it makes tiles ≥ 15 % larger)
+  puts the card in a column beside the rows, which then use the body's height; a narrow card
+  writes the notation at 1.15× instead of 1.5×; the card says "legacy: ΔF508"; the in-frame note
+  is "3 nt lost: a multiple of 3" and "codon 507 ATC → ATT: still Ile".
+- **Gel**: the poles (words, or − / + when narrow) and the ladder sizes stand outside the plate on
+  the left, the lanes inside it (the lanes were shifted half a lane right before), lane names
+  alternate heights rather than shrink, and the readings are one per size: a dashed line level with
+  the bands from the ladder across the plate and the size in a right margin (stepped apart when
+  close), "≈" for a size outside the gel's resolving range; the card lists the caveats first.
+- **Coat glyphs**: `cross` param `animal` (auto, dog, mouse, rabbit, cat, guinea pig, none);
+  `glyphs.animal_of`: the preset's (labrador → dog, yellow_mouse → mouse, rabbit_coat → rabbit),
+  one named in the title or a trait, else a neutral patch of fur — never a guessed mouse.
+- **`fit_text` ligatures** (shared): Manim's `Paragraph` assigns glyphs to lines by counting
+  characters, so a font that joins two letters into one glyph (Source Serif 4 "fi"; Inter "->",
+  "=>") moved letters onto the neighbouring line ("Cystic fibrosis i / n a family"). `_paragraph`
+  rebuilds a multi-line paragraph with `disable_ligatures=True` when its glyph count differs from
+  its letter count (and keeps the first build if Manim refuses, i.e. glyphs missing for another
+  reason). One-line texts and texts without ligatures are built as before: the Phase Q baseline
+  stays 31/31 identical.
+- **`crispr` 9:16**: when the protospacer and PAM do not fit at the readable tile size the tiles
+  shrink to fit the frame with their 5′ / 3′ ends (they ran off both edges); unchanged otherwise.
+- **Example**: `codons: 5` (the card beside the rows in 16:9); 9:16 lint clean of layout findings.

@@ -125,6 +125,24 @@ def test_fit_text_highlight_colors_glyphs(text_media: None) -> None:
     assert colors.count("#FF0000") == 3
 
 
+def test_fit_text_keeps_letters_on_their_line_with_ligatures(text_media: None) -> None:
+    """Step 221: the serif heading font draws "fi" as one glyph; Manim splits a Paragraph's
+    glyphs into lines by counting characters, so "fibrosis in" took the next line's first letter
+    ("Cystic fibrosis i / n a family"). Each line's glyphs must stay at that line's height; a font
+    without ligatures is built as before (spaces not counted as glyphs)."""
+    from vidgen.config import ThemeConfig
+
+    serif = Theme(ThemeConfig(preset="light_academic"))
+    block = fit_text("Cystic fibrosis in a family", 4.0, 3.0, size=48, role="heading", weight="BOLD", theme=serif, balance=True)
+    assert len(block) == 3
+    lowest = min(line.height for line in block)
+    for line in block:          # a letter taken from the next line sits a line pitch lower
+        drawn = [g for g in line if g.has_points()]
+        assert max(g.get_y() for g in drawn) - min(g.get_y() for g in drawn) < 0.5 * lowest
+    plain = fit_text("Cystic fibrosis in a family", 4.0, 3.0, size=48, weight="BOLD", theme=Theme(), balance=True)
+    assert not plain.consider_spaces_as_chars and sum(len(line) for line in plain) == len("Cysticfibrosisinafamily")
+
+
 def test_fit_text_empty_is_an_error(text_media: None) -> None:
     with pytest.raises(VidgenError):
         fit_text("   ", 5.0, theme=Theme())

@@ -101,11 +101,32 @@ def _fly(attrs: dict[str, str], s: float, ink: str) -> VGroup:
 
 
 def _coat(attrs: dict[str, str], s: float, ink: str) -> VGroup:
+    """A coat colour on the animal named in ``attrs["animal"]`` (dog, mouse, rabbit, cat, guinea
+    pig), or a neutral patch of fur when none is known."""
+    animal = attrs.get("animal", "")
     colour = attrs.get("colour", "")
     fill = attrs.get("colour_hex", NEUTRAL["coat"])
+    if animal == "dog":
+        return _dog(fill, colour, s, ink)
+    if not animal:
+        return _fur(fill, colour, s, ink)
     points = "#4A3B33" if colour == "himalayan" else fill
-    ears = VGroup(*[_filled(Circle(radius=s * 0.16), points, ink, 1.3).move_to(np.array([side * s * 0.27, s * 0.3, 0])) for side in (1, -1)])
-    inner = VGroup(*[Circle(radius=s * 0.08).set_fill("#E8A3A0", opacity=0.8).set_stroke(width=0).move_to(e) for e in ears])
+    if animal == "rabbit":
+        ears = VGroup(*[_filled(Ellipse(width=s * 0.16, height=s * 0.46), points, ink, 1.3).rotate(-side * 0.15)
+                        .move_to(np.array([side * s * 0.13, s * 0.34, 0])) for side in (1, -1)])
+        inner = VGroup(*[Ellipse(width=s * 0.07, height=s * 0.3).set_fill("#E8A3A0", opacity=0.8).set_stroke(width=0).rotate(-side * 0.15)
+                         .move_to(e) for side, e in zip((1, -1), ears)])
+    elif animal == "cat":
+        ears = VGroup(*[_filled(Polygon(np.array([side * s * 0.12, s * 0.12, 0]), np.array([side * s * 0.34, s * 0.12, 0]),
+                                        np.array([side * s * 0.3, s * 0.44, 0])), points, ink, 1.3) for side in (1, -1)])
+        inner = VGroup()
+    elif animal == "guinea pig":
+        ears = VGroup(*[_filled(Ellipse(width=s * 0.2, height=s * 0.13), points, ink, 1.3).move_to(np.array([side * s * 0.3, s * 0.22, 0]))
+                        for side in (1, -1)])
+        inner = VGroup()
+    else:                                   # mouse: round ears
+        ears = VGroup(*[_filled(Circle(radius=s * 0.16), points, ink, 1.3).move_to(np.array([side * s * 0.27, s * 0.3, 0])) for side in (1, -1)])
+        inner = VGroup(*[Circle(radius=s * 0.08).set_fill("#E8A3A0", opacity=0.8).set_stroke(width=0).move_to(e) for e in ears])
     face = _filled(Ellipse(width=s * 0.74, height=s * 0.66), fill, ink, 1.5).shift(DOWN * s * 0.05)
     if colour == "agouti":
         ticks = VGroup(*[Line(np.array([x, -s * 0.05, 0]), np.array([x + s * 0.04, s * 0.12, 0])).set_stroke("#5C452D", width=1.2, opacity=0.7)
@@ -116,6 +137,31 @@ def _coat(attrs: dict[str, str], s: float, ink: str) -> VGroup:
     eyes = VGroup(*[Dot(radius=s * 0.045, color=eye_fill).move_to(np.array([side * s * 0.14, s * 0.0, 0])) for side in (1, -1)])
     nose = Dot(radius=s * 0.05, color=points if colour == "himalayan" else "#B5666A").move_to(np.array([0, -s * 0.15, 0]))
     return VGroup(ears, inner, face, ticks, eyes, nose)
+
+
+def _dog(fill: str, colour: str, s: float, ink: str) -> VGroup:
+    """A dog's head, front on: a broad head, drooping ears, a paler muzzle and a dark nose (a
+    retriever rather than a rodent)."""
+    dark = colour in ("black", "chocolate", "brown", "ebony", "dark", "sepia")
+    ears = VGroup(*[_filled(Ellipse(width=s * 0.2, height=s * 0.46), mix_colors(fill, "#000000", 0.82), ink, 1.3).rotate(side * 0.28)
+                    .move_to(np.array([side * s * 0.33, s * 0.02, 0])) for side in (1, -1)])
+    head = _filled(Ellipse(width=s * 0.6, height=s * 0.7), fill, ink, 1.5).shift(UP * s * 0.04)
+    muzzle = _filled(Ellipse(width=s * 0.34, height=s * 0.26), mix_colors(fill, "#FFFFFF", 0.78 if dark else 0.88), ink, 1.2)
+    muzzle.move_to(np.array([0, -s * 0.18, 0]))
+    nose = _filled(Ellipse(width=s * 0.14, height=s * 0.09), "#1E1C1A", ink, 1.0).move_to(np.array([0, -s * 0.12, 0]))
+    eye_fill = "#F4F1EA" if dark else "#1E1C1A"
+    eyes = VGroup(*[Dot(radius=s * 0.04, color=eye_fill).move_to(np.array([side * s * 0.13, s * 0.08, 0])) for side in (1, -1)])
+    return VGroup(ears, head, muzzle, nose, eyes)
+
+
+def _fur(fill: str, colour: str, s: float, ink: str) -> VGroup:
+    """A patch of fur in the coat colour: no animal is guessed when none is named."""
+    patch = _filled(RoundedRectangle(width=s * 0.78, height=s * 0.62, corner_radius=s * 0.16), fill, ink, 1.5)
+    strand = _outline(fill, ink) if colour not in ("black", "ebony", "dark") else mix_colors(fill, "#FFFFFF", 0.7)
+    hairs = VGroup(*[ArcBetweenPoints(np.array([x, -s * 0.16 + dy, 0]), np.array([x + s * 0.08, s * 0.12 + dy, 0]), angle=-0.6)
+                     .set_stroke(strand, width=1.4, opacity=0.75)
+                     for x, dy in ((-s * 0.26, 0.0), (-s * 0.1, s * 0.03), (s * 0.06, -s * 0.02), (s * 0.2, s * 0.02))])
+    return VGroup(patch, hairs)
 
 
 def _feather(attrs: dict[str, str], s: float, ink: str) -> VGroup:

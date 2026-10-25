@@ -163,7 +163,7 @@ scenes:
     params:
       gene: CFTR                           # no title: the gene strip, two rows and the card fill the frame
       variant: {c: "c.1521_1523del", p: "p.(Phe508del)"}
-      codons: 6
+      codons: 5                            # few codons: large tiles, the card beside them in 16:9
     lint_ignore:
       # the deleted residue (Phe 508) is struck through on purpose
       - {rule: covered_text}

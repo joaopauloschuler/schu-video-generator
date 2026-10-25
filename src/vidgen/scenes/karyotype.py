@@ -355,6 +355,9 @@ class KaryotypeScene(NarratedScene):
         k = self.k
         area = self.draw_area
         slots = self._ideogram_slots(p)
+        if self._horizontal(slots):
+            self._build_horizontal(slots)
+            return
         name_h = self.markup("der(22)", size=self.small).height
         robs = [a for a in k.abnormalities if a.kind == "rob"]
         columns: list[tuple[str, Any, str]] = []        # (slot, copy or None for a ghost, role)
@@ -384,7 +387,8 @@ class KaryotypeScene(NarratedScene):
         name_room = name_h * 1.8 + 0.25
         unit = (area.height - 0.3 - len(rows) * name_room) / sum(u + d for u, d in ext)
         self.col_labels = self._column_labels()
-        extra = {ci: max(self.markup(text, size=self.small * 0.9).width for _, text, _ in items) + 0.6
+        self.band_size = self.small * (1.1 if len(columns) <= 4 else 0.9)      # few chromosomes: the labels they are about, larger
+        extra = {ci: max(self.markup(text, size=self.band_size).width for _, text, _ in items) + 0.6
                  for ci, items in self.col_labels.items()}
         names: dict[int, Mobject] = {}
         for ci, (s, copy, role) in enumerate(columns):
@@ -399,7 +403,8 @@ class KaryotypeScene(NarratedScene):
 
         # the width follows the length (chromosome 1 about ten times as long as wide), unless the
         # columns would not fit: then thinner, and shorter only when very thin
-        w = min(WIDTH_SHARE * 249.0 * unit, 0.6)
+        # a few chromosomes stand alone in the frame: drawn as broad as a metaphase chromosome
+        w = min(WIDTH_SHARE * 249.0 * unit, 0.6) if len(columns) > 4 else min(WIDE_SHARE * 249.0 * unit, 0.85)
         while w > 0.03 and max(row_width(r, w) for r in range(len(rows))) > area.width:
             w *= 0.95
         if w < 0.35 * WIDTH_SHARE * 249.0 * unit:      # very thin: shorter instead
@@ -463,6 +468,81 @@ class KaryotypeScene(NarratedScene):
         self._band_labels()
         self._ideogram_changes()
 
+    def _horizontal(self, slots: list[str]) -> bool:
+        """16:9, normal chromosomes, at most four copies: lying across the frame (pter at the
+        left), which fills a wide frame far better than standing columns."""
+        k = self.k
+        return (not self.is_portrait and not k.abnormalities and k.sex in ("XX", "XY")
+                and sum(len(k.copies[s]) for s in slots) <= 4)
+
+    def _build_horizontal(self, slots: list[str]) -> None:
+        """The copies one under another, each drawn as a column and turned a quarter turn (p arm
+        left, q arm right), the names at the left, the labelled bands above the first copy with
+        leader lines, p and q under the last."""
+        k = self.k
+        area = self.draw_area
+        self.columns = [(s, c, "copy") for s in slots for c in k.copies[s]]
+        self.col_labels = self._column_labels()
+        self.band_size = self.small * 1.1
+        names = {ci: self.markup(copy.name, size=self.small, color=self.ink) for ci, (s, copy, _) in enumerate(self.columns)}
+        name_w = max(m.width for m in names.values()) + 0.35
+        longest = max(copy.length for _, copy, _ in self.columns)
+        lab_h = self.markup("7q31.2", size=self.band_size).height
+        pq_h = self.markup("<i>q</i>", size=self.small * 0.95).height
+        n = len(self.columns)
+        levels = max((len(v) for v in self.col_labels.values()), default=0)
+        label_room = (levels * lab_h * 1.5 + 0.45) if levels else 0.0
+        unit = (area.width - name_w - 0.4) / longest
+        w = min(WIDE_SHARE * 249.0 * unit, 1.2, (area.height - label_room - pq_h - 0.4) / (n * 1.9))
+        self.unit, self.w = unit, w
+        self.stroke = max(1.5, min(3.0, w * 10))
+        block_h = label_room + n * w + (n - 1) * w * 0.9 + pq_h + 0.25
+        x0 = area.center[0] - (name_w + longest * unit) / 2 + name_w
+        y = area.center[1] + block_h / 2 - label_room - w / 2
+        self.slot_groups, self.slot_copies = {}, {s: [] for s in slots}
+        self.before, self.after, self.ghosts, self.col_x = {}, {}, {}, {}
+        rows: dict[int, float] = {}
+        for ci, (s, copy, _) in enumerate(self.columns):
+            d = ChromosomeDrawing(self, copy, 0.0, 0.0, unit, w, self.ink, self.tints, self.stroke)
+            d.group.rotate(PI / 2, about_point=ORIGIN).shift(np.array([x0, y, 0.0]))
+            self.after[ci] = d
+            self.slot_copies[s].append(d)
+            self.col_x[ci] = x0
+            rows[ci] = y
+            names[ci].move_to(np.array([x0 - 0.3 - names[ci].width / 2, y, 0.0]))
+            y -= w * 1.9
+        self.col_names = names
+        last = len(self.columns) - 1
+        _, copy, _ = self.columns[last]
+        self.arm_labels = VGroup()
+        for arm, mb in (("p", copy.centromere / 2), ("q", (copy.centromere + copy.length) / 2)):
+            t = self.markup(f"<i>{arm}</i>", size=self.small * 0.95, color=self.dim_ink)
+            t.move_to(np.array([x0 + mb * unit, rows[last] - w / 2 - 0.12 - t.height / 2, 0.0]))
+            self.arm_labels.add(t)
+        for s in slots:
+            parts = [self.after[ci].group for ci, (ss, _, _) in enumerate(self.columns) if ss == s]
+            parts += [names[ci] for ci, (ss, _, _) in enumerate(self.columns) if ss == s]
+            self.slot_groups[s] = VGroup(*parts)
+        # the labels over their band, one level up when they would touch
+        self.band_mobs, self.break_labels = {}, {}
+        for ci, items in self.col_labels.items():
+            placed: list[tuple[float, float, int]] = []
+            for at, text, _ in sorted(items):
+                bx = x0 + at * unit
+                label = self.markup(text, size=self.band_size, color=self.ink)
+                lx = min(max(bx, area.x0 + label.width / 2), area.x1 - label.width / 2)
+                level = 0
+                while any(lvl == level and abs(lx - px) < (label.width + pw) / 2 + 0.2 for px, pw, lvl in placed):
+                    level += 1
+                placed.append((lx, label.width, level))
+                top = rows[ci] + w / 2
+                ly = top + 0.35 + level * lab_h * 1.5 + lab_h / 2
+                label.move_to(np.array([lx, ly, 0.0]))
+                lead = VMobject().set_points_as_corners([np.array([bx, rows[ci] - w * 0.5, 0]), np.array([bx, top + 0.25, 0]),
+                                                         np.array([lx, ly - lab_h / 2 - 0.06, 0])]).set_stroke(self.dim_ink, width=2)
+                self.band_mobs[text.split(" ")[0]] = VGroup(lead, label)
+        self._ideogram_changes()
+
     def _column_labels(self) -> dict[int, list[tuple[float, str, int | None]]]:
         """Per column, the labels written to its right: (Mb along that copy, markup, change):
         a derivative's own breakpoints, the bands asked for on the first normal copy."""
@@ -500,7 +580,7 @@ class KaryotypeScene(NarratedScene):
             for at, text, change in sorted(items):
                 y = d.mb_y(at)
                 x0 = d.x + d.width / 2 + (d.width * 0.6 if change is not None else 0.0)
-                label = self.markup(text, size=self.small * 0.9, color=self.hi if change is not None else self.ink)
+                label = self.markup(text, size=self.band_size, color=self.hi if change is not None else self.ink)
                 ly = y
                 for other in used:
                     if abs(ly - other) < label.height * 1.15:
