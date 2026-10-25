@@ -16144,4 +16144,140 @@ by what the entries still to come need and every entry is held to a share — `E
 per entry (its page, two palette stills, two GIFs each ≤ `CLIP_MAX_BYTES`; the heaviest entries so
 far, `cross`, `cell`, `rainy_evening`, weigh 0.33 MB), a test per entry, and `BUDGET` = 13 MB
 (10 MB + 8 entries after Step 216 × 0.36 MB). The genetics samples are kept to two or three short
-beats. After Step 216: 10.6 MB (`linkage_map` 0.32 MB, `karyotype` 0.31 MB).
+beats. After Step 216: 10.6 MB (`linkage_map` 0.32 MB, `karyotype` 0.31 MB); after Step 217:
+11.5 MB (`mutation` 0.28 MB, `dna_lab` 0.26 MB, `crispr` 0.30 MB — its sample is one beat, the
+scene's many coloured tiles making heavy GIFs).
+
+### 96.13 The `mutation` scene and HGVS (Step 217)
+
+**The model** (`genetics/hgvs.py`, `genetics/reference_genes.py`, `genetics/mutation.py`; no manim):
+
+- **`CodingSequence`**: exonic coding-strand DNA from `c.first` (`c.1` is the A of the ATG), the
+  coding exons as `c.` ranges, the intron sequences when known, the CDS length and the first exon's
+  number. `coding_sequence()` checks the bases (an mRNA's U is read as T), the exons (in order,
+  touching, covering the window) and the length.
+- **DNA variants** (`parse_c` → `RawVariant`, `resolve` → `DnaVariant` + `Edit`): substitution,
+  `del`, `dup`, `ins`, `delins` and intronic substitutions (`c.92+1G>A`, `c.1585-1G>A`; the
+  reference base comes from the intron when it is known, else from the GT…AG consensus at ±1, ±2).
+  The usual slips are refused with the fix (`c.A20T`, `→` for `>`, lower case, `c.0`, a reversed
+  range, several bases in a substitution, `ins` without its two flanking positions, a `p.` given as
+  the DNA change). `normalize(cds, edit)` writes what a change *is*: common bases trimmed, one base
+  for one a substitution, deletions and insertions moved to their 3′-most position **within the
+  exon** (HGVS's 3′ rule), an insertion that copies the bases before it a duplication;
+  `check_written` refuses a non-canonical description with the canonical one and the reason. The
+  bases an author writes after `del` / `dup` are checked and kept in the drawing (`c.1521_1523delCTT`).
+- **The protein** (`protein_change`): the mutant window is translated with `cellworld.sequences.CODONS`
+  and compared with the reference — synonymous, missense, nonsense, frameshift (`fs` counts the first
+  changed residue as 1 up to the new stop; `None` → `fs*?`), in-frame `del` / `dup` / `ins` /
+  `delins` (3′-most in a run), start loss `p.(Met1?)`, stop loss `ext`; a splice-site change is
+  `p.?`. `ProteinChange.text(style, stop)` writes `p.(Glu7Val)`, `p.(E7V)`, `p.(Arg553*)` or
+  `p.(Arg553Ter)`. `parse_p` reads an author's form back (refusing `X` for a stop and `ΔF508`), and
+  `check_stated` compares it with the computed one, naming the legacy numbering when the residue
+  number is one less (HGVS counts the initiator Met).
+- **Consequence** (`consequence`): the canonical DNA change, the protein change, its class, the two
+  translations, the mutant sequence and the notes — the side chains of a missense, the codon of a
+  synonymous change, whether an indel keeps the frame, nonsense-mediated decay (a premature stop
+  more than `NMD_DISTANCE` = 50 nt upstream of the last exon–exon junction; the exons must be
+  complete to judge it), and for a splice site the predicted RNA change (exon skipping for an
+  internal exon, else intron retention; `splice: skip | retain | auto`).
+- **Reference genes** (`reference_genes.py`): windows of real coding sequence with their exons,
+  transcript and CDS length — **HBB** (NM_000518.5, c.1–150), **CFTR** (NM_000492.4, c.1516–1680 in
+  exons 11–13) and **GJB2** (NM_004004.6, c.1–66) — each with the textbook variants that lie in it
+  and their legacy names (HbS c.20A>T p.(Glu7Val) = β6 Glu→Val; HbC, HbE, codon 39 nonsense,
+  IVS-I-1; F508del c.1521_1523del p.(Phe508del) = ΔF508, G542X, G551D, R553X, 1717-1G>A; 35delG
+  c.35del p.(Gly12Valfs*2)). A test translates every window and checks each variant's published
+  protein change.
+- **The plan** (`build_mutation_plan` / `plan_mutation`, cached by the params' JSON): the coding
+  sequence (a reference window, an author's `sequence`, or a gene built by `cellworld.expression`
+  whose exons and introns become `c.` ranges), the symbol checked by `cellworld.names`, and each
+  variant as a `VariantView` (consequence, the `p.` text in the author's style, the legacy name,
+  a note).
+
+**The scene** (`scenes/mutation.py`, helpers `scenes/molecular_draw.py`, action
+`scenes/molecular_actions.py`): a reference row and a variant row — base tiles in Phase U's base
+colours (lightened so the dark letter keeps 4.5:1 contrast), a box per codon, the amino acid on a
+chip under it with its residue number. The variant row is a copy of the reference that changes:
+the replaced bases leave, the rest slide to their new places in the fixed codon frame and the new
+ones drop in, so a frameshift regroups every later codon and reaches its premature stop; changed
+bases are ringed, changed residues highlighted, a stop red, deleted residues struck through, and a
+tick marks the junction of a deletion. A splice-site variant draws the exon border instead (exonic
+bases in tiles, intronic bases lower-case in pale outlined tiles, the codon box at the border
+dashed). The gene strip (when the exons are known) shows the coding exons with GT…AG, the window
+bracketed, an arrow at the variant and, for a splice site, the predicted mRNA (the exon skipped or
+the intron kept). The card gives the symbol, `c.`, the computed `p.`, the class, the legacy name and
+the notes; notes (then the legacy name, then the big type) are dropped rather than shrunk below the
+readable size. Self-play: the reference, then each variant; `mutate` puts one on a word.
+
+Public: no new `vidgen.api` names (`genetics.hgvs`, `genetics.mutation`, `genetics.reference_genes`);
+scene type `mutation`; action `mutate`.
+
+### 96.14 The `crispr` scene (Step 217)
+
+**The model** (`genetics/crispr.py`, no manim): `CAS` holds SpCas9 (PAM `NGG`, 20-nt spacer) and
+SaCas9 (`NNGRRT`, 21–23 nt), both cutting both strands 3 bp upstream (5′) of the PAM (blunt ends).
+`find_guides` lists every protospacer with a PAM on either strand with its cut position and GC
+content; `check_guide` places an author's spacer and refuses, with the guides that would work, a
+spacer that is not in the target (naming the reverse-complement and written-backwards mistakes),
+one without a PAM after it (naming what is there, and another enzyme's PAM when it fits), the wrong
+length, a spacer written with its PAM, one that occurs twice. `repair` gives the outcome: NHEJ
+joins the ends with an indel (default +1, the commonest SpCas9 outcome, copying the base 4 bp
+upstream of the PAM) or HDR copies a donor carrying `edit`; with `coding_first` the outcome runs
+through `hgvs.edit_consequence`, so it is written in HGVS with its protein change, and the notes say
+whether the frame is kept (a knockout), how far the edit lies from the cut, and whether the repaired
+allele still has its protospacer and PAM (Cas9 would cut it again).
+
+**The scene** (`scenes/crispr.py`): the target drawn **from the strand that carries the PAM** — with
+a guide on the bottom strand the same DNA is shown as its reverse complement, so the protospacer
+always reads 5′→3′ along the top row and every label keeps its lane (the card says so; HGVS stays in
+the target's own numbering). The enzyme is two lobes behind the DNA, the sgRNA a row of RNA tiles
+with a scaffold hairpin. Steps: `dna` → `scan` (the enzyme passes the PAMs it finds, settles on the
+right one, the PAM is boxed, the protospacer bracketed, the displaced strand lifts and the spacer
+takes its place) → `cleave` (both strands part at the cut) → `repair` (the complex leaves, a donor
+appears for HDR, the repaired allele is drawn with its changed bases ringed). Cards: the target, the
+guide (enzyme, PAM, spacer, how many guides the target offers), the break, the repair.
+
+Public: no new `vidgen.api` names (`genetics.crispr`); scene type `crispr`; actions `scan`,
+`cleave`, `repair`.
+
+### 96.15 The `dna_lab` scene (Step 217)
+
+**The model** (`genetics/dna_lab.py`, no manim), one plan per `method`:
+
+- **PCR**: the primers are checked against the template (the forward primer repeats the top strand,
+  the reverse primer is the reverse complement of the top strand downstream; each must bind once,
+  and they must point towards each other), the product runs between their 5′ ends, Tm by the Wallace
+  rule below 14 nt else the GC formula, annealing ~5 °C below the lower Tm (refused at or above it),
+  denaturation 94–98 °C, extension 68–74 °C, ~1 kb per minute. `pcr_strands` simulates the strands
+  of the first cycles exactly (each primer extends to the end of its template), so the
+  defined-length product first appears in cycle 3; `PcrPlan.counts(n)` aggregates the same rule to
+  2ⁿ molecules and 2ⁿ − 2n of exactly the product (a primer site at the template's edge gives the
+  product a cycle earlier, and the counts follow the simulation).
+- **Gel**: `resolving_range` interpolates the standard agarose table; `migration` is linear in
+  log₁₀(size) over that range (0.1–0.9 of the run) and compressed smoothly outside it, strictly
+  decreasing in size; `size_from_distance` reads a size off the ladder by log-linear interpolation.
+  Notes flag fragments outside the range and bands that would run as one.
+- **Sanger**: the read, its template strand, seeded peak heights and the called bases, a
+  heterozygous position called with its IUPAC code.
+- **NGS**: seeded reads from the two alleles (`zygosity`), per-base sequencing errors, coverage per
+  position, the alt-read share at the site and the call (heterozygous ≥ 15 %, homozygous ≥ 85 %,
+  below 10× *low coverage*); `pack_rows` stacks the reads so they do not touch.
+
+**The scene** (`scenes/dna_lab.py`): PCR — the template as two bars with the primers as arrows,
+the product measured, a temperature trace of three cycles and a row of molecules per cycle (those
+of the product's length in the highlight colour); gel — the plate with its wells at the cathode,
+the ladder labelled (labels that would collide are left out), the bands migrating to their
+distances and their sizes read off; Sanger — the template and the new strand, the fragments
+flashing in turn, then the chromatogram with its called bases in the base colours; NGS — the
+reference, the reads stacked with the base at the site coloured and errors marked, the coverage
+bars and the variant call. Each method has its steps (`setup` → …), played by `run: <target>` or
+beat by beat.
+
+Public: no new `vidgen.api` names (`genetics.dna_lab`); scene type `dna_lab`; action `run`.
+
+**Gaps after Step 217**: `mutation` shows one window of a transcript (no multi-exon scrolling), the
+splice prediction is schematic (no cryptic sites, no branch-point or polypyrimidine analysis), RNA
+`r.` changes are written only for splice sites; `crispr` has SpCas9 and SaCas9 only (no base or
+prime editing, no off-target search, no PAM-proximal seed weighting), and NHEJ's indel is the
+author's choice rather than a distribution; `dna_lab` has one PCR product (no multiplex, no
+nested PCR, no qPCR curve), the gel is one lane set without a running clock, Sanger peaks are
+stylised (no real mobility or peak shape) and NGS is a seeded read model, not an aligner.

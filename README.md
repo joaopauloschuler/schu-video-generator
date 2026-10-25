@@ -207,7 +207,13 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   centimorgans (gene order, interference; Haldane / Kosambi) ([docs](docs/CONFIG.md#linkage_map));
   `karyotype` reads ISCN notation (47,XX,+21; t(9;22)(q34;q11.2)) into a G-banded karyogram or
   animated structural edits ([docs](docs/CONFIG.md#karyotype)); `cell_cycle` meiosis shows
-  non-disjunction and its aneuploid gametes.
+  non-disjunction and its aneuploid gametes. Molecular genetics: `mutation` applies a variant to a
+  real coding sequence and works out its protein change with the genetic code, in HGVS notation
+  checked against the sequence (c.20A>T p.(Glu7Val), c.1521_1523del p.(Phe508del), c.35del
+  p.(Gly12Valfs*2), splice sites) ([docs](docs/CONFIG.md#mutation)); `crispr` shows Cas9 with its
+  guide — the PAM, the R-loop, the blunt cut 3 bp away, and NHEJ or HDR with the repaired allele's
+  change ([docs](docs/CONFIG.md#crispr)); `dna_lab` plays PCR, an agarose gel, Sanger sequencing or
+  NGS reads with a variant call ([docs](docs/CONFIG.md#dna_lab)).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,

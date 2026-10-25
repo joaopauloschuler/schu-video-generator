@@ -67,6 +67,9 @@ SAMPLES: dict[str, dict[str, Any]] = {
                  "analyse": True, "genotypes": True},
     "linkage_map": {"title": "Map", "loci": ["b", "vg"], "counts": {"b vg": 405, "+ +": 415, "b +": 85, "+ vg": 95}},
     "karyotype": {"title": "Karyotype", "karyotype": "47,XX,+21"},
+    "mutation": {"title": "Mutation", "gene": "HBB", "variant": "c.20A>T"},
+    "crispr": {"title": "Edit", "target": "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAG"},
+    "dna_lab": {"title": "Gel", "method": "gel", "lanes": {"patient": [450], "control": [450, 300]}},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -258,7 +261,8 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     hidden = [t.name for t in scene.targets if not scene.is_shown(t)]
     expected = {"equation": ["step1"],                                  # an equation step morphs into the next
                 "code_morph": ["version1", "version1.line1"],           # version 1 morphed into version 2
-                "equation_derivation": ["term:c", "term:a"]}            # term: means the current step's part
+                "equation_derivation": ["term:c", "term:a"],            # term: means the current step's part
+                "crispr": ["pam", "protospacer", "cas9", "sgrna", "cut"]}   # the complex leaves when the break is repaired
     assert hidden == expected.get(kind, [])
 
 

@@ -301,6 +301,9 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "pedigree": [{"title": "T:title", "condition": "T:condition", "individuals": ["a: male", "b: female", "c: female affected of a + b"]}],
     "linkage_map": [{"title": "T:title", "map": {"y": 0, "w": 1.5}}],
     "karyotype": [{"title": "T:title", "karyotype": "46,XX"}],
+    "mutation": [{"title": "T:title", "gene": "HBB", "variant": "c.20A>T"}],
+    "crispr": [{"title": "T:title", "target": "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAG"}],
+    "dna_lab": [{"title": "T:title", "method": "gel", "lanes": {"patient": [450]}}],
     "iso_diagram": [
         {
             "blocks": ["Alpha", {"id": "b", "label": "T:b label"}, {"id": "s", "label": "T:stack", "layers": ["Gamma", {"id": "l", "label": "T:layer"}]}],

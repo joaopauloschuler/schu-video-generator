@@ -554,6 +554,36 @@ scenes:
     beats:
       - text: "Three copies of chromosome twenty-one: trisomy twenty-one, Down syndrome."
 
+  - id: mutation
+    type: mutation      # a variant on a real coding sequence: codons, the protein change, HGVS notation
+    params:
+      title: "Sickle-cell haemoglobin"
+      gene: HBB
+      variant: {c: "c.20A>T", p: "p.(Glu7Val)"}
+    beats:
+      - text: "One base of the beta-globin gene changes, and glutamic acid becomes valine."
+        actions: [{mutate: variant, at: "@changes"}]
+
+  - id: crispr
+    type: crispr        # Cas9 with its guide: the PAM, the blunt cut, and the repair
+    params:
+      title: "Cutting with Cas9"
+      target: "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAGTCTGCC"
+    beats:
+      - text: "The guide binds beside a PAM, and both strands break three base pairs away."
+        actions: [{scan: dna}, {cleave: dna, at: "@break"}]
+
+  - id: gel
+    type: dna_lab       # pcr, gel, sanger or ngs: the laboratory methods of molecular genetics
+    params:
+      title: "On the gel"
+      method: gel
+      agarose: 1.5
+      lanes: {patient: [450], control: [450, 300]}
+    beats:
+      - text: "DNA runs to the anode; the smaller fragment runs furthest."
+        actions: [{run: ladder}]
+
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
     chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)

@@ -16,6 +16,7 @@ from .presets import PRESETS, Preset
 from . import glyphs, punnett, stats  # noqa: E402  (the cross scene's plan, pictures and chi-square)
 from . import pedigree, pedigree_analysis, pedigree_layout, pedigree_plan  # noqa: E402  (the pedigree scene's chart and analysis)
 from . import karyotype, mapping  # noqa: E402  (the karyotype and linkage_map scenes' models)
+from . import crispr, dna_lab, hgvs, mutation, reference_genes  # noqa: E402  (the molecular scenes' models)
 
 __all__ = [
     "CHROMOSOMES", "EPISTASIS_KINDS", "MODES", "PRESETS", "Allele", "CrossResult", "Epistasis", "Gamete", "GeneticSystem", "Genotype",
@@ -24,4 +25,5 @@ __all__ = [
     "haplotype_gametes", "is_lethal", "locus_phenotypes", "make_genotype", "mode_of", "parse_genotype", "parse_mode", "phenotypes_of",
     "ratio", "ratio_text", "reciprocal", "symbol_ascii", "symbol_markup", "symbol_text", "test_cross", "make_tester",
     "glyphs", "punnett", "stats", "pedigree", "pedigree_analysis", "pedigree_layout", "pedigree_plan", "karyotype", "mapping",
+    "crispr", "dna_lab", "hgvs", "mutation", "reference_genes",
 ]

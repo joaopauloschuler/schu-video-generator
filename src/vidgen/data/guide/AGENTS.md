@@ -303,6 +303,9 @@ project's own scene types, in its theme).
 | a family pedigree in standard (NSGC) symbols: affected, carriers, deceased, proband, twins, consanguinity; which modes of inheritance fit and why the others are excluded, deduced genotypes, carrier probabilities, the risk for a child | `pedigree` | `title`, `individuals` (lines like "II-3: female affected of I-1 + I-2" or mappings), `couples`, `condition`, `mode`, `analyse`, `genotypes`, `penetrance`, `rare`, `carrier_frequency`, `alleles` or `preset`; the actions deduce, analyse, risk |
 | linked genes and genetic maps: crossing over between homologues (coupling / repulsion), a two- or three-point test cross worked out from offspring counts (parental and double-crossover classes, gene order, distances in cM, coincidence and interference), map functions | `linkage_map` | `title`, `loci` + `counts` (the test-cross classes) or `map` (loci at cM positions), `map_function` (none, haldane, kosambi), `phase`, `crossover`, `chromosomes`; the actions cross_over, measure; reveal the steps (table, classes, order, distances, interference, map) |
 | a human karyotype from its ISCN notation (47,XX,+21; 45,X; 46,XY,del(5)(p15.2); t(9;22); rob(14;21)): a karyogram by groups A–G with G-banded ideograms and the change highlighted, or the chromosomes involved with structural changes played as edits | `karyotype` | `title`, `karyotype`, `show` (auto, karyogram, ideogram), `chromosomes`, `bands` ({7q31.2: CFTR}), `notation`; the action rearrange |
+| a mutation on a real coding sequence: the reading frame and codons, the variant made from them (substitution, deletion, insertion, frameshift with its premature stop, splice site), the protein change from the genetic code, HGVS c. and p. notation checked | `mutation` | `gene` (HBB, CFTR, GJB2, or a gene mapping) or `sequence` (+ `first`, `exons`, `length`), `variant` (c.20A>T, or {c, p, legacy, note}, or a list), `splice`, `codes`, `stop`, `codons`, `strip`, `symbol`; the action mutate |
+| CRISPR–Cas9 editing: the sgRNA's spacer, the PAM, the R-loop, the blunt cut 3 bp from the PAM, and the repair (NHEJ indel or HDR from a donor), written in HGVS on a coding target | `crispr` | `target`, `cas` (SpCas9, SaCas9), `spacer` or `guide`, `repair` (nhej, hdr, none), `indel`, `edit`, `coding_first`; the actions scan, cleave, repair |
+| the laboratory: PCR (primers, cycles, 2ⁿ copies), an agarose gel (ladder, migration by size), Sanger sequencing (a chromatogram with called bases) or NGS reads with coverage and a variant call | `dna_lab` | `method` (pcr, gel, sanger, ngs) and its params: `template` + `primers` + `temperatures` + `cycles`; `agarose` + `ladder` + `lanes`; `sequence` + `heterozygous`; `reference` + `variant` + `zygosity` + `depth`; the action run |
 | a signalling pathway: ligands, receptors, kinase cascades, second messengers, genes, in compartment bands, SBGN-style (arrows, T-bars, P marks); a signal spreading, inhibitors, knockouts, drugs | `pathway` | `title`, `template` (gpcr_camp_pka, rtk_ras_mapk, pi3k_akt), `nodes` (id, kind, label, in, gene, state, marks, role), `edges` (a -> b activates, a -o b catalyses, a => b translocates, an arrow with a bar inhibits, or {from, to, type, effect, site, feedback, label}), `remove`, `species`, `direction`; the actions signal, inhibit, knockout, drug, amplify, focus |
 | molecules up close: DNA, RNAs, nucleosomes, receptors, channels, pumps, ATP synthase, ions (nm, notation checked); transport, diffusion, osmosis, action potentials | `molecule` | `title`, `membrane` (none, plasma, inner_mitochondrial, thylakoid…), `molecules` (kind, at in nm, in, state, faces, gene, protein, parts, transporter, modifications…), `solutes`, `potential`, `species`, `compartment`; the actions set_state, transport, diffuse, osmosis, action_potential; or a `gene` (codons, introns, signal_peptide, sequence…) whose expression the actions transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold show up close |
 | one number that matters | `stat` | `value`, `label`, `comparison`, `context`, `prefix`, `suffix`, `unit` |
@@ -770,6 +773,57 @@ A `karyotype` scene draws a human karyotype from its ISCN notation (DESIGN §96.
   beats:
     - text: "A male karyotype, its chromosomes in pairs by size, three copies of chromosome twenty-one."
     - text: "Forty-seven, X Y, plus twenty-one: Down syndrome."
+```
+
+A `mutation` scene works a sequence variant out on a real coding sequence with the genetic code (DESIGN §96.13): the reference codons with their amino acids (the initiator Met is residue 1) and the variant row made from them — a base swaps, or bases leave or come in and the rest slide through the fixed codon frame, so a frameshift regroups every codon after it and reaches its premature stop. Give a reference window (`gene: HBB`, `CFTR`, `GJB2`: real coding sequence with its exons and transcript), your own `sequence:` (with `first:`, `exons:`, `length:` when you want splice sites and nonsense-mediated decay), or a gene like a `molecule` scene's (`gene: {protein: MVHL…, introns: 1}`). The `variant:` is HGVS on the coding DNA (`c.20A>T`, `c.1521_1523delCTT`, `c.35delG`, `c.35dup`, `c.76_77insT`, `c.76_77delinsTT`, `c.92+1G>A`); vidgen computes the protein change (`p.(Glu7Val)`, `p.(Phe508del)`, `p.(Arg553*)`, `p.(Gly12Valfs*2)`, `p.?` for a splice site with the exon skipped or the intron retained), the class and the notes (side chains, the frame, nonsense-mediated decay), and checks a `p:` you write against the sequence. Use `legacy:` for the old name (ΔF508, Glu6Val: HGVS counts the initiator Met, so HbS is `c.20A>T p.(Glu7Val)`). A list of variants plays one after another; `mutate: variant` puts one on a word. Checked with the reason: a change that is not HGVS, a reference base that is not there, a description that is not the canonical one (the 3′ rule), a stated `p.` that does not follow, `p.R553X` and `ΔF508`.
+
+```yaml
+# genetics
+- id: sickle
+  type: mutation
+  params:
+    title: "Sickle-cell haemoglobin"
+    gene: HBB                                  # or sequence: ATGGTG…, or gene: {protein: …, introns: 1}
+    variant: {c: "c.20A>T", p: "p.(Glu7Val)"}  # p. is checked; legacy name Glu6Val
+  beats:
+    - text: "The start of the beta-globin coding sequence, read in codons."
+    - text: "One base changes: A to T in codon seven."
+      actions: [{mutate: variant, at: "@changes"}]
+    - text: "Glutamic acid becomes valine: sickle-cell haemoglobin."
+```
+
+A `crispr` scene shows Cas9 editing a target (DESIGN §96.14): the DNA with every base, the sgRNA's 20-nt spacer (21–23 for SaCas9) pairing with the target strand, the PAM (`NGG`; `NNGRRT` for SaCas9) right after the protospacer's 3′ end on the other strand, the R-loop, the blunt double-strand break 3 bp upstream of the PAM, and the repair: `nhej` (a small indel — `indel: +1` is the commonest, and an indel that is not a multiple of 3 is a frameshift knockout) or `hdr` (a donor carrying `edit:`). Leave `spacer` out and vidgen picks a guide from the PAMs it finds (`guide: 2` for the n-th); with `coding_first:` (the `c.` number of the target's first base) the outcome is written in HGVS with its protein change. `scan`, `cleave` and `repair` put the steps on words. Checked with the reason: a spacer that is not in the target or has no PAM after it (with the guides that would work), the wrong length for the enzyme, a spacer written with its PAM, a target without any PAM.
+
+```yaml
+# genetics
+- id: edit
+  type: crispr
+  params:
+    title: "Cutting with Cas9"
+    target: "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAGTCTGCC"
+    repair: nhej                       # or hdr with edit: 25A>T (c.20A>T with coding_first)
+  beats:
+    - text: "The guide binds beside its PAM, and three base pairs away both strands break."
+      actions: [{scan: dna}, {cleave: dna, at: "@break"}]
+```
+
+A `dna_lab` scene shows one laboratory method (DESIGN §96.15). `method: pcr`: the primers checked against the template (the forward primer repeats the top strand, the reverse primer is the reverse complement downstream), the product's length, melting temperatures and an annealing temperature ~5 °C below them, the temperature trace (denature ~95 °C, anneal, extend 72 °C with Taq) and the copies — 2ⁿ molecules after n cycles, 2ⁿ − 2n of exactly the product's length, the first in cycle 3. `method: gel`: an agarose gel, DNA running from the wells at the cathode to the anode, the distance log-linear in size within the gel's range, a `ladder` and each band's size read off it. `method: sanger`: chain termination with ddNTPs, the fragments sorted by length and a chromatogram with the called bases (`heterozygous: "8T>C"` gives two half-height peaks and a Y). `method: ngs`: seeded reads aligned to a reference with their coverage and a variant call (≈50 % alt reads: heterozygous). `run: <step>` plays a step on a word (the steps before it play first).
+
+```yaml
+# genetics
+- id: pcr
+  type: dna_lab
+  params:
+    title: "PCR"
+    method: pcr
+    template: "GCTTACCAGTCGATGCCATGACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGG"
+    primers: {forward: "GACTGCATCAGCTGAAGGTC", reverse: "CCTCAGGAGTCAGATGCACC"}
+  beats:
+    - text: "A template, two primers, and a product of a defined length."
+    - text: "The strands separate, the primers anneal, Taq extends them."
+      actions: [{run: trace}]
+    - text: "The molecules double every cycle."
+      actions: [{run: counts}]
 ```
 
 In `cell_cycle` meiosis, `nondisjunction: {division: I, pair: 1}` makes that pair's homologues go to one pole at anaphase I (every gamete n + 1 or n − 1), `division: II` its sister chromatids stay together at anaphase II in one cell (half the gametes normal); the gametes are labelled and the last caption gives the zygotes after fertilisation (trisomic, monosomic, euploid).
@@ -1279,6 +1333,11 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `cross_over` | on a `linkage_map`: non-sister chromatids meet at a chiasma in an interval and swap the segments beyond it (`cross_over: "interval:v-ct"`, or `double`); the recombinant chromatids are labelled | ~2.4 s, on the word that says crossing over |
 | `measure` | on a `linkage_map`: a distance on the map with the RF its map function gives (`measure: "interval:w-v"`) | ~1.6 s |
 | `rearrange` | on a `karyotype`: a change of the notation (`rearrange: change:1`, or `changes`): a structural change as an edit in an ideogram, else its highlight | ~2.6 s an edit |
+| `mutate` | on a `mutation`: the variant row is made from the reference and the card gives the HGVS notation (`mutate: variant`, `variant:2`, `variants`) | ~3 s, on the word that names the change |
+| `scan` | on a `crispr`: the enzyme searches the PAMs, binds the protospacer and the R-loop forms (`scan: dna`) | ~3 s |
+| `cleave` | on a `crispr`: the blunt double-strand break 3 bp from the PAM (`cleave: dna`) | ~1.6 s, on the word that says cut |
+| `repair` | on a `crispr`: NHEJ or HDR, with the repaired allele and its HGVS change (`repair: repair`) | ~2.8 s |
+| `run` | on a `dna_lab`: a step of its method (`run: trace`, `counts`, `ladder`, `sizes`, `fragments`, `chromatogram`, `reads`, `call`); the steps before it play first | ~2.2 s each |
 
 ```yaml
 - id: speeds

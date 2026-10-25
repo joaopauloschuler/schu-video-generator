@@ -5,9 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–216)
+## Unreleased (Steps 193–217)
 
 ### Genetics (Phase V, from Step 213)
+
+- **Molecular genetics** (Step 217). A `mutation` scene type: a variant applied to a real coding
+  sequence (HBB, CFTR, GJB2 reference windows with their exons and transcripts, your own sequence,
+  or a gene written as in a `molecule` scene) and worked out with the genetic code — the reference
+  codons with their amino acids and the variant row made from them (substitution, deletion,
+  duplication, insertion, a frameshift regrouping every later codon to its premature stop,
+  splice-site changes with the predicted mRNA) —, with HGVS notation generated and checked against
+  the sequence (the 3′ rule, intronic positions, nonsense-mediated decay; `c.20A>T p.(Glu7Val)`,
+  `c.1521_1523del p.(Phe508del)`, `c.35del p.(Gly12Valfs*2)`, `c.1657C>T p.(Arg553*)`, legacy
+  names). A `crispr` scene type: guides found in a target (PAM `NGG` / `NNGRRT` right after the
+  protospacer's 3′ end), the sgRNA's spacer checked, the R-loop, the blunt cut 3 bp upstream of the
+  PAM, and the repair — NHEJ with a small indel or HDR from a donor — written in HGVS with its
+  protein change on a coding target. A `dna_lab` scene type with `method: pcr | gel | sanger | ngs`:
+  primers checked against the template with the product measured, a temperature trace and 2ⁿ /
+  2ⁿ − 2n copies from the simulated strands; an agarose gel with a ladder and log-linear migration
+  with the sizes read off; a Sanger chromatogram with called bases and a heterozygote; NGS reads
+  with coverage and a variant call. New actions `mutate`, `scan`, `cleave`, `repair`, `run`.
 
 - **Chromosomes** (Step 216). A `linkage_map` scene type: the heterozygote's homologue pair with
   its alleles (coupling or repulsion), crossing over between non-sister chromatids giving

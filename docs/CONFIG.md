@@ -7572,6 +7572,233 @@ acrocentric autosomes, or not at q10;q10; an interstitial deletion or duplicatio
 centromere; a change on a chromosome the karyotype does not have (*del(Y) in 46,XX*); `chromosomes`
 with `show: karyogram`; `rearrange` on a karyotype without changes or a change it does not have.
 
+### `mutation`
+
+A sequence variant worked out on a real coding sequence with the genetic code (DESIGN §96.13;
+`vidgen.genetics.hgvs` and `genetics.mutation`): the reference codons with their amino acids, the
+variant row made from them, and the HGVS notation checked against the sequence.
+
+- **The sequence**: a reference window (`gene: HBB`, `CFTR`, `GJB2` — real coding sequence with its
+  exons, transcript and CDS length), your own `sequence:` (coding DNA or mRNA from `c.1`, or from
+  `first:`, with `exons:` and `length:` when you want splice sites and nonsense-mediated decay), or
+  a gene written as in a `molecule` scene (`gene: {protein: MVHL…, introns: 1}`, `{sequence: …,
+  introns: [[a, b]]}`): its coding sequence, exons and introns are taken from the built gene.
+- **The rows**: the reading frame from the ATG — base tiles in the DNA colours of Phase U, a box
+  per codon, the amino acid under it (three-letter by default, `codes: one` for one-letter) with
+  its residue number (the initiator Met is 1). The variant row is made from the reference: the base
+  swaps, or bases leave or come in and the rest slide through the fixed codon frame, so a
+  frameshift visibly regroups every codon after it and reaches its premature stop. Changed bases
+  are ringed, changed residues highlighted, a stop drawn red, deleted residues struck through.
+- **The variant** (`variant:`): HGVS on the coding sequence — `c.20A>T`, `c.1521_1523del` (the
+  deleted bases may be written: `c.1521_1523delCTT`, `c.35delG`), `c.35dup`, `c.76_77insT`,
+  `c.76_77delinsTT`, splice sites `c.92+1G>A` / `c.1585-1G>A`. A list makes several variants of the
+  same sequence, one after another. A mapping adds the author's own protein change, which is
+  **checked** against the genetic code (`{c: c.20A>T, p: p.(Glu7Val)}`), a `legacy:` name and a
+  `note:`.
+- **The consequence**, computed: silent (synonymous), missense (with the side chains), nonsense,
+  frameshift (`p.(Gly12Valfs*2)`: the new frame's length, `fs*?` when no stop is reached in the
+  window), in-frame deletion / duplication / insertion / deletion–insertion, start loss
+  `p.(Met1?)`, stop loss, splice donor / acceptor (`p.?` with the predicted RNA change: exon
+  skipping or intron retention, `splice: skip | retain | auto`). Notes say whether the frame is
+  kept and whether a premature stop is more than ~50 nt upstream of the last exon–exon junction
+  (nonsense-mediated decay).
+- **The card**: the gene symbol (italic), the `c.` change as written, the computed `p.` change
+  (`stop: Ter` writes `p.(Arg553Ter)`), the class, the legacy name and the notes.
+- **The gene strip** (when the exons are known): the coding exons with GT…AG introns, the window
+  shown bracketed, an arrow at the variant, and for a splice-site change the predicted mRNA.
+
+```yaml
+- id: sickle
+  type: mutation
+  params:
+    title: "Sickle-cell haemoglobin"
+    gene: HBB                               # a reference window; or sequence: ATG…, or gene: {protein: …}
+    variant: {c: "c.20A>T", p: "p.(Glu7Val)"}   # p. is checked against the genetic code
+  beats:
+    - text: "The start of the beta-globin coding sequence, read in codons."
+    - text: "One base changes: A to T in codon seven."
+      actions: [{mutate: variant, at: "@changes"}]
+    - text: "Glutamic acid becomes valine: HbS."
+- id: cf
+  type: mutation
+  params: {gene: CFTR, variant: "c.1521_1523delCTT p.(Phe508del)"}   # legacy name ΔF508
+  beats: [{text: "Three bases go; the frame is kept; one phenylalanine is missing."}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `gene` | | a reference window (`HBB`, `CFTR`, `GJB2`) or a gene mapping (`sequence` / `protein` / `codons`, `introns`, `seed`, `cell`) |
+| `sequence` | | instead of `gene`: coding DNA (or mRNA) 5′→3′ |
+| `first`, `exons`, `first_exon`, `length` | `1`, —, `1`, — | the window's first `c.` number, the coding exons as `c.` ranges, the first exon's number, the whole CDS length |
+| `symbol`, `species` | —, `human` | the gene symbol (italic, checked against the nomenclature) |
+| `variant` | `c.1A>G` | the change, a mapping (`c`, `p`, `legacy`, `note`, `splice`) or a list of them |
+| `splice` | `auto` | a splice-site change's predicted outcome: `skip` (exon skipping) or `retain` (intron retention) |
+| `codes` | `three` | amino acids as `Glu` or `E` |
+| `stop` | `*` | `p.(Arg553*)` or `Ter` |
+| `codons` | fits | how many codons the rows show (3–16) |
+| `strip` | `true` | the gene strip (when the exons are known) |
+| `size`, `title_size` | `caption`, `heading` | |
+
+**Actions**. Without them the scene plays itself (the reference, then each variant with its card).
+
+| action | | |
+|---|---|---|
+| `mutate` | `variant`, `variant:2`, `variants` | makes that variant from the reference (~3 s), with its card |
+
+`highlight`, `dim`, `callout` and `reveal` work on `gene`, `reference`, `variant`, `variant:<n>`,
+`protein`, `notation`, `codon:<n>`.
+
+**The rules** (`vidgen validate`): a change that is not HGVS (*HGVS writes the position first:
+c.20A>T*, *a substitution is written with >*, *write the bases in capitals*), a reference base that
+is not the one in the sequence (*c.20 is C in this sequence, not A*), a position outside the window,
+a description that is not the canonical one (*c.1520_1522del describes the same change as
+c.1521_1523del … HGVS's 3′ rule*; *an insertion that copies the bases just before it is a
+duplication*), an intronic position without `exons:` or at the wrong exon end, a `p.` that does not
+follow from the DNA change (with the computed one, and *HGVS counts the initiator Met as residue 1*
+when it is the legacy numbering), `p.R553X` (*X means an unknown amino acid in HGVS; a stop is * or
+Ter*), `ΔF508` (*the legacy name; HGVS writes p.(Phe508del)*).
+
+### `crispr`
+
+CRISPR–Cas9 genome editing on a target sequence (DESIGN §96.14; `vidgen.genetics.crispr`):
+
+- **The target**: both strands with every base, drawn from the strand that carries the PAM, so the
+  protospacer always reads 5′→3′ along the top row (with a guide on the bottom strand the card says
+  the view is the reverse complement of what you wrote).
+- **The guide**: the sgRNA's spacer (20 nt for SpCas9, 21–23 for SaCas9) repeats the protospacer on
+  the non-target strand; the **PAM** (`NGG` for SpCas9, `NNGRRT` for SaCas9) lies right after the
+  protospacer's 3′ end on that strand. vidgen finds every guide with a PAM in the target: leave
+  `spacer` out for the one nearest the middle, give `guide: 2` for the n-th, or write your own
+  `spacer`.
+- **What plays**: the enzyme comes in, stops at the PAMs it passes, settles on the right one; the
+  DNA opens, the spacer pairs with the target strand and the other strand is displaced (the
+  R-loop); both strands are cut **3 bp upstream (5′) of the PAM**, leaving blunt ends.
+- **The repair**: `nhej` joins the ends with a small indel (`indel: +1` default — the commonest
+  SpCas9 outcome —, `-4`, …), `hdr` copies a donor template carrying `edit:`; `none` stops at the
+  break. With `coding_first:` (the `c.` number of the target's first base) the outcome is written in
+  HGVS with its protein change, and the card says whether the frame is kept (a frameshift knockout)
+  and whether the repaired allele can be cut again.
+
+```yaml
+- id: edit
+  type: crispr
+  params:
+    title: "Cutting with Cas9"
+    target: "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAGTCTGCC"
+    repair: nhej                      # hdr with edit: 25A>T (or c.20A>T with coding_first)
+  beats:
+    - text: "A stretch of double-stranded DNA."
+    - text: "The guide finds its sequence next to a PAM."
+      actions: [{scan: dna}]
+    - text: "Three base pairs from the PAM, both strands break."
+      actions: [{cleave: dna}]
+    - text: "Joining the ends leaves one extra base: the reading frame shifts."
+      actions: [{repair: repair}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `target` | | the top strand 5′→3′, 26–80 bp |
+| `cas` | `SpCas9` | `SaCas9` (PAM `NNGRRT`, 21–23 nt spacer) |
+| `spacer` | a guide vidgen finds | the sgRNA's spacer 5′→3′ (U or T) |
+| `guide` | | instead of `spacer`: the n-th candidate guide (by cut position) |
+| `repair` | `nhej` | `hdr`, `none` |
+| `indel` | `+1` | NHEJ: the indel at the cut (+1 … +12, −1 … −12) |
+| `edit` | | HDR: the donor's change (`25A>T`, `24_26del`; `c.…` with `coding_first`) |
+| `coding_first` | | the `c.` number of the target's first base (outcomes in HGVS) |
+| `symbol` | | the gene's symbol for the card |
+| `size`, `title_size` | `caption`, `heading` | |
+
+**Actions** (each plays the steps before it that have not played).
+
+| action | | |
+|---|---|---|
+| `scan` | `dna`, `cas9`, `sgrna`, `pam` | the search, the PAM, the R-loop (~3 s) |
+| `cleave` | `dna`, `cut` | the blunt double-strand break (~1.6 s) |
+| `repair` | `dna`, `repair` | NHEJ or HDR, with the outcome on the card (~2.8 s) |
+
+**The rules** (`vidgen validate`): a spacer that is not in the target (*it is the complement of a
+protospacer…*, *written backwards*), one without a PAM after it (naming what is there and the guides
+that would work), the wrong spacer length for the enzyme, a spacer with its PAM written on
+(*the PAM is in the DNA, not in the sgRNA*), a spacer that occurs twice, a target without any PAM,
+`edit` without `repair: hdr`, `indel` without `repair: nhej`, a `c.` edit without `coding_first`.
+
+### `dna_lab`
+
+The laboratory methods of molecular genetics (DESIGN §96.15; `vidgen.genetics.dna_lab`), one per
+`method:`.
+
+- **`pcr`**: the template with its primers (the forward primer repeats the top strand, the reverse
+  primer is the reverse complement of the top strand downstream; both written 5′→3′ and checked
+  against the template), the product's length, the melting temperatures (Wallace rule below 14 nt,
+  else the GC formula) and the annealing temperature (~5 °C below the lower Tm), a temperature trace
+  of the cycles (denature 94–98 °C, anneal 50–65 °C, extend 72 °C with Taq) and the molecules
+  doubling cycle by cycle — the strands are simulated, so the product of defined length first
+  appears in cycle 3 and there are 2ⁿ molecules, 2ⁿ − 2n of them exactly the product, after n
+  cycles.
+- **`gel`**: an agarose gel, the wells at the cathode (−), DNA running to the anode (+), the
+  distance linear in log₁₀ of the size within the gel's resolving range (0.5 %: ~1–30 kb … 2 %:
+  ~50 bp–2 kb), a ladder (`1kb`, `100bp`, `50bp` or your own sizes) and each band's size read off
+  the ladder by interpolation.
+- **`sanger`**: chain termination with ddNTPs, the fragments sorted by length and a chromatogram
+  whose peaks give the bases 5′→3′; a heterozygous position (`heterozygous: "8T>C"`) is two
+  overlapping half-height peaks called with its IUPAC code (Y).
+- **`ngs`**: seeded short reads from the two alleles aligned to a reference, the coverage per
+  position, sequencing errors marked, and a variant call from the share of alt reads
+  (heterozygous ≈ 50 %, homozygous ≈ 100 %, below 10× *low coverage*).
+
+```yaml
+- id: pcr
+  type: dna_lab
+  params:
+    title: "PCR"
+    method: pcr
+    template: "GCTTACCAGTCGATGCCATGACTGCATCAGCTGAAGGTCACC…"   # 40–5000 bp
+    primers: {forward: "GACTGCATCAGCTGAAGGTC", reverse: "CCAAGGGTAGACCACCAGCA"}
+    cycles: 30
+  beats:
+    - text: "A template, two primers, and a product of a defined length."
+    - text: "Ninety-five to separate, fifty-five to anneal, seventy-two to extend."
+      actions: [{run: trace}]
+    - text: "The molecules double every cycle."
+      actions: [{run: counts}]
+- id: gel
+  type: dna_lab
+  params: {method: gel, agarose: 1.5, ladder: 100bp, lanes: {patient: [450], control: [450, 300]}}
+  beats: [{text: "Small fragments run furthest.", actions: [{run: ladder}]}, {text: "The ladder gives the size.", actions: [{run: sizes}]}]
+```
+
+| param | method | |
+|---|---|---|
+| `title` | | in the header band |
+| `method` | | `pcr`, `gel`, `sanger`, `ngs` |
+| `template`, `primers`, `temperatures`, `cycles` | pcr | the template 5′→3′; `{forward, reverse}` 5′→3′ (15–35 nt); `{denature, anneal, extend}` °C; 1–40 cycles |
+| `agarose`, `ladder`, `lanes` | gel | 0.5–3 %; `1kb` / `100bp` / `50bp` or sizes; `{patient: [450], digest: [300, 150]}` |
+| `sequence`, `heterozygous`, `primer` | sanger | the read 5′→3′ (8–40 nt); `"8T>C"` or a list; the sequencing primer |
+| `reference`, `variant`, `zygosity`, `read_length`, `depth`, `error_rate` | ngs | 30–120 bp; `"31C>T"`; `heterozygous` / `homozygous` / `absent`; 10–…; 4–40×; 0–0.05 |
+| `seed` | sanger, ngs | changes the seeded reads or peak heights |
+| `size`, `title_size` | | |
+
+**Actions**. Without them the scene plays its steps beat by beat.
+
+| action | | |
+|---|---|---|
+| `run` | the step's target | `trace`, `counts` (pcr); `ladder`, `lane:<label>`, `sizes` (gel); `fragments`, `chromatogram` (sanger); `reads`, `coverage`, `call` (ngs); the steps before it play first (~2.2 s each) |
+
+`highlight`, `dim`, `callout` and `reveal` work on the same targets (`template`, `primers`,
+`product`, `cycle:<n>`, `gel`, `sequence`, `reference`…).
+
+**The rules** (`vidgen validate`): a primer that is not in the template or on the wrong strand
+(*it matches the bottom strand: it would anneal to the top strand and extend leftwards*; *a reverse
+primer is the reverse complement of the top strand: write …*), primers that point away from each
+other, a primer that binds twice, a primer shorter than 15 nt, an annealing temperature at or above
+a primer's Tm, temperatures outside their windows, a gel percentage outside 0.5–3 %, an unknown
+ladder (did you mean…), fragment sizes outside 10 bp–50 kb, a heterozygous position whose base is
+not the one in the read, a variant whose reference base is wrong, and params that belong to another
+method (*agarose: is a param of method: gel, not pcr*).
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -10225,7 +10452,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, `mutate`, `scan`, `cleave`, `repair`, `run`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -10281,6 +10508,9 @@ a title card, a `transform` of a bar).
 | `pedigree` | `title`, `chart`, `legend`, `generation:<R>`, `person:<id>`, `proband`, `consultand`, `affected`, `carriers`, `child`, `genotypes`, `modes`, `analysis`, `mode:<code>`, `risk` | deduce, analyse, risk, reveal, highlight, dim, callout | `generation:II` a row (Roman numeral); `person:II-3` (or the author's id, `person:mum`) one person with their lines; `chart` everything (also its entrance); `affected` / `carriers` (declared and obligate) groups of people; `child` the proposed child; `genotypes` (also `all`) the deduced genotypes; `modes` (also `analysis`) the analysis card, `mode:XR` one mode's row; `risk` the risk card; see [`pedigree`](#pedigree) |
 | `linkage_map` | `title`, `chromosomes`, `table`, `classes`, `order`, `distances`, `interference`, `map`, `locus:<name>`, `interval:<a>-<b>`, `double` | cross_over, measure, reveal, highlight, dim, callout | `reveal: order` (any step) plays a step of the worked test cross with the steps it needs; `locus:v` its bands and alleles; `interval:v-ct` its brace on the map (and the target of `cross_over` / `measure`); see [`linkage_map`](#linkage_map) |
 | `karyotype` | `title`, `chromosomes`, `group:<A…G>`, `chromosome:<name>`, `change:<n>`, `changes`, `notation`, `reading`, `band:<band>` | rearrange, reveal, highlight, dim, callout | `change:1` the first change written (its highlight or edit); `chromosome:21` a pair; `group:G` a Denver group (karyogram); `band:7q31.2` a labelled band (ideogram); see [`karyotype`](#karyotype) |
+| `mutation` | `title`, `gene`, `reference`, `variant`, `variant:<n>`, `protein`, `notation`, `codon:<n>` | mutate, reveal, highlight, dim, callout | `variant` the row made by the change (`variant:2` the n-th listed); `codon:7` a codon with its amino acid; `gene` the exon strip; see [`mutation`](#mutation) |
+| `crispr` | `title`, `dna`, `pam`, `protospacer`, `cas9`, `sgrna`, `cut`, `repair`, `card` | scan, cleave, repair, reveal, highlight, dim, callout | `pam` the PAM boxed, `protospacer` its bracket, `cut` the break, `repair` the repaired allele; see [`crispr`](#crispr) |
+| `dna_lab` | `title`, and per method `template`, `primers`, `product`, `trace`, `cycle:<n>`, `counts` (pcr); `gel`, `ladder`, `lane:<label>`, `sizes` (gel); `sequence`, `fragments`, `chromatogram` (sanger); `reference`, `reads`, `coverage`, `call` (ngs) | run, reveal, highlight, dim, callout | `run: counts` (or any step's target) plays that step and the ones before it; see [`dna_lab`](#dna_lab) |
 | `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |

@@ -20069,3 +20069,130 @@ How to test
   map with measure / cross_over, non-disjunction I and II) and `scratchpad/s216/proj2` (47,XY,+21;
   45,X; t(9;22); rob(14;21); inv(9) + del(5); 7q31.2 CFTR), sheets and end frames in
   `scratchpad/s216/stills/{dark,light}-{16x9,9x16}/`.
+
+## Step 217 — Molecular genetics: mutations, CRISPR and the laboratory
+
+What was built
+- **A `mutation` scene type** (`scenes/mutation.py`, drawing helpers `scenes/molecular_draw.py`):
+  a variant worked out on a real coding sequence with the genetic code — the reference codons (the
+  reading frame from the ATG, base tiles in Phase U's base colours, the amino acid under each codon
+  with its residue number, the initiator Met = 1) and the variant row made from them: the base
+  swaps, or bases leave or come in and the rest slide through the fixed codon frame, so a
+  frameshift regroups every later codon and reaches its premature stop. Splice-site variants draw
+  the exon border (intronic bases lower-case in pale tiles) instead. A gene strip shows the coding
+  exons with GT…AG, the window bracketed, the variant marked and, for a splice site, the predicted
+  mRNA (exon skipped or intron retained). The card gives the symbol, the `c.` change as written,
+  the computed `p.`, the class, the legacy name and notes (side chains, the frame, NMD).
+- **HGVS** (`genetics/hgvs.py`, no manim): coding sequences with exons and introns; `c.`
+  substitutions, del / dup / ins / delins and intronic substitutions parsed with the usual
+  mistakes refused; `normalize` writes the canonical description (3′ rule within the exon, dup for
+  a copied insertion, the shortest form) and `check_written` refuses a non-canonical one with the
+  reason; the protein consequence computed with `cellworld.sequences.CODONS` (silent, missense,
+  nonsense, frameshift with `fs*n`, in-frame indels, start / stop loss, `p.?` for splice sites)
+  and written in three- or one-letter codes with `*` or `Ter`; `parse_p` + `check_stated` check an
+  author's `p.` (naming the legacy numbering when it is one less, refusing `X` and `ΔF508`);
+  nonsense-mediated decay by the 50-nt rule.
+- **Reference genes** (`genetics/reference_genes.py`): real coding-sequence windows for **HBB**
+  (NM_000518.5, c.1–150), **CFTR** (NM_000492.4, c.1516–1680, exons 11–13) and **GJB2**
+  (NM_004004.6, c.1–66) with their exons, CDS lengths and the textbook variants that lie in them
+  (HbS, HbC, HbE, codon 39, IVS-I-1; F508del, G542X, G551D, R553X, 1717-1G>A; 35delG) and their
+  legacy names. A test translates every window and checks each published protein change.
+- **A `crispr` scene type** (`scenes/crispr.py`, model `genetics/crispr.py`): SpCas9 and SaCas9
+  with their PAMs and spacer lengths; every guide in a target found, an author's spacer checked
+  (no PAM, the wrong PAM, the wrong length, written backwards or with its PAM, not unique — each
+  with the guides that would work); the search, the R-loop, the blunt cut 3 bp upstream of the PAM
+  and the repair (NHEJ indel, HDR from a donor), written in HGVS with its protein change when
+  `coding_first` says where the frame is. The picture is drawn from the strand that carries the
+  PAM (a `-` guide shows the reverse complement, said on the card), so the protospacer always reads
+  5′→3′ on top.
+- **A `dna_lab` scene type** (`scenes/dna_lab.py`, model `genetics/dna_lab.py`) with four methods:
+  `pcr` (primers checked against the template and the product measured, Tm and annealing
+  temperature, a temperature trace, the molecules doubling with 2ⁿ / 2ⁿ − 2n of the product's
+  length from the simulated strands), `gel` (agarose range, log-linear migration to the anode, a
+  ladder and sizes read off it), `sanger` (chain termination, the fragments, a chromatogram with
+  called bases and a heterozygous Y) and `ngs` (seeded reads, coverage, a variant call).
+- **Actions** `mutate`, `scan`, `cleave`, `repair`, `run` (`scenes/molecular_actions.py`); each
+  plays the steps before it that have not played, so one action can carry a whole method.
+
+YAML
+```yaml
+- id: sickle
+  type: mutation
+  params:
+    gene: HBB                                   # or sequence: + first/exons/length, or gene: {protein: …}
+    variant: {c: "c.20A>T", p: "p.(Glu7Val)"}   # p. checked; legacy Glu6Val; a list plays several
+  beats: [{text: "...", actions: [{mutate: variant, at: "@changes"}]}]
+- id: edit
+  type: crispr
+  params: {target: "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAGTCTGCC", repair: nhej}
+  beats: [{text: "...", actions: [{scan: dna}, {cleave: dna}, {repair: repair}]}]
+- id: pcr
+  type: dna_lab
+  params: {method: pcr, template: "GCTT…", primers: {forward: "GACTGCATCAGCTGAAGGTC", reverse: "CCTCAGGAGTCAGATGCACC"}}
+  beats: [{text: "...", actions: [{run: trace}]}, {text: "...", actions: [{run: counts}]}]
+- id: gel
+  type: dna_lab
+  params: {method: gel, agarose: 1.5, ladder: 100bp, lanes: {patient: [450], control: [450, 300]}}
+```
+
+Files touched
+- New: `src/vidgen/genetics/{hgvs,reference_genes,mutation,crispr,dna_lab}.py`,
+  `src/vidgen/scenes/{mutation,crispr,dna_lab,molecular_draw,molecular_actions}.py`,
+  `tests/test_molecular.py` (19 + 2 render), `docs/gallery/{mutation,crispr,dna_lab}.md` + 12 media.
+- Changed: `src/vidgen/genetics/__init__.py`, `src/vidgen/scenes/__init__.py`, `docs/CONFIG.md`
+  (three sections, targets table rows, the action enum), the guide
+  `src/vidgen/data/guide/AGENTS.md` (three chooser rows, three paragraphs with `# genetics`
+  samples, five action rows) copied to `AGENTS.md`, `examples/gallery/video.yaml` (three scenes),
+  `docs/gallery/README.md`, `README.md`, `DESIGN.md` §96.12–96.15, `CHANGELOG.md`, `tasklist.md`;
+  tests' lists (`test_actions`, `test_actions_coverage`, `test_builtin_scenes`, `test_translation`).
+
+Public interfaces
+- Scene types `mutation`, `crispr`, `dna_lab`; actions `mutate`, `scan`, `cleave`, `repair`, `run`.
+  No new `vidgen.api` names (the models are `genetics.hgvs`, `genetics.reference_genes`,
+  `genetics.mutation`, `genetics.crispr`, `genetics.dna_lab`); no config key. No shared rendering
+  code changed (the Phase Q frame baseline was not re-run).
+
+Decisions / deviations (DESIGN §96.13–96.15)
+- **HGVS is computed, not trusted**: the author's `c.` is checked against the sequence *and*
+  against the canonical description (3′ rule, dup for a copied insertion), and a stated `p.` is
+  checked against the genetic code. The legacy numbering (Glu6Val, ΔF508, R553X) is refused with
+  the modern form and may be written in `legacy:` instead.
+- Reference windows rather than whole transcripts: a scene shows at most 16 codons, so each gene
+  carries the stretch its textbook variants lie in (with the real `c.` numbering, exons and CDS
+  length, so NMD and splice sites are judged correctly).
+- A `crispr` scene is drawn from the PAM-carrying strand (the reverse complement for a `-` guide):
+  one lane layout for both strands, said on the card; HGVS stays in the target's own numbering.
+- PCR counts come from the strand simulation (aggregated), not from the 2ⁿ − 2n formula: a primer
+  site at the template's edge gives the defined-length product a cycle earlier, and the drawing and
+  the card then agree.
+- The cards drop their notes (then the legacy name, then the big type) rather than shrinking text
+  below the readable size; the base tiles are lightened so the dark letters keep 4.5:1 contrast.
+- The gallery's `crispr` sample is one beat: the scene's many coloured tiles make heavy GIFs
+  (0.30 MB for the entry, the cap is 0.36 MB).
+
+Known gaps
+- `mutation`: one window per scene, splice prediction schematic (no cryptic sites, branch point or
+  polypyrimidine tract), `r.` written only for splice sites, no multi-variant haplotypes.
+- `crispr`: SpCas9 / SaCas9 only; no off-target search, no base or prime editing; NHEJ's indel is
+  the author's choice, not a distribution; the donor is drawn as a bare stretch with arms implied.
+- `dna_lab`: one PCR product (no multiplex / nested / qPCR), the gel has no running clock, Sanger
+  peaks are stylised, NGS is a seeded read model, not an aligner.
+- Lint at preview on the scratch project: no errors; warnings `label_spacing` (base tiles stand one
+  tile apart by design), `min_font` (card lines and 5′ / 3′ marks between the 1.8 % error and 2.5 %
+  warning sizes), `max_words` on full cards, and `said_before_shown` / `rushed_animation` from the
+  scratch narration.
+
+How to test
+- `tests/test_molecular.py` (21 with renders, ~210 s): the reference windows translated, every
+  textbook variant's published protein change, the legacy numbering refused, the 3′ rule, frameshift
+  / nonsense / silent / in-frame / start-loss / splice classes, HGVS parse errors, the plan's check
+  of a stated `p.`; PAM finding and cut positions, guide checks, NHEJ and HDR outcomes; PCR counts
+  against the simulated strands and primer errors, gel migration monotonic and log-linear with the
+  ladder read back, Sanger calls, NGS calls and seeded reads; scene validation; renders 16:9 / 9:16.
+- Not render: `test_molecular` + `test_chromosomes` + `test_cross` + `test_pedigree` +
+  `test_genetics_model`; `test_actions` + `test_actions_coverage` + `test_builtin_scenes` +
+  `test_translation` + `test_registry` + `test_extensions`; `test_docs` + `test_guide` +
+  `test_gallery`; `test_schema` + `test_introspect` + `test_accuracy` + `test_api`.
+- Stills: scratch project `scratchpad/s217/proj` (sickle cell, F508del, 35delG, a splice site, three
+  point mutations, two CRISPR edits, PCR, gel, Sanger, NGS), sheets and end frames in
+  `scratchpad/s217/stills/{dark,light}-{16x9,9x16}/`.
