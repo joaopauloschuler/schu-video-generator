@@ -315,6 +315,20 @@ scenes:
         actions:
           - {highlight: "bin:4-5", style: box}
 
+  - id: decay
+    type: plot            # scientific axes: log / symlog / reversed / broken, units, 10ⁿ and SI prefixes; data from a CSV
+    params:
+      title: "Activity of an iodine-131 sample"
+      data: assets/decay.csv    # columns "time (d)", "activity (Bq)", "model (Bq)": the units go to the axis titles
+      y: {scale: log}
+      series:
+        - {name: measured, x: time, y: activity, style: points}
+        - {name: "model, half-life 8.0 d", x: time, y: model, dashed: true}
+      caption: "Illustrative numbers"
+    beats:
+      - text: "Plots read their data from a file. The activity halves every eight days."
+      - text: "On a log axis that decay is a straight line."
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:

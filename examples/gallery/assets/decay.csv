@@ -1,0 +1,13 @@
+# An iodine-131 sample (half-life 8.0 d): measured activity and the model 1000 Bq x 2^(-t / 8 d); illustrative numbers
+time (d), activity (Bq), model (Bq)
+0, 1000, 1000
+2, 851, 841
+4, 700, 707
+6, 590, 595
+8, 506, 500
+10, 418, 420
+14, 301, 297
+18, 214, 210
+24, 124, 125
+30, 77, 74.3
+40, 31, 31.3

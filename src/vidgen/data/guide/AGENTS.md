@@ -316,6 +316,7 @@ project's own scene types, in its theme).
 | change over time, trends | `line_chart` | `title`, `x`, `series`, `x_label`, `y_label`, `changes` |
 | a relationship between two measures | `scatter` | `title`, `series`, `trend`, `highlight`, `x_label`, `y_label` |
 | how values are distributed | `histogram` | `title`, `values`, `bins`, `mean`, `median`, `highlight` |
+| measurements and models on scientific axes: log, symlog, reversed or broken axes with units, 10ⁿ and SI prefixes, panels sharing an axis, orbits at an equal aspect; data inline or from a CSV | `plot` | `title`, `series` (name, x and y or points, style, dashed), `data` (a CSV, units in its headers: "time (s)"), `x` / `y` (label, unit, scale, min, max, reversed, format, breaks), `panels`, `aspect` |
 | parts of a whole (≤ 6 parts) | `pie` | `title`, `labels`, `values`, `donut`, `highlight`, `other_below` |
 | a matrix (correlations, hours x days) | `heatmap` | `title`, `rows`, `columns`, `values`, `highlight` |
 | where in the world | `map` | `title`, `view`, `steps`, `values`, `pins`, `arcs` |
@@ -1012,6 +1013,19 @@ the genetics types, notation, exactness and pacing: `vidgen guide genetics` and
   beats:
     - text: "Most requests finish fast."
     - text: "Half of them in under thirty milliseconds."
+- id: decay
+  type: plot
+  params:
+    title: "Activity of an iodine-131 sample"
+    x: {label: time, unit: d}
+    y: {label: activity, unit: Bq, scale: log}
+    # from a file: data: assets/decay.csv, then x: time, y: activity name its columns
+    series:
+      - {name: measured, style: points, x: [0, 4, 8, 14, 20, 30, 40], y: [1000, 712, 494, 302, 180, 73, 32]}
+      - {name: "model, half-life 8.0 d", dashed: true, x: [0, 40], y: [1000, 31.25]}
+  beats:
+    - text: "The activity halves every eight days."
+    - text: "On a log axis that decay is a straight line."
 - id: devices
   type: pie
   params: {title: "Visits by device", donut: true, labels: ["Mobile", "Desktop", "Tablet"], values: [5200, 3100, 640], highlight: Mobile}

@@ -83,6 +83,7 @@ from vidgen.scenes import (  # noqa: F401
     pedigree,
     pedigree_actions,
     pie,
+    plot,
     population,
     population_actions,
     process,

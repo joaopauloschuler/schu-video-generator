@@ -4335,6 +4335,101 @@ multiples (so the axis reads 10, 20, 30), or a `bin_width` — or from `counts` 
     - text: "These are the requests to look at."
 ```
 
+### `plot`
+
+A scientific plot on the chart core (DESIGN §97): line and point series from inline numbers
+or a CSV in the project, on linear, `log`, `symlog`, reversed or broken axes with units,
+scientific notation or SI prefixes, gridlines and a legend; one panel or several sharing an
+axis; an equal aspect for orbits and trajectories. Steps: the axes with the first series, then
+one series per beat (`reveal: series`, default; lines draw from their first point, points pop
+in) or everything at once (`all`). Labels are plain text (no LaTeX): `10⁻³`, `2.5 × 10⁶`, `µs`.
+[Action targets](#beat-actions): `title`, `axes` (every panel's axes), `panel<N>` (with several
+panels), `legend`, `series<N>`, `series:<name>`.
+
+| param | type | default | |
+|---|---|---|---|
+| `series` | list of series | — | the series of a one-panel plot (give `series` or `panels`) |
+| `panels` | list of `{series, x, y, weight}` | — | several panels: stacked (`arrange: rows`, sharing x) or side by side (`columns`, sharing y); a panel's own `x` / `y` is the axis it does not share; `weight` its relative size (default 1) |
+| `data` | str | — | a CSV / TSV in the project, best under `assets/` (renders follow its changes there); first row = column names with optional units: `time (s)`, `E [MeV]`, `v / km/s`; `#` comment lines; blank / `NA` cells are gaps |
+| `x`, `y` | axis | linear, from the data | `{label, unit, scale, min, max, reversed, format, linthresh, breaks}`, below |
+| `arrange` | `rows` \| `columns` | `rows` | how `panels` are laid out |
+| `share` | bool | `true` | panels share the axis along which they are arranged; `false`: each its own |
+| `aspect` | `auto` \| `equal` | `auto` | `equal`: one unit as long on x as on y (one panel, linear axes); the axis with room to spare widens |
+| `grid` | `major` \| `both` \| `x` \| `y` \| `none` | `major` | gridlines at the labelled ticks; `both` adds a log axis' minor ticks |
+| `legend` | bool | auto | default: in a panel with several series, and in a figure of several panels for a series its panel's axis title does not name; in a free corner of the plot, else one row above |
+| `reveal` | `series` \| `all` | `series` | |
+| `point_radius` | float | auto | marker radius in units (0.1 for up to 20 points, down to 0.035) |
+| `label_size` | size | `caption` | ticks, axis titles, legend |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+
+A **series** is `{name, x, y}` — `x` / `y` are column names of the data file (`data` of the
+series, else the plot's) or lists of numbers (`null` in `y` leaves a gap) — or `{name, points:
+[[x, y], ...]}`; with `style` (`line` joined in data order, `points`, `both`), `color` (default
+the palette by position), `marker` (`auto`: circle, square, triangle, diamond by position among
+the series with markers), `dashed`, `width` (default 4).
+
+An **axis**: `label` (default: the first series' column name) and `unit` (default: the unit in
+that column's header; columns in another unit are an error, as are two series in different
+units on one axis), shown as `label (unit)`; `scale`: `linear`, `log` (base 10, positive values
+only; powers of ten, or 1-2-5 within two decades, with 2–9 minor ticks) or `symlog` (linear
+within ±`linthresh`, logarithmic beyond: data across zero spanning decades; `linthresh`
+default from the data); `min` / `max` (default: the data rounded out to a tick; data outside is
+an error); `reversed` (high to low: stellar magnitudes, depth); `breaks: [[from, to], ...]` cut
+ranges out of a linear axis (drawn with `//` marks; data on both sides, none inside); `format`:
+
+| `format` | ticks | title |
+|---|---|---|
+| `auto` | plain numbers with the decimals the ticks need; beyond 10⁵ or below 10⁻³ divided by a power of ten (a multiple of 3); a log axis plain from 0.001 to 10 000, else `10⁻⁹` | `distance (10⁶ km)` |
+| `plain` | `0.0005`, `1500000` | `distance (km)` |
+| `sci` | `2.5 × 10⁻³` on every tick | `rate (s⁻¹)` |
+| `si` | one SI prefix for a linear axis, chosen by its largest tick; on a log axis each tick its own (`10 kHz`) | `time (ms)`; needs a base unit (`s`, `m`, `g`, `Hz`, `eV`, `J`, `W`, `V`, `A`, `Pa`, `Bq`, …; `km` is refused: write `m`) |
+| `"{:.1f}"` | a Python format pattern | |
+
+```yaml
+- id: decay
+  type: plot
+  params:
+    title: "Activity of an iodine-131 sample"
+    data: assets/decay.csv            # time (d), activity (Bq), model (Bq)
+    y: {scale: log}
+    series:
+      - {name: measured, x: time, y: activity, style: points}
+      - {name: "model, half-life 8.0 d", x: time, y: model, dashed: true}
+  beats:
+    - text: "The counts fall by half every eight days."
+    - text: "On a log axis the decay is a straight line."
+- id: orbit
+  type: plot
+  params:
+    title: "Earth and Mars around the Sun"
+    data: assets/orbits.csv           # x_earth (AU), y_earth (AU), x_mars (AU), y_mars (AU)
+    aspect: equal
+    x: {label: x}                     # the unit AU comes from the columns
+    y: {label: y}
+    series:
+      - {name: Earth, x: x_earth, y: y_earth}
+      - {name: Mars, x: x_mars, y: y_mars}
+      - {name: Sun, points: [[0, 0]], style: points, color: highlight}
+  beats:
+    - text: "Earth's orbit is nearly a circle; Mars moves on an ellipse."
+- id: energy
+  type: plot
+  params:
+    title: "Energy of Mars over one orbit"
+    data: assets/energy.csv           # time (yr), kinetic (J), potential (J), total (J), distance (AU)
+    panels:
+      - y: {label: energy}
+        series:
+          - {name: kinetic, x: time, y: kinetic}
+          - {name: potential, x: time, y: potential}
+          - {name: total, x: time, y: total, dashed: true}
+      - series: [{name: distance, x: time, y: distance}]
+  beats:
+    - text: "Kinetic and potential energy trade places; the total stays constant."
+```
+
 ### `pie`
 
 Shares of a whole as slices of a circle, or of a ring with `donut: true` (the total, or
@@ -10653,6 +10748,7 @@ a title card, a `transform` of a bar).
 | `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>`, `change<N>` | reveal, dim, highlight, zoom, trace | a series is its line, markers and end label; `point:sparse@8`; `change<N>` is the axes and lines, revealing it plays that change; `trace` a series to sweep a cursor along it |
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
+| `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>` | reveal, dim, highlight, zoom, callout | a series is its line runs and markers; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |

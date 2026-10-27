@@ -304,6 +304,11 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "mutation": [{"title": "T:title", "gene": "HBB", "variant": "c.20A>T"}],
     "crispr": [{"title": "T:title", "target": "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAG"}],
     "dna_lab": [{"title": "T:title", "method": "gel", "lanes": {"patient": [450]}}],
+    "plot": [
+        {"title": "T:title", "caption": "T:caption", "x": {"label": "T:x", "unit": "s"}, "y": {"label": "T:y"},
+         "series": [{"name": "T:s", "x": [0, 1], "y": [1, 2]}]},
+        {"panels": [{"x": {"label": "T:px"}, "y": {"label": "T:py"}, "series": [{"name": "T:p", "points": [[0, 1], [1, 2]]}]}], "share": False},
+    ],
     "population": [{"title": "T:title", "condition": "T:condition", "incidence": "1/2500"}],
     "gwas": [{"title": "T:title", "trait": "T:trait", "background": 400}],
     "iso_diagram": [

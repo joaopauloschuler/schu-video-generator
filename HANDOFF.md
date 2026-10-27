@@ -20591,3 +20591,77 @@ How to test
 - Video: scratchpad `s221/cystic_fibrosis.mp4` (16:9, 4:12, −16.0 LUFS, Kokoro audio of Step 220),
   contact sheet `s221/contact_16x9.png`; checks project `s221/lab` (gel, gel2, Labradors, mice,
   coat, cf family, first cousins, crispr) — storyboards under `s221/lab/build/`.
+
+## Step 222 — Phase W plan and the chart core
+
+What was built
+- **Phase W plan** (tasklist Steps 222–228, DESIGN §97): the survey of today's charts (§97.2: the
+  chart scenes on `vidgen.charts`, `math_axes`, and every Phase U / V domain plot — the
+  action-potential inset, the cyclin plot, the PCR trace on `molecular_draw.plot_axes`, Sanger,
+  gel, NGS coverage, the population and GWAS plots — with file and the axes features each
+  needs), what orbital mechanics and particle physics need, the design (§97.3), the compatibility
+  rule (chart scenes keep `vidgen.charts`; domain plots move only in Step 227, where clearly better
+  and visually compatible, with before / after) and the `plot` scene (§97.4). In "Ideas for future
+  phases" the resonance-bump histograms are marked moved (`[→]`), the Solar-System scale handling
+  and the physics simulations note their charting / calculation parts as moved.
+- **Chart core `vidgen/plotcore/`** (no manim; a test checks in a fresh interpreter):
+  `ticks.py` (linear 1-2-2.5-5 steps cleaned to 12 digits, `inside` for fixed domains; log decades
+  or 1-2-5 within two decades, minor 2–9; symlog with a default `linthresh`), `numbers.py` (U+2212,
+  superscripts, `sci_number`, `si_number`, `tick_labels` with formats auto / plain / sci / si /
+  pattern and the power of ten or SI-prefixed unit for the title, `prefixed_unit_problem`,
+  `axis_title`), `axis.py` (`AxisSpec.problems`, `build_axis`, `Axis.fraction` with reversed
+  axes and breaks, `equal_aspect`), `data.py` (`read_table`: CSV / TSV / semicolons, comments,
+  gaps, units in headers, errors with line and column; `Table.column` with did-you-mean),
+  `figure.py` (`layout_figure`: rows sharing x, columns sharing y, weights, equal aspect, label
+  thinning `label_stride` with `keep_last`, `clip_polyline`).
+- **Drawing layer `vidgen/plot_draw.py`**: `text_measure`, `draw_panel` (axis lines cut at breaks
+  with `//` marks, tick marks, dashed major and faint minor gridlines, labels, titles),
+  `series_line` (clipped, dashed), `series_markers`.
+- **Scene type `plot`** (`scenes/plot.py`): series from inline lists / points or CSV columns,
+  per-axis `label`, `unit`, `scale`, `min`, `max`, `reversed`, `format`, `linthresh`, `breaks`;
+  `panels` with `arrange` / `share` / `weight`; `aspect: equal`; `grid`; per-panel legends;
+  `reveal: series | all`; targets `title`, `axes`, `panel<N>`, `legend`, `series<N>`,
+  `series:<name>`. Docs: CONFIG section and targets row, guide chooser row and snippet (copied to
+  `AGENTS.md`), gallery entry `plot` (`vidgen gallery --types plot`; gallery 12.3 MB of 13 MB),
+  `examples/gallery` scene `decay` with `examples/gallery/assets/decay.csv`, CHANGELOG.
+
+Files touched
+- New: `src/vidgen/plotcore/{__init__,numbers,ticks,axis,data,figure}.py`, `src/vidgen/plot_draw.py`,
+  `src/vidgen/scenes/plot.py`, `tests/test_plot_core.py`, `tests/test_plot.py`,
+  `examples/gallery/assets/decay.csv`, `docs/gallery/plot.md`, `docs/gallery/media/plot-*`.
+- Changed: `src/vidgen/api.py` (modules `plotcore`, `plot_draw`), `src/vidgen/charts.py`
+  (`_stride` replaced by the core's `label_stride`, identical code), `src/vidgen/scenes/__init__.py`,
+  `docs/CONFIG.md`, `docs/gallery/README.md`, guide + `AGENTS.md`, `examples/gallery/video.yaml`,
+  `DESIGN.md` (§2 layout, §6.4, §97), `tasklist.md`, `CHANGELOG.md`; test lists in
+  `test_builtin_scenes.py`, `test_actions_coverage.py`, `test_translation.py`, `test_extensions.py`.
+
+Public interfaces: `vidgen.api.plotcore`, `vidgen.api.plot_draw` (modules); scene type `plot`. No
+config key, action or dependency.
+
+Decisions
+- Name `plot`: no scene type or action has it; it is a target name in `cell_cycle` / `population`
+  and a `gwas` param — other namespaces (DESIGN §97.4).
+- Tick labels are plain Unicode, never LaTeX (as the chart scenes); the power of ten goes into the
+  axis title in multiples of 3 (`10⁶ km`), matching SI prefixes.
+- The y title stays horizontal above the tick labels (the chart scenes' style; readable on
+  phones); stacked panels each carry their own y title.
+- A CSV is best under `assets/`: the render fingerprint follows files there (§97.4).
+
+Compatibility
+- Phase Q baseline re-run after the shared changes (`charts.py`, `api.py`): 31 frames, max
+  difference 0 (`phase-q-baseline/check222`).
+- Existing chart and domain scenes: no code change besides the `label_stride` import.
+
+Known gaps (planned): error bars, bands, fits, histograms, annotations (223); live series (224);
+units and `calculation` (225); lint (226); domain-plot adoption, example, `science` topic,
+cookbook (227). Also: equal-aspect axes choose tick steps independently; a dashed series' legend
+swatch is solid; legends appear with the axes; a line across a break is drawn straight.
+
+How to test
+- `tests/test_plot_core.py` (53, < 1 s), `tests/test_plot.py` (19 + 2 render, ~14 s).
+- Related: `test_charts` + `test_pie_heatmap` + `test_api` (102 not render), `test_builtin_scenes` +
+  `test_actions_coverage` + `test_translation` + `test_extensions` + `test_guide` + `test_docs`
+  (418 not render; render `-k plot`: 3), `test_gallery` + `test_schema` + `test_registry` (110 not
+  render, 190 s).
+- Stills: scratchpad `s222/proj` (decay, orbit, energy, symlog, mass, broken, magnitude) —
+  `build/preview{,_vertical,_light,_vlight}/frames/<scene>/` and `.../storyboard/`.

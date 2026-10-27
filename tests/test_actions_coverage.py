@@ -70,6 +70,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "mutation": {"title": "Mutation", "gene": "HBB", "variant": "c.20A>T"},
     "crispr": {"title": "Edit", "target": "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAG"},
     "dna_lab": {"title": "Gel", "method": "gel", "lanes": {"patient": [450], "control": [450, 300]}},
+    "plot": {"title": "Decay", "y": {"scale": "log"}, "series": [{"name": "a", "x": [0, 1, 2], "y": [100, 50, 25]}, {"name": "b", "points": [[0, 90], [2, 30]], "style": "points"}]},
     "population": {"title": "Drift", "model": "drift", "N": 20, "p0": 0.5, "generations": 20, "replicates": 3},
     "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},

@@ -1275,6 +1275,45 @@ baseline frames when shared code changes). DESIGN §96. Steps 213–221.
 ### Step 221 — Review of Phase V
 - [x] Critical review with fixes, including a scientific-accuracy pass (presets, reference windows, HGVS, CRISPR, lab methods, population genetics, GWAS, lint facts: no errors found; the CFTR legacy numbering confirmed and documented; the excluded-unless-non-penetrant wording made exact); frame use of `pedigree`, `karyotype` (ideograms across a 16:9 frame), `mutation` (card beside few codons); proband P placement; gel labels; dog / neutral coat glyphs; the ligature line-split bug of `fit_text`; `crispr` off-frame in 9:16; compatibility (Phase Q baseline 31/31); phase tests and related suites; `tests/test_mcp.py` in full
 
+## Phase W — Science foundation: scientific charts and worked calculations
+
+Goal: a foundation every science domain builds on (genetics and cell biology now; orbital
+mechanics and particle physics next): one chart core — an axes engine and plot primitives —
+instead of each domain scene drawing its own axes (log and symlog scales, scientific notation,
+units on axes, broken axes, error bars and bands, fits with residuals, histograms with fits,
+panels sharing an axis, annotations tied to data, data from CSV or simulations, live plots), and
+worked calculations with units (a `calculation` scene and a lint of narrated numbers), in
+vidgen's style, readable on phones in 16:9 and 9:16, easy for AI authors to write right in YAML
+(validated with did-you-mean, linted, documented). Additive and opt-in: existing projects, chart
+and domain scenes, gallery frames, audio and the studio unchanged unless a step deliberately moves
+a scene onto the core (with before / after; Phase Q's 31 baseline frames when shared code
+changes). DESIGN §97. Steps 222–228.
+
+### Step 222 — Plan and chart core
+- [x] Phase W plan here and DESIGN §97 for the whole phase: a survey of how charts are drawn today (the chart scenes, `math_axes`, and every Phase U / V domain plot with its file and the axes features it needs) and what orbital mechanics and particle physics will need; the data model; the new scene type `plot` (name checked: a target name in `cell_cycle` / `population` and a `gwas` param, other namespaces); the compatibility rule (chart scenes keep `vidgen.charts`; domain plots move onto the core only in Step 227, where clearly better and visually compatible, with before / after)
+- [x] Chart core without manim (`vidgen/plotcore/`: `ticks` linear / log with minor ticks / symlog, `numbers` plain, `10ⁿ` in the title, `sci`, SI prefixes and their unit check, `axis` linear / log / symlog / reversed / broken with its checks, `data` CSV with units in headers, `figure` multi-panel layout sharing an axis, equal aspect, label thinning, line clipping; deterministic, text measured by a callback) and a drawing layer `vidgen/plot_draw.py`; both exported by `vidgen.api` as modules; `charts` now imports the core's `label_stride` (same code)
+- [x] A `plot` scene type: line / point series from inline numbers or a CSV in the project (units from the headers, mixed units refused), axes with `scale`, `min` / `max`, `reversed`, `format` (auto, plain, sci, si, a pattern), `linthresh`, `breaks`; gridlines (`grid: both` adds log minor ticks), legends in a free corner or above, `panels` stacked (shared x) or side by side (shared y), `aspect: equal`; targets `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`; CONFIG section and targets row, guide chooser row and snippet, gallery entry, `examples/gallery` scene with `assets/decay.csv`
+- [x] Tests `tests/test_plot_core.py` (ticks: nice numbers, log decades, symlog, very small / large and negative ranges; formats and SI prefixes; axes; CSV with units and its errors; layout determinism, sharing, equal aspect, thinning; no manim import) and `tests/test_plot.py` (params and validation errors, CSV in a project, targets and legends, tiny renders in 16:9 and 9:16)
+- [~] Not yet (planned): error bars, bands, fits, histograms, annotations (223); live series (224); units engine and `calculation` (225); lint (226); adoption by domain scenes, example, `science` guide topic, cookbook (227)
+
+### Step 223 — Data features
+- [ ] Error bars (symmetric / asymmetric, x and y, their meaning: SD, SEM, CI), confidence and prediction bands, fitted curves (linear, polynomial, exponential, power, logistic, Gaussian, a custom expression via `mathexpr`) with parameters ± uncertainties and R², a residual panel; histograms with binning rules (Sturges, Freedman–Diaconis, explicit) and fitted distributions; annotations tied to data (point labels, arrows, shaded regions, reference lines) placed without overlaps
+
+### Step 224 — Live and animated plots
+- [ ] Series that grow as data or a simulation advances (a seeded, deterministic time-series generator: an ODE as safe expressions or a callable registered through `vidgen.api`), axes rescaling smoothly, panels with a shared time axis, highlight / zoom on a region, actions timed to beats and words (grow, reveal series, fit, annotate, zoom)
+
+### Step 225 — Units and `calculation`
+- [ ] A quantities engine (pint as an optional extra if acceptable, else a small own engine) with SI and common units, conversions, dimensional analysis; a `calculation` scene: formula in TeX, symbol table, substitution, step-by-step evaluation (exact fractions, significant figures), unit simplification and conversion, highlighted results, chains of calculations, actions on beats and words
+
+### Step 226 — Lint
+- [ ] Numbers in narration / on screen against computed results (tolerance, units, "about"), unit mismatches, overstated significant figures; chart rules: axes without their data's unit, log axes with non-positive data, error bars without a stated meaning, unlabelled series, truncated y axis on bar-like data (info)
+
+### Step 227 — Adoption, example, docs, gallery
+- [ ] Suitable Phase U / V domain plots moved onto the core (before / after, tests kept); an example project (a short narrated explainer with plots and a worked calculation: radioactive decay or drug clearance); guide topic `science`, CONFIG, `docs/COOKBOOK-SCIENCE-CHARTS.md`, gallery entries within budget, README, CHANGELOG
+
+### Step 228 — Review of Phase W
+- [ ] Critical review with fixes; accuracy of fits and statistics against numpy / scipy references, units and calculations; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
@@ -1320,7 +1359,9 @@ errors, an accuracy lint, docs, a gallery section, an example and a review.
 - [ ] Manoeuvres: Hohmann transfers with Δv budgets, gravity assists, Lagrange points,
   resonances, tides
 - [ ] The Solar System from published orbital elements for a given date, with honest scale
-  handling (log scales, insets, "distances not to scale" labels)
+  handling (log scales, insets, "distances not to scale" labels) — the charting part (log and
+  symlog axes, equal-aspect trajectories, energy against time, panels sharing an axis) moved into
+  Phase W (Steps 222–224); the orbits themselves stay here
 - [ ] Accuracy lint: an orbit that wouldn't close, energy drifting, a period inconsistent with
   its semi-major axis, a manoeuvre with impossible Δv
 - Effort: medium
@@ -1331,7 +1372,9 @@ errors, an accuracy lint, docs, a gallery section, an example and a review.
   with rules checking conservation at every vertex: charge, lepton and baryon number, colour
 - [ ] Detectors: layers (tracker, calorimeters, muon chambers), tracks curving in the magnetic
   field (curvature direction gives the charge), showers, collisions and decays
-- [ ] Data: histograms where a resonance "bump" emerges from the background as events accumulate
+- [→] Data: histograms where a resonance "bump" emerges from the background as events accumulate
+  — moved into Phase W (histograms with fitted peaks: Step 223; growing as events accumulate:
+  Step 224)
 - [ ] Accuracy lint: conservation-law violations, impossible decays (lighter into heavier), wrong
   charges
 - Effort: medium
@@ -1350,6 +1393,8 @@ errors, an accuracy lint, docs, a gallery section, an example and a review.
 - [ ] Chemistry: molecules with correct bonding and geometry, reaction mechanisms with curly
   arrows, energy diagrams
 - [ ] Physics: circuits, forces and fields, waves, simple simulations driven by real equations
+  (plots of simulations driven by equations and worked calculations with units moved into Phase
+  W, Steps 224–225; the physics pictures stay here)
 - [ ] Neuroscience: neurons and synapses, building on the action potential and SNAREs
 - [ ] Computer science: data structures and algorithms stepping through (sorting, graphs, trees),
   a natural fit for coding Shorts

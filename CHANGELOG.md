@@ -5,7 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–221)
+## Unreleased (Steps 193–222)
+
+### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
+
+- **The chart core and the `plot` scene** (Step 222). A new scene type `plot` draws line and
+  point series from inline numbers or a CSV in the project (units read from the headers: `time
+  (s)`, `E [MeV]`) on linear, log, symlog, reversed or broken axes, with tick labels in plain
+  numbers, powers of ten (`distance (10⁶ km)`, `2.5 × 10⁻³`) or SI prefixes (`time (µs)`, `10
+  kHz`), units in the axis titles, gridlines (with a log axis' minor ticks), a legend in a free
+  corner, several panels sharing an axis, and an equal aspect for orbits and trajectories. Data
+  an axis cannot show (a zero on a log axis, a value inside a break or past `max`), unknown
+  columns (with did-you-mean) and mixed units are errors from `vidgen validate`. It is built on a
+  chart core without manim (`vidgen.plotcore`: ticks, number formats, axes, CSV tables, the
+  layout of multi-panel figures) and a thin drawing layer (`vidgen.plot_draw`), both exported by
+  `vidgen.api`. Existing chart scenes are unchanged.
 
 ### Genetics (Phase V, from Step 213)
 

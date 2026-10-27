@@ -208,6 +208,10 @@ src/vidgen/
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
                           # colour scales, colour bar, readable text on fills (§34)
+  plotcore/               # the chart core for scientific plots (§97; no manim): numbers.py (10ⁿ, SI prefixes,
+                          # tick labels), ticks.py (linear / log / symlog), axis.py (Axis, AxisSpec, breaks,
+                          # reversed, equal aspect), data.py (CSV tables, units in headers), figure.py (panel layout)
+  plot_draw.py            # the chart core's drawing layer: axes, ticks, gridlines, break marks, series (§97)
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
@@ -1024,6 +1028,9 @@ text) and `music_template_catalog()` (every template's facts).
 Step 187 (§93.9) adds `check_music_score(score)`, `check_music_audio(samples, name)` (both →
 `MusicCheck`: verdict, facts, findings with fixes, sections, tracks) and `music_check_text(check)`
 (the report in words).
+Step 222 (§97) adds the modules `plotcore` (the chart core without manim: `AxisSpec`, `Axis`,
+`build_axis`, ticks, number formats, `read_table`, `layout_figure`, `PanelLayout`...) and
+`plot_draw` (`draw_panel`, `series_line`, `series_markers`, `text_measure`).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -16575,3 +16582,238 @@ reported, ignored (`lint_ignore`) and configured exactly like them. `ScienceIssu
 - **`crispr` 9:16**: when the protospacer and PAM do not fit at the readable tile size the tiles
   shrink to fit the frame with their 5′ / 3′ ends (they ran off both edges); unchanged otherwise.
 - **Example**: `codons: 5` (the card beside the rows in 16:9); 9:16 lint clean of layout findings.
+
+## 97. Science foundation: scientific charts and worked calculations (Phase W, Steps 222–228)
+
+A shared foundation for every science domain — genetics and cell biology now, orbital mechanics
+and particle physics next: **one chart core** (an axes engine and plot primitives) instead of each
+domain scene drawing its own axes, and **worked calculations with units** (a `calculation` scene
+and a lint comparing narrated numbers with computed ones). Written by AI authors in YAML,
+validated with did-you-mean `VidgenError`s, linted, readable on phones in 16:9 and 9:16.
+Additive and opt-in: existing projects, chart scenes, domain scenes, gallery frames, audio and the
+studio unchanged unless a step deliberately moves a scene onto the core (then with a before /
+after report and its tests kept); after a shared-code change the Phase Q baseline (31 frames)
+must stay identical.
+
+### 97.1 The phase (plan)
+
+- **Step 222, the plan and the chart core** (this section): the survey of today's charts (§97.2),
+  the design (§97.3), the core `vidgen.plotcore` (no manim) and its drawing layer
+  `vidgen.plot_draw`, and a first scene type `plot` (§97.4): line / point series from inline
+  numbers or a CSV, linear / log / symlog / reversed / broken axes, scientific notation and SI
+  prefixes, units, gridlines, a legend, panels sharing an axis, an equal aspect.
+- **Step 223, data features**: error bars (symmetric / asymmetric, x and y, with their meaning:
+  SD, SEM, CI), confidence and prediction bands, fitted curves (linear, polynomial, exponential,
+  power, logistic, Gaussian, a custom expression through `vidgen.mathexpr`) with parameters ±
+  uncertainties and R², a residual panel (a panel sharing x, §97.3 figure layout); histograms
+  with binning rules (Sturges, Freedman–Diaconis, explicit) and fitted distributions;
+  annotations tied to data (point labels, arrows, shaded regions, reference lines) placed
+  without overlaps; units in CSV headers (done in Step 222) used by the fits.
+- **Step 224, live and animated plots**: series that grow as data or a simulation advances (a
+  generic, seeded time-series generator: an ODE written as safe expressions, or a callable
+  registered through `vidgen.api`), axes rescaling smoothly, panels with a shared time axis,
+  highlight and zoom on a region, actions timed to beats and words (grow, reveal series, fit,
+  annotate, zoom).
+- **Step 225, units and `calculation`**: a quantities engine (pint as an optional extra if it is
+  light enough on Windows / Python 3.12, else a small own engine; decided and recorded then) with
+  SI and common units, conversions and dimensional analysis; the `calculation` scene: a formula in
+  TeX, a symbol table (name, value, unit), the substitution shown, step-by-step evaluation (exact
+  fractions for exact inputs, significant figures otherwise), units simplified and converted,
+  results highlighted, chains referencing earlier results, actions on beats and words.
+- **Step 226, lint**: numbers in narration and on screen against computed results (tolerance,
+  units, "about"), unit mismatches, overstated significant figures; chart rules: an axis without
+  the unit its data declares, a log axis with non-positive data, error bars without a stated
+  meaning, unlabelled series, a truncated y axis on bar-like data (info).
+- **Step 227, adoption, example, docs, gallery**: suitable Phase U / V domain plots moved onto
+  the core where it is a clear improvement and visually compatible (each reported with before /
+  after; their tests kept); an example (a short narrated explainer with plots and calculations:
+  radioactive decay or drug clearance, a fit and a worked calculation); guide topic `science`,
+  CONFIG, `docs/COOKBOOK-SCIENCE-CHARTS.md`, gallery entries within budget, README, CHANGELOG.
+- **Step 228, review**: accuracy of fits and statistics against numpy / scipy references in
+  tests, units and calculations, compatibility, the phase's tests and related suites,
+  `tests/test_mcp.py` in full.
+
+### 97.2 How charts are drawn today (survey, Step 222)
+
+Two families exist. **`vidgen.charts`** (§33–34, exported) gives chart scenes a `ChartAxis`
+(linear or log, domain = data rounded out to ticks), `chart_axes` (tick labels, titles,
+gridlines, label thinning), `auto_legend`, markers, `linear_fit`, colour scales. **`math_axes`**
+(§87.6–87.8, `scenes/math_axes.py`) draws maths axes crossing at the origin for `function_plot`
+and `number_line`. Several domain scenes draw their own axes by hand.
+
+| scene / plot | file | axes and features it needs |
+|---|---|---|
+| `bar_chart` | `scenes/bar_chart.py` | categories, no value axis (value labels on bars), changes between beats |
+| `line_chart` | `scenes/line_chart.py` | categorical or numeric x, linear y via `value_axis` + `chart_axes`, legend, end labels, a rescaling y axis (`chart_changes`), a cursor |
+| `scatter` | `scenes/scatter.py` | linear or log x / y (`value_axis(log=)`), both gridlines, markers by series, a least-squares trend with its equation and R², point labels placed without overlaps |
+| `histogram` | `scenes/histogram.py` | bins (`auto`, `sturges`, `sqrt`, `fd`, nice widths), counts from 0, percent, mean / median markers, a compared distribution |
+| `heatmap`, `map` | `scenes/heatmap.py`, `scenes/world_map.py` | colour scales (sequential / diverging, OKLab) with a colour bar |
+| `pie` | `scenes/pie.py` | no axes |
+| `function_plot`, `number_line` | `scenes/function_plot.py`, `scenes/number_line.py`, `scenes/math_axes.py` | maths axes through the origin, a fixed aspect, sampled curves from `mathexpr`, dots, tangents, areas, geometry marks |
+| action-potential inset (`molecule`, Phase U) | `scenes/molecule.py` (`_ApAxes`, `_ap_plot`) | fixed ranges (mV against ms), a trace that grows live with the process (`molecule_runtime`) |
+| cyclin–CDK plot (`cell_cycle`, Phase U) | `scenes/cell_cycle.py` (`_build_plot`) | x = share of the cycle with coloured phase bands and phase names, levels in a.u. without ticks, smooth curves labelled at their peaks |
+| PCR temperature trace (`dna_lab`, Phase V) | `scenes/dna_lab.py` (`_pcr_trace`), `scenes/molecular_draw.py` (`plot_axes`) | hand-placed ticks (cycle numbers; the three temperatures in °C), a step-shaped trace, stage names |
+| Sanger chromatogram (`dna_lab`) | `scenes/dna_lab.py` (`_sanger_trace`) | a baseline only: one peak per base, called bases under it |
+| agarose gel (`dna_lab`) | `scenes/dna_lab.py`, `genetics/dna_lab.py` (`migration`) | a log-linear axis in disguise (migration linear in log₁₀ size), ladder sizes as tick labels, readings in a margin |
+| NGS coverage (`dna_lab`) | `scenes/dna_lab.py` (`_build_ngs`) | bars per base, no numeric axis |
+| allele-frequency plot (`population`, Phase V) | `scenes/population.py` | `chart_axes`: generations × frequency 0–1, lines growing over generations, a shaded bottleneck band, a dashed reference, end dots; a second, stacked heterozygosity plot with its own axes (shared x drawn twice) |
+| Manhattan, QQ, regional plots (`gwas`, Phase V) | `scenes/gwas.py` | categorical genome axis (chromosomes), −log₁₀ p (a log scale computed by hand), threshold lines labelled in a margin, overflow triangles, an equal-ish QQ plot with a diagonal, a regional plot in Mb with r² colour bins |
+| chi-square tables (`cross`, `population`) | `scenes/cross_draw.py`, `scenes/population.py` | tables, not plots (unchanged by Phase W) |
+
+**What the coming domains need** (Ideas for future phases): orbital mechanics — trajectories at an
+**equal aspect** (an ellipse must look like one), energies over time in J (**powers of ten in the
+title**), log–log period against semi-major axis (Kepler's third law: a fitted slope of 3/2, Step
+223), panels sharing a time axis (energy and distance), **symlog** for quantities crossing zero
+over decades, insets and "not to scale" notes; particle physics — **invariant-mass histograms**
+with fitted peaks over a background (Step 223), event counts on a **log y**, masses in GeV via
+**SI prefixes** on eV, √N error bars, a ratio / residual panel sharing x, a resonance emerging as
+events accumulate (live, Step 224). Also stellar magnitudes and depths (**reversed** axes) and data
+with a gap (**broken** axes).
+
+### 97.3 The design
+
+**Two layers.** `vidgen/plotcore/` decides everything that can be decided without drawing: tick
+values, labels, axis domains and the mapping of data to the frame, the layout of panels, labels
+and titles, the parts of a line inside a plot. It imports no manim (a test imports it in a fresh
+interpreter) and is deterministic: the same inputs give the same layout, so tests check layouts
+without rendering. Text sizes come from a callback (`Measure: text -> (width, height)`):
+`plot_draw.text_measure` measures real `Text` in the theme font (cached), tests use
+`approx_measure`. `vidgen/plot_draw.py` turns a laid-out panel into manim objects and nothing
+else. Both are exported by `vidgen.api` as the modules `plotcore` and `plot_draw` (built-in
+scenes import only `vidgen.api`, §6.4).
+
+- **Ticks** (`plotcore.ticks`). Linear: the smallest step of 1, 2, 2.5 or 5 × 10ᵏ giving at most
+  `max_ticks` ticks from a multiple at or below the data to one at or above (the rule of
+  `layout.nice_ticks`), values cleaned to 12 significant digits (`0.3`, never
+  `0.30000000000000004`), a single value widened (`5..5` -> `4.5..5.5`); `inside=True` for a
+  fixed domain: the densest round step with at most `max_ticks` ticks inside it. Log (base 10):
+  decades, every k-th when there are more than `max_ticks`; within two decades 1-2-5 ticks when
+  they fit; minor ticks 2–9 × 10ᵏ (unlabelled tick marks, gridlines with `grid: both`) when every
+  decade is labelled. Symlog: linear within ±`linthresh` (mapped to ±1), one unit per decade
+  beyond (`sign(v)(1 + log₁₀(|v|/linthresh))`); ticks 0 and ±linthresh × 10ᵏ, thinned by decade;
+  default `linthresh` the decade of the smallest non-zero magnitude, at most 1/1000 of the largest.
+- **Numbers** (`plotcore.numbers`), plain Unicode so no LaTeX: the minus sign U+2212, superscript
+  exponents, `×`, `µ`. Tick formats: `auto` — linear: plain with the decimals the ticks need while
+  the largest tick lies in [10⁻³, 10⁵), else divided by 10ⁿ (n a multiple of 3) with the power in
+  the title (`distance (10⁶ km)`, `count (× 10³)`), or every tick in full for a narrow window far
+  from 0 (10⁹ … 10⁹ + 3); log / symlog: plain from 0.001 to 10 000, else `10⁻⁹`; `plain`; `sci`
+  (`2.5 × 10⁻³`, a mantissa of 1 left out: `10⁶`); `si` — linear: one prefix for the axis, chosen
+  by its largest tick, in the title (`time (µs)`), log / symlog: per tick (`10 kHz`); it needs a
+  base unit (`prefixed_unit_problem`: `km` refused, "write m"); a `str.format` pattern. The axis
+  title is `label (unit)`.
+- **Axes** (`plotcore.axis`). `AxisSpec` (what the author asks: scale, `lo` / `hi`, `reversed`,
+  `linthresh`, `breaks`, `format`, `unit`, `label`, `max_ticks`, `include_zero`, `exact` +
+  `margin`) checks itself against the data it must show (`problems(values, name)`: a log scale with
+  a value ≤ 0, data past `min` / `max` — never clipped silently —, a value inside a break, breaks
+  overlapping or without data on both sides, `linthresh` off symlog, `si` with a prefixed unit).
+  `build_axis(values, spec, lo=, hi=)` → `Axis` (domain, ticks, labels, minor ticks, title,
+  segments); without fixed ends the domain reaches the outer ticks (the chart scenes' rule), with
+  them (or `exact`) ticks lie inside. `Axis.fraction(v)` maps a value to 0..1 along the drawn
+  axis: through the scale's transform, reversed (`1 − f`), and across breaks (each break takes
+  `BREAK_GAP` = 4 % of the length; the pieces share the rest in proportion to their spans).
+- **Figures** (`plotcore.figure`). `layout_figure(area, panels, measure, arrange, share, gap, top,
+  aspect, weights)` → one `PanelLayout` per panel (plot `Rect`, axes, the tick labels kept,
+  titles). The chart scenes' style (§33): y tick labels right-aligned left of the plot, the y
+  title above them left-aligned (horizontal, readable on phones; no rotated text), x labels and
+  title below. `rows`: panels stacked; with `share` one x axis built from every panel's x values,
+  only the lowest panel labelled, every plot with the same left and right edges (the widest y
+  labels decide). `columns`: side by side sharing y, only the first panel labelled. Labels that
+  would touch are thinned to every k-th (`label_stride`, moved here from `charts._stride`, which
+  now imports it; `keep_last`: the axis' end keeps its label). `aspect: equal` (one panel, linear
+  axes): the axis with room to spare widens about its middle (iterated: the new ticks can change
+  the label widths), or, when its ends are fixed, the plot narrows instead. `clip_polyline` keeps
+  the parts of a line inside the plot (Liang–Barsky per segment; `nan` breaks a line).
+- **Tables** (`plotcore.data`). `read_table(text, source)`: comma, semicolon or tab separated
+  (picked from the header line), `#` comment lines, the header naming the columns with units as
+  `name (unit)` (a space before the parenthesis, so `f(x)` stays a name), `name [unit]` or
+  `name / unit`; numbers with `.` decimals, `−` accepted; blank / `NA` / `NaN` cells are gaps.
+  Errors name the file, line and column (`'2,5' is not a number (use a dot for decimals)`), a row
+  of the wrong length, a repeated or nameless column, a file without rows or a column without
+  numbers; `Table.column(name)` takes the name or the whole header and suggests the closest
+  (`did_you_mean`, own `difflib` helper so the core needs nothing else).
+- **Drawing** (`plot_draw`). `draw_panel(layout, size, color, axis_color, grid)`: axis lines
+  (left and bottom, cut at breaks with `//` marks), outward tick marks at major ticks (shorter at
+  minor ones), dashed gridlines at the labelled ticks (stroke 1, opacity 0.4 as `chart_axes`),
+  faint solid minor gridlines (opacity 0.16) with `grid: both`, labels at `chart_label_size`
+  (never below the readable size). `series_line` (clipped runs, optionally dashed),
+  `series_markers` (`chart_marker`s with a background-coloured outline, those inside the plot).
+  Legends reuse `charts.auto_legend` / `chart_legend`.
+
+**Existing scenes and the core (compatibility rule).** The chart scenes keep `vidgen.charts`
+(public, used by extensions) and draw exactly as before; the only shared change in Step 222 is
+`label_stride` moving into the core (same code; the Phase Q baseline 31/31 identical). A scene
+moves onto the core only in Step 227, only where it is a clear improvement and looks the same or
+better (each reported with before / after stills, its tests passing); candidates: the
+`population` frequency and heterozygosity plots (two panels sharing x), the `gwas` QQ plot (equal
+aspect) and the PCR trace (`molecular_draw.plot_axes`, hand-made axes); not candidates: the
+cyclin plot (no numeric axes), the Sanger trace, gel and coverage (pictures of lab results, not
+charts), `function_plot` / `number_line` (maths axes through the origin are another convention),
+and `bar_chart` / `line_chart` / `scatter` / `histogram` (stable, with their own changes and
+targets; `plot` covers the scientific cases they do not).
+
+### 97.4 The `plot` scene type (Step 222)
+
+Name: **`plot`** (`scenes/plot.py`). Checked for clashes: no scene type or action is called
+`plot`; the word is a target name inside `cell_cycle` and `population` and a `gwas` param (`plot:
+manhattan | qq | both`) — other namespaces, so the type keeps the plain name; the docs say "the
+`plot` scene type" where both senses are near. `function_plot` stays for functions of x (maths
+axes); `plot` is for data and models on scientific axes.
+
+```yaml
+- id: decay
+  type: plot
+  params:
+    title: "Activity of an iodine-131 sample"
+    data: assets/decay.csv            # time (d), activity (Bq), model (Bq)
+    y: {scale: log}                   # label and unit from the column: "activity (Bq)"
+    series:
+      - {name: measured, x: time, y: activity, style: points}
+      - {name: "model, half-life 8.0 d", x: time, y: model, dashed: true}
+- id: energy
+  type: plot
+  params:
+    data: assets/energy.csv
+    panels:                           # stacked, sharing the x axis
+      - y: {label: energy}
+        series: [{name: kinetic, x: time, y: kinetic}, {name: potential, x: time, y: potential}]
+      - series: [{name: distance, x: time, y: distance}]
+```
+
+- **Params**: `series` (one panel) or `panels` (`{series, x, y, weight}`), `data` (a CSV in the
+  project; renders follow its changes under `assets/`, the fingerprint's folder), `x` / `y`
+  (`PlotAxis`: `label`, `unit`, `scale`, `min`, `max`, `reversed`, `format`, `linthresh`,
+  `breaks`), `arrange` (`rows` | `columns`), `share`, `aspect` (`auto` | `equal`), `grid`
+  (`major` | `both` | `x` | `y` | `none`), `legend`, `reveal` (`series` | `all`), `point_radius`,
+  `label_size`, `title`, `caption` and their sizes / colours. A series: `name`, `x` / `y` (column
+  names or lists; `null` in y is a gap) or `points`, its own `data`, `style` (`line` | `points` |
+  `both`), `color`, `marker` (auto by position among the series with markers), `dashed`, `width`.
+- **Labels and units from the data**: an axis without `label` takes the first series' column
+  name, without `unit` the unit in that column's header; a column in another unit than the axis
+  states, or two series in different units on one axis, is an error naming both.
+- **Checks**: at param validation for inline data (no file to read), at `vidgen validate`
+  (`validate_project`) when a CSV is named: series names unique, one of `series` / `panels`,
+  `x` + `y` or `points`, equal lengths, columns named only with a data file, unknown columns with
+  did-you-mean, the axis problems of §97.3, a panel's own x when stacked panels share x, `aspect:
+  equal` with one panel and linear axes, a gap only in y.
+- **Layout**: the title (`chart_title`), caption, and `layout_figure` over the body; ticks at
+  most 7 on x and 6 on y in 16:9 (4 and 7 in 9:16); with `aspect: equal` the domains are the data
+  with a 6 % margin, widened to the plot's shape. **Legends** per panel (`_legend_panels`, static
+  so `target_names` knows them): `legend` if given, else a panel with several series, or — in a
+  figure of several panels — a panel whose single series its own axis title does not name; in a
+  free corner of the panel (`auto_legend`), else one row of all those entries above the figure
+  (the layout makes room). Series colours from the palette by position, lines 4 px, markers sized
+  by the number of points (0.1 … 0.035 units).
+- **Steps and targets**: the axes (lines drawn, the rest faded in) and legends with the first
+  step; `reveal: series` one series per beat (line runs drawn from their first point, markers
+  popping in, in data order), `all` everything at once. Targets `title`, `axes`, `panel<N>` (with
+  several panels), `legend`, `series<N>`, `series:<name>`.
+
+Public: `vidgen.api` gains the modules `plotcore` and `plot_draw` (DESIGN §6.4's rule: the
+names extensions need); scene type `plot`; no config key, no action. No new dependency (pint is
+Step 225's decision).
+
+**Gaps after Step 222** (planned for 223–227): no error bars, bands, fits, histograms, annotations
+or live series yet; a dashed series' legend swatch is solid; the equal-aspect axes choose their
+tick steps independently (x and y may step by 2 and by 1); a line crossing a break is drawn
+straight across it; no inset plots; panel titles are the axis titles only; the legends appear with
+the axes, not with their series.
