@@ -5,7 +5,241 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–211)
+## Unreleased (Steps 193–228)
+
+### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
+
+- **Review of Phase W: accuracy fixes** (Step 228). Checked against numpy / scipy
+  (`tests/test_science_review.py`). **Changed results:** counts — a series with `y_err: sqrt`, or
+  a curve fitted to a histogram — are fitted by Poisson maximum likelihood (weights from the fitted
+  curve; √N weights from the data pulled a decay low: the example's λ 0.276 → 0.274 min⁻¹, its
+  narration updated), and a count of 0 is no longer an error; a histogram with a number of bins
+  no longer drops its smallest or largest value to round-off; RK45 samples come from its dense
+  output (as scipy: far fewer steps, the same accuracy) with an absolute tolerance scaled to the
+  model. **Units:** two readings in °C / °F cannot be added, and a difference of readings cannot
+  be shown in °C (write changes in K). **Look:** normalized residual panels are symmetric and
+  ticked at ±2 (points without bars); `aspect: equal` plots tick both axes with one step (square
+  gridlines); a calculation leaving for the next one fades out faster. The lint also accepts a
+  number said for an intermediate step of a calculation.
+
+- **A science example, guide topic and cookbook; the PCR trace on the chart core** (Step 227).
+  `examples/radioactive-decay` ("Half-life: how radioactive decay keeps time", about 2:52 with
+  Kokoro): a live Monte Carlo of 1000 and 20 nuclei beside the exponential law, counts with √N
+  error bars on a log axis with an exponential fit, its confidence band and residuals, the
+  half-life worked out with its uncertainty, and carbon-14 dating; seeded data from
+  `make_data.py`, a 9:16 variant. `vidgen guide science` (plot or chart, honest axes, error bars,
+  fits, live models, units and significant figures, pacing, lint; the `biology` topic no longer
+  answers to "science") and `docs/COOKBOOK-SCIENCE-CHARTS.md`; the gallery has a "Science charts"
+  section. **Changed look:** a `calculation` keeps the units in a long substitution whenever they
+  stay comfortably readable (on two lines, or one factor per line) instead of falling back to SI
+  numbers, a block too tall for the frame shrinks its largest lines first, and a calculation's
+  lines stay within 1.6 times each other's size (a big formula above a long substitution comes
+  down towards it); the `dna_lab` PCR
+  trace is drawn by the chart core: a horizontal "temperature (°C)" title, the three temperatures
+  named by their stage on the axis ("denature 95") with gridlines, "cycle 1…3" under the cycles.
+  New: `plotcore.layout_axes` (a panel from axes you built). The population, GWAS, cyclin and
+  action-potential plots keep their drawing (DESIGN §97.12 says why).
+
+- **Lint for numbers, units and plots** (Step 226). `vidgen lint` reads the numbers the narration
+  and the screen say — in digits and in words ("eleven point two kilometres per second", "three
+  point seven times ten to the minus nineteen joules", "one in a hundred and fifty", "three
+  halves") — and compares them with what the `calculation` scenes compute: `calc_numbers` (a value
+  that is not the result, rounding as written and "about" allowed), `calc_units` ("a speed of 30
+  kilometres"; 30 m/s for 29.8 km/s, mg for µg) and `calc_sigfigs` (info: more significant
+  figures than the inputs give). New plot rules: `plot_units` (an axis of a physical quantity
+  without its unit), `plot_log` (error bars, fits or lines at or below zero on a log axis),
+  `plot_errors` (error bars without a stated meaning, or called otherwise in the narration),
+  `plot_series` (several series without legend or labels, placeholder names), `plot_truncated`
+  (info: bars not starting at zero, also a `bar_chart` baseline), `plot_conserved` (a model's
+  conserved energy drifting: use leapfrog or a smaller step) and `plot_fit_claims` ("a half-life
+  of twelve days" when the fit gives 8.0 ± 0.1 d). `said_before_shown` / `unsaid_reveal` know the
+  plot and calculation actions and targets. No new dependency.
+
+- **Worked calculations with units** (Step 225). A new scene type `calculation` shows a symbol
+  table (each value with its unit, its meaning and its source; constants such as `G`, `h`, `c`,
+  `M_sun` with CODATA 2022 / SI 2019 / IAU values) and works each calculation step by step: the
+  formula (TeX written from the expression), the values substituted with their units, the result
+  in a box with the right significant figures — or as an exact fraction when every input is exact
+  (2/3 × 1/25 × 1/4 = 1/150) — and the result converted into other units (m/s → km/s, J → eV,
+  GeV/c² → kg). Later calculations use earlier results by name, and other scenes can too
+  (`from_scene`). Units are checked: adding metres to seconds is refused with both dimensions
+  explained. The actions `substitute`, `compute` and `convert` time the steps to words;
+  `highlight: "symbol:G"` marks a symbol. The engine is `vidgen.api.quantities` (units,
+  prefixes, °C / °F offsets, conversions, significant figures, exact fractions); no new
+  dependency.
+
+- **Live plots from simulations** (Step 224). A `plot` takes `models` that generate its data:
+  differential equations written as safe expressions (`{x: v, v: "-k*x - c*v"}` with parameters,
+  initial conditions and a time span) integrated by RK4, adaptive RK45 or the symplectic
+  leapfrog (energy stays bounded on orbits and oscillators), recurrences (the logistic map,
+  compound growth), seeded random walks and Poisson events (the same seed gives the same numbers
+  everywhere), or a Python function registered with `vidgen.api.register_model`; derived
+  quantities (an energy) and their drift when declared conserved. Their series grow over the beat
+  with a head marker, an optional readout (`t = 3.20 s`, `x = 0.53 m`) and a fading trail for
+  phase-space plots; panels on one model grow together; axes widen smoothly as the data reach
+  their edge; histograms can fill as events arrive (a peak emerging from the background). The
+  action `grow` times a growth to words (`to: 4` stops part-way), and `zoom` with `x` / `y`
+  zooms a plot's axes to a region and back. Fits and annotations wait for the data. Errors name
+  the problem: an unknown name in an equation (did you mean), a missing initial condition, a step
+  too large, a solution that blows up, a stiff system. No new dependency.
+
+- **Error bars, fits, histograms and annotations on `plot`** (Step 223). Series take error bars
+  (`y_err` / `x_err`: a number, a column, a list, `{minus, plus}`, or `sqrt` for √N) with their
+  meaning in the legend (`± SD`, `± SEM`, `95 % CI`, `min–max`); `fits` draw fitted curves —
+  linear, polynomial, exponential, power law, logistic, Gaussian and Breit–Wigner peaks over a
+  polynomial background, or your own expression with named parameters — with the parameters ±
+  standard errors (`k = −0.0846 ± 0.0017 d⁻¹`), R², χ²/ν for weighted fits, confidence or
+  prediction bands and a residual panel; series with `values` are histograms (Sturges,
+  Freedman–Diaconis, Scott, one bin per integer, explicit edges; counts or density) with fitted
+  normal, exponential or Poisson distributions; `annotations` (point labels, arrows, reference
+  lines, shaded ranges, notes) find a place that covers no data and no other text. The actions
+  `fit` and `annotate` put a fit or an annotation on a word. Fitting needs no new dependency
+  (numpy; checked against scipy in the tests). Plot text is larger (phone-readable), the plot
+  fills its area (axes end just past the data, a legend or fit box without room moves beside the
+  figure), legend entries appear with their series, dashed series have dashed swatches, and a
+  line no longer crosses an axis break.
+
+- **The chart core and the `plot` scene** (Step 222). A new scene type `plot` draws line and
+  point series from inline numbers or a CSV in the project (units read from the headers: `time
+  (s)`, `E [MeV]`) on linear, log, symlog, reversed or broken axes, with tick labels in plain
+  numbers, powers of ten (`distance (10⁶ km)`, `2.5 × 10⁻³`) or SI prefixes (`time (µs)`, `10
+  kHz`), units in the axis titles, gridlines (with a log axis' minor ticks), a legend in a free
+  corner, several panels sharing an axis, and an equal aspect for orbits and trajectories. Data
+  an axis cannot show (a zero on a log axis, a value inside a break or past `max`), unknown
+  columns (with did-you-mean) and mixed units are errors from `vidgen validate`. It is built on a
+  chart core without manim (`vidgen.plotcore`: ticks, number formats, axes, CSV tables, the
+  layout of multi-panel figures) and a thin drawing layer (`vidgen.plot_draw`), both exported by
+  `vidgen.api`. Existing chart scenes are unchanged.
+
+### Genetics (Phase V, from Step 213)
+
+- **Review of Phase V** (Step 221). A scientific-accuracy pass over the presets, reference
+  sequences, HGVS, CRISPR, the lab methods, population genetics, GWAS and the lint rules found no
+  wrong data (CFTR's legacy numbering, c. + 132, is now documented). Pedigrees use the frame better
+  (the chart spreads sideways, a legend column beside it in 16:9, numbers beside the symbols, the
+  9:16 chart sized to the cards it shows), place the proband's P where it belongs to no other label,
+  and state an exclusion exactly ("— excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)").
+  Normal chromosomes in a 16:9 `karyotype` lie across the frame; `mutation` with few codons puts its
+  card beside larger rows; gel labels no longer overlap lanes or ladder bands; a coat colour is
+  drawn on a dog for Labradors (`cross` param `animal`, a neutral fur patch when no animal is
+  named); `crispr` fits a 9:16 frame. Fixed for every scene: a multi-line text in a font with
+  ligatures (the light_academic headings' "fi") no longer moves letters onto the next line.
+
+- **Example, guide topic and cookbook** (Step 220). `examples/cystic-fibrosis`: "Cystic fibrosis:
+  from a family to a diagnosis" (about 4 min with Kokoro narration, a 9:16 variant) — a pedigree
+  with the modes of inheritance tested, a Punnett square of two carriers, the carrier probability
+  2/3 and the risk 1/150, *CFTR* at 7q31.2, c.1521_1523del p.(Phe508del) on the real sequence, an
+  NGS carrier test and the carrier frequency from the incidence. A guide topic `vidgen guide
+  genetics` and `docs/COOKBOOK-GENETICS.md` (choosing, NSGC / ISCN / HGVS / HGNC notation, exact
+  numbers, reading a pedigree aloud, a counselling tone, common mistakes and their lint rules); the
+  gallery's Genetics section links both. `dna_lab` NGS reads a **deletion** too (`variant:
+  "6_8del"`: gapped reads bridged by a line, the call from the reads spanning it), its reads may
+  run past the reference's ends (even coverage up to the edges; **the reads of an existing
+  `ngs` scene change**), its tiles drop their letters when they would touch and its call card
+  names the verdict in its heading. Lint: `label_spacing` and `max_words` treat a lone character
+  on a plate (a DNA base) as a tile, not a label or a word; `contrast` finds the backdrop of a
+  narrow glyph (`I`, `1`) beside it; `genetics_hwe` reads "q, the frequency of disease alleles, is
+  about one in fifty" as q, not as the incidence.
+
+- **Accuracy lint for genetics** (Step 219). Seven `vidgen lint` rules compare the narration and
+  on-screen text with what each genetics scene computes: `genetics_ratio` (a ratio or share the
+  `cross` does not give: "a 3:1 ratio" for a dihybrid, "half the daughters affected" for a carrier
+  mother), `genetics_pedigree` (a chart that does not fit its stated mode, as an error; a dominant
+  trait skipping a generation without reduced penetrance; father-to-son transmission of an X-linked
+  trait; carrier and risk probabilities against the chart), `genetics_linkage` (RF over 50 %,
+  distances and RF against the map, linked loci called unlinked), `genetics_hwe` (carriers called
+  q², q against the incidence, carriers against 2pq), `genetics_crispr` (the wrong PAM for the Cas,
+  a cut not 3 bp upstream of the PAM, sticky ends for Cas9, the spacer length), `genetics_karyotype`
+  (ISCN that does not parse or lists its changes out of order, "45,X is male", a condition the
+  karyotype does not show) and `genetics_hgvs` (HGVS invalid or not the scene's variant, legacy
+  numbering such as p.Glu6Val unannounced; `ΔF508` / `R553X` shorthand as info). `science_naming`
+  and caption italics know the genes of the new scenes; the narration–picture rules know their
+  actions and targets. No new findings on any example or the gallery.
+
+- **Population genetics** (Step 218). A `population` scene type: Hardy–Weinberg worked step by step
+  with exact numbers — p and q from genotype counts, genotype frequencies, p or the incidence of a
+  recessive condition (1/2500 → q = 1/50, carriers 2pq = 49/1250 ≈ 1 in 25.5), p² + 2pq + q² with an
+  inbreeding coefficient, and a chi-square test of HWE with df = 1 — beside the population drawn as
+  dots by genotype; and seeded Wright–Fisher simulations — drift (replicate lines, fixation and loss),
+  selection (fitnesses or s and h; the deterministic course with drifting lines), mutation,
+  migration between two populations, a bottleneck and a founder effect with the heterozygosity
+  against H₀ Π(1 − 1/2N). A `gwas` scene type: a Manhattan plot (22 autosomes and X, the 5 × 10⁻⁸ and
+  1 × 10⁻⁵ lines, peaks labelled), a QQ plot with λ_GC and a regional plot coloured by r², from a CSV,
+  inline variants or a seeded synthetic study labelled "simulated data". New actions `simulate`,
+  `resample`, `regional`.
+
+- **Molecular genetics** (Step 217). A `mutation` scene type: a variant applied to a real coding
+  sequence (HBB, CFTR, GJB2 reference windows with their exons and transcripts, your own sequence,
+  or a gene written as in a `molecule` scene) and worked out with the genetic code — the reference
+  codons with their amino acids and the variant row made from them (substitution, deletion,
+  duplication, insertion, a frameshift regrouping every later codon to its premature stop,
+  splice-site changes with the predicted mRNA) —, with HGVS notation generated and checked against
+  the sequence (the 3′ rule, intronic positions, nonsense-mediated decay; `c.20A>T p.(Glu7Val)`,
+  `c.1521_1523del p.(Phe508del)`, `c.35del p.(Gly12Valfs*2)`, `c.1657C>T p.(Arg553*)`, legacy
+  names). A `crispr` scene type: guides found in a target (PAM `NGG` / `NNGRRT` right after the
+  protospacer's 3′ end), the sgRNA's spacer checked, the R-loop, the blunt cut 3 bp upstream of the
+  PAM, and the repair — NHEJ with a small indel or HDR from a donor — written in HGVS with its
+  protein change on a coding target. A `dna_lab` scene type with `method: pcr | gel | sanger | ngs`:
+  primers checked against the template with the product measured, a temperature trace and 2ⁿ /
+  2ⁿ − 2n copies from the simulated strands; an agarose gel with a ladder and log-linear migration
+  with the sizes read off; a Sanger chromatogram with called bases and a heterozygote; NGS reads
+  with coverage and a variant call. New actions `mutate`, `scan`, `cleave`, `repair`, `run`.
+
+- **Chromosomes** (Step 216). A `linkage_map` scene type: the heterozygote's homologue pair with
+  its alleles (coupling or repulsion), crossing over between non-sister chromatids giving
+  recombinant chromatids, and two- or three-point test crosses worked out from offspring counts
+  step by step — parental and double-crossover classes, gene order, interval distances in cM
+  (RF × 100, Haldane or Kosambi), expected and observed double crossovers, coefficient of
+  coincidence and interference, the map; or loci at map positions with `measure`. A `karyotype`
+  scene type: ISCN notation parsed and checked (47,XX,+21; 45,X; 47,XXY; del, dup, inv,
+  t(9;22)(q34;q11.2), rob(14;21)(q10;q10)) and drawn as a karyogram in the Denver groups with
+  schematic G-banded ideograms (true relative lengths and centromeres) and the change highlighted,
+  or as ideograms with structural changes played as edits; a card reads the notation. `cell_cycle`
+  meiosis takes `nondisjunction: {division: I | II, pair}`: aneuploid gametes labelled with their
+  shares and the zygotes they make. New actions `cross_over`, `measure`, `rearrange`. The committed
+  gallery's budget is 13 MB (each entry at most 0.36 MB).
+
+- **A `pedigree` scene type** (Step 215): a family chart in standard human pedigree nomenclature
+  (NSGC: squares, circles, diamonds; affected filled, carriers dotted or half-shaded, deceased
+  struck, proband arrow with P, consanguinity double line, MZ / DZ twins, adoption brackets,
+  miscarriage triangle, a proposed child dashed with ?) laid out by generation (Roman numerals,
+  individuals numbered left to right, sibships in birth order, partners beside), written as one
+  line per person (`"II-3: female affected of I-1 + I-2"`) or mappings. Its genetics are worked
+  out exactly: which modes of inheritance fit (AD, AR, XD, XR, Y-linked, mitochondrial; each
+  excluded one with its reason, e.g. father-to-son transmission), reduced penetrance, the
+  genotypes the chart forces (obligate carriers), carrier probabilities by Bayes' rule (2/3 for an
+  unaffected sibling under AR) and the risk for a proposed child with its factors (2/3 × 1/25 ×
+  1/4 = 1/150). The actions `deduce`, `analyse` and `risk` put each step on a word; `reveal`
+  brings in generations or people. Validated with the reason (two fathers, a cycle, twins who are
+  not siblings, a male carrier under X-linked inheritance).
+- **A `cross` scene type** (Step 214): a genetic cross worked out exactly and drawn — the parents
+  with their homologous chromosomes, genotypes in standard notation and phenotype pictures (peas,
+  flowers, flies, coats, blood groups…), their gametes flying out to a Punnett square's headers
+  (each allele in its homologue's colour; recombinants of linked genes ringed, with their exact
+  frequencies), the square filling cell by cell or row by row (up to 8 × 8; a branch, forked-line,
+  diagram for larger crosses), and the offspring counted into genotype and phenotype classes —
+  exact fractions, percentages, whole-number ratios (9 : 3 : 3 : 1, 9 : 3 : 4, 2 : 1 with the
+  lethal class crossed out; X-linked crosses split by sex). `P: [RRYY, rryy]` shows P → F1 → F2,
+  `kind: test` makes the tester, `kind: reciprocal` swaps the sexes; `observed` counts add a
+  chi-square test (χ², df, p, critical value, verdict). The actions `form_gametes`, `fill`,
+  `count`, `ratio` and `chi_square` put each step on a word; without them the scene plays itself.
+  16:9 and 9:16; validated with the reason (alleles, sexes, phase, counts for classes that do not
+  exist, a cell filled twice).
+- **The genetics model** (Step 213, no scene type yet; `vidgen.genetics`, also in `vidgen.api`):
+  loci and alleles in standard notation (`A`/`a`, `I^A` shown as Iᴬ, `c^{ch}`, wild type `w^+` or
+  `+`, X-linked alleles written on their chromosome, `X^H X^h`, `X^h Y`); dominance — complete,
+  incomplete, codominant, or a hierarchy of multiple alleles such as `"I^A = I^B > i"`; lethal
+  alleles; penetrance and expressivity; epistasis (recessive 9:3:4, dominant 12:3:1, suppression
+  13:3, duplicate 15:1, complementary 9:7, cumulative 9:6:1); autosomal, X-, Y-linked and
+  mitochondrial loci; linkage with recombination frequencies (coupling / repulsion written
+  `AB/ab` / `Ab/aB`, interference for three loci, no crossing over in Drosophila males). An exact
+  cross engine computes gametes and offspring genotype and phenotype distributions as fractions,
+  with test and reciprocal crosses; 15 presets of textbook crosses (`abo`, `labrador`,
+  `drosophila_white`, `drosophila_b_vg`…). Mistakes are refused with the reason: an allele not
+  defined for its locus (did-you-mean), a female with a Y, an X-linked allele written without its
+  X, linked loci without their phase, a recombination frequency above 0.5. The scene types
+  (`cross`, `pedigree`, `karyotype`, `linkage_map`, `mutation`, `crispr`, `dna_lab`,
+  `population`, `gwas`) follow in Steps 214–218; plan in `DESIGN.md` §96.
 
 ### Cell biology in physical scale (Phase U, from Step 202)
 

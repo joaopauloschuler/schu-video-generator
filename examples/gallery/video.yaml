@@ -315,6 +315,34 @@ scenes:
         actions:
           - {highlight: "bin:4-5", style: box}
 
+  - id: decay
+    type: plot            # scientific axes: log / symlog / reversed / broken, units, 10ⁿ and SI prefixes; data from a CSV
+    params:
+      title: "Activity of an iodine-131 sample"
+      data: assets/decay.csv    # columns "time (d)", "activity (Bq)", "model (Bq)": the units go to the axis titles
+      y: {scale: log}
+      series:
+        - {name: measured, x: time, y: activity, style: points}
+        - {name: "model, half-life 8.0 d", x: time, y: model, dashed: true}
+      caption: "Illustrative numbers"
+    beats:
+      - text: "Plots read their data from a file. The activity halves every eight days."
+      - text: "On a log axis that decay is a straight line."
+
+  - id: half_life
+    type: calculation     # a worked calculation with units: formula, values substituted, result with significant figures
+    params:
+      title: "Half-life from the decay constant"
+      symbols:
+        - {name: lambda, value: "0.0862 d^-1", meaning: decay constant of iodine-131, source: fitted}
+      calculations:
+        - {name: t_half, expr: "ln(2)/lambda", unit: d, convert: h, meaning: half-life}
+    beats:
+      - text: "The half-life is the natural log of two divided by the decay constant."
+        actions: [{substitute: calc1, at: "@divided"}]
+      - text: "That gives eight point oh four days."
+        actions: [{compute: calc1, at: "@gives"}]
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:
@@ -510,6 +538,104 @@ scenes:
     beats:
       - text: "Each turn makes three NADH, one FADH2, one GTP and two carbon dioxide."
         actions: [{advance: tca, to: oxaloacetate}]
+
+  - id: cross
+    type: cross         # a genetic cross worked out exactly: gametes, a Punnett square, ratios (or a branch diagram)
+    params:
+      title: "Mendel's monohybrid cross"
+      preset: pea_seed_shape
+      P: [RR, rr]       # the true-breeding P generation; its F1 is crossed to give the F2
+    beats:
+      - text: "The F1 plants make R and r gametes, and the F2 shows three round to one wrinkled."
+        actions: [{form_gametes: both}, {fill: square, at: "@F2"}, {ratio: phenotypes, at: "@three"}]
+
+  - id: pedigree
+    type: pedigree      # a family chart in NSGC symbols; the modes of inheritance that fit, carriers, risks
+    params:
+      title: "An X-linked recessive family"
+      preset: hemophilia_a   # alleles H / h on the X; the condition is hemophilia A
+      individuals:
+        - "I-1: male"
+        - "I-2: female"
+        - "II-1: male affected of I-1 + I-2"
+        - "II-2: female of I-1 + I-2"
+        - "II-3: male of I-1 + I-2"
+    beats:
+      - text: "An affected son of unaffected parents: his mother is an obligate carrier."
+        actions: [{deduce: carriers, at: "@obligate"}]
+
+  - id: linkage
+    type: linkage_map   # linked genes: crossing over, a test cross worked out into a map in centimorgans
+    params:
+      title: "Two linked genes"
+      loci: [b, vg]      # Drosophila black body and vestigial wings, in coupling
+      counts: {"b vg": 405, "+ +": 415, "b +": 85, "+ vg": 95}
+    beats:
+      - text: "Crossing over between the homologues makes recombinant chromatids."
+      - text: "Eighteen percent of the offspring are recombinant: the genes are eighteen centimorgans apart."
+
+  - id: karyotype
+    type: karyotype     # a human karyotype from its ISCN notation, the change highlighted or played as an edit
+    params:
+      title: "Forty-seven, XX, plus 21"
+      karyotype: "47,XX,+21"
+    beats:
+      - text: "Three copies of chromosome twenty-one: trisomy twenty-one, Down syndrome."
+
+  - id: mutation
+    type: mutation      # a variant on a real coding sequence: codons, the protein change, HGVS notation
+    params:
+      title: "Sickle-cell haemoglobin"
+      gene: HBB
+      variant: {c: "c.20A>T", p: "p.(Glu7Val)"}
+    beats:
+      - text: "One base of the beta-globin gene changes, and glutamic acid becomes valine."
+        actions: [{mutate: variant, at: "@changes"}]
+
+  - id: crispr
+    type: crispr        # Cas9 with its guide: the PAM, the blunt cut, and the repair
+    params:
+      title: "Cutting with Cas9"
+      target: "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAGTCTGCC"
+    beats:
+      - text: "The guide binds beside a PAM, and both strands break three base pairs away."
+        actions: [{scan: dna}, {cleave: dna, at: "@break"}]
+
+  - id: gel
+    type: dna_lab       # pcr, gel, sanger or ngs: the laboratory methods of molecular genetics
+    params:
+      title: "On the gel"
+      method: gel
+      agarose: 1.5
+      lanes: {patient: [450], control: [450, 300]}
+    beats:
+      - text: "DNA runs to the anode; the smaller fragment runs furthest."
+        actions: [{run: ladder}]
+
+  - id: drift
+    type: population    # Hardy–Weinberg worked exactly, or seeded drift / selection / migration / bottleneck simulations
+    params:
+      title: "Genetic drift"
+      model: drift
+      N: 20
+      p0: 0.5
+      generations: 50
+      replicates: 3
+      seed: 36
+    beats:
+      - text: "In small populations, chance alone fixes or loses an allele."
+        actions: [{simulate: lines}]
+
+  - id: gwas
+    type: gwas          # a Manhattan plot with the significance line; synthetic data is labelled as such
+    params:
+      title: "A genome-wide association study"
+      trait: body mass index
+      peaks:
+        - {chromosome: 16, position: 53.8 Mb, p: 1e-40, gene: FTO}
+        - {chromosome: 18, position: 60.2 Mb, p: 2e-14, gene: MC4R}
+    beats:
+      - text: "Two loci pass genome-wide significance, five times ten to the minus eight."
 
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about

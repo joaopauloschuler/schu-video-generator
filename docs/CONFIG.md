@@ -4335,6 +4335,376 @@ multiples (so the axis reads 10, 20, 30), or a `bin_width` — or from `counts` 
     - text: "These are the requests to look at."
 ```
 
+### `plot`
+
+A scientific plot on the chart core (DESIGN §97): line, point and histogram series from inline
+numbers or a CSV in the project, on linear, `log`, `symlog`, reversed or broken axes with units,
+scientific notation or SI prefixes, gridlines and a legend; error bars, fitted curves with their
+parameters ± standard errors, confidence and prediction bands, residual panels, distributions
+over histograms, and annotations tied to the data; one panel or several sharing an axis; an
+equal aspect for orbits and trajectories. Steps: the axes with the first series, then one series
+per beat (`reveal: series`, default; lines draw from their first point, points pop in, bars
+rise; a series' legend entry and error bars come with it), then each fit, then each annotation
+— or everything at once (`all`). The actions [`fit` and `annotate`](#beat-actions) (and
+`reveal`) put a fit, an annotation, a series or its error bars on a word instead; the plot's
+own steps then leave them out. Series of [models](#live-plots-models-and-grow) (ODEs,
+recurrences, random processes) grow live over their beat, and `grow` / `zoom` time growth and
+zooms to words. Labels are plain text (no LaTeX): `10⁻³`, `2.5 × 10⁶`, `µs`.
+Text is at least `body` size in 16:9 (`caption` in 9:16: the large scale), for phones; an
+axis ends just past its data when rounding out to the next tick would leave more than 8 % of
+the span empty; a legend, fit box or note that finds no free spot inside its plot moves to a
+column on the right (16:9) or above the figure (9:16), and the plot shrinks for it.
+[Action targets](#beat-actions): `title`, `axes` (every panel's axes), `panel<N>` (with several
+panels), `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`,
+`annotation<N>`, `annotation:<id>`.
+
+| param | type | default | |
+|---|---|---|---|
+| `series` | list of series | — | the series of a one-panel plot (give `series` or `panels`) |
+| `panels` | list of `{series, x, y, weight}` | — | several panels: stacked (`arrange: rows`, sharing x) or side by side (`columns`, sharing y); a panel's own `x` / `y` is the axis it does not share; `weight` its relative size (default 1) |
+| `data` | str | — | a CSV / TSV in the project, best under `assets/` (renders follow its changes there); first row = column names with optional units: `time (s)`, `E [MeV]`, `v / km/s`; `#` comment lines; blank / `NA` cells are gaps |
+| `x`, `y` | axis | linear, from the data | `{label, unit, scale, min, max, reversed, format, linthresh, breaks}`, below |
+| `arrange` | `rows` \| `columns` | `rows` | how `panels` are laid out |
+| `share` | bool | `true` | panels share the axis along which they are arranged; `false`: each its own |
+| `aspect` | `auto` \| `equal` | `auto` | `equal`: one unit as long on x as on y (one panel, linear axes); the axis with room to spare widens, and both axes tick with the same step (square gridlines) |
+| `grid` | `major` \| `both` \| `x` \| `y` \| `none` | `major` | gridlines at the labelled ticks; `both` adds a log axis' minor ticks |
+| `legend` | bool | auto | default: in a panel with several series, a fit, or error bars with a stated `error`, and in a figure of several panels for a series its panel's axis title does not name; in a free corner of the plot, else beside (16:9) or above (9:16) the figure |
+| `fits` | list of fits | `[]` | fitted curves, below |
+| `annotations` | list of annotations | `[]` | labels, arrows, reference lines, shaded ranges, notes, below |
+| `models` | map of name → model | `{}` | models generating data that grows live: ODEs, recurrences, random walks, Poisson events, registered functions; [below](#live-plots-models-and-grow) |
+| `rescale` | bool | `true` | while live series grow, free axes start around the first data and widen smoothly as the data reach their edge (an axis whose data only grow, e.g. time, is shown whole); `false`: the whole range from the start |
+| `reveal` | `series` \| `all` | `series` | |
+| `point_radius` | float | auto | marker radius in units (0.1 for up to 20 points, down to 0.035) |
+| `label_size` | size | auto | ticks, axis titles, legend, fit boxes, annotations; default `body` in 16:9, `caption` in 9:16 |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+
+A **series** is `{name, x, y}` — `x` / `y` are column names of the data file (`data` of the
+series, else the plot's) or lists of numbers (`null` in `y` leaves a gap) — or `{name, points:
+[[x, y], ...]}`; with `style` (`line` joined in data order, `points`, `both`), `color` (default
+the palette by position), `marker` (`auto`: circle, square, triangle, diamond by position among
+the series with markers), `dashed` (its legend swatch is dashed too), `width` (default 4). A
+line never crosses an axis break: it stops on one side and goes on on the other.
+
+**Error bars**: `y_err` and `x_err` — a number (every point), a column of the data file, a list
+(`null`: no bar), `{minus, plus}` for asymmetric bars (each a number, column or list), or
+`y_err: sqrt` (Poisson: √y, a histogram's √N). `error` says what they mean and the legend
+shows it: `sd` (± SD), `sem` (± SEM), `ci95` (95 % CI), `range` (min–max), `poisson` (± √N;
+the default with `y_err: sqrt`), `other`. Bars on a log axis that reach 0 run to the plot's
+edge; the axis makes room for the bars' ends.
+
+**Histograms**: a series with `values` (a column or a list of raw numbers) instead of `x` / `y`;
+`bins`: `auto` (the narrower of Sturges and Freedman–Diaconis, as numpy), `sturges`, `fd`
+(Freedman–Diaconis), `scott`, `sqrt`, `integers` (one bin per whole number: counts), a number of
+equal bins, or the edges `[e0, e1, ...]`; `bin_width` (overrides a rule), `bin_range: [low,
+high]` (values outside are left out), `nice_bins` (`true`: a rule's width rounded to 1, 2, 2.5
+or 5 × 10ᵏ with edges on its multiples; `false`: numpy's edges), `density` (heights as a
+probability density, area 1; default counts). `style`: `bars` (default), `step` (outline) or
+`points` (a marker at each bin's centre, with `y_err: sqrt` the particle-physics look). The y
+axis starts at 0 and is titled `count` (or `density`).
+
+**Fits** (`fits: [{series, model, ...}]`), drawn as a curve over the fitted points (`extend:
+true`: across the axis) with a box of the parameters ± standard errors, R² and χ²/ν (with
+errors); the legend names the fit (`name`, else its formula):
+
+| key | default | |
+|---|---|---|
+| `series` | — | the series to fit, by name |
+| `model` | `linear` | `linear` (a + b·x), `poly` (`degree`, 1–6), `exponential` (A·exp(k·x)), `power` (A·xᵏ, x > 0), `logistic` (L / (1 + exp(−k(x − x₀)))), `gaussian` (A·exp(−(x − μ)²/2σ²)), `breit_wigner` (also `cauchy`, `lorentzian`: A·(Γ/2)²/((x − M)² + (Γ/2)²)), `custom` (`expr`); on a histogram also the distributions `normal`, `exponential`, `poisson` fitted to the raw values by maximum likelihood (Poisson needs `bins: integers` and is drawn as steps) |
+| `background` | — | `gaussian` / `breit_wigner`: a polynomial background of that degree (0–6; parameters b₀, b₁, …) under the peak |
+| `expr`, `params` | — | `custom`: an expression of `x` and named parameters (the safe maths syntax of `function_plot`; a parameter may be called `tau` or `e`) and their starting values: `params: {a: 1000, tau: {value: 8, unit: d}, c: 0}` (a unit is shown after the value); `params` also overrides a built-in model's own starting values |
+| `name` | `<model> fit` | legend and targets `fit:<name>` |
+| `range` | — | fit only the points with x in `[low, high]` |
+| `weighted` | `true` | weight by the series' y errors (absolute: χ²/ν tells whether they match the scatter), use its x errors (effective variance); counts — a histogram, or a series with `y_err: sqrt` — by Poisson maximum likelihood (the variance is the fitted curve's, not the count's: √N weights from the data pull a fit low; χ²/ν is Pearson's; a 0 count is a point like any other); without errors the parameter errors come from the scatter (as `scipy.optimize.curve_fit`) |
+| `band`, `level` | `none`, `0.95` | `confidence` (where the true curve lies) or `prediction` (where a new point would lie), shaded in the curve's colour; Student's t with n − p degrees of freedom (the normal quantile when the points have errors) |
+| `residuals` | `false` | `true`: a panel under the plot sharing x with y − fit (and the error bars); `normalized`: (y − fit)/σ (counts: σ = √fit), symmetric about 0 and ticked at ±2 |
+| `show` | `auto` | the box: `auto` (parameters, R², χ²/ν with errors), `none`, or a list of `formula`, `params`, `r2`, `chi2`, `n` |
+| `color`, `dashed`, `width` | accent (several fits: the series' colour), `false`, 4 | |
+
+Values ± errors are written as results are: the error with two significant digits (one from 355
+to 949, PDG rule), the value to the same place, a power of ten outside brackets beyond 10⁵ or
+below 10⁻³ (`(2.510 ± 0.031) × 10⁻⁴ s`), units from the axes (`k = −0.0846 ± 0.0017 d⁻¹`). R² is unweighted (1 − Σ residual² / Σ (y −
+ȳ)²); with error bars read χ²/ν.
+Fitting needs no scipy: linear models are solved directly, others by Levenberg–Marquardt in
+numpy (checked against `scipy.optimize.curve_fit` and, for counts, a Poisson likelihood); a fit that cannot be done (too few points, a power law with x ≤ 0, parameters the data do
+not determine, a model undefined at the starting values) is an error naming the fit.
+
+**Annotations** (`annotations: [{type, text, ...}]`), placed where they cover the least data
+and no other text (deterministic):
+
+| `type` | keys | |
+|---|---|---|
+| `label` | `x`, `y` — or `series` with `x` (its point nearest x) or `index` (1 = first; alone: its highest point) — and `text` | a ring on the point and its text beside it (a leader line when it had to stand off) |
+| `arrow` | as `label` | the text further off with an arrow to the point |
+| `hline`, `vline` | `y` / `x`, `text` (optional) | a dashed reference line across the plot, its text along it |
+| `xrange`, `yrange` | `x: [from, to]` / `y: [from, to]`, `text` (optional) | a shaded range across the plot |
+| `note` | `text`, `at` (`auto`, `top_left`, `top_right`, `bottom_right`, `bottom_left`, `top`, `bottom`) | a text box in a free spot (else beside the figure) |
+
+Each takes `panel` (1 = first; default the series' panel), `color` (default `highlight`) and
+`id` (targets `annotation:<id>`).
+
+An **axis**: `label` (default: the first series' column name) and `unit` (default: the unit in
+that column's header; columns in another unit are an error, as are two series in different
+units on one axis), shown as `label (unit)`; `scale`: `linear`, `log` (base 10, positive values
+only; powers of ten, or 1-2-5 within two decades, with 2–9 minor ticks) or `symlog` (linear
+within ±`linthresh`, logarithmic beyond: data across zero spanning decades; `linthresh`
+default from the data); `min` / `max` (default: the data rounded out to a tick when that tick
+is near, else just past the data; data outside is an error); `reversed` (high to low: stellar magnitudes, depth); `breaks: [[from, to], ...]` cut
+ranges out of a linear axis (drawn with `//` marks; data on both sides, none inside); `format`:
+
+| `format` | ticks | title |
+|---|---|---|
+| `auto` | plain numbers with the decimals the ticks need; beyond 10⁵ or below 10⁻³ divided by a power of ten (a multiple of 3); a log axis plain from 0.001 to 10 000, else `10⁻⁹` | `distance (10⁶ km)` |
+| `plain` | `0.0005`, `1500000` | `distance (km)` |
+| `sci` | `2.5 × 10⁻³` on every tick | `rate (s⁻¹)` |
+| `si` | one SI prefix for a linear axis, chosen by its largest tick; on a log axis each tick its own (`10 kHz`) | `time (ms)`; needs a base unit (`s`, `m`, `g`, `Hz`, `eV`, `J`, `W`, `V`, `A`, `Pa`, `Bq`, …; `km` is refused: write `m`) |
+| `"{:.1f}"` | a Python format pattern | |
+
+```yaml
+- id: decay
+  type: plot
+  params:
+    title: "Activity of an iodine-131 sample"
+    data: assets/decay.csv            # time (d), activity (Bq), model (Bq)
+    y: {scale: log}
+    series:
+      - {name: measured, x: time, y: activity, style: points}
+      - {name: "model, half-life 8.0 d", x: time, y: model, dashed: true}
+  beats:
+    - text: "The counts fall by half every eight days."
+    - text: "On a log axis the decay is a straight line."
+- id: orbit
+  type: plot
+  params:
+    title: "Earth and Mars around the Sun"
+    data: assets/orbits.csv           # x_earth (AU), y_earth (AU), x_mars (AU), y_mars (AU)
+    aspect: equal
+    x: {label: x}                     # the unit AU comes from the columns
+    y: {label: y}
+    series:
+      - {name: Earth, x: x_earth, y: y_earth}
+      - {name: Mars, x: x_mars, y: y_mars}
+      - {name: Sun, points: [[0, 0]], style: points, color: highlight}
+  beats:
+    - text: "Earth's orbit is nearly a circle; Mars moves on an ellipse."
+- id: energy
+  type: plot
+  params:
+    title: "Energy of Mars over one orbit"
+    data: assets/energy.csv           # time (yr), kinetic (J), potential (J), total (J), distance (AU)
+    panels:
+      - y: {label: energy}
+        series:
+          - {name: kinetic, x: time, y: kinetic}
+          - {name: potential, x: time, y: potential}
+          - {name: total, x: time, y: total, dashed: true}
+      - series: [{name: distance, x: time, y: distance}]
+  beats:
+    - text: "Kinetic and potential energy trade places; the total stays constant."
+- id: decay_fit
+  type: plot
+  params:
+    title: "Activity of an iodine-131 sample"
+    data: assets/decay.csv            # time (d), activity (Bq), sem (Bq)
+    series:
+      - {name: measured, x: time, y: activity, style: points, y_err: sem, error: sem}
+    fits:
+      - {series: measured, model: exponential, name: decay, band: confidence, residuals: true}
+    annotations:
+      - {type: hline, y: 500, text: half the start}
+      - {type: label, series: measured, x: 8, text: after 8 days, id: half}
+  beats:
+    - text: "The counts fall by half every eight days."
+    - text: "An exponential fits them."
+      actions: [{fit: "fit:decay", at: "@exponential"}]
+    - text: "After eight days, half is left."
+      actions: [{annotate: "annotation:half", at: "@half"}]
+- id: peak
+  type: plot
+  params:
+    title: "Diphoton invariant mass"
+    data: assets/mass.csv             # mass (GeV): one value per event
+    y: {label: events per 2 GeV}
+    series:
+      - {name: events, values: mass, bins: 30, bin_range: [100, 160], style: points, y_err: sqrt}
+    fits:
+      - {series: events, model: gaussian, background: 2, name: peak + background, residuals: normalized}
+    annotations:
+      - {type: xrange, x: [120, 130], text: signal region}
+  beats:
+    - text: "A small peak over a falling background."
+- id: growth
+  type: plot
+  params:
+    data: assets/growth.csv           # time (h), OD600
+    series: [{name: culture, x: time, y: OD600, style: points}]
+    fits:
+      - name: logistic
+        series: culture
+        model: custom
+        expr: "L/(1 + exp(-r*(x - t0)))"
+        params: {L: 1.5, r: {value: 0.5, unit: h⁻¹}, t0: {value: 10, unit: h}}
+        band: prediction
+  beats:
+    - text: "Growth slows as the culture fills the flask."
+```
+
+#### Live plots: models and grow
+
+A **model** (`models: {name: {kind, ...}}`) generates columns that series name like the
+columns of a CSV (`x: t, y: x`; a series takes `model: <name>`, by default the plot's only
+model when it has no `data`). Its series are **live**: each grows over its step's slot of the
+beat (from its first point to its last, in the model's time) with a head marker; consecutive
+live series of one model grow together (panels sharing a time axis, a phase portrait next to
+x(t)). Everything is deterministic: the same model and seed give the same numbers on every
+machine.
+
+| `kind` | keys | columns |
+|---|---|---|
+| `ode` | `equations` (`{x: v, v: "-k*x - c*v"}`: the derivative of each variable; keys `x`, `dx/dt` or `x'`), `initial` (every variable), `params`, `t: [start, end]` (default `[0, 10]`), `method`, `step`, `tolerance`, `samples` | `t`, the variables |
+| `recurrence` | `equations` (`{x: "r*x*(1 - x)"}`: the next value from the current; `n` is the step number), `initial`, `params`, `steps` (default 50) | `n`, the variables |
+| `random_walk` | `steps` (100), `seed`, `step` (the step's length, 1), `p` (1-D lattice: chance of a step up, 0.5), `dims` (1 or 2), `distribution` (`lattice` or `gaussian`) | `n`, `x` (`y`), `distance` |
+| `poisson` | `rate` (events per unit time), `t`, `seed` | `t`, `count` (a staircase), `expected` |
+| `function` | `function` (a name registered with `vidgen.api.register_model`), `params`, `seed` | what the function returns |
+
+Every kind also takes `quantities` (derived columns: `{E: "0.5*v^2 + 0.5*k*x^2"}`, expressions
+of the columns and params in the safe maths syntax), `units` (`{t: s, x: m, E: J}`: axis titles
+and readouts) and — `ode`, `recurrence`, `function` — `conserved` (quantities that should stay
+constant: their drift is checked for lint). `method` of an `ode`: `rk4` (fixed `step`, default a
+thousandth of the span; error ∝ step⁴), `rk45` (adaptive Dormand–Prince to the relative
+`tolerance`, 10⁻⁶, with an absolute floor scaled to the initial values; `step` is the first step;
+the samples between its steps come from its dense output, as scipy's `solve_ivp`), `leapfrog` (velocity Verlet: symplectic, the
+energy of an orbit or an oscillator stays bounded over long times where RK4 slowly drifts;
+needs every position paired with a velocity, `x' = v`, and forces that do not depend on
+velocities). Errors name the model: an unknown name in an equation (did you mean), a missing or
+unknown initial condition, a step larger than a quarter of the span, a solution that blows up
+(where, and what to try), a stiff system that would need tiny steps all along.
+
+A live series (`live`, default `true` for a model's series; `live: true` makes data grow
+point by point too, and a histogram fill as its values arrive in their order — a peak emerging
+from the background as events accumulate, `readout` counting them) takes `head` (the marker at
+its growing end, `true`), `readout` (`true` or
+a label: a box with the model's time and the series' current value, `t = 3.20 s`, `x = 0.53
+m`; placed like a legend, beside the figure when the plot has no free spot) and `trail` (in the
+model's time: only that last stretch is drawn strongly, the older path faint — phase-space
+plots). While it grows, free axes widen smoothly when the data reach their edge (`rescale`);
+fits and annotations on a growing series wait until its data are complete.
+
+The action [`grow`](#beat-actions) times a growth: `- grow: "series:x"` (or `axes`: every live
+series, `panel2`) from where it is to `to` (the model's time; default the end), lasting until
+the beat's next action or its end (or `run_time`); a later `grow` continues. `zoom` with `x` /
+`y` eases a plot's axes to a region of the data and back (at the end of the beat, or `until`):
+`- {zoom: axes, x: [8, 18]}`; annotations of that panel step aside meanwhile.
+
+Models written in Python: in an extension,
+
+```python
+from vidgen.api import register_model
+
+@register_model("tumour")
+def tumour(params: dict[str, float], seed: int) -> dict[str, list[float]]:
+    ...   # deterministic for the same params and seed
+    return {"t": times, "volume": volumes}   # the first column is the progress (time)
+```
+
+```yaml
+- id: oscillator
+  type: plot
+  params:
+    title: A damped oscillator
+    models:
+      osc:
+        kind: ode
+        equations: {x: v, v: "-k*x - c*v"}
+        params: {k: 4, c: 0.3}
+        initial: {x: 1, v: 0}
+        t: [0, 20]
+        step: 0.01
+        units: {t: s, x: m, v: m/s}
+    arrange: columns
+    share: false
+    legend: false
+    panels:
+      - series: [{name: position, x: t, y: x, readout: true}]
+        y: {label: position}
+      - series: [{name: phase, x: x, y: v, trail: 3}]
+        x: {label: position}
+        y: {label: velocity}
+  beats:
+    - text: "Friction takes the energy away, so each swing is smaller."
+    - text: "In phase space the state spirals in towards rest."
+- id: pendulum
+  type: plot
+  params:
+    models:
+      swing:
+        kind: ode
+        equations: {theta: omega, omega: "-g/L*sin(theta)"}
+        params: {g: 9.81, L: 1}
+        initial: {theta: 2.5, omega: 0}
+        t: [0, 12]
+        method: leapfrog
+        quantities: {E: "0.5*L^2*omega^2 + g*L*(1 - cos(theta))"}
+        conserved: [E]
+        units: {t: s, theta: rad, E: J/kg}
+    panels:                           # stacked, sharing the time axis, growing together
+      - series: [{name: angle, x: t, y: theta}]
+      - series: [{name: energy, x: t, y: E, readout: true}]
+  beats:
+    - text: "The angle swings while the energy stays the same."
+- id: hares
+  type: plot
+  params:
+    models:
+      lv:
+        kind: ode
+        equations: {hares: "a*hares - b*hares*lynxes", lynxes: "d*b*hares*lynxes - g*lynxes"}
+        params: {a: 1.0, b: 0.1, d: 0.5, g: 0.6}
+        initial: {hares: 10, lynxes: 5}
+        t: [0, 40]
+        method: rk45
+        units: {t: yr}
+    series:
+      - {name: hares, x: t, y: hares}
+      - {name: lynxes, x: t, y: lynxes}
+  beats:
+    - text: "Hares multiply, lynxes eat them, and the cycle repeats."
+      actions: [{zoom: axes, x: [8, 18], at: 0.4}]
+- id: decay
+  type: plot
+  params:
+    models:
+      d: {kind: ode, equations: {N: "-lambda*N"}, params: {lambda: 0.3}, initial: {N: 1000}, t: [0, 10], samples: 40}
+    series: [{name: atoms, x: t, y: N, style: points}]
+    fits: [{series: atoms, model: exponential}]
+  beats:
+    - text: "The atoms decay."
+      actions: [{grow: "series:atoms", to: 4}]
+    - text: "Then the rest, and an exponential fits them."
+      actions: [{grow: "series:atoms"}, {fit: fit1, at: "@exponential"}]
+- id: walk
+  type: plot
+  params:
+    models:
+      walk: {kind: random_walk, steps: 400, seed: 7}
+    series: [{name: walker, x: n, y: x, readout: position}]
+  beats:
+    - text: "A coin decides every step; the walker wanders off."
+- id: resonance
+  type: plot
+  params:
+    data: assets/mass.csv             # mass (GeV): one value per event, in arrival order
+    y: {label: events per 2 GeV}
+    series:
+      - {name: events, values: mass, bins: 30, bin_range: [100, 160], style: points, y_err: sqrt, live: true, readout: events}
+    fits:
+      - {series: events, model: gaussian, background: 2, name: peak + background}
+  beats:
+    - text: "Events arrive one by one, and a bump rises above the background."
+    - text: "A Gaussian over a smooth background fits it."
+```
+
 ### `pie`
 
 Shares of a whole as slices of a circle, or of a ring with `donut: true` (the total, or
@@ -4981,6 +5351,194 @@ jumps ahead; the steps in between are skipped and the result still gets its box.
     - text: "Divide both sides by two."
     - text: "And x is four."
 ```
+
+### `calculation`
+
+A **worked calculation with units**: a symbol table (each symbol's value with its unit, what it
+means and where the value comes from) and a chain of calculations, each shown step by step —
+the **formula** (TeX written from the expression), the **values substituted** with their units,
+an **intermediate** value (the argument of an outer square root or power), the **result** in a
+box with its significant figures (an exact fraction and its decimal when every input is exact:
+2/3 × 1/25 × 1/4 = 1/150 ≈ 0.00667), and **conversions** into other units. The arithmetic is
+done on quantities with units (no `eval`): adding metres to seconds, a function of a quantity
+with a unit, or a result in a unit of another kind is an error naming both dimensions. **Needs
+LaTeX**, like [`equation`](#equation).
+
+```yaml
+- id: orbit
+  type: calculation
+  params:
+    title: "How fast does the Earth orbit the Sun?"
+    symbols:
+      - {name: G, constant: G}                     # CODATA 2022, shown with its source
+      - {name: M_sun, constant: M_sun}
+      - {name: r, constant: AU, meaning: "Earth–Sun distance"}
+    calculations:
+      - {name: v, expr: "sqrt(G*M_sun/r)", sig: 3, convert: km/s, meaning: orbital speed}
+  beats:
+    - text: "Gravity holds the Earth on its orbit, so its speed is the square root of G M over r."
+    - text: "Put in the numbers, and the Earth moves at about thirty kilometres per second."
+      actions: [{substitute: calc1, at: "@numbers"}, {compute: calc1, at: "@moves"}]
+- id: risk
+  type: calculation
+  params:
+    title: "Risk for the couple's child"
+    symbols:                                       # fractions are exact: the result is 1/150
+      - {name: P_mother, value: "2/3", meaning: "mother is a carrier", tex: 'P_{\mathrm{mother}}'}
+      - {name: P_father, value: "1/25", meaning: "father is a carrier (population)", tex: 'P_{\mathrm{father}}'}
+      - {name: P_aa, value: "1/4", meaning: "child of two carriers is affected"}
+    calculations:
+      - {name: P, expr: "P_mother*P_father*P_aa", meaning: risk for the child}
+  beats:
+    - text: "Two thirds times one twenty-fifth times one quarter is one in one hundred fifty."
+- id: year
+  type: calculation
+  params:
+    symbols:
+      - {name: v, from_scene: orbit}               # the result v of the scene 'orbit'
+      - {name: r, constant: AU}
+    calculations:
+      - {name: T, expr: "2*pi*r/v", unit: d, sig: 3, meaning: orbital period}
+  beats:
+    - text: "At that speed one orbit takes three hundred sixty-five days."
+```
+
+**Values.** `value` is a number (`29.8`, `"6.674e-11"`, `"2.5 × 10^3"`) or a fraction
+(`"1/25"`), optionally followed by its unit (`"29.8 km/s"`) — or give `unit:` separately.
+YAML drops trailing zeros (`1.50` becomes 1.5): write such values as strings (`"1.50"`).
+**Exactness and significant figures**: a fraction is exact; a whole number without a unit is
+exact (a count); any other number is measured, its significant figures counted from its digits —
+leading zeros never count, trailing zeros count after a decimal point (`0.0250` → 3, `2.50e3` → 3)
+and not in a whole number without one (`1500 m` → 2: write `1.500e3` or `sig: 4`). `sig: 3`
+states them (the value is rounded to them), `exact: true` makes a value exact. Exact values
+never limit a result's figures.
+
+**Constants** (`constant:` a key; the symbol, meaning and source come with it, and the table shows
+the value to 4 figures while the full value is used; `digits:` shows more): SI 2019 exact —
+`c`, `h`, `hbar`, `k_B`, `N_A`, `e` (elementary charge), `R`, `sigma_SB`; CODATA 2022 — `G`, `m_e`,
+`m_p`, `m_u`, `epsilon_0`, `mu_0`; CGPM 1901 — `g` (standard gravity, exact); IAU 2012 — `AU`
+(exact); IAU 2015 nominal — `GM_sun`, `GM_earth`, `R_earth` (equatorial); `M_sun`, `M_earth` are
+the IAU parameters divided by CODATA 2022 G. A symbol named like the constant (`G`, `M_sun`) takes
+its TeX (`M_⊙`); another name (`r` for `AU`) is written from the name. `e`, `pi` and `tau` in an
+expression are the mathematical constants unless a symbol takes the name (`{name: e, constant: e}`).
+
+**Units** (`unit`, `convert`, in values and in `[brackets]` after a number in an expression):
+SI base and derived units with prefixes (`m`, `kg`, `s`, `A`, `K`, `mol`, `cd`, `N`, `J`, `W`,
+`Pa`, `Hz`, `Bq`, `C`, `V`, `Ω`/`ohm`, `F`, `T`, `Wb`, `H`, `S`, `Gy`, `Sv`, `rad`; `km`, `µs`/`us`,
+`mL`, `kPa`, `MeV`...), `min`, `h`, `d`, `yr` (Julian; `Myr`, `Gyr`), `L`, `M` (mol/L; `mM`, `µM`),
+`t`, `Da` (`kDa`), `u`, `eV` (`keV` … `TeV`), `cal` (`kcal`), `Wh` (`kWh`), `Å`, `au`/`AU`, `ly`, `pc`
+(`kpc`, `Mpc`), `atm`, `bar` (`mbar`), `mmHg`, `Torr`, `deg`/`°`, `sr`, `%`, `ppm`, `c` (as in
+`GeV/c^2`), and the temperatures `°C`/`degC` and `°F`/`degF`. Written as people write them:
+`m/s^2`, `km h^-1`, `kg·m²·s⁻²`, `kg*m**2/s**2`, `J/(mol·K)`, `m^(1/2)`; `/` divides by the
+factor after it (`m/s/s` = m/s²; group with brackets). A temperature with an offset must stand
+alone (`°C/s` is refused: a change of 1 °C is 1 K, write `K/s`); a value in °C is converted to
+kelvin (25.0 °C = 298.2 K, keeping its last decimal place), and a result can be shown in °C.
+Two readings in °C (or °F) cannot be added (`T1 + T2` is refused: a change of temperature is
+written in K, `T + 10 [K]`; average readings in K), and a difference of two readings cannot be
+shown in °C (`unit: K` for `T2 - T1`: 10 K would read as −263 °C). Unknown units get a did-you-mean; a prefix on a unit that takes none (`kmin`) is refused.
+
+**Expressions** (`expr`): the names of the symbols and of earlier results, numbers (exact: the
+`2` of `2*p*q`, the `1/2` of `m*v^2/2`), `+ - * / ^` (or `**`), brackets, implicit products
+(`2pq` written `2 p q` or `2*p*q`), `sqrt`, `exp`, `ln`/`log`, `log10`, `log2`, `sin`, `cos`,
+`tan` (radians; a value in `deg` is converted), `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`,
+`abs`, `min`, `max`, and a number with a unit `9.81 [m/s^2]`. A quantity with a unit may only be
+raised to a fixed rational power (`r^2`, `x^(1/2)`); the arguments of `exp`, `ln`, `sin`... must
+be pure numbers. Square roots of exact perfect squares stay exact (√(1/2500) = 1/50).
+
+**Significant figures of a result**: a product or quotient has the fewest of its measured
+factors; a sum or difference keeps the coarsest last decimal place (100.0 m − 99.9 m = 0.1 m,
+one figure); functions keep their argument's; exact inputs never limit. `sig` on a calculation
+overrides that (a `sig` above what the inputs give is kept, and lint flags it in a later step).
+Results are written rounded half away from zero, plainly from 10⁻³ to 10⁵ when no digit left of
+the point is uncertain, else in scientific notation (29 800 to three figures is 2.98 × 10⁴; 240
+to three figures is 2.40 × 10²), like the plot core. An exact result is written as a fraction
+(numerator and denominator up to 100 000) with its decimal (`= 1/50 = 0.02`, `= 1/150 ≈ 0.00667`),
+or as a whole number; an exact irrational one (ln 2) with 4 figures after `≈`. Later calculations
+use a result's full value, not its rounded one.
+
+**Units of a result**: `unit:` if given (checked against the result's dimension), else SI with a
+named unit where one fits exactly (kg·m²·s⁻² → J, kg·m·s⁻² → N, ...; J·s for an action; s⁻¹ stays,
+since it may be Hz or Bq), else the base units (m³·kg⁻¹·s⁻²). `convert: [km/s, km/h]` adds a last
+line with the result in those units.
+
+**Layout.** The table goes beside the work in 16:9 (40 % of the width) and above it in a vertical
+frame (as tall as it needs, at most half the body; two columns when the rows are short); `table:
+side`, `top` or `none`. Each row is `symbol = value unit` over its meaning and source; a
+calculation's result joins the table when the next calculation starts (`results_in_table:
+false` keeps them out). The lines of a calculation are aligned at their `=` and centred; each
+is as large as `size` allows (1.15x in a vertical frame) within the width; when the block is too
+tall, the largest lines give way first (down to a common size), so a big formula shrinks before
+a long substitution does, and no line is more than 1.6 times the size of the smallest (one block). A long substitution keeps its units when that stays comfortably
+readable (1.2x the readable size or more): with units on one line, on two lines (the outer product
+split) or one factor per line, the most explicit that is nearly as large as the largest of those;
+otherwise it is written in SI numbers without units (on one line, on two) — `units: always` /
+`never` choose. A calculation that still does not fit at the readable size logs a warning (split
+it, or use fewer symbols per formula). Symbols are
+coloured by their concept colour (`terms:` whose `tex` is the symbol's) or their own `color`, in
+the table and in every line.
+
+**Steps and timing.** One calculation per beat; with more beats than calculations, each
+calculation's lines spread over its beats; with more calculations than beats, they share them.
+The first step brings the title and the table. The actions `substitute`, `compute` and `convert`
+(and `reveal: formula2`) time a line to a word; a line an action names is left out of the
+scene's own steps, comes with the lines before it that are not on screen yet, and brings the
+lines after it that no action names (a `compute` brings an unnamed conversion).
+
+**Results of other scenes.** `from_scene: orbit` takes the result with the symbol's name from the
+calculation scene `orbit`; `from_scene: orbit.v` names the result. Checked by `vidgen validate`
+(an unknown scene or result with did-you-mean, scenes taking values from each other in a loop).
+
+**Errors** (at `vidgen validate`, naming the symbol or calculation): an unknown symbol (did you
+mean…; a constant's key not in the table: "add `{name: G, constant: G}`"; a result computed by a
+later calculation), incompatible units with both dimensions explained ("cannot add 'a' and 'b':
+length (m) vs time (s)"), a division by zero, a negative square root, `sig` outside 1–15,
+`format: fraction` of an inexact result, `percent` of a quantity with a unit, an unknown unit or
+constant, a symbol with no value or two.
+
+[Action targets](#beat-actions): `title`, `table`, `symbol:<name>` (the symbol in the table and
+in the lines on screen, its substituted value too — for `highlight`), `row:<name>`, `calc<N>` /
+`calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>` / `result:<name>`, `conversion<N>`.
+
+| param | type | default | |
+|---|---|---|---|
+| `title` | str | `""` | heading |
+| `symbols` | list | `[]` | the symbol table: `{name, value, unit, meaning, source}`, `{name, constant}` or `{name, from_scene}` |
+| `symbols[].name` | str | required | the name formulas use: letters, digits and `_` (`v`, `M_sun`, `t_half`, `lambda`) |
+| `symbols[].value` | number \| str | — | a number, `"1/25"`, `"6.674e-11"`, optionally with its unit (`"29.8 km/s"`) |
+| `symbols[].unit` | str | `""` | its unit, if not after the value; for a constant, the unit to show it in |
+| `symbols[].constant` | str | — | a constant's key (list above; aliases such as `kB`, `Msun` work) |
+| `symbols[].from_scene` | str | — | `scene_id` or `scene_id.result`: a result of another calculation scene |
+| `symbols[].sig` | int (1–15) | from the digits | its significant figures (the value is rounded to them) |
+| `symbols[].exact` | bool | — | `true`: exact (never limits a result) |
+| `symbols[].digits` | int | as written; constants 4 | figures to show (the full value is used) |
+| `symbols[].tex` | str | from the name | TeX of the symbol (`M_sun` → M_⊙, `k_B`, `lambda` → λ, `t_half` → t_1/2, `p1` → p₁) |
+| `symbols[].meaning` | str | a constant's | shown under it in the table |
+| `symbols[].source` | str | a constant's | where the value comes from, after the meaning |
+| `symbols[].color` | color | concept colour | colour of the symbol in the table and the formulas |
+| `symbols[].show` | bool | `true` | `false`: not listed in the table |
+| `calculations` | list (≥ 1) | required | `{name, expr, unit, convert, sig, format, meaning}` |
+| `calculations[].name` | str | required | the result's name (later calculations and `from_scene` use it) |
+| `calculations[].expr` | str | required | the formula as an expression of the symbols |
+| `calculations[].meaning` | str | `""` | what the result is (shown with it in the table) |
+| `calculations[].unit` | str | SI | unit of the result |
+| `calculations[].convert` | str \| list | `[]` | units to show the result in on a last line |
+| `calculations[].sig` | int (1–15) | from the inputs | significant figures of the result |
+| `calculations[].format` | `auto` \| `decimal` \| `sci` \| `fraction` \| `percent` | `auto` | how the result is written |
+| `calculations[].tex` | str | from `expr` | TeX of the formula's right side |
+| `calculations[].symbol` | str | from the name | TeX of the result's symbol |
+| `calculations[].substitute` | bool | `true` | show the values substituted |
+| `calculations[].intermediate` | bool | when it helps | show the argument of an outer root or power evaluated |
+| `calculations[].units` | `auto` \| `always` \| `never` | `auto` | units in the substitution |
+| `table` | `auto` \| `side` \| `top` \| `none` | `auto` | where the table goes |
+| `results_in_table` | bool | `true` | add each result to the table when the next calculation starts |
+| `size` | size | `72` | largest formula size |
+| `table_size` | size | `40` | size of the table's symbols and values (1.15x in a vertical frame) |
+| `color` | color | `text` | formula colour |
+| `result_color` | color | `highlight` | the box around each result |
+| `meaning_color` | color | `dim` | meanings and sources in the table |
+| `caption` | str | `""` | note under the calculation |
+| `caption_size` | size | `caption` | |
+| `caption_color` | color | `dim` | |
 
 ### `function_plot`
 
@@ -6913,6 +7471,13 @@ stylised (Alberts *Molecular Biology of the Cell* ch. 17, Morgan *The Cell Cycle
   chromosome still two — now non-identical — chromatids), prophase II (no replication; new spindles
   at right angles), metaphase II, anaphase II (sisters separate: equational), telophase II and
   cytokinesis II: **four haploid cells**, one chromatid per chromosome, recombinant chromatids visible.
+- **Non-disjunction** (`nondisjunction: {division: I | II, pair: 1}`, meiosis; DESIGN §96.11): in
+  meiosis I both homologues of that pair go to one pole at anaphase I (one cell n + 1, the other
+  n − 1; **every gamete aneuploid**: 2 of 4 n + 1, 2 n − 1); in meiosis II its sister chromatids
+  stay together at anaphase II in the first cell (**2 of 4 gametes normal**, 1 n + 1, 1 n − 1).
+  The gametes are labelled (*n + 1 = 3*), the counts line gives each cell's count once they
+  differ, and the last caption says what fertilisation by a normal gamete gives (trisomic 2n + 1,
+  monosomic 2n − 1, euploid zygotes and their shares).
 
 Captions name each stage and say what happens in key terms; a counts line gives, per cell (per
 daughter nucleus from telophase), the chromosomes (centromeres: separated sisters count), the
@@ -6961,6 +7526,7 @@ the first division runs across a landscape frame and down a portrait one, the ca
 | `cell` | `animal` | mitosis: `animal` or `plant` |
 | `crossovers` | one per pair | meiosis: per homologous pair, one or two positions (0–1 along the chromosome from the p telomere, not at the centromere, at least 0.15 apart) |
 | `assortment` | by the seed | meiosis: per pair, `m` or `p`: the homologue facing the first pole at metaphase I |
+| `nondisjunction` | | meiosis: `{division: I, pair: 1}` — that pair's homologues (I) or sister chromatids (II, in the first daughter cell) fail to separate; gametes n + 1 / n − 1 / n with their shares |
 | `seed` | `1` | the chromosomes' places, default crossovers and assortment |
 | `captions`, `counts` | `true` | the stage captions; the counts line |
 | `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
@@ -6980,7 +7546,9 @@ and mitosis*); a division advanced backwards; an odd 2n (*a diploid cell has hom
 bivalent without a crossover (*an obligate chiasma: without one the homologues are not held together
 on the metaphase I spindle and missegregate*), a crossover at the centromere, more than two, or two
 too close (interference); `expect` counts that are wrong (*after Cytokinesis II there are 4 cells,
-each with 2 chromosomes (2 chromatids, n, 1C) for 2n = 4; expect.chromosomes says 4*); params of
+each with 2 chromosomes (2 chromatids, n, 1C) for 2n = 4; expect.chromosomes says 4*); with
+non-disjunction, `expect` of per-cell counts once the cells differ (only `cells` then), a
+`division` other than I / II, a pair the cell does not have, `nondisjunction` in mitosis; params of
 another mode; `checkpoint` outside `mode: cycle`.
 
 ### `metabolism`
@@ -7074,6 +7642,898 @@ matrix*); components out of order or a missing carrier (*complex III passes elec
 only through cytochrome c*); a component of the other chain (*psii is not part of the electron
 transport chain: it sits in the thylakoid membrane*); the light reactions in an animal cell; ATP
 synthase before any protons were pumped; a pathway advanced backwards.
+
+### `cross`
+
+A genetic cross at university level (Griffiths *Introduction to Genetic Analysis*, Hartwell
+*Genetics: From Genes to Genomes*), worked out exactly by vidgen's cross engine (DESIGN §96: exact
+fractions, segregation, independent assortment, crossing over at the recombination frequency,
+X and Y segregating in males, lethal classes removed) and drawn from it, so no ratio on screen can
+disagree with the cross:
+
+- **The parents**: each with its homologous chromosomes (one colour per homologue, the alleles as
+  bands with their symbols; X and Y drawn as such), its genotype in standard notation (alleles
+  italic, superscripts: *I*ᴬ, X*ᴴ*, *vg*⁺) and its phenotype picture. In 16:9 parent 1 (the
+  mother, the eggs) stands beside the rows of the square and parent 2 (the father, the sperm or
+  pollen) over its columns; in 9:16 both in a row on top. `P: [RRYY, rryy]` crosses a
+  true-breeding P generation to its F1 (a line *P: RRYY × rryy → F1: all RrYy*) and shows the F1
+  intercross, labelled F₁ and F₂ (with sex chromosomes the F1 female and male are crossed).
+- **The gametes** (`form_gametes`): the parent's homologues part and its gametes fly out of it to
+  the square's headers — each allele in the colour of the homologue it came from, so independent
+  assortment shows; for linked loci the recombinant gametes are ringed in the highlight colour and
+  every gamete carries its exact frequency (41.5 %, 8.5 %), parental ones first.
+- **The Punnett square** (`show: punnett`; `auto` up to 4 × 4 gametes, at most 8 × 8): the eggs
+  down the side, the sperm across the top (♀ / ♂ in the corner when the sexes matter), each cell
+  filled (`fill`) as its row's and column's gametes move in: the zygote's genotype, its phenotype
+  picture and, with sex chromosomes, ♀ or ♂; cells tinted by phenotype class; a lethal genotype
+  crossed out. Cells widen for long allele names (*b*⁺ *vg*⁺/*b vg*).
+- **The branch (forked-line) diagram** (`show: branch`; `auto` beyond 4 × 4, as for a trihybrid):
+  a column per trait (with sex chromosomes, the sex first), each branch its conditional probability
+  (3/4 round → 3/4 yellow → 3/4 purple), each leaf its product (= 27/64), percentage, pictures and
+  number of the ratio — the leaves are the class table. Conditional probabilities make it exact
+  for linked loci too. `branch: genotypes` branches locus by locus (1/4 *RR*, 1/2 *Rr*, 1/4 *rr*;
+  at most 16 leaves).
+- **The classes** (`count`, `ratio`), in a panel right of the drawing (16:9) or under it (9:16):
+  the phenotype classes (picture, name, exact fraction in lowest terms — counted up cell by cell
+  when the cells are equally likely —, percentage where the panel has room, the number of the
+  ratio) and the genotype classes (in two columns beyond six; at most 12: a trihybrid's 27 are not
+  tabled), then the ratio line (**9 : 3 : 3 : 1** phenotypic ratio). Classes are in textbook order
+  (dominant first; epistasis in its ratio's order: 9 black : 3 brown : 4 yellow; incomplete
+  dominance red : pink : white; females first). A lethal genotype's row is struck through and the
+  phenotypes are those of the survivors (*AʸAʸ dies, 1/4 of zygotes; 2 : 1*); the genotypic ratio is
+  then the one at fertilization.
+- **The chi-square test** (`observed`, `chi_square`): observed counts of the phenotype classes
+  against the expected ones (N × the exact share): a table of O, E and (O − E)²/E, then χ², the
+  degrees of freedom (classes − 1), the p-value (the upper regularized gamma function, computed
+  by vidgen), the critical value at `alpha` and the verdict (*p ≥ α: consistent with 9 : 3 : 3 : 1*,
+  or *p < α: reject*); a note when an expected count is below 5.
+- **Notes** under the drawing, from the model: the parental and recombinant gamete frequencies and
+  the recombination frequency of a linked parent (or *no crossing over* — Drosophila males), the
+  lethal class and the survivors' ratio, the tester of a test cross, the reciprocal cross, the
+  epistasis and what it does.
+
+Phenotype pictures are chosen from the trait's name and the phenotype's words: a pea (round or
+wrinkled, yellow or green; both traits in one pea), a flower (its petal colour), a fruit fly's eye
+or the whole fly (body colour, wings normal or vestigial, eye colour), an animal's coat (black,
+brown, yellow, agouti, chinchilla, himalayan, albino…), a feather, a squash (white, yellow, green;
+disc, sphere, long), a blood drop with its ABO group, a seed capsule (triangular, ovoid), an
+affected / unaffected square, or a colour swatch. A coat is drawn on its animal — `animal: dog`
+(the `labrador` preset), `mouse` (`yellow_mouse`), `rabbit` (`rabbit_coat`), `cat`, `guinea pig`, or
+one named in the title or a trait ("Labradors", "mice") — else as a plain patch of fur (`animal:
+none` always). `pictures: false` leaves them out.
+
+```yaml
+- id: dihybrid
+  type: cross
+  params:
+    title: "A dihybrid cross"
+    preset: pea_dihybrid                       # or loci / linkage / epistasis / sex (below)
+    parents: [RrYy, RrYy]                      # P: [RRYY, rryy] shows P → F1 → F2
+    observed: {round yellow: 315, round green: 108, wrinkled yellow: 101, wrinkled green: 32}
+  beats:
+    - text: "Each parent makes four kinds of gametes, in equal numbers."
+      actions: [{form_gametes: both, at: "@four"}]
+    - text: "Sixteen equally likely combinations fill the square."
+      actions: [{fill: square, by: row}]
+    - text: "Nine to three to three to one."
+      actions: [{count: phenotypes}, {ratio: phenotypes, at: "@Nine"}]
+    - text: "Mendel's counts fit: chi-square is small and p is large."
+      actions: [{chi_square: test, at: "@chi-square"}, {highlight: "cells:wrinkled, green", style: box}]
+- id: hemophilia
+  type: cross
+  params:
+    preset: hemophilia_a
+    mother: "X^H X^h"                          # a carrier
+    father: "X^H Y"                            # parents: [...] in any order works too (the X and Y say)
+  beats:
+    - text: "Half of the sons of a carrier mother are affected; no daughter is."
+- id: linked
+  type: cross
+  params:
+    loci:
+      - {gene: b, trait: body colour, alleles: {b^+: grey body, b: black body}}
+      - {gene: vg, trait: wings, alleles: {vg^+: normal wings, vg: vestigial wings}}
+    linkage: [{loci: [b, vg], rf: 0.17, rf_male: 0}]
+    mother: "b^+vg^+/bvg"                      # the phase is required for linked loci
+    kind: test                                 # the tester bvg/bvg is made
+  beats:
+    - text: "Seventeen percent of her gametes are recombinant."
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `preset` | | a textbook system: `pea_seed_shape`, `pea_dihybrid`, `snapdragon`, `abo`, `rabbit_coat`, `labrador`, `squash_colour`, `chicken_feathers`, `shepherds_purse`, `sweet_pea`, `squash_shape`, `yellow_mouse`, `drosophila_white`, `hemophilia_a`, `drosophila_b_vg` (each with the right dominance, epistasis or linkage) |
+| `loci` | | instead of a preset: each `{gene, trait, alleles, dominance, heterozygotes, chromosome, lethal, penetrance, normal, expressivity}` — `alleles` most dominant first (`{A: round, a: wrinkled}`), `dominance` `complete` (default), `incomplete`, `codominant` or a hierarchy `"I^A = I^B > i"` (`>` complete, `=` codominant, `~` incomplete), `heterozygotes: {C^R/C^W: pink}`, `chromosome: autosome / X / Y / mt`, `lethal: {A^Y: recessive}`, `penetrance: 0.8` with `normal`, `expressivity: variable` |
+| `linkage` | | linked loci in map order with the recombination frequency of each interval: `[{loci: [b, vg], rf: 0.17, rf_male: 0}]` (`coincidence` or `interference` for three loci); RF ≤ 0.5 |
+| `epistasis` | | `[{kind: recessive, epistatic: E, hypostatic: B}]` (`recessive` 9:3:4, `dominant` 12:3:1, `suppression` 13:3; `duplicate` 15:1, `complementary` 9:7, `cumulative` 9:6:1 take `loci: [A, B]` and `phenotypes`) |
+| `sex` | | `XY`: follow the sexes without sex-linked loci |
+| `parents` | | the two genotypes (`[RrYy, RrYy]`, `["I^A i", "I^B i"]`; with sex chromosomes in any order: `["X^H Y", "X^H X^h"]`); `kind: test` takes one |
+| `mother`, `father` | | the egg (seed) parent and the sperm (pollen) parent — needed with mitochondrial loci |
+| `P` | | a true-breeding P generation `[RRYY, rryy]`: its F1 is worked out (it must be one genotype per sex) and intercrossed |
+| `kind` | `cross` | `test`: one parent and its tester (homozygous / hemizygous for every recessive allele, the other sex); `reciprocal`: the same lines with the sexes swapped (an X-linked mother must be true-breeding) |
+| `show` | `auto` | `punnett` (up to 8 × 8), `branch`, `auto` (a square up to 4 × 4 gametes) |
+| `branch` | `phenotypes` | the branch diagram's levels: `phenotypes` (sex, then trait by trait) or `genotypes` (locus by locus, at most 16 leaves) |
+| `observed` | | counts per phenotype class for a chi-square test: `{round yellow: 315, ...}` (the class's words in any order; with sexes add `female` / `male`: `{white male: 42}`) or a list in class order |
+| `alpha` | `0.05` | the test's significance level (`0.01`, `"5%"`) |
+| `notes` | `true` | the notes under the drawing |
+| `pictures` | `true` | the phenotype pictures |
+| `animal` | `auto` | the animal a coat colour is drawn on: `dog`, `mouse`, `rabbit`, `cat`, `guinea pig`, `none` (a patch of fur); `auto`: the preset's or one the title or traits name, else the patch |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`). Without any of them the scene plays itself:
+the parents (and the empty square) in the first beat, then the gametes, the filling, the
+genotype and phenotype classes with their ratios and the chi-square test, spread over the beats.
+With one of them, it shows the parents and the empty square, and the actions do the rest (an
+action finds what it needs done first: `count` fills the cells left, `fill` forms the gametes).
+
+| action | options | |
+|---|---|---|
+| `form_gametes` | — | `form_gametes: both` (`parents`, `parent1` / `mother`, `parent2` / `father`, `gametes`): the homologues part and the gametes fly out (2.2 s; both 2.9 s) |
+| `fill` | `by` (`auto`, `cell`, `row`, `column`) | `fill: square` (`all`), `row2`, `col3`, `cell2.3`, `"cells:wrinkled, green"`, `cells:RrYy`, or patterns (`row*`): the cells fill in one after another (`by: cell`, default up to 16 cells) or a line at a time (~0.2 s a cell, 1–6 s); `fill: tree` grows a branch diagram level by level |
+| `count` | — | `count: phenotypes` or `genotypes`: the table in the panel row by row, each class's cells flashing (a branch diagram's own kind: its leaves' products appear) |
+| `ratio` | — | `ratio: phenotypes` / `genotypes`: the ratio numbers and the ratio line (counts first when needed) |
+| `chi_square` | — | `chi_square: test` (needs `observed`): the table of observed and expected counts, then χ², df, p, the critical value and the verdict |
+
+`highlight` (best with `style: box` or `fill`), `dim`, `reveal` and `callout` work on the targets:
+`cells:<class>` (`"cells:round, yellow"`: every Punnett cell of a phenotype class, or its leaves),
+`cells:<genotype>` (`cells:RrYy`), `class:<label>` / `class<N>` (a row of the phenotype table),
+`genotype:<genotype>`, `cell<R>.<C>`, `row<N>`, `col<N>`, `parent1`, `gametes2`, `notes`.
+
+**The rules** (`vidgen validate`, each with the reason and a did-you-mean): an unknown preset,
+allele, locus or epistasis kind; a genotype missing a locus or with three alleles; an X-linked
+allele written without its X (*write X^H X^h (female) or X^H Y (male)*); a female with a Y; XXY or
+X0 (a karyotype, not a cross); linked loci heterozygous at two loci without their phase (*write
+AB/ab (coupling) or Ab/aB (repulsion)*); RF above 0.5; both parents of one sex; a P generation
+that is not true-breeding; a test cross with two parents, or without a recessive allele to make
+the tester; a Punnett square larger than 8 × 8, a genotype branch diagram over 16 leaves;
+`observed` counts for a class the cross does not have, missing classes, negative counts; `alpha`
+without `observed`; `count: genotypes` with more than 12 genotype classes; `fill: tree` on a
+square (or a row on a tree); gametes formed twice, a cell filled twice, a table counted twice.
+
+### `pedigree`
+
+A family chart in standard human pedigree nomenclature (NSGC recommendations, Bennett et al.
+2008) with its genetic analysis worked out exactly (DESIGN §96.8), for medical genetics and
+counselling lessons:
+
+- **Symbols**: male square, female circle, sex unknown a diamond; affected filled; a carrier a
+  dot in the centre (NSGC; `carrier_style: half` draws the half-shaded heterozygote of many
+  textbooks instead — for declared and deduced obligate carriers alike); deceased a diagonal line;
+  the proband an arrow with **P**, the consultand an arrow without; adoption square brackets
+  (`adopted: in` with a dashed line to the adoptive parents, `out` solid); a miscarriage a small
+  triangle, a stillbirth its symbol struck with **SB**; a proposed child dashed with **?** (the
+  risk is for it); ages and labels under the symbols.
+- **Lines**: the mating line between partners (double for consanguinity: found from shared
+  ancestors, or declared; two short slashes for a separation), the descent line to the sibship
+  line, each child's line; twins from one point (monozygotic with a bar between the lines, zygosity
+  unknown with **?**).
+- **Layout** (deterministic: the same chart always gives the same picture): generations are rows
+  with Roman numerals at the left, individuals numbered left to right (II-3; the number at the top
+  of each symbol); sibships in birth order (YAML order) under their parents; a partner from outside
+  beside the relative (male left of female when nothing else decides); each family a block as wide
+  as its widest generation, so lines do not cross; relatives who marry each other are moved to the
+  facing edges of their sibships, up to the common ancestors, so their mating line crosses nothing.
+  With NSGC ids (`II-3`) vidgen keeps your numbering and checks it reads left to right as drawn
+  (else it says the drawn order); with other ids (`mum`, `kid1`) it numbers the chart. Wide
+  families shrink to fit (9:16: the chart on top, the panel under it).
+- **Analysis** (`analyse`): each mode of inheritance — autosomal dominant (AD) and recessive (AR),
+  X-linked dominant (XD) and recessive (XR), Y-linked (YL), mitochondrial (MT) — fits when some
+  genotypes explain every phenotype on the chart, found by summing over all assignments (variable
+  elimination; no hand-written rules decide). An excluded mode gets the textbook reason with the
+  people it names (*XR: father-to-son: affected father II-1 has an affected son III-1, but a son's X
+  comes from his mother II-2 (married in, not a carrier)*; *AD: III-2 is affected but neither
+  parent is: a dominant trait does not skip a generation — excluded unless II-1 or II-2 is
+  non-penetrant (heterozygous)*; *XR: affected daughter II-1 needs an Xᵃ from her unaffected father
+  I-1 — excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)*); a mode that fits
+  only with reduced penetrance names who is non-penetrant, one that needs a partner from outside
+  to carry the allele says so.
+- **Genotypes** (`deduce`): under each symbol the genotype the chart forces (*Aa*, X*ᴴ*X*ʰ*) or the
+  most telling one with its exact probability by Bayes' rule on the whole chart (**2/3** *Aa* for
+  an unaffected sibling of an affected child under AR; lowered by unaffected children where they
+  tell something: a possible carrier with three unaffected sons, 1/9); obligate carriers get the
+  carrier mark and the highlight colour.
+- **Risk** (`risk`) for the proposed child: the factors of the textbook product when the parents
+  are independent (*P(II-4 is Aa) = 1/25, P(II-3 is Aa) = 2/3, both pass a: 1/4, risk = 1/25 ×
+  2/3 × 1/4 = 1/150 ≈ 0.67 %*; X-linked: *a son: 1/2*, per sex), else the exact risk from the
+  whole chart (consanguineous parents).
+
+The model: one locus with two alleles; founders in Hardy–Weinberg proportions with a rare
+allele (the limit q → 0: an unaffected founder carries the allele only when the chart needs it,
+and the explanation needing the fewest copies entering the family wins); `rare: true` (the
+textbook "the trait is rare") — people who marry into the family carry nothing beyond what their
+own phenotype shows; `carrier_frequency: 1/25` gives people from outside that chance instead
+(recessive modes; it sets q = c / (2 − c)); `penetrance` (default 1); no new mutations, no
+phenocopies, no manifesting heterozygotes under XR, homoplasmic mtDNA.
+
+```yaml
+- id: cf
+  type: pedigree
+  params:
+    title: "Cystic fibrosis in a family"
+    condition: cystic fibrosis
+    mode: AR                               # genotypes and risk; default: the only mode that fits
+    carrier_frequency: 1/25                # for people marrying in
+    individuals:                           # a line each, or a mapping (below)
+      - "I-1: male"
+      - "I-2: female deceased age d. 71 y"
+      - "II-1: male of I-1 + I-2"
+      - "II-2: female affected proband of I-1 + I-2 age 24 y"
+      - "II-3: male of I-1 + I-2"
+      - "II-4: female"                     # married in (beside II-3)
+      - "III-1: unknown proposed of II-3 + II-4"
+  beats:
+    - text: "A couple with no family history has a daughter with cystic fibrosis."
+      actions: [{reveal: "generation:II", at: "@daughter"}]
+    - text: "Only autosomal recessive inheritance fits."
+      actions: [{analyse: modes}]
+    - text: "Her unaffected brother is a carrier with probability two thirds."
+      actions: [{deduce: genotypes, at: "@carrier"}]
+    - text: "Their child's risk is one in a hundred and fifty."
+      actions: [{risk: risk, at: "@risk"}]
+- id: hemophilia
+  type: pedigree
+  params:
+    preset: hemophilia_a                   # alleles H / h, X-linked recessive, condition "hemophilia A"
+    analyse: true
+    genotypes: true
+    individuals:
+      - {id: I-1, sex: male}
+      - {id: I-2, sex: female}
+      - {id: II-1, sex: male, affected: true, deceased: true, parents: [I-1, I-2]}
+      - {id: II-2, sex: female, parents: [I-1, I-2]}
+      - {id: II-3, sex: male}
+      - {id: III-1, sex: male, affected: true, proband: true, parents: [II-3, II-2]}
+      - {id: III-2, sex: male, parents: [II-3, II-2], twin: {with: III-3, kind: MZ}}
+      - {id: III-3, sex: male, parents: [II-3, II-2], twin: {with: III-2, kind: MZ}}
+  beats:
+    - text: "Two generations of an X-linked recessive trait."
+```
+
+**An individual** is a mapping or a line. The mapping: `id` (required; NSGC `II-3` or any name),
+`sex` (`female`, `male`, `unknown`; `f` / `m` / `u`), `affected`, `carrier` (a known heterozygote,
+unaffected), `deceased`, `proband`, `consultand`, `adopted` (`in`, `out`), `loss` (`miscarriage`,
+`stillbirth`), `proposed` (a child not yet born; no phenotype), `parents` (both: `[I-1, I-2]`),
+`spouse` (a partner without children together), `twin` (`II-4` or `{with: II-4, kind: MZ | DZ |
+unknown}`), `age` and `label` (text under the symbol). The line: `"<id>: <words>"` — a sex, the
+flags (`affected`, `carrier`, `deceased`, `proband`, `consultand`, `proposed`, `miscarriage`,
+`stillbirth`, `adopted in` / `out`), `of <parent> + <parent>`, `twin <id> MZ`, `spouse <id>`, and
+last `age <the rest of the line>`.
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `individuals` | required | the people (above) |
+| `couples` | | `[{partners: [II-1, II-2], consanguineous: true, separated: true}]` or `"II-1 + II-2"`: a childless couple, consanguinity whose shared ancestors are not drawn, a separation |
+| `condition` | text | the condition's name, in the legend |
+| `mode` | the only one that fits | `AD`, `AR`, `XD`, `XR`, `YL`, `MT` (or `autosomal recessive`…): the mode for genotypes and risk; a chart that does not fit it is a lint warning (Step 219) and shows no genotypes |
+| `analyse` | `false` | `true`: the analysis panel with all six modes; a list (`[AD, AR, XR]`) for some |
+| `genotypes` | `false` | show the genotypes when the scene plays itself (needs a mode) |
+| `penetrance` | `1` | P(affected \| disease genotype): `0.8`, `"80%"` |
+| `rare` | `true` | people marrying into the family do not carry the allele (unless affected or marked) |
+| `carrier_frequency` | | an outsider's chance of carrying a recessive allele (`1/25`) |
+| `alleles` | `[A, a]` | the symbols, dominant first (`[H, h]`); the disease allele is the dominant one under AD / XD |
+| `preset`, `loci` | | one locus instead (`hemophilia_a`, `drosophila_white`, or `[{gene, trait, alleles, chromosome}]`): its alleles and mode (the condition is the phenotype that is not "normal…", or `condition`) |
+| `carrier_style` | `dot` | `dot` (NSGC) or `half` (half-shaded heterozygote) |
+| `numbers` | `true` | the individual numbers (and the Roman numerals) |
+| `legend` | `true` | a legend of the marks used |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`). Without them the scene plays itself: a
+generation per beat, then the analysis (`analyse`), the genotypes (`genotypes`) and the risk (when
+there is a proposed child and a mode). With one of them (or a `reveal` of chart targets) it shows
+the chart at once except what a `reveal` brings in later (and the proposed child, which `risk`
+brings), and the actions do the rest.
+
+| action | options | |
+|---|---|---|
+| `deduce` | — | `deduce: genotypes` (`carriers`, `generation:II`, `person:II-3`): the genotypes appear under the symbols, obligate carriers marked (1.4 s); needs a mode |
+| `analyse` | — | `analyse: modes` (each in turn, 1 s each) or `mode:XR`: fits / excluded with the reason, the people it names ringed; after the last, which fit. In 9:16 (or when the list does not fit) a strip of the six modes with one reason at a time |
+| `risk` | — | `risk: risk`: the proposed child appears and the risk card with its factors and the exact risk, also written under the child (2.2 s) |
+
+`reveal` brings in `generation:II` or `person:II-3` (with their lines); `highlight` (`style: box`)
+and `dim` mark `person:<id>`, `affected`, `carriers`, `proband`, `mode:AR`.
+
+**The rules** (`vidgen validate`, each with the reason and a did-you-mean): an unknown key or word
+of the compact form; a parent who is not an individual; a child with two fathers or two mothers;
+one parent only; a parent without a sex; a cycle (someone their own ancestor); twins who are not
+siblings, monozygotic twins of different sexes; affected and carrier together; a proposed child
+with a phenotype or without parents; more than one proband, consultand or proposed child; more
+than two partners; generations that do not fit (partners of different generations); NSGC ids for
+some people only, numbers that do not read left to right as drawn, a Roman numeral out of place; a
+male carrier under a stated X-linked mode (*a male has one X: with the allele he is affected*), a
+carrier under Y-linked or mitochondrial inheritance; `mode` against the locus' own mode;
+`deduce` or `risk` when the chart fits several modes and none is stated (*the chart fits AD, XD —
+say which with mode:*); `risk` without a proposed child.
+
+### `linkage_map`
+
+Linked loci, crossing over and genetic maps (DESIGN §96.9), computed by
+`vidgen.genetics.mapping`:
+
+- **The chromosomes**: the heterozygous parent's homologue pair — two sister chromatids each,
+  joined at the centromere, in the maternal / paternal colours of `cell_cycle`'s meiosis — with its
+  alleles above and below (*v*⁺ the wild type). **Crossing over** (`crossover`, or the action
+  `cross_over`): the two inner, non-sister chromatids meet at a chiasma in an interval, swap the
+  segments beyond it and part again — two recombinant and two parental chromatids, each with its
+  alleles written beside it in the colours of the homologues they came from (`double`: one in each
+  interval of three loci, a two-strand double crossover).
+- **`counts`: a test cross worked out** — the heterozygote × the homozygous recessive tester, so
+  each offspring class shows a gamete of the heterozygote. Two or three loci: the table of classes
+  (as you list them) → **classes**: the parental classes are the largest reciprocal pair (they give
+  the phase: *coupling* (cis) or *repulsion* (trans)), the double crossovers the smallest →
+  **order** (three loci): the locus at which a double crossover differs from a parental class is in
+  the middle; the table's columns move into map order → **distances**: each interval's
+  recombinants (the classes recombinant for that pair of loci, double crossovers included), RF =
+  recombinants / N, the distance (RF × 100 cM, or the map function's); the outer distance is the sum
+  → **interference**: expected double crossovers RF₁ × RF₂ × N, observed, the coefficient of
+  coincidence c = observed / expected, interference I = 1 − c → **map**: a bar with the loci at their
+  positions, the interval distances under it.
+- **`map`: loci at positions** in cM (`{y: 0, w: 1.5, v: 33}`) — the chromosome with the loci in
+  proportion, the map bar; `measure` shows a distance and the RF the map function gives.
+- **Map functions** (`map_function`): `none` (default) d = 100 × RF, what three-point analyses report
+  — right for short distances, below about 15 cM, where double crossovers are rare; `haldane` d =
+  −½ ln(1 − 2r) (no interference); `kosambi` d = ¼ ln[(1 + 2r)/(1 − 2r)] (with interference). An RF
+  is at most 50 %: loci far apart assort independently.
+
+```yaml
+- id: threepoint
+  type: linkage_map
+  params:
+    title: "A three-point test cross"
+    loci: [v, cv, ct]                    # the mutant alleles' symbols, in any order
+    counts:                              # each class once: v cv ct (mutant) or + / v+ (wild type), names in any order
+      "v cv+ ct+": 580
+      "v+ cv ct": 592
+      "v cv ct+": 45
+      "v+ cv+ ct": 40
+      "v cv ct": 89
+      "v+ cv+ ct+": 94
+      "v cv+ ct": 3
+      "v+ cv ct+": 5
+    # map_function: haldane             # or kosambi; default none (d = 100 × RF)
+  beats:
+    - text: "A female heterozygous at three linked loci is test-crossed."
+    - text: "A crossover between non-sister chromatids makes recombinant chromatids."
+    - text: "Her offspring fall into eight classes."
+    - text: "The largest pair is parental, the smallest are double crossovers."
+    - text: "A double crossover changes only the middle gene: cut lies between the other two."
+    - text: "Each interval's recombinants give its distance: 13.2 and 6.4 centimorgans."
+    - text: "Fewer double crossovers than expected: interference is 0.35."
+    - text: "The map."
+- id: xmap
+  type: linkage_map
+  params:
+    map: {y: 0, w: 1.5, v: 33, m: 36.1}
+    map_function: haldane
+    crossover: none
+  beats:
+    - text: "Between white and vermilion a crossover is likely."
+      actions: [{cross_over: "interval:w-v", at: "@crossover"}]
+    - text: "Thirty-one and a half centimorgans."
+      actions: [{measure: "interval:w-v"}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `loci` | | with `counts`: the loci, by their mutant alleles' symbols (`[v, cv, ct]`; two or three) |
+| `counts` | | the offspring classes and numbers: `{"v cv+ ct+": 580, …}` — a class names each locus once, the mutant allele by its symbol and the wild type as `v+` (any order) or `+` (by position in `loci`); all 2ⁿ classes (0 allowed) |
+| `map` | | instead of `counts`: loci at positions in cM (`{y: 0, w: 1.5, v: 33}`) |
+| `map_function` | `none` | `none` (d = 100 × RF), `haldane`, `kosambi` |
+| `phase` | `coupling` | `map`: `coupling` (the mutant alleles on one homologue) or `repulsion` (alternating); counts show their own |
+| `crossover` | `auto` | the crossing over the scene plays: an interval between neighbouring loci (`v-ct`), a list, `double`, `none`; `auto`: the first interval |
+| `chromosomes` | `true` | draw the homologue pair |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`). Without them the scene plays itself: the
+chromosomes, the crossing over, then (counts) the table, classes, order, distances, interference
+and the map, spread over the beats. `reveal: order` (any step: `table`, `classes`, `order`,
+`distances`, `interference`, `map`) puts a step on a word — the steps it needs come first — and the
+scene then shows only what the actions bring.
+
+| action | options | |
+|---|---|---|
+| `cross_over` | — | `cross_over: interval:v-ct` (neighbouring loci) or `double`: the chiasma, the exchange, the recombinant chromatids labelled (2.4 s); takes the place of the scene's own crossing over |
+| `measure` | — | `measure: interval:w-v` (any two loci): a bracket over the interval and a card with its distance and RF (map function; RF = d/100 at most 50 % with `none`, with a warning beyond 15 cM) (1.6 s) |
+
+`highlight`, `dim`, `callout` work on `locus:<name>` (its bands and alleles), `interval:<a>-<b>`
+(its brace on the map), `table`, `classes`, `map`, `chromosomes`.
+
+**The rules** (`vidgen validate`, each with the reason and a did-you-mean): `counts` without `loci`,
+or both `counts` and `map`; not two or three loci; a class naming a locus twice, an unknown locus, a
+class listed twice, missing classes; two reciprocal pairs equally large (the parental classes
+cannot be told) or equally small (the double crossovers cannot be told); an interval with 50 % or
+more recombinants; two loci at one position; `phase` with `counts`; a crossover between loci that
+are not neighbours; `measure` without one interval.
+
+### `karyotype`
+
+A human karyotype from its ISCN notation (DESIGN §96.10), parsed and checked by
+`vidgen.genetics.karyotype`:
+
+- **The chromosomes**: GRCh38 lengths and centromere positions (so 21 is shorter than 22 and every
+  arm ratio is right), the textbook classes (metacentric 1, 3, 16, 19, 20; acrocentric 13, 14, 15,
+  21, 22 with stalks and satellites, and Y) and the Denver groups A–G. **G-bands are schematic**:
+  each arm is split into its ISCN regions and bands (its last band checked: 1p36, 5p15, Xq28…)
+  with dark and pale bands alternating, heterochromatin (1q12, 9q12, 16q11, Yq12) grey — the
+  pattern is plausible, not the measured ISCN ideogram; a named band is drawn where this scheme puts
+  it. The bands are dark on light in every theme.
+- **`show: karyogram`**: the pairs in rows by group (16:9: 1–5; 6–12 and X; 13–18; 19–22 and Y),
+  the centromeres on one line per row, numbers under the pairs, group letters; the changes
+  highlighted: an extra copy boxed, a lost one as a dashed ghost, a derivative's changed stretch
+  bracketed (material from another chromosome tinted).
+- **`show: ideogram`**: the chromosomes involved (or those in `chromosomes:`), large, with p and q,
+  the bands asked for labelled (`bands: {7q31.2: CFTR}`), and each structural change played as an
+  **edit** of the normal chromosomes: the breakpoints flash, a deletion's segment falls away, a
+  duplication's is copied in, an inversion's turns round (paracentric within an arm; pericentric
+  across the centromere, changing the arm ratio), a reciprocal translocation's distal segments swap,
+  a Robertsonian translocation joins two long arms while the short arms are lost; the derivative is
+  named (`der(22)`) and its breakpoints labelled.
+- **The card**: the notation, read — the count and sex chromosomes, each change in words, and the
+  classic condition it names (Down, Edwards, Patau, Turner, Klinefelter, triple X, 47,XYY,
+  cri-du-chat, the Philadelphia chromosome, a balanced Robertsonian carrier, translocation Down
+  syndrome).
+
+ISCN supported: the count, the sex chromosomes (`XX`, `XY`, `X`, `XXY`, `XXX`, `XYY`…), then `+21`,
+`-21`, `del(5)(p15.2)` (terminal), `del(1)(q21q32)` (interstitial), `dup(1)(q21q32)`,
+`inv(9)(p12q13)` / `inv(3)(q21q26)`, `t(9;22)(q34;q11.2)`, `rob(14;21)(q10;q10)` (or
+`der(14;21)(q10;q10)`; `rob(14;21)` alone too); `mat` / `pat` / `dn` after a change. Not
+supported: mosaics (`/`), rings, isochromosomes, markers, acquired ±X / ±Y.
+
+```yaml
+- id: down
+  type: karyotype
+  params:
+    title: "Trisomy 21"
+    karyotype: "47,XY,+21"                 # show: auto -> karyogram (a numerical change)
+  beats:
+    - text: "A male karyotype, arranged by size in groups A to G."
+    - text: "Three copies of chromosome twenty-one."
+    - text: "Forty-seven, X Y, plus twenty-one: Down syndrome."
+- id: ph
+  type: karyotype
+  params:
+    title: "The Philadelphia chromosome"
+    karyotype: "46,XX,t(9;22)(q34;q11.2)"  # show: auto -> ideogram (structural changes only)
+    bands: {9q34: ABL1, 22q11.2: BCR}
+  beats:
+    - text: "Chromosomes nine and twenty-two."
+    - text: "Their long arms break and swap places."
+      actions: [{rearrange: "change:1", at: "@break"}]
+    - text: "The small derivative twenty-two is the Philadelphia chromosome."
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `karyotype` | `46,XX` | the ISCN notation (above) |
+| `show` | `auto` | `karyogram`, `ideogram`; `auto`: ideogram when `chromosomes` is given or every change is structural, else karyogram |
+| `chromosomes` | the changed ones | ideogram: which chromosomes to draw (all their copies): `[7]`, `[9, 22]` |
+| `bands` | | bands to label (ideogram): `{7q31.2: CFTR, Xq28: F8}` or `[21q22]` |
+| `notation` | `true` | the card with the notation and its reading |
+| `size`, `title_size` | `caption`, `heading` | label size (never below the readable size) and title |
+
+**Actions** (timed like any action, `at: "@word"`). Without them the scene plays itself: the
+chromosomes and the notation, the changes (highlights or edits), the reading. With `rearrange` (or
+a `reveal` of `change:<n>` / `reading`) the changes wait for the actions; the reading comes on the
+last beat unless revealed.
+
+| action | options | |
+|---|---|---|
+| `rearrange` | — | `rearrange: change:1` (the changes in the order written after the sex chromosomes; `changes` for all): ideogram, structural — the edit (2.6 s); otherwise the highlight (1.2 s) |
+
+`highlight`, `dim`, `callout` work on `chromosome:<21>` (a pair or slot), `group:<A…G>` (karyogram),
+`change:<n>`, `notation`, `reading`, `band:<7q31.2>`.
+
+**The rules** (`vidgen validate`, each with the reason and the fix): the count against the
+chromosomes listed (*'47,XX' says 47 chromosomes but lists 46 (44 autosomes + XX = 46); write
+46,XX*); a sex complement without an X, in lower case, or ±X / ±Y written as changes; an unknown
+change (did you mean…), the old short form `5p-`, a mosaic; a band past the end of its arm (*5p16
+does not exist: 5p ends at band 5p15*); a translocation with the higher-numbered chromosome first, or
+not one band per chromosome; a Robertsonian translocation between chromosomes that are not
+acrocentric autosomes, or not at q10;q10; an interstitial deletion or duplication across the
+centromere; a change on a chromosome the karyotype does not have (*del(Y) in 46,XX*); `chromosomes`
+with `show: karyogram`; `rearrange` on a karyotype without changes or a change it does not have.
+
+### `mutation`
+
+A sequence variant worked out on a real coding sequence with the genetic code (DESIGN §96.13;
+`vidgen.genetics.hgvs` and `genetics.mutation`): the reference codons with their amino acids, the
+variant row made from them, and the HGVS notation checked against the sequence.
+
+- **The sequence**: a reference window (`gene: HBB`, `CFTR`, `GJB2` — real coding sequence with its
+  exons, transcript and CDS length), your own `sequence:` (coding DNA or mRNA from `c.1`, or from
+  `first:`, with `exons:` and `length:` when you want splice sites and nonsense-mediated decay), or
+  a gene written as in a `molecule` scene (`gene: {protein: MVHL…, introns: 1}`, `{sequence: …,
+  introns: [[a, b]]}`): its coding sequence, exons and introns are taken from the built gene.
+- **The rows**: the reading frame from the ATG — base tiles in the DNA colours of Phase U, a box
+  per codon, the amino acid under it (three-letter by default, `codes: one` for one-letter) with
+  its residue number (the initiator Met is 1). The variant row is made from the reference: the base
+  swaps, or bases leave or come in and the rest slide through the fixed codon frame, so a
+  frameshift visibly regroups every codon after it and reaches its premature stop. Changed bases
+  are ringed, changed residues highlighted, a stop drawn red, deleted residues struck through.
+- **The variant** (`variant:`): HGVS on the coding sequence — `c.20A>T`, `c.1521_1523del` (the
+  deleted bases may be written: `c.1521_1523delCTT`, `c.35delG`), `c.35dup`, `c.76_77insT`,
+  `c.76_77delinsTT`, splice sites `c.92+1G>A` / `c.1585-1G>A`. A list makes several variants of the
+  same sequence, one after another. A mapping adds the author's own protein change, which is
+  **checked** against the genetic code (`{c: c.20A>T, p: p.(Glu7Val)}`), a `legacy:` name and a
+  `note:`.
+- **The consequence**, computed: silent (synonymous), missense (with the side chains), nonsense,
+  frameshift (`p.(Gly12Valfs*2)`: the new frame's length, `fs*?` when no stop is reached in the
+  window), in-frame deletion / duplication / insertion / deletion–insertion, start loss
+  `p.(Met1?)`, stop loss, splice donor / acceptor (`p.?` with the predicted RNA change: exon
+  skipping or intron retention, `splice: skip | retain | auto`). Notes say whether the frame is
+  kept and whether a premature stop is more than ~50 nt upstream of the last exon–exon junction
+  (nonsense-mediated decay).
+- **The card**: the gene symbol (italic), the `c.` change as written, the computed `p.` change
+  (`stop: Ter` writes `p.(Arg553Ter)`), the class, the legacy name and the notes.
+- **The gene strip** (when the exons are known): the coding exons with GT…AG introns, the window
+  shown bracketed, an arrow at the variant, and for a splice-site change the predicted mRNA.
+
+```yaml
+- id: sickle
+  type: mutation
+  params:
+    title: "Sickle-cell haemoglobin"
+    gene: HBB                               # a reference window; or sequence: ATG…, or gene: {protein: …}
+    variant: {c: "c.20A>T", p: "p.(Glu7Val)"}   # p. is checked against the genetic code
+  beats:
+    - text: "The start of the beta-globin coding sequence, read in codons."
+    - text: "One base changes: A to T in codon seven."
+      actions: [{mutate: variant, at: "@changes"}]
+    - text: "Glutamic acid becomes valine: HbS."
+- id: cf
+  type: mutation
+  params: {gene: CFTR, variant: "c.1521_1523delCTT p.(Phe508del)"}   # legacy name ΔF508
+  beats: [{text: "Three bases go; the frame is kept; one phenylalanine is missing."}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `gene` | | a reference window (`HBB`, `CFTR`, `GJB2`) or a gene mapping (`sequence` / `protein` / `codons`, `introns`, `seed`, `cell`) |
+| `sequence` | | instead of `gene`: coding DNA (or mRNA) 5′→3′ |
+| `first`, `exons`, `first_exon`, `length` | `1`, —, `1`, — | the window's first `c.` number, the coding exons as `c.` ranges, the first exon's number, the whole CDS length |
+| `symbol`, `species` | —, `human` | the gene symbol (italic, checked against the nomenclature) |
+| `variant` | `c.1A>G` | the change, a mapping (`c`, `p`, `legacy`, `note`, `splice`) or a list of them |
+| `splice` | `auto` | a splice-site change's predicted outcome: `skip` (exon skipping) or `retain` (intron retention) |
+| `codes` | `three` | amino acids as `Glu` or `E` |
+| `stop` | `*` | `p.(Arg553*)` or `Ter` |
+| `codons` | fits | how many codons the rows show (3–16) |
+| `strip` | `true` | the gene strip (when the exons are known) |
+| `size`, `title_size` | `caption`, `heading` | |
+
+**Actions**. Without them the scene plays itself (the reference, then each variant with its card).
+
+| action | | |
+|---|---|---|
+| `mutate` | `variant`, `variant:2`, `variants` | makes that variant from the reference (~3 s), with its card |
+
+`highlight`, `dim`, `callout` and `reveal` work on `gene`, `reference`, `variant`, `variant:<n>`,
+`protein`, `notation`, `codon:<n>`.
+
+**The rules** (`vidgen validate`): a change that is not HGVS (*HGVS writes the position first:
+c.20A>T*, *a substitution is written with >*, *write the bases in capitals*), a reference base that
+is not the one in the sequence (*c.20 is C in this sequence, not A*), a position outside the window,
+a description that is not the canonical one (*c.1520_1522del describes the same change as
+c.1521_1523del … HGVS's 3′ rule*; *an insertion that copies the bases just before it is a
+duplication*), an intronic position without `exons:` or at the wrong exon end, a `p.` that does not
+follow from the DNA change (with the computed one, and *HGVS counts the initiator Met as residue 1*
+when it is the legacy numbering), `p.R553X` (*X means an unknown amino acid in HGVS; a stop is * or
+Ter*), `ΔF508` (*the legacy name; HGVS writes p.(Phe508del)*).
+
+### `crispr`
+
+CRISPR–Cas9 genome editing on a target sequence (DESIGN §96.14; `vidgen.genetics.crispr`):
+
+- **The target**: both strands with every base, drawn from the strand that carries the PAM, so the
+  protospacer always reads 5′→3′ along the top row (with a guide on the bottom strand the card says
+  the view is the reverse complement of what you wrote).
+- **The guide**: the sgRNA's spacer (20 nt for SpCas9, 21–23 for SaCas9) repeats the protospacer on
+  the non-target strand; the **PAM** (`NGG` for SpCas9, `NNGRRT` for SaCas9) lies right after the
+  protospacer's 3′ end on that strand. vidgen finds every guide with a PAM in the target: leave
+  `spacer` out for the one nearest the middle, give `guide: 2` for the n-th, or write your own
+  `spacer`.
+- **What plays**: the enzyme comes in, stops at the PAMs it passes, settles on the right one; the
+  DNA opens, the spacer pairs with the target strand and the other strand is displaced (the
+  R-loop); both strands are cut **3 bp upstream (5′) of the PAM**, leaving blunt ends.
+- **The repair**: `nhej` joins the ends with a small indel (`indel: +1` default — the commonest
+  SpCas9 outcome —, `-4`, …), `hdr` copies a donor template carrying `edit:`; `none` stops at the
+  break. With `coding_first:` (the `c.` number of the target's first base) the outcome is written in
+  HGVS with its protein change, and the card says whether the frame is kept (a frameshift knockout)
+  and whether the repaired allele can be cut again.
+
+```yaml
+- id: edit
+  type: crispr
+  params:
+    title: "Cutting with Cas9"
+    target: "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAGTCTGCC"
+    repair: nhej                      # hdr with edit: 25A>T (or c.20A>T with coding_first)
+  beats:
+    - text: "A stretch of double-stranded DNA."
+    - text: "The guide finds its sequence next to a PAM."
+      actions: [{scan: dna}]
+    - text: "Three base pairs from the PAM, both strands break."
+      actions: [{cleave: dna}]
+    - text: "Joining the ends leaves one extra base: the reading frame shifts."
+      actions: [{repair: repair}]
+```
+
+| param | | |
+|---|---|---|
+| `title` | text | in the header band |
+| `target` | | the top strand 5′→3′, 26–80 bp |
+| `cas` | `SpCas9` | `SaCas9` (PAM `NNGRRT`, 21–23 nt spacer) |
+| `spacer` | a guide vidgen finds | the sgRNA's spacer 5′→3′ (U or T) |
+| `guide` | | instead of `spacer`: the n-th candidate guide (by cut position) |
+| `repair` | `nhej` | `hdr`, `none` |
+| `indel` | `+1` | NHEJ: the indel at the cut (+1 … +12, −1 … −12) |
+| `edit` | | HDR: the donor's change (`25A>T`, `24_26del`; `c.…` with `coding_first`) |
+| `coding_first` | | the `c.` number of the target's first base (outcomes in HGVS) |
+| `symbol` | | the gene's symbol for the card |
+| `size`, `title_size` | `caption`, `heading` | |
+
+**Actions** (each plays the steps before it that have not played).
+
+| action | | |
+|---|---|---|
+| `scan` | `dna`, `cas9`, `sgrna`, `pam` | the search, the PAM, the R-loop (~3 s) |
+| `cleave` | `dna`, `cut` | the blunt double-strand break (~1.6 s) |
+| `repair` | `dna`, `repair` | NHEJ or HDR, with the outcome on the card (~2.8 s) |
+
+**The rules** (`vidgen validate`): a spacer that is not in the target (*it is the complement of a
+protospacer…*, *written backwards*), one without a PAM after it (naming what is there and the guides
+that would work), the wrong spacer length for the enzyme, a spacer with its PAM written on
+(*the PAM is in the DNA, not in the sgRNA*), a spacer that occurs twice, a target without any PAM,
+`edit` without `repair: hdr`, `indel` without `repair: nhej`, a `c.` edit without `coding_first`.
+
+### `dna_lab`
+
+The laboratory methods of molecular genetics (DESIGN §96.15; `vidgen.genetics.dna_lab`), one per
+`method:`.
+
+- **`pcr`**: the template with its primers (the forward primer repeats the top strand, the reverse
+  primer is the reverse complement of the top strand downstream; both written 5′→3′ and checked
+  against the template), the product's length, the melting temperatures (Wallace rule below 14 nt,
+  else the GC formula) and the annealing temperature (~5 °C below the lower Tm), a temperature trace
+  of the cycles (denature 94–98 °C, anneal 50–65 °C, extend 72 °C with Taq) and the molecules
+  doubling cycle by cycle — the strands are simulated, so the product of defined length first
+  appears in cycle 3 and there are 2ⁿ molecules, 2ⁿ − 2n of them exactly the product, after n
+  cycles.
+- **`gel`**: an agarose gel, the wells at the cathode (−), DNA running to the anode (+), the
+  distance linear in log₁₀ of the size within the gel's resolving range (0.5 %: ~1–30 kb … 2 %:
+  ~50 bp–2 kb), a ladder (`1kb`, `100bp`, `50bp` or your own sizes) and each band's size read off
+  the ladder by interpolation.
+- **`sanger`**: chain termination with ddNTPs, the fragments sorted by length and a chromatogram
+  whose peaks give the bases 5′→3′; a heterozygous position (`heterozygous: "8T>C"`) is two
+  overlapping half-height peaks called with its IUPAC code (Y).
+- **`ngs`**: seeded short reads from the two alleles aligned to a reference, the coverage per
+  position, sequencing errors marked, and a variant call from the share of alt reads
+  (heterozygous ≈ 50 %, homozygous ≈ 100 %, below 10× *low coverage*). The reference is a window
+  of a longer sequence: reads may run past its ends and are clipped, so the coverage is even up to
+  the edges. The variant is a substitution (`variant: "31C>T"`) or a deletion of 1–12 bp
+  (`"6_8del"`, `"6_8delCTT"`: the bases are checked): an alt read has a gap there, bridged by a
+  line as in a genome browser, and only reads spanning the whole deleted stretch count for the
+  call (CFTR F508del: `examples/cystic-fibrosis`). With a long reference in a narrow frame the
+  tiles are drawn without letters.
+
+```yaml
+- id: pcr
+  type: dna_lab
+  params:
+    title: "PCR"
+    method: pcr
+    template: "GCTTACCAGTCGATGCCATGACTGCATCAGCTGAAGGTCACC…"   # 40–5000 bp
+    primers: {forward: "GACTGCATCAGCTGAAGGTC", reverse: "CCAAGGGTAGACCACCAGCA"}
+    cycles: 30
+  beats:
+    - text: "A template, two primers, and a product of a defined length."
+    - text: "Ninety-five to separate, fifty-five to anneal, seventy-two to extend."
+      actions: [{run: trace}]
+    - text: "The molecules double every cycle."
+      actions: [{run: counts}]
+- id: gel
+  type: dna_lab
+  params: {method: gel, agarose: 1.5, ladder: 100bp, lanes: {patient: [450], control: [450, 300]}}
+  beats: [{text: "Small fragments run furthest.", actions: [{run: ladder}]}, {text: "The ladder gives the size.", actions: [{run: sizes}]}]
+```
+
+| param | method | |
+|---|---|---|
+| `title` | | in the header band |
+| `method` | | `pcr`, `gel`, `sanger`, `ngs` |
+| `template`, `primers`, `temperatures`, `cycles` | pcr | the template 5′→3′; `{forward, reverse}` 5′→3′ (15–35 nt); `{denature, anneal, extend}` °C; 1–40 cycles |
+| `agarose`, `ladder`, `lanes` | gel | 0.5–3 %; `1kb` / `100bp` / `50bp` or sizes; `{patient: [450], digest: [300, 150]}` |
+| `sequence`, `heterozygous`, `primer` | sanger | the read 5′→3′ (8–40 nt); `"8T>C"` or a list; the sequencing primer |
+| `reference`, `variant`, `zygosity`, `read_length`, `depth`, `error_rate` | ngs | 30–120 bp; `"31C>T"` or a deletion `"6_8del"`; `heterozygous` / `homozygous` / `absent`; 10–…; 4–40×; 0–0.05 |
+| `seed` | sanger, ngs | changes the seeded reads or peak heights |
+| `size`, `title_size` | | |
+
+**Actions**. Without them the scene plays its steps beat by beat.
+
+| action | | |
+|---|---|---|
+| `run` | the step's target | `trace`, `counts` (pcr); `ladder`, `lane:<label>`, `sizes` (gel); `fragments`, `chromatogram` (sanger); `reads`, `coverage`, `call` (ngs); the steps before it play first (~2.2 s each) |
+
+`highlight`, `dim`, `callout` and `reveal` work on the same targets (`template`, `primers`,
+`product`, `cycle:<n>`, `gel`, `sequence`, `reference`…).
+
+**The rules** (`vidgen validate`): a primer that is not in the template or on the wrong strand
+(*it matches the bottom strand: it would anneal to the top strand and extend leftwards*; *a reverse
+primer is the reverse complement of the top strand: write …*), primers that point away from each
+other, a primer that binds twice, a primer shorter than 15 nt, an annealing temperature at or above
+a primer's Tm, temperatures outside their windows, a gel percentage outside 0.5–3 %, an unknown
+ladder (did you mean…), fragment sizes outside 10 bp–50 kb, a heterozygous position whose base is
+not the one in the read, a variant whose reference base is wrong, and params that belong to another
+method (*agarose: is a param of method: gel, not pcr*).
+
+### `population`
+
+Population genetics (DESIGN §96.16; `vidgen.genetics.population`), one `model:` per scene.
+
+- **`hardy_weinberg`** (the default): the population as 100 dots coloured by genotype (a
+  heterozygote half and half; with more than 100 people a dot stands for several and the legend
+  gives the real counts) and the working, step by step: the allele frequencies p and q — from
+  genotype `counts` (p = (2n<sub>AA</sub> + n<sub>Aa</sub>) / 2N), genotype `frequencies`, `p`
+  itself or the `incidence` of a recessive condition (q = √incidence, exact when both terms are
+  squares: 1/2500 → q = 1/50) —, the expected genotype frequencies p² + 2pq + q² = 1 (with the
+  inbreeding coefficient `inbreeding` F: p² + Fpq, 2pq(1 − F), q² + Fpq), the carrier frequency
+  2pq (49/1250 ≈ 1 in 25.5 for 1/2500; ≈ 2q for a rare allele) and, from counts, the chi-square
+  test of Hardy–Weinberg proportions: χ² over the three genotypes with **df = 1** (3 classes − 1 −
+  1 allele frequency estimated from the data), its p-value, the critical value 3.84 at α = 0.05,
+  the heterozygote deficit or excess F̂ = 1 − H<sub>obs</sub>/H<sub>exp</sub> and a warning when an
+  expected count is below 5. Numbers are exact fractions with their decimals.
+- **Simulations** (seeded Wright–Fisher: N diploids, 2N gene copies sampled binomially each
+  generation after selection, mutation and migration; the same `seed` gives the same lines):
+  `drift` (several replicate lines of the allele frequency over generations from `p0`; smaller N
+  drifts faster; fixation and loss marked with a dot; heterozygosity with its expectation
+  H<sub>t</sub> = H₀(1 − 1/2N)<sup>t</sup>), `selection` (`fitness` of the three genotypes, or `s`
+  and `h`: w = 1, 1 − hs, 1 − s; the deterministic recursion as a thick line, with `N` the drifting
+  lines around it; heterozygote advantage gives p̂ = t/(s + t)), `mutation` (`mu` A → a, `nu`
+  a → A per copy per generation; equilibrium ν/(μ + ν)), `migration` (two `populations` with
+  their `p0`, a migration rate `m`, `direction: both | one_way` — continent → island: p<sub>t</sub> =
+  p<sub>c</sub> + (p₀ − p<sub>c</sub>)(1 − m)<sup>t</sup>), `bottleneck` (`{at, N, generations}`:
+  N drops, then recovers; the heterozygosity lost stays lost), `founder` (`founders` individuals
+  sampled from a source at `p0`, then N). `mu` / `nu` can be added to any simulation. The first
+  line's individuals are drawn as dots (its 2N gene copies paired at random, so the dots carry
+  that generation's allele count; 100 dots at most).
+
+```yaml
+- id: cf
+  type: population
+  params:
+    title: "Carriers of cystic fibrosis"
+    incidence: 1/2500              # or counts: {AA: 360, Aa: 480, aa: 160}, frequencies:, p:
+    condition: cystic fibrosis
+  beats:
+    - text: "One baby in two thousand five hundred has cystic fibrosis."
+    - text: "So q is one in fifty."
+      actions: [{reveal: alleles}]
+    - text: "And about one person in twenty-five is a carrier."
+      actions: [{reveal: carriers}]
+- id: drift
+  type: population
+  params: {model: drift, N: 20, p0: 0.5, generations: 100, replicates: 8, seed: 3}
+  beats:
+    - text: "Eight populations of twenty start at one half."
+    - text: "Each generation is a random sample of forty gene copies."
+      actions: [{simulate: "generation:40"}]
+    - text: "Some lines fix the allele, others lose it."
+      actions: [{simulate: lines}, {highlight: fixed, at: "@fix"}]
+```
+
+| param | model | |
+|---|---|---|
+| `title` | | in the header band |
+| `model` | | `hardy_weinberg`, `drift`, `selection`, `mutation`, `migration`, `bottleneck`, `founder` |
+| `alleles` | | the two alleles, `[A, a]` by default (`[M, N]`); p is the first one's frequency |
+| `counts`, `total` | hardy_weinberg | genotype counts `{AA: 360, Aa: 480, aa: 160}` (whole numbers ≥ 0; `Aa` or `aA`); `total` is checked against their sum |
+| `frequencies` | hardy_weinberg | genotype frequencies adding up to 1 |
+| `p` | hardy_weinberg | the first allele's frequency (0–1, `"3/5"`, `"60%"`) |
+| `incidence`, `condition` | hardy_weinberg | the incidence of the recessive condition (q² = incidence; random mating only) and its name |
+| `inbreeding` | hardy_weinberg | F (0–1) |
+| `N`, `p0`, `generations`, `replicates` | simulations | population size (2–1 000 000 diploids; needed for drift, bottleneck, founder; without it the deterministic recursion alone), starting frequency, 1–2000 generations (default 100), 1–20 lines (default 6) |
+| `fitness`, `s`, `h` | selection | `{AA: 1, Aa: 0.95, aa: 0.9}` (none negative) or s in [−1, 1] and h (default 0.5) |
+| `mu`, `nu` | simulations | mutation rates per copy per generation |
+| `populations`, `m`, `direction` | migration | `[{name: mainland, p0: 0.9}, {name: island, p0: 0.1}]` (or two numbers), the migration rate, `both` / `one_way` |
+| `bottleneck` | bottleneck | `{at: 20, N: 10, generations: 5}` |
+| `founders` | founder | how many found the new population (fewer than N) |
+| `heterozygosity` | drift, bottleneck, founder | draw H under the frequencies with its expectation H₀ Π(1 − 1/2N); default: bottleneck and founder |
+| `seed` | | the same seed gives the same lines and dots |
+| `size`, `title_size` | | |
+
+**Actions**. Without them the scene plays its steps beat by beat (Hardy–Weinberg: the dots, then
+each step; a simulation: the plot and the dots, about a third of the generations, the rest with the
+outcome card).
+
+| action | targets | |
+|---|---|---|
+| `simulate` | `generation:<t>`, `lines` (or `plot`: to the last generation) | grows every line, the deterministic curve and the heterozygosity to that generation; the dots follow; fixed and lost lines get their dot; the outcome card at the end (~1–3.2 s) |
+| `resample` | `population` | the next generation (every line one generation on, the dots redrawn), or in a Hardy–Weinberg scene a new random sample of 100 at the expected frequencies (~1.4 s) |
+
+`reveal: alleles` / `expected` / `carriers` / `chi_square` plays a Hardy–Weinberg step (the steps
+before it first); `highlight: fixed` (`lost`, `line:3`, `deterministic`, `heterozygosity`,
+`population`) marks a part.
+
+**The rules** (`vidgen validate`): a frequency outside [0, 1], genotype frequencies that do not add
+up to 1, counts that are not whole numbers or do not add up to `total`, a genotype that is not one
+of the alleles' (did you mean…), a missing genotype, two sources at once (`p` and `incidence`), a
+negative fitness, s outside [−1, 1], drift without N, a bottleneck that is not smaller than N, a
+param of another model (*s: not a param of model: drift (a param of model: selection)*), a
+`simulate` that goes back in generations, `simulate` on a Hardy–Weinberg scene.
+
+### `gwas`
+
+A genome-wide association study (DESIGN §96.17; `vidgen.genetics.gwas`). `plot: manhattan`: −log₁₀ p
+of every variant along the genome, chromosomes 1–22 (and X with `x_chromosome: true` or when your
+data has it) in alternating colours, the genome-wide significance line at **5 × 10⁻⁸** (−log₁₀ =
+7.3) and the suggestive line at 1 × 10⁻⁵, each peak ringed and labelled with its gene (italic) or
+lead variant; points above `y_max` (default: the data's, at most 40) are drawn as triangles at the
+top with their p written. `plot: qq`: observed against expected −log₁₀ p (the i-th smallest of n
+expected at (i − 0.5)/n), the diagonal, and the genomic inflation **λ<sub>GC</sub>** = median
+χ²₁ / 0.455. `plot: both`: the two side by side (16:9) or stacked (9:16). `regional` (a param or
+the action) zooms into a peak: its window boxed on the Manhattan plot and a regional plot under it,
+the variants coloured by r² with the lead (a diamond).
+
+The data: `data:` a CSV or TSV in the project (columns chromosome / `CHR`, position in bp / `BP`, p /
+`P`, and optionally variant / `SNP`, gene, r2), or `variants:` inline — lead variants are found by
+clumping (the smallest p first; nothing within `clump_kb`, default 500 kb, of a lead becomes another)
+and labelled from `labels: {rs429358: APOE}`; or a **synthetic** study (`peaks:` and nothing else): a
+seeded null background (`background` variants, default 2400, spread over the autosomes by their
+GRCh38 lengths; `inflation` λ to mimic stratification) and your peaks, each a lead variant with the
+variants around it in linkage disequilibrium (r² falling with distance; a neighbour's z = r·z<sub>lead</sub> +
+√(1 − r²)·ε). Synthetic data is written **simulated data** on the plot. p-values may be numbers or
+strings (`"3e-450"` beyond floating point); positions in bp or text (`53.8 Mb`, `420 kb`).
+
+```yaml
+- id: gwas
+  type: gwas
+  params:
+    title: "A genome-wide association study"
+    trait: body mass index
+    plot: both                         # manhattan | qq | both
+    peaks:                             # a synthetic study (or data: assoc.csv, or variants: [...])
+      - {chromosome: 16, position: 53.8 Mb, p: 1e-40, gene: FTO, variant: rs9939609}
+      - {chromosome: 18, position: 60.2 Mb, p: 2e-14, gene: MC4R}
+  beats:
+    - text: "Every dot is a variant tested for association with body mass index."
+    - text: "Genome-wide significance is five times ten to the minus eight."
+      actions: [{reveal: thresholds}, {reveal: peaks, at: "@significance"}]
+    - text: "Around FTO, the variants in linkage disequilibrium with the lead share its signal."
+      actions: [{regional: "peak:FTO"}]
+```
+
+| param | | |
+|---|---|---|
+| `title`, `trait` | | the header; the trait, in the row over the plot |
+| `plot` | | `manhattan` (default), `qq`, `both` |
+| `data` | your data | a `.csv` / `.tsv` in the project |
+| `variants` | your data | `[{chromosome, position, p, variant?, gene?, r2?}, …]` |
+| `labels`, `clump_kb` | your data | genes for lead variants; the clumping distance |
+| `peaks` | synthetic | `[{chromosome, position, p, gene?, variant?, label?}]` |
+| `background`, `inflation`, `seed` | synthetic | 200–20 000 null variants; λ of the null (0.5–3); the seed |
+| `x_chromosome` | | draw X after 22 |
+| `regional` | | a peak's label to zoom into in the scene's own steps |
+| `y_max` | | top of the −log₁₀ p axis (at least 8) |
+| `size`, `title_size` | | |
+
+**Actions**. Without them: the axes, the points chromosome by chromosome, the thresholds, the peak
+labels, the QQ plot, the regional plot (when `regional` is set).
+
+| action | targets | |
+|---|---|---|
+| `regional` | `peak:<label>` | boxes the peak's window and draws its regional plot (~2.6 s; one per scene) |
+
+`reveal: points` (`chromosome:16`, `thresholds`, `peaks`, `qq`) plays those steps on words;
+`highlight: peak:FTO` rings a peak.
+
+**The rules** (`vidgen validate`): a p-value outside (0, 1] or not a number, an unknown chromosome (1–22 and X;
+Y and mtDNA are not drawn), a position in Mb written as bp (*write 53800000 or '53.8 Mb'*) or beyond
+the chromosome's end (GRCh38), a CSV without a chromosome / position / p column, `peaks` with your own
+data, `data` with `variants`, a `regional` peak that is not on the plot (did you mean…), two
+regional plots, `y_max` below the significance line.
 
 ### `end_card`
 
@@ -9728,7 +11188,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -9751,6 +11211,8 @@ a title card, a `transform` of a bar).
 | `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>`, `change<N>` | reveal, dim, highlight, zoom, trace | a series is its line, markers and end label; `point:sparse@8`; `change<N>` is the axes and lines, revealing it plays that change; `trace` a series to sweep a cursor along it |
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
+| `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
+| `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
@@ -9780,6 +11242,15 @@ a title card, a `transform` of a bar).
 | `cell` | `title`, `cell`, `tissue`, `scale_bar`, `<id>` | reveal, zoom_to, motor_walk, endocytosis, exocytosis, transcribe, export, translate, to_golgi, secrete, dim, highlight, callout | `cell` is the cytosol and plasma membrane, `tissue` the neighbouring cells; an object's id names all its things (pores and ribosomes bound to a structure are part of it); `zoom_to` moves the camera between levels, `motor_walk` / `endocytosis` / `exocytosis` play processes, see [the cell actions](#cell-actions); a `gene`'s id takes its steps, see [a gene in a cell](#a-gene-in-a-cell) |
 | `cell_cycle` | `title`, `cycle`, `phase:<key>`, `checkpoint:<key>`, `<checkpoint>`, `plot`, `cyclin:<key>`, `marker`, `cell`, `chromosomes`, `pair<N>`, `spindle`, `caption` | advance, checkpoint, highlight, dim, reveal, callout | `mode: cycle`: `cycle` is the ring with its marker, `phase:g1` … `phase:g0` a phase's arc, `checkpoint:g2_m` (or `g2_m`) a checkpoint's mark, `plot` the cyclin levels, `cyclin:b` one curve; divisions: `cell` the whole drawing, `chromosomes` every chromatid, `pair1` a homologous pair, `spindle` the microtubules, `caption` the captions; see [`cell_cycle`](#cell_cycle) |
 | `metabolism` | `title`, `<process>`, `<metabolite>`, `step:<key>`, `<component>`, `membrane`, `tally` | advance, highlight, dim, reveal, callout | `glycolysis` (the process's name) is the whole drawing; `pyruvate` a metabolite's box, `step:pfk1` an enzyme's arrow and label; `complex_iv` a component of a chain, `membrane` its membrane; `tally` the counters; see [`metabolism`](#metabolism) |
+| `cross` | `title`, `generations`, `parents`, `parent<N>`, `mother`, `father`, `gametes`, `gametes<N>`, `square`, `tree`, `row<N>`, `col<N>`, `cell<R>.<C>`, `cells:<class>`, `phenotypes`, `genotypes`, `class<N>`, `class:<label>`, `genotype:<genotype>`, `chi_square`, `notes` | form_gametes, fill, count, ratio, chi_square, highlight, dim, reveal, callout | `parents` (also `both`) is both parents, `parent1` (`mother`) the egg parent; `gametes1` its gametes; `square` (or `tree`; both also `all`) the whole drawing; `cells:round, yellow` every cell of a phenotype class (or its leaves), `cells:RrYy` of a genotype; `class:round, yellow` a row of the phenotype table, `genotype:RrYy` of the genotype table; `chi_square` (also `test`) the test; see [`cross`](#cross) |
+| `pedigree` | `title`, `chart`, `legend`, `generation:<R>`, `person:<id>`, `proband`, `consultand`, `affected`, `carriers`, `child`, `genotypes`, `modes`, `analysis`, `mode:<code>`, `risk` | deduce, analyse, risk, reveal, highlight, dim, callout | `generation:II` a row (Roman numeral); `person:II-3` (or the author's id, `person:mum`) one person with their lines; `chart` everything (also its entrance); `affected` / `carriers` (declared and obligate) groups of people; `child` the proposed child; `genotypes` (also `all`) the deduced genotypes; `modes` (also `analysis`) the analysis card, `mode:XR` one mode's row; `risk` the risk card; see [`pedigree`](#pedigree) |
+| `linkage_map` | `title`, `chromosomes`, `table`, `classes`, `order`, `distances`, `interference`, `map`, `locus:<name>`, `interval:<a>-<b>`, `double` | cross_over, measure, reveal, highlight, dim, callout | `reveal: order` (any step) plays a step of the worked test cross with the steps it needs; `locus:v` its bands and alleles; `interval:v-ct` its brace on the map (and the target of `cross_over` / `measure`); see [`linkage_map`](#linkage_map) |
+| `karyotype` | `title`, `chromosomes`, `group:<A…G>`, `chromosome:<name>`, `change:<n>`, `changes`, `notation`, `reading`, `band:<band>` | rearrange, reveal, highlight, dim, callout | `change:1` the first change written (its highlight or edit); `chromosome:21` a pair; `group:G` a Denver group (karyogram); `band:7q31.2` a labelled band (ideogram); see [`karyotype`](#karyotype) |
+| `mutation` | `title`, `gene`, `reference`, `variant`, `variant:<n>`, `protein`, `notation`, `codon:<n>` | mutate, reveal, highlight, dim, callout | `variant` the row made by the change (`variant:2` the n-th listed); `codon:7` a codon with its amino acid; `gene` the exon strip; see [`mutation`](#mutation) |
+| `crispr` | `title`, `dna`, `pam`, `protospacer`, `cas9`, `sgrna`, `cut`, `repair`, `card` | scan, cleave, repair, reveal, highlight, dim, callout | `pam` the PAM boxed, `protospacer` its bracket, `cut` the break, `repair` the repaired allele; see [`crispr`](#crispr) |
+| `dna_lab` | `title`, and per method `template`, `primers`, `product`, `trace`, `cycle:<n>`, `counts` (pcr); `gel`, `ladder`, `lane:<label>`, `sizes` (gel); `sequence`, `fragments`, `chromatogram` (sanger); `reference`, `reads`, `coverage`, `call` (ngs) | run, reveal, highlight, dim, callout | `run: counts` (or any step's target) plays that step and the ones before it; see [`dna_lab`](#dna_lab) |
+| `population` | `title`, `population`, `alleles`, `expected`, `carriers`, `chi_square`, `plot`, `lines`, `line:<n>`, `deterministic`, `fixed`, `lost`, `heterozygosity`, `generation:<t>` | simulate, resample, reveal, highlight, dim, callout | `population` the dots and their legend; `reveal: alleles` (`expected`, `carriers`, `chi_square`) a Hardy–Weinberg step with the ones before it; `line:2` a simulated line, `fixed` / `lost` the lines that fixed or lost the allele with their end dots; `reveal: "generation:40"` grows the lines to that generation; see [`population`](#population) |
+| `gwas` | `title`, `manhattan`, `points`, `chromosome:<n>`, `thresholds`, `significance`, `suggestive`, `peaks`, `peak:<label>`, `qq`, `lambda`, `regional`, `simulated` | regional, reveal, highlight, dim, callout | `points` every variant (`chromosome:16` one chromosome's), `thresholds` both lines, `peak:FTO` a peak's ring and label (its gene, else its lead variant), `qq` the QQ plot, `lambda` λ_GC, `regional` the regional plot (with the `regional` param), `simulated` the "simulated data" tag; see [`gwas`](#gwas) |
 | `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
 | `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
@@ -9795,7 +11266,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
-| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets); on a [`plot`](#plot): `x`, `y` (`[from, to]` in data units) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. With `x` / `y` on a `plot` (targets `axes`, `panel<N>` or a series' panel) the camera stays: the plot's axes ease to that region of the data and back (x zooms every panel sharing it, residual panels too); its annotations step aside meanwhile. |
 | `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in; on an iso place `to` is a spot, the camera moves up and down too, and from the wide view it moves in (at least twice as close as the whole place). Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
@@ -9811,6 +11282,9 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |
 | `trace` | `to` (an x, or `[x, y]` for a point or a vector's tip) or `scale` (a vector only) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following; a point (`point<N>`, `point:A`) moves to `to: [x, y]`; a vector (`vector<N>`, `vector:a`) moves its tip to `to: [x, y]` or is multiplied by `scale` (2: twice as long, -1: turned round; its tail stays). Vectors, sums, marks and live labels drawn from a moved point or vector follow it. On a [`number_line`](#number_line): a point moves to `to` (a number). On a [`line_chart`](#line_chart): a cursor dot sweeps along a series (`series<N>`, `series:<name>`) to x = `to` (on category `x`, the position from 1) with the line's value over it. 2 s; it stays there (`until: <beat>`: back when that beat starts). |
+| `fit`, `annotate` | as the target: a fit (`- fit: "fit:decay"`) or an annotation (`- annotate: annotation2`) | on a [`plot`](#plot): draws the fit on a word (its band, the curve, its legend entry and parameter box, its residual panel; the data first if not shown yet; 1.6 s) or shows the annotation (its ring, arrow, line or shaded range and its text; 1 s); the plot's own steps leave them to the action. `reveal` does the same for a series or its error bars (`errors:<name>`). On live data both wait for the data to finish growing. |
+| `grow` | the target: a live series (`- grow: "series:x"`), `axes` (every live series) or `panel<N>`; `to` (the model's time, or the point number of live data; default the end) | on a [`plot`](#live-plots-models-and-grow): grows the live series from where they are to `to`, with the head marker and readout, the axes widening as the data reach their edge; it lasts until the beat's next action or the beat's end (or `run_time`); a later `grow` continues. The plot's own steps leave those series to it. |
+| `substitute`, `compute`, `convert` | as the target: a calculation (`- compute: calc1` or `"calc:v"`) | on a [`calculation`](#calculation): shows the values substituted into its formula (1.2 s), its result in its box (1.4 s; an intermediate value first) or its conversions (1.2 s) on a word, with the lines before it that are not on screen yet (an earlier calculation leaves, its result joining the table) and the lines after it that no action names; the scene's own steps leave those lines to the action. `reveal: formula2` shows a formula; `highlight: "symbol:G"` marks a symbol in the table and the lines on screen. `convert` needs `convert:` units. |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |
@@ -10526,6 +12000,23 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `science_naming` | warning | for the genes a scene declares (a molecule's `gene`, the scene's `gene:` param, a pathway node's `gene`): the gene written as its protein next to "gene" (mouse `TRP53 gene`: the gene is *Trp53*) or the protein as the gene next to "protein" (`Trp53 protein`: TRP53), a symbol in a case the species does not use (`trp53` in a mouse scene), and in a molecule's `label` (Pango markup) a gene next to "gene" without `<i>` or a protein in italics. Checked in titles, labels, callout labels and narration |
 | `science_pathway` | warning | in a [`pathway`](#pathway) scene, narration that says one node activates another (or "B is activated by A") where the scene's arc A → B inhibits (a T-bar, or `effect: inhibits` such as Akt's phosphorylation of TSC2), inhibits where it activates, phosphorylates where it dephosphorylates or the reverse. Only direct arcs between two named nodes (labels or genes) with a few words between are read |
 | `science_counts` | warning | a number in the narration against the textbook: the net ATP (2), NADH (2) or pyruvate (2) of glycolysis per glucose; NADH (3), FADH₂ (1), CO₂ (2) or GTP (1) per turn of the citric acid cycle (twice that per glucose); Na⁺ (3) and K⁺ (2) per Na⁺/K⁺ pump cycle; protons pumped per NADH (10), per FADH₂ (6), by complex I (4), II (none), III (4), IV (2); cells after mitosis (2) or meiosis (4); stop codons (3); human chromosomes (46, 23 in a gamete); base pairs per turn of B-DNA (10–10.5) and per nucleosome (145–147) |
+| `genetics_ratio` | warning | in a [`cross`](#cross) scene, a ratio in the narration (`9:3:3:1`, "a three to one ratio", "three round to one wrinkled", "9 purple : 7 white") that is none of the cross's — its phenotype ratio, genotype ratio, the zygotes' (lethal genotypes included), by sex or with the sexes pooled, each parent's gametes (when the sentence says gametes), the observed counts, the ratio without the epistasis (when the sentence speaks of classes merging or masking), one trait's ratio (when the sentence says it is one trait's: "each trait alone", a trait's name, one trait's phenotypes) — or a share ("half", "a quarter of", "two thirds", "1 in 4", "25 %", "all the daughters") of a named phenotype (or of the carriers) among the offspring, sons or daughters, or a child's chance of it, that is not the cross's ("a quarter of the children are affected sons" is read jointly). Sentences about the F1 of a `P` cross, about a test cross the scene is not, or hypothetical ("would", "instead", "modified to", "unlike") are left alone; `tolerance` (0.05, relative) for shares said with "about" |
+| `genetics_pedigree` | warning; **error** for a chart against its mode | a [`pedigree`](#pedigree) whose chart does not fit its stated `mode` (the reason from the analysis, e.g. "III-1 is affected but neither parent is", and the modes that fit); narration saying a dominant trait skips a generation without reduced penetrance (said, or `penetrance:` below 1), or that an X-linked trait passes from father to son (said X-linked, or the scene's mode XR / XD); in a pedigree scene a named person's carrier probability ("II-3 is a carrier with probability one half"), an unaffected sibling's, or the proposed child's risk (per sex for "a son") that differs from the chart's computed value. Conditional sentences ("if both are carriers…") are left alone |
+| `genetics_linkage` | warning | in any scene, a recombination frequency (or a share of recombinants) said to be over 50 %; in a [`linkage_map`](#linkage_map) or a `cross` with `linkage:`, a distance in cM / map units or an RF that differs from the scene's for the two loci the sentence names (or, naming none, from every pair's), two linked loci called unlinked ("assort independently") or two unlinked loci called linked. Locus symbols are matched as written (a one-letter capital only beside "and", "gene", "locus" or a dash); `tolerance` (0.05) for "about" |
+| `genetics_hwe` | warning | Hardy–Weinberg in the narration: carriers called q² (or p²), the affected called 2pq, p² + q² = 1; numbers said in one beat that do not agree — q against the incidence (q² = incidence), the carrier frequency against q (2pq, or ≈ 2q for a rare allele: "1 in 25" for q = 1/50 is fine); in a [`population`](#population) Hardy–Weinberg scene, q and the incidence against the scene's. `tolerance` (0.1, relative) between two numbers |
+| `genetics_crispr` | warning | a PAM written for the wrong nuclease (SpCas9 NGG, SaCas9 NNGRRT, Cas12a TTTV), a cut placed downstream of (3′ of, inside) the PAM or not 3 bp upstream of it, sticky or staggered ends for Cas9 (its break is blunt), the PAM before the protospacer or on the target strand, a spacer length the enzyme does not use (SpCas9 17–24 nt). The enzyme is the [`crispr`](#crispr) scene's `cas`, or the one the sentence names; sentences naming no Cas outside a crispr scene are left alone |
+| `genetics_karyotype` | warning | ISCN notation in the narration or on screen (title, callout labels) that does not parse (the reason and fix: `47,xy,+21`, a count that is not what is listed), a [`karyotype`](#karyotype) whose changes are out of ISCN order (after the sex chromosomes by chromosome, sex chromosomes first, numerical before structural: `46,XY,del(5)(p15.2),inv(9)(p12q13)`), a karyotype or a sex-chromosome syndrome given the wrong sex ("45,X is male", "a girl with 47,XXY", "Turner syndrome in boys"; SRY named is left alone), a condition the scene's karyotype does not have ("trisomy 21" for `47,XY,+18`; comparisons with "like", "such as" are left alone) |
+| `genetics_hgvs` | warning; info for legacy shorthand | HGVS in the narration or on screen that is not valid (`c.A20T`), or in a [`mutation`](#mutation) scene not its variant (`c.20A>G`, a `p.` that does not follow from it); a protein change in the legacy numbering without the initiator Met (`p.Glu6Val`, `Glu6Val` for HbS — in a mutation scene or when the sentence names HBB, sickle cell, CFTR, cystic fibrosis) unless the sentence calls it legacy; as info, legacy shorthand (`ΔF508`, `R553X`, `G551D`) in a genetics scene or a sentence about a variant, unless called legacy (`F508del`, the community's name, is fine) |
+| `calc_numbers` | warning | a number in the narration or on screen (title, caption, text, callout labels, a plot's notes) that refers to a value of a [`calculation`](#calculation) scene and differs from it by more than the way it was written: "thirty kilometres per second" fits 29.8 km/s (a whole number's trailing zeros allow rounding by up to a tenth), "eleven point two" is read to 0.05, "one in a hundred and fifty" against 1/150, "two point two times ten to the minus twenty-five" (with "in kilograms" earlier in the sentence) in kg; "about" also allows rounding to one or two significant figures or `tolerance` (0.05, relative). A number with a unit refers to its own scene's value of that dimension (the one it agrees with, else the one the sentence names, else the scene's only value of that dimension); a pure number or share only to a value the sentence names (its name, or two words of its `meaning`; in its own scene one word no other value has, then only a share, fraction, percentage or decimal); another scene's result only in a scene without numbers of its own (not a calculation, not a plot with fits) and when the sentence names it. Bounds ("more than"), ranges ("400 to 700 nm"), negations, questions and comparisons ("than") are left alone |
+| `calc_units` | warning | a value said in a unit of the wrong kind for its quantity: "a speed of 30 kilometres", "a half-life of 8 metres" (any scene; masses and momenta in eV are natural units, a frequency may be a share), or a calculation's value named by its meaning with a unit of another dimension; a value of the right kind off by a power of 1000 from the calculation's ("30 metres per second" for 29.8 km/s, mg for µg): a prefix mixed up |
+| `calc_sigfigs` | info | a calculation whose `sig` claims more significant figures than its inputs give, or a number said for a result with more figures than it has ("29.7847 kilometres per second" for a result known to 3); whole numbers ending in zeros and numbers in words without "point" are not counted |
+| `plot_units` | warning | a [`plot`](#plot) axis titled with a physical quantity (time, distance, mass, energy, speed, temperature, pressure, voltage, activity, concentration…) but without a unit (no `unit:`, none in the column header, none in the title: "relative", "count", "(…)", "per …" are fine); a fit whose `params` give units while its x axis has none |
+| `plot_log` | warning | on a log axis: error bars reaching zero or below (drawn to the axis edge), a fitted curve or its band reaching zero or below, a reference line or range at or below zero; data a log axis cannot show found when the plot's CSV or model is read |
+| `plot_errors` | warning | a series with `y_err` / `x_err` but no `error:` (what the bars mean: `sd`, `sem`, `ci95`, `range`, `poisson`, `other`); narration about the error bars calling them something else ("standard deviation" for `error: sem`) |
+| `plot_series` | warning | a panel with several series and `legend: false` where no label annotation names them; a placeholder series name (`series 2`, `data`, `line1`) |
+| `plot_truncated` | info | bars that do not start at zero: a histogram drawn as bars on a y axis with `breaks`; a [`bar_chart`](#bar_chart) whose `baseline` is not 0 while every bar is on one side of it |
+| `plot_conserved` | warning | a quantity a plot model declares `conserved` drifting by more than `tolerance` (0.01, relative: max \|q − q₀\| / max \|q\|) over the run: the plot shows the integrator's error; use `method: leapfrog` (symplectic) or a smaller `step` |
+| `plot_fit_claims` | warning | narration or a plot note stating a fitted value the fit does not give, within `sigmas` (2) standard errors and the said value's rounding: an exponential's half-life, lifetime / time constant, decay constant (growth: doubling time, growth rate), a power law's exponent ("three halves"), a line's slope and intercept, a peak's centre / mass, σ and width (FWHM), a logistic's carrying capacity and midpoint, a distribution's mean, a custom model's parameters by name; in the fit's units (the axes'), converted from the unit said |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -10574,6 +12065,23 @@ lint:
     science_naming: {}
     science_pathway: {}
     science_counts: {}
+    genetics_ratio: {tolerance: 0.05}       # relative, for shares said with "about"
+    genetics_pedigree: {}
+    genetics_linkage: {tolerance: 0.05}     # relative, for distances and RF said with "about"
+    genetics_hwe: {tolerance: 0.1}          # relative, between two Hardy–Weinberg numbers
+    genetics_crispr: {}
+    genetics_karyotype: {}
+    genetics_hgvs: {}
+    calc_numbers: {tolerance: 0.05}         # relative, for values said with "about" (beyond rounding to 1-2 figures)
+    calc_units: {tolerance: 0.05}           # as calc_numbers, once a factor of 1000 is taken out
+    calc_sigfigs: {}                        # info by default
+    plot_units: {}
+    plot_log: {}
+    plot_errors: {}
+    plot_series: {}
+    plot_truncated: {}                      # info by default
+    plot_conserved: {tolerance: 0.01}       # largest relative drift of a conserved quantity
+    plot_fit_claims: {sigmas: 2.0, tolerance: 0.05}   # standard errors of the fitted value; relative, for "about"
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -10596,6 +12104,78 @@ gly:
 akt:
   warning science_pathway   akt_b1 @ 0.0s: "Akt activates TSC2, and the signal reaches mTORC1.": the scene's arc akt → tsc2 inhibits (phosphorylates), but the narration says it activates: say inhibits, or change the arc
 ```
+
+**Genetics accuracy** (the `genetics_*` rules, for the [genetics scenes](#cross) and any
+narration): each genetics scene's model is rebuilt from its params — the cross, the pedigree's
+analysis and probabilities, the map, Hardy–Weinberg, the nuclease, the karyotype, the variant —
+and what the narration and the on-screen text say is checked against it; the text checks that
+need no scene (a dominant trait skipping a generation, RF over 50 %, the Hardy–Weinberg formulas,
+Cas9's PAM and cut, karyotype notation, HGVS and legacy names) read every scene. As with the
+`science_*` rules a claim is read only when clearly there: negations, contrasts, questions and
+hypotheticals ("would", "instead", "unlike") are left alone, and a number only next to the words
+that say what it is. `science_naming` also knows the genes of `mutation` (its gene), `crispr`
+(`symbol`), `gwas` (the peaks' genes) and `karyotype` (genes at `bands`), which captions set in
+italics. Example (the planted mistakes of a demo project):
+
+```
+$ vidgen lint demo --rule genetics_ratio --rule genetics_pedigree --rule genetics_hgvs
+dihybrid:
+  warning genetics_ratio    dihybrid_b1 @ 0.0s: "The offspring show a three to one ratio.": 'three to one' does not follow from this cross: its phenotypes are 9 : 3 : 3 : 1 and its genotypes 1 : 2 : 1 : 2 : 4 : 2 : 1 : 2 : 1 (each trait alone gives that: say it is one trait's ratio); say the ratio the cross gives, or change the cross
+hemo:
+  warning genetics_ratio    hemo_b1 @ 0.0s: "Half the daughters have hemophilia A.": 'Half': in this cross 0 of the daughters (females) are hemophilia A, not 1/2 (50 %): say what the cross gives, or change the cross
+  warning genetics_pedigree hemo_b2 @ 2.7s: "The father passes the X-linked allele to his sons.": an X-linked allele never passes from father to son: a father gives his sons his Y and his daughters his X (male-to-male transmission rules X-linked inheritance out)
+skipped:
+  error   genetics_pedigree skipped_b1 @ 0.0s: the chart does not fit the stated mode AD (autosomal dominant): III-1 is affected but neither parent (II-1, II-2) is: a dominant trait does not skip a generation — excluded unless II-1 is non-penetrant (heterozygous); no mode tried fits the chart as drawn: fix the chart (affected, carrier, parents), or give penetrance: when the reason says it is excluded unless someone is non-penetrant
+cf:
+  warning genetics_pedigree cf_b2 @ 3.4s: "The risk for their baby is one in four.": 'one in four': the chart gives the proposed child a risk of 1/150 (1 in 150) (under AR), not 1/4 (25 %)
+sickle:
+  warning genetics_hgvs     sickle_b1 @ 0.0s: "The hbb gene changes at c.20A>G, which gives p.Glu6Val.": 'c.20A>G' is not the scene's variant (c.20A>T)
+  info    genetics_hgvs     sickle_b2 @ 3.8s: "In cystic fibrosis, the ΔF508 variant is the commonest allele.": 'ΔF508' is the legacy name: HGVS writes CFTR c.1521_1523del p.(Phe508del) (say 'legacy name ΔF508' if you keep it)
+```
+
+**Calculations and plots** (the `calc_*` and `plot_*` rules, for [`calculation`](#calculation),
+[`plot`](#plot) and `bar_chart` scenes and any narration): each calculation scene's symbols and
+results are worked out as the render works them out (`from_scene` imports resolved), each plot's
+data, fits and models resolved as the render resolves them, and the numbers the narration and the
+screen text say are read in digits and in words — "29.8 km/s", "3.73 × 10⁻¹⁹ J", "thirty
+kilometres per second", "eleven point two", "eight point oh four days", "three point seven times
+ten to the minus nineteen joules", "one in a hundred and fifty", "forty-nine fiftieths", "three
+halves", "0.173 per hour", "metres per second squared" — and compared in SI, the said value's own
+rounding allowed. Units said are read by the [`calculation`](#calculation) scene's unit engine
+(`vidgen.quantities`), so km, µg, eV, °C, au and GeV/c² convert as in a calculation. Example (the
+planted mistakes of a demo project):
+
+```
+$ vidgen lint demo --rule calc_numbers --rule calc_units --rule calc_sigfigs --rule plot_units --rule plot_log ...
+orbit:
+  warning calc_numbers      orbit_b2 @ 6.0s: "The Earth moves at about thirty-five kilometres per second.": "thirty-five kilometres per second", but orbital speed (v) is 29.8 km/s: say that, or fix the calculation
+  warning calc_units        orbit_b3 @ 9.3s: "That is 30 metres per second.": "30 metres per second" is 1,000 times smaller than orbital speed (v) = 29.8 km/s (2.98 × 10⁴ m/s): a prefix mixed up?
+  warning calc_units        orbit_b4 @ 11.7s: "Precisely, 29.7847 kilometres per second, or a speed of 30 kilometres.": "30 kilometres" is length (m), but a speed is measured in m/s, km/s, km/h: give it the unit of a speed, or the right quantity
+  info    calc_sigfigs      orbit_b4 @ 11.7s: "Precisely, 29.7847 kilometres per second, or a speed of 30 kilometres.": "29.7847 kilometres per second" gives 6 significant figures, but orbital speed (v) is known to 3 (its inputs): say 29.8 km/s
+halflife:
+  info    calc_sigfigs      halflife_b1 @ 0.0s: calculations[1] (t_half): sig 5 claims more than the inputs give (3 significant figures): lower its sig, or give the inputs as many figures as they really have
+risk:
+  warning calc_numbers      risk_b2 @ 1.7s: "The risk for the child is one in two hundred.": "one in two hundred", but risk for the child (P) is 1/150 (1 in 150): say that, or fix the calculation
+activity:
+  warning plot_units        activity_b1 @ 0.0s: x axis 'time' has no unit: a viewer cannot read its numbers; add x: {unit: s} (or the unit in the column header, 'time (s)')
+  warning plot_log          activity_b1 @ 0.0s: series 'measured': 1 error bar reaches zero or below on the log y axis (drawn to the axis edge, which looks like a huge error): give asymmetric errors that stay positive (y_err: {minus, plus}), or use a linear axis
+  warning plot_errors       activity_b1 @ 0.0s: series 'measured': error bars without a stated meaning: a viewer cannot tell a standard deviation from a standard error or a confidence interval; add error: sd | sem | ci95 | range | poisson | other (the legend then says it)
+  warning plot_fit_claims   activity_b2 @ 3.3s: "The fit gives a half-life of twelve days.": "twelve days", but the fit 'exponential fit' gives a half-life of 8.05 ± 0.56: say what the fit found, or fit what you say
+groups:
+  warning plot_series       groups_b1 @ 0.0s: the plot has 2 series and no legend (legend: false), and nothing names 'treated', 'series 2': the viewer cannot tell them apart; show the legend or label each series (annotations: {type: label, series: ...})
+  warning plot_errors       groups_b2 @ 2.0s: "The error bars show one standard deviation.": "standard deviation": the error bars are declared as standard errors of the mean (error: sem): say that, or fix the series' error
+bars:
+  info    plot_truncated    bars_b1 @ 0.0s: baseline 60: every bar starts at 60, not 0, so their lengths exaggerate the differences (a bar twice as long is not twice the value); say so on screen, or use baseline: 0
+spring:
+  warning plot_conserved    spring_b1 @ 0.0s: model 'osc': E is declared conserved but drifts by 8.07% over the run (more than 1.00%): the plot shows the integrator's error, not physics; use method: leapfrog (symplectic: the energy error stays bounded) or a smaller step (now step 0.5, method rk4)
+kepler:
+  warning plot_fit_claims   kepler_b2 @ 2.3s: "A power law with exponent five halves.": "five halves", but the fit 'power law' gives an exponent of 1.50 ± 1.9 × 10⁻⁴: say what the fit found, or fit what you say
+```
+
+`said_before_shown` and `unsaid_reveal` know these scenes too: `fit`, `annotate`, `grow`,
+`substitute`, `compute` and `convert` show things at their time, and a target's on-screen name is
+a plot series' name, a named fit's name, an annotation's text, or a calculation table row's
+meaning and source.
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
 `lint` section and `lint_ignore` do not count in a scene's render fingerprint: changing them

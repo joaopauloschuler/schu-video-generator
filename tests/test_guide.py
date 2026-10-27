@@ -103,6 +103,39 @@ def test_the_biology_topic_covers_the_cell_types() -> None:
     assert "vidgen guide biology" in topic_text("scenes")
 
 
+def test_the_genetics_topic_covers_the_genetics_types() -> None:
+    """Step 220: a topic for genetics videos (choosing, notation, exactness, lint rules, tone, pacing)."""
+    text = topic_text("genetics")
+    assert find_topic("hgvs").name == "genetics" and text.startswith("## Genetics")
+    for kind in ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas", "cell_cycle"):
+        assert f"`{kind}`" in text, kind
+    for part in ("**Choosing.**", "**Notation**", "**Exactness.**", "**Tone.**", "**Pacing.**", "NSGC", "ISCN", "HGVS", "HGNC",
+                 "never invented", "COOKBOOK-GENETICS.md", "examples/cystic-fibrosis"):
+        assert part in text, part
+    for rule in ("genetics_ratio", "genetics_pedigree", "genetics_linkage", "genetics_hwe", "genetics_crispr", "genetics_karyotype",
+                 "genetics_hgvs"):
+        assert f"`{rule}`" in text, rule
+    assert "vidgen guide genetics" in topic_text("scenes")
+
+
+def test_the_science_topic_covers_plots_and_calculations() -> None:
+    """Step 227: a topic for plots and worked calculations (choosing, axes, error bars, fits, live
+    models, units, pacing, lint)."""
+    text = topic_text("science")
+    assert find_topic("calculations").name == "science" and text.startswith("## Science")
+    assert find_topic("cell-biology").name == "biology"
+    for kind in ("plot", "calculation", "bar_chart", "function_plot"):
+        assert f"`{kind}`" in text, kind
+    for part in ("**Plot or chart.**", "**Honest axes.**", "**Error bars and fits.**", "**Live models.**",
+                 "**Units and significant figures.**", "**Pacing calculations.**", "**Lint.**",
+                 "COOKBOOK-SCIENCE-CHARTS.md", "examples/radioactive-decay", "error: sd | sem | ci95"):
+        assert part in text, part
+    for rule in ("calc_numbers", "calc_units", "calc_sigfigs", "plot_units", "plot_log", "plot_errors", "plot_series", "plot_truncated",
+                 "plot_conserved", "plot_fit_claims"):
+        assert f"`{rule}`" in text, rule
+    assert "vidgen guide science" in topic_text("scenes")
+
+
 def test_unknown_topic_suggests() -> None:
     with pytest.raises(VidgenError, match=r"unknown guide topic 'scene'; did you mean 'scenes'"):
         find_topic("scene")

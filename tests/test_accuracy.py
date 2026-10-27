@@ -149,7 +149,8 @@ def _found(project: Project, scene_id: str) -> list[tuple[str, str | None, str]]
 
 
 def test_rules_are_registered_in_config_order() -> None:
-    assert list(LINT_RULES[-len(SCIENCE_RULES):]) == list(SCIENCE_RULES)
+    k = LINT_RULES.index(SCIENCE_RULES[0])
+    assert list(LINT_RULES[k:k + len(SCIENCE_RULES)]) == list(SCIENCE_RULES)
     for name in SCIENCE_RULES:
         assert RULES[name].scope == "scene" and RULES[name].default == "warning"
 

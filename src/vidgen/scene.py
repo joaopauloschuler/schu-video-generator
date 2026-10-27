@@ -743,6 +743,14 @@ class NarratedScene(MovingCameraScene):
         b = self.beat(beat)
         return [u.kind.name for u in self._actions.uses if u.beat == b.id] if self._actions is not None else []
 
+    def beat_time_left(self, next_action: bool = False) -> float | None:
+        """Seconds left in the beat being narrated for an action starting now (a ``grow`` over
+        the rest of its beat; with ``next_action``, until the beat's next action is due), or
+        ``None`` outside a beat or without actions."""
+        if self._actions is None or self._current_beat is None:
+            return None
+        return self._actions.time_left(next_action)
+
     def action_uses(self, name: str) -> list[Any]:
         """The scene's validated uses of action type ``name``, in beat order: :class:`Action`
         objects with their ``options`` and ``config`` (e.g. a ``stage`` keeps the characters an

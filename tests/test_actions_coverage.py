@@ -62,6 +62,21 @@ SAMPLES: dict[str, dict[str, Any]] = {
                 "edges": ["egf -> egfr"]},
     "cell_cycle": {"title": "Cycle"},
     "metabolism": {"title": "ETC", "process": "etc", "components": ["complex_iii", "cyt_c", "complex_iv"]},
+    "cross": {"title": "Cross", "preset": "pea_seed_shape", "parents": ["Rr", "Rr"]},
+    "pedigree": {"title": "Pedigree", "individuals": ["I-1: male", "I-2: female", "II-1: female affected proband of I-1 + I-2"],
+                 "analyse": True, "genotypes": True},
+    "linkage_map": {"title": "Map", "loci": ["b", "vg"], "counts": {"b vg": 405, "+ +": 415, "b +": 85, "+ vg": 95}},
+    "karyotype": {"title": "Karyotype", "karyotype": "47,XX,+21"},
+    "mutation": {"title": "Mutation", "gene": "HBB", "variant": "c.20A>T"},
+    "crispr": {"title": "Edit", "target": "GACTGCATCAGCTGAAGGTCACCATGGTGCATCTGACTCCTGAGGAGAAG"},
+    "dna_lab": {"title": "Gel", "method": "gel", "lanes": {"patient": [450], "control": [450, 300]}},
+    "plot": {"title": "Decay", "y": {"scale": "log"}, "series": [{"name": "a", "x": [0, 1, 2, 3], "y": [100, 50, 25, 12], "y_err": 3, "error": "sd"},
+                                                               {"name": "b", "points": [[0, 90], [2, 30]], "style": "points"}],
+             "fits": [{"series": "a", "model": "exponential", "name": "e"}], "annotations": [{"type": "hline", "y": 50, "text": "half", "id": "h"}]},
+    "calculation": {"title": "Speed", "symbols": [{"name": "d", "value": "42.2 km"}, {"name": "t", "value": "2.0 h"}],
+                    "calculations": [{"name": "v", "expr": "d/t", "unit": "km/h", "convert": "m/s"}, {"name": "w", "expr": "2*v"}]},
+    "population": {"title": "Drift", "model": "drift", "N": 20, "p0": 0.5, "generations": 20, "replicates": 3},
+    "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
@@ -187,6 +202,32 @@ def test_target_names_of_every_builtin_type() -> None:
                                    "cyclin:a", "cyclin:b"]
     assert names("cell_cycle", mode="mitosis") == ["title", "cell", "chromosomes", "spindle", "pair1", "pair2", "caption"]
     assert names("metabolism") == ["title", "etc", "complex_iii", "cyt_c", "complex_iv", "membrane", "tally"]
+    assert names("cross") == ["title", "parents", "both", "parent1", "mother", "parent2", "father", "gametes", "gametes1", "gametes2",
+                              "square", "all", "row1", "row2", "col1", "col2", "cell1.1", "cell1.2", "cell2.1", "cell2.2",
+                              "cells:round", "cells:wrinkled", "cells:RR", "cells:Rr", "cells:rr", "phenotypes", "class1", "class:round",
+                              "class2", "class:wrinkled", "genotypes", "genotype:RR", "genotype:Rr", "genotype:rr"]
+    assert names("cross", preset="hemophilia_a", parents=["X^H X^h", "X^H Y"], show="branch")[10:] == [
+        "tree", "all", "cells:normal clotting, female", "cells:normal clotting, male", "cells:hemophilia A, male", "phenotypes",
+        "class1", "class:normal clotting, female", "class2", "class:normal clotting, male", "class3", "class:hemophilia A, male",
+        "genotypes", "genotype:X^H X^H", "genotype:X^H X^h", "genotype:X^H Y", "genotype:X^h Y"]
+    assert names("pedigree") == ["title", "chart", "legend", "generation:I", "generation:II", "person:I-1", "person:I-2", "person:II-1",
+                                 "proband", "affected", "carriers", "genotypes", "all", "modes", "analysis", "mode:AD", "mode:AR", "mode:XD",
+                                 "mode:XR", "mode:YL", "mode:MT"]
+    assert names("pedigree", individuals=["dad: male", "mum: female", "kid: male of dad + mum", "next: unknown proposed of dad + mum"],
+                 mode="AD", title="")[:8] == ["chart", "legend", "generation:I", "generation:II", "person:dad", "person:I-1", "person:mum",
+                                              "person:I-2"]
+    assert names("linkage_map") == ["title", "chromosomes", "table", "classes", "distances", "map", "locus:b", "locus:vg",
+                                    "interval:b-vg"]
+    assert names("linkage_map", loci=None, counts=None, map={"y": 0, "w": 1.5, "v": 33}, chromosomes=False) == [
+        "title", "map", "locus:y", "locus:w", "locus:v", "interval:y-w", "interval:y-v", "interval:w-v"]
+    kgram = names("karyotype")
+    assert kgram[:3] == ["title", "chromosomes", "group:A"] and "chromosome:X" in kgram and "chromosome:Y" not in kgram
+    assert kgram[-4:] == ["change:1", "changes", "notation", "reading"]
+    assert names("karyotype", karyotype="46,XX,t(9;22)(q34;q11.2)", bands=["9q34"], title="") == [
+        "chromosomes", "chromosome:9", "chromosome:22", "change:1", "changes", "notation", "reading", "band:9q34"]
+    assert names("calculation") == ["title", "table", "symbol:d", "row:d", "symbol:t", "row:t", "calc1", "calc:v", "formula1", "substitution1",
+                                    "result1", "result:v", "conversion1", "symbol:v", "row:v", "calc2", "calc:w", "formula2", "substitution2",
+                                    "result2", "result:w", "symbol:w"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",
@@ -230,7 +271,9 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     hidden = [t.name for t in scene.targets if not scene.is_shown(t)]
     expected = {"equation": ["step1"],                                  # an equation step morphs into the next
                 "code_morph": ["version1", "version1.line1"],           # version 1 morphed into version 2
-                "equation_derivation": ["term:c", "term:a"]}            # term: means the current step's part
+                "equation_derivation": ["term:c", "term:a"],            # term: means the current step's part
+                "crispr": ["pam", "protospacer", "cas9", "sgrna", "cut"],   # the complex leaves when the break is repaired
+                "calculation": ["formula1", "substitution1", "result1", "conversion1", "calc1"]}   # its result moved to the table
     assert hidden == expected.get(kind, [])
 
 
@@ -518,7 +561,7 @@ def test_a_type_without_targets_rejects_actions(make_project) -> None:
                     pass
     '''})
     (problem,) = project_problems(Project.load(root))
-    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, card, cell, cell_cycle, chapter, code,")
+    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, calculation, card, cell, cell_cycle, chapter, code,")
 
 
 def test_config_md_action_examples_validate(make_project) -> None:

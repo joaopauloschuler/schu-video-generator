@@ -1207,6 +1207,234 @@ when shared code changes). DESIGN §95. Steps 202–211.
 - [x] Small fix: the citric acid cycle's enzyme labels keep a margin from boxes (MDH touched malate) and CS steps beside the acetyl-CoA arrow in 9:16 (`metabolism.CLEAR_PAD`)
 - [~] Lint: the same kinds of findings as Step 211 (glyph letters in ATP synthase, the Na⁺/K⁺ pump and the respiratory chain; dense showcases over 40 words), none new
 
+### Small open items after Phase U
+- [ ] Planner chapter cards: `vidgen plan` still writes chapter cards of 2.5 s; the docs now recommend 3.5 s (`duration: 3.5`) — decide whether the planner should follow the cookbook
+- [ ] Gallery polish (cosmetic, pre-existing): letters inside the ATP synthase, Na⁺/K⁺ pump and respiratory-chain drawings (α, β, Na⁺, H⁺) below the readable size; long label leaders (mitochondrion labels in the `cell` overview, Granum/Stroma in the 9:16 plant cell); "cAMP → AMP" under the dimmed PDE4 box in the 9:16 glucagon pathway
+- [ ] Phase U gaps: no `set_state` in a `cell` scene; an endocytosed vesicle is not a targetable object; zoomed-view labels go stale after a process; 9:16 close-ups of long horizontal strips (a gene, a membrane) leave height unused; the eIF4G·4A blob overlaps "40S" during scanning in 16:9
+
+## Phase V — Genetics at university level
+
+Goal: genetics videos for lectures, medical and biology students and science channels: precise
+terms and standard notation (NSGC pedigrees, ISCN karyotypes, HGVS variants, HGNC symbols),
+scientifically exact — ratios, probabilities, gametes, map distances and frequencies computed
+by a model, not drawn by hand —, in vidgen's flat style, easy for AI authors to write right in
+YAML (validated with did-you-mean, linted), in 16:9 and 9:16. Built like Phase U: a model without
+manim (`vidgen/genetics/`), renderers and scene types apart; reuses Phase U (DNA and gene
+drawing, chromosomes and meiosis with crossing over, the genetic code, gene naming per species,
+`function_plot` axes, references, the science lint, narration–picture rules). Additive and
+opt-in: existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q's 31
+baseline frames when shared code changes). DESIGN §96. Steps 213–221.
+
+### Step 213 — Genetics model and plan
+- [x] Phase V plan here and DESIGN §96 for the whole phase: the data model; scene types decided (`cross`, `pedigree`, `karyotype`, `linkage_map`, `mutation`, `crispr`, `dna_lab`, `population`, `gwas`; non-disjunction as a `cell_cycle` option) and how they relate to Phase U's; how crosses (214), pedigrees (215), chromosomes (216), molecular genetics (217), population genetics (218) and the lint (219) plug in, with their planned YAML
+- [x] Model without manim (`vidgen/genetics/`: `notation`, `model`, `genotype`, `phenotype`, `cross`, `modes`, `presets`): allele notation (`I^A` → Iᴬ, `c^{ch}`, wild type `+` / `w^+`, X-linked alleles on their X: `X^H X^h`, `X^h Y`), loci with dominance (complete, incomplete, codominant, hierarchies such as `"I^A = I^B > i"`), lethal alleles, penetrance and expressivity, epistasis (recessive, dominant, suppression, duplicate, complementary, cumulative), autosomal / X / Y / mitochondrial loci, modes AD, AR, XD, XR, YL, MT with their hallmarks; 15 textbook presets
+- [x] Exact cross engine (fractions): gametes with independent assortment, linkage with recombination frequencies (coupling / repulsion, interference for three loci, `rf_male`), X and Y in males, mtDNA from eggs; offspring genotype and phenotype distributions in textbook order, lethal classes removed, ratios in lowest terms; test and reciprocal crosses
+- [x] Validation with the reason and did-you-mean (an allele not defined for its locus, an X-linked allele without its X, a female with a Y, XXY, linked loci without their phase, RF > 0.5, incomplete dominance without the heterozygote's phenotype, `+` for two loci…); `vidgen.api` names; tests `tests/test_genetics_model.py` (3:1, 1:2:1, 9:3:3:1, 1:1:1:1, 9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1, 2:1, ABO, X-linked both directions, linkage)
+- [~] No scene type or renderer yet (the Punnett square is Step 214); ZW / X0 sex systems, heteroplasmy and age-dependent penetrance not modelled
+
+### Step 214 — Crosses and Punnett squares
+- [x] A `cross` scene type on the cross engine: mono-, di- and trihybrid crosses, test crosses, reciprocal crosses, P → F1 → F2; incomplete dominance, codominance, multiple alleles (ABO), epistasis (9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1), lethal 2:1, sex-linked crosses with X / Y split by sex
+- [x] Animated gamete formation (homologues separating; crossing over for linked loci), squares filling step by step, offspring counted into genotype and phenotype ratios; branch (forked-line) diagrams for larger crosses; optional chi-square of observed against expected counts with the p-value
+- [x] Plan, Punnett cells, classes, branch tree and notes computed without manim (`genetics/punnett.py`), chi-square with its own regularized gamma (`genetics/stats.py`; matches SciPy), phenotype pictures chosen from trait and phenotype words (`genetics/glyphs.py`); actions form_gametes, fill, count, ratio, chi_square; 16:9 (parents beside / over the square) and 9:16 layouts; validation, docs (CONFIG, guide), gallery entry; tests `tests/test_cross.py`
+- [~] Phenotype names written in `loci` are not translatable (`vidgen translate-template`); percentages are left out of the phenotype table when the panel is too narrow; genotype tables stop at 12 classes (a trihybrid counts phenotypes)
+
+### Step 215 — Pedigrees
+- [x] A `pedigree` scene type in NSGC notation: squares / circles / diamonds, affected filled, carriers dotted (or half-shaded with `carrier_style: half`), deceased slash, proband arrow with P, consultand arrow, consanguinity double line (found from shared ancestors), separation marks, MZ / DZ / unknown twins, adoption brackets, miscarriage triangle, stillbirth SB, proposed child dashed with ?, generation numerals and individual numbers, ages and labels; deterministic layout by generation for 16:9 and 9:16 (`genetics/pedigree_layout.py`), consanguineous lines meeting in the middle
+- [x] Analysis by exact reasoning (`genetics/pedigree_analysis.py`: variable elimination over every genotype assignment, a rare-allele limit, Bayes on the whole chart): which modes fit the chart with the textbook reason for each excluded one, reduced penetrance, genotypes deduced where possible (obligate carriers), carrier probabilities (2/3; conditioning on unaffected children, 1/9), the risk for a proposed child with its factors (1/150 with a carrier frequency); actions deduce, analyse, risk with reveal / highlight on generations and people; YAML as lines or mappings with validation; docs (CONFIG, guide), gallery entry; tests `tests/test_pedigree.py`
+- [~] One locus, two alleles; no new mutations, phenocopies, manifesting heterozygotes or heteroplasmy; quadrants for several conditions not drawn; a partner from another generation (uncle–niece) not laid out; a person who married into the family twice not supported; the stated-mode warning is for Step 219's lint (`pedigree_plan.declared_mode_problem`)
+
+### Step 216 — Chromosomes: linkage, maps and karyotypes
+- [x] Linkage and recombination (coupling / repulsion), genetic maps in cM (map functions), three-point test crosses (gene order from double crossovers, interference, coefficient of coincidence): a `linkage_map` scene type (`genetics/mapping.py`: map functions none / Haldane / Kosambi, two- and three-point analysis from counts, plans; the chiasma between non-sister chromatids; steps table → classes → order → distances → interference → map; actions cross_over, measure)
+- [x] Human karyotypes: schematic G-banded ideograms (p / q arms, band names where safe), ISCN notation (47,XX,+21), aneuploidies, structural changes (deletion, duplication, paracentric / pericentric inversion, reciprocal and Robertsonian translocation): a `karyotype` scene type (`genetics/karyotype.py`: GRCh38 lengths and centromeres, ISCN parsing and count checks, derivatives as segments; karyogram by Denver groups or ideograms with animated edits; action rearrange); non-disjunction in meiosis I vs II and the resulting gametes as a `cell_cycle` option (`nondisjunction: {division, pair}`)
+- [x] Gallery budget: 13 MB with each entry held to 0.36 MB (DESIGN §96.12); docs (CONFIG, guide), gallery entries; tests `tests/test_chromosomes.py`
+- [~] Band positions are schematic (ISCN names placed by an even split of each arm, not measured ideogram positions); the inversion loop at pairing, mosaics, rings, isochromosomes and markers are not drawn; a karyogram does not animate structural edits (an ideogram does)
+
+### Step 217 — Molecular genetics
+- [x] A `mutation` scene type: silent, missense, nonsense, frameshift, in-frame indel and splice-site variants on a real coding sequence (the genetic code reused) with HGVS notation generated, parsed and checked (`genetics/hgvs.py`: the 3′ rule, intronic positions, NMD; `genetics/reference_genes.py`: HBB, CFTR, GJB2 windows with their textbook variants — c.20A>T p.(Glu7Val) (legacy Glu6Val), c.1521_1523del p.(Phe508del), c.35del p.(Gly12Valfs*2), c.1657C>T p.(Arg553*)); reference and variant rows with codons and amino acids, the gene strip with GT…AG and the predicted mRNA; action mutate
+- [x] A `crispr` scene type (sgRNA with a 20-nt spacer, NGG PAM 3′ of the protospacer on the non-target strand, R-loop, blunt cut 3 bp upstream of the PAM, NHEJ indels vs HDR with a donor, outcomes in HGVS with `coding_first`; guides found in a target, spacers checked; actions scan, cleave, repair) and a `dna_lab` scene type (`method: pcr | gel | sanger | ngs`: primers checked and the product measured, temperature trace, 2ⁿ / 2ⁿ − 2n copies from the simulated strands; agarose gel with a ladder and log-linear migration; a Sanger chromatogram with called bases and a heterozygote; NGS reads with coverage and a variant call; action run)
+- [x] Docs (CONFIG sections, guide rows, paragraphs and samples), gallery entries `mutation`, `crispr`, `dna_lab` (11.5 MB), `examples/gallery` scenes, tests `tests/test_molecular.py`
+- [~] One window of a transcript per `mutation` scene; splice prediction schematic (no cryptic sites); SpCas9 / SaCas9 only, no off-target search or base / prime editing; one PCR product, stylised Sanger peaks, a seeded NGS read model (not an aligner)
+
+### Step 218 — Population genetics
+- [x] A `population` scene type: Hardy–Weinberg with worked numbers (p, q from counts / genotype frequencies / p / incidence, exact fractions; p² + 2pq + q², inbreeding F; carriers 2pq — 1/2500 → q = 1/50, 49/1250 ≈ 1 in 25.5; chi-square of HWE with df = 1, F̂) and the population as dots by genotype; seeded Wright–Fisher drift, selection (fitness or s, h; deterministic recursion and drifting lines), mutation, migration (two populations, both / one-way), bottleneck and founder simulations with allele-frequency plots, fixation and loss marked, heterozygosity against H₀ Π(1 − 1/2N); actions simulate, resample (`genetics/population.py`)
+- [x] A `gwas` scene type: Manhattan plot (−log10 p by chromosome, alternating colours, 5 × 10⁻⁸ and 1 × 10⁻⁵ lines, peaks labelled), QQ plot with λ_GC, regional plot coloured by r²; data from a CSV, inline, or a seeded synthetic study labelled "simulated data"; action regional (`genetics/gwas.py`)
+- [x] Docs (CONFIG sections, guide rows, paragraphs and samples), gallery entries `population` (0.34 MB), `gwas` (0.17 MB) — gallery 12.0 MB —, `examples/gallery` scenes, tests `tests/test_population.py`
+- [~] Two alleles only (no multi-allelic HWE or exact HWE test); no age structure, selfing or assortative mating; the synthetic GWAS is a display model (a few thousand variants, LD as a decay with distance), not a genotype simulation; no conditional analysis, fine-mapping or gene track in the regional plot
+
+### Step 219 — Accuracy lint for genetics
+- [x] Seven lint rules (`genetics/accuracy.py`, `lint/genetics_rule.py`): `genetics_ratio` (ratios and shares against the cross), `genetics_pedigree` (chart against its stated mode as an error; skipped dominant generations, father → son for X-linked, carrier and risk probabilities against the chart), `genetics_linkage` (RF > 50 %, cM / RF against the map or the cross, linked loci called unlinked), `genetics_hwe` (Hardy–Weinberg formulas and numbers), `genetics_crispr` (PAM for the Cas, cut site, blunt ends, PAM side and strand, spacer length), `genetics_karyotype` (ISCN errors and order, the sex, the condition), `genetics_hgvs` (invalid or not the scene's variant, legacy numbering, legacy shorthand as info); configurable `tolerance` on ratio, linkage and hwe
+- [x] Gene / protein naming reused: `science_naming` and caption italics know the genes of `mutation`, `crispr`, `gwas`, `karyotype` (`gene_symbols`); narration–picture rules: the genetics actions show, `gwas` peaks and `karyotype` bands have a `target_text`
+- [x] Every example, the gallery and the Phase U / V scratch projects linted (229 scenes): no new findings on correct material (one real one: Step 216's scratch `46,XY,inv(9)(p12q13),del(5)(p15.2)` out of ISCN order); a demo project with a planted mistake for each rule; docs (CONFIG rules table, config block, example output; guide paragraph and troubleshooting rows; COOKBOOK §12 note); tests `tests/test_genetics_lint.py`
+- [~] English only; claims across two sentences are read only for Hardy–Weinberg numbers within one beat; shares are matched to phenotypes by their names (and "affected" / "carriers"), not to genotype classes or gametes; pedigree probabilities only for people named by NSGC id or "unaffected sibling" and the proposed child; no check of GWAS thresholds or PCR / gel numbers in narration
+
+### Step 220 — Example, docs and gallery
+- [x] An example tracing one inherited disease from pedigree to mutation to diagnosis: `examples/cystic-fibrosis` (AR pedigree with the modes tested, obligate carriers, a Punnett square of two carriers, 2/3 and the risk 1/150, CFTR at 7q31.2, c.1521_1523del p.(Phe508del), an NGS carrier test, the carrier frequency from the incidence), Kokoro narration (4:12, −16.1 LUFS), 16:9 and 9:16, references by PMID; NGS deletions (`variant: "6_8del"`) and clipped reads in `dna_lab` for it; tests `tests/test_cystic_fibrosis.py`
+- [x] Guide topic `genetics` (and a pointer from `scenes`); `docs/COOKBOOK-GENETICS.md` linked from README, the cookbook, the guide and the gallery; README bullet and example entry; the gallery's Genetics section with a note; the CONFIG completeness test covers the nine genetics types; lint fixes found while making it (tiles in `label_spacing` / `max_words`, narrow glyphs' backdrop, a `genetics_hwe` false positive)
+- [~] In 9:16 two lint warnings remain (the pedigree's "1/25 Aa" at 2.42 % against the 2.5 % warning size; the variant card's 43 words); NGS insertions are not modelled — the two warnings fixed in Step 221
+
+### Step 221 — Review of Phase V
+- [x] Critical review with fixes, including a scientific-accuracy pass (presets, reference windows, HGVS, CRISPR, lab methods, population genetics, GWAS, lint facts: no errors found; the CFTR legacy numbering confirmed and documented; the excluded-unless-non-penetrant wording made exact); frame use of `pedigree`, `karyotype` (ideograms across a 16:9 frame), `mutation` (card beside few codons); proband P placement; gel labels; dog / neutral coat glyphs; the ligature line-split bug of `fit_text`; `crispr` off-frame in 9:16; compatibility (Phase Q baseline 31/31); phase tests and related suites; `tests/test_mcp.py` in full
+
+## Phase W — Science foundation: scientific charts and worked calculations
+
+Goal: a foundation every science domain builds on (genetics and cell biology now; orbital
+mechanics and particle physics next): one chart core — an axes engine and plot primitives —
+instead of each domain scene drawing its own axes (log and symlog scales, scientific notation,
+units on axes, broken axes, error bars and bands, fits with residuals, histograms with fits,
+panels sharing an axis, annotations tied to data, data from CSV or simulations, live plots), and
+worked calculations with units (a `calculation` scene and a lint of narrated numbers), in
+vidgen's style, readable on phones in 16:9 and 9:16, easy for AI authors to write right in YAML
+(validated with did-you-mean, linted, documented). Additive and opt-in: existing projects, chart
+and domain scenes, gallery frames, audio and the studio unchanged unless a step deliberately moves
+a scene onto the core (with before / after; Phase Q's 31 baseline frames when shared code
+changes). DESIGN §97. Steps 222–228.
+
+### Step 222 — Plan and chart core
+- [x] Phase W plan here and DESIGN §97 for the whole phase: a survey of how charts are drawn today (the chart scenes, `math_axes`, and every Phase U / V domain plot with its file and the axes features it needs) and what orbital mechanics and particle physics will need; the data model; the new scene type `plot` (name checked: a target name in `cell_cycle` / `population` and a `gwas` param, other namespaces); the compatibility rule (chart scenes keep `vidgen.charts`; domain plots move onto the core only in Step 227, where clearly better and visually compatible, with before / after)
+- [x] Chart core without manim (`vidgen/plotcore/`: `ticks` linear / log with minor ticks / symlog, `numbers` plain, `10ⁿ` in the title, `sci`, SI prefixes and their unit check, `axis` linear / log / symlog / reversed / broken with its checks, `data` CSV with units in headers, `figure` multi-panel layout sharing an axis, equal aspect, label thinning, line clipping; deterministic, text measured by a callback) and a drawing layer `vidgen/plot_draw.py`; both exported by `vidgen.api` as modules; `charts` now imports the core's `label_stride` (same code)
+- [x] A `plot` scene type: line / point series from inline numbers or a CSV in the project (units from the headers, mixed units refused), axes with `scale`, `min` / `max`, `reversed`, `format` (auto, plain, sci, si, a pattern), `linthresh`, `breaks`; gridlines (`grid: both` adds log minor ticks), legends in a free corner or above, `panels` stacked (shared x) or side by side (shared y), `aspect: equal`; targets `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`; CONFIG section and targets row, guide chooser row and snippet, gallery entry, `examples/gallery` scene with `assets/decay.csv`
+- [x] Tests `tests/test_plot_core.py` (ticks: nice numbers, log decades, symlog, very small / large and negative ranges; formats and SI prefixes; axes; CSV with units and its errors; layout determinism, sharing, equal aspect, thinning; no manim import) and `tests/test_plot.py` (params and validation errors, CSV in a project, targets and legends, tiny renders in 16:9 and 9:16)
+- [~] Not yet (planned): error bars, bands, fits, histograms, annotations (223); live series (224); units engine and `calculation` (225); lint (226); adoption by domain scenes, example, `science` guide topic, cookbook (227)
+
+### Step 223 — Data features
+- [x] Error bars (symmetric / asymmetric, x and y, from numbers, lists, columns or `sqrt`; their meaning `sd`, `sem`, `ci95`, `range`, `poisson` in the legend), confidence and prediction bands, fitted curves (linear, polynomial, exponential, power, logistic, Gaussian and Breit–Wigner with a polynomial background, a custom expression with named parameters via `mathexpr.parse_model`) with parameters ± standard errors, R², χ²/ν (weighted with y errors, x errors by effective variance), a residual panel (plain or normalized); histograms (rules `auto`, `sturges`, `fd`, `scott`, `sqrt`, `integers`, a count, edges; counts or density; √N errors; bars, step or points) with distributions fitted by maximum likelihood (normal, exponential, Poisson) or peaks fitted to the counts; annotations tied to data (`label`, `arrow`, `hline`, `vline`, `xrange`, `yrange`, `note`) placed clear of data and each other, deterministically; actions `fit` and `annotate`, `reveal` for series and `errors:<name>`. Fitting in numpy (no scipy: it comes with manim, but vidgen does not import it; tests compare with it when installed)
+- [x] Reviewer's notes on 222: plot text at least `body` in 16:9 (`caption`, the large scale, in 9:16); axes end just past the data when the next tick is far (the plot fills its area); legends, fit boxes and notes without a free spot move beside (16:9) or above (9:16) the figure; a dashed series' legend swatch is dashed; legend entries come with their series; a line stops at an axis break
+- [x] Tests `tests/test_plot_fit.py` (quantiles, fits against closed forms and scipy, bands, histogram rules against numpy, maximum-likelihood distributions, value ± error, tight ends, breaks, placement determinism) and `tests/test_plot.py` (params errors, resolution, targets, actions, renders 16:9 / 9:16); CONFIG, guide, gallery entry regenerated
+
+### Step 224 — Live and animated plots
+- [x] Series that grow as data or a simulation advances (a seeded, deterministic time-series generator: an ODE as safe expressions or a callable registered through `vidgen.api`), axes rescaling smoothly, panels with a shared time axis, highlight / zoom on a region, actions timed to beats and words (grow, reveal series, fit, annotate, zoom)
+- [x] Models (`plot` param `models`): ODE systems from safe expressions (`mathexpr.parse_system`; named parameters, initial conditions, `t`) integrated by RK4, adaptive RK45 (Dormand–Prince, Hairer's stiffness test) or leapfrog / velocity Verlet (symplectic) with derived `quantities` and `conserved` drift (for lint); recurrences (logistic map, compound growth); seeded random walks (1-D / 2-D, lattice / Gaussian) and Poisson events on an own SplitMix64; `vidgen.api.register_model` functions. Clear errors: unknown names (did you mean), missing initial conditions, a step too large, blow-ups (where, what to try), stiff systems
+- [x] Live series: grow over their step's slot with a head marker, `readout` (time and value), `trail` (phase space); histograms fill as their values arrive (a peak emerging from the background as events accumulate); consecutive series of one model grow together across panels; axes widen smoothly ahead of the data (`rescale`); fits and annotations wait for the data; action `grow` (`to`, until the next action or the beat's end); `zoom` with `x` / `y` on a plot (axes ease to a region and back; annotations step aside)
+- [x] Tests `tests/test_plot_live.py` (integrators against cos, exponential and projectile solutions; leapfrog's bounded energy against RK4's drift; stiffness; errors; determinism and the SplitMix64 reference vector; recurrences; walks and Poisson statistics; registered functions; growth, trails, rescaling never hiding data; readouts; params and actions; renders 16:9 / 9:16); `scenes/plot.py` split (`plot_figure.py`); test_actions' action lists updated (they lacked Step 223's `fit` / `annotate`)
+- [~] Not yet: a rescaling panel needs all its series on one progress; a filling histogram's bins are fixed by all its values
+
+### Step 225 — Units and `calculation`
+- [x] A quantities engine (pint as an optional extra if acceptable, else a small own engine) with SI and common units, conversions, dimensional analysis; a `calculation` scene: formula in TeX, symbol table, substitution, step-by-step evaluation (exact fractions, significant figures), unit simplification and conversion, highlighted results, chains of calculations, actions on beats and words
+- [x] Own engine `vidgen.quantities` (no pint, no new dependency; DESIGN §97.9): SI base / derived units with prefixes, min h d yr, au ly pc, eV…TeV and GeV/c², u / Da, L, mL, M, °C / °F with offsets, atm bar mmHg Torr Pa, cal kcal Wh kWh, rad deg %, ppm; constants with sources (SI 2019 exact, CODATA 2022, CGPM 1901, IAU 2012 / 2015); unit parsing (`m/s^2`, `km h^-1`, `kg·m²·s⁻²`, `J/(mol·K)`), dimension errors explained, SI display with named units (kg·m²·s⁻² → J); quantities carrying exactness (fractions) and significant figures (products: fewest; sums: decimal places; explicit `sig`); expressions with units on a tree written in TeX
+- [x] Scene `calculation` (DESIGN §97.10): symbol table (symbol, value with unit, meaning, source; constants; `from_scene` results of other scenes), formula → substitution (with units, on two lines or in SI numbers when long) → intermediate → result in a box (exact fraction and decimal, or significant figures) → conversions; chains of results joining the table; concept colours on symbols; 16:9 (table beside) and 9:16 (table above); actions `substitute`, `compute`, `convert` (+ `reveal`, `highlight: "symbol:G"`); validation with did-you-mean
+- [x] Tests `tests/test_quantities.py` (units, conversions, dimension algebra, temperatures, constants, significant figures, exact fractions, TeX, the worked examples: orbital speed 29.8 km/s, escape velocity 11.2 km/s, Hardy–Weinberg carriers 49/1250, pedigree risk 1/150, half-life from k, photon energy in eV, Higgs mass in kg; errors) and `tests/test_calculation.py` (params, targets, actions, `from_scene`, renders 16:9 / 9:16); CONFIG, guide (chooser, snippet, actions), gallery entry `calculation` and an `examples/gallery` scene
+- [~] Not yet: the narration lint (226, done there); no ± uncertainty propagation (significant figures only); Phase U / V worked-number cards unchanged
+
+### Step 226 — Lint
+- [x] Numbers in narration / on screen against computed results (tolerance, units, "about"), unit mismatches, overstated significant figures; chart rules: axes without their data's unit, log axes with non-positive data, error bars without a stated meaning, unlabelled series, truncated y axis on bar-like data (info)
+- [x] Rules `calc_numbers`, `calc_units`, `calc_sigfigs` (info), `plot_units`, `plot_log`, `plot_errors`, `plot_series`, `plot_truncated` (info; also `bar_chart` baselines), `plot_conserved` (Step 224's drift), `plot_fit_claims` (DESIGN §97.11); knowledge in `vidgen/quantities/accuracy.py` (numbers in digits and words — "eleven point two", "times ten to the minus nineteen", "one in a hundred and fifty", "three halves" — units spoken or in symbols through the unit engine, resolution, "about", ranges, bounds, power-of-1000 mix-ups, dimension words, fitted quantities with propagated errors, error-bar meanings)
+- [x] Narration–picture rules know `fit`, `annotate`, `grow`, `substitute`, `compute`, `convert` and the plot / calculation targets' on-screen names (`target_text`)
+- [x] Tests `tests/test_calc_lint.py`; sweep of every example, the gallery and the Phase U–W scratch projects (274 scenes): 0 findings; demo with a planted mistake per rule (`vidgen lint`: 14 warnings, 5 info); docs (CONFIG lint table, config block, "Calculations and plots" with example output; guide paragraph and troubleshooting rows, copied to `AGENTS.md`; COOKBOOK §12 note), CHANGELOG, DESIGN §97.11
+- [~] Not yet: numbers of intermediate steps; a pure number whose value the sentence does not name; `bar_chart` / `line_chart` labels against their data
+
+### Step 227 — Adoption, example, docs, gallery
+- [x] Suitable Phase U / V domain plots moved onto the core (before / after, tests kept); an example project (a short narrated explainer with plots and a worked calculation: radioactive decay or drug clearance); guide topic `science`, CONFIG, `docs/COOKBOOK-SCIENCE-CHARTS.md`, gallery entries within budget, README, CHANGELOG
+- [x] Adoption (DESIGN §97.12): the `dna_lab` PCR trace on the core (`plotcore.layout_axes`; horizontal title, temperatures named on the axis, never thinned; `molecular_draw.plot_axes` removed; gallery `dna_lab` regenerated); population, GWAS, cyclin and action-potential plots skipped with reasons
+- [x] Reviewer's note on 225: substitutions keep their units when readable (largest lines shrink first, a one-factor-per-line way, judged by final size, `KEEP_UNITS` 1.2); gallery `calculation` regenerated
+- [x] `examples/radioactive-decay` (2:52, Kokoro, `beacon` bed, 16:9 + 9:16; live Monte Carlo, counts with √N bars on a log axis, custom exponential fit with band and residuals, half-life with uncertainty, carbon-14 dating; seeded `make_data.py`); lint clean in both formats; `tests/test_radioactive_decay.py`
+- [x] Guide topic `science` (copied to `AGENTS.md`), a "Science charts" gallery section, `docs/COOKBOOK-SCIENCE-CHARTS.md` linked from README, the cookbook, the guide and the gallery; CONFIG completeness test covers `plot` and `calculation`; README feature bullet and example entry; CHANGELOG; DESIGN §6.4, §97.12
+- [~] Not yet: the population / GWAS / cyclin / action-potential plots keep their own drawing (reasons in §97.12); a single factor wider than the frame (G's unit in 9:16) still falls back to SI numbers
+
+### Step 228 — Review of Phase W
+- [x] Critical review with fixes; accuracy of fits and statistics against numpy / scipy references, units and calculations; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Fixed (DESIGN §97.13): histogram edges dropping the extreme values; √N-weighted fits of counts biased (now Poisson maximum likelihood; the example re-voiced for λ = 0.274); RK45 dense output and a scaled absolute tolerance; °C readings added / differences shown in °C refused; equal-aspect tick steps; normalized residual panels (±2, no bars); intermediate values for the lint; faster hand-over between calculations; `tests/test_science_review.py`
+- [~] Kept as documented gaps (§97.13): SI fallback for a single factor wider than the frame, `label_size: caption` for crowded 16:9 fit figures, one progress per rescaling panel, no zoom on broken axes, the 9:16 fit box room, chart-scene value labels unchecked, the domain plots of §97.12
+
+---
+
+## Ideas for future phases (discussed with the owner, not planned yet)
+
+Each content area below would be a phase of its own, built like the cell-biology phase: a model
+with real rules (no manim), a renderer, actions timed to beats and words, validation with clear
+errors, an accuracy lint, docs, a gallery section, an example and a review.
+
+### Top picks
+- [ ] **Video studio (notes on whole videos).** Like the music studio's listening notes: open the
+  rendered video in a local page, pause anywhere and pin a note ("too fast here", "this label is
+  hard to read", "I want a close-up of the ribosome"); "Ask an agent" sends the notes with the
+  scene, beat and frame each points to; the agent edits the YAML, re-renders only the affected
+  scenes, and the new version plays side by side with the old one (A/B, keep/discard). Reuse the
+  studio's session/version design and MCP hand-off.
+- [ ] **Paper to video.** From a PDF of a paper: an outline, chapters and plain-language narration,
+  the key figures (with credit) and equations as equation scenes, references collected
+  automatically; run validate, lint (incl. the science rules) and a storyboard for review.
+- [ ] **A real Windows end-to-end test run** (not a feature, but the most important next step):
+  studio, Kokoro, renders and exports were tested on Linux only; a guided run on the owner's
+  Windows machine.
+
+### Genetics (suggested first: reuses most of Phase U; large student/teacher audience) — moved into Phase V (Steps 213–221)
+- [→] Mendelian genetics: Punnett squares filling in step by step; mono- and dihybrid crosses with
+  ratios; dominance, codominance, incomplete dominance, sex-linked inheritance; pedigree charts in
+  standard notation — Phase V, Steps 213–215
+- [→] Molecular genetics: mutation types (point, missense, nonsense, frameshift), CRISPR-Cas9
+  cutting and repair (NHEJ / HDR), PCR cycles, gel electrophoresis, sequencing reads aligning —
+  Phase V, Step 217
+- [→] Linkage and population genetics: recombination and genetic maps; Hardy–Weinberg, drift and
+  selection as seeded simulations with allele-frequency plots; a GWAS Manhattan plot — Phase V,
+  Steps 216 and 218
+- [→] Accuracy lint: ratios that don't follow from the cross; pedigrees inconsistent with the
+  stated inheritance mode; a "dominant" trait skipping generations without explanation — Phase V,
+  Step 219
+- Effort: medium (DNA, chromosomes, meiosis, naming rules and charts already exist)
+
+### Planetary and orbital mechanics (suggested second: very visual, easy to keep exactly correct)
+- [ ] Real physics: two-body Kepler orbits from orbital elements; n-body integration with an
+  energy-conserving (symplectic) method
+- [ ] Kepler's laws shown live: ellipse with the Sun at a focus, equal areas in equal times,
+  period vs distance
+- [ ] Manoeuvres: Hohmann transfers with Δv budgets, gravity assists, Lagrange points,
+  resonances, tides
+- [ ] The Solar System from published orbital elements for a given date, with honest scale
+  handling (log scales, insets, "distances not to scale" labels) — the charting part (log and
+  symlog axes, equal-aspect trajectories, energy against time, panels sharing an axis) moved into
+  Phase W (Steps 222–224); the orbits themselves stay here
+- [ ] Accuracy lint: an orbit that wouldn't close, energy drifting, a period inconsistent with
+  its semi-major axis, a manoeuvre with impossible Δv
+- Effort: medium
+
+### Particle physics (suggested third: distinctive niche)
+- [ ] The Standard Model chart (quarks, leptons, bosons; masses, charges, spins)
+- [ ] Feynman diagrams in proper notation (fermion arrows, wavy photons, curly gluons, vertices),
+  with rules checking conservation at every vertex: charge, lepton and baryon number, colour
+- [ ] Detectors: layers (tracker, calorimeters, muon chambers), tracks curving in the magnetic
+  field (curvature direction gives the charge), showers, collisions and decays
+- [→] Data: histograms where a resonance "bump" emerges from the background as events accumulate
+  — moved into Phase W (histograms with fitted peaks: Step 223; growing as events accumulate:
+  Step 224)
+- [ ] Accuracy lint: conservation-law violations, impossible decays (lighter into heavier), wrong
+  charges
+- Effort: medium
+
+### Protein folding (suggested last, or in two parts)
+- [ ] Levels of structure (primary → quaternary); amino-acid properties (hydrophobic core,
+  charges); α-helix (3.6 residues per turn) and β-sheets with hydrogen bonds; disulfide bridges
+- [ ] Folding: the energy-landscape funnel; chaperones (Hsp70, chaperonin, calnexin already
+  exist); misfolding and amyloid aggregation
+- [ ] Real structures: load a protein from a PDB file (Protein Data Bank data is free to use) and
+  draw it as a rotating cartoon ribbon, with AlphaFold confidence colours
+- Effort: medium for the schematic version; large for real 3D ribbons (vidgen draws in 2D today;
+  Manim can do 3D)
+
+### Other content areas
+- [ ] Chemistry: molecules with correct bonding and geometry, reaction mechanisms with curly
+  arrows, energy diagrams
+- [ ] Physics: circuits, forces and fields, waves, simple simulations driven by real equations
+  (plots of simulations driven by equations and worked calculations with units moved into Phase
+  W, Steps 224–225; the physics pictures stay here)
+- [ ] Neuroscience: neurons and synapses, building on the action potential and SNAREs
+- [ ] Computer science: data structures and algorithms stepping through (sorting, graphs, trees),
+  a natural fit for coding Shorts
+
+### Cartoons and games
+- [ ] Playable levels: export the platform levels as small playable HTML5 games (the world model
+  and rules were designed for this in Phase O)
+- [ ] Isometric interactions: characters sitting, opening chests, small puzzles, as story tools
+
+### Music and sound
+- [ ] Score pieces that follow the video's timings (like composed music), with builds and lifts
+  landing on chosen scenes automatically
+- [ ] A sound-effects designer in the studio (the same editing loop, for effects)
+- [ ] Split music and sound into their own package, with vidgen depending on it
+
+### Reach and polish
+- [ ] Brand kits: a theme, fonts, intro/outro and music saved once and reused across videos
+- [ ] Faster renders: smarter caching and parallel scenes for long videos
+
 ---
 
 ## Backlog (after Step 60)

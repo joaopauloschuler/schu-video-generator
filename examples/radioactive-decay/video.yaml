@@ -1,0 +1,164 @@
+# Half-life: a short narrated physics explainer (about 2.5 min) that uses Phase W's science scene
+# types together (docs/CONFIG.md `plot` and `calculation`; DESIGN §97; the craft:
+# docs/COOKBOOK-SCIENCE-CHARTS.md):
+#   - a live `plot` of a Monte Carlo decay: 1000 and 20 nuclei, each with a random decay time,
+#     growing beside the exponential law (two panels sharing the time axis)
+#   - a `plot` of measured counts with √N (Poisson) error bars on a log axis, an exponential fit
+#     with its 95 % confidence band and a residual panel ((counts − fit)/σ)
+#   - a `calculation`: the half-life from the fitted decay constant, its uncertainty and how far
+#     the tabulated value lies, with units and significant figures
+#   - a `calculation` chain for carbon-14 dating: the decay constant, then the age of a hearth
+#   - concept colours (terms: with tex) on λ and t½ in the formulas; a quiet music bed
+#
+#   vidgen validate examples/radioactive-decay       # checks the short variant too
+#   vidgen lint examples/radioactive-decay [--variant short]   # incl. the calc_* and plot_* rules
+#   vidgen storyboard examples/radioactive-decay --per-beat 2 [--variant short]
+#   vidgen tts examples/radioactive-decay            # Kokoro: local and free (the kokoro extra)
+#   vidgen render examples/radioactive-decay [--preview] [--variant short]
+#
+# Data: assets/counts.csv and assets/nuclei.csv are illustrative, written by make_data.py (seeded,
+# standard library only) from the tabulated half-life of barium-137m, 2.552 min (NNDC); the
+# screens say "simulated". Carbon-14: half-life 5730 ± 40 yr (Godwin 1962, the "Cambridge"
+# half-life); the specific activity of modern carbon, 0.226 Bq per gram of carbon (13.56
+# decays per minute per gram). The hearth's 0.071 Bq/g is an illustrative sample. Radiocarbon
+# ages are calibrated against tree rings and other records in practice (the last beat says so).
+# No audio is committed: before `vidgen tts` beats are timed from their word count.
+title: "Half-life: how radioactive decay keeps time"
+output: radioactive_decay
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  short:                          # a 9:16 Short of the same video
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart, speed: 0.85}   # local and free, word timings; 0.9 put two short beats over narration_speed
+stt: {provider: faster_whisper, model: base.en}
+
+pronunciation:
+  barium-137m: barium one thirty-seven m
+  carbon-14: carbon fourteen
+
+terms:
+  decay constant: {color: secondary, tex: "\\lambda"}
+  half-life: {color: primary, tex: "t_{1/2}"}
+
+music: {source: beacon, volume: -8}
+transition: {type: crossfade, duration: 0.4}
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "NUCLEAR PHYSICS"
+      title: "Half-life: how radioactive decay keeps time"   # "half-life" in its concept colour (terms:)
+      subtitle: "Random nuclei, a law, a fit and a date"
+    beats:
+      - text: "Every unstable nucleus decays at a random moment. And yet a sample of them keeps time like a clock. That clock is the half-life."
+        actions: [{highlight: subtitle, at: "@clock"}]
+
+  - id: nuclei
+    type: plot
+    params:
+      title: "Nuclei decaying at random"
+      caption: "Simulated: each nucleus gets a random decay time (seed 227)"
+      data: assets/nuclei.csv       # time (min), N1000, N20, law: the share of the nuclei left
+      x: {label: time, min: 0, max: 12}
+      y: {label: share of nuclei left, min: 0, max: 1}
+      series:                       # one per beat: the 1000 grow, the law is drawn, the 20 grow
+        - {name: 1000 nuclei, x: time, y: N1000, live: true}
+        - {name: "law: exp(−λt)", x: time, y: law, dashed: true, width: 5}
+        - {name: 20 nuclei, x: time, y: N20, live: true}
+    beats:
+      - text: "Here are a thousand nuclei of barium-137m, simulated. In every moment each one has the same small chance to decay, however long it has already lived."
+      - text: "No one can say which nucleus goes next, but together they follow the smooth exponential law."
+      - text: "With only twenty nuclei, chance shows: the count falls in uneven steps around the same curve."
+
+  - id: counts
+    type: plot
+    params:
+      title: "Counting decays"
+      caption: "Simulated measurement of barium-137m: Poisson noise, background neglected"
+      data: assets/counts.csv       # time (min), counts
+      y: {scale: log, label: counts per 30 s}
+      label_size: caption           # smaller axis text: room for the residual panel in 16:9
+      series:
+        - {name: counts, x: time, y: counts, style: points, y_err: sqrt, error: poisson}
+      fits:                         # λ itself as a parameter (A·exp(k·t) would show k = −λ); counts with
+                                    # y_err: sqrt are fitted by Poisson maximum likelihood
+        - name: exponential fit
+          series: counts
+          model: custom
+          expr: "A*exp(-lambda*x)"
+          params: {A: 700, lambda: {value: 0.3, unit: min⁻¹}}
+          band: confidence
+          residuals: normalized
+    beats:
+      - text: "In the lab we cannot watch single nuclei, but a detector counts their decays."
+      - text: "These are the counts in every thirty seconds, for fifteen minutes."
+        actions: [{reveal: "series:counts", at: "@These"}]
+      - text: "Each count has a Poisson uncertainty, its square root. On a logarithmic axis, an exponential decay is a straight line."
+        actions: [{reveal: "errors:counts", at: "@Poisson"}, {highlight: axes, style: flash, at: "@logarithmic"}]
+      - text: "An exponential fit gives the slope: the decay constant is zero point two seven four per minute, give or take zero point zero zero four."
+        actions: [{fit: "fit:exponential fit", at: "@exponential"}, {highlight: "fit:exponential fit", style: flash, at: "@per"}]
+      - text: "The tail holds few counts, so its scatter is largest."
+        actions: [{zoom: axes, x: [9.5, 15], at: "@tail"}]
+      - text: "Divided by their uncertainties, the residuals lie evenly around zero, nearly all within two: the model fits."
+        actions: [{highlight: "fit:exponential fit", style: flash, at: "@residuals"}]
+
+  - id: half
+    type: calculation
+    params:
+      title: "The half-life from the fit"
+      symbols:
+        - {name: lambda, value: "0.274 min^-1", meaning: decay constant, source: "fit"}
+        - {name: s_lambda, value: "0.0044 min^-1", meaning: "its standard error", source: "fit", tex: "\\sigma_{\\lambda}"}
+        - {name: t_tab, value: "2.552 min", meaning: "tabulated half-life of barium-137m", source: "NNDC", tex: "t_{\\mathrm{tab}}"}
+      calculations:
+        - {name: t_half, expr: "ln(2)/lambda", unit: min, meaning: half-life}
+        - {name: s_t, expr: "t_half*s_lambda/lambda", unit: min, meaning: "uncertainty of the half-life", symbol: "\\sigma_{t}"}
+        - {name: z, expr: "(t_tab - t_half)/s_t", meaning: "standard errors from the tabulated value"}
+    beats:
+      - text: "After one half-life, half of the nuclei are left: e to the minus lambda t equals one half. So the half-life is the natural log of two over lambda: two point five three minutes."
+      - text: "Its relative uncertainty is the same as lambda's: about zero point zero four minutes."
+      - text: "The tabulated value, two point five five minutes, lies about half a standard error away: the measurement agrees."
+
+  - id: carbon
+    type: calculation
+    params:
+      title: "Dating a hearth with carbon-14"
+      symbols:
+        - {name: t_C, value: "5730 yr", meaning: "half-life of carbon-14", source: "Godwin 1962", tex: "t_{1/2}"}
+        - {name: A_0, value: "0.226 Bq/g", meaning: "activity of living carbon, per gram", source: "modern standard"}
+        - {name: A, value: "0.071 Bq/g", meaning: "activity of the hearth's charcoal", source: "illustrative sample"}
+      calculations:
+        - {name: lambda_C, expr: "ln(2)/t_C", unit: "yr^-1", meaning: "decay constant of carbon-14", symbol: "\\lambda"}
+        - {name: t, expr: "ln(A_0/A)/lambda_C", unit: yr, meaning: age of the charcoal}
+    beats:
+      - text: "The same law dates the past. Living things take up carbon-14 from the air, and stop when they die. Its half-life is five thousand seven hundred and thirty years,"
+      - text: "so its decay constant is one point two one times ten to the minus four per year."
+      - text: "Living carbon gives zero point two two six becquerels per gram, charcoal from an old hearth zero point zero seven one. Solving the decay law for the time gives about nine thousand six hundred years."
+        actions: [{highlight: "row:A_0", at: "@Living"}, {highlight: "row:A", at: "@charcoal"}, {substitute: calc2, at: "@Solving"},
+                  {compute: calc2, at: "@about"}]
+      - text: "Real radiocarbon dates are then calibrated, because the carbon-14 in the air has not been perfectly constant."
+        actions: [{highlight: result2, at: "@calibrated"}, {highlight: "row:A_0", style: box, at: "@air"}]
+
+  - id: recap
+    type: bullets
+    params:
+      heading: "Half-life"
+      items:
+        - {text: "Each nucleus decays at random", icon: radiation}
+        - {text: "A large sample decays exponentially", icon: trending-down}
+        - {text: "A fit to counts gives λ; t½ = ln 2 / λ", icon: chart-line}
+        - {text: "The same law dates the past", icon: hourglass}
+    beats:
+      - text: "Each nucleus decays at random."
+      - text: "Many of them together decay exponentially."
+      - text: "A fit gives the decay constant, and the half-life follows."
+      - text: "And the same law reveals the age of ancient remains."

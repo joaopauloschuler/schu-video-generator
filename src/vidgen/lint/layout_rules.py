@@ -359,6 +359,8 @@ def label_spacing(ctx: StillContext, settings: LabelSpacingRule) -> Iterator[Iss
     limit = settings.min_gap * ctx.short_side
     texts = [obj for obj in ctx.objects if is_text(obj)]
     for label, shape in label_plates(ctx):
+        if len(str(label.get("text", "")).strip()) == 1:
+            continue  # one character on its own plate is a tile (a DNA base, a key), set in a row by design
         plate = object_box(shape)
         color = str(shape["fill"]["color"]).lower()
         # the callout's own mark: an outline in the plate's colour; the text it frames is the
@@ -451,8 +453,10 @@ def _words(text: str) -> int:
 
 @rule("max_words")
 def max_words(ctx: StillContext, settings: MaxWordsRule) -> Iterator[Issue]:
-    """Too many words are on screen at once."""
-    counted = [obj for obj in ctx.objects if obj["kind"] == "text" and _words(str(obj.get("text", "")))]
+    """Too many words are on screen at once (a lone character is a tile — a DNA base, a key —,
+    not a word to read)."""
+    counted = [obj for obj in ctx.objects
+               if obj["kind"] == "text" and len(str(obj.get("text", "")).strip()) > 1 and _words(str(obj.get("text", "")))]
     total = sum(_words(str(obj["text"])) for obj in counted)
     if total <= settings.max_words:
         return

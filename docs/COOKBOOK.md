@@ -9,7 +9,11 @@ that shows source code, see [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUT
 for writing your own music as score files (room for the voice, builds and lifts, loops, genre
 sketches), see [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md); for cell-biology lectures and research
 explainers (accuracy, level of detail, zooming, pacing dense content), see
-[COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md).
+[COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md); for genetics and medical genetics (NSGC,
+ISCN, HGVS notation, exact numbers, a counselling tone), see
+[COOKBOOK-GENETICS.md](COOKBOOK-GENETICS.md); for scientific plots and worked calculations
+(honest axes, error bars, fits and their uncertainties, units and significant figures), see
+[COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 
@@ -439,6 +443,51 @@ craft (choosing the scene type, level of detail, labelling, zooming, pacing dens
 narration–picture timing, references, common mistakes) is in
 [COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md), with the worked example
 [`examples/gene-to-secreted-protein`](../examples/gene-to-secreted-protein/README.md).
+
+**Genetics: say what the model computes.** The genetics scenes compute their ratios,
+probabilities, map distances, frequencies and HGVS; `vidgen lint`'s `genetics_*` rules compare the
+narration and the on-screen text with them:
+
+- Ratios and shares: say the cross's own (a dihybrid F2 is 9 : 3 : 3 : 1; "3 : 1" only as "each
+  trait alone"); a carrier mother's sons are affected with probability 1/2, her daughters are
+  carriers with 1/2 and never affected.
+- Pedigrees: the chart must fit the stated `mode` (else an error); a dominant trait skips a
+  generation only with reduced penetrance; an X-linked trait never passes father to son; say the
+  carrier probabilities and risks the chart gives (2/3 for an unaffected sibling under AR, the
+  proposed child's 1/150), or say "if both are carriers…" for the conditional case.
+- Linkage and populations: RF is at most 50 %; distances as on the map; carriers are 2pq (≈ 2q),
+  the affected q², q = √incidence.
+- Molecular: SpCas9 needs NGG right after the protospacer and cuts both strands bluntly 3 bp
+  upstream of it; karyotypes in ISCN with their changes in chromosome order, the sex they have
+  (45,X is female); HGVS with the initiator Met counted (HbS p.(Glu7Val), "legacy Glu6Val"),
+  `ΔF508` / `R553X` only as legacy names.
+
+The whole craft (choosing among the nine types, notation, exact numbers, reading a pedigree aloud,
+a counselling tone, common mistakes with the rule that catches each) is in
+[COOKBOOK-GENETICS.md](COOKBOOK-GENETICS.md), with the worked example
+[`examples/cystic-fibrosis`](../examples/cystic-fibrosis/README.md).
+
+**Calculations and plots: say the numbers the scene computes.** A `calculation` scene works its
+results out with units and significant figures, a `plot` fits its data; the `calc_*` and `plot_*`
+rules read the numbers the narration says (in words too: "eleven point two kilometres per
+second", "one in a hundred and fifty") against them:
+
+- Say the result as the scene shows it, or rounded with "about" ("about thirty kilometres per
+  second" for 29.8 km/s); never more figures than the inputs give (29.8, not 29.7847), and the
+  unit of the quantity's kind with the right prefix (km/s, not m/s; a speed is not "30
+  kilometres").
+- Give symbols and results a `meaning`: a bare probability or ratio is compared only when the
+  sentence names what it is ("the risk for the child is one in a hundred and fifty").
+- Plots: every physical axis has its unit; error bars say what they are (`error: sem`) and the
+  narration says the same; no error bars, fits or lines at or below zero on a log axis; a legend
+  or labels when there are several series; a model's `conserved` energy stays within 1 % (use
+  `method: leapfrog` for orbits and oscillators); a half-life, exponent or peak said aloud is the
+  fit's, within its uncertainty.
+
+The whole craft (plot or chart, honest axes, error-bar meanings, fits and their uncertainties,
+units and significant figures, pacing a calculation, common mistakes with the rule that catches
+each) is in [COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md), with the worked example
+[`examples/radioactive-decay`](../examples/radioactive-decay/README.md).
 
 ## 13. Editorial options (example style choices)
 

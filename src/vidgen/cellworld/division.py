@@ -49,8 +49,30 @@ STAGE_LABELS = {
 }
 
 
-def stage_captions(mode: str, cell: str, pairs: int) -> dict[str, tuple[str, ...]]:
+def stage_captions(mode: str, cell: str, pairs: int, nd: tuple[str, int] | None = None) -> dict[str, tuple[str, ...]]:
     """What each keyframe of a stage shows, in one line each (the scene captions them)."""
+    captions = _captions(mode, cell, pairs)
+    if nd is None:
+        return captions
+    k = nd[1] + 1
+    if nd[0] == "I":
+        captions.update({
+            "anaphase_i": (f"Non-disjunction: the homologues of pair {k} fail to separate and both go to one pole",),
+            "telophase_i": ("One pole has n + 1 chromosomes, the other n − 1",),
+            "cytokinesis_i": ("Two aneuploid cells (n + 1 and n − 1), each chromosome still two sister chromatids",),
+            "cytokinesis_ii": ("Every gamete is aneuploid: 2 of 4 are n + 1, 2 are n − 1; fertilised by a normal gamete: "
+                               "trisomic (2n + 1) and monosomic (2n − 1) zygotes",),
+        })
+    else:
+        captions.update({
+            "anaphase_ii": (f"Non-disjunction in one cell: the sister chromatids of pair {k} fail to separate and go to one pole",),
+            "cytokinesis_ii": ("Gametes: 2 of 4 are n, 1 is n + 1, 1 is n − 1; fertilised by a normal gamete: 2 euploid (2n), "
+                               "1 trisomic (2n + 1), 1 monosomic (2n − 1) zygote",),
+        })
+    return captions
+
+
+def _captions(mode: str, cell: str, pairs: int) -> dict[str, tuple[str, ...]]:
     combos = 2 ** pairs
     plant = cell == "plant"
     return {
@@ -114,6 +136,38 @@ def stage_counts(mode: str, stage: str, two_n: int) -> Counts:
     return Counts(4, n, n, "n", "1C")
 
 
+def nondisjunction_cells(stage: str, two_n: int, nd: tuple[str, int] | None) -> list[tuple[int, int]] | None:
+    """With non-disjunction, each cell's (chromosomes, chromatids) once the cells differ (from
+    telophase I after an error in meiosis I, from anaphase II after one in meiosis II); ``None``
+    while they are equal. Chromosomes are counted by centromeres."""
+    if nd is None:
+        return None
+    n = two_n // 2
+    k = MEIOSIS_STAGES.index(stage)
+    if nd[0] == "I":
+        if k < MEIOSIS_STAGES.index("telophase_i"):
+            return None
+        if k <= MEIOSIS_STAGES.index("metaphase_ii"):
+            return [(n + 1, 2 * (n + 1)), (n - 1, 2 * (n - 1))]
+        if stage == "anaphase_ii":
+            return [(2 * (n + 1), 2 * (n + 1)), (2 * (n - 1), 2 * (n - 1))]
+        return [(n + 1, n + 1), (n + 1, n + 1), (n - 1, n - 1), (n - 1, n - 1)]
+    if k < MEIOSIS_STAGES.index("anaphase_ii"):
+        return None
+    if stage == "anaphase_ii":
+        return [(2 * n - 1, 2 * n), (2 * n, 2 * n)]
+    return [(n - 1, n - 1), (n + 1, n + 1), (n, n), (n, n)]
+
+
+def gamete_outcomes(nd: tuple[str, int]) -> list[tuple[str, str, str]]:
+    """The gametes of a meiosis with non-disjunction and the zygotes they make with a normal
+    gamete: (share, gamete, zygote) — meiosis I: ½ n + 1 and ½ n − 1, every gamete aneuploid;
+    meiosis II: ½ n, ¼ n + 1, ¼ n − 1."""
+    if nd[0] == "I":
+        return [("1/2", "n + 1", "2n + 1 (trisomy)"), ("1/2", "n − 1", "2n − 1 (monosomy)")]
+    return [("1/2", "n", "2n (euploid)"), ("1/4", "n + 1", "2n + 1 (trisomy)"), ("1/4", "n − 1", "2n − 1 (monosomy)")]
+
+
 # ----- the specification and its checks -------------------------------------------------------------
 
 
@@ -130,6 +184,10 @@ class DivisionSpec:
     crossovers: tuple[tuple[float, ...], ...] | None = None
     assortment: tuple[str, ...] | None = None
     seed: int = 1
+    nondisjunction: tuple[str, int] | None = None
+    """meiosis: (``I`` or ``II``, pair index from 0): the homologues of that pair fail to
+    separate at anaphase I, or its sister chromatids at anaphase II (in the first daughter
+    cell); DESIGN.md §96.11."""
 
 
 def stages_of(mode: str) -> tuple[str, ...]:
@@ -171,7 +229,16 @@ def check_spec(spec: DivisionSpec) -> DivisionSpec:
     if spec.mode == "mitosis":
         if spec.crossovers is not None or spec.assortment is not None:
             raise VidgenError("crossovers and assortment belong to meiosis (mitosis has no pairing of homologues)")
+        if spec.nondisjunction is not None:
+            raise VidgenError("nondisjunction is drawn for meiosis (mode: meiosis): non-disjunction in meiosis I or II and its gametes")
         return spec
+    if spec.nondisjunction is not None:
+        division, pair = spec.nondisjunction
+        if division not in ("I", "II"):
+            raise VidgenError(f"nondisjunction.division: '{division}': I (homologues fail to separate at anaphase I) or II (sister "
+                              f"chromatids fail to separate at anaphase II)")
+        if not 0 <= pair < pairs:
+            raise VidgenError(f"nondisjunction.pair: {pair + 1} is not a pair of this cell (pairs 1–{pairs} for 2n = {spec.two_n})")
     crossovers = spec.crossovers
     if crossovers is None:
         made = []
@@ -206,9 +273,15 @@ def check_spec(spec: DivisionSpec) -> DivisionSpec:
     return replace(spec, crossovers=tuple(tuple(sorted(x)) for x in crossovers), assortment=tuple(assortment))
 
 
-def expect_problem(mode: str, stage: str, two_n: int, expect: dict[str, object]) -> str | None:
+def expect_problem(mode: str, stage: str, two_n: int, expect: dict[str, object], nd: tuple[str, int] | None = None) -> str | None:
     """Why counts an author states for ``stage`` are wrong (``None`` when right): chromosomes,
     chromatids (per cell), cells, ploidy (n / 2n), dna (1C, 2C, 4C)."""
+    differ = nondisjunction_cells(stage, two_n, nd) if mode == "meiosis" else None
+    if differ is not None and set(expect) & {"chromosomes", "chromatids", "ploidy", "dna"}:
+        label = STAGE_LABELS[stage].replace("<sub>", "").replace("</sub>", "")
+        per = ", ".join(str(c) for c, _ in differ)
+        return (f"after {label} with non-disjunction the cells differ ({per} chromosomes): expect can state cells only "
+                f"(the caption shows each cell's count)")
     have = stage_counts(mode, stage, two_n)
     per = {"cells": have.cells, "chromosomes": have.chromosomes, "chromatids": have.chromatids, "ploidy": have.ploidy, "dna": have.dna}
     for key, value in expect.items():
@@ -492,7 +565,7 @@ def plan_division(spec: DivisionSpec) -> Division:
     else:
         frames = _meiosis(pl)
     division = Division(pl.spec, pl.chromatids, [], {}, pl.scale, pl.w)
-    captions = stage_captions(pl.spec.mode, pl.spec.cell, pl.pairs)
+    captions = stage_captions(pl.spec.mode, pl.spec.cell, pl.pairs, pl.spec.nondisjunction)
     for stage, items_list in frames:
         for k, items in enumerate(items_list):
             caps = captions[stage]
@@ -829,6 +902,13 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
     bivalents(it, plate_c, {k: math.pi / 2 for k in pairs}, 0.9 * g, True, True, 0.0, w, -1, kts=True, poles=(left, right))
     frames.append(("metaphase_i", [it]))
 
+    nd = pl.spec.nondisjunction
+    nd1 = nd[1] if nd is not None and nd[0] == "I" else None      # the pair whose homologues stay together
+    nd2 = nd[1] if nd is not None and nd[0] == "II" else None     # the pair whose sisters stay together (first cell)
+
+    def other(parent: str) -> str:
+        return "p" if parent == "m" else "m"
+
     # anaphase I: homologues (both sisters) to the poles, arms splayed (arm cohesion gone)
     stages = []
     for kt_u, pu, rx, ry in ((0.5, 0.88, 1.12, 0.85), (0.95, 1.25, 1.42, 0.8)):
@@ -841,10 +921,12 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
         pl.polar(it, "R", rp, lp, 0.1)
         for k in pairs:
             for parent in "mp":
-                go = (-1.0, 0.0) if parent == left_parent[k] else (1.0, 0.0)
+                stray = k == nd1 and parent != left_parent[k]
+                go = (-1.0, 0.0) if parent == left_parent[k] or stray else (1.0, 0.0)
+                lift = (0.11 if plate[k] >= 0 else -0.11) if stray else 0.0
                 for sister in (0, 1):
                     ch = by[(k, parent, sister)]
-                    ktp = (go[0] * kt_u, plate[k] * 0.7 + (sister - 0.5) * 0.9 * w)
+                    ktp = (go[0] * kt_u, plate[k] * 0.7 + (sister - 0.5) * 0.9 * w + lift)
                     pts = pl.vee(ch, ktp, go, 0.26 + 0.14 * sister, side=(sister - 0.5) * 0.1)
                     pl.chromatid(it, ch, pts, w, True, ktp, go)
                     pole = lp if go[0] < 0 else rp
@@ -854,7 +936,15 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
 
     # telophase I and cytokinesis I
     centers = {"a": (-0.95, 0.0), "b": (0.95, 0.0)}
-    side_of = {k: {left_parent[k]: "a", ("p" if left_parent[k] == "m" else "m"): "b"} for k in pairs}
+    # the chromosomes (pair, homologue) each daughter of meiosis I receives
+    members: dict[str, list[tuple[int, str]]] = {"a": [], "b": []}
+    for k in pairs:
+        members["a"].append((k, left_parent[k]))
+        if k == nd1:
+            members["a"].append((k, other(left_parent[k])))
+        else:
+            members["b"].append((k, other(left_parent[k])))
+    side_of = {key: cid for cid in "ab" for key in members[cid]}
     for stage, pinch, gap, rx, k_coil, nuc in (("telophase_i", 0.45, 0.0, 1.55, 0.35, 0.7), ("cytokinesis_i", 1.0, 0.1, 1.8, 0.35, 1.0)):
         it = {}
         cell_main(it, rx, 0.8 if stage == "telophase_i" else 0.9, pinch, gap)
@@ -862,11 +952,11 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
             cx = centers[cid][0] * (1.0 if stage == "cytokinesis_i" else 0.98)
             pl.envelope(it, cid, (cx, 0.0), 0.36, broken=0.3 if stage == "telophase_i" else 0.0, opacity=nuc * 0.8)
             pl.pole(it, "L" if cid == "a" else "R", (cx + (0.42 if cid == "b" else -0.42), 0.0), angle=0.3 if cid == "a" else 1.2)
-        ts = {cid: dict(zip(pairs, _territories((centers[cid][0], 0.0), 0.36, len(pairs)))) for cid in "ab"}
+        ts = {cid: dict(zip(members[cid], _territories((centers[cid][0], 0.0), 0.36, len(members[cid])))) for cid in "ab"}
         for k in pairs:
             for parent in "mp":
-                cid = side_of[k][parent]
-                center = ts[cid][k]
+                cid = side_of[(k, parent)]
+                center = ts[cid][(k, parent)]
                 for sister in (0, 1):
                     ch = by[(k, parent, sister)]
                     go = (-1.0, 0.0) if cid == "a" else (1.0, 0.0)
@@ -882,12 +972,9 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
         cx = centers[cid][0]
         return (cx, -dv), (cx, dv)
 
-    order2 = {cid: [k for k in order] for cid in "ab"}
-    plate2 = {cid: dict(zip(order2[cid], _plate_slots(pl, [(LENGTHS[k] * pl.scale, CENTROMERES[k]) for k in order2[cid]], 1.3)))
+    order2 = {cid: [key for k in order for key in members[cid] if key[0] == k] for cid in "ab"}
+    plate2 = {cid: dict(zip(order2[cid], _plate_slots(pl, [(LENGTHS[k] * pl.scale, CENTROMERES[k]) for k, _ in order2[cid]], 1.3)))
               for cid in "ab"}
-
-    def homologue_in(cid: str, k: int) -> str:
-        return left_parent[k] if cid == "a" else ("p" if left_parent[k] == "m" else "m")
 
     def two_cells(items: dict[str, Item], rx: float = 0.9, ry: float = 0.9, pinch: float = 0.0, gap: float = 0.0) -> None:
         pl.cell(items, "main", (0.0, 0.0), 0.0, 1.8, 0.9, 1.0, 0.1, opacity=0.0)
@@ -901,14 +988,13 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
         lo, hi = poles2(cid, 0.72)
         pl.pole(it, f"{cid}0", _lerp(centers[cid], lo, 0.7), asters=0.6, outward=-math.pi / 2, angle=0.3)
         pl.pole(it, f"{cid}1", _lerp(centers[cid], hi, 0.7), asters=0.6, outward=math.pi / 2, angle=1.2)
-        ts = dict(zip(pairs, _territories(centers[cid], 0.5, len(pairs))))
-        for k in pairs:
-            parent = homologue_in(cid, k)
+        ts = dict(zip(members[cid], _territories(centers[cid], 0.5, len(members[cid]))))
+        for k, parent in members[cid]:
             ang = rng2.uniform(0, math.pi)
             for sister in (0, 1):
                 ch = by[(k, parent, sister)]
-                rod = pl.rod(ch, ts[k], ang, (sister - 0.5) * 1.25 * w, ((ch.centromere, (sister - 0.5) * 0.5 * w, 0.05),))
-                pl.chromatid(it, ch, pl.coil(ch, rod, ts[k], 0.12), 0.85 * w, True)
+                rod = pl.rod(ch, ts[(k, parent)], ang, (sister - 0.5) * 1.25 * w, ((ch.centromere, (sister - 0.5) * 0.5 * w, 0.05),))
+                pl.chromatid(it, ch, pl.coil(ch, rod, ts[(k, parent)], 0.12), 0.85 * w, True)
     frames.append(("prophase_ii", [it]))
 
     def plate_ii(items: dict[str, Item]) -> None:
@@ -924,9 +1010,8 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
     plate_ii(it)
     for cid in "ab":
         lo, hi = poles2(cid, 0.72)
-        for k in pairs:
-            parent = homologue_in(cid, k)
-            c = (centers[cid][0] + plate2[cid][k], 0.0)
+        for k, parent in members[cid]:
+            c = (centers[cid][0] + plate2[cid][(k, parent)], 0.0)
             for sister in (0, 1):
                 ch = by[(k, parent, sister)]
                 lane = (sister - 0.5) * 1.25 * w            # angle 0: across = +y, sister 1 faces up
@@ -940,17 +1025,30 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
     it = {}
     two_cells(it, 1.1, 0.8)
     plate_ii(it)
+    def stuck(cid: str, k: int) -> bool:
+        """Sister chromatids that fail to separate at anaphase II (both go up)."""
+        return cid == "a" and k == nd2
+
     for cid in "ab":
         lo, hi = poles2(cid, 0.8)
-        for k in pairs:
-            parent = homologue_in(cid, k)
+        for k, parent in members[cid]:
             for sister in (0, 1):
                 ch = by[(k, parent, sister)]
-                go = (0.0, 1.0) if sister == 1 else (0.0, -1.0)
-                ktp = (centers[cid][0] + plate2[cid][k] * 0.75, go[1] * 0.5)
+                go = (0.0, 1.0) if sister == 1 or stuck(cid, k) else (0.0, -1.0)
+                beside = (sister - 0.5) * 2.4 * w if stuck(cid, k) else 0.0
+                ktp = (centers[cid][0] + plate2[cid][(k, parent)] * 0.75 + beside, go[1] * 0.5)
                 pl.chromatid(it, ch, pl.vee(ch, ktp, go, 0.32), w, True, ktp, go)
-                pl.fibre(it, f"k:{ch.id}", hi if sister == 1 else lo, _add(ktp, go, 0.55 * w))
+                pl.fibre(it, f"k:{ch.id}", hi if go[1] > 0 else lo, _add(ktp, go, 0.55 * w))
     frames.append(("anaphase_ii", [it]))
+
+    # the chromatids each product of meiosis II receives (cell, pole 0 down / 1 up)
+    products: dict[tuple[str, int], list[tuple[int, str, int]]] = {(cid, s): [] for cid in "ab" for s in (0, 1)}
+    for cid in "ab":
+        for s in (0, 1):
+            for k, parent in members[cid]:
+                for sister in (0, 1):
+                    if (1 if stuck(cid, k) else sister) == s:
+                        products[(cid, s)].append((k, parent, sister))
 
     # the products keep their chromosomes condensed (drawn so), so the exchanged segments stay visible
     for stage, rx, pinch, gap, k_coil, nuc in (("telophase_ii", 1.3, 0.5, 0.0, 0.2, 0.8), ("cytokinesis_ii", 1.36, 1.0, 0.08, 0.12, 1.0)):
@@ -964,14 +1062,16 @@ def _meiosis(pl: Planner) -> list[tuple[str, list[dict[str, Item]]]]:
                 pl.envelope(it, nid, (cx, cy), 0.27 if stage == "telophase_ii" else 0.3, broken=0.3 if stage == "telophase_ii" else 0.0,
                             opacity=nuc * 0.85, nucleolus=1.0 if stage == "cytokinesis_ii" else 0.0)
                 pl.pole(it, nid, (cx + (0.42 if cid == "b" else -0.42), cy * 1.35), angle=0.3 + sister)
-                ts = dict(zip(pairs, _territories((cx, cy), 0.28, len(pairs))))
-                for k in pairs:
-                    parent = homologue_in(cid, k)
-                    ch = by[(k, parent, sister)]
+                got = products[(cid, sister)]
+                ts = dict(zip(got, _territories((cx, cy), 0.28, len(got))))
+                for key in got:
+                    ch = by[key]
                     go = (0.0, 1.0) if sister else (0.0, -1.0)
-                    pts = pl.vee(ch, ts[k], go, 0.3)
-                    pl.chromatid(it, ch, pl.coil(ch, pts, ts[k], k_coil), 0.75 * w, True)
+                    pts = pl.vee(ch, ts[key], go, 0.3)
+                    pl.chromatid(it, ch, pl.coil(ch, pts, ts[key], k_coil), 0.75 * w, True)
                 if stage == "cytokinesis_ii":
-                    it[f"label:{nid}"] = Item("label", ((cx, cy),), 0.47, (), 1.0, f"n = {pl.pairs}")
+                    extra = len(got) - pl.pairs
+                    text = f"n = {pl.pairs}" if extra == 0 else f"n {'+' if extra > 0 else '−'} {abs(extra)} = {len(got)}"
+                    it[f"label:{nid}"] = Item("label", ((cx, cy),), 0.47, (), 1.0, text)
         frames.append((stage, [it]))
     return frames

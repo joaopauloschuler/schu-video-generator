@@ -30,6 +30,7 @@ from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color, styled
 from vidgen.layout import auto_format, fit_text, format_value, nice_ticks
 from vidgen.lint.color import TEXT_RATIO, _gamma, _linear, blend, contrast_ratio, hex_rgb, rgb_hex
+from vidgen.plotcore.figure import label_stride
 from vidgen.regions import Region, orientation, place, readable_size, region
 from vidgen.runtime import current_theme
 from vidgen.theme import Theme
@@ -263,25 +264,6 @@ class ChartAxes:
         return self.x.contains(x) and self.y.contains(y)
 
 
-def _stride(positions: Sequence[float], extents: Sequence[float], gap: float) -> list[int]:
-    """Indices of labels to keep: every k-th (smallest k) so neighbours keep ``gap`` between
-    them (``extents`` = their sizes along the axis); the last one too when it has room."""
-    n = len(positions)
-    if n <= 1:
-        return list(range(n))
-
-    def clear(i: int, j: int) -> bool:
-        return abs(positions[j] - positions[i]) >= (extents[i] + extents[j]) / 2 + gap
-
-    for k in range(1, n):
-        kept = list(range(0, n, k))
-        if all(clear(a, b) for a, b in zip(kept, kept[1:])):
-            if kept[-1] != n - 1 and clear(kept[-1], n - 1):
-                kept.append(n - 1)
-            return kept
-    return [0]
-
-
 def chart_axes(
     area: Region,
     x: ChartAxis,
@@ -335,8 +317,8 @@ def chart_axes(
 
     xs = [axes.x_pos(t) for t in x.ticks]
     ys = [axes.y_pos(t) for t in y.ticks]
-    keep_x = _stride(xs, [t.width for t in x_texts], 0.35 * cap + 0.15)
-    keep_y = _stride(ys, [t.height for t in y_texts], 0.9 * cap)
+    keep_x = label_stride(xs, [t.width for t in x_texts], 0.35 * cap + 0.15)
+    keep_y = label_stride(ys, [t.height for t in y_texts], 0.9 * cap)
     for i in keep_y:
         t = y_texts[i]
         t.move_to([plot.x0 - gap - t.width / 2, ys[i], 0])
@@ -404,7 +386,7 @@ def chart_legend(
 ) -> VGroup:
     """A legend: per ``(name, color, swatch)`` entry a swatch and the name, wrapped into rows
     that fit ``max_width`` (``stack``: one entry per row; shrunk if one entry alone is wider).
-    ``swatch`` is ``line``, ``box`` or a marker shape (:data:`CHART_MARKERS`). Rows are
+    ``swatch`` is ``line``, ``dashed`` (a dashed line), ``box``, ``band`` (a faint wide box: a shaded band) or a marker shape (:data:`CHART_MARKERS`). Rows are
     ``VGroup`` s of items, items ``VGroup(swatch, name)``."""
     theme = theme or current_theme()
     s = chart_label_size(size, theme)
@@ -413,8 +395,12 @@ def chart_legend(
     for name, c, swatch in entries:
         if swatch == "line":
             mark: VMobject = Line([0, 0, 0], [h * 2.2, 0, 0], color=resolve_color(c, theme), stroke_width=4)
+        elif swatch == "dashed":
+            mark = DashedLine([0, 0, 0], [h * 2.2, 0, 0], color=resolve_color(c, theme), stroke_width=4, dash_length=h * 0.42, dashed_ratio=0.55)
         elif swatch == "box":
             mark = Square(side_length=h * 1.1).set_fill(resolve_color(c, theme), opacity=0.9).set_stroke(width=0)
+        elif swatch == "band":
+            mark = Rectangle(width=h * 2.2, height=h * 0.9).set_fill(resolve_color(c, theme), opacity=0.3).set_stroke(width=0)
         else:
             mark = chart_marker(swatch, h * 0.5, c, theme=theme)
         items.append(VGroup(mark, styled(Text, theme, name, s, color, NORMAL)).arrange(RIGHT, buff=h * 0.5))
@@ -684,9 +670,9 @@ def color_bar(
             ticks.add(Line([pos, -thickness / 2, 0], [pos, -thickness / 2 - 0.1, 0], color=dim, stroke_width=2))
             labels.add(text.move_to([pos, -thickness / 2 - 0.18 - text.height / 2, 0]))
     if vertical and len(labels) > 1:   # thin labels that would touch
-        keep = _stride([m.get_y() for m in labels], [m.height for m in labels], 0.5 * labels[0].height)
+        keep = label_stride([m.get_y() for m in labels], [m.height for m in labels], 0.5 * labels[0].height)
     else:
-        keep = _stride([m.get_x() for m in labels], [m.width for m in labels], 0.3) if len(labels) > 1 else list(range(len(labels)))
+        keep = label_stride([m.get_x() for m in labels], [m.width for m in labels], 0.3) if len(labels) > 1 else list(range(len(labels)))
     ticks = VGroup(*[ticks[i] for i in keep])
     labels = VGroup(*[labels[i] for i in keep])
     group = VGroup(bar, ticks, labels)

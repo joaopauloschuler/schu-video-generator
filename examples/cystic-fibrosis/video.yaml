@@ -1,0 +1,222 @@
+# Cystic fibrosis, from a family to a diagnosis: a university-level medical-genetics explainer
+# (about 4 min) that follows one inherited disease through Phase V's scene types
+# (docs/CONFIG.md `pedigree`, `cross`, `karyotype`, `mutation`, `dna_lab`, `population`;
+# DESIGN §96; the craft: docs/COOKBOOK-GENETICS.md):
+#   - a `pedigree` in NSGC symbols: the modes of inheritance tried one by one (only autosomal
+#     recessive fits), the obligate carriers, 2/3 for the unaffected brother, the risk 1/150 for
+#     his child with a partner from the population (carrier frequency 1/25)
+#   - a `cross` of two carriers: 1 AA : 2 Aa : 1 aa, why an unaffected sibling is a carrier 2/3
+#   - a `karyotype` ideogram of chromosome 7 with the CFTR landmark at 7q31.2
+#   - a `mutation` on the real CFTR coding sequence (NM_000492.4): c.1521_1523del p.(Phe508del),
+#     an in-frame deletion (legacy name ΔF508, shown on the card)
+#   - a `dna_lab` NGS carrier test: reads over the same window, about half with the three bases
+#     missing: heterozygous
+#   - a `population` Hardy–Weinberg scene: incidence ~1/2500 → q = 1/50 → carriers 2pq ≈ 1/25
+#   - word-timed actions, concept colours (terms:), references as markers
+#
+#   vidgen validate examples/cystic-fibrosis          # checks the short variant too
+#   vidgen lint examples/cystic-fibrosis [--variant short]   # incl. the science_* and genetics_* rules
+#   vidgen storyboard examples/cystic-fibrosis --per-beat 2 [--variant short]
+#   vidgen tts examples/cystic-fibrosis               # Kokoro: local and free (the kokoro extra)
+#   vidgen render examples/cystic-fibrosis [--preview] [--variant short]
+#
+# Facts (textbook consensus: Strachan & Read, Human Molecular Genetics; Thompson & Thompson,
+# Genetics in Medicine): cystic fibrosis is autosomal recessive; CFTR (7q31.2) encodes an
+# ABC-family anion channel (chloride and bicarbonate) of epithelial cells. F508del is the
+# commonest disease allele worldwide (about 70 % of CF chromosomes in people of northern European
+# ancestry; Kerem et al. 1989); the CTT removed spans codons 507 and 508 (ATC TTT -> ATT), so
+# Ile507 stays and one Phe is missing; the protein misfolds and is mostly degraded in the ER. The
+# incidence in people of European ancestry is approximately 1 in 2,500–3,500 births (lower in
+# other populations); the scene uses 1/2500, said "about". q here counts every pathogenic CFTR
+# allele, not only F508del. The NGS reads are a seeded model (the scene's own reads), not a
+# patient's data. References: Riordan et al. 1989 and Kerem et al. 1989 (Science 245), by PMID.
+# No audio is committed: before `vidgen tts` beats are timed from their word count.
+title: "Cystic fibrosis: from a family to a diagnosis"
+output: cystic_fibrosis
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  short:                          # a 9:16 Short of the same video
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart, speed: 0.85}   # local and free, word timings; 0.85: dense terms, said clearly (0.9 is too fast for lint)
+stt: {provider: faster_whisper, model: base.en}
+
+pronunciation:
+  CFTR: C F T R
+  "c.1521_1523del": c dot fifteen twenty-one to fifteen twenty-three del
+  "p.(Phe508del)": p dot phe five oh eight del
+  F508del: F five oh eight del
+  ΔF508: delta F five oh eight
+  q31.2: q thirty-one point two
+  2pq: two p q
+
+terms:
+  carrier: secondary
+  autosomal recessive: primary
+  F508del: tertiary
+
+music: {source: discovery, volume: -6}
+transition: {type: crossfade, duration: 0.4}
+citations: {show: marker}
+
+overlays:
+  - type: captions
+    style: karaoke
+    max_lines: 1
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "MEDICAL GENETICS"
+      title: "Cystic fibrosis: from a family to a diagnosis"
+      highlight: "Cystic fibrosis"
+      subtitle: "Pedigree, gene, variant, test and population"
+    beats:
+      - text: "A couple with no family history of cystic fibrosis has a daughter with the condition. Years later, her brother and his partner plan a family, and ask what the chances are."
+
+  - id: family
+    type: pedigree
+    params:
+      title: "The family"
+      condition: cystic fibrosis
+      mode: AR
+      carrier_frequency: 1/25            # a partner from the population (European ancestry, approximately)
+      analyse: [AD, AR, XR]
+      individuals:
+        - "I-1: male"
+        - "I-2: female"
+        - "II-1: female affected proband of I-1 + I-2"
+        - "II-2: male consultand of I-1 + I-2"
+        - "II-3: female"                 # his partner, married in
+        - "III-1: unknown proposed of II-2 + II-3"
+    beats:
+      - text: "In standard pedigree symbols, squares are males and circles are females. The filled circle is the affected daughter, and the arrow marks her as the proband."
+        actions: [{highlight: "person:II-1", at: "@filled"}]
+      - text: "Which modes of inheritance fit? We test each one against the chart."
+        actions: [{analyse: modes, at: "@test"}]
+      - text: "A dominant condition would have to show in a parent, and an X-linked one in an affected daughter would need an affected father. Only autosomal recessive inheritance explains this family."
+      - text: "So both parents are obligate carriers: each has one disease allele and one working allele."
+        actions: [{deduce: carriers, at: "@obligate"}]
+
+  - id: punnett
+    type: cross
+    params:
+      title: "Two carriers"
+      loci:
+        - {gene: CFTR, trait: cystic fibrosis, alleles: {A: unaffected, a: affected}}
+      parents: [Aa, Aa]
+    beats:
+      - text: "Each carrier parent passes on either allele, with equal chance."
+        actions: [{form_gametes: both, at: "@either"}]
+      - text: "The four combinations are equally likely: one quarter of the children are expected to be affected, one half are carriers, and one quarter inherit two working alleles."
+        actions: [{fill: square, at: "@combinations"}, {count: genotypes, at: "@quarter"}]
+      - text: "The brother is unaffected, so the affected square is ruled out for him. Of the three squares left, two are carriers."
+        actions: [{dim: "cell2.2", at: "@ruled"}, {highlight: "cells:Aa", at: "@two"}, {highlight: "genotype:Aa", at: "@carriers"}]
+
+  - id: risk
+    type: pedigree
+    params:
+      title: "The risk for the next generation"
+      condition: cystic fibrosis
+      mode: AR
+      carrier_frequency: 1/25
+      individuals:
+        - "I-1: male"
+        - "I-2: female"
+        - "II-1: female affected proband of I-1 + I-2"
+        - "II-2: male consultand of I-1 + I-2"
+        - "II-3: female"
+        - "III-1: unknown proposed of II-2 + II-3"
+    beats:
+      - text: "Back in the family, the brother's chance of being a carrier is two thirds."
+        actions: [{deduce: genotypes, at: "@two"}]
+      - text: "His partner has no family history, so her chance is that of the population: about one in twenty-five."
+      - text: "Two thirds, times one in twenty-five, times one quarter for two carriers' child, gives a risk of one in a hundred and fifty for their baby."
+        actions: [{risk: risk, at: "@gives"}]
+
+  - id: gene
+    type: karyotype
+    params:
+      title: "Where the gene lies"
+      karyotype: "46,XY"
+      chromosomes: [7]
+      bands: {7q31.2: CFTR}
+      notation: false
+    references:
+      - {id: riordan, label: "Riordan et al., Science 1989", pmid: "2475911"}
+    beats:
+      - text: "The gene is CFTR, the cystic fibrosis transmembrane conductance regulator. It lies on the long arm of chromosome seven, in band q31.2."
+        cite: [riordan]
+        actions: [{highlight: "band:7q31.2", at: "@q31.2"}]
+      - text: "Its protein is an anion channel in epithelial cells. It lets chloride and bicarbonate out, in the airways, the pancreas, the gut and the sweat glands."
+
+  - id: variant
+    type: mutation
+    params:
+      gene: CFTR                           # no title: the gene strip, two rows and the card fill the frame
+      variant: {c: "c.1521_1523del", p: "p.(Phe508del)"}
+      codons: 5                            # few codons: large tiles, the card beside them in 16:9
+    lint_ignore:
+      # the deleted residue (Phe 508) is struck through on purpose
+      - {rule: covered_text}
+    references:
+      - {id: kerem, label: "Kerem et al., Science 1989", pmid: "2570460"}
+    beats:
+      - text: "Here is the CFTR coding sequence in exon eleven, read in codons, around codon five hundred and eight."
+      - text: "Three bases, C T T, are deleted: c.1521_1523del."
+        cite: [kerem]
+        actions: [{mutate: variant, at: "@deleted"}]
+      - text: "The deletion removes exactly one codon's worth of bases, so the reading frame is kept. Isoleucine five hundred and seven stays, and one phenylalanine is missing: p.(Phe508del), traditionally called ΔF508."
+      - text: "The protein misfolds, and most of it is broken down before it reaches the cell surface."
+
+  - id: test
+    type: dna_lab
+    params:
+      title: "Carrier testing by sequencing"
+      method: ngs
+      reference: "ATCATCTTTGGTGTTTCCTATGATGAATATAGATACAGAA"   # CFTR c.1516–1555 (NM_000492.4)
+      variant: "6_8delCTT"                 # = c.1521_1523del in this window
+      zygosity: heterozygous
+      read_length: 20
+      depth: 16
+      seed: 10                             # 19 reads span the site, 10 with the deletion (53 %)
+    beats:
+      - text: "The brother chooses to be tested. His DNA is sequenced as short reads, and each read is aligned to the reference."
+        actions: [{run: reads, at: "@sequenced"}]
+      - text: "Over the variant, about half of the reads have a gap where C T T should be. The others match the reference."
+        actions: [{run: call, at: "@gap"}]
+      - text: "He is heterozygous: a carrier of F508del, with one working copy of CFTR, which is why he is healthy."
+
+  - id: population
+    type: population
+    params:
+      title: "Hardy–Weinberg"
+      incidence: 1/2500
+      condition: cystic fibrosis
+    beats:
+      - text: "In people of European ancestry, about one baby in two thousand five hundred is born with cystic fibrosis."
+      - text: "With random mating the incidence is q squared, so q, the frequency of disease alleles, is about one in fifty."
+        actions: [{reveal: alleles, at: "@squared"}]
+      - text: "Carriers are 2pq: about one person in twenty-five."
+        actions: [{reveal: carriers, at: "@Carriers"}]
+      - text: "That is why most affected children are born to families with no history: the alleles pass silently, from carrier to carrier."
+
+  - id: recap
+    type: process
+    params:
+      heading: "From a family to a diagnosis"
+      stages: ["Pedigree", "Risk", "Gene", "Variant", "Test"]
+    beats:
+      - text: "The pedigree gives the mode of inheritance."
+      - text: "Bayes' rule gives each relative's risk."
+      - text: "The gene sits on chromosome seven."
+      - text: "F508del is an in-frame deletion."
+      - text: "And sequencing turns a probability into an answer, which genetic counselling helps the family use."

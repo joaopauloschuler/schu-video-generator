@@ -199,6 +199,17 @@ def _timing_findings(
 
     if any(n in names and getattr(lint.rules, n).severity != "off" for n in SCIENCE_RULES):
         ctx.science = science_issues(project, scene_id, lint.rules)
+    from vidgen.lint.genetics_rule import GENETICS_RULES, genetics_issues
+
+    if any(n in names and getattr(lint.rules, n).severity != "off" for n in GENETICS_RULES):
+        ctx.science = ctx.science + genetics_issues(project, scene_id, lint.rules)
+    from vidgen.lint.calc_rule import CALC_RULES, calc_issues
+    from vidgen.lint.plot_rule import PLOT_RULES, plot_issues
+
+    if any(n in names and getattr(lint.rules, n).severity != "off" for n in CALC_RULES):
+        ctx.science = ctx.science + calc_issues(project, scene_id, lint.rules)
+    if any(n in names and getattr(lint.rules, n).severity != "off" for n in PLOT_RULES):
+        ctx.science = ctx.science + plot_issues(project, scene_id, lint.rules)
     narration_rules = [n for n in ("said_before_shown", "unsaid_reveal") if n in names and getattr(lint.rules, n).severity != "off"]
     if narration_rules and layout is not None and activity["beats"]:
         from vidgen.lint.narration_rule import narration_picture

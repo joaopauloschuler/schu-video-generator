@@ -179,7 +179,7 @@ def fit_text_sized(
             kwargs["t2c"] = {**colored, **(kwargs.get("t2c") or {})}
 
     if squeeze > 1.0 and "\n" not in normalized:
-        line = Paragraph(normalized, font_size=font_size, **kwargs)
+        line = _paragraph([normalized], font_size, kwargs)
         if line.width <= max_width * squeeze:
             return _shrunk(line, font_size, max_width, max_height)
     # Search the font size arithmetically (word widths and line pitch scale linearly with the
@@ -194,14 +194,29 @@ def fit_text_sized(
     if balance and len(lines) > 1:
         target = metrics.balanced(font_size, max_width, len(lines))
         lines = metrics.wrap(font_size, target)
-    block = Paragraph(*lines, font_size=font_size, **kwargs)
+    block = _paragraph(lines, font_size, kwargs)
     for _ in range(3):
         if block.width <= max_width * 1.001 or len(lines) == len(normalized.split()):
             break
         target *= max_width / block.width * 0.98
         lines = metrics.wrap(font_size, target)
-        block = Paragraph(*lines, font_size=font_size, **kwargs)
+        block = _paragraph(lines, font_size, kwargs)
     return _shrunk(block, font_size, max_width, max_height)
+
+
+def _paragraph(lines: list[str], font_size: float, kwargs: dict[str, Any]) -> Paragraph:
+    """``Paragraph(*lines)``, built again without ligatures when the font draws some (e.g. "fi"
+    in a serif heading font): Manim splits the glyphs into lines by counting characters, so one
+    glyph for two letters would move a letter onto the next line ("fibrosis i / n a family"; Inter
+    joins "->" and "=>"). One line, and lines without ligatures, are built exactly as before."""
+    block = Paragraph(*lines, font_size=font_size, **kwargs)
+    letters = sum(1 for line in lines for ch in line if not ch.isspace())
+    if len(lines) > 1 and len(block.lines_text.chars) != letters:
+        try:
+            block = Paragraph(*lines, font_size=font_size, disable_ligatures=True, **kwargs)
+        except ValueError:          # glyphs missing for another reason (Manim refuses): keep the first build
+            pass
+    return block
 
 
 def _shrunk(block: Paragraph, font_size: float, max_width: float, max_height: float | None) -> tuple[Paragraph, float]:

@@ -1,0 +1,83 @@
+"""Quantities with units for worked calculations (Phase W, DESIGN §97.9), without manim and
+without a new dependency: units and dimensions (:mod:`.units`), constants with their sources
+(:mod:`.constants`), quantities carrying exactness and significant figures (:mod:`.quantity`),
+expressions evaluated on them and written in TeX (:mod:`.expr`) and worked calculations
+(:mod:`.calc`), which the ``calculation`` scene draws. Exported by ``vidgen.api`` as the module
+``quantities``."""
+
+from .calc import CONSTANT_DIGITS, EXACT_DIGITS, FORMATS, CalcInput, CalcResult, Step, SymbolInput, SymbolValue, Worked, check_name, name_tex, work
+from .constants import ALIASES as CONSTANT_ALIASES, CONSTANTS, Constant, constant
+from .expr import Node, evaluate, parse, to_tex
+from .quantity import (
+    FUNCTIONS,
+    MAX_SIG,
+    NumberText,
+    Quantity,
+    QuantityError,
+    Written,
+    add,
+    call,
+    count_sig,
+    decimal_text,
+    div,
+    exact_root,
+    fraction_text,
+    in_unit,
+    mul,
+    power,
+    round_sig,
+    written,
+)
+from .units import DIMENSIONLESS, PREFIXES, UNITS, Dim, Unit, UnitDef, base_unit_text, describe_dim, dim, parse_unit, si_unit
+
+__all__ = [
+    "CONSTANTS",
+    "CONSTANT_ALIASES",
+    "CONSTANT_DIGITS",
+    "DIMENSIONLESS",
+    "EXACT_DIGITS",
+    "FORMATS",
+    "FUNCTIONS",
+    "MAX_SIG",
+    "PREFIXES",
+    "UNITS",
+    "CalcInput",
+    "CalcResult",
+    "Constant",
+    "Dim",
+    "Node",
+    "NumberText",
+    "Quantity",
+    "QuantityError",
+    "Step",
+    "SymbolInput",
+    "SymbolValue",
+    "Unit",
+    "UnitDef",
+    "Worked",
+    "Written",
+    "add",
+    "base_unit_text",
+    "call",
+    "check_name",
+    "constant",
+    "count_sig",
+    "decimal_text",
+    "describe_dim",
+    "dim",
+    "div",
+    "evaluate",
+    "exact_root",
+    "fraction_text",
+    "in_unit",
+    "mul",
+    "name_tex",
+    "parse",
+    "parse_unit",
+    "power",
+    "round_sig",
+    "si_unit",
+    "to_tex",
+    "work",
+    "written",
+]

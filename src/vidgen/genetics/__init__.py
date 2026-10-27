@@ -1,0 +1,31 @@
+"""Genetics (DESIGN.md §96): loci, alleles and their notation, genotypes, phenotypes with
+dominance, penetrance and epistasis, modes of inheritance, and an exact cross engine (fractions,
+independent assortment, linkage with recombination, sex chromosomes, mtDNA). Plain data and
+rules, no manim imports (a test checks): ``vidgen validate`` and lint use it without rendering;
+the genetics scene types (Steps 214–218) draw it."""
+
+from .cross import CrossResult, cross, fertilize, gametes, genotype_key, haplotype_gametes, ratio, ratio_text, reciprocal, test_cross, make_tester
+from .genotype import Gamete, Genotype, SexChromosome, alleles_at, gamete_text, genotype_text, make_genotype, parse_genotype
+from .model import (
+    CHROMOSOMES, EPISTASIS_KINDS, Allele, Epistasis, GeneticSystem, LinkageGroup, Locus, Trait, as_fraction, build_locus, build_system,
+)
+from .modes import MODES, Mode, mode_of, parse_mode
+from .notation import canonical_symbol, symbol_ascii, symbol_markup, symbol_text
+from .phenotype import Phenotype, is_lethal, locus_phenotypes, phenotypes_of
+from .presets import PRESETS, Preset
+from . import glyphs, punnett, stats  # noqa: E402  (the cross scene's plan, pictures and chi-square)
+from . import pedigree, pedigree_analysis, pedigree_layout, pedigree_plan  # noqa: E402  (the pedigree scene's chart and analysis)
+from . import karyotype, mapping  # noqa: E402  (the karyotype and linkage_map scenes' models)
+from . import crispr, dna_lab, hgvs, mutation, reference_genes  # noqa: E402  (the molecular scenes' models)
+from . import gwas, population  # noqa: E402  (the population and gwas scenes' models)
+from . import accuracy  # noqa: E402  (the genetics lint's knowledge)
+
+__all__ = [
+    "CHROMOSOMES", "EPISTASIS_KINDS", "MODES", "PRESETS", "Allele", "CrossResult", "Epistasis", "Gamete", "GeneticSystem", "Genotype",
+    "LinkageGroup", "Locus", "Mode", "Phenotype", "Preset", "SexChromosome", "Trait", "alleles_at", "as_fraction", "build_locus",
+    "build_system", "canonical_symbol", "cross", "fertilize", "gamete_text", "gametes", "genotype_key", "genotype_text",
+    "haplotype_gametes", "is_lethal", "locus_phenotypes", "make_genotype", "mode_of", "parse_genotype", "parse_mode", "phenotypes_of",
+    "ratio", "ratio_text", "reciprocal", "symbol_ascii", "symbol_markup", "symbol_text", "test_cross", "make_tester",
+    "glyphs", "punnett", "stats", "pedigree", "pedigree_analysis", "pedigree_layout", "pedigree_plan", "karyotype", "mapping",
+    "crispr", "dna_lab", "hgvs", "mutation", "reference_genes", "gwas", "population", "accuracy",
+]

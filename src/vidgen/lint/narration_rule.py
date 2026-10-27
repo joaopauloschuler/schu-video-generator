@@ -31,13 +31,18 @@ from vidgen.textnorm import fold
 if TYPE_CHECKING:
     from vidgen.project import Project
 
-#: Actions that bring something on screen at their time: the built-in ones, and the cell-biology
-#: scenes' actions that bring labels, captions, badges or a zoomed view's part names (§95.14).
+#: Actions that bring something on screen at their time: the built-in ones, the cell-biology
+#: scenes' actions that bring labels, captions, badges or a zoomed view's part names (§95.14), the
+#: genetics scenes' actions that bring gametes, cells, tables, cards and plots (§96.18), and the
+#: plot and calculation actions that bring fits, notes, growing series and worked steps (§97.11).
 SHOWING_ACTIONS = frozenset({
     "reveal", "callout", "transform",
     "zoom_to", "advance", "checkpoint", "signal", "knockout", "drug", "inhibit", "amplify", "transcribe", "cap", "splice", "polyadenylate",
     "export", "translate", "target_er", "glycosylate", "fold", "to_golgi", "secrete", "transport", "set_state", "diffuse", "osmosis",
     "action_potential", "motor_walk", "endocytosis", "exocytosis",
+    "form_gametes", "fill", "count", "ratio", "chi_square", "deduce", "analyse", "risk", "cross_over", "measure", "rearrange", "mutate",
+    "scan", "cleave", "repair", "run", "simulate", "resample", "regional",
+    "fit", "annotate", "grow", "substitute", "compute", "convert",
 })
 
 _WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)*")

@@ -809,6 +809,23 @@ LINT_RULES: tuple[str, ...] = (
     "science_naming",
     "science_pathway",
     "science_counts",
+    "genetics_ratio",
+    "genetics_pedigree",
+    "genetics_linkage",
+    "genetics_hwe",
+    "genetics_crispr",
+    "genetics_karyotype",
+    "genetics_hgvs",
+    "calc_numbers",
+    "calc_units",
+    "calc_sigfigs",
+    "plot_units",
+    "plot_log",
+    "plot_errors",
+    "plot_series",
+    "plot_truncated",
+    "plot_conserved",
+    "plot_fit_claims",
 )
 RuleName = Literal[
     "off_frame",
@@ -851,6 +868,23 @@ RuleName = Literal[
     "science_naming",
     "science_pathway",
     "science_counts",
+    "genetics_ratio",
+    "genetics_pedigree",
+    "genetics_linkage",
+    "genetics_hwe",
+    "genetics_crispr",
+    "genetics_karyotype",
+    "genetics_hgvs",
+    "calc_numbers",
+    "calc_units",
+    "calc_sigfigs",
+    "plot_units",
+    "plot_log",
+    "plot_errors",
+    "plot_series",
+    "plot_truncated",
+    "plot_conserved",
+    "plot_fit_claims",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1105,6 +1139,97 @@ class ScienceCountsRule(RuleConfig):
     """``science_counts``: a number in the narration that contradicts the textbook (net 4 ATP from glycolysis, 2 NADH per turn of the citric acid cycle, 2 Na⁺ out per pump cycle…) (DESIGN.md §95.14)."""
 
 
+class GeneticsRatioRule(RuleConfig):
+    """``genetics_ratio``: in a cross scene, a ratio (3 : 1 for a dihybrid) or a share of a phenotype among the offspring, sons or daughters (half the sons affected) said in the narration that does not follow from the cross (DESIGN.md §96.18)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a share said as an approximation ("about 40 %") may differ from the cross's."""
+
+
+class GeneticsPedigreeRule(RuleConfig):
+    """``genetics_pedigree``: a pedigree chart that does not fit its stated mode (error); narration with a dominant trait skipping a generation without reduced penetrance, father-to-son transmission of an X-linked trait, or a carrier or risk probability that differs from the chart's (DESIGN.md §96.18)."""
+
+
+class GeneticsLinkageRule(RuleConfig):
+    """``genetics_linkage``: a recombination frequency said to be over 50 %, a distance in cM or an RF that differs from the scene's map or cross, close loci called unlinked or unlinked loci called linked (DESIGN.md §96.18)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a distance or RF said as an approximation ("about 18 cM") may differ from the scene's."""
+
+
+class GeneticsHweRule(RuleConfig):
+    """``genetics_hwe``: Hardy–Weinberg arithmetic in the narration: q against the incidence (q² = incidence), the carrier frequency against 2pq (≈ 2q), carriers called q², a population scene's numbers (DESIGN.md §96.18)."""
+
+    tolerance: float = Field(default=0.1, ge=0, le=0.5)
+    """How far (relative) two numbers said may disagree (1 in 25 for 2pq = 1 in 25.5 is fine)."""
+
+
+class GeneticsCrisprRule(RuleConfig):
+    """``genetics_crispr``: narration naming a wrong PAM for the Cas (TTTV for SpCas9), a cut other than 3 bp upstream of the PAM (downstream, inside it), sticky ends for Cas9, the PAM before the protospacer or on the target strand, a spacer length the enzyme does not use (DESIGN.md §96.18)."""
+
+
+class GeneticsKaryotypeRule(RuleConfig):
+    """``genetics_karyotype``: ISCN notation in narration or on screen that does not parse or lists its changes out of order, a karyotype or a sex-chromosome syndrome given the wrong sex (45,X male), a condition the karyotype scene does not show (trisomy 21 for 47,XY,+18) (DESIGN.md §96.18)."""
+
+
+class GeneticsHgvsRule(RuleConfig):
+    """``genetics_hgvs``: HGVS in narration or on screen that is invalid or not the mutation scene's variant, legacy numbering (Glu6Val for HBB) without saying it is legacy; legacy shorthand (ΔF508, R553X) as info (DESIGN.md §96.18)."""
+
+
+class CalcNumbersRule(RuleConfig):
+    """``calc_numbers``: a number in the narration or on screen (title, caption, labels, notes) that refers to a calculation's value — by its unit, its meaning or its name — and differs from what the calculation computes by more than the way it was written ("thirty kilometres per second" fits 29.8 km/s; "about" also allows rounding to one or two significant figures) (DESIGN.md §97.11)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a value said with "about" may differ from the computed one, beyond rounding it to one or two significant figures."""
+
+
+class CalcUnitsRule(RuleConfig):
+    """``calc_units``: a value said in a unit of another dimension than its quantity ("a speed of 30 kilometres"; a result named by its meaning with a unit of another kind), or in the right kind of unit but off by a power of 1000 (30 m/s for 29.8 km/s, mg for µg) (DESIGN.md §97.11)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """As calc_numbers: how far a value said with "about" may be off once the factor of 1000 is taken out."""
+
+
+class CalcSigfigsRule(RuleConfig):
+    """``calc_sigfigs``: a calculation whose sig claims more significant figures than its inputs give, or a number said for a result with more figures than it has (29.78 km/s for a result known to 3) (DESIGN.md §97.11)."""
+
+
+class PlotUnitsRule(RuleConfig):
+    """``plot_units``: a plot axis without a unit where its quantity has one: a physical quantity named in its title without a unit (time, energy, distance, temperature...), or fit parameters given units while the axis has none (DESIGN.md §97.11)."""
+
+
+class PlotLogRule(RuleConfig):
+    """``plot_log``: a log axis with something it cannot show: error bars, a fitted curve or its band reaching zero or below (drawn to the axis edge), a reference line or range at or below zero, or data refused when the plot is resolved (a CSV or a model) (DESIGN.md §97.11)."""
+
+
+class PlotErrorsRule(RuleConfig):
+    """``plot_errors``: error bars without a stated meaning (error: sd, sem, ci95, range, poisson or other), or narration calling them something they are not declared to be ("standard deviation" for error: sem) (DESIGN.md §97.11)."""
+
+
+class PlotSeriesRule(RuleConfig):
+    """``plot_series``: series a viewer cannot tell apart: several series in one panel with the legend turned off and no annotation naming them, or a placeholder name (series 1, data) (DESIGN.md §97.11)."""
+
+
+class PlotTruncatedRule(RuleConfig):
+    """``plot_truncated``: bars that do not start at zero, which exaggerates differences: a histogram on a y axis with a break, a bar_chart with a baseline other than 0 and every bar on one side of it (DESIGN.md §97.11)."""
+
+
+class PlotConservedRule(RuleConfig):
+    """``plot_conserved``: a quantity a plot's model declares conserved that drifts by more than tolerance over the run: use method: leapfrog (symplectic, the energy error stays bounded) or a smaller step (DESIGN.md §97.11)."""
+
+    tolerance: float = Field(default=0.01, gt=0, le=0.5)
+    """The largest relative drift max |q − q₀| / max |q| accepted."""
+
+
+class PlotFitClaimsRule(RuleConfig):
+    """``plot_fit_claims``: narration or a note on a plot with fits stating a fitted value ("a half-life of eight days", "exponent three halves", "the peak at 126 GeV") that the fit does not give, its uncertainty considered (DESIGN.md §97.11)."""
+
+    sigmas: float = Field(default=2.0, gt=0, le=10)
+    """How many standard errors of the fitted value a said value may differ by (besides its own rounding)."""
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a value said with "about" may differ."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1273,6 +1398,40 @@ class LintRules(_Strict):
     """Narration contradicting a pathway arc's effect (default: warning)."""
     science_counts: ScienceCountsRule = Field(default_factory=ScienceCountsRule)
     """A number in the narration contradicting the textbook (default: warning)."""
+    genetics_ratio: GeneticsRatioRule = Field(default_factory=GeneticsRatioRule)
+    """A ratio or share in a cross scene's narration that does not follow from its cross (default: warning)."""
+    genetics_pedigree: GeneticsPedigreeRule = Field(default_factory=GeneticsPedigreeRule)
+    """A pedigree against its stated mode (error), a mode or probability stated against the chart or the textbook (default: warning)."""
+    genetics_linkage: GeneticsLinkageRule = Field(default_factory=GeneticsLinkageRule)
+    """RF over 50 %, distances or RF against the scene's map, linked loci called unlinked (default: warning)."""
+    genetics_hwe: GeneticsHweRule = Field(default_factory=GeneticsHweRule)
+    """Hardy–Weinberg arithmetic errors in the narration (default: warning)."""
+    genetics_crispr: GeneticsCrisprRule = Field(default_factory=GeneticsCrisprRule)
+    """A wrong PAM, cut site, end type or spacer length for the Cas (default: warning)."""
+    genetics_karyotype: GeneticsKaryotypeRule = Field(default_factory=GeneticsKaryotypeRule)
+    """Karyotype notation errors, the wrong sex or condition for a karyotype (default: warning)."""
+    genetics_hgvs: GeneticsHgvsRule = Field(default_factory=GeneticsHgvsRule)
+    """HGVS not valid or not the scene's variant, legacy numbering unsaid (default: warning; legacy shorthand: info)."""
+    calc_numbers: CalcNumbersRule = Field(default_factory=CalcNumbersRule)
+    """A number said or shown for a calculation's value that differs from what it computes (default: warning)."""
+    calc_units: CalcUnitsRule = Field(default_factory=CalcUnitsRule)
+    """A value said in a unit of the wrong kind for its quantity, or off by a power of 1000 (default: warning)."""
+    calc_sigfigs: CalcSigfigsRule = Field(default_factory=CalcSigfigsRule)
+    """More significant figures than a calculation's inputs give, in its sig or in a number said for it (default: info)."""
+    plot_units: PlotUnitsRule = Field(default_factory=PlotUnitsRule)
+    """A plot axis of a physical quantity without its unit (default: warning)."""
+    plot_log: PlotLogRule = Field(default_factory=PlotLogRule)
+    """Error bars, fits, bands or reference lines at or below zero on a log axis (default: warning)."""
+    plot_errors: PlotErrorsRule = Field(default_factory=PlotErrorsRule)
+    """Error bars without a stated meaning, or said to mean something else (default: warning)."""
+    plot_series: PlotSeriesRule = Field(default_factory=PlotSeriesRule)
+    """Series that cannot be told apart: no legend and no labels, or placeholder names (default: warning)."""
+    plot_truncated: PlotTruncatedRule = Field(default_factory=PlotTruncatedRule)
+    """Bars not starting at zero (default: info)."""
+    plot_conserved: PlotConservedRule = Field(default_factory=PlotConservedRule)
+    """A model's conserved quantity drifting beyond tolerance (default: warning)."""
+    plot_fit_claims: PlotFitClaimsRule = Field(default_factory=PlotFitClaimsRule)
+    """A fitted value said differently from what the fit gives (default: warning)."""
 
 
 class LintConfig(_Strict):

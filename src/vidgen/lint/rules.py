@@ -135,7 +135,8 @@ class SceneContext:
     ``unsaid_reveal`` runs), ``music_issues`` the ``(message, severity)`` of the project pieces
     whose cue starts in this scene (:func:`vidgen.lint.music_rule.music_issues`; filled when
     ``music_check`` runs), ``science`` the scene's scientific-accuracy findings
-    (:class:`vidgen.lint.science_rule.ScienceIssue`; filled when a ``science_*`` rule runs).
+    (:class:`vidgen.lint.science_rule.ScienceIssue`; filled when a ``science_*``, ``genetics_*``,
+    ``calc_*`` or ``plot_*`` rule runs).
     """
 
     scene_id: str

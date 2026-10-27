@@ -208,6 +208,15 @@ src/vidgen/
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
                           # colour scales, colour bar, readable text on fills (§34)
+  plotcore/               # the chart core for scientific plots (§97; no manim): numbers.py (10ⁿ, SI prefixes,
+                          # tick labels), ticks.py (linear / log / symlog), axis.py (Axis, AxisSpec, breaks,
+                          # reversed, equal aspect), data.py (CSV tables, units in headers), figure.py (panel layout),
+                          # fit.py / stats.py / hist.py / annotate.py (§97.5), integrate.py (RK4, RK45, Verlet),
+                          # models.py (ODEs, recurrences, random processes, registered functions), live.py (§97.7)
+  plot_draw.py            # the chart core's drawing layer: axes, ticks, gridlines, break marks, series (§97)
+  quantities/             # units and worked calculations (§97.9; no manim): units.py (dimensions, units, prefixes,
+                          # parsing, SI display), constants.py (CODATA 2022, SI 2019, IAU), quantity.py (values with
+                          # exactness and significant figures), expr.py (expressions with units, TeX), calc.py
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
@@ -1024,6 +1033,22 @@ text) and `music_template_catalog()` (every template's facts).
 Step 187 (§93.9) adds `check_music_score(score)`, `check_music_audio(samples, name)` (both →
 `MusicCheck`: verdict, facts, findings with fixes, sections, tracks) and `music_check_text(check)`
 (the report in words).
+Step 222 (§97) adds the modules `plotcore` (the chart core without manim: `AxisSpec`, `Axis`,
+`build_axis`, ticks, number formats, `read_table`, `layout_figure`, `PanelLayout`...) and
+`plot_draw` (`draw_panel`, `series_line`, `series_markers`, `text_measure`).
+Step 224 (§97.7) adds `register_model(name)` (a decorator registering a Python function as a
+model a `plot` can name: `fn(params, seed) -> {column: values}`), and to `plotcore` the
+integrators and models (`simulate_ode`, `simulate_recurrence`, `random_walk`,
+`poisson_process`, `run_registered`, `Simulation`, `rk4`, `rk45`, `verlet`...), the live-plot
+logic (`grown`, `rescale_schedule`, `domain_at`, `axis_for`, `readout_text`...) and `relabel`;
+to `plot_draw` `flat`, `morph_into`, `head_marker` and `draw_panel(cache=)`.
+Step 225 (§97.9) adds the module `quantities` (units and dimensions without manim and without a
+new dependency: `parse_unit`, `Unit`, `si_unit`, `describe_dim`, `CONSTANTS` / `constant`,
+`Quantity`, `written`, `in_unit`, the arithmetic carrying significant figures, `decimal_text`,
+`fraction_text`, expression trees `parse` / `evaluate` / `to_tex`, and worked calculations
+`work(symbols, calcs)` → `Worked` of `CalcResult`s).
+Step 227 (§97.12) adds `plotcore.layout_axes` (a panel from axes the caller built) and, in
+`quantities`, `Step.deep` / `Step.unit_variants` and `to_tex(stack=2)` (one factor per line).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -15608,3 +15633,1840 @@ kind's range, counts, exaggerated glyphs.
   findings in the gallery's `synthase` and the showcases); a 9:16 close-up of a horizontal strip
   (gene, membrane) still leaves height unused; gallery media of the cell-biology section were
   not regenerated (pathway and metabolism stills differ a little from a render now).
+
+## 96. Genetics at university level (Phase V, Steps 213–221)
+
+Genetics videos for lectures, medical and biology students and science channels: standard terms
+and notation, **computed rather than drawn by hand** (ratios, probabilities, gametes, map
+distances, frequencies come from a model), in vidgen's flat style, written by AI agents in YAML,
+checked by `vidgen validate` with did-you-mean errors and by `vidgen lint`, in 16:9 and 9:16.
+Built like Phase U (§95): a model with rules and no manim (`vidgen/genetics/`), renderers and
+scene types apart. Additive and opt-in: existing projects, scenes, gallery frames, audio and the
+studio unchanged. References for the facts: standard textbooks (Griffiths *Introduction to
+Genetic Analysis*, Hartwell *Genetics: From Genes to Genomes*, Strachan & Read *Human Molecular
+Genetics*) and nomenclatures (NSGC pedigrees, ISCN karyotypes, HGVS variants, HGNC symbols).
+
+### 96.1 The phase (plan)
+
+- **Step 213, the model and this plan** (§96.3–96.6): loci, alleles and notation, genotypes,
+  phenotypes (dominance, lethal alleles, penetrance, expressivity, epistasis), modes of
+  inheritance, the exact cross engine; scene types decided (§96.2). No scene type yet.
+- **Step 214, `cross`**: Punnett squares and branch (forked-line) diagrams on the cross engine;
+  animated gamete formation, squares filling step by step, offspring counted into ratios;
+  mono-, di-, trihybrid, test, reciprocal, P → F1 → F2; every dominance and epistasis kind,
+  lethal 2:1, X / Y crosses split by sex; optional chi-square of observed against expected
+  counts with its p-value (`genetics/stats.py`, exact upper regularized gamma; no scipy).
+- **Step 215, `pedigree`**: NSGC symbols, deterministic layout by generation, the analysis of
+  which modes fit (§96.5), deduced genotypes, carrier and risk probabilities.
+- **Step 216, `karyotype` and `linkage_map`**; non-disjunction as an option of Phase U's
+  `cell_cycle` meiosis.
+- **Step 217, `mutation`, `crispr`, `dna_lab`** (PCR, gel, Sanger, NGS).
+- **Step 218, `population` and `gwas`**.
+- **Step 219, the genetics lint** (§96.5); **Step 220** the example (cystic fibrosis from pedigree
+  to diagnosis), docs (guide topic `genetics`, CONFIG, `docs/COOKBOOK-GENETICS.md`), gallery
+  section "Genetics"; **Step 221** the review with a scientific-accuracy pass.
+
+### 96.2 Scene types (decided)
+
+| Type | Step | Shows | Relation to Phase U |
+| --- | --- | --- | --- |
+| `cross` | 214 | Punnett square, branch diagram, gametes, ratios, chi-square | new; gametes from linked loci drawn as homologue pairs with the chromatid look of `cell_cycle` (`cellworld.division`) |
+| `pedigree` | 215 | a family chart in NSGC notation, mode analysis, risks | new; its own layout (generations are rows; not `vidgen.graph`, whose layered layout does not know couples and sibships) |
+| `karyotype` | 216 | ideograms with G-bands, a karyogram, ISCN notation, aneuploidy, structural changes | new; chromosome outlines and centromeres as in `cellworld.division` |
+| `linkage_map` | 216 | chromosomes with loci in cM, crossing over between linked loci (coupling / repulsion), three-point crosses, interference | new; crossing over drawn like `cell_cycle`'s meiosis I chiasmata |
+| `cell_cycle` (existing) | 216 | meiosis with `nondisjunction: {division: I \| II, pair: n}` and the resulting gametes' counts | an option of the Phase U type, not a new type |
+| `mutation` | 217 | a coding sequence with a variant: silent, missense, nonsense, frameshift, in-frame indel, splice site; HGVS `c.` / `p.` | the genetic code `cellworld.sequences.CODONS`, the gene strip of the `molecule` scene's `gene:` (`cellworld.expression`) |
+| `crispr` | 217 | sgRNA (20 nt spacer), NGG PAM, Cas9 cut 3 bp 5′ of the PAM, NHEJ / HDR | the DNA ladder of the `molecule` scene (5′ / 3′ ends, base pairs) |
+| `dna_lab` | 217 | `method: pcr \| gel \| sanger \| ngs` | like `metabolism`'s `process:`: one type, several techniques sharing DNA drawing and plots |
+| `population` | 218 | Hardy–Weinberg, seeded drift / selection / migration / bottleneck / founder simulations, allele frequencies over generations | the axes of `function_plot` / `line_chart` (`vidgen.charts`, `math_axes`) |
+| `gwas` | 218 | Manhattan plot (−log₁₀ p by chromosome, 5 × 10⁻⁸ line), QQ plot | `vidgen.charts` |
+
+Why new types rather than modes of Phase U types: a Punnett square, a pedigree or a gel has
+nothing of a cell's µm camera or a molecule's membrane rows; each new type is one picture
+grammar with its own params, as `pathway` was next to `cell`. What they share lives in the
+model (`vidgen.genetics`) and in Phase U's `cellworld` (sequences, names, chromosome look,
+accuracy text helpers), imported, not copied. Gene symbols are italic through the existing
+`gene_symbols(params)` hook (§95.16) and HGNC / species checks through `cellworld.names`.
+
+### 96.3 The model (`vidgen/genetics/`, no manim; Step 213)
+
+Modules: `notation` (allele symbols), `model` (loci, linkage groups, epistasis, the system and
+its builder), `genotype` (genotypes, gametes, parsing and writing), `phenotype` (phenotypes,
+penetrance, epistasis, lethality, class order), `cross` (the engine), `modes` (modes of
+inheritance), `presets` (textbook systems). A test imports them in a fresh interpreter and checks
+`manim` is not loaded. Probabilities are `fractions.Fraction` everywhere (floats from YAML go
+through their decimal text: `0.1` is exactly 1/10; `"17%"` and `"1/6"` are read too).
+
+- **Allele notation.** A symbol is a base (letters and digits) with an optional superscript after
+  `^`: `A`, `a`, `I^A`, `c^{ch}` (braces for several characters), `w^+`, or `+` alone; `+` (alone
+  or as the superscript) marks the wild type. Shown three ways: text with Unicode superscripts
+  (`Iᴬ`, `w⁺`, `cᶜʰ`; where Unicode has no superscript letter — capital C F Q S X Y Z, q — the
+  `^` form stays: `A^Y`), Pango markup for drawings (alleles italic, `<i>I<sup>A</sup></i>`; the
+  chromosome letters X and Y roman) and the YAML form, which reads back (tested for every
+  preset). Symbols must differ between the loci of one system (write `vg^+` and `b^+`, not `+`
+  twice), so a genotype reads unambiguously. `X` and `Y` may be alleles (Mendel's `Y` / `y`)
+  only in a system without sex chromosomes.
+- **A locus** (`gene`, `trait`, `alleles` most dominant first, `chromosome: autosome | X | Y |
+  mt`, `dominance`, `heterozygotes`, `lethal`, `penetrance`, `normal`, `expressivity`):
+  `dominance` is `complete` (the listed order), `incomplete` or `codominant` (two alleles) or a
+  hierarchy `"I^A = I^B > i"` (`>` complete, `=` codominant, `~` incomplete). A heterozygote of a
+  codominant level shows both phenotypes (`"A and B"`, or its `heterozygotes:` name: ABO's `AB`);
+  of an incomplete level its own named phenotype (required: `heterozygotes: {C^R/C^W: pink}`);
+  naming the heterozygote of a completely dominant pair is refused with the fix. Lethal alleles:
+  `recessive` (homozygotes and hemizygotes die: the yellow mouse's Aʸ) or `dominant`.
+  Penetrance is an exact share per phenotype (a number applies to the one phenotype that is not
+  `normal`); non-penetrant carriers show `normal` (default: the wild-type allele's phenotype).
+  Expressivity (`constant` / `variable`) is a recorded property for the pedigree and the lint;
+  it does not change ratios.
+- **Linkage** (`linkage: [{loci: [A, B, C], rf: [0.1, 0.2], coincidence: 0.5, rf_male: 0}]`):
+  loci in map order on one chromosome with the recombination frequency of each adjacent
+  interval, 0 ≤ RF ≤ 0.5 (above 0.5 is refused: loci far apart assort independently; map
+  distances over 50 cM are sums of intervals, Step 216). Three loci may give `coincidence` or
+  `interference` (= 1 − coincidence). `rf_male` for sex-specific recombination (none in
+  Drosophila males). Two or more X-linked loci need their group (they share the X); Y-linked and
+  mitochondrial loci never take one.
+- **Epistasis** between two loci (`epistasis: [{kind, epistatic, hypostatic}]`, or `loci: [A, B]`
+  for the symmetric kinds), each kind with its dihybrid F2: `recessive` 9:3:4, `dominant`
+  12:3:1, `suppression` 13:3, `duplicate` 15:1, `complementary` 9:7, `cumulative` 9:6:1. The
+  first three show the loci's own phenotypes; `duplicate` / `complementary` take them from two
+  loci with the same two phenotype names, else `phenotypes: [purple, white]`; `cumulative` always
+  names its three (`[disc, sphere, long]`). The loci need two alleles with complete dominance
+  where the kind reads "dominant" / "recessive".
+- **The system** (`GeneticSystem`, built by `build_system(spec, where)` from the scene's YAML:
+  `loci`, `linkage`, `epistasis`, `sex: XY` to follow the sexes without sex-linked loci, or one
+  `preset:`): the loci, the autosomal groups (an unlinked locus is a group of one: independent
+  assortment), the X group, the Y loci, the mt loci, the epistasis entries and the **traits**
+  (phenotype columns: an independent locus, or an epistatic pair). Presets (`PRESETS`, each with
+  a note and an example cross): `pea_seed_shape`, `pea_dihybrid`, `snapdragon`, `abo`,
+  `rabbit_coat`, `labrador`, `squash_colour`, `chicken_feathers`, `shepherds_purse`,
+  `sweet_pea`, `squash_shape`, `yellow_mouse`, `drosophila_white`, `hemophilia_a`,
+  `drosophila_b_vg` (Morgan's b–vg test cross, 17 % recombinants, `rf_male: 0`).
+- **Genotypes** (`parse_genotype(system, text, where, sex)`): written `AaBb`, `A/a B/b`,
+  `I^A i`, linked loci with their phase `AB/ab` (coupling) or `Ab/aB` (repulsion) — required as
+  soon as the genotype is heterozygous at two linked loci —, sex chromosomes `X^H X^h`,
+  `X^H/Y`, several X-linked loci `X^{H,b}`, Y-linked `Y^T`, a mitochondrial allele once.
+  Canonical form: dominant haplotype first, X before Y. `genotype_text(system, g, style)` writes
+  text / markup / YAML: one-letter alleles run together (`AaBb`, `XᴴXʰ`), longer ones spaced
+  with `/` (`b⁺ vg⁺/b vg`).
+- **Errors** name the place (`parents[0]: genotype 'RrYx': …`) and the fix: an allele not
+  defined (the alleles listed, did-you-mean), an allele of another locus, an X-linked allele
+  without its X (`write X^H X^h (female) or X^H Y (male)`), a female with a Y, XXY / X0 (a
+  karyotype, Step 216), a locus missing or with three alleles, linked loci without their phase,
+  RF > 0.5, an unknown key / chromosome / epistasis kind / preset (did-you-mean), `X^w` written as
+  an allele, `+` used by two loci, incomplete dominance without the heterozygote's phenotype.
+- **Modes of inheritance** (`MODES`: `AD`, `AR`, `XD`, `XR`, `YL`, `MT`, each with its hallmarks
+  as data; `parse_mode("x-linked recessive")`; `mode_of(system, locus, phenotype)` from the
+  chromosome and the dominance): one table for the pedigree analysis and the lint.
+
+### 96.4 The cross engine (Step 213)
+
+- **Gametes** (`gametes(system, genotype, sex)`): the product over autosomal groups of each
+  group's haplotypes (segregation; independent assortment between groups), with crossing over
+  inside a group: every crossover pattern of its intervals with its probability (independent
+  intervals; for three loci the double crossovers are `C·r₁·r₂`, singles `r − C·r₁·r₂`), the
+  gamete switching homologue at each crossover. Two loci: parentals `(1 − r)/2`, recombinants
+  `r/2` each. Females recombine X-linked loci; males pass X or Y (1/2 each); `rf_male` applies to
+  male meiosis; eggs carry the mtDNA, sperm and pollen none.
+- **A cross** (`cross(system, mother, father)` → `CrossResult`): every egg × sperm, the zygotes
+  (sum 1), the share carrying a lethal genotype (`lethal`), and the survivors' genotype and
+  phenotype distributions renormalized (yellow mice: lethal 1/4, then 2/3 yellow : 1/3 agouti).
+  Phenotype classes (`Phenotype`: one phenotype per trait, plus the sex when the system has sex
+  chromosomes) are ordered as textbooks write ratios: females first, then each trait in dominance
+  order (incomplete heterozygotes between their parents: red, pink, white) or the kind's
+  epistasis order (9 black : 3 brown : 4 yellow; 12 white : 3 yellow : 1 green; 13 white : 3
+  coloured). `ratio()` gives the smallest whole numbers, `ratio_text()` `9 : 3 : 3 : 1`.
+  Without sex chromosomes or mtDNA the two parents' roles are symmetric (seed and pollen).
+- **Test cross** (`make_tester`, `test_cross`): the partner homozygous (hemizygous) for every
+  locus' single recessive allele, of the other sex; refused where the lowest level holds two
+  alleles. **Reciprocal** (`reciprocal(system, mother, father)`): the father's line as the
+  mother and the mother's line as the father (a true-breeding mother needed at X-linked loci;
+  the new father keeps the old father's Y; mtDNA goes with its line).
+- Tested exactly: 3:1, 1:2:1, 9:3:3:1, 27:9:…:1, 1:1:1:1 test cross, ABO 1:1:1:1 and 1:1:2, a
+  dominance series, 9:3:4, 12:3:1, 13:3, 15:1, 9:7, 9:6:1 (and their test crosses 1:1:2, 1:3,
+  3:1), 2:1 lethal, penetrance 4/5, X-linked recessive both ways and F2 (white only in males),
+  a carrier mother's sons 1/2 affected, Y-linked, mitochondrial, coupling and repulsion test
+  crosses, RF = 0.5 as 1:1:1:1, Morgan's 17 % and no recombinants from Drosophila males, three
+  loci with coincidence 0.5, X-linked loci recombining in females only.
+
+### 96.5 How the later steps plug in (plan; YAML as planned)
+
+- **`cross` (214).** Params: the genetic system (`preset` or `loci` / `linkage` / `epistasis` /
+  `sex`), the parents (`parents: [RrYy, RrYy]`, or `mother:` / `father:` when the system
+  `needs_sexes`; `generations: [P, F1, F2]` with `P: [RRYY, rryy]` to derive F1 and its
+  intercross or selfing), `show: punnett | branch | gametes | ratios` (`auto`: Punnett up to 4 × 4
+  gametes, branch beyond), `observed: {round yellow: 315, …}` for the chi-square. Actions:
+  `form_gametes` (a parent's homologues separating, crossing over for linked loci), `fill`
+  (`row`, `column`, `cell`, `all`), `count` (`genotypes` / `phenotypes`, the ratio built up),
+  `highlight` (a class), `chi_square`. Everything shown comes from `CrossResult` (cells are
+  `fertilize(egg, sperm)`, tallies are its distributions), so a drawn ratio cannot disagree with
+  the cross.
+
+  ```yaml
+  - id: dihybrid
+    type: cross
+    params:
+      preset: pea_dihybrid
+      parents: [RrYy, RrYy]
+      show: punnett
+    beats:
+      - text: "Each parent makes four kinds of gametes in equal numbers."
+        actions: [{form_gametes: both}]
+      - text: "Sixteen equally likely combinations give a nine to three to three to one ratio."
+        actions: [{fill: all}, {count: phenotypes}]
+  ```
+- **`pedigree` (215).** Params: `individuals` (`id`, `sex: female | male | unknown`, `affected`,
+  `carrier`, `deceased`, `proband`, `adopted`, `parents: [I-1, I-2]`, `twins: {with, kind: MZ | DZ}`,
+  `consanguineous` couples), `mode:` (a `parse_mode` name) or `analyse: true`, the locus (a
+  `preset` or `loci` with one locus) for genotypes and risks, `penetrance`. The analysis is exact
+  reasoning on the model: each mode is tried by assigning genotypes consistent with every
+  phenotype (and penetrance), giving the consistent modes, forced genotypes and, by Bayesian
+  conditioning on the chart, carrier probabilities (2/3 for an unaffected sibling of an affected
+  child in AR) and the risk for a proposed child. Actions: `reveal` (a generation), `highlight`,
+  `deduce`, `risk`.
+- **`karyotype` / `linkage_map` (216).** `karyotype`: `karyotype: "47,XX,+21"` (ISCN parsed and
+  checked), `show: ideogram | karyogram`, `highlight: [21]`, structural changes
+  (`del(5)(p15.2)`, `inv`, `t(9;22)(q34;q11)`, `rob(14;21)`); band data schematic (ISCN 400-band
+  level names only where verified). `linkage_map`: loci with positions in cM, map functions
+  (Haldane, Kosambi) between cM and RF, a three-point test cross from counts (`counts:` of the
+  eight classes → gene order from the double crossovers, distances, coefficient of coincidence,
+  interference) computed in `genetics/mapping.py`; actions `cross_over`, `measure`.
+- **Molecular (217).** `mutation`: `sequence` (a coding sequence, `cellworld.sequences`
+  checks), `variant: c.1521_1523del` (HGVS parsed in `genetics/hgvs.py`; the protein
+  consequence computed with the genetic code and written `p.(Phe508del)`); `crispr`: `target`
+  sequence, `spacer` (20 nt), the PAM checked (NGG 3′ of the protospacer on the non-target
+  strand), the cut 3 bp 5′ of the PAM, `repair: nhej | hdr`; `dna_lab`: `method`, `primers` (5′→3′,
+  checked against the template), `cycles` (from one template molecule, 2ⁿ − 2n double-stranded copies of exactly the target length
+  after n cycles, the first two appearing in cycle 3),
+  `ladder` and fragment sizes (log-linear migration), Sanger peaks or NGS reads from a seeded
+  model with a variant call.
+- **`population` / `gwas` (218).** `population`: `model: hardy_weinberg` (p² + 2pq + q² with
+  worked numbers; carrier frequency 2pq from an incidence q²) or `drift | selection | migration |
+  bottleneck | founder` (`N`, `s`, `h`, `m`, `generations`, `replicates`, `seed`;
+  Wright–Fisher in `genetics/population.py`, deterministic per seed); `gwas`: `plot: manhattan |
+  qq`, seeded synthetic data or a CSV, the 5 × 10⁻⁸ line.
+- **The lint (219)** (`vidgen.lint.genetics_rule`, knowledge in `genetics/accuracy.py`, like
+  §95.14): rebuilds each genetics scene's model from its params (no render) and checks the
+  narration and on-screen text against it — a ratio or probability that does not follow from
+  the cross (`genetics_ratio`), a pedigree inconsistent with its stated mode (AD skipping a
+  generation without reduced penetrance, XR passed father → son: `genetics_pedigree`), RF over
+  50 % or cM / RF confusion (`genetics_linkage`), Hardy–Weinberg arithmetic (`genetics_hw`),
+  a CRISPR target without an NGG PAM (`genetics_crispr`), karyotype and HGVS format errors;
+  `science_naming` reused for gene symbols; `said_before_shown` / `unsaid_reveal` learn the new
+  targets. Hard impossibilities stay validation errors (as now: RF > 0.5, a female with a Y).
+
+### 96.6 Public (Step 213)
+
+- `vidgen.api` adds `genetics` (the package), `GeneticSystem`, `CrossResult`,
+  `build_genetic_system` (`genetics.build_system`), `genetic_cross` (`genetics.cross`),
+  `parse_genotype`, `GENETICS_PRESETS`, `INHERITANCE_MODES`. No scene type, action or config key
+  yet: nothing existing changes.
+- **Gaps** (for later steps): ZW sex determination (birds, butterflies) and X0 systems are not
+  modelled; heteroplasmy is not (one mitochondrial allele per individual); penetrance is per
+  phenotype, not age-dependent; epistasis is between two loci, one pair per locus; a dominance
+  hierarchy cannot mix codominance and incomplete dominance in one level; the map functions
+  (cM ↔ RF) are Step 216's.
+
+### 96.7 The `cross` scene (Step 214)
+
+**What is computed** (no manim; `genetics/punnett.py`, `stats.py`, `glyphs.py`, in
+`vidgen.genetics` and so in `vidgen.api` through `genetics`):
+
+- `punnett.build_plan(params)` → `CrossPlan` (cached by the params' JSON: `plan_cross`): the
+  system, the parents, `kind`, their roles, the P line, every gamete of each parent
+  (`GameteView`: frequency, each allele with the homologue it came from — 0, 1 or `None` when
+  both carry it —, recombinant or not; ordered by frequency, then dominance, so parental gametes
+  of linked loci come first), the Punnett cells (`Cell`: `fertilize(egg, sperm)`, probability,
+  lethal, phenotype distribution), the phenotype classes (`PhenotypeClass`: label `round,
+  yellow` / `white, male`, exact share of the survivors, its number of the whole-number ratio, its
+  cells, a cell count when every cell is equally likely, its pictures), the genotype classes of the
+  zygotes (`GenotypeClass`: key `RrYy` — one-letter alleles run together, else the YAML form —,
+  shares of zygotes and survivors, lethal), `show` resolved, the branch tree and the notes.
+- **Parents**: `parents` (two genotypes; with sex chromosomes in any order, the X and Y say who is
+  the mother), or `mother` / `father` (needed with mitochondrial loci); `P` (true-breeding: its
+  cross must give one F1 genotype per sex, else refused with the genotypes found) gives the F1
+  intercross, labelled F₁ / F₂; `kind: test` takes one parent and adds `make_tester`;
+  `kind: reciprocal` uses `reciprocal`.
+- **The branch diagram** is a probability tree of the survivors: levels sex (when the classes
+  have one) then each trait, or (`branch: genotypes`) each locus (the X / Y pair last); every node
+  carries the probability **conditional** on its path and the product. For independent traits the
+  conditionals are the forked-line method's (3/4, 1/4 everywhere); for linked loci they differ, so
+  the tree stays exact. Limits: a Punnett square up to 8 × 8 (`auto`: up to 4 × 4), at most 16
+  leaves.
+- **Chi-square** (`stats.chi_square`): expected counts exact (N × share as fractions), χ² exact, df
+  = classes − 1, p = Q(df/2, χ²/2) with the upper regularized gamma function (series below a + 1,
+  Lentz's continued fraction above; equal to SciPy's `gammaincc` to 1e-9 in the tests), the
+  critical value by bisection, rejection when p < α, classes with E < 5 flagged. `observed` is a
+  mapping matched to the classes by their words in any order (`yellow round` = `round, yellow`),
+  or a list in class order; every class once.
+- **Pictures** (`glyphs.class_glyphs`): from the trait's name and the phenotype's words — pea
+  (shape, colour; both traits in one pea), flower, eye (a fly's compound eye for red / white /
+  sepia…, else a human eye), fly (body colour, wings, eye colour), coat (an animal head), feather,
+  fruit (colour, disc / sphere / long), blood drop with the ABO group, capsule, affected /
+  unaffected square, swatch. Drawn by `scenes/cross_draw.py` (original flat shapes).
+- **Notes** from the model: a linked parent's parental and recombinant gamete shares and RF (or "no
+  crossing over in this sex"), the lethal genotype with the share of zygotes and the survivors'
+  ratio, the tester, the reciprocal cross (and when it cannot differ), each epistasis in the loci's
+  symbols (`ee masks the B locus (ee is yellow whatever B)`).
+
+**The scene** (`scenes/cross.py`): 16:9 — the drawing on the left 58 %, the panel (class tables,
+chi-square) on the right; parent 1 beside the rows and parent 2 over the columns of the square
+(the textbook figure), "×" in the corner (♀ / ♂ there with sex chromosomes). A branch diagram
+without a panel uses the whole width: the parents with their gametes in a column on the left.
+9:16 — the parents in a row on top (gametes under each for a branch diagram), the drawing, the
+panel under it. Cells are as tall as the height allows and as wide as their genotypes; gamete chips
+become pills for long alleles; a low row puts its share beside its gamete. Tables use 1.15 × the
+label size, fitted to the panel; the phenotype table drops its percentages when it would shrink
+below 85 %; genotype tables go to two columns beyond six classes and stop at 12 (a trihybrid's 27
+are not tabled). Cards stack in the panel and replace each other when the next does not fit. A
+branch diagram's leaves are the table of its kind (products, percentages in 16:9 when the tree
+keeps 90 % of its size, pictures, ratio numbers, the ratio line under the tree); the panel then
+holds only the other kind (when it fits) and the chi-square test, and is left out when empty.
+
+**Actions** (`scenes/cross_actions.py`; `needs_visible = False`, each finds what it needs done
+first): `form_gametes` (targets `both` / `parents` / `gametes`, `parent1` / `mother` /
+`gametes1`, `parent2` / `father` / `gametes2`), `fill` (`square` / `all`, `row<N>`, `col<N>`,
+`cell<R>.<C>`, `cells:<class or genotype>`, patterns; `by: auto | cell | row | column`; `tree` on a
+branch diagram), `count` / `ratio` (`phenotypes`, `genotypes`), `chi_square` (`test` /
+`chi_square`). Any of them puts the scene in manual mode (the first step shows the parents and
+the empty square only); without them the scene's own steps are the parents, the gametes, the
+filling, each table counted with its ratio, the test. `action_sequence_problems` refuses gametes
+formed twice, a cell filled twice, a table counted twice, the test twice. The built-in
+`highlight` / `dim` / `callout` work on every target (`cells:` with `style: box` or `fill`).
+
+Changes from the plan (§96.5): `show` is `auto | punnett | branch` (gametes and ratios are always
+part of the scene, so no `show: gametes | ratios`); `generations: [P, F1, F2]` became `P: [...]`
+alone (the F1 is derived, the F2 shown); `kind` (`cross`, `test`, `reciprocal`) names the
+cross; the chi-square target has the alias `test` (`chi_square: test`); the counts are a
+`count` action plus a `ratio` action (a table can be counted on one word and its ratio said on
+another). Crossing over is shown by the gametes (recombinants ringed, their frequencies), not by
+chiasmata on the parents' chromosomes (`linkage_map`, Step 216, draws crossing over).
+
+**Public**: no new `vidgen.api` names (the new modules are reached as `genetics.punnett`,
+`genetics.stats`, `genetics.glyphs`); a scene type `cross` and five actions; no config key. Gaps:
+phenotype names in `loci` are not translatable strings; per-cell penetrance (a genotype split
+between phenotypes) shows the main phenotype in its cell (the tables are exact); the 9:16 genotype
+tree is small with 9 leaves; the lint of ratios said in narration is Step 219's.
+
+### 96.8 The `pedigree` scene (Step 215)
+
+**The chart** (`genetics/pedigree.py`, no manim): `parse_pedigree(individuals, couples)` →
+`Pedigree` (people in YAML order, couples with their children in birth order, each person's
+generation, who married in, NSGC labels). A person is a mapping (`id`, `sex`, `affected`,
+`carrier`, `deceased`, `proband`, `consultand`, `adopted: in | out`, `loss: miscarriage |
+stillbirth`, `proposed`, `parents`, `spouse`, `twin: {with, kind: MZ | DZ | unknown}`, `age`,
+`label`) or a line (`"II-3: female affected deceased of I-1 + I-2 twin II-4 MZ age 45 y"`).
+Couples come from shared children, `spouse:` and `couples:` (childless, `consanguineous`,
+`separated`); consanguinity is also found from shared ancestors. Generations are solved as
+offsets (partners equal, children +1) per connected family; a conflict (an uncle marrying his
+niece) is refused. **Married in**: a founder whose partner has parents on the chart (and an
+adopted-in child: unrelated). **NSGC ids** (`II-3` for everyone, or for no one): the numeral is
+the generation (checked), the numbers must read left to right as drawn (the layout's order is
+named in the error); other ids are numbered by the layout. Refused with the reason: two fathers or
+two mothers, one parent only, a parent without a sex, a cycle, twins who are not siblings, MZ
+twins of different sexes, affected and carrier together, a proposed child with a phenotype or
+without parents, several probands / consultands / proposed children, more than two partners.
+
+**The layout** (`genetics/pedigree_layout.py`): anchors (everyone with parents, one founder per
+cluster of founder partners: the one with most partners, then the male) own a rectangular block;
+a married-in partner stands beside its anchor (male left of female, unless an edge pull decides;
+with NSGC ids by their numbers); a sibship is its children's blocks side by side (twins adjacent,
+0.3 pitch between families) centred under the mating line; two partners on both sides of a person
+with two partners. **Joins** (two relatives as partners): their children belong to the partner
+reached later in preorder; both lines are pulled towards each other up to the common ancestors'
+sibship (the person moved to the sibship's edge, its spouse on the other side), where the two
+branches stand side by side — so the (double) mating line crosses nothing. Positions are in pitch
+units (one symbol and its gap), deterministic.
+
+**The analysis** (`genetics/pedigree_analysis.py`): one locus, two alleles; a genotype is (sex,
+copies of the disease allele): autosomal 0–2, a female's X 0–2, a male's X / Y and mtDNA 0–1;
+transmission per mode (X: the mother's X to every child, the father's to daughters; Y father to
+son; mtDNA from the mother); P(affected | genotype) = `penetrance` for the disease genotype, else
+0 (no phenocopies; XR heterozygotes unaffected). Founders follow Hardy–Weinberg with allele
+frequency q → 0 (weights as (power of q, coefficient) — an exact semiring for the leading term,
+so the posterior is the limit: the explanations needing the fewest copies entering the family,
+weighted by their probabilities); with `carrier_frequency` c (recessive modes) q = c / (2 − c),
+exact (P(heterozygote | unaffected) = 2q / (1 + q) = c). `rare: true` (default): a married-in
+founder carries no more copies than its phenotype needs. MZ twins share their genotype; a carrier
+must be heterozygous (impossible for a male's X, the Y and mtDNA). Inference is variable
+elimination (greedy smallest factor first), so consanguineous loops are exact. A mode **fits**
+when the total weight is not zero; an excluded mode's reason is the first textbook rule that
+applies (skipped generation at full penetrance, affected parents with an unaffected child under
+AR, an affected mother's unaffected son or an affected daughter's unaffected father under XR,
+father → son with a married-in mother, an affected father's unaffected daughter under XD, an
+affected female under YL, mtDNA not from the mother, discordant MZ twins, impossible carriers,
+a married-in parent who would have to carry a rare allele), else the smallest nuclear family no
+genotypes fit; when it would fit at penetrance 1/2 the reason ends with the exact condition
+(Step 221): "— excluded unless I-1 is non-penetrant (Xᵃ Y; very unusual)", naming the people
+forced to carry the disease genotype unaffected (else the unaffected people the reason names
+who might: "I-1 or I-2"), their genotype per mode and sex, and "unusual" (AR) / "very unusual"
+(XR) for the recessive modes, where reduced penetrance is rare (it is a known feature of many dominant ones). A fitting mode's note: who must be non-penetrant (same
+wording), or the people from outside who must carry the allele.
+`infer` gives each person's posterior, the forced genotypes, obligate carriers (forced
+heterozygotes, unaffected) and the proposed child's risk (P(affected); per sex for X / Y modes;
+the textbook factors — carrier probabilities, transmission, sex, penetrance — when the parents'
+joint posterior is the product of their marginals and the product equals the risk).
+
+**The plan** (`genetics/pedigree_plan.py`, cached by the params' JSON): chart, layout, labels,
+options, the modes tried (`analyse: [..]`), the stated mode (`mode`, or a `preset` / one `loci`
+locus: its alleles, its mode by `mode_of`, the condition = the phenotype that is not "normal…" or
+`condition`), the mode used (the stated one if the chart fits it, else the only fitting one,
+else none) and `warnings`. `declared_mode_problem(plan)` gives the reason a chart does not fit its
+stated mode, for the lint (Step 219); validation errors: a male carrier under a stated X-linked
+mode, any carrier under YL / MT, `mode` against the locus' mode, `genotypes` / `deduce` / `risk`
+without a mode.
+
+**The scene** (`scenes/pedigree.py`, symbols `scenes/pedigree_draw.py`, actions
+`scenes/pedigree_actions.py`): the pitch fits the chart's width and height (16:9 chart 60 %, the
+panel right; 9:16 chart on top up to 56 % of the body, the panel under it); symbol 0.5 pitch;
+numbers at each symbol's top corner (away from a twin line); under it the genotype slot (two lines
+— probability over genotype — when "2/3 Aa" is wider than the pitch and the height allows) and the
+age / label lines; the Roman numerals at the left; a legend of the marks used. Lines appear with
+the people they join (a mating line when both partners are on, a child's line with the child).
+The analysis card lists each mode with a tick or cross and its reason; when it does not fit the
+panel, a strip of the modes with one reason at a time (each replacing the last). The risk card:
+the factors, the product, the exact risk and per-sex risks; the risk is also written under the
+proposed child. Self-play: a generation per beat, then analysis, genotypes, risk as asked; any of
+`deduce` / `analyse` / `risk` (or a `reveal` of chart targets) makes it manual: the chart at
+once except what a `reveal` brings later (and the proposed child, which `risk` brings).
+
+**Public**: no new `vidgen.api` names (`genetics.pedigree`, `genetics.pedigree_layout`,
+`genetics.pedigree_analysis`, `genetics.pedigree_plan`); a scene type `pedigree`; actions
+`deduce`, `analyse`, `risk`; no config key. Changes from the plan (§96.5): `analyse` is a param
+(`true` or a list) and an action (`analyse: modes`); the action that shows genotypes is `deduce`;
+`reveal` / `highlight` are the built-ins on `generation:<R>` / `person:<id>`; `carrier_frequency`
+and `rare` added; `twin: {with, kind}`. Gaps: one locus; quadrants for several conditions,
+pregnancy (P) symbols other than the proposed child, infertility marks, partners from different
+generations and people who married into the family twice are not supported; heteroplasmy,
+new mutations and age-dependent penetrance not modelled.
+
+### 96.9 The `linkage_map` scene (Step 216)
+
+**What is computed** (`genetics/mapping.py`, no manim):
+
+- **Map functions** (`MAP_FUNCTIONS`, `rf_to_cm`, `cm_to_rf`): `none` d = 100 r (what three-point
+  analyses report; `SHORT_CM` = 15 cM is where the scene warns it underestimates), `haldane`
+  d = −½ ln(1 − 2r) M (no interference), `kosambi` d = ¼ ln((1 + 2r)/(1 − 2r)) M; RF over ½ is
+  refused (a distance over 50 cM is a sum of intervals); at r = ½ the map functions give ∞ and
+  `cm_to_rf` tends to ½ (independent assortment).
+- **Test-cross classes** (`class_key`, `parse_counts`): a class names each locus once — the
+  mutant allele by its symbol, the wild type `v+` / `v^+` (any order) or `+` (by position in
+  `loci`); all 2ⁿ classes once (0 allowed).
+- **`analyse(loci, counts, function)`** → `MapAnalysis`: reciprocal pairs summed; the largest pair
+  is parental (a tie refused: the parentals cannot be told), its first class gives the phase
+  (`coupling` / `repulsion` for two loci, `mixed` for three when the mutant alleles are split);
+  for three loci the smallest pair is the double crossovers (a tie refused), the middle locus the
+  one at which a double-crossover class differs from a parental class by one locus; each interval's
+  recombinants are the classes whose two loci are combined unlike the parental class (double
+  crossovers count in both intervals); RF exact (`Fraction`), cM by the function; the outer RF
+  counted directly (it misses the double crossovers); expected double crossovers RF₁ × RF₂ × N,
+  coincidence = observed / expected, interference = 1 − coincidence (undefined when an interval has
+  no recombinants). Notes: RF ≥ 40 % (maybe unlinked: a chi-square test decides), an interval over
+  15 cM without a map function. Tested on Griffiths' *v cv ct* data computed by hand: order *v – ct
+  – cv*, 191/1448 and 93/1448, c = 8/(191·93/1448) ≈ 0.65, I ≈ 0.35.
+- **The plan** (`build_linkage_plan` / `plan_linkage`, cached by the params' JSON): `counts` (with
+  `loci`) or `map` (`{y: 0, w: 1.5}` sorted by position; two loci at one position refused);
+  the map order, positions, the heterozygote's homologues (from the parental classes, or `phase`
+  for a map), the crossovers drawn (`auto`: the first interval; `double`; `v-ct` between
+  neighbours only), `measure_interval` (any two loci: distance and the RF the function gives).
+
+**The scene** (`scenes/linkage_map.py`, actions `scenes/linkage_actions.py`): the chromosome area
+draws the heterozygote's homologue pair as four chromatids (sisters pinched at the centromere,
+the homologue colours of `cross` / `cell_cycle`), loci as bands across them, the alleles above and
+below (a second row where neighbours would touch, for both their even and their map positions).
+The chromosome is drawn in the true map order from the start (it is the parent's chromosome; the
+experimenter's ignorance of the order is the table's: its columns start in the given order and
+move into map order at the `order` step). Crossing over: the inner chromatids are pulled together
+at the chiasma (a bump in their lanes), the segments beyond it change owner half-way, they part;
+each chromatid's alleles are written beside it, coloured by origin, *parental* / *recombinant*.
+Counts: the table (classes in the author's order, numbers right-aligned, the total), the
+steps' cards replacing each other (classes; gene order; distances with the sums; interference),
+tags on the rows (parental, DCO, then SCO with its interval), the map bar (loci staggered when
+close, positions, interval braces, the unit and the function). 16:9: chromosomes and map left
+(42 %), table and card right; 9:16: chromosomes, table, card, map stacked; `map` mode: chromosomes
+on top, map and card side by side (16:9) or stacked. Self-play: chromosomes, the crossing over, the
+steps, the map (merged into at most two steps a beat so a short scene does not overrun); a
+`reveal` of a step (or `measure`) makes it manual; each step runs the steps it needs first.
+`cross_over` takes the place of the scene's own crossing over (and starts from the pair as it was).
+
+Public: no new `vidgen.api` names (`genetics.mapping`); scene type `linkage_map`; actions
+`cross_over`, `measure`. Changes from the plan (§96.5): the steps are built-in `reveal` targets
+rather than actions; `phase` and `crossover` params added.
+
+### 96.10 The `karyotype` scene (Step 216)
+
+**The model** (`genetics/karyotype.py`, no manim): the 24 chromosomes with GRCh38 lengths and
+centromere midpoints (Mb), textbook classes (metacentric 1, 3, 16, 19, 20; acrocentric 13–15,
+21, 22, Y; satellites on 13–15, 21, 22), Denver groups A–G, and each arm's last ISCN band
+(`TERMINAL`: 1p36, 1q44, …, Xq28, Yq12), the one band fact checked. **Bands are schematic**:
+each arm is split into its regions (from the terminal band's region number) and bands (the last
+region's count from the terminal band, `REGION_BANDS` = 3 for the others), widths varied by a
+fixed hash, the terminal band pale and dark bands alternating inwards (four shades),
+heterochromatin 1q12, 9q12, 16q11, Yq12 grey, p11 / p12 stalk / p13 satellite on the satellited
+acrocentrics. A named band (`band_ref`, `parse_band_label`: `7q31.2`) lies where this scheme puts it
+(a sub-band a share of its band; a band past a region's drawn count in proportion), so labels and
+breakpoints agree with the drawing; positions are near, not at, the measured ISCN ones (said in
+the card's note and the docs).
+
+**ISCN** (`parse_karyotype`): count, sex chromosomes (X, Y only, at least one X, at most five),
+then `+N` / `-N`, `del(c)(band)` (terminal) or `(bandband)` (interstitial, one arm), `dup`, `inv`
+(paracentric within an arm, pericentric across the centromere), `t(a;b)(band;band)` (sex
+chromosome or lower number first), `rob(a;b)(q10;q10)` / `der(a;b)(q10;q10)` / `rob(a;b)` between
+acrocentric autosomes; `mat` / `pat` / `dn` kept. Refused with the fix: a count that is not what is
+listed (computed: 44 + sex + gains − losses − Robertsonian fusions), lower-case or Y-only sex
+chromosomes, ±X / ±Y, `5p-`, mosaics, unknown changes (did-you-mean), bands past an arm's end,
+interstitial changes across the centromere, a change on a chromosome the cell lacks. The cell's
+chromosomes are `Copy`s by slot: a normal copy is one segment; a derivative is segments of normal
+chromosomes (`Segment(chrom, a, b)`, a > b inverted) with its centromere and marked stretches —
+terminal deletion (the rest), interstitial deletion (two pieces), tandem duplication, inversion
+(the middle reversed, the centromere moved when pericentric), reciprocal translocation (each
+derivative keeps its centromere's segment and takes the partner's distal one, oriented outwards
+whichever arms broke), Robertsonian (the first chromosome's q arm reversed above the centromere,
+the second's below; in the first's slot). Readings in words and classic conditions only where
+certain (trisomy 21 / 18 / 13, translocation Down syndrome or a balanced Robertsonian carrier,
+Turner, Klinefelter, triple X, 47,XYY, cri-du-chat for a 5p terminal deletion, the Philadelphia
+chromosome for t(9;22)(q34;q11)).
+
+**The scene** (`scenes/karyotype.py`, ideograms `scenes/karyotype_draw.py`, action
+`scenes/karyotype_actions.py`): a chromosome is a column of band polygons cut from capsules (each
+arm a capsule between telomere, centromere and stalk, so the centromere is a constriction), fixed
+neutral greys in every theme (G-banding is dark on light), the outline in the theme's ink;
+material from another chromosome tinted with the accent. `show: karyogram`: rows by group (16:9
+1–5 / 6–12, X / 13–18 / 19–22, Y; 9:16 five rows), centromeres on a line per row, one scale for
+all, width from length (slimmer when the width is short), group letters, numbers; an empty Y slot
+is left out; changes: a box round the slot, a dashed ghost for a lost chromosome (45,X: "X or Y"),
+brackets beside a derivative's marked stretch. `show: ideogram` (auto when `chromosomes` is given
+or every change is structural): the slots' copies in columns (a Robertsonian's consumed
+chromosome as a ghost column), one row (16:9) or a row per slot (9:16), p / q labels, names under
+(derivatives in the highlight colour), labels with leader lines — asked-for bands beside the first
+normal copy, a derivative's breakpoints beside it. An edit: the normal chromosome stands where its
+derivative will; its segments (`segment_piece`, bands in source order) `ReplacementTransform` into
+the derivative's (an inverted one along a half-turn arc, a translocated one along an arc), what no
+derivative keeps fades out, outlines are redrawn, names and brackets appear. The card: the notation,
+the count and sex, each change read, the conditions, notes (16:9).
+
+Public: no new `vidgen.api` names (`genetics.karyotype`); scene type `karyotype`; action
+`rearrange`. Changes from the plan: `show: auto | karyogram | ideogram` (the plan's
+`highlight: [21]` became the automatic highlight of the changes and the built-in `highlight` on
+`chromosome:21`); `bands` labels; `notation`.
+
+### 96.11 Non-disjunction in `cell_cycle` meiosis (Step 216)
+
+`DivisionSpec.nondisjunction = (I | II, pair index)` (scene param `{division, pair}` from 1),
+checked in `check_spec` (meiosis only; a pair the cell has). Meiosis I: at anaphase I the
+homologue that would go right goes left too (lifted a little so both show), the first daughter
+receives both homologues; meiosis II: in the first daughter the pair's sister chromatids both go
+to the upper pole. The daughters' and products' chromosomes are lists (`members`, `products`), so
+territories, plates and labels follow what each cell has; without `nondisjunction` every keyframe
+is unchanged (checked item by item against the Step 211 planner for 2n = 2–8, three seeds).
+Captions say what goes wrong and, at the end, the gametes and zygotes (`gamete_outcomes`: I — 2
+of 4 n + 1, 2 n − 1, trisomic and monosomic zygotes; II — 2 of 4 n, 1 n + 1, 1 n − 1);
+`nondisjunction_cells` gives each cell's (chromosomes, chromatids) once they differ (centromere
+count: an unsplit pair counts once at anaphase II), shown in the counts line and refusing `expect`
+of per-cell counts there. Gametes are labelled `n + 1 = 3`.
+
+### 96.12 The gallery budget (Step 216)
+
+The committed `docs/gallery` was at 9.95 MB of its 10 MB test budget after Step 215. Phase V adds
+nine scene types and a genetics showcase, each needing two stills and two GIFs; squeezing every
+new GIF to a lower frame rate would make the newest previews the worst. Decision: the budget grows
+by what the entries still to come need and every entry is held to a share — `ENTRY_MAX` = 0.36 MB
+per entry (its page, two palette stills, two GIFs each ≤ `CLIP_MAX_BYTES`; the heaviest entries so
+far, `cross`, `cell`, `rainy_evening`, weigh 0.33 MB), a test per entry, and `BUDGET` = 13 MB
+(10 MB + 8 entries after Step 216 × 0.36 MB). The genetics samples are kept to two or three short
+beats. After Step 216: 10.6 MB (`linkage_map` 0.32 MB, `karyotype` 0.31 MB); after Step 217:
+11.5 MB (`mutation` 0.28 MB, `dna_lab` 0.26 MB, `crispr` 0.30 MB — its sample is one beat, the
+scene's many coloured tiles making heavy GIFs); after Step 218: 12.0 MB (`population` 0.34 MB — its
+sample has three lines and no heterozygosity panel —, `gwas` 0.17 MB).
+
+### 96.13 The `mutation` scene and HGVS (Step 217)
+
+**The model** (`genetics/hgvs.py`, `genetics/reference_genes.py`, `genetics/mutation.py`; no manim):
+
+- **`CodingSequence`**: exonic coding-strand DNA from `c.first` (`c.1` is the A of the ATG), the
+  coding exons as `c.` ranges, the intron sequences when known, the CDS length and the first exon's
+  number. `coding_sequence()` checks the bases (an mRNA's U is read as T), the exons (in order,
+  touching, covering the window) and the length.
+- **DNA variants** (`parse_c` → `RawVariant`, `resolve` → `DnaVariant` + `Edit`): substitution,
+  `del`, `dup`, `ins`, `delins` and intronic substitutions (`c.92+1G>A`, `c.1585-1G>A`; the
+  reference base comes from the intron when it is known, else from the GT…AG consensus at ±1, ±2).
+  The usual slips are refused with the fix (`c.A20T`, `→` for `>`, lower case, `c.0`, a reversed
+  range, several bases in a substitution, `ins` without its two flanking positions, a `p.` given as
+  the DNA change). `normalize(cds, edit)` writes what a change *is*: common bases trimmed, one base
+  for one a substitution, deletions and insertions moved to their 3′-most position **within the
+  exon** (HGVS's 3′ rule), an insertion that copies the bases before it a duplication;
+  `check_written` refuses a non-canonical description with the canonical one and the reason. The
+  bases an author writes after `del` / `dup` are checked and kept in the drawing (`c.1521_1523delCTT`).
+- **The protein** (`protein_change`): the mutant window is translated with `cellworld.sequences.CODONS`
+  and compared with the reference — synonymous, missense, nonsense, frameshift (`fs` counts the first
+  changed residue as 1 up to the new stop; `None` → `fs*?`), in-frame `del` / `dup` / `ins` /
+  `delins` (3′-most in a run), start loss `p.(Met1?)`, stop loss `ext`; a splice-site change is
+  `p.?`. `ProteinChange.text(style, stop)` writes `p.(Glu7Val)`, `p.(E7V)`, `p.(Arg553*)` or
+  `p.(Arg553Ter)`. `parse_p` reads an author's form back (refusing `X` for a stop and `ΔF508`), and
+  `check_stated` compares it with the computed one, naming the legacy numbering when the residue
+  number is one less (HGVS counts the initiator Met).
+- **Consequence** (`consequence`): the canonical DNA change, the protein change, its class, the two
+  translations, the mutant sequence and the notes — the side chains of a missense, the codon of a
+  synonymous change, whether an indel keeps the frame, nonsense-mediated decay (a premature stop
+  more than `NMD_DISTANCE` = 50 nt upstream of the last exon–exon junction; the exons must be
+  complete to judge it), and for a splice site the predicted RNA change (exon skipping for an
+  internal exon, else intron retention; `splice: skip | retain | auto`).
+- **Reference genes** (`reference_genes.py`): windows of real coding sequence with their exons,
+  transcript and CDS length — **HBB** (NM_000518.5, c.1–150), **CFTR** (NM_000492.4, c.1516–1680 in
+  exons 11–13) and **GJB2** (NM_004004.6, c.1–66) — each with the textbook variants that lie in it
+  and their legacy names (HbS c.20A>T p.(Glu7Val) = β6 Glu→Val; HbC, HbE, codon 39 nonsense,
+  IVS-I-1; F508del c.1521_1523del p.(Phe508del) = ΔF508, G542X, G551D, R553X, 1717-1G>A; 35delG
+  c.35del p.(Gly12Valfs*2)). A test translates every window and checks each variant's published
+  protein change.
+- **The plan** (`build_mutation_plan` / `plan_mutation`, cached by the params' JSON): the coding
+  sequence (a reference window, an author's `sequence`, or a gene built by `cellworld.expression`
+  whose exons and introns become `c.` ranges), the symbol checked by `cellworld.names`, and each
+  variant as a `VariantView` (consequence, the `p.` text in the author's style, the legacy name,
+  a note).
+
+**The scene** (`scenes/mutation.py`, helpers `scenes/molecular_draw.py`, action
+`scenes/molecular_actions.py`): a reference row and a variant row — base tiles in Phase U's base
+colours (lightened so the dark letter keeps 4.5:1 contrast), a box per codon, the amino acid on a
+chip under it with its residue number. The variant row is a copy of the reference that changes:
+the replaced bases leave, the rest slide to their new places in the fixed codon frame and the new
+ones drop in, so a frameshift regroups every later codon and reaches its premature stop; changed
+bases are ringed, changed residues highlighted, a stop red, deleted residues struck through, and a
+tick marks the junction of a deletion. A splice-site variant draws the exon border instead (exonic
+bases in tiles, intronic bases lower-case in pale outlined tiles, the codon box at the border
+dashed). The gene strip (when the exons are known) shows the coding exons with GT…AG, the window
+bracketed, an arrow at the variant and, for a splice site, the predicted mRNA (the exon skipped or
+the intron kept). The card gives the symbol, `c.`, the computed `p.`, the class, the legacy name and
+the notes; notes (then the legacy name, then the big type) are dropped rather than shrunk below the
+readable size. Self-play: the reference, then each variant; `mutate` puts one on a word.
+
+Public: no new `vidgen.api` names (`genetics.hgvs`, `genetics.mutation`, `genetics.reference_genes`);
+scene type `mutation`; action `mutate`.
+
+### 96.14 The `crispr` scene (Step 217)
+
+**The model** (`genetics/crispr.py`, no manim): `CAS` holds SpCas9 (PAM `NGG`, 20-nt spacer) and
+SaCas9 (`NNGRRT`, 21–23 nt), both cutting both strands 3 bp upstream (5′) of the PAM (blunt ends).
+`find_guides` lists every protospacer with a PAM on either strand with its cut position and GC
+content; `check_guide` places an author's spacer and refuses, with the guides that would work, a
+spacer that is not in the target (naming the reverse-complement and written-backwards mistakes),
+one without a PAM after it (naming what is there, and another enzyme's PAM when it fits), the wrong
+length, a spacer written with its PAM, one that occurs twice. `repair` gives the outcome: NHEJ
+joins the ends with an indel (default +1, the commonest SpCas9 outcome, copying the base 4 bp
+upstream of the PAM) or HDR copies a donor carrying `edit`; with `coding_first` the outcome runs
+through `hgvs.edit_consequence`, so it is written in HGVS with its protein change, and the notes say
+whether the frame is kept (a knockout), how far the edit lies from the cut, and whether the repaired
+allele still has its protospacer and PAM (Cas9 would cut it again).
+
+**The scene** (`scenes/crispr.py`): the target drawn **from the strand that carries the PAM** — with
+a guide on the bottom strand the same DNA is shown as its reverse complement, so the protospacer
+always reads 5′→3′ along the top row and every label keeps its lane (the card says so; HGVS stays in
+the target's own numbering). The enzyme is two lobes behind the DNA, the sgRNA a row of RNA tiles
+with a scaffold hairpin. Steps: `dna` → `scan` (the enzyme passes the PAMs it finds, settles on the
+right one, the PAM is boxed, the protospacer bracketed, the displaced strand lifts and the spacer
+takes its place) → `cleave` (both strands part at the cut) → `repair` (the complex leaves, a donor
+appears for HDR, the repaired allele is drawn with its changed bases ringed). Cards: the target, the
+guide (enzyme, PAM, spacer, how many guides the target offers), the break, the repair.
+
+Public: no new `vidgen.api` names (`genetics.crispr`); scene type `crispr`; actions `scan`,
+`cleave`, `repair`.
+
+### 96.15 The `dna_lab` scene (Step 217)
+
+**The model** (`genetics/dna_lab.py`, no manim), one plan per `method`:
+
+- **PCR**: the primers are checked against the template (the forward primer repeats the top strand,
+  the reverse primer is the reverse complement of the top strand downstream; each must bind once,
+  and they must point towards each other), the product runs between their 5′ ends, Tm by the Wallace
+  rule below 14 nt else the GC formula, annealing ~5 °C below the lower Tm (refused at or above it),
+  denaturation 94–98 °C, extension 68–74 °C, ~1 kb per minute. `pcr_strands` simulates the strands
+  of the first cycles exactly (each primer extends to the end of its template), so the
+  defined-length product first appears in cycle 3; `PcrPlan.counts(n)` aggregates the same rule to
+  2ⁿ molecules and 2ⁿ − 2n of exactly the product (a primer site at the template's edge gives the
+  product a cycle earlier, and the counts follow the simulation).
+- **Gel**: `resolving_range` interpolates the standard agarose table; `migration` is linear in
+  log₁₀(size) over that range (0.1–0.9 of the run) and compressed smoothly outside it, strictly
+  decreasing in size; `size_from_distance` reads a size off the ladder by log-linear interpolation.
+  Notes flag fragments outside the range and bands that would run as one.
+- **Sanger**: the read, its template strand, seeded peak heights and the called bases, a
+  heterozygous position called with its IUPAC code.
+- **NGS**: seeded reads from the two alleles (`zygosity`), per-base sequencing errors, coverage per
+  position, the alt-read share at the site and the call (heterozygous ≥ 15 %, homozygous ≥ 85 %,
+  below 10× *low coverage*); `pack_rows` stacks the reads so they do not touch.
+
+**The scene** (`scenes/dna_lab.py`): PCR — the template as two bars with the primers as arrows,
+the product measured, a temperature trace of three cycles and a row of molecules per cycle (those
+of the product's length in the highlight colour); gel — the plate with its wells at the cathode,
+the ladder labelled (labels that would collide are left out), the bands migrating to their
+distances and their sizes read off; Sanger — the template and the new strand, the fragments
+flashing in turn, then the chromatogram with its called bases in the base colours; NGS — the
+reference, the reads stacked with the base at the site coloured and errors marked, the coverage
+bars and the variant call. Each method has its steps (`setup` → …), played by `run: <target>` or
+beat by beat.
+
+Public: no new `vidgen.api` names (`genetics.dna_lab`); scene type `dna_lab`; action `run`.
+
+**Gaps after Step 217**: `mutation` shows one window of a transcript (no multi-exon scrolling), the
+splice prediction is schematic (no cryptic sites, no branch-point or polypyrimidine analysis), RNA
+`r.` changes are written only for splice sites; `crispr` has SpCas9 and SaCas9 only (no base or
+prime editing, no off-target search, no PAM-proximal seed weighting), and NHEJ's indel is the
+author's choice rather than a distribution; `dna_lab` has one PCR product (no multiplex, no
+nested PCR, no qPCR curve), the gel is one lane set without a running clock, Sanger peaks are
+stylised (no real mobility or peak shape) and NGS is a seeded read model, not an aligner.
+
+### 96.16 The `population` scene (Step 218)
+
+**The model** (`genetics/population.py`, no manim):
+
+- **Hardy–Weinberg** (`hardy_weinberg(spec)` → `HardyWeinberg`): one source of `counts` (genotype
+  counts: p = (2n<sub>AA</sub> + n<sub>Aa</sub>) / 2N, exact), `frequencies` (adding up to 1),
+  `p`, or `incidence` (of a recessive condition: q = √incidence, an exact `Fraction` when the
+  numerator and denominator are squares — 1/2500 → 1/50 —, else a float; refused with `inbreeding`,
+  as q² = incidence assumes random mating); the alleles (`[A, a]`; genotypes written `AA`, `Aa` /
+  `aA`, `aa`); expected genotype frequencies p² + Fpq, 2pq(1 − F), q² + Fpq; the carrier frequency
+  2pq with the rare-allele approximation 2q in the notes. From counts `hwe_test`: expected counts
+  N p², 2Npq, Nq² exact, χ² exact, **df = 1** (three classes − 1 − one allele frequency estimated),
+  p = Q(½, χ²/2) (`stats.chi_square_p`), the critical value 3.84, classes with E < 5, and
+  F̂ = 1 − H<sub>obs</sub>/H<sub>exp</sub>. Errors: a share outside [0, 1], frequencies not adding
+  up to 1, counts that are not whole numbers ≥ 0 or do not add up to `total`, a genotype not of the
+  alleles (did-you-mean), a missing genotype, two sources.
+- **Wright–Fisher** (`simulate(spec)` → `Simulation`): N diploids, each generation the expected
+  frequency after selection (p' = (p²w<sub>AA</sub> + pq w<sub>Aa</sub>)/w̄), mutation
+  (p(1 − μ) + (1 − p)ν) and migration (two populations: (1 − m)p₁ + m p₂ both ways, or one way into
+  the second) is sampled as Binomial(2N, p')/2N with `numpy.random.default_rng(seed)` (the same seed
+  gives the same lines; replicates draw in turn from one generator). Sizes per generation: N, a
+  `bottleneck` `{at, N, generations}` (then N again), a `founder` sample of `founders` from a source
+  at p₀ at generation 0. The deterministic recursion (no sampling) for selection, mutation and
+  migration; each line's fixation / loss generation (absorbing only when nothing reintroduces the
+  allele); expected heterozygosity H<sub>t</sub> = H<sub>t−1</sub>(1 − 1/2N<sub>t</sub>) (exact
+  in expectation for binomial sampling of 2N copies) and the lines' mean 2pq for drift, bottleneck
+  and founder; the first line's individuals at a generation (its 2N copies paired at random,
+  seeded, so the dots carry exactly that generation's allele count). Fitness `{AA, Aa, aa}` (none
+  negative, not all 0) or `s`, `h` (w = 1, 1 − hs, 1 − s; s in [−1, 1]). Notes per model: P(fixation)
+  = p₀ under drift, the 1/2N loss of H, heterozygote advantage p̂ = t/(s + t), 2Ns < 1, ν/(μ + ν),
+  the one-way migration closed form, the heterozygosity a bottleneck removes.
+- **The plan** (`build_population_plan` / `plan_population`, cached by the spec's JSON): the model,
+  `hw` or `sim`; a param of another model is refused naming its model.
+
+**The scene** (`scenes/population.py`, actions `scenes/population_actions.py`): Hardy–Weinberg —
+the dots left (16:9) or on top (9:16), at most 100 (a dot stands for N/100 people when there are
+more, the legend then giving the real counts), and the working as blocks stacked on the right
+(alleles, expected, carriers, chi-square; when the next block does not fit, the earlier ones leave).
+Simulations — the frequency plot (`chart_axes`, the line chart's styling: palette colours, 3–3.5 px
+lines; the deterministic course as a thick line in the text colour; populations in the primary and
+secondary colours with their names coloured in the card), optionally the heterozygosity plot
+(`heterozygosity`; default for bottleneck and founder) with its expectation and the lines' mean, the
+bottleneck as a shaded band with its N on a plate, the founder's source as a dashed line; the dots
+(the first line's individuals) and the card (the model, its notes; at the last generation the
+outcome: fixed / lost / segregating, the deterministic end, H). A generation counter beside the
+plot's title follows the lines. Lines grow by a driven animation (points to the current fractional
+generation); a fixed or lost line gets a dot where it absorbs. Self-play: the plot and dots, about a
+third of the generations, the rest; any `simulate` / `resample` (or a `reveal` of `generation:<t>`)
+makes it manual. `action_sequence_problems` refuses a `simulate` that does not go forward.
+
+Public: no new `vidgen.api` names (`genetics.population`); scene type `population`; actions
+`simulate`, `resample`. Changes from the plan (§96.5): `model` defaults to `hardy_weinberg`; the
+mutation model is its own `model: mutation` (and `mu` / `nu` add to any simulation); `heterozygosity`
+added; Hardy–Weinberg steps are built-in `reveal` targets.
+
+### 96.17 The `gwas` scene (Step 218)
+
+**The model** (`genetics/gwas.py`, no manim): p-values kept as −log₁₀ p, parsed from numbers or
+strings through `decimal` (so `"3e-450"` works; 0 < p ≤ 1); z ↔ −log₁₀ p (two-sided, `erfc`, an
+asymptotic expansion beyond z = 37, bisection for the inverse). Chromosomes 1–22 and X (`chr7`, 23 =
+X; Y / MT refused with the reason); positions in bp or `"53.8 Mb"` / `"420 kb"` (a bare number below
+1000 is refused as Mb written as bp), within GRCh38 lengths (`genetics.karyotype.LENGTH_MB`). The
+genome axis: chromosomes in order with a 12 Mb gap. **Author data**: `read_rows` (CSV / TSV, the usual
+column names CHR / BP / P / SNP / gene / r2), `author_variants`, then `clump` (smallest p first,
+nothing within `clump_kb` of a lead becomes another; leads below `label_p` = 5 × 10⁻⁸ labelled from
+`labels` or a gene column, else their id). **Synthetic**: a seeded null background (`background`,
+default 2400 variants spread by chromosome length, p uniform, optionally inflated by λ: z·√λ) and the
+author's `peaks`, each a lead with 48 variants (half within ±80 kb, half across ±400 kb), r² =
+e<sup>−d/0.15 Mb</sup> × U(0.55, 1) and z<sub>i</sub> = r<sub>i</sub> z<sub>lead</sub> + √(1 − r²)·ε, so a
+neighbour's expected χ² ≈ r² χ²<sub>lead</sub>; background variants inside a window get a small r².
+λ<sub>GC</sub> = median χ²₁ / 0.4549 (over the null background for a synthetic study: its peaks'
+variants would otherwise be a far larger share than in a real study of millions); QQ points
+(expected −log₁₀((i − 0.5)/n), the low end thinned); at most `MAX_DRAWN` = 4000 points drawn (every
+p < 0.01 kept). `build_gwas_plan` / `plan_gwas` (cached by the spec's JSON).
+
+**The scene** (`scenes/gwas.py`; action `regional` in `scenes/population_actions.py`): the
+Manhattan plot (`chart_axes` with the y title turned along the axis, so no row is spent on it;
+chromosome numbers thinned when they would touch; alternating primary and a 45 % tint; the
+significance line solid in the accent colour and the suggestive line dashed, both labelled in a margin
+right of the plot; points above `y_max` — default the data's top, at most 40 — as triangles at the
+top with their p in the label; peaks ringed and labelled, italic for gene symbols); the info row over
+it (the boxed **simulated data** tag for a synthetic study, the trait, variants, hits); the QQ plot
+(diagonal dashed, λ<sub>GC</sub> over it); the regional plot (the peak's window boxed on the Manhattan
+plot with zoom lines, r² colours fixed in every theme — five bins — and the lead a purple diamond,
+its id, gene and p). 16:9: the Manhattan plot alone, or beside the QQ plot (70 / 30), or over the
+regional plot with the QQ plot in a column at the right; 9:16 stacked. Self-play: the axes, the
+points chromosome by chromosome, the thresholds, the peak labels, the QQ plot, the regional plot (with
+the `regional` param); a `reveal` of a later target makes it manual (the `regional` action does not).
+
+Public: no new `vidgen.api` names (`genetics.gwas`); scene type `gwas`; action `regional`. Changes from
+the plan (§96.5): `plot: both`; `regional` (param and action) added; inline `variants` and `labels`.
+
+**Gaps after Step 218**: two alleles only (no multi-allelic Hardy–Weinberg, no exact HWE test for
+small counts — only the warning); no age structure, overlapping generations, selfing or assortative
+mating; selection acts on viability only (no fecundity or sex-specific fitness); the synthetic GWAS is
+a display model (a few thousand variants and LD as a distance decay), not a genotype simulation; no
+gene track, recombination rate or conditional analysis in the regional plot; one regional plot per
+scene.
+
+### 96.18 The genetics accuracy lint (Step 219)
+
+Built on §95.14's framework, not beside it: the knowledge is `vidgen.genetics.accuracy` (no manim;
+it reuses `cellworld.accuracy`'s `sentences`, `plain`, `normal_text` and `Claim`), the glue
+`vidgen.lint.genetics_rule` (`GENETICS_RULES`, `genetics_issues(project, scene_id, rules)`), and the
+runner appends its findings to `SceneContext.science` after the `science_*` ones, so they are
+reported, ignored (`lint_ignore`) and configured exactly like them. `ScienceIssue` gains an optional
+`severity` (an issue's own: the pedigree error, HGVS info).
+
+- **Reading claims.** As in §95.14, narrowly: a sentence with a negation or contrast, a question or a
+  hypothetical (`HYPOTHETICAL`: would, could, instead, modified, becomes, than, unlike, compared,
+  "expected if"…) is not read. **Shares** (`shares_in`): `1/4`, `1 in 2,500`, `one in four`, `2 out
+  of 3`, `25 %`, `twenty-five percent`, `half`, `a quarter`, `three quarters`, `two thirds` (an
+  ordinal only with a numerator other than "a" or before "of": not "a third child"), `all the
+  daughters`; each knows whether it was said with "about" (`tolerance`, relative) or as a bound ("more
+  than", "up to": not compared) and how finely it was written (17 % is ±0.5 points). Numbers in digits
+  or words up to millions (`number`). **Ratios** (`ratios_said`): `9:3:3:1`, "three to one", "nine to
+  three to three to one", "three round to one wrinkled", "9 purple : 7 white" — between the numbers
+  only the cross's phenotype words; the "to" form needs those words or a ratio word.
+- **`genetics_ratio`** (`cross_claims`, cross scenes): a ratio must be one of `cross_ratios(plan)` —
+  phenotypes, genotypes, zygotes (lethal ones included: the yellow mouse's 1 : 2 : 1), by sex, sexes
+  pooled, each parent's gametes (sentence about gametes), the observed counts, without the epistasis
+  (sentence about classes merging or masking), one trait's (sentence says "each trait alone", a
+  trait's name or only one trait's phenotypes) — compared as reduced, sorted numbers. A share is
+  read when the sentence has a group word (offspring, sons, daughters, children, plants, flies…) or a
+  chance word, and names phenotypes (`CrossVocabulary`: full names, words naming only one phenotype,
+  "affected" / "unaffected" for a two-phenotype trait with a normal one, blood groups after
+  "group" / "type", "carriers" / "heterozygotes" for one two-allele locus); the group after the share
+  decides: "half the sons" is among the sons, "a quarter of the children are affected sons" the joint
+  share, "each son has a 50 % chance" among the sons. Skipped: sentences about the F1 of a `P` cross,
+  about a test cross the scene is not, about gametes.
+- **`genetics_pedigree`**: `declared_mode_problem` (Step 215) as an **error** on the first beat
+  (with the modes that fit, or the reduced-penetrance hint); `pedigree_text_claims` in every scene ("a
+  dominant trait skips a generation" without penetrance / recessive / carrier words or a
+  `penetrance:` below 1; father → son / male-to-male transmission when the sentence says X-linked or
+  the scene's mode is XR / XD, Y and autosomal sentences left alone); `pedigree_claims` in pedigree
+  scenes with an inference: a carrier probability of a person named by NSGC id, or of "an unaffected
+  sibling / brother / sister" (any unaffected person's value accepted), and the proposed child's risk
+  (per sex for a son or daughter); conditional sentences (if, given, assuming) are left alone.
+- **`genetics_linkage`** (`linkage_claims`): in any scene an RF or recombinant share over 50 %; with
+  pairs (`map_pairs` of a `linkage_map` plan: distance on the map, the interval RF, for the outer pair
+  of three loci the direct count and the sum; `cross_pairs` of a cross's linkage groups: 100 × RF
+  summed, r₁ + r₂ − 2Cr₁r₂, unlinked pairs) a distance in cM / map units or an RF for the two loci the
+  sentence names (`mentions`: symbols as written, a one-letter capital only beside and / gene / locus /
+  a dash), or any pair's when it names none; "unlinked" / "assort independently" for a pair with
+  RF < 0.4, "linked" for an unlinked pair.
+- **`genetics_hwe`** (`hw_claims`): the formulas (carriers as q² or p², the incidence as 2pq,
+  p² + q² = 1) and, per beat, q, the incidence and the carrier frequency said: q² against the
+  incidence, carriers against 2q(1 − q) or 2q (both accepted within `tolerance`, 0.1); with a
+  population Hardy–Weinberg scene q and the incidence against the scene's.
+- **`genetics_crispr`** (`crispr_claims`): the enzyme is the sentence's (SpCas9 / Cas9, SaCas9,
+  Cas12a / Cpf1) or the `crispr` scene's (no Cas, no scene: not read); a PAM token next to "PAM" that
+  is not the enzyme's (`PAMS`, or an instance of it: AGG fits NGG), a cut downstream / 3′ / after /
+  inside the PAM or N ≠ 3 bp upstream, sticky / staggered / overhang ends (Cas12a, nickases,
+  restriction enzymes named: left alone), the PAM upstream of the protospacer or on the target strand,
+  a spacer length outside `SPACER_RANGES` (SpCas9 17–24 nt).
+- **`genetics_karyotype`** (`karyotype_claims`, also on titles and callout labels; the scene's
+  `karyotype`): ISCN tokens (`47,XX,+21`, `46,XY,t(9;22)(q34;q11.2)`) parsed with
+  `genetics.karyotype.parse_karyotype` (its error and fix), out of ISCN order (`iscn_order_problem`:
+  after the sex chromosomes by chromosome, sex chromosomes first, numerical before structural on one
+  chromosome — the order Step 216 left unchecked), a token or Turner / Klinefelter said with only the
+  other sex's words (SRY named: left alone), and a condition said (trisomy / monosomy N, Down, Edwards,
+  Patau, Turner, Klinefelter, triple X, cri-du-chat, Philadelphia) that the sentence's karyotype, or the
+  karyotype scene's, does not have (`_conditions`: translocation trisomy 21 counts as Down; comparisons
+  with like / such as / other left alone).
+- **`genetics_hgvs`** (`hgvs_claims`, also on screen): `c.` and `p.` tokens parsed by `genetics.hgvs`
+  (format errors with their fix: `c.A20T`); in a `mutation` scene a `c.` that is not one of its
+  variants (canonical forms compared) and a `p.` that `check_stated` does not accept for any variant —
+  the legacy numbering (one residue lower, no initiator Met) reported unless the sentence says legacy /
+  traditional / known as / mature protein; outside a mutation scene the reference genes' textbook
+  variants (`_legacy_numbering`: HbS `Glu6Val` when the sentence names HBB, sickle cell, haemoglobin;
+  CFTR, cystic fibrosis); **info**: `ΔF508` / `delta F508` and one-letter shorthand (`R553X`, `G551D`,
+  `E6V`) with their HGVS form, in genetics scenes or sentences about a variant, unless called legacy
+  (`F508del`, the community's name, is not reported).
+- **`science_naming` reused.** `science_issues` validates the params of `mutation`, `crispr`, `gwas`,
+  `karyotype` too, and `_genes` asks their new `gene_symbols(params)` (the mutation plan's symbol,
+  `crispr`'s `symbol`, the genes of `gwas` peaks / variants / labels, `karyotype` band texts that are
+  HGNC-form symbols), which also put them in italics in captions (`video_gene_symbols`).
+- **Narration–picture rules.** `SHOWING_ACTIONS` adds the genetics actions (`form_gametes`, `fill`,
+  `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`,
+  `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`); `gwas`
+  (`peak:<label>` → the label) and `karyotype` (`band:<band>` → its text) get `target_text` (`cross`
+  and `pedigree` had one since Steps 214–215).
+- **Config.** `GeneticsRatioRule` / `GeneticsLinkageRule` (`tolerance` 0.05), `GeneticsHweRule`
+  (`tolerance` 0.1), `GeneticsPedigreeRule`, `GeneticsCrisprRule`, `GeneticsKaryotypeRule`,
+  `GeneticsHgvsRule`; all scene scope, default warning, last in `LINT_RULES`.
+- **False positives.** Every example, the gallery and the Phase U / V scratch projects (229 scenes):
+  no finding on correct material; one real finding (Step 216's scratch karyotype out of ISCN order).
+  The tests hold a correct-sentence list beside each wrong one.
+- **Public:** no new `vidgen.api` names (`genetics.accuracy` through `genetics`); seven lint rules;
+  scene types `mutation`, `crispr`, `gwas`, `karyotype` gain `gene_symbols`, `gwas` and `karyotype`
+  `target_text`. Nothing renders differently except caption italics of those genes in videos that
+  have such scenes.
+- **Gaps:** English only; a claim spread over two sentences is read only for Hardy–Weinberg numbers
+  within a beat; shares are matched to phenotypes and carriers, not to named genotype classes or
+  gametes; pedigree probabilities only for NSGC-named people, "an unaffected sibling" and the proposed
+  child; no narration checks of GWAS thresholds, PCR cycle counts or gel sizes; PAM tokens are read
+  only as written letters (not "N G G" spelled for the TTS).
+
+### 96.19 The example, the guide topic and the cookbook (Step 220)
+
+- **`examples/cystic-fibrosis`** (README with a scene table, the choices and the checks): one
+  disease through six of the nine types — `pedigree` (AD / AR / XR tested, obligate carriers),
+  `cross` (two carriers), `pedigree` again (2/3, the partner at `carrier_frequency: 1/25`, the risk
+  1/150 with its factors), `karyotype` (ideogram of 7, `bands: {7q31.2: CFTR}`), `mutation` (CFTR
+  c.1521_1523del p.(Phe508del)), `dna_lab` `ngs` (the brother heterozygous for the deletion),
+  `population` (incidence 1/2500 → 49/1250) and a `process` recap. The family is shown twice so each
+  scene stays readable; the diagnosis is sequencing because a 3-bp difference does not show on an
+  agarose gel. Kokoro `af_heart` at 0.85 (0.9 failed `narration_speed` on two beats), `discovery`
+  at −6 dB, karaoke captions, `citations: {show: marker}`, references by PMID (Riordan et al. and
+  Kerem et al., *Science* 1989). A test validates both variants, runs the genetics lint and checks
+  the narrated numbers against the plans.
+- **NGS deletions** (`genetics.dna_lab.plan_ngs`): `variant` is `31C>T` or `a_bdel[BASES]` (1–12 bp,
+  a reference base on both sides, the bases checked); alt reads are aligned with `-` gaps; the call
+  counts only reads spanning the whole site (`NgsPlan.site_depth`; `end`, `kind`, `site` added with
+  defaults). Reads start anywhere from `MIN_OVERLAP` − L to len − `MIN_OVERLAP` and are clipped to
+  the window, so coverage is even up to its edges (a deletion at position 6 of the CFTR window
+  needs it); this changes the reads of existing `ngs` scenes (a deliberate improvement; nothing
+  committed used one). The scene draws a gapped read as two bar pieces and a bridging line (as
+  genome browsers do), drops tile letters that would touch (9:16), sizes rows up to 0.8 tile and
+  puts the verdict in the call card's heading (a short card drops lines, never the call).
+- **Lint** (shared, findings only, no rendering change): a lone character on a plate is a tile —
+  not a label for `label_spacing`, not a word for `max_words`; `introspect._backdrop` widens a
+  glyph's box narrower than half its height before sampling (an `I` read as grey on grey);
+  `genetics_hwe`'s q pattern accepts "frequency of disease alleles, is …" and a number said as q
+  is not read again as the incidence.
+- **Docs**: guide topic `genetics` (aliases heredity, inheritance, medical-genetics, punnett, hgvs:
+  choosing by question, notation NSGC / ISCN / HGVS / HGNC, exactness, the seven rules, tone,
+  pacing, a snippet), a pointer from `scenes`; `docs/COOKBOOK-GENETICS.md` (choosing, notation, exact
+  numbers, reading a pedigree aloud, counselling tone, pacing, references, a mistakes table with
+  the rule that catches each, a validated pattern) linked from README, `docs/COOKBOOK.md`, the
+  guide and the gallery; the gallery's Genetics section gets a note (`SECTION_NOTES`,
+  `SECTION_FOOTERS`); the CONFIG completeness test covers the nine genetics types (they were
+  complete). No gallery media changed (12.0 MB of 13 MB).
+- **Gaps**: in 9:16 the pedigree's "1/25 Aa" label is 2.42 % of the frame (warning size 2.5 %) and
+  the variant card with its notes has 43 words; NGS insertions and indels are not modelled; the
+  deleted residue's strike-through is a `covered_text` finding the example ignores with a reason.
+
+### 96.20 Review of Phase V (Step 221)
+
+- **Scientific-accuracy pass** (no error found in the data; checked by hand against the RefSeq
+  proteins, HGVS, ISCN and the textbooks): the HBB / CFTR / GJB2 windows translate to the known
+  proteins and every textbook variant's `p.`; CFTR's legacy numbering is c. + 132 (the A of the ATG
+  is legacy 133: c.1585-1G>A ↔ 1717-1G>A, c.1624G>T ↔ 1756G>T, c.489+1G>T ↔ 621+1G>T) and the old
+  exon numbering called intron 11 intron 10 — now in the module text and the variant's note;
+  exon spans (exon 11 = c.1393–1584, 192 bp; exon 12 = c.1585–1679, 95 bp), CDS lengths (444,
+  4443, 681 nt); the 15 presets' ratios; SpCas9 NGG / 20 nt, SaCas9 NNGRRT / 21–23 nt, blunt cut
+  3 bp 5′ of the PAM; Tm (Wallace / GC formula), the agarose ranges, ddNTPs; HWE 49/1250, df = 1;
+  λ_GC with the χ²₁ median 0.4549; Haldane / Kosambi; the three-point v–ct–cv data; band
+  landmarks (7q31.2 CFTR, 9q34 ABL1, 22q11.2 BCR, 5p15.2, Xq28 F8); FTO / MC4R positions (GRCh38).
+- **Pedigree exclusion wording**: a mode excluded at full penetrance that penetrance 1/2 would
+  allow ends with the exact condition (see §96.8 "explain"), e.g. "— excluded unless I-1 is
+  non-penetrant (Xᵃ Y; very unusual)"; the fitting note under reduced penetrance uses the same
+  form ("fits with reduced penetrance: II-1 is non-penetrant (heterozygous)"); a male is never
+  called a carrier of an X-linked allele. The compact (9:16) reason starts with the mode code only.
+  The XR daughter rule reads "needs an Xᵃ from her unaffected father I-1".
+- **Frame use**: `pedigree` spreads a height-bound chart sideways (`Px` up to 1.3 pitches), puts the
+  legend in a column beside the chart in 16:9 when that gives a larger pitch, numbers individuals
+  beside the symbol's top corner on the side without a mating line (above only when someone has
+  partners on both sides; outside adoption brackets), and in 9:16 gives the chart what the cards
+  that will be shown leave (`_panel_need`: the tallest of them, the analysis at its compact size
+  when shorter). The proband's / consultand's arrow points at the lower half of the symbol (clear
+  of the labels under it) and its P goes to the first spot round the tail that touches no other
+  mark or label (`pedigree_draw.letter_spots`). `karyotype` draws normal chromosomes (no changes,
+  ≤ 4 copies) in 16:9 lying across the frame, p arm left, labels over their band with a leader
+  through it, p / q under the last copy; few ideogram columns are drawn broader (up to the
+  metaphase share) with larger band labels; broad capsules get round ends (extra samples where
+  the half-width ≥ 0.25). `mutation` with few codons in 16:9 (when it makes tiles ≥ 15 % larger)
+  puts the card in a column beside the rows, which then use the body's height; a narrow card
+  writes the notation at 1.15× instead of 1.5×; the card says "legacy: ΔF508"; the in-frame note
+  is "3 nt lost: a multiple of 3" and "codon 507 ATC → ATT: still Ile".
+- **Gel**: the poles (words, or − / + when narrow) and the ladder sizes stand outside the plate on
+  the left, the lanes inside it (the lanes were shifted half a lane right before), lane names
+  alternate heights rather than shrink, and the readings are one per size: a dashed line level with
+  the bands from the ladder across the plate and the size in a right margin (stepped apart when
+  close), "≈" for a size outside the gel's resolving range; the card lists the caveats first.
+- **Coat glyphs**: `cross` param `animal` (auto, dog, mouse, rabbit, cat, guinea pig, none);
+  `glyphs.animal_of`: the preset's (labrador → dog, yellow_mouse → mouse, rabbit_coat → rabbit),
+  one named in the title or a trait, else a neutral patch of fur — never a guessed mouse.
+- **`fit_text` ligatures** (shared): Manim's `Paragraph` assigns glyphs to lines by counting
+  characters, so a font that joins two letters into one glyph (Source Serif 4 "fi"; Inter "->",
+  "=>") moved letters onto the neighbouring line ("Cystic fibrosis i / n a family"). `_paragraph`
+  rebuilds a multi-line paragraph with `disable_ligatures=True` when its glyph count differs from
+  its letter count (and keeps the first build if Manim refuses, i.e. glyphs missing for another
+  reason). One-line texts and texts without ligatures are built as before: the Phase Q baseline
+  stays 31/31 identical.
+- **`crispr` 9:16**: when the protospacer and PAM do not fit at the readable tile size the tiles
+  shrink to fit the frame with their 5′ / 3′ ends (they ran off both edges); unchanged otherwise.
+- **Example**: `codons: 5` (the card beside the rows in 16:9); 9:16 lint clean of layout findings.
+
+## 97. Science foundation: scientific charts and worked calculations (Phase W, Steps 222–228)
+
+A shared foundation for every science domain — genetics and cell biology now, orbital mechanics
+and particle physics next: **one chart core** (an axes engine and plot primitives) instead of each
+domain scene drawing its own axes, and **worked calculations with units** (a `calculation` scene
+and a lint comparing narrated numbers with computed ones). Written by AI authors in YAML,
+validated with did-you-mean `VidgenError`s, linted, readable on phones in 16:9 and 9:16.
+Additive and opt-in: existing projects, chart scenes, domain scenes, gallery frames, audio and the
+studio unchanged unless a step deliberately moves a scene onto the core (then with a before /
+after report and its tests kept); after a shared-code change the Phase Q baseline (31 frames)
+must stay identical.
+
+### 97.1 The phase (plan)
+
+- **Step 222, the plan and the chart core** (this section): the survey of today's charts (§97.2),
+  the design (§97.3), the core `vidgen.plotcore` (no manim) and its drawing layer
+  `vidgen.plot_draw`, and a first scene type `plot` (§97.4): line / point series from inline
+  numbers or a CSV, linear / log / symlog / reversed / broken axes, scientific notation and SI
+  prefixes, units, gridlines, a legend, panels sharing an axis, an equal aspect.
+- **Step 223, data features**: error bars (symmetric / asymmetric, x and y, with their meaning:
+  SD, SEM, CI), confidence and prediction bands, fitted curves (linear, polynomial, exponential,
+  power, logistic, Gaussian, a custom expression through `vidgen.mathexpr`) with parameters ±
+  uncertainties and R², a residual panel (a panel sharing x, §97.3 figure layout); histograms
+  with binning rules (Sturges, Freedman–Diaconis, explicit) and fitted distributions;
+  annotations tied to data (point labels, arrows, shaded regions, reference lines) placed
+  without overlaps; units in CSV headers (done in Step 222) used by the fits.
+- **Step 224, live and animated plots**: series that grow as data or a simulation advances (a
+  generic, seeded time-series generator: an ODE written as safe expressions, or a callable
+  registered through `vidgen.api`), axes rescaling smoothly, panels with a shared time axis,
+  highlight and zoom on a region, actions timed to beats and words (grow, reveal series, fit,
+  annotate, zoom).
+- **Step 225, units and `calculation`**: a quantities engine (pint as an optional extra if it is
+  light enough on Windows / Python 3.12, else a small own engine; decided and recorded then) with
+  SI and common units, conversions and dimensional analysis; the `calculation` scene: a formula in
+  TeX, a symbol table (name, value, unit), the substitution shown, step-by-step evaluation (exact
+  fractions for exact inputs, significant figures otherwise), units simplified and converted,
+  results highlighted, chains referencing earlier results, actions on beats and words.
+- **Step 226, lint**: numbers in narration and on screen against computed results (tolerance,
+  units, "about"), unit mismatches, overstated significant figures; chart rules: an axis without
+  the unit its data declares, a log axis with non-positive data, error bars without a stated
+  meaning, unlabelled series, a truncated y axis on bar-like data (info).
+- **Step 227, adoption, example, docs, gallery**: suitable Phase U / V domain plots moved onto
+  the core where it is a clear improvement and visually compatible (each reported with before /
+  after; their tests kept); an example (a short narrated explainer with plots and calculations:
+  radioactive decay or drug clearance, a fit and a worked calculation); guide topic `science`,
+  CONFIG, `docs/COOKBOOK-SCIENCE-CHARTS.md`, gallery entries within budget, README, CHANGELOG.
+- **Step 228, review**: accuracy of fits and statistics against numpy / scipy references in
+  tests, units and calculations, compatibility, the phase's tests and related suites,
+  `tests/test_mcp.py` in full.
+
+### 97.2 How charts are drawn today (survey, Step 222)
+
+Two families exist. **`vidgen.charts`** (§33–34, exported) gives chart scenes a `ChartAxis`
+(linear or log, domain = data rounded out to ticks), `chart_axes` (tick labels, titles,
+gridlines, label thinning), `auto_legend`, markers, `linear_fit`, colour scales. **`math_axes`**
+(§87.6–87.8, `scenes/math_axes.py`) draws maths axes crossing at the origin for `function_plot`
+and `number_line`. Several domain scenes draw their own axes by hand.
+
+| scene / plot | file | axes and features it needs |
+|---|---|---|
+| `bar_chart` | `scenes/bar_chart.py` | categories, no value axis (value labels on bars), changes between beats |
+| `line_chart` | `scenes/line_chart.py` | categorical or numeric x, linear y via `value_axis` + `chart_axes`, legend, end labels, a rescaling y axis (`chart_changes`), a cursor |
+| `scatter` | `scenes/scatter.py` | linear or log x / y (`value_axis(log=)`), both gridlines, markers by series, a least-squares trend with its equation and R², point labels placed without overlaps |
+| `histogram` | `scenes/histogram.py` | bins (`auto`, `sturges`, `sqrt`, `fd`, nice widths), counts from 0, percent, mean / median markers, a compared distribution |
+| `heatmap`, `map` | `scenes/heatmap.py`, `scenes/world_map.py` | colour scales (sequential / diverging, OKLab) with a colour bar |
+| `pie` | `scenes/pie.py` | no axes |
+| `function_plot`, `number_line` | `scenes/function_plot.py`, `scenes/number_line.py`, `scenes/math_axes.py` | maths axes through the origin, a fixed aspect, sampled curves from `mathexpr`, dots, tangents, areas, geometry marks |
+| action-potential inset (`molecule`, Phase U) | `scenes/molecule.py` (`_ApAxes`, `_ap_plot`) | fixed ranges (mV against ms), a trace that grows live with the process (`molecule_runtime`) |
+| cyclin–CDK plot (`cell_cycle`, Phase U) | `scenes/cell_cycle.py` (`_build_plot`) | x = share of the cycle with coloured phase bands and phase names, levels in a.u. without ticks, smooth curves labelled at their peaks |
+| PCR temperature trace (`dna_lab`, Phase V) | `scenes/dna_lab.py` (`_pcr_trace`), `scenes/molecular_draw.py` (`plot_axes`) | hand-placed ticks (cycle numbers; the three temperatures in °C), a step-shaped trace, stage names |
+| Sanger chromatogram (`dna_lab`) | `scenes/dna_lab.py` (`_sanger_trace`) | a baseline only: one peak per base, called bases under it |
+| agarose gel (`dna_lab`) | `scenes/dna_lab.py`, `genetics/dna_lab.py` (`migration`) | a log-linear axis in disguise (migration linear in log₁₀ size), ladder sizes as tick labels, readings in a margin |
+| NGS coverage (`dna_lab`) | `scenes/dna_lab.py` (`_build_ngs`) | bars per base, no numeric axis |
+| allele-frequency plot (`population`, Phase V) | `scenes/population.py` | `chart_axes`: generations × frequency 0–1, lines growing over generations, a shaded bottleneck band, a dashed reference, end dots; a second, stacked heterozygosity plot with its own axes (shared x drawn twice) |
+| Manhattan, QQ, regional plots (`gwas`, Phase V) | `scenes/gwas.py` | categorical genome axis (chromosomes), −log₁₀ p (a log scale computed by hand), threshold lines labelled in a margin, overflow triangles, an equal-ish QQ plot with a diagonal, a regional plot in Mb with r² colour bins |
+| chi-square tables (`cross`, `population`) | `scenes/cross_draw.py`, `scenes/population.py` | tables, not plots (unchanged by Phase W) |
+
+**What the coming domains need** (Ideas for future phases): orbital mechanics — trajectories at an
+**equal aspect** (an ellipse must look like one), energies over time in J (**powers of ten in the
+title**), log–log period against semi-major axis (Kepler's third law: a fitted slope of 3/2, Step
+223), panels sharing a time axis (energy and distance), **symlog** for quantities crossing zero
+over decades, insets and "not to scale" notes; particle physics — **invariant-mass histograms**
+with fitted peaks over a background (Step 223), event counts on a **log y**, masses in GeV via
+**SI prefixes** on eV, √N error bars, a ratio / residual panel sharing x, a resonance emerging as
+events accumulate (live, Step 224). Also stellar magnitudes and depths (**reversed** axes) and data
+with a gap (**broken** axes).
+
+### 97.3 The design
+
+**Two layers.** `vidgen/plotcore/` decides everything that can be decided without drawing: tick
+values, labels, axis domains and the mapping of data to the frame, the layout of panels, labels
+and titles, the parts of a line inside a plot. It imports no manim (a test imports it in a fresh
+interpreter) and is deterministic: the same inputs give the same layout, so tests check layouts
+without rendering. Text sizes come from a callback (`Measure: text -> (width, height)`):
+`plot_draw.text_measure` measures real `Text` in the theme font (cached), tests use
+`approx_measure`. `vidgen/plot_draw.py` turns a laid-out panel into manim objects and nothing
+else. Both are exported by `vidgen.api` as the modules `plotcore` and `plot_draw` (built-in
+scenes import only `vidgen.api`, §6.4).
+
+- **Ticks** (`plotcore.ticks`). Linear: the smallest step of 1, 2, 2.5 or 5 × 10ᵏ giving at most
+  `max_ticks` ticks from a multiple at or below the data to one at or above (the rule of
+  `layout.nice_ticks`), values cleaned to 12 significant digits (`0.3`, never
+  `0.30000000000000004`), a single value widened (`5..5` -> `4.5..5.5`); `inside=True` for a
+  fixed domain: the densest round step with at most `max_ticks` ticks inside it. Log (base 10):
+  decades, every k-th when there are more than `max_ticks`; within two decades 1-2-5 ticks when
+  they fit; minor ticks 2–9 × 10ᵏ (unlabelled tick marks, gridlines with `grid: both`) when every
+  decade is labelled. Symlog: linear within ±`linthresh` (mapped to ±1), one unit per decade
+  beyond (`sign(v)(1 + log₁₀(|v|/linthresh))`); ticks 0 and ±linthresh × 10ᵏ, thinned by decade;
+  default `linthresh` the decade of the smallest non-zero magnitude, at most 1/1000 of the largest.
+- **Numbers** (`plotcore.numbers`), plain Unicode so no LaTeX: the minus sign U+2212, superscript
+  exponents, `×`, `µ`. Tick formats: `auto` — linear: plain with the decimals the ticks need while
+  the largest tick lies in [10⁻³, 10⁵), else divided by 10ⁿ (n a multiple of 3) with the power in
+  the title (`distance (10⁶ km)`, `count (× 10³)`), or every tick in full for a narrow window far
+  from 0 (10⁹ … 10⁹ + 3); log / symlog: plain from 0.001 to 10 000, else `10⁻⁹`; `plain`; `sci`
+  (`2.5 × 10⁻³`, a mantissa of 1 left out: `10⁶`); `si` — linear: one prefix for the axis, chosen
+  by its largest tick, in the title (`time (µs)`), log / symlog: per tick (`10 kHz`); it needs a
+  base unit (`prefixed_unit_problem`: `km` refused, "write m"); a `str.format` pattern. The axis
+  title is `label (unit)`.
+- **Axes** (`plotcore.axis`). `AxisSpec` (what the author asks: scale, `lo` / `hi`, `reversed`,
+  `linthresh`, `breaks`, `format`, `unit`, `label`, `max_ticks`, `include_zero`, `exact` +
+  `margin`) checks itself against the data it must show (`problems(values, name)`: a log scale with
+  a value ≤ 0, data past `min` / `max` — never clipped silently —, a value inside a break, breaks
+  overlapping or without data on both sides, `linthresh` off symlog, `si` with a prefixed unit).
+  `build_axis(values, spec, lo=, hi=)` → `Axis` (domain, ticks, labels, minor ticks, title,
+  segments); without fixed ends the domain reaches the outer ticks (the chart scenes' rule), with
+  them (or `exact`) ticks lie inside. `Axis.fraction(v)` maps a value to 0..1 along the drawn
+  axis: through the scale's transform, reversed (`1 − f`), and across breaks (each break takes
+  `BREAK_GAP` = 4 % of the length; the pieces share the rest in proportion to their spans).
+- **Figures** (`plotcore.figure`). `layout_figure(area, panels, measure, arrange, share, gap, top,
+  aspect, weights)` → one `PanelLayout` per panel (plot `Rect`, axes, the tick labels kept,
+  titles). The chart scenes' style (§33): y tick labels right-aligned left of the plot, the y
+  title above them left-aligned (horizontal, readable on phones; no rotated text), x labels and
+  title below. `rows`: panels stacked; with `share` one x axis built from every panel's x values,
+  only the lowest panel labelled, every plot with the same left and right edges (the widest y
+  labels decide). `columns`: side by side sharing y, only the first panel labelled. Labels that
+  would touch are thinned to every k-th (`label_stride`, moved here from `charts._stride`, which
+  now imports it; `keep_last`: the axis' end keeps its label). `aspect: equal` (one panel, linear
+  axes): the axis with room to spare widens about its middle (iterated: the new ticks can change
+  the label widths), or, when its ends are fixed, the plot narrows instead. `clip_polyline` keeps
+  the parts of a line inside the plot (Liang–Barsky per segment; `nan` breaks a line).
+- **Tables** (`plotcore.data`). `read_table(text, source)`: comma, semicolon or tab separated
+  (picked from the header line), `#` comment lines, the header naming the columns with units as
+  `name (unit)` (a space before the parenthesis, so `f(x)` stays a name), `name [unit]` or
+  `name / unit`; numbers with `.` decimals, `−` accepted; blank / `NA` / `NaN` cells are gaps.
+  Errors name the file, line and column (`'2,5' is not a number (use a dot for decimals)`), a row
+  of the wrong length, a repeated or nameless column, a file without rows or a column without
+  numbers; `Table.column(name)` takes the name or the whole header and suggests the closest
+  (`did_you_mean`, own `difflib` helper so the core needs nothing else).
+- **Drawing** (`plot_draw`). `draw_panel(layout, size, color, axis_color, grid)`: axis lines
+  (left and bottom, cut at breaks with `//` marks), outward tick marks at major ticks (shorter at
+  minor ones), dashed gridlines at the labelled ticks (stroke 1, opacity 0.4 as `chart_axes`),
+  faint solid minor gridlines (opacity 0.16) with `grid: both`, labels at `chart_label_size`
+  (never below the readable size). `series_line` (clipped runs, optionally dashed),
+  `series_markers` (`chart_marker`s with a background-coloured outline, those inside the plot).
+  Legends reuse `charts.auto_legend` / `chart_legend`.
+
+**Existing scenes and the core (compatibility rule).** The chart scenes keep `vidgen.charts`
+(public, used by extensions) and draw exactly as before; the only shared change in Step 222 is
+`label_stride` moving into the core (same code; the Phase Q baseline 31/31 identical). A scene
+moves onto the core only in Step 227, only where it is a clear improvement and looks the same or
+better (each reported with before / after stills, its tests passing); candidates: the
+`population` frequency and heterozygosity plots (two panels sharing x), the `gwas` QQ plot (equal
+aspect) and the PCR trace (`molecular_draw.plot_axes`, hand-made axes); not candidates: the
+cyclin plot (no numeric axes), the Sanger trace, gel and coverage (pictures of lab results, not
+charts), `function_plot` / `number_line` (maths axes through the origin are another convention),
+and `bar_chart` / `line_chart` / `scatter` / `histogram` (stable, with their own changes and
+targets; `plot` covers the scientific cases they do not).
+
+### 97.4 The `plot` scene type (Step 222)
+
+Name: **`plot`** (`scenes/plot.py`). Checked for clashes: no scene type or action is called
+`plot`; the word is a target name inside `cell_cycle` and `population` and a `gwas` param (`plot:
+manhattan | qq | both`) — other namespaces, so the type keeps the plain name; the docs say "the
+`plot` scene type" where both senses are near. `function_plot` stays for functions of x (maths
+axes); `plot` is for data and models on scientific axes.
+
+```yaml
+- id: decay
+  type: plot
+  params:
+    title: "Activity of an iodine-131 sample"
+    data: assets/decay.csv            # time (d), activity (Bq), model (Bq)
+    y: {scale: log}                   # label and unit from the column: "activity (Bq)"
+    series:
+      - {name: measured, x: time, y: activity, style: points}
+      - {name: "model, half-life 8.0 d", x: time, y: model, dashed: true}
+- id: energy
+  type: plot
+  params:
+    data: assets/energy.csv
+    panels:                           # stacked, sharing the x axis
+      - y: {label: energy}
+        series: [{name: kinetic, x: time, y: kinetic}, {name: potential, x: time, y: potential}]
+      - series: [{name: distance, x: time, y: distance}]
+```
+
+- **Params**: `series` (one panel) or `panels` (`{series, x, y, weight}`), `data` (a CSV in the
+  project; renders follow its changes under `assets/`, the fingerprint's folder), `x` / `y`
+  (`PlotAxis`: `label`, `unit`, `scale`, `min`, `max`, `reversed`, `format`, `linthresh`,
+  `breaks`), `arrange` (`rows` | `columns`), `share`, `aspect` (`auto` | `equal`), `grid`
+  (`major` | `both` | `x` | `y` | `none`), `legend`, `reveal` (`series` | `all`), `point_radius`,
+  `label_size`, `title`, `caption` and their sizes / colours. A series: `name`, `x` / `y` (column
+  names or lists; `null` in y is a gap) or `points`, its own `data`, `style` (`line` | `points` |
+  `both`), `color`, `marker` (auto by position among the series with markers), `dashed`, `width`.
+- **Labels and units from the data**: an axis without `label` takes the first series' column
+  name, without `unit` the unit in that column's header; a column in another unit than the axis
+  states, or two series in different units on one axis, is an error naming both.
+- **Checks**: at param validation for inline data (no file to read), at `vidgen validate`
+  (`validate_project`) when a CSV is named: series names unique, one of `series` / `panels`,
+  `x` + `y` or `points`, equal lengths, columns named only with a data file, unknown columns with
+  did-you-mean, the axis problems of §97.3, a panel's own x when stacked panels share x, `aspect:
+  equal` with one panel and linear axes, a gap only in y.
+- **Layout**: the title (`chart_title`), caption, and `layout_figure` over the body; ticks at
+  most 7 on x and 6 on y in 16:9 (4 and 7 in 9:16); with `aspect: equal` the domains are the data
+  with a 6 % margin, widened to the plot's shape. **Legends** per panel (`_legend_panels`, static
+  so `target_names` knows them): `legend` if given, else a panel with several series, or — in a
+  figure of several panels — a panel whose single series its own axis title does not name; in a
+  free corner of the panel (`auto_legend`), else one row of all those entries above the figure
+  (the layout makes room). Series colours from the palette by position, lines 4 px, markers sized
+  by the number of points (0.1 … 0.035 units).
+- **Steps and targets**: the axes (lines drawn, the rest faded in) and legends with the first
+  step; `reveal: series` one series per beat (line runs drawn from their first point, markers
+  popping in, in data order), `all` everything at once. Targets `title`, `axes`, `panel<N>` (with
+  several panels), `legend`, `series<N>`, `series:<name>`.
+
+Public: `vidgen.api` gains the modules `plotcore` and `plot_draw` (DESIGN §6.4's rule: the
+names extensions need); scene type `plot`; no config key, no action. No new dependency (pint is
+Step 225's decision).
+
+**Gaps after Step 222** (planned for 223–227): no error bars, bands, fits, histograms, annotations
+or live series yet; a dashed series' legend swatch is solid; the equal-aspect axes choose their
+tick steps independently (x and y may step by 2 and by 1); a line crossing a break is drawn
+straight across it; no inset plots; panel titles are the axis titles only; the legends appear with
+the axes, not with their series. (Step 223 fixed the dashed swatch, the line across a break and
+the legends' timing, §97.6.)
+
+### 97.5 Data features (Step 223)
+
+**Fits** (`plotcore.fit`, numpy only). `make_model(kind, degree, background, expr, params,
+guesses, units)` → `Model` (YAML names, shown labels `μ σ Γ x₀ b₁`, the shown formula, f(x, p),
+a design matrix for models linear in p, a starting guess from the data, each parameter's unit
+from the axes' units: `unit_ratio("Bq", "d")` = `Bq/d`, `d⁻¹`). Kinds: `linear` (a + b·x),
+`poly` (c₀ … cₙ, n ≤ 6), `exponential` (A·exp(k·x); guess: a line through ln y), `power` (A·xᵏ,
+x > 0; guess: log–log), `logistic` (L, k, x₀; guess: the logit line), `gaussian` and
+`breit_wigner` (A, μ/M, σ/Γ, plus `background: n` → b₀ … bₙ; guess: peak height, position and
+FWHM above a line through the edges), `custom` (an expression through
+`mathexpr.parse_model(text, parameters)`: the safe parser with named parameters that may shadow
+a constant (`tau`), unknown names with did-you-mean, an unused parameter refused). Aliases:
+`cauchy` / `lorentzian` → `breit_wigner`, `polynomial`, `exp`, `gauss`, `sigmoid`.
+`fit_curve(x, y, model, y_err, x_err)`: models linear in p by weighted `lstsq`; others by
+Levenberg–Marquardt (Marquardt's diagonal scaling, central-difference Jacobian with an absolute
+step for a parameter at 0, λ ×4 / ÷3). Covariance (JᵀWJ)⁻¹ — absolute with y errors, scaled by
+SSR/(n − p) without (as `curve_fit`'s `absolute_sigma`); x errors by effective variance σ² = σ_y²
++ (f′(x)σ_x)², four re-weightings. `FitResult`: params, errors, cov, χ², χ²/ν (with errors), R²
+(unweighted 1 − SSR/SST), RMSE, residuals, `band(xs, level, kind)` (delta method gᵀCg; the
+prediction band adds σ² interpolated between the data's errors or SSR/(n − p); Student's t with
+n − p, the normal quantile with known errors), `parameter_lines` (`A = 985 ± 19 Bq`). Errors:
+too few points (n ≤ p), a power law with x ≤ 0, non-positive y errors, a rank-deficient JᵀJ, a
+model undefined at the start. Distribution functions in `plotcore.stats` (normal CDF / quantile:
+Acklam + Newton; Student's t through the regularized incomplete beta, the quantile solved on the
+tail so 1 − p loses nothing; χ² survival through the incomplete gamma), ≤ 1e-9 from scipy.
+
+**Why no scipy.** scipy is installed wherever vidgen is (manim requires it), but vidgen does not
+list it and the core must import without it (and fast); the fits above are short and match
+`scipy.optimize.curve_fit` to 1e-3 of a standard error (tests, when scipy is importable — else
+the closed-form tests run). No new dependency, nothing for the owner to install on Windows.
+
+**Histograms** (`plotcore.hist`). `rule_width` = numpy's `histogram_bin_edges` widths (Sturges,
+Freedman–Diaconis, Scott with σ over n, square root, `auto` = the smaller of Sturges and FD);
+`bin_edges(values, bins, width, lo, hi, nice)`: a rule's width rounded to 1 / 2 / 2.5 / 5 × 10ᵏ
+with edges on its multiples (`nice`, the default: round tick-like edges), else numpy's edges
+exactly; `integers` (k ± ½), a count, explicit edges; at most 400 bins. `histogram()` → counts
+(the last bin closed), density, √N errors, values outside counted. `fit_distribution(hist,
+kind)`: maximum likelihood on the raw values — `normal` (mean, σ with 1/N; errors σ/√N,
+σ/√2N), `exponential` (λ = 1/mean, λ/√N), `poisson` (mean, √(μ/N); whole numbers, `bins:
+integers`) — as a `FitResult` whose model gives heights in the histogram's units (N·width·pdf),
+with Pearson's χ² over the bins and its degrees of freedom (bins − 1 − p). Peaks (`gaussian`,
+`breit_wigner` + background) on a histogram are least-squares fits of the heights with σ = √N
+(an empty bin: one count's error).
+
+**Numbers**. `value_with_error(v, e, unit)`: the error rounded by the PDG rule (three leading
+digits 100–354: two significant digits; 355–949: one; 950–999: up to 1000, two), the value to
+the same place (halves away from 0), a power of ten outside brackets beyond [10⁻³, 10⁵): `(2.510 ±
+0.031) × 10⁻⁴ s`; an error of float noise (an exact fit) writes the value alone.
+
+**Annotations** (`plotcore.annotate`, deterministic). A candidate box costs 1000 per unit area
+outside the plot, 10 per data point it covers (markers, samples every 0.1 along lines and fit
+curves, bar interiors, error-bar ends), and 1000 + 5000 × area per text box it touches (text
+over text is worse than text over a few points); the cheapest wins, ties to the first listed.
+`place_near` (8 directions × 3 rings around a point; off the first ring a leader line),
+`place_in_plot` (corners, then edge middles), `place_on_hline` / `place_on_vline` (along the
+line, at its ends or middle), `place_in_span` (inside a shaded range, else beside it).
+
+### 97.6 The `plot` scene's data features (Step 223)
+
+Params (`scenes/plot_parts.py`: `PlotSeries`, `PlotErrorPair`, `PlotFit`, `PlotFitParam`,
+`PlotAnnotation`, the resolution into `Resolved` — a list of panels with `.fits`): series
+`y_err` / `x_err` (number, column, list, `{minus, plus}`, `sqrt`) and `error` (`sd`, `sem`,
+`ci95`, `range`, `poisson`, `other`, shown in the legend entry: `measured (± SEM)`); histogram
+series (`values`, `bins`, `bin_width`, `bin_range`, `nice_bins`, `density`; `style: bars | step |
+points`; y from 0, titled `count` / `density`); `fits` (`series` and the annotations' `series` are
+`TextRef`s: a translated series name is followed); `annotations` (`label`, `arrow`, `hline`,
+`vline`, `xrange`, `yrange`, `note`; `panel`, `color`, `id`). Fits are computed at validation
+(inline data) or `vidgen validate` (a CSV), so a fit that fails names itself (`fits[1] (power
+fit): a power fit needs positive x values`).
+
+Layout. The figure is the data panels, each followed by the residual panels of its fits
+(weight 0.4, sharing x; y titled `residual (unit)` or `(y − fit)/σ`, ticks from 0). Axes:
+`AxisSpec.tight = 0.08` — a free end goes to the next round tick only when that adds at most
+8 % of the span, else 4 % past the data (`plotcore.TIGHT_PAD`); error-bar ends and the fitted
+curve count as data the axis shows (when it can: positive on log, inside fixed ends and not in
+a break). Placement loop: each panel's legend in a free corner (`auto_legend`), each fit box
+and note in a free spot (`place_in_plot` at cost 0); whatever finds none moves to a **side
+group** — a column on the right of the figure in 16:9 (the figure narrows; the column top at
+the first plot's top), above the figure in 9:16 (side by side when the items fit the width) —
+and the layout is redone (at most fits + notes + 3 rounds). Annotations are placed last, in
+order, inside their panel, against the data and every box placed so far. Text: `label_size`
+default `body` in a landscape frame and `caption` in portrait (the large scale's 30 pt), never
+below `min_font`; the title sits 0.35 above the body (was 0.45).
+
+Drawing (`plot_draw`): `error_bars` (caps where a bar ends inside; on a log axis a bar to ≤ 0
+runs to the edge), `band` (one polygon per x piece between breaks, clamped to the plot), `bars`,
+`text_lines`, `label_text`, `plate` (a rounded box in the background colour, z above the data),
+`reference_line`, `span`, `leader` (a line or an arrow, stopping short of the point);
+`PanelLayout.frame_line` puts a gap where neighbours lie on different sides of a break.
+`charts.chart_legend` gained the swatches `dashed` and `band` (additive; the chart scenes do
+not use them).
+
+Steps and targets. Series (with their legend entry — the legend's frame comes with the first —
+and their error bars unless an action reveals `errors:<name>`), then each fit (`fit<N>`,
+`fit:<name>`: band, curve, legend entries, box, residual panel; the series first), then each
+annotation (`annotation<N>`, `annotation:<id>`); `reveal: all` puts them in one step. Targets an
+action (`reveal`, `fit`, `annotate`) names are left out of the steps. Entrances nest (a fit brings
+its series, a series the axes): `Plot.entrance` builds each entrance once per step (`_batch`).
+Actions `fit` and `annotate` (`scenes/plot_actions.py`): plot scenes only (`plot_actions =
+True`), targets checked with did-you-mean; they play the target's entrance (1.6 s, 1 s).
+
+Public: `vidgen.api.plotcore` gains `fit_curve`, `make_model`, `Model`, `FitResult`,
+`MODEL_KINDS`, `MODEL_ALIASES`, `PEAK_KINDS`, `histogram`, `Histogram`, `bin_edges`,
+`rule_width`, `fit_distribution`, `poisson_pmf`, `BIN_RULES`, `DISTRIBUTIONS`, `normal_cdf`,
+`normal_ppf`, `t_cdf`, `t_ppf`, `chi2_sf`, `value_with_error`, `error_digits`, `pretty_name`,
+`unit_power`, `unit_ratio`, the placement functions and `Placement`, `TIGHT_PAD`;
+`AxisSpec.tight`, `Axis.piece`, `PanelLayout.frame_line`; `vidgen.api.plot_draw` the drawing
+functions above; `vidgen.mathexpr.parse_model` / `ModelExpression` (not re-exported). Actions
+`fit`, `annotate`. No new dependency, no config key.
+
+**Gaps after Step 223**: no live series (224); fits of 2-D data, global fits sharing parameters
+across series, and a likelihood fit of binned counts (Poisson likelihood instead of √N weights)
+are not there; an annotation cannot point into another panel; a crowded 16:9 figure (two panels,
+a fit with residuals, a long legend) gets small plots at `body` text — authors can set
+`label_size: caption` or move the legend with `legend: false`.
+
+### 97.7 Models and live plots in the core (Step 224)
+
+**Integrators** (`plotcore.integrate`, numpy only, deterministic). `rk4(f, t0, y0, t1, step,
+samples)`: classical RK4, the last step shortened to end on `t1`, outputs thinned to about
+`samples` evenly spaced steps (`output_times`; more than 2·10⁶ steps is refused). `rk45(f, t0,
+y0, t1, times, rtol, atol, first_step, max_step)`: Dormand–Prince 5(4) with scipy's tableau and
+RMS error norm, steps clamped to end on each output time (exact outputs, no dense
+interpolation; the natural step is kept across the clamp), growth ×0.2…×5 with safety 0.9;
+stiffness by Hairer's test — h·|k₇ − k₆|/|y₇ − y₆| (≈ h|λ|) above 2.5 on 30 accepted steps (six
+calm steps in a row reset the count) — raised only when the rest of the span would still need
+more than 20 000 steps (a short stiff stretch is merely slow), and more than 10⁵ steps is
+refused as stiff too. `verlet(accel, t0, x0, v0, t1, step, samples)`: velocity Verlet
+(kick–drift–kick leapfrog): symplectic, time-reversible, energy error bounded (O(h²),
+oscillating). Every integrator raises `IntegrationError` (a `VidgenError` with `kind`
+`blow_up` / `stiff` / `steps`, the time and the variable) when the state is not finite or
+exceeds 10¹² × max(1, |y₀|).
+
+**Models** (`plotcore.models`) return a `Simulation`: ordered columns (the first is the
+progress column, `t` or `n`), units, and `drift` of the quantities declared `conserved`
+(`conservation_drift`: max |q − q₀| / max(|q₀|, max |q|)). `simulate_ode(equations, initial,
+params, t, step, method, rtol, samples, quantities, conserved, units)`: equation keys `x`,
+`dx/dt`, `x'` (`equation_variable`), right sides compiled by `mathexpr.parse_system` (the
+safe parser with every name a slot: state variables, parameters, `t`; `x` is an ordinary name
+there; a name may shadow a constant; unknown names with did-you-mean; `SystemExpression.scalar`
+evaluates plain floats fast inside one `np.errstate`); default step span/1000, at most a
+quarter of the span; `leapfrog` needs every equation of the form `x' = v` (`leapfrog_pairs`)
+or an acceleration not reading any velocity. Messages name the model and say what to try
+(`model 'osc': x blows up near t = 1.005 …: try a smaller step (now 0.005) or method: rk45`).
+`simulate_recurrence` (keys `x`, `x_next`, `x[n+1]`; `n` available; a non-finite value names
+the step). `random_walk` and `poisson_process` draw from `SplitMix64` (Steele–Lea–Flood; the
+reference vector `0xE220A8397B1DCDAF` for seed 0): the same seed gives the same walk with any
+numpy version (numpy's streams are not promised stable); lattice walks ±step (1-D with `p`, 2-D
+four directions), Gaussian walks (Box–Muller), Poisson events by exponential gaps (a staircase
+`count` column, ≤ 50 000 events). `register_model(name)` / `run_registered` (exported by
+`vidgen.api`): `fn(params, seed) -> {column: values}`, checked (a mapping of equal-length
+numeric columns, a non-decreasing first column; an exception becomes a `VidgenError` naming
+the function). Derived `quantities` (expressions of columns and params, vectorised) work for
+every kind.
+
+**Live logic** (`plotcore.live`, pure functions of the progress, so a frame never depends on
+the frames before it). `grown(times, xs, ys, until)` (points reached plus the head interpolated
+between two points; a gap stays a gap), `segment` (a trail's recent stretch), `value_at`,
+`time_like` (values that never decrease: a time axis, shown whole). `rescale_schedule(times,
+values, final, fixed_lo, fixed_hi)` → `(first domain, [Stop(start, end, lo, hi)])` in
+transform space: the first domain covers the first 12 % of the progress with 30 % headroom of
+the data's span; whenever the running extent would leave the domain shown, it grows to cover it
+with that headroom (clipped to `final`, ends within 15 % of the final end snap to it, fixed ends
+stay); each growth eases in (smoothstep) over 7 % of the progress range and **ends when the data
+arrive** (so data never leave the plot), growths closer than that merge; the last stop ends on
+`final` at the end. `domain_at(first, stops, progress)` evaluates it; `blend` eases a zoom.
+`axis_for(static, spec, lo, hi)` builds the axis for such a domain (ticks inside, the static
+axis' `linthresh`; the static axis itself for its own domain) and `figure.relabel(lay, x, y,
+measure)` lays its labels out on the same plot rectangle (the plot does not move while its
+axes rescale). `readout_text(label, value, unit, integer=)`: three significant digits, plain
+from 10⁻³ to 10⁵, a whole number written whole.
+
+### 97.8 Live and animated `plot` scenes (Step 224)
+
+```yaml
+- id: oscillator
+  type: plot
+  params:
+    models:
+      osc: {kind: ode, equations: {x: v, v: "-k*x - c*v"}, params: {k: 4, c: 0.3}, initial: {x: 1, v: 0}, t: [0, 20], units: {t: s, x: m}}
+    arrange: columns
+    share: false
+    panels:
+      - series: [{name: position, x: t, y: x, readout: true}]
+      - series: [{name: phase, x: x, y: v, trail: 3}]
+  beats:
+    - text: "Each swing is smaller than the one before."
+      actions: [{grow: axes, to: 10}]
+    - text: "Zoom in on the first swings."
+      actions: [{grow: axes}, {zoom: panel1, x: [0, 5], at: "@first"}]
+```
+
+**Params** (`scenes/plot_models.py`): `models: {name: PlotModel}` — `kind` (`ode`,
+`recurrence`, `random_walk`, `poisson`, `function`) with the keys of each kind (any other key
+is an error naming the kind; a missing `equations` / `initial` / `rate` / `function` too);
+`method` aliases (`verlet`, `symplectic` → `leapfrog`, `adaptive` → `rk45`); results cached by
+the model's JSON (validation, `vidgen validate` and the render resolve the plot more than
+once). Series gain `model` (default: the plot's only model when there is no `data`; set by the
+plot's validator), `live` (default with a model), `head`, `readout` (`true` or a label),
+`trail`; a model's columns are a `Table` (`model:<name>`), so labels and units come from it as
+from a CSV. `rescale` (default `true`). `Params.conservation()` → `(model, quantity, drift)`
+for lint (Step 226); the scene keeps it as `conservation`.
+
+**Drawing while playing** (`scenes/plot_live.py`, the mixin `LivePlot`). Everything that changes
+during a play or a wait — a rescaling or zoomed panel's axes, a growing series (line, markers,
+error bars, head), the readout, fit curves and bands of a zoomed panel, a residual panel — is a
+**flat** group (`plot_draw.flat`) re-shaped in place each frame (`plot_draw.morph_into`: each
+member takes the points, style and z-index of one part of the new drawing; members are added or
+emptied as the count changes). Animations and the growth updater act on an empty **clock**
+mobject (z −1000) instead of a group of those parts: manim then redraws the whole frame while
+it moves, and no group is dissolved when a part is added on its own (adding a group that
+contains members of another top-level group makes manim dissolve the latter, losing its
+updater). Members added mid-play may be drawn in any order among equal z-indices: text sits a
+z-index above its plate, lines above gridlines.
+
+**Steps and timing.** Consecutive free live series of one model are one step: its axes and
+legend entries come in (up to 0.8 s), then the series grow by an updater over the rest of the
+step's slot (`GROW_SHARE` = 92 %; `play_steps` remembers the slot) while the narration goes on
+and beat actions play in the waits; growth is linear in the model's time; a mid still is
+planned half-way (storyboards). `reveal: all` grows every live series in the first step, with
+the static parts; fits and annotations on live data follow in a second step. The action `grow`
+(`scenes/plot_actions.py`, targets live series, `axes`, `panel<N>`; option `to`) grows from
+where the series are, lasting until the beat's next action (`ActionRunner.time_left(next_action
+=True)`, `NarratedScene.beat_time_left`) or the beat's end; a later `grow` continues; the
+plot's own steps leave its series (and a panel's / all with `axes`) to it. `reveal` of a live
+series grows it over the rest of the beat (`entrance_time`). Fits on a live series, and
+annotations on one or in a rescaling panel, first finish its growth (a `Succession`: the fit
+appears once the data are complete). `settle()` finishes any growth still running when the
+scene ends.
+
+**Rescaling** applies to a data panel whose series are all live on one progress (one model, or
+a single live series), with `rescale: true`, not `aspect: equal`, for each axis not shared
+across panels, without breaks, not fixed at both ends, and not time-like; the schedule is built
+from the row-wise extent of the panel's series. The panel's static layout is the final domain,
+so legends, fit boxes, notes and readouts are placed once against all the data.
+
+**Filling histograms.** A histogram series with `live` (or of a model's column) fills as its
+values arrive in their order: the progress counts values (`times` = 0 … N), the bins are those of
+all the values (so the static layout, fits and legends hold), each frame bins the first ⌊u⌋
+values (`np.bincount` of each value's bin, cached) with √N error bars; an empty bin shows no
+marker yet; its y axis widens from the running highest bar (`fixed_lo`: from 0); its readout
+counts the values (`events = 1303`). A fit on it waits until all values are in.
+
+**Readouts** are boxes sized to their widest text over the whole growth (the time column once
+per model, then `label = value unit` per series; a step count and whole-number values written
+whole, the last step reached for recurrences, walks and live data), placed like notes: in a
+free spot of their panel, else in the side column (16:9) or above the figure (9:16).
+
+**Zoom.** The built-in `zoom` action gained `x` / `y` (`[from, to]` in data units; not with
+`scale`): on a `plot` (`scene_problems`: plot scenes only) the camera stays and the targets'
+panels (`axes`, `panel<N>`, a series' panel; x also every panel sharing it and residual panels)
+ease their domains in transform space (`blend`); annotations of those panels fade out and come
+back with the zoom's undoing (`temporary`: at the beat's end or `until`); while zoomed a growth
+keeps drawing into the zoomed view and its rescaling waits until the zoom is over. A broken axis
+is refused.
+
+**Choices.** No scipy (§97.5's reasons) and no new dependency: RK4 / RK45 / Verlet are short and
+tested against analytic solutions. Rescaling eases ahead of the data rather than after (data
+never poke out of the plot); the price is a domain that moves a moment before the head reaches
+its edge. Readouts are not tied to the head (moving text is hard to read on a phone).
+
+Public: `vidgen.api.register_model`; `plotcore`: `simulate_ode`, `simulate_recurrence`,
+`random_walk`, `poisson_process`, `register_model`, `registered_models`, `run_registered`,
+`Simulation`, `SplitMix64`, `conservation_drift`, `ODE_METHODS`, `METHOD_ALIASES`, `rk4`,
+`rk45`, `verlet`, `IntegrationError`, `grown`, `segment`, `value_at`, `time_like`,
+`rescale_schedule`, `Stop`, `domain_at`, `blend`, `axis_for`, `readout_number`,
+`readout_text`, `relabel`; `plot_draw.flat`, `morph_into`, `head_marker`, `draw_panel(cache=)`;
+`mathexpr.parse_system` / `SystemExpression` (not re-exported); `NarratedScene.beat_time_left`;
+action `grow`; `zoom` options `x`, `y`; `plot` params `models`, `rescale`, series `model`,
+`live`, `head`, `readout`, `trail`. `scenes/plot.py` was split: the drawing helpers moved to
+`scenes/plot_figure.py` (mixin `PlotFigure`).
+
+**Gaps after Step 224**: a rescaling panel needs all its series on one progress (a filling
+histogram alone in its panel); bins of a filling histogram are fixed by all its values; readouts show values, not their uncertainties; zooming a
+broken axis is refused; an annotation cannot follow the head; adaptive RK45 has no dense output
+(steps end on the sample times, so `samples` bounds the largest step) — dense output added in
+Step 228 (§97.13).
+
+### 97.9 Quantities with units (Step 225)
+
+**Decision: an own engine, no pint.** pint would cover units and conversions, but not what the
+`calculation` scene needs most — exact fractions through a chain (2/3 × 1/25 × 1/4 = 1/150),
+significant figures carried by the school rules, TeX of every step, explanations of dimension
+errors in the author's words — and it is a dependency with its own registry files and parser to
+keep in step on the owner's Windows / Python 3.12 install. The engine is small (≈ 2 000 lines
+in `vidgen/quantities/`, stdlib only: `fractions`, `decimal`), deterministic and tested against
+textbook values; pint is not needed even as an optional extra. No new dependency.
+
+**Units** (`quantities.units`). A dimension is seven `Fraction` exponents (m, kg, s, A, K, mol,
+cd; a fractional power is possible: √m). A `UnitDef` is an SI factor — a `Fraction` when the unit
+is defined exactly (km, h, eV from e, au, ly = Julian year × c, atm, bar, mmHg, cal = 4.184 J, Da
+from CODATA 2022), a float when π is involved (deg, pc = 648 000/π au) — a dimension, an offset
+(°C, °F only) and whether SI prefixes may precede it (2022 set, `u`/`μ` for µ, `da`, `h`, `c`,
+`d`). `parse_unit(text)` (cached): symbols, then a prefix + a prefixable unit (`Pa`, `cd`, `min`,
+`mol` win over prefix readings; `ft` is refused, not femtotonnes), products (`*`, `·`, `.`, a
+space), `/` dividing the next factor, powers (`^2`, `**2`, `²`, `⁻¹`, `^(1/2)`), brackets, a
+leading `1` (`1/s`); an offset unit must stand alone (`°C/s` refused, "write K/s"); did-you-mean
+over the symbols. `Unit.text` / `.tex` write it (one negative factor after a slash: `km/s`,
+`m/s²`, `GeV/c²`; else negative powers: `J·mol⁻¹·K⁻¹`). `si_unit(dim)`: a named derived unit when
+one matches exactly (N, J, W, Pa, C, V, Ω, F, T, Wb, H; J·s for an action; s⁻¹ is left alone —
+Hz or Bq), else the base units, kg first. `describe_dim`: `energy (kg·m²·s⁻², J)`, `speed
+(m·s⁻¹)`, or the base units for unnamed ones.
+
+**Constants** (`quantities.constants`): the SI 2019 defining constants exact (c, h, e, k_B, N_A;
+ħ, R = N_A·k_B, σ derived, ħ and σ kept as floats), CODATA 2022 (G, m_e, m_p, m_u, ε₀, μ₀), g_n
+(CGPM 1901, exact), the au (IAU 2012, exact), IAU 2015 nominal (GM)☉, (GM)⊕ and R⊕ (equatorial),
+M☉ and M⊕ as those parameters over CODATA G (six figures). Each with its TeX, meaning and source
+(shown in the table), aliases (`kB`, `Msun`, `eps0`...) and did-you-mean.
+
+**Quantities** (`quantities.quantity`). `Quantity(value, dim, sig)`: an SI value, a `Fraction`
+while exact and rational, else a float; `sig` its significant figures, `None` exact. Written
+values (`written`): a fraction is exact; a whole number without a unit is exact (a count); other
+numbers are measured with `count_sig` figures (leading zeros never, trailing zeros after a point,
+not in a whole number: `1500` → 2); `sig` rounds to the stated figures; `exact: true`. A value
+in °C converts to kelvin keeping its resolution (25.0 °C → 298.2 K). Arithmetic: `add` (dims
+must agree, error naming both sides and dimensions; the result keeps the coarser resolution,
+10^(decade − sig + 1), so cancellation loses figures), `mul` / `div` (fewest figures of the
+measured operands; division by zero named), `power` (a dimensioned base needs an exact rational
+exponent; exact roots of perfect powers stay exact: √(1/2500) = 1/50), `call` (`sqrt`, `abs`,
+`min`/`max` with equal dims, and the transcendental functions on pure numbers; figures of the
+argument). `decimal_text(value, sig, mode)`: rounded half away from zero (`Decimal`), plain in
+[10⁻³, 10⁵) when no digit left of the point is uncertain (29 800 to 3 figures → `2.98 × 10⁴`,
+240 to 3 → `2.40 × 10²`), else scientific — the plot core's bounds; Unicode and TeX.
+`fraction_text` for exact fractions; `nice_fraction`: numerator and denominator ≤ 100 000.
+
+**Expressions** (`quantities.expr`): the grammar of `mathexpr` (same tokens, implicit products,
+right-associative `^`) parsed into a tree (`Node`), plus a number with a unit in brackets (`9.81
+[m/s^2]`); numbers written in a formula are exact. `evaluate(node, env)` on quantities; `pi`,
+`e`, `tau` unless a symbol shadows them. `to_tex(node, leaf, replace, values, stack)` writes it
+with precedence-aware brackets (`\frac`, `\sqrt`, `e^{}`, `\ln 2`, products of symbols side by
+side with a thin space after a subscript, ×  between numbers and substituted values), a name
+written by `leaf` (a symbol, or a value with its unit), sub-trees replaced (`replace`: an
+evaluated part), and `stack` putting the outermost product on two lines (an `array`) for narrow
+frames. Not `mathexpr`'s closures: one tree serves evaluation and every TeX step; `mathexpr` is
+unchanged.
+
+**Worked calculations** (`quantities.calc`). `work(symbols, calcs, wrap, lenient)`: symbols
+(`SymbolInput`: value | constant | imported result) and calculations (`CalcInput`: name, expr,
+unit, convert, sig, format, tex, symbol, intermediate, substitute) in order; each result becomes
+a name for later ones (an earlier name used before it is computed: "computed by calculations[3],
+after this one"; a constant's key not in the table: "add {name: G, constant: G}"). A
+`CalcResult` has its value (`SymbolValue`: quantity, display unit, number as text / TeX, the SI
+value for substitutions without units), the steps (`Step`: kind formula | substitute |
+intermediate | result | convert, TeX after the relation `=` / `\approx`; the substitution in four
+variants: with units / SI numbers, on one line / two), the names used, conversions and
+warnings (a `sig` claiming more than the inputs give — for lint, Step 226). Names: identifiers,
+not function names, unique; `name_tex` writes them (`M_sun` → `M_{\odot}`, `k_B`, `lambda`,
+`t_half` → `t_{1/2}`, `p1` → `p_1`). The result's display: `unit` (checked) or `si_unit`; formats
+`auto` (an exact rational: a fraction when nice, then its decimal — exact when it terminates
+within six figures, `= 1/50 = 0.02`, else `≈ 0.00667`; exact irrational: 4 figures after ≈;
+measured: its figures), `decimal`, `sci`, `fraction` (exact results only), `percent` (pure
+numbers). The intermediate (default on) is the outer function's or power's non-trivial argument
+evaluated, with one guard figure beyond an explicit `sig`. Later calculations use full values.
+`wrap(key, tex)` lets the scene mark each symbol occurrence (dvisvgm groups) for highlights.
+
+### 97.10 The `calculation` scene (Step 225)
+
+Name: **`calculation`** (no scene type, action or common target has it). It replaces neither
+`equation` (a formula that morphs) nor `equation_derivation` (algebra with reasons); it is the way
+to show worked numbers — the Hardy–Weinberg and pedigree-risk cards of Phases U / V wrote theirs
+as Pango text with `Fraction`s, which those scenes keep (compatibility); new worked numbers use
+`calculation`.
+
+Params (`scenes/calculation.py`): `symbols` (`CalcSymbol`: `name`, exactly one of `value` /
+`constant` / `from_scene`, `unit`, `sig`, `exact`, `digits`, `tex`, `meaning`, `source`, `color`,
+`show`), `calculations` (`CalcStep`: `name`, `expr`, `meaning`, `unit`, `convert`, `sig`,
+`format`, `tex`, `symbol`, `substitute`, `intermediate`, `units: auto | always | never`), `table`
+(`auto | side | top | none`), `results_in_table`, `size` (72), `table_size` (40), `color`,
+`result_color`, `meaning_color`, `title`, `caption`. The params validator runs `work(lenient)`:
+every error a param can cause is reported by `validate_params` / `vidgen validate`;
+`from_scene` (`scene_id` or `scene_id.result`) is resolved by `validate_project` and at render
+(`resolve_imports`: the other scene's params parsed and worked, recursively; unknown scene /
+result with did-you-mean; a loop refused).
+
+Layout. The table beside the work in 16:9 (columns 0.6 / 0.4), above it in 9:16 (its natural
+height, at most half the body; two columns when the rows are short); a row is `symbol = value
+unit` (MathTex at `table_size`, ×1.15 in portrait) over `meaning · source` (readable caption
+text); results of all calculations but the last have rows from the start (hidden until their
+calculation leaves). The work area shows one calculation at a time: its lines aligned at their
+relation (a dvisvgm group `vgrel`), the block centred; each line scaled on its own to the width
+(at most `size`), then all together when the block is too tall (gaps excluded from the shrink).
+A substitution picks the first of its variants (units; units on two lines; SI numbers; SI on two
+lines) whose size is at least 80 % of the largest variant's or twice the readable size —
+explicit when it fits, readable when it does not. A warning when a line still ends below the
+readable size (lint's measure: the 75th percentile of glyph heights). The result line gets a
+`result_color` box. Symbol colours: `color`, else a concept colour (`terms:`) whose TeX equals
+the symbol's, applied to every occurrence (groups) in lines and table. The layout dump's math
+text is the TeX without the group markers.
+
+Steps. Calculations ≥ beats: calculations distributed over beats, each beat playing its
+calculations' lines; fewer: beats distributed over calculations, each calculation's lines over
+its beats. Lines an action names (`substitute` / `compute` / `convert` on `calc<N>`, `reveal` of
+a line or `calc<N>`) and the lines after them are left to the actions; an entrance brings the
+lines before it not yet shown and the following lines no action names; the first entrance of a
+calculation sends the previous one away (its rows fade, its result row fades into the table)
+and brings the title, caption and table. (Nested `Succession`s shrank a row in manim — the result
+box is created alongside the row's fade-in instead.)
+
+Targets: `title`, `table`, `symbol:<name>` (every occurrence: table, lines, substituted values),
+`row:<name>`, `calc<N>` / `calc:<name>`, `formula<N>`, `substitution<N>` (a formula of numbers
+only: the formula), `result<N>` / `result:<name>`, `conversion<N>`. Actions
+(`scenes/calculation_actions.py`): `substitute`, `compute`, `convert` — calculation scenes only
+(`calculation_actions = True`), targets `calc<N>` / `calc:<name>` checked with did-you-mean
+(`convert` needs `convert:` units); they play `Calculation.calculation_step(target, action)`.
+
+Public: `vidgen.api.quantities` (module); scene type `calculation`; actions `substitute`,
+`compute`, `convert`. No config key, no dependency.
+
+**Gaps after Step 225**: the narration lint against computed results is Step 226 (results and
+warnings are ready: `Params.worked(project)`); temperatures are absolute (a difference of two
+°C values is right in K, but adding two absolute temperatures is not refused); units in
+`[brackets]` inside an expression are not converted for an SI substitution; no uncertainties
+(± propagation) — significant figures only; a long formula is shrunk or stacked, not broken at
+`=` signs; Phase U / V cards keep their own worked-number text.
+
+### 97.11 Lint for calculations and plots (Step 226)
+
+Ten rules (scene scope, configurable in `lint.rules` like the others, last in `LINT_RULES`):
+`calc_numbers`, `calc_units`, `calc_sigfigs` (info) and `plot_units`, `plot_log`,
+`plot_errors`, `plot_series`, `plot_truncated` (info), `plot_conserved` (`tolerance` 0.01),
+`plot_fit_claims` (`sigmas` 2, `tolerance` 0.05); `calc_numbers` / `calc_units` take `tolerance`
+(0.05). Like the `science_*` / `genetics_*` rules they read the config, not the stills: the
+runner appends `calc_issues` (`lint/calc_rule.py`) and `plot_issues` (`lint/plot_rule.py`) to
+`SceneContext.science` (`ScienceIssue`s, reported by `science_rule._issues`).
+
+**Knowledge** (`vidgen/quantities/accuracy.py`, no manim; reuses `cellworld.accuracy.plain` /
+`Claim` and `genetics.accuracy.HYPOTHETICAL`): `said_values(sentence)` → `SaidValue`s — numbers
+in digits (`2,500`, `29.8`, `3.73 × 10⁻¹⁹`, `6.674e-11`, `1.5 million`, `1/25`) and in words with
+a strict whole-number grammar (`words_value`: "three hundred sixty-five", "a hundred and fifty";
+"two and three" is not a number), decimals said with "point" ("eight point oh four"), spoken
+powers of ten ("times ten to the minus nineteen"), fractions with ordinal denominators ("three
+halves", "forty-nine fiftieths", "one twenty-fifth", "one and a half"), shares ("one person in
+twenty-six", "1 out of 3"); each with its resolution (half its last written place; a whole
+number's trailing zeros allow rounding by up to a tenth of it — "thirty" covers 29.8, "two
+hundred" not 150), significant figures (sure only with a decimal point or a non-zero last
+digit), "about" (also "near", "≈"), a bound ("more than"), a range ("400 to 700", "between 3 and
+5", "two or three"). Units after a number: spoken (`UNIT_WORDS` with prefixes, "square" /
+"cubic" / "squared", "per", "an hour" for times: "kilometres per second", "metres per second
+squared", "micrograms per litre", "degrees Celsius") or symbols parsed by `parse_unit` (a
+stop-list keeps "5 am", "2 as" out; three-letter lowercase words are not units); "in kilograms"
+earlier in the sentence gives unit-less numbers a unit. `agrees(said, actual_si, tolerance,
+sigma)` compares in SI (shares on N); "about" also accepts rounding to 1–2 significant figures
+or `tolerance`. `mixup_power` finds a factor 10^(3k) that would make it agree.
+`dimension_claims`: a quantity word linked to a value ("a speed of", "the half-life is") whose
+unit has another dimension (masses and momenta may be in eV, a frequency a share).
+`fit_quantities(kind, names, params, errors, units, x_unit)` → `FitQuantity`s with propagated
+errors (exponential: half-life ln2/|k|, lifetime 1/|k|, rate; growth: doubling time; the
+exponential distribution 1/λ; power: exponent; linear: slope, intercept; gaussian / normal:
+centre, σ, FWHM; Breit–Wigner: M, Γ; logistic: L, x₀, k; Poisson: mean; custom: parameters by
+name); `fit_claims` reads "<word> (of|is|at|…) <value>" and accepts the value within `sigmas`
+standard errors plus its rounding (in the parameter's unit, converted from the said one).
+`error_meaning_claims`: in a sentence about bars / errors, a meaning (standard deviation, SEM,
+confidence interval, range, Poisson) other than the declared ones.
+
+**Which value a number refers to** (`calc_rule`). Candidates are every calculation scene's
+symbols and results (`Params.worked(project)`, imports resolved; a result shown in its first
+conversion), with the content stems of their `meaning` (number words left out). A number with a
+unit: its own scene's values of that dimension — any it agrees with is fine (and then
+`calc_sigfigs` checks a result's figures), else the one the sentence names, else the scene's only
+value of that dimension (a result); `mixup_power` makes it `calc_units`, else `calc_numbers`. A
+pure number or share: only a value the sentence names (its name, or two meaning words — all when
+the meaning has one), the number containing or nearest after the mention (shares, fractions,
+percentages and decimals before bare whole numbers); in its own scene one meaning word no other
+value has also names it, but then only a share / fraction / percentage / decimal is taken.
+Another scene's results only in scenes without numbers of their own (not a calculation, not a
+plot with fits: those have their own values and `plot_fit_claims`) and only when named. A unit of
+another dimension for a named value is `calc_units`. Texts: beats, and on screen the params
+`title`, `subtitle`, `heading`, `caption`, `text`, `body`, `lines`, `bullets`, `items`, `points`,
+`note`, `footer`, a plot's annotation texts and callout labels (`calc_rule.screen_texts`).
+`CalcResult.warnings` (a `sig` beyond the inputs) are `calc_sigfigs`.
+
+**Plots** (`plot_rule`, the plot resolved with the project's CSVs and models as at render):
+`plot_units` — an axis title naming a physical quantity (`QUANTITY_UNITS`) with no unit and no
+"relative / count / (…) / per …"; a fit with parameter units on a unitless x. `plot_log` — on a
+log axis: error bars' lower ends ≤ 0, a fit curve over its range or its band ≤ 0, an hline /
+vline / range ≤ 0; and a resolve error about a log scale (data from a CSV or a model that
+validation of inline data could not see). Validation already refuses inline data ≤ 0 and a
+histogram on log y (its bars start at 0). `plot_errors` — `y_err` / `x_err` without `error`;
+narration naming another meaning. `plot_series` — a panel of several series whose legend is off
+(`Plot._legend_panels`) where label / arrow annotations do not name them all; placeholder names.
+`plot_truncated` — a bars histogram on a y axis with `breaks` (a linear `min` above 0 is refused
+by validation), a `bar_chart` with `baseline` ≠ 0 and every value on one side. `plot_conserved` —
+`Params.conservation()` above `tolerance`, suggesting leapfrog (or, with leapfrog, half the step).
+
+**Narration–picture rules.** `SHOWING_ACTIONS` gains `fit`, `annotate`, `grow`, `substitute`,
+`compute`, `convert`; `Plot.target_text` (series name, a named fit, an annotation's text, the
+title) and `Calculation.target_text` (a `row:` / `symbol:` target's table note "meaning ·
+source", the title; formulas are math, not text labels).
+
+**Choices.** English only, as the other accuracy rules. Narrow by design (a false finding teaches
+authors to ignore lint): negations, questions, comparisons ("than"), hypotheticals, bounds and
+ranges are not read; a pure number needs its name in the sentence; cross-scene matching only from
+scenes without numbers of their own. The trailing-zero rule (a tenth at most) is the compromise
+between "thirty" for 29.8 (fine) and "two hundred" for 150 (wrong). `plot_conserved`'s 1 %:
+leapfrog on the Step 224 pendulum drifts 0.02 %, RK4 with a coarse step 8 %.
+
+Public: lint rules and their config models (`CalcNumbersRule` … `PlotFitClaimsRule`); module
+`vidgen.quantities.accuracy` (reached as `vidgen.api.quantities.accuracy` after import; not
+re-exported); scene classmethods `Plot.target_text`, `Calculation.target_text`. No dependency.
+
+**Gaps after Step 226**: a calculation's chain is compared value by value (a number said for an
+intermediate step is not read); a pure number in a sentence that does not name its value ("two
+thirds times one twenty-fifth times one quarter is one in two hundred") is not read; units in
+words after a symbol number ("90 km an hour") keep only the symbol; no checks of numbers on
+`bar_chart` / `line_chart` labels against their data; `plot_fit_claims` reads the plot scene's
+own fits only.
+
+### 97.12 Adoption, the substitution layout, the example and the docs (Step 227)
+
+**Adoption of the core by the Phase U / V plots** (the rule of §97.3: only where clearly better
+and visually compatible, with before / after stills; stills in the scratchpad's `s227/before16`,
+`before916` and `adopt/build/...`):
+
+| plot | decision | why |
+|---|---|---|
+| PCR temperature trace (`dna_lab`) | **adopted** | it drew its own axes (`molecular_draw.plot_axes`, now removed): a rotated "°C", "denature" printed over the 95 tick label and the trace. On the core (`plotcore.layout_axes` with hand-built `Axis`es, `plot_draw.draw_panel`): a horizontal title "temperature (°C)", the three temperatures as the y ticks named by their stage ("denature 95", "extend 72", "anneal 50") with dashed gridlines, "cycle k" under each cycle; the stage names no longer sit inside the plot. Labels the core would thin are spread apart instead (`dna_lab._all_y_labels`: each temperature names a stage). The plot is a little shorter (the title row); the gallery entry `dna_lab` was regenerated (GIFs 110 / 120 KB) |
+| allele-frequency and heterozygosity plots (`population`) | skipped | already drawn with `vidgen.charts.chart_axes`, the style the core copies: the core would draw the same picture; the risk (lines growing per generation, the bottleneck band, the stacked H plot and their tests and gallery entry) buys nothing visible |
+| Manhattan, QQ and regional plots (`gwas`) | skipped | `chart_axes` too; the Manhattan x axis is categorical (chromosomes), which the core does not do; the QQ plot's square ranges (both axes to the same ceiling) already give the equal aspect |
+| cyclin–CDK curves (`cell_cycle`) | skipped | no numeric axes (levels in a.u. without ticks, phase bands): not a chart (§97.3) |
+| action-potential inset (`molecule`) | skipped | a small inset in a side panel with units at the axis ends and a threshold line; the core's layout spends a title row above and a label row below, which the inset cannot spare, and the core has no inset plots yet (§97.4 gaps) |
+| Sanger trace, gel, NGS coverage | not candidates | pictures of lab results (§97.3) |
+
+`plotcore.layout_axes(area, x, y, measure, top=)` (new, exported): one panel laid out like
+`layout_figure`'s from axes the caller built (`Axis` with its own ticks and labels) — for domain
+plots whose ticks mean something other than round numbers.
+
+**Substitutions keep their units** (reviewer's note on Step 225). The orbit's substitution fell
+back to SI numbers without units even in 16:9: the rule wanted a variant at least 80 % as large
+as the largest (the SI one) or twice the readable size, and the block's uniform shrink made every
+line small. Now (`scenes/calculation.py`): (1) when the block is too tall, the largest lines
+shrink first, down to a common size (`_fit`: a cap found by bisection; then no line more than
+`SPREAD` = 1.6 times the smallest, so the lines read as one block; then a uniform shrink if the
+aligned block is too wide) — a big formula gives way before a long substitution; (2) a third
+way with units, one factor of the outermost product per line (`Step.deep`, `expr.to_tex(stack=2)`;
+a bare number stays with the factor after it: `2 × G`, not `2` alone); (3) each way is judged by
+its final size in the block, and the units ways win when the most explicit of them that is nearly
+as large as the largest is at least `KEEP_UNITS` = 1.2 × the readable size (`_choose`), else the
+old rule over all ways. Results: orbit (√(G M☉ / r)) keeps units in 16:9 and 9:16, escape
+(√(2 G M / R)) in 16:9 (SI in 9:16, where G's unit is too wide), the photon's E = hc/λ in both.
+`Step.unit_variants()`; `units: always` now includes the one-per-line way. Lines of one block can
+now differ in size (within `SPREAD`); a formula that used to stand twice as large as a long
+substitution now comes down towards it (the orbit, the photon); the gallery entry `calculation`
+was regenerated.
+
+**The example** `examples/radioactive-decay` (2:52, Kokoro `af_heart` at 0.85, the `beacon` bed at
+−8 dB, no captions overlay: the plots need the height): a live Monte Carlo (CSV series with `live:
+true`; 1000 and 20 nuclei beside exp(−λt), fixed axes), counts with √N bars on a log axis fitted
+by `model: custom` `A*exp(-lambda*x)` (λ itself in the box; the built-in exponential shows k = −λ)
+with a confidence band and normalized residuals, a zoom on the tail, the half-life with its
+uncertainty and its distance from the tabulated value in standard errors (uncertainty as a
+calculation of its own: the engine carries significant figures, not ±), carbon-14 dating as a
+chain. Data from `make_data.py` (standard library, `random.Random(227)`: stable across Python
+versions), labelled "simulated" on screen. Lint clean in 16:9 and 9:16 with the real narration.
+
+**Docs.** Guide topic `science` (aliases plots, plot, calculations, calculation, units, fits,
+physics, data; the alias `science` left the `biology` topic, which keeps cell-biology, lecture,
+research); the guide's chooser snippets of `plot` and `calculation` moved into their own block
+`# science charts`, so the gallery index has a section "Science charts" (`gallery.SECTION_NOTES`
+links the example and the cookbook); `docs/COOKBOOK-SCIENCE-CHARTS.md`; CONFIG's calculation
+layout paragraph; the CONFIG completeness test now covers `plot` and `calculation`.
+
+Public: `plotcore.layout_axes`; `quantities.Step.deep`, `Step.unit_variants`;
+`expr.to_tex(stack=)` takes 0 / 1 / 2 (a bool still works). No config key, no dependency.
+
+**Gaps after Step 227**: the population, GWAS, cyclin and action-potential plots keep their own
+drawing (above); `layout_axes` has no shared-axis variant; a substitution whose single factor is
+wider than the frame (G's unit in 9:16) still falls back to SI numbers; in 16:9 a crowded fit
+figure needs `label_size: caption` for a readable residual panel; a live CSV series has no head
+readout of its own time unless `readout:` is set.
+
+### 97.13 Review of Phase W (Step 228)
+
+**Accuracy, checked against numpy / scipy** (scratchpad `s228/probe*.py`; kept as tests in
+`tests/test_science_review.py`, the scipy comparisons skip without scipy):
+
+| what | reference | finding |
+|---|---|---|
+| weighted / unweighted lines, polynomials | `curve_fit`, `numpy.polyfit(cov=...)`, `linregress` | parameters 1e-10, errors 1e-8 to 1e-15, R² and χ² exact |
+| confidence and prediction bands of a line | the textbook formulas with Student's t | 1e-15 |
+| exponential, Gaussian, logistic, power (weighted and not), their bands | `curve_fit` + the delta method | parameters ≤ 3e-7, errors ≤ 1e-5 (numerical Jacobian) |
+| x errors (effective variance) | `scipy.odr` | parameters within 0.06 σ, errors 0.1 %: an approximation of orthogonal regression, kept and documented |
+| binning rules sturges / fd / scott / sqrt / auto | `numpy.histogram_bin_edges` | same edges (1e-12) |
+| **histogram with a number of bins or a rule's exact edges** | `numpy.histogram` | **bug, fixed**: the 12-digit cleaning of the edges could move the outer edge past the smallest or largest value, which was then dropped (`outside`); with 50 random values and `bins: 7` it happened in most samples. `hist._cover` keeps the outer edges at the data's ends |
+| maximum-likelihood normal / exponential / Poisson | `scipy.stats.*.fit`, `poisson.pmf` | exact |
+| **counts fitted with √N weights** | a Poisson likelihood minimised by `scipy.optimize.minimize` | **bias, fixed**: weights from the observed counts (Neyman's χ²) pull a decay low where counts are few; for the example's data λ came out 0.47 σ high on average (300 simulated data sets). Counts — `y_err: sqrt` on a series, or a histogram's curve fit — are now fitted by Poisson maximum likelihood: least squares re-weighted with the fitted curve's variance until it settles (`fit_curve(poisson=scale)`; the fixed point solves the likelihood equations; errors from the Fisher information; χ² is Pearson's; a 0 count is a point like any other instead of an error). The example's λ: 0.276 → 0.274 ± 0.004 min⁻¹ (scipy's likelihood minimum to 1e-8) |
+| normal / t quantiles, χ² tail | `scipy.stats` | 1e-9 or better |
+| RK45 | `solve_ivp` (RK45, DOP853) | the same error; **inefficiency, fixed**: steps ended on every output time (2401 right-hand-side calls for 400 samples of an oscillator; scipy 716). Now the steps follow the error control and the outputs come from the method's dense output (scipy's interpolant): 709 calls, the same accuracy. **The absolute tolerance** was rtol × 10⁻³ whatever the model's scale (a concentration of 10⁻⁷ mol/L was integrated to an absolute 10⁻⁹): now scaled by the largest initial value |
+| RK4 / leapfrog drift | closed forms | Kepler e = 0.5 over 30: RK4 2e-8, leapfrog 3e-4 (bounded, O(step²)) as documented |
+| SplitMix64 | the reference sequence (seed 1234567) | identical |
+| constants | `scipy.constants` (CODATA 2022), IAU | identical; R = N_A·k_B exactly, M☉ and M⊕ from IAU GM / CODATA G |
+| units | conversion factors | ly, pc, au, Torr, mmHg, cal, Da: as defined |
+
+**Units: temperatures on an offset scale** (the gap of Step 225). `Quantity.temperature`:
+`"point"` for a value written in °C / °F (a reading), `"difference"` for a difference of two
+readings. In kelvin the arithmetic is right either way, so nothing changes in value; the marks
+catch the two slips: adding two readings is refused ("write a change of temperature in K, or the
+readings in K to average them"), and a difference cannot be written in °C / °F ("10 K would read
+as −263 °C"). A difference scaled by a pure number stays one; a reading times anything is no
+longer a reading; T + ΔT is a reading. Readings written in K are plain values (a K value may be a
+temperature or a change), so averages in K work.
+
+**Known gaps of 222–227, decided:**
+
+| gap | decision |
+|---|---|
+| equal-aspect axes with independent tick steps | fixed: both axes take the larger step (`figure._common_step`) inside the equal-aspect loop (square gridlines) |
+| RK45 without dense output | fixed (above) |
+| normalized residual panels hard to read | fixed: symmetric about 0, ticked at ±2 (`AxisSpec.ticks`, caller-chosen linear ticks), the points without bars (each is ±1 by definition, the bars only took room); counts use σ = √fit, as their χ² |
+| intermediate calculation steps not seen by the lint | improved: an `intermediate` line keeps its evaluated parts (`Step.values`); the lint takes them as candidates without a name: a number said for one agrees, none is ever blamed |
+| a calculation's slow fade when the next starts (it read as a ghost behind the new formula) | fixed: the leaving calculation takes `LEAVE_SHARE` = 0.5 of a step against 1 per line coming |
+| a single factor wider than the frame falls back to SI numbers | stays: breaking a unit or a value across lines would mislead; SI numbers with the units in the table are honest |
+| crowded 16:9 fit figures need `label_size: caption` | stays documented (an automatic switch would change existing plots) |
+| rescaling only when every series of a panel shares one progress | stays (a panel with two clocks has no single domain at a time) |
+| zoom on a broken axis refused | stays (a zoom inside one piece would need the break logic per frame) |
+| 9:16 long fit box reserves room above the figure from the start | stays (the layout is static; moving the plot when the box appears would jump) |
+| `bar_chart` / `line_chart` value labels not compared with narration | stays (their labels come from their own data; a narration check would be a chart-scene rule) |
+| Phase U / V domain plots not adopted | the decisions of §97.12 stand |
+
+**Module boundaries.** `vidgen.plotcore` and `vidgen.quantities` import only `vidgen.errors` and
+`vidgen.mathexpr` (no manim, no scipy, no scenes; checked in a fresh interpreter).
+`quantities.accuracy` (the lint's knowledge, not re-exported) imports the sentence helpers of
+`cellworld.accuracy` / `genetics.accuracy`, which loads those pure-Python packages; acceptable for
+a lint module, noted for a later move of the shared sentence helpers into a neutral module.
+
+**Compatibility.** Phase Q baseline: 31 frames, max difference 0 (`phase-q-baseline/check228`).
+Changed on purpose: fits of counts (`y_err: sqrt`, histogram curve fits) by Poisson likelihood
+(only `examples/radioactive-decay` uses them: narration and the `half` scene updated to λ = 0.274,
+t½ = 2.53 min, σ = 0.041 min, z = 0.5; three beats re-voiced with Kokoro), normalized residual
+panels, equal-aspect tick steps, RK45 samples (dense output: differences within the tolerance),
+the calculation hand-over timing. The gallery is unchanged (no gallery scene uses any of them).
+
+Public (additive): `plotcore.fit_curve(..., poisson=)`, `AxisSpec.ticks`,
+`quantities.Quantity.temperature`, `quantities.Step.values`. No config key, no dependency.
