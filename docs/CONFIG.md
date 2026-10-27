@@ -4347,7 +4347,9 @@ per beat (`reveal: series`, default; lines draw from their first point, points p
 rise; a series' legend entry and error bars come with it), then each fit, then each annotation
 — or everything at once (`all`). The actions [`fit` and `annotate`](#beat-actions) (and
 `reveal`) put a fit, an annotation, a series or its error bars on a word instead; the plot's
-own steps then leave them out. Labels are plain text (no LaTeX): `10⁻³`, `2.5 × 10⁶`, `µs`.
+own steps then leave them out. Series of [models](#live-plots-models-and-grow) (ODEs,
+recurrences, random processes) grow live over their beat, and `grow` / `zoom` time growth and
+zooms to words. Labels are plain text (no LaTeX): `10⁻³`, `2.5 × 10⁶`, `µs`.
 Text is at least `body` size in 16:9 (`caption` in 9:16: the large scale), for phones; an
 axis ends just past its data when rounding out to the next tick would leave more than 8 % of
 the span empty; a legend, fit box or note that finds no free spot inside its plot moves to a
@@ -4369,6 +4371,8 @@ panels), `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit
 | `legend` | bool | auto | default: in a panel with several series, a fit, or error bars with a stated `error`, and in a figure of several panels for a series its panel's axis title does not name; in a free corner of the plot, else beside (16:9) or above (9:16) the figure |
 | `fits` | list of fits | `[]` | fitted curves, below |
 | `annotations` | list of annotations | `[]` | labels, arrows, reference lines, shaded ranges, notes, below |
+| `models` | map of name → model | `{}` | models generating data that grows live: ODEs, recurrences, random walks, Poisson events, registered functions; [below](#live-plots-models-and-grow) |
+| `rescale` | bool | `true` | while live series grow, free axes start around the first data and widen smoothly as the data reach their edge (an axis whose data only grow, e.g. time, is shown whole); `false`: the whole range from the start |
 | `reveal` | `series` \| `all` | `series` | |
 | `point_radius` | float | auto | marker radius in units (0.1 for up to 20 points, down to 0.035) |
 | `label_size` | size | auto | ticks, axis titles, legend, fit boxes, annotations; default `body` in 16:9, `caption` in 9:16 |
@@ -4543,6 +4547,160 @@ ranges out of a linear axis (drawn with `//` marks; data on both sides, none ins
         band: prediction
   beats:
     - text: "Growth slows as the culture fills the flask."
+```
+
+#### Live plots: models and grow
+
+A **model** (`models: {name: {kind, ...}}`) generates columns that series name like the
+columns of a CSV (`x: t, y: x`; a series takes `model: <name>`, by default the plot's only
+model when it has no `data`). Its series are **live**: each grows over its step's slot of the
+beat (from its first point to its last, in the model's time) with a head marker; consecutive
+live series of one model grow together (panels sharing a time axis, a phase portrait next to
+x(t)). Everything is deterministic: the same model and seed give the same numbers on every
+machine.
+
+| `kind` | keys | columns |
+|---|---|---|
+| `ode` | `equations` (`{x: v, v: "-k*x - c*v"}`: the derivative of each variable; keys `x`, `dx/dt` or `x'`), `initial` (every variable), `params`, `t: [start, end]` (default `[0, 10]`), `method`, `step`, `tolerance`, `samples` | `t`, the variables |
+| `recurrence` | `equations` (`{x: "r*x*(1 - x)"}`: the next value from the current; `n` is the step number), `initial`, `params`, `steps` (default 50) | `n`, the variables |
+| `random_walk` | `steps` (100), `seed`, `step` (the step's length, 1), `p` (1-D lattice: chance of a step up, 0.5), `dims` (1 or 2), `distribution` (`lattice` or `gaussian`) | `n`, `x` (`y`), `distance` |
+| `poisson` | `rate` (events per unit time), `t`, `seed` | `t`, `count` (a staircase), `expected` |
+| `function` | `function` (a name registered with `vidgen.api.register_model`), `params`, `seed` | what the function returns |
+
+Every kind also takes `quantities` (derived columns: `{E: "0.5*v^2 + 0.5*k*x^2"}`, expressions
+of the columns and params in the safe maths syntax), `units` (`{t: s, x: m, E: J}`: axis titles
+and readouts) and — `ode`, `recurrence`, `function` — `conserved` (quantities that should stay
+constant: their drift is checked for lint). `method` of an `ode`: `rk4` (fixed `step`, default a
+thousandth of the span; error ∝ step⁴), `rk45` (adaptive Dormand–Prince to the relative
+`tolerance`, 10⁻⁶; `step` is the first step), `leapfrog` (velocity Verlet: symplectic, the
+energy of an orbit or an oscillator stays bounded over long times where RK4 slowly drifts;
+needs every position paired with a velocity, `x' = v`, and forces that do not depend on
+velocities). Errors name the model: an unknown name in an equation (did you mean), a missing or
+unknown initial condition, a step larger than a quarter of the span, a solution that blows up
+(where, and what to try), a stiff system that would need tiny steps all along.
+
+A live series (`live`, default `true` for a model's series; `live: true` makes data grow
+point by point too, and a histogram fill as its values arrive in their order — a peak emerging
+from the background as events accumulate, `readout` counting them) takes `head` (the marker at
+its growing end, `true`), `readout` (`true` or
+a label: a box with the model's time and the series' current value, `t = 3.20 s`, `x = 0.53
+m`; placed like a legend, beside the figure when the plot has no free spot) and `trail` (in the
+model's time: only that last stretch is drawn strongly, the older path faint — phase-space
+plots). While it grows, free axes widen smoothly when the data reach their edge (`rescale`);
+fits and annotations on a growing series wait until its data are complete.
+
+The action [`grow`](#beat-actions) times a growth: `- grow: "series:x"` (or `axes`: every live
+series, `panel2`) from where it is to `to` (the model's time; default the end), lasting until
+the beat's next action or its end (or `run_time`); a later `grow` continues. `zoom` with `x` /
+`y` eases a plot's axes to a region of the data and back (at the end of the beat, or `until`):
+`- {zoom: axes, x: [8, 18]}`; annotations of that panel step aside meanwhile.
+
+Models written in Python: in an extension,
+
+```python
+from vidgen.api import register_model
+
+@register_model("tumour")
+def tumour(params: dict[str, float], seed: int) -> dict[str, list[float]]:
+    ...   # deterministic for the same params and seed
+    return {"t": times, "volume": volumes}   # the first column is the progress (time)
+```
+
+```yaml
+- id: oscillator
+  type: plot
+  params:
+    title: A damped oscillator
+    models:
+      osc:
+        kind: ode
+        equations: {x: v, v: "-k*x - c*v"}
+        params: {k: 4, c: 0.3}
+        initial: {x: 1, v: 0}
+        t: [0, 20]
+        step: 0.01
+        units: {t: s, x: m, v: m/s}
+    arrange: columns
+    share: false
+    legend: false
+    panels:
+      - series: [{name: position, x: t, y: x, readout: true}]
+        y: {label: position}
+      - series: [{name: phase, x: x, y: v, trail: 3}]
+        x: {label: position}
+        y: {label: velocity}
+  beats:
+    - text: "Friction takes the energy away, so each swing is smaller."
+    - text: "In phase space the state spirals in towards rest."
+- id: pendulum
+  type: plot
+  params:
+    models:
+      swing:
+        kind: ode
+        equations: {theta: omega, omega: "-g/L*sin(theta)"}
+        params: {g: 9.81, L: 1}
+        initial: {theta: 2.5, omega: 0}
+        t: [0, 12]
+        method: leapfrog
+        quantities: {E: "0.5*L^2*omega^2 + g*L*(1 - cos(theta))"}
+        conserved: [E]
+        units: {t: s, theta: rad, E: J/kg}
+    panels:                           # stacked, sharing the time axis, growing together
+      - series: [{name: angle, x: t, y: theta}]
+      - series: [{name: energy, x: t, y: E, readout: true}]
+  beats:
+    - text: "The angle swings while the energy stays the same."
+- id: hares
+  type: plot
+  params:
+    models:
+      lv:
+        kind: ode
+        equations: {hares: "a*hares - b*hares*lynxes", lynxes: "d*b*hares*lynxes - g*lynxes"}
+        params: {a: 1.0, b: 0.1, d: 0.5, g: 0.6}
+        initial: {hares: 10, lynxes: 5}
+        t: [0, 40]
+        method: rk45
+        units: {t: yr}
+    series:
+      - {name: hares, x: t, y: hares}
+      - {name: lynxes, x: t, y: lynxes}
+  beats:
+    - text: "Hares multiply, lynxes eat them, and the cycle repeats."
+      actions: [{zoom: axes, x: [8, 18], at: 0.4}]
+- id: decay
+  type: plot
+  params:
+    models:
+      d: {kind: ode, equations: {N: "-lambda*N"}, params: {lambda: 0.3}, initial: {N: 1000}, t: [0, 10], samples: 40}
+    series: [{name: atoms, x: t, y: N, style: points}]
+    fits: [{series: atoms, model: exponential}]
+  beats:
+    - text: "The atoms decay."
+      actions: [{grow: "series:atoms", to: 4}]
+    - text: "Then the rest, and an exponential fits them."
+      actions: [{grow: "series:atoms"}, {fit: fit1, at: "@exponential"}]
+- id: walk
+  type: plot
+  params:
+    models:
+      walk: {kind: random_walk, steps: 400, seed: 7}
+    series: [{name: walker, x: n, y: x, readout: position}]
+  beats:
+    - text: "A coin decides every step; the walker wanders off."
+- id: resonance
+  type: plot
+  params:
+    data: assets/mass.csv             # mass (GeV): one value per event, in arrival order
+    y: {label: events per 2 GeV}
+    series:
+      - {name: events, values: mass, bins: 30, bin_range: [100, 160], style: points, y_err: sqrt, live: true, readout: events}
+    fits:
+      - {series: events, model: gaussian, background: 2, name: peak + background}
+  beats:
+    - text: "Events arrive one by one, and a bump rises above the background."
+    - text: "A Gaussian over a smooth background fits it."
 ```
 
 ### `pie`
@@ -10917,7 +11075,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
-| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets); on a [`plot`](#plot): `x`, `y` (`[from, to]` in data units) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. With `x` / `y` on a `plot` (targets `axes`, `panel<N>` or a series' panel) the camera stays: the plot's axes ease to that region of the data and back (x zooms every panel sharing it, residual panels too); its annotations step aside meanwhile. |
 | `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in; on an iso place `to` is a spot, the camera moves up and down too, and from the wide view it moves in (at least twice as close as the whole place). Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
@@ -10933,7 +11091,8 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |
 | `trace` | `to` (an x, or `[x, y]` for a point or a vector's tip) or `scale` (a vector only) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following; a point (`point<N>`, `point:A`) moves to `to: [x, y]`; a vector (`vector<N>`, `vector:a`) moves its tip to `to: [x, y]` or is multiplied by `scale` (2: twice as long, -1: turned round; its tail stays). Vectors, sums, marks and live labels drawn from a moved point or vector follow it. On a [`number_line`](#number_line): a point moves to `to` (a number). On a [`line_chart`](#line_chart): a cursor dot sweeps along a series (`series<N>`, `series:<name>`) to x = `to` (on category `x`, the position from 1) with the line's value over it. 2 s; it stays there (`until: <beat>`: back when that beat starts). |
-| `fit`, `annotate` | as the target: a fit (`- fit: "fit:decay"`) or an annotation (`- annotate: annotation2`) | on a [`plot`](#plot): draws the fit on a word (its band, the curve, its legend entry and parameter box, its residual panel; the data first if not shown yet; 1.6 s) or shows the annotation (its ring, arrow, line or shaded range and its text; 1 s); the plot's own steps leave them to the action. `reveal` does the same for a series or its error bars (`errors:<name>`). |
+| `fit`, `annotate` | as the target: a fit (`- fit: "fit:decay"`) or an annotation (`- annotate: annotation2`) | on a [`plot`](#plot): draws the fit on a word (its band, the curve, its legend entry and parameter box, its residual panel; the data first if not shown yet; 1.6 s) or shows the annotation (its ring, arrow, line or shaded range and its text; 1 s); the plot's own steps leave them to the action. `reveal` does the same for a series or its error bars (`errors:<name>`). On live data both wait for the data to finish growing. |
+| `grow` | the target: a live series (`- grow: "series:x"`), `axes` (every live series) or `panel<N>`; `to` (the model's time, or the point number of live data; default the end) | on a [`plot`](#live-plots-models-and-grow): grows the live series from where they are to `to`, with the head marker and readout, the axes widening as the data reach their edge; it lasts until the beat's next action or the beat's end (or `run_time`); a later `grow` continues. The plot's own steps leave those series to it. |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |

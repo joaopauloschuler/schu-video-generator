@@ -111,6 +111,16 @@ class PlotSeries(SceneParams):
     """Error bars in x: a number, a column, a list or {minus, plus}."""
     error: Literal["sd", "sem", "ci95", "range", "poisson", "other"] | None = None
     """What the error bars mean, shown in the legend: sd (standard deviation), sem (standard error of the mean), ci95 (95 % confidence interval), range (min to max), poisson (√N), other. Default with y_err: sqrt: poisson."""
+    model: str | None = None
+    """A model of the plot's models whose columns x and y name (default: the plot's only model, when there is no data file)."""
+    live: bool | None = None
+    """Grow the series over its beat (from its first point to its last, in the model's time or the data's order) with a moving head; a histogram fills as its values arrive, in their order; default: true for a model's series."""
+    head: bool = True
+    """live: a marker at the growing end."""
+    readout: bool | str = False
+    """live: show the current value (and the model's time) in a box while it grows: true (labelled by the y column), or the label to use."""
+    trail: float | None = Field(default=None, gt=0)
+    """live: only the last stretch (this long, in the model's time or points) is drawn strongly, the older part faint (phase-space plots)."""
 
     @field_validator("y", mode="before")
     @classmethod
@@ -153,6 +163,13 @@ class PlotSeries(SceneParams):
             raise ValueError(f"series '{self.name}': error ({self.error}) says what the error bars mean, but there are none (y_err / x_err)")
         if self.data is not None and not self.data.lower().endswith(DATA_SUFFIXES):
             raise ValueError(f"series '{self.name}': data '{self.data}' is not a .csv or .tsv file")
+        if self.model is not None:
+            if self.data is not None:
+                raise ValueError(f"series '{self.name}': give data (a file) or model, not both")
+            if not (isinstance(self.values, str) or isinstance(self.x, str) and isinstance(self.y, str)):
+                raise ValueError(f"series '{self.name}': a model's series names its columns: x and y (x: t, y: x), or values (a histogram of a column)")
+        if self.histogram and self.trail is not None:
+            raise ValueError(f"series '{self.name}': a histogram has no trail (it fills as its values arrive)")
         n = self.count()
         for axis in ("x_err", "y_err"):
             for side, v in _sides(getattr(self, axis)):
@@ -165,6 +182,11 @@ class PlotSeries(SceneParams):
     @property
     def histogram(self) -> bool:
         return self.values is not None
+
+    @property
+    def is_live(self) -> bool:
+        """Whether it grows over its beat (``live``, default with a model)."""
+        return self.live if self.live is not None else self.model is not None
 
     @property
     def drawn_as(self) -> str:
@@ -183,6 +205,14 @@ class PlotSeries(SceneParams):
         for v in (self.x, self.y):
             if isinstance(v, list):
                 return len(v)
+        return None
+
+    def live_problem(self) -> str | None:
+        """What is wrong with its live options once its model is known, or ``None``."""
+        if not self.is_live:
+            for key in ("readout", "trail"):
+                if getattr(self, key):
+                    return f"series '{self.name}': {key} is for a live series (live: true, or a model's series)"
         return None
 
     def columns(self) -> list[str]:
@@ -359,6 +389,15 @@ class ResolvedSeries:
         self.x_col, self.y_col = x_col, y_col   # plotcore.Column or None (inline numbers)
         self.hist, self.y_err, self.x_err = hist, y_err, x_err
         self.panel = 0
+        #: A live series: its progress at each point (the model's time column, else 0, 1, 2…),
+        #: and the time column (name, unit) for its readout; ``None`` for a static series.
+        self.times: np.ndarray | None = None
+        self.time_col: Any = None
+        self.discrete = False   # its progress counts steps: a readout shows the last one reached
+
+    @property
+    def live(self) -> bool:
+        return self.times is not None
 
     def x_values(self) -> list[float]:
         """The x values its axis must show (a histogram: its edges)."""

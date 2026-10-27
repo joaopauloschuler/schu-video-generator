@@ -431,13 +431,28 @@ class Zoom(Action):
     """Move the camera in on targets and back: by the end of the beat, or with ``until: <beat>``
     by the time that beat starts. Without ``scale`` the view is as close as fits the targets
     with ``padding`` around them (at most 3x; a target that fills the frame is not zoomed); the
-    view never leaves the frame."""
+    view never leaves the frame. In a ``plot`` scene, ``x`` / ``y`` instead zoom the plot's
+    axes to a region of the data (``zoom: axes, x: [2, 4]``) and back."""
 
     class Options(ActionOptions):
         scale: float | None = Field(default=None, gt=1, le=8)
         """Magnification (2 = twice as large); default: as close as the targets fit with padding."""
         padding: float = Field(default=0.15, ge=0, lt=0.5)
         """Share of the zoomed view kept free on each side of the targets."""
+        x: tuple[float, float] | None = None
+        """plot scenes: zoom the plot's axes to x from..to (in data units) instead of moving the camera."""
+        y: tuple[float, float] | None = None
+        """plot scenes: zoom the plot's axes to y from..to (in data units) instead of moving the camera."""
+
+        @model_validator(mode="after")
+        def _region(self) -> "Zoom.Options":
+            for name in ("x", "y"):
+                rng = getattr(self, name)
+                if rng is not None and not rng[1] > rng[0]:
+                    raise ValueError(f"{name} must be [from, to] with to > from, got [{rng[0]:g}, {rng[1]:g}]")
+            if (self.x is not None or self.y is not None) and self.scale is not None:
+                raise ValueError("give scale (a camera zoom) or x / y (a zoom of a plot's axes), not both")
+            return self
 
     run_time = 1.0
     reversible = True
@@ -446,8 +461,21 @@ class Zoom(Action):
     #: Largest magnification chosen automatically (``scale`` may ask for more).
     max_scale = 3.0
 
+    def _region(self) -> bool:
+        return self.options.x is not None or self.options.y is not None
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        """x / y zoom a plot's axes: plot scenes only, on its axes, panels or series."""
+        if self._region() and not hasattr(scene_cls, "zoom_region"):
+            return [("action", "zoom with x or y zooms the axes of a plot (type: plot); for other scenes zoom the camera (scale, padding)")]
+        return []
+
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Move and narrow the camera frame onto the targets' parts on screen."""
+        """Move and narrow the camera frame onto the targets' parts on screen (with ``x`` /
+        ``y`` on a plot: ease its axes to that region)."""
+        if self._region():
+            self.region = True
+            return scene.zoom_region(targets, self.options.x, self.options.y)  # type: ignore[attr-defined]
         parts = [part for _, part in _parts(scene, targets)] or [t.mobject for t in targets]
         group = Group(*parts)
         fw, fh = scene.frame_width, scene.frame_height
@@ -467,6 +495,8 @@ class Zoom(Action):
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to the view before the zoom (nothing to do when the camera is there)."""
+        if getattr(self, "region", False):
+            return scene.zoom_back()  # type: ignore[attr-defined]
         return move_camera_back(scene, getattr(self, "before", None))
 
 

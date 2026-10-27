@@ -69,12 +69,28 @@ def draw_panel(
     axis_color: Any = "dim",
     grid: Grid = "major",
     theme: Theme | None = None,
+    cache: dict[Any, Any] | None = None,
 ) -> PanelDrawing:
     """Draw a laid-out panel: the left and bottom axis lines (cut at breaks, with ``//`` marks),
     outward tick marks at every major tick (shorter at minor ones), gridlines (``major``: both
     axes at labelled ticks, ``both``: also minor ones, ``x`` / ``y`` / ``none``), tick labels in
-    ``color`` and axis titles. Nothing is added to a scene."""
+    ``color`` and axis titles. Nothing is added to a scene. ``cache`` (a dict kept by the
+    caller) reuses the text of labels drawn before (a panel redrawn every frame while it
+    rescales or zooms)."""
     theme = theme or current_theme()
+    memo: dict[Any, Any] = cache if cache is not None else {}
+
+    def label(text: str) -> Text:
+        key = ("label", text, s, str(color))
+        if key not in memo:
+            memo[key] = styled(Text, theme, text, s, color, NORMAL)
+        return memo[key].copy() if cache is not None else memo.pop(key)
+
+    def title(text: str, width: float, align: str) -> Any:
+        key = ("title", text, round(width, 3), align, s, str(color))
+        if key not in memo:
+            memo[key] = fit_text(text, width, size=s, color=color, align=align, theme=theme)
+        return memo[key].copy() if cache is not None else memo.pop(key)
     s = chart_label_size(size, theme)
     dim = resolve_color(axis_color, theme)
     plot = lay.plot
@@ -113,15 +129,15 @@ def draw_panel(
     out.breaks.add(*_break_marks(lay, dim))
 
     for lab in lay.x_labels:
-        out.x_labels.append(styled(Text, theme, lab.text, s, color, NORMAL).move_to(np.array([lab.x, lab.y, 0.0])))
+        out.x_labels.append(label(lab.text).move_to(np.array([lab.x, lab.y, 0.0])))
     for lab in lay.y_labels:
-        t = styled(Text, theme, lab.text, s, color, NORMAL)
+        t = label(lab.text)
         out.y_labels.append(t.move_to(np.array([lab.x + lab.width / 2 - t.width / 2, lab.y, 0.0])))
     if lay.y_title is not None:
-        t = fit_text(lay.y_title.text, lay.y_title.width + 0.05, size=s, color=color, align="left", theme=theme)
+        t = title(lay.y_title.text, lay.y_title.width + 0.05, "left")
         out.y_title = t.move_to(np.array([lay.y_title.x - lay.y_title.width / 2 + t.width / 2, lay.y_title.y, 0.0]))
     if lay.x_title is not None:
-        t = fit_text(lay.x_title.text, lay.x_title.width + 0.05, size=s, color=color, theme=theme)
+        t = title(lay.x_title.text, lay.x_title.width + 0.05, "center")
         out.x_title = t.move_to(np.array([lay.x_title.x, lay.x_title.y, 0.0]))
     out.group.add(out.minor, out.grid, out.lines, out.ticks, out.breaks, *out.x_labels, *out.y_labels)
     out.group.add(*[t for t in (out.x_title, out.y_title) if t is not None])
@@ -384,6 +400,51 @@ def series_markers(points: np.ndarray, plot: Rect, color: str, *, marker: str = 
     return group
 
 
+#: The style a :func:`morph_into` copies from a part to a member.
+_STYLE = ("fill_rgbas", "stroke_rgbas", "background_stroke_rgbas", "stroke_width", "background_stroke_width", "sheen_direction", "sheen_factor")
+
+
+def flat(drawing: Any) -> VGroup:
+    """A flat group of the parts of ``drawing`` that have points (the same objects), for
+    :func:`morph_into`."""
+    return VGroup(*drawing.family_members_with_points()) if drawing is not None else VGroup()
+
+
+def morph_into(container: VGroup, drawing: Any) -> VGroup:
+    """Make the flat ``container`` (see :func:`flat`) show ``drawing``: each member takes the
+    points, style and z-index of one part of ``drawing`` that has points; members are added
+    when it has more parts and emptied when it has fewer. The container and its members keep
+    their identity, so a scene that is playing keeps drawing them — a plot redrawn every frame
+    while it grows, rescales or zooms. Members added during a play may be drawn before older
+    ones: what must lie on top needs a higher z-index (text over its plate)."""
+    parts = drawing.family_members_with_points() if drawing is not None else []
+    kids = list(container.submobjects)
+    for i, part in enumerate(parts):
+        if i >= len(kids):
+            container.add(part)
+            continue
+        kid = kids[i]
+        kid.points = np.array(part.points)
+        for attr in _STYLE:
+            value = getattr(part, attr, None)
+            if value is not None:
+                setattr(kid, attr, value.copy() if isinstance(value, np.ndarray) else value)
+        kid.z_index = part.z_index
+    for kid in kids[len(parts):]:
+        kid.clear_points()
+    return container
+
+
+def head_marker(point: Sequence[float], color: str, *, radius: float = 0.09, theme: Theme | None = None) -> VMobject:
+    """The marker at the head of a growing series: a dot in its colour with a ring in the
+    background colour, above the data."""
+    from manim import Circle
+
+    theme = theme or current_theme()
+    dot = Circle(radius=radius).set_fill(color, opacity=1.0).set_stroke(theme.background, width=3, opacity=1.0)
+    return dot.move_to(np.array([point[0], point[1], 0.0])).set_z_index(4)
+
+
 __all__ = [
     "AXIS_STROKE",
     "GRID_OPACITY",
@@ -395,8 +456,11 @@ __all__ = [
     "bars",
     "draw_panel",
     "error_bars",
+    "flat",
+    "head_marker",
     "label_text",
     "leader",
+    "morph_into",
     "plate",
     "reference_line",
     "series_line",

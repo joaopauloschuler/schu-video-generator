@@ -2,16 +2,34 @@
 number formats (:mod:`.numbers`, :mod:`.ticks`), axes with linear, log, symlog, reversed and
 broken scales (:mod:`.axis`), tables read from CSV with units in the headers (:mod:`.data`),
 the layout of multi-panel figures (:mod:`.figure`), curve fits with uncertainties and bands
-(:mod:`.fit`, :mod:`.stats`), histograms with fitted distributions (:mod:`.hist`) and the
-placement of annotations (:mod:`.annotate`). The drawing layer is ``vidgen.plot_draw``; the
+(:mod:`.fit`, :mod:`.stats`), histograms with fitted distributions (:mod:`.hist`), the
+placement of annotations (:mod:`.annotate`), models generating data — ODE integrators,
+recurrences, seeded random processes, registered functions (:mod:`.integrate`,
+:mod:`.models`) — and live plots growing with them (:mod:`.live`). The drawing layer is ``vidgen.plot_draw``; the
 ``plot`` scene type uses both. Exported by ``vidgen.api`` as the module ``plotcore``."""
 
 from .annotate import Placement, best_box, place_in_plot, place_in_span, place_near, place_on_hline, place_on_vline
 from .axis import BREAK_GAP, SCALES, TIGHT_PAD, Axis, AxisSpec, build_axis, equal_aspect
 from .data import Column, Table, did_you_mean, parse_number, read_table, split_header
-from .figure import Label, Measure, PanelInput, PanelLayout, Rect, approx_measure, clip_polyline, label_stride, layout_figure
+from .figure import Label, Measure, PanelInput, PanelLayout, Rect, approx_measure, clip_polyline, label_stride, layout_figure, relabel
 from .fit import MODEL_ALIASES, MODEL_KINDS, PEAK_KINDS, FitResult, Model, fit_curve, make_model, pretty_name, unit_power, unit_ratio
 from .hist import BIN_RULES, DISTRIBUTIONS, Histogram, bin_edges, fit_distribution, histogram, poisson_pmf, rule_width
+from .integrate import IntegrationError, rk4, rk45, verlet
+from .live import Stop, axis_for, blend, domain_at, grown, readout_number, readout_text, rescale_schedule, segment, time_like, value_at
+from .models import (
+    METHOD_ALIASES,
+    ODE_METHODS,
+    Simulation,
+    SplitMix64,
+    conservation_drift,
+    poisson_process,
+    random_walk,
+    register_model,
+    registered_models,
+    run_registered,
+    simulate_ode,
+    simulate_recurrence,
+)
 from .numbers import (
     MINUS,
     SI_PREFIXES,
@@ -39,9 +57,11 @@ __all__ = [
     "BIN_RULES",
     "BREAK_GAP",
     "DISTRIBUTIONS",
+    "METHOD_ALIASES",
     "MINUS",
     "MODEL_ALIASES",
     "MODEL_KINDS",
+    "ODE_METHODS",
     "PEAK_KINDS",
     "SCALES",
     "SI_PREFIXES",
@@ -53,6 +73,7 @@ __all__ = [
     "Column",
     "FitResult",
     "Histogram",
+    "IntegrationError",
     "Label",
     "Measure",
     "Model",
@@ -60,24 +81,32 @@ __all__ = [
     "PanelLayout",
     "Placement",
     "Rect",
+    "Simulation",
+    "SplitMix64",
+    "Stop",
     "Table",
     "TickLabels",
     "approx_measure",
+    "axis_for",
     "axis_title",
     "best_box",
     "bin_edges",
+    "blend",
     "build_axis",
     "check_tick_format",
     "chi2_sf",
     "clean",
     "clip_polyline",
+    "conservation_drift",
     "default_linthresh",
     "did_you_mean",
+    "domain_at",
     "equal_aspect",
     "error_digits",
     "exponent_of",
     "fit_curve",
     "fit_distribution",
+    "grown",
     "histogram",
     "label_stride",
     "layout_figure",
@@ -94,13 +123,27 @@ __all__ = [
     "place_on_vline",
     "plain_number",
     "poisson_pmf",
+    "poisson_process",
     "power_of_ten",
     "prefixed_unit_problem",
     "pretty_name",
+    "random_walk",
     "read_table",
+    "readout_number",
+    "readout_text",
+    "register_model",
+    "registered_models",
+    "relabel",
+    "rescale_schedule",
+    "rk4",
+    "rk45",
     "rule_width",
+    "run_registered",
     "sci_number",
+    "segment",
     "si_number",
+    "simulate_ode",
+    "simulate_recurrence",
     "split_header",
     "superscript",
     "symlog_inverse",
@@ -109,7 +152,10 @@ __all__ = [
     "t_cdf",
     "t_ppf",
     "tick_labels",
+    "time_like",
     "unit_power",
     "unit_ratio",
+    "value_at",
     "value_with_error",
+    "verlet",
 ]

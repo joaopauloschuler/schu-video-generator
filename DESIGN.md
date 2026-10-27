@@ -210,7 +210,9 @@ src/vidgen/
                           # colour scales, colour bar, readable text on fills (§34)
   plotcore/               # the chart core for scientific plots (§97; no manim): numbers.py (10ⁿ, SI prefixes,
                           # tick labels), ticks.py (linear / log / symlog), axis.py (Axis, AxisSpec, breaks,
-                          # reversed, equal aspect), data.py (CSV tables, units in headers), figure.py (panel layout)
+                          # reversed, equal aspect), data.py (CSV tables, units in headers), figure.py (panel layout),
+                          # fit.py / stats.py / hist.py / annotate.py (§97.5), integrate.py (RK4, RK45, Verlet),
+                          # models.py (ODEs, recurrences, random processes, registered functions), live.py (§97.7)
   plot_draw.py            # the chart core's drawing layer: axes, ticks, gridlines, break marks, series (§97)
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
@@ -1031,6 +1033,12 @@ Step 187 (§93.9) adds `check_music_score(score)`, `check_music_audio(samples, n
 Step 222 (§97) adds the modules `plotcore` (the chart core without manim: `AxisSpec`, `Axis`,
 `build_axis`, ticks, number formats, `read_table`, `layout_figure`, `PanelLayout`...) and
 `plot_draw` (`draw_panel`, `series_line`, `series_markers`, `text_measure`).
+Step 224 (§97.7) adds `register_model(name)` (a decorator registering a Python function as a
+model a `plot` can name: `fn(params, seed) -> {column: values}`), and to `plotcore` the
+integrators and models (`simulate_ode`, `simulate_recurrence`, `random_walk`,
+`poisson_process`, `run_registered`, `Simulation`, `rk4`, `rk45`, `verlet`...), the live-plot
+logic (`grown`, `rescale_schedule`, `domain_at`, `axis_for`, `readout_text`...) and `relabel`;
+to `plot_draw` `flat`, `morph_into`, `head_marker` and `draw_panel(cache=)`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -16934,3 +16942,164 @@ across series, and a likelihood fit of binned counts (Poisson likelihood instead
 are not there; an annotation cannot point into another panel; a crowded 16:9 figure (two panels,
 a fit with residuals, a long legend) gets small plots at `body` text — authors can set
 `label_size: caption` or move the legend with `legend: false`.
+
+### 97.7 Models and live plots in the core (Step 224)
+
+**Integrators** (`plotcore.integrate`, numpy only, deterministic). `rk4(f, t0, y0, t1, step,
+samples)`: classical RK4, the last step shortened to end on `t1`, outputs thinned to about
+`samples` evenly spaced steps (`output_times`; more than 2·10⁶ steps is refused). `rk45(f, t0,
+y0, t1, times, rtol, atol, first_step, max_step)`: Dormand–Prince 5(4) with scipy's tableau and
+RMS error norm, steps clamped to end on each output time (exact outputs, no dense
+interpolation; the natural step is kept across the clamp), growth ×0.2…×5 with safety 0.9;
+stiffness by Hairer's test — h·|k₇ − k₆|/|y₇ − y₆| (≈ h|λ|) above 2.5 on 30 accepted steps (six
+calm steps in a row reset the count) — raised only when the rest of the span would still need
+more than 20 000 steps (a short stiff stretch is merely slow), and more than 10⁵ steps is
+refused as stiff too. `verlet(accel, t0, x0, v0, t1, step, samples)`: velocity Verlet
+(kick–drift–kick leapfrog): symplectic, time-reversible, energy error bounded (O(h²),
+oscillating). Every integrator raises `IntegrationError` (a `VidgenError` with `kind`
+`blow_up` / `stiff` / `steps`, the time and the variable) when the state is not finite or
+exceeds 10¹² × max(1, |y₀|).
+
+**Models** (`plotcore.models`) return a `Simulation`: ordered columns (the first is the
+progress column, `t` or `n`), units, and `drift` of the quantities declared `conserved`
+(`conservation_drift`: max |q − q₀| / max(|q₀|, max |q|)). `simulate_ode(equations, initial,
+params, t, step, method, rtol, samples, quantities, conserved, units)`: equation keys `x`,
+`dx/dt`, `x'` (`equation_variable`), right sides compiled by `mathexpr.parse_system` (the
+safe parser with every name a slot: state variables, parameters, `t`; `x` is an ordinary name
+there; a name may shadow a constant; unknown names with did-you-mean; `SystemExpression.scalar`
+evaluates plain floats fast inside one `np.errstate`); default step span/1000, at most a
+quarter of the span; `leapfrog` needs every equation of the form `x' = v` (`leapfrog_pairs`)
+or an acceleration not reading any velocity. Messages name the model and say what to try
+(`model 'osc': x blows up near t = 1.005 …: try a smaller step (now 0.005) or method: rk45`).
+`simulate_recurrence` (keys `x`, `x_next`, `x[n+1]`; `n` available; a non-finite value names
+the step). `random_walk` and `poisson_process` draw from `SplitMix64` (Steele–Lea–Flood; the
+reference vector `0xE220A8397B1DCDAF` for seed 0): the same seed gives the same walk with any
+numpy version (numpy's streams are not promised stable); lattice walks ±step (1-D with `p`, 2-D
+four directions), Gaussian walks (Box–Muller), Poisson events by exponential gaps (a staircase
+`count` column, ≤ 50 000 events). `register_model(name)` / `run_registered` (exported by
+`vidgen.api`): `fn(params, seed) -> {column: values}`, checked (a mapping of equal-length
+numeric columns, a non-decreasing first column; an exception becomes a `VidgenError` naming
+the function). Derived `quantities` (expressions of columns and params, vectorised) work for
+every kind.
+
+**Live logic** (`plotcore.live`, pure functions of the progress, so a frame never depends on
+the frames before it). `grown(times, xs, ys, until)` (points reached plus the head interpolated
+between two points; a gap stays a gap), `segment` (a trail's recent stretch), `value_at`,
+`time_like` (values that never decrease: a time axis, shown whole). `rescale_schedule(times,
+values, final, fixed_lo, fixed_hi)` → `(first domain, [Stop(start, end, lo, hi)])` in
+transform space: the first domain covers the first 12 % of the progress with 30 % headroom of
+the data's span; whenever the running extent would leave the domain shown, it grows to cover it
+with that headroom (clipped to `final`, ends within 15 % of the final end snap to it, fixed ends
+stay); each growth eases in (smoothstep) over 7 % of the progress range and **ends when the data
+arrive** (so data never leave the plot), growths closer than that merge; the last stop ends on
+`final` at the end. `domain_at(first, stops, progress)` evaluates it; `blend` eases a zoom.
+`axis_for(static, spec, lo, hi)` builds the axis for such a domain (ticks inside, the static
+axis' `linthresh`; the static axis itself for its own domain) and `figure.relabel(lay, x, y,
+measure)` lays its labels out on the same plot rectangle (the plot does not move while its
+axes rescale). `readout_text(label, value, unit, integer=)`: three significant digits, plain
+from 10⁻³ to 10⁵, a whole number written whole.
+
+### 97.8 Live and animated `plot` scenes (Step 224)
+
+```yaml
+- id: oscillator
+  type: plot
+  params:
+    models:
+      osc: {kind: ode, equations: {x: v, v: "-k*x - c*v"}, params: {k: 4, c: 0.3}, initial: {x: 1, v: 0}, t: [0, 20], units: {t: s, x: m}}
+    arrange: columns
+    share: false
+    panels:
+      - series: [{name: position, x: t, y: x, readout: true}]
+      - series: [{name: phase, x: x, y: v, trail: 3}]
+  beats:
+    - text: "Each swing is smaller than the one before."
+      actions: [{grow: axes, to: 10}]
+    - text: "Zoom in on the first swings."
+      actions: [{grow: axes}, {zoom: panel1, x: [0, 5], at: "@first"}]
+```
+
+**Params** (`scenes/plot_models.py`): `models: {name: PlotModel}` — `kind` (`ode`,
+`recurrence`, `random_walk`, `poisson`, `function`) with the keys of each kind (any other key
+is an error naming the kind; a missing `equations` / `initial` / `rate` / `function` too);
+`method` aliases (`verlet`, `symplectic` → `leapfrog`, `adaptive` → `rk45`); results cached by
+the model's JSON (validation, `vidgen validate` and the render resolve the plot more than
+once). Series gain `model` (default: the plot's only model when there is no `data`; set by the
+plot's validator), `live` (default with a model), `head`, `readout` (`true` or a label),
+`trail`; a model's columns are a `Table` (`model:<name>`), so labels and units come from it as
+from a CSV. `rescale` (default `true`). `Params.conservation()` → `(model, quantity, drift)`
+for lint (Step 226); the scene keeps it as `conservation`.
+
+**Drawing while playing** (`scenes/plot_live.py`, the mixin `LivePlot`). Everything that changes
+during a play or a wait — a rescaling or zoomed panel's axes, a growing series (line, markers,
+error bars, head), the readout, fit curves and bands of a zoomed panel, a residual panel — is a
+**flat** group (`plot_draw.flat`) re-shaped in place each frame (`plot_draw.morph_into`: each
+member takes the points, style and z-index of one part of the new drawing; members are added or
+emptied as the count changes). Animations and the growth updater act on an empty **clock**
+mobject (z −1000) instead of a group of those parts: manim then redraws the whole frame while
+it moves, and no group is dissolved when a part is added on its own (adding a group that
+contains members of another top-level group makes manim dissolve the latter, losing its
+updater). Members added mid-play may be drawn in any order among equal z-indices: text sits a
+z-index above its plate, lines above gridlines.
+
+**Steps and timing.** Consecutive free live series of one model are one step: its axes and
+legend entries come in (up to 0.8 s), then the series grow by an updater over the rest of the
+step's slot (`GROW_SHARE` = 92 %; `play_steps` remembers the slot) while the narration goes on
+and beat actions play in the waits; growth is linear in the model's time; a mid still is
+planned half-way (storyboards). `reveal: all` grows every live series in the first step, with
+the static parts; fits and annotations on live data follow in a second step. The action `grow`
+(`scenes/plot_actions.py`, targets live series, `axes`, `panel<N>`; option `to`) grows from
+where the series are, lasting until the beat's next action (`ActionRunner.time_left(next_action
+=True)`, `NarratedScene.beat_time_left`) or the beat's end; a later `grow` continues; the
+plot's own steps leave its series (and a panel's / all with `axes`) to it. `reveal` of a live
+series grows it over the rest of the beat (`entrance_time`). Fits on a live series, and
+annotations on one or in a rescaling panel, first finish its growth (a `Succession`: the fit
+appears once the data are complete). `settle()` finishes any growth still running when the
+scene ends.
+
+**Rescaling** applies to a data panel whose series are all live on one progress (one model, or
+a single live series), with `rescale: true`, not `aspect: equal`, for each axis not shared
+across panels, without breaks, not fixed at both ends, and not time-like; the schedule is built
+from the row-wise extent of the panel's series. The panel's static layout is the final domain,
+so legends, fit boxes, notes and readouts are placed once against all the data.
+
+**Filling histograms.** A histogram series with `live` (or of a model's column) fills as its
+values arrive in their order: the progress counts values (`times` = 0 … N), the bins are those of
+all the values (so the static layout, fits and legends hold), each frame bins the first ⌊u⌋
+values (`np.bincount` of each value's bin, cached) with √N error bars; an empty bin shows no
+marker yet; its y axis widens from the running highest bar (`fixed_lo`: from 0); its readout
+counts the values (`events = 1303`). A fit on it waits until all values are in.
+
+**Readouts** are boxes sized to their widest text over the whole growth (the time column once
+per model, then `label = value unit` per series; a step count and whole-number values written
+whole, the last step reached for recurrences, walks and live data), placed like notes: in a
+free spot of their panel, else in the side column (16:9) or above the figure (9:16).
+
+**Zoom.** The built-in `zoom` action gained `x` / `y` (`[from, to]` in data units; not with
+`scale`): on a `plot` (`scene_problems`: plot scenes only) the camera stays and the targets'
+panels (`axes`, `panel<N>`, a series' panel; x also every panel sharing it and residual panels)
+ease their domains in transform space (`blend`); annotations of those panels fade out and come
+back with the zoom's undoing (`temporary`: at the beat's end or `until`); while zoomed a growth
+keeps drawing into the zoomed view and its rescaling waits until the zoom is over. A broken axis
+is refused.
+
+**Choices.** No scipy (§97.5's reasons) and no new dependency: RK4 / RK45 / Verlet are short and
+tested against analytic solutions. Rescaling eases ahead of the data rather than after (data
+never poke out of the plot); the price is a domain that moves a moment before the head reaches
+its edge. Readouts are not tied to the head (moving text is hard to read on a phone).
+
+Public: `vidgen.api.register_model`; `plotcore`: `simulate_ode`, `simulate_recurrence`,
+`random_walk`, `poisson_process`, `register_model`, `registered_models`, `run_registered`,
+`Simulation`, `SplitMix64`, `conservation_drift`, `ODE_METHODS`, `METHOD_ALIASES`, `rk4`,
+`rk45`, `verlet`, `IntegrationError`, `grown`, `segment`, `value_at`, `time_like`,
+`rescale_schedule`, `Stop`, `domain_at`, `blend`, `axis_for`, `readout_number`,
+`readout_text`, `relabel`; `plot_draw.flat`, `morph_into`, `head_marker`, `draw_panel(cache=)`;
+`mathexpr.parse_system` / `SystemExpression` (not re-exported); `NarratedScene.beat_time_left`;
+action `grow`; `zoom` options `x`, `y`; `plot` params `models`, `rescale`, series `model`,
+`live`, `head`, `readout`, `trail`. `scenes/plot.py` was split: the drawing helpers moved to
+`scenes/plot_figure.py` (mixin `PlotFigure`).
+
+**Gaps after Step 224**: a rescaling panel needs all its series on one progress (a filling
+histogram alone in its panel); bins of a filling histogram are fixed by all its values; readouts show values, not their uncertainties; zooming a
+broken axis is refused; an annotation cannot follow the head; adaptive RK45 has no dense output
+(steps end on the sample times, so `samples` bounds the largest step).

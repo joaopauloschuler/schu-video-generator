@@ -357,6 +357,19 @@ def _labels(plot: Rect, x: Axis, y: Axis, measure: Measure, show_x: bool, show_y
     return replace(lay, x_labels=tuple(x_labels), y_labels=tuple(y_labels), x_title=x_title, y_title=y_title, x_kept=tuple(x_kept), y_kept=tuple(y_kept))
 
 
+def relabel(lay: PanelLayout, x: Axis, y: Axis, measure: Measure) -> PanelLayout:
+    """``lay`` with new axes (a rescaling or zoomed domain) on the same plot area: tick labels
+    and titles placed and thinned again, on the sides that show them in ``lay``."""
+    show_x = bool(lay.x_labels) or lay.x_title is not None
+    show_y = bool(lay.y_labels) or lay.y_title is not None
+    room = _room(x, y, measure, show_x, show_y, 1e6)
+    cell = lay.plot
+    if lay.x_title is not None:
+        t = lay.x_title
+        cell = Rect(min(cell.x0, t.x - t.width / 2), cell.y0, max(cell.x1, t.x + t.width / 2), cell.y1)
+    return _labels(lay.plot, x, y, measure, show_x, show_y, cell, room)
+
+
 def clip_polyline(points: np.ndarray, box: Rect) -> list[np.ndarray]:
     """The parts of a polyline (``(n, 2|3)`` frame points; ``nan`` rows break it) inside
     ``box``: a list of runs of at least two points, each segment clipped (Liang-Barsky)."""
@@ -418,4 +431,5 @@ __all__ = [
     "clip_polyline",
     "label_stride",
     "layout_figure",
+    "relabel",
 ]

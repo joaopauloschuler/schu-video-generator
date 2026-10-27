@@ -318,6 +318,7 @@ project's own scene types, in its theme).
 | how values are distributed | `histogram` | `title`, `values`, `bins`, `mean`, `median`, `highlight` |
 | measurements and models on scientific axes: log, symlog, reversed or broken axes with units, 10ⁿ and SI prefixes, panels sharing an axis, orbits at an equal aspect; data inline or from a CSV | `plot` | `title`, `series` (name, x and y or points, style, dashed), `data` (a CSV, units in its headers: "time (s)"), `x` / `y` (label, unit, scale, min, max, reversed, format, breaks), `panels`, `aspect` |
 | error bars, fitted curves with parameters ± errors and R², confidence bands, residuals, histograms with a fitted distribution or a peak over a background, labels and reference lines on data | `plot` | `series` (y_err / x_err with error: sd, sem, ci95, range; or values with bins: a histogram), `fits` (series, model, band, residuals), `annotations` (label, arrow, hline, vline, xrange, yrange, note); the actions fit, annotate |
+| a simulation drawn as it runs: an oscillator, an orbit's energy, predator and prey, the logistic map, a random walk, events arriving | `plot` | `models` (ode with equations, initial, params, t, method rk4 / rk45 / leapfrog; recurrence; random_walk; poisson; function), series naming their columns (x: t, y: x) with readout, trail; `rescale`; the actions grow, zoom (x, y) |
 | parts of a whole (≤ 6 parts) | `pie` | `title`, `labels`, `values`, `donut`, `highlight`, `other_below` |
 | a matrix (correlations, hours x days) | `heatmap` | `title`, `rows`, `columns`, `values`, `highlight` |
 | where in the world | `map` | `title`, `view`, `steps`, `values`, `pins`, `arcs` |
@@ -1045,6 +1046,28 @@ the genetics types, notation, exactness and pacing: `vidgen guide genetics` and
   beats:
     - text: "The activity halves every eight days."
     - text: "On a log axis that decay is a straight line."
+- id: oscillator
+  type: plot
+  params:
+    title: "A damped oscillator"
+    models:   # ode (equations, initial, params, t, method: rk4 | rk45 | leapfrog), recurrence, random_walk, poisson, function
+      osc:
+        kind: ode
+        equations: {x: v, v: "-k*x - c*v"}   # x' = v, v' = -k x - c v
+        params: {k: 4, c: 0.3}
+        initial: {x: 1, v: 0}
+        t: [0, 20]
+        units: {t: s, x: m, v: m/s}
+    arrange: columns
+    share: false
+    legend: false
+    panels:   # a model's series grow live over their beat; readout: the current value; trail: a fading path
+      - series: [{name: position, x: t, y: x, readout: true}]
+      - series: [{name: phase, x: x, y: v, trail: 3}]
+  beats:
+    - text: "Friction takes the energy away, so each swing is smaller."
+    - text: "In phase space the state spirals in towards rest."
+      actions: [{zoom: panel1, x: [0, 5], at: "@phase"}]
 - id: devices
   type: pie
   params: {title: "Visits by device", donut: true, labels: ["Mobile", "Desktop", "Tablet"], values: [5200, 3100, 640], highlight: Mobile}
@@ -1333,7 +1356,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `highlight` | make the thing the voice names stand out (`style: color`, `box`, `underline`, `fill`, `flash`) | one target per beat |
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
-| `zoom` | look closer at a detail, then come back | at most one per scene |
+| `zoom` | look closer at a detail, then come back; on a `plot`, `x: [from, to]` / `y: [...]` zoom its axes to that region of the data instead of moving the camera | at most one per scene |
 | `pan` | on a `stage`: move the camera to a character or a mark (`to: right`); on an iso place to a spot (`to: well`) across and up the picture, moving in from the wide view | on a stage wider than the frame (`width: 2`), or on an iso place to look at a thing |
 | `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start; on an iso place it zooms in first, to a plain stage's size) | one at a time |
 | `reveal` | bring a later element in early; on an iso place an object with `shown: false` appears (a bridge over the pond) | rarely: the default order is usually right |
@@ -1341,6 +1364,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `transform` | morph one target into another (`into`) | for equations and before / after |
 | `fit` | on a `plot`: draw a fit on a word (`- fit: "fit:decay"`: its band, curve, parameters and residual panel) | when the narration says the data are fitted |
 | `annotate` | on a `plot`: show an annotation on a word (`- annotate: annotation2`: its mark and text) | when the narration names the marked point, line or range |
+| `grow` | on a `plot`: grow live series (a model's) from a word until the next action or the beat's end (`- grow: "series:x"`, `to: 4` in the model's time; `axes`: all of them) | when the narration follows the simulation as it runs |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |

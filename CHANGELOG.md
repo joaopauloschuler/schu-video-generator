@@ -5,9 +5,24 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–223)
+## Unreleased (Steps 193–224)
 
 ### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
+
+- **Live plots from simulations** (Step 224). A `plot` takes `models` that generate its data:
+  differential equations written as safe expressions (`{x: v, v: "-k*x - c*v"}` with parameters,
+  initial conditions and a time span) integrated by RK4, adaptive RK45 or the symplectic
+  leapfrog (energy stays bounded on orbits and oscillators), recurrences (the logistic map,
+  compound growth), seeded random walks and Poisson events (the same seed gives the same numbers
+  everywhere), or a Python function registered with `vidgen.api.register_model`; derived
+  quantities (an energy) and their drift when declared conserved. Their series grow over the beat
+  with a head marker, an optional readout (`t = 3.20 s`, `x = 0.53 m`) and a fading trail for
+  phase-space plots; panels on one model grow together; axes widen smoothly as the data reach
+  their edge; histograms can fill as events arrive (a peak emerging from the background). The
+  action `grow` times a growth to words (`to: 4` stops part-way), and `zoom` with `x` / `y`
+  zooms a plot's axes to a region and back. Fits and annotations wait for the data. Errors name
+  the problem: an unknown name in an equation (did you mean), a missing initial condition, a step
+  too large, a solution that blows up, a stiff system. No new dependency.
 
 - **Error bars, fits, histograms and annotations on `plot`** (Step 223). Series take error bars
   (`y_err` / `x_err`: a number, a column, a list, `{minus, plus}`, or `sqrt` for √N) with their

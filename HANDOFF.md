@@ -20749,3 +20749,91 @@ How to test
 - Stills: scratchpad `s223/proj` (decay, kepler, peak, heights, counts, growth, broken, and 222's
   orbit, energy, symlog, mass, magnitude) — `build/preview{,_vertical,_light,_vlight}/storyboard/`
   and `.../frames/<scene>/`; `vidgen lint` on 16:9 and 9:16: 0 errors.
+
+## Step 224 — Live and animated plots
+
+What was built
+- **Integrators** (`plotcore/integrate.py`, numpy only): `rk4` (fixed step, outputs thinned),
+  `rk45` (Dormand–Prince 5(4), scipy's tableau, steps ending on the output times, Hairer's
+  stiffness test raised only when the rest would need > 20 000 steps), `verlet` (velocity
+  Verlet / leapfrog, symplectic); `IntegrationError` (blow-up beyond 10¹² × the start, stiff,
+  too many steps).
+- **Models** (`plotcore/models.py`): `simulate_ode` (equations as safe expressions via the new
+  `mathexpr.parse_system`, keys `x` / `dx/dt` / `x'`, params, initial conditions, `t`, methods
+  `rk4` / `rk45` / `leapfrog` with aliases, derived `quantities`, `conserved` drift, units;
+  errors: unknown names with did-you-mean, missing / unknown initial conditions, step > a quarter
+  of the span, blow-ups with where and what to try, leapfrog with velocity-dependent forces,
+  stiffness), `simulate_recurrence`, `random_walk` (1-D / 2-D, lattice / Gaussian) and
+  `poisson_process` on an own `SplitMix64` (seed-stable across numpy versions),
+  `register_model` / `run_registered` (exported as `vidgen.api.register_model`), `Simulation`
+  (columns, units, drift; `.table()`).
+- **Live logic** (`plotcore/live.py`): `grown`, `segment`, `head`, `value_at`, `time_like`,
+  `rescale_schedule` + `domain_at` (axes widen ahead of the data, eased, never hiding them),
+  `blend`, `axis_for`, `readout_text`; `figure.relabel` (new axes on the same plot rectangle).
+- **Drawing** (`plot_draw.py`): `flat`, `morph_into` (re-shape a flat group in place so manim
+  keeps drawing it during a play or a wait), `head_marker`, `draw_panel(cache=)` (cached label
+  text for panels redrawn every frame).
+- **`plot` scene**: params `models` (`scenes/plot_models.py`: `PlotModel` with per-kind keys,
+  cached runs) and `rescale`; series `model` (default the plot's only model), `live`, `head`,
+  `readout`, `trail`; `scenes/plot_live.py` (mixin `LivePlot`): consecutive live series of one
+  model grow together over their step's slot (an updater on an empty "clock" mobject), head
+  markers, readouts placed like notes (in the plot, else beside / above the figure), trails,
+  smooth rescaling, histograms that fill as their values arrive (a peak emerging), fits and
+  annotations waiting for the data, `settle()` at the end, mid stills for storyboards. Actions:
+  `grow` (`scenes/plot_actions.py`; `to`; until the beat's next action or its end) and `zoom`
+  with `x` / `y` on a plot (axes ease to a region and back; annotations step aside).
+  `Params.conservation()` (and the scene's `conservation`) for Step 226's lint.
+- `scenes/plot.py` split: drawing helpers moved to `scenes/plot_figure.py` (mixin `PlotFigure`);
+  plot.py 1021 → 879 lines.
+- Docs: CONFIG `plot` (params, "Live plots: models and grow" with a model table and six
+  examples), the `zoom` and new `grow` action rows; guide chooser row, an oscillator snippet,
+  actions rows (copied to `AGENTS.md`); DESIGN §6.4, §2 layout, §97.7, §97.8; CHANGELOG; tasklist.
+
+Files touched
+- New: `src/vidgen/plotcore/{integrate,models,live}.py`, `src/vidgen/scenes/{plot_models,plot_live,plot_figure}.py`,
+  `tests/test_plot_live.py`.
+- Changed: `src/vidgen/plotcore/{__init__,figure}.py`, `src/vidgen/plot_draw.py`, `src/vidgen/mathexpr.py`
+  (additive: `parse_system`, `SystemExpression`, the parser's `variable`), `src/vidgen/actions.py`
+  (`ActionRunner.time_left`), `src/vidgen/scene.py` (`beat_time_left`), `src/vidgen/api.py`
+  (`register_model`), `src/vidgen/scenes/{plot,plot_parts,plot_actions,actions,__init__}.py`,
+  docs (`docs/CONFIG.md`, guide + `AGENTS.md`), `DESIGN.md`, `CHANGELOG.md`, `tasklist.md`,
+  `tests/test_actions.py` (action lists: they lacked Step 223's `annotate` / `fit`, now also `grow`).
+
+Public interfaces: `vidgen.api.register_model`; the `plotcore` / `plot_draw` names in DESIGN
+§97.8; `NarratedScene.beat_time_left`; action `grow`; `zoom` options `x`, `y`; `plot` params
+`models`, `rescale`, series `model`, `live`, `head`, `readout`, `trail`. No config key, no
+dependency.
+
+Decisions
+- Growth in a step runs in the waits (an updater), so it spans the beat while the narration and
+  other actions go on; the `grow` action is an animation lasting until the next action.
+- Everything changing while playing is a flat group re-shaped in place, driven by an empty
+  clock mobject: a group holding the parts gets dissolved by manim when one part is added on its
+  own (that lost the updater during a zoom), and the static-frame cache would hide changes.
+- Rescaling eases ahead of the data (the data never leave the plot); the static layout is the
+  final domain, so legends, fit boxes, notes and readouts are placed once.
+- Own SplitMix64 instead of numpy's generators for seed stability; no scipy (as Step 223).
+- `zoom` keeps its name with `x` / `y` for plots rather than a new action.
+
+Compatibility
+- Phase Q baseline after the shared changes (mathexpr, actions, scene, plot_draw, figure, api):
+  31 frames, max difference 0 (`phase-q-baseline/check224`).
+- Plots without models or live series draw as before (test_plot passes unchanged).
+
+Known gaps: a rescaling panel needs all its series on one progress (one model, or one live
+series); a filling histogram's bins are fixed by all its values; readouts show values without
+uncertainties; zoom on a broken axis is refused; RK45 has no dense output (steps end on the
+sample times); in 9:16 a long fit box reserves its room above the figure from the start (Step
+223 behaviour); `tests/test_actions.py` render tests not run in full (only `-k zoom`).
+
+How to test
+- `tests/test_plot_live.py` (40 incl. 2 render, ~25 s), `tests/test_plot.py` (51), `tests/test_plot_core.py`,
+  `tests/test_plot_fit.py`.
+- Related: `test_actions` (not render, and render `-k zoom`), `test_actions_coverage` +
+  `test_builtin_scenes` + `test_extensions` + `test_translation` (not render; render `-k plot`),
+  `test_api` + `test_guide` + `test_docs` + `test_function_plot`, `test_schema` + `test_registry`,
+  `test_gallery` (not render).
+- Stills: scratchpad `s224/proj` (oscillator with phase space and trail, predators with a zoom,
+  logistic map, random walk, leapfrog pendulum energy, a filling resonance histogram with a fit,
+  decay grown in two parts then fitted) — `build/preview{,_vertical,_light,_vlight}/storyboard/`
+  (3 stills per beat plus mid-growth stills); `vidgen lint` (16:9): 0 errors.

@@ -4,8 +4,11 @@ log / symlog / reversed / broken axes with units, scientific notation and SI pre
 bars, fitted curves with their parameters ± errors, confidence and prediction bands, residual
 panels, distributions over histograms, and annotations tied to the data (labels, arrows,
 reference lines, shaded ranges, notes) placed clear of the data and of each other; one panel
-or several sharing an axis, an equal aspect for trajectories. The params and their resolution
-are in ``plot_parts.py``; the actions ``fit`` and ``annotate`` in ``plot_actions.py``."""
+or several sharing an axis, an equal aspect for trajectories; data from models (ODEs,
+recurrences, random processes, registered functions) growing live. The params and their
+resolution are in ``plot_parts.py`` and ``plot_models.py``, the drawing helpers in
+``plot_figure.py``, the live part in ``plot_live.py``; the actions ``fit``, ``annotate`` and
+``grow`` in ``plot_actions.py``."""
 
 import math
 from dataclasses import replace
@@ -16,9 +19,11 @@ import numpy as np
 
 from vidgen.api import *
 
+from .plot_figure import TIGHT, PlotFigure
+from .plot_live import LivePlot
+from .plot_models import PlotModel
 from .plot_parts import (
     DATA_SUFFIXES,
-    ERROR_MEANINGS,
     PlotAnnotation,
     PlotAxis,
     PlotFit,
@@ -28,18 +33,14 @@ from .plot_parts import (
     ResolvedPanel,
     ResolvedSeries,
     error_arrays,
-    series_point,
 )
 
 #: Point marker radius (Manim units) by the number of points drawn (as ``scatter``).
 _RADII = ((20, 0.1), (60, 0.08), (150, 0.06), (600, 0.045))
-#: A free axis end is rounded out to a tick only when that adds at most this share of the
-#: data's span (else the plot ends just past the data and fills its area).
-TIGHT = 0.08
 #: Size of a residual panel relative to the panel it belongs to.
 RESIDUAL_WEIGHT = 0.4
 #: Actions whose targets a plot's own steps leave to them.
-_TIMED = ("reveal", "fit", "annotate")
+_TIMED = ("reveal", "fit", "annotate", "grow")
 
 
 class PlotPanel(SceneParams):
@@ -56,7 +57,7 @@ class PlotPanel(SceneParams):
 
 
 @scene("plot")
-class Plot(NarratedScene):
+class Plot(LivePlot, PlotFigure, NarratedScene):
     """Scientific plot: line, point and histogram series from inline numbers or a CSV, on
     linear, log, symlog, reversed or broken axes with units, with error bars, fitted curves
     (parameters ± errors, R², bands, residual panels) and annotations, in one panel or several
@@ -73,6 +74,7 @@ class Plot(NarratedScene):
 
     outro = 0.5
     plot_actions = True
+    mid_still_actions = frozenset({"grow", "zoom"})
     target_patterns = ("title", "axes", "panel<N>", "legend", "series<N>", "series:<name>", "errors:<name>", "fit<N>", "fit:<name>",
                        "annotation<N>", "annotation:<id>")
 
@@ -105,6 +107,10 @@ class Plot(NarratedScene):
         """Annotations tied to the data: [{type: label | arrow | hline | vline | xrange | yrange | note, text, ...}]."""
         reveal: Literal["series", "all"] = "series"
         """series: one series per beat, then the fits and annotations; all: everything in beat 1."""
+        models: dict[str, PlotModel] = Field(default_factory=dict)
+        """Models generating data, by name: {osc: {kind: ode, equations: {x: v, v: "-k*x"}, initial: {x: 1, v: 0}, params: {k: 4}, t: [0, 10]}}; series name their columns (x: t, y: x) and grow live."""
+        rescale: bool = True
+        """While live series grow, axes without fixed ends start around the first data and widen smoothly as the data reach their edge (a time axis is shown whole); false: the whole range from the start."""
         point_radius: float | None = Field(default=None, gt=0, le=0.4)
         """Marker radius in Manim units; default: from the number of points."""
         label_size: ThemeSize | None = None
@@ -132,6 +138,19 @@ class Plot(NarratedScene):
             if (self.series is None) == (self.panels is None):
                 raise ValueError("give series (one panel) or panels, not both" if self.series is not None else "give series (one panel) or panels")
             all_series = self.all_series()
+            for name in self.models:
+                if not name.isidentifier():
+                    raise ValueError(f"models: '{name}' is not a name (letters, digits and _)")
+            for s in all_series:
+                if s.model is None and s.data is None and self.data is None and len(self.models) == 1 and s.columns():
+                    s.model = next(iter(self.models))   # the plot's only model
+                if s.model is not None and s.model not in self.models:
+                    known = list(self.models)
+                    raise ValueError(f"series '{s.name}': no model '{s.model}'" + (f"; models: {', '.join(known)}" if known else " (add it under models:)")
+                                     + did_you_mean(s.model, known))
+                problem = s.live_problem()
+                if problem:
+                    raise ValueError(problem)
             names = [str(s.name) for s in all_series]
             for i, name in enumerate(names):
                 if name in names[:i]:
@@ -148,8 +167,10 @@ class Plot(NarratedScene):
                 if self.x.scale != "linear" or self.y.scale != "linear" or self.x.breaks or self.y.breaks:
                     raise ValueError("aspect: equal needs linear x and y axes without breaks")
             for s in all_series:
-                if s.columns() and s.data is None and self.data is None:
-                    raise ValueError(f"series '{s.name}': it names columns ({', '.join(s.columns())}) but no data file is given (data: assets/file.csv)")
+                if s.columns() and s.data is None and self.data is None and s.model is None:
+                    hint = "; with several models, say which: model: <name>" if self.models else ""
+                    raise ValueError(f"series '{s.name}': it names columns ({', '.join(s.columns())}) but no data file is given (data: assets/file.csv) "
+                                     f"and no model{hint}")
             fit_names = []
             for k, f in enumerate(self.fits, start=1):
                 if f.series not in names:
@@ -193,8 +214,22 @@ class Plot(NarratedScene):
 
         def files(self) -> list[str]:
             """The data files this plot reads."""
-            used = {s.data or self.data for s in self.all_series() if s.columns()}
+            used = {s.data or self.data for s in self.all_series() if s.columns() and s.model is None}
             return sorted(f for f in used if f)
+
+        def source(self, s: PlotSeries) -> str:
+            """The key of the table a series reads: ``model:<name>`` or the data file."""
+            return f"model:{s.model}" if s.model is not None else (s.data or self.data or "")
+
+        def simulations(self) -> dict[str, Any]:
+            """Each used model's :class:`plotcore.Simulation` (run once, cached)."""
+            used = {s.model for s in self.all_series() if s.model is not None}
+            return {name: m.run(name) for name, m in self.models.items() if name in used}
+
+        def conservation(self) -> list[tuple[str, str, float]]:
+            """``(model, quantity, relative drift)`` for every quantity a used model declares
+            conserved (for lint: a drift above a few 10⁻³ means the method or step is wrong)."""
+            return [(name, q, d) for name, sim in self.simulations().items() for q, d in sim.drift.items()]
 
         def resolve(self, project: Any = None) -> Resolved:
             """The panels with their numbers (read from the data files of ``project``, default
@@ -205,6 +240,8 @@ class Plot(NarratedScene):
                 proj = project if project is not None else current_project()
                 path = proj.asset(name)
                 tables[name] = plotcore.read_table(path.read_text(encoding="utf-8"), name)
+            for name, sim in self.simulations().items():
+                tables[f"model:{name}"] = sim.table()
             out = []
             for k, panel in enumerate(self.panel_list()):
                 series = [self._numbers(s, tables) for s in panel.series]
@@ -228,7 +265,7 @@ class Plot(NarratedScene):
             return resolved
 
         def _numbers(self, s: PlotSeries, tables: dict[str, Any]) -> ResolvedSeries:
-            table = tables.get(s.data or self.data or "")
+            table = tables.get(self.source(s))
             where = f"series '{s.name}'"
             if s.histogram:
                 col = table.column(s.values, f"{where} values") if isinstance(s.values, str) else None
@@ -240,6 +277,9 @@ class Plot(NarratedScene):
                     raise VidgenError(f"{where}: {error}") from None
                 rs = ResolvedSeries(s, [float(c) for c in hist.centers], [float(h) for h in hist.heights], col, None, hist=hist)
                 rs.y_err = error_arrays(s.y_err, len(rs.xs), table, f"{where} y_err", rs.ys, hist)
+                if s.is_live:   # it fills as its values arrive: the progress counts them
+                    rs.times = np.arange(len(hist.values) + 1, dtype=float)
+                    rs.discrete = True
                 return rs
             if s.points is not None:
                 xs, ys = [p[0] for p in s.points], [p[1] for p in s.points]
@@ -263,6 +303,16 @@ class Plot(NarratedScene):
             rs = ResolvedSeries(s, xs, ys, cols[0], cols[1])
             rs.y_err = error_arrays(s.y_err, len(xs), table, f"{where} y_err", ys)
             rs.x_err = error_arrays(s.x_err, len(xs), table, f"{where} x_err", xs)
+            if s.is_live:
+                if s.model is not None:
+                    rs.time_col = table.columns[0]
+                    rs.times = np.asarray(rs.time_col.values, dtype=float)
+                else:
+                    rs.times = np.arange(len(xs), dtype=float)
+                # steps (a recurrence, a walk, data points): readouts show the last step reached
+                rs.discrete = s.model is None or self.models[s.model].kind in ("recurrence", "random_walk")
+                if len(xs) < 2:
+                    raise VidgenError(f"{where}: a live series needs at least two points")
             return rs
 
         def _specs(self, panels: list[ResolvedPanel], axis: str, shared: bool) -> list[Any]:
@@ -444,6 +494,9 @@ class Plot(NarratedScene):
         note_plates = {i: plot_draw.plate(plot_draw.label_text(str(a.text), size=size, theme=self.theme), theme=self.theme)
                        for i, a in enumerate(p.annotations) if a.type == "note"}
         note_panel = {i: (p.annotations[i].panel or 1) - 1 for i in note_plates}
+        # live readouts: boxes of their widest text, placed like notes (plot_live.py draws them)
+        self._series, self._inputs, self._figure, self._measure, self._label_size = series, inputs, figure, measure, size
+        readout_plates = {k: Rectangle(width=w, height=h).set_stroke(width=0).set_fill(opacity=0) for k, (w, h) in self.readout_sizes().items()}
 
         def layout(right: float, top: float) -> list[Any]:
             area = plotcore.Rect(body.x0, body.y0, body.x1 - right, body.y1)
@@ -455,9 +508,10 @@ class Plot(NarratedScene):
 
         # legends and fit boxes go in a free spot of their plot; what finds none moves beside
         # the figure (16:9: a column on the right) or above it (9:16), and the figure shrinks
-        outside_legend, outside_fits, outside_notes = False, set(), set()
-        for _ in range(len(fits) + len(note_plates) + 3):
-            side = self._side(outside_legend, outside_fits, entries, fit_boxes, body, size, portrait, [note_plates[i] for i in sorted(outside_notes)])
+        outside_legend, outside_fits, outside_notes, outside_readouts = False, set(), set(), set()
+        for _ in range(len(fits) + len(note_plates) + len(readout_plates) + 3):
+            side = self._side(outside_legend, outside_fits, entries, fit_boxes, body, size, portrait,
+                              [note_plates[i] for i in sorted(outside_notes)] + [readout_plates[k] for k in sorted(outside_readouts)])
             right, top = (0.0, side.height + 0.3) if portrait and len(side) else ((side.width + 0.45, 0.0) if len(side) else (0.0, 0.0))
             lays = layout(right, top)
             data_lays = [lays[i] for i, (kind, _) in enumerate(figure) if kind == "data"]
@@ -504,6 +558,18 @@ class Plot(NarratedScene):
                     break
                 note.move_to([placed.box.center[0], placed.box.center[1], 0])
                 taken[k].append(placed.box)
+            if moved:
+                continue
+            for k, box in readout_plates.items():
+                if k in outside_readouts:
+                    continue
+                placed = plotcore.place_in_plot((box.width, box.height), data_lays[k].plot, obstacles[k], taken[k])
+                if placed.cost > 0:
+                    outside_readouts.add(k)
+                    moved = True
+                    break
+                box.move_to([placed.box.center[0], placed.box.center[1], 0])
+                taken[k].append(placed.box)
             if not moved:
                 break
         if len(side):
@@ -521,6 +587,9 @@ class Plot(NarratedScene):
                 fit_boxes[j] = side[first + n]
             for n, i in enumerate(sorted(outside_notes)):
                 note_plates[i] = side[first + len(outside_fits) + n]
+            for n, k in enumerate(sorted(outside_readouts)):
+                readout_plates[k] = side[first + len(outside_fits) + len(outside_notes) + n]
+        self._readout_box = {k: self._rect(m) for k, m in readout_plates.items()}
         frame += legends
         legend_items: dict[str, Mobject] = {}
         boxes: list[Mobject | None] = []
@@ -571,308 +640,54 @@ class Plot(NarratedScene):
                 continue
             k =(a.panel - 1) if a.panel is not None else (next(s.panel for s in series if str(s.spec.name) == a.series) if a.series else 0)
             notes.append(self._draw_annotation(a, data_lays[k], series, size, obstacles[k], taken[k], radius))
+        for n in notes:
+            n["group"] = VGroup(n["mark"], n["lead"], n["label"])
 
         self.layouts, self.legends, self.fit_results = lays, legends, fits   # the plotcore layouts, legends drawn, fits (with results)
         self.annotation_boxes = [n["box"] for n in notes]
-        data_drawn = [drawn[i] for i, (kind, _) in enumerate(figure) if kind == "data"]
-        self._steps(title, frame, legends, boxes, legend_items, data_drawn, parts, error_groups, series, fit_parts, fits, notes)
-
-    # ----- figure inputs ------------------------------------------------------------------------
-
-    @staticmethod
-    def _usable(values: list[float], spec: Any) -> list[float]:
-        """Extra values an axis should show (error bar ends, a fit's curve) that it can show:
-        finite, positive on a log axis, inside fixed ends, not in a break."""
-        out = []
-        for v in values:
-            if not math.isfinite(v) or (spec.scale == "log" and v <= 0):
-                continue
-            if (spec.lo is not None and v < spec.lo) or (spec.hi is not None and v > spec.hi):
-                continue
-            if any(a < v < b for a, b in spec.breaks):
-                continue
-            out.append(v)
-        return out
-
-    def _panel_input(self, panel: ResolvedPanel, fits: list[ResolvedFit]) -> Any:
-        xs = [v for s in panel.series for v in s.x_values()]
-        ys = [v for s in panel.series for v in s.y_values()]
-        xs += self._usable([v for s in panel.series for v in s.extents("x")], panel.x)
-        ys += self._usable([v for s in panel.series for v in s.extents("y")], panel.y)
-        for f in fits:
-            grid = f.curve_x(f.lo, f.hi, panel.x.scale, 120)
-            ys += self._usable([float(v) for v in f.result(grid)], panel.y)
-        return plotcore.PanelInput(tuple(xs), tuple(ys), panel.x, panel.y)
-
-    @staticmethod
-    def _residuals(f: ResolvedFit) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """``(x, residual, error)`` of a fit's points (normalized: (y − f)/σ, errors 1)."""
-        s = f.series
-        xs, ys = np.asarray(s.xs, dtype=float), np.asarray(s.ys, dtype=float)
-        sigma = s.hist.errors if s.hist is not None else s.sigma()
-        res = ys - f.result(xs)
-        err = np.asarray(sigma, dtype=float) if sigma is not None else np.zeros_like(xs)
-        if f.spec.residuals == "normalized":
-            with np.errstate(all="ignore"):
-                res = np.where(err > 0, res / np.where(err > 0, err, 1.0), np.nan)
-            err = np.where(np.isfinite(res), 1.0, 0.0)
-        ok = np.isfinite(xs) & np.isfinite(res)
-        if f.spec.range is not None:
-            ok &= (xs >= f.spec.range[0]) & (xs <= f.spec.range[1])
-        return xs[ok], res[ok], err[ok]
-
-    def _residual_input(self, f: ResolvedFit, panel: ResolvedPanel, parent: Any) -> Any:
-        xs, res, err = self._residuals(f)
-        normalized = f.spec.residuals == "normalized"
-        spec = plotcore.AxisSpec(label="(y − fit)/σ" if normalized else "residual", unit="" if normalized else panel.y.unit,
-                                 include_zero=True, max_ticks=3, tight=TIGHT, format=panel.y.format if panel.y.scale == "linear" else "auto")
-        ys = [0.0, *res, *(res - err), *(res + err)]
-        return plotcore.PanelInput(parent.x_values, tuple(float(v) for v in ys if math.isfinite(v)), panel.x, spec)
-
-    # ----- legend -------------------------------------------------------------------------------
-
-    def _legend_entries(self, panel: ResolvedPanel, fits: list[ResolvedFit], k: int, colors: list[str], index: dict[int, int], shapes: list[str],
-                        fit_colors: list[str]) -> list[tuple[str, str, str, str]]:
-        """``(key, name, colour, swatch)`` per series of the panel, then per fit."""
-        out = []
-        for s in panel.series:
-            i = index[id(s)]
-            name = str(s.spec.name)
-            if s.spec.meaning is not None:
-                name += f" ({ERROR_MEANINGS[s.spec.meaning]})"
-            style = s.spec.drawn_as
-            swatch = "box" if style == "bars" else shapes[i] if style == "points" else "dashed" if s.spec.dashed else "line"
-            out.append((f"series{i}", name, colors[i], swatch))
-        for j, f in enumerate(fits):
-            if f.panel == k:
-                out.append((f"fit{j}", str(f.spec.name) or f.result.model.formula, fit_colors[j], "dashed" if f.spec.dashed else "line"))
-                if f.spec.band != "none":
-                    out.append((f"band{j}", f"{f.spec.level * 100:g} % {f.spec.band} band", fit_colors[j], "band"))
-        return out
-
-    @staticmethod
-    def _legend_parts(legends: list[Mobject]) -> tuple[list[Mobject | None], list[Mobject]]:
-        """The frame of each legend (``None`` for one above the figure) and every entry, in
-        order."""
-        boxes, items = [], []
-        for lg in legends:
-            if len(lg) == 2 and isinstance(lg[0], RoundedRectangle):
-                boxes.append(lg[0])
-                rows = lg[1]
-            else:
-                boxes.append(None)
-                rows = lg
-            items += [item for row in rows for item in row]
-        return boxes, items
-
-    @staticmethod
-    def _sample(lay: Any, s: ResolvedSeries) -> list[np.ndarray]:
-        """Frame points a legend or a label must keep clear of: the series' points, samples
-        along its line, the inside of its bars, its error bars' ends."""
-        if s.hist is not None and s.spec.drawn_as in ("bars", "step"):
-            out = []
-            for a, b, h in zip(s.hist.edges, s.hist.edges[1:], s.ys):
-                x0, x1 = lay.frame_x(a), lay.frame_x(b)
-                top = lay.frame_y(h) if (lay.y.scale != "log" or h > 0) else lay.plot.y0
-                for fx in np.linspace(x0, x1, max(2, int((x1 - x0) / 0.12) + 1)):
-                    for fy in np.arange(lay.plot.y0, min(top, lay.plot.y1) + 1e-9, 0.15):
-                        out.append(np.array([fx, fy, 0.0]))
-                    out.append(np.array([fx, min(top, lay.plot.y1), 0.0]))
-            return out
-        pts = lay.frame_points(s.xs, s.ys)
-        out = [q for q in pts if not np.isnan(q[:2]).any()]
-        if s.spec.drawn_as in ("line", "both"):
-            for run in plotcore.clip_polyline(lay.frame_line(s.xs, s.ys), lay.plot):
-                out.extend(sample_path(list(run)))
-        for axis, err in (("y", s.y_err), ("x", s.x_err)):
-            if err is None:
-                continue
-            for x, y, lo, hi in zip(s.xs, s.ys, *err):
-                if not (math.isfinite(x) and math.isfinite(y)):
-                    continue
-                for v in np.linspace(-lo, hi, 5):
-                    q = (x, y + v) if axis == "y" else (x + v, y)
-                    if (axis == "y" and lay.y.scale == "log" and q[1] <= 0) or (axis == "x" and lay.x.scale == "log" and q[0] <= 0):
-                        continue
-                    out.append(np.array([lay.frame_x(q[0]), lay.frame_y(q[1]), 0.0]))
-        return out
-
-    def _obstacles(self, k: int, lay: Any, series: list[ResolvedSeries], fits: list[ResolvedFit]) -> np.ndarray:
-        """Every frame point of the data in panel ``k`` (what text must not cover)."""
-        panel_series = [s for s in series if s.panel == k]
-        pts = [q for s in panel_series for q in self._sample(lay, s)]
-        for f in fits:
-            if f.panel == k:
-                lo, hi = self._curve_range(f, lay)
-                xs = f.curve_x(lo, hi, lay.x.scale, 160)
-                for run in plotcore.clip_polyline(lay.frame_line(list(xs), list(f.result(xs))), lay.plot):
-                    pts.extend(sample_path(list(run)))
-        return np.array(pts).reshape(-1, 3)[:, :2] if pts else np.zeros((0, 2))
-
-    @staticmethod
-    def _rect(m: Mobject) -> Any:
-        return plotcore.Rect(m.get_left()[0], m.get_bottom()[1], m.get_right()[0], m.get_top()[1])
-
-    # ----- fits ---------------------------------------------------------------------------------
-
-    @staticmethod
-    def _curve_range(f: ResolvedFit, lay: Any) -> tuple[float, float]:
-        if f.spec.extend:
-            return lay.x.lo, lay.x.hi
-        return max(f.lo, lay.x.lo), min(f.hi, lay.x.hi)
-
-    def _curve_points(self, f: ResolvedFit, lay: Any) -> tuple[list[float], list[float]]:
-        """Data points along the fitted curve, a gap at every x break (a Poisson fit: steps)."""
-        lo, hi = self._curve_range(f, lay)
-        if f.discrete:
-            xs, ys = [], []
-            for c in f.series.hist.centers:
-                h = float(f.result(np.array([c]))[0])
-                xs += [c - 0.5, c + 0.5]
-                ys += [h, h]
-            return xs, ys
-        xs_all: list[float] = []
-        ys_all: list[float] = []
-        for a, b in lay.x.segments:
-            a, b = max(a, lo), min(b, hi)
-            if b <= a:
-                continue
-            xs = f.curve_x(a, b, lay.x.scale)
-            if xs_all:
-                xs_all.append(xs[0])
-                ys_all.append(math.nan)
-            xs_all += [float(v) for v in xs]
-            ys_all += [float(v) for v in f.result(xs)]
-        return xs_all, ys_all
-
-    def _fit_box(self, f: ResolvedFit, size: float) -> VGroup:
-        """A fit's parameters (± standard errors), R² and χ²/ν on a plate (empty for ``show:
-        none``); placed later."""
-        lines = f.lines()
-        if not lines:
-            return VGroup()
-        return plot_draw.plate(plot_draw.text_lines(lines, size=size, theme=self.theme), theme=self.theme)
-
-    def _side(self, legend: bool, fits: set[int], entries: list[list[Any]], boxes: list[VGroup], body: Region, size: float, portrait: bool,
-              notes: list[VGroup]) -> VGroup:
-        """What stands beside the figure: one legend of every entry (when a panel's legend
-        found no free corner), the fit boxes and notes that found no free spot; a column (16:9)
-        or above the figure (9:16; side by side when they fit), shrunk to fit."""
-        items: list[Mobject] = []
-        if legend:
-            items.append(chart_legend([e[1:] for es in entries for e in es], body.width if portrait else body.width * 0.4, size=size, stack=not portrait))
-        items += [boxes[j].copy() for j in sorted(fits)] + [n.copy() for n in notes]
-        if not items:
-            return VGroup()
-        group = VGroup(*items)
-        if portrait and sum(m.width for m in items) + 0.4 * (len(items) - 1) <= body.width:
-            group.arrange(RIGHT, buff=0.4, aligned_edge=UP)   # side by side when they fit: the plot keeps its height
-        else:
-            group.arrange(DOWN, buff=0.3, aligned_edge=ORIGIN if portrait else LEFT)
-        limit_w = body.width if portrait else body.width * 0.42
-        limit_h = body.height * (0.45 if portrait else 1.0)
-        factor = min(1.0, limit_w / group.width, limit_h / group.height)
-        if factor < 1.0:
-            group.scale(factor)
-        return group
-
-    def _draw_fit(self, f: ResolvedFit, lay: Any, color: str, box: VGroup) -> dict[str, Any]:
-        xs, ys = self._curve_points(f, lay)
-        curve = plot_draw.series_line(lay.frame_line(xs, ys), lay.plot, color, width=f.spec.width, dashed=f.spec.dashed).set_z_index(1)
-        band = VGroup()
-        if f.spec.band != "none":
-            lo, hi = self._curve_range(f, lay)
-            bx = f.curve_x(lo, hi, lay.x.scale)
-            lower, upper = f.result.band(bx, level=f.spec.level, kind=f.spec.band)
-            band = plot_draw.band(lay, list(bx), list(lower), list(upper), color, opacity=0.2)
-        return {"curve": curve, "band": band, "box": box, "residual": None}
-
-    def _draw_residuals(self, f: ResolvedFit, lay: Any, panel: Any, color: str, radius: float, shape: str) -> VGroup:
-        xs, res, err = self._residuals(f)
-        zero = plot_draw.reference_line(lay, y=0.0, color=self.theme.color("dim"), width=2.0)
-        dots = plot_draw.series_markers(lay.frame_points(list(xs), list(res)), lay.plot, color, marker=shape if f.series.spec.drawn_as != "line" else "circle",
-                                        radius=min(radius, 0.07), theme=self.theme).set_z_index(2)
-        bars = plot_draw.error_bars(lay, list(xs), list(res), y_lo=list(err), y_hi=list(err), color=mix_colors(color, self.theme.background, 0.85),
-                                    width=2.0, cap=0.07) if np.any(err > 0) else VGroup()
-        return VGroup(panel.group, zero, bars, dots)
-
-    # ----- annotations --------------------------------------------------------------------------
-
-    def _draw_annotation(self, a: PlotAnnotation, lay: Any, series: list[ResolvedSeries], size: float, obstacles: np.ndarray, taken: list[Any],
-                         radius: float) -> dict[str, Any]:
-        color = self.theme.color(a.color or "highlight")
-        text = str(a.text)
-        label: Mobject = VGroup()
-        if text:
-            label = plot_draw.plate(plot_draw.label_text(text, size=size, theme=self.theme), theme=self.theme)
-        dims = (label.width, label.height)
-        mark: Mobject = VGroup()
-        lead: Mobject = VGroup()
-        box = None
-        plot = lay.plot
-        if a.type in ("label", "arrow"):
-            if a.series is not None:
-                s = next(r for r in series if str(r.spec.name) == a.series)
-                x, y = series_point(s, a.x, a.index)
-            else:
-                x, y = float(a.x), float(a.y)
-            if not (lay.x.contains(x) and lay.y.contains(y)):
-                raise VidgenError(f"scene '{self.spec.id}': an annotation's point ({x:g}, {y:g}) lies outside the plot's axes")
-            ax, ay = lay.frame_x(x), lay.frame_y(y)
-            ring = Circle(radius=max(radius * 1.7, 0.12)).set_stroke(color, width=3).move_to([ax, ay, 0])
-            mark = ring if a.type == "label" else VGroup()
-            steps = (1.0, 2.2, 3.6) if a.type == "label" else (2.6, 3.8, 5.0)
-            placed = plotcore.place_near((ax, ay), dims, plot, obstacles, taken, gap=max(radius * 1.7, 0.12) + 0.08, steps=steps)
-            box = placed.box
-            label.move_to([box.center[0], box.center[1], 0])
-            edge = (min(max(ax, box.x0), box.x1), min(max(ay, box.y0), box.y1))
-            if a.type == "arrow":
-                lead = plot_draw.leader(edge, (ax, ay), color, arrow=True, buff=max(radius, 0.06) + 0.04)
-            elif placed.leader:
-                lead = plot_draw.leader(edge, (ax, ay), color, buff=max(radius * 1.7, 0.12))
-        elif a.type in ("hline", "vline"):
-            value = float(a.y if a.type == "hline" else a.x)
-            axis = lay.y if a.type == "hline" else lay.x
-            if not axis.contains(value):
-                raise VidgenError(f"scene '{self.spec.id}': the {a.type} at {value:g} lies outside the axis ({axis.lo:g} to {axis.hi:g})")
-            mark = plot_draw.reference_line(lay, x=None if a.type == "hline" else value, y=value if a.type == "hline" else None, color=color)
-            if text:
-                where = plotcore.place_on_hline(lay.frame_y(value), dims, plot, obstacles, taken) if a.type == "hline" else \
-                    plotcore.place_on_vline(lay.frame_x(value), dims, plot, obstacles, taken)
-                box = where.box
-        else:   # xrange, yrange
-            lo, hi = a.x if a.type == "xrange" else a.y
-            vertical = a.type == "xrange"
-            mark = plot_draw.span(lay, lo, hi, color, vertical=vertical)
-            if text:
-                f0, f1 = sorted((lay.frame_x(lo), lay.frame_x(hi))) if vertical else sorted((lay.frame_y(lo), lay.frame_y(hi)))
-                box = plotcore.place_in_span(f0, f1, dims, plot, obstacles, taken, vertical=vertical).box
-        if text and box is not None:
-            label.move_to([box.center[0], box.center[1], 0])
-            taken.append(box)
-        return {"mark": mark, "label": label, "lead": lead, "box": box, "spec": a}
+        # the live part (plot_live.py) reads these
+        self._series, self._data_lays, self._lays, self._figure, self._drawn, self._inputs = series, data_lays, lays, figure, drawn, inputs
+        self._parts, self._errors, self._colors, self._shapes, self._radius, self._label_size = parts, error_groups, colors, shapes, radius, size
+        self._fits, self._fit_parts, self._fit_colors, self._notes, self._measure = fits, fit_parts, fit_colors, notes, measure
+        self._share_x = arrange == "rows" and p.share and len(panels) > 1
+        self._share_y = arrange == "columns" and p.share and len(panels) > 1
+        self._live_prepare()
+        self.conservation = p.conservation()   # (model, quantity, drift) for lint
+        data_pos = [i for i, (kind, _) in enumerate(figure) if kind == "data"]
+        axes_mobs = [self._axes_flat.get(i, drawn[i]) for i in data_pos]
+        self._steps(title, frame, legends, boxes, legend_items, axes_mobs, self._parts, self._errors, series, fit_parts, fits, notes)
 
     # ----- steps -----------------------------------------------------------------------------
 
     def _held(self) -> set[str]:
         """Target names that a timed action (reveal, fit, annotate) brings on screen."""
-        patterns = [t for kind in _TIMED for use in self.action_uses(kind) for t in use.config.targets()]
-        return {pat for pat in patterns}
+        patterns = {t for kind in _TIMED for use in self.action_uses(kind) for t in use.config.targets()}
+        for use in self.action_uses("grow"):   # a grow of a panel (or of every panel) holds their series
+            for t in use.config.targets():
+                if t == "axes" or (t.startswith("panel") and t[5:].isdigit()):
+                    panels = self.params.panel_list()
+                    chosen = panels if t == "axes" else panels[int(t[5:]) - 1 : int(t[5:])]
+                    patterns |= {f"series:{s.name}" for panel in chosen for s in panel.series}
+        return patterns
 
     def _steps(self, title: Mobject | None, frame: list[Mobject], legends: list[Mobject], boxes: list[Any], legend_items: dict[str, Mobject],
                drawn: list[Any], parts: list[tuple[VGroup, VGroup, VGroup]], errors: list[VGroup | None], series: list[ResolvedSeries],
                fit_parts: list[dict[str, Any]], fits: list[ResolvedFit], notes: list[dict[str, Any]]) -> None:
         p = self.params
         pieces = [m for m in frame if not any(m is lg for lg in legends)]
-        axes_group = VGroup(*[d.group for d in drawn])
+        groups = [d if isinstance(d, VGroup) else d.group for d in drawn]   # a flat group: a panel redrawn while playing
+        axes_group = VGroup(*groups)
         patterns = self._held()
 
         def held(names: list[str]) -> bool:
             return any(fnmatchcase(n, pat) for n in names for pat in patterns)
 
         def show_panel(d: Any) -> list[Animation]:
-            if self.on_screen_parts(d.group):
+            group = d if isinstance(d, VGroup) else d.group
+            if self.on_screen_parts(group):
                 return []
+            if isinstance(d, VGroup):
+                return [FadeIn(d)]
             rest = VGroup(*[m for m in d.group if m is not d.lines])
             return [Create(d.lines), FadeIn(rest)]
 
@@ -883,11 +698,12 @@ class Plot(NarratedScene):
             return anims
 
         chart = self.target("axes", axes_group, entrance=intro)
+        self._chart_target = chart
         if title is not None:
             self.target("title", title, entrance=intro)
         if len(drawn) > 1:
             for k, d in enumerate(drawn, start=1):
-                self.target(f"panel{k}", d.group, entrance=lambda d=d: show_panel(d))
+                self.target(f"panel{k}", groups[k - 1], entrance=lambda d=d: show_panel(d))
         if legends:
             parts_of_legends = [b for b in boxes if b is not None] + list(legend_items.values())
             self.target("legend", VGroup(*legends), entrance=lambda: [FadeIn(m) for m in parts_of_legends if not self.on_screen_parts(m)])
@@ -905,6 +721,8 @@ class Plot(NarratedScene):
                 anims.append(FadeIn(item))
             return anims
 
+        self._legend_entry = legend_entry
+
         def grow(k: int) -> list[Animation]:
             """Lines draw from their first point; markers pop in (in data order); bars rise."""
             line, dots, bars = parts[k]
@@ -917,12 +735,16 @@ class Plot(NarratedScene):
 
         error_targets: dict[int, Any] = {}
         for k, (s, group) in enumerate(zip(series, errors)):
-            if group is not None:
+            if group is not None and s.live:   # a live series' error bars grow with it
+                error_targets[k] = self.target(f"errors:{s.spec.name}", group, entrance=lambda k=k: self.entrance(series_targets[k]))
+            elif group is not None:
                 error_targets[k] = self.target(f"errors:{s.spec.name}", group, entrance=lambda k=k, g=group: self.entrance(chart) + self.entrance(series_targets[k])
                                                + [LaggedStart(*[Create(m) for m in g], lag_ratio=min(0.1, 1.0 / max(len(g), 1)))])
         series_targets: list[Any] = []
 
         def series_entrance(k: int) -> list[Animation]:
+            if series[k].live:
+                return self.grow_animation([k])
             anims = self.entrance(chart) + legend_entry(f"series{k}") + grow(k)
             names = [f"errors:{series[k].spec.name}"]
             if k in error_targets and not held(names) and not self.is_shown(error_targets[k]):
@@ -931,8 +753,14 @@ class Plot(NarratedScene):
             return anims
 
         for k, s in enumerate(series):
-            line, dots, bars = parts[k]
-            series_targets.append(self.target([f"series{k + 1}", f"series:{s.spec.name}"], VGroup(line, dots, bars), entrance=lambda k=k: series_entrance(k)))
+            mob = VGroup(*self._live_parts(k)) if s.live else VGroup(*parts[k])
+            series_targets.append(self.target([f"series{k + 1}", f"series:{s.spec.name}"], mob, entrance=lambda k=k: series_entrance(k)))
+
+        def after_growth(pre: list[Animation], own: list[Animation]) -> list[Animation]:
+            """``own`` once the data it needs have grown (``pre``)."""
+            if not pre:
+                return [AnimationGroup(*own, lag_ratio=0.3)] if own else []
+            return [Succession(*pre, AnimationGroup(*own, lag_ratio=0.3))] if own else pre
 
         fit_targets = []
         for j, (f, fp) in enumerate(zip(fits, fit_parts)):
@@ -940,11 +768,12 @@ class Plot(NarratedScene):
 
             def fit_entrance(j: int = j, fp: dict[str, Any] = fp, residual: Any = residual) -> list[Animation]:
                 k = series.index(fits[j].series)
-                anims = self.entrance(series_targets[k])
+                residual = fp["residual"]
+                anims = self.complete([k]) if series[k].live else self.entrance(series_targets[k])
                 own: list[Animation] = []
                 if len(fp["band"]):
                     own.append(FadeIn(fp["band"]))
-                own += [Create(run, rate_func=smooth) for run in fp["curve"]]
+                own += [Create(run, rate_func=smooth) for run in fp["curve"] if run.has_points()]
                 own += legend_entry(f"fit{j}") + legend_entry(f"band{j}")
                 if len(fp["box"]):
                     own.append(FadeIn(fp["box"], shift=UP * 0.1))
@@ -952,6 +781,8 @@ class Plot(NarratedScene):
                     panel = residual[0]
                     rest = VGroup(*residual[1:])
                     own.append(AnimationGroup(FadeIn(panel), FadeIn(rest)))
+                if series[k].live:
+                    return after_growth(anims, own)
                 return anims + [AnimationGroup(*own, lag_ratio=0.3)]
 
             mob = VGroup(fp["band"], fp["curve"], fp["box"], *([residual] if residual is not None else []))
@@ -969,10 +800,15 @@ class Plot(NarratedScene):
                     own.append(Create(n["lead"]))
                 if len(n["label"]):
                     own.append(FadeIn(n["label"]))
+                k = self._note_panel(n)
+                waiting = [i for i, s in enumerate(series) if s.panel == k and s.live and (k in self._schedule or (n["spec"].series is not None and str(s.spec.name) == n["spec"].series))]
+                pre = self.complete(waiting)   # an annotation on growing data (or a rescaling panel) waits for the data
+                if pre:
+                    return after_growth(pre, own)
                 return self.entrance(chart) + ([AnimationGroup(*own, lag_ratio=0.4)] if own else [])
 
             names = [f"annotation{i + 1}"] + ([f"annotation:{a.id}"] if a.id else [])
-            note_targets.append(self.target(names, VGroup(n["mark"], n["lead"], n["label"]), entrance=note_entrance))
+            note_targets.append(self.target(names, n["group"], entrance=note_entrance))
 
         def reveal(targets: list[Any]) -> list[Animation]:
             """The targets' entrances (the axes, a legend's frame: once)."""
@@ -983,16 +819,38 @@ class Plot(NarratedScene):
                 self._batch = None
 
         steps: list[Any] = []
-        free_series = [t for k, t in enumerate(series_targets) if not held(list(t.names))]
+        free = [k for k, t in enumerate(series_targets) if not held(list(t.names))]
         free_fits = [t for t in fit_targets if not held(list(t.names))]
         free_notes = [t for t in note_targets if not held(list(t.names))]
+        # live series grow over their step's slot; consecutive ones on one model grow together
+        runs: list[list[int]] = []
+        for k in free:
+            same = runs and series[runs[-1][-1]].live and series[k].live and series[k].spec.model is not None \
+                and series[runs[-1][-1]].spec.model == series[k].spec.model
+            if same:
+                runs[-1].append(k)
+            else:
+                runs.append([k])
         if p.reveal == "all":
-            steps = [lambda: reveal(free_series + free_fits + free_notes)]
+            static = [series_targets[k] for k in free if not series[k].live]
+            growing = [k for k in free if series[k].live]
+            waits = [t for t, f in zip(fit_targets, fits) if f.series.live] + [t for t, n in zip(note_targets, notes)
+                                                                               if any(s.live and s.panel == self._note_panel(n) for s in series)]
+            first = static + [t for t in free_fits + free_notes if t not in waits]
+            if growing:
+                steps = [lambda: self.live_step(growing, first)]
+                later = [t for t in free_fits + free_notes if t in waits]
+                if later:
+                    steps.append(lambda: reveal(later))
+            else:
+                steps = [lambda: reveal(first)]
         else:
-            steps = [(lambda t=t: reveal([t])) for t in free_series + free_fits + free_notes]
+            steps = [(lambda ks=ks: self.live_step(ks)) if series[ks[0]].live else (lambda t=series_targets[ks[0]]: reveal([t])) for ks in runs]
+            steps += [(lambda t=t: reveal([t])) for t in free_fits + free_notes]
         if not steps:
             steps = [lambda: self.entrance(chart)]
         self.reveal(steps, fraction=0.8, cap=2.5)
+        self.settle()
         self.finish()
 
     #: Targets and parts entering in the entrance being built (``None`` between entrances): an

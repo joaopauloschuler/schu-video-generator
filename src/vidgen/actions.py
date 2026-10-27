@@ -495,6 +495,18 @@ class ActionRunner:
         """Whether actions of the current beat are still to run."""
         return bool(self._pending)
 
+    def time_left(self, next_action: bool = False) -> float:
+        """Seconds from now to the end of the current beat, less the time the scene holds for
+        its later steps (what an action may use); with ``next_action``, at most until the next
+        action of the beat falls due."""
+        fps = config.frame_rate
+        now = self._now()
+        end = self._end - round(self.held * fps)
+        if next_action:
+            later = [d.frame for d in self._pending if not d.revert and d.frame > now]
+            end = min([end, *later])
+        return max(end - now, 0) / fps
+
     def start_beat(self, beat_id: str, d: float, pad: float) -> None:
         """Schedule the beat's actions: undoing (``until`` = this beat) first, then its own by
         ``at``; temporary actions that must be over by the next beat are undone at its end."""
