@@ -433,6 +433,9 @@ class ResolvedFit:
         self.lo, self.hi = lo, hi   # the x range the curve covers by default
         self.panel = series.panel
         self.x_unit = self.y_unit = ""
+        #: Poisson data fitted by maximum likelihood: the variance per unit of y at each point
+        #: of the series (1 for counts; residuals are then normalized by √(scale·fit)), else None.
+        self.poisson: np.ndarray | None = None
 
     def reduced_chi2(self) -> float | None:
         """χ²/ν: with y errors (a curve fit), or Pearson's against the bins (a distribution)."""

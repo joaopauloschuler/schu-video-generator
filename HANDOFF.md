@@ -21097,3 +21097,98 @@ How to test
   16:9 and 9:16: 0 findings with the Kokoro narration.
 - Stills: substitution layout `s227/calc/build/preview{,_vertical,_vlight}/storyboard/`; PCR
   before `s227/before16`, `s227/before916`, after `s227/adopt/build/preview{,_vertical,_vlight}/storyboard/`.
+
+## Step 228 — Review of Phase W
+
+What was done (DESIGN §97.13): a critical review of Steps 222–227 against numpy / scipy, with
+fixes, and the known gaps decided.
+
+Findings and fixes
+- **Histograms dropped values** (bug): with `bins: N` (and a rule with `nice_bins: false`) the
+  12-digit cleaning of the edges could move an outer edge past the smallest or largest value, which
+  then fell `outside` (most samples of 50 random values with 7 bins; a 20-bin density differed from
+  numpy by 16 %). `plotcore/hist._cover` keeps the outer edges at the data's ends.
+- **Counts fitted with √N weights were biased** (accuracy): weights from the observed counts
+  (Neyman's χ²) pull a decay towards low counts — λ 0.47 σ high on average for the example's data
+  (300 simulated sets). New `fit_curve(..., poisson=scale)`: least squares re-weighted with the
+  fitted curve's variance until it settles = Poisson maximum likelihood (the score equations hold;
+  errors from the Fisher information; χ² is Pearson's). The `plot` scene uses it for a series with
+  `y_err: sqrt` (counts ≥ 0) and for curve fits to histograms (density: the per-bin scale); a 0
+  count no longer raises "a y error of 0". Normalized residuals of such fits use σ = √fit.
+- **RK45** stepped onto every output time (2401 calls for 400 samples; scipy 716): now steps follow
+  the error control and samples come from the dense output (scipy's interpolant `_P`): 709 calls,
+  the same error as `solve_ivp`. `simulate_ode` scales the absolute tolerance by the largest initial
+  value (a 10⁻⁷ mol/L model was integrated to an absolute 10⁻⁹).
+- **Temperatures** (gap of 225): `Quantity.temperature` marks readings in °C / °F (`"point"`) and
+  their differences; adding two readings is refused, a difference cannot be shown in °C / °F
+  (result `unit` or `convert`). Values are unchanged (kelvin arithmetic was right).
+- **Equal aspect**: both axes tick with the larger step inside the equal-aspect loop
+  (`figure._common_step`; the scale stays equal — test_plot's render check).
+- **Residual panels** (the example's was hard to read): normalized panels symmetric about 0,
+  ticked at ±2 (new `AxisSpec.ticks`), points without bars (each is ±1 by definition).
+- **Lint**: intermediate calculation lines keep their evaluated parts (`Step.values`); the lint
+  takes them as unnamed candidates (a number said for one agrees; never blamed).
+- **Calculation hand-over**: the leaving calculation takes `LEAVE_SHARE` = 0.5 of a step (its slow
+  fade read as a ghost behind the next formula).
+- Checked and fine: lines / polynomials / Gaussian / logistic / power fits and their errors vs
+  `curve_fit` (≤ 1e-5), bands vs the textbook formulas (1e-15), binning rules vs numpy, ML
+  distributions vs `scipy.stats`, quantiles and χ² tail (1e-9), x errors vs `scipy.odr` (0.06 σ:
+  the effective-variance approximation, documented), SplitMix64 reference sequence, every constant
+  vs `scipy.constants` (CODATA 2022), unit factors.
+- Module boundaries: `plotcore` and `quantities` import only `errors` / `mathexpr` (no manim,
+  scipy or scenes); `quantities.accuracy` (lint knowledge) pulls the pure-Python cellworld /
+  genetics packages for three sentence helpers — noted, not moved.
+
+The example: λ = 0.274 ± 0.004 min⁻¹ (χ²/ν 0.77) by Poisson likelihood; the `half` scene now 0.274
+min⁻¹ → t½ 2.53 min, σ 0.041 min, z = 0.5 ("about half a standard error away"); three beats
+re-voiced with Kokoro (counts_b4, half_b1, half_b3); README, cookbook and the guide's science snippet
+updated to the same numbers.
+
+Files touched
+- New: `tests/test_science_review.py` (15).
+- Changed: `src/vidgen/plotcore/{fit,hist,integrate,models,axis,figure}.py`,
+  `src/vidgen/quantities/{quantity,expr,calc}.py`, `src/vidgen/lint/calc_rule.py`,
+  `src/vidgen/scenes/{plot,plot_parts,plot_figure,calculation}.py`,
+  `examples/radioactive-decay/{video.yaml,README.md}`, `tests/test_radioactive_decay.py`,
+  `docs/CONFIG.md`, `docs/COOKBOOK-SCIENCE-CHARTS.md`, guide + `AGENTS.md`, `DESIGN.md` §97.13,
+  `CHANGELOG.md`, `tasklist.md`.
+
+Public interfaces (additive): `plotcore.fit_curve(poisson=)`, `AxisSpec.ticks`,
+`quantities.Quantity.temperature`, `quantities.Step.values`. No config key, no dependency.
+
+Decisions
+- Poisson likelihood by default for counts rather than an option: it is the correct fit for
+  Poisson data, and √N weights are a known bias; `weighted: false` still gives an unweighted fit.
+- Temperature marks only on values written in °C / °F: a value in K may be a temperature or a
+  change, so averages in K work and nothing written in K is refused.
+- Normalized residuals without error bars (pulls), ticks at ±2 only (0 has its dashed line).
+- Kept as gaps (§97.13 table): SI fallback for a single factor wider than the frame,
+  `label_size: caption` for crowded 16:9 fit figures, one progress per rescaling panel, no zoom on
+  broken axes, the 9:16 fit-box room, `bar_chart` / `line_chart` value labels unchecked, the
+  domain plots of §97.12.
+
+Compatibility
+- Phase Q baseline: 31 frames, max difference 0 (`phase-q-baseline/check228`).
+- Gallery unchanged (no gallery scene fits counts, uses normalized residuals, an equal aspect,
+  rk45 or two calculations). Phase U / V scenes unchanged (`test_molecular` renders pass).
+- Lint sweep `s226/lint_all.py` (examples, gallery, s205–s225 scratch projects, 280 scenes): 0
+  findings; `s226/bad225` still 8, `s226/demo` still fires every rule.
+
+Known gaps: those of the table above; R² stays unweighted (documented); x errors use the
+effective-variance approximation, not orthogonal regression.
+
+How to test
+- `tests/test_science_review.py` (15, ~3 s; scipy references skip without scipy).
+- Related, all passing: `test_plot_fit` + `test_plot_core` + `test_quantities` (176);
+  `test_plot` + `test_calculation` + `test_plot_live` (107 incl. renders); `test_calc_lint` +
+  `test_radioactive_decay`; `test_charts` + `test_pie_heatmap` + `test_api` + `test_function_plot`
+  (158); `test_builtin_scenes` + `test_actions_coverage` + `test_extensions` + `test_translation`
+  (279 not render; 10 render `-k "plot or calculation"`); `test_guide` + `test_docs` +
+  `test_gallery` (167); `test_schema` + `test_registry` + `test_introspect` + `test_json_output`
+  (127); `test_genetics_lint` + `test_accuracy` + `test_narration_rule` + `test_lint` +
+  `test_timing_lint` (128); `test_molecular` (23 incl. 2 renders) + `test_cystic_fibrosis`;
+  `test_actions` (21 not render); `tests/test_mcp.py` in full (20).
+- Video: scratchpad `s228/proj/output/radioactive_decay.mp4` (1920×1080, 172.93 s video and audio,
+  −16.0 LUFS, true peak −1.9 dBTP); contact sheet `s228/contact_16x9.png`; stills
+  `s228/proj/build/preview/storyboard/` and `s228/proj/build/preview_short/frames/`; `vidgen lint`
+  16:9 and 9:16: 0 findings.

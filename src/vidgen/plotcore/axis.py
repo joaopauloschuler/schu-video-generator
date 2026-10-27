@@ -46,6 +46,9 @@ class AxisSpec:
     exact: bool = False
     margin: float = 0.0
     tight: float | None = None
+    #: Ticks chosen by the caller (linear axes; those inside the domain are kept) instead of
+    #: round steps: a normalized residual panel ticks ±2 (σ), not ±2.5.
+    ticks: tuple[float, ...] | None = None
 
     def problems(self, values: Sequence[float], name: str = "axis") -> list[str]:
         """What is wrong with this spec for ``values`` (data that must be shown), each a
@@ -264,6 +267,8 @@ def build_axis(values: Sequence[float], spec: AxisSpec, *, lo: float | None = No
                 d_lo, ticks = spec.lo, [t for t in ticks if t >= spec.lo - 1e-12 * abs(spec.lo)]
             if spec.hi is not None:
                 d_hi, ticks = spec.hi, [t for t in ticks if t <= spec.hi + 1e-12 * abs(spec.hi)]
+    elif spec.ticks is not None and spec.scale == "linear":
+        ticks = sorted(t for t in spec.ticks if d_lo - 1e-9 * (d_hi - d_lo) <= t <= d_hi + 1e-9 * (d_hi - d_lo))
     else:
         ticks = linear_ticks(d_lo, d_hi, spec.max_ticks, inside=inside)
         if not inside:

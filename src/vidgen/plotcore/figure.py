@@ -20,6 +20,7 @@ import numpy as np
 from vidgen.errors import VidgenError
 
 from .axis import Axis, AxisSpec, build_axis, equal_aspect
+from .numbers import axis_title, clean, tick_labels
 
 #: ``measure(text) -> (width, height)`` of a label in frame units.
 Measure = Callable[[str], tuple[float, float]]
@@ -221,7 +222,7 @@ def layout_figure(
     axes = _axes(panels, arrange, share)
     layouts = _place(area, axes, measure, arrange, share, gap, top, weights)
     if aspect == "equal":
-        for _ in range(4):
+        for _ in range(8):
             lay = layouts[0]
             p = panels[0]
             free_x = p.x.lo is None or p.x.hi is None
@@ -234,10 +235,36 @@ def layout_figure(
                 return [_labels(_shrunk_plot(lay), lay.x, lay.y, measure, True, True, inner, _room(lay.x, lay.y, measure, True, True, area.width))]
             x_axis = build_axis(p.x_values, p.x, lo=x_lo, hi=x_hi) if widen_x else lay.x
             y_axis = build_axis(p.y_values, p.y, lo=y_lo, hi=y_hi) if widen_y else lay.y
-            if not widen_x and not widen_y:
+            same = _common_step(x_axis, y_axis, p.x, p.y)   # square gridlines: one tick step on both axes
+            if same is not None:
+                x_axis, y_axis = same
+            if not widen_x and not widen_y and same is None:
                 break
             layouts = _place(area, [(x_axis, y_axis)], measure, arrange, share, gap, top, weights)
     return layouts
+
+
+def _common_step(x: Axis, y: Axis, x_spec: AxisSpec, y_spec: AxisSpec) -> tuple[Axis, Axis] | None:
+    """For an equal aspect: both axes ticked with the same step (the larger of the two), so the
+    gridlines make squares; ``None`` when the steps already agree, an axis is not plain linear
+    (breaks) or one axis would keep fewer than two ticks."""
+    if len(x.segments) > 1 or len(y.segments) > 1 or len(x.ticks) < 2 or len(y.ticks) < 2:
+        return None
+    sx, sy = x.ticks[1] - x.ticks[0], y.ticks[1] - y.ticks[0]
+    if math.isclose(sx, sy, rel_tol=1e-9):
+        return None
+    step = max(sx, sy)
+
+    def ticked(axis: Axis, spec: AxisSpec) -> Axis | None:
+        first, last = math.ceil(axis.lo / step - 1e-9), math.floor(axis.hi / step + 1e-9)
+        if last - first + 1 < 2:
+            return None
+        ticks = [clean(k * step) for k in range(first, last + 1)]
+        labels = tick_labels(ticks, spec.format, spec.unit, scale=spec.scale)
+        return replace(axis, ticks=tuple(ticks), labels=tuple(labels.labels), title=axis_title(spec.label, labels.title_unit, labels.exponent))
+
+    new_x, new_y = ticked(x, x_spec), ticked(y, y_spec)
+    return (new_x, new_y) if new_x is not None and new_y is not None else None
 
 
 def layout_axes(area: Rect, x: Axis, y: Axis, measure: Measure, *, top: float = 0.0) -> PanelLayout:

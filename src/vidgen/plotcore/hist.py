@@ -104,19 +104,30 @@ def bin_edges(
     if isinstance(bins, int) and width is None:
         if not 1 <= bins <= MAX_BINS:
             raise VidgenError(f"bins must be 1..{MAX_BINS}, got {bins}")
-        return [clean(e) for e in np.linspace(a, b, bins + 1)]
+        return _cover([clean(e) for e in np.linspace(a, b, bins + 1)], a, b)
     inside = [v for v in finite if a <= v <= b]
     w = width if width is not None else rule_width(inside if len(inside) >= 2 else finite, str(bins))
     if w <= 0:
         raise VidgenError(f"a bin width must be positive, got {w:g}")
     if not nice and width is None:
         count = max(1, math.ceil((b - a) / w))
-        return _limit([clean(e) for e in np.linspace(a, b, count + 1)])
+        return _limit(_cover([clean(e) for e in np.linspace(a, b, count + 1)], a, b))
     if nice and width is None:
         w = nice_width(w)
     start = lo if lo is not None else math.floor(a / w + 1e-9) * w
     count = max(1, math.ceil((b - start) / w - 1e-9))   # the last bin includes its right edge
-    return _limit([clean(start + k * w) for k in range(count + 1)])
+    return _limit(_cover([clean(start + k * w) for k in range(count + 1)], a, b))
+
+
+def _cover(edges: list[float], a: float, b: float) -> list[float]:
+    """The edges with the outer ones moved (by round-off at most) to include ``a`` and ``b``:
+    the 12-digit cleaning, or a floor / ceiling within its tolerance, must not drop the smallest
+    or largest value from the histogram."""
+    if edges[0] > a:
+        edges[0] = a
+    if edges[-1] < b:
+        edges[-1] = b
+    return edges
 
 
 def _limit(edges: list[float]) -> list[float]:

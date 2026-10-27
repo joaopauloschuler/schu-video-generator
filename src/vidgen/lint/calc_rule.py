@@ -75,6 +75,11 @@ def candidates(project: Project) -> tuple[dict[str, list[qa.Candidate]], dict[st
             stems = frozenset(s for s, _ in _stems(str(v.meaning)))
             rows.append(qa.Candidate(v.name, str(v.meaning), float(q.value), q.dim, q.sig, display.value_text(), display.unit, is_result, spec.id,
                                      stems))
+        # the parts of an intermediate line (no name: a number said for one agrees, none is named)
+        for r in worked.results:
+            for part in (p for step in r.steps for p in step.values):
+                q = part.quantity
+                rows.append(qa.Candidate("", "", float(q.value), q.dim, q.sig, part.value_text(), part.unit, False, spec.id))
         found[spec.id] = rows
         results[spec.id] = list(worked.results)
     _cache.clear()
@@ -262,7 +267,7 @@ def _target(v: qa.SaidValue, pool: list[qa.Candidate], own: list[qa.Candidate], 
     named = [c for c in pool if id(c) in mentioned]
     if named:
         return min(named, key=lambda c: abs(v.start - mentioned[id(c)])), False
-    same = [c for c in own if c in pool]
+    same = [c for c in own if c in pool and c.name]   # an intermediate part never takes the blame
     results = [c for c in same if c.result]
     if len(results) == 1 and len(same) == 1:
         return results[0], False

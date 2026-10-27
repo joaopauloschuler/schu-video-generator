@@ -5,9 +5,22 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–227)
+## Unreleased (Steps 193–228)
 
 ### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
+
+- **Review of Phase W: accuracy fixes** (Step 228). Checked against numpy / scipy
+  (`tests/test_science_review.py`). **Changed results:** counts — a series with `y_err: sqrt`, or
+  a curve fitted to a histogram — are fitted by Poisson maximum likelihood (weights from the fitted
+  curve; √N weights from the data pulled a decay low: the example's λ 0.276 → 0.274 min⁻¹, its
+  narration updated), and a count of 0 is no longer an error; a histogram with a number of bins
+  no longer drops its smallest or largest value to round-off; RK45 samples come from its dense
+  output (as scipy: far fewer steps, the same accuracy) with an absolute tolerance scaled to the
+  model. **Units:** two readings in °C / °F cannot be added, and a difference of readings cannot
+  be shown in °C (write changes in K). **Look:** normalized residual panels are symmetric and
+  ticked at ±2 (points without bars); `aspect: equal` plots tick both axes with one step (square
+  gridlines); a calculation leaving for the next one fades out faster. The lint also accepts a
+  number said for an intermediate step of a calculation.
 
 - **A science example, guide topic and cookbook; the PCR trace on the chart core** (Step 227).
   `examples/radioactive-decay` ("Half-life: how radioactive decay keeps time", about 2:52 with

@@ -219,7 +219,8 @@ def _integrate(method: str, rhs: Callable[[float, np.ndarray], np.ndarray], equa
     if method == "rk4":
         return rk4(rhs, t0, y0, t1, step or span / 1000, samples=samples or DEFAULT_SAMPLES)
     outs = np.linspace(t0, t1, (samples or DEFAULT_SAMPLES) + 1)
-    _, states = rk45(rhs, t0, y0, t1, times=outs[1:], rtol=rtol, atol=rtol * 1e-3, first_step=step, max_step=span / 20)
+    size = float(np.max(np.abs(y0))) if len(y0) and np.any(y0 != 0) else 1.0   # the absolute floor follows the model's own scale
+    _, states = rk45(rhs, t0, y0, t1, times=outs[1:], rtol=rtol, atol=rtol * 1e-3 * size, first_step=step, max_step=span / 20)
     return outs, np.vstack([y0, states])
 
 

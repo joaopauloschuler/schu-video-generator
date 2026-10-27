@@ -155,6 +155,8 @@ class Step:
     alt_stacked: str = ""
     #: ``tex`` with one factor of its outermost product per line (three factors or more).
     deep: str = ""
+    #: An ``intermediate`` line's evaluated parts (for the lint: a number said for one of them).
+    values: list[SymbolValue] = field(default_factory=list)
 
     def variants(self) -> list[str]:
         """The ways to write this line, from the most explicit: with units, with units on two
@@ -391,7 +393,7 @@ def _calculate(k: int, c: CalcInput, tree: ex.Node, known: dict[str, SymbolValue
         number = _exact_number(q, unit, c.sig, c.format)
     except QuantityError as error:
         raise ctx.fail(str(error)) from None
-    shown = Quantity(q.value, q.dim, c.sig if c.sig is not None else q.sig)
+    shown = Quantity(q.value, q.dim, c.sig if c.sig is not None else q.sig, q.temperature)
     value = _with_si(SymbolValue(c.name, c.symbol or name_tex(c.name), c.meaning, "", shown, unit, number))
     steps = _steps(c, tree, q, value, known, wrap)
     conversions = []
@@ -402,7 +404,10 @@ def _calculate(k: int, c: CalcInput, tree: ex.Node, known: dict[str, SymbolValue
             raise ctx.fail(f"convert: {error}") from None
         if u.dim != q.dim:
             raise ctx.fail(f"convert: '{target}' is {describe_dim(u.dim)}, but the result is {describe_dim(q.dim)}")
-        n = _exact_number(value.quantity, u, None, "auto" if c.format in ("fraction", "percent") else c.format)
+        try:
+            n = _exact_number(value.quantity, u, None, "auto" if c.format in ("fraction", "percent") else c.format)
+        except QuantityError as error:
+            raise ctx.fail(f"convert: {error}") from None
         conv = SymbolValue(c.name, value.tex, c.meaning, "", value.quantity, u, n)
         conversions.append(conv)
         tex, _ = conv.value_tex()
@@ -439,6 +444,7 @@ def _steps(c: CalcInput, tree: ex.Node, q: Quantity, value: SymbolValue, known: 
     want = c.intermediate if c.intermediate is not None else True
     if want and tree.kind in ("call", "^") and len(tree.walk()) > 3:
         replace = {}
+        parts: list[SymbolValue] = []
         env = {n: v.quantity for n, v in known.items()}
         for child in tree.children:
             if child.kind in ("num", "name"):
@@ -450,8 +456,9 @@ def _steps(c: CalcInput, tree: ex.Node, q: Quantity, value: SymbolValue, known: 
             n = _exact_number(Quantity(part.value, part.dim, guard), u, None, "auto")
             sv = SymbolValue("", "", "", "", part, u, n)
             replace[id(child)] = sv.value_tex()
+            parts.append(sv)
         if replace:
-            steps.append(Step("intermediate", ex.to_tex(tree, symbol, replace, values=True)[0]))
+            steps.append(Step("intermediate", ex.to_tex(tree, symbol, replace, values=True)[0], values=parts))
     shown, _ = value.value_tex()
     exact_frac = value.number.fraction and q.rational
     if exact_frac:

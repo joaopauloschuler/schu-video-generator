@@ -423,12 +423,18 @@ def fit_curve(
     *,
     y_err: Sequence[float] | None = None,
     x_err: Sequence[float] | None = None,
+    poisson: float | Sequence[float] | None = None,
     max_iter: int = 400,
 ) -> FitResult:
     """Fit ``model`` to the points (``nan`` points are left out). ``y_err``: standard errors of
-    y (weighted least squares, absolute); ``x_err``: of x (effective variance). Raises
-    ``VidgenError`` for too few points, non-positive errors, a power law with x ≤ 0, or a fit
-    that cannot be determined."""
+    y (weighted least squares, absolute); ``x_err``: of x (effective variance). ``poisson``:
+    the y values are counts (or counts times a scale): their variance is ``poisson`` × the
+    model, not the data — least squares re-weighted from the fitted curve until it settles,
+    which is the Poisson maximum-likelihood fit (weights √N from the data, ``y_err`` alone,
+    pull the curve low where counts are small); ``y_err`` is then only the first round's
+    weights, and ``chi2`` is Pearson's Σ (y − f)² / (poisson·f). Raises ``VidgenError`` for
+    too few points, non-positive errors, a power law with x ≤ 0, or a fit that cannot be
+    determined."""
     xa, ya = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
     sy = np.asarray(y_err, dtype=float) if y_err is not None else None
     sx = np.asarray(x_err, dtype=float) if x_err is not None else None
@@ -441,6 +447,11 @@ def fit_curve(
                 raise VidgenError(f"{name} must be positive numbers")
     if sy is not None and np.any(sy[ok] == 0):
         raise VidgenError("y errors must be positive (a zero error would weigh one point infinitely)")
+    scale = None
+    if poisson is not None:
+        scale = np.broadcast_to(np.asarray(poisson, dtype=float), xa.shape)[ok]
+        if np.any(scale <= 0) or np.any(ya[ok] < 0):
+            raise VidgenError("Poisson weights need counts ≥ 0 and a positive scale")
     xa, ya = xa[ok], ya[ok]
     sy = sy[ok] if sy is not None else None
     sx = sx[ok] if sx is not None else None
@@ -450,29 +461,42 @@ def fit_curve(
     if model.positive_x and np.any(xa <= 0):
         raise VidgenError(f"a {model.kind} fit needs positive x values (x = {xa[xa <= 0][0]:g})")
     p0 = np.asarray(model.guess(xa, ya), dtype=float)
+    if scale is not None and sy is None:
+        sy = np.sqrt(np.maximum(ya, scale) * scale)   # the first round: √N, one count for an empty bin
     sigma = sy.copy() if sy is not None else None
-    if sx is not None and np.any(sx > 0):
-        rounds = 4
+    has_x = sx is not None and np.any(sx > 0)
+    if has_x:
         if sigma is None:
             sigma = np.ones_like(xa)
             sy = np.zeros_like(xa)
-    else:
-        rounds = 1
+    rounds = 30 if scale is not None else 4 if has_x else 1
     p = p0
     iterations = 0
     for _ in range(rounds):
         w = 1.0 / sigma**2 if sigma is not None else np.ones_like(xa)
+        before = np.array(p, dtype=float)
         if model.basis is not None:
             B = model.basis(xa) * np.sqrt(w)[:, None]
             p = np.linalg.lstsq(B, ya * np.sqrt(w), rcond=None)[0]
         else:
             p, it = _levenberg_marquardt(model, xa, ya, w, p, max_iter)
             iterations += it
-        if sx is not None and sy is not None:
-            h = 1e-6 * (np.abs(xa) + float(np.ptp(xa)) + 1e-12)
-            slope = (model(xa + h, p) - model(xa - h, p)) / (2 * h)
-            sigma = np.sqrt(sy**2 + (slope * sx) ** 2)
+        if scale is not None:
+            mu = model(xa, p)
+            if not np.all(np.isfinite(mu)):
+                raise VidgenError("the fitted model is undefined at some data points (give params: other starting values)")
+            floor = 1e-9 * max(float(np.max(np.abs(mu))), float(np.max(scale)))
+            sy = np.sqrt(np.maximum(mu, floor) * scale)   # the model's variance, not the data's
+        if sy is not None and (has_x or scale is not None):
+            if has_x:
+                h = 1e-6 * (np.abs(xa) + float(np.ptp(xa)) + 1e-12)
+                slope = (model(xa + h, p) - model(xa - h, p)) / (2 * h)
+                sigma = np.sqrt(sy**2 + (slope * sx) ** 2)
+            else:
+                sigma = sy.copy()
             sigma[sigma <= 0] = np.min(sigma[sigma > 0]) if np.any(sigma > 0) else 1.0
+        if scale is not None and not has_x and np.all(np.abs(np.asarray(p) - before) <= 1e-10 * (np.abs(before) + 1e-12)):
+            break
     if model.kind in PEAK_KINDS:
         p = np.array(p, dtype=float)
         p[2] = abs(p[2])   # a width: the model is even in it

@@ -89,7 +89,8 @@ scenes:
       label_size: caption           # smaller axis text: room for the residual panel in 16:9
       series:
         - {name: counts, x: time, y: counts, style: points, y_err: sqrt, error: poisson}
-      fits:                         # λ itself as a parameter (A·exp(k·t) would show k = −λ)
+      fits:                         # λ itself as a parameter (A·exp(k·t) would show k = −λ); counts with
+                                    # y_err: sqrt are fitted by Poisson maximum likelihood
         - name: exponential fit
           series: counts
           model: custom
@@ -103,7 +104,7 @@ scenes:
         actions: [{reveal: "series:counts", at: "@These"}]
       - text: "Each count has a Poisson uncertainty, its square root. On a logarithmic axis, an exponential decay is a straight line."
         actions: [{reveal: "errors:counts", at: "@Poisson"}, {highlight: axes, style: flash, at: "@logarithmic"}]
-      - text: "An exponential fit gives the slope: the decay constant is zero point two seven six per minute, give or take zero point zero zero four."
+      - text: "An exponential fit gives the slope: the decay constant is zero point two seven four per minute, give or take zero point zero zero four."
         actions: [{fit: "fit:exponential fit", at: "@exponential"}, {highlight: "fit:exponential fit", style: flash, at: "@per"}]
       - text: "The tail holds few counts, so its scatter is largest."
         actions: [{zoom: axes, x: [9.5, 15], at: "@tail"}]
@@ -115,7 +116,7 @@ scenes:
     params:
       title: "The half-life from the fit"
       symbols:
-        - {name: lambda, value: "0.276 min^-1", meaning: decay constant, source: "fit"}
+        - {name: lambda, value: "0.274 min^-1", meaning: decay constant, source: "fit"}
         - {name: s_lambda, value: "0.0044 min^-1", meaning: "its standard error", source: "fit", tex: "\\sigma_{\\lambda}"}
         - {name: t_tab, value: "2.552 min", meaning: "tabulated half-life of barium-137m", source: "NNDC", tex: "t_{\\mathrm{tab}}"}
       calculations:
@@ -123,9 +124,9 @@ scenes:
         - {name: s_t, expr: "t_half*s_lambda/lambda", unit: min, meaning: "uncertainty of the half-life", symbol: "\\sigma_{t}"}
         - {name: z, expr: "(t_tab - t_half)/s_t", meaning: "standard errors from the tabulated value"}
     beats:
-      - text: "After one half-life, half of the nuclei are left: e to the minus lambda t equals one half. So the half-life is the natural log of two over lambda: two point five one minutes."
+      - text: "After one half-life, half of the nuclei are left: e to the minus lambda t equals one half. So the half-life is the natural log of two over lambda: two point five three minutes."
       - text: "Its relative uncertainty is the same as lambda's: about zero point zero four minutes."
-      - text: "The tabulated value, two point five five minutes, lies one standard error away: the measurement agrees."
+      - text: "The tabulated value, two point five five minutes, lies about half a standard error away: the measurement agrees."
 
   - id: carbon
     type: calculation

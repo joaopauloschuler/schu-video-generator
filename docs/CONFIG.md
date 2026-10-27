@@ -4366,7 +4366,7 @@ panels), `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit
 | `x`, `y` | axis | linear, from the data | `{label, unit, scale, min, max, reversed, format, linthresh, breaks}`, below |
 | `arrange` | `rows` \| `columns` | `rows` | how `panels` are laid out |
 | `share` | bool | `true` | panels share the axis along which they are arranged; `false`: each its own |
-| `aspect` | `auto` \| `equal` | `auto` | `equal`: one unit as long on x as on y (one panel, linear axes); the axis with room to spare widens |
+| `aspect` | `auto` \| `equal` | `auto` | `equal`: one unit as long on x as on y (one panel, linear axes); the axis with room to spare widens, and both axes tick with the same step (square gridlines) |
 | `grid` | `major` \| `both` \| `x` \| `y` \| `none` | `major` | gridlines at the labelled ticks; `both` adds a log axis' minor ticks |
 | `legend` | bool | auto | default: in a panel with several series, a fit, or error bars with a stated `error`, and in a figure of several panels for a series its panel's axis title does not name; in a free corner of the plot, else beside (16:9) or above (9:16) the figure |
 | `fits` | list of fits | `[]` | fitted curves, below |
@@ -4416,17 +4416,18 @@ errors); the legend names the fit (`name`, else its formula):
 | `expr`, `params` | — | `custom`: an expression of `x` and named parameters (the safe maths syntax of `function_plot`; a parameter may be called `tau` or `e`) and their starting values: `params: {a: 1000, tau: {value: 8, unit: d}, c: 0}` (a unit is shown after the value); `params` also overrides a built-in model's own starting values |
 | `name` | `<model> fit` | legend and targets `fit:<name>` |
 | `range` | — | fit only the points with x in `[low, high]` |
-| `weighted` | `true` | weight by the series' y errors (absolute: χ²/ν tells whether they match the scatter), use its x errors (effective variance), a histogram's √N; without errors the parameter errors come from the scatter (as `scipy.optimize.curve_fit`) |
+| `weighted` | `true` | weight by the series' y errors (absolute: χ²/ν tells whether they match the scatter), use its x errors (effective variance); counts — a histogram, or a series with `y_err: sqrt` — by Poisson maximum likelihood (the variance is the fitted curve's, not the count's: √N weights from the data pull a fit low; χ²/ν is Pearson's; a 0 count is a point like any other); without errors the parameter errors come from the scatter (as `scipy.optimize.curve_fit`) |
 | `band`, `level` | `none`, `0.95` | `confidence` (where the true curve lies) or `prediction` (where a new point would lie), shaded in the curve's colour; Student's t with n − p degrees of freedom (the normal quantile when the points have errors) |
-| `residuals` | `false` | `true`: a panel under the plot sharing x with y − fit (and the error bars); `normalized`: (y − fit)/σ |
+| `residuals` | `false` | `true`: a panel under the plot sharing x with y − fit (and the error bars); `normalized`: (y − fit)/σ (counts: σ = √fit), symmetric about 0 and ticked at ±2 |
 | `show` | `auto` | the box: `auto` (parameters, R², χ²/ν with errors), `none`, or a list of `formula`, `params`, `r2`, `chi2`, `n` |
 | `color`, `dashed`, `width` | accent (several fits: the series' colour), `false`, 4 | |
 
 Values ± errors are written as results are: the error with two significant digits (one from 355
 to 949, PDG rule), the value to the same place, a power of ten outside brackets beyond 10⁵ or
-below 10⁻³ (`(2.510 ± 0.031) × 10⁻⁴ s`), units from the axes (`k = −0.0846 ± 0.0017 d⁻¹`).
+below 10⁻³ (`(2.510 ± 0.031) × 10⁻⁴ s`), units from the axes (`k = −0.0846 ± 0.0017 d⁻¹`). R² is unweighted (1 − Σ residual² / Σ (y −
+ȳ)²); with error bars read χ²/ν.
 Fitting needs no scipy: linear models are solved directly, others by Levenberg–Marquardt in
-numpy; a fit that cannot be done (too few points, a power law with x ≤ 0, parameters the data do
+numpy (checked against `scipy.optimize.curve_fit` and, for counts, a Poisson likelihood); a fit that cannot be done (too few points, a power law with x ≤ 0, parameters the data do
 not determine, a model undefined at the starting values) is an error naming the fit.
 
 **Annotations** (`annotations: [{type, text, ...}]`), placed where they cover the least data
@@ -4572,7 +4573,8 @@ of the columns and params in the safe maths syntax), `units` (`{t: s, x: m, E: J
 and readouts) and — `ode`, `recurrence`, `function` — `conserved` (quantities that should stay
 constant: their drift is checked for lint). `method` of an `ode`: `rk4` (fixed `step`, default a
 thousandth of the span; error ∝ step⁴), `rk45` (adaptive Dormand–Prince to the relative
-`tolerance`, 10⁻⁶; `step` is the first step), `leapfrog` (velocity Verlet: symplectic, the
+`tolerance`, 10⁻⁶, with an absolute floor scaled to the initial values; `step` is the first step;
+the samples between its steps come from its dense output, as scipy's `solve_ivp`), `leapfrog` (velocity Verlet: symplectic, the
 energy of an orbit or an oscillator stays bounded over long times where RK4 slowly drifts;
 needs every position paired with a velocity, `x' = v`, and forces that do not depend on
 velocities). Errors name the model: an unknown name in an equation (did you mean), a missing or
@@ -5431,7 +5433,9 @@ SI base and derived units with prefixes (`m`, `kg`, `s`, `A`, `K`, `mol`, `cd`, 
 factor after it (`m/s/s` = m/s²; group with brackets). A temperature with an offset must stand
 alone (`°C/s` is refused: a change of 1 °C is 1 K, write `K/s`); a value in °C is converted to
 kelvin (25.0 °C = 298.2 K, keeping its last decimal place), and a result can be shown in °C.
-Unknown units get a did-you-mean; a prefix on a unit that takes none (`kmin`) is refused.
+Two readings in °C (or °F) cannot be added (`T1 + T2` is refused: a change of temperature is
+written in K, `T + 10 [K]`; average readings in K), and a difference of two readings cannot be
+shown in °C (`unit: K` for `T2 - T1`: 10 K would read as −263 °C). Unknown units get a did-you-mean; a prefix on a unit that takes none (`kmin`) is refused.
 
 **Expressions** (`expr`): the names of the symbols and of earlier results, numbers (exact: the
 `2` of `2*p*q`, the `1/2` of `m*v^2/2`), `+ - * / ^` (or `**`), brackets, implicit products

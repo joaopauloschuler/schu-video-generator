@@ -102,6 +102,16 @@ _A = [
 ]
 _B = np.array([35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84])
 _E = np.array([71 / 57600, 0, -71 / 16695, 71 / 1920, -17253 / 339200, 22 / 525, -1 / 40])
+# the dense output (Shampine 1986, as scipy's RK45): y(t + x·h) = y + h·Σ_k (K P)_k x^k, k = 1..4
+_P = np.array([
+    [1, -8048581381 / 2820520608, 8663915743 / 2820520608, -12715105075 / 11282082432],
+    [0, 0, 0, 0],
+    [0, 131558114200 / 32700410799, -68118460800 / 10900136933, 87487479700 / 32700410799],
+    [0, -1754552775 / 470086768, 14199869525 / 1410260304, -10690763975 / 1880347072],
+    [0, 127303824393 / 49829197408, -318862633887 / 49829197408, 701980252875 / 199316789632],
+    [0, -282668133 / 205662961, 2019193451 / 616988883, -1453857185 / 822651844],
+    [0, 40617522 / 29380423, -110615467 / 29380423, 69997945 / 29380423],
+])
 
 
 def rk45(
@@ -117,64 +127,78 @@ def rk45(
     max_step: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Adaptive Dormand–Prince 5(4) from ``t0`` to ``t1``, reporting the state at ``times``
-    (increasing, inside ``[t0, t1]``; steps end on each of them, so outputs are exact to the
-    tolerance). Error per step below ``atol + rtol·|y|`` (RMS norm, as scipy). A step that must
-    shrink below 10⁻¹² of the span raises an ``IntegrationError`` of kind ``stiff``."""
+    (increasing, inside ``[t0, t1]``). The steps follow the error control, not the output
+    times: states between the ends of a step come from the method's fourth-order dense output
+    (the interpolant of scipy's ``RK45``), so many output times cost no extra steps. Error per
+    step below ``atol + rtol·|y|`` (RMS norm, as scipy). A step that must shrink below 10⁻¹² of
+    the span raises an ``IntegrationError`` of kind ``stiff``."""
     y = np.asarray(y0, dtype=float).copy()
     limit = _limit(y)
     span = t1 - t0
     outs = np.asarray(times, dtype=float)
-    h_nat = first_step or span / 100   # the step the error control asks for (before ending on an output time)
+    h_nat = first_step or span / 100   # the step the error control asks for
     h_max = max_step or span
     t = t0
-    states = []
+    states: list[np.ndarray] = []
+    pending = 0   # the next output time to report
+    while pending < len(outs) and outs[pending] <= t0 + 1e-12 * max(1.0, abs(t0)):
+        states.append(y.copy())
+        pending += 1
     steps = stiff_steps = calm_steps = 0
     k_first = f(t, y)
-    for target in outs:
-        while t < target - 1e-12 * max(1.0, abs(target)):
-            h = min(h_nat, h_max, target - t)
-            clamped = h < h_nat
-            if h < 1e-12 * span:
-                raise IntegrationError(f"the adaptive step had to shrink below {h:.3g} near t = {t:.4g}: the system looks stiff or singular there",
-                                       "stiff", t)
-            ks = [k_first]
-            stage = y
-            for i in range(1, 6):
-                stage = y + h * sum(a * k for a, k in zip(_A[i], ks))
-                ks.append(f(t + _C[i] * h, stage))
-            y_new = y + h * sum(b * k for b, k in zip(_B, ks))
-            k7 = f(t + h, y_new)
-            err = h * sum(e * k for e, k in zip(_E, [*ks, k7]))
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_new))
-            norm = float(np.sqrt(np.mean((err / scale) ** 2))) if len(y) else 0.0
-            steps += 1
-            if steps > MAX_ADAPTIVE_STEPS:
-                raise IntegrationError(f"more than {MAX_ADAPTIVE_STEPS:,} adaptive steps by t = {t:.4g} (of {t0:g} to {t1:g}): the system looks stiff "
-                                       "(very different time scales); loosen the tolerance, shorten t or use method: rk4 with a small step", "stiff", t)
-            if not math.isfinite(norm):
-                h_nat = h / 4
-                continue
-            if norm <= 1.0:
-                # Hairer's test: h·|λ| ≈ h·|k7 − k6| / |y_new − stage6| near the edge of the
-                # method's stability region (3.3) for many steps in a row means a stiff system
-                dy = float(np.linalg.norm(y_new - stage))
-                if dy > 0 and h * float(np.linalg.norm(k7 - ks[5])) / dy > STIFF_LIMIT:
-                    stiff_steps, calm_steps = stiff_steps + 1, 0
-                    if stiff_steps >= STIFF_STEPS and (t1 - t) / h > STIFF_BUDGET:   # a short stiff stretch is just slow
-                        raise IntegrationError(f"the system is stiff near t = {t:.4g} (a fast decay forces tiny steps): the adaptive method would need "
-                                               "a very small step for its whole time; shorten t, rescale the fast rate, or use method: rk4 with a small step", "stiff", t)
-                else:
-                    calm_steps += 1
-                    if calm_steps >= 6:   # Hairer: six calm steps in a row reset the count
-                        stiff_steps = 0
-                t, y, k_first = t + h, y_new, k7
-                _check(y, t, limit)
-                grown = h * (min(5.0, max(0.2, 0.9 * norm ** -0.2)) if norm > 0 else 5.0)
-                h_nat = max(h_nat, grown) if clamped else grown
+    end = float(outs[-1]) if len(outs) else t0
+    while pending < len(outs):
+        h = min(h_nat, h_max, end - t)
+        clamped = h < h_nat
+        if h < 1e-12 * span:
+            raise IntegrationError(f"the adaptive step had to shrink below {h:.3g} near t = {t:.4g}: the system looks stiff or singular there",
+                                   "stiff", t)
+        ks = [k_first]
+        stage = y
+        for i in range(1, 6):
+            stage = y + h * sum(a * k for a, k in zip(_A[i], ks))
+            ks.append(f(t + _C[i] * h, stage))
+        y_new = y + h * sum(b * k for b, k in zip(_B, ks))
+        k7 = f(t + h, y_new)
+        err = h * sum(e * k for e, k in zip(_E, [*ks, k7]))
+        scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_new))
+        norm = float(np.sqrt(np.mean((err / scale) ** 2))) if len(y) else 0.0
+        steps += 1
+        if steps > MAX_ADAPTIVE_STEPS:
+            raise IntegrationError(f"more than {MAX_ADAPTIVE_STEPS:,} adaptive steps by t = {t:.4g} (of {t0:g} to {t1:g}): the system looks stiff "
+                                   "(very different time scales); loosen the tolerance, shorten t or use method: rk4 with a small step", "stiff", t)
+        if not math.isfinite(norm):
+            h_nat = h / 4
+            continue
+        if norm > 1.0:
+            h_nat = h * max(0.2, 0.9 * norm ** -0.2)
+            continue
+        # Hairer's test: h·|λ| ≈ h·|k7 − k6| / |y_new − stage6| near the edge of the method's
+        # stability region (3.3) for many steps in a row means a stiff system
+        dy = float(np.linalg.norm(y_new - stage))
+        if dy > 0 and h * float(np.linalg.norm(k7 - ks[5])) / dy > STIFF_LIMIT:
+            stiff_steps, calm_steps = stiff_steps + 1, 0
+            if stiff_steps >= STIFF_STEPS and (t1 - t) / h > STIFF_BUDGET:   # a short stiff stretch is just slow
+                raise IntegrationError(f"the system is stiff near t = {t:.4g} (a fast decay forces tiny steps): the adaptive method would need "
+                                       "a very small step for its whole time; shorten t, rescale the fast rate, or use method: rk4 with a small step", "stiff", t)
+        else:
+            calm_steps += 1
+            if calm_steps >= 6:   # Hairer: six calm steps in a row reset the count
+                stiff_steps = 0
+        t_new = end if h == end - t else t + h
+        _check(y_new, t_new, limit)
+        # outputs inside the step from the dense output: y + h·Σ Q x^k (x the share of the step)
+        q = np.array([*ks, k7]).T @ _P
+        while pending < len(outs) and outs[pending] <= t_new + 1e-12 * max(1.0, abs(t_new)):
+            share = (outs[pending] - t) / h
+            if share >= 1.0 - 1e-12:
+                states.append(y_new.copy())
             else:
-                h_nat = h * max(0.2, 0.9 * norm ** -0.2)
-        t = float(target) if abs(t - target) <= 1e-12 * max(1.0, abs(target)) else t
-        states.append(y.copy())
+                states.append(y + h * (q @ share ** np.arange(1, 5)))
+            pending += 1
+        t, y, k_first = t_new, y_new, k7
+        grown = h * (min(5.0, max(0.2, 0.9 * norm ** -0.2)) if norm > 0 else 5.0)
+        h_nat = max(h_nat, grown) if clamped else grown
     return outs, np.array(states)
 
 

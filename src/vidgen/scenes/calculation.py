@@ -42,6 +42,8 @@ NEARLY, LARGE, KEEP_UNITS = 0.8, 2.0, 1.2
 #: The lines of a calculation stay one block: none more than this times the smallest's size.
 SPREAD = 1.6
 ROW_GAP, BOX_PAD, TABLE_GAP = 0.34, 0.14, 0.22
+#: The share of a step the previous calculation takes to leave, against 1 for each line coming.
+LEAVE_SHARE = 0.5
 
 
 class CalcSymbol(SceneParams):
@@ -654,11 +656,14 @@ class Calculation(NarratedScene):
         if not todo:
             return []
         before: list[Animation] = self._intro()
+        left = False
         for i in range(k):
             leaving = [row.mobject for row in self._calcs[i].rows if self.on_screen_parts(row.tex)]
             if leaving:
+                left = True
                 before += self._to_table(i) if self.params.results_in_table else [FadeOut(VGroup(*leaving), shift=UP * 0.2)]
-        stages = [AnimationGroup(*before)] if before else []
+        # a calculation that leaves goes quickly (a slow fade reads as a ghost behind the next one)
+        stages = [AnimationGroup(*before, run_time=LEAVE_SHARE) if left else AnimationGroup(*before)] if before else []
         stages += [AnimationGroup(*self._enter_row(row)) for row in todo]
         return [Succession(*stages)] if len(stages) > 1 else list(stages[0].animations)
 

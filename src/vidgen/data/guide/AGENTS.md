@@ -2331,7 +2331,8 @@ only to show context, not to exaggerate a change (a bar-like quantity starts at 
 poisson` (`y_err: sqrt` for counts: ± √N); say the same word in the narration. A fit shows its
 parameters ± standard errors, R² and χ²/ν (about 1: the errors match the scatter); `band:
 confidence` shows where the curve lies, `prediction` where a new point would; `residuals:
-normalized` shows (y − fit)/σ under the plot. Prefer a model whose parameter is the quantity you
+normalized` shows (y − fit)/σ under the plot, ticked at ±2. Counts (`y_err: sqrt`, histograms)
+are fitted by Poisson maximum likelihood, so the fit is not pulled low. Prefer a model whose parameter is the quantity you
 talk about (`model: custom`, `expr: "A*exp(-lambda*x)"` gives λ itself). Say fitted values as the
 box writes them, with "give or take" for the error.
 
@@ -2340,17 +2341,19 @@ orbits and oscillators, so the energy stays put), `recurrence`, `random_walk`, `
 the same numbers every render); a CSV series with `live: true` grows point by point too. Growth
 fills its beat; `grow` and `zoom` (`x: [from, to]`) time it to words.
 
-**Units and significant figures.** Write values as you would on paper — `"0.276 min^-1"`, `532
+**Units and significant figures.** Write values as you would on paper — `"0.274 min^-1"`, `532
 nm`, `"5730 yr"`, `constant: G` — and give each a `meaning` and a `source`. A number with a unit
 or a decimal point is measured (its figures count: `1500 m` has 2, `"1.50"` has 3); fractions and
 whole numbers without a unit are exact (`2/3 × 1/25 × 1/4 = 1/150`). The result keeps the figures
 the inputs allow; `sig:` asks for fewer, never more (`calc_sigfigs`). `convert: km/s` adds the
 result in another unit; a later calculation (or another scene, `from_scene`) uses earlier results.
-For an uncertainty, compute it as a calculation of its own (σ_t = t·σ_λ/λ).
+For an uncertainty, compute it as a calculation of its own (σ_t = t·σ_λ/λ). A change of
+temperature is written in K (`"10 K"`): two readings in °C are not added, and a difference is
+shown in K, not °C.
 
 **Pacing calculations.** One calculation per beat, or one line per action (`substitute`,
 `compute` on the word: `at: "@gives"`); say the formula in words, then the result once, with its
-unit ("two point five one minutes"). Long formulas break into a chain of short calculations.
+unit ("two point five three minutes"). Long formulas break into a chain of short calculations.
 Plots: one idea per beat (the data, the error bars, the fit, the residuals), 10–25 words; add an
 action every few seconds (`reveal: "errors:<series>"`, `fit`, `annotate`, `zoom`, `highlight` with
 `style: flash`) so the picture keeps moving; `label_size: caption` gives a crowded 16:9 figure
@@ -2367,13 +2370,13 @@ and 9:16.
   params:
     title: "The half-life from the fit"
     symbols:
-      - {name: lambda, value: "0.276 min^-1", meaning: decay constant, source: fit}
+      - {name: lambda, value: "0.274 min^-1", meaning: decay constant, source: fit}
       - {name: s_lambda, value: "0.0044 min^-1", meaning: its standard error, source: fit, tex: "\\sigma_{\\lambda}"}
     calculations:
       - {name: t_half, expr: "ln(2)/lambda", unit: min, meaning: half-life}
       - {name: s_t, expr: "t_half*s_lambda/lambda", unit: min, meaning: uncertainty of the half-life}
   beats:
-    - text: "The half-life is the natural log of two over lambda: two point five one minutes."
+    - text: "The half-life is the natural log of two over lambda: two point five three minutes."
     - text: "Its relative uncertainty is the same as lambda's: about zero point zero four minutes."
 ```
 

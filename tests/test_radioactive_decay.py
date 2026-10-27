@@ -48,22 +48,24 @@ def test_the_lint_is_clean_and_the_numbers_are_the_scenes() -> None:
     params = {s.id: s for s in project.config.scenes}
     calc = registry.get("calculation").cls
     half = {r.name: r for r in calc.validate_params(params["half"].params).worked().results}
-    assert half["t_half"].value.value_text() == "2.51 min" and half["s_t"].value.value_text() == "0.040 min"
-    assert half["z"].value.value_text() == "1"
+    assert half["t_half"].value.value_text() == "2.53 min" and half["s_t"].value.value_text() == "0.041 min"
+    assert half["z"].value.value_text() == "0.5"
     carbon = {r.name: r for r in calc.validate_params(params["carbon"].params).worked().results}
     assert carbon["lambda_C"].value.value_text() == "1.21 × 10⁻⁴ yr⁻¹" and carbon["t"].value.value_text() == "9.6 × 10³ yr"
 
 
 def test_the_fit_gives_the_narrated_decay_constant() -> None:
-    from vidgen import plotcore
+    from vidgen import extensions, registry
 
-    table = plotcore.read_table((EXAMPLE / "assets" / "counts.csv").read_text(encoding="utf-8"), "counts.csv")
-    x, y = table.column("time").values, table.column("counts").values
-    model = plotcore.make_model("custom", expr="A*exp(-lambda*x)", params=["A", "lambda"], guesses={"A": 700.0, "lambda": 0.3})
-    fit = plotcore.fit_curve(x, y, model, y_err=[math.sqrt(v) for v in y])
-    lam, err = fit.value("lambda")
-    assert round(lam, 3) == 0.276 and round(err, 3) == 0.004 and 0.5 < fit.reduced_chi2 < 1.5
-    assert abs(lam - math.log(2) / 2.552) < 1.5 * err          # the true value within the uncertainty
+    extensions.load_builtins()
+    project = Project.load(EXAMPLE)
+    params = {s.id: s for s in project.config.scenes}
+    resolved = registry.get("plot").cls.validate_params(params["counts"].params).resolve(project)
+    fit = resolved.fits[0]
+    lam, err = fit.result.value("lambda")
+    # counts with y_err: sqrt: Poisson maximum likelihood (Step 228), not √N weights (0.2765)
+    assert round(lam, 3) == 0.274 and round(err, 3) == 0.004 and 0.5 < fit.reduced_chi2() < 1.5
+    assert abs(lam - math.log(2) / 2.552) < 0.6 * err          # the true value within the uncertainty
 
 
 def test_the_data_script_is_seeded(tmp_path: Path) -> None:

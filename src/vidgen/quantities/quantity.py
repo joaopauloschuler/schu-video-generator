@@ -39,11 +39,17 @@ class QuantityError(VidgenError):
 
 @dataclass(frozen=True)
 class Quantity:
-    """An SI ``value`` of dimension ``dim`` with ``sig`` significant figures (``None``: exact)."""
+    """An SI ``value`` of dimension ``dim`` with ``sig`` significant figures (``None``: exact).
+    ``temperature``: ``"point"`` for a value written on a scale with an offset (°C, °F; a
+    reading of a thermometer), ``"difference"`` for the difference of two such readings, else
+    ``""``. In SI (kelvin) the arithmetic is right either way; the marks catch the two slips
+    authors make with °C: adding two readings (20 °C + 10 °C, where 10 °C was meant as a
+    change) and writing a difference in °C (10 K would read as −263 °C)."""
 
     value: Number
     dim: Dim = DIMENSIONLESS
     sig: int | None = None
+    temperature: str = ""
 
     @property
     def exact(self) -> bool:
@@ -253,14 +259,30 @@ def add(a: Quantity, b: Quantity, sign: int = 1, left: str = "", right: str = ""
         dx, dy = (a.dim, b.dim) if sign > 0 else (b.dim, a.dim)
         raise QuantityError(f"cannot {verb} {x or 'a quantity'} {joint} {y or 'a quantity'}: {describe_dim(dx)} vs {describe_dim(dy)} "
                             "— only quantities of the same kind can be added or subtracted")
+    points = (a.temperature == "point", b.temperature == "point")
+    if sign > 0 and all(points):
+        raise QuantityError(f"cannot add {left or 'a temperature'} and {right or 'a temperature'}: both are readings on a scale "
+                            "with an offset (°C or °F); write a change of temperature in K (a change of 10 °C is 10 K), "
+                            "or the readings in K to average them")
+    temperature = "difference" if all(points) else "point" if points[0] or (points[1] and sign > 0) else \
+        "difference" if "difference" in (a.temperature, b.temperature) else ""
     if _is_exact_number(a.value) and _is_exact_number(b.value):
         value: Number = Fraction(a.value) + sign * Fraction(b.value)
     else:
         value = float(a.value) + sign * float(b.value)
     if a.sig is None and b.sig is None:
-        return Quantity(value, a.dim, None)
+        return Quantity(value, a.dim, None, temperature)
     res = max(resolution(a), resolution(b))
-    return Quantity(value, a.dim, sig_from_resolution(value, res))
+    return Quantity(value, a.dim, sig_from_resolution(value, res), temperature)
+
+
+def _scaled_temperature(a: Quantity, b: Quantity) -> str:
+    """The mark of a product or quotient: a difference stays one when scaled by a pure number
+    (half a change is a change); a reading times anything is no longer a reading."""
+    for q, other in ((a, b), (b, a)):
+        if q.temperature == "difference" and other.dim == DIMENSIONLESS:
+            return "difference"
+    return ""
 
 
 def mul(a: Quantity, b: Quantity) -> Quantity:
@@ -269,7 +291,7 @@ def mul(a: Quantity, b: Quantity) -> Quantity:
         value: Number = Fraction(a.value) * Fraction(b.value)
     else:
         value = check_finite(float(a.value) * float(b.value), "a product")
-    return Quantity(value, dim_mul(a.dim, b.dim), _sig_min(a.sig, b.sig))
+    return Quantity(value, dim_mul(a.dim, b.dim), _sig_min(a.sig, b.sig), _scaled_temperature(a, b))
 
 
 def div(a: Quantity, b: Quantity, divisor: str = "") -> Quantity:
@@ -280,11 +302,11 @@ def div(a: Quantity, b: Quantity, divisor: str = "") -> Quantity:
         value: Number = Fraction(a.value) / Fraction(b.value)
     else:
         value = check_finite(float(a.value) / float(b.value), "a quotient")
-    return Quantity(value, dim_div(a.dim, b.dim), _sig_min(a.sig, b.sig))
+    return Quantity(value, dim_div(a.dim, b.dim), _sig_min(a.sig, b.sig), _scaled_temperature(a, b) if b.dim == DIMENSIONLESS else "")
 
 
 def neg(a: Quantity) -> Quantity:
-    return Quantity(-a.value, a.dim, a.sig)
+    return Quantity(-a.value, a.dim, a.sig, "difference" if a.temperature == "difference" else "")
 
 
 def _iroot(n: int, k: int) -> int | None:
@@ -364,7 +386,7 @@ def call(name: str, args: list[Quantity], texts: list[str]) -> Quantity:
             raise QuantityError(f"the square root of a negative number ({texts[0]})")
         return power(a, Quantity(Fraction(1, 2)), texts[0], "1/2")
     if name == "abs":
-        return Quantity(abs(args[0].value), args[0].dim, args[0].sig)
+        return Quantity(abs(args[0].value), args[0].dim, args[0].sig, args[0].temperature)
     if name in ("min", "max"):
         a, b = args
         if a.dim != b.dim:
@@ -399,6 +421,10 @@ def in_unit(q: Quantity, unit: Unit) -> tuple[Number, int | None]:
     offset: 25.0 °C = 298.2 K). Raises :class:`QuantityError` when the dimensions differ."""
     if q.dim != unit.dim:
         raise QuantityError(f"cannot express {describe_dim(q.dim)} in {unit.text or 'a pure number'} ({describe_dim(unit.dim)})")
+    if unit.offset and q.temperature == "difference":
+        raise QuantityError(f"the result is a difference of temperatures: in {unit.text} it would read as a temperature on the scale "
+                            f"({float(unit.from_si(q.value)):.4g} {unit.text}); write it in K (a change of 1 {unit.text} is "
+                            f"{'1 K' if unit.factor == 1 else '5/9 K'})")
     value = unit.from_si(q.value)
     if q.sig is None or not unit.offset:
         return value, q.sig
@@ -444,7 +470,7 @@ def written(value: str | int | float, unit: str = "", sig: int | None = None, ex
     if s is not None and u.offset:
         res = 10.0 ** (decade(exact_value) - s + 1) * float(u.factor)
         s = sig_from_resolution(si, res)
-    return Written(Quantity(si, u.dim, s), u, number)
+    return Written(Quantity(si, u.dim, s, "point" if u.offset else ""), u, number)
 
 
 __all__ = [

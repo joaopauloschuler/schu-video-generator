@@ -361,10 +361,15 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
                 else:
                     xs, ys = np.asarray(s.xs, dtype=float), np.asarray(s.ys, dtype=float)
                     sigma = s.sigma() if f.weighted else None
+                    counts: Any = None   # Poisson data: weights from the fitted curve (maximum likelihood)
                     if s.hist is not None and f.weighted:
                         sigma = np.asarray(s.hist.errors, dtype=float)
                         floor = float(sigma[sigma > 0].min()) if np.any(sigma > 0) else 1.0
                         sigma = np.where(sigma > 0, sigma, floor)   # an empty bin: one count's error
+                        counts = 1.0 / (s.hist.total * s.hist.widths) if s.hist.density else 1.0
+                    elif sigma is not None and s.spec.y_err == "sqrt" and np.all(np.asarray(ys)[np.isfinite(ys)] >= 0):
+                        sigma = np.where(sigma > 0, sigma, 1.0)   # a count of 0: one count's error, as an empty bin
+                        counts = 1.0
                     x_sigma = (s.x_err[0] + s.x_err[1]) / 2 if f.weighted and s.x_err is not None else None
                     keep = np.isfinite(xs) & np.isfinite(ys)
                     if f.range is not None:
@@ -372,13 +377,16 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
                     if sigma is not None and np.any(sigma[keep] <= 0):
                         raise VidgenError("a point to fit has a y error of 0; give every point an error, or weighted: false")
                     result = plotcore.fit_curve(xs[keep], ys[keep], f.make_model(), y_err=None if sigma is None else sigma[keep],
-                                                x_err=None if x_sigma is None or not np.any(x_sigma[keep] > 0) else x_sigma[keep])
+                                                x_err=None if x_sigma is None or not np.any(x_sigma[keep] > 0) else x_sigma[keep],
+                                                poisson=None if counts is None else np.broadcast_to(counts, xs.shape)[keep])
                     lo, hi = float(xs[keep].min()), float(xs[keep].max())
                     if s.hist is not None:
                         lo, hi = max(float(s.hist.edges[0]), lo - s.hist.widths[0] / 2), min(float(s.hist.edges[-1]), hi + s.hist.widths[0] / 2)
             except VidgenError as error:
                 raise VidgenError(f"{where}: {error}") from None
             fit = ResolvedFit(f, s, result, f.kind == "poisson", lo, hi)
+            if s.hist is None or f.kind not in plotcore.DISTRIBUTIONS:
+                fit.poisson = None if counts is None else np.broadcast_to(counts, (len(s.xs),)).astype(float)
             panel = resolved.panels[s.panel]
             fit.x_unit, fit.y_unit = panel.x.unit, panel.y.unit
             return fit

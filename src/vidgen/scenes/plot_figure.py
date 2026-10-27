@@ -4,6 +4,7 @@ parameter boxes and residual panels, the side column (or row) for what finds no 
 annotations. A mixin of :class:`Plot` (``plot.py``), written against ``vidgen.api``."""
 
 import math
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -49,16 +50,20 @@ class PlotFigure:
 
     @staticmethod
     def _residuals(f: ResolvedFit) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """``(x, residual, error)`` of a fit's points (normalized: (y − f)/σ, errors 1)."""
+        """``(x, residual, error)`` of a fit's points (normalized: (y − f)/σ, without errors;
+        σ of Poisson counts is the fit's √(scale·f), as in its χ²)."""
         s = f.series
         xs, ys = np.asarray(s.xs, dtype=float), np.asarray(s.ys, dtype=float)
         sigma = s.hist.errors if s.hist is not None else s.sigma()
         res = ys - f.result(xs)
         err = np.asarray(sigma, dtype=float) if sigma is not None else np.zeros_like(xs)
-        if f.spec.residuals == "normalized":
+        if f.spec.residuals == "normalized" and f.poisson is not None:   # Pearson residuals: the fit's own variance
+            with np.errstate(all="ignore"):
+                err = np.sqrt(f.poisson * np.maximum(f.result(xs), 0.0))
+        if f.spec.residuals == "normalized":   # pulls: every error is 1 by definition, so no bars
             with np.errstate(all="ignore"):
                 res = np.where(err > 0, res / np.where(err > 0, err, 1.0), np.nan)
-            err = np.where(np.isfinite(res), 1.0, 0.0)
+            err = np.zeros_like(res)
         ok = np.isfinite(xs) & np.isfinite(res)
         if f.spec.range is not None:
             ok &= (xs >= f.spec.range[0]) & (xs <= f.spec.range[1])
@@ -70,6 +75,10 @@ class PlotFigure:
         spec = plotcore.AxisSpec(label="(y − fit)/σ" if normalized else "residual", unit="" if normalized else panel.y.unit,
                                  include_zero=True, max_ticks=3, tight=TIGHT, format=panel.y.format if panel.y.scale == "linear" else "auto")
         ys = [0.0, *res, *(res - err), *(res + err)]
+        if normalized:   # symmetric, ticked at ±2σ (the band most points should fall in; 0 has its own line)
+            reach = max([abs(v) for v in ys if math.isfinite(v)] + [2.0])
+            edge = max(2.5, math.ceil(reach * 1.05 * 2) / 2)
+            spec = replace(spec, lo=-edge, hi=edge, ticks=(-2.0, 2.0) if edge <= 6 else None)
         return plotcore.PanelInput(parent.x_values, tuple(float(v) for v in ys if math.isfinite(v)), panel.x, spec)
 
     # ----- legend -------------------------------------------------------------------------------

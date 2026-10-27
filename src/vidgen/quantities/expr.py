@@ -213,7 +213,7 @@ def literal(node: Node) -> Quantity:
     """A number written in a formula: exact (with its unit, if any)."""
     value = qy.number_value(node.value)
     unit = parse_unit(node.unit)
-    return Quantity(unit.to_si(value), unit.dim, None)
+    return Quantity(unit.to_si(value), unit.dim, None, "point" if unit.offset else "")
 
 
 def evaluate(node: Node, env: Mapping[str, Quantity], unknown: Callable[[str], VidgenError] | None = None) -> Quantity:

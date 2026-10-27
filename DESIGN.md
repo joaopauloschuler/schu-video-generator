@@ -17112,7 +17112,8 @@ action `grow`; `zoom` options `x`, `y`; `plot` params `models`, `rescale`, serie
 **Gaps after Step 224**: a rescaling panel needs all its series on one progress (a filling
 histogram alone in its panel); bins of a filling histogram are fixed by all its values; readouts show values, not their uncertainties; zooming a
 broken axis is refused; an annotation cannot follow the head; adaptive RK45 has no dense output
-(steps end on the sample times, so `samples` bounds the largest step).
+(steps end on the sample times, so `samples` bounds the largest step) — dense output added in
+Step 228 (§97.13).
 
 ### 97.9 Quantities with units (Step 225)
 
@@ -17405,3 +17406,67 @@ drawing (above); `layout_axes` has no shared-axis variant; a substitution whose 
 wider than the frame (G's unit in 9:16) still falls back to SI numbers; in 16:9 a crowded fit
 figure needs `label_size: caption` for a readable residual panel; a live CSV series has no head
 readout of its own time unless `readout:` is set.
+
+### 97.13 Review of Phase W (Step 228)
+
+**Accuracy, checked against numpy / scipy** (scratchpad `s228/probe*.py`; kept as tests in
+`tests/test_science_review.py`, the scipy comparisons skip without scipy):
+
+| what | reference | finding |
+|---|---|---|
+| weighted / unweighted lines, polynomials | `curve_fit`, `numpy.polyfit(cov=...)`, `linregress` | parameters 1e-10, errors 1e-8 to 1e-15, R² and χ² exact |
+| confidence and prediction bands of a line | the textbook formulas with Student's t | 1e-15 |
+| exponential, Gaussian, logistic, power (weighted and not), their bands | `curve_fit` + the delta method | parameters ≤ 3e-7, errors ≤ 1e-5 (numerical Jacobian) |
+| x errors (effective variance) | `scipy.odr` | parameters within 0.06 σ, errors 0.1 %: an approximation of orthogonal regression, kept and documented |
+| binning rules sturges / fd / scott / sqrt / auto | `numpy.histogram_bin_edges` | same edges (1e-12) |
+| **histogram with a number of bins or a rule's exact edges** | `numpy.histogram` | **bug, fixed**: the 12-digit cleaning of the edges could move the outer edge past the smallest or largest value, which was then dropped (`outside`); with 50 random values and `bins: 7` it happened in most samples. `hist._cover` keeps the outer edges at the data's ends |
+| maximum-likelihood normal / exponential / Poisson | `scipy.stats.*.fit`, `poisson.pmf` | exact |
+| **counts fitted with √N weights** | a Poisson likelihood minimised by `scipy.optimize.minimize` | **bias, fixed**: weights from the observed counts (Neyman's χ²) pull a decay low where counts are few; for the example's data λ came out 0.47 σ high on average (300 simulated data sets). Counts — `y_err: sqrt` on a series, or a histogram's curve fit — are now fitted by Poisson maximum likelihood: least squares re-weighted with the fitted curve's variance until it settles (`fit_curve(poisson=scale)`; the fixed point solves the likelihood equations; errors from the Fisher information; χ² is Pearson's; a 0 count is a point like any other instead of an error). The example's λ: 0.276 → 0.274 ± 0.004 min⁻¹ (scipy's likelihood minimum to 1e-8) |
+| normal / t quantiles, χ² tail | `scipy.stats` | 1e-9 or better |
+| RK45 | `solve_ivp` (RK45, DOP853) | the same error; **inefficiency, fixed**: steps ended on every output time (2401 right-hand-side calls for 400 samples of an oscillator; scipy 716). Now the steps follow the error control and the outputs come from the method's dense output (scipy's interpolant): 709 calls, the same accuracy. **The absolute tolerance** was rtol × 10⁻³ whatever the model's scale (a concentration of 10⁻⁷ mol/L was integrated to an absolute 10⁻⁹): now scaled by the largest initial value |
+| RK4 / leapfrog drift | closed forms | Kepler e = 0.5 over 30: RK4 2e-8, leapfrog 3e-4 (bounded, O(step²)) as documented |
+| SplitMix64 | the reference sequence (seed 1234567) | identical |
+| constants | `scipy.constants` (CODATA 2022), IAU | identical; R = N_A·k_B exactly, M☉ and M⊕ from IAU GM / CODATA G |
+| units | conversion factors | ly, pc, au, Torr, mmHg, cal, Da: as defined |
+
+**Units: temperatures on an offset scale** (the gap of Step 225). `Quantity.temperature`:
+`"point"` for a value written in °C / °F (a reading), `"difference"` for a difference of two
+readings. In kelvin the arithmetic is right either way, so nothing changes in value; the marks
+catch the two slips: adding two readings is refused ("write a change of temperature in K, or the
+readings in K to average them"), and a difference cannot be written in °C / °F ("10 K would read
+as −263 °C"). A difference scaled by a pure number stays one; a reading times anything is no
+longer a reading; T + ΔT is a reading. Readings written in K are plain values (a K value may be a
+temperature or a change), so averages in K work.
+
+**Known gaps of 222–227, decided:**
+
+| gap | decision |
+|---|---|
+| equal-aspect axes with independent tick steps | fixed: both axes take the larger step (`figure._common_step`) inside the equal-aspect loop (square gridlines) |
+| RK45 without dense output | fixed (above) |
+| normalized residual panels hard to read | fixed: symmetric about 0, ticked at ±2 (`AxisSpec.ticks`, caller-chosen linear ticks), the points without bars (each is ±1 by definition, the bars only took room); counts use σ = √fit, as their χ² |
+| intermediate calculation steps not seen by the lint | improved: an `intermediate` line keeps its evaluated parts (`Step.values`); the lint takes them as candidates without a name: a number said for one agrees, none is ever blamed |
+| a calculation's slow fade when the next starts (it read as a ghost behind the new formula) | fixed: the leaving calculation takes `LEAVE_SHARE` = 0.5 of a step against 1 per line coming |
+| a single factor wider than the frame falls back to SI numbers | stays: breaking a unit or a value across lines would mislead; SI numbers with the units in the table are honest |
+| crowded 16:9 fit figures need `label_size: caption` | stays documented (an automatic switch would change existing plots) |
+| rescaling only when every series of a panel shares one progress | stays (a panel with two clocks has no single domain at a time) |
+| zoom on a broken axis refused | stays (a zoom inside one piece would need the break logic per frame) |
+| 9:16 long fit box reserves room above the figure from the start | stays (the layout is static; moving the plot when the box appears would jump) |
+| `bar_chart` / `line_chart` value labels not compared with narration | stays (their labels come from their own data; a narration check would be a chart-scene rule) |
+| Phase U / V domain plots not adopted | the decisions of §97.12 stand |
+
+**Module boundaries.** `vidgen.plotcore` and `vidgen.quantities` import only `vidgen.errors` and
+`vidgen.mathexpr` (no manim, no scipy, no scenes; checked in a fresh interpreter).
+`quantities.accuracy` (the lint's knowledge, not re-exported) imports the sentence helpers of
+`cellworld.accuracy` / `genetics.accuracy`, which loads those pure-Python packages; acceptable for
+a lint module, noted for a later move of the shared sentence helpers into a neutral module.
+
+**Compatibility.** Phase Q baseline: 31 frames, max difference 0 (`phase-q-baseline/check228`).
+Changed on purpose: fits of counts (`y_err: sqrt`, histogram curve fits) by Poisson likelihood
+(only `examples/radioactive-decay` uses them: narration and the `half` scene updated to λ = 0.274,
+t½ = 2.53 min, σ = 0.041 min, z = 0.5; three beats re-voiced with Kokoro), normalized residual
+panels, equal-aspect tick steps, RK45 samples (dense output: differences within the tolerance),
+the calculation hand-over timing. The gallery is unchanged (no gallery scene uses any of them).
+
+Public (additive): `plotcore.fit_curve(..., poisson=)`, `AxisSpec.ticks`,
+`quantities.Quantity.temperature`, `quantities.Step.values`. No config key, no dependency.

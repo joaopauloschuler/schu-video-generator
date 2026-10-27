@@ -58,19 +58,22 @@ is the commonest error-bar mistake.
 ## 4. Fits and their uncertainties
 
 - **The model whose parameter you talk about.** `model: exponential` fits A·exp(k·x), so its box
-  shows k = −0.276 min⁻¹; to talk about a decay constant, fit `model: custom` with `expr:
-  "A*exp(-lambda*x)"` and the box shows λ = 0.276 ± 0.004 min⁻¹ directly.
+  shows k = −0.274 min⁻¹; to talk about a decay constant, fit `model: custom` with `expr:
+  "A*exp(-lambda*x)"` and the box shows λ = 0.274 ± 0.004 min⁻¹ directly.
 - **Read the box.** Parameters ± standard errors (two significant digits in the error, the value
   to the same place), R², and with error bars χ²/ν: about 1 means the scatter matches the errors;
   much more than 1, the model or the errors are wrong; much less, the errors are too large.
 - **Bands.** `band: confidence` is where the true curve lies (narrow with many points);
   `prediction` is where a new point would fall (wider). Say which.
 - **Residuals.** `residuals: normalized` shows (y − fit)/σ under the plot: they should scatter
-  evenly around zero, about two thirds within ±1 and nearly all within ±2. A curve or a trend in
-  the residuals means the model misses something, whatever R² says.
-- **Weighted fits of counts.** √N weights pull a fit slightly towards low counts; with few counts
-  per point, prefer wider bins (or say so). The example's λ comes out about one standard error
-  above the true value: that is what an honest uncertainty looks like.
+  evenly around zero, about two thirds within ±1 and nearly all within ±2 (the panel is ticked at
+  ±2). A curve or a trend in the residuals means the model misses something, whatever R² says.
+- **Fits of counts.** Counts with `y_err: sqrt` (and histograms) are fitted by Poisson maximum
+  likelihood: the weights come from the fitted curve, not from the counts, because √N weights
+  from the data pull a fit towards low counts (by about half a standard error for the example's
+  data). Bins with very few counts are still fine; an empty one counts as a 0.
+- **R² is unweighted.** It compares the squared residuals with the data's spread whatever the
+  weights; with error bars, χ²/ν is the number to read.
 
 ## 5. Live models
 
@@ -84,7 +87,7 @@ the axes (`min` / `max`) when several live series share a panel.
 
 ## 6. Units and significant figures
 
-- **Write values as on paper**, with units: `"0.276 min^-1"`, `532 nm`, `"5730 yr"`, `"0.226
+- **Write values as on paper**, with units: `"0.274 min^-1"`, `532 nm`, `"5730 yr"`, `"0.226
   Bq/g"`, `constant: G` (CODATA / IAU values with their source). Give each symbol a `meaning` and a
   `source`: they are the table under the work, and lint uses them.
 - **Figures come from how a value is written.** A decimal or a value with a unit is measured: `532
@@ -104,7 +107,7 @@ the axes (`min` / `max`) when several live series share a panel.
 - One calculation per beat, or one line per action: `substitute` on the word that names the
   values, `compute` on "gives" or the result's first word, `convert` on the new unit.
 - Say the formula in words ("the natural log of two over lambda"), then the result once, with its
-  unit and the figures the screen shows ("two point five one minutes"); "about" for a rounding.
+  unit and the figures the screen shows ("two point five three minutes"); "about" for a rounding.
 - Chains: a long formula is two short calculations (the decay constant, then the age); a later one
   uses the earlier result by name, another scene by `from_scene`.
 - Plots: one idea per beat (the data, the error bars, the fit, the residuals), 10–25 words, and
@@ -155,9 +158,9 @@ config and the narration (in words too), and each message gives the fix.
   params:
     title: "The half-life"
     symbols:
-      - {name: lambda, value: "0.276 min^-1", meaning: decay constant, source: fit}
+      - {name: lambda, value: "0.274 min^-1", meaning: decay constant, source: fit}
     calculations:
       - {name: t_half, expr: "ln(2)/lambda", unit: min, convert: s, meaning: half-life}
   beats:
-    - text: "The half-life is the natural log of two over lambda: two point five one minutes."
+    - text: "The half-life is the natural log of two over lambda: two point five three minutes."
 ```

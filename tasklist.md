@@ -1331,7 +1331,9 @@ changes). DESIGN §97. Steps 222–228.
 - [~] Not yet: the population / GWAS / cyclin / action-potential plots keep their own drawing (reasons in §97.12); a single factor wider than the frame (G's unit in 9:16) still falls back to SI numbers
 
 ### Step 228 — Review of Phase W
-- [ ] Critical review with fixes; accuracy of fits and statistics against numpy / scipy references, units and calculations; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Critical review with fixes; accuracy of fits and statistics against numpy / scipy references, units and calculations; compatibility; phase tests and related suites; `tests/test_mcp.py` in full
+- [x] Fixed (DESIGN §97.13): histogram edges dropping the extreme values; √N-weighted fits of counts biased (now Poisson maximum likelihood; the example re-voiced for λ = 0.274); RK45 dense output and a scaled absolute tolerance; °C readings added / differences shown in °C refused; equal-aspect tick steps; normalized residual panels (±2, no bars); intermediate values for the lint; faster hand-over between calculations; `tests/test_science_review.py`
+- [~] Kept as documented gaps (§97.13): SI fallback for a single factor wider than the frame, `label_size: caption` for crowded 16:9 fit figures, one progress per rescaling panel, no zoom on broken axes, the 9:16 fit box room, chart-scene value labels unchecked, the domain plots of §97.12
 
 ---
 
