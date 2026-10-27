@@ -73,6 +73,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "plot": {"title": "Decay", "y": {"scale": "log"}, "series": [{"name": "a", "x": [0, 1, 2, 3], "y": [100, 50, 25, 12], "y_err": 3, "error": "sd"},
                                                                {"name": "b", "points": [[0, 90], [2, 30]], "style": "points"}],
              "fits": [{"series": "a", "model": "exponential", "name": "e"}], "annotations": [{"type": "hline", "y": 50, "text": "half", "id": "h"}]},
+    "calculation": {"title": "Speed", "symbols": [{"name": "d", "value": "42.2 km"}, {"name": "t", "value": "2.0 h"}],
+                    "calculations": [{"name": "v", "expr": "d/t", "unit": "km/h", "convert": "m/s"}, {"name": "w", "expr": "2*v"}]},
     "population": {"title": "Drift", "model": "drift", "N": 20, "p0": 0.5, "generations": 20, "replicates": 3},
     "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
@@ -223,6 +225,9 @@ def test_target_names_of_every_builtin_type() -> None:
     assert kgram[-4:] == ["change:1", "changes", "notation", "reading"]
     assert names("karyotype", karyotype="46,XX,t(9;22)(q34;q11.2)", bands=["9q34"], title="") == [
         "chromosomes", "chromosome:9", "chromosome:22", "change:1", "changes", "notation", "reading", "band:9q34"]
+    assert names("calculation") == ["title", "table", "symbol:d", "row:d", "symbol:t", "row:t", "calc1", "calc:v", "formula1", "substitution1",
+                                    "result1", "result:v", "conversion1", "symbol:v", "row:v", "calc2", "calc:w", "formula2", "substitution2",
+                                    "result2", "result:w", "symbol:w"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",
@@ -267,7 +272,8 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     expected = {"equation": ["step1"],                                  # an equation step morphs into the next
                 "code_morph": ["version1", "version1.line1"],           # version 1 morphed into version 2
                 "equation_derivation": ["term:c", "term:a"],            # term: means the current step's part
-                "crispr": ["pam", "protospacer", "cas9", "sgrna", "cut"]}   # the complex leaves when the break is repaired
+                "crispr": ["pam", "protospacer", "cas9", "sgrna", "cut"],   # the complex leaves when the break is repaired
+                "calculation": ["formula1", "substitution1", "result1", "conversion1", "calc1"]}   # its result moved to the table
     assert hidden == expected.get(kind, [])
 
 
@@ -555,7 +561,7 @@ def test_a_type_without_targets_rejects_actions(make_project) -> None:
                     pass
     '''})
     (problem,) = project_problems(Project.load(root))
-    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, card, cell, cell_cycle, chapter, code,")
+    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, calculation, card, cell, cell_cycle, chapter, code,")
 
 
 def test_config_md_action_examples_validate(make_project) -> None:

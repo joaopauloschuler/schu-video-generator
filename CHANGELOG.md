@@ -5,9 +5,22 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–224)
+## Unreleased (Steps 193–225)
 
 ### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
+
+- **Worked calculations with units** (Step 225). A new scene type `calculation` shows a symbol
+  table (each value with its unit, its meaning and its source; constants such as `G`, `h`, `c`,
+  `M_sun` with CODATA 2022 / SI 2019 / IAU values) and works each calculation step by step: the
+  formula (TeX written from the expression), the values substituted with their units, the result
+  in a box with the right significant figures — or as an exact fraction when every input is exact
+  (2/3 × 1/25 × 1/4 = 1/150) — and the result converted into other units (m/s → km/s, J → eV,
+  GeV/c² → kg). Later calculations use earlier results by name, and other scenes can too
+  (`from_scene`). Units are checked: adding metres to seconds is refused with both dimensions
+  explained. The actions `substitute`, `compute` and `convert` time the steps to words;
+  `highlight: "symbol:G"` marks a symbol. The engine is `vidgen.api.quantities` (units,
+  prefixes, °C / °F offsets, conversions, significant figures, exact fractions); no new
+  dependency.
 
 - **Live plots from simulations** (Step 224). A `plot` takes `models` that generate its data:
   differential equations written as safe expressions (`{x: v, v: "-k*x - c*v"}` with parameters,

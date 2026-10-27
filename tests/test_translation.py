@@ -311,6 +311,8 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
         {"series": [{"name": "T:d", "x": [0, 1, 2], "y": [1, 2, 4]}], "fits": [{"series": "T:d", "name": "T:fit"}],
          "annotations": [{"type": "note", "text": "T:note"}]},
     ],
+    "calculation": [{"title": "T:title", "caption": "T:caption", "symbols": [{"name": "d", "value": "4.0 m", "meaning": "T:meaning"}],
+                     "calculations": [{"name": "a", "expr": "d^2", "meaning": "T:result"}]}],
     "population": [{"title": "T:title", "condition": "T:condition", "incidence": "1/2500"}],
     "gwas": [{"title": "T:title", "trait": "T:trait", "background": 400}],
     "iso_diagram": [

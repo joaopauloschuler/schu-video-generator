@@ -631,7 +631,7 @@ from vidgen.cellworld.captions import NoteMode as CellNoteMode, note_text as cel
 from vidgen.cellworld.names import gene_spans  # noqa: E402
 from vidgen import references as video_references  # noqa: E402
 from vidgen import genetics  # noqa: E402
-from vidgen import plot_draw, plotcore  # noqa: E402
+from vidgen import plot_draw, plotcore, quantities  # noqa: E402
 from vidgen.plotcore import register_model  # noqa: E402
 from vidgen.genetics import MODES as INHERITANCE_MODES, PRESETS as GENETICS_PRESETS, CrossResult, GeneticSystem, parse_genotype  # noqa: E402
 from vidgen.genetics import build_system as build_genetic_system, cross as genetic_cross  # noqa: E402
@@ -1618,6 +1618,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "genetic_cross",
     "plotcore",
     "plot_draw",
+    "quantities",
     "did_you_mean",
     "format_length",
     "parse_coordinate",

@@ -5350,6 +5350,189 @@ jumps ahead; the steps in between are skipped and the result still gets its box.
     - text: "And x is four."
 ```
 
+### `calculation`
+
+A **worked calculation with units**: a symbol table (each symbol's value with its unit, what it
+means and where the value comes from) and a chain of calculations, each shown step by step —
+the **formula** (TeX written from the expression), the **values substituted** with their units,
+an **intermediate** value (the argument of an outer square root or power), the **result** in a
+box with its significant figures (an exact fraction and its decimal when every input is exact:
+2/3 × 1/25 × 1/4 = 1/150 ≈ 0.00667), and **conversions** into other units. The arithmetic is
+done on quantities with units (no `eval`): adding metres to seconds, a function of a quantity
+with a unit, or a result in a unit of another kind is an error naming both dimensions. **Needs
+LaTeX**, like [`equation`](#equation).
+
+```yaml
+- id: orbit
+  type: calculation
+  params:
+    title: "How fast does the Earth orbit the Sun?"
+    symbols:
+      - {name: G, constant: G}                     # CODATA 2022, shown with its source
+      - {name: M_sun, constant: M_sun}
+      - {name: r, constant: AU, meaning: "Earth–Sun distance"}
+    calculations:
+      - {name: v, expr: "sqrt(G*M_sun/r)", sig: 3, convert: km/s, meaning: orbital speed}
+  beats:
+    - text: "Gravity holds the Earth on its orbit, so its speed is the square root of G M over r."
+    - text: "Put in the numbers, and the Earth moves at about thirty kilometres per second."
+      actions: [{substitute: calc1, at: "@numbers"}, {compute: calc1, at: "@moves"}]
+- id: risk
+  type: calculation
+  params:
+    title: "Risk for the couple's child"
+    symbols:                                       # fractions are exact: the result is 1/150
+      - {name: P_mother, value: "2/3", meaning: "mother is a carrier", tex: 'P_{\mathrm{mother}}'}
+      - {name: P_father, value: "1/25", meaning: "father is a carrier (population)", tex: 'P_{\mathrm{father}}'}
+      - {name: P_aa, value: "1/4", meaning: "child of two carriers is affected"}
+    calculations:
+      - {name: P, expr: "P_mother*P_father*P_aa", meaning: risk for the child}
+  beats:
+    - text: "Two thirds times one twenty-fifth times one quarter is one in one hundred fifty."
+- id: year
+  type: calculation
+  params:
+    symbols:
+      - {name: v, from_scene: orbit}               # the result v of the scene 'orbit'
+      - {name: r, constant: AU}
+    calculations:
+      - {name: T, expr: "2*pi*r/v", unit: d, sig: 3, meaning: orbital period}
+  beats:
+    - text: "At that speed one orbit takes three hundred sixty-five days."
+```
+
+**Values.** `value` is a number (`29.8`, `"6.674e-11"`, `"2.5 × 10^3"`) or a fraction
+(`"1/25"`), optionally followed by its unit (`"29.8 km/s"`) — or give `unit:` separately.
+YAML drops trailing zeros (`1.50` becomes 1.5): write such values as strings (`"1.50"`).
+**Exactness and significant figures**: a fraction is exact; a whole number without a unit is
+exact (a count); any other number is measured, its significant figures counted from its digits —
+leading zeros never count, trailing zeros count after a decimal point (`0.0250` → 3, `2.50e3` → 3)
+and not in a whole number without one (`1500 m` → 2: write `1.500e3` or `sig: 4`). `sig: 3`
+states them (the value is rounded to them), `exact: true` makes a value exact. Exact values
+never limit a result's figures.
+
+**Constants** (`constant:` a key; the symbol, meaning and source come with it, and the table shows
+the value to 4 figures while the full value is used; `digits:` shows more): SI 2019 exact —
+`c`, `h`, `hbar`, `k_B`, `N_A`, `e` (elementary charge), `R`, `sigma_SB`; CODATA 2022 — `G`, `m_e`,
+`m_p`, `m_u`, `epsilon_0`, `mu_0`; CGPM 1901 — `g` (standard gravity, exact); IAU 2012 — `AU`
+(exact); IAU 2015 nominal — `GM_sun`, `GM_earth`, `R_earth` (equatorial); `M_sun`, `M_earth` are
+the IAU parameters divided by CODATA 2022 G. A symbol named like the constant (`G`, `M_sun`) takes
+its TeX (`M_⊙`); another name (`r` for `AU`) is written from the name. `e`, `pi` and `tau` in an
+expression are the mathematical constants unless a symbol takes the name (`{name: e, constant: e}`).
+
+**Units** (`unit`, `convert`, in values and in `[brackets]` after a number in an expression):
+SI base and derived units with prefixes (`m`, `kg`, `s`, `A`, `K`, `mol`, `cd`, `N`, `J`, `W`,
+`Pa`, `Hz`, `Bq`, `C`, `V`, `Ω`/`ohm`, `F`, `T`, `Wb`, `H`, `S`, `Gy`, `Sv`, `rad`; `km`, `µs`/`us`,
+`mL`, `kPa`, `MeV`...), `min`, `h`, `d`, `yr` (Julian; `Myr`, `Gyr`), `L`, `M` (mol/L; `mM`, `µM`),
+`t`, `Da` (`kDa`), `u`, `eV` (`keV` … `TeV`), `cal` (`kcal`), `Wh` (`kWh`), `Å`, `au`/`AU`, `ly`, `pc`
+(`kpc`, `Mpc`), `atm`, `bar` (`mbar`), `mmHg`, `Torr`, `deg`/`°`, `sr`, `%`, `ppm`, `c` (as in
+`GeV/c^2`), and the temperatures `°C`/`degC` and `°F`/`degF`. Written as people write them:
+`m/s^2`, `km h^-1`, `kg·m²·s⁻²`, `kg*m**2/s**2`, `J/(mol·K)`, `m^(1/2)`; `/` divides by the
+factor after it (`m/s/s` = m/s²; group with brackets). A temperature with an offset must stand
+alone (`°C/s` is refused: a change of 1 °C is 1 K, write `K/s`); a value in °C is converted to
+kelvin (25.0 °C = 298.2 K, keeping its last decimal place), and a result can be shown in °C.
+Unknown units get a did-you-mean; a prefix on a unit that takes none (`kmin`) is refused.
+
+**Expressions** (`expr`): the names of the symbols and of earlier results, numbers (exact: the
+`2` of `2*p*q`, the `1/2` of `m*v^2/2`), `+ - * / ^` (or `**`), brackets, implicit products
+(`2pq` written `2 p q` or `2*p*q`), `sqrt`, `exp`, `ln`/`log`, `log10`, `log2`, `sin`, `cos`,
+`tan` (radians; a value in `deg` is converted), `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`,
+`abs`, `min`, `max`, and a number with a unit `9.81 [m/s^2]`. A quantity with a unit may only be
+raised to a fixed rational power (`r^2`, `x^(1/2)`); the arguments of `exp`, `ln`, `sin`... must
+be pure numbers. Square roots of exact perfect squares stay exact (√(1/2500) = 1/50).
+
+**Significant figures of a result**: a product or quotient has the fewest of its measured
+factors; a sum or difference keeps the coarsest last decimal place (100.0 m − 99.9 m = 0.1 m,
+one figure); functions keep their argument's; exact inputs never limit. `sig` on a calculation
+overrides that (a `sig` above what the inputs give is kept, and lint flags it in a later step).
+Results are written rounded half away from zero, plainly from 10⁻³ to 10⁵ when no digit left of
+the point is uncertain, else in scientific notation (29 800 to three figures is 2.98 × 10⁴; 240
+to three figures is 2.40 × 10²), like the plot core. An exact result is written as a fraction
+(numerator and denominator up to 100 000) with its decimal (`= 1/50 = 0.02`, `= 1/150 ≈ 0.00667`),
+or as a whole number; an exact irrational one (ln 2) with 4 figures after `≈`. Later calculations
+use a result's full value, not its rounded one.
+
+**Units of a result**: `unit:` if given (checked against the result's dimension), else SI with a
+named unit where one fits exactly (kg·m²·s⁻² → J, kg·m·s⁻² → N, ...; J·s for an action; s⁻¹ stays,
+since it may be Hz or Bq), else the base units (m³·kg⁻¹·s⁻²). `convert: [km/s, km/h]` adds a last
+line with the result in those units.
+
+**Layout.** The table goes beside the work in 16:9 (40 % of the width) and above it in a vertical
+frame (as tall as it needs, at most half the body; two columns when the rows are short); `table:
+side`, `top` or `none`. Each row is `symbol = value unit` over its meaning and source; a
+calculation's result joins the table when the next calculation starts (`results_in_table:
+false` keeps them out). The lines of a calculation are aligned at their `=` and centred; each
+is as large as `size` allows (1.15x in a vertical frame) within the width, and a long
+substitution is written the most explicit way that stays nearly as large as the largest: with
+units on one line, with units on two lines (the outer product split), then in SI numbers without
+units (on one line, on two) — `units: always` / `never` choose. A calculation that still does not
+fit at the readable size logs a warning (split it, or use fewer symbols per formula). Symbols are
+coloured by their concept colour (`terms:` whose `tex` is the symbol's) or their own `color`, in
+the table and in every line.
+
+**Steps and timing.** One calculation per beat; with more beats than calculations, each
+calculation's lines spread over its beats; with more calculations than beats, they share them.
+The first step brings the title and the table. The actions `substitute`, `compute` and `convert`
+(and `reveal: formula2`) time a line to a word; a line an action names is left out of the
+scene's own steps, comes with the lines before it that are not on screen yet, and brings the
+lines after it that no action names (a `compute` brings an unnamed conversion).
+
+**Results of other scenes.** `from_scene: orbit` takes the result with the symbol's name from the
+calculation scene `orbit`; `from_scene: orbit.v` names the result. Checked by `vidgen validate`
+(an unknown scene or result with did-you-mean, scenes taking values from each other in a loop).
+
+**Errors** (at `vidgen validate`, naming the symbol or calculation): an unknown symbol (did you
+mean…; a constant's key not in the table: "add `{name: G, constant: G}`"; a result computed by a
+later calculation), incompatible units with both dimensions explained ("cannot add 'a' and 'b':
+length (m) vs time (s)"), a division by zero, a negative square root, `sig` outside 1–15,
+`format: fraction` of an inexact result, `percent` of a quantity with a unit, an unknown unit or
+constant, a symbol with no value or two.
+
+[Action targets](#beat-actions): `title`, `table`, `symbol:<name>` (the symbol in the table and
+in the lines on screen, its substituted value too — for `highlight`), `row:<name>`, `calc<N>` /
+`calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>` / `result:<name>`, `conversion<N>`.
+
+| param | type | default | |
+|---|---|---|---|
+| `title` | str | `""` | heading |
+| `symbols` | list | `[]` | the symbol table: `{name, value, unit, meaning, source}`, `{name, constant}` or `{name, from_scene}` |
+| `symbols[].name` | str | required | the name formulas use: letters, digits and `_` (`v`, `M_sun`, `t_half`, `lambda`) |
+| `symbols[].value` | number \| str | — | a number, `"1/25"`, `"6.674e-11"`, optionally with its unit (`"29.8 km/s"`) |
+| `symbols[].unit` | str | `""` | its unit, if not after the value; for a constant, the unit to show it in |
+| `symbols[].constant` | str | — | a constant's key (list above; aliases such as `kB`, `Msun` work) |
+| `symbols[].from_scene` | str | — | `scene_id` or `scene_id.result`: a result of another calculation scene |
+| `symbols[].sig` | int (1–15) | from the digits | its significant figures (the value is rounded to them) |
+| `symbols[].exact` | bool | — | `true`: exact (never limits a result) |
+| `symbols[].digits` | int | as written; constants 4 | figures to show (the full value is used) |
+| `symbols[].tex` | str | from the name | TeX of the symbol (`M_sun` → M_⊙, `k_B`, `lambda` → λ, `t_half` → t_1/2, `p1` → p₁) |
+| `symbols[].meaning` | str | a constant's | shown under it in the table |
+| `symbols[].source` | str | a constant's | where the value comes from, after the meaning |
+| `symbols[].color` | color | concept colour | colour of the symbol in the table and the formulas |
+| `symbols[].show` | bool | `true` | `false`: not listed in the table |
+| `calculations` | list (≥ 1) | required | `{name, expr, unit, convert, sig, format, meaning}` |
+| `calculations[].name` | str | required | the result's name (later calculations and `from_scene` use it) |
+| `calculations[].expr` | str | required | the formula as an expression of the symbols |
+| `calculations[].meaning` | str | `""` | what the result is (shown with it in the table) |
+| `calculations[].unit` | str | SI | unit of the result |
+| `calculations[].convert` | str \| list | `[]` | units to show the result in on a last line |
+| `calculations[].sig` | int (1–15) | from the inputs | significant figures of the result |
+| `calculations[].format` | `auto` \| `decimal` \| `sci` \| `fraction` \| `percent` | `auto` | how the result is written |
+| `calculations[].tex` | str | from `expr` | TeX of the formula's right side |
+| `calculations[].symbol` | str | from the name | TeX of the result's symbol |
+| `calculations[].substitute` | bool | `true` | show the values substituted |
+| `calculations[].intermediate` | bool | when it helps | show the argument of an outer root or power evaluated |
+| `calculations[].units` | `auto` \| `always` \| `never` | `auto` | units in the substitution |
+| `table` | `auto` \| `side` \| `top` \| `none` | `auto` | where the table goes |
+| `results_in_table` | bool | `true` | add each result to the table when the next calculation starts |
+| `size` | size | `72` | largest formula size |
+| `table_size` | size | `40` | size of the table's symbols and values (1.15x in a vertical frame) |
+| `color` | color | `text` | formula colour |
+| `result_color` | color | `highlight` | the box around each result |
+| `meaning_color` | color | `dim` | meanings and sources in the table |
+| `caption` | str | `""` | note under the calculation |
+| `caption_size` | size | `caption` | |
+| `caption_color` | color | `dim` | |
+
 ### `function_plot`
 
 Maths axes with functions f(x): curves, dots that travel along a curve with a live value label
@@ -11022,6 +11205,7 @@ a title card, a `transform` of a bar).
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
+| `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
@@ -11093,6 +11277,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `trace` | `to` (an x, or `[x, y]` for a point or a vector's tip) or `scale` (a vector only) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following; a point (`point<N>`, `point:A`) moves to `to: [x, y]`; a vector (`vector<N>`, `vector:a`) moves its tip to `to: [x, y]` or is multiplied by `scale` (2: twice as long, -1: turned round; its tail stays). Vectors, sums, marks and live labels drawn from a moved point or vector follow it. On a [`number_line`](#number_line): a point moves to `to` (a number). On a [`line_chart`](#line_chart): a cursor dot sweeps along a series (`series<N>`, `series:<name>`) to x = `to` (on category `x`, the position from 1) with the line's value over it. 2 s; it stays there (`until: <beat>`: back when that beat starts). |
 | `fit`, `annotate` | as the target: a fit (`- fit: "fit:decay"`) or an annotation (`- annotate: annotation2`) | on a [`plot`](#plot): draws the fit on a word (its band, the curve, its legend entry and parameter box, its residual panel; the data first if not shown yet; 1.6 s) or shows the annotation (its ring, arrow, line or shaded range and its text; 1 s); the plot's own steps leave them to the action. `reveal` does the same for a series or its error bars (`errors:<name>`). On live data both wait for the data to finish growing. |
 | `grow` | the target: a live series (`- grow: "series:x"`), `axes` (every live series) or `panel<N>`; `to` (the model's time, or the point number of live data; default the end) | on a [`plot`](#live-plots-models-and-grow): grows the live series from where they are to `to`, with the head marker and readout, the axes widening as the data reach their edge; it lasts until the beat's next action or the beat's end (or `run_time`); a later `grow` continues. The plot's own steps leave those series to it. |
+| `substitute`, `compute`, `convert` | as the target: a calculation (`- compute: calc1` or `"calc:v"`) | on a [`calculation`](#calculation): shows the values substituted into its formula (1.2 s), its result in its box (1.4 s; an intermediate value first) or its conversions (1.2 s) on a word, with the lines before it that are not on screen yet (an earlier calculation leaves, its result joining the table) and the lines after it that no action names; the scene's own steps leave those lines to the action. `reveal: formula2` shows a formula; `highlight: "symbol:G"` marks a symbol in the table and the lines on screen. `convert` needs `convert:` units. |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |

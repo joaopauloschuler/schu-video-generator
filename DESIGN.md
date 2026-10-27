@@ -214,6 +214,9 @@ src/vidgen/
                           # fit.py / stats.py / hist.py / annotate.py (§97.5), integrate.py (RK4, RK45, Verlet),
                           # models.py (ODEs, recurrences, random processes, registered functions), live.py (§97.7)
   plot_draw.py            # the chart core's drawing layer: axes, ticks, gridlines, break marks, series (§97)
+  quantities/             # units and worked calculations (§97.9; no manim): units.py (dimensions, units, prefixes,
+                          # parsing, SI display), constants.py (CODATA 2022, SI 2019, IAU), quantity.py (values with
+                          # exactness and significant figures), expr.py (expressions with units, TeX), calc.py
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
@@ -1039,6 +1042,11 @@ integrators and models (`simulate_ode`, `simulate_recurrence`, `random_walk`,
 `poisson_process`, `run_registered`, `Simulation`, `rk4`, `rk45`, `verlet`...), the live-plot
 logic (`grown`, `rescale_schedule`, `domain_at`, `axis_for`, `readout_text`...) and `relabel`;
 to `plot_draw` `flat`, `morph_into`, `head_marker` and `draw_panel(cache=)`.
+Step 225 (§97.9) adds the module `quantities` (units and dimensions without manim and without a
+new dependency: `parse_unit`, `Unit`, `si_unit`, `describe_dim`, `CONSTANTS` / `constant`,
+`Quantity`, `written`, `in_unit`, the arithmetic carrying significant figures, `decimal_text`,
+`fraction_text`, expression trees `parse` / `evaluate` / `to_tex`, and worked calculations
+`work(symbols, calcs)` → `Worked` of `CalcResult`s).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -17103,3 +17111,140 @@ action `grow`; `zoom` options `x`, `y`; `plot` params `models`, `rescale`, serie
 histogram alone in its panel); bins of a filling histogram are fixed by all its values; readouts show values, not their uncertainties; zooming a
 broken axis is refused; an annotation cannot follow the head; adaptive RK45 has no dense output
 (steps end on the sample times, so `samples` bounds the largest step).
+
+### 97.9 Quantities with units (Step 225)
+
+**Decision: an own engine, no pint.** pint would cover units and conversions, but not what the
+`calculation` scene needs most — exact fractions through a chain (2/3 × 1/25 × 1/4 = 1/150),
+significant figures carried by the school rules, TeX of every step, explanations of dimension
+errors in the author's words — and it is a dependency with its own registry files and parser to
+keep in step on the owner's Windows / Python 3.12 install. The engine is small (≈ 2 000 lines
+in `vidgen/quantities/`, stdlib only: `fractions`, `decimal`), deterministic and tested against
+textbook values; pint is not needed even as an optional extra. No new dependency.
+
+**Units** (`quantities.units`). A dimension is seven `Fraction` exponents (m, kg, s, A, K, mol,
+cd; a fractional power is possible: √m). A `UnitDef` is an SI factor — a `Fraction` when the unit
+is defined exactly (km, h, eV from e, au, ly = Julian year × c, atm, bar, mmHg, cal = 4.184 J, Da
+from CODATA 2022), a float when π is involved (deg, pc = 648 000/π au) — a dimension, an offset
+(°C, °F only) and whether SI prefixes may precede it (2022 set, `u`/`μ` for µ, `da`, `h`, `c`,
+`d`). `parse_unit(text)` (cached): symbols, then a prefix + a prefixable unit (`Pa`, `cd`, `min`,
+`mol` win over prefix readings; `ft` is refused, not femtotonnes), products (`*`, `·`, `.`, a
+space), `/` dividing the next factor, powers (`^2`, `**2`, `²`, `⁻¹`, `^(1/2)`), brackets, a
+leading `1` (`1/s`); an offset unit must stand alone (`°C/s` refused, "write K/s"); did-you-mean
+over the symbols. `Unit.text` / `.tex` write it (one negative factor after a slash: `km/s`,
+`m/s²`, `GeV/c²`; else negative powers: `J·mol⁻¹·K⁻¹`). `si_unit(dim)`: a named derived unit when
+one matches exactly (N, J, W, Pa, C, V, Ω, F, T, Wb, H; J·s for an action; s⁻¹ is left alone —
+Hz or Bq), else the base units, kg first. `describe_dim`: `energy (kg·m²·s⁻², J)`, `speed
+(m·s⁻¹)`, or the base units for unnamed ones.
+
+**Constants** (`quantities.constants`): the SI 2019 defining constants exact (c, h, e, k_B, N_A;
+ħ, R = N_A·k_B, σ derived, ħ and σ kept as floats), CODATA 2022 (G, m_e, m_p, m_u, ε₀, μ₀), g_n
+(CGPM 1901, exact), the au (IAU 2012, exact), IAU 2015 nominal (GM)☉, (GM)⊕ and R⊕ (equatorial),
+M☉ and M⊕ as those parameters over CODATA G (six figures). Each with its TeX, meaning and source
+(shown in the table), aliases (`kB`, `Msun`, `eps0`...) and did-you-mean.
+
+**Quantities** (`quantities.quantity`). `Quantity(value, dim, sig)`: an SI value, a `Fraction`
+while exact and rational, else a float; `sig` its significant figures, `None` exact. Written
+values (`written`): a fraction is exact; a whole number without a unit is exact (a count); other
+numbers are measured with `count_sig` figures (leading zeros never, trailing zeros after a point,
+not in a whole number: `1500` → 2); `sig` rounds to the stated figures; `exact: true`. A value
+in °C converts to kelvin keeping its resolution (25.0 °C → 298.2 K). Arithmetic: `add` (dims
+must agree, error naming both sides and dimensions; the result keeps the coarser resolution,
+10^(decade − sig + 1), so cancellation loses figures), `mul` / `div` (fewest figures of the
+measured operands; division by zero named), `power` (a dimensioned base needs an exact rational
+exponent; exact roots of perfect powers stay exact: √(1/2500) = 1/50), `call` (`sqrt`, `abs`,
+`min`/`max` with equal dims, and the transcendental functions on pure numbers; figures of the
+argument). `decimal_text(value, sig, mode)`: rounded half away from zero (`Decimal`), plain in
+[10⁻³, 10⁵) when no digit left of the point is uncertain (29 800 to 3 figures → `2.98 × 10⁴`,
+240 to 3 → `2.40 × 10²`), else scientific — the plot core's bounds; Unicode and TeX.
+`fraction_text` for exact fractions; `nice_fraction`: numerator and denominator ≤ 100 000.
+
+**Expressions** (`quantities.expr`): the grammar of `mathexpr` (same tokens, implicit products,
+right-associative `^`) parsed into a tree (`Node`), plus a number with a unit in brackets (`9.81
+[m/s^2]`); numbers written in a formula are exact. `evaluate(node, env)` on quantities; `pi`,
+`e`, `tau` unless a symbol shadows them. `to_tex(node, leaf, replace, values, stack)` writes it
+with precedence-aware brackets (`\frac`, `\sqrt`, `e^{}`, `\ln 2`, products of symbols side by
+side with a thin space after a subscript, ×  between numbers and substituted values), a name
+written by `leaf` (a symbol, or a value with its unit), sub-trees replaced (`replace`: an
+evaluated part), and `stack` putting the outermost product on two lines (an `array`) for narrow
+frames. Not `mathexpr`'s closures: one tree serves evaluation and every TeX step; `mathexpr` is
+unchanged.
+
+**Worked calculations** (`quantities.calc`). `work(symbols, calcs, wrap, lenient)`: symbols
+(`SymbolInput`: value | constant | imported result) and calculations (`CalcInput`: name, expr,
+unit, convert, sig, format, tex, symbol, intermediate, substitute) in order; each result becomes
+a name for later ones (an earlier name used before it is computed: "computed by calculations[3],
+after this one"; a constant's key not in the table: "add {name: G, constant: G}"). A
+`CalcResult` has its value (`SymbolValue`: quantity, display unit, number as text / TeX, the SI
+value for substitutions without units), the steps (`Step`: kind formula | substitute |
+intermediate | result | convert, TeX after the relation `=` / `\approx`; the substitution in four
+variants: with units / SI numbers, on one line / two), the names used, conversions and
+warnings (a `sig` claiming more than the inputs give — for lint, Step 226). Names: identifiers,
+not function names, unique; `name_tex` writes them (`M_sun` → `M_{\odot}`, `k_B`, `lambda`,
+`t_half` → `t_{1/2}`, `p1` → `p_1`). The result's display: `unit` (checked) or `si_unit`; formats
+`auto` (an exact rational: a fraction when nice, then its decimal — exact when it terminates
+within six figures, `= 1/50 = 0.02`, else `≈ 0.00667`; exact irrational: 4 figures after ≈;
+measured: its figures), `decimal`, `sci`, `fraction` (exact results only), `percent` (pure
+numbers). The intermediate (default on) is the outer function's or power's non-trivial argument
+evaluated, with one guard figure beyond an explicit `sig`. Later calculations use full values.
+`wrap(key, tex)` lets the scene mark each symbol occurrence (dvisvgm groups) for highlights.
+
+### 97.10 The `calculation` scene (Step 225)
+
+Name: **`calculation`** (no scene type, action or common target has it). It replaces neither
+`equation` (a formula that morphs) nor `equation_derivation` (algebra with reasons); it is the way
+to show worked numbers — the Hardy–Weinberg and pedigree-risk cards of Phases U / V wrote theirs
+as Pango text with `Fraction`s, which those scenes keep (compatibility); new worked numbers use
+`calculation`.
+
+Params (`scenes/calculation.py`): `symbols` (`CalcSymbol`: `name`, exactly one of `value` /
+`constant` / `from_scene`, `unit`, `sig`, `exact`, `digits`, `tex`, `meaning`, `source`, `color`,
+`show`), `calculations` (`CalcStep`: `name`, `expr`, `meaning`, `unit`, `convert`, `sig`,
+`format`, `tex`, `symbol`, `substitute`, `intermediate`, `units: auto | always | never`), `table`
+(`auto | side | top | none`), `results_in_table`, `size` (72), `table_size` (40), `color`,
+`result_color`, `meaning_color`, `title`, `caption`. The params validator runs `work(lenient)`:
+every error a param can cause is reported by `validate_params` / `vidgen validate`;
+`from_scene` (`scene_id` or `scene_id.result`) is resolved by `validate_project` and at render
+(`resolve_imports`: the other scene's params parsed and worked, recursively; unknown scene /
+result with did-you-mean; a loop refused).
+
+Layout. The table beside the work in 16:9 (columns 0.6 / 0.4), above it in 9:16 (its natural
+height, at most half the body; two columns when the rows are short); a row is `symbol = value
+unit` (MathTex at `table_size`, ×1.15 in portrait) over `meaning · source` (readable caption
+text); results of all calculations but the last have rows from the start (hidden until their
+calculation leaves). The work area shows one calculation at a time: its lines aligned at their
+relation (a dvisvgm group `vgrel`), the block centred; each line scaled on its own to the width
+(at most `size`), then all together when the block is too tall (gaps excluded from the shrink).
+A substitution picks the first of its variants (units; units on two lines; SI numbers; SI on two
+lines) whose size is at least 80 % of the largest variant's or twice the readable size —
+explicit when it fits, readable when it does not. A warning when a line still ends below the
+readable size (lint's measure: the 75th percentile of glyph heights). The result line gets a
+`result_color` box. Symbol colours: `color`, else a concept colour (`terms:`) whose TeX equals
+the symbol's, applied to every occurrence (groups) in lines and table. The layout dump's math
+text is the TeX without the group markers.
+
+Steps. Calculations ≥ beats: calculations distributed over beats, each beat playing its
+calculations' lines; fewer: beats distributed over calculations, each calculation's lines over
+its beats. Lines an action names (`substitute` / `compute` / `convert` on `calc<N>`, `reveal` of
+a line or `calc<N>`) and the lines after them are left to the actions; an entrance brings the
+lines before it not yet shown and the following lines no action names; the first entrance of a
+calculation sends the previous one away (its rows fade, its result row fades into the table)
+and brings the title, caption and table. (Nested `Succession`s shrank a row in manim — the result
+box is created alongside the row's fade-in instead.)
+
+Targets: `title`, `table`, `symbol:<name>` (every occurrence: table, lines, substituted values),
+`row:<name>`, `calc<N>` / `calc:<name>`, `formula<N>`, `substitution<N>` (a formula of numbers
+only: the formula), `result<N>` / `result:<name>`, `conversion<N>`. Actions
+(`scenes/calculation_actions.py`): `substitute`, `compute`, `convert` — calculation scenes only
+(`calculation_actions = True`), targets `calc<N>` / `calc:<name>` checked with did-you-mean
+(`convert` needs `convert:` units); they play `Calculation.calculation_step(target, action)`.
+
+Public: `vidgen.api.quantities` (module); scene type `calculation`; actions `substitute`,
+`compute`, `convert`. No config key, no dependency.
+
+**Gaps after Step 225**: the narration lint against computed results is Step 226 (results and
+warnings are ready: `Params.worked(project)`); temperatures are absolute (a difference of two
+°C values is right in K, but adding two absolute temperatures is not refused); units in
+`[brackets]` inside an expression are not converted for an SI substitution; no uncertainties
+(± propagation) — significant figures only; a long formula is shrunk or stacked, not broken at
+`=` signs; Phase U / V cards keep their own worked-number text.

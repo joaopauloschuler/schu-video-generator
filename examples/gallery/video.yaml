@@ -329,6 +329,20 @@ scenes:
       - text: "Plots read their data from a file. The activity halves every eight days."
       - text: "On a log axis that decay is a straight line."
 
+  - id: half_life
+    type: calculation     # a worked calculation with units: formula, values substituted, result with significant figures
+    params:
+      title: "Half-life from the decay constant"
+      symbols:
+        - {name: lambda, value: "0.0862 d^-1", meaning: decay constant of iodine-131, source: fitted}
+      calculations:
+        - {name: t_half, expr: "ln(2)/lambda", unit: d, convert: h, meaning: half-life}
+    beats:
+      - text: "The half-life is the natural log of two divided by the decay constant."
+        actions: [{substitute: calc1, at: "@divided"}]
+      - text: "That gives eight point oh four days."
+        actions: [{compute: calc1, at: "@gives"}]
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:

@@ -20837,3 +20837,85 @@ How to test
   logistic map, random walk, leapfrog pendulum energy, a filling resonance histogram with a fit,
   decay grown in two parts then fitted) — `build/preview{,_vertical,_light,_vlight}/storyboard/`
   (3 stills per beat plus mid-growth stills); `vidgen lint` (16:9): 0 errors.
+
+## Step 225 — Units and the `calculation` scene
+
+What was built
+- **Quantities engine `vidgen/quantities/`** (no manim, stdlib only; DESIGN §97.9). Decision: an
+  own engine, not pint (pint lacks exact fractions through a chain, school significant-figure
+  rules and TeX of each step, and would be a dependency to keep in step on Windows).
+  `units.py`: dimensions as seven `Fraction` exponents, a unit table (SI base / derived with
+  prefixes, min h d yr, L M (mol/L) t Da u, eV cal Wh, Å au AU ly pc, atm bar mmHg Torr, deg ° % ppm
+  sr, `c` for GeV/c², °C / °F with offsets), exact factors where defined exactly, `parse_unit`
+  (`m/s^2`, `km h^-1`, `kg·m²·s⁻²`, `J/(mol·K)`, `m^(1/2)`; offset units must stand alone;
+  did-you-mean), `Unit.text` / `.tex`, `si_unit` (named derived units: J, N, Pa...; J·s; base
+  units otherwise), `describe_dim` ("energy (kg·m²·s⁻², J)"). `constants.py`: SI 2019 exact (c, h,
+  ħ, e, k_B, N_A, R, σ), CODATA 2022 (G, m_e, m_p, m_u, ε₀, μ₀), g_n, au (IAU 2012), IAU 2015 nominal
+  GM☉, GM⊕, R⊕, and M☉ / M⊕ from them; TeX, meaning, source, aliases. `quantity.py`: `Quantity`
+  (SI value, Fraction while exact, `sig` or exact), `written` (values as authors write them;
+  exactness rules), `count_sig`, arithmetic with dimension checks and significant figures (products
+  fewest, sums by resolution, functions keep), exact roots, `decimal_text` (half away from zero,
+  plain vs scientific like the plot core, no ambiguous trailing zeros), `fraction_text`,
+  `in_unit` (offsets keep their resolution). `expr.py`: the mathexpr grammar as a tree (plus
+  `2 [m]` unit literals), `evaluate` on quantities, `to_tex` (brackets by precedence, products of
+  symbols side by side, × for values, `stack` on two lines). `calc.py`: `work(symbols, calcs,
+  wrap, lenient)` → `Worked` / `CalcResult` (value, steps formula / substitute (4 variants) /
+  intermediate / result / convert, used names, conversions, warnings), `name_tex`.
+- **Scene `calculation`** (`scenes/calculation.py`, DESIGN §97.10): symbol table beside the work
+  (16:9) or above it (9:16; two columns when short), one calculation at a time aligned at `=`,
+  per-line sizing with the substitution variant chosen for readability, result box, conversions,
+  results joining the table when the next calculation starts, concept colours on symbols,
+  `from_scene` results of other scenes (`resolve_imports`), validation of everything at params
+  time (imports at `vidgen validate`). Actions `substitute`, `compute`, `convert`
+  (`scenes/calculation_actions.py`); `reveal` of a line; `highlight: "symbol:G"`.
+- Docs: CONFIG section `calculation`, targets row, actions row; guide chooser row, snippet
+  (gallery sample), action rows, copied to `AGENTS.md`; gallery entry `calculation` (16:9 GIF 86 KB,
+  9:16 104 KB; gallery 12.6 MB); `examples/gallery` scene `half_life`; DESIGN §2, §6.4, §97.9,
+  §97.10; CHANGELOG; tasklist.
+
+Files touched
+- New: `src/vidgen/quantities/{__init__,units,constants,quantity,expr,calc}.py`,
+  `src/vidgen/scenes/{calculation,calculation_actions}.py`, `tests/test_quantities.py`,
+  `tests/test_calculation.py`, `docs/gallery/calculation.md`, `docs/gallery/media/calculation-*`.
+- Changed: `src/vidgen/api.py` (module `quantities`), `src/vidgen/scenes/__init__.py`,
+  `docs/CONFIG.md`, `docs/gallery/README.md`, guide + `AGENTS.md`, `examples/gallery/video.yaml`,
+  `DESIGN.md`, `CHANGELOG.md`, `tasklist.md`; test lists in `test_builtin_scenes.py`,
+  `test_actions_coverage.py`, `test_actions.py`, `test_translation.py`, `test_registry.py`.
+
+Public interfaces: `vidgen.api.quantities`; scene type `calculation`; actions `substitute`,
+`compute`, `convert`. No config key, no dependency.
+
+Decisions
+- Own engine instead of pint (above). `mathexpr` unchanged: calculations need a tree (one parse
+  for evaluation and every TeX line), so `quantities.expr` reuses its grammar.
+- Exactness by how a value is written: fractions and unitless whole numbers exact; numbers with
+  units or decimals measured (`532 nm` has 3 figures, `1500 m` 2); `exact` / `sig` override.
+  Numbers inside formulas are exact. Constants are shown to 4 figures, used in full.
+- Symbols must be listed (a constant too) so the table shows every value with its source; an
+  unlisted constant's name in a formula gets "add {name: G, constant: G}".
+- One calculation on screen at a time; earlier results move into the table (readable on phones,
+  no scrolling stacks). Long substitutions: with units if large enough, else on two lines, else
+  SI numbers without units (the table has the units).
+- Actions are named after the step (`substitute`, `compute`, `convert`); "show" is the built-in
+  `reveal` (a new generic action name `show` would clash with everyday words in other scenes).
+- Phase U / V worked-number cards (Hardy–Weinberg, pedigree risk) are left as they are
+  (compatibility); new worked numbers use `calculation`.
+
+Compatibility
+- Phase Q baseline after the shared change (`api.py`): 31 frames, max difference 0
+  (`phase-q-baseline/check225`). Existing scenes untouched.
+
+Known gaps: the narration / on-screen number lint is Step 226 (`Params.worked(project)` and
+`CalcResult.warnings` are ready for it); no ± uncertainty propagation; adding two absolute
+temperatures is not refused; a long formula is shrunk or stacked, never broken at `=`; a short
+beat with a calculation change can be "rushed" for lint (the previous calculation leaving and the
+next formula share the first step).
+
+How to test
+- `tests/test_quantities.py` (91, < 1 s), `tests/test_calculation.py` (15 incl. 2 render, ~13 s).
+- Related: `test_builtin_scenes` + `test_actions_coverage` + `test_actions` + `test_translation` +
+  `test_extensions` (not render; render `-k calculation`), `test_guide` + `test_docs` +
+  `test_schema` + `test_registry` + `test_gallery`, `test_api`.
+- Stills: scratchpad `s225/proj` (orbit, period with `from_scene`, escape with actions and a
+  highlight, carriers with concept colours, pedigree 1/150, halflife, photon, higgs) —
+  `build/preview{,_vertical,_light,_vlight}/storyboard/` and `.../frames/<scene>/`.

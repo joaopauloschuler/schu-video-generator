@@ -328,6 +328,7 @@ project's own scene types, in its theme).
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
+| a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1068,6 +1069,20 @@ the genetics types, notation, exactness and pacing: `vidgen guide genetics` and
     - text: "Friction takes the energy away, so each swing is smaller."
     - text: "In phase space the state spirals in towards rest."
       actions: [{zoom: panel1, x: [0, 5], at: "@phase"}]
+- id: orbit_speed
+  type: calculation   # formula -> values with units -> result with significant figures -> conversion
+  params:
+    title: "How fast does the Earth orbit the Sun?"
+    symbols:   # value: a number with its unit ("29.8 km/s", "1/25", "6.674e-11 m^3 kg^-1 s^-2"), or a constant (CODATA / IAU)
+      - {name: G, constant: G}
+      - {name: M_sun, constant: M_sun}
+      - {name: r, constant: AU, meaning: "Earth–Sun distance"}
+    calculations:   # expr uses the symbols' names; a later calculation may use an earlier result's name
+      - {name: v, expr: "sqrt(G*M_sun/r)", sig: 3, convert: km/s, meaning: orbital speed}
+  beats:
+    - text: "Gravity holds the Earth on its orbit, so its speed is the square root of G M over r."
+    - text: "Put in the numbers, and the Earth moves at about thirty kilometres per second."
+      actions: [{substitute: calc1, at: "@numbers"}, {compute: calc1, at: "@moves"}]
 - id: devices
   type: pie
   params: {title: "Visits by device", donut: true, labels: ["Mobile", "Desktop", "Tablet"], values: [5200, 3100, 640], highlight: Mobile}
@@ -1365,6 +1380,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `fit` | on a `plot`: draw a fit on a word (`- fit: "fit:decay"`: its band, curve, parameters and residual panel) | when the narration says the data are fitted |
 | `annotate` | on a `plot`: show an annotation on a word (`- annotate: annotation2`: its mark and text) | when the narration names the marked point, line or range |
 | `grow` | on a `plot`: grow live series (a model's) from a word until the next action or the beat's end (`- grow: "series:x"`, `to: 4` in the model's time; `axes`: all of them) | when the narration follows the simulation as it runs |
+| `substitute` | on a `calculation`: show a calculation's values put into its formula on a word (`- substitute: calc1`; the formula first if it is not on screen); `reveal: formula2` shows a formula, `highlight: "symbol:G"` marks a symbol | when the narration says the numbers |
+| `compute` | on a `calculation`: show its result on a word (`- compute: calc1`; the steps before it come first) | when the narration says the result |
+| `convert` | on a `calculation`: show the result in its `convert` units on a word (`- convert: calc1`) | when the narration says the result in other units |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
