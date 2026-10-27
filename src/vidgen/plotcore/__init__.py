@@ -1,12 +1,17 @@
 """The chart core for scientific plots (Phase W, DESIGN §97), without manim: tick values and
 number formats (:mod:`.numbers`, :mod:`.ticks`), axes with linear, log, symlog, reversed and
-broken scales (:mod:`.axis`), tables read from CSV with units in the headers (:mod:`.data`) and
-the layout of multi-panel figures (:mod:`.figure`). The drawing layer is ``vidgen.plot_draw``;
-the ``plot`` scene type uses both. Exported by ``vidgen.api`` as the module ``plotcore``."""
+broken scales (:mod:`.axis`), tables read from CSV with units in the headers (:mod:`.data`),
+the layout of multi-panel figures (:mod:`.figure`), curve fits with uncertainties and bands
+(:mod:`.fit`, :mod:`.stats`), histograms with fitted distributions (:mod:`.hist`) and the
+placement of annotations (:mod:`.annotate`). The drawing layer is ``vidgen.plot_draw``; the
+``plot`` scene type uses both. Exported by ``vidgen.api`` as the module ``plotcore``."""
 
-from .axis import BREAK_GAP, SCALES, Axis, AxisSpec, build_axis, equal_aspect
+from .annotate import Placement, best_box, place_in_plot, place_in_span, place_near, place_on_hline, place_on_vline
+from .axis import BREAK_GAP, SCALES, TIGHT_PAD, Axis, AxisSpec, build_axis, equal_aspect
 from .data import Column, Table, did_you_mean, parse_number, read_table, split_header
 from .figure import Label, Measure, PanelInput, PanelLayout, Rect, approx_measure, clip_polyline, label_stride, layout_figure
+from .fit import MODEL_ALIASES, MODEL_KINDS, PEAK_KINDS, FitResult, Model, fit_curve, make_model, pretty_name, unit_power, unit_ratio
+from .hist import BIN_RULES, DISTRIBUTIONS, Histogram, bin_edges, fit_distribution, histogram, poisson_pmf, rule_width
 from .numbers import (
     MINUS,
     SI_PREFIXES,
@@ -16,6 +21,7 @@ from .numbers import (
     axis_title,
     check_tick_format,
     clean,
+    error_digits,
     exponent_of,
     plain_number,
     power_of_ten,
@@ -24,45 +30,75 @@ from .numbers import (
     si_number,
     superscript,
     tick_labels,
+    value_with_error,
 )
+from .stats import chi2_sf, normal_cdf, normal_ppf, t_cdf, t_ppf
 from .ticks import default_linthresh, linear_ticks, log_ticks, symlog_inverse, symlog_ticks, symlog_transform
 
 __all__ = [
+    "BIN_RULES",
     "BREAK_GAP",
+    "DISTRIBUTIONS",
     "MINUS",
+    "MODEL_ALIASES",
+    "MODEL_KINDS",
+    "PEAK_KINDS",
     "SCALES",
     "SI_PREFIXES",
     "TICK_FORMATS",
+    "TIGHT_PAD",
     "TIMES",
     "Axis",
     "AxisSpec",
     "Column",
+    "FitResult",
+    "Histogram",
     "Label",
     "Measure",
+    "Model",
     "PanelInput",
     "PanelLayout",
+    "Placement",
     "Rect",
     "Table",
     "TickLabels",
     "approx_measure",
     "axis_title",
+    "best_box",
+    "bin_edges",
     "build_axis",
     "check_tick_format",
+    "chi2_sf",
     "clean",
     "clip_polyline",
     "default_linthresh",
     "did_you_mean",
     "equal_aspect",
+    "error_digits",
     "exponent_of",
+    "fit_curve",
+    "fit_distribution",
+    "histogram",
     "label_stride",
     "layout_figure",
     "linear_ticks",
     "log_ticks",
+    "make_model",
+    "normal_cdf",
+    "normal_ppf",
     "parse_number",
+    "place_in_plot",
+    "place_in_span",
+    "place_near",
+    "place_on_hline",
+    "place_on_vline",
     "plain_number",
+    "poisson_pmf",
     "power_of_ten",
     "prefixed_unit_problem",
+    "pretty_name",
     "read_table",
+    "rule_width",
     "sci_number",
     "si_number",
     "split_header",
@@ -70,5 +106,10 @@ __all__ = [
     "symlog_inverse",
     "symlog_ticks",
     "symlog_transform",
+    "t_cdf",
+    "t_ppf",
     "tick_labels",
+    "unit_power",
+    "unit_ratio",
+    "value_with_error",
 ]

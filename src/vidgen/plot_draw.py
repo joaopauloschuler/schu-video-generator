@@ -1,7 +1,8 @@
 """The drawing layer of the chart core (Phase W, DESIGN §97): manim objects for a laid-out
 :class:`~vidgen.plotcore.PanelLayout` — axis lines with break marks, tick marks, gridlines
 (dashed at labelled ticks, faint solid at a log axis' minor ticks), tick labels, axis titles —
-and for data series (lines clipped to the plot, point markers). The layout itself is decided
+and for data (lines clipped to the plot, point markers, error bars, shaded bands, histogram
+bars) and annotations (reference lines, shaded ranges, text on plates, leaders and arrows). The layout itself is decided
 by :mod:`vidgen.plotcore` without manim; this module only draws it. Exported by ``vidgen.api``
 as the module ``plot_draw``."""
 
@@ -175,6 +176,201 @@ def series_line(points: np.ndarray, plot: Rect, color: str, *, width: float = 4.
     return group
 
 
+def _segment(a: Sequence[float], b: Sequence[float], plot: Rect) -> np.ndarray | None:
+    """The part of the segment a-b inside ``plot`` (``(2, 3)`` frame points) or ``None``."""
+    runs = clip_polyline(np.array([[a[0], a[1], 0.0], [b[0], b[1], 0.0]]), plot)
+    return runs[0] if runs else None
+
+
+def error_bars(
+    lay: PanelLayout,
+    xs: Sequence[float],
+    ys: Sequence[float],
+    *,
+    y_lo: Sequence[float] | None = None,
+    y_hi: Sequence[float] | None = None,
+    x_lo: Sequence[float] | None = None,
+    x_hi: Sequence[float] | None = None,
+    color: str = "#888888",
+    width: float = 2.5,
+    cap: float = 0.07,
+) -> VGroup:
+    """Error bars at data points: from ``y - y_lo`` to ``y + y_hi`` (and ``x - x_lo`` to ``x +
+    x_hi``), lengths in data units (asymmetric when the two differ), clipped to the plot, with
+    caps ``cap`` units wide where a bar ends inside it. On a log axis a bar reaching 0 or below
+    runs to the plot's edge."""
+    plot = lay.plot
+    group = VGroup()
+
+    def stroke(seg: np.ndarray) -> Line:
+        return Line(seg[0], seg[1], color=color, stroke_width=width)
+
+    for k, (x, y) in enumerate(zip(xs, ys)):
+        if not (np.isfinite(x) and np.isfinite(y)):
+            continue
+        fx, fy = lay.frame_x(x), lay.frame_y(y)
+        if y_lo is not None and y_hi is not None and (y_lo[k] > 0 or y_hi[k] > 0):
+            low, high = y - y_lo[k], y + y_hi[k]
+            a = (fx, lay.frame_y(low) if (lay.y.scale != "log" or low > 0) else plot.y0 - 1.0)
+            b = (fx, lay.frame_y(high))
+            seg = _segment(a, b, plot)
+            if seg is not None:
+                group.add(stroke(seg))
+                for end in (a, b):
+                    if plot.contains(end[0], end[1], 1e-6):
+                        group.add(Line(np.array([fx - cap / 2, end[1], 0.0]), np.array([fx + cap / 2, end[1], 0.0]), color=color, stroke_width=width))
+        if x_lo is not None and x_hi is not None and (x_lo[k] > 0 or x_hi[k] > 0):
+            low, high = x - x_lo[k], x + x_hi[k]
+            a = (lay.frame_x(low) if (lay.x.scale != "log" or low > 0) else plot.x0 - 1.0, fy)
+            b = (lay.frame_x(high), fy)
+            seg = _segment(a, b, plot)
+            if seg is not None:
+                group.add(stroke(seg))
+                for end in (a, b):
+                    if plot.contains(end[0], end[1], 1e-6):
+                        group.add(Line(np.array([end[0], fy - cap / 2, 0.0]), np.array([end[0], fy + cap / 2, 0.0]), color=color, stroke_width=width))
+    return group
+
+
+def band(lay: PanelLayout, xs: Sequence[float], lower: Sequence[float], upper: Sequence[float], color: str, *, opacity: float = 0.2) -> VGroup:
+    """A shaded band between ``lower`` and ``upper`` (data values at ``xs``, increasing),
+    clipped to the plot (heights held at its top and bottom), one polygon per piece of the x
+    axis between breaks and per run of finite values."""
+    from manim import Polygon
+
+    plot = lay.plot
+    group = VGroup()
+    runs: list[list[tuple[float, float, float]]] = []
+    current: list[tuple[float, float, float]] = []
+    last_piece = None
+    for x, lo, hi in zip(xs, lower, upper):
+        ok = np.isfinite(x) and np.isfinite(lo) and np.isfinite(hi) and lay.x.contains(x)
+        piece = lay.x.piece(x) if ok else None
+        if not ok or (last_piece is not None and piece != last_piece):
+            if len(current) >= 2:
+                runs.append(current)
+            current = []
+        if ok:
+            fx = min(max(lay.frame_x(x), plot.x0), plot.x1)
+            f_lo = plot.y0 - 1.0 if (lay.y.scale == "log" and lo <= 0) else lay.frame_y(lo)
+            f_hi = lay.frame_y(hi)
+            clamp = (lambda v: min(max(v, plot.y0), plot.y1))
+            current.append((fx, clamp(min(f_lo, f_hi)), clamp(max(f_lo, f_hi))))
+            last_piece = piece
+    if len(current) >= 2:
+        runs.append(current)
+    for run in runs:
+        top = [np.array([x, hi, 0.0]) for x, _, hi in run]
+        bottom = [np.array([x, lo, 0.0]) for x, lo, _ in reversed(run)]
+        group.add(Polygon(*top, *bottom).set_fill(color, opacity=opacity).set_stroke(width=0))
+    return group
+
+
+def bars(lay: PanelLayout, edges: Sequence[float], heights: Sequence[float], color: str, *, opacity: float = 0.55, outline: bool = True, theme: Theme | None = None) -> VGroup:
+    """Histogram bars from the axis' base (0, or the bottom of a log axis) to ``heights``
+    between ``edges``, clipped to the plot; filled at ``opacity`` (0: an outline only, the
+    ``step`` style) with an outline in ``color``. One ``Polygon`` per bar, left to right."""
+    from manim import Polygon
+
+    theme = theme or current_theme()
+    plot = lay.plot
+    group = VGroup()
+    base = plot.y0 if lay.y.scale == "log" or not lay.y.contains(0.0) else lay.frame_y(0.0)
+    for a, b, h in zip(edges, edges[1:], heights):
+        x0 = min(max(lay.frame_x(a), plot.x0), plot.x1)
+        x1 = min(max(lay.frame_x(b), plot.x0), plot.x1)
+        if x1 - x0 <= 1e-9:
+            continue
+        top = plot.y0 if (lay.y.scale == "log" and h <= 0) else min(max(lay.frame_y(h), plot.y0), plot.y1)
+        rect = Polygon(np.array([x0, base, 0.0]), np.array([x1, base, 0.0]), np.array([x1, top, 0.0]), np.array([x0, top, 0.0]))
+        rect.set_fill(color, opacity=opacity)
+        rect.set_stroke(color if outline else theme.background, width=2.0 if opacity == 0 else 1.2, opacity=1.0)
+        group.add(rect)
+    return group
+
+
+def label_text(text: str, *, size: str | float = "caption", color: Any = "text", theme: Theme | None = None) -> Text:
+    """One line of chart text in the theme font at ``size`` (never below the readable size)."""
+    theme = theme or current_theme()
+    return styled(Text, theme, text, chart_label_size(size, theme), color, NORMAL)
+
+
+def text_lines(lines: Sequence[str], *, size: str | float = "caption", color: Any = "text", theme: Theme | None = None) -> VGroup:
+    """Lines of plain text, left-aligned under one another (a fit's parameters, a note)."""
+    from manim import DOWN, LEFT
+
+    theme = theme or current_theme()
+    s = chart_label_size(size, theme)
+    group = VGroup(*[styled(Text, theme, line, s, color, NORMAL) for line in lines])
+    return group.arrange(DOWN, buff=0.12 * s / 24, aligned_edge=LEFT) if len(group) > 1 else group
+
+
+#: Inner padding of a text plate (frame units).
+PLATE_PAD = 0.12
+
+
+def plate(content: VMobject, *, color: Any = "dim", theme: Theme | None = None) -> VGroup:
+    """``content`` on a faint rounded plate in the background colour (so text reads over
+    gridlines and data), drawn above the plot's lines; ``VGroup(plate, content)``."""
+    from manim import RoundedRectangle
+
+    theme = theme or current_theme()
+    box = RoundedRectangle(width=content.width + 2 * PLATE_PAD, height=content.height + 2 * PLATE_PAD, corner_radius=0.08)
+    box.set_fill(theme.background, opacity=0.88).set_stroke(resolve_color(color, theme), width=1, opacity=0.5)
+    box.move_to(content.get_center())
+    return VGroup(box, content).set_z_index(3)
+
+
+def reference_line(lay: PanelLayout, *, x: float | None = None, y: float | None = None, color: str = "#888888", width: float = 2.5, dashed: bool = True) -> VGroup:
+    """A line across the plot at data ``x`` (vertical) or ``y`` (horizontal), dashed by
+    default; empty when the value lies outside the axis."""
+    plot = lay.plot
+    group = VGroup()
+    if y is not None and lay.y.contains(y):
+        fy = lay.frame_y(y)
+        a, b = np.array([plot.x0, fy, 0.0]), np.array([plot.x1, fy, 0.0])
+    elif x is not None and lay.x.contains(x):
+        fx = lay.frame_x(x)
+        a, b = np.array([fx, plot.y0, 0.0]), np.array([fx, plot.y1, 0.0])
+    else:
+        return group
+    line = DashedLine(a, b, color=color, stroke_width=width, dash_length=0.14, dashed_ratio=0.55) if dashed else Line(a, b, color=color, stroke_width=width)
+    return group.add(line)
+
+
+def span(lay: PanelLayout, lo: float, hi: float, color: str, *, vertical: bool = True, opacity: float = 0.14) -> VGroup:
+    """A shaded range across the plot: x from ``lo`` to ``hi`` (``vertical``) or y, clipped."""
+    from manim import Polygon
+
+    plot = lay.plot
+    if vertical:
+        a, b = sorted((lay.frame_x(lo), lay.frame_x(hi)))
+        a, b = max(a, plot.x0), min(b, plot.x1)
+        corners = ((a, plot.y0), (b, plot.y0), (b, plot.y1), (a, plot.y1))
+    else:
+        a, b = sorted((lay.frame_y(lo), lay.frame_y(hi)))
+        a, b = max(a, plot.y0), min(b, plot.y1)
+        corners = ((plot.x0, a), (plot.x1, a), (plot.x1, b), (plot.x0, b))
+    if b - a <= 1e-9:
+        return VGroup()
+    return VGroup(Polygon(*[np.array([cx, cy, 0.0]) for cx, cy in corners]).set_fill(color, opacity=opacity).set_stroke(width=0))
+
+
+def leader(start: Sequence[float], end: Sequence[float], color: str, *, arrow: bool = False, width: float = 2.5, buff: float = 0.08) -> VMobject:
+    """A thin line from a label (``start``) to the point it names (``end``), stopping ``buff``
+    short of it; with ``arrow`` a small arrowhead at the point."""
+    from manim import Arrow
+
+    a, b = np.array([*start[:2], 0.0]), np.array([*end[:2], 0.0])
+    length = float(np.linalg.norm(b - a))
+    if length <= buff * 2:
+        return VGroup()
+    b2 = a + (b - a) * (length - buff) / length
+    if arrow:
+        return Arrow(a, b2, buff=0, color=color, stroke_width=width + 0.5, max_tip_length_to_length_ratio=0.5, tip_length=0.16)
+    return Line(a, b2, color=color, stroke_width=width)
+
+
 def series_markers(points: np.ndarray, plot: Rect, color: str, *, marker: str = "circle", radius: float = 0.08, theme: Theme | None = None) -> VGroup:
     """Point markers (:func:`~vidgen.charts.chart_marker`) at the frame ``points`` inside
     ``plot``, with a thin outline in the background colour so overlapping markers stay apart."""
@@ -188,4 +384,24 @@ def series_markers(points: np.ndarray, plot: Rect, color: str, *, marker: str = 
     return group
 
 
-__all__ = ["AXIS_STROKE", "GRID_OPACITY", "MINOR_OPACITY", "TICK_LENGTH", "PanelDrawing", "draw_panel", "series_line", "series_markers", "text_measure"]
+__all__ = [
+    "AXIS_STROKE",
+    "GRID_OPACITY",
+    "MINOR_OPACITY",
+    "PLATE_PAD",
+    "TICK_LENGTH",
+    "PanelDrawing",
+    "band",
+    "bars",
+    "draw_panel",
+    "error_bars",
+    "label_text",
+    "leader",
+    "plate",
+    "reference_line",
+    "series_line",
+    "series_markers",
+    "span",
+    "text_lines",
+    "text_measure",
+]

@@ -115,6 +115,20 @@ class PanelLayout:
             out[k] = (self.frame_x(x), self.frame_y(y), 0.0) if ok else (math.nan, math.nan, 0.0)
         return out
 
+    def frame_line(self, xs: Sequence[float], ys: Sequence[float]) -> np.ndarray:
+        """Frame points of a line through data points, with a ``nan`` row (a gap) wherever two
+        neighbours lie on different sides of an axis break: a line never crosses a break."""
+        pts = self.frame_points(xs, ys)
+        if len(self.x.segments) == 1 and len(self.y.segments) == 1:
+            return pts
+        rows: list[np.ndarray] = []
+        for k in range(len(pts)):
+            if k and math.isfinite(xs[k - 1]) and math.isfinite(xs[k]) and math.isfinite(ys[k - 1]) and math.isfinite(ys[k]):
+                if self.x.piece(xs[k - 1]) != self.x.piece(xs[k]) or self.y.piece(ys[k - 1]) != self.y.piece(ys[k]):
+                    rows.append(np.array([math.nan, math.nan, 0.0]))
+            rows.append(pts[k])
+        return np.array(rows)
+
 
 def label_stride(positions: Sequence[float], extents: Sequence[float], gap: float, *, keep_last: bool = False) -> list[int]:
     """Indices of labels to keep: every k-th (smallest k) so neighbours keep ``gap`` between

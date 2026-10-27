@@ -308,6 +308,8 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
         {"title": "T:title", "caption": "T:caption", "x": {"label": "T:x", "unit": "s"}, "y": {"label": "T:y"},
          "series": [{"name": "T:s", "x": [0, 1], "y": [1, 2]}]},
         {"panels": [{"x": {"label": "T:px"}, "y": {"label": "T:py"}, "series": [{"name": "T:p", "points": [[0, 1], [1, 2]]}]}], "share": False},
+        {"series": [{"name": "T:d", "x": [0, 1, 2], "y": [1, 2, 4]}], "fits": [{"series": "T:d", "name": "T:fit"}],
+         "annotations": [{"type": "note", "text": "T:note"}]},
     ],
     "population": [{"title": "T:title", "condition": "T:condition", "incidence": "1/2500"}],
     "gwas": [{"title": "T:title", "trait": "T:trait", "background": 400}],

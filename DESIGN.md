@@ -16816,4 +16816,121 @@ Step 225's decision).
 or live series yet; a dashed series' legend swatch is solid; the equal-aspect axes choose their
 tick steps independently (x and y may step by 2 and by 1); a line crossing a break is drawn
 straight across it; no inset plots; panel titles are the axis titles only; the legends appear with
-the axes, not with their series.
+the axes, not with their series. (Step 223 fixed the dashed swatch, the line across a break and
+the legends' timing, §97.6.)
+
+### 97.5 Data features (Step 223)
+
+**Fits** (`plotcore.fit`, numpy only). `make_model(kind, degree, background, expr, params,
+guesses, units)` → `Model` (YAML names, shown labels `μ σ Γ x₀ b₁`, the shown formula, f(x, p),
+a design matrix for models linear in p, a starting guess from the data, each parameter's unit
+from the axes' units: `unit_ratio("Bq", "d")` = `Bq/d`, `d⁻¹`). Kinds: `linear` (a + b·x),
+`poly` (c₀ … cₙ, n ≤ 6), `exponential` (A·exp(k·x); guess: a line through ln y), `power` (A·xᵏ,
+x > 0; guess: log–log), `logistic` (L, k, x₀; guess: the logit line), `gaussian` and
+`breit_wigner` (A, μ/M, σ/Γ, plus `background: n` → b₀ … bₙ; guess: peak height, position and
+FWHM above a line through the edges), `custom` (an expression through
+`mathexpr.parse_model(text, parameters)`: the safe parser with named parameters that may shadow
+a constant (`tau`), unknown names with did-you-mean, an unused parameter refused). Aliases:
+`cauchy` / `lorentzian` → `breit_wigner`, `polynomial`, `exp`, `gauss`, `sigmoid`.
+`fit_curve(x, y, model, y_err, x_err)`: models linear in p by weighted `lstsq`; others by
+Levenberg–Marquardt (Marquardt's diagonal scaling, central-difference Jacobian with an absolute
+step for a parameter at 0, λ ×4 / ÷3). Covariance (JᵀWJ)⁻¹ — absolute with y errors, scaled by
+SSR/(n − p) without (as `curve_fit`'s `absolute_sigma`); x errors by effective variance σ² = σ_y²
++ (f′(x)σ_x)², four re-weightings. `FitResult`: params, errors, cov, χ², χ²/ν (with errors), R²
+(unweighted 1 − SSR/SST), RMSE, residuals, `band(xs, level, kind)` (delta method gᵀCg; the
+prediction band adds σ² interpolated between the data's errors or SSR/(n − p); Student's t with
+n − p, the normal quantile with known errors), `parameter_lines` (`A = 985 ± 19 Bq`). Errors:
+too few points (n ≤ p), a power law with x ≤ 0, non-positive y errors, a rank-deficient JᵀJ, a
+model undefined at the start. Distribution functions in `plotcore.stats` (normal CDF / quantile:
+Acklam + Newton; Student's t through the regularized incomplete beta, the quantile solved on the
+tail so 1 − p loses nothing; χ² survival through the incomplete gamma), ≤ 1e-9 from scipy.
+
+**Why no scipy.** scipy is installed wherever vidgen is (manim requires it), but vidgen does not
+list it and the core must import without it (and fast); the fits above are short and match
+`scipy.optimize.curve_fit` to 1e-3 of a standard error (tests, when scipy is importable — else
+the closed-form tests run). No new dependency, nothing for the owner to install on Windows.
+
+**Histograms** (`plotcore.hist`). `rule_width` = numpy's `histogram_bin_edges` widths (Sturges,
+Freedman–Diaconis, Scott with σ over n, square root, `auto` = the smaller of Sturges and FD);
+`bin_edges(values, bins, width, lo, hi, nice)`: a rule's width rounded to 1 / 2 / 2.5 / 5 × 10ᵏ
+with edges on its multiples (`nice`, the default: round tick-like edges), else numpy's edges
+exactly; `integers` (k ± ½), a count, explicit edges; at most 400 bins. `histogram()` → counts
+(the last bin closed), density, √N errors, values outside counted. `fit_distribution(hist,
+kind)`: maximum likelihood on the raw values — `normal` (mean, σ with 1/N; errors σ/√N,
+σ/√2N), `exponential` (λ = 1/mean, λ/√N), `poisson` (mean, √(μ/N); whole numbers, `bins:
+integers`) — as a `FitResult` whose model gives heights in the histogram's units (N·width·pdf),
+with Pearson's χ² over the bins and its degrees of freedom (bins − 1 − p). Peaks (`gaussian`,
+`breit_wigner` + background) on a histogram are least-squares fits of the heights with σ = √N
+(an empty bin: one count's error).
+
+**Numbers**. `value_with_error(v, e, unit)`: the error rounded by the PDG rule (three leading
+digits 100–354: two significant digits; 355–949: one; 950–999: up to 1000, two), the value to
+the same place (halves away from 0), a power of ten outside brackets beyond [10⁻³, 10⁵): `(2.510 ±
+0.031) × 10⁻⁴ s`; an error of float noise (an exact fit) writes the value alone.
+
+**Annotations** (`plotcore.annotate`, deterministic). A candidate box costs 1000 per unit area
+outside the plot, 10 per data point it covers (markers, samples every 0.1 along lines and fit
+curves, bar interiors, error-bar ends), and 1000 + 5000 × area per text box it touches (text
+over text is worse than text over a few points); the cheapest wins, ties to the first listed.
+`place_near` (8 directions × 3 rings around a point; off the first ring a leader line),
+`place_in_plot` (corners, then edge middles), `place_on_hline` / `place_on_vline` (along the
+line, at its ends or middle), `place_in_span` (inside a shaded range, else beside it).
+
+### 97.6 The `plot` scene's data features (Step 223)
+
+Params (`scenes/plot_parts.py`: `PlotSeries`, `PlotErrorPair`, `PlotFit`, `PlotFitParam`,
+`PlotAnnotation`, the resolution into `Resolved` — a list of panels with `.fits`): series
+`y_err` / `x_err` (number, column, list, `{minus, plus}`, `sqrt`) and `error` (`sd`, `sem`,
+`ci95`, `range`, `poisson`, `other`, shown in the legend entry: `measured (± SEM)`); histogram
+series (`values`, `bins`, `bin_width`, `bin_range`, `nice_bins`, `density`; `style: bars | step |
+points`; y from 0, titled `count` / `density`); `fits` (`series` and the annotations' `series` are
+`TextRef`s: a translated series name is followed); `annotations` (`label`, `arrow`, `hline`,
+`vline`, `xrange`, `yrange`, `note`; `panel`, `color`, `id`). Fits are computed at validation
+(inline data) or `vidgen validate` (a CSV), so a fit that fails names itself (`fits[1] (power
+fit): a power fit needs positive x values`).
+
+Layout. The figure is the data panels, each followed by the residual panels of its fits
+(weight 0.4, sharing x; y titled `residual (unit)` or `(y − fit)/σ`, ticks from 0). Axes:
+`AxisSpec.tight = 0.08` — a free end goes to the next round tick only when that adds at most
+8 % of the span, else 4 % past the data (`plotcore.TIGHT_PAD`); error-bar ends and the fitted
+curve count as data the axis shows (when it can: positive on log, inside fixed ends and not in
+a break). Placement loop: each panel's legend in a free corner (`auto_legend`), each fit box
+and note in a free spot (`place_in_plot` at cost 0); whatever finds none moves to a **side
+group** — a column on the right of the figure in 16:9 (the figure narrows; the column top at
+the first plot's top), above the figure in 9:16 (side by side when the items fit the width) —
+and the layout is redone (at most fits + notes + 3 rounds). Annotations are placed last, in
+order, inside their panel, against the data and every box placed so far. Text: `label_size`
+default `body` in a landscape frame and `caption` in portrait (the large scale's 30 pt), never
+below `min_font`; the title sits 0.35 above the body (was 0.45).
+
+Drawing (`plot_draw`): `error_bars` (caps where a bar ends inside; on a log axis a bar to ≤ 0
+runs to the edge), `band` (one polygon per x piece between breaks, clamped to the plot), `bars`,
+`text_lines`, `label_text`, `plate` (a rounded box in the background colour, z above the data),
+`reference_line`, `span`, `leader` (a line or an arrow, stopping short of the point);
+`PanelLayout.frame_line` puts a gap where neighbours lie on different sides of a break.
+`charts.chart_legend` gained the swatches `dashed` and `band` (additive; the chart scenes do
+not use them).
+
+Steps and targets. Series (with their legend entry — the legend's frame comes with the first —
+and their error bars unless an action reveals `errors:<name>`), then each fit (`fit<N>`,
+`fit:<name>`: band, curve, legend entries, box, residual panel; the series first), then each
+annotation (`annotation<N>`, `annotation:<id>`); `reveal: all` puts them in one step. Targets an
+action (`reveal`, `fit`, `annotate`) names are left out of the steps. Entrances nest (a fit brings
+its series, a series the axes): `Plot.entrance` builds each entrance once per step (`_batch`).
+Actions `fit` and `annotate` (`scenes/plot_actions.py`): plot scenes only (`plot_actions =
+True`), targets checked with did-you-mean; they play the target's entrance (1.6 s, 1 s).
+
+Public: `vidgen.api.plotcore` gains `fit_curve`, `make_model`, `Model`, `FitResult`,
+`MODEL_KINDS`, `MODEL_ALIASES`, `PEAK_KINDS`, `histogram`, `Histogram`, `bin_edges`,
+`rule_width`, `fit_distribution`, `poisson_pmf`, `BIN_RULES`, `DISTRIBUTIONS`, `normal_cdf`,
+`normal_ppf`, `t_cdf`, `t_ppf`, `chi2_sf`, `value_with_error`, `error_digits`, `pretty_name`,
+`unit_power`, `unit_ratio`, the placement functions and `Placement`, `TIGHT_PAD`;
+`AxisSpec.tight`, `Axis.piece`, `PanelLayout.frame_line`; `vidgen.api.plot_draw` the drawing
+functions above; `vidgen.mathexpr.parse_model` / `ModelExpression` (not re-exported). Actions
+`fit`, `annotate`. No new dependency, no config key.
+
+**Gaps after Step 223**: no live series (224); fits of 2-D data, global fits sharing parameters
+across series, and a likelihood fit of binned counts (Poisson likelihood instead of √N weights)
+are not there; an annotation cannot point into another panel; a crowded 16:9 figure (two panels,
+a fit with residuals, a long legend) gets small plots at `body` text — authors can set
+`label_size: caption` or move the legend with `legend: false`.

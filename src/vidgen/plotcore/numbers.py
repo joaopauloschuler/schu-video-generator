@@ -236,6 +236,58 @@ def axis_title(label: str, unit: str = "", exponent: int = 0) -> str:
     return f"{label} ({inner})" if inner else label
 
 
+def error_digits(error: float) -> tuple[float, int]:
+    """``error`` rounded by the Particle Data Group's rule and the decimal place it ends at:
+    its three leading digits 100–354 keep two significant digits, 355–949 one, 950–999 round
+    up to 1000 with two (``0.0123`` -> ``(0.012, 3)``, ``0.47`` -> ``(0.5, 1)``)."""
+    e = exponent_of(error)
+    lead = int(round(error / 10.0 ** (e - 2)))   # three leading digits, 100..1000
+    if lead >= 1000:
+        e, lead = e + 1, 100
+    if lead <= 354:
+        digits = 2
+    elif lead <= 949:
+        digits = 1
+    else:
+        e, digits = e + 1, 2
+    place = e - digits + 1
+    return clean(round(error / 10.0**place) * 10.0**place), -place
+
+
+def _round_half_up(value: float, decimals: int) -> float:
+    """``value`` rounded to ``decimals`` (negative: tens, hundreds) with halves away from 0, as
+    results are written (Python's ``round`` goes to the even neighbour: 12345 -> 12340)."""
+    step = 10.0 ** (-decimals)
+    q = abs(value) / step
+    rounded = math.floor(q + 0.5 + 1e-9 * max(q, 1.0))
+    return math.copysign(clean(rounded * step), value) + 0.0
+
+
+def value_with_error(value: float, error: float | None, unit: str = "", digits: int = 4) -> str:
+    """``value ± error`` as a result is written: the error rounded by :func:`error_digits`, the
+    value to the same decimal place, a power of ten outside brackets when the value is below
+    10⁻³ or from 10⁵ (``(2.51 ± 0.03) × 10⁻⁴ s⁻¹``), then the unit. Without a usable error the
+    value with ``digits`` significant digits."""
+    unit = f" {unit}" if unit else ""
+    if not math.isfinite(value):
+        return f"{value}{unit}"
+    if error is None or not math.isfinite(error) or error <= 1e-12 * abs(value):   # no error, or one of float noise (an exact fit)
+        top = abs(value)
+        if top == 0 or PLAIN_MIN <= top < PLAIN_MAX:
+            d = max(0, digits - 1 - exponent_of(value)) if value else 0
+            return plain_number(value, min(d, 8)) + unit
+        return sci_number(float(f"{value:.{digits}g}")) + unit
+    top = max(abs(value), error)
+    e = 0 if PLAIN_MIN <= top < PLAIN_MAX else exponent_of(top)
+    scaled_error, decimals = error_digits(error / 10.0**e)
+    scaled_value = _round_half_up(value / 10.0**e, decimals)
+    d = max(decimals, 0)
+    body = f"{plain_number(scaled_value, d)} ± {plain_number(scaled_error, d)}"
+    if e:
+        return f"({body}) {TIMES} {power_of_ten(e)}{unit}"
+    return body + unit
+
+
 __all__ = [
     "MINUS",
     "PLAIN_MAX",
@@ -249,6 +301,7 @@ __all__ = [
     "check_tick_format",
     "clean",
     "decimals_needed",
+    "error_digits",
     "exponent_of",
     "plain_number",
     "power_of_ten",
@@ -258,4 +311,5 @@ __all__ = [
     "si_parts",
     "superscript",
     "tick_labels",
+    "value_with_error",
 ]

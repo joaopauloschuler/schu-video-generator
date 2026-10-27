@@ -386,7 +386,7 @@ def chart_legend(
 ) -> VGroup:
     """A legend: per ``(name, color, swatch)`` entry a swatch and the name, wrapped into rows
     that fit ``max_width`` (``stack``: one entry per row; shrunk if one entry alone is wider).
-    ``swatch`` is ``line``, ``box`` or a marker shape (:data:`CHART_MARKERS`). Rows are
+    ``swatch`` is ``line``, ``dashed`` (a dashed line), ``box``, ``band`` (a faint wide box: a shaded band) or a marker shape (:data:`CHART_MARKERS`). Rows are
     ``VGroup`` s of items, items ``VGroup(swatch, name)``."""
     theme = theme or current_theme()
     s = chart_label_size(size, theme)
@@ -395,8 +395,12 @@ def chart_legend(
     for name, c, swatch in entries:
         if swatch == "line":
             mark: VMobject = Line([0, 0, 0], [h * 2.2, 0, 0], color=resolve_color(c, theme), stroke_width=4)
+        elif swatch == "dashed":
+            mark = DashedLine([0, 0, 0], [h * 2.2, 0, 0], color=resolve_color(c, theme), stroke_width=4, dash_length=h * 0.42, dashed_ratio=0.55)
         elif swatch == "box":
             mark = Square(side_length=h * 1.1).set_fill(resolve_color(c, theme), opacity=0.9).set_stroke(width=0)
+        elif swatch == "band":
+            mark = Rectangle(width=h * 2.2, height=h * 0.9).set_fill(resolve_color(c, theme), opacity=0.3).set_stroke(width=0)
         else:
             mark = chart_marker(swatch, h * 0.5, c, theme=theme)
         items.append(VGroup(mark, styled(Text, theme, name, s, color, NORMAL)).arrange(RIGHT, buff=h * 0.5))

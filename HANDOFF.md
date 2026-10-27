@@ -20665,3 +20665,87 @@ How to test
   render, 190 s).
 - Stills: scratchpad `s222/proj` (decay, orbit, energy, symlog, mass, broken, magnitude) —
   `build/preview{,_vertical,_light,_vlight}/frames/<scene>/` and `.../storyboard/`.
+
+## Step 223 — Data features: error bars, fits, histograms, annotations
+
+What was built
+- **Fits** (`plotcore/fit.py`, numpy only): `make_model` (linear, poly n ≤ 6, exponential,
+  power, logistic, gaussian and breit_wigner with `background: n`, custom expressions with named
+  parameters; aliases cauchy / lorentzian / polynomial / exp / gauss / sigmoid; starting guesses
+  from the data, overridable; parameter units from the axes), `fit_curve` (weighted `lstsq` for
+  linear models, Levenberg–Marquardt otherwise; absolute y errors, scaled covariance without;
+  x errors by effective variance), `FitResult` (errors, χ², χ²/ν, R², residuals, confidence /
+  prediction `band`, `parameter_lines`). `plotcore/stats.py`: normal and Student-t CDF / quantile,
+  incomplete beta / gamma, χ² survival, no scipy. `mathexpr.parse_model` / `ModelExpression`:
+  the safe parser with named parameters (may shadow `tau`, `e`; unused parameter refused).
+- **Histograms** (`plotcore/hist.py`): numpy-identical rule widths (sturges, fd, scott, sqrt,
+  auto), nice edges by default, `integers`, counts, edges; counts / density, √N errors;
+  maximum-likelihood `normal`, `exponential`, `poisson` with Pearson χ² over the bins.
+- **Annotations placement** (`plotcore/annotate.py`): candidate boxes scored by area outside the
+  plot, data points covered and text boxes touched; `place_near` (rings around a point, leader
+  flag), `place_in_plot`, `place_on_hline` / `vline`, `place_in_span`. Deterministic.
+- **Numbers**: `value_with_error` (PDG rounding, half up, powers of ten outside brackets),
+  `error_digits`. **Axes**: `AxisSpec.tight` (a far tick is not rounded out to; 4 % pad),
+  `Axis.piece`, `PanelLayout.frame_line` (a gap across breaks).
+- **Drawing** (`plot_draw.py`): `error_bars`, `band`, `bars`, `text_lines`, `label_text`,
+  `plate`, `reference_line`, `span`, `leader`. `charts.chart_legend`: swatches `dashed`, `band`.
+- **`plot` scene**: params moved to `scenes/plot_parts.py` (with the resolution); series
+  `y_err` / `x_err` / `error`, histogram series (`values`, `bins`, `bin_width`, `bin_range`,
+  `nice_bins`, `density`, style bars / step / points), `fits`, `annotations`; residual panels;
+  a placement loop that moves legends, fit boxes and notes without a free spot to a side column
+  (16:9) or above the figure (9:16); legend entries appear with their series / fit; entrances
+  built once per step (`Plot.entrance`, `_batch`); targets `errors:<name>`, `fit<N>`,
+  `fit:<name>`, `annotation<N>`, `annotation:<id>`. Actions `fit`, `annotate`
+  (`scenes/plot_actions.py`).
+- **Reviewer's notes on 222**: label size default `body` in 16:9 / `caption` (30 pt) in 9:16;
+  tight axes, smaller title gap, the side column: the plot fills its area; dashed swatch;
+  legends with their series; lines stop at breaks.
+- Docs: CONFIG `plot` (error bars, histograms, fits table, annotations table, examples), targets
+  row, actions row; guide chooser row, a fit snippet (now the first plot snippet: the gallery
+  sample), actions rows, `AGENTS.md` copied; gallery `plot` regenerated (16:9 107 KB GIF, 9:16
+  122 KB; gallery 12.3 MB); DESIGN §97.5, §97.6; CHANGELOG; tasklist.
+
+Files touched
+- New: `src/vidgen/plotcore/{fit,hist,stats,annotate}.py`, `src/vidgen/scenes/plot_parts.py`,
+  `src/vidgen/scenes/plot_actions.py`, `tests/test_plot_fit.py`.
+- Changed: `src/vidgen/plotcore/{__init__,axis,figure,numbers}.py`, `src/vidgen/plot_draw.py`,
+  `src/vidgen/scenes/plot.py`, `src/vidgen/scenes/__init__.py`, `src/vidgen/mathexpr.py`
+  (additive), `src/vidgen/charts.py` (two swatches, additive), `docs/CONFIG.md`, guide +
+  `AGENTS.md`, `docs/gallery/plot.md` + media, `DESIGN.md`, `CHANGELOG.md`, `tasklist.md`;
+  tests `test_plot.py`, `test_actions_coverage.py` (plot sample with errors / fit / annotation),
+  `test_translation.py` (sample with fit name and note text).
+
+Public interfaces: `vidgen.api.plotcore` / `plot_draw` gain the functions listed in DESIGN §97.6;
+actions `fit`, `annotate`; `plot` params `fits`, `annotations`, series error / histogram keys;
+`label_size` default now auto. No config key, no dependency.
+
+Decisions
+- No scipy: it is installed with manim but vidgen does not import it; own LM + quantiles match
+  `curve_fit` / `scipy.stats` in the tests (to 1e-3 of a standard error; quantiles to 1e-9).
+- With y errors the covariance is absolute and bands use the normal quantile; without, scaled by
+  the residual variance with Student's t (curve_fit's conventions, stated in CONFIG).
+- `exponential` on a histogram is the maximum-likelihood distribution; on x / y data the curve.
+- Fit boxes show parameters, R², χ²/ν by default; the formula goes to the legend (unless named).
+- The side column in 16:9 rather than a row above: 16:9 has width to spare, not height.
+- Series references in fits / annotations are `TextRef` (a translated series name is followed).
+
+Compatibility
+- Phase Q baseline after the shared changes (`charts.py`, `mathexpr.py`): 31 frames, max
+  difference 0 (`phase-q-baseline/check223`). Chart scenes do not use the new swatches.
+- The `plot` scene (new in 222) looks different on purpose: larger text, tight axes, side legend.
+
+Known gaps: no live series (224); no Poisson-likelihood binned fit (√N weights), no global fits,
+no annotations across panels; dense 16:9 figures (2 panels + residuals + long legend) get small
+plots at `body` text (set `label_size: caption`); a label may still cover a point or two when
+the plot is crowded (the cheapest place wins); `plot.py` is long (~950 lines) — a split
+(drawing helpers out) is a candidate for 228.
+
+How to test
+- `tests/test_plot_fit.py` (30, ~1.5 s; scipy comparisons skip without scipy),
+  `tests/test_plot.py` (51 incl. 4 render, ~13 s), `tests/test_plot_core.py` (53).
+- Related: `test_translation`, `test_function_plot`, `test_charts` + `test_pie_heatmap` +
+  `test_api`, `test_builtin_scenes` + `test_actions_coverage` + `test_extensions` (not render, and
+  render `-k plot`), `test_guide` + `test_docs`, `test_gallery` + `test_schema` + `test_registry`.
+- Stills: scratchpad `s223/proj` (decay, kepler, peak, heights, counts, growth, broken, and 222's
+  orbit, energy, symlog, mass, magnitude) — `build/preview{,_vertical,_light,_vlight}/storyboard/`
+  and `.../frames/<scene>/`; `vidgen lint` on 16:9 and 9:16: 0 errors.

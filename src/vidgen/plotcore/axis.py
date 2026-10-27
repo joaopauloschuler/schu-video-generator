@@ -16,6 +16,8 @@ from .ticks import default_linthresh, linear_ticks, log_ticks, symlog_inverse, s
 SCALES = ("linear", "log", "symlog")
 #: The gap a break leaves in the axis, as a share of its length.
 BREAK_GAP = 0.04
+#: How far past the data a ``tight`` end stops, as a share of the data's span.
+TIGHT_PAD = 0.04
 
 
 @dataclass(frozen=True)
@@ -26,7 +28,9 @@ class AxisSpec:
     linear axis (``[(a, b)]``: nothing between a and b is drawn); ``format`` is a tick format
     (:func:`~vidgen.plotcore.numbers.tick_labels`); ``include_zero`` keeps 0 in the domain;
     ``exact``: the domain is the data's range exactly (with ``margin``, a share of the span on
-    each side), ticks only inside it."""
+    each side), ticks only inside it. ``tight`` (linear and log axes): a free end is rounded
+    out to the next tick only when that adds at most this share of the data's span; else it
+    stops :data:`TIGHT_PAD` of the span past the data (the plot fills its area)."""
 
     scale: str = "linear"
     lo: float | None = None
@@ -41,6 +45,7 @@ class AxisSpec:
     include_zero: bool = False
     exact: bool = False
     margin: float = 0.0
+    tight: float | None = None
 
     def problems(self, values: Sequence[float], name: str = "axis") -> list[str]:
         """What is wrong with this spec for ``values`` (data that must be shown), each a
@@ -168,6 +173,15 @@ class Axis:
         span = self.hi - self.lo
         return any(a - 1e-9 * span <= value <= b + 1e-9 * span for a, b in self.segments)
 
+    def piece(self, value: float) -> int:
+        """The index of the domain piece (between breaks) that ``value`` belongs to: the last
+        piece starting at or before it (0 without breaks)."""
+        k = 0
+        for i, (a, _) in enumerate(self.segments):
+            if value >= a:
+                k = i
+        return k
+
     def break_fractions(self) -> list[float]:
         """The middle of each break along the drawn axis (where the break marks go)."""
         out = []
@@ -235,7 +249,9 @@ def build_axis(values: Sequence[float], spec: AxisSpec, *, lo: float | None = No
     elif spec.scale == "log":
         ticks, minor = log_ticks(d_lo, d_hi, spec.max_ticks, inside=inside)
         if not inside:
-            d_lo, d_hi = min(d_lo, ticks[0]), max(d_hi, ticks[-1])
+            t_lo, t_hi = _tight_ends(d_lo, d_hi, ticks, spec, log=True)
+            d_lo, d_hi = min(d_lo, t_lo), max(d_hi, t_hi)
+            ticks = [t for t in ticks if d_lo * (1 - 1e-9) <= t <= d_hi * (1 + 1e-9)]
             if spec.lo is not None:
                 d_lo, ticks = spec.lo, [t for t in ticks if t >= spec.lo * (1 - 1e-9)]
             if spec.hi is not None:
@@ -251,7 +267,9 @@ def build_axis(values: Sequence[float], spec: AxisSpec, *, lo: float | None = No
     else:
         ticks = linear_ticks(d_lo, d_hi, spec.max_ticks, inside=inside)
         if not inside:
-            d_lo, d_hi = min(d_lo, ticks[0]), max(d_hi, ticks[-1])
+            t_lo, t_hi = _tight_ends(d_lo, d_hi, ticks, spec, log=False)
+            d_lo, d_hi = min(d_lo, t_lo), max(d_hi, t_hi)
+            ticks = [t for t in ticks if d_lo - 1e-9 * (d_hi - d_lo) <= t <= d_hi + 1e-9 * (d_hi - d_lo)]
             if spec.lo is not None:
                 d_lo = spec.lo
                 ticks = [t for t in ticks if t >= spec.lo - 1e-9 * abs(d_hi - d_lo)] or ticks
@@ -263,6 +281,29 @@ def build_axis(values: Sequence[float], spec: AxisSpec, *, lo: float | None = No
     labels = tick_labels(ticks, spec.format, spec.unit, scale=spec.scale)
     title = axis_title(spec.label, labels.title_unit, labels.exponent)
     return Axis(spec.scale, d_lo, d_hi, tuple(ticks), tuple(labels.labels), tuple(minor), title, spec.reversed, linthresh, segments)
+
+
+def _tight_ends(lo: float, hi: float, ticks: Sequence[float], spec: AxisSpec, *, log: bool) -> tuple[float, float]:
+    """The ends of a domain whose data runs ``lo..hi`` and whose round ticks run from
+    ``ticks[0]`` to ``ticks[-1]``: the outer ticks, or with ``spec.tight`` a free end whose tick
+    lies too far out stops :data:`TIGHT_PAD` of the span past the data. At least two ticks stay
+    inside (else the ticks' ends)."""
+    t_lo, t_hi = ticks[0], ticks[-1]
+    if spec.tight is None:
+        return t_lo, t_hi
+    f = math.log10 if log else (lambda v: v)
+    g = (lambda v: 10.0**v) if log else (lambda v: v)
+    span = f(hi) - f(lo)
+    if span <= 0:
+        return t_lo, t_hi
+    a, b = t_lo, t_hi
+    if spec.lo is None and f(lo) - f(t_lo) > spec.tight * span:
+        a = g(f(lo) - TIGHT_PAD * span)
+    if spec.hi is None and f(t_hi) - f(hi) > spec.tight * span:
+        b = g(f(hi) + TIGHT_PAD * span)
+    if sum(1 for t in ticks if a <= t <= b) < 2:
+        return t_lo, t_hi
+    return a, b
 
 
 def _pieces(lo: float, hi: float, breaks: list[tuple[float, float]]) -> list[tuple[float, float]]:

@@ -4337,14 +4337,24 @@ multiples (so the axis reads 10, 20, 30), or a `bin_width` — or from `counts` 
 
 ### `plot`
 
-A scientific plot on the chart core (DESIGN §97): line and point series from inline numbers
-or a CSV in the project, on linear, `log`, `symlog`, reversed or broken axes with units,
-scientific notation or SI prefixes, gridlines and a legend; one panel or several sharing an
-axis; an equal aspect for orbits and trajectories. Steps: the axes with the first series, then
-one series per beat (`reveal: series`, default; lines draw from their first point, points pop
-in) or everything at once (`all`). Labels are plain text (no LaTeX): `10⁻³`, `2.5 × 10⁶`, `µs`.
+A scientific plot on the chart core (DESIGN §97): line, point and histogram series from inline
+numbers or a CSV in the project, on linear, `log`, `symlog`, reversed or broken axes with units,
+scientific notation or SI prefixes, gridlines and a legend; error bars, fitted curves with their
+parameters ± standard errors, confidence and prediction bands, residual panels, distributions
+over histograms, and annotations tied to the data; one panel or several sharing an axis; an
+equal aspect for orbits and trajectories. Steps: the axes with the first series, then one series
+per beat (`reveal: series`, default; lines draw from their first point, points pop in, bars
+rise; a series' legend entry and error bars come with it), then each fit, then each annotation
+— or everything at once (`all`). The actions [`fit` and `annotate`](#beat-actions) (and
+`reveal`) put a fit, an annotation, a series or its error bars on a word instead; the plot's
+own steps then leave them out. Labels are plain text (no LaTeX): `10⁻³`, `2.5 × 10⁶`, `µs`.
+Text is at least `body` size in 16:9 (`caption` in 9:16: the large scale), for phones; an
+axis ends just past its data when rounding out to the next tick would leave more than 8 % of
+the span empty; a legend, fit box or note that finds no free spot inside its plot moves to a
+column on the right (16:9) or above the figure (9:16), and the plot shrinks for it.
 [Action targets](#beat-actions): `title`, `axes` (every panel's axes), `panel<N>` (with several
-panels), `legend`, `series<N>`, `series:<name>`.
+panels), `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`,
+`annotation<N>`, `annotation:<id>`.
 
 | param | type | default | |
 |---|---|---|---|
@@ -4356,10 +4366,12 @@ panels), `legend`, `series<N>`, `series:<name>`.
 | `share` | bool | `true` | panels share the axis along which they are arranged; `false`: each its own |
 | `aspect` | `auto` \| `equal` | `auto` | `equal`: one unit as long on x as on y (one panel, linear axes); the axis with room to spare widens |
 | `grid` | `major` \| `both` \| `x` \| `y` \| `none` | `major` | gridlines at the labelled ticks; `both` adds a log axis' minor ticks |
-| `legend` | bool | auto | default: in a panel with several series, and in a figure of several panels for a series its panel's axis title does not name; in a free corner of the plot, else one row above |
+| `legend` | bool | auto | default: in a panel with several series, a fit, or error bars with a stated `error`, and in a figure of several panels for a series its panel's axis title does not name; in a free corner of the plot, else beside (16:9) or above (9:16) the figure |
+| `fits` | list of fits | `[]` | fitted curves, below |
+| `annotations` | list of annotations | `[]` | labels, arrows, reference lines, shaded ranges, notes, below |
 | `reveal` | `series` \| `all` | `series` | |
 | `point_radius` | float | auto | marker radius in units (0.1 for up to 20 points, down to 0.035) |
-| `label_size` | size | `caption` | ticks, axis titles, legend |
+| `label_size` | size | auto | ticks, axis titles, legend, fit boxes, annotations; default `body` in 16:9, `caption` in 9:16 |
 | `title`, `caption` | str | `""` | |
 | `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
 | `title_size`, `title_color` | size, color | `heading`, `text` | |
@@ -4368,15 +4380,72 @@ A **series** is `{name, x, y}` — `x` / `y` are column names of the data file (
 series, else the plot's) or lists of numbers (`null` in `y` leaves a gap) — or `{name, points:
 [[x, y], ...]}`; with `style` (`line` joined in data order, `points`, `both`), `color` (default
 the palette by position), `marker` (`auto`: circle, square, triangle, diamond by position among
-the series with markers), `dashed`, `width` (default 4).
+the series with markers), `dashed` (its legend swatch is dashed too), `width` (default 4). A
+line never crosses an axis break: it stops on one side and goes on on the other.
+
+**Error bars**: `y_err` and `x_err` — a number (every point), a column of the data file, a list
+(`null`: no bar), `{minus, plus}` for asymmetric bars (each a number, column or list), or
+`y_err: sqrt` (Poisson: √y, a histogram's √N). `error` says what they mean and the legend
+shows it: `sd` (± SD), `sem` (± SEM), `ci95` (95 % CI), `range` (min–max), `poisson` (± √N;
+the default with `y_err: sqrt`), `other`. Bars on a log axis that reach 0 run to the plot's
+edge; the axis makes room for the bars' ends.
+
+**Histograms**: a series with `values` (a column or a list of raw numbers) instead of `x` / `y`;
+`bins`: `auto` (the narrower of Sturges and Freedman–Diaconis, as numpy), `sturges`, `fd`
+(Freedman–Diaconis), `scott`, `sqrt`, `integers` (one bin per whole number: counts), a number of
+equal bins, or the edges `[e0, e1, ...]`; `bin_width` (overrides a rule), `bin_range: [low,
+high]` (values outside are left out), `nice_bins` (`true`: a rule's width rounded to 1, 2, 2.5
+or 5 × 10ᵏ with edges on its multiples; `false`: numpy's edges), `density` (heights as a
+probability density, area 1; default counts). `style`: `bars` (default), `step` (outline) or
+`points` (a marker at each bin's centre, with `y_err: sqrt` the particle-physics look). The y
+axis starts at 0 and is titled `count` (or `density`).
+
+**Fits** (`fits: [{series, model, ...}]`), drawn as a curve over the fitted points (`extend:
+true`: across the axis) with a box of the parameters ± standard errors, R² and χ²/ν (with
+errors); the legend names the fit (`name`, else its formula):
+
+| key | default | |
+|---|---|---|
+| `series` | — | the series to fit, by name |
+| `model` | `linear` | `linear` (a + b·x), `poly` (`degree`, 1–6), `exponential` (A·exp(k·x)), `power` (A·xᵏ, x > 0), `logistic` (L / (1 + exp(−k(x − x₀)))), `gaussian` (A·exp(−(x − μ)²/2σ²)), `breit_wigner` (also `cauchy`, `lorentzian`: A·(Γ/2)²/((x − M)² + (Γ/2)²)), `custom` (`expr`); on a histogram also the distributions `normal`, `exponential`, `poisson` fitted to the raw values by maximum likelihood (Poisson needs `bins: integers` and is drawn as steps) |
+| `background` | — | `gaussian` / `breit_wigner`: a polynomial background of that degree (0–6; parameters b₀, b₁, …) under the peak |
+| `expr`, `params` | — | `custom`: an expression of `x` and named parameters (the safe maths syntax of `function_plot`; a parameter may be called `tau` or `e`) and their starting values: `params: {a: 1000, tau: {value: 8, unit: d}, c: 0}` (a unit is shown after the value); `params` also overrides a built-in model's own starting values |
+| `name` | `<model> fit` | legend and targets `fit:<name>` |
+| `range` | — | fit only the points with x in `[low, high]` |
+| `weighted` | `true` | weight by the series' y errors (absolute: χ²/ν tells whether they match the scatter), use its x errors (effective variance), a histogram's √N; without errors the parameter errors come from the scatter (as `scipy.optimize.curve_fit`) |
+| `band`, `level` | `none`, `0.95` | `confidence` (where the true curve lies) or `prediction` (where a new point would lie), shaded in the curve's colour; Student's t with n − p degrees of freedom (the normal quantile when the points have errors) |
+| `residuals` | `false` | `true`: a panel under the plot sharing x with y − fit (and the error bars); `normalized`: (y − fit)/σ |
+| `show` | `auto` | the box: `auto` (parameters, R², χ²/ν with errors), `none`, or a list of `formula`, `params`, `r2`, `chi2`, `n` |
+| `color`, `dashed`, `width` | accent (several fits: the series' colour), `false`, 4 | |
+
+Values ± errors are written as results are: the error with two significant digits (one from 355
+to 949, PDG rule), the value to the same place, a power of ten outside brackets beyond 10⁵ or
+below 10⁻³ (`(2.510 ± 0.031) × 10⁻⁴ s`), units from the axes (`k = −0.0846 ± 0.0017 d⁻¹`).
+Fitting needs no scipy: linear models are solved directly, others by Levenberg–Marquardt in
+numpy; a fit that cannot be done (too few points, a power law with x ≤ 0, parameters the data do
+not determine, a model undefined at the starting values) is an error naming the fit.
+
+**Annotations** (`annotations: [{type, text, ...}]`), placed where they cover the least data
+and no other text (deterministic):
+
+| `type` | keys | |
+|---|---|---|
+| `label` | `x`, `y` — or `series` with `x` (its point nearest x) or `index` (1 = first; alone: its highest point) — and `text` | a ring on the point and its text beside it (a leader line when it had to stand off) |
+| `arrow` | as `label` | the text further off with an arrow to the point |
+| `hline`, `vline` | `y` / `x`, `text` (optional) | a dashed reference line across the plot, its text along it |
+| `xrange`, `yrange` | `x: [from, to]` / `y: [from, to]`, `text` (optional) | a shaded range across the plot |
+| `note` | `text`, `at` (`auto`, `top_left`, `top_right`, `bottom_right`, `bottom_left`, `top`, `bottom`) | a text box in a free spot (else beside the figure) |
+
+Each takes `panel` (1 = first; default the series' panel), `color` (default `highlight`) and
+`id` (targets `annotation:<id>`).
 
 An **axis**: `label` (default: the first series' column name) and `unit` (default: the unit in
 that column's header; columns in another unit are an error, as are two series in different
 units on one axis), shown as `label (unit)`; `scale`: `linear`, `log` (base 10, positive values
 only; powers of ten, or 1-2-5 within two decades, with 2–9 minor ticks) or `symlog` (linear
 within ±`linthresh`, logarithmic beyond: data across zero spanning decades; `linthresh`
-default from the data); `min` / `max` (default: the data rounded out to a tick; data outside is
-an error); `reversed` (high to low: stellar magnitudes, depth); `breaks: [[from, to], ...]` cut
+default from the data); `min` / `max` (default: the data rounded out to a tick when that tick
+is near, else just past the data; data outside is an error); `reversed` (high to low: stellar magnitudes, depth); `breaks: [[from, to], ...]` cut
 ranges out of a linear axis (drawn with `//` marks; data on both sides, none inside); `format`:
 
 | `format` | ticks | title |
@@ -4428,6 +4497,52 @@ ranges out of a linear axis (drawn with `//` marks; data on both sides, none ins
       - series: [{name: distance, x: time, y: distance}]
   beats:
     - text: "Kinetic and potential energy trade places; the total stays constant."
+- id: decay_fit
+  type: plot
+  params:
+    title: "Activity of an iodine-131 sample"
+    data: assets/decay.csv            # time (d), activity (Bq), sem (Bq)
+    series:
+      - {name: measured, x: time, y: activity, style: points, y_err: sem, error: sem}
+    fits:
+      - {series: measured, model: exponential, name: decay, band: confidence, residuals: true}
+    annotations:
+      - {type: hline, y: 500, text: half the start}
+      - {type: label, series: measured, x: 8, text: after 8 days, id: half}
+  beats:
+    - text: "The counts fall by half every eight days."
+    - text: "An exponential fits them."
+      actions: [{fit: "fit:decay", at: "@exponential"}]
+    - text: "After eight days, half is left."
+      actions: [{annotate: "annotation:half", at: "@half"}]
+- id: peak
+  type: plot
+  params:
+    title: "Diphoton invariant mass"
+    data: assets/mass.csv             # mass (GeV): one value per event
+    y: {label: events per 2 GeV}
+    series:
+      - {name: events, values: mass, bins: 30, bin_range: [100, 160], style: points, y_err: sqrt}
+    fits:
+      - {series: events, model: gaussian, background: 2, name: peak + background, residuals: normalized}
+    annotations:
+      - {type: xrange, x: [120, 130], text: signal region}
+  beats:
+    - text: "A small peak over a falling background."
+- id: growth
+  type: plot
+  params:
+    data: assets/growth.csv           # time (h), OD600
+    series: [{name: culture, x: time, y: OD600, style: points}]
+    fits:
+      - name: logistic
+        series: culture
+        model: custom
+        expr: "L/(1 + exp(-r*(x - t0)))"
+        params: {L: 1.5, r: {value: 0.5, unit: h⁻¹}, t0: {value: 10, unit: h}}
+        band: prediction
+  beats:
+    - text: "Growth slows as the culture fills the flask."
 ```
 
 ### `pie`
@@ -10748,7 +10863,7 @@ a title card, a `transform` of a bar).
 | `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>`, `change<N>` | reveal, dim, highlight, zoom, trace | a series is its line, markers and end label; `point:sparse@8`; `change<N>` is the axes and lines, revealing it plays that change; `trace` a series to sweep a cursor along it |
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
-| `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>` | reveal, dim, highlight, zoom, callout | a series is its line runs and markers; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
+| `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
@@ -10818,6 +10933,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |
 | `trace` | `to` (an x, or `[x, y]` for a point or a vector's tip) or `scale` (a vector only) | on a [`function_plot`](#function_plot): a dot (`dot<N>`) travels along its curve to x = `to`, its value label, guides and tangent following; an area (`area<N>`) moves its right end to `to`, its value following; a point (`point<N>`, `point:A`) moves to `to: [x, y]`; a vector (`vector<N>`, `vector:a`) moves its tip to `to: [x, y]` or is multiplied by `scale` (2: twice as long, -1: turned round; its tail stays). Vectors, sums, marks and live labels drawn from a moved point or vector follow it. On a [`number_line`](#number_line): a point moves to `to` (a number). On a [`line_chart`](#line_chart): a cursor dot sweeps along a series (`series<N>`, `series:<name>`) to x = `to` (on category `x`, the position from 1) with the line's value over it. 2 s; it stays there (`until: <beat>`: back when that beat starts). |
+| `fit`, `annotate` | as the target: a fit (`- fit: "fit:decay"`) or an annotation (`- annotate: annotation2`) | on a [`plot`](#plot): draws the fit on a word (its band, the curve, its legend entry and parameter box, its residual panel; the data first if not shown yet; 1.6 s) or shows the annotation (its ring, arrow, line or shaded range and its text; 1 s); the plot's own steps leave them to the action. `reveal` does the same for a series or its error bars (`errors:<name>`). |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |

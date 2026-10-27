@@ -15,7 +15,7 @@ rainbow; ``knock_action``: knock; ``hide_action``: hide; ``iso_actions``: build,
 focus, relabel; ``cell_actions``: zoom_to; ``molecule_actions``: set_state, transport, diffuse, osmosis,
 action_potential; ``gene_actions``: transcribe, cap, splice, polyadenylate, export, translate, target_er,
 glycosylate, fold, to_golgi, secrete; ``pathway_actions``: signal, inhibit, knockout, drug, amplify; ``cycle_actions``: advance, checkpoint; ``cross_actions``: form_gametes, fill, count, ratio, chi_square; ``pedigree_actions``: deduce, analyse, risk; ``linkage_actions``: cross_over, measure;
-``karyotype_actions``: rearrange; ``host_actions``: host_point, host_look, host_react, host_move,
+``karyotype_actions``: rearrange; ``plot_actions``: fit, annotate; ``host_actions``: host_point, host_look, host_react, host_move,
 host_enter, host_exit) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
@@ -84,6 +84,7 @@ from vidgen.scenes import (  # noqa: F401
     pedigree_actions,
     pie,
     plot,
+    plot_actions,
     population,
     population_actions,
     process,

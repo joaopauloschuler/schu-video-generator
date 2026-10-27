@@ -317,6 +317,7 @@ project's own scene types, in its theme).
 | a relationship between two measures | `scatter` | `title`, `series`, `trend`, `highlight`, `x_label`, `y_label` |
 | how values are distributed | `histogram` | `title`, `values`, `bins`, `mean`, `median`, `highlight` |
 | measurements and models on scientific axes: log, symlog, reversed or broken axes with units, 10ⁿ and SI prefixes, panels sharing an axis, orbits at an equal aspect; data inline or from a CSV | `plot` | `title`, `series` (name, x and y or points, style, dashed), `data` (a CSV, units in its headers: "time (s)"), `x` / `y` (label, unit, scale, min, max, reversed, format, breaks), `panels`, `aspect` |
+| error bars, fitted curves with parameters ± errors and R², confidence bands, residuals, histograms with a fitted distribution or a peak over a background, labels and reference lines on data | `plot` | `series` (y_err / x_err with error: sd, sem, ci95, range; or values with bins: a histogram), `fits` (series, model, band, residuals), `annotations` (label, arrow, hline, vline, xrange, yrange, note); the actions fit, annotate |
 | parts of a whole (≤ 6 parts) | `pie` | `title`, `labels`, `values`, `donut`, `highlight`, `other_below` |
 | a matrix (correlations, hours x days) | `heatmap` | `title`, `rows`, `columns`, `values`, `highlight` |
 | where in the world | `map` | `title`, `view`, `steps`, `values`, `pins`, `arcs` |
@@ -1013,6 +1014,24 @@ the genetics types, notation, exactness and pacing: `vidgen guide genetics` and
   beats:
     - text: "Most requests finish fast."
     - text: "Half of them in under thirty milliseconds."
+- id: decay_fit
+  type: plot
+  params:
+    title: "Fitting the decay"
+    x: {label: time, unit: d}
+    y: {label: activity, unit: Bq}
+    series:   # error bars: y_err (number, list, column, {minus, plus} or sqrt) and what they mean (sd, sem, ci95, range)
+      - {name: measured, style: points, x: [0, 4, 8, 14, 20, 30, 40], y: [1000, 712, 494, 302, 180, 73, 32], y_err: 20, error: sem}
+    fits:     # linear, poly, exponential, power, logistic, gaussian, breit_wigner (background: n), custom (expr + params)
+      - {series: measured, model: exponential, name: decay, band: confidence, residuals: true}
+    annotations:   # label, arrow, hline, vline, xrange, yrange, note
+      - {type: label, series: measured, x: 8, text: "half after 8 days", id: half}
+  beats:
+    - text: "The measured activity, with its error bars."
+    - text: "An exponential fits the points, with its parameters and their errors."
+      actions: [{fit: "fit:decay", at: "@exponential"}]
+    - text: "After eight days, half is left."
+      actions: [{annotate: "annotation:half", at: "@half"}]
 - id: decay
   type: plot
   params:
@@ -1320,6 +1339,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `reveal` | bring a later element in early; on an iso place an object with `shown: false` appears (a bridge over the pond) | rarely: the default order is usually right |
 | `hide` | on an iso place: an object fades away (`- hide: rock`; a bridge gone cannot be crossed) | cause and effect in the story |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
+| `fit` | on a `plot`: draw a fit on a word (`- fit: "fit:decay"`: its band, curve, parameters and residual panel) | when the narration says the data are fitted |
+| `annotate` | on a `plot`: show an annotation on a word (`- annotate: annotation2`: its mark and text) | when the narration names the marked point, line or range |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |

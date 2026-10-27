@@ -13,7 +13,7 @@ from __future__ import annotations
 import difflib
 import math
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -115,11 +115,14 @@ def _found(text: str) -> str:
 class _Parser:
     """Recursive descent over the tokens; each rule returns a numpy closure."""
 
-    def __init__(self, text: str, known: Mapping[str, MathExpression]) -> None:
+    def __init__(self, text: str, known: Mapping[str, MathExpression], slots: Mapping[str, int] | None = None, values: list[float] | None = None) -> None:
         self.text, self.known = text, known
         self.tokens = _tokens(_plain(text))
         self.i = 0
         self.called: list[str] = []
+        self.slots = dict(slots or {})   # parameter name -> index into values (a model's parameters)
+        self.values = values if values is not None else []
+        self.used: set[str] = set()
 
     def peek(self) -> tuple[str, str, int]:
         return self.tokens[self.i]
@@ -206,6 +209,10 @@ class _Parser:
     def name(self, text: str, col: int) -> Evaluate:
         if text == VARIABLE:
             return lambda v: v
+        if text in self.slots:
+            index, values = self.slots[text], self.values
+            self.used.add(text)
+            return lambda v: np.full_like(v, values[index])
         if text in MATH_CONSTANTS:
             value = MATH_CONSTANTS[text]
             return lambda v: np.full_like(v, value)
@@ -228,11 +235,12 @@ class _Parser:
             if len(args) != count:
                 raise self.fail(f"{text} takes {count} argument{'s' if count > 1 else ''}, got {len(args)}")
             return (lambda f, a: lambda v: f(*(g(v) for g in a)))(numpy_function, args)
-        names = [VARIABLE, *MATH_CONSTANTS, *MATH_FUNCTIONS, *self.known]
+        names = [VARIABLE, *self.slots, *MATH_CONSTANTS, *MATH_FUNCTIONS, *self.known]
         close = difflib.get_close_matches(text, names, n=3, cutoff=0.6)
         hint = f" (did you mean {', '.join(close)}?)" if close else ""
         known = f"; functions defined before: {', '.join(self.known)}" if self.known else ""
-        raise self.fail(f"unknown name {text!r} at character {col}{hint}; the variable is x, constants pi, e, tau, functions {', '.join(MATH_FUNCTIONS)}{known}")
+        params = f"; parameters {', '.join(self.slots)}" if self.slots else ""
+        raise self.fail(f"unknown name {text!r} at character {col}{hint}; the variable is x{params}, constants pi, e, tau, functions {', '.join(MATH_FUNCTIONS)}{known}")
 
 
 def parse_expression(text: str, known: Mapping[str, MathExpression] | None = None) -> MathExpression:
@@ -241,6 +249,56 @@ def parse_expression(text: str, known: Mapping[str, MathExpression] | None = Non
     parser = _Parser(text, known or {})
     evaluate = parser.parse()
     return MathExpression(text.strip(), evaluate, tuple(dict.fromkeys(parser.called)))
+
+
+_PARAMETER = re.compile(r"^[A-Za-z_]\w*$")
+
+
+@dataclass(frozen=True)
+class ModelExpression:
+    """An expression of ``x`` and named ``parameters`` (a model to fit, e.g. ``a*exp(-x/tau) +
+    c``): :meth:`__call__` evaluates it at ``xs`` for parameter ``values`` given in the order of
+    ``parameters`` (``nan`` where undefined)."""
+
+    text: str
+    parameters: tuple[str, ...]
+    evaluate: Evaluate = field(repr=False, compare=False)
+    values: list[float] = field(repr=False, compare=False)
+
+    def __call__(self, xs: np.ndarray | float, values: Sequence[float]) -> np.ndarray:
+        """The model's values at ``xs`` for the parameter ``values``."""
+        if len(values) != len(self.parameters):
+            raise ValueError(f"{self.text!r} has {len(self.parameters)} parameters, got {len(values)} values")
+        self.values[:] = [float(v) for v in values]
+        x = np.asarray(xs, dtype=float)
+        with np.errstate(all="ignore"):
+            out = np.asarray(self.evaluate(x), dtype=float)
+        out = np.broadcast_to(out, x.shape).astype(float)
+        out[~np.isfinite(out)] = np.nan
+        return out
+
+
+def parse_model(text: str, parameters: Sequence[str]) -> ModelExpression:
+    """Compile ``text``, an expression of ``x`` and the named ``parameters`` (identifiers other
+    than ``x`` and the function names; a parameter may take a constant's name, e.g. ``tau``,
+    which then means the parameter) into a :class:`ModelExpression`. Raises ``ValueError`` for a
+    bad expression, a bad or repeated parameter name, or a parameter the expression does not
+    use."""
+    names = list(parameters)
+    for name in names:
+        if not _PARAMETER.match(name):
+            raise ValueError(f"parameter name {name!r} is not a name (letters, digits, _)")
+        if name == VARIABLE or name in MATH_FUNCTIONS:
+            raise ValueError(f"parameter name {name!r} is taken (x is the variable; functions: {', '.join(MATH_FUNCTIONS)})")
+        if names.count(name) > 1:
+            raise ValueError(f"parameter {name!r} is named twice")
+    values: list[float] = [0.0] * len(names)
+    parser = _Parser(text, {}, {n: i for i, n in enumerate(names)}, values)
+    evaluate = parser.parse()
+    unused = [n for n in names if n not in parser.used]
+    if unused:
+        raise ValueError(f"{text.strip()!r}: the parameter{'s' if len(unused) > 1 else ''} {', '.join(unused)} {'are' if len(unused) > 1 else 'is'} not in the expression")
+    return ModelExpression(text.strip(), tuple(names), evaluate, values)
 
 
 _SUPERSCRIPTS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")

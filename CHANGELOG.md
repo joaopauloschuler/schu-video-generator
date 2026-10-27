@@ -5,9 +5,25 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–222)
+## Unreleased (Steps 193–223)
 
 ### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
+
+- **Error bars, fits, histograms and annotations on `plot`** (Step 223). Series take error bars
+  (`y_err` / `x_err`: a number, a column, a list, `{minus, plus}`, or `sqrt` for √N) with their
+  meaning in the legend (`± SD`, `± SEM`, `95 % CI`, `min–max`); `fits` draw fitted curves —
+  linear, polynomial, exponential, power law, logistic, Gaussian and Breit–Wigner peaks over a
+  polynomial background, or your own expression with named parameters — with the parameters ±
+  standard errors (`k = −0.0846 ± 0.0017 d⁻¹`), R², χ²/ν for weighted fits, confidence or
+  prediction bands and a residual panel; series with `values` are histograms (Sturges,
+  Freedman–Diaconis, Scott, one bin per integer, explicit edges; counts or density) with fitted
+  normal, exponential or Poisson distributions; `annotations` (point labels, arrows, reference
+  lines, shaded ranges, notes) find a place that covers no data and no other text. The actions
+  `fit` and `annotate` put a fit or an annotation on a word. Fitting needs no new dependency
+  (numpy; checked against scipy in the tests). Plot text is larger (phone-readable), the plot
+  fills its area (axes end just past the data, a legend or fit box without room moves beside the
+  figure), legend entries appear with their series, dashed series have dashed swatches, and a
+  line no longer crosses an axis break.
 
 - **The chart core and the `plot` scene** (Step 222). A new scene type `plot` draws line and
   point series from inline numbers or a CSV in the project (units read from the headers: `time
