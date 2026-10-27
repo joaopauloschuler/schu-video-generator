@@ -17248,3 +17248,95 @@ warnings are ready: `Params.worked(project)`); temperatures are absolute (a diff
 `[brackets]` inside an expression are not converted for an SI substitution; no uncertainties
 (± propagation) — significant figures only; a long formula is shrunk or stacked, not broken at
 `=` signs; Phase U / V cards keep their own worked-number text.
+
+### 97.11 Lint for calculations and plots (Step 226)
+
+Ten rules (scene scope, configurable in `lint.rules` like the others, last in `LINT_RULES`):
+`calc_numbers`, `calc_units`, `calc_sigfigs` (info) and `plot_units`, `plot_log`,
+`plot_errors`, `plot_series`, `plot_truncated` (info), `plot_conserved` (`tolerance` 0.01),
+`plot_fit_claims` (`sigmas` 2, `tolerance` 0.05); `calc_numbers` / `calc_units` take `tolerance`
+(0.05). Like the `science_*` / `genetics_*` rules they read the config, not the stills: the
+runner appends `calc_issues` (`lint/calc_rule.py`) and `plot_issues` (`lint/plot_rule.py`) to
+`SceneContext.science` (`ScienceIssue`s, reported by `science_rule._issues`).
+
+**Knowledge** (`vidgen/quantities/accuracy.py`, no manim; reuses `cellworld.accuracy.plain` /
+`Claim` and `genetics.accuracy.HYPOTHETICAL`): `said_values(sentence)` → `SaidValue`s — numbers
+in digits (`2,500`, `29.8`, `3.73 × 10⁻¹⁹`, `6.674e-11`, `1.5 million`, `1/25`) and in words with
+a strict whole-number grammar (`words_value`: "three hundred sixty-five", "a hundred and fifty";
+"two and three" is not a number), decimals said with "point" ("eight point oh four"), spoken
+powers of ten ("times ten to the minus nineteen"), fractions with ordinal denominators ("three
+halves", "forty-nine fiftieths", "one twenty-fifth", "one and a half"), shares ("one person in
+twenty-six", "1 out of 3"); each with its resolution (half its last written place; a whole
+number's trailing zeros allow rounding by up to a tenth of it — "thirty" covers 29.8, "two
+hundred" not 150), significant figures (sure only with a decimal point or a non-zero last
+digit), "about" (also "near", "≈"), a bound ("more than"), a range ("400 to 700", "between 3 and
+5", "two or three"). Units after a number: spoken (`UNIT_WORDS` with prefixes, "square" /
+"cubic" / "squared", "per", "an hour" for times: "kilometres per second", "metres per second
+squared", "micrograms per litre", "degrees Celsius") or symbols parsed by `parse_unit` (a
+stop-list keeps "5 am", "2 as" out; three-letter lowercase words are not units); "in kilograms"
+earlier in the sentence gives unit-less numbers a unit. `agrees(said, actual_si, tolerance,
+sigma)` compares in SI (shares on N); "about" also accepts rounding to 1–2 significant figures
+or `tolerance`. `mixup_power` finds a factor 10^(3k) that would make it agree.
+`dimension_claims`: a quantity word linked to a value ("a speed of", "the half-life is") whose
+unit has another dimension (masses and momenta may be in eV, a frequency a share).
+`fit_quantities(kind, names, params, errors, units, x_unit)` → `FitQuantity`s with propagated
+errors (exponential: half-life ln2/|k|, lifetime 1/|k|, rate; growth: doubling time; the
+exponential distribution 1/λ; power: exponent; linear: slope, intercept; gaussian / normal:
+centre, σ, FWHM; Breit–Wigner: M, Γ; logistic: L, x₀, k; Poisson: mean; custom: parameters by
+name); `fit_claims` reads "<word> (of|is|at|…) <value>" and accepts the value within `sigmas`
+standard errors plus its rounding (in the parameter's unit, converted from the said one).
+`error_meaning_claims`: in a sentence about bars / errors, a meaning (standard deviation, SEM,
+confidence interval, range, Poisson) other than the declared ones.
+
+**Which value a number refers to** (`calc_rule`). Candidates are every calculation scene's
+symbols and results (`Params.worked(project)`, imports resolved; a result shown in its first
+conversion), with the content stems of their `meaning` (number words left out). A number with a
+unit: its own scene's values of that dimension — any it agrees with is fine (and then
+`calc_sigfigs` checks a result's figures), else the one the sentence names, else the scene's only
+value of that dimension (a result); `mixup_power` makes it `calc_units`, else `calc_numbers`. A
+pure number or share: only a value the sentence names (its name, or two meaning words — all when
+the meaning has one), the number containing or nearest after the mention (shares, fractions,
+percentages and decimals before bare whole numbers); in its own scene one meaning word no other
+value has also names it, but then only a share / fraction / percentage / decimal is taken.
+Another scene's results only in scenes without numbers of their own (not a calculation, not a
+plot with fits: those have their own values and `plot_fit_claims`) and only when named. A unit of
+another dimension for a named value is `calc_units`. Texts: beats, and on screen the params
+`title`, `subtitle`, `heading`, `caption`, `text`, `body`, `lines`, `bullets`, `items`, `points`,
+`note`, `footer`, a plot's annotation texts and callout labels (`calc_rule.screen_texts`).
+`CalcResult.warnings` (a `sig` beyond the inputs) are `calc_sigfigs`.
+
+**Plots** (`plot_rule`, the plot resolved with the project's CSVs and models as at render):
+`plot_units` — an axis title naming a physical quantity (`QUANTITY_UNITS`) with no unit and no
+"relative / count / (…) / per …"; a fit with parameter units on a unitless x. `plot_log` — on a
+log axis: error bars' lower ends ≤ 0, a fit curve over its range or its band ≤ 0, an hline /
+vline / range ≤ 0; and a resolve error about a log scale (data from a CSV or a model that
+validation of inline data could not see). Validation already refuses inline data ≤ 0 and a
+histogram on log y (its bars start at 0). `plot_errors` — `y_err` / `x_err` without `error`;
+narration naming another meaning. `plot_series` — a panel of several series whose legend is off
+(`Plot._legend_panels`) where label / arrow annotations do not name them all; placeholder names.
+`plot_truncated` — a bars histogram on a y axis with `breaks` (a linear `min` above 0 is refused
+by validation), a `bar_chart` with `baseline` ≠ 0 and every value on one side. `plot_conserved` —
+`Params.conservation()` above `tolerance`, suggesting leapfrog (or, with leapfrog, half the step).
+
+**Narration–picture rules.** `SHOWING_ACTIONS` gains `fit`, `annotate`, `grow`, `substitute`,
+`compute`, `convert`; `Plot.target_text` (series name, a named fit, an annotation's text, the
+title) and `Calculation.target_text` (a `row:` / `symbol:` target's table note "meaning ·
+source", the title; formulas are math, not text labels).
+
+**Choices.** English only, as the other accuracy rules. Narrow by design (a false finding teaches
+authors to ignore lint): negations, questions, comparisons ("than"), hypotheticals, bounds and
+ranges are not read; a pure number needs its name in the sentence; cross-scene matching only from
+scenes without numbers of their own. The trailing-zero rule (a tenth at most) is the compromise
+between "thirty" for 29.8 (fine) and "two hundred" for 150 (wrong). `plot_conserved`'s 1 %:
+leapfrog on the Step 224 pendulum drifts 0.02 %, RK4 with a coarse step 8 %.
+
+Public: lint rules and their config models (`CalcNumbersRule` … `PlotFitClaimsRule`); module
+`vidgen.quantities.accuracy` (reached as `vidgen.api.quantities.accuracy` after import; not
+re-exported); scene classmethods `Plot.target_text`, `Calculation.target_text`. No dependency.
+
+**Gaps after Step 226**: a calculation's chain is compared value by value (a number said for an
+intermediate step is not read); a pure number in a sentence that does not name its value ("two
+thirds times one twenty-fifth times one quarter is one in two hundred") is not read; units in
+words after a symbol number ("90 km an hour") keep only the symbol; no checks of numbers on
+`bar_chart` / `line_chart` labels against their data; `plot_fit_claims` reads the plot scene's
+own fits only.

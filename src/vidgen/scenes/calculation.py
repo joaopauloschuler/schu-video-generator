@@ -263,6 +263,22 @@ class Calculation(NarratedScene):
         return names
 
     @classmethod
+    def target_text(cls, params: Any, name: str) -> str | None:
+        """What a target is called on screen (for the narration lint): a table row's note
+        (meaning · source) for ``row:`` / ``symbol:``, the title; formulas are math, not text."""
+        if name == "title":
+            return str(params.title) or None
+        kind, _, key = name.partition(":")
+        if kind not in ("row", "symbol") or not key:
+            return None
+        worked = params.worked(None, lenient=True)
+        try:
+            v = worked.value(key)
+        except KeyError:
+            return None
+        return " · ".join(x for x in (str(v.meaning), v.source) if x) or None
+
+    @classmethod
     def validate_project(cls, params: Any, project: Any) -> list[str]:
         if not latex_available():
             log.warning("calculation scenes need LaTeX, which was not found on PATH; rendering them will fail")

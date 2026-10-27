@@ -245,7 +245,8 @@ def _found(project: Project, scene_id: str) -> list[tuple[str, str | None, str, 
 
 
 def test_rules_are_registered_in_config_order() -> None:
-    assert list(LINT_RULES[-len(GENETICS_RULES):]) == list(GENETICS_RULES)
+    k = LINT_RULES.index(GENETICS_RULES[0])
+    assert list(LINT_RULES[k:k + len(GENETICS_RULES)]) == list(GENETICS_RULES)
     for name in GENETICS_RULES:
         assert RULES[name].scope == "scene" and RULES[name].default == "warning"
     assert LintRules().genetics_hwe.tolerance == 0.1

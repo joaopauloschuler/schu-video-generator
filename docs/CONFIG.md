@@ -12000,6 +12000,16 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `genetics_crispr` | warning | a PAM written for the wrong nuclease (SpCas9 NGG, SaCas9 NNGRRT, Cas12a TTTV), a cut placed downstream of (3′ of, inside) the PAM or not 3 bp upstream of it, sticky or staggered ends for Cas9 (its break is blunt), the PAM before the protospacer or on the target strand, a spacer length the enzyme does not use (SpCas9 17–24 nt). The enzyme is the [`crispr`](#crispr) scene's `cas`, or the one the sentence names; sentences naming no Cas outside a crispr scene are left alone |
 | `genetics_karyotype` | warning | ISCN notation in the narration or on screen (title, callout labels) that does not parse (the reason and fix: `47,xy,+21`, a count that is not what is listed), a [`karyotype`](#karyotype) whose changes are out of ISCN order (after the sex chromosomes by chromosome, sex chromosomes first, numerical before structural: `46,XY,del(5)(p15.2),inv(9)(p12q13)`), a karyotype or a sex-chromosome syndrome given the wrong sex ("45,X is male", "a girl with 47,XXY", "Turner syndrome in boys"; SRY named is left alone), a condition the scene's karyotype does not have ("trisomy 21" for `47,XY,+18`; comparisons with "like", "such as" are left alone) |
 | `genetics_hgvs` | warning; info for legacy shorthand | HGVS in the narration or on screen that is not valid (`c.A20T`), or in a [`mutation`](#mutation) scene not its variant (`c.20A>G`, a `p.` that does not follow from it); a protein change in the legacy numbering without the initiator Met (`p.Glu6Val`, `Glu6Val` for HbS — in a mutation scene or when the sentence names HBB, sickle cell, CFTR, cystic fibrosis) unless the sentence calls it legacy; as info, legacy shorthand (`ΔF508`, `R553X`, `G551D`) in a genetics scene or a sentence about a variant, unless called legacy (`F508del`, the community's name, is fine) |
+| `calc_numbers` | warning | a number in the narration or on screen (title, caption, text, callout labels, a plot's notes) that refers to a value of a [`calculation`](#calculation) scene and differs from it by more than the way it was written: "thirty kilometres per second" fits 29.8 km/s (a whole number's trailing zeros allow rounding by up to a tenth), "eleven point two" is read to 0.05, "one in a hundred and fifty" against 1/150, "two point two times ten to the minus twenty-five" (with "in kilograms" earlier in the sentence) in kg; "about" also allows rounding to one or two significant figures or `tolerance` (0.05, relative). A number with a unit refers to its own scene's value of that dimension (the one it agrees with, else the one the sentence names, else the scene's only value of that dimension); a pure number or share only to a value the sentence names (its name, or two words of its `meaning`; in its own scene one word no other value has, then only a share, fraction, percentage or decimal); another scene's result only in a scene without numbers of its own (not a calculation, not a plot with fits) and when the sentence names it. Bounds ("more than"), ranges ("400 to 700 nm"), negations, questions and comparisons ("than") are left alone |
+| `calc_units` | warning | a value said in a unit of the wrong kind for its quantity: "a speed of 30 kilometres", "a half-life of 8 metres" (any scene; masses and momenta in eV are natural units, a frequency may be a share), or a calculation's value named by its meaning with a unit of another dimension; a value of the right kind off by a power of 1000 from the calculation's ("30 metres per second" for 29.8 km/s, mg for µg): a prefix mixed up |
+| `calc_sigfigs` | info | a calculation whose `sig` claims more significant figures than its inputs give, or a number said for a result with more figures than it has ("29.7847 kilometres per second" for a result known to 3); whole numbers ending in zeros and numbers in words without "point" are not counted |
+| `plot_units` | warning | a [`plot`](#plot) axis titled with a physical quantity (time, distance, mass, energy, speed, temperature, pressure, voltage, activity, concentration…) but without a unit (no `unit:`, none in the column header, none in the title: "relative", "count", "(…)", "per …" are fine); a fit whose `params` give units while its x axis has none |
+| `plot_log` | warning | on a log axis: error bars reaching zero or below (drawn to the axis edge), a fitted curve or its band reaching zero or below, a reference line or range at or below zero; data a log axis cannot show found when the plot's CSV or model is read |
+| `plot_errors` | warning | a series with `y_err` / `x_err` but no `error:` (what the bars mean: `sd`, `sem`, `ci95`, `range`, `poisson`, `other`); narration about the error bars calling them something else ("standard deviation" for `error: sem`) |
+| `plot_series` | warning | a panel with several series and `legend: false` where no label annotation names them; a placeholder series name (`series 2`, `data`, `line1`) |
+| `plot_truncated` | info | bars that do not start at zero: a histogram drawn as bars on a y axis with `breaks`; a [`bar_chart`](#bar_chart) whose `baseline` is not 0 while every bar is on one side of it |
+| `plot_conserved` | warning | a quantity a plot model declares `conserved` drifting by more than `tolerance` (0.01, relative: max \|q − q₀\| / max \|q\|) over the run: the plot shows the integrator's error; use `method: leapfrog` (symplectic) or a smaller `step` |
+| `plot_fit_claims` | warning | narration or a plot note stating a fitted value the fit does not give, within `sigmas` (2) standard errors and the said value's rounding: an exponential's half-life, lifetime / time constant, decay constant (growth: doubling time, growth rate), a power law's exponent ("three halves"), a line's slope and intercept, a peak's centre / mass, σ and width (FWHM), a logistic's carrying capacity and midpoint, a distribution's mean, a custom model's parameters by name; in the fit's units (the axes'), converted from the unit said |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -12055,6 +12065,16 @@ lint:
     genetics_crispr: {}
     genetics_karyotype: {}
     genetics_hgvs: {}
+    calc_numbers: {tolerance: 0.05}         # relative, for values said with "about" (beyond rounding to 1-2 figures)
+    calc_units: {tolerance: 0.05}           # as calc_numbers, once a factor of 1000 is taken out
+    calc_sigfigs: {}                        # info by default
+    plot_units: {}
+    plot_log: {}
+    plot_errors: {}
+    plot_series: {}
+    plot_truncated: {}                      # info by default
+    plot_conserved: {tolerance: 0.01}       # largest relative drift of a conserved quantity
+    plot_fit_claims: {sigmas: 2.0, tolerance: 0.05}   # standard errors of the fitted value; relative, for "about"
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -12105,6 +12125,50 @@ sickle:
   warning genetics_hgvs     sickle_b1 @ 0.0s: "The hbb gene changes at c.20A>G, which gives p.Glu6Val.": 'c.20A>G' is not the scene's variant (c.20A>T)
   info    genetics_hgvs     sickle_b2 @ 3.8s: "In cystic fibrosis, the ΔF508 variant is the commonest allele.": 'ΔF508' is the legacy name: HGVS writes CFTR c.1521_1523del p.(Phe508del) (say 'legacy name ΔF508' if you keep it)
 ```
+
+**Calculations and plots** (the `calc_*` and `plot_*` rules, for [`calculation`](#calculation),
+[`plot`](#plot) and `bar_chart` scenes and any narration): each calculation scene's symbols and
+results are worked out as the render works them out (`from_scene` imports resolved), each plot's
+data, fits and models resolved as the render resolves them, and the numbers the narration and the
+screen text say are read in digits and in words — "29.8 km/s", "3.73 × 10⁻¹⁹ J", "thirty
+kilometres per second", "eleven point two", "eight point oh four days", "three point seven times
+ten to the minus nineteen joules", "one in a hundred and fifty", "forty-nine fiftieths", "three
+halves", "0.173 per hour", "metres per second squared" — and compared in SI, the said value's own
+rounding allowed. Units said are read by the [`calculation`](#calculation) scene's unit engine
+(`vidgen.quantities`), so km, µg, eV, °C, au and GeV/c² convert as in a calculation. Example (the
+planted mistakes of a demo project):
+
+```
+$ vidgen lint demo --rule calc_numbers --rule calc_units --rule calc_sigfigs --rule plot_units --rule plot_log ...
+orbit:
+  warning calc_numbers      orbit_b2 @ 6.0s: "The Earth moves at about thirty-five kilometres per second.": "thirty-five kilometres per second", but orbital speed (v) is 29.8 km/s: say that, or fix the calculation
+  warning calc_units        orbit_b3 @ 9.3s: "That is 30 metres per second.": "30 metres per second" is 1,000 times smaller than orbital speed (v) = 29.8 km/s (2.98 × 10⁴ m/s): a prefix mixed up?
+  warning calc_units        orbit_b4 @ 11.7s: "Precisely, 29.7847 kilometres per second, or a speed of 30 kilometres.": "30 kilometres" is length (m), but a speed is measured in m/s, km/s, km/h: give it the unit of a speed, or the right quantity
+  info    calc_sigfigs      orbit_b4 @ 11.7s: "Precisely, 29.7847 kilometres per second, or a speed of 30 kilometres.": "29.7847 kilometres per second" gives 6 significant figures, but orbital speed (v) is known to 3 (its inputs): say 29.8 km/s
+halflife:
+  info    calc_sigfigs      halflife_b1 @ 0.0s: calculations[1] (t_half): sig 5 claims more than the inputs give (3 significant figures): lower its sig, or give the inputs as many figures as they really have
+risk:
+  warning calc_numbers      risk_b2 @ 1.7s: "The risk for the child is one in two hundred.": "one in two hundred", but risk for the child (P) is 1/150 (1 in 150): say that, or fix the calculation
+activity:
+  warning plot_units        activity_b1 @ 0.0s: x axis 'time' has no unit: a viewer cannot read its numbers; add x: {unit: s} (or the unit in the column header, 'time (s)')
+  warning plot_log          activity_b1 @ 0.0s: series 'measured': 1 error bar reaches zero or below on the log y axis (drawn to the axis edge, which looks like a huge error): give asymmetric errors that stay positive (y_err: {minus, plus}), or use a linear axis
+  warning plot_errors       activity_b1 @ 0.0s: series 'measured': error bars without a stated meaning: a viewer cannot tell a standard deviation from a standard error or a confidence interval; add error: sd | sem | ci95 | range | poisson | other (the legend then says it)
+  warning plot_fit_claims   activity_b2 @ 3.3s: "The fit gives a half-life of twelve days.": "twelve days", but the fit 'exponential fit' gives a half-life of 8.05 ± 0.56: say what the fit found, or fit what you say
+groups:
+  warning plot_series       groups_b1 @ 0.0s: the plot has 2 series and no legend (legend: false), and nothing names 'treated', 'series 2': the viewer cannot tell them apart; show the legend or label each series (annotations: {type: label, series: ...})
+  warning plot_errors       groups_b2 @ 2.0s: "The error bars show one standard deviation.": "standard deviation": the error bars are declared as standard errors of the mean (error: sem): say that, or fix the series' error
+bars:
+  info    plot_truncated    bars_b1 @ 0.0s: baseline 60: every bar starts at 60, not 0, so their lengths exaggerate the differences (a bar twice as long is not twice the value); say so on screen, or use baseline: 0
+spring:
+  warning plot_conserved    spring_b1 @ 0.0s: model 'osc': E is declared conserved but drifts by 8.07% over the run (more than 1.00%): the plot shows the integrator's error, not physics; use method: leapfrog (symplectic: the energy error stays bounded) or a smaller step (now step 0.5, method rk4)
+kepler:
+  warning plot_fit_claims   kepler_b2 @ 2.3s: "A power law with exponent five halves.": "five halves", but the fit 'power law' gives an exponent of 1.50 ± 1.9 × 10⁻⁴: say what the fit found, or fit what you say
+```
+
+`said_before_shown` and `unsaid_reveal` know these scenes too: `fit`, `annotate`, `grow`,
+`substitute`, `compute` and `convert` show things at their time, and a target's on-screen name is
+a plot series' name, a named fit's name, an annotation's text, or a calculation table row's
+meaning and source.
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
 `lint` section and `lint_ignore` do not count in a scene's render fingerprint: changing them

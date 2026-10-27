@@ -20919,3 +20919,94 @@ How to test
 - Stills: scratchpad `s225/proj` (orbit, period with `from_scene`, escape with actions and a
   highlight, carriers with concept colours, pedigree 1/150, halflife, photon, higgs) —
   `build/preview{,_vertical,_light,_vlight}/storyboard/` and `.../frames/<scene>/`.
+
+## Step 226 — Lint for calculations and plots
+
+What was built (DESIGN §97.11)
+- **Ten lint rules** (scene scope, last in `LINT_RULES`, configurable in `lint.rules`):
+  `calc_numbers` (`tolerance` 0.05), `calc_units` (`tolerance`), `calc_sigfigs` (info),
+  `plot_units`, `plot_log`, `plot_errors`, `plot_series`, `plot_truncated` (info),
+  `plot_conserved` (`tolerance` 0.01), `plot_fit_claims` (`sigmas` 2, `tolerance` 0.05). Each
+  message quotes the sentence (or names the series / axis / fit / model) and gives the fix.
+- **Knowledge** `vidgen/quantities/accuracy.py` (no manim): numbers in digits and words
+  (strict whole-number grammar, "point" decimals, "times ten to the minus nineteen", ordinal
+  fractions "forty-nine fiftieths", "three halves", shares "one person in twenty-six"), their
+  resolution (trailing zeros allow at most a tenth), significant figures, "about" / bounds /
+  ranges; units spoken ("kilometres per second", "metres per second squared", "an hour", "per
+  hour", "degrees Celsius") or in symbols via `parse_unit`, "in kilograms" as the sentence's
+  unit; `agrees` (SI, "about" = rounding to 1–2 figures or tolerance), `mixup_power` (10^(3k));
+  `dimension_claims` ("a speed of 30 kilometres"); `fit_quantities` / `fit_claims` (half-life,
+  lifetime, rate, doubling time, exponent, slope, intercept, centre / mass, σ, width, capacity,
+  midpoint, mean, custom parameters; errors propagated); `error_meaning_claims`.
+- **Glue** `lint/calc_rule.py` (candidates: every calculation scene's symbols and results,
+  `worked(project)`; which value a number refers to — DESIGN §97.11; screen texts of any scene:
+  title, caption, text, lines, bullets…, plot notes, callout labels) and `lint/plot_rule.py`
+  (the plot resolved with its CSVs and models; `bar_chart` baselines). Both add to
+  `SceneContext.science` like the science / genetics rules.
+- **Narration–picture rules**: `fit`, `annotate`, `grow`, `substitute`, `compute`, `convert`
+  are showing actions; `Plot.target_text` (series, named fits, annotation texts, title) and
+  `Calculation.target_text` (`row:` / `symbol:` → "meaning · source", title).
+
+YAML (nothing new to write; what the rules read)
+```yaml
+- id: orbit
+  type: calculation
+  params:
+    symbols: [{name: G, constant: G}, {name: M_sun, constant: M_sun}, {name: r, constant: AU}]
+    calculations: [{name: v, expr: "sqrt(G*M_sun/r)", sig: 3, convert: km/s, meaning: orbital speed}]
+  beats:
+    - text: "The Earth moves at about thirty kilometres per second."   # fine; "thirty-five": calc_numbers
+lint: {rules: {plot_conserved: {tolerance: 0.005}, calc_sigfigs: {severity: off}}}
+```
+
+Files touched
+- New: `src/vidgen/quantities/accuracy.py`, `src/vidgen/lint/calc_rule.py`, `src/vidgen/lint/plot_rule.py`,
+  `tests/test_calc_lint.py` (35).
+- Changed: `src/vidgen/config.py` (ten rule configs, `LINT_RULES`, `RuleName`, `LintRules`),
+  `src/vidgen/lint/{__init__,run,rules,narration_rule}.py`, `src/vidgen/scenes/plot.py` and
+  `calculation.py` (`target_text`), `tests/test_genetics_lint.py` (rule order no longer assumes
+  genetics last), `docs/CONFIG.md` (rules table, config block, "Calculations and plots" with the
+  demo's output), guide + `AGENTS.md` (paragraph after the genetics one, ten troubleshooting rows),
+  `docs/COOKBOOK.md` §12 note, `DESIGN.md` §97.11, `CHANGELOG.md`, `tasklist.md`.
+
+Public interfaces: lint rules above with their config models (`CalcNumbersRule` …
+`PlotFitClaimsRule`); module `vidgen.quantities.accuracy` (not re-exported by `quantities`); scene
+classmethods `Plot.target_text`, `Calculation.target_text`. No dependency, no scene param.
+
+Decisions / deviations
+- A power-of-1000 mismatch ("30 metres per second" for 29.8 km/s) is reported once, as
+  `calc_units` (the brief lists it under both rules).
+- `plot_log` cannot see inline data ≤ 0 or log-y histograms: validation already refuses them; it
+  covers error bars, fits, bands and lines, and data from CSVs / models found when resolved.
+- `plot_truncated`: a linear `min` above a histogram's 0 is refused by validation, so it reports a
+  bars histogram on a broken y axis and `bar_chart` baselines ≠ 0 (all bars on one side).
+- Cross-scene matching (a card saying another scene's result) only from scenes without numbers of
+  their own and only when the sentence names the value: a plot with fits has `plot_fit_claims`,
+  and "a half-life" in one scene is often another quantity than in the next.
+- Sentences with "than" are not read (genetics' `HYPOTHETICAL`): comparisons are not claims.
+- Rendering unchanged (lint, config and classmethods only); the Phase Q frame baseline was not
+  re-run (no drawing code changed).
+
+Known gaps
+- English only; intermediate steps of a calculation are not compared; a pure number whose value
+  the sentence does not name is not read ("two thirds times one twenty-fifth times one quarter is
+  one in two hundred"); "90 km an hour" keeps only "km"; no checks of `bar_chart` / `line_chart`
+  value labels against their data; `plot_fit_claims` reads its own plot's fits only.
+
+How to test
+- `tests/test_calc_lint.py` (35, no render, ~3 s): numbers and units (19 parametrised), fractions /
+  shares / ranges, agreement and mix-ups, dimension words, fit quantities and claims, error
+  meanings, rule order and defaults, the rules on small projects (orbit, risk, a card naming
+  another scene's result, sig warnings, rules off, every plot rule, a CSV refused on a log axis,
+  good plots quiet), the gallery clean, narration targets.
+- Related (not render): `test_genetics_lint` + `test_accuracy` + `test_narration_rule` (132 with
+  test_calc_lint); `test_lint` + `test_timing_lint` (31); `test_guide` + `test_docs` (142);
+  `test_plot` + `test_calculation` + `test_quantities` + `test_plot_live` (189); `test_schema` +
+  `test_introspect` + `test_api` + `test_json_output` + `test_builtin_scenes` +
+  `test_actions_coverage` + `test_extensions` + `test_registry` (329); `test_music_pieces` +
+  `test_iso_diagram_actions` + `test_captions` + `test_mcp` (62). Not run: the full suite.
+- False-positive sweep: scratchpad `s226/lint_all.py` (every example, the gallery, the Phase
+  U–W scratch projects s205–s225: 274 scenes) → 0 findings. `s226/bad225` (s225's narration with
+  nine numbers changed) → 8 found (the unnamed pedigree product is the gap above).
+- Demo: `vidgen lint` on scratchpad `s226/demo` (nine scenes, preview renders, estimated timings)
+  → 14 warnings, 5 info, every rule firing (output in CONFIG "Calculations and plots").

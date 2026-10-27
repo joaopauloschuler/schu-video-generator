@@ -409,6 +409,31 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
             names += [f"annotation{i}"] + ([f"annotation:{a.id}"] if a.id else [])
         return names
 
+    @classmethod
+    def target_text(cls, params: Any, name: str) -> str | None:
+        """What a target is called on screen (for the narration lint): a series' name (its
+        legend entry), a named fit's name, an annotation's text, the title."""
+        series = params.all_series()
+        if name == "title":
+            return str(params.title) or None
+        kind, _, key = name.partition(":")
+        if not key and kind.rstrip("0123456789") != kind:
+            key, kind = kind[len(kind.rstrip("0123456789")):], kind.rstrip("0123456789")
+            index = int(key) - 1
+        else:
+            index = None
+        if kind in ("series", "errors"):
+            found = series[index] if index is not None and index < len(series) else next((s for s in series if str(s.name) == key), None)
+            return str(found.name) if found is not None and kind == "series" else None
+        if kind == "fit":
+            found = params.fits[index] if index is not None and index < len(params.fits) else next((f for f in params.fits if f.label() == key), None)
+            return str(found.name) if found is not None and str(found.name) else None
+        if kind == "annotation":
+            notes = params.annotations
+            found = notes[index] if index is not None and index < len(notes) else next((a for a in notes if a.id == key), None)
+            return str(found.text) if found is not None and str(found.text) else None
+        return None
+
     @staticmethod
     def _legend_panels(params: Any) -> list[bool]:
         """Per panel, whether it shows a legend: ``legend`` if given, else with several series,

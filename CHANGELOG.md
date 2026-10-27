@@ -5,9 +5,24 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–225)
+## Unreleased (Steps 193–226)
 
 ### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
+
+- **Lint for numbers, units and plots** (Step 226). `vidgen lint` reads the numbers the narration
+  and the screen say — in digits and in words ("eleven point two kilometres per second", "three
+  point seven times ten to the minus nineteen joules", "one in a hundred and fifty", "three
+  halves") — and compares them with what the `calculation` scenes compute: `calc_numbers` (a value
+  that is not the result, rounding as written and "about" allowed), `calc_units` ("a speed of 30
+  kilometres"; 30 m/s for 29.8 km/s, mg for µg) and `calc_sigfigs` (info: more significant
+  figures than the inputs give). New plot rules: `plot_units` (an axis of a physical quantity
+  without its unit), `plot_log` (error bars, fits or lines at or below zero on a log axis),
+  `plot_errors` (error bars without a stated meaning, or called otherwise in the narration),
+  `plot_series` (several series without legend or labels, placeholder names), `plot_truncated`
+  (info: bars not starting at zero, also a `bar_chart` baseline), `plot_conserved` (a model's
+  conserved energy drifting: use leapfrog or a smaller step) and `plot_fit_claims` ("a half-life
+  of twelve days" when the fit gives 8.0 ± 0.1 d). `said_before_shown` / `unsaid_reveal` know the
+  plot and calculation actions and targets. No new dependency.
 
 - **Worked calculations with units** (Step 225). A new scene type `calculation` shows a symbol
   table (each value with its unit, its meaning and its source; constants such as `G`, `h`, `c`,

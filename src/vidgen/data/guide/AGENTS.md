@@ -922,6 +922,21 @@ sentences ("if both parents are carriers…", "unlike Down syndrome…") are not
 the genetics types, notation, exactness and pacing: `vidgen guide genetics` and
 `docs/COOKBOOK-GENETICS.md` (example: `examples/cystic-fibrosis`).
 
+Numbers in calculations and plots are checked too. The `calc_*` rules read the numbers the
+narration and the screen say — in digits or words: "thirty kilometres per second", "eleven point
+two", "three point seven times ten to the minus nineteen joules", "one in a hundred and fifty" —
+against what each `calculation` scene computes (`calc_numbers`: a value that is not the result,
+"about" allows rounding to one or two figures; `calc_units`: "a speed of 30 kilometres", or 30 m/s
+for 29.8 km/s; `calc_sigfigs`, info: "29.7847 km/s" for a result known to 3 figures, or a `sig`
+beyond the inputs). Give each symbol and result a `meaning`: a pure number ("one in a hundred and
+fifty") is only compared when the sentence names it. The `plot_*` rules check a `plot`: an axis of
+a physical quantity without its unit (`plot_units`), error bars, fits or lines at or below zero on
+a log axis (`plot_log`), error bars without `error:` (sd, sem, ci95…) or called something else in
+the narration (`plot_errors`), series without a legend or label (`plot_series`), bars not starting
+at zero (`plot_truncated`, info; also a `bar_chart` `baseline`), a model's `conserved` quantity
+drifting (`plot_conserved`: use `method: leapfrog` or a smaller `step`), and a fitted value said
+otherwise ("a half-life of twelve days" for a fit giving 8.0 ± 0.1 d; `plot_fit_claims`).
+
 ```yaml
 # accuracy and references
 - id: er
@@ -2931,6 +2946,16 @@ install; `vidgen validate` warns when it is missing.
 | `genetics_crispr` | the wrong PAM for the Cas, a cut downstream of the PAM or not 3 bp upstream, sticky ends for Cas9 | SpCas9: NGG, a blunt cut 3 bp upstream (5′) of the PAM |
 | `genetics_karyotype` | ISCN that does not parse or is out of order, "45,X is male", a condition the `karyotype` does not show | the notation or the condition the message gives |
 | `genetics_hgvs` | HGVS not valid or not the `mutation`'s variant, legacy numbering unannounced (p.Glu6Val); info: `ΔF508`, `R553X` | the HGVS form; call the old name legacy |
+| `calc_numbers` | a number said or shown for a `calculation`'s value that is not what it computes ("thirty-five kilometres per second" for 29.8 km/s) | the value the message gives (or "about" and a rounding of it); or fix the calculation |
+| `calc_units` | "a speed of 30 kilometres"; a value off by a factor of 1000 (m/s for km/s, mg for µg) | the unit of that kind, the right prefix |
+| `calc_sigfigs` | (info) more figures than the inputs give: a `sig` beyond them, "29.7847 km/s" said for 29.8 | round to the figures the message gives, or give the inputs more figures |
+| `plot_units` | a `plot` axis titled with a physical quantity (time, energy…) but no unit | `unit:` on the axis, or `name (unit)` in the CSV header |
+| `plot_log` | error bars, a fit or its band, or a reference line at or below zero on a log axis | asymmetric errors that stay positive, a positive model, `band: none`, or a linear / symlog axis |
+| `plot_errors` | error bars without `error:`, or narration calling them otherwise ("standard deviation" for `sem`) | `error:` sd, sem, ci95, range, poisson or other; say what they are |
+| `plot_series` | several series with `legend: false` and no label naming them; a placeholder name (`series 2`) | show the legend or label each series; name it after what it is |
+| `plot_truncated` | (info) bars not starting at zero: a histogram on a broken y axis, a `bar_chart` `baseline` other than 0 | drop the break / baseline, or say so on screen |
+| `plot_conserved` | a model's `conserved` quantity drifts beyond 1 % | `method: leapfrog`, or a smaller `step` |
+| `plot_fit_claims` | a fitted value said otherwise ("a half-life of twelve days" for 8.0 ± 0.1 d, "exponent five halves") | the value the fit gives, or fit what you say |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

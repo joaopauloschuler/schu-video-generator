@@ -465,6 +465,23 @@ a counselling tone, common mistakes with the rule that catches each) is in
 [COOKBOOK-GENETICS.md](COOKBOOK-GENETICS.md), with the worked example
 [`examples/cystic-fibrosis`](../examples/cystic-fibrosis/README.md).
 
+**Calculations and plots: say the numbers the scene computes.** A `calculation` scene works its
+results out with units and significant figures, a `plot` fits its data; the `calc_*` and `plot_*`
+rules read the numbers the narration says (in words too: "eleven point two kilometres per
+second", "one in a hundred and fifty") against them:
+
+- Say the result as the scene shows it, or rounded with "about" ("about thirty kilometres per
+  second" for 29.8 km/s); never more figures than the inputs give (29.8, not 29.7847), and the
+  unit of the quantity's kind with the right prefix (km/s, not m/s; a speed is not "30
+  kilometres").
+- Give symbols and results a `meaning`: a bare probability or ratio is compared only when the
+  sentence names what it is ("the risk for the child is one in a hundred and fifty").
+- Plots: every physical axis has its unit; error bars say what they are (`error: sem`) and the
+  narration says the same; no error bars, fits or lines at or below zero on a log axis; a legend
+  or labels when there are several series; a model's `conserved` energy stays within 1 % (use
+  `method: leapfrog` for orbits and oscillators); a half-life, exponent or peak said aloud is the
+  fit's, within its uncertainty.
+
 ## 13. Editorial options (example style choices)
 
 These are choices, not rules. Pick a stance per video and apply it consistently.
