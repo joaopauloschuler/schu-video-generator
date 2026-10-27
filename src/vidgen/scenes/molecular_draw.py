@@ -1,6 +1,6 @@
 """Drawing helpers of the molecular genetics scenes (``mutation``, ``crispr``, ``dna_lab``;
 DESIGN.md §96.13–96.15): base tiles in the base colours of Phase U's DNA drawings (A green, T red,
-G blue, C yellow, letters dark on every theme), codon groups, amino-acid chips, small plot axes.
+G blue, C yellow, letters dark on every theme), codon groups, amino-acid chips, cards.
 Written against ``vidgen.api``."""
 
 from typing import Any
@@ -103,37 +103,6 @@ def aa_chip(scene: Any, text: str, width: float, height: float, size: float, ink
     if t.width > width * 0.86:
         t.scale(width * 0.86 / t.width)
     return VGroup(chip, t.move_to(chip))
-
-
-def plot_axes(scene: Any, area: Any, x_range: tuple[float, float], y_range: tuple[float, float], x_label: str, y_label: str,
-              ink: str, dim: str, size: float, x_ticks: list[tuple[float, str]], y_ticks: list[tuple[float, str]]) -> tuple[VGroup, Any]:
-    """Two axes in ``area`` with tick labels; returns them and ``to_point(x, y)``."""
-    lab_h = scene.markup("0", size=size).height
-    y_w = max([scene.markup(t, size=size).width for _, t in y_ticks] + [0.3]) + 0.15
-    x0, y0 = area.x0 + y_w + lab_h * 1.4, area.y0 + lab_h * 2.6
-    x1, y1 = area.x1 - 0.1, area.y1 - lab_h * 0.6
-
-    def to_point(x: float, y: float) -> np.ndarray:
-        fx = (x - x_range[0]) / ((x_range[1] - x_range[0]) or 1.0)
-        fy = (y - y_range[0]) / ((y_range[1] - y_range[0]) or 1.0)
-        return np.array([x0 + fx * (x1 - x0), y0 + fy * (y1 - y0), 0.0])
-
-    parts: list[Mobject] = [Line(np.array([x0, y0, 0]), np.array([x1, y0, 0])).set_stroke(ink, width=2),
-                            Line(np.array([x0, y0, 0]), np.array([x0, y1, 0])).set_stroke(ink, width=2)]
-    for v, t in x_ticks:
-        p = to_point(v, y_range[0])
-        parts.append(Line(p, p + DOWN * 0.07).set_stroke(ink, width=1.5))
-        parts.append(scene.markup(t, size=size, color=dim).next_to(p, DOWN, buff=0.1))
-    for v, t in y_ticks:
-        p = to_point(x_range[0], v)
-        parts.append(Line(p, p + LEFT * 0.07).set_stroke(ink, width=1.5))
-        parts.append(scene.markup(t, size=size, color=dim).next_to(p, LEFT, buff=0.1))
-    xl = scene.markup(x_label, size=size, color=dim)
-    xl.move_to(np.array([(x0 + x1) / 2, area.y0 + xl.height / 2, 0]))
-    yl = scene.markup(y_label, size=size, color=dim).rotate(PI / 2)
-    yl.move_to(np.array([area.x0 + yl.width / 2, (y0 + y1) / 2, 0]))
-    parts += [xl, yl]
-    return VGroup(*parts), to_point
 
 
 def card_lines(scene: Any, lines: list[str], width: float, size: float, ink: str, head: str | None = None,

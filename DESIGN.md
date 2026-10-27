@@ -1047,6 +1047,8 @@ new dependency: `parse_unit`, `Unit`, `si_unit`, `describe_dim`, `CONSTANTS` / `
 `Quantity`, `written`, `in_unit`, the arithmetic carrying significant figures, `decimal_text`,
 `fraction_text`, expression trees `parse` / `evaluate` / `to_tex`, and worked calculations
 `work(symbols, calcs)` → `Worked` of `CalcResult`s).
+Step 227 (§97.12) adds `plotcore.layout_axes` (a panel from axes the caller built) and, in
+`quantities`, `Step.deep` / `Step.unit_variants` and `to_tex(stack=2)` (one factor per line).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -17340,3 +17342,66 @@ thirds times one twenty-fifth times one quarter is one in two hundred") is not r
 words after a symbol number ("90 km an hour") keep only the symbol; no checks of numbers on
 `bar_chart` / `line_chart` labels against their data; `plot_fit_claims` reads the plot scene's
 own fits only.
+
+### 97.12 Adoption, the substitution layout, the example and the docs (Step 227)
+
+**Adoption of the core by the Phase U / V plots** (the rule of §97.3: only where clearly better
+and visually compatible, with before / after stills; stills in the scratchpad's `s227/before16`,
+`before916` and `adopt/build/...`):
+
+| plot | decision | why |
+|---|---|---|
+| PCR temperature trace (`dna_lab`) | **adopted** | it drew its own axes (`molecular_draw.plot_axes`, now removed): a rotated "°C", "denature" printed over the 95 tick label and the trace. On the core (`plotcore.layout_axes` with hand-built `Axis`es, `plot_draw.draw_panel`): a horizontal title "temperature (°C)", the three temperatures as the y ticks named by their stage ("denature 95", "extend 72", "anneal 50") with dashed gridlines, "cycle k" under each cycle; the stage names no longer sit inside the plot. Labels the core would thin are spread apart instead (`dna_lab._all_y_labels`: each temperature names a stage). The plot is a little shorter (the title row); the gallery entry `dna_lab` was regenerated (GIFs 110 / 120 KB) |
+| allele-frequency and heterozygosity plots (`population`) | skipped | already drawn with `vidgen.charts.chart_axes`, the style the core copies: the core would draw the same picture; the risk (lines growing per generation, the bottleneck band, the stacked H plot and their tests and gallery entry) buys nothing visible |
+| Manhattan, QQ and regional plots (`gwas`) | skipped | `chart_axes` too; the Manhattan x axis is categorical (chromosomes), which the core does not do; the QQ plot's square ranges (both axes to the same ceiling) already give the equal aspect |
+| cyclin–CDK curves (`cell_cycle`) | skipped | no numeric axes (levels in a.u. without ticks, phase bands): not a chart (§97.3) |
+| action-potential inset (`molecule`) | skipped | a small inset in a side panel with units at the axis ends and a threshold line; the core's layout spends a title row above and a label row below, which the inset cannot spare, and the core has no inset plots yet (§97.4 gaps) |
+| Sanger trace, gel, NGS coverage | not candidates | pictures of lab results (§97.3) |
+
+`plotcore.layout_axes(area, x, y, measure, top=)` (new, exported): one panel laid out like
+`layout_figure`'s from axes the caller built (`Axis` with its own ticks and labels) — for domain
+plots whose ticks mean something other than round numbers.
+
+**Substitutions keep their units** (reviewer's note on Step 225). The orbit's substitution fell
+back to SI numbers without units even in 16:9: the rule wanted a variant at least 80 % as large
+as the largest (the SI one) or twice the readable size, and the block's uniform shrink made every
+line small. Now (`scenes/calculation.py`): (1) when the block is too tall, the largest lines
+shrink first, down to a common size (`_fit`: a cap found by bisection; then no line more than
+`SPREAD` = 1.6 times the smallest, so the lines read as one block; then a uniform shrink if the
+aligned block is too wide) — a big formula gives way before a long substitution; (2) a third
+way with units, one factor of the outermost product per line (`Step.deep`, `expr.to_tex(stack=2)`;
+a bare number stays with the factor after it: `2 × G`, not `2` alone); (3) each way is judged by
+its final size in the block, and the units ways win when the most explicit of them that is nearly
+as large as the largest is at least `KEEP_UNITS` = 1.2 × the readable size (`_choose`), else the
+old rule over all ways. Results: orbit (√(G M☉ / r)) keeps units in 16:9 and 9:16, escape
+(√(2 G M / R)) in 16:9 (SI in 9:16, where G's unit is too wide), the photon's E = hc/λ in both.
+`Step.unit_variants()`; `units: always` now includes the one-per-line way. Lines of one block can
+now differ in size (within `SPREAD`); a formula that used to stand twice as large as a long
+substitution now comes down towards it (the orbit, the photon); the gallery entry `calculation`
+was regenerated.
+
+**The example** `examples/radioactive-decay` (2:52, Kokoro `af_heart` at 0.85, the `beacon` bed at
+−8 dB, no captions overlay: the plots need the height): a live Monte Carlo (CSV series with `live:
+true`; 1000 and 20 nuclei beside exp(−λt), fixed axes), counts with √N bars on a log axis fitted
+by `model: custom` `A*exp(-lambda*x)` (λ itself in the box; the built-in exponential shows k = −λ)
+with a confidence band and normalized residuals, a zoom on the tail, the half-life with its
+uncertainty and its distance from the tabulated value in standard errors (uncertainty as a
+calculation of its own: the engine carries significant figures, not ±), carbon-14 dating as a
+chain. Data from `make_data.py` (standard library, `random.Random(227)`: stable across Python
+versions), labelled "simulated" on screen. Lint clean in 16:9 and 9:16 with the real narration.
+
+**Docs.** Guide topic `science` (aliases plots, plot, calculations, calculation, units, fits,
+physics, data; the alias `science` left the `biology` topic, which keeps cell-biology, lecture,
+research); the guide's chooser snippets of `plot` and `calculation` moved into their own block
+`# science charts`, so the gallery index has a section "Science charts" (`gallery.SECTION_NOTES`
+links the example and the cookbook); `docs/COOKBOOK-SCIENCE-CHARTS.md`; CONFIG's calculation
+layout paragraph; the CONFIG completeness test now covers `plot` and `calculation`.
+
+Public: `plotcore.layout_axes`; `quantities.Step.deep`, `Step.unit_variants`;
+`expr.to_tex(stack=)` takes 0 / 1 / 2 (a bool still works). No config key, no dependency.
+
+**Gaps after Step 227**: the population, GWAS, cyclin and action-potential plots keep their own
+drawing (above); `layout_axes` has no shared-axis variant; a substitution whose single factor is
+wider than the frame (G's unit in 9:16) still falls back to SI numbers; in 16:9 a crowded fit
+figure needs `label_size: caption` for a readable residual panel; a live CSV series has no head
+readout of its own time unless `readout:` is set.

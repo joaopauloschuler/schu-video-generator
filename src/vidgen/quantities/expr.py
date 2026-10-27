@@ -266,12 +266,12 @@ def _factors(node: Node) -> list[Node]:
 
 
 def to_tex(node: Node, leaf: Leaf, replace: Mapping[int, tuple[str, float]] | None = None, values: bool = False,
-           stack: bool = False) -> tuple[str, float]:
+           stack: int = 0) -> tuple[str, float]:
     """``node`` in TeX and the precedence level of its top part. ``leaf(node)`` writes a name
     (a symbol, or a value with its unit) as ``(tex, level)``; ``replace`` maps ``id(node)`` to
     a part written instead (an evaluated sub-expression); ``values``: the names are written as
     values, so every product gets a times sign; ``stack``: the outermost products are set on
-    two lines (a narrow frame)."""
+    two lines (1, a narrow frame) or one factor per line (2)."""
     if replace and id(node) in replace:
         return replace[id(node)]
     k = node.kind
@@ -288,9 +288,20 @@ def to_tex(node: Node, leaf: Leaf, replace: Mapping[int, tuple[str, float]] | No
     if k == "*" and stack:
         factors = [to_tex(f, leaf, replace, values) for f in _factors(node)]
         texts = [_wrap(t, level, PROD) for t, level in factors]
-        half = (len(texts) + 1) // 2
-        first, second = r" \times ".join(texts[:half]), r" \times ".join(texts[half:])
-        return rf"\begin{{array}}{{c}} {first} \\ {{}} \times {second} \end{{array}}", ATOM
+        if stack >= 2:   # a bare number stays with the factor after it (2 × G, not 2 alone)
+            lines, carry = [], []
+            for f, t in zip(_factors(node), texts):
+                carry.append(t)
+                if not (f.kind == "num" and not f.unit):
+                    lines.append(r" \times ".join(carry))
+                    carry = []
+            if carry:
+                lines.append(r" \times ".join(carry))
+        else:
+            half = (len(texts) + 1) // 2
+            lines = [r" \times ".join(texts[:half]), r" \times ".join(texts[half:])]
+        rows = r" \\ {} \times ".join(lines)
+        return rf"\begin{{array}}{{c}} {rows} \end{{array}}", ATOM
     parts = [to_tex(c, leaf, replace, values, stack) for c in node.children]
     if k == "neg":
         tex, level = parts[0]

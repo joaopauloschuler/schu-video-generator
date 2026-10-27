@@ -22,7 +22,9 @@ text), `social` (vertical videos), `scenes` (which scene type), `design` (themes
 `actions` (pointing at things), `cartoons` (characters on a stage), `platform` (platform
 stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for a story), `biology`
 (cell-biology lectures: choosing, accuracy, naming, references, pacing), `genetics` (crosses,
-pedigrees, chromosomes, variants, the lab, populations: notation, exactness, lint), `overlays` (overlays,
+pedigrees, chromosomes, variants, the lab, populations: notation, exactness, lint), `science`
+(plots and worked calculations: plot or chart, fits, live models, units, significant figures,
+lint), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
 thumbnail, GIFs, translations, rights to your content), `troubleshooting` (validate and lint messages).
@@ -936,6 +938,8 @@ the narration (`plot_errors`), series without a legend or label (`plot_series`),
 at zero (`plot_truncated`, info; also a `bar_chart` `baseline`), a model's `conserved` quantity
 drifting (`plot_conserved`: use `method: leapfrog` or a smaller `step`), and a fitted value said
 otherwise ("a half-life of twelve days" for a fit giving 8.0 ± 0.1 d; `plot_fit_claims`).
+Choosing between a plot and a chart, fits, live models, units and pacing for calculations: `vidgen
+guide science` and `docs/COOKBOOK-SCIENCE-CHARTS.md` (example: `examples/radioactive-decay`).
 
 ```yaml
 # accuracy and references
@@ -1031,6 +1035,12 @@ otherwise ("a half-life of twelve days" for a fit giving 8.0 ± 0.1 d; `plot_fit
   beats:
     - text: "Most requests finish fast."
     - text: "Half of them in under thirty milliseconds."
+```
+
+Scientific plots and worked calculations (the craft: `vidgen guide science`):
+
+```yaml
+# science charts
 - id: decay_fit
   type: plot
   params:
@@ -1098,6 +1108,10 @@ otherwise ("a half-life of twelve days" for a fit giving 8.0 ± 0.1 d; `plot_fit
     - text: "Gravity holds the Earth on its orbit, so its speed is the square root of G M over r."
     - text: "Put in the numbers, and the Earth moves at about thirty kilometres per second."
       actions: [{substitute: calc1, at: "@numbers"}, {compute: calc1, at: "@moves"}]
+```
+
+```yaml
+# data
 - id: devices
   type: pie
   params: {title: "Visits by device", donut: true, labels: ["Mobile", "Desktop", "Tablet"], values: [5200, 3100, 640], highlight: Mobile}
@@ -2152,7 +2166,7 @@ bridge crosses it) at row 4, column 11`). A whole story: `examples/iso-story` (a
 a key, a lamp lit in the rain, flowers that bloom, a 9:16 variant). Every key: `docs/CONFIG.md`
 "Isometric places (`iso`)".
 
-<!-- topic: biology (also: cell-biology, science, lecture, research) -->
+<!-- topic: biology (also: cell-biology, lecture, research) -->
 ## Cell biology: lectures and research explainers
 
 Five scene types draw cell biology at university level, stylised but checked (`vidgen guide
@@ -2288,6 +2302,79 @@ and reveal them step by step.
     - text: "Three bases, C T T, are deleted: c.1521_1523del."
       actions: [{mutate: variant, at: "@deleted"}]
     - text: "The frame is kept, and one phenylalanine is missing: p.(Phe508del), traditionally called ΔF508."
+```
+
+<!-- topic: science (also: plots, plot, calculations, calculation, units, fits, physics, data) -->
+## Science: plots and worked calculations
+
+Two scene types carry the numbers of a science video, and both **compute** what they show: `plot`
+(data and models on scientific axes: error bars, fits with their uncertainties, residuals,
+histograms, simulations drawn as they run) and `calculation` (a formula, the values put in with
+their units, the result with its significant figures). Every param: `docs/CONFIG.md`; the craft in
+full: `docs/COOKBOOK-SCIENCE-CHARTS.md` in the schu-video-generator repository; a whole example:
+`examples/radioactive-decay` (simulated nuclei, measured counts with a fit, the half-life worked
+out, carbon-14 dating; 16:9 and 9:16).
+
+**Plot or chart.** A comparison of a few categories or a trend for a general audience →
+`bar_chart`, `line_chart`, `pie`, `scatter`, `histogram` (big labels, values on the bars).
+Measurements and models → `plot`: a log or symlog axis, units in the axis titles, error bars,
+a fit, a residual panel, panels sharing a time axis, an orbit at an equal aspect, a model that
+grows while you narrate. A function of x for a maths lesson → `function_plot`. Worked numbers →
+`calculation`, not text on a card.
+
+**Honest axes.** Units on every physical axis (`unit:` or `time (s)` in the CSV header); a log
+axis when the data span decades (decay, counts, frequencies), never to hide a zero; `min` / `max`
+only to show context, not to exaggerate a change (a bar-like quantity starts at zero); say
+"simulated" or "illustrative" in a `caption` when the data are not a measurement.
+
+**Error bars and fits.** Every error bar says what it is: `error: sd | sem | ci95 | range |
+poisson` (`y_err: sqrt` for counts: ± √N); say the same word in the narration. A fit shows its
+parameters ± standard errors, R² and χ²/ν (about 1: the errors match the scatter); `band:
+confidence` shows where the curve lies, `prediction` where a new point would; `residuals:
+normalized` shows (y − fit)/σ under the plot. Prefer a model whose parameter is the quantity you
+talk about (`model: custom`, `expr: "A*exp(-lambda*x)"` gives λ itself). Say fitted values as the
+box writes them, with "give or take" for the error.
+
+**Live models.** `models:` with `kind: ode` (equations as expressions; `method: leapfrog` for
+orbits and oscillators, so the energy stays put), `recurrence`, `random_walk`, `poisson` (seeded:
+the same numbers every render); a CSV series with `live: true` grows point by point too. Growth
+fills its beat; `grow` and `zoom` (`x: [from, to]`) time it to words.
+
+**Units and significant figures.** Write values as you would on paper — `"0.276 min^-1"`, `532
+nm`, `"5730 yr"`, `constant: G` — and give each a `meaning` and a `source`. A number with a unit
+or a decimal point is measured (its figures count: `1500 m` has 2, `"1.50"` has 3); fractions and
+whole numbers without a unit are exact (`2/3 × 1/25 × 1/4 = 1/150`). The result keeps the figures
+the inputs allow; `sig:` asks for fewer, never more (`calc_sigfigs`). `convert: km/s` adds the
+result in another unit; a later calculation (or another scene, `from_scene`) uses earlier results.
+For an uncertainty, compute it as a calculation of its own (σ_t = t·σ_λ/λ).
+
+**Pacing calculations.** One calculation per beat, or one line per action (`substitute`,
+`compute` on the word: `at: "@gives"`); say the formula in words, then the result once, with its
+unit ("two point five one minutes"). Long formulas break into a chain of short calculations.
+Plots: one idea per beat (the data, the error bars, the fit, the residuals), 10–25 words; add an
+action every few seconds (`reveal: "errors:<series>"`, `fit`, `annotate`, `zoom`, `highlight` with
+`style: flash`) so the picture keeps moving; `label_size: caption` gives a crowded 16:9 figure
+room.
+
+**Lint.** `calc_numbers`, `calc_units`, `calc_sigfigs` read numbers in the narration and on screen
+against each `calculation`; `plot_units`, `plot_log`, `plot_errors`, `plot_series`,
+`plot_truncated`, `plot_conserved`, `plot_fit_claims` check each `plot`. Run `vidgen lint` in 16:9
+and 9:16.
+
+```yaml
+- id: half
+  type: calculation
+  params:
+    title: "The half-life from the fit"
+    symbols:
+      - {name: lambda, value: "0.276 min^-1", meaning: decay constant, source: fit}
+      - {name: s_lambda, value: "0.0044 min^-1", meaning: its standard error, source: fit, tex: "\\sigma_{\\lambda}"}
+    calculations:
+      - {name: t_half, expr: "ln(2)/lambda", unit: min, meaning: half-life}
+      - {name: s_t, expr: "t_half*s_lambda/lambda", unit: min, meaning: uncertainty of the half-life}
+  beats:
+    - text: "The half-life is the natural log of two over lambda: two point five one minutes."
+    - text: "Its relative uncertainty is the same as lambda's: about zero point zero four minutes."
 ```
 
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->

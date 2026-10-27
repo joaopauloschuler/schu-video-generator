@@ -152,12 +152,12 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
 GENETICS_TYPES = ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas")
 
 
-@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES],
-                         ids=["cell_biology", "genetics"])
+@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES, ("plot", "calculation")],
+                         ids=["cell_biology", "genetics", "science_charts"])
 def test_science_sections_name_every_nested_option(kinds: tuple[str, ...]) -> None:
-    """Steps 210 and 220: every param of the cell-biology and the genetics types, nested options
-    too (an object's `coat`, a gene's `introns`, a node's marks' `domain`), is named in its
-    CONFIG.md section."""
+    """Steps 210, 220 and 227: every param of the cell-biology, the genetics and the science-chart
+    types, nested options too (an object's `coat`, a gene's `introns`, a node's marks' `domain`, a
+    fit's `residuals`, a symbol's `from_scene`), is named in its CONFIG.md section."""
     from vidgen.describe import nested_models
 
     heads = {m.group(1): m.start() for m in re.finditer(r"^### `(\w+)`", CONFIG_MD, re.M)}
@@ -226,6 +226,36 @@ def test_genetics_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
     assert "examples/cystic-fibrosis/README.md" in text
     for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
         assert "COOKBOOK-GENETICS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
+def test_science_charts_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 227: the science-charts cookbook's pattern validates and is lint-clean for the calc_*
+    and plot_* rules, it names both types, and the README, the cookbook, the guide and the gallery
+    point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.lint.calc_rule import calc_issues
+    from vidgen.lint.plot_rule import plot_issues
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-SCIENCE-CHARTS.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    assert len(blocks) == 1
+    scenes = yaml.safe_load(blocks[0])
+    (tmp_path / "video.yaml").write_text(yaml.safe_dump({"title": "t", "scenes": scenes}, allow_unicode=True), encoding="utf-8")
+    project = Project.load(tmp_path)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    for scene in project.config.scenes:
+        rules = project.config.lint.rules
+        assert not calc_issues(project, scene.id, rules) and not plot_issues(project, scene.id, rules), scene.id
+    for kind in ("plot", "calculation"):
+        assert f"[`{kind}`](CONFIG.md#{kind})" in text, kind
+    for rule in ("calc_numbers", "calc_units", "calc_sigfigs", "plot_units", "plot_log", "plot_errors", "plot_series", "plot_truncated",
+                 "plot_conserved", "plot_fit_claims"):
+        assert f"`{rule}`" in text, rule
+    assert "examples/radioactive-decay/README.md" in text
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
+        assert "COOKBOOK-SCIENCE-CHARTS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
 def test_docs_yaml_snippets_parse() -> None:

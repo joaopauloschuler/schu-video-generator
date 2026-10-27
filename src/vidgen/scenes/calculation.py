@@ -36,8 +36,11 @@ ACTION_STEP = {"substitute": "substitute", "compute": "result", "convert": "conv
 TIMED = ("reveal", "substitute", "compute", "convert")
 #: A long substitution is written the most explicit way (with units, on one line) that is at
 #: least :data:`NEARLY` as large as the largest way (units on two lines, SI numbers without
-#: units...), or :data:`LARGE` times the readable size.
-NEARLY, LARGE = 0.8, 2.0
+#: units...), or :data:`LARGE` times the readable size; a way with units (on one line, two, or
+#: one factor per line) is kept when it is at least :data:`KEEP_UNITS` times the readable size.
+NEARLY, LARGE, KEEP_UNITS = 0.8, 2.0, 1.2
+#: The lines of a calculation stay one block: none more than this times the smallest's size.
+SPREAD = 1.6
 ROW_GAP, BOX_PAD, TABLE_GAP = 0.34, 0.14, 0.22
 
 
@@ -168,6 +171,72 @@ class _Row:
     @property
     def mobject(self) -> Mobject:
         return VGroup(self.tex, self.box) if self.box is not None else self.tex
+
+
+@dataclass
+class _Way:
+    """One way of writing a line: the formula (not scaled yet), the scale fitting it to the
+    width, its glyph size relative to the readable size at scale 1, whether it keeps units."""
+
+    tex: MathTex
+    scale: float
+    glyph: float
+    units: bool
+
+
+def _rel_x(tex: MathTex) -> float:
+    """The x of a line's relation sign (its left edge when it has none)."""
+    rel = tex.id_to_vgroup_dict.get("vgrel")
+    return rel.get_left()[0] if rel is not None and rel.family_members_with_points() else tex.get_left()[0]
+
+
+def _choose(ways: list[_Way], final: list[float]) -> _Way:
+    """The way to write a substitution, given each way's final size (relative to the readable
+    size): among the ways with units, the most explicit that is nearly as large as the largest
+    of them (or large anyway), when it is comfortably readable; else the same rule over every
+    way (SI numbers without units)."""
+    def pick(pairs: list[tuple[_Way, float]]) -> tuple[_Way, float]:
+        top = max(f for _, f in pairs)
+        return next(p for p in pairs if p[1] >= min(LARGE, NEARLY * top))
+
+    pairs = list(zip(ways, final))
+    units = [p for p in pairs if p[0].units]
+    if units:
+        way, size = pick(units)
+        if size >= KEEP_UNITS:
+            return way
+    return pick(pairs)[0]
+
+
+def _fit(ways: list[_Way], room_w: float, room_h: float) -> list[float]:
+    """How much each line of a block written these ways (each already at its ``scale``)
+    shrinks so the block fits ``room_w`` × ``room_h``: when it is too tall, the largest lines
+    first, down to a common size (a large formula gives way before a long substitution does);
+    then those more than :data:`SPREAD` times the smallest line's size down to it; then all
+    together when the lines, aligned at their relation signs, are too wide."""
+    sizes = [w.scale * w.glyph for w in ways]
+    heights = [w.tex.height * w.scale for w in ways]
+
+    def factors(cap: float) -> list[float]:
+        return [min(1.0, cap / s) if s > 0 else 1.0 for s in sizes]
+
+    out = [1.0] * len(ways)
+    if sum(heights) > room_h:
+        lo, hi = 0.0, max(sizes)
+        for _ in range(40):   # the common size whose block height fills room_h
+            mid = (lo + hi) / 2
+            if sum(h * f for h, f in zip(heights, factors(mid))) > room_h:
+                hi = mid
+            else:
+                lo = mid
+        out = factors(lo)
+    # one block: no line more than SPREAD times the size of the smallest
+    smallest = min(s * f for s, f in zip(sizes, out))
+    out = [min(f, SPREAD * smallest / s) if s > 0 else f for s, f in zip(sizes, out)]
+    left = max((_rel_x(w.tex) - w.tex.get_left()[0]) * w.scale * f for w, f in zip(ways, out))
+    right = max((w.tex.get_right()[0] - _rel_x(w.tex)) * w.scale * f for w, f in zip(ways, out))
+    wide = min(1.0, room_w / max(left + right, 1e-6))
+    return [f * wide for f in out]
 
 
 @dataclass
@@ -445,45 +514,45 @@ class Calculation(NarratedScene):
         floor = self._floor()
 
         room_w = area.width - 2 * BOX_PAD - 0.1
-        rows: list[_Row] = []
-        smallest = float("inf")
+        gaps = ROW_GAP * (len(r.steps) - 1) + 2 * BOX_PAD   # the gaps do not shrink with the rows
+        room_h = max(area.height - gaps, 0.2 * area.height)
+        lines: list[list[_Way]] = []
         for j, step in enumerate(r.steps):
             options = [step.tex]
+            with_units = {step.tex}
             if step.kind == "substitute":
-                options = {"auto": step.variants(), "always": [t for t in (step.tex, step.stacked) if t],
+                with_units = set(step.unit_variants())
+                options = {"auto": step.variants(), "always": step.unit_variants(),
                            "never": [t for t in (step.alt, step.alt_stacked) if t]}[spec.units] or [step.tex]
             where = f"calculations[{k + 1}] ({r.name}), the {step.kind} line"
-            built = []
+            ways = []
             for tex in options:   # sizes relative to the readable size, at the width's scale
                 m = self._math(self._row_tex(step.relation, tex, lhs if j == 0 else ""), size, where)
-                scale = min(1.0, room_w / max(m.width, 1e-6))
-                built.append((scale * self._glyph(m) / floor, m, scale))
-                if scale >= 1.0:
+                ways.append(_Way(m, min(1.0, room_w / max(m.width, 1e-6)), self._glyph(m) / floor, tex in with_units))
+                if ways[-1].scale >= 1.0:
                     break
-            # the most explicit way of writing it that is nearly as large as the largest
-            top = max(b[0] for b in built)
-            ratio, m, scale = next(b for b in built if b[0] >= min(LARGE, NEARLY * top))
-            m.scale(scale)
-            smallest = min(smallest, ratio)
-            rows.append(_Row(step.kind, m))
-        # aligned at the relation sign; shrunk together when the block is too wide or tall
-        for row in rows:
-            rel = row.tex.id_to_vgroup_dict.get("vgrel")
-            row.rel_x = rel.get_left()[0] if rel is not None and rel.family_members_with_points() else row.tex.get_left()[0]
+            lines.append(ways)
+        chosen = [ways[0] for ways in lines]
+        for j, ways in enumerate(lines):
+            if len(ways) < 2:
+                continue
+            # each way of writing the line sized as the block would set it (shrunk to the area
+            # with the other lines); the most explicit that is nearly as large as the largest,
+            # or the first with units that is comfortably readable
+            final = [w.scale * w.glyph * _fit(chosen[:j] + [w] + chosen[j + 1:], room_w, room_h)[j] for w in ways]
+            chosen[j] = _choose(ways, final)
+        # aligned at the relation sign; the largest lines shrunk first when the block is too tall
+        rows = []
+        factors = _fit(chosen, room_w, room_h)
+        for way, step, f in zip(chosen, r.steps, factors):
+            way.tex.scale(way.scale * f)
+            rows.append(_Row(step.kind, way.tex, _rel_x(way.tex)))
         left = max(row.rel_x - row.tex.get_left()[0] for row in rows)
         right = max(row.tex.get_right()[0] - row.rel_x for row in rows)
-        heights = sum(row.tex.height for row in rows)
-        gaps = ROW_GAP * (len(rows) - 1) + 2 * BOX_PAD   # the gaps do not shrink with the rows
-        shrink = min(1.0, room_w / max(left + right, 1e-6), max(area.height - gaps, 0.2 * area.height) / max(heights, 1e-6))
-        if shrink < 1.0:
-            for row in rows:
-                row.tex.scale(shrink)
-                rel = row.tex.id_to_vgroup_dict.get("vgrel")
-                row.rel_x = rel.get_left()[0] if rel is not None and rel.family_members_with_points() else row.tex.get_left()[0]
-            left, right = left * shrink, right * shrink
-        if smallest * shrink < 0.98:
+        smallest = min(w.scale * w.glyph * f for w, f in zip(chosen, factors))
+        if smallest < 0.98:
             log.warning("scene '%s': calculation '%s' is set %.0f%% below the readable size to fit; shorten it (units: never, fewer symbols "
-                        "in one formula, or split it into two calculations)", self.spec.id, r.name, 100 * (1 - smallest * shrink))
+                        "in one formula, or split it into two calculations)", self.spec.id, r.name, 100 * (1 - smallest))
         x_rel = area.center[0] - (left + right) / 2 + left
         total = sum(row.tex.height for row in rows) + ROW_GAP * (len(rows) - 1)
         top = area.center[1] + total / 2

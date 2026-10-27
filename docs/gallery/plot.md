@@ -69,6 +69,11 @@ From the author guide (`vidgen guide scenes`):
 | `series.x_err.minus` | `float \| str \| list[float \| None]` | required | How far the bar reaches below (left of) each point. |
 | `series.x_err.plus` | `float \| str \| list[float \| None]` | required | How far it reaches above (right of) each point. |
 | `series.error` | `'sd' \| 'sem' \| 'ci95' \| 'range' \| 'poisson' \| 'other' \| None` |  | What the error bars mean, shown in the legend: sd (standard deviation), sem (standard error of the mean), ci95 (95 % confidence interval), range (min to max), poisson (√N), other. Default with y_err: sqrt: poisson. |
+| `series.model` | `str \| None` |  | A model of the plot's models whose columns x and y name (default: the plot's only model, when there is no data file). |
+| `series.live` | `bool \| None` |  | Grow the series over its beat (from its first point to its last, in the model's time or the data's order) with a moving head; a histogram fills as its values arrive, in their order; default: true for a model's series. |
+| `series.head` | `bool` | `True` | live: a marker at the growing end. |
+| `series.readout` | `bool \| str` | `False` | live: show the current value (and the model's time) in a box while it grows: true (labelled by the y column), or the label to use. |
+| `series.trail` | `float \| None` |  | live: only the last stretch (this long, in the model's time or points) is drawn strongly, the older part faint (phase-space plots). |
 | `panels` | `list[PlotPanel] \| None` |  | Several panels instead of series, stacked (arrange: rows, sharing x) or side by side (columns, sharing y). |
 | `panels.series` | `list[PlotSeries]` | required | The panel's series. |
 | `panels.series.name` | `str` | required | Series name (legend, targets series:<name>, fits: series: <name>). |
@@ -94,6 +99,11 @@ From the author guide (`vidgen guide scenes`):
 | `panels.series.x_err.minus` | `float \| str \| list[float \| None]` | required | How far the bar reaches below (left of) each point. |
 | `panels.series.x_err.plus` | `float \| str \| list[float \| None]` | required | How far it reaches above (right of) each point. |
 | `panels.series.error` | `'sd' \| 'sem' \| 'ci95' \| 'range' \| 'poisson' \| 'other' \| None` |  | What the error bars mean, shown in the legend: sd (standard deviation), sem (standard error of the mean), ci95 (95 % confidence interval), range (min to max), poisson (√N), other. Default with y_err: sqrt: poisson. |
+| `panels.series.model` | `str \| None` |  | A model of the plot's models whose columns x and y name (default: the plot's only model, when there is no data file). |
+| `panels.series.live` | `bool \| None` |  | Grow the series over its beat (from its first point to its last, in the model's time or the data's order) with a moving head; a histogram fills as its values arrive, in their order; default: true for a model's series. |
+| `panels.series.head` | `bool` | `True` | live: a marker at the growing end. |
+| `panels.series.readout` | `bool \| str` | `False` | live: show the current value (and the model's time) in a box while it grows: true (labelled by the y column), or the label to use. |
+| `panels.series.trail` | `float \| None` |  | live: only the last stretch (this long, in the model's time or points) is drawn strongly, the older part faint (phase-space plots). |
 | `panels.x` | `PlotAxis \| None` |  | Its x axis (arrange: columns, or share: false); default: the plot's x. |
 | `panels.x.label` | `str` |  | Axis title (the unit is added in parentheses); default: the name of the first series' data column. |
 | `panels.x.unit` | `str` |  | Unit, shown as 'label (unit)'; default: the unit in the first series' column header, e.g. 'time (s)'. |
@@ -172,6 +182,27 @@ From the author guide (`vidgen guide scenes`):
 | `annotations.color` | `color \| None` |  | Colour of the mark, line or range; default: highlight. |
 | `annotations.id` | `str \| None` |  | A name for targets annotation:<id>. |
 | `reveal` | `'series' \| 'all'` | `'series'` | series: one series per beat, then the fits and annotations; all: everything in beat 1. |
+| `models` | `dict[str, PlotModel]` |  | Models generating data, by name: {osc: {kind: ode, equations: {x: v, v: "-k*x"}, initial: {x: 1, v: 0}, params: {k: 4}, t: [0, 10]}}; series name their columns (x: t, y: x) and grow live. |
+| `models.kind` | `'ode' \| 'recurrence' \| 'random_walk' \| 'poisson' \| 'function'` | required | ode (differential equations), recurrence (x[n+1] from x[n]), random_walk, poisson (random events in time), function (registered in Python). |
+| `models.equations` | `dict[str, str]` |  | ode: the derivative of each variable, {x: v, v: "-k*x - c*v"} (keys x, dx/dt or x'); recurrence: the next value, {x: "r*x*(1 - x)"}. |
+| `models.initial` | `dict[str, float]` |  | Starting value of every variable: {x: 1, v: 0}. |
+| `models.params` | `dict[str, float]` |  | Named parameters the equations (and quantities) use: {k: 4, c: 0.3}; function: passed to it. |
+| `models.t` | `tuple[float, float] \| None` |  | ode, poisson: the time span [start, end]; default [0, 10]. |
+| `models.step` | `float \| None` |  | ode: the integration step (rk4, leapfrog; default a thousandth of the span; rk45: the first step); random_walk: the length of a step (default 1). |
+| `models.method` | `str` | `'rk4'` | ode: rk4 (fixed step, 4th order), rk45 (adaptive Dormand–Prince, tolerance), leapfrog (velocity Verlet: symplectic, keeps the energy of orbits and oscillators; needs x' = v pairs and forces without velocities). |
+| `models.tolerance` | `float` | `1e-06` | ode, rk45: the relative error allowed per step. |
+| `models.samples` | `int \| None` |  | ode: how many points to keep for drawing (default 600). |
+| `models.steps` | `int \| None` |  | recurrence: how many iterations (default 50); random_walk: how many steps (default 100). |
+| `models.seed` | `int` | `1` | random_walk, poisson, function: the random seed (the same seed gives the same numbers). |
+| `models.p` | `float` | `0.5` | random_walk (1-D lattice): the chance of a step up. |
+| `models.dims` | `1 \| 2` | `1` | random_walk: 1 (x) or 2 (x and y). |
+| `models.distribution` | `'lattice' \| 'gaussian'` | `'lattice'` | random_walk: lattice (±step) or gaussian (normal steps). |
+| `models.rate` | `float \| None` |  | poisson: events per unit of time. |
+| `models.function` | `str \| None` |  | function: the name it was registered under (vidgen.api.register_model). |
+| `models.quantities` | `dict[str, str]` |  | Derived columns, expressions of the columns and params: {E: "0.5*v^2 + 0.5*k*x^2"}. |
+| `models.conserved` | `list[str]` |  | Quantities that should stay constant (an energy): their drift is checked (vidgen lint). |
+| `models.units` | `dict[str, str]` |  | Units of the columns: {t: s, x: m, v: m/s, E: J} (axis titles, readouts). |
+| `rescale` | `bool` | `True` | While live series grow, axes without fixed ends start around the first data and widen smoothly as the data reach their edge (a time axis is shown whole); false: the whole range from the start. |
 | `point_radius` | `float \| None` |  | Marker radius in Manim units; default: from the number of points. |
 | `label_size` | `size \| None` |  | Size of tick labels, axis titles, the legend, fit boxes and annotations (never below the readable minimum); default: body in a landscape frame, caption in a portrait one. |
 | `caption` | `str` |  | Note under the plot (e.g. the data source). |

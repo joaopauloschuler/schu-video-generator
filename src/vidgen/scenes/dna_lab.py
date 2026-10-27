@@ -12,6 +12,7 @@
 
 The model is ``vidgen.genetics.dna_lab``; the action ``run`` is in ``scenes/molecular_actions.py``."""
 
+import dataclasses
 from typing import Any, Literal
 
 import numpy as np
@@ -19,7 +20,31 @@ import numpy as np
 from vidgen.api import *
 
 from .bio_draw import small_size, text_block
-from .molecular_draw import BASE_HUES, Letters, base_ink, base_tile, esc, plot_axes
+from .molecular_draw import BASE_HUES, Letters, base_ink, base_tile, esc
+
+
+def _all_y_labels(lay: Any, measure: Any) -> Any:
+    """``lay`` with every y tick labelled (the PCR temperatures each name a stage; none may be
+    thinned away): labels too close for their height are spread apart about their ticks,
+    kept inside the plot's height."""
+    if len(lay.y_kept) == len(lay.y.ticks):
+        return lay
+    _, cap = measure("0")
+    gap = 0.45 * cap + 0.05
+    sizes = [measure(t) for t in lay.y.labels]
+    order = sorted(range(len(sizes)), key=lambda i: lay.y.ticks[i])
+    ys = [lay.frame_y(lay.y.ticks[i]) for i in order]
+    need = [(sizes[a][1] + sizes[b][1]) / 2 + 0.15 * cap for a, b in zip(order, order[1:])]
+    for _ in range(50):   # push neighbours apart, then back inside the plot
+        for k, d in enumerate(need):
+            short = d - (ys[k + 1] - ys[k])
+            if short > 0:
+                ys[k] -= short / 2
+                ys[k + 1] += short / 2
+        shift = max(0.0, lay.plot.y0 - ys[0]) - max(0.0, ys[-1] - lay.plot.y1)
+        ys = [y + shift for y in ys]
+    labels = [plotcore.Label(lay.y.labels[i], lay.plot.x0 - gap - sizes[i][0] / 2, y, *sizes[i]) for i, y in zip(order, ys)]
+    return dataclasses.replace(lay, y_labels=tuple(labels), y_kept=tuple(order))
 
 
 def BASE_HUE(base: str) -> str:
@@ -295,11 +320,24 @@ class DnaLabScene(NarratedScene):
         """The temperature trace of three cycles: denature, anneal, extend."""
         p = self.plan.pcr
         area = self.trace_area
-        lo, hi = 45.0, max(100.0, p.denature + 4)
+        lo, hi = min(45.0, p.anneal - 5), max(100.0, p.denature + 4)
         shown = min(3, p.cycles)
-        ticks_y = [(p.anneal, f"{p.anneal:g}"), (p.extend, f"{p.extend:g}"), (p.denature, f"{p.denature:g}")]
-        axes, to_point = plot_axes(self, area, (0.0, shown * 3.0), (lo, hi), "cycles", "°C", self.ink, self.dim_ink, self.tiny,
-                                   [(3 * k + 1.5, str(k + 1)) for k in range(shown)], ticks_y)
+        # axes of the chart core (DESIGN §97.12): "cycle k" under the middle of each cycle; the
+        # three temperatures as the y ticks, named by their stage, with dashed gridlines (no
+        # stage names inside the plot to collide with the trace); a horizontal title
+        stages: dict[float, list[str]] = {}
+        for name, temp in (("anneal", p.anneal), ("extend", p.extend), ("denature", p.denature)):
+            stages.setdefault(temp, []).append(name)
+        temps = sorted(stages)
+        x_axis = plotcore.Axis("linear", 0.0, shown * 3.0, tuple(3.0 * k + 1.5 for k in range(shown)), tuple(f"cycle {k + 1}" for k in range(shown)))
+        y_axis = plotcore.Axis("linear", lo, hi, tuple(temps), tuple(f"{' / '.join(stages[t])} {t:g}" for t in temps), title="temperature (°C)")
+        measure = plot_draw.text_measure(self.tiny, self.theme)
+        lay = _all_y_labels(plotcore.layout_axes(plotcore.Rect(area.x0, area.y0, area.x1, area.y1), x_axis, y_axis, measure), measure)
+        axes = plot_draw.draw_panel(lay, size=self.tiny, color="dim", grid="y", theme=self.theme).group
+
+        def to_point(x: float, y: float) -> np.ndarray:
+            return np.array([lay.frame_x(x), lay.frame_y(y), 0.0])
+
         self.trace_axes = axes
         self.to_trace = to_point
         pts: list[np.ndarray] = [to_point(0.0, p.anneal)]
@@ -311,15 +349,7 @@ class DnaLabScene(NarratedScene):
             path = VMobject().set_points_as_corners([pts[-1]] + seg).set_stroke(self.bad, width=3)
             self.cycle_paths.append(path)
             pts += seg
-        marks = VGroup()
-        for text, temp, dx, up in (("denature", p.denature, 0.5, -1), ("anneal", p.anneal, 1.55, 1), ("extend", p.extend, 2.5, 1)):
-            t = self.markup(text, size=self.tiny, color=self.dim_ink)
-            t.move_to(to_point(dx, temp) + UP * up * t.height * 0.85)
-            if t.get_top()[1] > area.y1:
-                t.shift(DOWN * (t.get_top()[1] - area.y1))
-            marks.add(t)
-        self.trace_marks = marks
-        self.trace_group = VGroup(axes, *self.cycle_paths, marks)
+        self.trace_group = VGroup(axes, *self.cycle_paths)
 
     def _pcr_molecules(self) -> None:
         """The molecules after each cycle: a row per cycle of short bars, the ones of the product's
@@ -680,7 +710,7 @@ class DnaLabScene(NarratedScene):
         anims: list[Animation] = [FadeIn(self.trace_axes)]
         for path in self.cycle_paths:
             anims.append(Create(path))
-        anims.append(AnimationGroup(FadeIn(self.trace_marks), *self._swap(self._card(lines, "The cycle"))))
+        anims.append(AnimationGroup(*self._swap(self._card(lines, "The cycle"))))
         return [Succession(*anims)]
 
     def _step_pcr_count(self) -> list[Animation]:

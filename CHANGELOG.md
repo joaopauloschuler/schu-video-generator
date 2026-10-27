@@ -5,9 +5,27 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–226)
+## Unreleased (Steps 193–227)
 
 ### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
+
+- **A science example, guide topic and cookbook; the PCR trace on the chart core** (Step 227).
+  `examples/radioactive-decay` ("Half-life: how radioactive decay keeps time", about 2:52 with
+  Kokoro): a live Monte Carlo of 1000 and 20 nuclei beside the exponential law, counts with √N
+  error bars on a log axis with an exponential fit, its confidence band and residuals, the
+  half-life worked out with its uncertainty, and carbon-14 dating; seeded data from
+  `make_data.py`, a 9:16 variant. `vidgen guide science` (plot or chart, honest axes, error bars,
+  fits, live models, units and significant figures, pacing, lint; the `biology` topic no longer
+  answers to "science") and `docs/COOKBOOK-SCIENCE-CHARTS.md`; the gallery has a "Science charts"
+  section. **Changed look:** a `calculation` keeps the units in a long substitution whenever they
+  stay comfortably readable (on two lines, or one factor per line) instead of falling back to SI
+  numbers, a block too tall for the frame shrinks its largest lines first, and a calculation's
+  lines stay within 1.6 times each other's size (a big formula above a long substitution comes
+  down towards it); the `dna_lab` PCR
+  trace is drawn by the chart core: a horizontal "temperature (°C)" title, the three temperatures
+  named by their stage on the axis ("denature 95") with gridlines, "cycle 1…3" under the cycles.
+  New: `plotcore.layout_axes` (a panel from axes you built). The population, GWAS, cyclin and
+  action-potential plots keep their drawing (DESIGN §97.12 says why).
 
 - **Lint for numbers, units and plots** (Step 226). `vidgen lint` reads the numbers the narration
   and the screen say — in digits and in words ("eleven point two kilometres per second", "three

@@ -153,11 +153,18 @@ class Step:
     #: ``tex`` and ``alt`` with their outermost products on two lines (for a narrow frame).
     stacked: str = ""
     alt_stacked: str = ""
+    #: ``tex`` with one factor of its outermost product per line (three factors or more).
+    deep: str = ""
 
     def variants(self) -> list[str]:
         """The ways to write this line, from the most explicit: with units, with units on two
-        lines, SI numbers, SI numbers on two lines (repeats left out)."""
-        return list(dict.fromkeys(t for t in (self.tex, self.stacked, self.alt, self.alt_stacked) if t))
+        lines, with units one factor per line, SI numbers, SI numbers on two lines (repeats
+        left out)."""
+        return list(dict.fromkeys(t for t in (self.tex, self.stacked, self.deep, self.alt, self.alt_stacked) if t))
+
+    def unit_variants(self) -> list[str]:
+        """The ways of :meth:`variants` that keep the units."""
+        return list(dict.fromkeys(t for t in (self.tex, self.stacked, self.deep) if t))
 
 
 @dataclass
@@ -426,8 +433,9 @@ def _steps(c: CalcInput, tree: ex.Node, q: Quantity, value: SymbolValue, known: 
     steps = [Step("formula", formula, plain=c.expr)]
     leaves = [n for n in tree.walk() if n.kind == "name" and n.value in known]
     if c.substitute and leaves:
-        variants = {(units, stack): ex.to_tex(tree, substituted(units), values=True, stack=stack)[0] for units in (True, False) for stack in (False, True)}
-        steps.append(Step("substitute", variants[True, False], alt=variants[False, False], stacked=variants[True, True], alt_stacked=variants[False, True]))
+        variants = {(units, stack): ex.to_tex(tree, substituted(units), values=True, stack=stack)[0] for units in (True, False) for stack in (0, 1, 2)}
+        steps.append(Step("substitute", variants[True, 0], alt=variants[False, 0], stacked=variants[True, 1], alt_stacked=variants[False, 1],
+                          deep=variants[True, 2]))
     want = c.intermediate if c.intermediate is not None else True
     if want and tree.kind in ("call", "^") and len(tree.walk()) > 3:
         replace = {}

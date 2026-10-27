@@ -11,7 +11,9 @@ sketches), see [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md); for cell-biology lectures
 explainers (accuracy, level of detail, zooming, pacing dense content), see
 [COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md); for genetics and medical genetics (NSGC,
 ISCN, HGVS notation, exact numbers, a counselling tone), see
-[COOKBOOK-GENETICS.md](COOKBOOK-GENETICS.md).
+[COOKBOOK-GENETICS.md](COOKBOOK-GENETICS.md); for scientific plots and worked calculations
+(honest axes, error bars, fits and their uncertainties, units and significant figures), see
+[COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 
@@ -481,6 +483,11 @@ second", "one in a hundred and fifty") against them:
   or labels when there are several series; a model's `conserved` energy stays within 1 % (use
   `method: leapfrog` for orbits and oscillators); a half-life, exponent or peak said aloud is the
   fit's, within its uncertainty.
+
+The whole craft (plot or chart, honest axes, error-bar meanings, fits and their uncertainties,
+units and significant figures, pacing a calculation, common mistakes with the rule that catches
+each) is in [COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md), with the worked example
+[`examples/radioactive-decay`](../examples/radioactive-decay/README.md).
 
 ## 13. Editorial options (example style choices)
 

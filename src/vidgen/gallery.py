@@ -94,6 +94,12 @@ SECTION_NOTES: dict[str, str] = {
         "(`examples/cystic-fibrosis`). Notation, exact numbers and counselling tone: "
         "[the genetics cookbook](../COOKBOOK-GENETICS.md)."
     ),
+    "science charts": (
+        "A whole physics explainer with plots and calculations, simulated nuclei, counts with a fit, the half-life worked out "
+        "and carbon-14 dating: [Half-life: how radioactive decay keeps time](../../examples/radioactive-decay/README.md) "
+        "(`examples/radioactive-decay`). Honest axes, error bars, fits, units and significant figures: "
+        "[the science-charts cookbook](../COOKBOOK-SCIENCE-CHARTS.md)."
+    ),
 }
 #: The last line of a showcase's page, by section: where to read more.
 SECTION_FOOTERS: dict[str, str] = {

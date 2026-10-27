@@ -240,6 +240,25 @@ def test_pcr_primer_errors() -> None:
         lab.plan_pcr({"template": PCR_TEMPLATE, "primers": PRIMERS, "temperatures": {"denature": 99.5}})
 
 
+def test_pcr_trace_keeps_every_temperature_label() -> None:
+    """Step 227: the PCR trace is on the chart core; its three named temperatures are never
+    thinned away — labels too close (anneal 64, extend 72) are spread apart, inside the plot."""
+    from vidgen import plotcore
+    from vidgen.scenes.dna_lab import _all_y_labels
+
+    measure = plotcore.approx_measure(height=0.25)
+    x = plotcore.Axis("linear", 0.0, 9.0, (1.5, 4.5, 7.5), ("cycle 1", "cycle 2", "cycle 3"))
+    y = plotcore.Axis("linear", 45.0, 100.0, (64.0, 72.0, 95.0), ("anneal 64", "extend 72", "denature 95"), title="temperature (°C)")
+    lay = plotcore.layout_axes(plotcore.Rect(-3, -1, 3, 1), x, y, measure)
+    assert len(lay.y_kept) < 3                                          # the core thins them
+    spread = _all_y_labels(lay, measure)
+    labels = sorted(spread.y_labels, key=lambda lab: lab.y)
+    assert [lab.text for lab in labels] == ["anneal 64", "extend 72", "denature 95"] and spread.y_kept == (0, 1, 2)
+    assert all(b.y - a.y >= (a.height + b.height) / 2 for a, b in zip(labels, labels[1:]))
+    assert labels[0].y >= lay.plot.y0 - 1e-9 and labels[-1].y <= lay.plot.y1 + 1e-9
+    assert _all_y_labels(spread, measure) is spread
+
+
 def test_gel_migration_is_monotonic_in_size() -> None:
     for agarose in (0.7, 1.0, 1.5, 2.0):
         lo, hi = lab.resolving_range(agarose)

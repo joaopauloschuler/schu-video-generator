@@ -11,7 +11,7 @@ recurrences, seeded random processes, registered functions (:mod:`.integrate`,
 from .annotate import Placement, best_box, place_in_plot, place_in_span, place_near, place_on_hline, place_on_vline
 from .axis import BREAK_GAP, SCALES, TIGHT_PAD, Axis, AxisSpec, build_axis, equal_aspect
 from .data import Column, Table, did_you_mean, parse_number, read_table, split_header
-from .figure import Label, Measure, PanelInput, PanelLayout, Rect, approx_measure, clip_polyline, label_stride, layout_figure, relabel
+from .figure import Label, Measure, PanelInput, PanelLayout, Rect, approx_measure, clip_polyline, label_stride, layout_axes, layout_figure, relabel
 from .fit import MODEL_ALIASES, MODEL_KINDS, PEAK_KINDS, FitResult, Model, fit_curve, make_model, pretty_name, unit_power, unit_ratio
 from .hist import BIN_RULES, DISTRIBUTIONS, Histogram, bin_edges, fit_distribution, histogram, poisson_pmf, rule_width
 from .integrate import IntegrationError, rk4, rk45, verlet
@@ -109,6 +109,7 @@ __all__ = [
     "grown",
     "histogram",
     "label_stride",
+    "layout_axes",
     "layout_figure",
     "linear_ticks",
     "log_ticks",

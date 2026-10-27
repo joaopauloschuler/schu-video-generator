@@ -240,6 +240,13 @@ def layout_figure(
     return layouts
 
 
+def layout_axes(area: Rect, x: Axis, y: Axis, measure: Measure, *, top: float = 0.0) -> PanelLayout:
+    """Lay out one panel whose axes the caller built (hand-placed ticks and labels: cycle
+    numbers between ticks, three named temperatures) in ``area``, in the style of
+    :func:`layout_figure` (``top`` units kept free above)."""
+    return _place(area, [(x, y)], measure, "rows", False, 0.0, top, [1.0])[0]
+
+
 def _shrunk_plot(lay: PanelLayout) -> Rect:
     """The plot narrowed (centred) or lowered (top kept) to an equal aspect, for an axis that
     would have to widen but has both ends fixed."""

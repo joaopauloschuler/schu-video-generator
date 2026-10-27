@@ -1323,7 +1323,12 @@ changes). DESIGN §97. Steps 222–228.
 - [~] Not yet: numbers of intermediate steps; a pure number whose value the sentence does not name; `bar_chart` / `line_chart` labels against their data
 
 ### Step 227 — Adoption, example, docs, gallery
-- [ ] Suitable Phase U / V domain plots moved onto the core (before / after, tests kept); an example project (a short narrated explainer with plots and a worked calculation: radioactive decay or drug clearance); guide topic `science`, CONFIG, `docs/COOKBOOK-SCIENCE-CHARTS.md`, gallery entries within budget, README, CHANGELOG
+- [x] Suitable Phase U / V domain plots moved onto the core (before / after, tests kept); an example project (a short narrated explainer with plots and a worked calculation: radioactive decay or drug clearance); guide topic `science`, CONFIG, `docs/COOKBOOK-SCIENCE-CHARTS.md`, gallery entries within budget, README, CHANGELOG
+- [x] Adoption (DESIGN §97.12): the `dna_lab` PCR trace on the core (`plotcore.layout_axes`; horizontal title, temperatures named on the axis, never thinned; `molecular_draw.plot_axes` removed; gallery `dna_lab` regenerated); population, GWAS, cyclin and action-potential plots skipped with reasons
+- [x] Reviewer's note on 225: substitutions keep their units when readable (largest lines shrink first, a one-factor-per-line way, judged by final size, `KEEP_UNITS` 1.2); gallery `calculation` regenerated
+- [x] `examples/radioactive-decay` (2:52, Kokoro, `beacon` bed, 16:9 + 9:16; live Monte Carlo, counts with √N bars on a log axis, custom exponential fit with band and residuals, half-life with uncertainty, carbon-14 dating; seeded `make_data.py`); lint clean in both formats; `tests/test_radioactive_decay.py`
+- [x] Guide topic `science` (copied to `AGENTS.md`), a "Science charts" gallery section, `docs/COOKBOOK-SCIENCE-CHARTS.md` linked from README, the cookbook, the guide and the gallery; CONFIG completeness test covers `plot` and `calculation`; README feature bullet and example entry; CHANGELOG; DESIGN §6.4, §97.12
+- [~] Not yet: the population / GWAS / cyclin / action-potential plots keep their own drawing (reasons in §97.12); a single factor wider than the frame (G's unit in 9:16) still falls back to SI numbers
 
 ### Step 228 — Review of Phase W
 - [ ] Critical review with fixes; accuracy of fits and statistics against numpy / scipy references, units and calculations; compatibility; phase tests and related suites; `tests/test_mcp.py` in full

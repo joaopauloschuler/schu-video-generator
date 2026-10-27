@@ -13,6 +13,7 @@ import pytest
 
 from vidgen.errors import VidgenError
 from vidgen.plotcore import (
+    Axis,
     AxisSpec,
     PanelInput,
     Rect,
@@ -24,6 +25,7 @@ from vidgen.plotcore import (
     default_linthresh,
     exponent_of,
     label_stride,
+    layout_axes,
     layout_figure,
     linear_ticks,
     log_ticks,
@@ -324,6 +326,18 @@ def test_tick_labels_are_thinned_so_none_touch() -> None:
     assert xs[-1].text == lay.x.labels[-1]                     # the end of the axis keeps its label
     assert label_stride([0, 1, 2, 3], [0.5] * 4, 0.6) == [0, 2]
     assert label_stride([0, 1, 2, 3], [0.5] * 4, 0.6, keep_last=True) == [0, 3]
+
+
+def test_layout_axes_takes_hand_built_axes() -> None:
+    """Step 227: a panel whose ticks the caller placed (the PCR trace: cycle numbers between the
+    ticks of a cycle, three named temperatures), laid out like a figure's panel."""
+    x = Axis("linear", 0.0, 9.0, (1.5, 4.5, 7.5), ("cycle 1", "cycle 2", "cycle 3"))
+    y = Axis("linear", 45.0, 100.0, (50.0, 72.0, 95.0), ("anneal 50", "extend 72", "denature 95"), title="temperature (°C)")
+    lay = layout_axes(Rect(-3, -1.5, 3, 1.5), x, y, approx_measure(height=0.2))
+    assert lay.x is x and lay.y is y and lay.x_title is None and lay.y_title.text == "temperature (°C)"
+    assert lay.frame_x(4.5) == pytest.approx(lay.plot.center[0]) and lay.plot.x0 > -3 + 0.11 * 11   # room for "denature 95"
+    assert [lab.text for lab in lay.x_labels] == ["cycle 1", "cycle 2", "cycle 3"]
+    assert lay == layout_axes(Rect(-3, -1.5, 3, 1.5), x, y, approx_measure(height=0.2))   # deterministic
 
 
 def test_clip_polyline() -> None:

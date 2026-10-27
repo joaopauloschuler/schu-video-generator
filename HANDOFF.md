@@ -21010,3 +21010,90 @@ How to test
   nine numbers changed) → 8 found (the unnamed pedigree product is the gap above).
 - Demo: `vidgen lint` on scratchpad `s226/demo` (nine scenes, preview renders, estimated timings)
   → 14 warnings, 5 info, every rule firing (output in CONFIG "Calculations and plots").
+
+## Step 227 — Adoption, example, docs, gallery
+
+What was built (DESIGN §97.12)
+- **Adoption of the chart core** by the Phase U / V plots, by DESIGN §97.3's rule:
+
+  | plot | decision | why |
+  |---|---|---|
+  | PCR temperature trace (`dna_lab`) | adopted | hand-made axes had a rotated "°C" and "denature" over the 95 label and the trace; now `plotcore.layout_axes` + `plot_draw.draw_panel`: a horizontal "temperature (°C)" title, the temperatures named on the axis ("denature 95", "extend 72", "anneal 50") with dashed gridlines, "cycle k" under each cycle, labels never thinned (`dna_lab._all_y_labels` spreads close ones); `molecular_draw.plot_axes` removed |
+  | population frequency / heterozygosity | skipped | already on `vidgen.charts.chart_axes` (the style the core copies): same picture, risk for nothing |
+  | GWAS Manhattan / QQ / regional | skipped | `chart_axes` too; categorical chromosome axis not in the core; the QQ ranges are already square |
+  | cyclin–CDK curves | skipped | no numeric axes (a.u., phase bands) |
+  | action-potential inset | skipped | a small inset: the core's title and label rows cost height it does not have; no inset plots in the core yet |
+
+- **Reviewer's note on 225 (units dropped in substitutions)**: `scenes/calculation.py` — when the
+  block is too tall the largest lines shrink first (`_fit`, bisection on a common cap), no line
+  more than `SPREAD` = 1.6× the smallest; a third way with units, one factor per line
+  (`Step.deep`, `expr.to_tex(stack=2)`, a bare number stays with the next factor); each way judged
+  by its final size and the units ways kept when the best of them is ≥ `KEEP_UNITS` = 1.2× the
+  readable size (`_choose`). Orbit keeps units in 16:9 and 9:16, escape in 16:9 (9:16: SI, G's
+  unit is too wide), photon in both.
+- **Example `examples/radioactive-decay`** (README, `video.yaml`, `make_data.py`,
+  `assets/counts.csv`, `assets/nuclei.csv`): intro; a live Monte Carlo of 1000 and 20
+  barium-137m nuclei beside exp(−λt); counts per 30 s with √N bars on a log axis, a custom fit
+  `A*exp(-lambda*x)` (λ = 0.276 ± 0.004 min⁻¹, χ²/ν 0.92) with confidence band and normalized
+  residuals, a zoom on the tail; the half-life 2.51 min, its uncertainty 0.040 min and the
+  tabulated 2.552 min one standard error away; carbon-14: λ = 1.21 × 10⁻⁴ yr⁻¹ and a hearth at
+  9.6 × 10³ yr, with the calibration caveat; recap. Kokoro `af_heart` 0.85, `beacon` at −8 dB, a
+  `short` 9:16 variant, terms with TeX for λ and t½, no captions overlay (plots need the height).
+- **Docs**: guide topic `science` (aliases plots, plot, calculations, calculation, units, fits,
+  physics, data; `biology` lost its alias `science`), a pointer from the `scenes` topic; the
+  chooser snippets of `plot` / `calculation` in their own block `# science charts` → gallery
+  section "Science charts" (`gallery.SECTION_NOTES`); `docs/COOKBOOK-SCIENCE-CHARTS.md` (choosing,
+  honest axes, error-bar meanings, fits and uncertainties, live models, units and significant
+  figures, pacing, mistakes → rules, a validated pattern) linked from README, COOKBOOK §intro and
+  §12, the guide and the gallery; CONFIG calculation layout paragraph; README feature bullet and
+  example entry; CHANGELOG; DESIGN §6.4, §97.12; `AGENTS.md` copied.
+- **Gallery**: `dna_lab` (GIFs 110 / 120 KB), `calculation` (87 / 104 KB) regenerated; `plot.md`
+  page refreshed (its params table lacked Step 224's keys); index regrouped; 12.6 MB of 13.
+
+Files touched
+- New: `docs/COOKBOOK-SCIENCE-CHARTS.md`, `examples/radioactive-decay/*`, `tests/test_radioactive_decay.py`.
+- Changed: `src/vidgen/plotcore/{figure,__init__}.py` (`layout_axes`), `src/vidgen/quantities/{expr,calc}.py`,
+  `src/vidgen/scenes/{calculation,dna_lab,molecular_draw}.py`, `src/vidgen/gallery.py`, guide +
+  `AGENTS.md`, `README.md`, `docs/COOKBOOK.md`, `docs/CONFIG.md`, `docs/gallery/{README,plot}.md` +
+  media (`dna_lab-*`, `calculation-*`), `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`; tests
+  `test_calculation.py`, `test_quantities.py`, `test_plot_core.py`, `test_molecular.py`, `test_docs.py`
+  (cookbook test; completeness parametrized with `plot` + `calculation`), `test_guide.py`.
+
+Public interfaces: `plotcore.layout_axes`; `quantities.Step.deep`, `Step.unit_variants()`;
+`expr.to_tex(stack=0|1|2)`. No config key, no action, no dependency.
+
+Decisions
+- Only the PCR trace adopted: the other candidates either already share the core's style
+  (`chart_axes`) or need features the core lacks (categorical axes, insets) — no clear gain.
+- Temperatures named on the y axis instead of stage words inside a short plot (no collisions,
+  readable at any height); labels spread rather than thinned (each names a stage).
+- Calculation lines stay within 1.6× of each other: a block reads as one, and a long substitution
+  with units is not dwarfed by its formula.
+- The example's live simulation is a seeded CSV from a committed stdlib script (a `plot` model
+  kind for random decay would need Python registration); the fit is `custom` so the box shows λ.
+
+Compatibility
+- Phase Q baseline after the shared changes (plotcore, quantities, molecular_draw): 31 frames, max
+  difference 0 (`phase-q-baseline/check227`; calculation and dna_lab are not in it).
+- Changed on purpose: `calculation` layouts (units kept, sizes within 1.6×), the PCR trace.
+- Lint sweep `s226/lint_all.py` (examples incl. the new one, gallery, Phase U–W scratch projects,
+  280 scenes): 0 findings.
+
+Known gaps
+- Population / GWAS / cyclin / action-potential plots keep their own drawing; a single factor wider
+  than the frame (G's unit in 9:16) falls back to SI numbers; crowded 16:9 fit figures need
+  `label_size: caption`; `layout_axes` has one panel only.
+
+How to test
+- `tests/test_radioactive_decay.py` (6), `tests/test_calculation.py` (16 incl. 2 render),
+  `tests/test_quantities.py` (93), `tests/test_plot_core.py` (54), `tests/test_molecular.py` (23 incl.
+  renders, ~170 s), `test_docs` + `test_guide` (150), `test_gallery` (20), `test_plot` +
+  `test_plot_fit` + `test_api` (91), `test_calc_lint` (35), `test_builtin_scenes` +
+  `test_actions_coverage` + `test_extensions` + `test_translation` (292 selected),
+  `test_cystic_fibrosis` + `test_schema` + `test_registry` + `test_plot_live` (134 not render).
+- Video: scratchpad `s227/proj/output/radioactive_decay.mp4` (1920×1080, 30 fps, 172.23 s video and
+  audio, −16.1 LUFS, true peak −1.9 dBTP, LRA 3.2 LU, no silence over 1.5 s); contact sheet
+  `s227/contact_16x9.png`; 9:16 stills `s227/proj/build/preview_short/storyboard/`; `vidgen lint`
+  16:9 and 9:16: 0 findings with the Kokoro narration.
+- Stills: substitution layout `s227/calc/build/preview{,_vertical,_vlight}/storyboard/`; PCR
+  before `s227/before16`, `s227/before916`, after `s227/adopt/build/preview{,_vertical,_vlight}/storyboard/`.

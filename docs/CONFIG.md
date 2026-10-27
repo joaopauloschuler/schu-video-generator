@@ -5462,11 +5462,14 @@ frame (as tall as it needs, at most half the body; two columns when the rows are
 side`, `top` or `none`. Each row is `symbol = value unit` over its meaning and source; a
 calculation's result joins the table when the next calculation starts (`results_in_table:
 false` keeps them out). The lines of a calculation are aligned at their `=` and centred; each
-is as large as `size` allows (1.15x in a vertical frame) within the width, and a long
-substitution is written the most explicit way that stays nearly as large as the largest: with
-units on one line, with units on two lines (the outer product split), then in SI numbers without
-units (on one line, on two) — `units: always` / `never` choose. A calculation that still does not
-fit at the readable size logs a warning (split it, or use fewer symbols per formula). Symbols are
+is as large as `size` allows (1.15x in a vertical frame) within the width; when the block is too
+tall, the largest lines give way first (down to a common size), so a big formula shrinks before
+a long substitution does, and no line is more than 1.6 times the size of the smallest (one block). A long substitution keeps its units when that stays comfortably
+readable (1.2x the readable size or more): with units on one line, on two lines (the outer product
+split) or one factor per line, the most explicit that is nearly as large as the largest of those;
+otherwise it is written in SI numbers without units (on one line, on two) — `units: always` /
+`never` choose. A calculation that still does not fit at the readable size logs a warning (split
+it, or use fewer symbols per formula). Symbols are
 coloured by their concept colour (`terms:` whose `tex` is the symbol's) or their own `color`, in
 the table and in every line.
 

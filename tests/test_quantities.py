@@ -298,6 +298,20 @@ def test_escape_velocity_from_the_earth() -> None:
     assert r.conversions[0].value_text() == "11.2 km/s"
     full = result([S("G", constant="G"), S("M", constant="M_earth"), S("R", constant="R_earth")], [C("v_esc", "sqrt(2*G*M/R)")])
     assert full.value.quantity.sig == 5                                       # R_earth has 5 figures
+    sub = r.steps[1]
+    # stacked on two lines; one factor per line keeps the bare 2 with G
+    assert sub.stacked.count(r"\\") == 1 and sub.deep.count(r"\\") == 1 and sub.deep.startswith(r"\sqrt{\frac{\begin{array}{c} 2 \times")
+    assert sub.unit_variants() == list(dict.fromkeys([sub.tex, sub.stacked, sub.deep]))
+    assert sub.variants()[-2:] == [sub.alt, sub.alt_stacked]
+
+
+def test_one_factor_per_line() -> None:
+    def symbols(node):
+        return (node.value, 5)
+
+    assert to_tex(parse("a*b*c*d"), symbols, stack=2)[0] == r"\begin{array}{c} a \\ {} \times b \\ {} \times c \\ {} \times d \end{array}"
+    assert to_tex(parse("a*b*c*d"), symbols, stack=1)[0] == r"\begin{array}{c} a \times b \\ {} \times c \times d \end{array}"
+    assert to_tex(parse("2*a*3*b"), symbols, stack=2)[0] == r"\begin{array}{c} 2 \times a \\ {} \times 3 \times b \end{array}"
 
 
 def test_hardy_weinberg_carrier_frequency() -> None:

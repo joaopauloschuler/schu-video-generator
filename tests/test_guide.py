@@ -118,6 +118,24 @@ def test_the_genetics_topic_covers_the_genetics_types() -> None:
     assert "vidgen guide genetics" in topic_text("scenes")
 
 
+def test_the_science_topic_covers_plots_and_calculations() -> None:
+    """Step 227: a topic for plots and worked calculations (choosing, axes, error bars, fits, live
+    models, units, pacing, lint)."""
+    text = topic_text("science")
+    assert find_topic("calculations").name == "science" and text.startswith("## Science")
+    assert find_topic("cell-biology").name == "biology"
+    for kind in ("plot", "calculation", "bar_chart", "function_plot"):
+        assert f"`{kind}`" in text, kind
+    for part in ("**Plot or chart.**", "**Honest axes.**", "**Error bars and fits.**", "**Live models.**",
+                 "**Units and significant figures.**", "**Pacing calculations.**", "**Lint.**",
+                 "COOKBOOK-SCIENCE-CHARTS.md", "examples/radioactive-decay", "error: sd | sem | ci95"):
+        assert part in text, part
+    for rule in ("calc_numbers", "calc_units", "calc_sigfigs", "plot_units", "plot_log", "plot_errors", "plot_series", "plot_truncated",
+                 "plot_conserved", "plot_fit_claims"):
+        assert f"`{rule}`" in text, rule
+    assert "vidgen guide science" in topic_text("scenes")
+
+
 def test_unknown_topic_suggests() -> None:
     with pytest.raises(VidgenError, match=r"unknown guide topic 'scene'; did you mean 'scenes'"):
         find_topic("scene")
