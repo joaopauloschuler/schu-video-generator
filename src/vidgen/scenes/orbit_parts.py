@@ -325,10 +325,12 @@ def _angle(value: Any, where: str, default: float = 0.0) -> float:
     return default if value is None else orbits.value_si(value, "angle", where)
 
 
-def build_system(central: Any, bodies: list[OrbitBody]) -> Any:
+def build_system(central: Any, bodies: list[OrbitBody], jd: float | None = None) -> Any:
     """The :class:`orbits.System` of the central body (a preset name or :class:`OrbitCentral`)
     and the bodies, checked: names unique, ``around`` a body listed before, a preset's primary
-    present, elements consistent, periapses outside the bodies they orbit."""
+    present, elements consistent, periapses outside the bodies they orbit. With a Julian date
+    ``jd`` (Step 233) the Table 1 planets take their elements on that date."""
+    from .orbit_sky import dated_preset   # the date's module builds on this one
     centre = (OrbitCentral(preset=central) if isinstance(central, str) else central).body()
     central_key = orbits.preset_key(centre)
     out: list[Any] = []
@@ -337,6 +339,7 @@ def build_system(central: Any, bodies: list[OrbitBody]) -> Any:
     for k, spec in enumerate(bodies, start=1):
         where = f"bodies[{k}]"
         preset = orbits.orbit_preset(spec.preset, where) if spec.preset else None
+        preset = dated_preset(preset, jd, spec, where)
         name = spec.display_name()
         if not name:
             raise VidgenError(f"{where}: give a name (or a preset)")
@@ -508,7 +511,7 @@ class OrbitModel:
 
     def __init__(self, system: Any, span: float, run: Any, follow: str | None, trails: dict[str, float], shots: list[Any] | None = None,
                  cannon_at: Any = None, transfer: "TransferInfo | None" = None, assist: "AssistInfo | None" = None,
-                 extra_bodies: list["OrbitBody"] | None = None, specs: list["OrbitBody"] | None = None, many: Any = None) -> None:
+                 extra_bodies: list["OrbitBody"] | None = None, specs: list["OrbitBody"] | None = None, many: Any = None, sky: Any = None) -> None:
         self.system, self.span, self.run, self.follow, self.trails = system, span, run, follow, trails
         self.shots = list(shots or [])
         self.cannon_at = cannon_at
@@ -521,6 +524,9 @@ class OrbitModel:
         #: inertial view, 1 the rotating frame; the scene sets it as it draws).
         self.many = many
         self.turn = many.turn0 if many is not None else 0.0
+        #: Step 233: the date, event, log view, inset or sizes picture
+        #: (:class:`~vidgen.scenes.orbit_sky.SkyInfo`; ``None`` without them).
+        self.sky = sky
 
     def burns(self) -> list[tuple[str, Any]]:
         """Every burn of the scene in order of the bodies, then time: (body name, :class:`orbits.Burn`)
@@ -621,7 +627,7 @@ class OrbitModel:
 
 def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, orbit_count: float | None, dynamics: str, method: str,
                   step: str | None, follow: str | None, cannon: OrbitCannon | None = None, transfer: OrbitTransfer | None = None,
-                  flyby: OrbitFlyby | None = None, many: Any = None) -> OrbitModel:
+                  flyby: OrbitFlyby | None = None, many: Any = None, sky: Any = None) -> OrbitModel:
     """Everything an ``orbit`` scene computes before drawing, checked (``VidgenError`` with the
     reason): the system, the span (``span``, or ``orbit_count`` periods of the first body —
     default one; with only a cannon, the longest closed shot's period; with a transfer, until a
@@ -629,7 +635,22 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
     the trails, the cannon's shots, the transfer's burns, the flyby's probe and the overlays'
     needs. Step 232: ``many`` (:class:`~vidgen.scenes.orbit_systems.ManySpec`) adds a
     three-body system, bodies near Lagrange points, a resonance, the barycentre or rotating
-    view, the tidal schematic."""
+    view, the tidal schematic. Step 233: ``sky`` (:class:`~vidgen.scenes.orbit_sky.SkySpec`) a
+    date, an event, the log view, an inset, or the sizes picture."""
+    info_sky = None
+    if sky is not None and sky.wanted():
+        from . import orbit_sky as osky
+        if sky.sizes is not None:
+            busy = [k for k, on in (("date", sky.date is not None), ("event", sky.event), ("radial: log", sky.radial != "linear"),
+                                    ("inset", sky.inset not in (None, False)), ("cannonball", cannon), ("transfer", transfer), ("flyby", flyby),
+                                    ("system / resonance / tides", many is not None and many.wanted(bodies))) if on]
+            if busy:
+                raise VidgenError(f"sizes: the sizes picture is a scene of its own; leave out {', '.join(busy)}")
+            info_sky = osky.sizes_model(central, bodies, sky.sizes)
+            centre = (OrbitCentral(preset=central) if isinstance(central, str) else central).body()
+            return OrbitModel(orbits.System(centre, ()), orbits.DAY, None, None, {}, specs=[], sky=info_sky)
+        osky.check_sky(sky, bodies=bodies, follow=follow, cannon=cannon, transfer=transfer, flyby=flyby, many=many, dynamics=dynamics)
+        info_sky = osky.SkyInfo(jd0=osky.date_jd(sky.date) if sky.date is not None else None, log=sky.radial == "log")
     info_many = None
     if many is not None and many.wanted(bodies):
         from .orbit_systems import prepare_many   # the many-body module builds on this one
@@ -645,7 +666,14 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
         probe, assist = _flyby_probe(centre, flyby, [b.display_name() for b in bodies])
         extra.append(probe)
     all_bodies = [*bodies, *extra]
-    system = build_system(central, all_bodies)
+    system = build_system(central, all_bodies, jd=info_sky.jd0 if info_sky is not None else None)
+    if info_sky is not None:
+        if sky.event is not None:
+            info_sky.event, info_sky.event_t = osky.resolve_event(sky.event, info_sky.jd0, system)
+        if sky.inset not in (None, False):
+            info_sky.inset, info_sky.inner = osky.inset_radius(sky.inset, system)
+        if info_sky.log:
+            info_sky.r0 = osky.log_r0(system)
     if not all_bodies and cannon is None:
         raise VidgenError("bodies: give at least 1 item (a body), or a cannonball")
     if cannon is not None and dynamics == "nbody":
@@ -667,6 +695,8 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
         seconds = info.arrival + 0.2 * (info.arrival - info.depart)
     elif assist is not None and orbit_count is None:
         seconds = 2 * assist.t_periapsis
+    elif info_sky is not None and info_sky.event is not None and orbit_count is None:   # until a little after the event
+        seconds = max(1.15 * info_sky.event_t, 30 * orbits.DAY)
     elif info_many is not None and info_many.eight is not None:   # the figure-eight: its own period
         seconds = (orbit_count if orbit_count is not None else 1.0) * info_many.eight.period
     elif not all_bodies:
@@ -680,6 +710,8 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
             raise VidgenError(f"orbits: bodies[1] '{first}' is on an open orbit (e = {o.elements.e:g}, a {o.elements.kind}): it has no period; "
                               "give span: '200 d' (a time) instead")
         seconds = (orbit_count if orbit_count is not None else 1.0) * period
+    if info_sky is not None and info_sky.jd0 is not None:
+        orbits.check_valid(info_sky.jd0, info_sky.jd0 + seconds / orbits.DAY, where="span")
     late = [(name, b) for name, b in OrbitModel(system, seconds, None, None, {}).burns() if b.time > seconds]
     if late:
         name, b = late[0]
@@ -714,7 +746,7 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
             whole = info_many.restricted.pair.period
         trails[o.name] = _trail_seconds(spec.trail, whole, seconds, f"{o.name}.trail")
     follow_name = None if follow == system.central.name else follow
-    model = OrbitModel(system, seconds, run, follow_name, trails, shots, cannon_at, info, assist, extra, specs=all_bodies, many=info_many)
+    model = OrbitModel(system, seconds, run, follow_name, trails, shots, cannon_at, info, assist, extra, specs=all_bodies, many=info_many, sky=info_sky)
     if info_many is not None:
         from .orbit_systems import finish_many
         finish_many(model, many)

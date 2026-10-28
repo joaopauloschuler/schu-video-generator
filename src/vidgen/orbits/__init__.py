@@ -6,7 +6,8 @@ units (:mod:`.values`), systems of bodies moved by Kepler's laws and the video's
 (:mod:`.system`), n-body motion on Phase W's integrators (:mod:`.nbody`), Kepler's laws
 (:mod:`.laws`), burns and transfers (:mod:`.manoeuvres`), gravity assists (:mod:`.flyby`), the
 restricted three-body problem (:mod:`.threebody`) and many bodies — the figure-eight, binaries,
-resonances, tides (:mod:`.manybody`). The ``orbit``
+resonances, tides (:mod:`.manybody`), and the planets on a date from JPL's approximate elements
+with conjunctions and oppositions (:mod:`.ephemeris`). The ``orbit``
 scene type draws them. Exported by ``vidgen.api`` as the module ``orbits``."""
 
 from .bodies import ALIASES as PRESET_ALIASES, BODIES, GM_EARTH, GM_SUN, ORBITS, R_EARTH, SIDEREAL_DAY, Body, OrbitPreset, body_preset, orbit_preset, preset_key
@@ -91,10 +92,66 @@ from .threebody import (
     routh_stable,
     zero_velocity_segments,
 )
-from .bodies import GALILEAN_PERIODS, GALILEAN_PHASES
+from .bodies import GALILEAN_PERIODS, GALILEAN_PHASES, planet_preset, preset_on
+from .ephemeris import (
+    EVENTS,
+    J2000,
+    PLANETS,
+    SOURCE as TABLE1_SOURCE,
+    TABLE1,
+    VALID_FROM,
+    VALID_TO,
+    Event,
+    MeanElements,
+    calendar,
+    check_valid,
+    date_text,
+    distance as planet_distance,
+    elongation,
+    event_kind_check,
+    events_between,
+    heliocentric,
+    julian_date,
+    longitude as ecliptic_longitude,
+    mean_elements,
+    next_event,
+    parse_date,
+    planet_key,
+    planet_synodic_period,
+    sidereal_period,
+    valid_range,
+)
 from .values import AU, DAY, G, YEAR, length_unit, speedup_text, time_unit, value_si
 
 __all__ = [
+    "EVENTS",
+    "J2000",
+    "PLANETS",
+    "TABLE1",
+    "TABLE1_SOURCE",
+    "VALID_FROM",
+    "VALID_TO",
+    "Event",
+    "MeanElements",
+    "calendar",
+    "check_valid",
+    "date_text",
+    "ecliptic_longitude",
+    "elongation",
+    "event_kind_check",
+    "events_between",
+    "heliocentric",
+    "julian_date",
+    "mean_elements",
+    "next_event",
+    "parse_date",
+    "planet_distance",
+    "planet_key",
+    "planet_preset",
+    "planet_synodic_period",
+    "preset_on",
+    "sidereal_period",
+    "valid_range",
     "FIGURE_EIGHT_PERIOD",
     "FIGURE_EIGHT_V3",
     "FIGURE_EIGHT_X1",

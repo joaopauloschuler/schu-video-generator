@@ -21499,3 +21499,88 @@ How to test
   the Laplace resonance with conjunctions, a binary, the Moon's path, the tides):
   `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16 light);
   `vidgen lint`: 0 errors, 1 warning (mid-turn).
+
+
+## Step 233 — The Solar System on a date
+
+What was built (DESIGN §98.7):
+
+- **The compact side panel first** (reviewer: 232's panels had 10–15 rows of tiny text). Every
+  panel row (`Slot`) has a `name` and a `rank`; `choose_rows` keeps rank 0, then ranks 1 / 2 in the
+  scene's order up to 6 rows (16:9) / 5 (9:16) besides the "not to scale" notes, never a
+  diagnostic, every row at least the label size, one column. `panel: compact` (default) | `full`
+  (the old panel) | `none` | a list of row names (`PANEL_ROWS`, did-you-mean). ΔE/E, ΔL/L, the
+  Jacobi drift and the figure-eight's return error are diagnostics (`energy: true` brings ΔE/E and
+  ΔL/L back); `Orbit.diagnostics(params)` gives them to the lint (Step 234) whatever the panel shows.
+  The 229–232 scratch projects were re-rendered (s232 16:9 dark and 9:16 light, s231, s230 16:9)
+  and lint clean (s232's old mid-turn warning is gone too); the tides note is shorter in compact.
+- **Model** `vidgen.orbits.ephemeris` (no manim): Standish's Table 1 (J2000 values and rates per
+  century for Mercury … Neptune and Pluto; source and validity in the docstring), Julian dates,
+  validity checks (1800-01-01 to the end of 2050, start and end), mean elements on a date,
+  heliocentric ecliptic positions (the document's method), longitudes, distances, elongations,
+  sidereal and synodic periods, `next_event` (opposition, conjunction, inferior / superior
+  conjunction, aligned: root finding on the wrapped longitude difference) and `events_between`.
+  The planet presets now read their J2000 values from `TABLE1` (one copy); `preset_on`; Pluto as a
+  body and orbit preset (`kepler_planets` stays the eight planets).
+- **Scene** `orbit` (`scenes/orbit_sky.py`): `date`, `event`, `radial: log`, `inset`, `sizes`
+  (its own picture); targets `event`, `inset`, `rings`; the panel's `date`, `event`, `distance`,
+  `synodic` rows.
+
+Files touched
+- New: `src/vidgen/orbits/ephemeris.py`, `src/vidgen/scenes/orbit_sky.py`, `tests/test_orbit_sky.py` (35).
+- Changed: `src/vidgen/orbits/{__init__,bodies,laws}.py`, `src/vidgen/scenes/{orbit,orbit_parts,
+  orbit_overlays,orbit_manoeuvres,orbit_many}.py`, `tests/test_orbit.py` (3 assertions on panel rows:
+  `energy: true`, `panel: full`, a row list), `tests/test_orbit_many.py` (the Jacobi row is now a
+  diagnostic), `docs/CONFIG.md` (panel paragraph, Step 233 section, params, targets row), the guide +
+  `AGENTS.md` (chooser row, two snippets, two paragraphs), `DESIGN.md` §98.7, `tasklist.md`,
+  `CHANGELOG.md`.
+
+Public interfaces (additive, one visible default): `vidgen.api.orbits` gains the `ephemeris`
+names (`longitude` as `ecliptic_longitude`, `distance` as `planet_distance`, `SOURCE` as
+`TABLE1_SOURCE`), `planet_preset`, `preset_on`, the `pluto` presets; `Orbit.diagnostics`; `orbit`
+params `panel`, `date`, `event`, `radial`, `inset`, `sizes`. Visible change: orbit panels are
+compact by default (ΔE/E hidden unless `energy: true` / `panel: full`).
+
+Decisions
+- Ranks are chosen per scene by what it is about (a transfer's Δv rows always; Routh's test only
+  when L4 / L5 matter; the legend last); the budget leaves out lower ranks rather than shrinking text.
+- Events by heliocentric longitudes (equal or 180° apart): the same instant as the geocentric
+  opposition in longitude and monotone at the synodic rate, so bracketing is robust. Published
+  dates come out within hours (Mars 2020-10-13 23:24 TT vs 23:20 UT published; 2022-12-08 05:32 vs
+  05:36).
+- The Earth's longitude at an equinox is 180° of date; Table 1's frame is J2000, so the tests
+  subtract the precession since 2000 (50.29″/yr) — that is why 2020's raw value is 179.72°.
+- From the date the planets move on two-body Kepler orbits from the date's elements (consistent
+  with every other orbit scene); over a year they stay within 2 × 10⁻⁴ AU of Table 1's positions
+  (tested). Non-Table-1 presets with a date must be placed with `nu` / `mean_anomaly` (the Moon's
+  position on a date is not modelled).
+- `inset` reuses the flyby's side-box slot; the inner planets and the Sun are named in the inset,
+  not at the crowded centre of the main picture. `sizes` is an `orbit` param, not a new scene type
+  (the gallery budget, as for `tides`).
+- Values **for the owner to check**: Table 1's numbers were entered from memory of the document and
+  verified indirectly (the equinoxes, eight published event dates within hours, the sidereal year
+  365.2564 d, synodic periods 779.94 / 583.92 / 398.88 d) — Pluto's rates and the slower planets'
+  rates are the least exercised by the tests; Pluto's GM 975.5 km³ s⁻² (system) and radius
+  1 188.3 km. (Fetching JPL's table file https://ssd.jpl.nasa.gov/txt/p_elem_t1.txt to compare was
+  not permitted in this session.)
+
+Compatibility: shared code untouched (only the orbit scene files and `vidgen.orbits`), so the
+Phase Q baseline was not re-run. Existing orbit scenes render the same picture with a shorter
+panel (the deliberate change above); `panel: full` gives the previous panel.
+
+Known gaps: the Moon / satellites on a date; Table 2a; light-time, aberration, the equinox of
+date; greatest elongations; in 9:16 a true-scale picture with an inset is small (the inset takes
+the room under it); gallery media (Step 235).
+
+How to test
+- `tests/test_orbit_sky.py` (35, ~40 s incl. renders), `tests/test_orbit.py` (75), `tests/test_orbit_many.py`
+  (31), `tests/test_orbits.py`, `tests/test_orbit_laws.py`, `tests/test_orbit_manoeuvres.py`.
+- Related, passing: `test_docs`, `test_guide`, `test_gallery` (not render), `test_translation`,
+  `test_extensions`, `test_api`, `test_schema`, `test_registry`, `test_introspect`,
+  `test_json_output`, `test_actions_coverage` (not render + `-k orbit`), `test_builtin_scenes -k orbit`,
+  `test_lint`, `test_narration_rule`, `test_calculation`, `test_calc_lint`, `test_plot_live`,
+  `test_word_anchors`.
+- Stills: scratchpad `s233/proj` (Mars at opposition from 2020-06-01, the whole Solar System on
+  2024-01-01 with the inset, all planets and Pluto on the log scale, the sizes):
+  `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16 light);
+  `vidgen lint` 0 findings in both. The 232 project's panels: `s232/proj/build/preview/storyboard/`.

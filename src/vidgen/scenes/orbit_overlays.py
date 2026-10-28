@@ -6,9 +6,9 @@ overlaps (labels move with their bodies, with a leader line when pushed away). A
 :class:`~vidgen.scenes.orbit.Orbit`; the physics is in :mod:`vidgen.orbits.laws`."""
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fnmatch import fnmatchcase
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import numpy as np
 
@@ -39,7 +39,10 @@ _SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 @dataclass
 class Slot:
     """A row of the side panel: text (``probes`` size it; ``value`` gives it at a time), a
-    colour ``swatch`` before it, or the velocity ``key`` (an arrow) before it."""
+    colour ``swatch`` before it, or the velocity ``key`` (an arrow) before it. ``name`` is the
+    row's name in :data:`PANEL_ROWS` (``panel: [time, total_dv]``; rows of one name go
+    together) and ``rank`` how much a compact panel wants it: 0 always, 1 then 2 while there is
+    room, :data:`DIAGNOSTIC` only in ``panel: full`` or when named."""
 
     probes: list[str]
     value: Callable[[float], str] | None = None
@@ -47,9 +50,73 @@ class Slot:
     scale: float = 1.0
     swatch: str | None = None
     key: bool = False
+    name: str = ""
+    rank: int = 1
 
     def text(self, t: float) -> str:
         return self.value(t) if self.value is not None else self.probes[0]
+
+
+#: Rank of the rows a compact panel leaves out (diagnostics: ΔE/E, ΔL/L, the Jacobi drift...).
+DIAGNOSTIC = 9
+#: Most rows of a compact panel (16:9, 9:16), besides the "not to scale" note; rows of rank 0
+#: are always kept.
+PANEL_BUDGET = (6, 5)
+#: The panel's row names (``panel: [time, speedup, total_dv]``) and what each shows.
+PANEL_ROWS: dict[str, str] = {
+    "time": "the simulated time", "speedup": "the speed-up (or 'clock paused')", "note": "'sizes not to scale' (kept whenever sizes are enlarged)",
+    "energy": "the n-body energy error ΔE/E (diagnostic)", "angular": "the n-body angular-momentum error ΔL/L (diagnostic)",
+    "e": "a body's eccentricity (with geometry)", "speed": "the speed now (velocity)", "speed_range": "the fastest and slowest speeds and where",
+    "key": "the velocity arrows' key", "dt": "the sectors' equal time", "areas": "the sectors' areas",
+    "cannon_speeds": "the circular and escape speeds at the cannon", "shots": "each shot's speed and kind", "legend": "the bodies with their periods",
+    "burns": "each burn's Δv", "dv_spent": "the Δv spent so far", "next": "the mission line (the next burn)",
+    "transfer_kind": "the transfer's kind and target", "dv": "a transfer's Δv₁, Δv₂…", "total_dv": "a transfer's total Δv",
+    "transfer_time": "the transfer time", "phasing": "a phasing's angle, turns and Δv", "phase": "the target's lead angle (live)",
+    "window": "the launch window's angle and the synodic period", "miss": "how far the target is missed",
+    "v_inf": "a flyby's v∞", "turn_angle": "a flyby's turning angle δ and e", "side": "the side the probe passes",
+    "sun_speeds": "the speeds in the Sun's frame", "gain": "the speed gained or lost",
+    "mu": "a three-body pair's mass ratio μ", "routh": "Routh's stability test", "frame": "the frame shown (inertial, rotating)",
+    "l1_l2": "the L1 / L2 distances", "jacobi": "the Jacobi constant and its drift ΔC/C (diagnostic)", "angle": "the angle ahead of / behind the secondary",
+    "coorbital": "the co-orbital kind (tadpole, horseshoe)", "eight": "the figure-eight's period", "closure": "the figure-eight's return error",
+    "mass_ratio": "a binary's mass ratio", "barycentre": "where the barycentre lies", "binary_period": "a binary's period",
+    "ratios": "resonance period ratios", "laplace": "the Laplace angle", "laplace_formula": "the Laplace angle's formula",
+    "conjunctions": "conjunction counts", "curvature": "which way a path bends",
+    "pull": "the satellite's pull (tides)", "tidal": "the tidal acceleration", "arrows": "how much the tidal arrows are enlarged",
+    "tide": "the equilibrium tide's height", "locked": "tidal locking", "schematic": "the schematic's 'not to scale' note",
+    "date": "the calendar date (Solar System on a date)", "distance": "distances between bodies on the date",
+    "event": "the next conjunction / opposition",
+}
+PanelMode = Literal["compact", "full", "none"]
+
+
+def choose_rows(slots: list[Slot], mode: Any, budget: int) -> list[Slot]:
+    """The rows a panel shows: ``full`` every one; ``none`` only the "not to scale" notes; a
+    list the rows of those names (rows that do not apply to the scene are skipped); ``compact``
+    the rows of rank 0, then of rank 1 and 2 (in the scene's order, a name's rows together) while
+    at most ``budget`` rows are taken, never a diagnostic. Every row but ``full``'s is set at
+    least at the readable size (scale 1)."""
+    if mode == "full":
+        return list(slots)
+    notes = {"note", "schematic"}
+    if mode == "none":
+        chosen = [s for s in slots if s.name in notes]
+    elif isinstance(mode, (list, tuple)):
+        chosen = [s for s in slots if s.name in mode or s.name in notes]
+    else:
+        groups: dict[str, list[Slot]] = {}
+        for s in slots:
+            groups.setdefault(s.name or f"_{id(s)}", []).append(s)
+        keep = {k for k, g in groups.items() if min(s.rank for s in g) == 0}
+        count = sum(len(groups[k]) for k in keep if k not in notes)
+        for rank in (1, 2):
+            for k, g in groups.items():
+                if k in keep or min(s.rank for s in g) != rank:
+                    continue
+                if count + len(g) <= budget:
+                    keep.add(k)
+                    count += len(g)
+        chosen = [s for s in slots if (s.name or f"_{id(s)}") in keep]
+    return [replace(s, scale=max(s.scale, 1.0)) for s in chosen]
 
 
 @dataclass
@@ -223,36 +290,39 @@ class OrbitOverlays:
             el = o.elements
             prefix = f"{o.name}: " if many else ""
             if spec.geometry_parts():
-                slots.append(Slot([f"{prefix}e = {plotcore.readout_number(el.e, 3) if el.e else '0'}"]))
+                slots.append(Slot([f"{prefix}e = {plotcore.readout_number(el.e, 3) if el.e else '0'}"], name="e", rank=0))
             vel = spec.velocity_spec()
             if vel is not None and vel.readout:
                 peri, apo = orbits.apsis_names(model.system.parent_body(o).name)
                 fast = el.speed_at(0.0)
-                slots.append(Slot([f"{prefix}v = {speed_text(fast)}", f"{prefix}v = {speed_text(fast * 0.999)}"], value=self._speed_value(o, prefix)))
-                slots.append(Slot([f"max {speed_text(fast)} at {peri}"], color="dim", scale=0.85))
+                slots.append(Slot([f"{prefix}v = {speed_text(fast)}", f"{prefix}v = {speed_text(fast * 0.999)}"], value=self._speed_value(o, prefix),
+                                  name="speed", rank=0))
+                slots.append(Slot([f"max {speed_text(fast)} at {peri}"], color="dim", scale=0.85, name="speed_range"))
                 if el.closed:
-                    slots.append(Slot([f"min {speed_text(el.speed_at(math.pi))} at {apo}"], color="dim", scale=0.85))
+                    slots.append(Slot([f"min {speed_text(el.speed_at(math.pi))} at {apo}"], color="dim", scale=0.85, name="speed_range"))
             sec = spec.sector_spec()
             if sec is not None:
                 dt = el.period / sec.count
-                slots.append(Slot([f"{prefix}Δt = {self._time_text(dt)} each"]))
+                slots.append(Slot([f"{prefix}Δt = {self._time_text(dt)} each"], name="dt", rank=0))
                 area = math.pi * el.a * el.b / sec.count
-                rows = min(sec.count if sec.show == "all" else math.ceil(sec.count / 2), AREA_ROWS)
+                most = AREA_ROWS if self._panel_mode == "full" else 2
+                rows = min(sec.count if sec.show == "all" else math.ceil(sec.count / 2), most)
                 widest = f"A{str(sec.count).translate(_SUB)} = {self._area_text(area * 1.0001)}"
                 for row in range(rows):
-                    slots.append(Slot([widest], value=self._area_value(o.name, row, rows), scale=0.9))
+                    slots.append(Slot([widest], value=self._area_value(o.name, row, rows), scale=0.9, name="areas", rank=0))
         if any(spec.velocity_spec() is not None for spec, _ in bodies):
-            slots.append(Slot(["10 km/s"], value=lambda t: speed_text(self._key_speed), key=True, color="dim", scale=0.85))
+            slots.append(Slot(["10 km/s"], value=lambda t: speed_text(self._key_speed), key=True, color="dim", scale=0.85, name="key", rank=0))
         if model.shots:
             r0 = float(np.linalg.norm(model.cannon_at))
             mu = model.system.central.gm
-            slots.append(Slot([f"circular {speed_text(orbits.circular_speed(mu, r0))}"], color="dim", scale=0.85))
-            slots.append(Slot([f"escape {speed_text(orbits.escape_speed(mu, r0))} = √2 × circular"], color="dim", scale=0.85))
+            slots.append(Slot([f"circular {speed_text(orbits.circular_speed(mu, r0))}"], color="dim", scale=0.85, name="cannon_speeds"))
+            slots.append(Slot([f"escape {speed_text(orbits.escape_speed(mu, r0))} = √2 × circular"], color="dim", scale=0.85, name="cannon_speeds"))
             for k, shot in enumerate(model.shots):
-                slots.append(Slot([f"{speed_text(shot.speed)}  {shot.kind}"], swatch=self._shot_colors[k], scale=0.9))
+                slots.append(Slot([f"{speed_text(shot.speed)}  {shot.kind}"], swatch=self._shot_colors[k], scale=0.9, name="shots", rank=0))
         if self._legend_wanted():
+            rank = 0 if self.params.legend is True else 2
             for text, color in self._many_legend_first():
-                slots.append(Slot([text], swatch=color, scale=0.9))
+                slots.append(Slot([text], swatch=color, scale=0.9, name="legend", rank=rank))
             for spec, o in bodies:
                 el = o.elements
                 many = self._many_legend(o)   # Step 232: a body of a three-body system or the figure-eight
@@ -263,7 +333,7 @@ class OrbitOverlays:
                     text = f"{o.name}  {count} burn{'s' if count > 1 else ''}"
                 else:
                     text = f"{o.name}  T = {self._time_text(el.period)}" if el.closed else f"{o.name}  {el.kind}, e = {el.e:.3g}"
-                slots.append(Slot([text], swatch=self._colors[o.name], scale=0.9))
+                slots.append(Slot([text], swatch=self._colors[o.name], scale=0.9, name="legend", rank=rank))
         return slots
 
     def _many_legend(self, o: Any) -> str | None:

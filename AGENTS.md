@@ -331,7 +331,7 @@ project's own scene types, in its theme).
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
-| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist; many bodies: Lagrange points and Trojans in the rotating frame, the figure-eight, binary stars, the Io–Europa–Ganymede resonance, tides (a schematic) | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley, io; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity; near: L4), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side), `system` (sun_jupiter, earth_moon, figure_eight), `view` (rotating), `lagrange`, `resonance`, `origin` (barycentre), `tides`; the actions sweep, launch, burn, flyby, pause, coast, corotate, inertial |
+| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist; many bodies: Lagrange points and Trojans in the rotating frame, the figure-eight, binary stars, the Io–Europa–Ganymede resonance, tides (a schematic); the Solar System on a date (1800–2050), the next opposition or conjunction, all planets on a log scale, an inset of the inner planets, planet sizes to scale | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley, io; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity; near: L4), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side), `system` (sun_jupiter, earth_moon, figure_eight), `view` (rotating), `lagrange`, `resonance`, `origin` (barycentre), `tides`, `date`, `event` (opposition, of), `radial` (log), `inset`, `sizes`, `panel` (compact, full, none, rows); the actions sweep, launch, burn, flyby, pause, coast, corotate, inertial |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1202,7 +1202,34 @@ Planets, moons and spacecraft on their orbits, in correct timing:
   beats:
     - text: "Take away the pull at the centre, and what is left stretches the Earth."
       actions: [{reveal: tidal, at: "@left"}]
+- id: mars_opposition
+  type: orbit
+  params:
+    title: "Mars at opposition"
+    date: 2020-06-01   # the planets where JPL's approximate elements put them that day (1800–2050); the panel shows the date
+    bodies: [{preset: earth}, {preset: mars}]
+    event: {kind: opposition, of: Mars}   # the next one after the date (root finding), drawn as the line they will stand on
+    caption: "Positions from JPL's approximate planetary elements"
+  beats:
+    - text: "In mid October the Earth overtakes Mars: Mars is at opposition."
+- id: planet_sizes
+  type: orbit
+  params: {title: "The planets' sizes to scale", sizes: true}   # radii to one scale side by side, the Sun's edge first
+  beats:
+    - text: "Jupiter is eleven times as wide as the Earth."
 ```
+
+The Solar System on a date: `date` (1800–2050, refused outside), `event` (opposition,
+conjunction, inferior_conjunction, superior_conjunction, aligned; `of`, `observer`), `radial:
+log` (every planet in one picture, distances compressed and labelled so, rings instead of axes),
+`inset: true` (the inner planets to scale in a box beside a true-scale picture), `sizes` (radii
+to scale; `{bodies: [earth, moon, mars]}`); presets add `pluto`.
+
+The side panel is compact by default: the time, the speed-up and the few values the scene is
+about, at a readable size. `panel: full` shows every row (diagnostics too: ΔE/E, ΔL/L, the
+Jacobi drift), `panel: none` only the "not to scale" note, or name the rows: `panel: [date,
+event, distance]` (time, speedup, energy, legend, total_dv, dv, phase, mu, frame, coorbital…; see
+CONFIG). `energy: true` puts ΔE/E in a compact panel.
 
 Many bodies: `system` (a restricted three-body pair or the figure-eight), `view: rotating`,
 `lagrange`, `zero_velocity`, bodies `near: L4` with `shift`; `resonance: [Io, Europa, Ganymede]`

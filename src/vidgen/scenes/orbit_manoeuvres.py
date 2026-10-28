@@ -70,38 +70,39 @@ class OrbitManoeuvres:
             many = len({name for name, _ in burns}) > 1
             for n, (name, b) in enumerate(burns, start=1):
                 text = (f"{name}: " if many else "") + f"{dv_name(n)} {speed_text(b.magnitude)} {b.direction}"
-                slots.append(Slot([text], scale=0.9))   # the plan, from the start (the mission line says what comes next)
+                slots.append(Slot([text], scale=0.9, name="burns", rank=0))   # the plan, from the start (the mission line says what comes next)
             total = sum(b.magnitude for _, b in burns)
-            slots.append(Slot([f"Δv spent {speed_text(total)} of {speed_text(total)}"], value=self._spent(burns), color="dim", scale=0.85))
+            slots.append(Slot([f"Δv spent {speed_text(total)} of {speed_text(total)}"], value=self._spent(burns), color="dim", scale=0.85,
+                              name="dv_spent", rank=1))
         if burns:
             probes = [self._next_text(burns, t) for t in np.linspace(0.0, model.span, 121)] + [f"next: {dv_name(len(burns))} now"]
-            slots.append(Slot(probes, value=lambda t: self._next_text(burns, t), color="dim", scale=0.85))
+            slots.append(Slot(probes, value=lambda t: self._next_text(burns, t), color="dim", scale=0.85, name="next", rank=2))
         if model.assist is not None:
             slots += self._assist_slots(model.assist)
         return slots
 
     def _transfer_slots(self, info: Any) -> list[Slot]:
         r = info.result
-        slots = [Slot([_KIND_NAMES[info.kind] + (f" to {info.target}" if info.target else "")], color="dim", scale=0.85)]
+        slots = [Slot([_KIND_NAMES[info.kind] + (f" to {info.target}" if info.target else "")], color="dim", scale=0.85, name="transfer_kind", rank=2)]
         if info.kind == "phasing":
             ahead = "ahead" if r.angle > 0 else "behind"
-            slots.append(Slot([f"{info.target} {_deg(abs(r.angle))} {ahead} at the burn"], scale=0.9))
-            slots.append(Slot([f"{r.revolutions} turn{'s' if r.revolutions > 1 else ''} of {self._time_text(r.period)}"], scale=0.9))
-            slots.append(Slot([f"{dv_name(1)} = {dv_name(2)} = {speed_text(r.dv)}"], scale=0.9))
+            slots.append(Slot([f"{info.target} {_deg(abs(r.angle))} {ahead} at the burn"], scale=0.9, name="phasing", rank=0))
+            slots.append(Slot([f"{r.revolutions} turn{'s' if r.revolutions > 1 else ''} of {self._time_text(r.period)}"], scale=0.9, name="phasing", rank=0))
+            slots.append(Slot([f"{dv_name(1)} = {dv_name(2)} = {speed_text(r.dv)}"], scale=0.9, name="phasing", rank=0))
         else:
             dvs = [r.dv1, r.dv2] + ([r.dv3] if info.kind == "bielliptic" else [])
             for n, dv in enumerate(dvs, start=1):
-                slots.append(Slot([f"{dv_name(n)} = {speed_text(dv)}"], scale=0.9))
-        slots.append(Slot([f"total Δv = {speed_text(r.total)}"]))
-        slots.append(Slot([f"transfer {self._time_text(info.arrival - info.depart)}"], scale=0.9))
+                slots.append(Slot([f"{dv_name(n)} = {speed_text(dv)}"], scale=0.9, name="dv", rank=0))
+        slots.append(Slot([f"total Δv = {speed_text(r.total)}"], name="total_dv", rank=0))
+        slots.append(Slot([f"transfer {self._time_text(info.arrival - info.depart)}"], scale=0.9, name="transfer_time", rank=0))
         if info.phase_needed is not None:
             needed = info.phase_needed
             probes = [self._phase_text(info, x) for x in (-math.radians(179.9), math.radians(179.9))]
-            slots.append(Slot(probes, value=lambda t: self._phase_text(info, self._lead_at(info, min(t, info.depart))), scale=0.9))
+            slots.append(Slot(probes, value=lambda t: self._phase_text(info, self._lead_at(info, min(t, info.depart))), scale=0.9, name="phase", rank=0))
             every = f", every {self._time_text(2 * math.pi / abs(info.n_ship - info.n_target))}" if info.kind != "phasing" else ""
-            slots.append(Slot([f"window at {_deg(needed)}{every}"], color="dim", scale=0.85))
+            slots.append(Slot([f"window at {_deg(needed)}{every}"], color="dim", scale=0.85, name="window", rank=2))
         if info.miss is not None and info.kind != "phasing" and info.miss > 1e-3 * info.r2:
-            slots.append(Slot([f"misses {info.target} by {self._length_text(info.miss)}"], color="accent", scale=0.85))
+            slots.append(Slot([f"misses {info.target} by {self._length_text(info.miss)}"], color="accent", scale=0.85, name="miss", rank=0))
         return slots
 
     def _lead_at(self, info: Any, t: float) -> float:
@@ -132,11 +133,11 @@ class OrbitManoeuvres:
         fb = ga.flyby
         side = "behind" if ga.side == "behind" else "in front of"
         return [
-            Slot([f"v∞ in = out = {speed_text(fb.v_inf)}"]),
-            Slot([f"δ = {_deg(fb.delta)}  (e = {fb.e:.3f})"], scale=0.9),
-            Slot([f"passes {side} {info.planet}"], color="dim", scale=0.85),
-            Slot([f"Sun: {speed_text(ga.speed_before)} → {speed_text(ga.speed_after)}"], scale=0.9),
-            Slot([f"{'gains' if ga.gain >= 0 else 'loses'} {speed_text(abs(ga.gain))}"], color="highlight" if ga.gain >= 0 else "accent"),
+            Slot([f"v∞ in = out = {speed_text(fb.v_inf)}"], name="v_inf", rank=0),
+            Slot([f"δ = {_deg(fb.delta)}  (e = {fb.e:.3f})"], scale=0.9, name="turn_angle", rank=0),
+            Slot([f"passes {side} {info.planet}"], color="dim", scale=0.85, name="side", rank=2),
+            Slot([f"Sun: {speed_text(ga.speed_before)} → {speed_text(ga.speed_after)}"], scale=0.9, name="sun_speeds", rank=0),
+            Slot([f"{'gains' if ga.gain >= 0 else 'loses'} {speed_text(abs(ga.gain))}"], color="highlight" if ga.gain >= 0 else "accent", name="gain", rank=0),
         ]
 
     # ----- building ----------------------------------------------------------------------------------

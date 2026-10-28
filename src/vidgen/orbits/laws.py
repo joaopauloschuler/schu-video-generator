@@ -196,7 +196,7 @@ def kepler_planets() -> dict[str, np.ndarray]:
     """Kepler's third law for the eight planets (JPL Table 1, J2000): semi-major axis ``a``
     (AU), period ``T`` (Julian years; T = 2π √(a³ / G(M☉ + m))), ``T_law`` (2π √(a³ / GM☉),
     the law without the planet's mass), ``a3`` (AU³) and ``T2`` (yr²), by increasing a."""
-    planets = sorted((p for p in ORBITS.values() if p.around == "sun" and p.body.gm > 0), key=lambda p: p.a)
+    planets = sorted((p for p in ORBITS.values() if p.around == "sun" and p.body.gm > 0 and p.key != "pluto"), key=lambda p: p.a)
     a = np.array([p.a for p in planets])
     period = np.array([2 * math.pi * math.sqrt(p.a**3 / (GM_SUN + p.body.gm)) for p in planets]) / YEAR
     law = 2 * math.pi * np.sqrt(a**3 / GM_SUN) / YEAR
@@ -206,7 +206,7 @@ def kepler_planets() -> dict[str, np.ndarray]:
 
 def kepler_planet_names() -> list[str]:
     """The planets' names in the order of :func:`kepler_planets` (for labels on the plot)."""
-    planets = sorted((p for p in ORBITS.values() if p.around == "sun" and p.body.gm > 0), key=lambda p: p.a)
+    planets = sorted((p for p in ORBITS.values() if p.around == "sun" and p.body.gm > 0 and p.key != "pluto"), key=lambda p: p.a)
     return [p.body.name for p in planets]
 
 

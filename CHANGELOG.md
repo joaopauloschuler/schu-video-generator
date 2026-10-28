@@ -5,9 +5,25 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–232)
+## Unreleased (Steps 193–233)
 
 ### Orbital mechanics (Phase X, from Step 229)
+
+- **The Solar System on a date** (Step 233). `date: 2020-06-01` places the planet presets (and
+  the new `pluto`) where JPL's approximate elements (Standish, Table 1, valid 1800–2050; dates
+  outside refused) put them that day, the panel showing the date as the clock runs; `event: {kind:
+  opposition, of: Mars}` finds the next opposition / conjunction after it by root finding and
+  draws the line the planets will stand on (Mars 2020-10-13); `radial: log` fits Mercury to Pluto
+  in one picture with labelled rings and "distances compressed (log)"; `inset: true` adds the inner
+  planets to scale beside a true-scale picture; `sizes: true` compares radii to scale side by side
+  with the Sun's edge. The model: `vidgen.api.orbits` gains `julian_date`, `heliocentric`,
+  `mean_elements`, `next_event`, `sidereal_period`, `planet_synodic_period`, `elongation`, `TABLE1`
+  and more.
+- **Compact orbit panels** (Step 233). The `orbit` scene's side panel now shows the time, the
+  speed-up and the few values the scene is about (at most six rows in 16:9, five in 9:16, at a
+  readable size); diagnostics such as ΔE/E, ΔL/L and a Jacobi constant's drift are left out unless
+  asked for (`energy: true`, `panel: full`, or by name: `panel: [time, total_dv, phase]`;
+  `panel: none`). `panel: full` restores the earlier panel.
 
 - **Many bodies** (Step 232). `system: earth_moon | sun_earth | sun_jupiter` (or your own pair
   with a mass ratio `mu`): the circular restricted three-body problem integrated about the

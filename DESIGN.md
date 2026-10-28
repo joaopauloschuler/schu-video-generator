@@ -17874,3 +17874,92 @@ dependency, no config key.
 **Not done**: n-body with burns (refused); the forbidden regions are drawn as their boundary only;
 the bulges' lead and the planet's spin; resonances with eccentricities (the conjunctions' slow
 drift here comes from the period ratios alone); the gallery media (Step 235).
+
+### 98.7 The Solar System on a date, and the compact panel (Step 233)
+
+**The compact side panel first** (the reviewer's note on 232's stills: 10–15 rows of small text,
+unreadable on a phone, crowding the picture). Every panel row (`Slot`) now has a `name` and a
+`rank`: 0 always shown, 1 then 2 while there is room, `DIAGNOSTIC` (9) only on request.
+`choose_rows(slots, mode, budget)`: `compact` (default) keeps rank 0, then fills ranks 1 and 2 in
+the scene's order — a name's rows together (a legend, the areas) — up to `PANEL_BUDGET` = 6 rows
+in 16:9 / 5 in 9:16 besides the "not to scale" notes; `full` every row (the panel as before,
+including 9:16's two columns); `none` only the notes; a list of names (`PANEL_ROWS`, checked with
+did-you-mean). Compact and listed rows are set at least at scale 1 (the label size, never under
+the readable minimum) in one column. What each scene is about decides the ranks: time and
+speed-up 0; ΔE/E, ΔL/L, the Jacobi constant's drift and the figure-eight's return error are
+diagnostics (`energy: true` makes ΔE/E and ΔL/L rank 0); a transfer's Δv rows, total, time and live
+phase angle 0, the window and kind 2; a flyby's v∞, δ, Sun-frame speeds and gain 0; a pair's μ, the
+frame, the co-orbital kind 0, Routh's test 0 when L4 / L5 matter, the L1 / L2 distances 0 unless
+it is a Trojan scene; the legend 2 (`legend: true`: 0); tides: the pull, tidal acceleration, the
+arrows' factor 0, the tide and locking 1, the speed-up 2. The lint gets the diagnostics from the
+model, whatever the panel shows: `Orbit.diagnostics(params)` → `energy_drift`, `angular_drift`,
+`jacobi_drift:<name>`, `closure` (largest relative errors over the run; Step 234 reads them). The
+229–232 scratch projects lint clean after it (s232's mid-turn warning gone).
+
+**Model** `vidgen.orbits.ephemeris` (no manim): E. M. Standish's *Keplerian Elements for
+Approximate Positions of the Major Planets* (JPL SSD), **Table 1** — a, e, I, L, ϖ, Ω at J2000 and
+their rates per Julian century, mean ecliptic and equinox of J2000, valid 1800–2050 — for Mercury …
+Neptune (the Earth's row is the Earth–Moon barycentre) and Pluto. `TABLE1` is the one copy (the
+presets in `bodies` read their J2000 values from it). `julian_date` (Gregorian dates and times,
+taken as TT; 2000-01-01 12:00 = 2451545.0), `calendar`, `date_text` (the day it falls on);
+`check_valid` refuses 1800-01-01 ≤ JD < 2051-01-01 violations for a start and an end;
+`mean_elements` (J2000 + rate × T), `heliocentric` (the document's method: M = L − ϖ, Kepler's
+equation, the orbit plane rotated by ω, I, Ω; vectorised), `longitude`, `distance`, `elongation`;
+`sidereal_period` (360°/L̇) and `planet_synodic_period`; `next_event(kind, observer, target,
+after)` — opposition / conjunction (outer target), inferior / superior conjunction (inner target),
+aligned — the root of the wrapped difference of heliocentric longitudes (0° or 180°) bracketed on
+1/24 of the synodic period and bisected to 10⁻⁵ d, refused outside the validity; `events_between`.
+`bodies`: `planet_preset` (from Table 1 values), `preset_on(key, jd)`, Pluto's body (GM of the
+Pluto–Charon system 975.5 km³ s⁻², radius 1 188.3 km — **for the owner to check**) and preset;
+`kepler_planets` stays the eight planets.
+
+**Checks against independent values** (tests): the Earth at the 2020 and 2021 March and the 2022
+September equinoxes and 1900's March one at heliocentric longitude 180° / 0° of date minus the
+precession since J2000 (50.29″/yr) within 0.03° — the J2000 frame is why the raw value is
+179.72° in 2020; every planet's distance within its perihelion–aphelion over 1800–2050; Mars's
+J2000 distance against Kepler's equation by hand; the sidereal year 365.2564 d; synodic periods
+Mars 779.94 d, Venus 583.92 d, Jupiter 398.88 d, Mercury 115.88 d, Saturn 378.1 d; Mars oppositions
+2018-07-27, 2020-10-13, 2022-12-08, 2025-01-16, Venus inferior conjunctions 2020-06-03 and
+2023-08-13, Jupiter's 2023-11-03 and Saturn's 2023-08-27 oppositions within ±2 d (they come out
+within hours: 2020-10-13 23:24, 2022-12-08 05:32 TT); the scene's Kepler motion from the date's
+elements within 2 × 10⁻⁴ AU of the table's positions over its span.
+
+**Scene** (`scenes/orbit_sky.py`: params, resolution and the mixin `OrbitSky`):
+
+- `date`: `build_system(..., jd)` gives Table 1 planets their elements on the day (`dated_preset`);
+  another preset needs `nu` / `mean_anomaly`. The model's `sky` (`SkyInfo`) keeps the start's JD;
+  the span's end is checked too. The panel's first row is the date (`date`), the time row drops to
+  rank 2.
+- `event: {kind, of, observer}`: `next_event` after the date (both bodies of the scene); default
+  span 1.15 × the time to it (at least 30 d); drawn once as the dashed line from the Sun through
+  both planets' positions at the event (rings on them; for a conjunction from the near planet
+  through the Sun's side), the kind's name placed by `place`; rows `event` (`Mars opposition
+  2020-10-13`), `distance` (live), `synodic`.
+- `radial: log`: positions drawn at log₁₀(1 + r/r₀) along their direction (r₀ = ⅓ of the smallest
+  perihelion), in `_frame_point(s)` and the extent, so conics, trails and labels follow; no axes
+  (`frame: axes` refused) but dashed rings at 0.1 / 0.3 / 1 / 3 / 10 / 30 / 100 AU (those ≥ 0.5
+  units and 0.35 apart), labelled along the ray the bodies cross least, on a plate over the orbits;
+  every body a dot; the note "distances compressed (log)" is always in the panel. Refused with any
+  overlay that measures lengths or speeds, n-body, transfers, flybys, systems, `follow`.
+- `inset`: the box of a flyby's vector diagram (`_vector_box_size`; 3.7 × 3.7 beside, under the
+  picture in 9:16) holds the bodies whose orbits lie within the radius (`true`: 1.08 × the largest
+  aphelion below 2 AU), their conics and dots moving, labels placed by `place` inside; their labels
+  and the Sun's leave the main picture (named in the inset); the region is a dashed circle there.
+- `sizes`: a picture of its own (`_construct_sizes`, like the tides): discs of the bodies' radii to
+  one scale chosen by bisection so discs and labels fit (16:9 a row with labels in two staggered
+  rows — the row's ends keep their whole label inside —; 9:16 a column with the text beside), the
+  Sun's limb (the same scale, clipped to the frame's edge) first in 16:9 and at the foot in 9:16,
+  "radii to scale (distances are not)". Refused with anything else of the scene's motion.
+
+**Public (additive)**: in `vidgen.api.orbits` the names of `ephemeris` (`longitude` as
+`ecliptic_longitude`, `distance` as `planet_distance`, `SOURCE` as `TABLE1_SOURCE`),
+`planet_preset`, `preset_on`; the preset `pluto` (body and orbit); `Orbit.diagnostics`; the
+`orbit` params `panel`, `date`, `event`, `radial`, `inset`, `sizes`; targets `event`, `inset`,
+`rings`. Changed defaults (visible): orbit panels are compact — ΔE/E and the other diagnostics are
+off unless asked for; `panel: full` restores the old panel. No dependency, no config key; shared
+code untouched (only the orbit scene and `vidgen.orbits`), so the Phase Q baseline was not re-run.
+
+**Not done**: the Moon's (and other satellites') positions on a date; dwarf planets other than
+Pluto (Ceres is not in Table 1); Table 2a (3000 BC – 3000 AD with Jupiter–Pluto's extra terms);
+light-time, aberration and the equinox of date (positions are geometric, J2000 frame); greatest
+elongations; the gallery media (Step 235).

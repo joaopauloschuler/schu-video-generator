@@ -13,7 +13,7 @@ import numpy as np
 
 from vidgen.api import *
 
-from .orbit_overlays import DIRECTIONS, Slot, arrow_shape, mob_rect, new_arrow, place
+from .orbit_overlays import DIAGNOSTIC, DIRECTIONS, Slot, arrow_shape, choose_rows, mob_rect, new_arrow, place
 
 #: Seconds a frame switch takes when its action gives no run_time.
 SWITCH_SECONDS = 2.0
@@ -172,67 +172,72 @@ class OrbitMany:
             pair = r.pair
             sec = r.secondary
             stable = orbits.routh_stable(pair.mu)
-            slots.append(Slot([f"{r.primary}–{sec}: μ = {plotcore.readout_number(pair.mu, 3)}"], scale=0.9))
-            slots.append(Slot([f"μ {'<' if stable else '>'} 0.0385: L4, L5 {'stable' if stable else 'unstable'} (Routh)"], color="dim", scale=0.85))
+            slots.append(Slot([f"{r.primary}–{sec}: μ = {plotcore.readout_number(pair.mu, 3)}"], scale=0.9, name="mu", rank=0))
+            trojan = any(k in info.lagrange for k in ("L4", "L5")) or any(v in ("L4", "L5") for v in info.near.values())
+            slots.append(Slot([f"μ {'<' if stable else '>'} 0.0385: L4, L5 {'stable' if stable else 'unstable'} (Routh)"], color="dim", scale=0.85,
+                              name="routh", rank=0 if trojan else 2))
             period = self._time_text(pair.period)
             probes = [f"rotating frame: one turn / {period}", "inertial frame (fixed stars)", "turning with the pair…"]
-            slots.append(Slot(probes, value=lambda t: self._frame_text(period), color="highlight", scale=0.85))
+            slots.append(Slot(probes, value=lambda t: self._frame_text(period), color="highlight", scale=0.85, name="frame", rank=0))
             dist = pair.distances()
             shown = [k for k in ("L1", "L2") if k in info.lagrange]
             if shown:
                 texts = [_big_length(dist[k]) for k in shown]
                 unit = texts[0].split(" ", 1)[1]
                 both = " / ".join(x.split(" ", 1)[0] for x in texts) + f" {unit}" if all(x.split(" ", 1)[1] == unit for x in texts) else " / ".join(texts)
-                slots.append(Slot([f"{' / '.join(shown)}: {both} from {sec}"], scale=0.85))
+                slots.append(Slot([f"{' / '.join(shown)}: {both} from {sec}"], scale=0.85, name="l1_l2", rank=0 if not trojan else 2))
             many = len(info.near) > 1
             for name in info.near:
                 prefix = f"{name}: " if many else ""
                 series = info.jacobi[name]
                 probes = [f"{prefix}C = {series[0]:.6f}, ΔC/C = {plotcore.readout_number(-1.23e-10, 2)}"]
-                slots.append(Slot(probes, value=self._jacobi_value(name, prefix), scale=0.85))
+                slots.append(Slot(probes, value=self._jacobi_value(name, prefix), scale=0.85, name="jacobi", rank=DIAGNOSTIC))
                 kind, lo, hi = info.coorbital[name]
                 probes = [self._angle_text(name, a) for a in (-179.9, 179.9)]
-                slots.append(Slot(probes, value=lambda t, n=name: self._angle_text(n, self._ahead(n, t)), scale=0.85))
-                slots.append(Slot([self._kind_text(kind, lo, hi)], color="dim", scale=0.85))
+                slots.append(Slot(probes, value=lambda t, n=name: self._angle_text(n, self._ahead(n, t)), scale=0.85, name="angle", rank=1))
+                slots.append(Slot([self._kind_text(kind, lo, hi)], color="dim", scale=0.85, name="coorbital", rank=0))
         if info.eight is not None:
-            slots.append(Slot([f"figure-eight: T = {self._time_text(info.eight.period)}"], scale=0.9))
+            slots.append(Slot([f"figure-eight: T = {self._time_text(info.eight.period)}"], scale=0.9, name="eight", rank=0))
             if info.closure is not None:
-                slots.append(Slot([f"back at the start after T (± {plotcore.readout_number(info.closure, 1)})"], color="dim", scale=0.85))
+                slots.append(Slot([f"back at the start after T (± {plotcore.readout_number(info.closure, 1)})"], color="dim", scale=0.85,
+                                  name="closure", rank=DIAGNOSTIC))
         stars = binary_names(model)
         if stars:
             a, b = stars
             gm_a, gm_b = model.system.central.gm, model.system.orbiter(b).body.gm
             share_a, _ = orbits.binary_shares(gm_a, gm_b)
-            slots.append(Slot([f"mass ratio {b}/{a} = {plotcore.readout_number(gm_b / gm_a, 3)}"], scale=0.9))
-            slots.append(Slot([f"barycentre {share_a:.0%} of the way from {a}"], color="dim", scale=0.85))
-            slots.append(Slot([f"both go round it in T = {self._time_text(model.system.orbiter(b).elements.period)}"], color="dim", scale=0.85))
+            slots.append(Slot([f"mass ratio {b}/{a} = {plotcore.readout_number(gm_b / gm_a, 3)}"], scale=0.9, name="mass_ratio", rank=0))
+            slots.append(Slot([f"barycentre {share_a:.0%} of the way from {a}"], color="dim", scale=0.85, name="barycentre", rank=0))
+            slots.append(Slot([f"both go round it in T = {self._time_text(model.system.orbiter(b).elements.period)}"], color="dim", scale=0.85,
+                              name="binary_period", rank=1))
         res = info.resonance
         if res is not None:
             for (a, ta), (b, tb) in zip(zip(res.bodies, res.periods), list(zip(res.bodies, res.periods))[1:]):
                 ratio = tb / ta
                 frac = orbits.nearest_ratio(ratio)
-                slots.append(Slot([f"T {b} / T {a} = {ratio:.4f} ≈ {frac.numerator}:{frac.denominator}"], scale=0.85))
+                slots.append(Slot([f"T {b} / T {a} = {ratio:.4f} ≈ {frac.numerator}:{frac.denominator}"], scale=0.85, name="ratios", rank=0))
             if len(res.bodies) == 3 and all(orbits.nearest_ratio(tb / ta) == 2 for ta, tb in zip(res.periods, res.periods[1:])):
-                slots.append(Slot(["Laplace angle φ = 359.9°"], value=self._laplace_value(), scale=0.9))
+                slots.append(Slot(["Laplace angle φ = 359.9°"], value=self._laplace_value(), scale=0.9, name="laplace", rank=0))
                 b1, b2, b3 = res.bodies
-                slots.append(Slot([f"φ = λ {b1} − 3 λ {b2} + 2 λ {b3}"], color="dim", scale=0.8))
+                slots.append(Slot([f"φ = λ {b1} − 3 λ {b2} + 2 λ {b3}"], color="dim", scale=0.8, name="laplace_formula", rank=2))
             if res.show:
                 for k, ((a, _), (b, _)) in enumerate(zip(zip(res.bodies, res.periods), list(zip(res.bodies, res.periods))[1:])):
                     n_max = len(res.conjunctions[k])
                     probes = [f"{a}–{b} conjunctions: {n_max}", f"{a}–{b} conjunctions: {max(n_max, 10)}"]
-                    slots.append(Slot(probes, value=lambda t, k=k, a=a, b=b: f"{a}–{b} conjunctions: {self._conj_count(k, t)}", color="dim", scale=0.85))
+                    slots.append(Slot(probes, value=lambda t, k=k, a=a, b=b: f"{a}–{b} conjunctions: {self._conj_count(k, t)}", color="dim", scale=0.85,
+                                      name="conjunctions", rank=1))
         central = model.system.central.name
         for name, (share, _) in info.curvature.items():
             when = "always" if share == 1.0 else f"{share:.0%} of the time"
-            slots.append(Slot([f"{name}'s path bends toward {central}: {when}"], scale=0.85))
+            slots.append(Slot([f"{name}'s path bends toward {central}: {when}"], scale=0.85, name="curvature", rank=0))
         return slots
 
     def _angular_slot(self) -> list[Slot]:
-        """The n-body run's angular-momentum error row (with the energy's)."""
+        """The n-body run's angular-momentum error row (with the energy's; a diagnostic)."""
         if self._model.run is None or self._model.run.angular is None:
             return []
         return [Slot(["ΔL/L = " + plotcore.readout_number(-1.23e-10, 2), "ΔL/L = " + plotcore.readout_number(-9.99e-9, 2)],
-                     value=lambda t: "ΔL/L = " + plotcore.readout_number(self._model.angular_error(t), 2))]
+                     value=lambda t: "ΔL/L = " + plotcore.readout_number(self._model.angular_error(t), 2), name="angular", rank=self._energy_rank())]
 
     def _frame_text(self, period: str) -> str:
         turn = self._model.turn
@@ -632,16 +637,18 @@ class OrbitMany:
         self._t_unit = orbits.time_unit(model.span)
         self._lines_static = [orbits.speedup_text(model.span / self._motion_seconds())]
         slots = [
-            Slot([self._time_line(model.span * k / 200) for k in range(201)], value=self._time_line),
-            Slot([*self._lines_static, "clock paused", "× 99 million"], value=lambda t: self._rate_text()),
-            Slot([f"{sat.name}'s pull: {plotcore.readout_number(pull, 3)} m/s²"], scale=0.85),
-            Slot([f"tidal: up to {plotcore.readout_number(tidal, 3)} m/s² (1/{pull / tidal:.0f} of it)"], scale=0.85),
-            Slot([f"tidal arrows drawn ×{TIDE_ARROW / tidal / (TIDE_PULL / pull):.0f} longer"], color="dim", scale=0.8),
-            Slot([f"equilibrium tide: {plotcore.readout_number(height, 2)} m"], scale=0.85),
+            Slot([self._time_line(model.span * k / 200) for k in range(201)], value=self._time_line, name="time", rank=0),
+            Slot([*self._lines_static, "clock paused", "× 99 million"], value=lambda t: self._rate_text(), name="speedup", rank=2),
+            Slot([f"{sat.name}'s pull: {plotcore.readout_number(pull, 3)} m/s²"], scale=0.85, name="pull", rank=0),
+            Slot([f"tidal: up to {plotcore.readout_number(tidal, 3)} m/s² (1/{pull / tidal:.0f} of it)"], scale=0.85, name="tidal", rank=0),
+            Slot([f"tidal arrows drawn ×{TIDE_ARROW / tidal / (TIDE_PULL / pull):.0f} longer"], color="dim", scale=0.8, name="arrows", rank=0),
+            Slot([f"equilibrium tide: {plotcore.readout_number(height, 2)} m"], scale=0.85, name="tide", rank=1),
         ]
         if spec.locking:
-            slots.append(Slot([f"{sat.name} spins once per orbit ({self._time_text(o.elements.period)}): locked"], scale=0.85))
-        slots.append(Slot(["schematic: sizes, distance and arrows not to scale"], color="dim", scale=0.8))
+            slots.append(Slot([f"{sat.name} spins once per orbit ({self._time_text(o.elements.period)}): locked"], scale=0.85, name="locked", rank=1))
+        note = "schematic: sizes, distance and arrows not to scale" if self._panel_mode == "full" else "schematic: not to scale"
+        slots.append(Slot([note], color="dim", scale=0.8, name="schematic", rank=0))
+        slots = choose_rows(slots, self._panel_mode, self._panel_budget())
         self._slots = slots
         w, h = self._panel_size(slots)
         if w > body.width:

@@ -12,9 +12,12 @@ transfers (Hohmann, bi-elliptic, phasing), a flyby with its Sun-frame vector dia
 clock that can run in stretches (a burn on its word, pauses): ``orbit_manoeuvres.py``. Step 232
 adds many bodies — a restricted three-body pair in the inertial or rotating frame with its
 Lagrange points, the figure-eight, binaries, resonances, the tidal schematic:
-``orbit_systems.py`` (params) and ``orbit_many.py`` (drawing). The params and the model are in
+``orbit_systems.py`` (params) and ``orbit_many.py`` (drawing). Step 233 adds the Solar System on a
+date — JPL's approximate elements, oppositions and conjunctions, the log view, the inset, sizes
+to scale — and the compact side panel: ``orbit_sky.py``. The params and the model are in
 ``orbit_parts.py``; the physics in ``vidgen.orbits``."""
 
+import datetime as dt
 import math
 from dataclasses import replace
 from typing import Any, Literal
@@ -24,9 +27,11 @@ import numpy as np
 from vidgen.api import *
 
 from .orbit_manoeuvres import VECTOR_GAP, OrbitManoeuvres
-from .orbit_overlays import OrbitOverlays, Slot, arrow_shape, leader_points, mob_rect, new_arrow, place
+from .orbit_overlays import (DIAGNOSTIC, PANEL_BUDGET, PANEL_ROWS, OrbitOverlays, PanelMode, Slot, arrow_shape, choose_rows, leader_points, mob_rect,
+                             new_arrow, place)
 from .orbit_many import OrbitMany, many_target_names
 from .orbit_parts import LagrangeName, OrbitBody, OrbitCannon, OrbitCentral, OrbitFlyby, OrbitModel, OrbitTransfer, Value, resolve_model
+from .orbit_sky import OrbitEvent, OrbitSizes, OrbitSky, SkySpec, sky_target_names
 from .orbit_systems import ManySpec, OrbitResonance, OrbitSystem, OrbitTides
 
 #: Smallest drawn radius (Manim units) of the central body and of an orbiting body: smaller
@@ -58,7 +63,7 @@ MODEL_CACHE = 32
 
 
 @scene("orbit")
-class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
+class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
     """Orbits in correct timing: a central body (``central``: a preset or your own) and
     ``bodies`` on Kepler orbits (presets, elements, or a position and velocity), drawn as conics
     with the bodies moving along them through the whole scene at one speed-up (``span`` or
@@ -78,12 +83,13 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
     ``burn:<n>``, ``transfer``, ``phase``, ``asymptotes``, ``turn``, ``v_inf``, ``motion``,
     ``atmosphere``, ``vectors``, ``v_before``, ``v_after``, ``lagrange``, ``lagrange:<L>``,
     ``zero_velocity``, ``rotation``, ``barycentre``, ``conjunctions``, ``pointer``, ``pull``,
-    ``mean``, ``tidal``, ``bulges``, ``face``, ``readout``; actions ``sweep`` (sectors),
+    ``mean``, ``tidal``, ``bulges``, ``face``, ``event``, ``inset``, ``rings``, ``readout``; actions ``sweep`` (sectors),
     ``launch`` (shots), ``burn`` (a burn on its word), ``flyby`` (the periapsis passage on its
     word), ``pause`` and ``coast`` (the clock held and run again), ``corotate`` and ``inertial``
     (the view of a three-body pair turned on a word). Many bodies (Step 232): ``system`` (a
     restricted three-body pair or the figure-eight), ``view``, ``origin``, ``lagrange``,
-    ``zero_velocity``, ``resonance``, ``center``, ``tides``.
+    ``zero_velocity``, ``resonance``, ``center``, ``tides``. The Solar System on a date (Step
+    233): ``date``, ``event``, ``radial``, ``inset``, ``sizes``; the side panel's rows ``panel``.
     """
 
     outro = 0.5
@@ -91,7 +97,7 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
     target_patterns = ("title", "frame", "central", "body:<name>", "orbit:<name>", "geometry:<name>", "foci:<name>", "axes:<name>",
                        "periapsis:<name>", "apoapsis:<name>", "sectors:<name>", "velocity:<name>", "cannon", "shot:<n>", "burn:<n>", "transfer",
                        "phase", "asymptotes", "turn", "v_inf", "motion", "atmosphere", "vectors", "v_before", "v_after", "lagrange", "lagrange:<L>",
-                       "zero_velocity", "rotation", "barycentre", "conjunctions", "pointer", "pull", "mean", "tidal", "bulges", "face", "readout")
+                       "zero_velocity", "rotation", "barycentre", "conjunctions", "pointer", "pull", "mean", "tidal", "bulges", "face", "event", "inset", "rings", "readout")
 
     class Params(SceneParams):
         title: TranslatableStr = ""
@@ -129,7 +135,9 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         energy: bool | None = None
         """Show the n-body energy error ΔE/E (default: on with dynamics: nbody)."""
         legend: bool | Literal["auto"] = "auto"
-        """List the bodies with their periods in the side panel; auto: in 16:9 with two or more bodies (the room beside the picture)."""
+        """List the bodies with their periods in the side panel; auto: with two or more bodies when the panel has room (16:9); true: always."""
+        panel: PanelMode | list[str] = "compact"
+        """The side panel's rows: compact (the time, the speed-up and the few values the scene is about, at a readable size; diagnostics such as ΔE/E, ΔL/L and the Jacobi drift left out), full (every row), none (only a 'not to scale' note), or a list of row names ([time, total_dv, phase]; see the guide)."""
         label_size: ThemeSize | None = None
         """Size of tick labels, body labels and the readout (never below the readable minimum); default: caption (the picture gets the room)."""
         caption: TranslatableStr = ""
@@ -158,6 +166,16 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         """Centre the view on where this body is halfway through the span (with extent: a close-up; the central body far off is shown by an arrow at the edge)."""
         tides: OrbitTides | bool | None = None
         """The tidal schematic (true or {satellite: moon, locking, points}): the satellite's pull at points of the planet, the differential (tidal) arrows, the two bulges, tidal locking; labelled schematic, not to scale."""
+        date: str | dt.date | None = None
+        """The Solar System on a date (Step 233): '2020-10-13' (1800–2050) places the planet presets (and Pluto) by JPL's approximate elements and rates on that day; the panel shows the date as the clock runs."""
+        event: OrbitEvent | None = None
+        """With date: the next conjunction / opposition after it, found by root finding — {kind: opposition, of: Mars} (observer: Earth) — drawn as the line they will stand on; default span: until a little after it."""
+        radial: Literal["linear", "log"] = "linear"
+        """linear: true distances; log: distances compressed (log10(1 + r/r0)) so Mercury and Neptune fit one picture, with labelled rings instead of axes and 'distances compressed' in the panel."""
+        inset: bool | Value | None = None
+        """A box beside the picture with the inner Solar System to scale (true: the orbits within 2 AU, or a radius '1.8 AU'); the region it shows is dashed in the main picture."""
+        sizes: OrbitSizes | bool | None = None
+        """A picture of radii to scale side by side (true: the scene's bodies or the eight planets; {bodies: [earth, moon, mars], sun: true}), the Sun's edge first; distances are not shown."""
 
         @model_validator(mode="after")
         def _consistent(self) -> "Orbit.Params":
@@ -165,6 +183,12 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
                 self.tides = None
             if self.tides is True:
                 self.tides = OrbitTides()
+            if self.sizes is False:
+                self.sizes = None
+            if self.sizes is True:
+                self.sizes = OrbitSizes()
+            if self.radial == "log" and self.frame == "axes" and "frame" in self.model_fields_set:
+                raise ValueError("radial: log has no linear axes; its frame is rings at round distances (leave out frame: axes)")
             if self.energy and self.dynamics != "nbody" and self.system is None:
                 raise ValueError("energy: the energy error is shown for dynamics: nbody (Kepler orbits conserve it exactly)")
             if self.method != "leapfrog" and self.dynamics != "nbody" and self.system is None:
@@ -173,6 +197,10 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
                 raise ValueError("center: give extent too (the half-width of the close-up around it, '3e6 km')")
             if self.center is not None and self.follow is not None:
                 raise ValueError("center: the view stays still around the body's start; leave out follow (or center)")
+            if isinstance(self.panel, list):
+                for row in self.panel:
+                    if row not in PANEL_ROWS:
+                        raise ValueError(f"panel: no row '{row}' (rows: {', '.join(PANEL_ROWS)})" + did_you_mean(row, list(PANEL_ROWS)))
             try:
                 self.model()
             except VidgenError as error:
@@ -190,7 +218,7 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
                                 self.tides if isinstance(self.tides, OrbitTides) else None, self.lagrange, self.zero_velocity, "method" in fields)
                 _MODELS[key] = resolve_model(self.central, self.bodies, span=self.span, orbit_count=self.orbits, dynamics=self.dynamics,
                                              method=self.method, step=self.step, follow=self.follow, cannon=self.cannonball, transfer=self.transfer,
-                                             flyby=self.flyby, many=many)
+                                             flyby=self.flyby, many=many, sky=SkySpec(self.date, self.radial, self.inset, self.sizes, self.event))
             return _MODELS[key]
 
         def body_specs(self) -> list[OrbitBody]:
@@ -205,7 +233,11 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
     def target_names(cls, params: Any) -> list[str]:
         names = (["title"] if params.title else []) + ["frame", "central"]
         model = params.model()
+        sky, sizes = sky_target_names(params)
+        if sizes:   # Step 233: the sizes picture (the Sun's edge is the central target)
+            return (["title"] if params.title else []) + ["frame"] + (["central"] if model.sky.sun is not None else []) + sky
         many, no_orbit = many_target_names(params)
+        many = many + sky
         if model.many is not None and model.many.tides is not None:
             return names + [f"body:{model.system.orbiters[0].name}", *many, "readout"]
         for spec, o in zip(params.body_specs(), model.system.orbiters):
@@ -244,6 +276,9 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         if name == "title":
             return str(params.title) or None
         kind, _, key = name.partition(":")
+        sky = params.model().sky
+        if sky is not None and sky.sizes is not None:   # the sizes picture: its bodies' names
+            return key if kind == "body" else ("Sun" if kind == "central" else None)
         if kind == "body":
             for spec in params.body_specs():
                 if spec.display_name() == key:
@@ -299,6 +334,30 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
                        v_before=(ga.speed_before, "km/s"), v_after=(ga.speed_after, "km/s"), gain=(ga.gain, "km/s"))
         return out
 
+    @classmethod
+    def diagnostics(cls, params: Any) -> dict[str, float]:
+        """The run's accuracy diagnostics, whatever the panel shows (for the lint, Step 234): the
+        largest |ΔE/E| (``energy_drift``) and |ΔL/L| (``angular_drift``) of an n-body run, each
+        near body's largest |ΔC/C| (``jacobi_drift:<name>``), the figure-eight's return error
+        (``closure``)."""
+        model = params.model()
+        out: dict[str, float] = {}
+        run = model.run
+        if run is not None:
+            e0 = float(run.energy[0])
+            if e0:
+                out["energy_drift"] = float(np.max(np.abs(np.asarray(run.energy) - e0))) / abs(e0)
+            if run.angular is not None:
+                out["angular_drift"] = max(abs(float(run.angular_error(k))) for k in range(len(run.times)))
+        info = model.many
+        if info is not None:
+            for name, series in (getattr(info, "jacobi", None) or {}).items():
+                s = np.asarray(series, dtype=float)
+                out[f"jacobi_drift:{name}"] = float(np.max(np.abs(s - s[0]))) / abs(float(s[0]))
+            if info.eight is not None and info.closure is not None:
+                out["closure"] = float(info.closure)
+        return out
+
     # ----- building ---------------------------------------------------------------------------
 
     def construct(self) -> None:
@@ -314,6 +373,11 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         self._size = size
         self._begin = begin
         self._video_now = begin
+        self._panel_mode = p.panel
+        if model.sky is not None and model.sky.sizes is not None:   # Step 233: radii to scale, a picture of its own
+            self._held = self._held_patterns()
+            self._construct_sizes(begin)
+            return
         if model.many is not None:
             model.turn = model.many.turn0   # a model is shared by renders: each starts from its own view
             self._switches = self._turn_plan()
@@ -342,6 +406,12 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             raise VidgenError(f"scene '{self.spec.id}': extent must be positive")
         reach = fixed if fixed is not None else max(np.max(np.abs(xs)), np.max(np.abs(ys)))
         unit_name, unit_m = orbits.length_unit(reach, p.unit)
+        self._log = model.sky is not None and model.sky.log
+        if self._log:   # Step 233: distances compressed; the picture is in the log view's own units
+            shown = self._radial(np.column_stack([xs, ys, 0 * xs]))
+            xs, ys = shown[:, 0], shown[:, 1]
+            fixed = self._log_d(fixed) if fixed is not None else None
+            unit_name, unit_m = "AU", 1.0
         self._unit_m, self._unit_name = unit_m, unit_name
         self._view_centre = (0.0, 0.0)
         if model.many is not None and model.many.center is not None:
@@ -353,20 +423,24 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         self._lines_static = [orbits.speedup_text(model.span / self._motion_seconds())] if p.readout else []
         self._t_unit = orbits.time_unit(model.span)
         self._note = ""   # "sizes not to scale", known once the drawing scale is
-        slots: list[Slot] = []
+        slots: list[Slot] = self._sky_head()
         if p.readout:
-            slots.append(Slot([self._time_line(model.span * k / 200) for k in range(201)], value=self._time_line))
+            slots.append(Slot([self._time_line(model.span * k / 200) for k in range(201)], value=self._time_line, name="time", rank=self._time_rank()))
             rates = ["clock paused", "× 99 million"] if any(self.action_times(k) for k in ("burn", "flyby", "pause")) else []
-            slots.append(Slot(list(self._lines_static) + rates, value=lambda t: self._rate_text()))
+            slots.append(Slot(list(self._lines_static) + rates, value=lambda t: self._rate_text(), name="speedup", rank=0))
+        slots += self._sky_slots()
         if p.shows_energy():
-            slots.append(Slot([self._energy_line(-1.23e-10), self._energy_line(-9.99e-9)], value=lambda t: self._energy_line(self._model.energy_error(t))))
+            slots.append(Slot([self._energy_line(-1.23e-10), self._energy_line(-9.99e-9)], value=lambda t: self._energy_line(self._model.energy_error(t)),
+                              name="energy", rank=self._energy_rank()))
             if model.many is not None:   # Step 232: the angular momentum's too
                 slots += self._angular_slot()
         slots += self._many_slots()
         slots += self._manoeuvre_slots()
         slots += self._overlay_slots()
-        has_panel = bool(slots)
-        slots.append(Slot(["sizes not to scale"], value=lambda t: self._note, color="dim", scale=0.85))
+        slots = choose_rows(slots, p.panel, self._panel_budget())
+        has_panel = bool(slots) or p.panel == "none"   # none: a panel only for the "not to scale" note
+        slots += self._sky_notes()   # the log view says so whatever the panel
+        slots.append(Slot(["sizes not to scale"], value=lambda t: self._note, color="dim", scale=0.85 if p.panel == "full" else 1.0, name="note", rank=0))
         self._slots = slots
         side_w, side_h = self._panel_size(slots) if has_panel else (0.0, 0.0)
         if side_w > body.width:   # wider rows are scaled down to the width when drawn, the panel with them
@@ -416,7 +490,8 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         central_color = self.theme.color(central_spec.color or centre.color or "highlight")
         self._central_color = central_color
         enlarged = False
-        true_r = centre.radius * self._scale
+        true_scale = 0.0 if self._log else self._scale   # the log view has no true size: every body is a dot
+        true_r = centre.radius * true_scale
         central_dot = Circle(radius=max(true_r, MIN_CENTRAL_RADIUS)).set_fill(central_color, opacity=1).set_stroke(width=0).set_z_index(3)
         enlarged |= centre.radius > 0 and true_r < MIN_CENTRAL_RADIUS
         central_label = self._label(str(central_spec.label) or centre.name, size) if central_spec.show_label else VGroup()
@@ -428,20 +503,24 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
 
         self._bodies: dict[str, tuple[Any, Any]] = {}
         for spec, o in zip(p.body_specs(), model.system.orbiters):
-            r = o.body.radius * self._scale
+            r = o.body.radius * true_scale
             enlarged |= o.body.radius > 0 and r < MIN_BODY_RADIUS
             dot = Circle(radius=max(r, MIN_BODY_RADIUS)).set_fill(colors[o.name], opacity=1)
             dot.set_stroke(self.theme.background, width=2).set_z_index(4)
             label = self._label(str(spec.label) or o.name, size) if spec.show_label else VGroup()
             self._bodies[o.name] = (dot, label)
             self._leaders[o.name] = self._leader()
-        self._note = "sizes not to scale" if enlarged else ""
+        self._note = "sizes not to scale" if enlarged or self._log else ""
+        enlarged = enlarged or self._log
         if not enlarged and box is not None:   # no note: the panel loses its last row
             self._slots = slots[:-1]
-            h = min(self._panel_size(self._slots)[1], box.height)
-            shift = 0.0 if portrait or self._vector_box is not None else (box.height - h) / 2
-            box = plotcore.Rect(box.x0, box.y1 - shift - h, box.x1, box.y1 - shift)
-            self._readout_box = box
+            if not self._slots:   # panel: none with sizes true: no panel at all
+                box = self._readout_box = None
+            else:
+                h = min(self._panel_size(self._slots)[1], box.height)
+                shift = 0.0 if portrait or self._vector_box is not None else (box.height - h) / 2
+                box = plotcore.Rect(box.x0, box.y1 - shift - h, box.x1, box.y1 - shift)
+                self._readout_box = box
 
         # orbits (conics around each body's parent; moved with the parent when it moves in the view)
         self._conics: dict[str, tuple[VGroup, Any, bool]] = {}
@@ -471,6 +550,7 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         self._build_orbit_overlays()
         self._build_manoeuvres()
         self._build_many()
+        self._build_sky()
         self._t = 0.0
         self._draw(0.0)
         self._register(title, caption, frame_parts)
@@ -500,11 +580,23 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         pad = plot_draw.PLATE_PAD
         return sum(widths) + PANEL_COLUMN_GAP * (len(widths) - 1) + 0.1 + 2 * pad, max(heights) + 2 * pad
 
+    def _frame_kind(self) -> str:
+        """The frame drawn: the param's, or none in the log view (its rings are drawn by the sky mixin)."""
+        return "none" if getattr(self, "_log", False) else self.params.frame
+
+    def _panel_budget(self) -> int:
+        """Most rows of a compact panel in this frame."""
+        return PANEL_BUDGET[1] if self.is_portrait else PANEL_BUDGET[0]
+
+    def _energy_rank(self) -> int:
+        """The energy / angular-momentum rows are diagnostics unless ``energy: true`` asks for them."""
+        return 0 if self.params.energy is True else DIAGNOSTIC
+
     def _panel_columns(self, slots: list[Slot]) -> list[list[Slot]]:
         """The panel's rows in one column, or in two side by side in a vertical frame when there
         are many (the picture keeps its height)."""
-        if not self.is_portrait or len(slots) <= PANEL_ROWS_PORTRAIT:
-            return [slots]
+        if not self.is_portrait or len(slots) <= PANEL_ROWS_PORTRAIT or getattr(self, "_panel_mode", "full") != "full":
+            return [slots]   # a compact panel stays one column at full size (the picture is width-limited in 9:16)
         k = math.ceil(len(slots) / 2)
         return [slots[:k], slots[k:]]
 
@@ -605,7 +697,7 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             margin = BURN_MARGIN if self._model.burns() else MARGIN   # room for the Δv arrows and their labels
             x_lo, x_hi = x_lo - margin * span, x_hi + margin * span
             y_lo, y_hi = y_lo - margin * span, y_hi + margin * span
-        if p.frame == "axes":
+        if self._frame_kind() == "axes":
             def spec(lo: float, hi: float, ticks: int) -> Any:
                 return plotcore.AxisSpec(lo=lo, hi=hi, unit=unit, label="", max_ticks=ticks, exact=True)
             panel = plotcore.PanelInput((), (), spec(x_lo, x_hi, 4 if portrait else 6), spec(y_lo, y_hi, 6 if portrait else 5))
@@ -643,9 +735,9 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
     def _frame(self, lay: Any, unit: str, size: float) -> VGroup:
         """The axes (``frame: axes``), a scale bar (``scale_bar``) or nothing."""
         p = self.params
-        if p.frame == "axes":
+        if self._frame_kind() == "axes":
             return plot_draw.draw_panel(lay, size=size, grid="major", theme=self.theme).group
-        if p.frame == "none":
+        if self._frame_kind() == "none":
             return VGroup()
         span = (lay.x.hi - lay.x.lo) / 4
         k = math.floor(math.log10(span))
@@ -774,10 +866,14 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
 
     def _frame_point(self, metres: np.ndarray) -> np.ndarray:
         lay, u = self._lay, self._unit_m
+        if self._log:
+            metres = self._radial(metres)
         return np.array([lay.frame_x(float(metres[0]) / u), lay.frame_y(float(metres[1]) / u), 0.0])
 
     def _frame_points(self, metres: np.ndarray) -> np.ndarray:
         lay, u = self._lay, self._unit_m
+        if self._log:
+            metres = self._radial(metres)
         x = lay.plot.x0 + (metres[:, 0] / u - lay.x.lo) / (lay.x.hi - lay.x.lo) * lay.plot.width
         y = lay.plot.y0 + (metres[:, 1] / u - lay.y.lo) / (lay.y.hi - lay.y.lo) * lay.plot.height
         return np.column_stack([x, y, np.zeros(len(x))])
@@ -835,6 +931,7 @@ class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         self._draw_orbit_overlays(t, anchors)
         self._draw_manoeuvres(t, anchors)
         self._draw_many(t, anchors)
+        self._draw_sky(t)
         self._place_labels(items, plot)
         self._draw_readout(t)
 

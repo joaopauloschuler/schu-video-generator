@@ -5632,12 +5632,26 @@ further out with a thin leader line, and they keep their place while it stays fr
 Orbits are thin lines in the body's colour, dashed for an open one; `trail` is a fading line
 behind the body (`true`: a quarter of its orbit; a share of it; a time; `false`). `follow: Earth`
 keeps the Earth at the centre: orbits around it stay still, the rest move with the view. The side
-panel (beside the picture in 16:9 — the room a tall picture leaves —, above it in 9:16) shows
-`t = 182 d` (min, h, d or yr by the span), the speed-up (`× 6 million`), with n-body the energy
-error `ΔE/E` (`energy: false` hides it), the overlays' values below, and a **legend** of the
-bodies with their periods (`legend: auto`: with two or more bodies, not in 9:16 with burns; `true`, `false`).
-In 9:16 a panel of more than five rows is set in two columns. A scale bar stands in the corner
-of the plot the paths keep away from (bottom left unless crowded).
+panel (beside the picture in 16:9 — the room a tall picture leaves —, above it in 9:16) is
+**compact** by default (Step 233): `t = 182 d` (min, h, d or yr by the span), the speed-up (`× 6
+million`), then the few values the scene is about — at most six rows in 16:9 and five in 9:16
+besides the "not to scale" note (rows a scene cannot do without, such as a transfer's Δv, are
+always kept), every row at the readable label size, in one column — and a **legend** of the
+bodies with their periods when it fits (`legend: auto`; `true` always, `false` never).
+Diagnostics — the n-body energy error `ΔE/E`, `ΔL/L`, a Jacobi constant's drift `ΔC/C`, the
+figure-eight's return error — are left out unless asked for (`energy: true`, `panel: full` or by
+name); the lint reads them from the model whatever the panel shows. `panel: full` shows every row
+(as before Step 233: in 9:16 more than five rows in two columns), `panel: none` only the "not to
+scale" note, and a list names the rows — `panel: [time, total_dv, phase]` — from: `time`,
+`speedup`, `date`, `event`, `distance`, `synodic`, `energy`, `angular`, `e`, `speed`,
+`speed_range`, `key`, `dt`, `areas`, `cannon_speeds`, `shots`, `legend`, `burns`, `dv_spent`,
+`next`, `transfer_kind`, `dv`, `total_dv`, `transfer_time`, `phasing`, `phase`, `window`, `miss`,
+`v_inf`, `turn_angle`, `side`, `sun_speeds`, `gain`, `mu`, `routh`, `frame`, `l1_l2`, `jacobi`,
+`angle`, `coorbital`, `eight`, `closure`, `mass_ratio`, `barycentre`, `binary_period`, `ratios`,
+`laplace`, `laplace_formula`, `conjunctions`, `curvature`, `pull`, `tidal`, `arrows`, `tide`,
+`locked` (rows that do not apply to the scene are skipped; the "not to scale" notes are always
+kept). A scale bar stands in the corner of the plot the paths keep away from (bottom left unless
+crowded).
 
 **Timing.** The first beat brings the frame, the central body, the orbits (drawn) and the bodies;
 then the bodies move until the scene's last frame, the time running from 0 to `span` (or
@@ -5997,7 +6011,8 @@ path around the Sun and the tides (a schematic).
   longer by the factor the panel gives (`tidal`) —, the two bulges along the line to the satellite
   (`bulges`, exaggerated) and with `locking` its near side marked (`face`): it spins once per orbit.
   The panel gives the pull (3.32 × 10⁻⁵ m/s²), the tidal acceleration (1.13 × 10⁻⁶ m/s², 1/29 of
-  it), the equilibrium tide (0.36 m) and "schematic: sizes, distance and arrows not to scale". Not
+  it), the equilibrium tide (0.36 m) and "schematic: not to scale" (`panel: full`: "schematic:
+  sizes, distance and arrows not to scale"). Not
   simulated: the oceans' dynamics, the bulges' lead from the Earth's spin, the Sun's tide.
 - **Checks**: an unknown system (did-you-mean), `central` or `dynamics: kepler` with a system,
   bodies with the figure-eight, a `near` body with elements, `near` / `view: rotating` /
@@ -6005,15 +6020,87 @@ path around the Sun and the tides (a schematic).
   `follow` with the barycentre's view, `center` without `extent`, a resonance not inside-out or
   around different bodies, `tides` with bodies, a system, a transfer.
 
+**The Solar System on a date** (Step 233): the planets where JPL's approximate elements put them
+on a day, the next opposition or conjunction, honest scale (true scale with an inset, or
+distances compressed and labelled so) and the planets' sizes side by side.
+
+```yaml
+- id: opposition
+  type: orbit
+  params:
+    title: "Mars at opposition"
+    date: 2020-06-01                     # 1800-01-01 … 2050-12-31; '2020-06-01 12:00' for a time (TT)
+    bodies: [{preset: earth}, {preset: mars}]
+    event: {kind: opposition, of: Mars}  # observer: Earth (default)
+    caption: "Positions from JPL's approximate planetary elements (valid 1800–2050)"
+- id: whole
+  type: orbit
+  params:
+    date: 2024-01-01
+    bodies: [{preset: mercury}, {preset: venus}, {preset: earth}, {preset: mars}, {preset: jupiter},
+             {preset: saturn}, {preset: uranus}, {preset: neptune}]
+    inset: true                          # or a radius: '1.8 AU'
+    span: "10 yr"
+- id: logview
+  type: orbit
+  params:
+    date: 2024-01-01
+    bodies: [{preset: mercury}, {preset: earth}, {preset: jupiter}, {preset: neptune}, {preset: pluto}]
+    radial: log
+    span: "2 yr"
+- id: sizes
+  type: orbit
+  params: {title: "The planets' sizes to scale", sizes: true}   # or {bodies: [earth, moon, mars], sun: false}
+```
+
+- **`date`**: the planet presets (`mercury` … `neptune` and `pluto`) take their elements on that
+  day from JPL's *Keplerian Elements for Approximate Positions of the Major Planets* (E. M.
+  Standish), **Table 1**: the J2000 values plus their rates per century, valid **1800–2050** — a
+  date or a span ending outside it is refused (the table is a fit to that interval). The Earth's
+  entry is the Earth–Moon barycentre (within 4 700 km of the Earth). From the date the planets move
+  on those Kepler orbits (two-body; within 0.0002 AU of the table's own positions over a year).
+  Another preset (the Moon, the ISS, Halley, the Galilean moons) has no position on a date here:
+  give its `nu` or `mean_anomaly`. The panel's first row is the date as the clock runs.
+- **`event`**: `{kind, of, observer}` — the first `kind` after the date of the planet `of` seen
+  from `observer` (default Earth; both must be bodies of the scene): `opposition` (an outer planet
+  opposite the Sun), `conjunction` (behind the Sun), `inferior_conjunction` / `superior_conjunction`
+  (an inner planet between us and the Sun / beyond it), `aligned` (equal heliocentric longitudes).
+  Found by root finding on the difference of the two heliocentric ecliptic longitudes (0° or 180°;
+  the same instant as the geocentric opposition in longitude); the published Mars oppositions
+  (2018-07-27, 2020-10-13, 2022-12-08, 2025-01-16) come out within hours. Drawn: the line from the
+  Sun through both planets where they will be (rings on them, the kind's name); the panel gives
+  `Mars opposition 2020-10-13`, the distance between them now and the synodic period. Default
+  span: until a little after the event. Target `event`.
+- **`radial: log`**: every distance r from the central body drawn as log₁₀(1 + r/r₀) (r₀ a third of
+  the smallest perihelion) along its true direction — Mercury and Pluto in one picture —, with
+  dashed rings at round distances (0.3, 1, 3, 10, 30 AU, labelled) instead of axes, every body a
+  dot, and the panel says "distances compressed (log)" (target `rings`). Overlays that measure
+  lengths or speeds (geometry, sectors, velocity, burns, transfers, flybys, systems) are refused on
+  it.
+- **`inset`**: `true` (the orbits within 2 AU: the inner planets) or a radius — a box beside the
+  panel (under the picture in 9:16) with those bodies to scale around the Sun, moving, named there
+  (their labels leave the crowded centre of the main picture), the region dashed in the main
+  picture (target `inset`).
+- **`sizes`**: a picture of its own: the radii of `bodies` (body presets with a radius; default the
+  scene's bodies or the eight planets) to one scale side by side (in a column in 9:16), the Sun's
+  edge first (16:9) or at the foot (9:16) when the central body is the Sun (`sun: false` leaves it
+  out), each with its name and equatorial radius, and "radii to scale (distances are not)".
+  Targets `central` (the Sun), `body:<name>`.
+- **Checks**: a date that is not one (`2020-13-01`), outside 1800–2050 (start or end), a non-Table-1
+  preset without `nu`, an event without a date, of a body not in the scene, the wrong kind for the
+  pair ("Venus is closer to the Sun than Earth, so it is never in opposition seen from there"),
+  `radial: log` with `frame: axes` or overlays, `inset` with `radial: log`, an inset holding every
+  body or none, `sizes` with anything else, an unknown size body (did-you-mean).
+
 | param | type | default | meaning |
 | --- | --- | --- | --- |
 | `title` | str | `""` | title |
-| `central` | preset \| `{preset, name, label, show_label, gm, mass, radius, color}` | `sun` | the central body: `sun`, `mercury` … `neptune`, `moon`, or your own (`gm` as `'3.986e14 m^3/s^2'` or `mass` as `'5.97e24 kg'`, `radius` with its unit) |
+| `central` | preset \| `{preset, name, label, show_label, gm, mass, radius, color}` | `sun` | the central body: `sun`, `mercury` … `neptune`, `pluto`, `moon`, or your own (`gm` as `'3.986e14 m^3/s^2'` or `mass` as `'5.97e24 kg'`, `radius` with its unit) |
 | `bodies` | list | required (may be empty with `cannonball`) | the orbiting bodies (below) |
 | `cannonball` | `{speeds, altitude, at, clockwise, show_paths}` | — | Newton's cannon (above) |
 | `transfer` | `{kind, ship, to, depart, apoapsis, revolutions}` | — | a Hohmann, bi-elliptic or phasing transfer (above) |
 | `flyby` | `{v_inf, periapsis, altitude, side, angle, planet_speed, atmosphere, name, reach, vectors}` | — | a gravity assist in the planet's frame (above) |
-| `legend` | bool \| `auto` | `auto` | the bodies and their periods in the side panel (auto: two or more bodies; not in 9:16 with burns) |
+| `legend` | bool \| `auto` | `auto` | the bodies and their periods in the side panel (auto: two or more bodies when the compact panel has room; not in 9:16 with burns) |
 | `span` | time | one period | simulated time shown (`'1 yr'`, `'92 min'`) |
 | `orbits` | number | `1` | instead of `span`: periods of the first body (a closed orbit) |
 | `dynamics` | `kepler` \| `nbody` | `kepler` | two-body Kepler orbits, or mutual gravity integrated |
@@ -6024,7 +6111,7 @@ path around the Sun and the tides (a schematic).
 | `extent` | length | auto | half-width of the view around its centre |
 | `follow` | body name | — | the view moves with this body |
 | `readout` | bool | `true` | time and speed-up |
-| `energy` | bool | with nbody | the n-body energy error ΔE/E |
+| `energy` | bool | with nbody, in `panel: full` | the n-body energy error ΔE/E (`true`: in a compact panel too) |
 | `label_size` | size | `caption` | ticks, labels and readout |
 | `caption` | str | `""` | note under the picture |
 | `caption_size` | size | `caption` | |
@@ -6060,6 +6147,12 @@ path around the Sun and the tides (a schematic).
 | `bodies[].near` | `L1` … `L5` | — | start at a Lagrange point (with a system) |
 | `bodies[].shift`, `drift` | `[x, y]` | — | the start moved / given a velocity, in the rotating frame |
 | `bodies[].curvature` | bool | `false` | which way its path bends around the central body |
+| `panel` | `compact` \| `full` \| `none` \| list of row names | `compact` | the side panel's rows (above) |
+| `date` | date | — | the planets on that day (1800–2050) |
+| `event` | `{kind, of, observer}` | — | the next opposition / conjunction after the date |
+| `radial` | `linear` \| `log` | `linear` | distances true, or compressed (log) |
+| `inset` | bool \| length | — | the inner Solar System to scale in a box |
+| `sizes` | bool \| `{bodies, sun}` | — | radii to scale side by side (a picture of its own) |
 
 ### `function_plot`
 
@@ -11734,7 +11827,7 @@ a title card, a `transform` of a bar).
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
-| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `lagrange`, `lagrange:<L>`, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`, `pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`, `readout` | reveal, highlight, sweep, launch, burn, corotate, inertial, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); a three-body pair's `lagrange` (`lagrange:L4` one point), `zero_velocity` curve and `rotation` badge; `barycentre`; a resonance's `conjunctions`; a close-up's `pointer` to the central body; the tidal schematic's `pull`, `mean`, `tidal`, `bulges`, `face`; `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
+| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `lagrange`, `lagrange:<L>`, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`, `pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`, `event`, `inset`, `rings`, `readout` | reveal, highlight, sweep, launch, burn, corotate, inertial, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); a three-body pair's `lagrange` (`lagrange:L4` one point), `zero_velocity` curve and `rotation` badge; `barycentre`; a resonance's `conjunctions`; a close-up's `pointer` to the central body; the tidal schematic's `pull`, `mean`, `tidal`, `bulges`, `face`; an event's alignment `event`, the `inset` box, the log view's `rings`; the sizes picture's `body:<name>` discs and `central` (the Sun's edge); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |

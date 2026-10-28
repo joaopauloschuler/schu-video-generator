@@ -134,7 +134,7 @@ def test_orbits_render(size: tuple[int, int], make_project, media: Path) -> None
     inner = {"title": "Inner planets", "bodies": [{"preset": "mercury"}, {"preset": "earth"}], "span": "1 yr", "caption": "JPL J2000 elements"}
     moon = {"central": "sun", "bodies": [{"preset": "earth"}, {"preset": "moon"}], "span": "30 d", "follow": "Earth", "frame": "scale_bar"}
     nbody = {"bodies": [{"name": "A", "a": "1 AU", "mass": "3e27 kg"}, {"name": "Probe", "periapsis": "2 AU", "e": 1.3, "nu": -60}],
-             "dynamics": "nbody", "span": "2 yr", "frame": "none"}
+             "dynamics": "nbody", "span": "2 yr", "frame": "none", "energy": True}   # Step 233: asked for (a diagnostic, hidden by default)
     scenes = [
         {"id": "inner", "type": "orbit", "params": inner, "beats": [{"text": "mercury races round"}, {"text": "the earth takes a year"}]},
         {"id": "moon", "type": "orbit", "params": moon, "beats": [{"text": "following the earth"}]},
@@ -264,7 +264,7 @@ def test_cannonball_launches_on_words(make_project, media: Path) -> None:
     beats = [{"text": "slowly it falls", "actions": [{"launch": "shot:1", "at": "@falls"}]},
              {"text": "faster it goes round", "actions": [{"launch": "shot:2", "at": "@round"}, {"launch": "shot:3"}]},
              {"text": "escape and beyond", "actions": [{"launch": "shot:4"}, {"launch": "shot:5", "at": "@beyond"}]}]
-    project = Project.load(make_project(minimal_config(scenes=[{"id": "c", "type": "orbit", "params": {**CANNON, "span": "3 h"}, "beats": beats}],
+    project = Project.load(make_project(minimal_config(scenes=[{"id": "c", "type": "orbit", "params": {**CANNON, "span": "3 h", "panel": ["time", "shots", "cannon_speeds"]}, "beats": beats}],
                                                        narration=NARRATION)))
     s = render(project, "c", media, (90, 160))
     times = [s._launch_time(k) for k in range(5)]
@@ -397,7 +397,7 @@ def test_burns_on_their_words_and_pauses(make_project, media: Path) -> None:
     pause to coast; the readout shows each stretch's own speed-up."""
     beats = [{"text": "now the first burn starts it", "actions": [{"burn": "burn:1", "at": "@burn"}, {"action": "pause", "at": "@starts"}]},
              {"text": "we coast to apogee and burn again", "actions": [{"action": "coast", "at": "@coast"}, {"burn": "burn:2", "at": "@again"}]}]
-    project = Project.load(make_project(minimal_config(scenes=[{"id": "g", "type": "orbit", "params": LEO_GEO, "beats": beats}], narration=NARRATION)))
+    project = Project.load(make_project(minimal_config(scenes=[{"id": "g", "type": "orbit", "params": {**LEO_GEO, "panel": "full"}, "beats": beats}], narration=NARRATION)))
     s = render(project, "g", media, (90, 160))
     play, model = s._playback, s._model
     times = {act.config.anchor: when for kind in ("burn", "pause", "coast") for act, when, _ in _times(s, kind)}

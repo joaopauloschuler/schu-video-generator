@@ -14,8 +14,12 @@ Sources (SI; marked in each entry):
   Neptune 24 764 km), the Moon's mean radius 1 737.4 km.
 - **JPL "Keplerian Elements for Approximate Positions of the Major Planets"** (E. M. Standish,
   Table 1, valid 1800–2050): the planets' J2000 mean elements a, e, I, L, ϖ, Ω (ecliptic and
-  equinox J2000); ω = ϖ − Ω, M = L − ϖ. The Earth's entry is the Earth–Moon barycentre. Their
-  rates (positions on a date) are Step 233.
+  equinox J2000); ω = ϖ − Ω, M = L − ϖ. The Earth's entry is the Earth–Moon barycentre. The
+  table (values and rates) is in :mod:`.ephemeris` (Step 233: positions on a date), read here.
+- Pluto (Step 233; a dwarf planet, in Table 1 with the planets): GM of the Pluto–Charon system
+  975.5 km³ s⁻² (Brozović et al. 2015, *Icarus* 246; the value DE440 uses — **for the owner to
+  check**), radius 1 188.3 km (New Horizons, Nimmo et al. 2017 — **for the owner to check**).
+  Ceres is not included (its elements are not in Table 1).
 - The Moon: mean distance 384 400 km, e = 0.0549, i = 5.145° to the ecliptic (Ω and ω
   precess with periods of 18.6 and 8.85 years: set to 0 here). The ISS-like orbit: circular at
   420 km altitude, i = 51.64°. The geostationary orbit: circular, equatorial, period one
@@ -42,6 +46,7 @@ from vidgen.errors import VidgenError
 from vidgen.plotcore import did_you_mean
 from vidgen.quantities import constant
 
+from .ephemeris import TABLE1, date_text, mean_elements
 from .values import AU
 
 _KM3 = 1e9   # km³/s² in m³/s²
@@ -107,6 +112,7 @@ BODIES: dict[str, Body] = {
     "europa": Body("Europa", 3_202.739 * _KM3, 1_560.8e3, "primary", _GALILEAN),
     "ganymede": Body("Ganymede", 9_887.834 * _KM3, 2_631.2e3, "secondary", _GALILEAN),
     "callisto": Body("Callisto", 7_179.289 * _KM3, 2_410.3e3, "dim", _GALILEAN),
+    "pluto": Body("Pluto", 975.5 * _KM3, 1_188.3e3, "dim", "Pluto–Charon system GM (Brozović et al. 2015); radius (New Horizons)"),
 }
 #: The Galilean moons' sidereal periods (days) and the mean anomalies they start at (degrees):
 #: Io 40°, Europa 0°, Ganymede 70° make the Laplace angle λ_Io − 3λ_Europa + 2λ_Ganymede = 180°
@@ -129,27 +135,20 @@ def _galilean(key: str) -> OrbitPreset:
 _JPL = "JPL approximate planetary elements, Table 1 (J2000; valid 1800–2050)"
 
 
-def _planet(key: str, a_au: float, e: float, inc: float, mean_long: float, peri_long: float, node: float) -> OrbitPreset:
-    """A planet from Table 1's J2000 values (degrees): ω = ϖ − Ω, M = L − ϖ. A negative
-    inclination (the Earth–Moon barycentre's −0.000 015 31°) is the same plane with the nodes
+def planet_preset(key: str, a_au: float, e: float, inc: float, mean_long: float, peri_long: float, node: float, source: str = _JPL) -> OrbitPreset:
+    """A planet from Table 1's values (degrees): ω = ϖ − Ω, M = L − ϖ. A negative inclination
+    (the Earth–Moon barycentre's −0.000 015 31° at J2000) is the same plane with the nodes
     swapped: |I| with Ω + 180°."""
     node = node if inc >= 0 else node + 180
     return OrbitPreset(key, BODIES[key], "sun", a_au * AU, e, math.radians(abs(inc)), math.radians(node % 360),
-                       math.radians((peri_long - node) % 360), math.radians((mean_long - peri_long) % 360), _JPL)
+                       math.radians((peri_long - node) % 360), math.radians((mean_long - peri_long) % 360), source)
 
 
 #: Preset orbiting bodies, by key.
 ORBITS: dict[str, OrbitPreset] = {
     p.key: p
     for p in [
-        _planet("mercury", 0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593),
-        _planet("venus", 0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255),
-        _planet("earth", 1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0.0),
-        _planet("mars", 1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891),
-        _planet("jupiter", 5.20288700, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909),
-        _planet("saturn", 9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448),
-        _planet("uranus", 19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503),
-        _planet("neptune", 30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574),
+        *[planet_preset(k, *TABLE1[k][0]) for k in TABLE1],
         OrbitPreset("moon", BODIES["moon"], "earth", 384_400e3, 0.0549, math.radians(5.145), source="mean distance and eccentricity; i to the ecliptic"),
         OrbitPreset("iss", Body("ISS", 0.0, 0.0, "", "an ISS-like orbit"), "earth", R_EARTH + 420e3, 0.0, math.radians(51.64),
                     source="ISS-like: circular, 420 km altitude, i = 51.64°"),
@@ -191,9 +190,17 @@ def orbit_preset(name: str, where: str = "bodies") -> OrbitPreset:
     raise VidgenError(f"{where}: unknown preset '{name}'" + did_you_mean(key, list(ORBITS) + list(ALIASES)) + f"; presets: {', '.join(ORBITS)}")
 
 
+def preset_on(key: str, jd: float) -> OrbitPreset:
+    """A Table 1 planet's preset with its elements on Julian date ``jd`` (J2000 values plus the
+    rates × centuries; no validity check here: :func:`~.ephemeris.check_valid`)."""
+    m = mean_elements(key, jd)
+    return planet_preset(m.planet, m.a, m.e, m.i, m.mean_longitude, m.peri_longitude, m.node, source=f"{_JPL}, on {date_text(jd)}")
+
+
 def preset_key(body: Body) -> str | None:
     """The preset key of a preset body (``None`` for a body of the author's own)."""
     return next((k for k, b in BODIES.items() if b == body), None)
 
 
-__all__ = ["ALIASES", "BODIES", "GALILEAN_PERIODS", "GALILEAN_PHASES", "GM_EARTH", "GM_SUN", "ORBITS", "R_EARTH", "SIDEREAL_DAY", "Body", "OrbitPreset", "body_preset", "orbit_preset", "preset_key"]
+__all__ = ["ALIASES", "BODIES", "GALILEAN_PERIODS", "GALILEAN_PHASES", "GM_EARTH", "GM_SUN", "ORBITS", "R_EARTH", "SIDEREAL_DAY", "Body", "OrbitPreset", "body_preset",
+           "orbit_preset", "planet_preset", "preset_key", "preset_on"]
