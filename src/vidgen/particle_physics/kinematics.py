@@ -707,7 +707,9 @@ def length_text(metres: float, digits: int = 4) -> str:
 # ----- plot model ---------------------------------------------------------------------------------
 
 
-@register_model("two_body_opening")
+@register_model("two_body_opening",
+                labels={"p": "parent momentum", "gamma": "γ", "theta_min": "smallest opening angle θ", "theta_90": "opening angle (90° in the rest frame)"},
+                units={"p": "GeV/c", "theta_min": "deg", "theta_90": "deg"})
 def _opening_model(params: dict[str, float], seed: int) -> dict[str, Any]:
     """The plot model ``two_body_opening`` (``kind: function``): a two-body decay of a parent of
     mass ``M`` (GeV/c²) into ``m1`` and ``m2`` (default 0) seen in the lab for parent momenta

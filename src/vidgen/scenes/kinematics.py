@@ -26,12 +26,15 @@ kin = particle_physics.kinematics
 LABEL_SCALE = 1.35
 HEADER_SCALE = 1.25
 VALUE_SCALE = 1.15
+#: The numbers with ``readout: key`` (fewer lines, larger).
+KEY_VALUE_SCALE = 1.3
 #: Arrow stroke, the gap between an arrow's tip and its label, between panels (scene units).
-ARROW_STROKE = 6
+ARROW_STROKE = 7
 LABEL_GAP = 0.14
 PANEL_GAP = 0.6
-#: Panels share one arrow scale unless their momenta differ more than this.
-SHARED_SCALE_LIMIT = 2.0
+#: Panels share one arrow scale unless their best fits differ more than this (then each panel
+#: fills its half and the larger one says ``arrows ×N``).
+SHARED_SCALE_LIMIT = 1.25
 #: Rapidities sampled when a frame is boosted, to keep every arrow inside its panel.
 BOOST_SAMPLES = 16
 
@@ -135,6 +138,8 @@ class Kinematics(NarratedScene):
         """both: the rest frame and the lab side by side (stacked in 9:16); rest or lab: one frame (boost moves it)."""
         values: bool = True
         """Write each frame's numbers (p*, energies, β, γ, opening angle, invariant mass, decay length)."""
+        readout: Literal["key", "all"] = "key"
+        """key: each frame's main numbers, large (p*, the invariant mass, the parent's p and E, βγcτ or the opening angle; the SI line with si); all: every number, smaller (the energies too)."""
         sum: bool = True
         """Draw the sum of the momenta (Σp; zero in the rest frame)."""
         decay_length: bool = True
@@ -465,44 +470,53 @@ class Kinematics(NarratedScene):
         return VGroup(symbol, VGroup())
 
     def _values(self, eta: float, width: float) -> VGroup:
-        rows = [fit_text(line, width, None, size=self._small * VALUE_SCALE, color="text" if k == 0 else "dim", min_size=self._small)
+        scale = VALUE_SCALE if self.params.readout == "all" else KEY_VALUE_SCALE
+        rows = [fit_text(line, width, None, size=self._small * scale, color="text" if k == 0 else "dim", min_size=self._small)
                 for k, line in enumerate(self.value_lines(eta))]
         return VGroup(*rows).arrange(DOWN, buff=0.12)
 
     def value_lines(self, eta: float) -> list[str]:
-        """The numbers a frame at rapidity ``eta`` shows."""
+        """The numbers a frame at rapidity ``eta`` shows: with ``readout: key`` its main ones
+        (at most three, written large), with ``readout: all`` every one."""
+        every = self.params.readout == "all"
+        return [text for key, text in self._value_items(eta) if every or key]
+
+    def _value_items(self, eta: float) -> list[tuple[bool, str]]:
+        """Every number of a frame, each marked whether it is a key number."""
         p, pic = self.params, self._pic
         vs = pic.vectors(eta)
         t = kin.total(vs)
         mass = f"√((ΣE)² − |Σp|²) = {kin.value_text(pic.mass, 'mass')}"
-        lines: list[str] = []
         d = pic.decay
+        key = p.readout == "key"
         if d is not None and abs(eta) < 1e-12:
             e1, e2 = d.energies
-            lines += [f"p* = {kin.value_text(d.p_star, 'momentum')}",
-                      f"E: {d.first.symbol} {kin.value_text(e1)} · {d.second.symbol} {kin.value_text(e2)}", mass]
-            if p.si:
-                lines.append("p* = " + kin.si_text(d.p_star, "momentum"))
-            return lines
+            items = [(True, f"p* = {kin.value_text(d.p_star, 'momentum')}"),
+                     (False, f"E: {_plain(d.first.symbol)} {kin.value_text(e1)} · {_plain(d.second.symbol)} {kin.value_text(e2)}"), (True, mass)]
+            if p.si:   # key: the SI value alone, short enough for one large line
+                items.append((True, "p* = " + (kin.si_text(d.p_star, "momentum").split(" = ", 1)[1] if key else kin.si_text(d.p_star, "momentum"))))
+            return items
         if d is not None:
             b = pic.motion(eta)
             parent = d.parent_vector(b)
-            lines.append(f"{d.parent.symbol}: p = {kin.value_text(parent.p, 'momentum')}, E = {kin.value_text(parent.energy)}")
+            p_text, e_text = kin.value_text(parent.p, "momentum"), kin.value_text(parent.energy)
+            items = [(True, f"{d.parent.symbol}: p = {p_text}")] + [(False, f"E = {e_text}")] if key else [(True, f"{d.parent.symbol}: p = {p_text}, E = {e_text}")]
+            long_lived = p.decay_length and d.parent.lifetime is not None and not d.parent.stable
             if vs[0].p > 0 and vs[1].p > 0:
-                lines.append(f"opening angle {kin.opening_angle(*vs):.1f}°")
-            lines.append(mass)
-            if p.decay_length and d.parent.lifetime is not None and not d.parent.stable:
-                lines.append(f"βγcτ = {kin.length_text(kin.DecayLength(d.parent, b).length)}")
+                items.append((not long_lived, f"opening angle {kin.opening_angle(*vs):.1f}°"))
+            items.append((True, mass))
+            if long_lived:
+                items.append((True, f"βγcτ = {kin.length_text(kin.DecayLength(d.parent, b).length)}"))
             if p.si:
-                lines.append("E = " + kin.si_text(parent.energy, "energy"))
-            return lines
-        lines.append(f"ΣE = {kin.value_text(t.energy)} · |Σp| = {kin.value_text(t.p, 'momentum') if t.p > 1e-6 * t.energy else '0'}")
+                items.append((False, "E = " + kin.si_text(parent.energy, "energy")))
+            return items
+        items = [(True, f"ΣE = {kin.value_text(t.energy)} · |Σp| = {kin.value_text(t.p, 'momentum') if t.p > 1e-6 * t.energy else '0'}")]
         if len(vs) == 2 and vs[0].p > 0 and vs[1].p > 0:
-            lines.append(f"opening angle {kin.opening_angle(*vs):.1f}°")
-        lines.append(mass)
+            items.append((True, f"opening angle {kin.opening_angle(*vs):.1f}°"))
+        items.append((True, mass))
         if p.si:
-            lines.append("m = " + kin.si_text(pic.mass, "mass"))
-        return lines
+            items.append((False, "m = " + kin.si_text(pic.mass, "mass")))
+        return items
 
     # ----- the arrows in a frame -------------------------------------------------------------
 
@@ -704,6 +718,12 @@ def _overlap(a: Mobject, b: Mobject) -> float:
     w = min(a.get_right()[0], b.get_right()[0]) - max(a.get_left()[0], b.get_left()[0])
     h = min(a.get_top()[1], b.get_top()[1]) - max(a.get_bottom()[1], b.get_bottom()[1])
     return w * h if w > 0 and h > 0 else 0.0
+
+
+def _plain(symbol: str) -> str:
+    """A particle symbol for plain text: ``ν_μ`` → ``νμ`` (the subscript is set apart in the
+    arrow labels, not in a line of numbers)."""
+    return symbol.replace("_", "")
 
 
 def _gamma_text(gamma: float) -> str:

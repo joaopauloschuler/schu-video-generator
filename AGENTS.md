@@ -335,7 +335,8 @@ project's own scene types, in its theme).
 | planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist; many bodies: Lagrange points and Trojans in the rotating frame, the figure-eight, binary stars, the Io–Europa–Ganymede resonance, tides (a schematic); the Solar System on a date (1800–2050), the next opposition or conjunction, all planets on a log scale, an inset of the inner planets, planet sizes to scale | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley, io; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity; near: L4), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side), `system` (sun_jupiter, earth_moon, figure_eight), `view` (rotating), `lagrange`, `resonance`, `origin` (barycentre), `tides`, `date`, `event` (opposition, of), `radial` (log), `inset`, `sizes`, `panel` (compact, full, none, rows); the actions sweep, launch, burn, flyby, pause, coast, corotate, inertial |
 | the Standard Model's particles: quarks and leptons in three generations, the gauge bosons and the Higgs boson with their masses (PDG 2024), charges and spins; antiparticles; which bosons couple to which particles | `standard_model` | `title`, `reveal` (groups, all), `show` (mass, charge, spin, name), `antiparticles`, `layout` (wide, tall), `key`, `source`; targets particle:<name>, generation:<N>, group:<quarks...>, row:<...>; the actions antiparticles, couplings |
 | a Feynman diagram in proper notation (e⁺e⁻ → μ⁺μ⁻, Compton, Bhabha, β⁻ and μ⁻ decay, π⁺ → μ⁺ ν_μ, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → W⁺b) or your own, every vertex checked against the Standard Model; s- and t-channel, decays, loops | `feynman` | `preset` or `diagrams` (lines "id: particle from -> to", groups), `diagram`, `time` (right, up), `spectators`, `reveal` (time, all); targets line:<id>, vertex:<id>, hadron:<particle>; the actions travel, vertex_rule, swap_channel |
-| relativistic kinematics: a two-body decay (π⁺ → μ⁺ ν_μ, K⁺ → π⁺ π⁰, H → γγ) as momentum arrows in the rest frame and the lab, particles with their invariant mass, boosts, opening angles, decay lengths βγcτ | `kinematics` | `decay` or `particles` ({particle, momentum, angle}), `momentum` / `energy` / `kinetic` / `beta` / `gamma` of the parent in the lab, `angle`, `frames` (both, rest, lab), `si`; targets panel:rest, panel:lab, arrow:<n>, sum, values; the action boost; a calculation takes p_star with from_scene |
+| relativistic kinematics: a two-body decay (π⁺ → μ⁺ ν_μ, K⁺ → π⁺ π⁰, H → γγ) as momentum arrows in the rest frame and the lab, particles with their invariant mass, boosts, opening angles, decay lengths βγcτ | `kinematics` | `decay` or `particles` ({particle, momentum, angle}), `momentum` / `energy` / `kinetic` / `beta` / `gamma` of the parent in the lab, `angle`, `frames` (both, rest, lab), `si`, `readout` (key, all); targets panel:rest, panel:lab, arrow:<n>, sum, values; the action boost; a calculation takes p_star with from_scene |
+| an event display in a schematic particle detector (tracker, solenoid, calorimeters, muon chambers): tracks bending in the magnetic field, electron / photon / muon / hadron / neutrino signatures, jets, missing transverse momentum; Z → μμ, H → γγ, H → 4ℓ, W → eν, dijet events | `detector` | `event` (a preset, {preset, seed} or {particles: [{particle, pt, eta, phi, leaves}], products}), `view` (xy, rz), `field`, `energy_scale` (log, linear), `tower_max`, `reveal` (layers, all), `readout`, `legend`, `layers`, `labels`, `label`; targets particle:<n>, particle:<particle>, jet:<n>, tracks, ecal, hcal, muon_hits, missing_pt, readout, legend; the action switch_view |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1372,8 +1373,48 @@ Particles given in the lab: `particles: [{particle: gamma, momentum: "80 GeV/c",
 pion_decay.p_star` (`M`, `E1`, `E2`, `beta`, `gamma`, `opening_angle`, `decay_length`; particles:
 `m_inv`). The model `particle_physics.kinematics` also gives thresholds (`threshold("p p -> p p p
 anti-p")`: 5.63 GeV kinetic on a fixed target, 0.94 GeV per beam at a collider) and the plot model
-`two_body_opening` (the opening angle against momentum). A decay below threshold, a forbidden
-decay, β ≥ 1 or an energy below the mass is refused with the numbers.
+`two_body_opening` (the opening angle against momentum; its axes are named and in GeV/c and
+degrees by themselves). A decay below threshold, a forbidden decay, β ≥ 1 or an energy below the
+mass is refused with the numbers. `readout: key` (default) writes each frame's main numbers large;
+`readout: all` every number.
+
+Event displays in a schematic cylindrical detector (tracker, solenoid, ECAL, HCAL, iron yoke, muon
+chambers; generic sizes, labelled "schematic detector · simulated event"), seen across the beam
+(x–y) or along it (r–z), with a simulated event built layer by layer over the beats:
+
+```yaml
+# particle physics
+- id: z_event
+  type: detector           # tracks bend with R = pT / (0.3 B); e, γ shower in the ECAL, hadrons in the HCAL, μ reach the muon chambers
+  params:
+    title: "A Z boson decays to two muons"
+    event: {preset: z_to_mumu, seed: 3, soft: 0}   # z_to_mumu, h_to_gammagamma, h_to_4l, w_to_enu, dijet; same seed, same event; soft: low-pT pions (default 4)
+  beats:
+    - text: "Tracks curve; calorimeters take the energy; two muons reach the muon chambers."
+      actions: [{highlight: "particle:mu+", at: "@muons"}]
+    - text: "Seen from the side."
+      actions: [{action: switch_view, to: rz}]
+- id: signatures
+  type: detector
+  params:
+    event:
+      particles:           # pt in GeV/c, eta, phi in degrees; particle: jet for a jet
+        - {particle: e-, pt: 30, eta: 0.3, phi: 20}
+        - {particle: gamma, pt: 40, phi: 100, leaves: [ecal]}   # leaves is checked: a photon leaves no track
+        - {particle: nu_e, pt: 35, phi: 150}                      # invisible: missing transverse momentum
+    reveal: all
+  beats:
+    - text: "The neutrino escapes: the momentum is out of balance."
+      actions: [{highlight: missing_pt, at: "@neutrino"}]
+```
+
+`field` (tesla, default 2) sets the bending: positive particles turn clockwise in the x–y view (the
+field out of the screen); low-p_T tracks curl up in the tracker. Missing p_T is minus the visible
+particles' sum. Towers grow ∝ log(1 + E) (`energy_scale: linear` for ∝ E; `tower_max` fills the
+depth). Targets: `particle:<n>` / `particle:mu+` (track, towers, name, readout row), `jet:<n>`,
+`tracks`, `ecal`, `hcal`, `muon_hits`, `missing_pt`, `readout`, `legend`, `layers`,
+`layer:<tracker|solenoid|ecal|hcal|iron|muon>`, `soft`. A τ, π⁰, Z or quark listed as a particle is
+refused with the reason (it decays first; make a jet).
 
 ```yaml
 # data
@@ -1691,6 +1732,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `vertex_rule` | on a `feynman` diagram: ring a vertex and state its rule (`vertex_rule: "vertex:v1"`; `show: [rule, coupling, checks]`): the vertex type, the coupling (α ≈ 1/137, α_s ≈ 0.118, g ≈ 0.65, y ∝ mass), the charge and lepton numbers in and out; undone at the next beat | "at this vertex the photon couples to the charge" |
 | `swap_channel` | on a `feynman` scene with several diagrams: morph into another (`- action: swap_channel`, `to: t`): s ↔ t channel, photon ↔ Z, top ↔ W loop | "or they exchange a photon instead" |
 | `boost` | on a `kinematics` scene: speed the last frame up continuously (`- action: boost`, `to: lab`, `rest` or a β such as 0.99): a decay's products swing forward and close up, Σp grows, β and γ count up, the invariant mass stays | "speed the pion up" |
+| `switch_view` | on a `detector` scene: turn the transverse view (x–y, across the beam) into the longitudinal one (r–z, along it) or back (`- action: switch_view`, `to: rz` / `xy`); rings, tracks, towers and hits morph | "seen from the side" |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |

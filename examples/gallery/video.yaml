@@ -388,6 +388,17 @@ scenes:
       - text: "At rest, the two pions leave back to back."
       - text: "In the lab the kaon moves, and both pions are thrown forward."
 
+  - id: detector
+    type: detector        # an event display in a schematic detector: tracks bending in the field, towers, muon hits, missing pT
+    params:
+      title: "Two photons"
+      event: {preset: h_to_gammagamma, seed: 5}
+      reveal: all
+    beats:
+      - text: "Two photons: showers in the calorimeter, and no tracks."
+      - text: "Seen from the side."
+        actions: [{action: switch_view, to: rz}]
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:

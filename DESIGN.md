@@ -18311,7 +18311,7 @@ examples simulated and labelled "simulated data"; no real experiment's logo or e
 **Names** (checked against the registry and the code): the package `vidgen.particle_physics`
 (`vidgen.particles` is the cartoon particle effects); scene types `standard_model` (237),
 `feynman` (238), `kinematics` (239), `detector` (240); actions `antiparticles`, `couplings` (237), `travel`,
-`vertex_rule`, `swap_channel` (238), `boost` (239); no collisions.
+`vertex_rule`, `swap_channel` (238), `boost` (239), `switch_view` (240); no collisions.
 
 ### 99.2 The model: `vidgen.particle_physics` (Step 237)
 
@@ -18667,3 +18667,115 @@ the muon's electron spectrum) are not modelled; lab distributions are shown as s
 the opening-angle curve, not as sampled angular distributions; the opening-angle model takes masses
 as numbers (plot params are numbers), not particle names; a dense two-frame picture trips
 `max_words` (about 45 words with every number: `values: false` or fewer beats' worth of detail).
+
+**Review of 239's stills (Step 240)**: each frame fills its half (`SHARED_SCALE_LIMIT` 2 → 1.25,
+the larger frame's header says `arrows ×N`); `readout: key` (new default) writes at most three
+key numbers per frame at 1.3 × the readable size (rest: p*, the invariant mass, the SI value when
+`si`; lab: the parent's p, the invariant mass, βγcτ — or the opening angle for a stable parent),
+`readout: all` every number at 1.15 ×; plain-text symbols drop the subscript underscore (`νμ`).
+Shared code, additive: a product next to the root of a sum is set apart by a thin space
+(`\sqrt{\gamma^2-1}\,c\tau`: the root's last term no longer runs into the factor; other products
+unchanged); `register_model(name, labels=..., units=...)` gives a model's columns axis names and
+default units (`Column.label`, `Simulation.labels`; the plot's `units` and an axis `label`
+override them) — `two_body_opening` names its axes "parent momentum (GeV/c)" and "smallest opening
+angle θ (deg)". `feynman` with `vertex_rule` in 16:9: the diagram is centred in the frame until the
+first rule card, glides left beside it, and back to the centre after the last one (`_dock`; parts
+not yet drawn are swapped silently). Phase Q baseline 31/31 identical.
+
+### 99.9 Detectors and events: the model (Step 240)
+
+`particle_physics/detector.py`, no manim. Lengths in metres, momenta and energies in GeV (c = 1),
+angles in radians, the field in tesla along +z.
+
+- **Geometry (schematic, generic sizes of our own; no experiment's)**: tracker r ≤ 1.10 m, |z| ≤
+  2.6 m (pixel layers at 5, 9, 13 cm; strips at 0.30–1.05 m), solenoid 1.18–1.30 m (|z| ≤ 2.8 m; the
+  field volume is inside it), ECAL 1.40–1.80 m (endcaps |z| 3.05–3.45 m), HCAL 1.90–2.90 m (endcaps
+  |z| 3.55–4.55 m), two iron layers interleaved with three muon stations to 4.60 m (endcaps to |z|
+  6.02 m). `Layer` (barrel shell and endcap discs), `Detector(field, return_field)` refuses a field
+  ≤ 0; `bz(r, z)`: B inside the coil, −`yoke_field` (default B/2, schematic) in the barrel iron, 0
+  elsewhere.
+- **Signatures** (`signature(p)`): electron, photon, muon, charged hadron, neutral hadron, neutrino
+  with what each must / may leave (`SIGNATURES`; parts track, ecal, hcal, muon, missing).
+  Particles that never reach the detector are errors with the reason: cτ < 1 m (τ, K⁰_S, Λ, D, B…:
+  "decays before it reaches the detector (cτ = 87 µm)"; π⁰: "give two photons"), Z / W / H / t
+  ("decays at the collision point; give its products or use a preset"), quarks and gluons ("make a
+  jet"). `signature_problem(p, parts)` checks a claim ("a photon leaves no track (it is neutral)") —
+  for Step 242's lint too.
+- **Trajectories** (`trajectory`): stepped in transverse steps (≤ 1 cm, ≤ R/40, ≤ 1 cm along z for
+  forward tracks); the heading turns by −0.2998 q B / p_T per metre (clockwise for qB > 0: the force
+  q v × B), z = sinh η per metre of transverse path; stops where absorbed (e, γ at the ECAL; hadrons
+  at the HCAL, whose ECAL entry is recorded on the way), after a full turn inside the field (a
+  curler; drawn for one turn) or at the envelope (muons). Records tracker-layer crossings, the
+  middle of each muon station crossed, calorimeter entry points. Verified: the path lies on the
+  circle of radius p_T / (0.3 B) with its centre on the force's side.
+- **Deposits and towers**: the energy shared by `CALO_SHARE` (e, γ: ECAL; charged hadrons 30 / 70 %;
+  neutral hadrons HCAL; schematic), at the entry points; `towers` bins them in cells (ECAL 7.5° /
+  HCAL 12° in φ; 6° / 9° in θ — coarser than real cells so a tower reads on video), hadron
+  showers spread 20 / 60 / 20 % over three cells; `tower_fraction` (linear or log, a floor of 0.12).
+- **Events**: `generate(preset, seed, soft)` with `SplitMix64` (seed × 1000003 + preset index):
+  `z_to_mumu`, `h_to_gammagamma`, `h_to_4l` (H → Z Z*, the Z* mass uniform from 12 GeV to what is
+  left, Z → e⁺e⁻, Z* → μ⁺μ⁻), `w_to_enu` (W⁺ → e⁺ν_e), `dijet` (two jets of equal p_T, back to
+  back). Boson mass from a Breit–Wigner (PDG mass and width, within ±3Γ), p_T exponential (mean 8 or
+  15 GeV, ≤ 60), rapidity in [−1, 1]; isotropic two-body decay in the rest frame boosted with
+  `FourVector.boost` (Step 239); retried until leptons and photons have |η| ≤ 2.4 and p_T ≥ 10 GeV
+  and a neutrino p_T ≥ 20 GeV (display events are chosen to be seen). The boson's p_T is balanced by a
+  recoil jet (≥ 15 GeV) or two soft pions; soft pions come in back-to-back pairs of equal p_T. So
+  every preset event balances exactly and its missing p_T is the neutrinos' (tested). Jets
+  (`make_jet`): 5–10 constituents (60 % charged pions, 25 % photons, 15 % K⁰_L / n) within ΔR ≲ 0.25,
+  rotated and scaled so their p_T sums exactly to the jet's. `custom_event` takes listed particles
+  (`particle: jet` allowed; |η| ≤ 3, p_T > 0) and `products` for the invariant mass.
+  `Event.missing_pt()` = −Σ visible p_T; `products_mass()`; `transverse_mass()` (one visible
+  product); `objects()` (by p_T for presets, listed order for lists).
+
+### 99.10 The `detector` scene type (Step 240)
+
+**Decision**: the scene type is `detector` (planned in §99.1; no type, action or target is called
+so) and the one new action `switch_view` (checked: `switch_on` / `switch_off` exist, no clash).
+Highlighting, dimming and revealing reuse the generic actions on the scene's targets.
+
+`scenes/detector.py`, `scenes/detector_actions.py`.
+
+- **Views**: x–y (circles, annuli; the field out of the screen, said in the label line) and r–z
+  (barrel and endcap rectangles, the beam dashed; a particle is drawn on the side of the beam its
+  azimuth points to, a tower on its own deposit's side). Each view's scale is fitted to the room
+  between the side columns (16:9) or above the blocks (9:16); object names sit in the muon system
+  (0.8 of the way out) beside their direction with a halo of the background (no ring of room around
+  the drawing — the detector is larger).
+- **Parts**: tracks as polylines (≤ 160 points) in the kind's colour (e primary, μ accent, hadrons
+  text; soft tracks thinner), tracker hits as dots, a muon's outer path and chamber hits (small
+  bars across the track); towers per owner (a listed particle, a jet, the soft tracks) as annular
+  sectors (x–y, at the barrel's radius by azimuth) or quadrilaterals along their polar angle (r–z,
+  clipped to the barrel's length / the endcap's radii); jet cones (ΔR 0.4); the missing p_T as a
+  dashed arrow ∝ p_T (its share of the largest object's p_T, at most 0.95 of the HCAL's radius;
+  x–y only).
+- **Side blocks**: the readout table (object, p_T, η; then p_T miss and the invariant or transverse
+  mass), the signature legend with small icons and the tower scale, the layer key, the label line
+  ("schematic detector · simulated event · B = 2 T out of the screen"). 16:9: key and label left,
+  readout and legend right; 9:16: readout beside the key, the legend in two columns, the label at
+  the bottom, the stack centred.
+- **Reveal** (`layers`): (1) detector, layer key, legend, label, title; (2) tracks (Create from the
+  collision point) and hits; (3) towers growing outward from the inner face (one
+  `UpdateFromAlphaFunc` on the container so the scene holds the container — a first version with a
+  `GrowFromPoint` per tower left the towers top-level and a view switch could not morph them) and
+  jet cones; (4) muons beyond the tracker and their hits; (5) missing p_T, names, readout, caption.
+  `all` deduplicates the entrances.
+- **Targets** registered on containers (one per part, holding the current view's mobject) so
+  `switch_view` can `Transform` each part into its counterpart and targets follow; parts not on
+  screen are swapped silently; an empty part (the missing p_T in r–z) is put on screen empty so
+  switching back draws it.
+- **Validation**: `field > 0`, the event (preset name with did-you-mean, particle names, reach,
+  |η| ≤ 3, p_T > 0), `products` numbering, `leaves` claims, `soft` 0–40.
+
+**Render performance**: preview (1280×720, 10 fps): a five-beat Z → μμ scene (15.9 s) renders in
+about 9 s; one with `switch_view` (5.7 s) in about 9 s; a few hundred mobjects, no memory concern.
+
+**Public (additive)**: scene type `detector`; action `switch_view`; `particle_physics.detector`;
+`register_model(..., labels=, units=)` keywords, `Column.label`, `Simulation.labels`. No
+dependency, no config key.
+
+**Known gaps after Step 240**: no displaced vertices (K⁰_S, Λ, b hadrons decay before the
+detector is drawn), no material effects (bremsstrahlung, conversions, multiple scattering), no
+pile-up and no resolution smearing (missing p_T of a simulated event is exact); muons leave no MIP
+deposit in the calorimeters; endcap muons in x–y are drawn where they cross the stations; a full
+display trips `max_words` (about 50 words with readout, legend and key: `legend: false` /
+`layers: false` for a busy narration).

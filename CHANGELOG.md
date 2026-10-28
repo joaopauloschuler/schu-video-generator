@@ -5,9 +5,25 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–239)
+## Unreleased (Steps 193–240)
 
 ### Particle physics (Phase Y, from Step 237)
+
+- **Event displays: the `detector` scene type** (Step 240). A schematic cylindrical detector
+  (tracker, solenoid, ECAL, HCAL, iron yoke, muon chambers; generic sizes, labelled "schematic
+  detector · simulated event") across the beam (x–y) or along it (r–z; the action `switch_view`
+  morphs one into the other), with a seeded simulated event built layer by layer over the beats:
+  tracks bending in the field with radius p_T / (0.3 B) and the sign of their charge (low-p_T ones
+  curl up), calorimeter towers growing with the energy (log or linear, stated), muons through
+  everything with chamber hits, jets as cones, the missing transverse momentum computed from the
+  visible particles, a readout (p_T, η, invariant or transverse mass), a signature legend and a
+  layer key. Presets `z_to_mumu`, `h_to_gammagamma`, `h_to_4l`, `w_to_enu`, `dijet` (decays in the
+  boson's rest frame boosted to the lab) or listed particles; what never reaches a detector (τ, π⁰,
+  Z, quarks) is refused with the reason, and a claimed signature is checked ("a photon leaves no
+  track"). Also: `kinematics` frames fill their halves with three large key numbers each
+  (`readout: all` for every number), a root of a sum is set apart from the next factor in
+  calculations, plot models can name their axes (`two_body_opening` does), and a `feynman` diagram
+  stays centred until a vertex-rule card needs the room.
 
 - **Relativistic kinematics: the `kinematics` scene type** (Step 239). Momentum vectors to scale: a
   two-body decay (`decay: "pi+ -> mu+ nu_mu"`) in the parent's rest frame — the products back to

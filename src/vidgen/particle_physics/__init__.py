@@ -4,7 +4,8 @@ common hadrons with PDG 2024 values (:mod:`.data`), names in ASCII and Unicode w
 (:mod:`.conservation`), the Standard Model chart's cells and couplings (:mod:`.chart`) and
 Feynman diagrams with their vertex rules and layout (:mod:`.feynman`, :mod:`.feynman_layout`),
 relativistic kinematics — four-vectors, invariant mass, two-body decays, boosts, thresholds,
-decay lengths (:mod:`.kinematics`).
+decay lengths (:mod:`.kinematics`), a schematic detector with simulated events, tracks in the field
+and signatures (:mod:`.detector`).
 Exported by ``vidgen.api`` as the module ``particle_physics``."""
 
 from .chart import CELLS, COUPLINGS, GRID, GROUPS, ROWS, SHORT_LABELS, Cell, Coupling, cell
@@ -31,7 +32,7 @@ from .data import (
 )
 from .names import ALIASES, antiparticle, find_key, normalize, particle, suggestions
 from .process import Leg, Process, as_process, parse_process
-from . import feynman, feynman_layout, kinematics
+from . import detector, feynman, feynman_layout, kinematics
 from .feynman import Diagram, DiagramCheck, build_diagram, check_diagram, preset_diagrams, vertex_rule
 from .feynman_layout import layout as diagram_layout
 from .kinematics import Boost, DecayLength, FourVector, Thresholds, TwoBodyDecay, decay_length, invariant_mass, threshold, two_body, two_body_momentum
@@ -45,6 +46,7 @@ __all__ = [
     "Thresholds",
     "TwoBodyDecay",
     "decay_length",
+    "detector",
     "invariant_mass",
     "kinematics",
     "threshold",

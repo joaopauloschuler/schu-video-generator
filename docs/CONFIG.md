@@ -6405,14 +6405,18 @@ MeV / GeV, momenta in MeV/c / GeV/c, masses in MeV/c² / GeV/c², the masses fro
   ...]`): their sum, the invariant mass m = √((ΣE)² − |Σp|²) and their **rest frame** (centre of
   momentum, β = Σp/ΣE, where Σp = 0). Photons all moving one way have none (refused).
 - **Frames**: `frames: both` (default) shows the rest frame and the lab side by side (16:9) or
-  stacked (9:16); `rest` or `lab` one frame, which the action `boost` moves. One arrow scale for both
-  frames unless their momenta differ more than twice — then the header says so (`arrows ×6.2`).
-  With one decay frame in a tall picture the flight direction points up.
+  stacked (9:16); `rest` or `lab` one frame, which the action `boost` moves. Each frame fills its
+  half: one arrow scale for both unless their best fits differ by more than 1.25× — then the
+  larger frame's header says so (`arrows ×2.7`). With one decay frame in a tall picture the flight
+  direction points up.
 - **Numbers** (`values: true`): the rest frame of a decay — p*, both energies, √((ΣE)² − |Σp|²) = M;
   the lab — the parent's p and E, the opening angle of the products, the same invariant mass (the
   point: it does not depend on the frame), the mean decay length βγcτ (`decay_length: true`, when
   the parent has a lifetime; time dilation, γτ, is behind it); for particles: ΣE, |Σp|, the opening
-  angle of two, the invariant mass. Under each frame's header: β and γ of the frame.
+  angle of two, the invariant mass. Under each frame's header: β and γ of the frame. With
+  `readout: key` (default) only the main numbers, large (p*, the invariant mass and the SI value;
+  the parent's p, the invariant mass and βγcτ or the opening angle); `readout: all` writes every
+  number, smaller.
 
 ```yaml
 - id: pion
@@ -6469,6 +6473,7 @@ numbers morph into the new frame's; the invariant mass stays. `until:` boosts ba
 | `angle` | degrees | `60` | the first product's direction in the rest frame, from the flight direction |
 | `frames` | `both` \| `rest` \| `lab` | `both` | which frames to show (one frame: `boost` moves it) |
 | `values` | bool | `true` | each frame's numbers |
+| `readout` | `key` \| `all` | `key` | the main numbers, large (at most three a frame), or every number, smaller |
 | `sum` | bool | `true` | the sum vector Σp |
 | `decay_length` | bool | `true` | the parent's βγcτ in the lab |
 | `si` | bool | `false` | the SI conversion of the main value |
@@ -6485,7 +6490,10 @@ E = 7m_p, kinetic 6m_p = 5.63 GeV; collider 2m_p per beam), `decay_length("mu-",
 (βγcτ = 24.9 km for a 4 GeV muon), `to_si` / `si_text`, `pdg_value`. The plot model
 `two_body_opening` (`kind: function`; params `M`, `m1`, `m2` in GeV/c², `p_min`, `p_max` in GeV/c)
 gives the opening angle of a two-body decay against the parent's momentum: columns `p`, `gamma`,
-`theta_min` (degrees; massless products: sin(θ_min/2) = 1/γ) and `theta_90`:
+`theta_min` (degrees; massless products: sin(θ_min/2) = 1/γ) and `theta_90`. The model gives its
+columns' units (GeV/c, deg) and axis names ("parent momentum", "smallest opening angle θ"), so the
+axes need no `label` (a registered model may do the same: `register_model(name, labels={...},
+units={...})`; the plot's `units` and an axis `label` override them):
 
 ```yaml
 - id: opening
@@ -6493,13 +6501,132 @@ gives the opening angle of a two-body decay against the parent's momentum: colum
   params:
     title: "Opening angle of the two photons"
     models:
-      pi0: {kind: function, function: two_body_opening, params: {M: 0.1349768, p_min: 0.2, p_max: 20}, units: {p: GeV/c, theta_min: deg}}
-    x: {scale: log, label: "pion momentum"}
-    y: {label: "smallest opening angle"}
-    series: [{name: opening angle, x: p, y: theta_min}]
+      pi0: {kind: function, function: two_body_opening, params: {M: 0.1349768, p_min: 0.2, p_max: 20}}
+    x: {scale: log}
+    series: [{name: smallest opening angle, x: p, y: theta_min}]
   beats:
     - text: "The faster the pion, the closer its photons."
 ```
+
+### `detector`
+
+**Event displays** (Phase Y) in a **schematic** cylindrical general-purpose detector — generic
+sizes of our own, no real experiment's geometry or logo; the line "schematic detector · simulated
+event" says so on screen. From the beam outwards: a pixel and a strip tracker (radius 1.1 m), the
+solenoid (1.18–1.30 m; its field `field`, default 2 T, fills the tracker), the electromagnetic
+calorimeter (ECAL, 1.4–1.8 m), the hadronic calorimeter (HCAL, 1.9–2.9 m), then the iron return
+yoke interleaved with three muon stations (to 4.6 m); barrels and endcaps (|z| to 6 m).
+
+- **Views**: `view: xy` across the beam (transverse; the field points out of the screen) or `rz`
+  along it (longitudinal; the beam horizontal, each particle drawn on the side of the beam its
+  azimuth points to). The action `switch_view` morphs one into the other.
+- **Tracks** are stepped through the field: a charge q turns with radius R [m] = p_T [GeV/c] /
+  (0.3 |q| B [T]) (2 T: a 1 GeV/c pion R = 1.67 m, a 30 GeV/c muon 50 m), **clockwise for q > 0**
+  in the x–y view, straight outside the coil; in the barrel iron the return field (`return_field`,
+  default half of `field`, opposite; schematic) bends a muon the other way. A track with 2R smaller
+  than the ECAL's radius **curls up** in the tracker (drawn for one turn). Hits mark the tracker
+  layers it crosses.
+- **Signatures**: electron — track + ECAL shower; photon — ECAL shower, no track; muon — a track
+  through everything + hits in the muon chambers; charged hadron (π±, K±, p) — track + HCAL shower
+  with some ECAL (30 / 70 %, schematic); neutral hadron (n, K⁰_L) — HCAL only; neutrino — nothing:
+  **missing transverse momentum**, computed as minus the visible particles' summed p_T and drawn as a
+  dashed arrow (x–y only; it is transverse). Particles that decay before the detector are refused
+  with the reason (τ: "cτ = 87 µm, give its products", π⁰: "give two photons", Z / W / H: "use a
+  preset or give its products", quarks and gluons: "make a jet").
+- **Towers**: deposits binned in cells (ECAL 7.5°, HCAL 12° in azimuth; 6° and 9° in polar
+  angle — coarser than real calorimeters, to read at video size; hadron showers spread to the
+  neighbouring cells), each drawn from the calorimeter's inner face with a length ∝ log(1 + E/GeV)
+  (`energy_scale: log`, default) or ∝ E (`linear`), the whole depth at `tower_max` GeV — stated
+  under the legend.
+- **Jets** are cones (ΔR ≈ 0.4) of 5–10 charged pions, photons from π⁰ and neutral hadrons whose
+  p_T sum to the jet's.
+- **Events** are simulated from a seed (the same seed, the same event): presets `z_to_mumu`,
+  `h_to_gammagamma`, `h_to_4l` (H → ZZ* → e⁺e⁻μ⁺μ⁻), `w_to_enu` (W⁺ → e⁺ν_e), `dijet`. A boson
+  (PDG 2024 mass, drawn from a Breit–Wigner with its width) is produced with some p_T, decays
+  isotropically in its rest frame and its products are boosted to the lab (Step 239's
+  kinematics); its p_T is balanced by a recoil (a jet, or two soft pions), and `soft` (default 4)
+  soft charged pions in back-to-back pairs show low-p_T curlers — so a preset's missing p_T is its
+  neutrino's. Leptons and photons are chosen within |η| ≤ 2.4 and p_T ≥ 10 GeV/c, a W's neutrino
+  p_T ≥ 20 GeV/c (a display event is one you can see). Or list particles: `{particle, pt (GeV/c),
+  eta, phi (degrees)}`, `particle: jet` for a jet; `products: [1, 2]` names those whose invariant
+  mass the readout states; `leaves: [track, ecal]` states what a particle leaves and is checked
+  ("a photon leaves no track (it is neutral): ECAL shower, no track").
+- **Readout**: the objects (leptons, photons, jets; by p_T for a preset, in order for a list) with
+  p_T and η, the missing p_T, the decay products' invariant mass (`m(μ⁺μ⁻) = 90.8 GeV/c²`) or a
+  W's transverse mass; the signature **legend**; the **layer key**; each object's name in the
+  detector beside its direction.
+- **Built layer by layer** (`reveal: layers`): the detector (with the layer key and the legend), the
+  tracks growing out of the collision point, the calorimeter towers growing outward, the muons
+  through the outer layers and their chamber hits, then the missing p_T, the names and the readout
+  — spread over the beats; `reveal: all` shows everything in beat 1.
+
+```yaml
+- id: z
+  type: detector
+  params:
+    title: "A Z boson decays to two muons"
+    event: {preset: z_to_mumu, seed: 3}   # or just event: z_to_mumu (seed 1)
+  beats:
+    - text: "A schematic detector, seen along the beam."
+    - text: "Charged particles leave curved tracks."
+    - text: "The calorimeters measure the energy."
+    - text: "Two muons cross everything and reach the muon chambers."
+      actions: [{highlight: "particle:mu+", at: "@muons"}]
+    - text: "Their invariant mass is close to the Z boson's."
+- id: signatures
+  type: detector
+  params:
+    event:
+      particles:
+        - {particle: e-, pt: 30, eta: 0.3, phi: 20}
+        - {particle: gamma, pt: 40, eta: -0.5, phi: 100, leaves: [ecal]}
+        - {particle: mu+, pt: 25, phi: 200}
+        - {particle: pi+, pt: 8, phi: 280}
+        - {particle: n, pt: 15, phi: 320}
+        - {particle: nu_e, pt: 35, phi: 150}
+    reveal: all
+  beats:
+    - text: "Each particle leaves its own signature."
+    - text: "Seen from the side."
+      actions: [{action: switch_view, to: rz}]
+```
+
+**Targets**: `title`, `caption`, `detector` (every layer), `layer:tracker`, `layer:solenoid`,
+`layer:ecal`, `layer:hcal`, `layer:iron`, `layer:muon`, `layers` (the key), `tracks`, `ecal`,
+`hcal` (the towers), `muon_hits` (the muons outside the tracker and their hits), `missing_pt` (the
+arrow and its readout row), `readout`, `legend`, `label`, `particle:<n>` (the readout's objects, 1,
+2…: track, hits, towers, name and row), `particle:<particle>` (`particle:mu+`, when there is one),
+`jet:<n>` (with its cone), `soft` (the soft and recoil tracks). `highlight`, `dim` and `reveal` work
+on all of them.
+
+**Action** `switch_view` (`- action: switch_view`; `to: xy | rz`, default the other view): every
+ring, track, tower and hit morphs into its counterpart; the missing p_T shows only in x–y. `until:`
+switches back. About 1.6 s.
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `event` | preset \| `{preset, seed, soft}` \| `{particles, seed, soft, products}` | `z_to_mumu` | the event: a preset (seed 1) or one with its seed, or listed particles `{particle, pt, eta, phi, leaves}` |
+| `view` | `xy` \| `rz` | `xy` | transverse (across the beam) or longitudinal (along it) |
+| `field` | tesla | `2.0` | the solenoid's field (> 0) |
+| `return_field` | tesla | half of `field` | the return field in the barrel iron (opposite; schematic) |
+| `energy_scale` | `log` \| `linear` | `log` | tower length ∝ log(1 + E) or E |
+| `tower_max` | GeV | `100` | the energy that fills a calorimeter's whole depth |
+| `readout` | bool | `true` | the objects' p_T and η, the missing p_T, the invariant or transverse mass |
+| `legend` | bool | `true` | the signature legend |
+| `layers` | bool | `true` | the layer key |
+| `labels` | bool | `true` | the objects' names in the detector |
+| `reveal` | `layers` \| `all` | `layers` | layer by layer over the beats, or everything in beat 1 |
+| `label` | text | `schematic detector · simulated event` | the line saying what is schematic and simulated (the field follows it) |
+| `title`, `caption` | text | `""` | title above, note under the display |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | title and caption style |
+
+The model is `vidgen.api.particle_physics.detector` (no manim): `Detector(field, return_field)`
+(`bz(r, z)`, `layers`), `bending_radius(pt, field, charge)`, `signature("gamma")` → `photon`,
+`signature_problem("gamma", ["track"])`, `generate("z_to_mumu", seed)` / `custom_event([...])` →
+`Event` (`particles` with `pt`, `eta`, `phi`, `missing_pt()`, `met`, `products_mass()`,
+`transverse_mass()`, `objects()`), `trajectory(particle, detector)` (points, tracker and muon hits,
+calorimeter entries, `curled`), `deposits`, `towers`. Sizes are generic and schematic; no
+resolution smearing (a simulated event's missing p_T is exact).
 
 ### `function_plot`
 
@@ -12178,6 +12305,7 @@ a title card, a `transform` of a bar).
 | `standard_model` | `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<name>`, `generation:<N>`, `group:<group>`, `row:<row>` | reveal, highlight, dim, antiparticles, couplings, callout | `particle:e` (or `particle:electron`) one cell; `generation:2` a column with its number; `group:quarks` the quark cells and their label; `row:neutrinos` a row; `antiparticles` turns cells into their antiparticles, `couplings: particle:photon` outlines what a boson couples to |
 | `feynman` | `title`, `caption`, `process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`, `hadron:<particle>` | reveal, highlight, dim, travel, vertex_rule, swap_channel, callout | `line:W` a line with its arrow and name; `vertex:v1` a vertex dot (`vertex_rule` rings it and states its rule); `hadron:n` a hadron's bracket; `travel: diagram` runs a dot along every line in time order; `swap_channel` morphs into another diagram, the targets following their lines |
 | `kinematics` | `title`, `caption`, `process`, `panel:rest`, `panel:lab`, `arrow:<n>`, `arrow:<particle>`, `sum`, `values` | reveal, highlight, dim, boost, callout | `arrow:mu+` the muon's arrow and label in every frame; `panel:lab` one frame with its numbers; `boost` speeds the last frame up (`to: lab`, `rest`, a β), the arrows changing continuously |
+| `detector` | `title`, `caption`, `detector`, `layer:<name>`, `layers`, `tracks`, `ecal`, `hcal`, `muon_hits`, `missing_pt`, `readout`, `legend`, `label`, `particle:<n>`, `particle:<particle>`, `jet:<n>`, `soft` | reveal, highlight, dim, switch_view, callout | `particle:mu+` the muon's track, hits, name and readout row; `missing_pt` the dashed arrow and its row; `switch_view` turns x–y into r–z (`to: rz`) and back |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |

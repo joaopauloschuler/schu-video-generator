@@ -334,7 +334,7 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
                     a, b = sorted(units)[:2]
                     raise VidgenError(f"{axis}: the series' columns are in different units ({a} and {b}); plot them on separate panels or convert one")
                 unit = param.unit or (units.pop() if units else "")
-                label = str(param.label) or (cols[0].name if cols else "")
+                label = str(param.label) or ((cols[0].label or cols[0].name) if cols else "")
                 first = group[0].series[0]
                 if axis == "y" and not label and first.hist is not None:
                     label = "density" if first.spec.density else "count"

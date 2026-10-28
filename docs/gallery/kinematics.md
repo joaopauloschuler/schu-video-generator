@@ -51,6 +51,7 @@ From the author guide (`vidgen guide scenes`):
 | `angle` | `float` | `60.0` | Decay: the first product's direction in the rest frame, degrees from the flight direction (the second goes opposite). |
 | `frames` | `'both' \| 'rest' \| 'lab'` | `'both'` | both: the rest frame and the lab side by side (stacked in 9:16); rest or lab: one frame (boost moves it). |
 | `values` | `bool` | `True` | Write each frame's numbers (p*, energies, β, γ, opening angle, invariant mass, decay length). |
+| `readout` | `'key' \| 'all'` | `'key'` | key: each frame's main numbers, large (p*, the invariant mass, the parent's p and E, βγcτ or the opening angle; the SI line with si); all: every number, smaller (the energies too). |
 | `sum` | `bool` | `True` | Draw the sum of the momenta (Σp; zero in the rest frame). |
 | `decay_length` | `bool` | `True` | Decay: the parent's mean decay length L = βγcτ in the lab (when it has a lifetime). |
 | `si` | `bool` | `False` | Add the SI conversion of the main value (p* in kg·m/s, the parent's energy in J, the invariant mass in kg). |

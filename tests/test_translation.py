@@ -318,6 +318,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "standard_model": [{"title": "T:title", "caption": "T:caption"}],
     "feynman": [{"title": "T:title", "caption": "T:caption", "preset": "bhabha"}],
     "kinematics": [{"title": "T:title", "caption": "T:caption", "decay": "pi0 -> gamma gamma", "frames": "rest"}],
+    "detector": [{"title": "T:title", "caption": "T:caption", "label": "T:label", "event": "dijet"}],
     "gwas": [{"title": "T:title", "trait": "T:trait", "background": 400}],
     "iso_diagram": [
         {

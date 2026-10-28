@@ -80,6 +80,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "standard_model": {"title": "Particles", "caption": "C"},
     "feynman": {"title": "Diagram", "caption": "C", "preset": "muon_decay"},
     "kinematics": {"title": "Decay", "caption": "C", "decay": "pi+ -> mu+ nu_mu", "momentum": "200 MeV/c"},
+    "detector": {"title": "Event", "caption": "C", "event": {"particles": [{"particle": "mu+", "pt": 40}, {"particle": "jet", "pt": 50, "phi": 180}]}},
     "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
@@ -246,6 +247,11 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("kinematics", title="", caption="", process=False, frames="rest", sum=False, values=False, momentum=None,
                  decay=None, particles=[{"particle": "gamma", "momentum": "1 GeV/c"}, {"particle": "gamma", "momentum": "1 GeV/c", "angle": 120}]) == [
         "panel:rest", "arrow:1", "arrow:2"]
+    layers = ["layer:tracker", "layer:solenoid", "layer:ecal", "layer:hcal", "layer:iron", "layer:muon"]
+    assert names("detector") == ["title", "caption", "detector", *layers, "layers", "tracks", "ecal", "hcal", "muon_hits", "missing_pt", "readout",
+                                 "legend", "label", "particle:1", "particle:2", "particle:mu+", "jet:1"]
+    assert names("detector", title="", caption="", layers=False, readout=False, legend=False, label="",
+                 event={"preset": "z_to_mumu", "seed": 3})[-5:] == ["particle:1", "particle:2", "particle:mu-", "particle:mu+", "soft"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

@@ -22118,3 +22118,109 @@ How to test
   `build/preview/frames/`, `build/preview_vertical/`, `build/preview_vlight/`; `s239/fey` (Step
   238's project re-rendered): `build/preview_light/storyboard/`, `build/preview_vertical/`,
   `build/preview_vlight/`.
+
+## Step 240 — Detectors and event displays
+
+What was built (DESIGN §99.8 review note, §99.9–§99.10): event displays in a schematic cylindrical
+detector as a model (`vidgen.particle_physics.detector`, no manim) and the scene type `detector`
+with the action `switch_view`.
+
+First, the review of Step 239's stills:
+- `kinematics`: each frame fills its half (shared arrow scale only within 1.25×, else the larger
+  frame says `arrows ×N`); new param `readout: key | all` — `key` (default) writes at most three
+  main numbers per frame at 1.3 × the readable size, `all` every number as before; `ν_μ` in plain
+  number lines written `νμ`.
+- `calculation` TeX (shared, `quantities/expr.py`): a product beside the root of a sum gets a thin
+  space — `\sqrt{\gamma^2-1}\,c\tau` — so the root's extent is clear; products without a root of a
+  sum are unchanged.
+- Plot models name their axes (shared, additive): `register_model(name, labels=..., units=...)`,
+  `Column.label`, `Simulation.labels`; `plot` uses a column's label when the axis has none.
+  `two_body_opening` gives "parent momentum (GeV/c)" and "smallest opening angle θ (deg)".
+- `feynman` with `vertex_rule` in 16:9: the diagram is centred until the first rule card, glides
+  left for it, and back after the last (`_dock`).
+- `feynman` and `kinematics` gallery entries regenerated.
+
+The step:
+- **Model** `detector`: `Detector(field, return_field)` with the schematic layers (`TRACKER`,
+  `SOLENOID`, `ECAL`, `HCAL`, `IRON`, `MUON`; barrels and endcaps), `bz`; `bending_radius`;
+  `signature` / `signature_problem` / `SIGNATURES`; `EventParticle`, `Jet`, `Event` (`missing_pt`,
+  `met`, `products_mass`, `transverse_mass`, `objects`); `generate(preset, seed, soft)` (presets
+  `z_to_mumu`, `h_to_gammagamma`, `h_to_4l`, `w_to_enu`, `dijet`), `custom_event`, `make_jet`;
+  `trajectory` (stepped helix, curlers, return field, hits, calorimeter entries), `deposits`,
+  `towers`, `tower_fraction`.
+- **Scene** `detector`: x–y / r–z views, layer-by-layer reveal (detector + key + legend, tracks,
+  towers, muons, missing p_T + names + readout), readout table, signature legend with icons and the
+  tower scale, layer key, label line with the field direction, object names in the muon system with
+  a background halo; targets `detector`, `layer:<name>`, `layers`, `tracks`, `ecal`, `hcal`,
+  `muon_hits`, `missing_pt`, `readout`, `legend`, `label`, `particle:<n>` / `particle:<particle>`,
+  `jet:<n>`, `soft`; `switch_view` morphs every part.
+
+Files touched
+- New: `src/vidgen/particle_physics/detector.py`, `src/vidgen/scenes/{detector,detector_actions}.py`,
+  `tests/test_detector.py` (36 incl. 5 renders), `docs/gallery/detector.md` +
+  `media/detector-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/particle_physics/{__init__,kinematics}.py`, `src/vidgen/plotcore/{data,models}.py`,
+  `src/vidgen/quantities/expr.py`, `src/vidgen/scenes/{__init__,feynman,kinematics,plot}.py`, the
+  guide (chooser row, kinematics notes, a `# particle physics` snippet, the `switch_view` row) +
+  `AGENTS.md`, `docs/CONFIG.md` (`detector` section, targets row, kinematics `readout`, model axis
+  names), `docs/gallery/README.md` and the `feynman` / `kinematics` entries (regenerated),
+  `examples/gallery/video.yaml` (scene `detector`),
+  `tests/{test_actions_coverage,test_builtin_scenes,test_docs,test_translation}.py`, `DESIGN.md`,
+  `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): scene type `detector`; action `switch_view`; `kinematics` param
+`readout`; `particle_physics.detector`; `register_model(..., labels=, units=)`, `Column.label`,
+`Simulation.labels`. No dependency, no config key.
+
+Decisions
+- Name `detector` (as planned in §99.1) and one new action; highlight / dim / reveal are the
+  generic actions on per-particle targets.
+- Geometry is our own generic layout (tracker 1.1 m, calorimeters to 2.9 m, muon system to 4.6 m),
+  drawn to scale in both views; cells coarser than a real calorimeter's so towers read on video
+  (said in DESIGN and the docs). The tower length is log(1 + E) by default with the scale under the
+  legend (linear on request; `tower_max` sets the full depth) — a linear scale made a 30 GeV
+  electron's tower a sliver beside the HCAL.
+- Tracks are stepped numerically (not drawn as ideal arcs) so the same code gives curlers, the
+  field edge and the return-field bend; the test checks the stepped path against the circle of
+  radius p_T / (0.3 B) and its centre side.
+- Preset events balance exactly (recoil + paired soft pions), so the missing p_T is computed from
+  the visible particles yet equals the neutrinos' (tested); listed events are not balanced — their
+  missing p_T is whatever the visible particles leave (documented).
+- Display events are chosen to be seen (leptons / photons |η| ≤ 2.4, p_T ≥ 10 GeV; a W's neutrino
+  ≥ 20 GeV) — said in CONFIG.
+- Object names sit inside the muon system with a background halo instead of a ring outside the
+  detector: the drawing is about 20 % larger.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check240`).
+Existing calculations' TeX unchanged unless a root of a sum stands beside another factor; plots
+without registered labels unchanged; `feynman` without `vertex_rule` unchanged. Gallery 14.7 MB of
+15 (detector entry 0.29 MB: GIFs 117 KB and 135 KB; the sample is the guide's first `detector`
+snippet, two beats with `soft: 0` to stay under the 150 KB GIF cap).
+
+Values: the boson masses and widths are Step 237's PDG 2024 values (no new value); the detector's
+sizes, cell sizes, calorimeter shares and the return field are schematic choices, not
+measurements.
+
+Known gaps: no displaced vertices, material effects, pile-up or resolution smearing; muons leave no
+MIP deposit; a full display trips `max_words` (about 50 words with readout, legend and key); in
+9:16 the legend and readout are drawn at about 0.98 of the readable size (lint `min_font` warns
+by 1–4 %; `legend: false` or `layers: false` avoids it).
+
+Render performance: preview (1280×720, 10 fps): a five-beat Z → μμ scene (15.9 s) in about 9 s,
+a two-beat scene with `switch_view` (5.7 s) in about 9 s; a few hundred mobjects, no memory concern.
+
+How to test
+- `tests/test_detector.py` (36 incl. 5 renders, ~12 s); `tests/test_kinematics.py`,
+  `tests/test_feynman.py`, `tests/test_particle_physics.py`, `tests/test_calculation.py`,
+  `tests/test_standard_model.py` (256 together with test_detector).
+- Related, all passing: `test_docs` + `test_guide` + `test_translation` + `test_extensions` not
+  render (274); `test_actions_coverage` + `test_builtin_scenes` + `test_gallery` not render (197);
+  `-k "detector or kinematics or feynman"` renders (9); `test_plot` + `test_plot_core` +
+  `test_plot_fit` + `test_plot_live` + `test_quantities` + `test_calc_lint` not render (296) and
+  renders (6); `test_api` + `test_schema` + `test_registry` + `test_introspect` + `test_json_output` +
+  `test_narration_rule` + `test_lint` + `test_overlays` not render (188).
+- Stills: scratchpad `s240/det` (Z → μμ in five beats, W → eν, H → γγ with switch_view, dijet, the
+  listed signatures in r–z → x–y): `build/preview/frames/`, `build/preview_light/`,
+  `build/preview_vertical/`; `s240/kin` (the review fixes: pion in two frames, π⁰ boost, diphoton
+  `readout: all`, the muon calculation, the opening-angle plot, Bhabha with vertex_rule):
+  `build/preview_light/`; `vidgen lint`: 0 errors.

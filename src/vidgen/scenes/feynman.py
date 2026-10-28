@@ -287,16 +287,19 @@ class Feynman(NarratedScene):
             self._caption = chart_caption(p.caption, area, color=p.caption_color)
             area = area.above(self._caption, gap=0.2)
         self._note_region = None
+        self._offset = self._centred = np.zeros(3)   # the diagram's shift from its area (centred in the frame without a rule card)
+        self._rules_hidden = 0
         if self.action_uses("vertex_rule"):
             if self.is_portrait:   # a band under the diagram
                 line_h = self.text("Hg", size=self._small * NOTE_SCALE).height
                 band = min(NOTE_LINES * line_h + (NOTE_LINES - 1) * 0.1, NOTE_BAND_SHARE * area.height)
                 self._note_region = Region(area.x0, area.y0, area.x1, area.y0 + band)
                 area = area.above(area.y0 + band, gap=0.25)
-            else:   # a column on the right
+            else:   # a column on the right; the diagram stays centred until the first rule card
                 width = min(NOTE_WIDTH, NOTE_SHARE * area.width)
                 self._note_region = Region(area.x1 - width, area.y0, area.x1, area.y1)
                 area = Region(area.x0, area.y0, area.x1 - width - 0.3, area.y1)
+                self._offset = self._centred = np.array([(width + 0.3) / 2, 0.0, 0.0])
         self._time_axis = None
         if p.time_axis:
             area = self._place_time_axis(area)
@@ -420,8 +423,8 @@ class Feynman(NarratedScene):
             t, y = point
             u, v = (t - t0) / tspan - 0.5, (y - y0) / span_y - 0.5
             if right:
-                return np.array([cx + u * width, cy + v * height, 0.0])
-            return np.array([cx - v * width, cy + u * height, 0.0])
+                return np.array([cx + u * width, cy + v * height, 0.0]) + self._offset
+            return np.array([cx - v * width, cy + u * height, 0.0]) + self._offset
 
         return to_screen
 
@@ -648,12 +651,12 @@ class Feynman(NarratedScene):
         """Ring vertex ``vertex`` and write its rule in the note band: the vertex type and the
         lines meeting there, the coupling, the conservation checks (``show``)."""
         state: dict[str, Any] = {"ring": None, "note": None}
-        parts = self._parts.get(f"vertex:{vertex}", {})
         checked = self._checks[self.current.name]
         if vertex not in self.current.vertices:
             return [], state
         vc = checked.vertex(vertex)
-        anims: list[Animation] = []
+        anims: list[Animation] = self._dock() if show else []
+        parts = self._drawn["parts"].get(f"vertex:{vertex}", {})   # where the dot ends (after docking)
         if "dot" in parts:
             ring = Circle(radius=0.24, color=color, stroke_width=5).move_to(parts["dot"].get_center()).set_z_index(5)
             state["ring"] = ring
@@ -682,8 +685,45 @@ class Feynman(NarratedScene):
             anims.append(FadeIn(note))
         return anims, state
 
+    def _dock(self, offset: np.ndarray | None = None) -> list[Animation]:
+        """Move the diagram to ``offset`` from its area (default none: left, beside the rule
+        column; it is centred in the frame before the first rule card and after the last): the
+        parts on screen glide, those still to come are swapped silently."""
+        offset = np.zeros(3) if offset is None else offset
+        if np.allclose(offset, self._offset):
+            return []
+        shift = offset - self._offset
+        self._offset = offset
+        drawn = self._build(self.current)
+        present = {id(m) for m in self.get_mobject_family_members()}
+        anims: list[Animation] = []
+        for name, box in self._containers.items():
+            new = drawn["parts"].get(name, {})
+            keep: dict[str, Mobject] = {}
+            for key, m in self._parts.get(name, {}).items():
+                if key in new and id(m) in present:
+                    anims.append(Transform(m, new[key]))
+                    keep[key] = m
+                else:
+                    box.remove(m)
+                    if key in new:
+                        box.add(new[key])
+                        keep[key] = new[key]
+            self._parts[name] = keep
+        self._drawn = drawn
+        if self._time_axis is not None:
+            if id(self._time_axis) in present:
+                anims.append(self._time_axis.animate.shift(shift))
+            else:
+                self._time_axis.shift(shift)
+        return anims
+
     def hide_rule(self, state: dict[str, Any]) -> list[Animation]:
-        return [FadeOut(m) for m in (state.get("ring"), state.get("note")) if m is not None and m in self.mobjects]
+        anims: list[Animation] = [FadeOut(m) for m in (state.get("ring"), state.get("note")) if m is not None and m in self.mobjects]
+        self._rules_hidden += 1
+        if self._rules_hidden >= len(self.action_uses("vertex_rule")):   # the last card: the diagram back to the centre
+            anims += self._dock(self._centred)
+        return anims
 
     def swap(self, to: str | None) -> list[Animation]:
         """Morph into another diagram of the scene (``to``; default the next one): lines and

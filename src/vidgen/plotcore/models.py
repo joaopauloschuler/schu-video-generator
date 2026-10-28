@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -50,6 +50,7 @@ class Simulation:
     columns: dict[str, np.ndarray]
     units: dict[str, str] = field(default_factory=dict)
     drift: dict[str, float] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
 
     @property
     def time(self) -> str:
@@ -58,7 +59,8 @@ class Simulation:
 
     def table(self) -> Table:
         """The columns as a :class:`~vidgen.plotcore.Table` (series pick them by name)."""
-        return Table(self.source, tuple(Column(n, self.units.get(n, ""), tuple(float(v) for v in vals)) for n, vals in self.columns.items()))
+        return Table(self.source, tuple(Column(n, self.units.get(n, ""), tuple(float(v) for v in vals), self.labels.get(n, ""))
+                                        for n, vals in self.columns.items()))
 
 
 def conservation_drift(values: Sequence[float]) -> float:
@@ -439,13 +441,18 @@ def poisson_process(
 
 #: Functions registered with :func:`register_model`: name -> function(params, seed) -> columns.
 _REGISTERED: dict[str, Callable[..., Mapping[str, Sequence[float]]]] = {}
+#: Their columns' display names and default units: name -> (labels, units).
+_COLUMN_INFO: dict[str, tuple[dict[str, str], dict[str, str]]] = {}
 
 
-def register_model(name: str) -> Callable[[Callable[..., Mapping[str, Sequence[float]]]], Callable[..., Mapping[str, Sequence[float]]]]:
+def register_model(name: str, *, labels: Mapping[str, str] | None = None,
+                   units: Mapping[str, str] | None = None) -> Callable[[Callable[..., Mapping[str, Sequence[float]]]], Callable[..., Mapping[str, Sequence[float]]]]:
     """Register a Python function as a model a plot can name (``kind: function, function:
     <name>``): ``fn(params: dict[str, float], seed: int) -> {column: values}``, the first
     column being the progress (time) column, every column of equal length. It must be
-    deterministic (same params and seed, same numbers). Exported by ``vidgen.api``."""
+    deterministic (same params and seed, same numbers). Optional ``labels`` (column -> how an
+    axis names it: ``{"theta_min": "θ_min"}``) and default ``units`` (column -> unit; the
+    plot's ``units`` override them). Exported by ``vidgen.api``."""
     if not isinstance(name, str) or not name.isidentifier():
         raise VidgenError(f"register_model: '{name}' is not a name (letters, digits, _)")
 
@@ -453,6 +460,7 @@ def register_model(name: str) -> Callable[[Callable[..., Mapping[str, Sequence[f
         if not callable(fn):
             raise VidgenError(f"register_model('{name}') must decorate a function")
         _REGISTERED[name] = fn
+        _COLUMN_INFO[name] = (dict(labels or {}), dict(units or {}))
         return fn
 
     return decorate
@@ -506,7 +514,10 @@ def run_registered(
     first = next(iter(columns.values()))
     if np.any(~np.isfinite(first)) or np.any(np.diff(first) < 0):
         raise VidgenError(f"{where}: the first column of '{name}' ('{next(iter(columns))}') is its progress (time) and must not decrease")
-    return _finish(source, columns, units or {}, quantities or {}, params, conserved, where)
+    labels, own_units = _COLUMN_INFO.get(name, ({}, {}))
+    merged = {k: u for k, u in own_units.items() if k in columns} | dict(units or {})
+    sim = _finish(source, columns, merged, quantities or {}, params, conserved, where)
+    return replace(sim, labels={k: v for k, v in labels.items() if k in columns})
 
 
 __all__ = [
