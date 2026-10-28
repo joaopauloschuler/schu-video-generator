@@ -136,6 +136,23 @@ def test_the_science_topic_covers_plots_and_calculations() -> None:
     assert "vidgen guide science" in topic_text("scenes")
 
 
+def test_the_orbits_topic_covers_the_orbit_scene() -> None:
+    """Step 235: a topic for orbital-mechanics videos (views, scale honesty, panels, presets,
+    manoeuvres, three bodies, dates, pacing, lint)."""
+    text = topic_text("orbits")
+    assert find_topic("hohmann").name == "orbits" and find_topic("orbit").name == "orbits" and text.startswith("## Orbits")
+    for kind in ("orbit", "calculation", "plot"):
+        assert f"`{kind}`" in text, kind
+    for part in ("**Choosing a view.**", "**Scale honesty.**", "**Panels.**", "**Presets and units.**", "**Manoeuvres.**",
+                 "**Three bodies.**", "**Dates.**", "**Pacing.**", "**Lint.**", "COOKBOOK-ORBITS.md", "examples/mars-transfer",
+                 "sizes not to scale", "√(v∞² + v_esc²) − v_circ"):
+        assert part in text, part
+    for rule in ("orbit_period", "orbit_speed", "orbit_dv", "orbit_transfer", "orbit_distance", "orbit_date", "orbit_scale",
+                 "orbit_conserved", "orbit_crash"):
+        assert f"`{rule}`" in text, rule
+    assert "vidgen guide orbits" in topic_text("scenes")
+
+
 def test_unknown_topic_suggests() -> None:
     with pytest.raises(VidgenError, match=r"unknown guide topic 'scene'; did you mean 'scenes'"):
         find_topic("scene")

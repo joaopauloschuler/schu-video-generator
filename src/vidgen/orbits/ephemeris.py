@@ -329,7 +329,7 @@ def events_between(kind: str, observer: str, target: str, start: float, end: flo
         if ev.jd > end:
             return out
         out.append(ev)
-        jd = ev.jd
+        jd = ev.jd + 1.0   # past the root: the bisection leaves ev.jd up to 1e-5 d before it (the same event again)
 
 
 __all__ = ["CENTURY", "EVENTS", "J2000", "PLANETS", "SOURCE", "TABLE1", "VALID_FROM", "VALID_TO", "Event", "MeanElements", "calendar", "check_valid",

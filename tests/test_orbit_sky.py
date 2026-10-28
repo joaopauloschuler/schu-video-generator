@@ -182,6 +182,9 @@ def test_event_geometry_and_errors() -> None:
     nxt = orbits.next_event("opposition", "earth", "mars", opp.jd)
     assert nxt.jd - opp.jd == pytest.approx(780, abs=60)   # the synodic period, give or take Mars's eccentricity
     assert [round(e.jd) for e in orbits.events_between("opposition", "earth", "mars", jd0, nxt.jd + 1)] == [round(opp.jd), round(nxt.jd)]
+    # Step 235: each event once (the 2029 opposition used to come twice: the bisection stops just before the root)
+    later = [e.date for e in orbits.events_between("opposition", "earth", "mars", orbits.julian_date("2024-01-01"), orbits.julian_date("2031-12-31"))]
+    assert later == ["2025-01-16", "2027-02-19", "2029-03-25", "2031-05-04"]
     sup = orbits.next_event("superior_conjunction", "earth", "venus", jd0)
     assert sup.distance > 1.5 * orbits.AU
     with pytest.raises(VidgenError, match="never in opposition"):

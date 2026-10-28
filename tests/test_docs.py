@@ -258,6 +258,36 @@ def test_science_charts_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
         assert "COOKBOOK-SCIENCE-CHARTS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
+def test_orbits_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 235: the orbits cookbook's pattern validates and is lint-clean for the orbit_* and
+    calc_* rules, it names the rules, and the README, the cookbook, the guide and the gallery
+    point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.lint.calc_rule import calc_issues
+    from vidgen.lint.orbit_rule import orbit_issues
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-ORBITS.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    assert len(blocks) == 1
+    scenes = yaml.safe_load(blocks[0])
+    (tmp_path / "video.yaml").write_text(yaml.safe_dump({"title": "t", "scenes": scenes}, allow_unicode=True), encoding="utf-8")
+    project = Project.load(tmp_path)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    for scene in project.config.scenes:
+        rules = project.config.lint.rules
+        assert not orbit_issues(project, scene.id, rules) and not calc_issues(project, scene.id, rules), scene.id
+    for kind in ("orbit", "calculation", "plot"):
+        assert f"[`{kind}`](CONFIG.md#{kind})" in text, kind
+    for rule in ("orbit_period", "orbit_speed", "orbit_dv", "orbit_transfer", "orbit_distance", "orbit_date", "orbit_scale",
+                 "orbit_conserved", "orbit_crash", "calc_numbers"):
+        assert f"`{rule}`" in text, rule
+    assert "examples/mars-transfer/README.md" in text
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
+        assert "COOKBOOK-ORBITS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
 def test_docs_yaml_snippets_parse() -> None:
     for doc in ("docs/CONFIG.md", "docs/EXTENDING.md", "README.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")

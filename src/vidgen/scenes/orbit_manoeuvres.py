@@ -487,6 +487,9 @@ class OrbitManoeuvres:
         lab = self._cached(f"{word} = {_deg(lead)}", self._size * 0.85, "highlight").set_z_index(5)
         at = centre + np.array([math.cos(mid), math.sin(mid), 0.0]) * (rad + 0.08)
         obstacles = ([self._panel_rect()] if self._readout_box is not None else []) + [mob_rect(self._central[0], 0.04)] * 3
+        # the bodies and their labels where they stand (a label sticks to its side, so the angle's text gives way)
+        obstacles += [mob_rect(m, 0.03) for pair in self._bodies.values() for m in pair
+                      if (m.has_points() or len(m)) and m.get_fill_opacity() > 0]
         _, box, _ = place(at, 0.02, lab.width, lab.height, obstacles=obstacles, plot=self._lay.plot, rings=WIDE_RINGS,
                           directions=((math.cos(mid), math.sin(mid)), *DIRECTIONS))
         lab.move_to([box.center[0], box.center[1], 0])

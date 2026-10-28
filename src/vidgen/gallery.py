@@ -100,11 +100,18 @@ SECTION_NOTES: dict[str, str] = {
         "(`examples/radioactive-decay`). Honest axes, error bars, fits, units and significant figures: "
         "[the science-charts cookbook](../COOKBOOK-SCIENCE-CHARTS.md)."
     ),
+    "orbital mechanics": (
+        "A whole orbital-mechanics explainer, why a rocket cannot fly straight to Mars, the Hohmann transfer, the transfer "
+        "time and the departure burn worked out, the planets on a real date: [How to get to Mars](../../examples/mars-transfer/README.md) "
+        "(`examples/mars-transfer`). Scale honesty, units, approximations to state and pacing: "
+        "[the orbits cookbook](../COOKBOOK-ORBITS.md)."
+    ),
 }
 #: The last line of a showcase's page, by section: where to read more.
 SECTION_FOOTERS: dict[str, str] = {
     "cell biology": "`vidgen guide scenes` · [the cell-biology cookbook](../COOKBOOK-CELL-BIOLOGY.md)",
     "genetics": "`vidgen guide genetics` · [the genetics cookbook](../COOKBOOK-GENETICS.md)",
+    "orbital mechanics": "`vidgen guide orbits` · [the orbits cookbook](../COOKBOOK-ORBITS.md)",
 }
 DEFAULT_FOOTER = "`vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`"
 
@@ -186,6 +193,11 @@ SHOWCASES: tuple[Showcase, ...] = (
     Showcase("mek_inhibitor", "cell biology", "Blocking MEK", "a signal running down the MAPK cascade, then a drug that blocks MEK and its effects downstream"),
     Showcase("mitosis", "cell biology", "Mitosis", "a dividing cell: condensation, the metaphase plate, sister chromatids parting, two daughter cells"),
     Showcase("respiratory_chain", "cell biology", "The respiratory chain", "electrons down complexes I–IV with protons pumped, then ATP synthase turning"),
+    Showcase("mars_hohmann", "orbital mechanics", "The Hohmann transfer to Mars",
+             "a transfer between two planets: the phase angle at the launch window, two burns on words, the Δv and the time computed"),
+    Showcase("jupiter_trojans", "orbital mechanics", "Trojans in the rotating frame",
+             "a three-body system in the frame turning with Jupiter: the five Lagrange points standing still, a Trojan's tadpole "
+             "inside its zero-velocity curve"),
 )
 
 

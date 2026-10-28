@@ -21663,3 +21663,82 @@ How to test
 - Lint everything: scratchpad `s234/lint_all.py` (config-only calc + plot + orbit over the examples, gallery and
   scratch projects: TOTAL 0). Demo with planted mistakes: scratchpad `s234/demo` (`vidgen lint` → 16 orbit
   warnings, the right statements quiet; preview storyboard in `s234/demo/build/preview/storyboard/`).
+
+## Step 235 — Example, docs and gallery
+
+What was built (DESIGN §98.9)
+- **Example `examples/mars-transfer`** ("How to get to Mars"; `video.yaml`, `README.md`): `intro`;
+  `straight` (the Earth's 29.8 km/s as a live arrow; a rocket alongside the Earth with a 3 km/s
+  radial burn on "Fire" goes round the Sun out to 1.11 AU, far short of Mars); `hohmann` (circular,
+  coplanar orbits stated in a caption; Mars starts 95° ahead so the live phase angle shrinks to
+  44.3°; Δv₁ 2.94 on "burn", 259 d, Δv₂ 2.65 on "second", 5.59 km/s in all); `timing`
+  (`calculation`: a = 1.262 AU, T = π√(a³/GM☉) = 259 d, θ = π(1 − 2T/T_M) = 44.3°); `leaving`
+  (`calculation` with v∞ `from_scene: hohmann.dv1`: v_circ 7.726, v_esc 10.93, Δv =
+  √(v∞² + v_esc²) − v_circ = 3.59 km/s from 300 km, the Oberth effect); `sky` (`date: 2026-10-28`,
+  Mars 64° ahead, the next window "around early December 2026" (lead = 44.3° on 2026-12-05 in this
+  model), the opposition of 2027-02-19 (`event`), windows every 780 d ≈ 26 months, the next in
+  early 2029); `recap`. Kokoro `af_heart` 0.85, `discovery` at −9 dB, terms (Hohmann transfer,
+  launch window, semi-major axis with TeX `a`), a 9:16 `short` variant.
+- **Docs**: guide topic `orbits` (aliases orbit, orbital, orbital-mechanics, kepler, hohmann,
+  planets, space, spaceflight; listed in the guide's topic list; the scenes topic points to it),
+  copied to `AGENTS.md`; `docs/COOKBOOK-ORBITS.md` (choosing, scale honesty, units and Δv,
+  approximations to state, pacing, mistakes → rules, a validated pattern) linked from README,
+  `docs/COOKBOOK.md` (intro, §12), the guide and the gallery; README feature bullet, example entry
+  and cookbook entry; CHANGELOG; DESIGN §98.9; CONFIG needed nothing new (`test_docs`'s
+  completeness test was already parametrized with `orbits` in Step 229 and passes).
+- **Gallery "Orbital mechanics"**: section note and footer (`gallery.SECTION_NOTES` /
+  `SECTION_FOOTERS`), the `orbit` entry regenerated (current layout, page with Steps 230–233's
+  params; 337 kB), showcases `mars_hohmann` (330 kB) and `jupiter_trojans` (328 kB; rotating view
+  from the start — a frame turn on a word made 170 kB GIFs).
+- **Budget decision: 13 → 15 MB** (`tests/test_gallery.py` `BUDGET`, comment; DESIGN §98.9). The
+  gallery went 12.9 → 13.6 MB. Optimizing first was tried: a lossless Pillow re-save of the GIFs
+  saved ~10 % on some and grew others, and `vidgen gallery` would undo it on the next regeneration
+  (gifsicle is not available and is not a dependency to add); smaller clips would visibly hurt
+  every entry. So the budget grows by Phase X's need plus about three entries; `ENTRY_MAX` 0.36 MB
+  and `CLIP_MAX_BYTES` 150 KB unchanged.
+- **Fixes found on the way**: the transfer's θ label now keeps off the bodies and their labels
+  (`orbit_manoeuvres._draw_phase`; in 9:16 it sat on "Earth"); `ephemeris.events_between` listed the
+  2029-03-25 Mars opposition twice (searches on from ev.jd + 1 d; test in `test_orbit_sky.py`).
+
+Files touched
+- New: `examples/mars-transfer/{video.yaml,README.md}`, `docs/COOKBOOK-ORBITS.md`,
+  `tests/test_mars_transfer.py` (5), `src/vidgen/data/gallery/showcases/{mars_hohmann,jupiter_trojans}.yaml`,
+  `docs/gallery/{mars_hohmann,jupiter_trojans}.md` + media.
+- Changed: `src/vidgen/gallery.py`, `src/vidgen/scenes/orbit_manoeuvres.py`,
+  `src/vidgen/orbits/ephemeris.py`, the guide + `AGENTS.md`, `README.md`, `docs/COOKBOOK.md`,
+  `docs/gallery/{README,orbit}.md` + `media/orbit-*`, `tests/{test_gallery,test_guide,test_docs,test_orbit_sky}.py`,
+  `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`.
+
+Public interfaces: none new (two showcases, a guide topic). Visible changes: the θ label's place
+in transfer scenes; the gallery budget.
+
+Decisions
+- The real date is its own scene (`sky`): a `transfer` needs circular orbits and a `date` places
+  the planets on Table 1's ellipses, so the two are not mixed; the window date comes from the
+  model's heliocentric lead (stated "around", "approximately" in the README) — real windows come
+  from porkchop plots on the true orbits.
+- The departure burn is computed from `from_scene` (never typed in); 300 km is an exact chosen
+  height; the naive "escape then Δv₁" 6.14 km/s is in the README only.
+- No gravity-assist aside: the video is already 3:43 (longer than the ~3 min aimed at; each orbit
+  scene needs time for the motion); the gallery's `orbit` page and the guide show the flyby.
+
+Checks
+- `vidgen lint` with the Kokoro narration: 0 findings in 16:9 and in 9:16 (orbit_*, calc_*,
+  narration and layout rules).
+- Render (scratchpad `s235/proj/output/mars_transfer.mp4`): 1280×720 at 30 fps — a 47 s orbit
+  scene at 1080p did not finish within the 10-minute command limit here, so the check render is
+  720p; 223.3 s video and audio, −16.0 LUFS, true peak −1.9 dBTP, LRA 3.3 LU, no silence over 1.5 s.
+- Compatibility: the shared code is untouched (the orbit scene, `vidgen.orbits` and the gallery
+  data only), so the Phase Q baseline was not re-run; orbit suites pass.
+
+Known gaps: no gravity-assist aside or Mars capture in the example; the 1080p render not made here;
+the 9:16 orbit sample keeps empty space under its picture (229–233 layout); `jupiter_trojans`'s
+L5 zero-velocity lobe is drawn in the Trojan's colour (correct: the curve is symmetric).
+
+How to test
+- `tests/test_mars_transfer.py` (5), `tests/test_docs.py` + `tests/test_guide.py` (154),
+  `tests/test_gallery.py -m "not render"` (19), `tests/test_orbit.py` (75), `tests/test_orbit_many.py` +
+  `tests/test_orbit_sky.py` (67), `tests/test_orbit_manoeuvres.py` + `test_orbit_lint.py` + `test_orbits.py` +
+  `test_orbit_laws.py` (139), `test_builtin_scenes` + `test_calc_lint` `-k "orbit or calc"` (43) — all passing.
+- Stills: scratchpad `s235/proj/build/preview/frames/` (16:9) and `s235/proj/build/preview_short/frames/`
+  (9:16); contact sheets `s235/contact_16x9.png` (the render) and `s235/short_sheet.png`.

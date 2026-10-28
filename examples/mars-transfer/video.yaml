@@ -1,0 +1,185 @@
+# How to get to Mars: a narrated orbital-mechanics explainer (about 3 min) built on Phase X's
+# `orbit` scene with `calculation` scenes (docs/CONFIG.md `orbit` and `calculation`; DESIGN §98;
+# the craft: docs/COOKBOOK-ORBITS.md):
+#   - why a rocket cannot fly straight there: the Earth's orbital speed, a radial burn bent by the
+#     Sun's gravity into an orbit that falls short of Mars
+#   - the Hohmann transfer Earth → Mars on circular, coplanar orbits (stated on screen): Δv₁, Δv₂,
+#     the transfer time and the phase angle, computed by the scene; burns timed to words
+#   - a worked `calculation` of the transfer time T = π √(a³ / GM☉) and the phase angle
+#   - the departure burn from low Earth orbit (the Oberth effect): √(v∞² + v_esc²) − v_circ
+#   - the Earth and Mars on a real date from JPL's approximate elements (valid 1800–2050), the
+#     synodic period and the next opposition; the next launch window stated as approximate
+#   - concept colours (terms:), Kokoro narration, a quiet music bed, a 9:16 `short` variant
+#
+#   vidgen validate examples/mars-transfer           # checks the short variant too
+#   vidgen lint examples/mars-transfer [--variant short]   # incl. the orbit_* and calc_* rules
+#   vidgen storyboard examples/mars-transfer --per-beat 2 [--variant short]
+#   vidgen tts examples/mars-transfer                # Kokoro: local and free (the kokoro extra)
+#   vidgen render examples/mars-transfer [--preview] [--variant short]
+#
+# Numbers (all computed by vidgen from its model; DESIGN §98): orbit radii are JPL Table 1's
+# semi-major axes (Earth 1.00000261 AU, Mars 1.52371034 AU) on circles; GM☉ IAU 2015 nominal.
+# Hohmann: Δv₁ 2.945 km/s, Δv₂ 2.649 km/s (heliocentric), 258.9 d, Mars 44.3° ahead at departure,
+# synodic period 779.9 d. Departure from a 300 km circular orbit: v∞ = Δv₁ gives 3.59 km/s
+# (√(v∞² + v_esc²) − v_circ, v_esc 10.93, v_circ 7.73 km/s). On 2026-10-28 Mars leads the Earth by
+# 64°; the lead reaches 44.3° around 2026-12-05 in this model (the next window, approximately), the
+# one after around 2029-01; Mars opposition 2027-02-19 at 0.678 AU (Table 1 positions).
+# No audio is committed: before `vidgen tts` beats are timed from their word count.
+title: "How to get to Mars"
+output: mars_transfer
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  short:                          # a 9:16 Short of the same video
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart, speed: 0.85}   # local and free, with word timings
+stt: {provider: faster_whisper, model: base.en}
+
+pronunciation:
+  Hohmann: Hoh-mann
+  Oberth: Oh-bert
+
+terms:
+  Hohmann transfer: {color: primary}
+  launch window: {color: secondary}
+  semi-major axis: {color: accent, tex: "a"}
+
+music: {source: discovery, volume: -9}
+transition: {type: crossfade, duration: 0.4}
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "ORBITAL MECHANICS"
+      title: "How to get to Mars"
+      subtitle: "Orbits, two burns and a launch window"
+    beats:
+      - text: "Getting to Mars is not a matter of pointing a rocket at it. Both planets move, and the Sun's gravity bends every path."
+        actions: [{highlight: subtitle, at: "@Sun's"}]
+
+  - id: straight
+    type: orbit
+    params:
+      title: "Why not fly straight there?"
+      central: sun
+      bodies:
+        - {preset: earth, e: 0, i: 0, raan: 0, argp: 0, trail: false, velocity: {live: true}}
+        - {preset: mars, e: 0, i: 0, raan: 0, argp: 0, nu: 60, trail: false}
+        - name: Rocket
+          alongside: Earth
+          trail: 0.5
+          burns:
+            - {at: "20 d", radial: "3 km/s", label: "3 km/s outwards"}
+      span: "1 yr"
+      caption: "Circular, coplanar orbits (an approximation)"
+    beats:
+      - text: "First, we are already moving: the Earth carries us around the Sun at almost thirty kilometres per second."
+        actions: [{highlight: "velocity:Earth", at: "@thirty"}]
+      - text: "Fire a rocket straight out, towards the orbit of Mars."
+        actions: [{burn: "burn:1", at: "@Fire"}]
+      - text: "It keeps the Earth's sideways speed, and the Sun's gravity bends its path into a new orbit that swings out a little and falls back, far short of Mars."
+      - text: "Every path is an orbit around the Sun: the trick is to choose the right one."
+
+  - id: hohmann
+    type: orbit
+    params:
+      title: "The Hohmann transfer"
+      central: sun
+      bodies:
+        - {preset: earth, e: 0, i: 0, raan: 0, argp: 0, trail: false}
+        - {preset: mars, e: 0, i: 0, raan: 0, argp: 0, nu: 95, trail: false}
+        - {name: Ship, alongside: Earth, trail: 0.15}
+      transfer: {ship: Ship, to: Mars}
+      caption: "Circular, coplanar orbits (an approximation)"
+    beats:
+      - text: "The cheapest route is the Hohmann transfer. We treat both orbits as circles in one plane, an approximation that shows the idea."
+      - text: "We leave when Mars leads the Earth by forty-four degrees: the launch window."
+        actions: [{highlight: phase, at: "@forty-four"}]
+      - text: "Then a prograde burn of two point nine four kilometres per second stretches our orbit into an ellipse that just touches the orbit of Mars."
+        actions: [{burn: "burn:1", at: "@burn"}]
+      - text: "Then we simply coast, along half of the ellipse, for two hundred and fifty-nine days."
+      - text: "Mars arrives too. A second burn of two point six five kilometres per second matches its speed."
+        actions: [{burn: "burn:2", at: "@second"}]
+      - text: "Together, the two burns add up to about five point six kilometres per second."
+
+  - id: timing
+    type: calculation
+    params:
+      title: "Why 259 days, and why 44°?"
+      symbols:
+        - {name: r_E, value: "1.000 AU", meaning: "Earth's orbit", source: "JPL"}
+        - {name: r_M, value: "1.524 AU", meaning: "Mars's orbit", source: "JPL"}
+        - {name: GM_sun, constant: GM_sun}
+        - {name: T_M, value: "687.0 d", meaning: "Mars's period", source: "JPL"}
+      calculations:
+        - {name: a, expr: "(r_E + r_M)/2", unit: AU, meaning: "transfer semi-major axis"}
+        - {name: T, expr: "pi*sqrt(a^3/GM_sun)", unit: d, sig: 3, meaning: "transfer time"}
+        - {name: theta, expr: "pi*(1 - 2*T/T_M)", unit: deg, meaning: "Mars's lead at departure", symbol: "\\theta"}
+    beats:
+      - text: "Why two hundred and fifty-nine days? The ellipse touches both orbits, so its semi-major axis is their average: one point two six astronomical units."
+      - text: "Kepler's third law gives its period, and we fly half of it: pi times the square root of a cubed over the Sun's G M, or two hundred and fifty-nine days."
+        actions: [{substitute: calc2, at: "@pi"}, {compute: calc2, at: "@hundred"}]
+      - text: "Meanwhile Mars moves on by one hundred and thirty-six degrees, so it must start forty-four degrees ahead."
+        actions: [{compute: calc3, at: "@forty-four"}]
+
+  - id: leaving
+    type: calculation
+    params:
+      title: "Leaving the Earth: the Oberth effect"
+      results_in_table: false       # six rows already: keep the table readable
+      symbols:
+        - {name: v_inf, from_scene: hohmann.dv1, meaning: "excess speed needed (Δv₁)", tex: "v_{\\infty}"}
+        - {name: GM_earth, constant: GM_earth}
+        - {name: R_earth, constant: R_earth}
+        - {name: h, value: "300 km", exact: true, meaning: "height of a low orbit", source: "chosen"}
+      calculations:
+        - {name: v_c, expr: "sqrt(GM_earth/(R_earth + h))", unit: km/s, sig: 4, meaning: "circular speed there", symbol: "v_{\\mathrm{circ}}"}
+        - {name: v_esc, expr: "sqrt(2*GM_earth/(R_earth + h))", unit: km/s, sig: 4, meaning: "escape speed there", symbol: "v_{\\mathrm{esc}}"}
+        - {name: dv_LEO, expr: "sqrt(v_inf^2 + v_esc^2) - v_c", unit: km/s, sig: 3, meaning: "Δv for the departure", symbol: "\\Delta v"}
+    beats:
+      - text: "Those were speeds around the Sun. A real rocket starts in low Earth orbit, three hundred kilometres up, at seven point seven three kilometres per second."
+      - text: "It must climb out of the Earth's gravity well, where the escape speed is ten point nine three kilometres per second, and keep two point nine four to spare."
+        actions: [{highlight: "symbol:v_inf", at: "@spare"}]
+      - text: "Burning deep in the well, where the rocket is already fast, makes the fuel count for more: the Oberth effect. The burn is about three point six kilometres per second."
+        actions: [{substitute: calc3, at: "@Burning"}, {compute: calc3, at: "@Oberth"}, {highlight: result3, at: "@about"}]
+
+  - id: sky
+    type: orbit
+    params:
+      title: "The Earth and Mars on 28 October 2026"
+      date: "2026-10-28"                 # quoted: `vidgen schema` checks a string (vidgen reads both)
+      bodies:
+        - {preset: earth, trail: 0.3}
+        - {preset: mars, trail: 0.2}
+      event: {kind: opposition, of: Mars}
+      caption: "Positions from JPL's approximate planetary elements (valid 1800–2050)"
+    beats:
+      - text: "Where are the planets now? This is the twenty-eighth of October 2026, from JPL's approximate planetary elements."
+      - text: "That day Mars is sixty-four degrees ahead of the Earth, more than the forty-four we need. The faster Earth closes the gap, so the next launch window opens around early December 2026."
+      - text: "On the nineteenth of February 2027 Mars is at opposition, opposite the Sun in our sky. We leave before that, while Mars is still ahead."
+        actions: [{highlight: event, at: "@opposition"}]
+      - text: "Windows return every synodic period, seven hundred and eighty days or about twenty-six months: the one after comes in early 2029."
+
+  - id: recap
+    type: bullets
+    params:
+      heading: "Getting to Mars"
+      items:
+        - {text: "Every path is an orbit around the Sun", icon: orbit}
+        - {text: "Hohmann: 2.94 + 2.65 km/s, 259 days", icon: rocket}
+        - {text: "Leave when Mars leads by 44°", icon: clock}
+        - {text: "A window every 780 days (≈ 26 months)", icon: calendar}
+    beats:
+      - text: "So, to sum up: every path is an orbit, around the Sun."
+      - text: "The Hohmann transfer takes two burns and two hundred and fifty-nine days."
+      - text: "We leave when Mars leads by forty-four degrees,"
+      - text: "and a launch window opens every twenty-six months. Real missions fly computed, tilted, elliptical paths, but the idea is the same."
+        actions: [{highlight: item4, at: "@Real"}, {highlight: item1, at: "@idea"}]

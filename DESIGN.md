@@ -18071,3 +18071,62 @@ number reader and the orbit scene's text helpers), so the Phase Q baseline was n
 numbers written with spaces between digit groups are skipped; eccentricities, inclinations and
 mass ratios said as pure numbers are not read; a claim of scale about one body among several
 (only the picture as a whole); an observer other than the Earth for event dates.
+
+### 98.9 Example, docs and gallery (Step 235)
+
+**Example** `examples/mars-transfer` ("How to get to Mars", about 3:43 with Kokoro `af_heart` 0.85,
+the `discovery` bed at −9 dB, a 9:16 `short` variant; terms in concept colours: Hohmann transfer,
+launch window, semi-major axis with TeX `a`). Seven scenes: `intro` (title); `straight` (the
+Earth's 29.8 km/s as a live arrow, a rocket alongside the Earth with a 3 km/s radial burn on
+"Fire": it goes round the Sun on an ellipse out to 1.11 AU, far short of Mars); `hohmann` (the
+transfer on circular, coplanar orbits, Mars starting 95° ahead so the live phase angle shrinks to
+44.3° before the first burn; burns on "burn" and "second"); `timing` (a `calculation`: a = (r_E +
+r_M)/2 = 1.262 AU, T = π√(a³/GM☉) = 259 d, θ = π(1 − 2T/T_M) = 44.3°); `leaving` (a `calculation`
+taking v∞ `from_scene: hohmann.dv1`: v_circ 7.726, v_esc 10.93, Δv = √(v∞² + v_esc²) − v_circ =
+3.59 km/s from 300 km — the Oberth effect; computed, never typed in); `sky` (`date: 2026-10-28`,
+the Earth and Mars from Table 1 with `event: {kind: opposition, of: Mars}` → 2027-02-19; the
+narration's next window "around early December 2026" and "early 2029" are where the heliocentric
+lead equals the Hohmann 44.3° in this model, 2026-12-05 and 2029-01-07, stated as approximate);
+`recap` (bullets). Every narrated number passes the `orbit_*` and `calc_*` rules (0 findings with
+the Kokoro audio in 16:9 and 9:16); `tests/test_mars_transfer.py` pins the numbers against
+`vidgen.orbits` directly. Approximations are stated on screen (captions on the orbit scenes) and in
+the recap ("real missions fly computed, tilted, elliptical paths").
+
+**Docs.** A guide topic `orbits` (aliases orbit, orbital, orbital-mechanics, kepler, hohmann,
+planets, space, spaceflight: choosing a view, scale honesty, panels, presets and units,
+manoeuvres, three bodies, dates, pacing, lint, a snippet); the `scenes` topic points to it.
+`docs/COOKBOOK-ORBITS.md` (choosing, scale honesty, units and Δv — heliocentric Δv versus the burn
+from low orbit —, a table of approximations to state, pacing, mistakes → rules, a pattern that a
+test validates and lints), linked from the README, `docs/COOKBOOK.md` (intro and §12), the guide
+and the gallery's section note. The CONFIG completeness test (`test_docs`, parametrized `orbits`)
+already covers every param of the scene, nested ones included.
+
+**Gallery.** The section "Orbital mechanics" has its note (`gallery.SECTION_NOTES`: the example and
+the cookbook) and footer; the `orbit` entry is regenerated (the current layout and page: 0.34 MB);
+two showcases (`gallery.SHOWCASES`, section `orbital mechanics`): `mars_hohmann` (the transfer with
+the phase angle and burns on words, 0.33 MB) and `jupiter_trojans` (`sun_jupiter` in the rotating
+view with L1–L5, a Trojan's tadpole and its zero-velocity curve, 0.33 MB; a first version turning
+the frame on a word made GIFs above 150 KB even at the fallback frame rates, so the showcase starts
+in the rotating frame).
+
+**Budget decision: 13 → 15 MB.** The gallery was at 12.9 MB of 13 before this step and 13.6 MB
+after it. Making room first was tried: the GIFs are 10.3 of the 12.9 MB; a lossless re-save of the
+GIFs with Pillow's optimiser saved about 10 % on some files and grew others, needs checking frame
+by frame, and is not what `vidgen gallery` writes — the next regeneration of an entry would undo it
+(gifsicle, which does this well, is not installed here and is not a dependency the owner's Windows
+setup has). Lowering the clip frame rate or width would visibly hurt every entry. So the budget
+grows by what Phase X needs plus room for about three more entries (each ≤ 0.36 MB): 15 MB, with
+`ENTRY_MAX` (0.36 MB per entry) and `gallery.CLIP_MAX_BYTES` (150 KB per GIF) unchanged
+(`tests/test_gallery.py`).
+
+**Fix found on the way**: the transfer's phase-angle label (`orbit_manoeuvres._draw_phase`) kept
+off the panel and the central body only; in 9:16 it could stand on the Earth's label (which keeps
+its side while it stays about as good). It now keeps off the bodies and their labels too. Orbit
+scenes with a transfer may place θ's label differently; no other picture changes (the scene is not
+in the Phase Q baseline). And `ephemeris.events_between` listed an event twice when the bisection
+stopped just before its root (the Mars opposition of 2029-03-25): it now searches on from a day
+after each event (events of a pair are a synodic period apart).
+
+**Render note**: the 16:9 check render was made at 1280×720, 30 fps: a 47 s orbit scene at
+1920×1080 takes longer than one 10-minute command on the development machine (rendering is
+per scene; the owner's machine renders 1080p as usual).

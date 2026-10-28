@@ -5,9 +5,24 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–234)
+## Unreleased (Steps 193–235)
 
 ### Orbital mechanics (Phase X, from Step 229)
+
+- **Example, docs and gallery** (Step 235). `examples/mars-transfer` ("How to get to Mars", about
+  3:43 with Kokoro, 16:9 and a 9:16 `short` variant): why a rocket cannot fly straight there, the
+  Hohmann transfer (Δv₁ 2.94 + Δv₂ 2.65 km/s, 259 days, Mars 44° ahead) with burns on words, the
+  transfer time and phase angle worked out in a `calculation`, the 3.59 km/s departure burn from
+  low Earth orbit (the Oberth effect, from `from_scene`), and the Earth and Mars on 28 October 2026
+  with the next window (around early December 2026) and the opposition of 19 February 2027. A
+  guide topic `vidgen guide orbits` and `docs/COOKBOOK-ORBITS.md` (choosing, scale honesty, units
+  and Δv, approximations to state, pacing, mistakes and the rules that catch them). The gallery's
+  "Orbital mechanics" section: the `orbit` entry regenerated with the current layout and two
+  showcases (the Hohmann transfer to Mars; Jupiter's Trojans in the rotating frame); the gallery's
+  size budget grows from 13 to 15 MB (each entry still at most 0.36 MB, each GIF 150 KB).
+- **Fix** (Step 235): a transfer's phase-angle label keeps off the bodies and their labels (it
+  could sit on the Earth's name in 9:16); `orbits.events_between` no longer lists an event twice
+  (the 2029 Mars opposition came twice).
 
 - **Orbital accuracy lint** (Step 234). Nine `vidgen lint` rules compare what the narration and
   the screen say with what each `orbit` scene computes: `orbit_period` ("Mars takes three years"

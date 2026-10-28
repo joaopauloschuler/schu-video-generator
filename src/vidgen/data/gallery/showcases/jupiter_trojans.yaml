@@ -1,0 +1,18 @@
+title: Trojans in the rotating frame
+voice: {provider: kokoro, voice: af_heart}
+scenes:
+  - id: jupiter_trojans
+    type: orbit
+    params:
+      title: "Jupiter's Trojans"
+      system: sun_jupiter                # the circular restricted three-body problem, μ = 9.54 × 10⁻⁴
+      view: rotating                     # the frame turns with Jupiter: the Sun, Jupiter and L1–L5 stand still
+      lagrange: true
+      zero_velocity: true                # the curve the Trojan cannot cross (its Jacobi constant)
+      bodies:
+        - {name: Trojan, near: L4, shift: [0.004, 0.0069], trail: "150 yr"}   # shares of the separation
+      span: "300 yr"
+    beats:
+      - text: "In the frame turning with Jupiter, the five Lagrange points stand still."
+        actions: [{highlight: "lagrange:L4", at: "@five"}]
+      - text: "A Trojan near L4 traces a tadpole around it, and never crosses its zero-velocity curve."

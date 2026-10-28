@@ -234,6 +234,18 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   ([cookbook](docs/COOKBOOK-SCIENCE-CHARTS.md), [gallery](docs/gallery/README.md#science-charts),
   [example](examples/radioactive-decay/README.md): radioactive decay, a fit and the half-life,
   carbon-14 dating).
+- **Orbital mechanics** (Phase X): `orbit` draws planets, moons and spacecraft on Kepler orbits
+  moving in correct timing (equal areas emerge from the physics), with honest scale ("sizes not to
+  scale", a true-scale inset, a log view), Kepler's laws (foci, equal-area sectors, vis-viva
+  arrows, Newton's cannonball), burns and Hohmann / bi-elliptic / phasing transfers with their Δv,
+  transfer time, phase angle and launch windows, gravity assists by patched conics, the restricted
+  three-body problem (Lagrange points, Trojans in the rotating frame, the figure-eight,
+  resonances, tides as a schematic) and the Solar System on any date 1800–2050 from JPL's
+  approximate elements, with the next opposition or conjunction ([docs](docs/CONFIG.md#orbit)).
+  The `orbit_*` lint rules check periods, speeds, Δv, transfer times, distances, dates and scale
+  claims against the scene's model ([cookbook](docs/COOKBOOK-ORBITS.md),
+  [gallery](docs/gallery/README.md#orbital-mechanics), [example](examples/mars-transfer/README.md):
+  how to get to Mars).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
@@ -844,6 +856,13 @@ my_video/
   exponential fit with its band and residuals, the half-life worked out from the fitted decay
   constant with its uncertainty, and carbon-14 dating; seeded data from `make_data.py`, a 9:16
   variant; about 2:52 with Kokoro narration (no audio committed).
+- [examples/mars-transfer](examples/mars-transfer/README.md) — "How to get to Mars", an orbital
+  mechanics explainer: why a rocket cannot fly straight there (a radial burn bent by the Sun's
+  gravity), the Hohmann transfer with Δv₁ 2.94 and Δv₂ 2.65 km/s, 259 days and Mars 44° ahead at
+  departure, the transfer time and phase angle worked out, the 3.59 km/s departure burn from low
+  Earth orbit (the Oberth effect), and the Earth and Mars on 28 October 2026 from JPL's elements
+  with the next window and opposition; a 9:16 variant; about 3:43 with Kokoro narration (no audio
+  committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -859,7 +878,10 @@ my_video/
   common mistakes and the lint rules that catch them;
   [docs/COOKBOOK-SCIENCE-CHARTS.md](docs/COOKBOOK-SCIENCE-CHARTS.md) — scientific plots and worked
   calculations: plot or chart, honest axes, error-bar meanings, fits and their uncertainties, units
-  and significant figures, pacing a calculation, common mistakes and the lint rules that catch them.
+  and significant figures, pacing a calculation, common mistakes and the lint rules that catch them;
+  [docs/COOKBOOK-ORBITS.md](docs/COOKBOOK-ORBITS.md) — orbital mechanics videos: choosing what to
+  show, scale honesty, units and Δv, the approximations to state, pacing, common mistakes and the
+  lint rules that catch them.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
