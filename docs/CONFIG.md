@@ -6244,6 +6244,137 @@ which explains whether a reaction or decay can happen (charge, baryon number, le
 numbers, angular momentum, energy and thresholds; flavour, C- and G-parity for the strong and
 electromagnetic interactions) and through which interaction.
 
+### `feynman`
+
+**Feynman diagrams** (Phase Y) in standard notation: quark and lepton lines with an arrow on the
+fermion-number flow (an antifermion's arrow points against time: an incoming positron's arrow
+points back), photons wavy, W and Z wavy with their names, gluons as coils, the Higgs boson
+dashed, vertices as dots, every line named with its particle (`e⁻`, `ν̄ₑ`, `u`, `d̄`, `W⁻`,
+`Z*`), and the time direction stated by an arrow (`time: right`, the usual convention, or `up`).
+The layout is automatic and deterministic: s-channel (the incoming pair meets at one vertex, the
+propagator runs along time), t-channel (the exchange is drawn across, its vertices at one time),
+u-channel (drawn uncrossed, the outgoing legs swapped), decays 1 → 2 and 1 → 3 (μ⁻ → ν_μ W⁻,
+W⁻ → e⁻ ν̄ₑ), cascades (H → ZZ* → 4ℓ) and one-loop triangles (H → γγ, gg → H); no two lines cross
+in the presets. The reaction is written under the title (`e⁻ e⁺ → μ⁻ μ⁺ · s-channel`; hadrons when
+quarks are grouped: `n → p e⁻ ν̄ₑ`).
+
+**Checked before anything is drawn** (`vidgen validate` refuses a diagram that breaks a rule, and
+says why): each vertex must be a Standard Model vertex at tree level — f f γ for charged fermions
+(no photon on a neutrino), q q g (no gluon on a lepton), g g g and g g g g, f f′ W changing
+flavour within a doublet (u ↔ d, c ↔ s, any up-type with any down-type quark through the CKM
+matrix; a charged lepton only with the neutrino of its own family), f f Z, f f H for massive
+fermions, H W W, H Z Z, H H H, W W γ, W W Z and the quartic gauge and Higgs vertices; **no H γ γ or
+H g g vertex** ("the Higgs boson couples to mass and the photon is massless; this goes through a
+loop of heavy particles: draw the loop (preset h_to_gammagamma)"); no flavour change at a photon,
+gluon, Z or Higgs vertex; four fermions never meet at one point ("draw the W"). At every vertex the
+charge, the baryon number and the lepton family numbers are conserved (the 237 checker, each vertex
+read as a little process with every line virtual), the fermion arrows run through it, and the
+colours can balance (a basic check: a quark's colour runs on, a gluon meets quarks or gluons). The
+fermion lines are followed through the diagram (d → u: B = 1/3 along the line; νₑ → e⁻: L_e = +1),
+and the whole reaction is checked with `particle_physics.check` (and the hadron reaction when quarks
+are grouped: π⁺ → μ⁺ ν_μ).
+
+```yaml
+- id: bhabha
+  type: feynman
+  params:
+    title: "Bhabha scattering"
+    preset: bhabha            # diagrams s and t; the first is shown (diagram: t starts with t)
+  beats:
+    - text: "An electron and a positron come in."
+    - text: "They annihilate into a photon."
+      actions: [{vertex_rule: "vertex:v1", show: [rule, coupling, checks], at: "@photon"}]
+    - text: "Or they simply exchange one: the t channel."
+      actions: [{action: swap_channel, to: t, at: "@exchange"}]
+    - text: "Follow them through."
+      actions: [{travel: diagram}]
+- id: own
+  type: feynman
+  params:
+    diagrams:                 # written by their lines: "id: particle from -> to" (ids for targets)
+      - name: W
+        lines:
+          - "mu: mu- in -> v1"
+          - "nu_mu: nu_mu v1 -> out"
+          - "W: W- v1 -> v2"
+          - "e: e- v2 -> out"
+          - {id: nu_e, particle: anti-nu_e, from: v2, to: out, label: true}
+  beats:
+    - text: "The muon turns into its neutrino and a W minus."
+      actions: [{highlight: "line:W", at: "@W"}]
+```
+
+**Lines**: each line is a particle running **forward in time** `from` → `to`, where an end is a
+vertex id (any name: `v1`, `a`), `in` (an incoming line starts there) or `out` (an outgoing line
+ends there); the vertices are the ends other than `in` and `out`. Write the particle as it travels
+forward in time: an incoming positron is `e+ in -> v1` (its arrow is drawn back against time), an
+outgoing antineutrino `anti-nu_e v2 -> out`. Any spelling of `vidgen.particle_physics` works (`e-`,
+`positron`, `ν̄ₑ`, `anti-u`, `gamma`, `g`, `W+`, `Z`, `H`); a trailing `*` marks a line off-shell
+(`Z*`, `gamma*`). A line `in -> out` is a spectator quark (drawn straight through). `id` names the
+target `line:<id>` (default `l1`, `l2`… in order); `label: false` leaves a line unnamed. A hadron is
+drawn as its quark lines in a `groups` entry `{particle, side, lines}`: a bracket and its name
+beside the lines (`{particle: pi+, side: initial, lines: [u, dbar]}`; the quark content must match).
+Tree diagrams and one-loop diagrams are drawn (a vertex joins three or four lines; one connected
+piece; two lines between the same vertices bow apart).
+
+**Presets** (each with its line ids, as targets): `ee_to_mumu` (e⁺e⁻ → μ⁺μ⁻; diagrams `photon`, `Z`;
+lines `e_minus`, `e_plus`, `boson`, `mu_minus`, `mu_plus`), `compton` (e⁻γ → e⁻γ; `s`, `u`; `e_in`,
+`gamma_in`, `e_mid`, `e_out`, `gamma_out`), `bhabha` (e⁺e⁻ → e⁺e⁻; `s`, `t`; `e_minus`, `e_plus`,
+`photon`, `e_minus_out`, `e_plus_out`), `moller` (e⁻e⁻ → e⁻e⁻; `t`, `u`), `beta_decay` (d → u e⁻ ν̄ₑ
+through a W⁻; `spectators: true` draws the neutron's and the proton's other quarks with brackets n
+and p; `d_in`, `u_out`, `W`, `e`, `nu`, `u_spec`, `d_spec`), `muon_decay` (μ⁻ → ν_μ e⁻ ν̄ₑ; `mu`,
+`nu_mu`, `W`, `e`, `nu_e`), `pion_decay` (π⁺ → μ⁺ ν_μ: u d̄ → W⁺; `u`, `dbar`, `W`, `mu`, `nu`;
+bracket π⁺), `drell_yan` (u ū → γ*/Z → μ⁻μ⁺; `photon`, `Z`; `q`, `qbar`, `boson`, `mu_minus`,
+`mu_plus`), `gg_to_h` (a top-quark loop; `g1`, `g2`, `loop1`–`loop3`, `H`), `h_to_gammagamma`
+(`top` and `W` loops; `H`, `loop1`–`loop3`, `gamma1`, `gamma2`), `h_to_zz_4l` (H → Z Z* → e⁻e⁺ μ⁻μ⁺;
+`H`, `Z`, `Zstar`, `e_minus`, `e_plus`, `mu_minus`, `mu_plus`), `top_decay` (t → W⁺ b; `W` and
+`leptonic` with W⁺ → e⁺ νₑ; `t`, `W`, `b`, `e`, `nu`). Vertices are `v1`, `v2`, `v3`.
+
+**Reveal**: `reveal: time` (default) draws the incoming lines (with the title, the reaction and the
+time arrow), then each vertex and the lines that begin there, in time order, spread over the beats;
+`reveal: all` draws everything in the first beat.
+
+**Targets**: `title`, `caption`, `process` (the reaction line), `diagram` (everything), `time_axis`,
+`line:<id>` (the line, its arrow and its name), `vertex:<id>` (the dot), `hadron:<particle>` (a
+group's bracket and name: `hadron:n`, `hadron:pi+`). `highlight` and `dim` work on all of them.
+
+**Actions**: `travel` — a particle dot runs along lines in time order (`travel: "line:mu"`, a list of
+lines on one clock, or `travel: diagram`: a dot on every line at once, the reaction flowing through;
+an exchange drawn across is crossed in a moment); `color` (default `highlight`); about 2 s.
+`vertex_rule: "vertex:v1"` — a ring on the vertex and its rule in words beside the diagram (wide
+frames) or under it (tall): the vertex type and the lines meeting there ("electromagnetic vertex
+(QED): e⁻ e⁺ → γ"), the coupling ("coupling Q·e …; α = e²/4πε₀ħc ≈ 1/137"; QCD: α_s(m_Z) ≈ 0.118;
+W: g/√2 with g = 2m_W/v ≈ 0.65 and the CKM element; Higgs: y = √2 m/v, proportional to the mass)
+and with `show: [rule, coupling, checks]` the conservation at the vertex ("Q: −1 + +1 → 0 ✓");
+undone when the next beat starts. `swap_channel` — morph into another diagram of the scene (`to:
+t`; default the next one): lines and vertices with the same id move, the others are drawn or fade,
+the reaction line takes the new label (`until:` swaps back).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `preset` | name | — | a standard diagram (list above); or `diagrams` |
+| `diagrams` | list of `{name, label, lines, groups}` | — | diagrams written by their lines; several for `swap_channel` |
+| `diagram` | name | the first | which diagram to show first (`s`, `t`, `u`, `photon`, `Z`, `top`, `W`, `leptonic`…) |
+| `spectators` | bool | `false` | `beta_decay`: the neutron and proton with their spectator quarks |
+| `time` | `right` \| `up` | `right` | the direction of time |
+| `time_axis` | bool | `true` | the `time →` arrow |
+| `process` | bool | `true` | the reaction line under the title (with the diagram's `label`) |
+| `labels` | bool | `true` | particle names on the lines |
+| `reveal` | `time` \| `all` | `time` | lines drawn in time order over the beats, or all in beat 1 |
+| `title`, `caption` | text | `""` | title above, note under the diagram |
+| `fermion_color` | colour | `text` | quark and lepton lines |
+| `boson_color` | colour | `accent` | photon, gluon, W and Z lines |
+| `higgs_color` | colour | `secondary` | Higgs lines |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | title and caption style |
+
+The model is `vidgen.api.particle_physics` (no manim): `preset_diagrams("bhabha")`,
+`build_diagram(name, lines, groups)`, `check_diagram(d).explain()` (every vertex with its rule and
+conservation, the fermion lines, the reaction), `vertex_rule([...into], [...out])` and
+`diagram_layout(d)` (positions; `crossings`). Coupling values: α from the SI 2019 / CODATA 2022
+constants; α_s(m_Z) = 0.118 and G_F (hence v ≈ 246 GeV and g = 2m_W/v ≈ 0.65) from PDG 2024;
+sin²θ_W ≈ 0.231 and the CKM magnitudes rounded to two figures. Diagrams are schematic: lengths and
+angles carry no meaning.
+
 ### `function_plot`
 
 Maths axes with functions f(x): curves, dots that travel along a curve with a live value label
@@ -11919,6 +12050,7 @@ a title card, a `transform` of a bar).
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
 | `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `lagrange`, `lagrange:<L>`, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`, `pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`, `event`, `inset`, `rings`, `readout` | reveal, highlight, sweep, launch, burn, corotate, inertial, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); a three-body pair's `lagrange` (`lagrange:L4` one point), `zero_velocity` curve and `rotation` badge; `barycentre`; a resonance's `conjunctions`; a close-up's `pointer` to the central body; the tidal schematic's `pull`, `mean`, `tidal`, `bulges`, `face`; an event's alignment `event`, the `inset` box, the log view's `rings`; the sizes picture's `body:<name>` discs and `central` (the Sun's edge); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
 | `standard_model` | `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<name>`, `generation:<N>`, `group:<group>`, `row:<row>` | reveal, highlight, dim, antiparticles, couplings, callout | `particle:e` (or `particle:electron`) one cell; `generation:2` a column with its number; `group:quarks` the quark cells and their label; `row:neutrinos` a row; `antiparticles` turns cells into their antiparticles, `couplings: particle:photon` outlines what a boson couples to |
+| `feynman` | `title`, `caption`, `process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`, `hadron:<particle>` | reveal, highlight, dim, travel, vertex_rule, swap_channel, callout | `line:W` a line with its arrow and name; `vertex:v1` a vertex dot (`vertex_rule` rings it and states its rule); `hadron:n` a hadron's bracket; `travel: diagram` runs a dot along every line in time order; `swap_channel` morphs into another diagram, the targets following their lines |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |

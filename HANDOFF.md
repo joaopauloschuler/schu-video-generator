@@ -21924,3 +21924,107 @@ How to test
   `build/preview/frames/` and `build/preview/storyboard/` (16:9 dark), `build/preview_light/`
   (16:9 light), `build/preview_vertical/` (9:16 dark), `build/preview_vlight/` (9:16 light);
   `vidgen lint`: 0 errors; warnings: `max_words` (dense chart) and `contrast` on dimmed symbols.
+
+## Step 238 — Feynman diagrams
+
+What was built (DESIGN §99.5–§99.6): Feynman diagrams in proper notation, with every vertex checked
+against the Standard Model, as a model (`vidgen.particle_physics.feynman`, `.feynman_layout`, no
+manim) and the scene type `feynman` with the actions `travel`, `vertex_rule`, `swap_channel`.
+
+First, two fixes from the review of Step 237:
+- τ(Λ) corrected to the PDG 2024 average (2.617 ± 0.010) × 10⁻¹⁰ s (2.632 before; Λ̄ follows, it
+  is built by conjugation); m_W 80.3692, m_Z 91.1880, Γ_Z 2.4955, m_H 125.20 GeV are confirmed and
+  no longer marked `# check` (DESIGN §99.2 updated; a test pins the values).
+- `test_builtin_scenes.py::test_builtins_use_only_the_public_api` passes again: `orbit_text.py`
+  imports through `vidgen.api` (which exports `plot_draw`), and `calculation.py` — which also
+  broke the rule (`from vidgen import registry`, since Step 231) — uses the new
+  `vidgen.api.find_scene_type` (= `registry.find`).
+
+The step:
+- **Model** `feynman`: `Diagram` / `DiagramLine` (a particle running forward in time `from` →
+  `to`: vertex ids, `in`, `out`; spectator quarks `in` → `out`), `HadronGroup` (quark lines
+  bracketed as n, p, π⁺…, content checked), `build_diagram` (structure errors), `vertex_rule`
+  (the Standard Model's tree-level vertices; no H γ γ / H g g / H Z γ vertex — "draw the loop
+  (preset h_to_gammagamma)"; flavour change only at a W, leptons within their family, quarks with
+  the CKM element; four fermions → "draw the W"), `check_vertex` (Q, B, L_e/μ/τ with Step 237's
+  `check`, the vertex as a process with all lines off-shell), `colour_problem`, `fermion_chains`,
+  `check_diagram` (+ the whole reaction and the hadron reaction), computed couplings (α, α_s, v, g,
+  Yukawa), 12 presets (`PRESETS`, `preset_diagrams`).
+- **Layout** `feynman_layout.layout`: time order from the legs (timelike / spacelike internal
+  lines, loop vertices early / late), columns, barycentric y, every order of the ends tried for the
+  fewest crossings (u-channel uncrossed), groups beside their spectators, bowed multi-edges.
+- **Scene** `feynman` (`scenes/feynman.py`, `feynman_draw.py`, `feynman_actions.py`): notation
+  (arrows, waves, coils, dashes, dots, labels with drawn bars, brackets), reaction line, time arrow
+  (`time: right | up`), reveal in time order, targets `line:<id>`, `vertex:<id>`,
+  `hadron:<particle>`, `process`, `diagram`, `time_axis`; `travel` (dots along lines on one clock),
+  `vertex_rule` (ring + rule, coupling, checks beside / under the diagram), `swap_channel`
+  (morph between a scene's diagrams; targets follow).
+
+Files touched
+- New: `src/vidgen/particle_physics/{feynman,feynman_layout}.py`,
+  `src/vidgen/scenes/{feynman,feynman_draw,feynman_actions}.py`, `tests/test_feynman.py` (79
+  incl. 3 renders), `docs/gallery/feynman.md` + `media/feynman-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/particle_physics/{__init__,data}.py`, `src/vidgen/api.py`
+  (`find_scene_type`), `src/vidgen/scenes/{__init__,calculation,orbit_text}.py`, the guide
+  (chooser row, a `# particle physics` snippet, three action rows) + `AGENTS.md`, `docs/CONFIG.md`
+  (`feynman` section and targets row), `docs/gallery/README.md` (generated), `examples/gallery/video.yaml`
+  (scene `feynman`), `tests/{test_actions_coverage,test_builtin_scenes,test_docs,test_particle_physics,test_translation}.py`,
+  `DESIGN.md` (§99.2 values, §99.5, §99.6), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): scene type `feynman`; actions `travel`, `vertex_rule`,
+`swap_channel`; `vidgen.api.find_scene_type`; `particle_physics.feynman`, `.feynman_layout`,
+`Diagram`, `DiagramCheck`, `build_diagram`, `check_diagram`, `preset_diagrams`, `vertex_rule`,
+`diagram_layout`. No dependency, no config key.
+
+Decisions
+- A line names the particle that travels forward in time (an incoming positron is `e+ in -> v1`);
+  the arrow is derived from the fermion number, so the author never draws arrows by hand and an
+  antifermion's arrow always points against time.
+- Vertex rules are written on the lines read as all outgoing (crossing symmetry), so one table
+  serves absorption, emission, annihilation and pair creation; conservation reuses `check` with
+  every line off-shell (no energy check at a vertex).
+- The u-channel is drawn uncrossed with the outgoing legs swapped (the same diagram); the brief's
+  "no crossings for tree diagrams" holds for every preset (tested) and a custom diagram that still
+  crosses gets a warning.
+- Internal lines are labelled as written (`γ`, not `γ*`, unless the author writes `gamma*`);
+  presets use `γ*` in Drell–Yan and `Z*` in H → ZZ*.
+- The vertex-rule text takes a column on the right in 16:9 (only when the scene uses
+  `vertex_rule`), a band at the bottom in 9:16; the diagram keeps the rest of the frame.
+- In 9:16 with time left → right the diagram may grow to 1.15 × its width tall (the frame is
+  narrow); `time: up` is the alternative for tall frames.
+- The gallery sample is the guide's first `feynman` snippet (Bhabha with `vertex_rule`,
+  `swap_channel`, `travel`).
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check238`).
+Existing scenes untouched (the two import changes are refactors). Gallery 14.1 MB of 15 (the entry
+about 0.16 MB: GIFs 76 KB and 70 KB).
+
+Values: couplings computed from constants (α), PDG 2024 (α_s(m_Z) = 0.1180, G_F = 1.1663788 ×
+10⁻⁵ GeV⁻², the masses of Step 237). **For the owner to check**: sin²θ_W ≈ 0.231 (shown with three
+figures; the stored 0.2313 is my memory of the PDG 2024 MS-bar value) and the CKM magnitudes
+(two figures: |V_ud| 0.97, |V_us| 0.22, |V_ub| 0.004, |V_cd| 0.22, |V_cs| 0.97, |V_cb| 0.04,
+|V_td| 0.009, |V_ts| 0.04, |V_tb| 1.0); both marked `# check` in `feynman.py`.
+
+Known gaps: two-loop and box diagrams are not laid out (one loop: triangles and bubbles); colour
+flow is checked, not drawn; the vertex-rule text is English only; with `reveal: time` and few
+beats, a diagram's last lines may be drawn in the beat after (steps spread over the beats) — a
+`swap_channel` early in that beat then morphs a diagram not yet complete (use `reveal: all` or
+more beats).
+
+Render performance: preview (1280×720, 10 fps) ≈ 0.6–0.8 s per second of video (Bhabha with
+three actions: 9.9 s of video in 6.7 s); no memory concern (a few hundred mobjects).
+
+How to test
+- `tests/test_feynman.py` (79 incl. 3 renders, ~7 s), `tests/test_particle_physics.py` (92).
+- Related, all passing: `test_docs` + `test_extensions` + `test_translation` +
+  `test_actions_coverage` not render (198); `test_guide` + `test_gallery` + `test_builtin_scenes`
+  not render (265); `test_builtin_scenes` + `test_actions_coverage -k "feynman or standard_model"`
+  with renders (10); `test_api` + `test_schema` + `test_registry` + `test_introspect` +
+  `test_json_output` + `test_narration_rule` not render (150); `test_lint` + `test_overlays` +
+  `test_calculation` + `test_standard_model` + `test_orbit` not render (126); the gallery lint
+  checks of `test_calc_lint`, `test_genetics_lint`, `test_orbit_lint` (3).
+- Stills: scratchpad `s238/proj` (nine scenes: Bhabha with vertex_rule / swap / travel, muon decay
+  with highlights, β decay with spectators, H → γγ top → W loop, gg → H with time up, H → ZZ* → 4ℓ,
+  Compton u, a custom e⁺e⁻ → W⁺W⁻ (ν exchange → s-channel Z), π⁺ decay):
+  `build/preview/storyboard/` (16:9 dark), `build/preview_light/`, `build/preview_vertical/`,
+  `build/preview_vlight/`; `vidgen lint`: 0 errors.

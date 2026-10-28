@@ -18332,12 +18332,14 @@ Z 91.1880 GeV (Γ 2.4955 GeV), H 125.20 GeV (Γ 4.1 MeV, the SM prediction); p 9
 939.56542 (878.4 s); π± 139.57039 (26.033 ns), π⁰ 134.9768 (8.43 × 10⁻¹⁷ s), η 547.862 (1.31 keV),
 K± 493.677 (12.38 ns), K⁰ 497.611, K⁰_S 89.54 ps, K⁰_L 51.16 ns, φ 1019.461 (4.249 MeV), J/ψ 3096.900
 (92.6 keV), Υ(1S) 9460.40 (54.02 keV), D± 1869.66 (1.033 ps), D⁰ 1864.84 (410.3 fs), B± 5279.41
-(1.638 ps), B⁰ 5279.72 (1.517 ps), Λ 1115.683 (263.2 ps), Σ⁺ 1189.37 (80.18 ps), Σ⁰ 1192.642
+(1.638 ps), B⁰ 5279.72 (1.517 ps), Λ 1115.683 (261.7 ps), Σ⁺ 1189.37 (80.18 ps), Σ⁰ 1192.642
 (7.4 × 10⁻²⁰ s), Σ⁻ 1197.449 (147.9 ps), Ξ⁰ 1314.86 (290 ps), Ξ⁻ 1321.71 (163.9 ps), Ω⁻ 1672.45
 (82.1 ps), Δ(1232) 1232 (117 MeV). **For the owner to check against the 2024 tables** (written from
 memory of the PDG summary tables; the 2022 value differs or the last digit is uncertain): the
-quark masses u, d, s, c, b, t and Γ_t; m_τ; m_W; m_Z and Γ_Z; m_H; τ(π⁰); τ(D⁰); m(B±), m(B⁰);
-τ(Λ) (2.632 × 10⁻¹⁰ s is the long-standing average; a 2024 update to about 2.62 is possible).
+quark masses u, d, s, c, b, t and Γ_t; m_τ; τ(π⁰); τ(D⁰); m(B±), m(B⁰). **Checked in Step 238's
+review** against the PDG 2024 summary tables: m_W 80.3692 GeV, m_Z 91.1880 GeV, Γ_Z 2.4955 GeV,
+m_H 125.20 GeV confirmed; τ(Λ) corrected from 2.632 to the PDG 2024 average (2.617 ± 0.010) ×
+10⁻¹⁰ s (and Λ̄ with it).
 
 ### 99.3 The conservation checker (Step 237)
 
@@ -18427,3 +18429,116 @@ FCNC loops (a K⁺ → π⁺ e⁺ e⁻ passes as weak), isospin beyond G.
 fields or `key: false`); cells dimmed by `couplings` can get `contrast` warnings for their large
 symbols (the backdrop sampler counts a dimmed glyph's own pixels); the neutrino-mass display uses
 one limit for all three flavours; no lint rules (242).
+
+### 99.5 Feynman diagrams: the model (Step 238)
+
+Two modules of `vidgen.particle_physics` (no manim), exported with `Diagram`, `DiagramCheck`,
+`build_diagram`, `check_diagram`, `preset_diagrams`, `vertex_rule` and `diagram_layout`.
+
+**`feynman`**: a `Diagram(name, lines, groups, label)` of `DiagramLine(id, particle, start, end,
+off_shell, label)`: the particle that runs **forward in time** from `start` to `end`, each a vertex
+id, `in` (an incoming leg starts there) or `out`; `in` → `out` is a spectator quark. The fermion
+arrow follows the fermion-number flow (`flow` +1 for a fermion, −1 for an antifermion, whose arrow
+points back along the line); vertices are the ends other than `in` / `out`. `HadronGroup(particle,
+side, lines)` brackets quark lines as a hadron (its quark content must match). `build_diagram`
+refuses what is not a diagram (an `in` at a line's end, a vertex joining fewer than 3 or more than 4
+lines, pieces not joined, more than one loop, tadpoles, a hadron as a line, a non-quark spectator,
+groups not on their side).
+
+`check_diagram(d)` → `DiagramCheck(vertices, chains, verdict, hadron_verdict)` with `problems`,
+`ok`, `explain()`:
+1. **Vertex rule** (`vertex_rule(into, out)` → `VertexRule(kind, name, coupling, interaction,
+   note)` or why not), on the lines read as all outgoing (crossing): two fermions (one fermion,
+   one antifermion: "the arrows must run through the vertex") and one boson — γ: same flavour,
+   charged (`QED`); g: same quark flavour (`QCD`); Z: same flavour (`NC`); H: same flavour,
+   massive (`Hff`; neutrinos massless in the SM); W: a weak doublet — a charged lepton with the
+   neutrino of its family, an up-type with a down-type quark (`CC`, the CKM element in the coupling
+   text, "CKM-suppressed" across generations); a flavour change at γ / g / Z / H is refused ("no
+   flavour-changing neutral currents at tree level"); three or four bosons — g g g, g g g g, W W γ,
+   W W Z, H W W, H Z Z, H H H, W W W W, W W Z Z, W W γ γ, W W Z γ, H H W W, H H Z Z, H H H H; **H γ γ,
+   H g g and H Z γ are refused with the loop** ("the Higgs boson couples to mass and the photon is
+   massless; … draw the loop (preset h_to_gammagamma)"); four fermions: "Fermi's contact is the
+   low-energy picture of a W exchanged: draw the W".
+2. **Conservation at the vertex** with §99.3's `check` (the vertex as a process, every line
+   off-shell so no energy check; a vertex with every line on one side is crossed): Q, B, L_e, L_μ,
+   L_τ (`VertexCheck.conservation_text()`: "Q: −1 → 0 + −1 ✓ · L_μ: +1 → +1 + 0 ✓").
+3. **Colour** (basic, `colour_problem`): the colours as outgoing (3, 3̄, 8) must be able to make a
+   singlet — triplets minus antitriplets a multiple of 3, a gluon never alone among colourless
+   lines.
+4. **Fermion lines** (`fermion_chains`): each chain in the direction of its fermion number (d → u,
+   νₑ → e⁻, a closed top loop) with the conserved number along it ("B = 1/3 along the line").
+5. **The reaction** of the external legs with `check` (spectators left out) and, with groups, the
+   hadron reaction (n → p e⁻ ν̄ₑ, π⁺ → μ⁺ ν_μ). The scene refuses a diagram with any problem.
+
+Couplings shown (computed): α = e²/4πε₀ħc from the SI 2019 / CODATA 2022 constants (1/137.036);
+α_s(m_Z) = 0.1180 (PDG 2024); G_F = 1.1663788 × 10⁻⁵ GeV⁻² (PDG 2024) → v = (√2 G_F)^−½ = 246.22
+GeV, g = 2m_W/v = 0.653, y_f = √2 m_f/v (top 0.991), H W W 2m_W²/v ≈ 52 GeV, H H H 3m_H²/v ≈ 191
+GeV. Rounded and marked for checking: sin²θ_W ≈ 0.231 (MS-bar at m_Z), the CKM magnitudes to two
+figures.
+
+**Presets** (`PRESETS`, `preset_diagrams(key, spectators)`; line ids are stable across a preset's
+diagrams so `swap_channel` can morph them): `ee_to_mumu` (photon, Z), `compton` (s, u),
+`bhabha` (s, t), `moller` (t, u), `beta_decay` (quark; `spectators` adds u, d and the n / p
+groups), `muon_decay`, `pion_decay` (group π⁺), `drell_yan` (photon γ*, Z), `gg_to_h` (top loop),
+`h_to_gammagamma` (top, W loops), `h_to_zz_4l`, `top_decay` (W, leptonic).
+
+**`feynman_layout.layout(d)`** → `DiagramLayout(vertices, lines, columns, timelike, groups,
+crossings, bounds)` in (t, y): t = 0 incoming ends, 1 outgoing ends; y spread −1 … 1 (spectators
+above). (1) Time order: a bridge line whose one side holds no incoming leg (or the other no outgoing
+one) is timelike and orders its vertices, otherwise spacelike (shared time); on a loop, vertices
+whose outside part holds only incoming legs are early, only outgoing late; spacelike-joined
+vertices form columns layered by the longest path, placed at fixed t (0.31 / 0.69 for two
+columns). (2) Vertex y: the weighted mean of the neighbours with the external ends fixed (solved
+exactly), same-column vertices at least 1.0 apart. (3) Every order of the incoming and of the
+outgoing ends (up to 4 per side) is scored by (crossings + lines passing through a vertex dot,
+hadron groups not beside their spectators, inversions of the written order): the u-channel comes out
+uncrossed with its outgoing legs swapped. Two lines between the same vertices bow apart (±0.32 of
+the chord). Every preset: 0 crossings, deterministic.
+
+### 99.6 The `feynman` scene type (Step 238)
+
+`scenes/feynman.py` (params, layout on screen, targets, reveal, the actions' drawing),
+`scenes/feynman_draw.py` (notation), `scenes/feynman_actions.py`.
+
+- **Params**: `preset` or `diagrams` (`{name, label, lines, groups}`; a line `{id, particle, from,
+  to, label}` or the string `"id: particle from -> to"`), `diagram` (shown first), `spectators`,
+  `time` (`right` | `up`), `time_axis`, `process`, `labels`, `reveal` (`time` | `all`), `title`,
+  `caption`, `fermion_color` (text), `boson_color` (accent), `higgs_color` (secondary). Validation
+  builds and checks every diagram: a rule broken is a param error with the reason.
+- **Notation**: fermions solid with a filled arrowhead on the fermion-number flow; γ, W, Z a sine
+  wave (amplitude 0.075, wavelength ≈ 0.3); g a coil (a circle rolling along the line); H dashed;
+  vertices dots; labels from the particle's Pango markup with the antiparticle bar drawn as a line
+  (as §99.4), `*` for off-shell; hadron brackets with the hadron's name outside the quark labels.
+  External labels sit beyond the open ends; internal ones beside the middle, away from the centre
+  unless that side meets another line. Lines are drawn from their earlier end (`Create` draws in
+  time order).
+- **Screen**: title, the reaction line (`e⁻ e⁺ → μ⁻ μ⁺ · s-channel`, hadrons when grouped),
+  caption; the diagram fitted into the rest with room for the labels and brackets (a transverse
+  unit at most 2.3, width at most 2.3 × height; 9:16 may grow to 1.15 × its width tall); the `time`
+  arrow under the diagram's left end (time right) or left of its bottom (up). When the scene uses
+  `vertex_rule`, its text gets a column on the right (16:9, 4 units) or a band at the bottom (9:16).
+- **Reveal** (`time`): the incoming lines with title, reaction and time arrow; then per column the
+  vertex dots and the lines beginning there (outgoing legs with their vertex), spread over the beats.
+- **Targets**: `title`, `caption`, `process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`,
+  `hadron:<particle>` — the union over the scene's diagrams; each is a container whose parts are
+  swapped by `swap_channel`, so targets follow their lines. `target_text`: a line's particle name.
+- **Actions**: `travel` (targets `line:<id>` / `diagram`; one clock from the earliest to the latest
+  time of the lines; each dot on its line while the clock is within the line's times, a spacelike
+  line crossed in ±0.08; fades in the last 12 %, removed at the end), `vertex_rule` (one vertex: a
+  ring, the rule text — name and lines, coupling, each conservation check; `until_next_beat`),
+  `swap_channel` (`to`, default the next diagram; same-id parts `Transform`, others `Create` /
+  `FadeOut`, the reaction line morphs; reversible).
+
+**Shared code** (Step 238): `vidgen.api.find_scene_type` (= `registry.find`) so that
+`scenes/calculation.py` no longer imports `vidgen.registry`; `scenes/orbit_text.py` imports through
+`vidgen.api` (the built-ins' public-API rule). No frame changes (Phase Q baseline 31/31).
+
+**Public (additive)**: scene type `feynman`; actions `travel`, `vertex_rule`, `swap_channel`;
+`vidgen.api.find_scene_type`; `particle_physics.feynman`, `particle_physics.feynman_layout` and the
+names above. No dependency, no config key.
+
+**Known gaps after Step 238**: two-loop and box diagrams are not laid out (one loop: triangles and
+bubbles); vertices with more than four ends per side keep the written order (no search); colour
+flow is checked, not drawn (no colour lines on the quarks); CKM magnitudes and sin²θ_W are rounded
+display values; the vertex-rule text is English only (the scene's title and caption translate);
+`travel` follows lines, not a fermion chain by name.

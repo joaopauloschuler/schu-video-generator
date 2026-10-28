@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 from manim import VGroup, VMobject
 
-from vidgen import plot_draw
+from vidgen.api import *
 
 DIGITS = "0123456789"
 #: A capital on each side isolates a glyph or a pair when measuring (its left edge is a fixed

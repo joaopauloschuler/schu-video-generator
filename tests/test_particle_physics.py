@@ -76,6 +76,9 @@ def test_lifetimes_widths_and_text() -> None:
     assert pp.PARTICLES["t"].mass_text() == "172.57 GeV" and pp.PARTICLES["c"].mass_text() == "1.273 GeV"
     assert pp.PARTICLES["Delta++"].charge_text(sign=True) == "+2" and pp.PARTICLES["d"].charge_text() == "−1/3"
     assert pp.energy_text(0.7823) == "782.3 keV" and pp.time_text(8.43e-17) == "8.43 × 10⁻¹⁷ s"
+    # PDG 2024: τ(Λ) = (2.617 ± 0.010) × 10⁻¹⁰ s (Step 238's review; 2.632 before), the same for Λ̄
+    assert pp.PARTICLES["Lambda"].lifetime_text() == "261.7 ps" and pp.PARTICLES["anti-Lambda"].lifetime == 2.617e-10
+    assert (pp.PARTICLES["W+"].mass_mev, pp.PARTICLES["Z"].mass_mev, pp.PARTICLES["Z"].width_mev, pp.PARTICLES["H"].mass_mev) == (80369.2, 91188.0, 2495.5, 125200.0)
 
 
 def test_hadrons_from_their_quarks() -> None:

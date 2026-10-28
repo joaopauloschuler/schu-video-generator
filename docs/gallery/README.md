@@ -103,6 +103,7 @@ A whole orbital-mechanics explainer, why a rocket cannot fly straight to Mars, t
 | type | preview | use it for |
 |---|---|---|
 | [`standard_model`](standard_model.md) | <a href="standard_model.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/standard_model-16x9.png"><img src="media/standard_model-16x9.gif" height="180" alt="standard_model at 16:9"></picture></a> <a href="standard_model.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/standard_model-9x16.png"><img src="media/standard_model-9x16.gif" height="180" alt="standard_model at 9:16"></picture></a> | the Standard Model's particles: quarks and leptons in three generations, the gauge bosons and the Higgs boson with their masses (PDG 2024), charges and spins; antiparticles; which bosons couple to which particles |
+| [`feynman`](feynman.md) | <a href="feynman.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/feynman-16x9.png"><img src="media/feynman-16x9.gif" height="180" alt="feynman at 16:9"></picture></a> <a href="feynman.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/feynman-9x16.png"><img src="media/feynman-9x16.gif" height="180" alt="feynman at 9:16"></picture></a> | a Feynman diagram in proper notation (e⁺e⁻ → μ⁺μ⁻, Compton, Bhabha, β⁻ and μ⁻ decay, π⁺ → μ⁺ ν_μ, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → W⁺b) or your own, every vertex checked against the Standard Model; s- and t-channel, decays, loops |
 
 ## Pictures and media
 

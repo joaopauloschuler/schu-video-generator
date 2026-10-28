@@ -78,6 +78,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "population": {"title": "Drift", "model": "drift", "N": 20, "p0": 0.5, "generations": 20, "replicates": 3},
     "orbit": {"title": "Orbits", "central": "sun", "bodies": [{"preset": "earth"}, {"name": "Comet", "a": "2 AU", "e": 0.7, "orbit": False}], "span": "1 yr"},
     "standard_model": {"title": "Particles", "caption": "C"},
+    "feynman": {"title": "Diagram", "caption": "C", "preset": "muon_decay"},
     "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
@@ -236,6 +237,10 @@ def test_target_names_of_every_builtin_type() -> None:
     assert sm[:9] == ["title", "chart", "header", "labels", "key", "source", "caption", "particle:u", "particle:up"]
     assert sm[-6:] == ["group:scalar_bosons", "group:bosons", "row:up_type", "row:down_type", "row:charged_leptons", "row:neutrinos"]
     assert names("standard_model", title="", caption="", key=False, source=False)[:3] == ["chart", "header", "labels"]
+    assert names("feynman") == ["title", "caption", "process", "diagram", "time_axis", "line:mu", "line:nu_mu", "line:W", "line:e", "line:nu_e",
+                                "vertex:v1", "vertex:v2"]
+    assert names("feynman", title="", caption="", process=False, time_axis=False, preset="pion_decay")[:2] == ["diagram", "line:u"]
+    assert names("feynman", preset="pion_decay")[-1] == "hadron:pi+"
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

@@ -5,10 +5,24 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–237)
+## Unreleased (Steps 193–238)
 
 ### Particle physics (Phase Y, from Step 237)
 
+- **Feynman diagrams: the `feynman` scene type** (Step 238). Diagrams in proper notation — fermion
+  arrows on the fermion-number flow (antifermions against time), wavy photons, W and Z, curly
+  gluons, a dashed Higgs, vertex dots, every line named (e⁻, ν̄ₑ, u, d̄), the time direction stated
+  (left → right, or `time: up`) — from 12 presets (e⁺e⁻ → μ⁺μ⁻, Compton, Bhabha, Møller, β⁻ decay
+  at quark level with optional spectator quarks, μ⁻ decay, π⁺ → μ⁺ ν_μ, Drell–Yan, gg → H,
+  H → γγ through a top or W loop, H → ZZ* → 4ℓ, t → W⁺b) or written by their lines
+  (`"photon: gamma v1 -> v2"`). The layout is automatic (s-, t-, u-channel, decays, cascades, one
+  loop; no crossings) and every vertex is checked against the Standard Model before it is drawn:
+  the allowed vertex types (no H γ γ vertex — "draw the loop"; a W only within a doublet), charge,
+  baryon and lepton family numbers at every vertex and along the fermion lines, colour, and the
+  whole reaction. Lines appear in time order over the beats; the actions `travel` (a particle
+  dot), `vertex_rule` (the vertex type, its coupling — α ≈ 1/137, α_s ≈ 0.118, g ≈ 0.65, Higgs ∝
+  mass — and the conservation checks) and `swap_channel` (s ↔ t, γ ↔ Z, top ↔ W loop). Fixed with
+  it: the Λ mean life (PDG 2024: 2.617 × 10⁻¹⁰ s).
 - **The `standard_model` scene type and the particle model** (Step 237). The Standard Model chart:
   quarks and leptons in three generations, the gauge bosons and the Higgs boson, each cell with
   its mass (PDG 2024), charge and spin, in colour groups with a key and the values' source; the

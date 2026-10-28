@@ -366,6 +366,17 @@ scenes:
       - text: "Every quark and lepton has an antiparticle with the opposite charge."
         actions: [{action: antiparticles, at: "@antiparticle"}]
 
+  - id: feynman
+    type: feynman         # a Feynman diagram, every vertex checked against the Standard Model; presets or your own lines
+    params:
+      title: "Muon decay"
+      preset: muon_decay
+    beats:
+      - text: "The muon turns into its neutrino and a W minus."
+        actions: [{highlight: "line:W", at: "@W"}]
+      - text: "The W decays into an electron and an electron antineutrino."
+        actions: [{travel: diagram, at: 0.2}]
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:

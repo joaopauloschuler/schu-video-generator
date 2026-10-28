@@ -334,6 +334,7 @@ project's own scene types, in its theme).
 | a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
 | planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist; many bodies: Lagrange points and Trojans in the rotating frame, the figure-eight, binary stars, the Io–Europa–Ganymede resonance, tides (a schematic); the Solar System on a date (1800–2050), the next opposition or conjunction, all planets on a log scale, an inset of the inner planets, planet sizes to scale | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley, io; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity; near: L4), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side), `system` (sun_jupiter, earth_moon, figure_eight), `view` (rotating), `lagrange`, `resonance`, `origin` (barycentre), `tides`, `date`, `event` (opposition, of), `radial` (log), `inset`, `sizes`, `panel` (compact, full, none, rows); the actions sweep, launch, burn, flyby, pause, coast, corotate, inertial |
 | the Standard Model's particles: quarks and leptons in three generations, the gauge bosons and the Higgs boson with their masses (PDG 2024), charges and spins; antiparticles; which bosons couple to which particles | `standard_model` | `title`, `reveal` (groups, all), `show` (mass, charge, spin, name), `antiparticles`, `layout` (wide, tall), `key`, `source`; targets particle:<name>, generation:<N>, group:<quarks...>, row:<...>; the actions antiparticles, couplings |
+| a Feynman diagram in proper notation (e⁺e⁻ → μ⁺μ⁻, Compton, Bhabha, β⁻ and μ⁻ decay, π⁺ → μ⁺ ν_μ, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → W⁺b) or your own, every vertex checked against the Standard Model; s- and t-channel, decays, loops | `feynman` | `preset` or `diagrams` (lines "id: particle from -> to", groups), `diagram`, `time` (right, up), `spectators`, `reveal` (time, all); targets line:<id>, vertex:<id>, hadron:<particle>; the actions travel, vertex_rule, swap_channel |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1292,6 +1293,40 @@ Targets of the chart: `particle:<name>` (`particle:u` or `particle:up`, `particl
 `row:up_type` / `down_type` / `charged_leptons` / `neutrinos`; `highlight` and `dim` work on all.
 `layout: tall` (default in 9:16) puts the bosons in two rows under the fermions.
 
+Feynman diagrams in proper notation, checked vertex by vertex against the Standard Model (a
+forbidden vertex is refused with the reason: no H γ γ vertex — draw the loop; no photon on a
+neutrino; a W only within a doublet):
+
+```yaml
+# particle physics
+- id: annihilation
+  type: feynman            # fermion arrows (antifermions against time), wavy γ/W/Z, curly g, dashed H
+  params:
+    title: "Bhabha scattering"
+    preset: bhabha         # ee_to_mumu, compton, bhabha, moller, beta_decay, muon_decay, pion_decay, drell_yan,
+                           # gg_to_h, h_to_gammagamma, h_to_zz_4l, top_decay
+  beats:
+    - text: "An electron and a positron annihilate into a photon."
+      actions: [{vertex_rule: "vertex:v1", show: [rule, coupling, checks], at: "@photon"}]
+    - text: "Or they exchange one: the t channel."
+      actions: [{action: swap_channel, to: t, at: "@exchange"}]
+    - text: "Follow them through."
+      actions: [{travel: diagram}]
+- id: muon_decay
+  type: feynman
+  params:
+    diagrams:              # your own: "id: particle from -> to"; ends are vertex ids, in, out
+      - lines: ["mu: mu- in -> v1", "nu_mu: nu_mu v1 -> out", "W: W- v1 -> v2", "e: e- v2 -> out", "nu_e: anti-nu_e v2 -> out"]
+  beats:
+    - text: "The muon becomes its neutrino and a W minus, which decays."
+      actions: [{highlight: "line:W", at: "@W"}]
+```
+
+Write each line's particle as it travels forward in time (an incoming positron: `e+ in -> v1`;
+its arrow is drawn back against time). Targets: `line:<id>`, `vertex:<id>`, `hadron:<particle>`
+(with `groups` or `spectators: true` on `beta_decay`), `process`, `diagram`, `time_axis`. `time:
+up` draws time bottom → top; the layout (s-, t-, u-channel, decays, loops) is automatic.
+
 ```yaml
 # data
 - id: devices
@@ -1604,6 +1639,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `inertial` | on an `orbit` with a three-body `system`: turn the view back to the fixed stars (`- action: inertial`) | "seen from the stars again" |
 | `antiparticles` | on a `standard_model` chart: turn quark and lepton cells into their antiparticles (`- action: antiparticles` for all, or `antiparticles: "group:leptons"`): the charge reverses, the symbol takes its bar or sign (ū, ν̄ₑ, e⁺), the name changes; `until:` turns them back | "every particle has an antiparticle with the opposite charge" |
 | `couplings` | on a `standard_model` chart: outline the particles a boson couples to (`couplings: "particle:photon"`; g, Z, W, H too), ring the bosons it meets, dim the rest and say why; undone at the next beat | "the photon couples to electric charge" |
+| `travel` | on a `feynman` diagram: a particle dot runs along lines in time order (`travel: "line:mu"`, or `travel: diagram` for a dot on every line at once) | "follow the electron through" |
+| `vertex_rule` | on a `feynman` diagram: ring a vertex and state its rule (`vertex_rule: "vertex:v1"`; `show: [rule, coupling, checks]`): the vertex type, the coupling (α ≈ 1/137, α_s ≈ 0.118, g ≈ 0.65, y ∝ mass), the charge and lepton numbers in and out; undone at the next beat | "at this vertex the photon couples to the charge" |
+| `swap_channel` | on a `feynman` scene with several diagrams: morph into another (`- action: swap_channel`, `to: t`): s ↔ t channel, photon ↔ Z, top ↔ W loop | "or they exchange a photon instead" |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |

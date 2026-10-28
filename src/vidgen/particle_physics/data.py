@@ -389,13 +389,13 @@ def _build() -> dict[str, Particle]:
     out.append(Particle("g", "gluon", "g", "g", "g", "gauge boson", 0.0, F(0), F(1), "g", parity=-1, colour="8", stable=True,
                         kind="gauge boson", note="massless in the theory; eight colour states", aliases=("gluon",)))
     w = Particle("W+", "W boson", "W⁺", _sup("W", "+"), "W^+", "gauge boson", 80369.2, F(1), F(1), "W-", width_mev=2085.0, unit="GeV",
-                 digits=6, kind="gauge boson", aliases=("W^+", "Wplus"))   # check (80.377 in PDG 2022)
+                 digits=6, kind="gauge boson", aliases=("W^+", "Wplus"))   # PDG 2024, confirmed in review (80.377 in PDG 2022)
     out += [w, _anti(w, "W-", "W boson", "W⁻", _sup("W", "-"), "W^-", ("W^-", "Wminus"))]
     out.append(Particle("Z", "Z boson", "Z", "Z", "Z", "gauge boson", 91188.0, F(0), F(1), "Z", width_mev=2495.5, unit="GeV", digits=6,
-                        kind="gauge boson", aliases=("Z0", "Z^0", "Z boson")))   # check (91.1876 / 2.4952 in PDG 2022)
+                        kind="gauge boson", aliases=("Z0", "Z^0", "Z boson")))   # PDG 2024, confirmed in review (91.1876 / 2.4952 in PDG 2022)
     out.append(Particle("H", "Higgs boson", "H", "H", "H", "scalar boson", 125200.0, F(0), F(0), "H", parity=1, c_parity=1, width_mev=4.1,
                         unit="GeV", digits=5, kind="scalar boson", note="width: the Standard Model prediction (measured 3.7 +1.9 −1.4 MeV)",
-                        aliases=("H0", "h", "h0", "higgs", "Higgs boson")))   # check (125.25 in PDG 2022)
+                        aliases=("H0", "h", "h0", "higgs", "Higgs boson")))   # PDG 2024, confirmed in review (125.25 in PDG 2022)
     # light mesons
     half, one, three_halves = F(1, 2), F(1), F(3, 2)
     pi = _hadron("pi+", "charged pion", "π⁺", _sup("π", "+"), r"\pi^+", "meson", 139.57039, 1, F(0), -1, (("u", "anti-d"),), lifetime=2.6033e-8,
@@ -446,7 +446,7 @@ def _build() -> dict[str, Particle]:
                 aliases=("neutron", "n0"))
     out += _pair(n, "anti-n", "antineutron", "n̄", "n̄", r"\bar{n}", ("nbar", "antineutron"))
     for key, name, symbol, mark, tex, mass, charge, content, tau, akey, asym, amark, atex, aliases in [
-        ("Lambda", "Lambda baryon", "Λ", "Λ", r"\Lambda", 1115.683, 0, ("u", "d", "s"), 2.632e-10,     # check lifetime (2024 average)
+        ("Lambda", "Lambda baryon", "Λ", "Λ", r"\Lambda", 1115.683, 0, ("u", "d", "s"), 2.617e-10,     # PDG 2024 average (2.632 before)
          "anti-Lambda", "Λ̄", "Λ̄", r"\bar{\Lambda}", ("Lambda0",)),
         ("Sigma+", "Sigma baryon", "Σ⁺", _sup("Σ", "+"), r"\Sigma^+", 1189.37, 1, ("u", "u", "s"), 0.8018e-10,
          "anti-Sigma-", "Σ̄⁻", _sup("Σ̄", "-"), r"\bar{\Sigma}^-", ()),

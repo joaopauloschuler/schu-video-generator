@@ -19,8 +19,6 @@ import numpy as np
 
 from vidgen.api import *
 
-from vidgen import registry
-
 from .equation_derivation import term_key, tex_error_excerpt
 
 log = logging.getLogger("vidgen.scenes.calculation")
@@ -160,12 +158,12 @@ def resolve_imports(params: Any, project: Any, seen: tuple[str, ...] = ()) -> di
         where = f"symbols[{k}] ({s.name}): from_scene '{s.from_scene}'"
         specs = {spec.id: spec for spec in project.config.scenes}
         spec = specs.get(scene_id)
-        entry = registry.find(spec.type) if spec is not None else None
+        entry = find_scene_type(spec.type) if spec is not None else None
         if spec is not None and spec.type != "calculation" and entry is not None and hasattr(entry.cls, "calc_values"):
             out[s.name] = _scene_value(entry.cls, spec, result, where)   # a value an orbit scene computed (Δv, a transfer time...)
             continue
         if spec is None or spec.type != "calculation":
-            calcs = [i for i, sp in specs.items() if sp.type == "calculation" or (registry.find(sp.type) is not None and hasattr(registry.find(sp.type).cls, "calc_values"))]
+            calcs = [i for i, sp in specs.items() if sp.type == "calculation" or (find_scene_type(sp.type) is not None and hasattr(find_scene_type(sp.type).cls, "calc_values"))]
             raise VidgenError(f"{where}: no calculation scene '{scene_id}'" + (f"; scenes with results: {', '.join(calcs)}" if calcs else "")
                               + did_you_mean(scene_id, calcs))
         if scene_id in seen:

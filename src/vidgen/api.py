@@ -93,6 +93,7 @@ from vidgen.regions import (  # noqa: E402
 )
 from vidgen.overlays import Overlay, OverlayContext, OverlayOptions, with_opacity  # noqa: E402
 from vidgen.registry import action, overlay, scene  # noqa: E402
+from vidgen.registry import find as find_scene_type  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
 from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize, one_or_many  # noqa: E402
 from vidgen.pronunciation import Pronunciation, Spoken  # noqa: E402
@@ -700,6 +701,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "NarratedScene",
     "SceneParams",
     "scene",
+    "find_scene_type",
     "action",
     "Action",
     "ActionOptions",
