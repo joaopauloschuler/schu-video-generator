@@ -331,6 +331,7 @@ project's own scene types, in its theme).
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
+| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity) |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1108,6 +1109,26 @@ Scientific plots and worked calculations (the craft: `vidgen guide science`):
     - text: "Gravity holds the Earth on its orbit, so its speed is the square root of G M over r."
     - text: "Put in the numbers, and the Earth moves at about thirty kilometres per second."
       actions: [{substitute: calc1, at: "@numbers"}, {compute: calc1, at: "@moves"}]
+```
+
+Planets, moons and spacecraft on their orbits, in correct timing:
+
+```yaml
+# orbital mechanics
+- id: inner_planets
+  type: orbit   # bodies move by Kepler's equation at one speed-up from the first beat to the scene's end
+  params:
+    title: "The inner planets for one Earth year"
+    central: sun   # a preset (sun, earth, mars, jupiter...) or {name, gm or mass, radius}
+    bodies:        # presets: mercury ... neptune (JPL J2000 elements), moon, iss, geo, halley
+      - {preset: mercury}
+      - {preset: earth}
+      - {name: Comet, a: "1.5 AU", e: 0.7, argp: 180, nu: 180, trail: 0.15}   # values carry units; angles in degrees
+    span: "1 yr"   # or orbits: 2 (periods of the first body)
+    caption: "J2000 elements (JPL approximate positions)"
+  beats:
+    - text: "Mercury races around the Sun in eighty-eight days."
+    - text: "The comet crawls far out and sweeps past the Sun."
 ```
 
 ```yaml

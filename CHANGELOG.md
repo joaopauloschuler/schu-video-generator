@@ -5,7 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–228)
+## Unreleased (Steps 193–229)
+
+### Orbital mechanics (Phase X, from Step 229)
+
+- **The `orbit` scene type and the orbital model** (Step 229). Planets, moons, satellites and
+  comets on Kepler orbits, moving in correct timing at one speed-up from the first beat to the
+  scene's end (so equal areas in equal times show as they are), with conic orbits, fading trails,
+  an equal-aspect frame in AU or km (or a scale bar), a readout of the simulated time and the
+  speed-up, "sizes not to scale" when bodies are enlarged, a view that follows a body, and
+  `dynamics: nbody` (mutual gravity on leapfrog or RK45, with the energy error). Bodies from
+  presets (the planets on JPL's approximate J2000 elements, the Moon, an ISS-like orbit,
+  geostationary, Halley), from elements with units (`a: "1.5 AU"`, `periapsis`, `altitude`, `i`,
+  `raan`, `argp`, `nu`) or from a position and velocity; clear errors such as a periapsis inside
+  the planet. The model is `vidgen.api.orbits` (no manim): Kepler's equation for every conic,
+  elements ↔ state vectors, vis-viva, periods, energies, n-body runs.
 
 ### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
 

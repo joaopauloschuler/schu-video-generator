@@ -79,6 +79,7 @@ from vidgen.scenes import (  # noqa: F401
     nature_action,
     network,
     number_line,
+    orbit,
     overlays,
     particles_action,
     pathway,

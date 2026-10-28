@@ -88,6 +88,12 @@ A whole physics explainer with plots and calculations, simulated nuclei, counts 
 | [`plot`](plot.md) | <a href="plot.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/plot-16x9.png"><img src="media/plot-16x9.gif" height="180" alt="plot at 16:9"></picture></a> <a href="plot.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/plot-9x16.png"><img src="media/plot-9x16.gif" height="180" alt="plot at 9:16"></picture></a> | measurements and models on scientific axes: log, symlog, reversed or broken axes with units, 10ⁿ and SI prefixes, panels sharing an axis, orbits at an equal aspect; data inline or from a CSV |
 | [`calculation`](calculation.md) | <a href="calculation.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/calculation-16x9.png"><img src="media/calculation-16x9.gif" height="180" alt="calculation at 16:9"></picture></a> <a href="calculation.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/calculation-9x16.png"><img src="media/calculation-9x16.gif" height="180" alt="calculation at 9:16"></picture></a> | a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results |
 
+## Orbital mechanics
+
+| type | preview | use it for |
+|---|---|---|
+| [`orbit`](orbit.md) | <a href="orbit.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/orbit-16x9.png"><img src="media/orbit-16x9.gif" height="180" alt="orbit at 16:9"></picture></a> <a href="orbit.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/orbit-9x16.png"><img src="media/orbit-9x16.gif" height="180" alt="orbit at 9:16"></picture></a> | planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity |
+
 ## Pictures and media
 
 | type | preview | use it for |

@@ -76,6 +76,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "calculation": {"title": "Speed", "symbols": [{"name": "d", "value": "42.2 km"}, {"name": "t", "value": "2.0 h"}],
                     "calculations": [{"name": "v", "expr": "d/t", "unit": "km/h", "convert": "m/s"}, {"name": "w", "expr": "2*v"}]},
     "population": {"title": "Drift", "model": "drift", "N": 20, "p0": 0.5, "generations": 20, "replicates": 3},
+    "orbit": {"title": "Orbits", "central": "sun", "bodies": [{"preset": "earth"}, {"name": "Comet", "a": "2 AU", "e": 0.7, "orbit": False}], "span": "1 yr"},
     "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
@@ -228,6 +229,8 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("calculation") == ["title", "table", "symbol:d", "row:d", "symbol:t", "row:t", "calc1", "calc:v", "formula1", "substitution1",
                                     "result1", "result:v", "conversion1", "symbol:v", "row:v", "calc2", "calc:w", "formula2", "substitution2",
                                     "result2", "result:w", "symbol:w"]
+    assert names("orbit") == ["title", "frame", "central", "body:Earth", "orbit:Earth", "body:Comet", "readout"]
+    assert names("orbit", title="", readout=False) == ["frame", "central", "body:Earth", "orbit:Earth", "body:Comet"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

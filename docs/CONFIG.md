@@ -5540,6 +5540,143 @@ in the lines on screen, its substituted value too — for `highlight`), `row:<na
 | `caption_size` | size | `caption` | |
 | `caption_color` | color | `dim` | |
 
+### `orbit`
+
+**Bodies on their orbits, moving in correct timing** (Phase X): a central body, bodies on
+Kepler orbits drawn as conics, the bodies moving along them by Kepler's equation from the start
+of the scene to its end at one constant speed-up — so equal video times are equal simulated
+times and the second law (equal areas in equal times) shows as it is —, fading trails, an
+equal-aspect frame in AU or km, a readout of the simulated time and the speed-up, and a view
+that can follow a body. `dynamics: nbody` integrates the mutual gravity of every body with mass
+instead (leapfrog by default, with the energy error shown). Values carry their units as text
+(`"1.5 AU"`, `"7.8 km/s"`, `"92 min"`); angles are degrees (or `"0.9 rad"`).
+
+```yaml
+- id: inner
+  type: orbit
+  params:
+    title: "The inner planets for one Earth year"
+    central: sun                         # a preset, or {name, gm or mass, radius}
+    bodies:
+      - {preset: mercury}                # the planets on their J2000 orbits (JPL)
+      - {preset: venus}
+      - {preset: earth}
+      - {preset: mars}
+    span: "1 yr"                         # or orbits: 2 (periods of the first body)
+    caption: "J2000 elements (JPL approximate positions)"
+  beats:
+    - text: "Mercury races around the Sun in eighty-eight days."
+    - text: "The Earth takes a year, Mars almost two."
+- id: comet
+  type: orbit
+  params:
+    title: "Equal areas in equal times"
+    bodies:
+      - {name: Comet, a: "3 AU", e: 0.8, argp: 90, nu: 180, trail: 0.15}
+    frame: scale_bar                     # axes (default) | scale_bar | none
+  beats:
+    - text: "Far from the Sun the comet crawls; near it, it sweeps round in weeks."
+- id: low_orbit
+  type: orbit
+  params:
+    central: earth
+    bodies:
+      - {preset: iss}                    # circular, 420 km up, 51.6°: 93 min
+      - {name: Probe, periapsis: "7000 km", e: 1.4, nu: -100, trail: "1 h"}   # an open orbit (hyperbola)
+      - {name: Ship, r: ["10000 km", 0], v: [0, "7.5 km/s"]}                  # from a position and velocity
+    span: "3 h"
+- id: moon
+  type: orbit
+  params:
+    central: sun
+    bodies: [{preset: earth}, {preset: moon}]   # the Moon goes around the Earth (its preset's primary)
+    span: "60 d"
+    follow: Earth                        # the view moves with the Earth
+```
+
+**Bodies** (`bodies`, in order; a body another one goes `around` comes first). A body is given by
+a **preset** (`mercury` … `neptune`: the J2000 mean elements of JPL's *Approximate Positions of
+the Planets*, Table 1, the Earth's being the Earth–Moon barycentre; `moon` around the Earth;
+`iss`: circular at 420 km, 51.64°; `geo`: geostationary, period one sidereal day; `halley`:
+rounded 1986 elements, for illustration), by **elements** — its size and shape one way: `a`
+(semi-major axis) with `e`, `periapsis` with `apoapsis`, `periapsis` with `e`, `apoapsis` with `e`,
+or `altitude` above the surface (a circle unless `e` is given); then `i`, `raan` (Ω), `argp` (ω),
+and where it starts, `nu` (true anomaly, default 0: at periapsis) or `mean_anomaly` — or by a
+**state**, `r` (position) and `v` (velocity) relative to what it orbits (2 or 3 components with
+units). Elements written next to a preset override the preset's. `e` = 0 is a circle, below 1 an
+ellipse, 1 a parabola (escape speed exactly), above 1 a hyperbola (for which `a` is |a|).
+`around` names the body it orbits (default: the central body, or the preset's primary when that
+body is listed). μ = G(M + m): a body's own `gm` or `mass` adds to its parent's (the Moon's
+month uses GM⊕ + GM☾).
+
+**Checks** (`vidgen validate`): units of the right kind (`'7.8 km'` for a speed is refused; a
+bare number for a length asks for a unit), a negative mass, an eccentricity below 0, two ways of
+giving the size, a periapsis inside the body it orbits ("its periapsis (6,000 km from the centre
+of Earth) lies inside Earth (radius 6,378 km): it would crash"), `orbits:` of an open orbit (it
+has no period: give `span`), a preset whose primary is missing, unknown presets, bodies and
+`follow` with did-you-mean, a radial velocity (no conic), `energy` / `method` / `step` without
+`dynamics: nbody`.
+
+**Picture.** The view shows every body's path over the span and the whole closed orbits (an open
+orbit out to three times the size of the rest), with a 6 % margin, at an equal aspect; `extent:`
+gives the half-width instead. `frame: axes` draws x and y axes on the plot core in AU or km
+(`unit: auto`: AU when the view spans more than 0.05 AU; large km values get 10³ in the title),
+`scale_bar` a bar of a round length, `none` nothing. Bodies are drawn to scale when large enough
+to see (the Earth under the ISS's orbit), else as dots — then the readout says **"sizes not to
+scale"**. Labels take the side of their body that covers no other body or label. Orbits are thin
+lines in the body's colour, dashed for an open one; `trail` is a fading line behind the body
+(`true`: a quarter of its orbit; a share of it; a time; `false`). `follow: Earth` keeps the Earth
+at the centre: orbits around it stay still, the rest move with the view. The readout (beside the
+plot in 16:9, above it in 9:16) shows `t = 182 d` (min, h, d or yr by the span), the speed-up
+(`× 6 million`) and with n-body the energy error `ΔE/E` (`energy: false` hides it).
+
+**Timing.** The first beat brings the frame, the central body, the orbits (drawn) and the bodies;
+then the bodies move until the scene's last frame, the time running from 0 to `span` (or
+`orbits` periods of the first body, default 1) at one speed-up. Equal video times are equal
+simulated times, so a comet is slow far out and fast near the Sun as Kepler's second law says.
+
+**N-body** (`dynamics: nbody`): every body with mass (`gm`, `mass` or a preset's) pulls on every
+other, from the Kepler states at the start; `method: leapfrog` (velocity Verlet: symplectic, its
+energy error stays bounded over many orbits; `step` default 1/1000 of the shortest orbital time
+scale) or `rk45` (adaptive Dormand–Prince: precise over a short run, its energy drifts over a long
+one). Orbits drawn are the starting (osculating) ones; trails show the real paths.
+
+| param | type | default | meaning |
+| --- | --- | --- | --- |
+| `title` | str | `""` | title |
+| `central` | preset \| `{preset, name, label, show_label, gm, mass, radius, color}` | `sun` | the central body: `sun`, `mercury` … `neptune`, `moon`, or your own (`gm` as `'3.986e14 m^3/s^2'` or `mass` as `'5.97e24 kg'`, `radius` with its unit) |
+| `bodies` | list | required | the orbiting bodies (below) |
+| `span` | time | one period | simulated time shown (`'1 yr'`, `'92 min'`) |
+| `orbits` | number | `1` | instead of `span`: periods of the first body (a closed orbit) |
+| `dynamics` | `kepler` \| `nbody` | `kepler` | two-body Kepler orbits, or mutual gravity integrated |
+| `method` | `leapfrog` \| `rk45` | `leapfrog` | n-body integrator (also `verlet`, `adaptive`) |
+| `step` | time | auto | n-body leapfrog step |
+| `frame` | `axes` \| `scale_bar` \| `none` | `axes` | what shows the scale |
+| `unit` | `auto` \| `AU` \| `km` | `auto` | unit of the axes and the scale bar |
+| `extent` | length | auto | half-width of the view around its centre |
+| `follow` | body name | — | the view moves with this body |
+| `readout` | bool | `true` | time and speed-up |
+| `energy` | bool | with nbody | the n-body energy error ΔE/E |
+| `label_size` | size | `caption` | ticks, labels and readout |
+| `caption` | str | `""` | note under the picture |
+| `caption_size` | size | `caption` | |
+| `caption_color` | color | `dim` | |
+| `title_size` | size | `heading` | |
+| `title_color` | color | `text` | |
+| `bodies[].name` | str | the preset's | name (targets `body:<name>`, `orbit:<name>`; `around`, `follow`) |
+| `bodies[].preset` | str | — | a preset orbit (above) |
+| `bodies[].around` | body name | central | what it orbits |
+| `bodies[].a`, `e` | length, number | —, `0` | semi-major axis and eccentricity |
+| `bodies[].periapsis`, `apoapsis`, `altitude` | length | — | the size another way |
+| `bodies[].i`, `raan`, `argp` | angle | `0` | inclination, ascending node Ω, argument of periapsis ω (the picture is the view from above the reference plane) |
+| `bodies[].nu`, `mean_anomaly` | angle | `0` | where it starts (true or mean anomaly) |
+| `bodies[].r`, `v` | list of lengths / speeds | — | a starting state instead of elements |
+| `bodies[].gm`, `mass`, `radius` | GM / mass / length | `0` or the preset's | its own gravity and size |
+| `bodies[].label`, `show_label` | str, bool | its name, `true` | the text beside it |
+| `bodies[].color` | color | palette | colour of the body, its orbit and trail |
+| `bodies[].trail` | bool \| number \| time | `true` | the fading trail |
+| `bodies[].orbit` | bool | `true` | draw its orbit |
+
 ### `function_plot`
 
 Maths axes with functions f(x): curves, dots that travel along a curve with a live value label
@@ -11213,6 +11350,7 @@ a title card, a `transform` of a bar).
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
+| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `readout` | highlight, dim, reveal, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `frame` the axes or scale bar; `central` the central body; `readout` the time and speed-up box (the bodies keep moving: a highlight on a moving body holds it still while it plays — Step 230 adds orbit actions) |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |

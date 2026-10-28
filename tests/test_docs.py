@@ -152,11 +152,11 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
 GENETICS_TYPES = ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas")
 
 
-@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES, ("plot", "calculation")],
-                         ids=["cell_biology", "genetics", "science_charts"])
+@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES, ("plot", "calculation"), ("orbit",)],
+                         ids=["cell_biology", "genetics", "science_charts", "orbits"])
 def test_science_sections_name_every_nested_option(kinds: tuple[str, ...]) -> None:
-    """Steps 210, 220 and 227: every param of the cell-biology, the genetics and the science-chart
-    types, nested options too (an object's `coat`, a gene's `introns`, a node's marks' `domain`, a
+    """Steps 210, 220, 227 and 229: every param of the cell-biology, the genetics, the science-chart
+    and the orbit types, nested options too (an object's `coat`, a gene's `introns`, a node's marks' `domain`, a
     fit's `residuals`, a symbol's `from_scene`), is named in its CONFIG.md section."""
     from vidgen.describe import nested_models
 

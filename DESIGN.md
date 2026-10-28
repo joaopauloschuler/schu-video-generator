@@ -217,6 +217,9 @@ src/vidgen/
   quantities/             # units and worked calculations (§97.9; no manim): units.py (dimensions, units, prefixes,
                           # parsing, SI display), constants.py (CODATA 2022, SI 2019, IAU), quantity.py (values with
                           # exactness and significant figures), expr.py (expressions with units, TeX), calc.py
+  orbits/                 # orbital mechanics (§98; no manim): kepler.py (Kepler's equation, every conic), elements.py
+                          # (elements <-> state vectors, vis-viva, period, energy), bodies.py (GM, radii, preset orbits
+                          # with sources), values.py (values with units), system.py (hierarchies, the clock), nbody.py
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
@@ -17470,3 +17473,133 @@ the calculation hand-over timing. The gallery is unchanged (no gallery scene use
 
 Public (additive): `plotcore.fit_curve(..., poisson=)`, `AxisSpec.ticks`,
 `quantities.Quantity.temperature`, `quantities.Step.values`. No config key, no dependency.
+
+## 98. Orbital mechanics (Phase X, Steps 229–236)
+
+Orbital-mechanics videos at university level (and for science YouTube): real physics, computed
+exactly, honest about scale, in vidgen's flat style, 16:9 and 9:16. The phase **builds on Phase
+W** and re-implements none of it: axes, equal aspect, ticks in AU / km and line clipping come from
+`vidgen.plotcore` / `vidgen.plot_draw` (§97.3); n-body motion from its integrators (`verlet`,
+`rk45`, §97.7); values with units and the IAU / CODATA constants from `vidgen.quantities`
+(§97.9); worked Δv budgets are `calculation` scenes (§97.10); the accuracy lint extends the
+`calc_*` / `plot_*` machinery (§97.11). Additive and opt-in: a new package and a new scene type;
+existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q baseline
+31/31 after Step 229).
+
+### 98.1 The phase (plan)
+
+- **Step 229, plan and orbital model** (this section): the model package `vidgen.orbits` (no
+  manim, §98.2), the `orbit` scene type (§98.3) with bodies, conic orbits, motion in correct
+  timing, trails, an equal-aspect frame, scale ticks / a scale bar, a time readout with the
+  speed-up, a view following a body, `dynamics: nbody`; validation with clear errors.
+- **Step 230, Kepler's laws and orbital speed**: on the `orbit` scene, overlays drawn from the
+  same `Elements`: the ellipse's geometry (foci, a, b, e, periapsis / apoapsis marks), equal areas
+  as shaded sectors between clock times (`System.position` at the sector's two times; the area
+  from `swept_area`), velocity vectors and a speed readout (vis-viva), Newton's cannonball (one
+  start point, speeds circular / elliptic / escape / hyperbolic: `Elements.from_state`); orbit
+  actions timed to beats and words (the clock is `Playback`: an action can pause, slow or jump it,
+  which is why the motion lives in one updater driven by the scene clock). T² ∝ a³ is a `plot`
+  (log–log, a fitted slope 3/2, §97.5) fed from the presets' `a` and `period`.
+- **Step 231, manoeuvres**: impulsive burns as a sequence of Kepler arcs (a burn changes v at a
+  time: the next arc is `Elements.from_state(r, v + Δv)`; the scene draws Δv arrows), Hohmann
+  (Δv₁, Δv₂, transfer time = half the transfer ellipse's period, phase angle, synodic period),
+  bi-elliptic, plane change (2 v sin(Δi/2)), raising / lowering, phasing; gravity assists by
+  patched conics (a hyperbola in the planet's frame from v∞ and periapsis: turning angle
+  2 asin(1/e), velocity addition in the Sun's frame). Validation: a burn whose new periapsis lies
+  inside a body (the same check as §98.3), an arc that hits the planet. Δv budgets as
+  `calculation` scenes (`from_scene` reads the manoeuvre's computed values).
+- **Step 232, many bodies**: the circular restricted three-body problem in the rotating frame
+  (the view rotates with the primaries: a `follow`-like frame transform in `OrbitModel.view`),
+  Lagrange points L1–L5 (roots of the collinear quintic for a mass ratio; L4 / L5 at 60°; the
+  Routh stability condition μ < 0.0385), Trojan-like motion, resonances (Io–Europa–Ganymede
+  1:2:4), the figure-eight solution (Chenciner–Montgomery initial values), energy drift readouts
+  leapfrog against RK45 (both already here, §98.2), tides as a schematic.
+- **Step 233, the Solar System on a date**: the presets' JPL Table 1 elements gain their rates
+  (per century) and a `date:` (validity 1800–2050, refused outside), true-scale and log-radial
+  views, insets, "sizes not to scale" labels (already shown by §98.3 when bodies are enlarged),
+  synodic periods, conjunctions / oppositions by root finding on the angle between two planets.
+- **Step 234, accuracy lint**: narration and labels against the model — periods against
+  semi-major axes (Kepler III with the right μ), speeds (vis-viva), Δv, transfer times, escape
+  speeds, distances, scale claims, energy drift of a declared-conserved run, a periapsis inside a
+  body; on `calc_numbers` and `plot_conserved`'s machinery, with `target_text` (§98.3) for names.
+- **Step 235, example, docs, gallery**: "How to get to Mars" (Hohmann Earth → Mars, computed Δv
+  budget and ~259-day transfer, ~44° phase angle, ~26-month synodic period), Kokoro narration,
+  16:9 and 9:16; guide topic `orbits`; CONFIG; `docs/COOKBOOK-ORBITS.md`; the gallery section
+  "Orbital mechanics" (started in Step 229 with `orbit`; the gallery is at 12.9 of 13 MB after
+  it, so 235 must optimize or record a budget change); README; CHANGELOG.
+- **Step 236, review**: physics against independent calculations (constants, published elements,
+  Kepler solver, conversions), compatibility, the phase's and related suites, `tests/test_mcp.py`.
+
+### 98.2 The model: `vidgen.orbits` (Step 229)
+
+A package without manim (checked in a fresh interpreter by a test), exported by `vidgen.api` as
+the module `orbits` (like `plotcore` and `quantities`). SI throughout: m, s, rad, μ = GM in m³ s⁻².
+
+| module | contents |
+|---|---|
+| `kepler` | Kepler's equation for every conic, element-wise on floats or arrays: elliptic `M = E − e sin E` (Newton from Danby's start E₀ = M + 0.85 e sign(sin M), in the same turn as M), hyperbolic `M = e sinh H − H` (Newton), parabolic Barker `M = D + D³/3`, D = tan(ν/2), in closed form (Cardano, written without cancellation); `E − e sin E` and `e sinh H − H` are evaluated as `(E − sin E) + (1 − e) sin E` with a series for small arguments, so the solvers stay at rounding level near e = 1 (tests: e = 0.999999 and 1.000001 to 1e-13). `true_from_mean`, `mean_from_true` (refusing ν beyond a hyperbola's asymptotes), `mean_motion` (√(μ/|a|³); 2√(μ/p³) for Barker's convention), `kind_of` (a parabola within `PARABOLIC_TOLERANCE` = 1e-9) |
+| `elements` | `Elements(mu, p, e, i, raan, argp, nu)`: stored by the semi-latus rectum p so one representation serves ellipse, parabola and hyperbola. Constructors `from_a`, `from_periapsis`, `from_apsides`, `from_state(mu, r, v)` (2 or 3 components; a radial trajectory refused); `state()` / `state_at_anomaly` / `states(t)` / `positions(t)` (perifocal → reference rotation R₃(−Ω) R₁(−i) R₃(−ω)); derived `a`, `b`, `periapsis`, `apoapsis`, `period`, `mean_motion`, `energy` (−μ/2a), `angular_momentum` (√(μp)), `v_infinity`, `nu_limit`, `radius_at`, `speed_at` (vis-viva), `time_of_flight`, `at(t)`, `conic(samples, r_max)` (an ellipse sampled evenly in E, an open conic in its anomaly out to r_max). Conventions for degenerate cases: equatorial → Ω = 0 (ω is the longitude of periapsis), circular → ω = 0 (ν is the argument of latitude / true longitude). Functions `vis_viva`, `period`, `semi_major_axis` (from a period), `circular_speed`, `escape_speed`, `specific_energy` |
+| `bodies` | `Body(name, gm, radius, color, source)`; `BODIES` (Sun, Mercury … Neptune, Moon) and `ORBITS` presets (the planets on JPL's Table 1 J2000 mean elements, ω = ϖ − Ω, M = L − ϖ, the Earth's being the Earth–Moon barycentre's; the Moon at 384 400 km, e = 0.0549, i = 5.145°; `iss` circular at 420 km, 51.64°; `geo` from one sidereal day; `halley` with rounded 1986 elements, "for illustration"); the sources in the module docstring: IAU 2015 B3 nominal GM☉, GM⊕, R☉, R⊕ via `quantities.constants`; DE440 planetary GM (planet systems from Mars outwards); IAU WGCCRE 2015 radii. `body_preset`, `orbit_preset` with did-you-mean |
+| `values` | `value_si(value, kind, where)`: an author's value with its unit (`'1.5 AU'`, `'7.8 km/s'`, `'92 min'`, `'3.986e14 m^3/s^2'`, `'5.97e24 kg'`; angles: a bare number is degrees) through the units engine of `quantities`, the dimension checked and explained; `length_unit` (AU above 0.05 AU in auto), `time_unit` (min / h / d / yr), `speedup_text` (`× 6.1 million`); `G` (CODATA 2022), `AU` (IAU 2012), `DAY`, `YEAR` (Julian) |
+| `system` | `Orbiter(name, body, elements, parent)` and `System(central, orbiters)`: hierarchical Kepler motion (the Moon around the Earth around the Sun: positions added up the parent chain); `Playback(start, seconds, span)`: video time → simulated time at one constant speed-up; `swept_area` (Kepler II check) |
+| `nbody` | `simulate(system, span, method, step, samples)` → `NBodyRun`: every body with gm > 0 pulls on every other (gm 0: test particles), from the Kepler states at t = 0, in the barycentre, integrated in scaled units (the largest starting separation; the time in which the total mass turns a body one radian there) with Phase W's `verlet` (leapfrog, default step 1/1000 of the shortest 2π√(q³/μ)) or `rk45` (rtol = atol = 1e-10); outputs relative to the central body, Hermite-interpolated between samples; the total energy (Σ½GMᵢvᵢ² − ΣGMᵢGMⱼ/rᵢⱼ, i.e. the energy times G) or, with one massive body, the test particles' specific energies; `drift` |
+
+**μ for a body's orbit** is G(M + m): the parent's GM plus the body's own (the Moon's month uses
+GM⊕ + GM☾: 27.28 d at the mean distance 384 400 km). A planet preset's orbit therefore uses
+GM☉ + GM_planet, which is what Table 1's mean motions assume to within their accuracy.
+
+**Why stored by p**: a parabola (the escape case of Newton's cannonball, Step 230) has no finite
+a; with p every conic has the same formulas for r(ν) = p / (1 + e cos ν) and the perifocal velocity
+√(μ/p) (−sin ν, e + cos ν).
+
+### 98.3 The `orbit` scene type (Step 229)
+
+Name checked: no scene type, param or target is called `orbit` (`orbit:<name>` is the scene's own
+target). `scenes/orbit.py` (drawing, timing) and `scenes/orbit_parts.py` (the YAML bodies:
+`OrbitCentral`, `OrbitBody`, `build_system`, `resolve_model` → `OrbitModel`).
+
+- **Bodies**: a preset, elements (the size one way: `a` with `e`, `periapsis` with `apoapsis` or
+  `e`, `apoapsis` with `e`, `altitude`; then `i`, `raan`, `argp`, `nu` or `mean_anomaly`), or a
+  state `r`, `v`; `around` another body listed before (a preset's primary is found by itself when
+  listed). Elements written next to a preset override it.
+- **Timing**: the first beat's entrance (frame, title, central body, orbits drawn, bodies) takes at
+  most 1.2 s; then one updater on a z-first clock mobject reads the scene's clock
+  (`renderer.time`, not a sum of dt: manim gives the first frame of every play a dt of 0) and maps
+  it through `Playback` from that moment to the scene's last frame (the beats' windows in whole
+  frames, as `narrate` waits them) onto 0 … `span`. Equal video times are equal simulated times,
+  so Kepler's second law shows unforced (tested on the rendered scene's own clock: equal areas to
+  1e-4). `span` (a time) or `orbits` (periods of the first body; refused for an open orbit).
+- **Picture**: the view's extent covers every body's path over the span (in the view's frame) and
+  the closed orbits around a still centre, open orbits capped at 3 × the rest (a lone flyby: 3 ×
+  its periapsis); a 6 % margin; `frame: axes` is a `plotcore.layout_figure` panel with
+  `aspect="equal"` and ticks in AU or km (10³ moved into the title by the core), `scale_bar` a
+  1-2-5 bar, `none`. The readout box sits beside the plot in 16:9 and above it in 9:16, sized
+  for the widest time it will show (no re-layout while it plays). Bodies drawn at true size when
+  that is at least 0.12 (central) / 0.075 (orbiter) Manim units, else enlarged to it, and then the
+  readout says "sizes not to scale". Orbits: thin conics in the body's colour (dashed when open),
+  around their parent's current position. Trails: 8 pieces fading to the tail (a quarter orbit by
+  default; a share; a time). Labels pick the first of eight sides free of other bodies, labels and
+  the readout, keeping their side while it stays free (no jumping). A body outside the plot is
+  hidden with its label.
+- **Follow**: positions are shown relative to the followed body (`OrbitModel.view`); its
+  satellites' conics stay still, everything else moves with the view.
+- **n-body**: `dynamics: nbody` integrates once at validation (cached by the params' JSON, the 32
+  most recent kept), the readout adds ΔE/E at the nearest output; the conics drawn are the
+  osculating starting orbits, the trails show the real paths.
+- **Validation** (`VidgenError` → `ValidationError` at `vidgen validate`): units of the right kind,
+  unit-less lengths, negative masses, e < 0, two ways of giving a size, periapsis inside the body
+  orbited ("it would crash", with both distances), `orbits` of an open orbit, a preset whose primary
+  is missing, unknown presets / bodies / `follow` with did-you-mean, radial velocities, ν beyond
+  the asymptotes, `energy` / `method` / `step` without n-body, duplicate names.
+- **Targets**: `title`, `frame`, `central`, `body:<name>` (dot, label, trail), `orbit:<name>`,
+  `readout`; `target_text` gives on-screen names for the narration lint. Actions: the generic
+  ones; Step 230 adds orbit actions.
+
+**Public (additive)**: `vidgen.api.orbits` (the module above); the scene type `orbit`. No config
+key outside the scene's params, no dependency.
+
+**Known gaps after Step 229** (planned later in the phase): no sectors, vectors or orbit actions
+(230); no burns or transfers (231); no rotating frame (232); presets at J2000 only, no dates (233);
+no orbit lint rules (234). Inclined orbits are drawn as their projection on the reference plane
+(the view from above; documented). A scene of only open orbits frames 3 × the periapsis: bodies
+leave the view at the end of a long span unless `extent` is set.

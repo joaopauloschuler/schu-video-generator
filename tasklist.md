@@ -1335,6 +1335,45 @@ changes). DESIGN §97. Steps 222–228.
 - [x] Fixed (DESIGN §97.13): histogram edges dropping the extreme values; √N-weighted fits of counts biased (now Poisson maximum likelihood; the example re-voiced for λ = 0.274); RK45 dense output and a scaled absolute tolerance; °C readings added / differences shown in °C refused; equal-aspect tick steps; normalized residual panels (±2, no bars); intermediate values for the lint; faster hand-over between calculations; `tests/test_science_review.py`
 - [~] Kept as documented gaps (§97.13): SI fallback for a single factor wider than the frame, `label_size: caption` for crowded 16:9 fit figures, one progress per rescaling panel, no zoom on broken axes, the 9:16 fit box room, chart-scene value labels unchecked, the domain plots of §97.12
 
+## Phase X — Orbital mechanics
+
+Goal: orbital-mechanics videos at university level (and for science YouTube): real physics,
+exactly computed, honest about scale, in vidgen's flat style, 16:9 and 9:16. Built on Phase W
+(the plot core for axes, equal aspect and trails; its integrators; `vidgen.quantities` with the
+IAU / CODATA constants; `calculation` scenes; the lint framework), re-implementing none of it.
+Additive and opt-in: existing projects, scenes, gallery frames, audio and the studio unchanged
+(Phase Q's 31 baseline frames when shared code changes). Physics from standard references,
+computed rather than hard-coded, approximations stated (two-body, patched conics, coplanar
+circular orbits for Hohmann). DESIGN §98. Steps 229–236.
+
+### Step 229 — Plan and orbital model
+- [x] Phase X plan here and DESIGN §98 for the whole phase (data model, how 230–235 plug in, the reuse of Phase W); the matching "Ideas" items marked as moved
+- [x] Model package `vidgen.orbits` without manim (exported by `vidgen.api` as `orbits`): Kepler's equation for elliptic / parabolic (Barker, closed form) / hyperbolic orbits, accurate near e = 1; `Elements` from classical elements (a or periapsis / apoapsis with e, i, Ω, ω, ν or M) and from state vectors, and back; vis-viva, period, specific energy and angular momentum, apsides, v∞, time of flight, conics for drawing; bodies with GM and radius (IAU 2015 nominal, DE440, IAU WGCCRE) and preset orbits (the planets on JPL's approximate J2000 elements, the Moon, ISS-like, geostationary, Halley) with sources; values with units through `vidgen.quantities`; hierarchical systems (the Moon around the Earth around the Sun), the playback clock, swept areas; n-body runs on Phase W's leapfrog / RK45 with the energy error
+- [x] Scene type `orbit`: a central body and bodies from presets, elements or a state; conic orbits (dashed when open), motion by Kepler's equation from the first beat to the scene's end at one speed-up (Kepler II emerges), fading trails, an equal-aspect frame on the plot core with AU / km ticks or a scale bar, a readout of the time, the speed-up and (n-body) ΔE/E, "sizes not to scale" when bodies are enlarged, `follow` a body, `dynamics: nbody`; validation with clear errors (units, a periapsis inside a body, open orbits without a period, missing primaries, did-you-mean); targets `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `readout`
+- [x] Tests `tests/test_orbits.py` (Kepler solver across e incl. near-parabolic and hyperbolic, element ↔ state round trips, known values: Earth's year 365.25 d, an ISS-like 92.97 min, the geostationary 42 164 km, the planets' periods; units; equal areas from the clock; n-body against Kepler, bounded leapfrog energy, conservation with two masses; no manim) and `tests/test_orbit.py` (params and errors, targets, Kepler II on a rendered scene's clock, `vidgen validate`, tiny renders 16:9 / 9:16); CONFIG section and targets row, guide chooser row and snippet (copied to `AGENTS.md`), gallery entry `orbit` in a new "Orbital mechanics" section, an `examples/gallery` scene
+- [~] Not yet (planned): ellipse geometry, equal-area sectors, velocity vectors, orbit actions (230); burns and transfers (231); rotating frame, Lagrange points (232); dates (233); lint (234); example, cookbook, guide topic (235)
+
+### Step 230 — Kepler's laws and orbital speed
+- [ ] Ellipse geometry (foci, a, b, e, periapsis / apoapsis), equal areas in equal times as shaded sectors, T² ∝ a³ (a linked `plot` on log axes), speed along the orbit (vis-viva) as velocity vectors and a readout; circular vs elliptical vs escape vs hyperbolic from one point (Newton's cannonball); actions timed to beats and words
+
+### Step 231 — Manoeuvres
+- [ ] Impulsive burns (Δv vectors), Hohmann transfer (Δv₁, Δv₂, transfer time, phase angle, synodic period / launch windows), bi-elliptic (optional), plane change, raising / lowering, phasing; gravity assists by patched conics (hyperbolic flyby in the planet's frame, turning angle from v∞ and periapsis, velocity addition in the Sun's frame); Δv budgets as `calculation` scenes; validation (a burn into the planet, a periapsis below the surface)
+
+### Step 232 — Many bodies
+- [ ] Three-body systems in the rotating frame, Lagrange points L1–L5 for a mass ratio (L4 / L5 stability), Trojan-like motion, mean-motion resonances (Io–Europa–Ganymede 1:2:4), a famous three-body solution (figure-eight), energy drift readouts (leapfrog vs RK), tides as a schematic
+
+### Step 233 — The Solar System on a date
+- [ ] Planets from JPL's approximate Keplerian elements and rates (1800–2050, source and validity stated), positions for any date in range, sizes and distances with honest scale handling (true scale, log radial scale, insets, "sizes not to scale"), orbital and synodic periods, conjunctions / oppositions; dwarf planets optional
+
+### Step 234 — Accuracy lint
+- [ ] Narration and labels against the model: periods vs semi-major axes (Kepler III with the right masses), speeds (vis-viva), Δv claims, transfer times, escape speeds, distances, scale claims, energy drift of a declared-conserved simulation, a periapsis inside a body; on the calc_numbers / plot_* machinery
+
+### Step 235 — Example, docs, gallery
+- [ ] Example "How to get to Mars" (Hohmann Earth → Mars with the Δv budget and ~259-day transfer, the ~44° phase angle, the ~26-month synodic period; optionally a gravity-assist aside), Kokoro narration, music bed low, 16:9 and 9:16; guide topic `orbits`; CONFIG; `docs/COOKBOOK-ORBITS.md`; the gallery section "Orbital mechanics" within budget (12.9 of 13 MB after Step 229: optimize or record a budget change); README; CHANGELOG
+
+### Step 236 — Review of Phase X
+- [ ] Critical review with fixes, including a physics-accuracy pass (independent calculations; constants and published elements), compatibility, phase tests and related suites, `tests/test_mcp.py` in full
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
@@ -1372,19 +1411,19 @@ errors, an accuracy lint, docs, a gallery section, an example and a review.
   Step 219
 - Effort: medium (DNA, chromosomes, meiosis, naming rules and charts already exist)
 
-### Planetary and orbital mechanics (suggested second: very visual, easy to keep exactly correct)
-- [ ] Real physics: two-body Kepler orbits from orbital elements; n-body integration with an
-  energy-conserving (symplectic) method
-- [ ] Kepler's laws shown live: ellipse with the Sun at a focus, equal areas in equal times,
-  period vs distance
-- [ ] Manoeuvres: Hohmann transfers with Δv budgets, gravity assists, Lagrange points,
-  resonances, tides
-- [ ] The Solar System from published orbital elements for a given date, with honest scale
+### Planetary and orbital mechanics (suggested second: very visual, easy to keep exactly correct) — moved into Phase X (Steps 229–236)
+- [→] Real physics: two-body Kepler orbits from orbital elements; n-body integration with an
+  energy-conserving (symplectic) method — Phase X, Step 229
+- [→] Kepler's laws shown live: ellipse with the Sun at a focus, equal areas in equal times,
+  period vs distance — Phase X, Step 230
+- [→] Manoeuvres: Hohmann transfers with Δv budgets, gravity assists, Lagrange points,
+  resonances, tides — Phase X, Steps 231 and 232
+- [→] The Solar System from published orbital elements for a given date, with honest scale
   handling (log scales, insets, "distances not to scale" labels) — the charting part (log and
   symlog axes, equal-aspect trajectories, energy against time, panels sharing an axis) moved into
-  Phase W (Steps 222–224); the orbits themselves stay here
-- [ ] Accuracy lint: an orbit that wouldn't close, energy drifting, a period inconsistent with
-  its semi-major axis, a manoeuvre with impossible Δv
+  Phase W (Steps 222–224); the orbits themselves: Phase X, Step 233
+- [→] Accuracy lint: an orbit that wouldn't close, energy drifting, a period inconsistent with
+  its semi-major axis, a manoeuvre with impossible Δv — Phase X, Step 234
 - Effort: medium
 
 ### Particle physics (suggested third: distinctive niche)

@@ -21192,3 +21192,71 @@ How to test
   −16.0 LUFS, true peak −1.9 dBTP); contact sheet `s228/contact_16x9.png`; stills
   `s228/proj/build/preview/storyboard/` and `s228/proj/build/preview_short/frames/`; `vidgen lint`
   16:9 and 9:16: 0 findings.
+
+## Step 229 — Plan and orbital model
+
+What was built (DESIGN §98): the Phase X plan (tasklist Steps 229–236, the "Planetary and orbital
+mechanics" ideas marked as moved; DESIGN §98.1 with how 230–235 plug into the model), the model
+package `vidgen.orbits` (no manim) and the scene type `orbit`.
+
+- `vidgen.orbits`: `kepler` (Kepler's equation: elliptic and hyperbolic by Newton, written without
+  cancellation near e = 1; parabolic Barker in closed form; true ↔ mean anomaly), `elements`
+  (`Elements` stored by p for every conic; from a / periapsis / apsides / a state vector; state
+  at any time; a, b, apsides, period, energy, h, v∞, time of flight, conics), `bodies` (GM and
+  radii from IAU 2015 B3, DE440, IAU WGCCRE; presets: the planets on JPL Table 1 J2000 elements,
+  the Moon, `iss`, `geo`, `halley`; sources in the docstring), `values` (values with units via
+  `quantities`; display units; speed-up text), `system` (hierarchies, the `Playback` clock,
+  `swept_area`), `nbody` (`simulate` on Phase W's `verlet` / `rk45` in scaled units, energy and
+  drift, Hermite interpolation).
+- Scene `orbit` (`scenes/orbit.py`, `scenes/orbit_parts.py`): central body + bodies (preset,
+  elements, or r / v; `around`), conics, motion through one updater on the scene clock at one
+  speed-up from the end of the first beat's entrance to the last frame, trails, equal-aspect
+  `plotcore` axes in AU / km or a scale bar, readout (time, speed-up, ΔE/E, "sizes not to
+  scale"), `follow`, `dynamics: nbody`; validation; targets `title`, `frame`, `central`,
+  `body:<name>`, `orbit:<name>`, `readout`.
+- A previous agent wrote most of the model, the scene and the tests before being interrupted;
+  this step reviewed them (physics values checked against Table 1 / DE440 / the IAU numbers;
+  storyboards in 16:9 dark and 9:16 light), bounded the model cache (32), and added the plan,
+  DESIGN, guide, gallery and handoff.
+
+Files touched
+- New: `src/vidgen/orbits/{__init__,kepler,elements,bodies,values,system,nbody}.py`,
+  `src/vidgen/scenes/{orbit,orbit_parts}.py`, `tests/test_orbits.py` (107), `tests/test_orbit.py`
+  (30 incl. renders), `docs/gallery/orbit.md` + `media/orbit-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py` (exports `orbits`), `src/vidgen/scenes/__init__.py`, the guide
+  (chooser row; an "orbital mechanics" snippet block) + `AGENTS.md`, `docs/CONFIG.md` (`orbit`
+  section and targets row), `docs/gallery/README.md` (new "Orbital mechanics" section),
+  `examples/gallery/video.yaml` (scene `orbits`), `tests/{test_actions_coverage,test_builtin_scenes,
+  test_translation,test_docs,test_extensions}.py`, `DESIGN.md` (layout, §98), `tasklist.md`,
+  `CHANGELOG.md`.
+
+Public interfaces (additive): `vidgen.api.orbits` (module); scene type `orbit`. No dependency.
+
+Decisions
+- Orbits stored by the semi-latus rectum p (a parabola has no a); μ = G(M + m) for each orbit.
+- Motion is driven by the scene clock through `Playback` (constant speed-up, no easing), so
+  Kepler II emerges; Step 230's actions will act on that clock.
+- Inclined orbits are drawn projected on the reference plane (the view from above), documented.
+- A guide snippet block of its own (`# orbital mechanics`) puts `orbit` in a gallery section
+  "Orbital mechanics" now; Step 235 adds the section note (example, cookbook). The gallery is at
+  12.9 MB of its 13 MB budget after this entry (295 kB): Step 235 must optimize or record a budget
+  change for its additions.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0; no shared code changed beyond the
+`api` export and the scene registration; `examples/gallery` lint: the new scene has no findings
+(the existing synthase / krebs / … findings are unchanged).
+
+Known gaps (planned in 230–235): no ellipse-geometry overlays, sectors, velocity vectors or orbit
+actions; no burns / transfers; no rotating frame; J2000 only (no dates); no orbit lint rules; a
+scene of only open orbits frames 3 × the periapsis, so bodies leave the view on a long span
+unless `extent` is set; in 16:9 a tall picture (a flyby) leaves the sides empty.
+
+How to test
+- `tests/test_orbits.py` (107, ~10 s), `tests/test_orbit.py` (30 incl. renders, ~70 s).
+- Related, all passing: `test_docs`, `test_guide`, `test_gallery` (not render), `test_translation`,
+  `test_actions_coverage`, `test_builtin_scenes` (not render + `-k orbit`), `test_extensions`,
+  `test_api`, `test_schema` + `test_registry` + `test_introspect` + `test_json_output`,
+  `test_lint` + `test_narration_rule`.
+- Stills: scratchpad `s229/proj` (inner planets, a comet, ISS + GEO, a flyby, the Moon followed,
+  n-body): `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16
+  light); `vidgen lint` 0 findings.

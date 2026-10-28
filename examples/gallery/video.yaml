@@ -343,6 +343,19 @@ scenes:
       - text: "That gives eight point oh four days."
         actions: [{compute: calc1, at: "@gives"}]
 
+  - id: orbits
+    type: orbit           # bodies on Kepler orbits, moving in correct timing at one speed-up; equal-aspect frame in AU or km
+    params:
+      title: "Equal areas in equal times"
+      central: sun
+      bodies:
+        - {preset: earth}
+        - {name: Comet, a: "1.5 AU", e: 0.7, argp: 180, nu: 180, trail: 0.15}
+      orbits: 1
+    beats:
+      - text: "Far from the Sun the comet crawls."
+      - text: "Near the Sun it sweeps round in a few weeks."
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:
