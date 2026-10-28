@@ -98,6 +98,12 @@ A whole orbital-mechanics explainer, why a rocket cannot fly straight to Mars, t
 | [The Hohmann transfer to Mars](mars_hohmann.md) | <a href="mars_hohmann.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/mars_hohmann-16x9.png"><img src="media/mars_hohmann-16x9.gif" height="180" alt="mars_hohmann at 16:9"></picture></a> <a href="mars_hohmann.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/mars_hohmann-9x16.png"><img src="media/mars_hohmann-9x16.gif" height="180" alt="mars_hohmann at 9:16"></picture></a> | a transfer between two planets: the phase angle at the launch window, two burns on words, the Δv and the time computed |
 | [Trojans in the rotating frame](jupiter_trojans.md) | <a href="jupiter_trojans.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/jupiter_trojans-16x9.png"><img src="media/jupiter_trojans-16x9.gif" height="180" alt="jupiter_trojans at 16:9"></picture></a> <a href="jupiter_trojans.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/jupiter_trojans-9x16.png"><img src="media/jupiter_trojans-9x16.gif" height="180" alt="jupiter_trojans at 9:16"></picture></a> | a three-body system in the frame turning with Jupiter: the five Lagrange points standing still, a Trojan's tadpole inside its zero-velocity curve |
 
+## Particle physics
+
+| type | preview | use it for |
+|---|---|---|
+| [`standard_model`](standard_model.md) | <a href="standard_model.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/standard_model-16x9.png"><img src="media/standard_model-16x9.gif" height="180" alt="standard_model at 16:9"></picture></a> <a href="standard_model.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/standard_model-9x16.png"><img src="media/standard_model-9x16.gif" height="180" alt="standard_model at 9:16"></picture></a> | the Standard Model's particles: quarks and leptons in three generations, the gauge bosons and the Higgs boson with their masses (PDG 2024), charges and spins; antiparticles; which bosons couple to which particles |
+
 ## Pictures and media
 
 | type | preview | use it for |

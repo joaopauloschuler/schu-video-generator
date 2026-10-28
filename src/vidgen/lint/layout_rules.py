@@ -42,6 +42,9 @@ _GLYPH_EM: dict[str, float] = {
     **dict.fromkeys("=+<>≤≥×÷~", _X_HEIGHT),  # operators sit low, like the lowercase letters
     **dict.fromkeys("₀₁₂₃₄₅₆₇₈₉⁰¹²³⁴⁵⁶⁷⁸⁹", _SCRIPT),  # sub- and superscript digits (w₁, x²)
     **dict.fromkeys("gpqy", _DESCENDER),
+    # Greek lowercase (Step 237: particle symbols, ν_μ, τ-neutrino): x-height, or with a descender
+    **dict.fromkeys("αεικνοπστυω", _X_HEIGHT),
+    **dict.fromkeys("γημρςφχψ", _DESCENDER),
     "j": 0.95,
     **dict.fromkeys(".,:;·•-–—−_'\"`‘’“”", _SMALL),
 }

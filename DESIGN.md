@@ -18229,3 +18229,201 @@ angle's lines and label; calculation scenes only where a substitution did not fi
 regenerated (13.6 MB of 15). Lint sweep (`s236/lint_all.py`: 337 scenes of the examples, gallery and
 s205–s236 projects): 0 findings; the s234 demo still finds its 16 planted mistakes; `vidgen lint` of
 the example (Kokoro audio) 0 in 16:9 and 9:16, and of s230–s233: 0.
+
+
+## 99. Particle physics (Phase Y, Steps 237–244)
+
+Particle-physics videos at university level (and for science YouTube): the Standard Model, Feynman
+diagrams in proper notation with conservation checked at every vertex, relativistic kinematics,
+detectors and event displays, resonances emerging from data. The phase **builds on Phase W and
+Phase X's patterns** and re-implements none of them: histograms, peak fits (Gaussian,
+Breit–Wigner, polynomial backgrounds, Poisson likelihood), live plots and the plot core are Phase
+W's (§97.3–§97.7); worked numbers with units are `calculation` scenes and `vidgen.quantities`
+(GeV, GeV/c, GeV/c², ħ and e from the SI 2019 constants, §97.9–§97.10); the accuracy lint extends
+`calc_*` / `plot_*` as Phase X's did (§97.11, §98.8); `from_scene` (§98.5) lets a calculation read
+a scene's computed values. Additive and opt-in: a new package, a new scene type, two new actions;
+existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q baseline 31/31
+after Step 237).
+
+**Physics honesty**: values from the Particle Data Group, PDG 2024 (S. Navas et al., *Review of
+Particle Physics*, Phys. Rev. D 110, 030001 (2024)), stated in the module and on the chart;
+schemes and approximations stated (quark masses MS-bar / direct; neutrino masses only bounded; the
+Δ(1232) Breit–Wigner values rounded; diagrams and detectors schematic and labelled so); computed
+rather than hard-coded (Q values, thresholds, Γ = ħ/τ, p*, decay lengths, significances); data in
+examples simulated and labelled "simulated data"; no real experiment's logo or exact geometry.
+
+### 99.1 The phase (plan)
+
+- **Step 237, plan and particle model** (this section): `vidgen.particle_physics` (no manim,
+  §99.2), the conservation checker (§99.3), the `standard_model` scene type with the actions
+  `antiparticles` and `couplings` (§99.4).
+- **Step 238, Feynman diagrams**: a `feynman` scene type (name checked: no type, action or target
+  is called `feynman`). The diagram is data in a model module of the package (`feynman.py`: lines
+  between vertices, each line a particle key from §99.2 with a direction — fermion arrows,
+  antifermions against time —, external legs before / after); the layout of tree diagrams (s-, t-,
+  u-channel, decays) and one-loop diagrams (a triangle for H → γγ / gg → H) is computed there; the
+  scene draws the notation (fermion lines with arrows, wavy γ / W / Z with labels, curly g, dashed
+  H, vertex dots, time left → right by default, `time: up` configurable). **Vertex checks reuse
+  §99.3**: each vertex is a little process (the particles into it → the particles out of it) checked
+  with `check` for charge, baryon and lepton numbers, plus the allowed vertex types of the Standard
+  Model (from `chart.COUPLINGS`: which boson meets which fermion; flavour change only at a W vertex;
+  colour flow at q q g and g g g). Presets: e⁺e⁻ → μ⁺μ⁻, Compton, Møller, Bhabha, β⁻ decay at quark
+  level, μ⁻ decay, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → Wb. Animation: lines drawn in time
+  order, a particle travelling along them, labels.
+- **Step 239, relativistic kinematics**: a model module `kinematics.py` (four-vectors (E, p) in
+  MeV with c = 1, conversions shown with units through `vidgen.quantities`; invariant mass;
+  two-body decay momentum p* from the masses (the Källén function); boosts; thresholds — the
+  checker's `Threshold` (§99.3) already gives √s and the fixed-target energy —; time dilation and
+  decay length βγcτ from §99.2's lifetimes). Pictures: a momentum-vector diagram view (a new scene
+  type or a `plot` model; decided in 239), and `calculation` scenes for the worked numbers (units
+  GeV, GeV/c, GeV/c²; `from_scene` reading the diagram's values).
+- **Step 240, detectors and event displays**: a `detector` scene type: a schematic cylindrical
+  detector in the transverse (x–y) and longitudinal (r–z) views (pixel / strip tracker, solenoid,
+  ECAL, HCAL, muon chambers; sizes generic, labelled schematic), particles from §99.2 leaving their
+  signatures (e: track + ECAL; γ: ECAL, no track; μ: track through everything + muon chambers;
+  charged hadron: track + HCAL; neutral hadron: HCAL; ν: missing p_T), tracks as helices with the
+  right sign and radius (p_T [GeV/c] = 0.3 B [T] R [m]), jets as cones, seeded events; actions to
+  build the event layer by layer, highlight a particle, show missing p_T.
+- **Step 241, collisions, decays and data**: invariant-mass histograms filling event by event are
+  Phase W's live `plot` with a new built-in model for sampling a resonance (Breit–Wigner with the
+  §99.2 mass and width, or Gaussian resolution) on a falling background (seeded, labelled
+  simulated); fits and a local significance (Asimov / likelihood ratio on Phase W's Poisson
+  likelihood, clearly labelled); decay chains and exponential decay times from §99.2's lifetimes;
+  branching ratios from PDG as pie / bar (values sourced in the module).
+- **Step 242, accuracy lint**: rules on the narration, labels and calculations against the model:
+  masses, charges, spins, lifetimes, branching ratios (§99.2), "allowed" / "forbidden" claims
+  against `check` (§99.3), the boson named for an interaction (`chart.COUPLINGS`), kinematics
+  numbers (239), detector signature claims (240), significance claims (241); on the
+  `calc_numbers` / `plot_*` machinery, with `target_text` (§99.4) for on-screen names. The
+  checker's explanations are the lint's messages.
+- **Step 243, example, docs, gallery**: "How the Higgs boson was found" (the chart, gg → H and
+  H → γγ / H → ZZ* → 4ℓ diagrams, the two-photon signature, the diphoton invariant mass in a
+  `calculation`, a simulated spectrum with a bump near 125 GeV and its fit, the meaning of 5σ),
+  Kokoro, music bed low, 16:9 and 9:16; a guide topic (**name to settle**: `particles` collides in
+  spirit with the cartoon `particles` action and `vidgen/particles.py`; `particle-physics` is
+  clearer); CONFIG; `docs/COOKBOOK-PARTICLES.md`; the gallery section "Particle physics" (started
+  in Step 237 with `standard_model`; the gallery is 13.9 MB of 15 after it: room for about three
+  entries); README; CHANGELOG.
+- **Step 244, review**: physics against independent sources (the PDG values marked `# check` in
+  `data.py`, conservation logic, vertex rules, kinematics), compatibility, render performance, the
+  phase's and related suites, `tests/test_mcp.py`.
+
+**Names** (checked against the registry and the code): the package `vidgen.particle_physics`
+(`vidgen.particles` is the cartoon particle effects); scene types `standard_model` (237),
+`feynman` (238), `detector` (240); actions `antiparticles`, `couplings` (237); no collisions.
+
+### 99.2 The model: `vidgen.particle_physics` (Step 237)
+
+A package without manim (a fresh-interpreter test), exported by `vidgen.api` as the module
+`particle_physics`. Energies and masses in MeV (c = 1), times in seconds.
+
+| module | contents |
+|---|---|
+| `data` | `Particle` (frozen): `key` (ASCII: `e-`, `anti-nu_e`, `pi0`, `K0_S`, `J/psi`), `name`, `symbol` (Unicode: `ν̄ₑ`, `π⁰`), `markup` (Pango), `tex`, `family` (quark, lepton, gauge boson, scalar boson, meson, baryon), `mass_mev` (0 for γ, g and the neutrinos, whose `mass_limit_mev` is 0.8 eV), `charge`, `spin`, `baryon` (Fractions), `lepton` (L_e, L_μ, L_τ), `flavour_numbers` (S, C, B′, T in the PDG sign convention: the quark's charge sign), `parity`, `c_parity`, `g_parity`, `colour` (1, 3, 3̄, 8), `lifetime_s` or `width_mev` (the one PDG quotes; `lifetime` / `width` compute the other with ħ = 6.582 × 10⁻²² MeV s from the exact SI h and e), `stable`, `mass_scheme`, `content` / `components` (quark keys; several for a mixture: π⁰, η, K⁰_S, K⁰_L, whose undefined numbers are `None` in `flavour`), `generation`, `note`, `aliases`; text helpers `mass_text`, `charge_text`, `lifetime_text`, `width_text` (`energy_text`, `time_text`). `PARTICLES`: the Standard Model particles (6 quarks, 6 leptons and their antiparticles, γ, g, W⁺, W⁻, Z, H: 30 keys) and 27 hadrons with their antiparticles (47 keys; 77 in all). Hadrons get their baryon number and flavour from their quarks; their charge is given and checked (`particle_problems`). Antiparticles by conjugation (`_anti`): charge, baryon, lepton, flavour reversed, colour conjugated, a fermion's parity reversed. Unsure values are marked `# check` in the source |
+| `names` | `particle(text)`: the key, an alias, Unicode as printed (combining macron / overline = anti; superscript charges; Greek → ASCII), ASCII anti markers (`anti-`, `anti`, `bar`, `~`, `nubar_e`), unique case-insensitive matches; **a bar keeps the antiparticle's own charge, as PDG writes it** (`Σ̄⁻` is the antiparticle of Σ⁺); `VidgenError` with did-you-mean. `antiparticle`, `find_key`, `normalize`, `suggestions` |
+| `process` | `parse_process("n -> p e- anti-nu_e")` → `Process(initial, final)` of `Leg(particle, off_shell)`: one arrow (`->`, `→`, `=>`, `⟶`), spaces, `+` and commas between, runs such as `e+e-` split greedily; `Z*` / `W*` off-shell (bosons and fermions only; `K*` refused: excited hadrons are not in the table); `Process.text("unicode" | "ascii" | "tex")` |
+| `conservation` | `check(process)` → `Verdict` (§99.3); `CONSERVATION_TABLE` (what strong / EM / weak conserve), `INTERACTIONS` (one line each) |
+| `chart` | `Cell` (the particle shown, target label and other names, group, fermion row, generation, grid position wide / tall, label and Pango symbol for particle and antiparticle, `bar`); `CELLS` (17); `GRID` (wide 5 × 4, tall 3 × 6); `COUPLINGS` (by boson: the fermions and bosons it couples to and why, tree level: g → quarks + g; γ → quarks, charged leptons + W; Z → all fermions + W, H; W → all fermions (flavour-changing) + γ, Z, W, H; H → quarks, charged leptons + W, Z, H); `SHORT_LABELS` |
+
+**Values** (PDG 2024 central values; masses in MeV unless GeV is given): u 2.16, d 4.70, s 93.5
+(MS-bar, μ = 2 GeV), c 1.273 GeV, b 4.183 GeV (MS-bar m(m)), t 172.57 GeV (direct, Γ 1.42 GeV);
+e 0.51099895, μ 105.6583755 (τ 2.1969811 µs), τ 1776.93 (290.3 fs); W 80.3692 GeV (Γ 2.085 GeV),
+Z 91.1880 GeV (Γ 2.4955 GeV), H 125.20 GeV (Γ 4.1 MeV, the SM prediction); p 938.27209, n
+939.56542 (878.4 s); π± 139.57039 (26.033 ns), π⁰ 134.9768 (8.43 × 10⁻¹⁷ s), η 547.862 (1.31 keV),
+K± 493.677 (12.38 ns), K⁰ 497.611, K⁰_S 89.54 ps, K⁰_L 51.16 ns, φ 1019.461 (4.249 MeV), J/ψ 3096.900
+(92.6 keV), Υ(1S) 9460.40 (54.02 keV), D± 1869.66 (1.033 ps), D⁰ 1864.84 (410.3 fs), B± 5279.41
+(1.638 ps), B⁰ 5279.72 (1.517 ps), Λ 1115.683 (263.2 ps), Σ⁺ 1189.37 (80.18 ps), Σ⁰ 1192.642
+(7.4 × 10⁻²⁰ s), Σ⁻ 1197.449 (147.9 ps), Ξ⁰ 1314.86 (290 ps), Ξ⁻ 1321.71 (163.9 ps), Ω⁻ 1672.45
+(82.1 ps), Δ(1232) 1232 (117 MeV). **For the owner to check against the 2024 tables** (written from
+memory of the PDG summary tables; the 2022 value differs or the last digit is uncertain): the
+quark masses u, d, s, c, b, t and Γ_t; m_τ; m_W; m_Z and Γ_Z; m_H; τ(π⁰); τ(D⁰); m(B±), m(B⁰);
+τ(Λ) (2.632 × 10⁻¹⁰ s is the long-standing average; a 2024 update to about 2.62 is possible).
+
+### 99.3 The conservation checker (Step 237)
+
+`check(process)` → `Verdict(process, allowed, interaction, checks, violations, notes, threshold,
+energy, energy_ok)`; `summary()` ("allowed: weak interaction", "forbidden: baryon number not
+conserved: B = +1 → 0"), `explain()` (every `Check` with ✓ / ✗ / Δ — Δ: a flavour the weak
+interaction may change — and each particle's share: "L_e: n 0 → p 0, e⁻ +1, ν̄ₑ −1 (total 0)", the
+energy line, notes).
+
+1. **Every interaction**: Q, B, L_e / L_μ / L_τ (checked when a lepton of that family takes part;
+   a note says that only neutrino oscillations change family numbers); angular momentum as far as
+   counting can tell (the number of fermions changes by an even number); energy — a decay needs the
+   parent heavier than the on-shell products ("m(H) = 125.2 GeV is not more than the products' 182.4
+   GeV", with the hint "write Z*" when one W / Z off-shell would do; a massless parent: "pair
+   production needs a nucleus"; p → n e⁺ νₑ: "in a nucleus the binding energy can make up the
+   difference"); a reaction gets `Threshold` (masses before and after, Q, the least √s, and for two
+   particles the fixed-target beam energy E = (M² − m_a² − m_b²) / 2m_b and its kinetic part: p p →
+   p p p p̄ needs 6 m_p = 5.63 GeV); the **Landau–Yang theorem** (a spin-1 particle never decays to
+   γγ: Z, J/ψ, φ, Υ).
+2. **Flavour**: S, C, B′, T summed per side; a mixture (K⁰_S, K⁰_L) is read as the component that
+   changes flavour least, said in a note ("read here as K⁰ (S = +1)").
+3. **The interaction**: a Higgs boson → `higgs` (flavour must be kept: no H → b s̄ at tree level; a
+   note for H with only massless partners: "a loop of heavy particles"); a W, Z or neutrino, or any
+   flavour change → `weak`, each flavour changing by at most one unit ("strangeness changes by 2 …
+   it would take two weak steps", Ξ⁻ → n π⁻); otherwise photons or charged leptons →
+   `electromagnetic`, else `strong`. Strong and electromagnetic processes conserve **C-parity**
+   (checked when every particle has one: π⁰ → γγγ refused) and the strong one **G-parity** (all
+   particles with G: η → πππ is then electromagnetic with the note "not strong … slow").
+4. Quark-level processes get a note: current-quark masses depend on the scheme and quarks are
+   bound, so the energy check is indicative; colour is not checked (238 does colour flow).
+
+Not checked: parity and orbital angular momentum (they need partial waves), CKM suppression,
+FCNC loops (a K⁺ → π⁺ e⁺ e⁻ passes as weak), isospin beyond G.
+
+### 99.4 The `standard_model` scene type (Step 237)
+
+`scenes/standard_model.py` (drawing, targets), `scenes/standard_model_actions.py` (actions).
+
+- **Arrangement**: `layout: auto` = `wide` in 16:9 (the classic grid: generations I–III, rows
+  up-type quarks, down-type quarks, charged leptons, neutrinos; a column of gauge bosons g, γ, Z, W;
+  the Higgs boson; the source note in the free cells under H; the key cell at the bottom right) and
+  `tall` in 9:16 (the fermion grid, the bosons in two rows under it: g γ Z / W H key, the source
+  line as a caption). Rotated group labels on the left (quarks, leptons; tall: bosons), the
+  generation numbers above; wide: "gauge bosons" and "scalar boson" over their columns. The grid
+  fills the area under the title: cell width from the width, height from the height, width at most
+  1.9 × height, height at most the width.
+- **Cells**: a rounded outline in the group colour (`quark_color` default the palette's third
+  colour, `lepton_color` tertiary, `gauge_color` accent, `higgs_color` secondary — the theme's
+  `highlight` stays free for actions), fill 0.1; texts at the readable size (×1.08 margin for the
+  lint's cap-height estimate), up to 25 % larger when wide cells have room. **Row mode** when every
+  cell's mass and charge fit on one line (16:9): mass top left, charge top right, spin right of the
+  middle, the symbol in the middle, the name at the bottom; **column mode** (the classic chart, 9:16)
+  when they do not and the height holds three lines over the name: mass, charge, spin down the left,
+  the symbol beside them. Lines share baselines. If neither fits, row mode with the top line scaled
+  down and a warning. Names that do not fit take shorter forms for all cells alike (`electron
+  neutrino` → `e-neutrino` → `neutrino`, separately for the antiparticle names). Antiparticle bars
+  are drawn as lines over the first glyph (a combining macron sits badly on ν); every symbol carries
+  its bar (invisible when none), so the flip morphs letters into letters and bar into bar (a
+  `Transform` between different structures left a copy that the layout dump read as text).
+- **Reveal**: `groups` (default): frame and quarks, leptons, gauge bosons, Higgs (+ key, source,
+  caption) as four steps over the beats; `all`: one step.
+- **Targets**: `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<target>`
+  and `particle:<name>` (u / up, e / electron, nu_e / electron_neutrino, g / gluon, photon / gamma,
+  Z / Z_boson, W / W_boson, H / higgs / Higgs), `generation:1`–`3` (with the numeral),
+  `group:quarks | leptons | fermions | gauge_bosons | scalar_bosons | bosons` (with their labels),
+  `row:up_type | down_type | charged_leptons | neutrinos`; `target_text` gives the on-screen names
+  (the antiparticle's when `antiparticles: true`).
+- **Actions**: `antiparticles` (no target: all fermions; or targets; reversible): each cell's
+  charge, symbol and name `Transform` into the antiparticle look built beside the particle look;
+  the group label becomes antiquarks / antileptons once all its cells are anti. `couplings`
+  (target: a boson cell; `color`, `dim`, `note`; reversible, `until_next_beat`): an outline around
+  the fermion block the boson couples to (contiguous rows by construction), a solid ring on the
+  boson, dashed rings on the bosons it meets, the rest dimmed to 0.45 (`dim_to` of the built-in
+  actions; restored by `Repaint`), the reason in words in the note area (wide: under H; tall: in
+  place of the source line). Both check the scene type; `couplings` checks that its targets are
+  boson cells.
+
+**Shared code** (Step 237): `lint/layout_rules._GLYPH_EM` knows Greek lowercase heights (x-height
+α ε ι κ ν ο π σ τ υ ω; descenders γ η μ ρ ς φ χ ψ): the cap-height estimate of `τ-neutrino` or a
+`ν_μ` symbol was 10–15 % low (texts without Greek letters are measured as before; frames unchanged).
+
+**Public (additive)**: `vidgen.api.particle_physics` (the module); the scene type
+`standard_model`; the actions `antiparticles`, `couplings`. No dependency, no config key.
+
+**Known gaps after Step 237**: the chart's labels and names are English only (not translatable;
+`title` and `caption` are); `max_words` warns on a full chart (about 50 words: `show:` fewer
+fields or `key: false`); cells dimmed by `couplings` can get `contrast` warnings for their large
+symbols (the backdrop sampler counts a dimmed glyph's own pixels); the neutrino-mass display uses
+one limit for all three flavours; no lint rules (242).

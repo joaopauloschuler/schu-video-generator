@@ -21829,3 +21829,98 @@ How to test
 - Video: scratchpad `s236/proj/output/mars_transfer.mp4` (1920×1080, 30 fps, 223.3 s video and audio,
   −16.0 LUFS, true peak −1.9 dBTP, LRA 3.3 LU); contact sheet `s236/contact_16x9.png`; 9:16 stills
   `s236/short_sheet.png` and `s236/proj/build/preview_short/`.
+
+
+## Step 237 — Plan and particle model
+
+What was built (DESIGN §99): the Phase Y plan (tasklist Steps 237–244, the "Particle physics"
+ideas marked as moved; DESIGN §99.1 with how 238–243 plug into the model and the reuse of Phases W
+and X), the model package `vidgen.particle_physics` (no manim), the conservation checker and the
+scene type `standard_model` with the actions `antiparticles` and `couplings`.
+
+- `vidgen.particle_physics`: `data` (`Particle`; the Standard Model's 30 particle / antiparticle
+  keys and 27 hadrons with antiparticles, 77 keys; PDG 2024 masses, widths or mean lives — the
+  other computed with ħ —, charge, spin, parity, C and G parity, colour, B, L_e / L_μ / L_τ,
+  S / C / B′ / T, quark content; hadron charge and baryon number checked against the quarks by
+  `particle_problems`; the source and the quark-mass schemes in the docstring; uncertain values
+  marked `# check`), `names` (ASCII and Unicode spellings, anti markers, PDG's barred-charge
+  convention, did-you-mean), `process` (`parse_process`, off-shell `Z*`), `conservation` (`check`
+  → `Verdict` with `summary` / `explain`; thresholds; interaction; C / G parity; Landau–Yang),
+  `chart` (cells, grid positions, couplings by boson).
+- Scene `standard_model` (`scenes/standard_model.py`, `scenes/standard_model_actions.py`): the
+  chart in colour groups with mass / charge / spin / name per cell, a key cell, the PDG source line;
+  wide grid in 16:9, bosons in two rows under the fermions in 9:16; row mode (mass and charge on one
+  line) or the classic column, chosen for all cells by what fits at the readable size; targets for
+  every particle (`particle:u` / `particle:up`...), generation, group and row; `reveal: groups |
+  all`; `antiparticles` (cells morph: charge, barred symbol drawn as a line, name; group labels
+  follow) and `couplings` (outline, rings, dimming, the reason in words; undone at the next beat).
+
+Files touched
+- New: `src/vidgen/particle_physics/{__init__,data,names,process,conservation,chart}.py`,
+  `src/vidgen/scenes/{standard_model,standard_model_actions}.py`, `tests/test_particle_physics.py`
+  (92), `tests/test_standard_model.py` (9 incl. 2 renders), `docs/gallery/standard_model.md` +
+  `media/standard_model-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py` (exports `particle_physics`), `src/vidgen/scenes/__init__.py`,
+  `src/vidgen/lint/layout_rules.py` (Greek lowercase glyph heights for the cap-height estimate),
+  the guide (chooser row, a `# particle physics` snippet block, two action rows) + `AGENTS.md`,
+  `docs/CONFIG.md` (`standard_model` section and targets row), `docs/gallery/README.md` (new
+  "Particle physics" section, generated), `examples/gallery/video.yaml` (scene `particles`),
+  `tests/{test_actions_coverage,test_builtin_scenes,test_docs,test_extensions,test_translation}.py`,
+  `DESIGN.md` (§99), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): `vidgen.api.particle_physics` (module); scene type `standard_model`;
+actions `antiparticles`, `couplings`. No dependency, no config key.
+
+Decisions
+- The package is `particle_physics`, not `particles` (`vidgen/particles.py` is the cartoon effect).
+  Step 243's guide topic name should avoid `particles` for the same reason (noted in §99.1).
+- Masses in MeV with c = 1; charges and baryon numbers as Fractions; the PDG flavour sign
+  convention; mixtures (π⁰, η, K⁰_S, K⁰_L) as several quark contents, the checker reading a K⁰_S as
+  whichever of K⁰ / K̄⁰ changes flavour least (said in a note).
+- `check` forbids on absolute laws (Q, B, family L, fermion count, energy for decays, Landau–Yang,
+  C-parity in strong / EM), on |ΔS| > 1 (first-order weak), and on flavour change at a Higgs
+  vertex; a G-parity violation only moves a hadronic decay from strong to electromagnetic with a
+  note ("slow"). Not checked: parity, orbital angular momentum, CKM suppression, FCNC, colour.
+- Chart colours: quarks the palette's third colour, leptons `tertiary`, gauge bosons `accent`,
+  Higgs `secondary` — `highlight` stays free for the actions.
+- Antiparticle bars are drawn as lines (the combining macron sits off-centre on ν and read like a
+  minus); every symbol carries an (invisible) bar so the flip morphs like into like.
+- Lint glyph table: Greek lowercase added (shared code; texts without Greek are measured as
+  before, frames unchanged).
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check237`).
+Existing scenes untouched; the lint change only affects texts with Greek lowercase letters.
+Gallery 13.9 MB of 15 (the entry is within the 0.36 MB share).
+
+Values for the owner to check (DESIGN §99.2, `# check` in `data.py`): written from memory of the
+PDG summary tables; where PDG 2022 and 2024 differ the 2024 value was used as I remember it: quark
+masses (u 2.16, d 4.70, s 93.5 MeV; c 1.273, b 4.183 GeV; t 172.57 GeV, Γ_t 1.42 GeV); m_τ
+1776.93 MeV; m_W 80.3692 GeV; m_Z 91.1880 GeV, Γ_Z 2.4955 GeV; m_H 125.20 GeV; τ(π⁰) 8.43 ×
+10⁻¹⁷ s; τ(D⁰) 410.3 fs; m(B±) 5279.41, m(B⁰) 5279.72 MeV; τ(Λ) 2.632 × 10⁻¹⁰ s (possibly
+updated to about 2.62 in 2024). The Higgs width is the SM prediction (4.1 MeV), not the measured
+value; the neutrino limit 0.8 eV (KATRIN 2022) is shown for all three flavours.
+
+Known gaps (planned in 238–243 or noted): no Feynman diagrams, kinematics, detectors, data or lint
+yet; chart labels and particle names are English only (title and caption translate); a full chart
+trips `max_words` (about 50 words); cells dimmed by `couplings` can trip `contrast` (the backdrop
+sampler counts a dimmed glyph's own pixels); `test_builtin_scenes.py::test_builtins_use_only_the_public_api`
+fails on `scenes/orbit_text.py` (`from vidgen import plot_draw`), unchanged since Step 236 — not
+touched here.
+
+Render performance: the 12.7 s chart scene renders in about 12 s at 1280×720 (preview, 10 fps);
+the couplings scene (four actions) in about 21 s.
+
+How to test
+- `tests/test_particle_physics.py` (92, < 1 s), `tests/test_standard_model.py` (9 incl. renders,
+  ~18 s).
+- Related, all passing except the pre-existing orbit_text import check: `test_docs` +
+  `test_extensions` + `test_translation` + `test_actions_coverage` not render (197);
+  `test_guide` + `test_gallery` not render (102); `test_builtin_scenes -k "standard_model or not
+  render"` (161 of 162); `test_actions_coverage -k standard_model` render (3); `test_api` +
+  `test_schema` + `test_registry` + `test_introspect` + `test_json_output` + `test_narration_rule`
+  not render (150); `test_lint` not render (22); `test_overlays` not render (16); the gallery lint
+  checks of `test_calc_lint`, `test_genetics_lint`, `test_orbit_lint` (3).
+- Stills: scratchpad `s237/proj` (three scenes: the chart by groups, antiparticles, couplings):
+  `build/preview/frames/` and `build/preview/storyboard/` (16:9 dark), `build/preview_light/`
+  (16:9 light), `build/preview_vertical/` (9:16 dark), `build/preview_vlight/` (9:16 light);
+  `vidgen lint`: 0 errors; warnings: `max_words` (dense chart) and `contrast` on dimmed symbols.

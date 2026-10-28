@@ -6159,6 +6159,91 @@ distances compressed and labelled so) and the planets' sizes side by side.
 | `inset` | bool \| length | — | the inner Solar System to scale in a box |
 | `sizes` | bool \| `{bodies, sun}` | — | radii to scale side by side (a picture of its own) |
 
+### `standard_model`
+
+**The Standard Model chart** (Phase Y): the six quarks and six leptons in three generations, the
+gauge bosons (g, γ, Z, W) and the Higgs boson, each cell with its mass, charge and spin and its
+name, in colour groups (quarks, leptons, gauge bosons, scalar boson). Values: **PDG 2024**
+(Review of Particle Physics) from `vidgen.particle_physics`; quark masses are MS-bar (u, d, s at
+2 GeV; c, b at their own mass) and the top's from direct measurements; the neutrinos show the
+direct limit `< 0.8 eV` (KATRIN); the source line says so on the chart (`source: false` drops it).
+In 16:9 the classic grid (bosons in columns on the right, the source note under the Higgs boson);
+in 9:16 the fermions in three columns and the bosons in two rows under them, each cell in the
+classic arrangement (mass, charge and spin down the left, the symbol beside them). A key cell names
+the positions.
+
+```yaml
+- id: chart
+  type: standard_model
+  params:
+    title: "The Standard Model of particle physics"
+    reveal: groups            # quarks, leptons, gauge bosons, Higgs over the beats (all: everything in beat 1)
+  beats:
+    - text: "Six quarks, in three generations."
+    - text: "Six leptons: the electron, the muon, the tau and three neutrinos."
+      actions: [{highlight: "row:neutrinos", style: box, at: "@neutrinos"}]
+    - text: "The gauge bosons carry the forces."
+    - text: "And the Higgs boson."
+- id: antimatter
+  type: standard_model
+  params: {reveal: all}
+  beats:
+    - text: "Every quark and lepton has an antiparticle."
+      actions: [{action: antiparticles, at: "@antiparticle"}]   # or a target: antiparticles: "group:leptons"
+    - text: "The photon couples to electric charge: never to neutrinos."
+      actions: [{couplings: "particle:photon"}]                 # undone when the next beat starts
+```
+
+**Targets**: `title`, `chart`, `header` (the generation numbers), `labels` (the group names),
+`key`, `source`, `caption`; every particle as `particle:<name>` — the symbol's ASCII name or the
+particle's name: `particle:u` / `particle:up`, `particle:e` / `particle:electron`,
+`particle:nu_e` / `particle:electron_neutrino`, `particle:g` / `particle:gluon`,
+`particle:photon` / `particle:gamma`, `particle:Z`, `particle:W`, `particle:H` / `particle:higgs`;
+`generation:1` … `generation:3` (a column with its number); `group:quarks`, `group:leptons`,
+`group:fermions`, `group:gauge_bosons`, `group:scalar_bosons`, `group:bosons`; `row:up_type`,
+`row:down_type`, `row:charged_leptons`, `row:neutrinos`. `highlight` and `dim` work on all of
+them.
+
+**Actions**: `antiparticles` turns quark and lepton cells into their antiparticles (all of them
+with `- action: antiparticles`, or a target such as `group:quarks` or `particle:e`): the charge
+reverses, the symbol takes its bar (ū, ν̄ₑ) or its sign (e⁺), the name changes (positron,
+anti-up); mass and spin stay; the bosons are their own antiparticles (W⁺ and W⁻ share the W
+cell); the group names become antiquarks / antileptons; `until:` turns them back. `couplings:
+"particle:<boson>"` shows which particles a boson couples to: an outline (in `color`, default
+`highlight`) around the quarks and leptons it acts on, a solid ring on the boson and dashed rings
+on the bosons it meets, the rest dimmed (`dim: false` keeps them), and the reason in words (`note:
+false` leaves it out): the gluon couples to colour (the quarks and itself), the photon to electric
+charge (quarks, charged leptons, W), the Z and the W to every quark and lepton (the W changing
+flavour), the Higgs boson to mass (quarks, charged leptons, W, Z and itself; neutrinos are
+massless in the Standard Model). It is undone when the next beat starts (or at `until:`).
+
+Lint: a full chart has about 50 words on screen, so `max_words` warns; `show: [mass]` or `key:
+false` makes it lighter. Cells dimmed by `couplings` may get a `contrast` warning for their large
+symbols (the lint samples the dimmed glyph as its own backdrop).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `title` | text | `""` | title above the chart |
+| `caption` | text | `""` | note under the chart |
+| `source` | bool | `true` | the values' source line (PDG 2024, the quark-mass scheme) |
+| `show` | list of `mass`, `charge`, `spin`, `name` | all four | what each cell shows besides the symbol |
+| `antiparticles` | bool | `false` | start with the quarks and leptons as their antiparticles |
+| `reveal` | `groups` \| `all` | `groups` | quarks, leptons, gauge bosons, Higgs one after another over the beats, or all in beat 1 |
+| `layout` | `auto` \| `wide` \| `tall` | `auto` | the classic grid, or the bosons in rows under the fermions; `auto`: by the frame |
+| `key` | bool | `true` | a key cell naming each position (mass, charge, spin, symbol, name) |
+| `quark_color` | colour | the theme's third palette colour | the quarks' colour |
+| `lepton_color` | colour | `tertiary` | the leptons' colour |
+| `gauge_color` | colour | `accent` | the gauge bosons' colour |
+| `higgs_color` | colour | `secondary` | the Higgs boson's colour |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | title and caption style |
+
+The model behind it is `vidgen.api.particle_physics` (no manim): the particles and common hadrons
+with PDG 2024 masses, widths or mean lives, quantum numbers and quark content; names in ASCII or
+Unicode (`"pi+"`, `"π⁺"`, `"anti-nu_e"`, `"ν̄ₑ"`, `"Σ̄⁻"`); and `check("n -> p e- anti-nu_e")`,
+which explains whether a reaction or decay can happen (charge, baryon number, lepton family
+numbers, angular momentum, energy and thresholds; flavour, C- and G-parity for the strong and
+electromagnetic interactions) and through which interaction.
+
 ### `function_plot`
 
 Maths axes with functions f(x): curves, dots that travel along a curve with a live value label
@@ -11833,6 +11918,7 @@ a title card, a `transform` of a bar).
 | `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
 | `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `lagrange`, `lagrange:<L>`, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`, `pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`, `event`, `inset`, `rings`, `readout` | reveal, highlight, sweep, launch, burn, corotate, inertial, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); a three-body pair's `lagrange` (`lagrange:L4` one point), `zero_velocity` curve and `rotation` badge; `barycentre`; a resonance's `conjunctions`; a close-up's `pointer` to the central body; the tidal schematic's `pull`, `mean`, `tidal`, `bulges`, `face`; an event's alignment `event`, the `inset` box, the log view's `rings`; the sizes picture's `body:<name>` discs and `central` (the Sun's edge); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
+| `standard_model` | `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<name>`, `generation:<N>`, `group:<group>`, `row:<row>` | reveal, highlight, dim, antiparticles, couplings, callout | `particle:e` (or `particle:electron`) one cell; `generation:2` a column with its number; `group:quarks` the quark cells and their label; `row:neutrinos` a row; `antiparticles` turns cells into their antiparticles, `couplings: particle:photon` outlines what a boson couples to |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |

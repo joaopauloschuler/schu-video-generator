@@ -333,6 +333,7 @@ project's own scene types, in its theme).
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
 | planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist; many bodies: Lagrange points and Trojans in the rotating frame, the figure-eight, binary stars, the Io–Europa–Ganymede resonance, tides (a schematic); the Solar System on a date (1800–2050), the next opposition or conjunction, all planets on a log scale, an inset of the inner planets, planet sizes to scale | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley, io; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity; near: L4), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side), `system` (sun_jupiter, earth_moon, figure_eight), `view` (rotating), `lagrange`, `resonance`, `origin` (barycentre), `tides`, `date`, `event` (opposition, of), `radial` (log), `inset`, `sizes`, `panel` (compact, full, none, rows); the actions sweep, launch, burn, flyby, pause, coast, corotate, inertial |
+| the Standard Model's particles: quarks and leptons in three generations, the gauge bosons and the Higgs boson with their masses (PDG 2024), charges and spins; antiparticles; which bosons couple to which particles | `standard_model` | `title`, `reveal` (groups, all), `show` (mass, charge, spin, name), `antiparticles`, `layout` (wide, tall), `key`, `source`; targets particle:<name>, generation:<N>, group:<quarks...>, row:<...>; the actions antiparticles, couplings |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1259,6 +1260,38 @@ drifting (`orbit_conserved`) and a periapsis in the atmosphere (`orbit_crash`). 
 naming a body is checked against the orbit scenes too. Write numbers as a viewer hears them, with
 "about" when rounded.
 
+The particles of the Standard Model (values from PDG 2024; the model `vidgen.api.particle_physics`
+also checks reactions and decays: `particle_physics.check("n -> p e- anti-nu_e").explain()`):
+
+```yaml
+# particle physics
+- id: standard_model
+  type: standard_model   # quarks and leptons in three generations, gauge bosons, Higgs; mass, charge, spin per cell
+  params:
+    title: "The Standard Model of particle physics"
+    reveal: groups       # quarks, leptons, gauge bosons, Higgs over the beats (all: the whole chart in beat 1)
+  beats:
+    - text: "Six quarks, in three generations."
+    - text: "Six leptons: the electron, the muon, the tau and three neutrinos."
+      actions: [{highlight: "row:neutrinos", style: box, at: "@neutrinos"}]
+    - text: "The gauge bosons carry the forces."
+    - text: "And the Higgs boson, found in twenty twelve."
+- id: antimatter
+  type: standard_model
+  params: {reveal: all}
+  beats:
+    - text: "Every quark and lepton has an antiparticle, with the opposite charge."
+      actions: [{action: antiparticles, at: "@antiparticle"}]   # or a target: "group:leptons", "particle:e"
+    - text: "The photon couples to electric charge, so never to a neutrino."
+      actions: [{couplings: "particle:photon"}]                 # also particle:g, Z, W, H; undone at the next beat
+```
+
+Targets of the chart: `particle:<name>` (`particle:u` or `particle:up`, `particle:e` /
+`electron`, `particle:nu_mu`, `particle:photon`, `particle:W`, `particle:H`), `generation:1`…`3`,
+`group:quarks` / `leptons` / `fermions` / `gauge_bosons` / `scalar_bosons` / `bosons`,
+`row:up_type` / `down_type` / `charged_leptons` / `neutrinos`; `highlight` and `dim` work on all.
+`layout: tall` (default in 9:16) puts the bosons in two rows under the fermions.
+
 ```yaml
 # data
 - id: devices
@@ -1569,6 +1602,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `coast` | on an `orbit`: run the clock again after a `pause` (`- action: coast`) | when the narration moves on |
 | `corotate` | on an `orbit` with a three-body `system`: turn the view into the frame rotating with the pair (`- action: corotate`, `run_time: 2`): both primaries and the Lagrange points stand still, trails redraw in that frame | "now let the frame turn with Jupiter" (a Trojan's tadpole appears) |
 | `inertial` | on an `orbit` with a three-body `system`: turn the view back to the fixed stars (`- action: inertial`) | "seen from the stars again" |
+| `antiparticles` | on a `standard_model` chart: turn quark and lepton cells into their antiparticles (`- action: antiparticles` for all, or `antiparticles: "group:leptons"`): the charge reverses, the symbol takes its bar or sign (ū, ν̄ₑ, e⁺), the name changes; `until:` turns them back | "every particle has an antiparticle with the opposite charge" |
+| `couplings` | on a `standard_model` chart: outline the particles a boson couples to (`couplings: "particle:photon"`; g, Z, W, H too), ring the bosons it meets, dim the rest and say why; undone at the next beat | "the photon couples to electric charge" |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |

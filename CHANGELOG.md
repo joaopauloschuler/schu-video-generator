@@ -5,7 +5,22 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–236)
+## Unreleased (Steps 193–237)
+
+### Particle physics (Phase Y, from Step 237)
+
+- **The `standard_model` scene type and the particle model** (Step 237). The Standard Model chart:
+  quarks and leptons in three generations, the gauge bosons and the Higgs boson, each cell with
+  its mass (PDG 2024), charge and spin, in colour groups with a key and the values' source; the
+  classic grid in 16:9, the bosons in rows under the fermions in 9:16. Every particle, generation,
+  group and row is a target; the actions `antiparticles` (cells turn into their antiparticles:
+  ū, ν̄ₑ, e⁺, the charge reversed) and `couplings` (which particles the photon, gluon, W, Z or Higgs
+  couples to, and why). The model is `vidgen.api.particle_physics` (no manim): the Standard Model
+  particles and 27 common hadrons with their antiparticles (masses, widths or lifetimes, quantum
+  numbers, quark content), names in ASCII or Unicode, and `check("n -> p e- anti-nu_e")`, which
+  explains whether a reaction or decay can happen (charge, baryon and lepton family numbers,
+  angular momentum, energy and thresholds; flavour, C- and G-parity) and through which
+  interaction.
 
 ### Orbital mechanics (Phase X, from Step 229)
 

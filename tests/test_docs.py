@@ -152,8 +152,8 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
 GENETICS_TYPES = ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas")
 
 
-@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES, ("plot", "calculation"), ("orbit",)],
-                         ids=["cell_biology", "genetics", "science_charts", "orbits"])
+@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES, ("plot", "calculation"), ("orbit",), ("standard_model",)],
+                         ids=["cell_biology", "genetics", "science_charts", "orbits", "particles"])
 def test_science_sections_name_every_nested_option(kinds: tuple[str, ...]) -> None:
     """Steps 210, 220, 227 and 229: every param of the cell-biology, the genetics, the science-chart
     and the orbit types, nested options too (an object's `coat`, a gene's `introns`, a node's marks' `domain`, a

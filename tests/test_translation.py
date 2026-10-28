@@ -315,6 +315,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
                      "calculations": [{"name": "a", "expr": "d^2", "meaning": "T:result"}]}],
     "population": [{"title": "T:title", "condition": "T:condition", "incidence": "1/2500"}],
     "orbit": [{"title": "T:title", "caption": "T:caption", "central": {"preset": "sun", "label": "T:sun"}, "bodies": [{"preset": "earth", "label": "T:earth"}]}],
+    "standard_model": [{"title": "T:title", "caption": "T:caption"}],
     "gwas": [{"title": "T:title", "trait": "T:trait", "background": 400}],
     "iso_diagram": [
         {

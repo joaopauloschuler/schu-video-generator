@@ -1402,6 +1402,48 @@ circular orbits for Hohmann). DESIGN §98. Steps 229–236.
 - [x] Lint reads "384 400 km"; the phase angle's label and lines kept off labels; a label keeps off its own dot
 - [~] Kept as gaps: n-body runs with burns; a heliocentric flyby trajectory; an exaggerated-altitude view for LEO at true scale; open-orbit framing beyond 3 × the periapsis without `extent`; small 9:16 pictures with an inset or a long panel
 
+## Phase Y — Particle physics
+
+Goal: particle-physics videos at university level (and for science YouTube): the Standard Model,
+Feynman diagrams in proper notation with conservation laws checked at every vertex, relativistic
+kinematics, detectors and event displays, and resonances emerging from data — exact where it can
+be computed, honest where it is schematic, in vidgen's flat style, 16:9 and 9:16. Built on Phase W
+(histograms and peak fits, live plots, `calculation` scenes, `vidgen.quantities`, the lint
+framework) and re-implementing none of it. Values from the Particle Data Group (PDG 2024),
+computed rather than hard-coded (thresholds, Q values, p*, decay lengths, significances); data in
+examples is simulated and labelled so; no real experiment's logo or geometry. Additive and
+opt-in: existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q's 31
+baseline frames when shared code changes). DESIGN §99. Steps 237–244.
+
+### Step 237 — Plan and particle model
+- [x] Phase Y plan here and DESIGN §99 for the whole phase (data model, scene types and names, how 238–243 plug in, the reuse of Phases W and X); the matching "Ideas" items marked as moved
+- [x] Model package `vidgen.particle_physics` without manim (exported by `vidgen.api` as `particle_physics`): the Standard Model's quarks, leptons, gauge bosons and Higgs and 27 hadrons (p, n, π, η, K±, K⁰ / K̄⁰, K⁰_S, K⁰_L, φ, J/ψ, Υ(1S), D±, D⁰, B±, B⁰, Λ, Σ, Ξ, Ω⁻, Δ(1232)) with their antiparticles — PDG 2024 masses, widths or mean lives (the other computed with ħ), charge, spin, parity, C and G parity where standard, colour, baryon and lepton family numbers, S / C / B′ / T, quark content (charges and baryon numbers checked against it); the quark-mass schemes stated; names in ASCII and Unicode with did-you-mean; reactions as text (`"n -> p e- anti-nu_e"`, `"π⁺ → μ⁺ ν_μ"`, off-shell `Z*`)
+- [x] The conservation checker `check()`: charge, baryon number, L_e / L_μ / L_τ, angular momentum (fermion count), energy (a decay's masses, a reaction's √s and fixed-target threshold), the Landau–Yang theorem; the interaction (strong, electromagnetic, weak, Higgs coupling) with flavour (|ΔS| ≤ 1 per W), C-parity and G-parity rules; teaching-style explanations ("lepton number L_e not conserved: 0 → +1")
+- [x] Scene type `standard_model`: the chart (three generations of quarks and leptons, gauge bosons, Higgs) with mass, charge and spin per cell in colour groups, a key cell and the source line; the classic grid in 16:9, the bosons in two rows under the fermions in 9:16; targets for every particle, generation, group and row; the actions `antiparticles` and `couplings`
+- [x] Tests `tests/test_particle_physics.py` (data sanity, names, parsing, 26 allowed and 17 forbidden textbook processes, thresholds, chart data, no manim) and `tests/test_standard_model.py` (params, targets, action checks, renders 16:9 / 9:16); CONFIG section and targets row, guide chooser row, snippet and actions rows (copied to `AGENTS.md`), gallery entry `standard_model` in a new "Particle physics" section, an `examples/gallery` scene
+- [~] Not yet (planned): Feynman diagrams (238), kinematics (239), detectors (240), data and decays (241), lint (242), example and cookbook (243), review (244)
+
+### Step 238 — Feynman diagrams
+- [ ] A `feynman` scene: proper notation (fermion arrows, antifermions against time, wavy photons and W / Z with labels, curly gluons, dashed Higgs, vertex dots; time left → right, configurable), automatic layout of tree diagrams (s-, t-, u-channel, decays) and simple one-loop diagrams (H → γγ through a top / W loop); every vertex checked (allowed vertex types: QED, QCD qqg / ggg, W charged current with flavour change, Z neutral current, Higgs to massive particles; charge, lepton and baryon number, colour flow) with the checker of Step 237; lines drawn in time order, a travelling dot, labels; presets (e⁺e⁻ → μ⁺μ⁻, Compton, Møller / Bhabha, β⁻ decay at quark level, μ⁻ decay, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → Wb)
+
+### Step 239 — Relativistic kinematics
+- [ ] Four-vectors in natural units with conversions shown, invariant mass, two-body decays at rest (p* from the masses), boosts and lab-frame distributions (schematic), thresholds (the antiproton's), time dilation and decay length βγcτ (muons reaching the ground, B mesons' millimetres), `calculation` scenes in GeV, GeV/c, GeV/c² (`from_scene`), a momentum-vector diagram view
+
+### Step 240 — Detectors and event displays
+- [ ] A cylindrical general-purpose detector in x–y and r–z views (pixel / strip tracker, solenoid, ECAL, HCAL, muon chambers), particle signatures (electron, photon, muon, charged and neutral hadron, neutrino as missing p_T), tracks curving with the right sign and radius (p_T = 0.3 B R), jets as cones, seeded events; actions: build the event layer by layer, highlight particles, show missing p_T; schematic and labelled so
+
+### Step 241 — Collisions, decays and data
+- [ ] Invariant-mass histograms filling event by event (falling background, the Z with its width, the Higgs in γγ and 4ℓ) with Phase W's fits, a local significance (Asimov / likelihood ratio, labelled), decay chains and exponential decay times, branching ratios from PDG as pie / bar; optional cross-section curves (R ratio, Z lineshape, labelled schematic)
+
+### Step 242 — Accuracy lint
+- [ ] Narration against the model: masses, charges, spins, lifetimes, branching ratios; conservation claims against the checker; Feynman-diagram claims; kinematics numbers; detector signature claims; significance claims; on the calc_numbers / plot_* machinery
+
+### Step 243 — Example, docs, gallery
+- [ ] Example "How the Higgs boson was found" (chart, gg → H, H → γγ / ZZ* → 4ℓ, the two-photon signature, the invariant mass in a `calculation`, a simulated diphoton spectrum with a fit, labelled "simulated data", what 5σ means), Kokoro narration, 16:9 and 9:16; guide topic (name to choose: `particles` is close to the cartoon `particles` action), CONFIG, `docs/COOKBOOK-PARTICLES.md`, the gallery section "Particle physics" (started in Step 237) within the 15 MB budget, README, CHANGELOG
+
+### Step 244 — Review of Phase Y
+- [ ] Critical review with fixes, including a physics-accuracy pass (PDG values, conservation logic, vertex rules, kinematics), compatibility, render performance, the phase's and related suites, `tests/test_mcp.py` in full
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
@@ -1454,17 +1496,19 @@ errors, an accuracy lint, docs, a gallery section, an example and a review.
   its semi-major axis, a manoeuvre with impossible Δv — Phase X, Step 234
 - Effort: medium
 
-### Particle physics (suggested third: distinctive niche)
-- [ ] The Standard Model chart (quarks, leptons, bosons; masses, charges, spins)
-- [ ] Feynman diagrams in proper notation (fermion arrows, wavy photons, curly gluons, vertices),
-  with rules checking conservation at every vertex: charge, lepton and baryon number, colour
-- [ ] Detectors: layers (tracker, calorimeters, muon chambers), tracks curving in the magnetic
-  field (curvature direction gives the charge), showers, collisions and decays
+### Particle physics (suggested third: distinctive niche) — moved into Phase Y (Steps 237–244)
+- [→] The Standard Model chart (quarks, leptons, bosons; masses, charges, spins) — Phase Y, Step 237
+- [→] Feynman diagrams in proper notation (fermion arrows, wavy photons, curly gluons, vertices),
+  with rules checking conservation at every vertex: charge, lepton and baryon number, colour —
+  Phase Y, Step 238 (the conservation checker: Step 237)
+- [→] Detectors: layers (tracker, calorimeters, muon chambers), tracks curving in the magnetic
+  field (curvature direction gives the charge), showers, collisions and decays — Phase Y, Steps
+  240 and 241
 - [→] Data: histograms where a resonance "bump" emerges from the background as events accumulate
   — moved into Phase W (histograms with fitted peaks: Step 223; growing as events accumulate:
   Step 224)
-- [ ] Accuracy lint: conservation-law violations, impossible decays (lighter into heavier), wrong
-  charges
+- [→] Accuracy lint: conservation-law violations, impossible decays (lighter into heavier), wrong
+  charges — Phase Y, Step 242 (the checker behind it: Step 237)
 - Effort: medium
 
 ### Protein folding (suggested last, or in two parts)

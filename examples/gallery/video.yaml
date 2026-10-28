@@ -356,6 +356,16 @@ scenes:
       - text: "Far from the Sun the comet crawls."
       - text: "Near the Sun it sweeps round in a few weeks."
 
+  - id: particles
+    type: standard_model  # the Standard Model chart: quarks, leptons, gauge bosons, Higgs; PDG 2024 masses, charges, spins
+    params:
+      title: "The Standard Model"
+      reveal: all
+    beats:
+      - text: "Twelve matter particles in three generations, and the bosons."
+      - text: "Every quark and lepton has an antiparticle with the opposite charge."
+        actions: [{action: antiparticles, at: "@antiparticle"}]
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:
