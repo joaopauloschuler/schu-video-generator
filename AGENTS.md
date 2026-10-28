@@ -331,7 +331,7 @@ project's own scene types, in its theme).
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
-| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude); the actions sweep, launch |
+| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side); the actions sweep, launch, burn, flyby, pause, coast |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1159,7 +1159,36 @@ Planets, moons and spacecraft on their orbits, in correct timing:
       actions: [{launch: "shot:1", at: "@slow"}, {launch: "shot:2", at: "@circular"}]
     - text: "Faster, an ellipse; at the escape speed it never returns."
       actions: [{launch: "shot:3", at: "@ellipse"}, {launch: "shot:4", at: "@escape"}, {launch: "shot:5"}]
+- id: to_mars
+  type: orbit
+  params:
+    title: "Earth to Mars"
+    bodies:
+      - {preset: earth, e: 0, i: 0, raan: 0, argp: 0}   # a transfer is between circular, coplanar orbits
+      - {preset: mars, e: 0, i: 0, raan: 0, argp: 0, nu: 75}
+      - {name: Ship, alongside: Earth}
+    transfer: {ship: Ship, to: Mars}   # Hohmann: Δv₁, Δv₂, 259 d, phase angle 44.3°, windows every 780 d
+    caption: "Circular, coplanar orbits (an approximation)"
+  beats:
+    - text: "We wait for Mars to lead by forty-four degrees, then burn."
+      actions: [{burn: "burn:1", at: "@burn"}]   # the clock runs so the burn falls on this word
+    - text: "Two hundred and fifty-nine days later Mars is there."
+      actions: [{burn: "burn:2", at: "@there"}]
+- id: gravity_assist
+  type: orbit
+  params:
+    title: "A gravity assist at Jupiter"
+    central: jupiter
+    flyby: {v_inf: "5.6 km/s", altitude: "400000 km", angle: 100, side: behind}   # δ, asymptotes, Sun-frame vectors
+  beats:
+    - text: "Passing behind Jupiter, the probe leaves faster around the Sun."
+      actions: [{action: flyby, at: "@behind"}]   # the closest approach on this word
 ```
+
+Burns on a body: `burns: [{at: "20 min", prograde: "0.6 km/s"}, {at: apoapsis, prograde: "0.55
+km/s"}]` (also retrograde, radial, anti_radial, normal, anti_normal); `transfer: {kind: hohmann |
+bielliptic | phasing, ship, to: <body or radius>}`; `- action: pause` / `- action: coast` hold
+and run the clock; a `calculation` takes the computed Δv with `from_scene: <orbit scene>.dv1`.
 
 Kepler's third law is a `plot` fed by the built-in model `kepler_planets` (the planets' `a` in
 AU, `T` in years): `models: {planets: {kind: function, function: kepler_planets, units: {a: AU,
@@ -1469,6 +1498,10 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `convert` | on a `calculation`: show the result in its `convert` units on a word (`- convert: calc1`) | when the narration says the result in other units |
 | `sweep` | on an `orbit`: start a body's equal-time sectors on a word (`- sweep: "sectors:Comet"`); `reveal: "foci:Comet"` (`axes:`, `periapsis:`, `velocity:`) shows an overlay, `highlight: "periapsis:Comet"` marks it | when the narration starts counting equal times |
 | `launch` | on an `orbit` with a `cannonball`: fire a shot on a word (`- launch: "shot:3"`; without launches every shot flies from the start) | when the narration says the speed of the shot |
+| `burn` | on an `orbit` with burns or a `transfer`: the clock runs so the burn happens on a word (`- burn: "burn:2"`); one speed-up before, another after, both in the panel | when the narration says "burn" |
+| `flyby` | on an `orbit` with a `flyby`: the closest approach on a word (`- action: flyby`) | when the narration says the probe swings past |
+| `pause` | on an `orbit`: hold the clock still from a word (`- action: pause`) until a `coast` (or the end of the beat); the panel says "clock paused" | while the narration explains a moment (the launch window) |
+| `coast` | on an `orbit`: run the clock again after a `pause` (`- action: coast`) | when the narration moves on |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |

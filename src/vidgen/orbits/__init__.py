@@ -3,7 +3,8 @@
 quantities — vis-viva, period, energy, angular momentum, apsides, time of flight
 (:mod:`.elements`), bodies and preset orbits with their sources (:mod:`.bodies`), values with
 units (:mod:`.values`), systems of bodies moved by Kepler's laws and the video's clock
-(:mod:`.system`), and n-body motion on Phase W's integrators (:mod:`.nbody`). The ``orbit``
+(:mod:`.system`), n-body motion on Phase W's integrators (:mod:`.nbody`), Kepler's laws
+(:mod:`.laws`), burns and transfers (:mod:`.manoeuvres`) and gravity assists (:mod:`.flyby`). The ``orbit``
 scene type draws them. Exported by ``vidgen.api`` as the module ``orbits``."""
 
 from .bodies import ALIASES as PRESET_ALIASES, BODIES, GM_EARTH, GM_SUN, ORBITS, R_EARTH, SIDEREAL_DAY, Body, OrbitPreset, body_preset, orbit_preset, preset_key
@@ -25,6 +26,33 @@ from .laws import (
     sector_areas,
     sector_times,
 )
+from .flyby import SIDES, Flyby, GravityAssist, flyby, gravity_assist, turning_angle
+from .manoeuvres import (
+    BURN_DIRECTIONS,
+    CIRCULAR_E,
+    COPLANAR,
+    Arc,
+    BiElliptic,
+    Burn,
+    BurnPlan,
+    Hohmann,
+    Phasing,
+    Trajectory,
+    bielliptic,
+    bielliptic_thresholds,
+    burn_components,
+    burn_vector,
+    combined_plane_change,
+    crash_time,
+    direction_name,
+    fly,
+    hohmann,
+    local_frame,
+    phasing,
+    plane_change,
+    synodic_period,
+    window_wait,
+)
 from .nbody import METHOD_ALIASES, METHODS, NBodyRun, default_step, method_name, simulate
 from .system import Orbiter, Playback, System, swept_area
 from .values import AU, DAY, G, YEAR, length_unit, speedup_text, time_unit, value_si
@@ -33,6 +61,36 @@ __all__ = [
     "APSIS_NAMES",
     "AU",
     "BODIES",
+    "BURN_DIRECTIONS",
+    "CIRCULAR_E",
+    "COPLANAR",
+    "SIDES",
+    "Arc",
+    "BiElliptic",
+    "Burn",
+    "BurnPlan",
+    "Flyby",
+    "GravityAssist",
+    "Hohmann",
+    "Phasing",
+    "Trajectory",
+    "bielliptic",
+    "bielliptic_thresholds",
+    "burn_components",
+    "burn_vector",
+    "combined_plane_change",
+    "crash_time",
+    "direction_name",
+    "fly",
+    "flyby",
+    "gravity_assist",
+    "hohmann",
+    "local_frame",
+    "phasing",
+    "plane_change",
+    "synodic_period",
+    "turning_angle",
+    "window_wait",
     "DAY",
     "G",
     "GM_EARTH",

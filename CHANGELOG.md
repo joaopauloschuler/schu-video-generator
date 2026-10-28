@@ -5,9 +5,24 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–230)
+## Unreleased (Steps 193–231)
 
 ### Orbital mechanics (Phase X, from Step 229)
+
+- **Manoeuvres and gravity assists** (Step 231). A body's `burns` (Δv prograde, retrograde,
+  radial, normal… at a time or the next periapsis / apoapsis: the Δv arrow at the burn point, the
+  orbit before faint and after drawn, a mission line in the panel); `transfer` — Hohmann (Δv₁, Δv₂,
+  total, transfer time, the phase angle drawn live until the launch window, the synodic period),
+  bi-elliptic, phasing — between circular coplanar orbits, with clear errors for eccentric or
+  inclined orbits; `alongside: Earth` starts a spacecraft with its planet; `flyby` — a gravity
+  assist in the planet's frame (asymptotes, v∞ in and out, the turning angle δ, the periapsis,
+  the atmosphere) with the Sun-frame vector diagram (speed gained behind the planet, lost in
+  front); the clock actions `burn` (a burn on its word), `flyby`, `pause`, `coast`, each stretch
+  of the clock showing its own speed-up; a `calculation` takes the computed Δv, times and angles
+  with `from_scene`. The model: `vidgen.api.orbits` gains burns and trajectories, `hohmann`,
+  `bielliptic` (and its thresholds 11.94 / 15.58, computed), `plane_change`, `phasing`,
+  `synodic_period`, `flyby`, `gravity_assist`. In 9:16 a long panel is set in two columns; a
+  scale bar takes the corner the paths keep away from.
 
 - **Kepler's laws and orbital speed** (Step 230). A body's `geometry` (the empty focus and the
   centre, a and b with their lengths, perihelion / aphelion — perigee / apogee around the Earth —

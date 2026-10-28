@@ -13,7 +13,8 @@ import pytest
 from pydantic import ValidationError
 
 from conftest import minimal_config
-from test_actions import render
+from manim import tempconfig
+from test_actions import FPS, render
 from vidgen import extensions, orbits, registry
 from vidgen.cli import project_problems
 from vidgen.project import Project
@@ -274,3 +275,160 @@ def test_cannonball_launches_on_words(make_project, media: Path) -> None:
     assert np.linalg.norm(parts["ball"].get_center() - centre) == pytest.approx(orbits.R_EARTH * s._scale, rel=1e-6)   # landed
     assert shot.impact < s._t - times[0]
     assert any("suborbital" in line for line in s._last_lines) and any("√2" in line for line in s._last_lines)
+
+
+# ----- Step 231: manoeuvres, transfers, flybys ----------------------------------------------------
+
+LEO_GEO = {"central": "earth", "bodies": [{"name": "Sat", "altitude": "300 km", "trail": False}], "transfer": {"ship": "Sat", "to": "42164 km"}}
+MARS = {"central": "sun", "bodies": [{"preset": "earth", "e": 0, "i": 0, "raan": 0, "argp": 0}, {"preset": "mars", "e": 0, "i": 0, "raan": 0, "argp": 0, "nu": 75},
+                                     {"name": "Ship", "alongside": "Earth"}], "transfer": {"ship": "Ship", "to": "Mars"}}
+JUPITER = {"central": "jupiter", "flyby": {"v_inf": "5.6 km/s", "altitude": "400000 km", "angle": 100}}
+
+
+def test_transfers_resolve_to_burns() -> None:
+    geo = cls().validate_params(LEO_GEO)
+    model = geo.model()
+    info = model.transfer
+    assert [round(b.magnitude) for _, b in model.burns()] == [round(info.result.dv1), round(info.result.dv2)]
+    assert info.result.dv1 / 1000 == pytest.approx(2.426, abs=1e-3) and info.depart == 0 and info.arrival == pytest.approx(info.result.time)
+    final = model.system.orbiter("Sat").trajectory.arcs[-1].elements
+    assert final.e < 1e-9 and final.a == pytest.approx(42164e3, rel=1e-9)
+    assert model.span == pytest.approx(1.2 * info.arrival)
+    assert cls().target_names(geo) == ["frame", "central", "body:Sat", "orbit:Sat", "burn:1", "burn:2", "transfer", "readout"]
+    values = cls().calc_values(geo)
+    assert values["dv_total"][0] == pytest.approx(info.result.total) and values["dv1"][1] == "km/s" and values["t_transfer"][1] == "h"
+    mars = cls().validate_params(MARS).model()
+    t = mars.transfer
+    assert t.window and t.phase_at_depart == pytest.approx(t.phase_needed, abs=1e-9) and math.degrees(t.phase_needed) == pytest.approx(44.3, abs=0.1)
+    assert (t.arrival - t.depart) / orbits.DAY == pytest.approx(258.9, abs=0.3) and t.miss < 1.0   # Mars is there (to a metre)
+    n_e, n_m = t.n_ship, t.n_target
+    assert t.depart == pytest.approx((math.radians(75) - t.phase_needed) / (n_e - n_m), rel=1e-6)   # 75° closing at n_E - n_M
+    assert cls().target_names(cls().validate_params(MARS))[-3:] == ["transfer", "phase", "readout"]
+    bi = cls().validate_params({**LEO_GEO, "transfer": {"kind": "bielliptic", "ship": "Sat", "to": "100000 km", "apoapsis": "200000 km"}}).model()
+    assert len(bi.burns()) == 3 and bi.system.orbiter("Sat").trajectory.arcs[-1].elements.a == pytest.approx(100000e3, rel=1e-9)
+    ph = cls().validate_params({"central": "earth", "bodies": [{"name": "Station", "altitude": "2000 km", "nu": 30}, {"name": "Chaser", "altitude": "2000 km"}],
+                                "transfer": {"kind": "phasing", "ship": "Chaser", "to": "Station", "revolutions": 2}}).model()
+    end = ph.transfer.arrival
+    assert ph.transfer.miss < 1.0 and ph.system.orbiter("Chaser").positions(end) == pytest.approx(ph.system.orbiter("Station").positions(end), abs=1.0)
+
+
+def test_burns_and_flyby_resolve() -> None:
+    p = cls().validate_params({"central": "earth", "bodies": [{"name": "Sat", "altitude": "400 km", "burns": [{"at": "20 min", "prograde": "0.6 km/s"},
+                                                                                                         {"at": "apoapsis", "prograde": "0.55 km/s"}]}], "span": "6 h"})
+    model = p.model()
+    (_, b1), (_, b2) = model.burns()
+    assert b1.time == 1200.0 and b2.time == pytest.approx(1200.0 + b1.orbit_after.period / 2) and b1.direction == "prograde"
+    assert cls().calc_values(p)["dv_spent"][0] == pytest.approx(1150.0)
+    fb = cls().validate_params(JUPITER)
+    model = fb.model()
+    ga = model.assist.assist
+    assert ga.gain > 0 and model.span == pytest.approx(2 * model.assist.t_periapsis)
+    assert model.assist.planet_speed == pytest.approx(math.sqrt((orbits.GM_SUN + orbits.BODIES["jupiter"].gm) / orbits.ORBITS["jupiter"].a))
+    probe = model.system.orbiter("Probe")
+    assert probe.elements.e == pytest.approx(ga.flyby.e, rel=1e-9) and np.linalg.norm(probe.positions(model.assist.t_periapsis)) == pytest.approx(ga.flyby.rp, rel=1e-9)
+    names = cls().target_names(fb)
+    assert names[:4] == ["frame", "central", "body:Probe", "orbit:Probe"] and {"asymptotes", "turn", "v_inf", "vectors", "v_before", "v_after"} <= set(names)
+    assert cls().calc_values(fb)["delta"][0] == pytest.approx(ga.flyby.delta)
+
+
+@pytest.mark.parametrize(
+    ("params", "message"),
+    [
+        ({**MARS, "bodies": [MARS["bodies"][0], {"preset": "mars", "e": 0}, MARS["bodies"][2]]}, "Mars's orbit is inclined 1.85° to Ship's.*coplanar"),
+        ({**MARS, "bodies": [MARS["bodies"][0], {"preset": "mars", "i": 0}, MARS["bodies"][2]]}, "Mars's orbit has e = 0.09339.*circular"),
+        ({**MARS, "transfer": {"ship": "Ship", "to": "Marz"}}, "no body 'Marz'.*did you mean 'Mars'"),
+        ({**LEO_GEO, "transfer": {"ship": "Sat", "to": "42164 km", "kind": "bielliptic"}}, "needs apoapsis"),
+        ({**LEO_GEO, "transfer": {"ship": "Sat", "to": "6000 km"}}, "lies inside Earth"),
+        ({**LEO_GEO, "transfer": {"ship": "Sat", "to": "6678.1 km"}}, "already on that orbit"),
+        ({**LEO_GEO, "bodies": [{"name": "Sat", "altitude": "300 km", "e": 0.1}]}, "e = 0.1.*starts from a circular orbit"),
+        ({**LEO_GEO, "bodies": [{"name": "Sat", "altitude": "300 km", "burns": [{"prograde": "1 km/s"}]}]}, "has burns of its own"),
+        ({**LEO_GEO, "transfer": {"ship": "Sat", "to": "42164 km"}, "span": "2 h"}, r"burn at 5.275 h comes after the scene's span \(120 min\)"),
+        ({"central": "earth", "bodies": [{"name": "S", "altitude": "300 km", "burns": [{"at": "10 min", "retrograde": "1 km/s"}]}], "span": "2 h"},
+         r"burns\[1\]: the orbit after it has its periapsis .* would hit Earth"),
+        ({"central": "earth", "bodies": [{"name": "S", "altitude": "300 km", "burns": [{"prograde": "-1 km/s"}]}], "span": "2 h"}, "use the opposite direction"),
+        ({"central": "earth", "bodies": [{"name": "S", "altitude": "300 km", "burns": [{"at": "apoapsis", "prograde": "1 km/s"}]}], "span": "2 h"},
+         "circular, it has no apoapsis"),
+        ({"central": "earth", "bodies": [{"name": "S", "altitude": "300 km", "burns": [{"at": "5 min"}]}], "span": "2 h"}, "give its Δv in a direction"),
+        ({"bodies": [{"name": "A", "a": "1 AU", "mass": "1e27 kg"}, {"name": "S", "alongside": "A", "burns": [{"prograde": "1 km/s"}]}], "dynamics": "nbody"},
+         "use dynamics: kepler"),
+        ({"bodies": [{"name": "S", "alongside": "Earth"}]}, "alongside 'Earth' is not a body listed before it"),
+        ({"bodies": [{"name": "A", "a": "1 AU"}, {"name": "S", "alongside": "A", "e": 0.2}]}, "leave out e"),
+        ({"central": "jupiter", "flyby": {"v_inf": "5.6 km/s", "periapsis": "60000 km"}}, "lies inside Jupiter .* would crash"),
+        ({"central": "earth", "flyby": {"v_inf": "9 km/s", "altitude": "80 km", "atmosphere": "100 km"}}, "inside the atmosphere of Earth"),
+        ({"central": "jupiter", "flyby": {"v_inf": "5.6 km/s", "altitude": "4e5 km", "periapsis": "5e5 km"}}, "one way"),
+        ({"central": "jupiter", "flyby": {"v_inf": "5.6 km/s", "altitude": "4e5 km", "angle": 150, "side": "in_front"}}, "both ways past it go behind it"),
+        ({"central": {"name": "X", "gm": "1e17 m^3/s^2", "radius": "70000 km"}, "flyby": {"v_inf": "5 km/s", "altitude": "4e5 km"}}, "give the speed of X"),
+    ],
+)
+def test_manoeuvre_errors(params: dict[str, Any], message: str) -> None:
+    with pytest.raises(ValidationError, match=message):
+        cls().validate_params(params)
+
+
+def test_manoeuvre_actions_and_calculations_are_checked(make_project) -> None:
+    def problems(*scenes: dict[str, Any]) -> list[str]:
+        return [m.message for m in project_problems(Project.load(make_project(minimal_config(scenes=list(scenes), narration=NARRATION))))]
+
+    plain = {"id": "o", "type": "orbit", "params": COMET, "beats": [{"text": "burn now", "actions": [{"burn": "burn:1"}]}]}
+    assert any("burn needs a body with burns" in m for m in problems(plain))
+    fly = {"id": "o", "type": "orbit", "params": COMET, "beats": [{"text": "pass now", "actions": [{"action": "flyby"}]}]}
+    assert any("flyby needs a flyby" in m for m in problems(fly))
+    held = {"id": "o", "type": "orbit", "params": COMET, "beats": [{"text": "hold it", "actions": [{"action": "pause", "target": "clock"}]}]}
+    assert any("takes no target" in m for m in problems(held))
+    good = {"id": "geo", "type": "orbit", "params": LEO_GEO, "beats": [{"text": "burn now and wait", "actions": [{"burn": "burn:1", "at": "@now"},
+                                                                                                                {"action": "pause", "at": "@wait"}]},
+                                                                      {"text": "go on", "actions": [{"action": "coast"}, {"burn": "burn:2", "at": "@on"}]}]}
+    calc = {"id": "budget", "type": "calculation", "params": {"symbols": [{"name": "dv1", "from_scene": "geo"}, {"name": "dv2", "from_scene": "geo"}],
+                                                              "calculations": [{"name": "dv_total", "expr": "dv1 + dv2", "unit": "km/s", "sig": 3}]},
+            "beats": [{"text": "add them"}]}
+    assert problems(good, calc) == []
+    bad = {**calc, "params": {**calc["params"], "symbols": [{"name": "dv1", "from_scene": "geo.dv9"}, {"name": "dv2", "from_scene": "geo"}]}}
+    assert any("computes dv1, dv2" in m and "not 'dv9'" in m for m in problems(good, bad))
+    from vidgen.scenes.calculation import Calculation
+
+    project = Project.load(make_project(minimal_config(scenes=[good, calc], narration=NARRATION), folder="calc"))
+    worked = Calculation.parse_params(calc["params"], "budget").worked(project)
+    assert worked.results[0].value.value_text() == "3.89 km/s"
+
+
+@pytest.mark.render
+def test_burns_on_their_words_and_pauses(make_project, media: Path) -> None:
+    """The clock runs in stretches so that each burn happens on its word and holds still from
+    pause to coast; the readout shows each stretch's own speed-up."""
+    beats = [{"text": "now the first burn starts it", "actions": [{"burn": "burn:1", "at": "@burn"}, {"action": "pause", "at": "@starts"}]},
+             {"text": "we coast to apogee and burn again", "actions": [{"action": "coast", "at": "@coast"}, {"burn": "burn:2", "at": "@again"}]}]
+    project = Project.load(make_project(minimal_config(scenes=[{"id": "g", "type": "orbit", "params": LEO_GEO, "beats": beats}], narration=NARRATION)))
+    s = render(project, "g", media, (90, 160))
+    play, model = s._playback, s._model
+    times = {act.config.anchor: when for kind in ("burn", "pause", "coast") for act, when, _ in _times(s, kind)}
+    (_, b1), (_, b2) = model.burns()
+    assert play.sim_time(times["@burn"]) == pytest.approx(b1.time, abs=1e-6) and play.sim_time(times["@again"]) == pytest.approx(b2.time, rel=1e-9)
+    assert play.rate((times["@starts"] + times["@coast"]) / 2) == 0 and play.sim_time(times["@starts"]) == pytest.approx(play.sim_time(times["@coast"]))
+    assert play.rate(times["@burn"] - 0.01) == 0   # the clock waited at 0 for the first burn's word
+    assert s._t == pytest.approx(model.span) and "all burns done" in s._last_lines
+    sat = s._bodies["Sat"][0].get_center()
+    assert sat[:2] == pytest.approx(s._frame_point(model.view("Sat", model.span))[:2], abs=1e-6)
+    tip = np.asarray(s._burn_parts[1]["arrow"][1].get_anchors())[0]   # Δv₂'s arrow at the apogee, along +Δv, to the scene's scale
+    start = s._frame_point(b2.position)
+    assert np.linalg.norm(tip[:2] - start[:2]) == pytest.approx(max(np.linalg.norm(b2.dv[:2]) * s._dv_scale, 0.12), rel=1e-6)
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
+def test_flyby_renders_with_its_vector_diagram(size: tuple[int, int], make_project, media: Path) -> None:
+    beats = [{"text": "it comes in"}, {"text": "and swings behind the planet", "actions": [{"action": "flyby", "at": "@behind"}]}]
+    project = Project.load(make_project(minimal_config(scenes=[{"id": "j", "type": "orbit", "params": JUPITER, "beats": beats}], narration=NARRATION)))
+    s = render(project, "j", media, size)
+    when = _times(s, "flyby")[0][1]
+    assert s._playback.sim_time(when) == pytest.approx(s._model.assist.t_periapsis, rel=1e-9)
+    box = s._vector_box
+    vectors = s.find_targets("vectors")[0].mobject
+    assert box is not None and vectors.get_left()[0] >= box.x0 - 1e-6 and vectors.get_right()[0] <= box.x1 + 1e-6
+    assert _overlap(_box(vectors), s._readout_box) < 1e-6 and _overlap(_box(vectors), s._lay.plot) < 1e-6
+    assert any(line.startswith("gains ") for line in s._last_lines) and s.is_shown("turn") and s.is_shown("asymptotes")
+
+
+def _times(scene: Any, kind: str) -> list[tuple[Any, float, float]]:
+    """The scene's action times as it computed them (at the test's frame rate)."""
+    with tempconfig({"frame_rate": FPS}):
+        return scene.action_times(kind, scene._begin)

@@ -19,6 +19,8 @@ import numpy as np
 
 from vidgen.api import *
 
+from vidgen import registry
+
 from .equation_derivation import term_key, tex_error_excerpt
 
 log = logging.getLogger("vidgen.scenes.calculation")
@@ -132,6 +134,20 @@ def _scene_ref(text: str) -> tuple[str, str | None]:
     return scene_id.strip(), (result.strip() or None)
 
 
+def _scene_value(cls: Any, spec: Any, result: str, where: str) -> tuple[Any, Any, Any, str]:
+    """A result another kind of scene computed (``calc_values``: name → (SI value, unit to show
+    it in)), as an imported symbol with four significant figures."""
+    params = cls.parse_params(spec.params, spec.id)
+    values = cls.calc_values(params)
+    if result not in values:
+        names = list(values)
+        raise VidgenError(f"{where}: scene '{spec.id}' computes {', '.join(names) or 'nothing'}, not '{result}'" + did_you_mean(result, names))
+    si, unit = values[result]
+    shown = quantities.parse_unit(unit)
+    q = quantities.Quantity(float(si), shown.dim, 4)
+    return q, shown, quantities.decimal_text(float(shown.from_si(float(si))), 4), quantities.name_tex(result)
+
+
 def resolve_imports(params: Any, project: Any, seen: tuple[str, ...] = ()) -> dict[str, Any]:
     """The values of the symbols taken from other scenes (``from_scene``): ``{name: (quantity,
     unit, number, tex)}``, computing those scenes' calculations (refusing a loop)."""
@@ -144,9 +160,13 @@ def resolve_imports(params: Any, project: Any, seen: tuple[str, ...] = ()) -> di
         where = f"symbols[{k}] ({s.name}): from_scene '{s.from_scene}'"
         specs = {spec.id: spec for spec in project.config.scenes}
         spec = specs.get(scene_id)
+        entry = registry.find(spec.type) if spec is not None else None
+        if spec is not None and spec.type != "calculation" and entry is not None and hasattr(entry.cls, "calc_values"):
+            out[s.name] = _scene_value(entry.cls, spec, result, where)   # a value an orbit scene computed (Δv, a transfer time...)
+            continue
         if spec is None or spec.type != "calculation":
-            calcs = [i for i, sp in specs.items() if sp.type == "calculation"]
-            raise VidgenError(f"{where}: no calculation scene '{scene_id}'" + (f"; calculation scenes: {', '.join(calcs)}" if calcs else "")
+            calcs = [i for i, sp in specs.items() if sp.type == "calculation" or (registry.find(sp.type) is not None and hasattr(registry.find(sp.type).cls, "calc_values"))]
+            raise VidgenError(f"{where}: no calculation scene '{scene_id}'" + (f"; scenes with results: {', '.join(calcs)}" if calcs else "")
                               + did_you_mean(scene_id, calcs))
         if scene_id in seen:
             raise VidgenError(f"{where}: the scenes {' -> '.join((*seen, scene_id))} take values from each other in a loop")

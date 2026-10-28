@@ -17692,6 +17692,94 @@ code.
 dependency, no config key.
 
 **Not done**: pausing or slowing the clock on an action (the speed-up stays constant, which is
-what makes the equal areas honest; a `clock` action could come with 231's manoeuvres); n-body
+what makes the equal areas honest; Step 231 added clock stretches, §98.5); n-body
 sectors / vectors; the orbit gallery media still show 229's layout (Step 235 renders the
 section).
+
+
+### 98.5 Manoeuvres and gravity assists (Step 231)
+
+**Approximations, stated**: two-body Kepler arcs; burns are impulsive (Δv at an instant);
+transfers between circular coplanar orbits (an eccentric or inclined target is refused with the
+reason and the way to state the approximation: `e: 0`, `i: 0`); gravity assists by patched
+conics (the planet's gravity alone near it, its velocity constant during the pass).
+
+**Model** (no manim):
+
+| module | contents |
+|---|---|
+| `manoeuvres` | `local_frame(r, v)` (prograde along v, radial = prograde × normal — in the plane, outwards —, normal along r × v), `burn_vector` / `burn_components`, `direction_name` (a component ≥ 90 % of Δv names it, else "prograde + normal"); `BurnPlan(at, components, label)` (`at` seconds or `periapsis` / `apoapsis`: the next one, strictly after the burn before), `Burn` (time, position, velocity before / after, Δv, components, orbits before / after), `Arc`, `Trajectory` (arcs between burns; `states(t)` by arc, `elements_at`, `total_dv`); `fly(start, plans, radius, body, horizon)` — each burn adds Δv to the velocity there, the next arc is `Elements.from_state`; refuses burns out of order, an apsis of a circle, and an arc that reaches the surface moving inwards before the next burn (`crash_time`: the inbound crossing ν = −acos((p/R − 1)/e) through `time_of_flight`; the last arc to `horizon`, default for ever). `Hohmann` / `hohmann(mu, r1, r2, mu_target, mu_from)` (a, e, circular and transfer speeds, Δv₁, Δv₂, time = π√(a³/μ), phase = π − n₂ t wrapped to (−π, π] with n₂ from the target's own μ, synodic 2π/|n₁ − n₂|), `window_wait(now, needed, n_from, n_to)` (the next time the lead angle equals the needed one), `synodic_period`; `BiElliptic` / `bielliptic(mu, r1, r2, rb)` (rb beyond both orbits), `bielliptic_thresholds()` — bisection: 11.938765 (Hohmann = the rb → ∞ limit (√2 − 1)(1 + 1/√R) in units of v₁) and 15.58172 (d total / d rb = 0 at rb = r₂); `plane_change(v, Δi)` = 2 v sin(Δi/2), `combined_plane_change` (law of cosines); `Phasing` / `phasing(mu, r, angle, revolutions, radius)` (T_ph = T(1 − θ/2πk); refuses a phasing orbit into the planet: "take more revolutions") |
+| `flyby` | `turning_angle(mu, v∞, r_p)` = 2 asin(1/(1 + r_p v∞²/μ)); `Flyby` / `flyby(mu, v∞, r_p, radius, atmosphere, direction, clockwise)` — the hyperbola from its periapsis state (the incoming asymptote at π/2 − δ/2 from the periapsis direction), e, δ, v_p, a < 0, the aiming distance b, the centre where the asymptotes cross (|a| e beyond the periapsis), v∞ in / out; refuses a periapsis inside the planet or its atmosphere; `GravityAssist` / `gravity_assist(mu, v_planet, v∞_in, r_p, side)` — of the two ways past (clockwise, counterclockwise) the one on `side`: the pull turns v∞ by Δv∞ pointing from the periapsis to the planet, so the energy change v_planet · Δv∞ is positive exactly when the periapsis lies behind (r̂_p · v̂_planet < 0); a direction of arrival from which both ways go behind (or in front) is refused with the reason; speeds before / after, `gain`, `energy_change` (= ½(v_after² − v_before²), tested) |
+
+`Orbiter.trajectory` (optional) makes `System.position` / `state` follow the burns; `Orbiter.states`,
+`positions`, `elements_at`.
+
+**Scene** (`scenes/orbit_manoeuvres.py`, a mixin of `Orbit`; params in `orbit_parts.py`):
+
+- `bodies[].burns: [{at, prograde | retrograde | radial | anti_radial | normal | anti_normal, label}]`
+  (positive speeds; a minus sign is refused: "use the opposite direction"); `bodies[].alongside:
+  Earth` — the body starts at that body's state, the same circle under its own μ (a spacecraft
+  leaving with its planet; one label for both while they coincide).
+- `transfer: {kind: hohmann | bielliptic | phasing, ship, to, depart, apoapsis, revolutions}` —
+  `to` a body (same parent, circular within 1e-6, planes within 1e-6 rad) or a radius; `depart:
+  window` (default) = `window_wait` from the lead angle at t = 0 (0 for a radius or phasing), or a
+  time (then the panel says how far the target is missed). The transfer becomes the ship's burns
+  (Hohmann: prograde / retrograde Δv₁ at departure, Δv₂ after half the ellipse; bi-elliptic: three;
+  phasing: two opposite burns `revolutions` phasing periods apart, the lead angle at departure
+  closed). Default span: arrival + 20 % of the transfer time. `TransferInfo` keeps what the panel
+  shows. Refused: a ship with burns of its own, a non-circular ship, `apoapsis` without bi-elliptic,
+  a radius inside the planet, the same orbit ("use kind: phasing"), burns after the span.
+- `flyby: {v_inf, periapsis | altitude, side, angle, planet_speed, atmosphere, name, reach,
+  vectors}` — the probe is a body the scene adds (`OrbitModel.extra_bodies`; `Params.body_specs()`
+  is the bodies as written plus it) starting `reach` periapsis distances out (default max(6 r_p,
+  1.6 × the asymptotes' crossing) so the crossing is in the picture); the planet's motion is +x;
+  `planet_speed` defaults to a planet preset's √(G(M☉ + m)/a). Default span: the whole pass.
+- **Drawing**: a ship's orbits arc by arc (the current one solid, earlier ones faint and dashed,
+  later ones not yet); Δv arrows on one scale (the largest Δv = 0.16 of the plot's shorter side,
+  at least 0.12 units) with a ring and a label placed once (obstacles: panel, central body ×3,
+  ticks, other burns' labels and arrows; orbit lines); the transfer's planned path dashed with a
+  ring at the arrival (`transfer`); the phase angle (`phase`): lines from the centre towards ship
+  and target (stopping short of them), an arc and θ, live until departure, then held. The flyby:
+  asymptotes (dashed, clipped), δ at their crossing, v∞ arrows at 10 % / 90 % of the pass along the
+  asymptotic directions, the periapsis "400,000 km up", a dashed atmosphere ring, the planet's
+  motion in the plot corner the path and asymptotes keep away from; the **vector diagram** in a box
+  under the panel (16:9) or under the picture (9:16): V from O, v∞ in / out from its tip on a dashed
+  circle of radius v∞, before / after from O with their speeds.
+- **Panel**: a transfer's kind and target, Δv₁ … , total, transfer time, "Mars leads by 52.0°"
+  (live until departure), "window at 44.3°, every 780 d", the mission line ("next: Δv₂ in 3.3 h",
+  "next: Δv₁ now", "all burns done"); plain burns are listed with "Δv spent … of …"; a flyby's v∞,
+  δ and e, the side, the Sun-frame speeds and the gain. In 9:16 a panel of more than five rows is
+  set in two columns, wider rows scale the panel down with them, and the legend (`auto`) is left
+  out when a body burns.
+- **The clock** (the 230 gap): `Playback` gains inner `knots` (video s, simulated s) and
+  `Playback.timed(start, seconds, span, events, holds)`: fixed points at each event (a burn's
+  simulated time on its word, the flyby's periapsis passage), and between two of them one speed-up
+  over the time not held; holds (a `pause` until the next `coast`, else its beat's end) keep the
+  simulated time still. Refused with the reason: an event before the motion starts or after it
+  ends, events out of order, a hold over an event's word, holds leaving no time to move. A burn
+  at t = 0 on a later word makes the clock wait at 0 (and the burn happens on the word, not at the
+  start). The video times come from `NarratedScene.action_times(name, start)` (new, additive:
+  the frame each use falls due at, counted as `narrate` and the runner count them), computed when
+  the motion starts; the panel's speed-up row shows the current stretch's rate ("clock paused").
+  Within a stretch equal video times are still equal simulated times, so Kepler II stays honest.
+- **Actions** (`orbit_actions.py`, cues): `burn` (target `burn:<n>`), `flyby`, `pause`, `coast`
+  (no target: `- action: pause`; checked: the scene type, a flyby for `flyby`, no target given).
+- **Δv budgets**: `Orbit.calc_values(params)` → {name: (SI value, unit)} (`dv1`, `dv2`, `dv3`,
+  `dv_total`, `t_transfer`, `r1`, `r2`, `v1`, `v2`, `phase_angle`, `synodic_period`, `wait`, `dv`,
+  `t_phasing`, `dv_burn<n>`, `dv_spent`, `v_inf`, `r_p`, `e`, `delta`, `v_planet`, `v_before`,
+  `v_after`, `gain`); `calculation`'s `from_scene` reads them from a scene type that has
+  `calc_values` (4 significant figures), with the same did-you-mean errors.
+- Layout additions on the way: a margin of 13 % (instead of 6 %) when bodies burn (room for the
+  arrows' labels); the scale bar takes the plot corner the paths keep away from and lies over the
+  orbits and sectors (the 230 lint warning of a comet crossing it).
+
+**Public (additive)**: in `vidgen.api.orbits` the names of `manoeuvres` and `flyby` above;
+`Playback.knots`, `Playback.timed`, `rate`, `rates`; `Orbiter.trajectory`;
+`NarratedScene.action_times`; the `orbit` params `bodies[].burns`, `bodies[].alongside`,
+`transfer`, `flyby`; its targets and actions above; `from_scene` on orbit scenes. No dependency,
+no config key. Phase Q baseline 31/31 identical.
+
+**Not done**: n-body with burns (refused); the flyby is shown in the planet's frame only (no
+heliocentric before / after orbits; the vector diagram carries the Sun's frame); a plane change
+is seen from above as its projection (its Δv is right; a 3D view is not planned); finite burns;
+the orbit gallery media (Step 235).

@@ -217,7 +217,7 @@ class OrbitOverlays:
         sectors' Δt and areas, the cannon's speeds and shots, the bodies' legend."""
         p, model = self.params, self._model
         slots: list[Slot] = []
-        bodies = list(zip(p.bodies, model.system.orbiters))
+        bodies = list(zip(p.body_specs(), model.system.orbiters))
         many = len(bodies) > 1
         for spec, o in bodies:
             el = o.elements
@@ -253,19 +253,24 @@ class OrbitOverlays:
         if self._legend_wanted():
             for spec, o in bodies:
                 el = o.elements
-                text = f"{o.name}  T = {self._time_text(el.period)}" if el.closed else f"{o.name}  {el.kind}, e = {el.e:.3g}"
+                if o.trajectory is not None:   # its orbit changes with its burns
+                    count = len(o.trajectory.burns)
+                    text = f"{o.name}  {count} burn{'s' if count > 1 else ''}"
+                else:
+                    text = f"{o.name}  T = {self._time_text(el.period)}" if el.closed else f"{o.name}  {el.kind}, e = {el.e:.3g}"
                 slots.append(Slot([text], swatch=self._colors[o.name], scale=0.9))
         return slots
 
     def _legend_wanted(self) -> bool:
         legend = self.params.legend
-        if legend == "auto":
-            return len(self._model.system.orbiters) >= 2
+        if legend == "auto":   # a vertical frame with a manoeuvre keeps its rows for the numbers (labels name the bodies)
+            busy = self.is_portrait and (self._model.transfer is not None or bool(self._model.burns()))
+            return len(self._model.system.orbiters) >= 2 and not busy
         return bool(legend)
 
     def _speed_value(self, o: Any, prefix: str) -> Callable[[float], str]:
         def value(t: float) -> str:
-            v = float(np.linalg.norm(o.elements.states(t)[1]))
+            v = float(np.linalg.norm(o.states(t)[1]))
             return f"{prefix}v = {speed_text(v)}"
         return value
 
@@ -294,12 +299,12 @@ class OrbitOverlays:
         self._sweep_video: dict[str, float] = {}
         self._launch_video: dict[int, float] = {}
         self._intro_parts: list[Mobject] = []
-        speeds = [o.elements.speed_at(0.0) for spec, o in zip(p.bodies, model.system.orbiters) if spec.velocity_spec() is not None]
+        speeds = [o.elements.speed_at(0.0) for spec, o in zip(p.body_specs(), model.system.orbiters) if spec.velocity_spec() is not None]
         plot = self._lay.plot
         if speeds:
             self._speed_scale = ARROW_SHARE * min(plot.width, plot.height) / max(speeds)   # frame units per m/s
             self._key_speed = round_speed(min(KEY_WIDTH / self._speed_scale, 0.6 * max(speeds)))
-        for spec, o in zip(p.bodies, model.system.orbiters):
+        for spec, o in zip(p.body_specs(), model.system.orbiters):
             if spec.geometry_parts():
                 self._build_geometry(spec, o)
             if spec.sector_spec() is not None:
@@ -537,7 +542,7 @@ class OrbitOverlays:
             if live is None:
                 continue
             o = model.system.orbiter(name)
-            v = o.elements.states(t)[1]
+            v = o.states(t)[1]
             start = self._frame_point(anchors[name])
             arrow_shape(live[0], live[1], start, np.array([v[0], v[1]]) * self._speed_scale, 4.0)
         for k, parts in enumerate(getattr(self, "_shot_parts", [])):

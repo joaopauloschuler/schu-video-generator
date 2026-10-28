@@ -5,6 +5,7 @@ orbits, the Moon, an ISS-like orbit, a geostationary one, Halley's comet), from 
 position and velocity, with values written with their units (``"1 AU"``, ``"7.8 km/s"``)."""
 
 import math
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 import numpy as np
@@ -57,6 +58,92 @@ class OrbitCannon(SceneParams):
     """Fire to the right of the top (clockwise); false: counterclockwise."""
     show_paths: bool = False
     """Draw each shot's whole path faintly from the start (the trajectories to come)."""
+
+
+class OrbitBurn(SceneParams):
+    """An impulsive burn: ``{at, prograde, retrograde, radial, anti_radial, normal, anti_normal, label}``."""
+
+    at: Value = 0.0
+    """When: a time from the start ('45 min'; 0 the start), or periapsis / apoapsis (the next one after the burn before)."""
+    prograde: Value | None = None
+    """Δv along the velocity ('2.4 km/s'): faster, the far side of the orbit rises."""
+    retrograde: Value | None = None
+    """Δv against the velocity: slower, the far side sinks."""
+    radial: Value | None = None
+    """Δv in the orbit's plane, perpendicular to the velocity, outwards: turns the orbit (the apsides move)."""
+    anti_radial: Value | None = None
+    """Δv in the plane, perpendicular to the velocity, inwards."""
+    normal: Value | None = None
+    """Δv out of the plane, along the angular momentum: tilts the orbit (a plane change; seen from above the picture shows only its projection)."""
+    anti_normal: Value | None = None
+    """Δv out of the plane the other way."""
+    label: TranslatableStr = ""
+    """Text next to its Δv arrow (default: Δv₁ 2.43 km/s prograde)."""
+
+    def plan(self, where: str) -> Any:
+        """The :class:`orbits.BurnPlan` (SI), checked."""
+        comps = {k: orbits.value_si(getattr(self, k), "speed", f"{where}.{k}") for k in orbits.BURN_DIRECTIONS if getattr(self, k) is not None}
+        if not comps:
+            raise VidgenError(f"{where}: give its Δv in a direction: prograde, retrograde, radial, anti_radial, normal or anti_normal ('0.5 km/s')")
+        for k, v in comps.items():
+            if v < 0:
+                raise VidgenError(f"{where}.{k}: a Δv is a positive speed; use the opposite direction ({_opposite(k)}) instead of a minus sign")
+        at = self.at
+        if isinstance(at, str) and at.strip().lower() in ("periapsis", "apoapsis"):
+            when: float | str = at.strip().lower()
+        elif at == 0 or at == "0":
+            when = 0.0
+        else:
+            when = orbits.value_si(at, "time", f"{where}.at")
+            if when < 0:
+                raise VidgenError(f"{where}.at: '{at}' is before the start")
+        return orbits.BurnPlan(when, comps, str(self.label))
+
+
+def _opposite(direction: str) -> str:
+    return direction[5:] if direction.startswith("anti_") else ("retrograde" if direction == "prograde" else "prograde" if direction == "retrograde" else f"anti_{direction}")
+
+
+class OrbitTransfer(SceneParams):
+    """A transfer between circular coplanar orbits flown by one body: ``{kind, ship, to, depart, apoapsis, revolutions}``."""
+
+    kind: Literal["hohmann", "bielliptic", "phasing"] = "hohmann"
+    """hohmann (two burns, half an ellipse), bielliptic (three burns, out to apoapsis and back in), phasing (catch up a body on the same orbit)."""
+    ship: str
+    """The body that flies it (listed in bodies, on a circular orbit; alongside: Earth starts it with a planet)."""
+    to: Value
+    """Where to: a body's name (its orbit circular and in the same plane: the phase angle and launch windows then count) or a radius ('42164 km')."""
+    depart: Value = "window"
+    """When the first burn fires: window (the first launch window from the start, when the target leads by the right angle), or a time ('30 d')."""
+    apoapsis: Value | None = None
+    """bielliptic: the far point between the two burns ('300000 km'), beyond both orbits."""
+    revolutions: int = Field(default=1, ge=1, le=20)
+    """phasing: turns on the phasing orbit before the second burn (more turns: a gentler orbit)."""
+
+
+class OrbitFlyby(SceneParams):
+    """A gravity assist past the central body, in its frame: ``{v_inf, periapsis or altitude, side, angle, planet_speed, atmosphere, name}``."""
+
+    v_inf: Value
+    """The probe's speed relative to the planet far away (hyperbolic excess speed, '5.6 km/s'): the same in and out."""
+    periapsis: Value | None = None
+    """Closest distance to the planet's centre ('400000 km'); or altitude."""
+    altitude: Value | None = None
+    """Closest height above the surface ('200000 km')."""
+    side: Literal["behind", "in_front"] = "behind"
+    """behind: the probe passes behind the planet (on the side it comes from) and gains speed around the Sun; in_front: it loses speed."""
+    angle: Value = 150.0
+    """Direction of v∞ coming in, in degrees from the planet's motion (180: straight against it; 150: mostly from ahead)."""
+    planet_speed: Value | None = None
+    """The planet's speed around the Sun ('13.06 km/s'); default: a preset planet's circular speed at its mean distance."""
+    atmosphere: Value | None = None
+    """Height of the top of the atmosphere ('100 km'): a periapsis in it is refused."""
+    name: str = "Probe"
+    """The probe's name (target body:<name>)."""
+    reach: float | None = Field(default=None, gt=1.5, le=500.0)
+    """How far out the pass starts and ends, in periapsis distances; default: far enough to show where the asymptotes cross (at least 6)."""
+    vectors: bool = True
+    """Draw the Sun-frame vector diagram: the planet's velocity plus v∞ before and after."""
 
 
 class OrbitCentral(SceneParams):
@@ -154,6 +241,10 @@ class OrbitBody(SceneParams):
     """Kepler's second law: shaded sectors swept in equal times (true: 8 per orbit; a number; or {count, show}), each one's area computed and listed."""
     velocity: bool | OrbitVelocity = False
     """Velocity vectors (length ∝ speed, one scale for the scene, with a key) and the speed from vis-viva: true, or {live, along, readout}."""
+    alongside: str | None = None
+    """Start where another body listed before is, moving with it ('Earth': a spacecraft leaving with the planet), instead of elements."""
+    burns: list[OrbitBurn] = Field(default_factory=list)
+    """Impulsive burns, in time order: [{at: '45 min', prograde: '0.5 km/s'}, {at: apoapsis, prograde: '0.4 km/s'}]; each Δv drawn as an arrow at its point, the orbits before and after."""
 
     @field_validator("geometry")
     @classmethod
@@ -242,18 +333,28 @@ def build_system(central: Any, bodies: list[OrbitBody]) -> Any:
         where = f"bodies[{k}] '{name}'"
         if name in seen or name == centre.name:
             raise VidgenError(f"{where}: the name is used twice; give each body its own name")
-        parent = _parent(spec, preset, where, centre, central_key, seen, presets)
+        mate = _alongside(spec, where, seen, centre)
+        parent = mate.parent if mate is not None else _parent(spec, preset, where, centre, central_key, seen, presets)
         parent_body = centre if parent is None else seen[parent].body
         gm = _gm(spec.gm, spec.mass, where)
         radius = _length(spec.radius, f"{where}.radius")
         body = orbits.Body(name, gm if gm is not None else (preset.body.gm if preset else 0.0),
                            radius if radius is not None else (preset.body.radius if preset else 0.0), preset.body.color if preset else "")
-        elements = _elements(spec, preset, where, parent_body.gm + body.gm, parent_body)
+        if mate is not None:   # where the other body is, moving with it (a circle stays the same circle under its own μ)
+            el = mate.elements
+            mu = parent_body.gm + body.gm
+            elements = orbits.Elements(mu, el.p, 0.0, el.i, el.raan, el.argp, el.nu) if el.e == 0 else orbits.Elements.from_state(mu, *el.state())
+        else:
+            elements = _elements(spec, preset, where, parent_body.gm + body.gm, parent_body)
         q = elements.periapsis
         if parent_body.radius > 0 and q <= parent_body.radius:
             raise VidgenError(f"{where}: its periapsis ({_distance(q)} from the centre of {parent_body.name}) lies inside {parent_body.name} "
                               f"(radius {_distance(parent_body.radius)}): it would crash; raise the periapsis or lower e")
-        orbiter = orbits.Orbiter(name, body, elements, parent)
+        trajectory = None
+        if spec.burns:
+            plans = [b.plan(f"{where}.burns[{n}]") for n, b in enumerate(spec.burns, start=1)]
+            trajectory = _fly(elements, plans, parent_body, where)
+        orbiter = orbits.Orbiter(name, body, elements, parent, trajectory)
         out.append(orbiter)
         seen[name] = orbiter
         if preset is not None:
@@ -265,6 +366,30 @@ def _distance(metres: float) -> str:
     if metres >= 0.05 * orbits.AU:
         return f"{metres / orbits.AU:.4g} AU"
     return f"{metres / 1000:,.0f} km"
+
+
+def _alongside(spec: "OrbitBody", where: str, seen: dict[str, Any], centre: Any) -> Any:
+    """The body ``spec`` starts alongside (``None``: it has its own orbit), checked."""
+    if spec.alongside is None:
+        return None
+    if spec.alongside not in seen:
+        known = list(seen)
+        raise VidgenError(f"{where}: alongside '{spec.alongside}' is not a body listed before it" + (f" (known: {', '.join(known)})" if known else "")
+                          + did_you_mean(spec.alongside, known))
+    others = [k for k in (*SHAPE_KEYS, "e", "i", "raan", "argp", "nu", "mean_anomaly", "r", "v", "preset") if getattr(spec, k) is not None]
+    if others:
+        raise VidgenError(f"{where}: alongside '{spec.alongside}' gives its start; leave out {', '.join(others)}")
+    mate = seen[spec.alongside]
+    if spec.around is not None and spec.around != (mate.parent or centre.name):
+        raise VidgenError(f"{where}: alongside '{spec.alongside}' it goes around {mate.parent or centre.name}, not '{spec.around}'")
+    return mate
+
+
+def _fly(elements: Any, plans: list[Any], parent: Any, where: str) -> Any:
+    try:
+        return orbits.fly(elements, plans, radius=parent.radius, body=parent.name)
+    except VidgenError as error:
+        raise VidgenError(f"{where}: {error}") from None
 
 
 def _parent(spec: OrbitBody, preset: Any, where: str, centre: Any, central_key: str | None, seen: dict[str, Any], presets: dict[str, str]) -> str | None:
@@ -372,10 +497,19 @@ class OrbitModel:
     (:class:`orbits.Shot`, fired from ``cannon_at``, a 3-vector in m) and ``cannon_radius``."""
 
     def __init__(self, system: Any, span: float, run: Any, follow: str | None, trails: dict[str, float], shots: list[Any] | None = None,
-                 cannon_at: Any = None) -> None:
+                 cannon_at: Any = None, transfer: "TransferInfo | None" = None, assist: "AssistInfo | None" = None,
+                 extra_bodies: list["OrbitBody"] | None = None) -> None:
         self.system, self.span, self.run, self.follow, self.trails = system, span, run, follow, trails
         self.shots = list(shots or [])
         self.cannon_at = cannon_at
+        self.transfer = transfer
+        self.assist = assist
+        self.extra_bodies = list(extra_bodies or [])
+
+    def burns(self) -> list[tuple[str, Any]]:
+        """Every burn of the scene in order of the bodies, then time: (body name, :class:`orbits.Burn`)
+        — ``burn:1``, ``burn:2``... in that order."""
+        return [(o.name, b) for o in self.system.orbiters if o.trajectory is not None for b in o.trajectory.burns]
 
     def shot_view(self, k: int, t: Any, launch: float) -> Any:
         """Shot ``k``'s position(s) in the view's frame at time(s) ``t`` when fired at ``launch``
@@ -404,25 +538,46 @@ class OrbitModel:
 
 
 def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, orbit_count: float | None, dynamics: str, method: str,
-                  step: str | None, follow: str | None, cannon: OrbitCannon | None = None) -> OrbitModel:
+                  step: str | None, follow: str | None, cannon: OrbitCannon | None = None, transfer: OrbitTransfer | None = None,
+                  flyby: OrbitFlyby | None = None) -> OrbitModel:
     """Everything an ``orbit`` scene computes before drawing, checked (``VidgenError`` with the
     reason): the system, the span (``span``, or ``orbit_count`` periods of the first body —
-    default one; with only a cannon, the longest closed shot's period), the n-body run, the
-    followed body, the trails, the cannon's shots and the overlays' needs."""
-    system = build_system(central, bodies)
-    if not bodies and cannon is None:
+    default one; with only a cannon, the longest closed shot's period; with a transfer, until a
+    little after it arrives; with a flyby, the whole pass), the n-body run, the followed body,
+    the trails, the cannon's shots, the transfer's burns, the flyby's probe and the overlays'
+    needs."""
+    assist = None
+    extra: list[OrbitBody] = []
+    if flyby is not None:
+        if cannon is not None or transfer is not None:
+            raise VidgenError("flyby: a gravity assist is a scene of its own (no cannonball or transfer with it)")
+        centre = (OrbitCentral(preset=central) if isinstance(central, str) else central).body()
+        probe, assist = _flyby_probe(centre, flyby, [b.display_name() for b in bodies])
+        extra.append(probe)
+    all_bodies = [*bodies, *extra]
+    system = build_system(central, all_bodies)
+    if not all_bodies and cannon is None:
         raise VidgenError("bodies: give at least 1 item (a body), or a cannonball")
     if cannon is not None and dynamics == "nbody":
         raise VidgenError("cannonball: the shots fly on Kepler orbits around the central body; use dynamics: kepler")
+    if dynamics == "nbody" and (transfer is not None or flyby is not None or any(b.burns for b in bodies)):
+        raise VidgenError("burns, transfers and flybys are flown on Kepler arcs (patched conics); use dynamics: kepler")
     shots, cannon_at = _shots(system.central, cannon) if cannon is not None else ([], None)
-    _check_overlays(bodies, system, dynamics)
+    info = None
+    if transfer is not None:
+        system, info = _transfer(system, all_bodies, transfer)
+    _check_overlays(all_bodies, system, dynamics)
     if span is not None and orbit_count is not None:
         raise VidgenError("give span (a time) or orbits (periods of the first body), not both")
     if span is not None:
         seconds = orbits.value_si(span, "time", "span")
         if seconds <= 0:
             raise VidgenError(f"span: '{span}' must be a positive time")
-    elif not bodies:
+    elif info is not None and orbit_count is None:
+        seconds = info.arrival + 0.2 * (info.arrival - info.depart)
+    elif assist is not None and orbit_count is None:
+        seconds = 2 * assist.t_periapsis
+    elif not all_bodies:
         if orbit_count is not None:
             raise VidgenError("orbits counts periods of the first body; with only a cannonball give span: '3 h' (a time), or leave it out")
         seconds = _cannon_span(shots, system.central.gm, float(np.linalg.norm(cannon_at)))
@@ -433,6 +588,11 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
             raise VidgenError(f"orbits: bodies[1] '{first}' is on an open orbit (e = {o.elements.e:g}, a {o.elements.kind}): it has no period; "
                               "give span: '200 d' (a time) instead")
         seconds = (orbit_count if orbit_count is not None else 1.0) * period
+    late = [(name, b) for name, b in OrbitModel(system, seconds, None, None, {}).burns() if b.time > seconds]
+    if late:
+        name, b = late[0]
+        what = f"the transfer's burn at {_time(b.time)}" if info is not None else f"{name}'s burn at {_time(b.time)}"
+        raise VidgenError(f"{what} comes after the scene's span ({_time(seconds)}); make the span longer or leave it out")
     names = [system.central.name, *system.names]
     if follow is not None and follow not in names:
         raise VidgenError(f"follow: no body '{follow}' (bodies: {', '.join(names)})" + did_you_mean(follow, names))
@@ -447,9 +607,215 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
     elif step is not None:
         raise VidgenError("step is the n-body integration step; it needs dynamics: nbody")
     trails = {}
-    for spec, o in zip(bodies, system.orbiters):
+    for spec, o in zip(all_bodies, system.orbiters):
         trails[o.name] = _trail_seconds(spec.trail, o.elements.period, seconds, f"{o.name}.trail")
-    return OrbitModel(system, seconds, run, None if follow == system.central.name else follow, trails, shots, cannon_at)
+    return OrbitModel(system, seconds, run, None if follow == system.central.name else follow, trails, shots, cannon_at, info, assist, extra)
+
+
+def _time(seconds: float) -> str:
+    unit, scale = orbits.time_unit(seconds)
+    return f"{seconds / scale:.4g} {unit}"
+
+
+@dataclass(frozen=True)
+class TransferInfo:
+    """A resolved transfer: its ``kind``, the ``ship`` flying it, the ``target`` body (``None``
+    for a radius), the radii, the result (:class:`orbits.Hohmann`, :class:`orbits.BiElliptic`
+    or :class:`orbits.Phasing`), the times of departure and arrival, the lead angle the target
+    needs at departure (``phase_needed``, rad; ``None`` without a target) and the one it has
+    (``phase_at_depart``), whether ``depart`` was the launch window, the ship's and target's
+    mean motions (rad/s), the distance between ship and target at arrival (``miss``, m)."""
+
+    kind: str
+    ship: str
+    target: str | None
+    r1: float
+    r2: float
+    result: Any
+    depart: float
+    arrival: float
+    phase_needed: float | None
+    phase_at_depart: float | None
+    window: bool
+    n_ship: float
+    n_target: float
+    miss: float | None
+
+    @property
+    def total(self) -> float:
+        return float(self.result.total)
+
+
+@dataclass(frozen=True)
+class AssistInfo:
+    """A resolved flyby: the probe's name, the planet's, the :class:`orbits.GravityAssist`,
+    when the probe passes periapsis (s after the start), the planet's speed around the Sun."""
+
+    probe: str
+    planet: str
+    assist: Any
+    t_periapsis: float
+    planet_speed: float
+
+
+def lead_angle(system: Any, ship: str, target: str, t: float) -> float:
+    """The angle (rad, in (−π, π]) the target leads the ship by at ``t``, in the ship's direction of motion."""
+    o = system.orbiter(ship)
+    r_s, v_s = o.states(t)
+    r_t = system.orbiter(target).positions(t)
+    sense = 1.0 if np.cross(r_s, v_s)[2] >= 0 else -1.0
+    ang = sense * (math.atan2(r_t[1], r_t[0]) - math.atan2(r_s[1], r_s[0]))
+    out = (ang + math.pi) % (2 * math.pi) - math.pi
+    return math.pi if out == -math.pi else out
+
+
+def _transfer(system: Any, bodies: list[OrbitBody], spec: OrbitTransfer) -> tuple[Any, TransferInfo]:
+    """The ship's burns for the transfer (a new system with its trajectory) and what the panel
+    shows of it. Raises for a ship or target off a circular orbit, orbits in different planes,
+    a ship with burns of its own, a phasing orbit into the planet, an impossible transfer."""
+    names = system.names
+    if spec.ship not in names:
+        raise VidgenError(f"transfer.ship: no body '{spec.ship}' (bodies: {', '.join(names)})" + did_you_mean(spec.ship, names))
+    ship = system.orbiter(spec.ship)
+    k = names.index(spec.ship)
+    if bodies[k].burns:
+        raise VidgenError(f"transfer: '{spec.ship}' has burns of its own; the transfer makes its burns (leave out its burns:)")
+    parent = system.parent_body(ship)
+    el = ship.elements
+    if el.e > orbits.CIRCULAR_E:
+        raise VidgenError(f"transfer: '{spec.ship}' is on an orbit with e = {el.e:.4g}; a {spec.kind} transfer starts from a circular orbit "
+                          f"(give it e: 0, or plan the burns yourself)")
+    target, r2 = None, None
+    to = spec.to
+    if isinstance(to, str) and to in names:
+        if to == spec.ship:
+            raise VidgenError("transfer.to: the ship cannot fly to itself")
+        target = to
+        tgt = system.orbiter(to)
+        if tgt.parent != ship.parent:
+            raise VidgenError(f"transfer.to: '{to}' goes around {tgt.parent or system.central.name}, '{spec.ship}' around "
+                              f"{ship.parent or system.central.name}: a transfer here is between orbits around one body")
+        tel = tgt.elements
+        if tel.e > orbits.CIRCULAR_E:
+            raise VidgenError(f"transfer.to: {to}'s orbit has e = {tel.e:.4g}; the transfer is computed between circular orbits — give {to} e: 0 "
+                              "(the circular approximation; say so in the caption)")
+        h1 = el.rotation[:, 2]
+        h2 = tel.rotation[:, 2]
+        tilt = math.acos(max(-1.0, min(1.0, float(h1 @ h2))))
+        if tilt > orbits.COPLANAR:
+            raise VidgenError(f"transfer.to: {to}'s orbit is inclined {math.degrees(tilt):.3g}° to {spec.ship}'s; a {spec.kind} transfer here is between "
+                              f"coplanar orbits — give both the same plane (i: 0: the coplanar approximation) or add a plane-change burn "
+                              f"(Δv = 2 v sin(Δi/2))")
+        r2 = tel.p
+        n_target = tel.mean_motion
+    elif isinstance(to, str) and not any(c.isdigit() for c in to):
+        raise VidgenError(f"transfer.to: no body '{to}' (bodies: {', '.join(names)}); give a body or a radius ('42164 km')" + did_you_mean(to, names))
+    else:
+        r2 = orbits.value_si(to, "length", "transfer.to")
+        if r2 <= 0:
+            raise VidgenError(f"transfer.to: '{to}' must be a positive radius")
+        if parent.radius > 0 and r2 <= parent.radius:
+            raise VidgenError(f"transfer.to: a {r2 / 1000:,.0f} km orbit lies inside {parent.name} (radius {parent.radius / 1000:,.0f} km)")
+        n_target = math.sqrt(el.mu / r2**3)
+    r1 = el.p
+    mu = el.mu
+    n_ship = el.mean_motion
+    kind = spec.kind
+    if kind == "phasing":
+        if target is None:
+            raise VidgenError("transfer: phasing catches up a body on the same orbit; give to: a body's name")
+        if not math.isclose(r1, r2, rel_tol=1e-6):
+            raise VidgenError(f"transfer: phasing is on one orbit, but {target} is at {_distance(r2)} and {spec.ship} at {_distance(r1)}; use kind: hohmann")
+    elif math.isclose(r1, r2, rel_tol=1e-9):
+        raise VidgenError(f"transfer.to: {spec.ship} is already on that orbit ({_distance(r1)}); to catch up a body there use kind: phasing")
+    if spec.apoapsis is not None and kind != "bielliptic":
+        raise VidgenError("transfer.apoapsis is the far point of a bielliptic transfer; give kind: bielliptic")
+    window = spec.depart == "window"
+    if kind == "hohmann":
+        result = orbits.hohmann(mu, r1, r2, mu_target=(system.orbiter(target).elements.mu if target else mu), mu_from=mu)
+        swept, legs = math.pi, None
+    elif kind == "bielliptic":
+        if spec.apoapsis is None:
+            raise VidgenError("transfer: a bielliptic transfer needs apoapsis: its far point ('300000 km'), beyond both orbits")
+        rb = orbits.value_si(spec.apoapsis, "length", "transfer.apoapsis")
+        result = orbits.bielliptic(mu, r1, r2, rb)
+        swept = 2 * math.pi
+        legs = (math.pi * math.sqrt(result.a1**3 / mu), math.pi * math.sqrt(result.a2**3 / mu))
+    else:
+        result = None
+        swept, legs = 0.0, None
+    if window and target is not None and kind != "phasing":
+        needed = (swept - n_target * result.time + math.pi) % (2 * math.pi) - math.pi
+        depart = orbits.window_wait(lead_angle(system, spec.ship, target, 0.0), needed, n_ship, n_target)
+    elif window:
+        depart, needed = 0.0, None
+    else:
+        depart = orbits.value_si(spec.depart, "time", "transfer.depart")
+        if depart < 0:
+            raise VidgenError(f"transfer.depart: '{spec.depart}' is before the start")
+        needed = (swept - n_target * result.time + math.pi) % (2 * math.pi) - math.pi if (target is not None and result is not None) else None
+    lead = lead_angle(system, spec.ship, target, depart) if target is not None else None
+    if kind == "phasing":
+        result = orbits.phasing(mu, r1, lead, spec.revolutions, radius=parent.radius, body=parent.name)
+        d = "retrograde" if result.lower else "prograde"
+        plans = [orbits.BurnPlan(depart, {d: result.dv}), orbits.BurnPlan(depart + result.time, {_opposite(d): result.dv})]
+        needed = None
+    elif kind == "hohmann":
+        d = "prograde" if result.raising else "retrograde"
+        plans = [orbits.BurnPlan(depart, {d: result.dv1}), orbits.BurnPlan(depart + result.time, {d: result.dv2})]
+    else:
+        raising = r2 > r1
+        plans = [orbits.BurnPlan(depart, {"prograde": result.dv1}), orbits.BurnPlan(depart + legs[0], {"prograde" if raising else "retrograde": result.dv2}),
+                 orbits.BurnPlan(depart + legs[0] + legs[1], {"retrograde": result.dv3})]
+    trajectory = _fly(el, plans, parent, f"transfer ({spec.ship})")
+    orbiters = tuple(replace(o, trajectory=trajectory) if o.name == spec.ship else o for o in system.orbiters)
+    new = orbits.System(system.central, orbiters)
+    arrival = trajectory.burns[-1].time
+    miss = float(np.linalg.norm(new.orbiter(spec.ship).positions(arrival) - new.orbiter(target).positions(arrival))) if target else None
+    return new, TransferInfo(kind, spec.ship, target, r1, r2, result, depart, arrival, needed, lead, window, n_ship, n_target, miss)
+
+
+def _flyby_probe(centre: Any, spec: OrbitFlyby, names: list[str]) -> tuple[OrbitBody, AssistInfo]:
+    """The flyby's probe as a body (its state where the pass starts, ``reach`` periapsis
+    distances out) and the gravity assist (raises for a periapsis inside the planet or its
+    atmosphere, a side the direction of arrival cannot give)."""
+    if spec.name in names or spec.name == centre.name:
+        raise VidgenError(f"flyby.name: '{spec.name}' is already a body's name; give the probe another")
+    v_inf = orbits.value_si(spec.v_inf, "speed", "flyby.v_inf")
+    if v_inf <= 0:
+        raise VidgenError("flyby.v_inf must be a positive speed")
+    if (spec.periapsis is None) == (spec.altitude is None):
+        raise VidgenError("flyby: give its closest approach one way: periapsis (from the centre) or altitude (above the surface)")
+    if spec.altitude is not None:
+        if centre.radius <= 0:
+            raise VidgenError(f"flyby.altitude needs the radius of {centre.name} (give central: {{radius: ...}}) or use periapsis")
+        rp = centre.radius + orbits.value_si(spec.altitude, "length", "flyby.altitude")
+    else:
+        rp = orbits.value_si(spec.periapsis, "length", "flyby.periapsis")
+    if rp <= 0:
+        raise VidgenError("flyby: the periapsis distance must be positive")
+    atmosphere = orbits.value_si(spec.atmosphere, "length", "flyby.atmosphere") if spec.atmosphere is not None else 0.0
+    if spec.planet_speed is not None:
+        speed = orbits.value_si(spec.planet_speed, "speed", "flyby.planet_speed")
+    else:
+        key = orbits.preset_key(centre)
+        if key is None or key not in orbits.ORBITS or orbits.ORBITS[key].around != "sun":
+            raise VidgenError(f"flyby.planet_speed: give the speed of {centre.name} around the Sun ('13.06 km/s'); it is known for the planet presets only")
+        p = orbits.ORBITS[key]
+        speed = math.sqrt((orbits.GM_SUN + centre.gm) / p.a)
+    if speed <= 0:
+        raise VidgenError("flyby.planet_speed must be positive")
+    angle = orbits.value_si(spec.angle, "angle", "flyby.angle")
+    v_in = v_inf * np.array([math.cos(angle), math.sin(angle)])
+    ga = orbits.gravity_assist(centre.gm, [speed, 0.0], v_in, rp, side=spec.side, radius=centre.radius, atmosphere=atmosphere, body=centre.name)
+    el = ga.flyby.elements
+    crossing = float(np.linalg.norm(ga.flyby.centre))   # where the asymptotes cross, |a| e from the planet
+    r_start = spec.reach * rp if spec.reach is not None else max(6 * rp, 1.6 * crossing)
+    nu0 = -math.acos(max(-1.0, min(1.0, (el.p / r_start - 1.0) / el.e)))
+    r, v = el.state_at_anomaly(nu0)
+    t_peri = el.time_of_flight(nu0, 0.0)
+    probe = OrbitBody(name=spec.name, r=[f"{float(x)!r} m" for x in r[:2]], v=[f"{float(x)!r} m/s" for x in v[:2]], color="highlight")
+    return probe, AssistInfo(spec.name, centre.name, ga, t_peri, speed)
 
 
 def _check_overlays(bodies: list[OrbitBody], system: Any, dynamics: str) -> None:
@@ -519,5 +885,5 @@ def _trail_seconds(trail: Any, period: float | None, span: float, where: str) ->
     return seconds
 
 
-__all__ = ["GEOMETRY_PARTS", "MAX_SHOTS", "SECTOR_COUNTS", "SHAPE_KEYS", "OrbitBody", "OrbitCannon", "OrbitCentral", "OrbitModel", "OrbitSectors",
-           "OrbitVelocity", "Value", "build_system", "resolve_model"]
+__all__ = ["GEOMETRY_PARTS", "MAX_SHOTS", "SECTOR_COUNTS", "SHAPE_KEYS", "AssistInfo", "OrbitBody", "OrbitBurn", "OrbitCannon", "OrbitCentral",
+           "OrbitFlyby", "OrbitModel", "OrbitSectors", "OrbitTransfer", "OrbitVelocity", "TransferInfo", "Value", "build_system", "lead_angle", "resolve_model"]

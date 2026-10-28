@@ -21329,3 +21329,82 @@ How to test
   equal-area sectors swept from a word, velocity arrows, Halley, Newton's cannonball launched on
   words, Kepler III plot, a flyby): `build/preview/storyboard/` (16:9 dark) and
   `build/preview_vlight/storyboard/` (9:16 light).
+
+
+## Step 231 — Manoeuvres
+
+What was built (DESIGN §98.5):
+
+- **Model** `vidgen.orbits.manoeuvres` (no manim): the local frame (prograde / radial / normal),
+  burns and trajectories (Kepler arcs between burns, `at` a time or the next periapsis / apoapsis,
+  an arc that would reach the surface before the next burn refused), `hohmann` (Δv₁, Δv₂, time,
+  phase angle from the target's own μ, synodic period), `window_wait`, `synodic_period`,
+  `bielliptic` and `bielliptic_thresholds()` (11.9387654 and 15.58172, computed by bisection),
+  `plane_change` (2 v sin(Δi/2)), `combined_plane_change`, `phasing`. `vidgen.orbits.flyby`:
+  `turning_angle`, `flyby` (the hyperbola from v∞ and r_p, its asymptotes' crossing, aiming
+  distance; a periapsis in the planet or its atmosphere refused), `gravity_assist` (the pass on
+  the chosen side; gain exactly when the periapsis is behind; an impossible side refused with the
+  reason). `Orbiter.trajectory`; `Playback` with knots and `Playback.timed`.
+- **Scene** `orbit`: `bodies[].burns`, `bodies[].alongside`, `transfer` (hohmann, bielliptic,
+  phasing; to a body or a radius; launch window by default), `flyby` (planet frame + Sun-frame
+  vector diagram); targets `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`,
+  `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`; actions `burn`, `flyby`, `pause`,
+  `coast` timing the clock (stretches with their own speed-up shown in the panel); a mission line
+  in the panel; `calc_values` so a `calculation` takes Δv etc. with `from_scene`.
+- Layout fixes met on the way: a 9:16 panel of more than five rows in two columns (and scaled with
+  its rows), no legend in 9:16 when a body burns (`auto`), a 13 % margin when bodies burn, a body
+  coinciding with an earlier one (alongside) shows one label, the scale bar in the least crowded
+  corner and over the orbits (fixes 230's lint warning; the 230 stills project lints clean).
+
+Files touched
+- New: `src/vidgen/orbits/{manoeuvres,flyby}.py`, `src/vidgen/scenes/orbit_manoeuvres.py`,
+  `tests/test_orbit_manoeuvres.py` (10).
+- Changed: `src/vidgen/orbits/{__init__,system}.py`, `src/vidgen/scenes/{orbit,orbit_parts,
+  orbit_overlays,orbit_actions,calculation,__init__}.py`, `src/vidgen/scene.py`
+  (`action_times`, additive), `tests/test_orbit.py` (+27 incl. 3 renders), `docs/CONFIG.md`
+  (orbit section, `from_scene`, targets and actions rows), the guide + `AGENTS.md` (chooser row,
+  two snippets, four action rows), `DESIGN.md` §98.5, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): in `vidgen.api.orbits` the names of `manoeuvres` and `flyby`,
+`Playback.knots / timed / rate / rates`, `Orbiter.trajectory / states / positions / elements_at`;
+`NarratedScene.action_times`; the `orbit` params, targets and actions above; `from_scene` on a
+scene type with `calc_values`.
+
+Decisions
+- Burns keep their simulated time from the orbit (an apoapsis, a launch window); an action on a
+  word moves the *clock* (a knot), not the burn — so the physics never depends on the narration,
+  and the time readout stays true (the panel shows each stretch's speed-up, "clock paused").
+- Transfers refuse eccentric / inclined orbits instead of silently circularising: the author
+  writes `e: 0, i: 0` and says so in a caption (the Earth→Mars example does). With `i: 0` a
+  preset's Ω still rotates the orbit: give `raan: 0, argp: 0` to place bodies by `nu` alone.
+- The flyby is an `orbit` param, not a new scene type: a new type would need a gallery entry and
+  the gallery is at its 13 MB budget (Step 235 decides there).
+- "Behind"/"in front" is decided by the periapsis' side (the sign of the energy change follows
+  from Δv∞ pointing at the planet), not by the turning sense; both ways past can be behind.
+
+Checks: the numbers asked for — LEO (300 km) → GEO 2.426 + 1.467 = 3.893 km/s in 5.28 h (the
+brief's 2.46 is from a lower orbit); Earth → Mars Δv₁ 2.945 km/s (heliocentric), 258.9 d, 44.3°,
+synodic 779.9 d; thresholds 11.9387654 / 15.58172; turning angle and v∞ in = out checked against
+the propagated hyperbola; energy gain sign; equal areas still honest within each clock stretch.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (shared code: `scene.py`
+`action_times`, `calculation.py` `from_scene`). 230 orbit scenes: unchanged except the scale bar's
+corner (only when crowded) and z-order, the 9:16 panel in two columns when long.
+
+Known gaps: n-body with burns (refused); the flyby in the planet's frame only (the vector
+diagram carries the Sun's frame); plane changes seen from above as a projection; LEO scenes at
+true scale hide the low orbit under the planet's disc (by design: sizes are true when large
+enough); the orbit gallery media (Step 235).
+
+How to test
+- `tests/test_orbit_manoeuvres.py` (10, < 1 s), `tests/test_orbit.py` (75 incl. renders, ~80 s),
+  `tests/test_orbits.py`, `tests/test_orbit_laws.py`.
+- Related, passing: `test_docs`, `test_guide`, `test_gallery` (not render), `test_actions_coverage`
+  (not render + render `-k orbit`), `test_builtin_scenes -k orbit`, `test_calculation`,
+  `test_calc_lint`, `test_schema`, `test_registry`, `test_introspect`, `test_json_output`,
+  `test_extensions`, `test_api`, `test_translation`, `test_plot_live`, `test_lint`,
+  `test_narration_rule`, `test_word_anchors`.
+- Stills: scratchpad `s231/proj` (LEO → GEO with burns on words, Earth → Mars with pause / coast
+  and the phase angle, raising and turning with three burns, a Δv budget `calculation` from the
+  orbit scene, bi-elliptic, phasing, a Jupiter gravity assist): `build/preview/storyboard/` (16:9
+  dark) and `build/preview_vlight/storyboard/` (9:16 light); `vidgen lint` 0 findings.

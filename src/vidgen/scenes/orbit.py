@@ -7,8 +7,10 @@ follow a body. The bodies move from the end of the first beat's entrance to the 
 one constant speed-up, so equal video times are equal simulated times and Kepler's second law
 shows as it is. Step 230 adds the overlays of Kepler's laws and orbital speed (the ellipse's
 geometry, equal-time sectors, velocity vectors, Newton's cannonball: ``orbit_overlays.py``) and
-the actions ``sweep`` and ``launch`` (``orbit_actions.py``). The params and the model are in
-``orbit_parts.py``; the physics in ``vidgen.orbits``."""
+the actions ``sweep`` and ``launch`` (``orbit_actions.py``). Step 231 adds manoeuvres — burns,
+transfers (Hohmann, bi-elliptic, phasing), a flyby with its Sun-frame vector diagram — and a
+clock that can run in stretches (a burn on its word, pauses): ``orbit_manoeuvres.py``. The params
+and the model are in ``orbit_parts.py``; the physics in ``vidgen.orbits``."""
 
 import math
 from dataclasses import replace
@@ -18,8 +20,9 @@ import numpy as np
 
 from vidgen.api import *
 
+from .orbit_manoeuvres import VECTOR_GAP, OrbitManoeuvres
 from .orbit_overlays import OrbitOverlays, Slot, arrow_shape, leader_points, mob_rect, new_arrow, place
-from .orbit_parts import OrbitBody, OrbitCannon, OrbitCentral, OrbitModel, Value, resolve_model
+from .orbit_parts import OrbitBody, OrbitCannon, OrbitCentral, OrbitFlyby, OrbitModel, OrbitTransfer, Value, resolve_model
 
 #: Smallest drawn radius (Manim units) of the central body and of an orbiting body: smaller
 #: bodies are enlarged to it (and the readout says "sizes not to scale").
@@ -32,8 +35,13 @@ TRAIL_SAMPLES = 64
 CONIC_SAMPLES = 360
 #: A margin around the data, as a share of its span (as the plot scene's equal aspect).
 MARGIN = 0.06
+#: The margin when bodies burn (their Δv arrows and labels stand at the edge of their orbits).
+BURN_MARGIN = 0.13
 #: Space between the plot and the side panel.
 BOX_GAP = 0.45
+#: In a vertical frame a panel of more rows than this is set in two columns, this far apart.
+PANEL_ROWS_PORTRAIT = 5
+PANEL_COLUMN_GAP = 0.35
 #: Space between the x tick labels and the unit written after them (16:9).
 UNIT_GAP = 0.25
 #: Width kept in a side panel row for the velocity key's arrow and its gap.
@@ -45,7 +53,7 @@ MODEL_CACHE = 32
 
 
 @scene("orbit")
-class Orbit(OrbitOverlays, NarratedScene):
+class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
     """Orbits in correct timing: a central body (``central``: a preset or your own) and
     ``bodies`` on Kepler orbits (presets, elements, or a position and velocity), drawn as conics
     with the bodies moving along them through the whole scene at one speed-up (``span`` or
@@ -54,18 +62,25 @@ class Orbit(OrbitOverlays, NarratedScene):
     move with a body, ``dynamics: nbody`` for mutual gravity (leapfrog, with the energy error
     shown). Kepler's laws and orbital speed: a body's ``geometry`` (foci, a, b, apsides),
     ``sectors`` (equal areas in equal times) and ``velocity`` (vectors, vis-viva speed);
-    ``cannonball`` (Newton's cannon: one point, increasing speeds).
+    ``cannonball`` (Newton's cannon: one point, increasing speeds). Manoeuvres: a body's
+    ``burns`` (Δv prograde, radial, normal...), a ``transfer`` (Hohmann, bi-elliptic, phasing:
+    Δv₁, Δv₂, transfer time, phase angle, launch windows), a ``flyby`` (a gravity assist in the
+    planet's frame with the Sun-frame vector diagram).
 
     Action targets: ``title``, ``frame``, ``central``, ``body:<name>``, ``orbit:<name>``,
     ``geometry:<name>``, ``foci:<name>``, ``axes:<name>``, ``periapsis:<name>``,
     ``apoapsis:<name>``, ``sectors:<name>``, ``velocity:<name>``, ``cannon``, ``shot:<n>``,
-    ``readout``; actions ``sweep`` (sectors) and ``launch`` (shots).
+    ``burn:<n>``, ``transfer``, ``phase``, ``asymptotes``, ``turn``, ``v_inf``, ``motion``,
+    ``atmosphere``, ``vectors``, ``v_before``, ``v_after``, ``readout``; actions ``sweep``
+    (sectors), ``launch`` (shots), ``burn`` (a burn on its word), ``flyby`` (the periapsis
+    passage on its word), ``pause`` and ``coast`` (the clock held and run again).
     """
 
     outro = 0.5
     orbit_actions = True
     target_patterns = ("title", "frame", "central", "body:<name>", "orbit:<name>", "geometry:<name>", "foci:<name>", "axes:<name>",
-                       "periapsis:<name>", "apoapsis:<name>", "sectors:<name>", "velocity:<name>", "cannon", "shot:<n>", "readout")
+                       "periapsis:<name>", "apoapsis:<name>", "sectors:<name>", "velocity:<name>", "cannon", "shot:<n>", "burn:<n>", "transfer",
+                       "phase", "asymptotes", "turn", "v_inf", "motion", "atmosphere", "vectors", "v_before", "v_after", "readout")
 
     class Params(SceneParams):
         title: TranslatableStr = ""
@@ -76,6 +91,10 @@ class Orbit(OrbitOverlays, NarratedScene):
         """The orbiting bodies: [{preset: earth}, {name: Probe, a: '1.5 AU', e: 0.4}, {name: Ship, r: ['7000 km', 0], v: [0, '8 km/s']}] (may be empty with a cannonball)."""
         cannonball: OrbitCannon | None = None
         """Newton's cannonball: shots from one point above the central body at increasing speeds ({speeds: [0.7, 0.9, 1, 1.2, escape, 1.6], altitude: '600 km'}), each classified by its energy."""
+        transfer: OrbitTransfer | None = None
+        """A transfer flown by one body between circular coplanar orbits: {kind: hohmann, ship: Ship, to: Mars} (or to: '42164 km'; kind: bielliptic with apoapsis, phasing); its burns, Δv budget, time, phase angle and launch windows computed."""
+        flyby: OrbitFlyby | None = None
+        """A gravity assist past the central body, in its frame: {v_inf: '5.6 km/s', altitude: '200000 km', side: behind}; the hyperbola, asymptotes, turning angle and the Sun-frame vector diagram."""
         span: Value | None = None
         """Simulated time the scene shows ('1 yr', '92 min', '30 d'); or orbits."""
         orbits: float | None = Field(default=None, gt=0)
@@ -132,8 +151,13 @@ class Orbit(OrbitOverlays, NarratedScene):
                 if len(_MODELS) >= MODEL_CACHE:   # a long-running process (the MCP server) keeps the recent ones
                     del _MODELS[next(iter(_MODELS))]
                 _MODELS[key] = resolve_model(self.central, self.bodies, span=self.span, orbit_count=self.orbits, dynamics=self.dynamics,
-                                             method=self.method, step=self.step, follow=self.follow, cannon=self.cannonball)
+                                             method=self.method, step=self.step, follow=self.follow, cannon=self.cannonball, transfer=self.transfer,
+                                             flyby=self.flyby)
             return _MODELS[key]
+
+        def body_specs(self) -> list[OrbitBody]:
+            """The bodies as written, then those the scene adds (a flyby's probe)."""
+            return [*self.bodies, *self.model().extra_bodies]
 
         def shows_energy(self) -> bool:
             return self.dynamics == "nbody" and self.energy is not False
@@ -142,7 +166,7 @@ class Orbit(OrbitOverlays, NarratedScene):
     def target_names(cls, params: Any) -> list[str]:
         names = (["title"] if params.title else []) + ["frame", "central"]
         model = params.model()
-        for spec, o in zip(params.bodies, model.system.orbiters):
+        for spec, o in zip(params.body_specs(), model.system.orbiters):
             names.append(f"body:{o.name}")
             if spec.orbit:
                 names.append(f"orbit:{o.name}")
@@ -158,7 +182,16 @@ class Orbit(OrbitOverlays, NarratedScene):
                 names.append(f"velocity:{o.name}")
         if model.shots:
             names += ["cannon", *[f"shot:{k + 1}" for k in range(len(model.shots))]]
-        if params.readout or params.shows_energy() or any(s.velocity_spec() or s.sector_spec() or s.geometry_parts() for s in params.bodies) or model.shots:
+        names += [f"burn:{k}" for k in range(1, len(model.burns()) + 1)]
+        if model.transfer is not None:
+            names += ["transfer"] + (["phase"] if model.transfer.target is not None else [])
+        if model.assist is not None:
+            fb = model.assist.assist.flyby
+            names += ["asymptotes", "turn", "v_inf", f"periapsis:{model.assist.probe}", "motion"] + (["atmosphere"] if fb.atmosphere > 0 else [])
+            if params.flyby.vectors:
+                names += ["vectors", "v_before", "v_after"]
+        if params.readout or params.shows_energy() or any(s.velocity_spec() or s.sector_spec() or s.geometry_parts() for s in params.body_specs()) \
+                or model.shots or model.burns() or model.assist is not None:
             names.append("readout")
         return names
 
@@ -169,13 +202,57 @@ class Orbit(OrbitOverlays, NarratedScene):
             return str(params.title) or None
         kind, _, key = name.partition(":")
         if kind == "body":
-            for spec in params.bodies:
+            for spec in params.body_specs():
                 if spec.display_name() == key:
                     return str(spec.label) or key
         if kind == "central":
             central = params.central
             return (str(central.label) or central.name or central.preset) if isinstance(central, OrbitCentral) else central.capitalize()
         return None
+
+    @classmethod
+    def calc_values(cls, params: Any) -> dict[str, tuple[float, str]]:
+        """What a ``calculation`` scene may take from this one (``from_scene: <id>.dv1``): name →
+        (SI value, the unit it is shown in). A transfer: ``dv1``, ``dv2`` (``dv3``), ``dv_total``,
+        ``t_transfer``, ``r1``, ``r2``, ``v1``, ``v2`` (circular speeds), with a target body
+        ``phase_angle``, ``synodic_period``, ``wait``; phasing: ``dv``, ``t_phasing``; burns:
+        ``dv_burn1``... and ``dv_spent``; a flyby: ``v_inf``, ``r_p``, ``e``, ``delta``,
+        ``v_planet``, ``v_before``, ``v_after``, ``gain``."""
+        model = params.model()
+        out: dict[str, tuple[float, str]] = {}
+
+        def time(seconds: float) -> tuple[float, str]:
+            unit, _ = orbits.time_unit(seconds)
+            return seconds, {"yr": "d"}.get(unit, unit)
+
+        info = model.transfer
+        if info is not None:
+            r = info.result
+            if info.kind == "phasing":
+                out.update(dv=(r.dv, "km/s"), t_phasing=time(r.time))
+            else:
+                out.update(dv1=(r.dv1, "km/s"), dv2=(r.dv2, "km/s"))
+                if info.kind == "bielliptic":
+                    out["dv3"] = (r.dv3, "km/s")
+            mu = model.system.orbiter(info.ship).elements.mu
+            out.update(dv_total=(r.total, "km/s"), t_transfer=time(info.arrival - info.depart), v1=(math.sqrt(mu / info.r1), "km/s"),
+                       v2=(math.sqrt(mu / info.r2), "km/s"))
+            length = "AU" if info.r2 > 0.05 * orbits.AU else "km"
+            out.update(r1=(info.r1, length), r2=(info.r2, length))
+            if info.phase_needed is not None:
+                out.update(phase_angle=(info.phase_needed, "deg"), synodic_period=time(2 * math.pi / abs(info.n_ship - info.n_target)),
+                           wait=time(info.depart) if info.depart > 0 else (0.0, "d"))
+        burns = model.burns()
+        for n, (_, b) in enumerate(burns, start=1):
+            out[f"dv_burn{n}"] = (b.magnitude, "km/s")
+        if burns:
+            out["dv_spent"] = (sum(b.magnitude for _, b in burns), "km/s")
+        if model.assist is not None:
+            ga = model.assist.assist
+            fb = ga.flyby
+            out.update(v_inf=(fb.v_inf, "km/s"), r_p=(fb.rp, "km"), e=(fb.e, ""), delta=(fb.delta, "deg"), v_planet=(model.assist.planet_speed, "km/s"),
+                       v_before=(ga.speed_before, "km/s"), v_after=(ga.speed_after, "km/s"), gain=(ga.gain, "km/s"))
+        return out
 
     # ----- building ---------------------------------------------------------------------------
 
@@ -199,7 +276,7 @@ class Orbit(OrbitOverlays, NarratedScene):
         if p.caption:
             caption = chart_caption(p.caption, body, size=p.caption_size, color=p.caption_color)
             body = body.above(caption, gap=0.2)
-        self._colors = {o.name: self.theme.color(spec.color) if spec.color else self.theme.palette_color(k) for k, (spec, o) in enumerate(zip(p.bodies, model.system.orbiters))}
+        self._colors = {o.name: self.theme.color(spec.color) if spec.color else self.theme.palette_color(k) for k, (spec, o) in enumerate(zip(p.body_specs(), model.system.orbiters))}
         self._shot_colors = self._shot_palette()
 
         # the extent of what the view must show, in metres, and the unit it is shown in
@@ -217,35 +294,55 @@ class Orbit(OrbitOverlays, NarratedScene):
         self._lines_static = [orbits.speedup_text(model.span / self._motion_seconds())] if p.readout else []
         self._t_unit = orbits.time_unit(model.span)
         self._note = ""   # "sizes not to scale", known once the drawing scale is
+        self._video_now = begin
         slots: list[Slot] = []
         if p.readout:
             slots.append(Slot([self._time_line(model.span * k / 200) for k in range(201)], value=self._time_line))
-            slots.append(Slot(list(self._lines_static), value=lambda t: self._lines_static[0]))
+            rates = ["clock paused", "× 99 million"] if any(self.action_times(k) for k in ("burn", "flyby", "pause")) else []
+            slots.append(Slot(list(self._lines_static) + rates, value=lambda t: self._rate_text()))
         if p.shows_energy():
             slots.append(Slot([self._energy_line(-1.23e-10), self._energy_line(-9.99e-9)], value=lambda t: self._energy_line(self._model.energy_error(t))))
+        slots += self._manoeuvre_slots()
         slots += self._overlay_slots()
         has_panel = bool(slots)
         slots.append(Slot(["sizes not to scale"], value=lambda t: self._note, color="dim", scale=0.85))
         self._slots = slots
         side_w, side_h = self._panel_size(slots) if has_panel else (0.0, 0.0)
-        side_h = min(side_h, body.height)
-        right, top = (0.0, side_h + BOX_GAP) if portrait and has_panel else ((side_w + BOX_GAP, 0.0) if has_panel else (0.0, 0.0))
-        area = plotcore.Rect(body.x0, body.y0, body.x1 - right, body.y1)
+        if side_w > body.width:   # wider rows are scaled down to the width when drawn, the panel with them
+            side_h *= body.width / side_w
+            side_w = body.width
+        vec_w, vec_h = self._vector_box_size()   # a flyby's vector diagram: under the panel (16:9), under the picture (9:16)
+        column_h = side_h + (VECTOR_GAP + vec_h if vec_h and not portrait else 0.0)
+        side_h = min(side_h, body.height - (VECTOR_GAP + vec_h if vec_h and not portrait else 0.0))
+        column_h = min(column_h, body.height)
+        column_w = max(side_w, vec_w if not portrait else 0.0)
+        right, top = (0.0, side_h + BOX_GAP) if portrait and has_panel else ((column_w + BOX_GAP, 0.0) if has_panel else (0.0, 0.0))
+        bottom = vec_h + VECTOR_GAP if portrait and vec_h else 0.0
+        area = plotcore.Rect(body.x0, body.y0 + bottom, body.x1 - right, body.y1)
         measure = plot_draw.text_measure(size, self.theme)
         lay = self._layout(area, xs / unit_m, ys / unit_m, None if fixed is None else fixed / unit_m, unit_name, measure, top)
-        box = None
+        box = vbox = None
         if has_panel:
             if portrait:
                 mid = (lay.plot.x0 + lay.plot.x1) / 2
                 box = plotcore.Rect(mid - side_w / 2, area.y1 - side_h, mid + side_w / 2, area.y1)
             else:   # beside the plot, its middle level with the plot's
-                cy = min(max((lay.plot.y0 + lay.plot.y1) / 2, body.y0 + side_h / 2), body.y1 - side_h / 2)
-                box = plotcore.Rect(lay.plot.x1 + BOX_GAP + self._unit_room(lay), cy - side_h / 2, lay.plot.x1 + BOX_GAP + self._unit_room(lay) + side_w, cy + side_h / 2)
-        x0, y0, x1, y1 = _bounds(lay, box)
+                cy = min(max((lay.plot.y0 + lay.plot.y1) / 2, body.y0 + column_h / 2), body.y1 - column_h / 2)
+                x0 = lay.plot.x1 + BOX_GAP + self._unit_room(lay)
+                box = plotcore.Rect(x0, cy + column_h / 2 - side_h, x0 + column_w, cy + column_h / 2)
+                if vec_h:
+                    vbox = plotcore.Rect(x0, cy - column_h / 2, x0 + column_w, cy - column_h / 2 + vec_h)
+        if portrait and vec_h:
+            mid = (lay.plot.x0 + lay.plot.x1) / 2
+            w = min(body.width, max(vec_w, lay.plot.width))
+            under = min([lay.plot.y0, *[lab.y - lab.height / 2 for lab in lay.x_labels]]) - VECTOR_GAP
+            vbox = plotcore.Rect(mid - w / 2, under - vec_h, mid + w / 2, under)
+        x0, y0, x1, y1 = _bounds(lay, box, vbox)
         dx, dy = (body.x0 + body.x1 - x0 - x1) / 2, (body.y0 + body.y1 - y0 - y1) / 2
         lay = _shifted(lay, dx, dy)
         if box is not None:
             box = plotcore.Rect(box.x0 + dx, box.y0 + dy, box.x1 + dx, box.y1 + dy)
+        self._vector_box = plotcore.Rect(vbox.x0 + dx, vbox.y0 + dy, vbox.x1 + dx, vbox.y1 + dy) if vbox is not None else None
         self._lay = lay
         self._picture_area = plotcore.Rect(body.x0, body.y0, body.x1, body.y1)   # where overlay labels may stand (the plot, its margins)
         self._scale = lay.plot.width / (lay.x.hi - lay.x.lo) / unit_m   # Manim units per metre
@@ -268,7 +365,7 @@ class Orbit(OrbitOverlays, NarratedScene):
         self._leaders: dict[str, VMobject] = {centre.name: self._leader()}
 
         self._bodies: dict[str, tuple[Any, Any]] = {}
-        for spec, o in zip(p.bodies, model.system.orbiters):
+        for spec, o in zip(p.body_specs(), model.system.orbiters):
             r = o.body.radius * self._scale
             enlarged |= o.body.radius > 0 and r < MIN_BODY_RADIUS
             dot = Circle(radius=max(r, MIN_BODY_RADIUS)).set_fill(colors[o.name], opacity=1)
@@ -280,7 +377,7 @@ class Orbit(OrbitOverlays, NarratedScene):
         if not enlarged and box is not None:   # no note: the panel loses its last row
             self._slots = slots[:-1]
             h = min(self._panel_size(self._slots)[1], box.height)
-            shift = 0.0 if portrait else (box.height - h) / 2
+            shift = 0.0 if portrait or self._vector_box is not None else (box.height - h) / 2
             box = plotcore.Rect(box.x0, box.y1 - shift - h, box.x1, box.y1 - shift)
             self._readout_box = box
 
@@ -288,8 +385,8 @@ class Orbit(OrbitOverlays, NarratedScene):
         self._conics: dict[str, tuple[VGroup, Any, bool]] = {}
         self._conic_points: dict[str, np.ndarray] = {}
         diagonal = math.hypot(lay.plot.width, lay.plot.height) / self._scale
-        for spec, o in zip(p.bodies, model.system.orbiters):
-            if not spec.orbit:
+        for spec, o in zip(p.body_specs(), model.system.orbiters):
+            if not spec.orbit or o.trajectory is not None:   # a body that burns: its orbits arc by arc (orbit_manoeuvres)
                 continue
             rel = o.elements.conic(CONIC_SAMPLES, r_max=1.5 * diagonal)
             moves = model.run is not None or not (o.parent == model.follow)
@@ -308,6 +405,7 @@ class Orbit(OrbitOverlays, NarratedScene):
         self._label_cache: dict[str, Any] = {}
 
         self._build_orbit_overlays()
+        self._build_manoeuvres()
         self._t = 0.0
         self._draw(0.0)
         self._register(title, caption, frame_parts)
@@ -323,15 +421,27 @@ class Orbit(OrbitOverlays, NarratedScene):
 
     def _panel_size(self, slots: list[Slot]) -> tuple[float, float]:
         """Width and height of the side panel holding ``slots``."""
-        width, height = 0.0, 0.0
-        for slot in slots:
-            m = plot_draw.text_measure(self._size * slot.scale, self.theme, slot.color)
-            dims = [m(t) for t in slot.probes]
-            w = max(d[0] for d in dims) + (0.32 if slot.swatch else 0.0) + (KEY_ROOM if slot.key else 0.0)
-            width = max(width, w)
-            height += max(d[1] for d in dims) + 0.14 * self._size / 24
+        widths, heights = [], []
+        for column in self._panel_columns(slots):
+            width, height = 0.0, 0.0
+            for slot in column:
+                m = plot_draw.text_measure(self._size * slot.scale, self.theme, slot.color)
+                dims = [m(t) for t in slot.probes]
+                w = max(d[0] for d in dims) + (0.32 if slot.swatch else 0.0) + (KEY_ROOM if slot.key else 0.0)
+                width = max(width, w)
+                height += max(d[1] for d in dims) + 0.14 * self._size / 24
+            widths.append(width)
+            heights.append(height)
         pad = plot_draw.PLATE_PAD
-        return width + 0.1 + 2 * pad, height + 2 * pad
+        return sum(widths) + PANEL_COLUMN_GAP * (len(widths) - 1) + 0.1 + 2 * pad, max(heights) + 2 * pad
+
+    def _panel_columns(self, slots: list[Slot]) -> list[list[Slot]]:
+        """The panel's rows in one column, or in two side by side in a vertical frame when there
+        are many (the picture keeps its height)."""
+        if not self.is_portrait or len(slots) <= PANEL_ROWS_PORTRAIT:
+            return [slots]
+        k = math.ceil(len(slots) / 2)
+        return [slots[:k], slots[k:]]
 
     def _unit_room(self, lay: Any) -> float:
         """Extra room right of the plot taken by the unit after the x ticks (16:9 axes)."""
@@ -355,6 +465,16 @@ class Orbit(OrbitOverlays, NarratedScene):
         ts = np.linspace(0.0, model.span, 400)
         system = model.system
         follow = model.follow
+        if model.assist is not None and follow is None:   # a flyby: the whole pass, the planet with its atmosphere
+            fb = model.assist.assist.flyby
+            ring = np.linspace(0, 2 * math.pi, 73)
+            top = fb.radius + fb.atmosphere
+            path = model.view(model.assist.probe, ts)
+            disc = np.column_stack([top * np.cos(ring), top * np.sin(ring), 0 * ring])
+            c = fb.centre
+            around = c + 0.2 * float(np.linalg.norm(c)) * np.column_stack([np.cos(ring), np.sin(ring), 0 * ring])
+            pts = np.concatenate([path, disc, around])   # and where the asymptotes cross, with room for the turning angle
+            return pts[:, 0], pts[:, 1]
         shown = [o for o in system.orbiters if follow is None or follow in [c.name for c in system.chain(o.name)[1:]]]
         if not shown:
             shown = [o for o in system.orbiters if o.name != follow]
@@ -364,6 +484,12 @@ class Orbit(OrbitOverlays, NarratedScene):
         for o in shown:
             path = model.view(o.name, ts)
             still = o.parent == follow and model.run is None
+            if o.trajectory is not None:   # a body that burns: its path, and the closed orbits it is on whole
+                points.append(path)
+                for arc in o.trajectory.arcs:
+                    if still and arc.elements.closed and arc.start <= model.span:
+                        points.append(arc.elements.conic(120))
+                continue
             if o.elements.closed:
                 points.append(path)
                 if still:
@@ -407,8 +533,9 @@ class Orbit(OrbitOverlays, NarratedScene):
         else:   # the data's box with a margin: the plot hugs the orbits (no axis runs on past them)
             x_lo, x_hi, y_lo, y_hi = float(xs.min()), float(xs.max()), float(ys.min()), float(ys.max())
             span = max(x_hi - x_lo, y_hi - y_lo, 1e-12)
-            x_lo, x_hi = x_lo - MARGIN * span, x_hi + MARGIN * span
-            y_lo, y_hi = y_lo - MARGIN * span, y_hi + MARGIN * span
+            margin = BURN_MARGIN if self._model.burns() else MARGIN   # room for the Δv arrows and their labels
+            x_lo, x_hi = x_lo - margin * span, x_hi + margin * span
+            y_lo, y_hi = y_lo - margin * span, y_hi + margin * span
         if p.frame == "axes":
             def spec(lo: float, hi: float, ticks: int) -> Any:
                 return plotcore.AxisSpec(lo=lo, hi=hi, unit=unit, label="", max_ticks=ticks, exact=True)
@@ -455,15 +582,39 @@ class Orbit(OrbitOverlays, NarratedScene):
         k = math.floor(math.log10(span))
         length = max(m * 10**k for m in (1, 2, 5) if m * 10**k <= span)
         per_unit = lay.plot.width / (lay.x.hi - lay.x.lo)
-        x0, y0 = lay.plot.x0 + 0.25, lay.plot.y0 + 0.3
+        text = plotcore.plain_number(length, max(0, -k)) if length < 1e5 else plotcore.sci_number(length, 1)
+        label = plot_draw.label_text(f"{text} {unit}", size=size, color="dim", theme=self.theme)
+        w, h = max(length * per_unit, label.width), label.height + 0.25
+        # the corner of the plot the bodies' paths keep away from (bottom left unless crowded)
+        paths = self._paths_in_frame()
+        corners = [(lay.plot.x0 + 0.25, lay.plot.y0 + 0.3), (lay.plot.x1 - 0.25 - w, lay.plot.y0 + 0.3), (lay.plot.x0 + 0.25, lay.plot.y1 - 0.15 - h),
+                   (lay.plot.x1 - 0.25 - w, lay.plot.y1 - 0.15 - h)]
+
+        def crowd(corner: tuple[float, float]) -> int:
+            x, y = corner
+            inside = (paths[:, 0] > x - 0.1) & (paths[:, 0] < x + w + 0.1) & (paths[:, 1] > y - 0.15) & (paths[:, 1] < y + h + 0.1)
+            return int(np.count_nonzero(inside))
+
+        x0, y0 = min(corners, key=crowd)   # the first of the least crowded
         x1 = x0 + length * per_unit
         dim = self.theme.color("dim")
         bar = VGroup(Line([x0, y0, 0], [x1, y0, 0]), Line([x0, y0 - 0.07, 0], [x0, y0 + 0.07, 0]), Line([x1, y0 - 0.07, 0], [x1, y0 + 0.07, 0]))
         bar.set_stroke(dim, width=3)
-        text = plotcore.plain_number(length, max(0, -k)) if length < 1e5 else plotcore.sci_number(length, 1)
-        label = plot_draw.label_text(f"{text} {unit}", size=size, color="dim", theme=self.theme)
         label.next_to(bar, UP, buff=0.1).align_to(bar, LEFT)
-        return VGroup(bar, label)
+        return VGroup(bar, label).set_z_index(2.6)   # over the orbits, trails and sectors, under the bodies
+
+    def _paths_in_frame(self) -> np.ndarray:
+        """Frame points along every body's path over the span and its drawn orbit (where the
+        scale bar should not stand)."""
+        model = self._model
+        ts = np.linspace(0.0, model.span, 300)
+        pts = [np.zeros((0, 3))]
+        for o in model.system.orbiters:
+            pts.append(self._frame_points(model.view(o.name, ts)))
+            if o.elements.closed:
+                parent = model.view(o.parent, 0.0) if o.parent is not None else model.view(model.system.central.name, 0.0)
+                pts.append(self._frame_points(o.elements.conic(120) + parent))
+        return np.concatenate(pts)
 
     def _label(self, text: str, size: float) -> Mobject:
         return plot_draw.label_text(text, size=size, theme=self.theme).set_z_index(5)
@@ -479,7 +630,7 @@ class Orbit(OrbitOverlays, NarratedScene):
         self._frame_parts = frame_parts
         self.target("frame", VGroup(frame_parts, *([caption] if caption is not None else [])))
         self.target("central", VGroup(*self._central, self._leaders[self._model.system.central.name]))
-        for spec, o in zip(p.bodies, self._model.system.orbiters):
+        for spec, o in zip(p.body_specs(), self._model.system.orbiters):
             dot, label = self._bodies[o.name]
             parts = [dot, label, self._leaders[o.name]] + ([self._trails[o.name]] if o.name in self._trails else [])
             self.target(f"body:{o.name}", VGroup(*parts))
@@ -519,14 +670,15 @@ class Orbit(OrbitOverlays, NarratedScene):
         self.add(*self._trails.values(), *self._leaders.values())
         start = float(self.renderer.time)
         end = self._begin + self._motion_seconds()
-        self._playback = orbits.Playback(start, max(end - start, 1 / config.frame_rate), self._model.span)
+        self._playback = self._clock_plan(start, max(end - start, 1 / config.frame_rate))
         if self.params.readout:
-            self._lines_static = [orbits.speedup_text(self._playback.speedup)]
+            self._lines_static = [orbits.speedup_text(self._playback.rate(start))]
 
         def update(_: Mobject, dt: float) -> None:
             # the scene's clock (the frame about to be written), not a sum of dt: manim gives the
             # first frame of every play and wait a dt of 0
-            self._draw(self._playback.sim_time(float(self.renderer.time)))
+            self._video_now = float(self.renderer.time)
+            self._draw(self._playback.sim_time(self._video_now))
 
         self._update = update
         self._clock_mob.add_updater(update)
@@ -606,6 +758,7 @@ class Orbit(OrbitOverlays, NarratedScene):
                         piece.start_new_path(run[0])
                         piece.add_points_as_corners(run[1:])
         self._draw_orbit_overlays(t, anchors)
+        self._draw_manoeuvres(t, anchors)
         self._place_labels(items, plot)
         self._draw_readout(t)
 
@@ -624,15 +777,26 @@ class Orbit(OrbitOverlays, NarratedScene):
         sides, else further out with a thin leader line to it. A label keeps its place while
         that stays about as good (labels move with their bodies without jumping about)."""
         dots = [(name, _rect(dot, 0.03)) for name, dot, _ in items if getattr(dot, "_orbit_shown", True)]
-        taken = ([self._panel_rect()] if self._readout_box is not None else []) + list(self._static_boxes)
-        lines = [pts for pts in self._conic_points.values() if len(pts)]
+        taken = ([self._panel_rect()] if self._readout_box is not None else []) + list(self._static_boxes) + self._manoeuvre_boxes()
+        lines = [pts for pts in self._conic_points.values() if len(pts)] + self._manoeuvre_lines()
         points = np.concatenate(lines)[:, :2] if lines else None
+        placed: list[np.ndarray] = []
         for name, dot, label in items:
             leader = self._leaders[name]
             leader.clear_points()
             if not label.has_points() and not len(label):
                 continue
             c = dot.get_center()
+            # a body where one listed before it is (a spacecraft alongside its planet): one label for both
+            twin = any(np.linalg.norm(c[:2] - p[:2]) < 0.02 for p in placed)
+            placed.append(c)
+            if twin:
+                label.set_opacity(0.0)
+                label._orbit_twin = True
+                continue
+            if getattr(label, "_orbit_twin", False):   # apart again: shown as its dot is
+                label.set_opacity(1.0 if getattr(dot, "_orbit_shown", True) else 0.0)
+                label._orbit_twin = False
             if name == self._model.system.central.name and self._label_inside:
                 label.move_to(c)
                 continue
@@ -678,7 +842,11 @@ class Orbit(OrbitOverlays, NarratedScene):
                 arrow_shape(arrow[0], arrow[1], np.zeros(3), np.array([length, 0.0]), 3.5)
                 mob = VGroup(arrow, mob).arrange(RIGHT, buff=0.15)
             rows.append(mob)
-        group = VGroup(*rows).arrange(DOWN, buff=0.14 * self._size / 24, aligned_edge=LEFT)
+        columns, k = [], 0
+        for column in self._panel_columns(self._slots):
+            columns.append(VGroup(*rows[k:k + len(column)]).arrange(DOWN, buff=0.14 * self._size / 24, aligned_edge=LEFT))
+            k += len(column)
+        group = columns[0] if len(columns) == 1 else VGroup(*columns).arrange(RIGHT, buff=PANEL_COLUMN_GAP, aligned_edge=UP)
         pad = plot_draw.PLATE_PAD
         fit = min((box.width - 2 * pad) / max(group.width, 1e-9), (box.height - 2 * pad) / max(group.height, 1e-9))
         if fit < 1:
@@ -700,16 +868,18 @@ def _rect(m: Mobject, pad: float = 0.0) -> Any:
     return mob_rect(m, pad)
 
 
-def _bounds(lay: Any, box: Any) -> tuple[float, float, float, float]:
-    """The box around a laid-out panel (plot, tick labels, titles) and the side panel ``box``."""
+def _bounds(lay: Any, *boxes: Any) -> tuple[float, float, float, float]:
+    """The box around a laid-out panel (plot, tick labels, titles) and the side ``boxes`` (the
+    panel, a vector diagram; ``None`` skipped)."""
     xs, ys = [lay.plot.x0, lay.plot.x1], [lay.plot.y0, lay.plot.y1]
     labels = [*lay.x_labels, *lay.y_labels, *[t for t in (lay.x_title, lay.y_title) if t is not None]]
     for lab in labels:
         xs += [lab.x - lab.width / 2, lab.x + lab.width / 2]
         ys += [lab.y - lab.height / 2, lab.y + lab.height / 2]
-    if box is not None:
-        xs += [box.x0, box.x1]
-        ys += [box.y0, box.y1]
+    for box in boxes:
+        if box is not None:
+            xs += [box.x0, box.x1]
+            ys += [box.y0, box.y1]
     return min(xs), min(ys), max(xs), max(ys)
 
 

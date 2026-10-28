@@ -5485,7 +5485,8 @@ scene's own steps, comes with the lines before it that are not on screen yet, an
 lines after it that no action names (a `compute` brings an unnamed conversion).
 
 **Results of other scenes.** `from_scene: orbit` takes the result with the symbol's name from the
-calculation scene `orbit`; `from_scene: orbit.v` names the result. Checked by `vidgen validate`
+calculation scene `orbit`; `from_scene: orbit.v` names the result; an [`orbit`](#orbit) scene with a
+transfer, burns or a flyby gives its computed numbers the same way (`from_scene: geo.dv1`). Checked by `vidgen validate`
 (an unknown scene or result with did-you-mean, scenes taking values from each other in a loop).
 
 **Errors** (at `vidgen validate`, naming the symbol or calculation): an unknown symbol (did you
@@ -5507,7 +5508,7 @@ in the lines on screen, its substituted value too — for `highlight`), `row:<na
 | `symbols[].value` | number \| str | — | a number, `"1/25"`, `"6.674e-11"`, optionally with its unit (`"29.8 km/s"`) |
 | `symbols[].unit` | str | `""` | its unit, if not after the value; for a constant, the unit to show it in |
 | `symbols[].constant` | str | — | a constant's key (list above; aliases such as `kB`, `Msun` work) |
-| `symbols[].from_scene` | str | — | `scene_id` or `scene_id.result`: a result of another calculation scene |
+| `symbols[].from_scene` | str | — | `scene_id` or `scene_id.result`: a result of another calculation scene, or a number an [`orbit`](#orbit) scene computed (`geo.dv1`) |
 | `symbols[].sig` | int (1–15) | from the digits | its significant figures (the value is rounded to them) |
 | `symbols[].exact` | bool | — | `true`: exact (never limits a result) |
 | `symbols[].digits` | int | as written; constants 4 | figures to show (the full value is used) |
@@ -5634,7 +5635,9 @@ keeps the Earth at the centre: orbits around it stay still, the rest move with t
 panel (beside the picture in 16:9 — the room a tall picture leaves —, above it in 9:16) shows
 `t = 182 d` (min, h, d or yr by the span), the speed-up (`× 6 million`), with n-body the energy
 error `ΔE/E` (`energy: false` hides it), the overlays' values below, and a **legend** of the
-bodies with their periods (`legend: auto`: with two or more bodies; `true`, `false`).
+bodies with their periods (`legend: auto`: with two or more bodies, not in 9:16 with burns; `true`, `false`).
+In 9:16 a panel of more than five rows is set in two columns. A scale bar stands in the corner
+of the plot the paths keep away from (bottom left unless crowded).
 
 **Timing.** The first beat brings the frame, the central body, the orbits (drawn) and the bodies;
 then the bodies move until the scene's last frame, the time running from 0 to `span` (or
@@ -5753,13 +5756,132 @@ an action can bring in on a word:
         - {fit: "fit:T ∝ aᵏ", at: "@slope"}
 ```
 
+**Manoeuvres** (Step 231): impulsive burns, transfers between circular orbits and gravity assists,
+every number computed (two-body orbits; burns are instantaneous; patched conics for a flyby — say
+so in a caption).
+
+```yaml
+- id: geo
+  type: orbit
+  params:
+    title: "From low orbit to geostationary"
+    central: earth
+    bodies:
+      - {name: Satellite, altitude: "300 km", trail: false}
+    transfer: {ship: Satellite, to: "42164 km"}   # Hohmann: Δv₁ 2.43 + Δv₂ 1.47 = 3.89 km/s, 5.28 h
+  beats:
+    - text: "A prograde burn starts the transfer."
+      actions:
+        - {burn: "burn:1", at: "@burn"}          # the clock runs so the burn falls on this word
+    - text: "At apogee a second burn makes the orbit circular."
+      actions:
+        - {burn: "burn:2", at: "@second"}
+- id: mars
+  type: orbit
+  params:
+    title: "Earth to Mars"
+    bodies:
+      - {preset: earth, e: 0, i: 0, raan: 0, argp: 0}            # circular, coplanar: the approximation
+      - {preset: mars, e: 0, i: 0, raan: 0, argp: 0, nu: 75}
+      - {name: Ship, alongside: Earth}                          # starts with the Earth
+    transfer: {ship: Ship, to: Mars}             # departs at the launch window (Mars 44.3° ahead)
+    caption: "Circular, coplanar orbits (an approximation)"
+  beats:
+    - text: "Mars must lead by forty-four degrees when we leave."
+      actions:
+        - {action: pause, at: "@forty-four"}     # the clock holds still...
+    - text: "We wait for the window and burn."
+      actions:
+        - {action: coast, at: "@wait"}           # ...and runs again
+        - {burn: "burn:1", at: "@burn"}
+- id: raise
+  type: orbit
+  params:
+    central: earth
+    bodies:
+      - name: Sat
+        altitude: "400 km"
+        burns:
+          - {at: "20 min", prograde: "0.6 km/s"}
+          - {at: apoapsis, prograde: "0.55 km/s"}
+          - {at: "4 h", radial: "0.5 km/s", label: "a radial kick"}
+    span: "6 h"
+- id: jupiter
+  type: orbit
+  params:
+    title: "A gravity assist at Jupiter"
+    central: jupiter
+    flyby: {v_inf: "5.6 km/s", altitude: "400000 km", angle: 100, side: behind}
+  beats:
+    - text: "It passes behind Jupiter and is turned through a large angle."
+      actions:
+        - {action: flyby, at: "@behind"}         # the closest approach on this word
+```
+
+- **`burns`** (on a body): `{at, prograde, retrograde, radial, anti_radial, normal, anti_normal,
+  label}` in time order — `at` a time from the start (`'45 min'`, 0) or `periapsis` / `apoapsis`
+  (the next one after the burn before); the Δv as positive speeds along the local directions
+  (prograde along the velocity, radial perpendicular to it in the plane, outwards, normal along the
+  angular momentum: a plane change, seen from above only as its projection). Each burn adds Δv to
+  the velocity there and the body flies on the new orbit (`Elements` from the state). Drawn: a Δv
+  arrow at the burn point (one scale for the scene) labelled `Δv₁ 2.43 km/s prograde`, the orbit
+  before faint and dashed, the one after in the body's colour; the panel lists the burns, `Δv spent
+  … of …` and the mission line (`next: Δv₂ in 2.6 h`, then `all burns done`). `alongside: Earth`
+  starts a body where another one is, moving with it (a spacecraft leaving with its planet).
+- **`transfer`**: `{kind, ship, to, depart, apoapsis, revolutions}` flown by the body `ship` from
+  its circular orbit. `kind: hohmann` (default): two burns, half an ellipse — Δv₁, Δv₂, the total,
+  the transfer time (half the ellipse's period); with `to` a body (circular, in the same plane) the
+  phase angle it must lead by at departure (θ = 180° − n₂ t; drawn live as the angle between ship
+  and target until the departure) and the synodic period between launch windows; `depart: window`
+  (default) waits for the first window, a time (`'30 d'`) departs then — and the panel says by how
+  much the target is missed. `to` may be a radius (`'42164 km'`). `kind: bielliptic` with
+  `apoapsis` (its far point, beyond both orbits): three burns; it beats Hohmann only for r₂/r₁ above
+  11.94 (with a far apoapsis) and for any apoapsis above 15.58 (`orbits.bielliptic_thresholds()`).
+  `kind: phasing` with `to` a body on the same orbit: the chaser drops to a faster orbit (or rises
+  to a slower one) for `revolutions` turns and meets it. The planned path is drawn dashed (target
+  `transfer`) to a ring where it arrives; the panel lists the numbers (`Hohmann transfer to Mars`,
+  Δv₁, Δv₂, total Δv, `transfer 259 d`, `Mars leads by 52.0°`, `window at 44.3°, every 780 d`, the
+  next burn); the phase angle is target `phase`. Checks: a ship or target not on a
+  circular orbit ("give Mars e: 0 — the circular approximation"), orbits in different planes
+  ("inclined 1.85°: give both the same plane or add a plane-change burn, Δv = 2 v sin(Δi/2)"), a
+  radius inside the planet, a ship already there, a bi-elliptic apoapsis inside the orbits, a
+  phasing orbit dipping into the planet ("take more revolutions"), burns after the span.
+- **`flyby`**: `{v_inf, periapsis or altitude, side, angle, planet_speed, atmosphere, name, reach,
+  vectors}` — a gravity assist past the central body, in its frame: the probe (`name`, default
+  Probe; target `body:Probe`) arrives with the excess speed `v_inf` from the direction `angle`
+  (degrees from the planet's motion, which points to +x) and leaves on a hyperbola with e = 1 + r_p
+  v∞²/μ, turned by δ with sin(δ/2) = 1/e, at the same speed. Drawn: the asymptotes (dashed,
+  crossing at the hyperbola's centre; target `asymptotes`), δ at their crossing (`turn`), v∞ in
+  and out (`v_inf`), the periapsis (`periapsis:Probe`), the atmosphere's top (`atmosphere`), the
+  planet's motion (`motion`) and, beside the panel (under the picture in 9:16), the **Sun-frame
+  vector diagram** (`vectors`; parts `v_before`, `v_after`): the planet's velocity plus v∞ before
+  and after on a circle of radius v∞, so the speed around the Sun changes — `side: behind` (passing
+  on the side the planet comes from) gains, `in_front` loses; a direction from which both ways past
+  go behind (or in front) is refused with the reason. `planet_speed` defaults to a planet preset's
+  circular speed at its mean distance. Checks: a periapsis inside the planet or its atmosphere.
+  The pass runs from `reach` periapsis distances out (default: far enough to show where the
+  asymptotes cross) and back.
+- **The clock**: the motion keeps one speed-up unless actions time it — `burn: "burn:2"` puts a
+  burn on its word (one speed-up before, another after), `- action: flyby` the closest approach,
+  `- action: pause` holds the clock still from its word until a `- action: coast` (or the end of
+  its beat). The panel always shows the stretch's own speed-up (`× 5 000`, `clock paused`), so the
+  time readout stays true. Burns on words keep their order; a word before the motion starts (the
+  first beat's entrance) is refused.
+- **Δv budgets as calculations**: a `calculation` scene takes these numbers with `from_scene`:
+  `{name: dv1, from_scene: geo}` — `dv1`, `dv2`, `dv3`, `dv_total`, `t_transfer`, `r1`, `r2`,
+  `v1`, `v2`, `phase_angle`, `synodic_period`, `wait` (a transfer), `dv`, `t_phasing` (phasing),
+  `dv_burn1`…, `dv_spent` (burns), `v_inf`, `r_p`, `e`, `delta`, `v_planet`, `v_before`,
+  `v_after`, `gain` (a flyby), each to four significant figures.
+
 | param | type | default | meaning |
 | --- | --- | --- | --- |
 | `title` | str | `""` | title |
 | `central` | preset \| `{preset, name, label, show_label, gm, mass, radius, color}` | `sun` | the central body: `sun`, `mercury` … `neptune`, `moon`, or your own (`gm` as `'3.986e14 m^3/s^2'` or `mass` as `'5.97e24 kg'`, `radius` with its unit) |
 | `bodies` | list | required (may be empty with `cannonball`) | the orbiting bodies (below) |
 | `cannonball` | `{speeds, altitude, at, clockwise, show_paths}` | — | Newton's cannon (above) |
-| `legend` | bool \| `auto` | `auto` | the bodies and their periods in the side panel (auto: two or more bodies) |
+| `transfer` | `{kind, ship, to, depart, apoapsis, revolutions}` | — | a Hohmann, bi-elliptic or phasing transfer (above) |
+| `flyby` | `{v_inf, periapsis, altitude, side, angle, planet_speed, atmosphere, name, reach, vectors}` | — | a gravity assist in the planet's frame (above) |
+| `legend` | bool \| `auto` | `auto` | the bodies and their periods in the side panel (auto: two or more bodies; not in 9:16 with burns) |
 | `span` | time | one period | simulated time shown (`'1 yr'`, `'92 min'`) |
 | `orbits` | number | `1` | instead of `span`: periods of the first body (a closed orbit) |
 | `dynamics` | `kepler` \| `nbody` | `kepler` | two-body Kepler orbits, or mutual gravity integrated |
@@ -5793,6 +5915,8 @@ an action can bring in on a word:
 | `bodies[].geometry` | bool \| list of `foci`, `axes`, `apsides` | `false` | the ellipse's geometry |
 | `bodies[].sectors` | bool \| number \| `{count, show}` | `false` | equal-time sectors (`count` 8, `show: alternate` \| `all`) |
 | `bodies[].velocity` | bool \| `{live, along, readout}` | `false` | velocity vectors (`live` true, `along` 0, `readout` true) |
+| `bodies[].alongside` | body name | — | start where that body is, moving with it |
+| `bodies[].burns` | list of `{at, prograde, retrograde, radial, anti_radial, normal, anti_normal, label}` | `[]` | impulsive burns (above) |
 
 ### `function_plot`
 
@@ -11467,7 +11591,7 @@ a title card, a `transform` of a bar).
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
-| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `readout` | reveal, highlight, sweep, launch, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
+| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `readout` | reveal, highlight, sweep, launch, burn, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
@@ -11541,6 +11665,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `grow` | the target: a live series (`- grow: "series:x"`), `axes` (every live series) or `panel<N>`; `to` (the model's time, or the point number of live data; default the end) | on a [`plot`](#live-plots-models-and-grow): grows the live series from where they are to `to`, with the head marker and readout, the axes widening as the data reach their edge; it lasts until the beat's next action or the beat's end (or `run_time`); a later `grow` continues. The plot's own steps leave those series to it. |
 | `substitute`, `compute`, `convert` | as the target: a calculation (`- compute: calc1` or `"calc:v"`) | on a [`calculation`](#calculation): shows the values substituted into its formula (1.2 s), its result in its box (1.4 s; an intermediate value first) or its conversions (1.2 s) on a word, with the lines before it that are not on screen yet (an earlier calculation leaves, its result joining the table) and the lines after it that no action names; the scene's own steps leave those lines to the action. `reveal: formula2` shows a formula; `highlight: "symbol:G"` marks a symbol in the table and the lines on screen. `convert` needs `convert:` units. |
 | `sweep`, `launch` | as the target: a body's sectors (`- sweep: "sectors:Comet"`) or a shot of the cannon (`- launch: "shot:3"`, `"shot:*"`) | on an [`orbit`](#orbit): from that moment on the scene's clock the body's equal-time sectors fill as it sweeps them, or the shot flies (the bodies keep moving; no animation of its own). Without these actions sectors and shots start with the motion. |
+| `burn`, `flyby`, `pause`, `coast` | `burn`: a burn (`- burn: "burn:2"`); the others no target (`- action: pause`) | on an [`orbit`](#orbit): the scene's clock is planned through their words — `burn` puts a burn (its simulated time fixed by the orbit) on its word, `flyby` the closest approach, `pause` holds the clock still until a `coast` (or the end of its beat); each stretch runs at its own speed-up, shown in the panel. Burns on words keep their order. |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |

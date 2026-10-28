@@ -16,7 +16,7 @@ focus, relabel; ``cell_actions``: zoom_to; ``molecule_actions``: set_state, tran
 action_potential; ``gene_actions``: transcribe, cap, splice, polyadenylate, export, translate, target_er,
 glycosylate, fold, to_golgi, secrete; ``pathway_actions``: signal, inhibit, knockout, drug, amplify; ``cycle_actions``: advance, checkpoint; ``cross_actions``: form_gametes, fill, count, ratio, chi_square; ``pedigree_actions``: deduce, analyse, risk; ``linkage_actions``: cross_over, measure;
 ``karyotype_actions``: rearrange; ``plot_actions``: fit, annotate, grow; ``calculation_actions``: substitute, compute,
-convert; ``orbit_actions``: sweep, launch; ``host_actions``: host_point, host_look, host_react, host_move,
+convert; ``orbit_actions``: sweep, launch, burn, flyby, pause, coast; ``host_actions``: host_point, host_look, host_react, host_move,
 host_enter, host_exit) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
