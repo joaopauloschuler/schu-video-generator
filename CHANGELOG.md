@@ -5,9 +5,27 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–240)
+## Unreleased (Steps 193–241)
 
 ### Particle physics (Phase Y, from Step 237)
+
+- **Collisions, decays and data** (Step 241). `mass_spectrum`: a simulated invariant-mass spectrum
+  (labelled "simulated data") filling event by event with a ticker and the local significance
+  growing as the data arrive (Asimov, or the observed excess), Z → μμ with its width, H → γγ as a
+  small resolution-dominated bump on a large falling background, H → ZZ* → 4ℓ with a handful of
+  events, or your own resonance; the peak fitted with Phase W's Gaussian or Breit–Wigner on a
+  polynomial background (mass ± uncertainty, width), a note with the likelihood-ratio significance
+  and what its p-value means (5σ ↔ 2.9 × 10⁻⁷: background alone fluctuating this high — not the
+  chance the result is wrong), an optional data − background panel; a `plot` underneath (grow, fit,
+  annotate, reveal, zoom). `decay_chain`: decays as a tree with τ and cτ (PDG 2024), branching
+  fractions, each decay checked. `branching` (bars) and `branching_pie`: branching ratios from the
+  model (the Higgs boson's are the LHC Higgs XS WG prediction, said so). Plot models
+  `mass_spectrum`, `decay_times` and `z_lineshape` (2, 3, 4 neutrino families; schematic). `plot`
+  fits gain `residuals: background` and `parameters`, residual panels their own targets; a note on
+  a live histogram whose growth a `grow` action holds no longer crashes the render; fits with a
+  polynomial in large x (a cubic background at 100–160 GeV) are no longer refused as undetermined.
+  Also: display events of `detector` presets sit on the resonance peak (mass within ± Γ), and the
+  16:9 detector is drawn about 15 % larger.
 
 - **Event displays: the `detector` scene type** (Step 240). A schematic cylindrical detector
   (tracker, solenoid, ECAL, HCAL, iron yoke, muon chambers; generic sizes, labelled "schematic

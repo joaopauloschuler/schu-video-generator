@@ -22224,3 +22224,113 @@ How to test
   `build/preview_vertical/`; `s240/kin` (the review fixes: pion in two frames, π⁰ boost, diphoton
   `readout: all`, the muon calculation, the opening-angle plot, Bhabha with vertex_rule):
   `build/preview_light/`; `vidgen lint`: 0 errors.
+
+## Step 241 — Collisions, decays and data
+
+What was built (DESIGN §99.10 review note, §99.11–§99.12): simulated collision data and what is
+read from it as two model modules (`particle_physics.spectrum`, `particle_physics.branching`, no
+manim), four scene types (`mass_spectrum`, `decay_chain`, `branching`, `branching_pie`), three
+plot models and a few additive `plot` features.
+
+First, the review of Step 240's stills:
+- Display presets draw the boson mass from a Breit–Wigner truncated to M ± Γ
+  (`detector.DISPLAY_WIDTHS` = 1, was ±3Γ), still one seeded uniform: `z_to_mumu` seed 3 now gives
+  m(μμ) = 89.0 GeV (was 85.9); a test checks 20 seeds within Γ_Z.
+- 16:9 detector about 15 % larger (circle 60 → 69 % of the frame height): the label column writes
+  the field on two lines, the side columns stand 0.6 × GAP from the drawing. Gallery entry
+  regenerated.
+
+The step:
+- **Model** `spectrum`: `SpectrumSpec`, `CHANNELS` (z_to_mumu, h_to_gammagamma, h_to_4l),
+  `channel_spec`, `generate` (cached; signal Cauchy(M, Γ) + Gaussian resolution, background
+  exponential / power / flat by inverse CDF), `asimov`, `counting_significance`, `p_value`,
+  `FIVE_SIGMA_P`, `window_shares`, `Spectrum.asimov_curve` / `counting_curve`,
+  `likelihood_significance` (Poisson ML fits, q₀, Z), `peak_guesses`, `meaning_lines`,
+  `decay_times`, `mean_lifetime`, `z_cross_section`; plot models `mass_spectrum`, `decay_times`,
+  `z_lineshape`.
+- **Model** `branching`: tables (H — SM prediction, LHC Higgs XS WG YR4, labelled theory; Z, W, π,
+  π⁰, K, μ — PDG 2024), antiparticles by conjugation, `branching_problems` (checker, sums within
+  10⁻³), `chain` / `ChainNode.lifetime_lines` / `mode_fraction`.
+- **Scenes**: `mass_spectrum` = a `Plot` subclass whose params are made from the physics (live
+  histogram, ticker and significance readout, Phase W peak fit, the 5σ note, data − background,
+  9:16 layout: fixed headroom, no legend, one box with the fit values and the note); `decay_chain`
+  (tidy tree, τ / cτ, fractions, checks); `branching` (`BarChart` subclass) and `branching_pie`
+  (`Pie` subclass).
+- **plot** (shared, additive): fit `residuals: background`, `parameters`; targets `residuals<N>` /
+  `residuals:<name>`; multi-line notes; fixes: a step growing live data no longer fades in axes
+  being re-shaped (crash with a `grow` action and an unheld note); `fit._covariance` rank test on
+  scaled columns (a cubic background at x ≈ 100 was refused).
+
+Files touched
+- New: `src/vidgen/particle_physics/{spectrum,branching}.py`, `src/vidgen/scenes/{mass_spectrum,decay_chain,branching}.py`,
+  `tests/test_spectrum.py` (29 incl. 5 renders), `docs/gallery/{mass_spectrum,decay_chain,branching,branching_pie}.md` + media.
+- Changed: `src/vidgen/particle_physics/{__init__,detector}.py`, `src/vidgen/plotcore/fit.py`,
+  `src/vidgen/scenes/{__init__,detector,plot,plot_figure,plot_live,plot_parts}.py`, the guide
+  (chooser rows, a `# particle physics` snippet block and notes, plot fit notes) + `AGENTS.md`,
+  `docs/CONFIG.md` (four sections, targets rows, plot fit keys, detector note), `docs/gallery/README.md`
+  (generated) and the `detector` entry, `examples/gallery/video.yaml` (four scenes),
+  `tests/{test_actions_coverage,test_builtin_scenes,test_detector,test_docs,test_extensions,test_gallery,test_registry,test_translation}.py`,
+  `DESIGN.md`, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): scene types `mass_spectrum`, `decay_chain`, `branching`,
+`branching_pie`; `particle_physics.spectrum`, `particle_physics.branching`; plot models
+`mass_spectrum`, `decay_times`, `z_lineshape`; plot fit keys `residuals: background`,
+`parameters`; plot targets `residuals<N>`, `residuals:<name>`; `detector.DISPLAY_WIDTHS`. No
+dependency, no config key.
+
+Decisions
+- Reuse first: `mass_spectrum` is a `plot` underneath (params made in a before-validator), so
+  filling, rescaling, fits, zoom and the actions are Phase W's; the scene adds only the readout
+  lines, the note and the portrait layout. Branching charts subclass `bar_chart` / `pie`; decay
+  times and the Z line shape are plot models; `decay_chain` is its own picture.
+- Readout significance = Asimov with the *expected* window shares (the sample's own shares were 0
+  for few events); the fit note = likelihood ratio; both "local", the p-value explained as the
+  chance that background alone fluctuates this high.
+- Fits start from the expected mass / width and the background-only polynomial (the generic peak
+  guess latched on the curvature of an exponential background; 14 of 20 γγ fits failed before).
+- Z fitted with a Breit–Wigner: its Γ includes the resolution (caption and docs say so); no Voigt.
+- 9:16: when all boxes went above the plot it kept a fifth of the frame; a fixed headroom (2× the
+  highest bin), no legend and one combined box inside the plot keep it large.
+- With a `fit` action and no `annotate` of the note, the note follows the fit (the plot's own step
+  would grow the data to the end before the fit).
+- Gallery budget 15 → 16.5 MB (recorded in `tests/test_gallery.py` and DESIGN §99.12): the four
+  entries take 0.74 MB (gallery 15.4 MB); room left for Step 243's showcase.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check241`). Shared
+changes are additive (new keys / targets) or fix crashes and refusals; `_covariance` gives the same
+inverse (Phase W's scipy comparisons pass). The `detector` look changed as asked (entry regenerated).
+
+Values (for the owner to check; DESIGN §99.11): the Higgs branching ratios are the YR4 predictions
+at m_H = 125.09 GeV written from memory (bb̄ 58.24, WW* 21.37, gg 8.187, ττ 6.272, cc̄ 2.891, ZZ*
+2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176 %); Z (hadrons 69.911, invisible 20.000, ee 3.3632, μμ
+3.3662, ττ 3.3696 %); W (hadrons 67.41, ℓν 10.86 % each, the universality average); K⁺ (63.56,
+20.67, 5.583, 5.07, 3.352, 1.760 %) — all marked `check=True`. π⁺, π⁰, μ values are standard. The
+Asimov hand values: s = 10, b = 100 → 0.98399; s = 100, b = 100 → 8.7897 (the brief's "~8.9" is
+approximate; s/√b would say 10); p(5σ) = 2.8665 × 10⁻⁷. σ⁰_had computed 41.51 nb (PDG fit 41.48).
+
+Known gaps: no Voigt fit (Z χ²/ν ≈ 2); significances local (no look-elsewhere); 9:16 shows the fit
+values with the note, not with the curve; the 9:16 box may cover a tall peak's top (4ℓ); full
+spectra with the note trip `max_words` (≈ 45 words); pie labels of small modes can fall under the
+readable size (pie's own behaviour); 4ℓ fits fail for ≈ 1 seed in 40 (clear error); no lint rules
+(Step 242).
+
+Render performance (preview 1280×720, 10 fps): H → γγ six beats (30 000 events, fit, subtraction,
+note, zoom; 26.4 s) in 31–41 s; Z (6.5 s) and 4ℓ (5.4 s) in 10–14 s; decay chain (9.3 s) in 6 s;
+branching bars (4.7 s) in 9 s; simulating 30 000 events ≈ 40 ms (cached). Bars, not events, are
+drawn; no memory concern.
+
+How to test
+- `tests/test_spectrum.py` (29 incl. 5 renders, ~45 s).
+- Related, all passing: `test_detector`, `test_particle_physics`, `test_plot`, `test_plot_live`,
+  `test_plot_fit`, `test_plot_core`, `test_science_review`; `test_builtin_scenes` +
+  `test_actions_coverage` + `test_docs` + `test_extensions` + `test_translation` + `test_guide` +
+  `test_gallery` + `test_registry` not render; renders `-k "mass_spectrum or decay_chain or
+  branching or plot"`; `test_api` + `test_schema` + `test_introspect` + `test_json_output` +
+  `test_narration_rule` + `test_lint` + `test_overlays` + `test_calc_lint` not render; the gallery
+  lint checks (3).
+- Stills: scratchpad `s241/proj` (H → γγ with fill, fit, subtraction, note, zoom; Z; 4ℓ):
+  `build/preview/frames/`, `build/preview_light/`, `build/preview_vertical/`, `build/preview_vlight/`;
+  `s241/proj2` (π decay chain, H → ZZ* → 4ℓ chain, H branching bars, Z pie, muon decay times with a
+  τ fit, the Z line shape): `build/preview/`, `build/preview_vertical/`; `s240/det` (the detector fix):
+  `build/preview/frames/zmumu/`; `vidgen lint`: 0 errors (warnings: `max_words` with the note,
+  one pie label).

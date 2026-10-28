@@ -399,6 +399,36 @@ scenes:
       - text: "Seen from the side."
         actions: [{action: switch_view, to: rz}]
 
+  - id: spectrum
+    type: mass_spectrum   # a simulated invariant-mass histogram filling event by event, a peak fit, the local significance
+    params:
+      channel: h_to_4l
+      style: points
+    beats:
+      - text: "Four-lepton events arrive one by one."
+      - text: "A fit finds the peak near one hundred and twenty-five GeV."
+
+  - id: chain
+    type: decay_chain     # decays with lifetimes and branching fractions, each one checked
+    params:
+      title: "From a pion to an electron"
+      decays: ["pi+ -> mu+ nu_mu", "mu+ -> e+ nu_e anti-nu_mu"]
+      reveal: all
+    beats:
+      - text: "A pion becomes a muon, and the muon an electron."
+
+  - id: higgs_decays
+    type: branching       # branching ratios from the model, the source in the caption
+    params: {particle: H, modes: 6}
+    beats:
+      - text: "How a Higgs boson decays, as the Standard Model predicts."
+
+  - id: z_decays
+    type: branching_pie
+    params: {particle: Z}
+    beats:
+      - text: "Seventy percent of Z bosons decay to hadrons."
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:

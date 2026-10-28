@@ -18310,7 +18310,8 @@ examples simulated and labelled "simulated data"; no real experiment's logo or e
 
 **Names** (checked against the registry and the code): the package `vidgen.particle_physics`
 (`vidgen.particles` is the cartoon particle effects); scene types `standard_model` (237),
-`feynman` (238), `kinematics` (239), `detector` (240); actions `antiparticles`, `couplings` (237), `travel`,
+`feynman` (238), `kinematics` (239), `detector` (240), `mass_spectrum`, `decay_chain`, `branching`,
+`branching_pie` (241); actions `antiparticles`, `couplings` (237), `travel`,
 `vertex_rule`, `swap_channel` (238), `boost` (239), `switch_view` (240); no collisions.
 
 ### 99.2 The model: `vidgen.particle_physics` (Step 237)
@@ -18779,3 +18780,159 @@ pile-up and no resolution smearing (missing p_T of a simulated event is exact); 
 deposit in the calorimeters; endcap muons in x–y are drawn where they cross the stations; a full
 display trips `max_words` (about 50 words with readout, legend and key: `legend: false` /
 `layers: false` for a busy narration).
+
+**Review of 240's stills (Step 241)**: a display preset's boson mass is now a Breit–Wigner draw
+truncated to M ± Γ (`DISPLAY_WIDTHS` = 1; was ±3Γ: `z_to_mumu` seed 3 gave 85.9 GeV, now 89.0),
+still one seeded uniform through the truncated inverse CDF, so presets stay deterministic (a test
+checks 20 seeds within Γ_Z). In 16:9 the drawing is about 15 % larger (the circle 60 → 69 % of the
+frame height): the label column writes the field on two lines ("B = 2 T", "out of the screen") so
+it is as narrow as the layer key, and the columns stand 0.6 × `GAP` from the drawing (its labels
+sit inside it). The `detector` gallery entry was regenerated.
+
+### 99.11 Collisions, decays and data: the model (Step 241)
+
+Two modules of `vidgen.particle_physics` (no manim), exported as `particle_physics.spectrum` and
+`particle_physics.branching`.
+
+**`spectrum`** — everything simulated from a seed (`SplitMix64`, the same seed the same events with
+any numpy) and labelled so on screen.
+
+- `SpectrumSpec(mass, width, resolution, lo, hi, events, signal, shape, slope, index, seed)` with
+  `problems()` (window, widths, 1 ≤ events ≤ 200 000, 0 ≤ signal ≤ events, shape parameters),
+  `window` (the peak window M ± 2√(σ² + (Γ/2)²)); `CHANNELS` (`z_to_mumu`: 70–110 GeV, 6000 events,
+  ≈4800 Z, σ = 1 GeV, exponential λ = 18 GeV, Breit–Wigner fit, no significance readout;
+  `h_to_gammagamma`: 100–160 GeV, 30 000 events, ≈320 H, σ = 1.6 GeV, exponential λ = 30 GeV,
+  Gaussian on a cubic, expected 5.3σ; `h_to_4l`: 100–160 GeV in 2 GeV bins, 40 events, ≈16 H, σ = 1.8
+  GeV, flat, Gaussian on a constant; masses and widths from §99.2; counts and shapes schematic),
+  `channel_spec(channel, seed, **overrides)`.
+- `generate(spec)` → `Spectrum(spec, masses, signal)` (cached): each event signal with probability
+  signal/events; signal = Cauchy(M, Γ) + σ·N(0, 1), redrawn until inside [lo, hi]; background by the
+  inverse CDF of `exponential` (∝ e^(−m/λ)), `power` (∝ m^−k) or `flat`, truncated to the window.
+- Significance (all local): `asimov(s, b)` = √(2((s + b) ln(1 + s/b) − s)) (Cowan et al. 2011);
+  `counting_significance(n, b)` = √(2(n ln(n/b) − (n − b))) for n > b; `p_value(z)` = ½ erfc(z/√2)
+  (`FIVE_SIGMA_P` = 2.867 × 10⁻⁷); `Spectrum.asimov_curve()` / `counting_curve()` after 0 … N events
+  with s, b expected in the window from `window_shares(spec)` (the background's CDF; the signal's
+  share from 20 000 draws with a fixed seed of its own — the simulation's own shares fluctuated to
+  0 with few events); `likelihood_significance(edges, counts, peak, degree, guesses)` → `Significance`
+  (`z`, `q0`, `p`, `fit`, `background`, `lnl_sb`, `lnl_b`): binned Poisson maximum-likelihood fits
+  (Phase W's `fit_curve(poisson=1)`) of a polynomial alone and of the peak on it, started from the
+  expected mass and width (`peak_guesses`) and the background-only polynomial (the plain peak guess
+  latches on the curvature of an exponential background), q₀ = 2(ln L_s+b − ln L_b), Z = √q₀;
+  `meaning_lines(z, method, narrow)` (the p-value said correctly: "the chance that background alone
+  fluctuates this high, not that the result is wrong (5σ: p = 2.9 × 10⁻⁷)"; "> 20σ" beyond 20).
+- Decay times: `decay_times(tau, events, seed)` (inverse CDF), `mean_lifetime(times)` → (τ̂ = mean,
+  τ̂/√N).
+- `z_cross_section(√s, neutrinos)`: σ(e⁺e⁻ → Z → hadrons) in nb, relativistic Breit–Wigner with an
+  s-dependent width, peak 12π Γ_ee Γ_had / (m_Z² Γ_Z²) × (ħc)² = 41.5 nb (the PDG pole fit 41.48);
+  each neutrino family adds Γ_inv/3 = 166 MeV. Schematic: no initial-state radiation.
+- Plot models (`register_model`): `mass_spectrum` (numbers only: mass, width, resolution, lo, hi,
+  events, signal, slope | index | flat; columns `n`, `m`, `signal`), `decay_times` (`tau`, `events`;
+  `n`, `t`), `z_lineshape` (`lo`, `hi`, `samples`; `sqrt_s`, `sigma`, `sigma_2nu`, `sigma_4nu`).
+
+Measured behaviour (40 seeds; tests on 20): the fitted mass is unbiased (mean pull ≈ 0); Z and 4ℓ
+pulls have the expected spread (≥ 90 % within 2σ); H → γγ, a 1 % signal on a cubic-approximated
+exponential, has wider pulls (sd ≈ 1.4, ≥ 75 % within 2σ: the Fisher errors underestimate a little
+when the bump is small) — said in the docs. The likelihood-ratio Z is a little above the Asimov
+expectation on average (6.0 against 5.3 for γγ: the mass and width are fitted, Wilks at the best
+point). 4ℓ fits fail for about 1 seed in 40 (a narrow spike in one bin): the scene's error says to
+try another seed, more events or wider bins.
+
+**`branching`**: `Branching(parent, modes, source, kind)` of `Mode(process, fraction, name, note,
+check)`; `branching(name)` (antiparticles by charge conjugation), `listed()`,
+`branching_problems()` (every process allowed by §99.3's checker, its parent the table's, each
+table ≤ 1 within `SUM_TOLERANCE` = 10⁻³ — the Z's separately averaged measurements add up to
+1.0001). Tables: **H at 125 GeV — Standard Model prediction**, LHC Higgs Cross Section Working
+Group, Yellow Report 4 (2016) at m_H = 125.09 GeV (bb̄ 58.24 %, WW* 21.37, gg 8.187, ττ 6.272, cc̄
+2.891, ZZ* 2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176; `kind: theory`, said on screen); PDG 2024
+measurements: Z (hadrons 69.911 %, invisible 20.000, e⁺e⁻ 3.3632, μ⁺μ⁻ 3.3662, τ⁺τ⁻ 3.3696), W⁺
+(hadrons 67.41 %, each ℓν the lepton-universality average 10.86), π⁺ (μ⁺ν 99.98770 %, e⁺ν 1.230 ×
+10⁻⁴), π⁰ (γγ 98.823 %, e⁺e⁻γ 1.174), K⁺ (μ⁺ν 63.56 %, π⁺π⁰ 20.67, π⁺π⁺π⁻ 5.583, π⁰e⁺ν 5.07, π⁰μ⁺ν
+3.352, π⁺π⁰π⁰ 1.760), μ⁻ (e⁻ν̄ₑν_μ ≈ 100 %). **For the owner to check** (`check=True`, written from
+memory of the tables): every H, Z, W and K value. Decay chains: `chain(decays)` → `Chain(nodes,
+decays, fractions)`; each later decay's parent is the first product not yet decayed with that key
+(an off-shell `Z*` matches its own leg first); every decay checked (the checker's summary is the
+error); `ChainNode.lifetime_lines()` (τ and cτ; a resonance Γ and τ = ħ/Γ, Γ_H to two figures; an
+off-shell leg "off shell (virtual)"); `mode_fraction(process)`.
+
+### 99.12 Scenes: `mass_spectrum`, `decay_chain`, `branching`, `branching_pie` (Step 241)
+
+**Decisions.** (1) The spectrum is **a `plot` underneath**: `MassSpectrum(Plot)` whose `Params`
+(a subclass of the plot's) turn the physics (`channel`, `seed`, `events`, `signal`, `mass`,
+`width`, `resolution`, `window`, `bin_width`, `background`, `slope`, `index`, `peak`,
+`background_degree`, `fit`, `significance`, `explain`, `subtract`, `style`, `ticker`, `label`) into
+plot params in a `mode="before"` validator: the model `mass_spectrum`, one live histogram series,
+the Phase W peak fit (starting values from the likelihood fit), the significance note
+(`annotation:significance`), axis names, caption. Filling, rescaling, fits, `zoom`, `grow`, `fit`,
+`annotate`, `reveal` are the plot's — nothing re-implemented. `series`, `fits`, `panels` are typed
+loosely there (converted by field validators) so translation does not offer the made texts; an
+author giving `series`, `models`, `fits`, `data`, `panels`, `arrange`, `share` or `aspect` is told to
+use `plot`. (2) Branching ratios are **`bar_chart` and `pie` subclasses** (`branching`,
+`branching_pie`) whose labels, values, unit, format, title and source caption come from the model —
+two types because a scene type is one class; bars are the default (the Higgs boson's γγ at 0.23 %
+is a sliver in a pie). (3) `decay_chain` is a scene of its own (a tree of particles is not data on
+axes). (4) Decay times and the Z line shape are **plot models** (no scene type): a histogram of
+`decay_times` with `model: custom, expr: "N*exp(-x/tau)"` gives τ ± its error; `z_lineshape` gives
+σ for 2, 3, 4 neutrino families.
+
+**`mass_spectrum`** (`scenes/mass_spectrum.py`): the readout (`_readout_lines` override) writes
+`events: 12 400` (a narrow no-break space) and `local significance: 3.4σ` / `(expected, Asimov)` or
+`(observed, counting)` from the precomputed curve — boxes sized to the widest text over the growth
+as Phase W's. The note gives the likelihood-ratio Z and the meaning of its p-value. With a `fit`
+action and no action showing the note, the note is held and follows the fit (`_held`, `entrance`):
+otherwise the plot's own note step would grow the data to its end before the fit. Text at
+`readable_size(margin=1.08)` (lint's `min_font` passes; the plot keeps the room). In 9:16
+(`_portrait`): the count axis fixed at 2 × the highest bin (the bars rise into it; the readout finds
+room there), no legend, and one box at the top left — the fitted mass and width, then the
+significance in short lines — instead of the fit box and the note (they overlapped, or every box
+went above the plot and left it a fifth of the frame).
+
+**`plot` additions** (shared, additive): fits take `residuals: background` (a peak fit with a
+background: the data minus the fitted background, √N bars, the fitted peak drawn over them; its
+axes enter with the plot's — they carry the x labels — and its content with the fit) and
+`parameters` (which parameters the box lists; unknown names are an error with the model's); targets
+`residuals<N>` / `residuals:<name>` (a residual panel revealed on its own word, then not with the
+fit); a note's text with line breaks is drawn line by line. **Fixed**: a note or fit step on a live
+histogram whose series a `grow` action holds faded in the re-shaping axes while the data grew (manim
+"zip() argument 2 is shorter"); the axes now come in first (`reveal()` plays them before targets
+whose entrance grows data). `plotcore.fit._covariance` scales J's columns before the rank test and
+inverts the scaled matrix (the same inverse): a cubic background in x ≈ 100–160 (columns 1 … 10⁶
+apart) was taken for rank-deficient.
+
+**`decay_chain`** (`scenes/decay_chain.py`): a tidy tree (each subtree as wide as its node or its
+children side by side; parents centred), depth along the flow — left → right in 16:9, top → bottom
+in 9:16 — scaled to fill the room up to 1.6×; symbols at 2 × the readable size with a rounded
+outline when they decay, family colours (neutrinos dim); τ / cτ (or Γ / τ) under each decaying
+particle; arrows from the parent (below its lifetime lines in 9:16) to each product; the branching
+fraction above the top arrow (16:9) or right of the rightmost (9:16), clear of it; the caption states
+the sources. Steps: the first particle, then one decay per beat (arrows grow, products fade in).
+Targets `title`, `caption`, `chain`, `decay<N>`, `particle:<n>`, `particle:<particle>`,
+`lifetime:<particle>`.
+
+**`branching` / `branching_pie`** (`scenes/branching.py`): `particle`, `modes` (the largest N, the
+caption says so); bars sorted and horizontal, values `{:.3g} %`; the pie shows values in % and
+groups modes under 1.5 %. Labels are the products' symbols (not translated).
+
+**Gallery budget** (recorded change): 15 → 16.5 MB (`tests/test_gallery.py`). The four types' entries
+(mass_spectrum 0.33 MB, decay_chain 0.15, branching 0.17, branching_pie 0.10) took the gallery to
+15.4 MB; the rest leaves room for Step 243's showcase and one more entry. `ENTRY_MAX` (0.36 MB) and the
+150 KB GIF cap are unchanged; the guide's first `mass_spectrum` snippet has two beats so its GIF
+stays under the cap.
+
+**Render performance**: preview 1280×720 at 10 fps — the six-beat H → γγ scene (30 000 events,
+26.4 s with fit, subtraction, note and zoom) in about 35–40 s (bars are drawn, one `bincount` per
+frame); the Z (6.5 s) and 4ℓ (5.4 s) scenes in about 10–14 s; a decay chain (9.3 s) in 6 s;
+branching bars in 9 s. Simulating 30 000 events takes about 40 ms (cached per spec).
+
+**Public (additive)**: scene types `mass_spectrum`, `decay_chain`, `branching`, `branching_pie`;
+`particle_physics.spectrum`, `particle_physics.branching`; plot models `mass_spectrum`,
+`decay_times`, `z_lineshape`; `plot` fit keys `residuals: background`, `parameters`; targets
+`residuals<N>`, `residuals:<name>`; `particle_physics.detector.DISPLAY_WIDTHS`. No dependency, no
+config key.
+
+**Known gaps after Step 241**: the Z peak is fitted with a Breit–Wigner (no Voigt): its Γ includes
+the resolution and χ²/ν ≈ 2 (said in the caption and docs); significances are local (no
+look-elsewhere effect); the 9:16 note box can cover the top of a tall peak (4ℓ); a full spectrum
+with its note trips `max_words` (about 45 words); in 9:16 the fit's values appear with the note,
+not with the fit curve; a pie of small modes may label them below the readable size (the pie's
+own behaviour); 4ℓ fits fail for about 1 seed in 40 (a clear error); no lint rules yet (Step 242:
+significance and branching-ratio claims).

@@ -81,6 +81,10 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "feynman": {"title": "Diagram", "caption": "C", "preset": "muon_decay"},
     "kinematics": {"title": "Decay", "caption": "C", "decay": "pi+ -> mu+ nu_mu", "momentum": "200 MeV/c"},
     "detector": {"title": "Event", "caption": "C", "event": {"particles": [{"particle": "mu+", "pt": 40}, {"particle": "jet", "pt": 50, "phi": 180}]}},
+    "mass_spectrum": {"title": "Spectrum", "channel": "h_to_4l", "subtract": True},
+    "decay_chain": {"title": "Chain", "caption": "C", "decays": ["pi+ -> mu+ nu_mu"]},
+    "branching": {"title": "BR", "particle": "pi+"},
+    "branching_pie": {"title": "BR", "particle": "Z"},
     "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
@@ -585,7 +589,7 @@ def test_a_type_without_targets_rejects_actions(make_project) -> None:
                     pass
     '''})
     (problem,) = project_problems(Project.load(root))
-    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, calculation, card, cell, cell_cycle, chapter, code,")
+    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, branching, branching_pie, bullets, calculation, card, cell, cell_cycle, chapter, code,")
 
 
 def test_config_md_action_examples_validate(make_project) -> None:

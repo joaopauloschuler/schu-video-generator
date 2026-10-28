@@ -55,7 +55,7 @@ class PlotFigure:
         s = f.series
         xs, ys = np.asarray(s.xs, dtype=float), np.asarray(s.ys, dtype=float)
         sigma = s.hist.errors if s.hist is not None else s.sigma()
-        res = ys - f.result(xs)
+        res = ys - (PlotFigure._background(f, xs) if f.spec.residuals == "background" else f.result(xs))
         err = np.asarray(sigma, dtype=float) if sigma is not None else np.zeros_like(xs)
         if f.spec.residuals == "normalized" and f.poisson is not None:   # Pearson residuals: the fit's own variance
             with np.errstate(all="ignore"):
@@ -69,12 +69,28 @@ class PlotFigure:
             ok &= (xs >= f.spec.range[0]) & (xs <= f.spec.range[1])
         return xs[ok], res[ok], err[ok]
 
+    @staticmethod
+    def _background(f: ResolvedFit, xs: np.ndarray) -> np.ndarray:
+        """The polynomial background part of a peak fit (``b0`` … under the peak) at ``xs``."""
+        p = np.asarray(f.result.params, dtype=float)
+        return np.polyval(p[3:][::-1], xs) if len(p) > 3 else np.zeros_like(xs)
+
+    def _signal_points(self, f: ResolvedFit, lay: Any) -> tuple[list[float], list[float]]:
+        """The fitted peak alone (fit − background) along the curve's range."""
+        lo, hi = self._curve_range(f, lay)
+        xs = f.curve_x(lo, hi, lay.x.scale)
+        return [float(v) for v in xs], [float(v) for v in f.result(xs) - self._background(f, xs)]
+
     def _residual_input(self, f: ResolvedFit, panel: ResolvedPanel, parent: Any) -> Any:
         xs, res, err = self._residuals(f)
         normalized = f.spec.residuals == "normalized"
-        spec = plotcore.AxisSpec(label="(y − fit)/σ" if normalized else "residual", unit="" if normalized else panel.y.unit,
-                                 include_zero=True, max_ticks=3, tight=TIGHT, format=panel.y.format if panel.y.scale == "linear" else "auto")
+        label = "(y − fit)/σ" if normalized else "data − background" if f.spec.residuals == "background" else "residual"
+        spec = plotcore.AxisSpec(label=label, unit="" if normalized else panel.y.unit,
+                                 include_zero=True, max_ticks=4 if f.spec.residuals == "background" else 3, tight=TIGHT, format=panel.y.format if panel.y.scale == "linear" else "auto")
         ys = [0.0, *res, *(res - err), *(res + err)]
+        if f.spec.residuals == "background":   # the fitted peak must fit in too
+            grid = f.curve_x(f.lo, f.hi, panel.x.scale, 120)
+            ys += [float(v) for v in f.result(grid) - self._background(f, grid)]
         if normalized:   # symmetric, ticked at ±2σ (the band most points should fall in; 0 has its own line)
             reach = max([abs(v) for v in ys if math.isfinite(v)] + [2.0])
             edge = max(2.5, math.ceil(reach * 1.05 * 2) / 2)
@@ -246,6 +262,11 @@ class PlotFigure:
                                         radius=min(radius, 0.07), theme=self.theme).set_z_index(2)
         bars = plot_draw.error_bars(lay, list(xs), list(res), y_lo=list(err), y_hi=list(err), color=mix_colors(color, self.theme.background, 0.85),
                                     width=2.0, cap=0.07) if np.any(err > 0) else VGroup()
+        if f.spec.residuals == "background":   # the fitted peak over the data minus background; the panel's axes come with the plot's
+            sx, sy = self._signal_points(f, lay)
+            peak_color = self.theme.color(f.spec.color) if f.spec.color else self.theme.color("accent")
+            peak = plot_draw.series_line(lay.frame_line(sx, sy), lay.plot, peak_color, width=f.spec.width, dashed=f.spec.dashed).set_z_index(1)
+            return VGroup(zero, bars, dots, peak)
         return VGroup(panel.group, zero, bars, dots)
 
     # ----- annotations --------------------------------------------------------------------------

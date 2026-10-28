@@ -4418,8 +4418,9 @@ errors); the legend names the fit (`name`, else its formula):
 | `range` | — | fit only the points with x in `[low, high]` |
 | `weighted` | `true` | weight by the series' y errors (absolute: χ²/ν tells whether they match the scatter), use its x errors (effective variance); counts — a histogram, or a series with `y_err: sqrt` — by Poisson maximum likelihood (the variance is the fitted curve's, not the count's: √N weights from the data pull a fit low; χ²/ν is Pearson's; a 0 count is a point like any other); without errors the parameter errors come from the scatter (as `scipy.optimize.curve_fit`) |
 | `band`, `level` | `none`, `0.95` | `confidence` (where the true curve lies) or `prediction` (where a new point would lie), shaded in the curve's colour; Student's t with n − p degrees of freedom (the normal quantile when the points have errors) |
-| `residuals` | `false` | `true`: a panel under the plot sharing x with y − fit (and the error bars); `normalized`: (y − fit)/σ (counts: σ = √fit), symmetric about 0 and ticked at ±2 |
+| `residuals` | `false` | `true`: a panel under the plot sharing x with y − fit (and the error bars); `normalized`: (y − fit)/σ (counts: σ = √fit), symmetric about 0 and ticked at ±2; `background` (a `gaussian` / `breit_wigner` fit with a `background`): the data minus the fitted background, with √N bars and the fitted peak drawn over them, titled "data − background" — its axes come with the plot's (they carry the x labels), its content with the fit, or on a word with `reveal: "residuals:<fit name>"` (targets `residuals<N>`, `residuals:<name>` for any residual panel: revealed by an action, the panel no longer comes with its fit) |
 | `show` | `auto` | the box: `auto` (parameters, R², χ²/ν with errors), `none`, or a list of `formula`, `params`, `r2`, `chi2`, `n` |
+| `parameters` | all | which parameters the box lists, by their model names (`gaussian`: `A`, `mu`, `sigma`, `b0`…; `breit_wigner`: `A`, `M`, `Gamma`, `b0`…; `custom`: its params); an unknown name is an error listing the model's |
 | `color`, `dashed`, `width` | accent (several fits: the series' colour), `false`, 4 | |
 
 Values ± errors are written as results are: the error with two significant digits (one from 355
@@ -6542,7 +6543,8 @@ yoke interleaved with three muon stations (to 4.6 m); barrels and endcaps (|z| t
   p_T sum to the jet's.
 - **Events** are simulated from a seed (the same seed, the same event): presets `z_to_mumu`,
   `h_to_gammagamma`, `h_to_4l` (H → ZZ* → e⁺e⁻μ⁺μ⁻), `w_to_enu` (W⁺ → e⁺ν_e), `dijet`. A boson
-  (PDG 2024 mass, drawn from a Breit–Wigner with its width) is produced with some p_T, decays
+  (PDG 2024 mass, drawn from a Breit–Wigner with its width, truncated to M ± Γ so the showcase
+  event sits on the peak) is produced with some p_T, decays
   isotropically in its rest frame and its products are boosted to the lab (Step 239's
   kinematics); its p_T is balanced by a recoil (a jet, or two soft pions), and `soft` (default 4)
   soft charged pions in back-to-back pairs show low-p_T curlers — so a preset's missing p_T is its
@@ -6626,7 +6628,242 @@ The model is `vidgen.api.particle_physics.detector` (no manim): `Detector(field,
 `Event` (`particles` with `pt`, `eta`, `phi`, `missing_pt()`, `met`, `products_mass()`,
 `transverse_mass()`, `objects()`), `trajectory(particle, detector)` (points, tracker and muon hits,
 calorimeter entries, `curled`), `deposits`, `towers`. Sizes are generic and schematic; no
-resolution smearing (a simulated event's missing p_T is exact).
+resolution smearing (a simulated event's missing p_T is exact). A preset's boson mass is a
+Breit–Wigner draw truncated to M ± Γ (`DISPLAY_WIDTHS`), so a showcase event sits on the peak (a
+histogram of many events is a `mass_spectrum`).
+
+### `mass_spectrum`
+
+**A resonance emerging from data** (Phase Y): a **simulated** invariant-mass spectrum filling event
+by event, its peak fit and the local significance of the bump — labelled "simulated data" in the
+legend and the caption (the caption also states the seed, the width and resolution, the
+background shape; a caption of your own is kept, prefixed with the label when it does not say
+"simulated"). Underneath it is a [`plot`](#plot) whose series, model and fit the scene makes from
+the physics: the filling, the axes widening, the fit, `zoom` (`x: [120, 130]`), `grow` (`to:` a
+number of events), `fit`, `annotate` and `reveal` are the plot's own.
+
+- **Channels** (`channel`): `z_to_mumu` (Z → μ⁺μ⁻, 70–110 GeV, 6000 events of which about 4800 Z, a
+  1 GeV resolution, an exponential Drell–Yan-like background, a Breit–Wigner fit),
+  `h_to_gammagamma` (H → γγ, 100–160 GeV, 30 000 events with about 320 Higgs bosons, resolution 1.6
+  GeV, an exponential background falling with λ = 30 GeV, a Gaussian fit on a cubic background —
+  tuned so the expected local significance reaches about 5σ), `h_to_4l` (H → ZZ* → 4ℓ, 40 events
+  of which about 16 signal on a flat background, 2 GeV bins, a Gaussian on a constant), `custom`
+  (give `mass` and `window`; resolution default 1 % of the mass, 5000 events, 5 % signal). Masses
+  and widths are PDG 2024's (Γ_H = 4.1 MeV is the Standard Model prediction: the H peaks are
+  resolution-dominated); counts and background shapes are schematic choices, not any
+  experiment's data.
+- **Simulation** (seeded, the same seed the same events): each event is signal with probability
+  `signal / events` (the signal count fluctuates as in real data); signal = a Breit–Wigner draw of
+  the mass and `width` plus a Gaussian draw of the `resolution`, redrawn until it lies in the
+  window; background by the inverse of its CDF in the window: `exponential` (∝ exp(−m/`slope`)),
+  `power` (∝ m^−`index`) or `flat`.
+- **The fit** (`fit: true`): `peak: gaussian` (μ, σ) or `breit_wigner` (M, Γ — for the Z the fitted
+  Γ includes the resolution, larger than the natural 2.50 GeV) on a polynomial background of
+  `background_degree`, by binned Poisson maximum likelihood (Phase W), started at the expected mass
+  and width and the background-only polynomial; the box lists the mass and width ± their standard
+  errors and χ²/ν. A fit that fails for a simulation is an error suggesting another seed, more
+  events or wider bins.
+- **Significance** (local; the look-elsewhere effect is not included): the readout under
+  `events: 12 400` gives, as the data arrive, `significance: asimov` — the expected (median)
+  Z = √(2((s + b) ln(1 + s/b) − s)) of the s and b expected in the peak window M ± 2√(σ² + (Γ/2)²)
+  after that many events (Cowan, Cranmer, Gross, Vitells 2011; ≈ s/√b for s ≪ b) — or `counting`
+  (the observed excess in that window over the expected background: √(2(n ln(n/b) − (n − b)))), or
+  `none`. With `explain` (default) a note after the fit (`annotation:significance`) gives the
+  likelihood-ratio significance Z = √(2(ln L_s+b − ln L_b)) (background only against signal +
+  background, Wilks' theorem at the fitted mass) and its meaning: the one-sided p-value is **the
+  chance that background alone fluctuates up this much — not the chance that the result is
+  wrong**; 5σ ↔ p = 2.9 × 10⁻⁷. Above 20σ it says "> 20σ".
+- **Data − background** (`subtract: true`): a panel under the plot (the plot's `residuals:
+  background`): the counts minus the fitted background with √N bars and the fitted peak over
+  them; its axes (with the mass labels) come with the plot's, its content with the fit or with
+  `reveal: "residuals:fit"` on a word.
+- **Timing**: without actions — the filling over beat 1, the fit, the note, one per beat. With a
+  `fit` action and no `annotate` of the note, the note follows the fit (else the plot's own step
+  would bring it, growing the data to the end, before the fit).
+- **Layout**: text at the readable size (`label_size`, default the readable minimum, so the plot
+  keeps the room); in 16:9 the fit box, the note and the readout stand in a free corner or a
+  column on the right. In 9:16 the count axis is fixed at twice the highest bin (the bars rise
+  into it, the readout stands there), there is no legend (the caption names the simulated data),
+  and the fit's values and the note are one box at the top left of the plot (the fitted mass and
+  width, then the significance in short lines), which comes with the note.
+
+```yaml
+- id: diphoton
+  type: mass_spectrum
+  params: {channel: h_to_gammagamma, seed: 1, subtract: true}
+  beats:
+    - text: "Simulated collisions arrive, and we histogram the mass of each photon pair."
+      actions: [{grow: axes, to: 12000}]
+    - text: "As the data pile up, a small bump appears near one hundred and twenty-five."
+      actions: [{grow: axes}]
+    - text: "A fit on a smooth background finds it."
+      actions: [{fit: "fit:fit", at: "@fit"}]
+    - text: "Subtract the background, and the bump stands out."
+      actions: [{reveal: "residuals:fit", at: "@Subtract"}]
+    - text: "Five sigma: background alone would fluctuate this high less than once in three million tries."
+      actions: [{annotate: "annotation:significance", at: "@Five"}]
+```
+
+**Targets** (the plot's): `title`, `axes`, `legend`, `series1` / `series:simulated data`, `fit1` /
+`fit:fit`, `residuals1` / `residuals:fit` (with `subtract`), `annotation1` /
+`annotation:significance` (with `explain`), and annotations of your own.
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `channel` | `z_to_mumu` \| `h_to_gammagamma` \| `h_to_4l` \| `custom` | `h_to_gammagamma` | the resonance and its decay (above) |
+| `seed` | int | `1` | the simulation's seed |
+| `events` | 10–200 000 | the channel's | events in all (bars are drawn, not events) |
+| `signal` | number | the channel's | expected signal events among them |
+| `mass`, `width` | GeV | PDG 2024 | the resonance (`custom`: `mass` needed, `width` 0) |
+| `resolution` | GeV | the channel's | Gaussian mass resolution σ |
+| `window` | `[low, high]` GeV | the channel's | the mass range (`custom`: needed) |
+| `bin_width` | GeV | the channel's | at most 400 bins |
+| `background` | `exponential` \| `power` \| `flat` | the channel's | the background's shape, with `slope` (GeV) or `index` |
+| `slope`, `index` | number | `30`, `4` | exp(−m/slope); m^−index |
+| `peak` | `gaussian` \| `breit_wigner` | the channel's | the fitted peak |
+| `background_degree` | 0–4 | the channel's | the fit's polynomial background |
+| `fit` | bool | `true` | fit once the data are in |
+| `significance` | `asimov` \| `counting` \| `none` | the channel's (`none` for the Z) | the readout growing with the data |
+| `explain` | bool | `true` | the likelihood-ratio note with the meaning of its p-value |
+| `subtract` | bool | `false` | the data − background panel |
+| `style` | `bars` \| `points` | `bars` | a filled histogram or markers with √N bars |
+| `ticker` | bool | `true` | `events: 12 400` in the readout |
+| `label` | text | `simulated data` | what the data are called (always says simulated) |
+
+The plot's own params apply as for `plot`: `title` (default "H → γγ: invariant mass"), `caption`,
+`x` / `y` (default "m(γγ) (GeV)" and "events / 1 GeV"), `annotations` (added after the scene's
+note), `legend`, `grid`, `rescale`, `reveal`, `point_radius`, `label_size` (default the
+readable minimum here), `caption_size`, `caption_color`, `title_size`, `title_color`.
+The scene makes `series`, `models`, `fits` and refuses them, `data`, `panels`, `arrange`, `share`
+and `aspect` (use [`plot`](#plot) for data of your own).
+
+The model is `vidgen.api.particle_physics.spectrum` (no manim): `CHANNELS`, `channel_spec`,
+`SpectrumSpec`, `generate(spec)` → `Spectrum` (`masses`, `signal`, `counts(edges, n)`,
+`expected(n)`, `asimov_curve()`, `counting_curve()`), `asimov(s, b)`, `counting_significance(n, b)`,
+`p_value(z)`, `FIVE_SIGMA_P`, `likelihood_significance(edges, counts, peak, degree, guesses)`,
+`window_shares`, `decay_times(tau, events, seed)`, `mean_lifetime(times)`, `z_cross_section(√s,
+neutrinos)`. **Plot models** for a `plot` (`kind: function`): `mass_spectrum` (params `mass`,
+`width`, `resolution`, `lo`, `hi`, `events`, `signal`, `slope` | `index` | `flat: 1`; columns `n`,
+`m`, `signal`), `decay_times` (`tau`, `events`; columns `n`, `t` — give the unit with `units: {t:
+µs}` and fit `model: custom, expr: "N*exp(-x/tau)"` for τ ± its error) and `z_lineshape` (`lo`,
+`hi`, `samples`; columns `sqrt_s` (GeV), `sigma`, `sigma_2nu`, `sigma_4nu` (nb): σ(e⁺e⁻ → hadrons)
+for 3, 2 and 4 light neutrino families, a relativistic Breit–Wigner with peak 12π Γ_ee Γ_had /
+(m_Z² Γ_Z²) = 41.5 nb from the PDG 2024 Z values — **schematic**: no QED radiative corrections,
+which lower the measured peak to about 30 nb; say so in the caption).
+
+### `decay_chain`
+
+**A chain of decays** (Phase Y) drawn as a tree, left to right in 16:9 and top to bottom in 9:16:
+`decays: ["pi+ -> mu+ nu_mu", "mu+ -> e+ nu_e anti-nu_mu"]` — the first decay's parent starts the
+chain; each later decay's parent is a product not yet decayed (`Z*` matches an off-shell `Z*`).
+Every decay is checked by the conservation checker (charge, baryon and lepton numbers, energy):
+a forbidden one is an error with the reason ("muon number not conserved: L_μ = +1 → 0"). Under
+each particle that decays: its mean life τ and cτ (PDG 2024; `lifetimes`), or for a resonance its
+width Γ and τ = ħ/Γ (the Higgs boson's Γ = 4.1 MeV is the Standard Model prediction); an
+off-shell particle says "off shell (virtual)". Beside each decay's arrows: its branching fraction
+when the model lists it (`branching`; see `branching`). The caption states the sources. One
+decay per beat (`reveal: decays`): the first particle, then each decay's arrows growing and its
+products.
+
+```yaml
+- id: chain
+  type: decay_chain
+  params:
+    title: "From a pion to an electron"
+    decays: ["pi+ -> mu+ nu_mu", "mu+ -> e+ nu_e anti-nu_mu"]
+  beats:
+    - text: "A positive pion."
+    - text: "It lives twenty-six nanoseconds, then becomes a muon and a neutrino."
+    - text: "The muon lives two point two microseconds."
+      actions: [{highlight: "lifetime:mu+", at: "@microseconds"}]
+```
+
+**Targets**: `title`, `caption`, `chain` (everything), `decay<N>` (the N-th decay's arrows,
+fraction and products), `particle:<n>` (the n-th particle: 1 the first parent, then the products
+in order), `particle:<particle>` (`particle:mu+`, when it appears once), `lifetime:<particle>`
+(its τ / cτ lines).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `decays` | list of decays | — | in order (above) |
+| `lifetimes` | bool | `true` | τ and cτ (Γ and τ) under each particle that decays |
+| `branching` | bool | `true` | each decay's branching fraction when listed |
+| `stable` | bool | `false` | also write "stable" under stable final particles |
+| `reveal` | `decays` \| `all` | `decays` | one decay per beat, or all in beat 1 |
+| `title`, `caption` | text | `""`, the sources | title above, note under the chain |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | style |
+
+The model: `particle_physics.branching.chain(decays)` → `Chain` (`nodes` with `leg`, `parent`,
+`made_by`, `decay`, `lifetime_lines()`; `decays`, `fractions`, `children(i)`), `mode_fraction`.
+
+### `branching`
+
+**Branching ratios** (Phase Y) of a particle as horizontal bars, largest first: `particle: H` (also
+`Z`, `W+` / `W-`, `pi+` / `pi-`, `pi0`, `K+` / `K-`, `mu-` / `mu+`; antiparticles by charge
+conjugation) — each mode's share in percent from `particle_physics.branching`, the source in the
+caption: **PDG 2024 measurements** for Z, W, π, K, μ (the W's leptonic modes are the
+lepton-universality average ℓν = 10.86 %); for the **Higgs boson at 125 GeV the Standard Model
+prediction** of the LHC Higgs Cross Section Working Group (Yellow Report 4, 2016, m_H = 125.09 GeV;
+bb̄ 58.2 %, WW* 21.4 %, gg 8.19 %, τ⁺τ⁻ 6.27 %, cc̄ 2.89 %, ZZ* 2.62 %, γγ 0.227 %, Zγ 0.153 %,
+μ⁺μ⁻ 0.0218 %), which the caption calls "a theory prediction, not a measurement". Labels are the
+products' symbols (bb̄, μ⁺ν_μ) or `hadrons` / `invisible`; they are not translated. Everything
+else is [`bar_chart`](#bar_chart)'s.
+
+```yaml
+- id: higgs_decays
+  type: branching
+  params: {particle: H}
+  beats:
+    - text: "Most Higgs bosons decay to a bottom quark pair; two photons, a quarter of a percent."
+      actions: [{highlight: "bar:γγ", at: "@photons"}]
+```
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `particle` | particle | — | the decaying particle (above) |
+| `modes` | int | all | only the largest N modes (the caption says so) |
+| `labels`, `values` | — | made | from the model; giving them is an error (use `bar_chart`) |
+
+The bar chart's params apply: `title` (default "How the Z decays", "How a 125 GeV Higgs boson
+decays"), `caption` (added after the source), `unit` (` %`), `value_format` (`{:.3g}`), `sort`
+(`true`), `horizontal` (`true`), `colors` (`palette`), `changes`, `highlight`, `highlight_color`,
+`reveal`, `baseline`, `caption_size`, `caption_color`, `title_size`, `title_color`, `label_size`,
+`value_size`. **Targets**: the bar chart's (`bar<N>`, `bar:<label>` — `bar:γγ`, `bar:hadrons` —,
+`title`, `change<N>`).
+
+### `branching_pie`
+
+The same branching ratios (see [`branching`](#branching)) as a [`pie`](#pie): `particle: Z`, the
+values in percent with the source in the caption; modes under `other_below` % (default `1.5`)
+are grouped — a pie hides the Higgs boson's γγ (0.23 %) in a sliver, so use `branching` bars for
+it.
+
+```yaml
+- id: z_decays
+  type: branching_pie
+  params: {particle: Z}
+  beats:
+    - text: "Seventy percent of Z bosons decay to hadrons, twenty percent to neutrinos."
+```
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `particle` | particle | — | the decaying particle |
+| `modes` | int | all | only the largest N modes |
+| `labels`, `values` | — | made | from the model (use `pie` for your own) |
+
+The pie's params apply: `title`, `caption`, `show_values` (`value`), `unit` (` %`),
+`value_format` (`{:.3g}`), `other_below` (`1.5`), `sort` (`true`), `donut`, `hole`, `center`,
+`center_label`, `percent_decimals`, `colors`, `max_slices`, `other_label`, `other_color`,
+`label_position`, `legend`, `reveal`, `highlight`, `explode`, `start_angle`, `clockwise`,
+`label_size`, `center_size`, `caption_size`, `caption_color`, `title_size`, `title_color`.
+**Targets**: the pie's (`slice<N>`, `slice:<label>`, `center`, `legend`, `title`).
+
+The tables: `particle_physics.branching.branching("H")` → `Branching` (`modes` with `process`,
+`fraction`, `label`, `percent`, `note`; `source`, `kind`: `measured` | `theory`; `total`,
+`mode(label)`), `listed()`, `branching_problems()` (every mode allowed by the checker, each table
+adding up to at most 1 within `SUM_TOLERANCE` = 10⁻³ — the Z's separately averaged measurements
+add up to 1.0001).
 
 ### `function_plot`
 
@@ -12299,7 +12536,11 @@ a title card, a `transform` of a bar).
 | `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>`, `change<N>` | reveal, dim, highlight, zoom, trace | a series is its line, markers and end label; `point:sparse@8`; `change<N>` is the axes and lines, revealing it plays that change; `trace` a series to sweep a cursor along it |
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
-| `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
+| `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `residuals<N>`, `residuals:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `residuals1` / `residuals:decay` the residual panel alone (revealed on its own word, it no longer comes with the fit); `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
+| `mass_spectrum` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `residuals<N>`, `residuals:<name>`, `annotation<N>`, `annotation:<id>` | grow, fit, annotate, reveal, zoom, highlight | the plot's: `series:simulated data` the filling histogram (and its readout), `fit:fit` the peak fit, `residuals:fit` the data − background panel (`subtract`), `annotation:significance` the note on the significance and its p-value; `grow` with `to:` a number of events |
+| `decay_chain` | `title`, `caption`, `chain`, `decay<N>`, `particle:<n>`, `particle:<particle>`, `lifetime:<particle>` | reveal, highlight, dim, callout | `decay2` the second decay's arrows, fraction and products; `particle:mu+` a particle (with its lifetime lines); `lifetime:mu+` its τ and cτ |
+| `branching` | `title`, `bar<N>`, `bar:<label>`, `change<N>` | reveal, dim, highlight, zoom | the bar chart's: `bar:γγ`, `bar:hadrons` a mode's bar and labels |
+| `branching_pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | the pie's: `slice:hadrons` a mode's wedge and label |
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
 | `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `lagrange`, `lagrange:<L>`, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`, `pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`, `event`, `inset`, `rings`, `readout` | reveal, highlight, sweep, launch, burn, corotate, inertial, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); a three-body pair's `lagrange` (`lagrange:L4` one point), `zero_velocity` curve and `rotation` badge; `barycentre`; a resonance's `conjunctions`; a close-up's `pointer` to the central body; the tidal schematic's `pull`, `mean`, `tidal`, `bulges`, `face`; an event's alignment `event`, the `inset` box, the log view's `rings`; the sizes picture's `body:<name>` discs and `central` (the Sun's edge); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
 | `standard_model` | `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<name>`, `generation:<N>`, `group:<group>`, `row:<row>` | reveal, highlight, dim, antiparticles, couplings, callout | `particle:e` (or `particle:electron`) one cell; `generation:2` a column with its number; `group:quarks` the quark cells and their label; `row:neutrinos` a row; `antiparticles` turns cells into their antiparticles, `couplings: particle:photon` outlines what a boson couples to |

@@ -319,6 +319,12 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "feynman": [{"title": "T:title", "caption": "T:caption", "preset": "bhabha"}],
     "kinematics": [{"title": "T:title", "caption": "T:caption", "decay": "pi0 -> gamma gamma", "frames": "rest"}],
     "detector": [{"title": "T:title", "caption": "T:caption", "label": "T:label", "event": "dijet"}],
+    "mass_spectrum": [{"title": "T:title", "caption": "T:caption simulated", "label": "T:label simulated", "channel": "h_to_4l",
+                       "x": {"label": "T:x"}, "annotations": [{"type": "note", "text": "T:note"}]}],
+    "decay_chain": [{"title": "T:title", "caption": "T:caption", "decays": ["pi+ -> mu+ nu_mu"]}],
+    "branching": [{"title": "T:title", "caption": "T:caption", "unit": "T:unit", "particle": "Z"}],
+    "branching_pie": [{"title": "T:title", "caption": "T:caption", "unit": "T:unit", "center": "T:center", "center_label": "T:center label",
+                       "other_label": "T:other", "particle": "Z", "donut": True}],
     "gwas": [{"title": "T:title", "trait": "T:trait", "background": 400}],
     "iso_diagram": [
         {

@@ -165,7 +165,9 @@ def test_preset_physics() -> None:
     z = dt.generate("z_to_mumu", 3)
     assert sorted(z.particles[i].particle.key for i in z.products) == ["mu+", "mu-"] and z.parent == "Z"
     gz = PARTICLES["Z"].width_mev / 1e3
-    assert abs(z.products_mass() - PARTICLES["Z"].mass_mev / 1e3) <= 3 * gz + 1e-6
+    assert abs(z.products_mass() - PARTICLES["Z"].mass_mev / 1e3) <= dt.DISPLAY_WIDTHS * gz + 1e-6
+    for seed in range(1, 21):   # every showcase Z lands on the peak (truncated Breit–Wigner draw)
+        assert abs(dt.generate("z_to_mumu", seed).products_mass() - 91.188) <= gz + 1e-6
     h = dt.generate("h_to_gammagamma", 5)
     assert h.products_mass() == pytest.approx(125.2, abs=0.05)   # Γ_H ≈ 4 MeV
     four = dt.generate("h_to_4l", 2)

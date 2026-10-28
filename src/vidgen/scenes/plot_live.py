@@ -60,9 +60,9 @@ class LivePlot:
         self._axes_flat: dict[int, VGroup] = {}
         for pos in sorted(dynamic):
             kind, j = self._figure[pos]
-            if kind == "data":
+            if kind == "data" or self._fits[j].spec.residuals == "background":   # (a background-subtracted panel's axes stand alone)
                 self._axes_flat[pos] = plot_draw.flat(self._drawn[pos].group)
-            else:
+            if kind == "residual":
                 self._fit_parts[j]["residual"] = plot_draw.flat(self._fit_parts[j]["residual"])
         panel_dynamic = {self._figure[pos][1] for pos in dynamic if self._figure[pos][0] == "data"}
         for i, s in enumerate(series):
@@ -157,6 +157,8 @@ class LivePlot:
             i = self._series.index(f.series)
             drawing = plot_draw.draw_panel(lay, size=self._label_size, grid=self.params.grid, theme=self.theme, cache=self._cache)
             plot_draw.morph_into(self._fit_parts[j]["residual"], self._draw_residuals(f, lay, drawing, self._colors[i], self._radius, self._shapes[i]))
+            if pos in self._axes_flat:
+                plot_draw.morph_into(self._axes_flat[pos], drawing.group)
             return
         if pos in self._axes_flat:
             drawing = plot_draw.draw_panel(lay, size=self._label_size, grid=self.params.grid, theme=self.theme, cache=self._cache)

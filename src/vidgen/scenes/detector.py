@@ -266,7 +266,8 @@ class Detector(NarratedScene):
         if width is not None:
             lines = [self.text(s, size=size, color="dim") for s in (str(self.params.label), b)]
             return VGroup(*[m.scale_to_fit_width(width) if m.width > width else m for m in lines]).arrange(DOWN, buff=0.1)
-        parts = [s.strip() for s in str(self.params.label).split("·") if s.strip()] + [b]
+        # the field on two lines so the column stays as narrow as the layer key (a larger drawing)
+        parts = [s.strip() for s in str(self.params.label).split("·") if s.strip()] + [f"B = {self._det.field:g} T", b.split(" T ", 1)[1]]
         return VGroup(*[self.text(s, size=size, color="dim") for s in parts]).arrange(DOWN, buff=0.1, aligned_edge=LEFT)
 
     # ----- layout ------------------------------------------------------------------------------
@@ -308,7 +309,8 @@ class Detector(NarratedScene):
             column = [m for m in (self._key, self._label) if m is not None]
             left = max((m.width for m in column), default=0.0)
             right = max((m.width for m in (self._readout, self._legend) if m is not None), default=0.0)
-            self._room = Region(area.x0 + left + GAP * (left > 0), area.y0, area.x1 - right - GAP * (right > 0), area.y1)
+            side_gap = GAP * 0.6   # the drawing's labels sit inside it, so the columns may come closer
+            self._room = Region(area.x0 + left + side_gap * (left > 0), area.y0, area.x1 - right - side_gap * (right > 0), area.y1)
             if column:
                 y = area.center[1] + (sum(m.height for m in column) + 2 * GAP * (len(column) - 1)) / 2
                 for m in column:

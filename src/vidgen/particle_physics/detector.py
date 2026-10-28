@@ -21,7 +21,8 @@ the calorimeter's radius curls up inside the tracker (drawn for one turn).
 
 **Events** are simulated (:func:`generate`) from a seed with :class:`~vidgen.plotcore.SplitMix64`:
 presets (``z_to_mumu``, ``h_to_gammagamma``, ``h_to_4l``, ``w_to_enu``, ``dijet``) decay a boson
-(mass from PDG 2024, Breit–Wigner around it with its width) isotropically in its rest frame and
+(mass from PDG 2024, a seeded Breit–Wigner draw with its width truncated to M ± Γ so a showcase
+event sits on the peak) isotropically in its rest frame and
 boost the products to the lab (:mod:`.kinematics`); the boson's transverse momentum is balanced
 by a recoil (a jet, or two soft pions), so the missing p_T is the neutrinos'. Jets are cones of
 charged hadrons, photons (from π⁰) and neutral hadrons. Energy deposits are shared between the
@@ -364,13 +365,19 @@ LEPTON_PT = 10.0
 NEUTRINO_PT = 20.0
 
 
+#: A display event's boson mass is a Breit–Wigner draw truncated to M ± this many widths, so a
+#: showcase event lands on the peak (a histogram of many events uses ``mass_spectrum`` instead).
+DISPLAY_WIDTHS = 1.0
+
+
 def _mass(key: str, rng: SplitMix64) -> float:
-    """A boson's mass (GeV) drawn from a Breit–Wigner of its PDG mass and width (within ±3Γ)."""
+    """A boson's mass (GeV) drawn from a Breit–Wigner of its PDG mass and width, truncated to
+    M ± :data:`DISPLAY_WIDTHS` Γ (inverse CDF of the truncated distribution: one uniform)."""
     p = PARTICLES[key]
     m, gamma = p.mass_mev / 1e3, (p.width_mev or 0.0) / 1e3
     if gamma <= 0:
         return m
-    u = 0.5 + (rng.uniform() - 0.5) * (2 / math.pi) * math.atan(6)   # inverse CDF, clipped to ±3Γ
+    u = 0.5 + (rng.uniform() - 0.5) * (2 / math.pi) * math.atan(2 * DISPLAY_WIDTHS)
     return m + gamma / 2 * math.tan(math.pi * (u - 0.5))
 
 

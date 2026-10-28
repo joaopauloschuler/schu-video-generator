@@ -410,10 +410,14 @@ def _levenberg_marquardt(model: Model, x: np.ndarray, y: np.ndarray, w: np.ndarr
 
 
 def _covariance(J: np.ndarray) -> np.ndarray:
-    A = J.T @ J
-    if np.linalg.matrix_rank(A) < A.shape[0]:
+    # columns scaled to unit length first (a polynomial in x ≈ 100 has columns 1 … 10⁶ apart,
+    # which an unscaled rank test takes for dependence); the same inverse, better conditioned
+    norms = np.linalg.norm(J, axis=0)
+    scale = np.where(norms > 0, norms, 1.0)
+    A = (J / scale).T @ (J / scale)
+    if np.any(norms == 0) or np.linalg.matrix_rank(A) < A.shape[0]:
         raise VidgenError("the fit's parameters are not determined by the data (too few distinct x values, or parameters that depend on each other)")
-    return np.linalg.inv(A)
+    return np.linalg.inv(A) / np.outer(scale, scale)
 
 
 def fit_curve(

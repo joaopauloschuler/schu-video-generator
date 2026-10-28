@@ -26,8 +26,11 @@ DOCS = ROOT / "docs" / "gallery"
 #: two showcases (0.33 MB each) took the gallery to 13.6 MB; the rest is room for about three more
 #: entries. Lossless GIF re-optimisation saved about 10 % on some files but is not what `vidgen
 #: gallery` writes (the next regeneration would undo it), so the budget grew instead; ENTRY_MAX and
-#: gallery.CLIP_MAX_BYTES are unchanged.
-BUDGET = 15_000_000
+#: gallery.CLIP_MAX_BYTES are unchanged. Step 241 (DESIGN §99.12): 15 → 16.5 MB for Phase Y — its four
+#: data types (mass_spectrum, decay_chain, branching, branching_pie; 0.10–0.33 MB each) took the
+#: gallery to 15.4 MB; the rest is room for Step 243's showcase and one more entry; ENTRY_MAX and the
+#: GIF cap are unchanged.
+BUDGET = 16_500_000
 #: What one entry may weigh: its two GIFs (each at most gallery.CLIP_MAX_BYTES), two stills and its
 #: page. The heaviest entries before Step 216 weighed 0.33 MB (cross, cell, rainy_evening).
 ENTRY_MAX = 360_000

@@ -337,6 +337,9 @@ project's own scene types, in its theme).
 | a Feynman diagram in proper notation (e⁺e⁻ → μ⁺μ⁻, Compton, Bhabha, β⁻ and μ⁻ decay, π⁺ → μ⁺ ν_μ, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → W⁺b) or your own, every vertex checked against the Standard Model; s- and t-channel, decays, loops | `feynman` | `preset` or `diagrams` (lines "id: particle from -> to", groups), `diagram`, `time` (right, up), `spectators`, `reveal` (time, all); targets line:<id>, vertex:<id>, hadron:<particle>; the actions travel, vertex_rule, swap_channel |
 | relativistic kinematics: a two-body decay (π⁺ → μ⁺ ν_μ, K⁺ → π⁺ π⁰, H → γγ) as momentum arrows in the rest frame and the lab, particles with their invariant mass, boosts, opening angles, decay lengths βγcτ | `kinematics` | `decay` or `particles` ({particle, momentum, angle}), `momentum` / `energy` / `kinetic` / `beta` / `gamma` of the parent in the lab, `angle`, `frames` (both, rest, lab), `si`, `readout` (key, all); targets panel:rest, panel:lab, arrow:<n>, sum, values; the action boost; a calculation takes p_star with from_scene |
 | an event display in a schematic particle detector (tracker, solenoid, calorimeters, muon chambers): tracks bending in the magnetic field, electron / photon / muon / hadron / neutrino signatures, jets, missing transverse momentum; Z → μμ, H → γγ, H → 4ℓ, W → eν, dijet events | `detector` | `event` (a preset, {preset, seed} or {particles: [{particle, pt, eta, phi, leaves}], products}), `view` (xy, rz), `field`, `energy_scale` (log, linear), `tower_max`, `reveal` (layers, all), `readout`, `legend`, `layers`, `labels`, `label`; targets particle:<n>, particle:<particle>, jet:<n>, tracks, ecal, hcal, muon_hits, missing_pt, readout, legend; the action switch_view |
+| a resonance emerging from (simulated) data: an invariant-mass histogram filling event by event with a ticker, Z → μμ, H → γγ or H → 4ℓ over a falling background, a peak fit (mass ± error, width), the local significance growing (Asimov) and what 5σ means, data − background | `mass_spectrum` | `channel` (z_to_mumu, h_to_gammagamma, h_to_4l, custom), `seed`, `events`, `signal`, `resolution`, `window`, `bin_width`, `background`, `peak`, `significance` (asimov, counting, none), `explain`, `subtract`, `style` (bars, points); a plot underneath: the actions grow (to: events), fit, annotate, reveal (residuals:fit), zoom (x) |
+| a decay chain with lifetimes: π⁺ → μ⁺ ν_μ, μ⁺ → e⁺ ν_e ν̄_μ; H → ZZ* → 4ℓ; τ and cτ (PDG 2024), branching fractions, every decay checked | `decay_chain` | `decays` (in order), `lifetimes`, `branching`, `stable`, `reveal` (decays, all); targets decay<N>, particle:<n>, lifetime:<particle> |
+| branching ratios of a particle from the model (H: SM prediction; Z, W, π, K, μ: PDG 2024), the source in the caption | `branching` (bars), `branching_pie` | `particle`, `modes` (the largest N); the bar chart's / pie's params and targets (bar:γγ, slice:hadrons) |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1415,6 +1418,74 @@ depth). Targets: `particle:<n>` / `particle:mu+` (track, towers, name, readout r
 `tracks`, `ecal`, `hcal`, `muon_hits`, `missing_pt`, `readout`, `legend`, `layers`,
 `layer:<tracker|solenoid|ecal|hcal|iron|muon>`, `soft`. A τ, π⁰, Z or quark listed as a particle is
 refused with the reason (it decays first; make a jet).
+
+Resonances emerging from data: a simulated invariant-mass spectrum fills event by event (bars, a
+ticker "events: 12 400" and the local significance growing with the data), then a peak fit with
+the mass ± its uncertainty and the width, the likelihood-ratio significance and what 5σ means;
+decay chains with lifetimes; branching ratios from the model:
+
+```yaml
+# particle physics
+- id: diphoton
+  type: mass_spectrum      # simulated, labelled so; a plot underneath: grow, fit, annotate, reveal and zoom work
+  params:
+    channel: h_to_gammagamma   # z_to_mumu, h_to_gammagamma, h_to_4l, custom (mass, window…)
+    seed: 1
+  beats:
+    - text: "Events arrive, and a small bump grows near one hundred and twenty-five GeV."
+      actions: [{grow: axes}]
+    - text: "A fit on a smooth background finds the mass, and how unlikely chance is."
+      actions: [{fit: "fit:fit", at: "@fit"}]   # the significance note follows (or annotate: "annotation:significance" on a word)
+- id: four_leptons
+  type: mass_spectrum
+  params: {channel: h_to_4l, style: points, subtract: true}   # points with √N bars; a data − background panel
+  beats:
+    - text: "Four leptons: only a handful of events, then a few more."
+      actions: [{grow: axes, to: 20}, {grow: axes, at: "@few"}]   # to: a number of events
+    - text: "A fit, then subtract the background, and look closer."
+      actions: [{fit: "fit:fit"}, {reveal: "residuals:fit", at: "@subtract"}, {zoom: axes, x: [115, 135], at: "@closer"}]
+- id: pion_chain
+  type: decay_chain        # each decay checked; τ and cτ (resonances: Γ) from PDG 2024; branching fractions when listed
+  params:
+    title: "From a pion to an electron"
+    decays: ["pi+ -> mu+ nu_mu", "mu+ -> e+ nu_e anti-nu_mu"]
+  beats:
+    - text: "A positive pion."
+    - text: "It lives twenty-six nanoseconds, then becomes a muon and a neutrino."
+    - text: "The muon lives two point two microseconds."
+- id: higgs_decays
+  type: branching          # bars from the model (H: LHC Higgs XS WG prediction; Z, W, π, K, μ: PDG 2024)
+  params: {particle: H}
+  beats:
+    - text: "Most Higgs bosons decay to a bottom quark pair; two photons, a quarter of a percent."
+      actions: [{highlight: "bar:γγ", at: "@photons"}]
+- id: z_decays
+  type: branching_pie      # a pie (small modes grouped below other_below %, 1.5 by default)
+  params: {particle: Z}
+  beats:
+    - text: "Seventy percent of Z bosons decay to hadrons, twenty percent to neutrinos."
+```
+
+What the numbers mean, and what is simulated: every event of a `mass_spectrum` is simulated from
+its `seed` (the same seed, the same events), labelled "simulated data" in the legend and caption:
+the resonance is a Breit–Wigner of the PDG 2024 mass and width smeared by a Gaussian `resolution`,
+over a smoothly falling background (`background: exponential | power | flat`, `slope`, `index`);
+`events` and `signal` (expected signal events) set the counts; `window` and `bin_width` the axis.
+The fit (`peak: gaussian | breit_wigner`, `background_degree`) is Phase W's binned Poisson
+likelihood; for the Z the fitted Γ includes the resolution (the caption gives both). The readout's
+**local significance** is the expected (Asimov) Z = √(2((s+b) ln(1+s/b) − s)) of the signal and
+background expected in the peak window after that many events (`significance: counting` for the
+observed excess, `none`); the note after the fit gives the likelihood ratio (background only
+against signal + background) and its one-sided p-value: **5σ ↔ p ≈ 2.9 × 10⁻⁷, the chance that
+background alone fluctuates up this much — not the chance that the result is wrong**. Both are
+local: the look-elsewhere effect is not included. Targets are the plot's: `axes`, `series:simulated
+data`, `fit:fit`, `residuals:fit` (with `subtract`), `annotation:significance`, `legend`, `title`.
+A `plot` also takes the models `mass_spectrum` (numbers: mass, width, resolution, lo, hi, events,
+signal, slope), `decay_times` (`tau`, `events`: exponential decay times to fit with `model: custom,
+expr: "N*exp(-x/tau)"`) and `z_lineshape` (σ(e⁺e⁻ → hadrons) for 2, 3 and 4 neutrino families;
+schematic, no radiative corrections — say so in the caption). `decay_chain` targets: `decay<N>`,
+`particle:<n>` / `particle:mu+`, `lifetime:mu+`, `chain`; `branching` and `branching_pie` take
+`modes` (the largest N) and the targets of `bar_chart` / `pie` (`bar:γγ`, `slice:hadrons`).
 
 ```yaml
 # data
@@ -2652,7 +2723,9 @@ only to show context, not to exaggerate a change (a bar-like quantity starts at 
 poisson` (`y_err: sqrt` for counts: ± √N); say the same word in the narration. A fit shows its
 parameters ± standard errors, R² and χ²/ν (about 1: the errors match the scatter); `band:
 confidence` shows where the curve lies, `prediction` where a new point would; `residuals:
-normalized` shows (y − fit)/σ under the plot, ticked at ±2. Counts (`y_err: sqrt`, histograms)
+normalized` shows (y − fit)/σ under the plot, ticked at ±2; `residuals: background` (a peak fit
+with a `background`) the data minus the fitted background with the peak drawn over it (reveal
+`residuals:<fit name>` on its own word); `parameters: [mu, sigma]` lists only those in the box. Counts (`y_err: sqrt`, histograms)
 are fitted by Poisson maximum likelihood, so the fit is not pulled low. Prefer a model whose parameter is the quantity you
 talk about (`model: custom`, `expr: "A*exp(-lambda*x)"` gives λ itself). Say fitted values as the
 box writes them, with "give or take" for the error.
