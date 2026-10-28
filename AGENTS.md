@@ -331,10 +331,11 @@ project's own scene types, in its theme).
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
-| a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
+| a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result; mass / lifetime / width: a particle's PDG value, mass: pi+), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
 | planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist; many bodies: Lagrange points and Trojans in the rotating frame, the figure-eight, binary stars, the Io–Europa–Ganymede resonance, tides (a schematic); the Solar System on a date (1800–2050), the next opposition or conjunction, all planets on a log scale, an inset of the inner planets, planet sizes to scale | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley, io; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity; near: L4), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side), `system` (sun_jupiter, earth_moon, figure_eight), `view` (rotating), `lagrange`, `resonance`, `origin` (barycentre), `tides`, `date`, `event` (opposition, of), `radial` (log), `inset`, `sizes`, `panel` (compact, full, none, rows); the actions sweep, launch, burn, flyby, pause, coast, corotate, inertial |
 | the Standard Model's particles: quarks and leptons in three generations, the gauge bosons and the Higgs boson with their masses (PDG 2024), charges and spins; antiparticles; which bosons couple to which particles | `standard_model` | `title`, `reveal` (groups, all), `show` (mass, charge, spin, name), `antiparticles`, `layout` (wide, tall), `key`, `source`; targets particle:<name>, generation:<N>, group:<quarks...>, row:<...>; the actions antiparticles, couplings |
 | a Feynman diagram in proper notation (e⁺e⁻ → μ⁺μ⁻, Compton, Bhabha, β⁻ and μ⁻ decay, π⁺ → μ⁺ ν_μ, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → W⁺b) or your own, every vertex checked against the Standard Model; s- and t-channel, decays, loops | `feynman` | `preset` or `diagrams` (lines "id: particle from -> to", groups), `diagram`, `time` (right, up), `spectators`, `reveal` (time, all); targets line:<id>, vertex:<id>, hadron:<particle>; the actions travel, vertex_rule, swap_channel |
+| relativistic kinematics: a two-body decay (π⁺ → μ⁺ ν_μ, K⁺ → π⁺ π⁰, H → γγ) as momentum arrows in the rest frame and the lab, particles with their invariant mass, boosts, opening angles, decay lengths βγcτ | `kinematics` | `decay` or `particles` ({particle, momentum, angle}), `momentum` / `energy` / `kinetic` / `beta` / `gamma` of the parent in the lab, `angle`, `frames` (both, rest, lab), `si`; targets panel:rest, panel:lab, arrow:<n>, sum, values; the action boost; a calculation takes p_star with from_scene |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1327,6 +1328,53 @@ its arrow is drawn back against time). Targets: `line:<id>`, `vertex:<id>`, `had
 (with `groups` or `spectators: true` on `beta_decay`), `process`, `diagram`, `time_axis`. `time:
 up` draws time bottom → top; the layout (s-, t-, u-channel, decays, loops) is automatic.
 
+Relativistic kinematics as momentum arrows: a two-body decay in the parent's rest frame (p* from
+the masses, PDG 2024) and in the lab, or particles with their invariant mass √((ΣE)² − |Σp|²):
+
+```yaml
+# particle physics
+- id: pion_decay
+  type: kinematics         # arrows to scale in the rest frame and the lab; p*, β, γ, opening angle, invariant mass, βγcτ
+  params:
+    title: "Pion decay in two frames"
+    decay: "pi+ -> mu+ nu_mu"
+    momentum: "200 MeV/c"  # the pion in the lab (or energy, kinetic, beta, gamma); frames: both | rest | lab
+  beats:
+    - text: "At rest, the muon and the neutrino fly apart back to back."
+    - text: "In the lab the pion moves, and both are thrown forward."
+    - text: "The invariant mass is the same in both frames: the pion's mass."
+      actions: [{highlight: values, at: "@invariant"}]
+- id: speed_up
+  type: kinematics
+  params: {decay: "pi0 -> gamma gamma", frames: rest, momentum: "1 GeV/c", angle: 90}
+  beats:
+    - text: "Speed the pion up, and its two photons close up."
+      actions: [{action: boost, to: lab, at: "@Speed"}]   # or to: 0.99, to: rest
+- id: muon_range
+  type: calculation        # PDG values by name: mass, lifetime, width
+  params:
+    symbols:
+      - {name: m_mu, mass: mu-}
+      - {name: tau, lifetime: mu-}
+      - {name: E, value: "4.00 GeV", meaning: "muon energy"}
+      - {name: c, constant: c}
+    calculations:
+      - {name: gamma, expr: "E/(m_mu*c^2)", meaning: "Lorentz factor"}
+      - {name: L, expr: "sqrt(gamma^2 - 1)*c*tau", unit: km, meaning: "mean decay length"}
+  beats:
+    - text: "A four GeV muon has a gamma of about thirty-eight."
+    - text: "On average it flies about twenty-five kilometres: time dilation brings it to the ground."
+```
+
+Particles given in the lab: `particles: [{particle: gamma, momentum: "80 GeV/c", angle: 25}, …]`
+(their rest frame is found; Σp = 0 there). Targets: `panel:rest`, `panel:lab`, `arrow:<n>` /
+`arrow:<particle>`, `sum`, `values`, `process`. A `calculation` takes the numbers with `from_scene:
+pion_decay.p_star` (`M`, `E1`, `E2`, `beta`, `gamma`, `opening_angle`, `decay_length`; particles:
+`m_inv`). The model `particle_physics.kinematics` also gives thresholds (`threshold("p p -> p p p
+anti-p")`: 5.63 GeV kinetic on a fixed target, 0.94 GeV per beam at a collider) and the plot model
+`two_body_opening` (the opening angle against momentum). A decay below threshold, a forbidden
+decay, β ≥ 1 or an energy below the mass is refused with the numbers.
+
 ```yaml
 # data
 - id: devices
@@ -1642,6 +1690,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `travel` | on a `feynman` diagram: a particle dot runs along lines in time order (`travel: "line:mu"`, or `travel: diagram` for a dot on every line at once) | "follow the electron through" |
 | `vertex_rule` | on a `feynman` diagram: ring a vertex and state its rule (`vertex_rule: "vertex:v1"`; `show: [rule, coupling, checks]`): the vertex type, the coupling (α ≈ 1/137, α_s ≈ 0.118, g ≈ 0.65, y ∝ mass), the charge and lepton numbers in and out; undone at the next beat | "at this vertex the photon couples to the charge" |
 | `swap_channel` | on a `feynman` scene with several diagrams: morph into another (`- action: swap_channel`, `to: t`): s ↔ t channel, photon ↔ Z, top ↔ W loop | "or they exchange a photon instead" |
+| `boost` | on a `kinematics` scene: speed the last frame up continuously (`- action: boost`, `to: lab`, `rest` or a β such as 0.99): a decay's products swing forward and close up, Σp grows, β and γ count up, the invariant mass stays | "speed the pion up" |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |

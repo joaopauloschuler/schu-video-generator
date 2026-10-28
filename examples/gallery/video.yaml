@@ -377,6 +377,17 @@ scenes:
       - text: "The W decays into an electron and an electron antineutrino."
         actions: [{travel: diagram, at: 0.2}]
 
+  - id: kinematics
+    type: kinematics      # momentum arrows of a decay in the rest frame and the lab; p* from the masses, invariant mass, βγcτ
+    params:
+      title: "Kaon decay in two frames"
+      decay: "K+ -> pi+ pi0"
+      gamma: 2
+      angle: 120
+    beats:
+      - text: "At rest, the two pions leave back to back."
+      - text: "In the lab the kaon moves, and both pions are thrown forward."
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:

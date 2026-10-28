@@ -18310,7 +18310,8 @@ examples simulated and labelled "simulated data"; no real experiment's logo or e
 
 **Names** (checked against the registry and the code): the package `vidgen.particle_physics`
 (`vidgen.particles` is the cartoon particle effects); scene types `standard_model` (237),
-`feynman` (238), `detector` (240); actions `antiparticles`, `couplings` (237); no collisions.
+`feynman` (238), `kinematics` (239), `detector` (240); actions `antiparticles`, `couplings` (237), `travel`,
+`vertex_rule`, `swap_channel` (238), `boost` (239); no collisions.
 
 ### 99.2 The model: `vidgen.particle_physics` (Step 237)
 
@@ -18514,9 +18515,10 @@ the chord). Every preset: 0 crossings, deterministic.
   time order).
 - **Screen**: title, the reaction line (`e⁻ e⁺ → μ⁻ μ⁺ · s-channel`, hadrons when grouped),
   caption; the diagram fitted into the rest with room for the labels and brackets (a transverse
-  unit at most 2.3, width at most 2.3 × height; 9:16 may grow to 1.15 × its width tall); the `time`
+  unit at most 3.0, width at most 2.8 × height; 9:16 may grow to 1.8 × its width tall; Step 239); the `time`
   arrow under the diagram's left end (time right) or left of its bottom (up). When the scene uses
-  `vertex_rule`, its text gets a column on the right (16:9, 4 units) or a band at the bottom (9:16).
+  `vertex_rule`, its text (1.3 × the readable size) gets a column on the right (16:9, up to 5 units / 36 %) or a band at the
+  bottom (9:16, eight lines, at most 30 % of the height; Step 239).
 - **Reveal** (`time`): the incoming lines with title, reaction and time arrow; then per column the
   vertex dots and the lines beginning there (outgoing legs with their vertex), spread over the beats.
 - **Targets**: `title`, `caption`, `process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`,
@@ -18542,3 +18544,126 @@ bubbles); vertices with more than four ends per side keep the written order (no 
 flow is checked, not drawn (no colour lines on the quarks); CKM magnitudes and sin²θ_W are rounded
 display values; the vertex-rule text is English only (the scene's title and caption translate);
 `travel` follows lines, not a fermion chain by name.
+
+**Step 239 review fixes** (notation and frame use, from the stills of 238): gluons are drawn as
+proper coils — radius 0.14, one turn per 0.3 units, each turn swinging back by its full radius so
+it closes into a loop (`COIL_RADIUS`, `COIL_PITCH`, squash 1.0; tested: the gluon's path runs
+backwards in every turn, the photon's never) — clearly unlike the photon's sine wave in a
+thumbnail; the diagram may take more of the frame (`MAX_UNIT` 2.3 → 3.0, `MAX_STRETCH` 2.3 → 2.8,
+in 9:16 up to 1.8 × its width tall, was 1.15); the vertex-rule text is 1.3 × the readable size
+(`NOTE_SCALE`), its column in 16:9 up to 5 units / 36 % of the width, its band in 9:16 eight lines
+(at most 30 % of the height). The `feynman` gallery entry was regenerated. A test of 238 compared
+label boxes with `config.frame_height` after the render (restored to the landscape frame by then);
+it now uses the rendered size.
+
+### 99.7 Relativistic kinematics: the model (Step 239)
+
+`particle_physics.kinematics` (no manim). **Natural units**: energies, momenta and masses in MeV
+with c = 1 (`value_text(29.79, "momentum")` → `29.79 MeV/c`, `"mass"` → MeV/c², the unit growing to
+GeV / TeV as `energy_text` does); **SI** through `vidgen.quantities`' units (`to_si`, `from_si`,
+`si_text`: `29.79 MeV/c = 1.592 × 10⁻²⁰ kg·m/s`, exact e and c), `natural_value("10 GeV/c")` parses a
+value with any unit of the right dimension.
+
+- `FourVector(energy, px, py, pz)`: `from_mass(m, p, angle)` (x–y plane), `p`, `mass2` (rounding
+  below 10⁻⁹ E² is 0), `mass` (**negative m² is an error** with the numbers), `beta_vector`,
+  `gamma` (massless: error), `dot` (Minkowski), `boost(beta)` — the vector seen from a frame in
+  which the current one moves with velocity β (a number along x or a vector): E' = γ(E + β·p),
+  p' = p + [(γ − 1)(β·p)/β² + γE] β; `total`, `invariant_mass`, `rest_frame_beta` (Σp/ΣE; a
+  massless system has no rest frame), `to_rest_frame`.
+- `gamma_of(β)` (**β ≥ 1 is refused**: "superluminal"), `Boost(beta, gamma)` with `from_beta`,
+  `from_gamma` (≥ 1), `from_momentum` (βγ = p/m), `from_energy` (**E < m refused**: "did you mean
+  the kinetic energy?"), `from_kinetic`; `motion(m, momentum= | energy= | kinetic= | beta= |
+  gamma=)` (exactly one).
+- **Two-body decays**: `kallen(x, y, z)`, `two_body_momentum(M, m₁, m₂)` = √λ(M², m₁², m₂²)/2M
+  (**below threshold refused**); `two_body("pi+ -> mu+ nu_mu")` → `TwoBodyDecay` (one particle into
+  two on-shell ones, allowed by §99.3's `check` — the checker's explanation is the error —, above
+  threshold) with `p_star`, `energies` (E₁ = (M² + m₁² − m₂²)/2M), `q_value`, `rest_vectors(angle)`
+  (back to back), `lab_vectors(boost, angle)`, `parent_vector`, `opening_angle(boost, angle)`,
+  `min_opening_angle` (scanned over the emission angle; massless products: sin(θ_min/2) = 1/γ).
+  Textbook values (tested): π⁺ → μ⁺ν_μ 29.79 MeV/c, K⁺ → π⁺π⁰ 205.1, Λ → pπ⁻ 100.6, Z → μ⁺μ⁻
+  45.59 GeV/c, H → γγ 62.60 GeV/c, π⁰ → γγ 67.49 MeV/c.
+- `MomentumPicture` (the scene's model): the particles' four-vectors in the system's rest frame,
+  the boost direction and the lab rapidity η (β = tanh η); `vectors(eta)` any frame along the
+  boost. `decay_picture(decay, angle, lab)` (the parent along +x), `system_picture([(particle,
+  p, angle), ...])` (lab given; the rest frame from Σp/ΣE).
+- **Thresholds**: `threshold("p p -> p p p anti-p")` → `Thresholds` built on §99.3's `Threshold`
+  (the reaction must be allowed): `sqrt_s` (Σ m after), `fixed_target` E = (s − m_a² − m_b²)/2m_b and
+  its kinetic part, `collider` (the beams' energies in the centre-of-momentum frame, (s + m_a² −
+  m_b²)/2√s), `ratio`. The antiproton: √s = 4m_p, fixed target E = 7m_p (kinetic 6m_p = 5.63 GeV),
+  collider 2m_p per beam (kinetic m_p). `fixed_target_energy(M, m_a, m_b)`.
+- **Time dilation and decay length**: `decay_length("mu-", energy=4000)` → `DecayLength` with
+  `c_tau`, `lab_lifetime` (γτ), `length` (βγcτ), `survival(d)` = e^(−d/L), `text()`; stable
+  particles refused. A 4 GeV muon: γ = 37.86, L = 24.93 km; B⁺ at 30 GeV/c: 2.8 mm; π± at 10 GeV/c:
+  559 m; π⁰: 1.9 µm. `length_text` (km … fm).
+- **PDG values for calculations**: `pdg_value(name, "mass" | "lifetime" | "width", unit)` →
+  `PdgValue(number, unit, meaning, source)`: the table's figures as a decimal string (`139.57039`
+  MeV/c²; masses below 1 GeV in MeV/c², else GeV/c²; a width computed from the mean life with 4
+  figures), "π⁺ mass", "PDG 2024"; a neutrino mass (only bounded) and a stable particle's lifetime
+  refused.
+- **Plot model** `two_body_opening` (registered with `plotcore.register_model`, `kind:
+  function`): params `M`, `m1`, `m2` (GeV/c²), `p_min`, `p_max` (GeV/c), `samples`; columns `p`,
+  `gamma`, `theta_min`, `theta_90` (degrees). The opening-angle plot is Phase W's `plot` — nothing
+  re-implemented.
+
+### 99.8 The `kinematics` scene type and PDG symbols in calculations (Step 239)
+
+**Decision**: a new scene type `kinematics` (name checked: no type, action or target is called
+so; the action `boost` neither), not a `plot` model: arrows from a common origin with labels at
+their tips, two frames side by side and a frame that moves continuously are a picture of their
+own, not data on axes; the numbers are worked out by `calculation` scenes (`from_scene` and the
+new particle symbols), the curves by `plot` (`two_body_opening`).
+
+`scenes/kinematics.py`, `scenes/kinematics_actions.py`.
+
+- **Params**: `decay` (two-body) with the parent's `momentum` / `energy` / `kinetic` (text with a
+  unit) / `beta` / `gamma` (at most one; needed unless `frames: rest`) and `angle` (the first
+  product's rest-frame direction from the flight direction, default 60°); or `particles` (`{particle,
+  momentum, angle}` in the lab); `frames: both | rest | lab`; `values`, `sum`, `decay_length`, `si`,
+  `process`, `reveal: steps | all`, title, caption. Validation builds the picture: the errors of
+  §99.7 become param errors.
+- **Layout**: panels side by side (16:9) or stacked (9:16), each with a header ("rest frame of π⁺",
+  "lab frame", "rest frame (Σp = 0)", "boosted frame"), a β / γ readout (not in a rest frame shown
+  beside the lab), the arrows and the numbers under them (room reserved for the tallest set the
+  frame will show). The arrow scale fills the panel with the labels (name + momentum beyond each
+  tip, the centre moved along the arrow just far enough for its box to clear the tip; a label that
+  overlaps an earlier one moves up or down): found by a few rounds since labels do not scale. Both
+  frames share one scale unless they differ more than 2× — then the larger one's header says
+  `arrows ×2.4`. One decay frame in 9:16 turns the picture a quarter (the flight direction up).
+  Particle colours from the theme palette; Σp grey at 0.75 opacity.
+- **Numbers**: decay at rest — p*, the products' energies, √((ΣE)² − |Σp|²) = M; a moving frame —
+  the parent's p and E, the opening angle, the same invariant mass, βγcτ; particles — ΣE, |Σp|, the
+  opening angle of two, the invariant mass; `si` adds one SI line.
+- **Reveal**: (1) title, process, headers, the first frame's arrows; (2) the second frame's arrows;
+  (3) sums, numbers, caption.
+- **Targets**: `title`, `caption`, `process`, `panel:rest`, `panel:lab`, `arrow:<n>` /
+  `arrow:<particle>` (unique keys; every frame's arrow and label), `sum`, `values`.
+- **`boost`** (`to: lab | rest | β`; reversible): the last frame's rapidity runs linearly from its
+  value to the target; each frame redraws arrows, labels, Σp and the readout (`orbit_text.LiveText`
+  for the changing numbers — no `Text` per frame); header and numbers `Transform` into the new
+  frame's. The containers keep their identity (targets follow); the parts they drop are made
+  invisible, because the renderer keeps drawing the family it collected when the animation began
+  (a first version left the rest-frame arrows on screen). The panel's scale covers every rapidity
+  its boosts pass through.
+- **`calc_values`** (`from_scene`): decay `M`, `p_star`, `E1`, `E2`, `Q`, with the lab `beta`,
+  `gamma`, `beta_gamma`, `p_lab`, `E_lab`, `opening_angle` (rad, shown in deg), `decay_length`;
+  particles `m_inv`, `E_total`, `p_total`, `opening_angle`.
+
+**`calculation` symbols** (shared code, additive): `{name, mass: pi+}`, `lifetime: mu-`, `width:
+Z` — one more kind of source beside `value`, `constant`, `from_scene` (exactly one); written into
+`quantities` as the value string and unit of `pdg_value` (meaning and source by default), so the
+substitution, significant figures and lint are those of any measured value. `CalcSymbol.pdg()`,
+`source_input()`. Existing calculations are unchanged.
+
+**Render performance**: a two-frame scene of 15.7 s renders in about 9 s at preview (1280×720,
+10 fps); the boost scene (7.5 s) in about 9 s.
+
+**Public (additive)**: scene type `kinematics`; action `boost`; calculation symbol keys `mass`,
+`lifetime`, `width`; `particle_physics.kinematics` and the names `Boost`, `DecayLength`,
+`FourVector`, `Thresholds`, `TwoBodyDecay`, `decay_length`, `invariant_mass`, `threshold`,
+`two_body`, `two_body_momentum`; the plot model `two_body_opening`. No dependency, no config key.
+
+**Known gaps after Step 239**: the pictures are planar (pz = 0); three-body decays (Dalitz plots,
+the muon's electron spectrum) are not modelled; lab distributions are shown as single events and
+the opening-angle curve, not as sampled angular distributions; the opening-angle model takes masses
+as numbers (plot params are numbers), not particle names; a dense two-frame picture trips
+`max_words` (about 45 words with every number: `values: false` or fewer beats' worth of detail).

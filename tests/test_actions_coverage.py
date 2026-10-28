@@ -79,6 +79,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "orbit": {"title": "Orbits", "central": "sun", "bodies": [{"preset": "earth"}, {"name": "Comet", "a": "2 AU", "e": 0.7, "orbit": False}], "span": "1 yr"},
     "standard_model": {"title": "Particles", "caption": "C"},
     "feynman": {"title": "Diagram", "caption": "C", "preset": "muon_decay"},
+    "kinematics": {"title": "Decay", "caption": "C", "decay": "pi+ -> mu+ nu_mu", "momentum": "200 MeV/c"},
     "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
@@ -241,6 +242,10 @@ def test_target_names_of_every_builtin_type() -> None:
                                 "vertex:v1", "vertex:v2"]
     assert names("feynman", title="", caption="", process=False, time_axis=False, preset="pion_decay")[:2] == ["diagram", "line:u"]
     assert names("feynman", preset="pion_decay")[-1] == "hadron:pi+"
+    assert names("kinematics") == ["title", "caption", "process", "panel:rest", "panel:lab", "arrow:1", "arrow:2", "arrow:mu+", "arrow:nu_mu", "sum", "values"]
+    assert names("kinematics", title="", caption="", process=False, frames="rest", sum=False, values=False, momentum=None,
+                 decay=None, particles=[{"particle": "gamma", "momentum": "1 GeV/c"}, {"particle": "gamma", "momentum": "1 GeV/c", "angle": 120}]) == [
+        "panel:rest", "arrow:1", "arrow:2"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",

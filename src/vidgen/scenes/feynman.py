@@ -30,14 +30,20 @@ LABEL_GAP = 0.14
 BRACKET_GAP = 0.12
 #: Largest size of one transverse unit of the layout (scene units) and the widest time / transverse
 #: ratio of the drawing.
-MAX_UNIT = 2.3
-MAX_STRETCH = 2.3
-#: Particle labels and the reaction line, relative to the readable size; lines of a vertex rule.
+MAX_UNIT = 3.0
+MAX_STRETCH = 2.8
+#: How much taller than wide the drawing may grow in a portrait frame (time left → right).
+PORTRAIT_STRETCH = 1.8
+#: Particle labels, the reaction line and the vertex-rule text, relative to the readable size;
+#: lines reserved for a vertex rule in a portrait band.
 LABEL_SCALE = 1.6
 PROCESS_SCALE = 1.35
-NOTE_LINES = 4
-#: Width of the vertex-rule column in wide frames (scene units).
-NOTE_WIDTH = 4.0
+NOTE_SCALE = 1.3
+NOTE_LINES = 8
+NOTE_BAND_SHARE = 0.3
+#: Width of the vertex-rule column in wide frames (scene units, at most this share of the width).
+NOTE_WIDTH = 5.0
+NOTE_SHARE = 0.36
 #: The last part of a ``travel`` in which its dots fade out.
 TRAVEL_FADE = 0.12
 
@@ -283,12 +289,12 @@ class Feynman(NarratedScene):
         self._note_region = None
         if self.action_uses("vertex_rule"):
             if self.is_portrait:   # a band under the diagram
-                line_h = self.text("Hg", size=self._small).height
-                band = NOTE_LINES * line_h + (NOTE_LINES - 1) * 0.1
+                line_h = self.text("Hg", size=self._small * NOTE_SCALE).height
+                band = min(NOTE_LINES * line_h + (NOTE_LINES - 1) * 0.1, NOTE_BAND_SHARE * area.height)
                 self._note_region = Region(area.x0, area.y0, area.x1, area.y0 + band)
                 area = area.above(area.y0 + band, gap=0.25)
             else:   # a column on the right
-                width = min(NOTE_WIDTH, 0.3 * area.width)
+                width = min(NOTE_WIDTH, NOTE_SHARE * area.width)
                 self._note_region = Region(area.x1 - width, area.y0, area.x1, area.y1)
                 area = Region(area.x0, area.y0, area.x1 - width - 0.3, area.y1)
         self._time_axis = None
@@ -398,7 +404,7 @@ class Feynman(NarratedScene):
             height = min(height, MAX_UNIT * span_y)
             width = min(width, MAX_STRETCH * height)
             if self.is_portrait:   # a narrow frame: the drawing may grow taller, up to a little more than square
-                height = min(yt - yb, max(height, 1.15 * width))
+                height = min(yt - yb, max(height, PORTRAIT_STRETCH * width))
             cx = (x0 + x1) / 2
             cy = (yb + yt) / 2
         else:
@@ -663,7 +669,8 @@ class Feynman(NarratedScene):
         region = self._note_region
         if lines and region is not None:
             side = not self.is_portrait
-            rows = [fit_text(text, region.width, region.height, size=self._small, color="text" if k == 0 else "dim", min_size=self._small,
+            size = self._small * NOTE_SCALE
+            rows = [fit_text(text, region.width, region.height, size=size, color="text" if k == 0 else "dim", min_size=self._small,
                              align="left" if side else "center") for k, text in enumerate(lines)]
             note = VGroup(*rows).arrange(DOWN, buff=0.22 if side else 0.1, aligned_edge=LEFT if side else ORIGIN)
             if note.height > region.height:

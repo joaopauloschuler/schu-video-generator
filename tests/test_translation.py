@@ -317,6 +317,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
     "orbit": [{"title": "T:title", "caption": "T:caption", "central": {"preset": "sun", "label": "T:sun"}, "bodies": [{"preset": "earth", "label": "T:earth"}]}],
     "standard_model": [{"title": "T:title", "caption": "T:caption"}],
     "feynman": [{"title": "T:title", "caption": "T:caption", "preset": "bhabha"}],
+    "kinematics": [{"title": "T:title", "caption": "T:caption", "decay": "pi0 -> gamma gamma", "frames": "rest"}],
     "gwas": [{"title": "T:title", "trait": "T:trait", "background": 400}],
     "iso_diagram": [
         {

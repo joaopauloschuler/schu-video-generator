@@ -5,10 +5,23 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–238)
+## Unreleased (Steps 193–239)
 
 ### Particle physics (Phase Y, from Step 237)
 
+- **Relativistic kinematics: the `kinematics` scene type** (Step 239). Momentum vectors to scale: a
+  two-body decay (`decay: "pi+ -> mu+ nu_mu"`) in the parent's rest frame — the products back to
+  back with p* from the masses (29.79 MeV/c) — and in the lab where the parent moves (`momentum:
+  200 MeV/c`), side by side in 16:9 and stacked in 9:16; or particles given in the lab with their sum
+  and rest frame. Each frame shows β and γ, the energies, the opening angle, the invariant mass
+  √((ΣE)² − |Σp|²) — the same in both frames —, the decay length βγcτ and, with `si: true`, SI
+  values. The action `boost` speeds a frame up continuously. A `calculation` takes a particle's
+  PDG value by name (`{name: m_mu, mass: mu-}`, `lifetime`, `width`) and the picture's numbers
+  (`from_scene: pion.p_star`); the plot model `two_body_opening` draws the opening angle against
+  momentum. The model `particle_physics.kinematics` adds four-vectors, boosts, thresholds (fixed
+  target vs collider) and decay lengths. Decays below threshold or forbidden, β ≥ 1, E < m and
+  negative m² are refused with the numbers. Also: gluons in `feynman` diagrams are proper coils,
+  diagrams fill more of the frame and the vertex-rule card is larger.
 - **Feynman diagrams: the `feynman` scene type** (Step 238). Diagrams in proper notation — fermion
   arrows on the fermion-number flow (antifermions against time), wavy photons, W and Z, curly
   gluons, a dashed Higgs, vertex dots, every line named (e⁻, ν̄ₑ, u, d̄), the time direction stated

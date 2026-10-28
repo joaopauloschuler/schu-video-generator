@@ -15,8 +15,8 @@ from vidgen.api import *
 #: pitch; dashes of the Higgs line; the fermion arrowhead's length and width.
 WAVE_AMPLITUDE = 0.075
 WAVE_LENGTH = 0.3
-COIL_RADIUS = 0.1
-COIL_PITCH = 0.27
+COIL_RADIUS = 0.14
+COIL_PITCH = 0.3
 DASH_LENGTH = 0.16
 ARROW_LENGTH = 0.24
 ARROW_WIDTH = 0.2
@@ -83,7 +83,9 @@ def path_mobject(path: Path, kind: str, color: str, width: float = LINE_WIDTH) -
         loops = max(3, round(length / COIL_PITCH))
         n = loops * 18
         r = min(COIL_RADIUS, length / (2 * loops) * 2.2)
-        squash = 0.8
+        # each turn swings back by more than the pitch, so every turn closes into a loop (a coil
+        # reads as a coil, not as a wave, even in a thumbnail)
+        squash = 1.0
         pts = []
         for k in range(n + 1):
             s = k / n

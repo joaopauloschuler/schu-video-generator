@@ -44,11 +44,14 @@ SPREAD = 1.6
 ROW_GAP, BOX_PAD, TABLE_GAP = 0.34, 0.14, 0.22
 #: The share of a step the previous calculation takes to leave, against 1 for each line coming.
 LEAVE_SHARE = 0.5
+#: Symbol keys that read a particle's PDG value (Phase Y, Step 239).
+PARTICLE_SOURCES = ("mass", "lifetime", "width")
 
 
 class CalcSymbol(SceneParams):
     """A row of the symbol table: ``{name, value, unit, meaning, source}``, or ``{name,
-    constant}``, or ``{name, from_scene}``."""
+    constant}``, or ``{name, from_scene}``, or a particle's PDG value ``{name, mass: pi+}``
+    (``lifetime``, ``width``)."""
 
     name: str
     """The name formulas use (v, M_sun, t_half, lambda): letters, digits and _."""
@@ -60,6 +63,12 @@ class CalcSymbol(SceneParams):
     """A named constant instead of a value: c, G, h, hbar, k_B, N_A, e, R, sigma_SB, m_e, m_p, m_u, epsilon_0, mu_0, g, AU, GM_sun, GM_earth, M_sun, M_earth, R_earth."""
     from_scene: str | None = None
     """The result of a calculation scene of this video instead of a value: 'scene_id' (the result with this name) or 'scene_id.result'."""
+    mass: str | None = None
+    """A particle's mass from PDG 2024 instead of a value: pi+, mu-, Z, H, π⁺ (MeV/c² below 1 GeV, else GeV/c²; or unit)."""
+    lifetime: str | None = None
+    """A particle's mean life from PDG 2024 instead of a value: mu-, pi+, B0 (in s, or unit: µs, ns, ps)."""
+    width: str | None = None
+    """A particle's decay width from PDG 2024 instead of a value: Z, W+, J/psi (MeV below 1 GeV, else GeV; or unit)."""
     sig: int | None = None
     """Significant figures of the value (it is rounded to them); default: counted from its digits (decimals), exact for fractions and whole numbers without a unit."""
     exact: bool | None = None
@@ -79,11 +88,32 @@ class CalcSymbol(SceneParams):
 
     @model_validator(mode="after")
     def _one_source(self) -> "CalcSymbol":
-        given = [k for k in ("value", "constant", "from_scene") if getattr(self, k) is not None]
+        given = [k for k in ("value", "constant", "from_scene", *PARTICLE_SOURCES) if getattr(self, k) is not None]
         if len(given) != 1:
-            raise ValueError(f"symbol '{self.name}': give exactly one of value, constant or from_scene" + (f" (got {', '.join(given)})" if given else
-                             " (value: 29.8 km/s, constant: G, from_scene: scene_id)"))
+            raise ValueError(f"symbol '{self.name}': give exactly one of value, constant, from_scene, mass, lifetime or width"
+                             + (f" (got {', '.join(given)})" if given else " (value: 29.8 km/s, constant: G, from_scene: scene_id, mass: pi+)"))
+        if given[0] in PARTICLE_SOURCES:
+            try:
+                self.pdg()
+            except VidgenError as error:
+                raise ValueError(f"symbol '{self.name}': {given[0]}: {error}") from None
         return self
+
+    def pdg(self) -> Any:
+        """The particle value (``particle_physics.kinematics.PdgValue``) of a ``mass`` /
+        ``lifetime`` / ``width`` symbol, else ``None``."""
+        key = next((k for k in PARTICLE_SOURCES if getattr(self, k) is not None), None)
+        if key is None:
+            return None
+        return particle_physics.kinematics.pdg_value(str(getattr(self, key)), key, self.unit)
+
+    def source_input(self) -> tuple[Any, str, str, str]:
+        """``value``, ``unit``, ``meaning`` and ``source`` for ``quantities`` (a particle value
+        written as the PDG table gives it)."""
+        v = self.pdg()
+        if v is None:
+            return self.value, self.unit, str(self.meaning), self.source
+        return v.number, v.unit, str(self.meaning) or v.meaning, self.source or v.source
 
 
 class CalcStep(SceneParams):
@@ -120,8 +150,8 @@ class CalcStep(SceneParams):
 
 def _inputs(p: Any, imports: dict[str, Any] | None = None) -> tuple[list[Any], list[Any]]:
     """The symbols and calculations as ``quantities`` inputs."""
-    symbols = [quantities.SymbolInput(s.name, s.value, s.unit, s.constant, s.sig, s.exact, s.tex, str(s.meaning), s.source, s.digits,
-                                      (imports or {}).get(s.name)) for s in p.symbols]
+    symbols = [quantities.SymbolInput(s.name, value, unit, s.constant, s.sig, s.exact, s.tex, meaning, source, s.digits, (imports or {}).get(s.name))
+               for s in p.symbols for value, unit, meaning, source in [s.source_input()]]
     calcs = [quantities.CalcInput(c.name, c.expr, c.unit, c.converts(), c.sig, c.format, c.tex, str(c.meaning), c.symbol, c.intermediate, c.substitute)
              for c in p.calculations]
     return symbols, calcs

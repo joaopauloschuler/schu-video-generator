@@ -22028,3 +22028,93 @@ How to test
   Compton u, a custom e⁺e⁻ → W⁺W⁻ (ν exchange → s-channel Z), π⁺ decay):
   `build/preview/storyboard/` (16:9 dark), `build/preview_light/`, `build/preview_vertical/`,
   `build/preview_vlight/`; `vidgen lint`: 0 errors.
+
+## Step 239 — Relativistic kinematics
+
+What was built (DESIGN §99.6 review fixes, §99.7–§99.8): relativistic kinematics as a model
+(`vidgen.particle_physics.kinematics`, no manim), the scene type `kinematics` (momentum vectors in
+the rest frame and the lab) with the action `boost`, particle values in `calculation` symbols
+(`mass: pi+`, `lifetime: mu-`, `width: Z`) and the plot model `two_body_opening`.
+
+First, the review of Step 238's stills:
+- Gluons now read as coils (radius 0.14, pitch 0.3, every turn closing into a loop), clearly unlike
+  the photon / W / Z waves at preview and 1080p (a test checks the coil runs backwards in each turn).
+- Diagrams take more of the frame (transverse unit up to 3.0, width up to 2.8 × height, 9:16 up to
+  1.8 × the width tall) and the vertex-rule card is 1.3 × the readable size (a 16:9 column up to 5
+  units / 36 %, a 9:16 band of eight lines, at most 30 % of the height). The `feynman` gallery
+  entry was regenerated. `test_feynman`'s portrait label check used `s.frame_height` after the
+  render (the landscape frame by then) and now uses the rendered size.
+
+The step:
+- **Model** `kinematics`: `FourVector` (E, p in MeV, c = 1; mass with negative m² refused, boosts,
+  Minkowski product), `invariant_mass`, rest frames of systems, `Boost` / `motion` (β ≥ 1, γ < 1,
+  E < m refused), `kallen`, `two_body_momentum`, `two_body` (checked by the conservation checker,
+  below threshold refused) with p*, energies, lab vectors and opening angles, `MomentumPicture`
+  (`decay_picture`, `system_picture`), `threshold` (fixed target vs collider), `decay_length`
+  (βγcτ, γτ, survival), SI conversions (`to_si`, `si_text`, `natural_value`), `pdg_value`, the plot
+  model `two_body_opening`.
+- **Scene** `kinematics`: a two-body decay in the parent's rest frame and the lab (side by side in
+  16:9, stacked in 9:16), or particles given in the lab with their rest frame; arrows to scale with
+  momenta at the tips, Σp, β / γ, and each frame's numbers (p*, energies, opening angle, the
+  invariant mass in both frames, βγcτ, SI); targets `panel:*`, `arrow:<n>` / `arrow:<particle>`,
+  `sum`, `values`, `process`; `boost` moves a frame continuously; `calc_values` for `from_scene`.
+- **Calculation**: `{name: m_mu, mass: mu-}` etc. take PDG 2024 values with their figures, meaning
+  and source.
+
+Files touched
+- New: `src/vidgen/particle_physics/kinematics.py`, `src/vidgen/scenes/{kinematics,kinematics_actions}.py`,
+  `tests/test_kinematics.py` (24 incl. 3 renders), `docs/gallery/kinematics.md` +
+  `media/kinematics-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/particle_physics/__init__.py`, `src/vidgen/scenes/{__init__,calculation,feynman,feynman_draw}.py`,
+  the guide (chooser row, calculation row, a `# particle physics` snippet, the `boost` action row)
+  + `AGENTS.md`, `docs/CONFIG.md` (`kinematics` section, the calculation's particle symbols, targets
+  row), `docs/gallery/README.md` and the `feynman` entry (regenerated), `examples/gallery/video.yaml`
+  (scene `kinematics`), `tests/{test_actions_coverage,test_builtin_scenes,test_docs,test_feynman,test_translation}.py`,
+  `DESIGN.md` (§99.6 fixes, §99.7, §99.8), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): scene type `kinematics`; action `boost`; calculation symbol keys
+`mass`, `lifetime`, `width`; `particle_physics.kinematics` (+ `Boost`, `DecayLength`, `FourVector`,
+`Thresholds`, `TwoBodyDecay`, `decay_length`, `invariant_mass`, `threshold`, `two_body`,
+`two_body_momentum` at the package level); plot model `two_body_opening`. No dependency, no config
+key.
+
+Decisions
+- A new scene type rather than a `plot` model: arrows from an origin, two frames and a frame that
+  moves are a picture of their own; worked numbers stay `calculation` scenes (now with PDG values by
+  name and `from_scene` from the picture), curves stay `plot` (a registered model).
+- MeV with c = 1 everywhere inside; units appear only in text (MeV/c, MeV/c²) and in SI conversions
+  through `vidgen.quantities`.
+- Both frames share one arrow scale unless they differ more than 2×; then the header says so
+  (`arrows ×2.4`), so a picture never silently misleads about lengths.
+- A decay is refused unless the checker allows it and it is above threshold; the checker's
+  explanation is the error message.
+- Massless products' minimum opening angle is computed by scanning the emission angle (general for
+  massive products) and matches sin(θ_min/2) = 1/γ (tested).
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check239`).
+Calculations without the new keys are unchanged; the `feynman` look changed as asked (gallery
+entry regenerated). Gallery 14.4 MB of 15 (kinematics GIFs 81 KB and 102 KB).
+
+Values: every number is computed from the PDG 2024 masses and lifetimes of Step 237 (none new);
+no value to check beyond those already listed (DESIGN §99.2).
+
+Known gaps: planar pictures (pz = 0); no three-body decays or sampled angular distributions;
+`two_body_opening` takes masses as numbers; a dense two-frame picture trips `max_words` (warning).
+
+Render performance: preview (1280×720, 10 fps): the two-frame pion scene (15.7 s) in about 9 s;
+the boost scene (7.5 s) in about 9 s; a few hundred mobjects, no memory concern.
+
+How to test
+- `tests/test_kinematics.py` (24 incl. 3 renders, ~12 s); `tests/test_feynman.py` (79),
+  `tests/test_particle_physics.py`, `tests/test_calculation.py`, `tests/test_standard_model.py`
+  (196 together).
+- Related, all passing: `test_docs` + `test_guide` + `test_translation` + `test_extensions` not
+  render (272); `test_actions_coverage` + `test_builtin_scenes` + `test_gallery` not render (183
+  after the gallery); `-k "kinematics or feynman"` renders (10); `test_api` + `test_schema` +
+  `test_registry` + `test_introspect` + `test_json_output` + `test_narration_rule` + `test_lint` +
+  `test_overlays` + `test_orbit` not render (255); the gallery lint checks (3).
+- Stills: scratchpad `s239/kin` (pion decay in two frames with SI, π⁰ boost, diphoton system,
+  K⁺ at γ = 3 lab only, the muon decay length calculation, from_scene, the opening-angle plot):
+  `build/preview/frames/`, `build/preview_vertical/`, `build/preview_vlight/`; `s239/fey` (Step
+  238's project re-rendered): `build/preview_light/storyboard/`, `build/preview_vertical/`,
+  `build/preview_vlight/`.

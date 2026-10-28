@@ -270,7 +270,9 @@ def test_diagram_renders_with_its_actions(size: tuple[int, int], make_project, m
     # labels inside the frame, none overlapping another
     labels = [parts[k] for parts in s._parts.values() for k in ("label", "label_out", "name") if k in parts]
     boxes = [_box(m) for m in labels]
-    assert all(abs(x) <= s.frame_width / 2 for b in boxes for x in (b[0], b[2])) and all(abs(y) <= s.frame_height / 2 for b in boxes for y in (b[1], b[3]))
+    # the frame of this size (the shorter side is 8 units; manim's config is restored after render)
+    fw, fh = (8 * size[0] / size[1], 8.0) if size[0] >= size[1] else (8.0, 8 * size[1] / size[0])
+    assert all(abs(x) <= fw / 2 for b in boxes for x in (b[0], b[2])) and all(abs(y) <= fh / 2 for b in boxes for y in (b[1], b[3]))
     assert all(_overlap(a, b) == 0 for i, a in enumerate(boxes) for b in boxes[i + 1:])
 
 

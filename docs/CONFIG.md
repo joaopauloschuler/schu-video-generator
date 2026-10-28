@@ -5490,6 +5490,15 @@ lines after it that no action names (a `compute` brings an unnamed conversion).
 calculation scene `orbit`; `from_scene: orbit.v` names the result; an [`orbit`](#orbit) scene with a
 transfer, burns or a flyby gives its computed numbers the same way (`from_scene: geo.dv1`). Checked by `vidgen validate`
 (an unknown scene or result with did-you-mean, scenes taking values from each other in a loop).
+A [`kinematics`](#kinematics) scene gives p*, β, γ, the opening angle, the decay length or an
+invariant mass the same way (`from_scene: pion.p_star`).
+
+**Particle values.** `{name: m_pi, mass: pi+}` takes the mass from the particle table (PDG 2024,
+`vidgen.particle_physics`) with the figures the table gives (139.57039 MeV/c²), the meaning "π⁺
+mass" and the source "PDG 2024"; `lifetime: mu-` the mean life (2.1969811 × 10⁻⁶ s), `width: Z`
+the width (2.4955 GeV; computed from the mean life as ħ/τ with 4 figures when PDG quotes a
+lifetime); `unit:` converts. A name the table does not know gets did-you-mean; a neutrino's mass
+(only bounded) and a stable particle's lifetime are refused.
 
 **Errors** (at `vidgen validate`, naming the symbol or calculation): an unknown symbol (did you
 mean…; a constant's key not in the table: "add `{name: G, constant: G}`"; a result computed by a
@@ -5505,12 +5514,13 @@ in the lines on screen, its substituted value too — for `highlight`), `row:<na
 | param | type | default | |
 |---|---|---|---|
 | `title` | str | `""` | heading |
-| `symbols` | list | `[]` | the symbol table: `{name, value, unit, meaning, source}`, `{name, constant}` or `{name, from_scene}` |
+| `symbols` | list | `[]` | the symbol table: `{name, value, unit, meaning, source}`, `{name, constant}`, `{name, from_scene}` or `{name, mass: pi+}` |
 | `symbols[].name` | str | required | the name formulas use: letters, digits and `_` (`v`, `M_sun`, `t_half`, `lambda`) |
 | `symbols[].value` | number \| str | — | a number, `"1/25"`, `"6.674e-11"`, optionally with its unit (`"29.8 km/s"`) |
 | `symbols[].unit` | str | `""` | its unit, if not after the value; for a constant, the unit to show it in |
 | `symbols[].constant` | str | — | a constant's key (list above; aliases such as `kB`, `Msun` work) |
 | `symbols[].from_scene` | str | — | `scene_id` or `scene_id.result`: a result of another calculation scene, or a number an [`orbit`](#orbit) scene computed (`geo.dv1`) |
+| `symbols[].mass`, `symbols[].lifetime`, `symbols[].width` | particle | — | a particle's PDG 2024 value by name ([`kinematics`](#kinematics)): `mass: pi+` (MeV/c² below 1 GeV, else GeV/c²), `lifetime: mu-` (s), `width: Z` (MeV or GeV); `unit` converts (`GeV/c^2`, `us`, `ps`) |
 | `symbols[].sig` | int (1–15) | from the digits | its significant figures (the value is rounded to them) |
 | `symbols[].exact` | bool | — | `true`: exact (never limits a result) |
 | `symbols[].digits` | int | as written; constants 4 | figures to show (the full value is used) |
@@ -6374,6 +6384,122 @@ conservation, the fermion lines, the reaction), `vertex_rule([...into], [...out]
 constants; α_s(m_Z) = 0.118 and G_F (hence v ≈ 246 GeV and g = 2m_W/v ≈ 0.65) from PDG 2024;
 sin²θ_W ≈ 0.231 and the CKM magnitudes rounded to two figures. Diagrams are schematic: lengths and
 angles carry no meaning.
+
+### `kinematics`
+
+**Relativistic kinematics** (Phase Y) as momentum vectors: arrows for the particles in a frame,
+drawn to scale from a common origin with their momenta written at the tips, the sum Σp (grey;
+zero in a rest frame) and the numbers the frame shows. Natural units (c = 1): energies in
+MeV / GeV, momenta in MeV/c / GeV/c, masses in MeV/c² / GeV/c², the masses from PDG 2024
+(`particle_physics`); `si: true` adds the SI value (J, kg·m/s, kg) through `vidgen.quantities`.
+
+- **A two-body decay** (`decay: "pi+ -> mu+ nu_mu"`): in the parent's **rest frame** the two
+  products leave back to back with p* = √λ(M², m₁², m₂²) / 2M (the Källén function λ; π⁺ → μ⁺ ν_μ
+  29.79 MeV/c, K⁺ → π⁺ π⁰ 205.1 MeV/c, Λ → p π⁻ 100.6 MeV/c, H → γγ 62.60 GeV/c each), the first
+  at `angle` degrees from the flight direction; in the **lab** the parent moves along +x with
+  `momentum` (or `energy`, `kinetic`, `beta`, `gamma`) and each product's four-vector is boosted.
+  The decay is checked first: one particle into two real ones, allowed by the conservation checker
+  (π⁺ → μ⁺ νₑ is refused: "electron number not conserved") and above threshold ("below threshold:
+  M = 135.0 MeV/c² is less than μ⁺ + μ⁻ = 211.3 MeV/c²").
+- **Particles given in the lab** (`particles: [{particle: gamma, momentum: "80 GeV/c", angle: 25},
+  ...]`): their sum, the invariant mass m = √((ΣE)² − |Σp|²) and their **rest frame** (centre of
+  momentum, β = Σp/ΣE, where Σp = 0). Photons all moving one way have none (refused).
+- **Frames**: `frames: both` (default) shows the rest frame and the lab side by side (16:9) or
+  stacked (9:16); `rest` or `lab` one frame, which the action `boost` moves. One arrow scale for both
+  frames unless their momenta differ more than twice — then the header says so (`arrows ×6.2`).
+  With one decay frame in a tall picture the flight direction points up.
+- **Numbers** (`values: true`): the rest frame of a decay — p*, both energies, √((ΣE)² − |Σp|²) = M;
+  the lab — the parent's p and E, the opening angle of the products, the same invariant mass (the
+  point: it does not depend on the frame), the mean decay length βγcτ (`decay_length: true`, when
+  the parent has a lifetime; time dilation, γτ, is behind it); for particles: ΣE, |Σp|, the opening
+  angle of two, the invariant mass. Under each frame's header: β and γ of the frame.
+
+```yaml
+- id: pion
+  type: kinematics
+  params:
+    title: "Pion decay in two frames"
+    decay: "pi+ -> mu+ nu_mu"
+    momentum: "200 MeV/c"     # the pion in the lab (or energy: 4 GeV, kinetic, beta: 0.82, gamma: 1.75)
+    angle: 60                 # the muon's direction in the rest frame, from the flight direction
+    si: true                  # p* = 29.79 MeV/c = 1.592 × 10⁻²⁰ kg·m/s
+  beats:
+    - text: "At rest, the muon and the neutrino fly apart back to back."
+    - text: "In the lab the pion moves, and both are thrown forward."
+    - text: "The invariant mass is the same in both frames: the pion's mass."
+      actions: [{highlight: values}]
+- id: fast
+  type: kinematics
+  params: {decay: "pi0 -> gamma gamma", frames: rest, momentum: "1 GeV/c", angle: 90}
+  beats:
+    - text: "At rest the two photons leave back to back."
+    - text: "Speed the pion up, and they close up."
+      actions: [{action: boost, to: lab}]     # or to: 0.99 (a β), to: rest
+- id: diphoton
+  type: kinematics
+  params:
+    particles:
+      - {particle: gamma, momentum: "80 GeV/c", angle: 25}
+      - {particle: gamma, momentum: "57.39 GeV/c", angle: -110}
+  beats:
+    - text: "Two photons: their invariant mass is the Higgs boson's, 125 GeV."
+```
+
+**Targets**: `title`, `caption`, `process` (the decay or the particles under the title),
+`panel:rest`, `panel:lab` (a frame: header, arrows, numbers), `arrow:<n>` (the n-th particle's
+arrows and labels in every frame, 1, 2…) and `arrow:<particle>` (`arrow:mu+`, when the particle is
+there once), `sum`, `values`. `highlight` and `dim` work on all of them.
+
+**Action** `boost` (`- action: boost`; `to: lab | rest | <β>`, default the lab from the rest
+frame, else the rest frame): the last frame speeds up continuously (rapidity linear in time) — the
+products swing forward and close up, Σp grows from zero, β and γ count up — and its header and
+numbers morph into the new frame's; the invariant mass stays. `until:` boosts back. About 2.5 s.
+`vidgen validate` refuses `to: 1.2` (faster than light) and `to: lab` without the parent's motion.
+
+**Values for a calculation** (`from_scene: pion.p_star`): a decay gives `M`, `p_star`, `E1`, `E2`,
+`Q` and with the lab `beta`, `gamma`, `beta_gamma`, `p_lab`, `E_lab`, `opening_angle`,
+`decay_length`; particles give `m_inv`, `E_total`, `p_total` and `opening_angle` (two).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `decay` | text | — | a two-body decay, `"K+ -> pi+ pi0"`; or `particles` |
+| `particles` | list of `{particle, momentum, angle}` | `[]` | particles in the lab: name, momentum with its unit (`"62.6 GeV/c"`), direction in degrees from the x axis |
+| `momentum`, `energy`, `kinetic` | text with unit | — | the decaying particle in the lab: `"10 GeV/c"`, `"4 GeV"` (total), `"1 GeV"` (kinetic); one of these, `beta` or `gamma` |
+| `beta`, `gamma` | number | — | the decaying particle's speed β (0 ≤ β < 1) or Lorentz factor γ (≥ 1) |
+| `angle` | degrees | `60` | the first product's direction in the rest frame, from the flight direction |
+| `frames` | `both` \| `rest` \| `lab` | `both` | which frames to show (one frame: `boost` moves it) |
+| `values` | bool | `true` | each frame's numbers |
+| `sum` | bool | `true` | the sum vector Σp |
+| `decay_length` | bool | `true` | the parent's βγcτ in the lab |
+| `si` | bool | `false` | the SI conversion of the main value |
+| `process` | bool | `true` | the decay or particles under the title |
+| `reveal` | `steps` \| `all` | `steps` | the first frame, the second, then sums and numbers over the beats; or all in beat 1 |
+| `title`, `caption` | text | `""` | title above, note under the picture |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | title and caption style |
+
+The model is `vidgen.api.particle_physics.kinematics` (no manim): `FourVector` (E, p in MeV;
+`mass`, `boost(beta)`, `dot`), `invariant_mass`, `two_body("pi+ -> mu+ nu_mu")` (`p_star`,
+`energies`, `lab_vectors`, `min_opening_angle`), `kallen`, `Boost.from_momentum` / `from_energy` /
+`from_beta` / `from_gamma`, `threshold("p p -> p p p anti-p")` (√s_min = 4m_p; fixed target
+E = 7m_p, kinetic 6m_p = 5.63 GeV; collider 2m_p per beam), `decay_length("mu-", energy=4000)`
+(βγcτ = 24.9 km for a 4 GeV muon), `to_si` / `si_text`, `pdg_value`. The plot model
+`two_body_opening` (`kind: function`; params `M`, `m1`, `m2` in GeV/c², `p_min`, `p_max` in GeV/c)
+gives the opening angle of a two-body decay against the parent's momentum: columns `p`, `gamma`,
+`theta_min` (degrees; massless products: sin(θ_min/2) = 1/γ) and `theta_90`:
+
+```yaml
+- id: opening
+  type: plot
+  params:
+    title: "Opening angle of the two photons"
+    models:
+      pi0: {kind: function, function: two_body_opening, params: {M: 0.1349768, p_min: 0.2, p_max: 20}, units: {p: GeV/c, theta_min: deg}}
+    x: {scale: log, label: "pion momentum"}
+    y: {label: "smallest opening angle"}
+    series: [{name: opening angle, x: p, y: theta_min}]
+  beats:
+    - text: "The faster the pion, the closer its photons."
+```
 
 ### `function_plot`
 
@@ -12051,6 +12177,7 @@ a title card, a `transform` of a bar).
 | `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `lagrange`, `lagrange:<L>`, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`, `pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`, `event`, `inset`, `rings`, `readout` | reveal, highlight, sweep, launch, burn, corotate, inertial, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); a three-body pair's `lagrange` (`lagrange:L4` one point), `zero_velocity` curve and `rotation` badge; `barycentre`; a resonance's `conjunctions`; a close-up's `pointer` to the central body; the tidal schematic's `pull`, `mean`, `tidal`, `bulges`, `face`; an event's alignment `event`, the `inset` box, the log view's `rings`; the sizes picture's `body:<name>` discs and `central` (the Sun's edge); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
 | `standard_model` | `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<name>`, `generation:<N>`, `group:<group>`, `row:<row>` | reveal, highlight, dim, antiparticles, couplings, callout | `particle:e` (or `particle:electron`) one cell; `generation:2` a column with its number; `group:quarks` the quark cells and their label; `row:neutrinos` a row; `antiparticles` turns cells into their antiparticles, `couplings: particle:photon` outlines what a boson couples to |
 | `feynman` | `title`, `caption`, `process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`, `hadron:<particle>` | reveal, highlight, dim, travel, vertex_rule, swap_channel, callout | `line:W` a line with its arrow and name; `vertex:v1` a vertex dot (`vertex_rule` rings it and states its rule); `hadron:n` a hadron's bracket; `travel: diagram` runs a dot along every line in time order; `swap_channel` morphs into another diagram, the targets following their lines |
+| `kinematics` | `title`, `caption`, `process`, `panel:rest`, `panel:lab`, `arrow:<n>`, `arrow:<particle>`, `sum`, `values` | reveal, highlight, dim, boost, callout | `arrow:mu+` the muon's arrow and label in every frame; `panel:lab` one frame with its numbers; `boost` speeds the last frame up (`to: lab`, `rest`, a β), the arrows changing continuously |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
