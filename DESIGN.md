@@ -18336,9 +18336,10 @@ K± 493.677 (12.38 ns), K⁰ 497.611, K⁰_S 89.54 ps, K⁰_L 51.16 ns, φ 1019.
 (92.6 keV), Υ(1S) 9460.40 (54.02 keV), D± 1869.66 (1.033 ps), D⁰ 1864.84 (410.3 fs), B± 5279.41
 (1.638 ps), B⁰ 5279.72 (1.517 ps), Λ 1115.683 (261.7 ps), Σ⁺ 1189.37 (80.18 ps), Σ⁰ 1192.642
 (7.4 × 10⁻²⁰ s), Σ⁻ 1197.449 (147.9 ps), Ξ⁰ 1314.86 (290 ps), Ξ⁻ 1321.71 (163.9 ps), Ω⁻ 1672.45
-(82.1 ps), Δ(1232) 1232 (117 MeV). **For the owner to check against the 2024 tables** (written from
-memory of the PDG summary tables; the 2022 value differs or the last digit is uncertain): the
-quark masses u, d, s, c, b, t and Γ_t; m_τ; τ(π⁰); τ(D⁰); m(B±), m(B⁰). **Checked in Step 238's
+(82.1 ps), Δ(1232) 1232 (117 MeV). The values Step 237 marked for the owner (the quark masses u,
+d, s, c, b, t and Γ_t; m_τ; τ(π⁰); τ(D⁰); m(B±), m(B⁰)) were **re-checked in Step 244's review**
+(the reviewer's independent reading of the PDG 2024 summary tables agrees with every one; §99.15);
+only the Higgs width prediction stays marked. **Checked in Step 238's
 review** against the PDG 2024 summary tables: m_W 80.3692 GeV, m_Z 91.1880 GeV, Γ_Z 2.4955 GeV,
 m_H 125.20 GeV confirmed; τ(Λ) corrected from 2.632 to the PDG 2024 average (2.617 ± 0.010) ×
 10⁻¹⁰ s (and Λ̄ with it).
@@ -18360,7 +18361,9 @@ energy line, notes).
    difference"); a reaction gets `Threshold` (masses before and after, Q, the least √s, and for two
    particles the fixed-target beam energy E = (M² − m_a² − m_b²) / 2m_b and its kinetic part: p p →
    p p p p̄ needs 6 m_p = 5.63 GeV); the **Landau–Yang theorem** (a spin-1 particle never decays to
-   γγ: Z, J/ψ, φ, Υ).
+   γγ: Z, J/ψ, φ, Υ); **two real particles merging into one** (Step 244): only at √s = M of the
+   product, so it must weigh at least m_a + m_b (e⁺e⁻ → Z allowed; e⁺e⁻ → γ and p p̄ → γ with a
+   real photon forbidden, with the hint to write `gamma*`; p p̄ → π⁰ forbidden).
 2. **Flavour**: S, C, B′, T summed per side; a mixture (K⁰_S, K⁰_L) is read as the component that
    changes flavour least, said in a note ("read here as K⁰ (S = +1)").
 3. **The interaction**: a Higgs boson → `higgs` (flavour must be kept: no H → b s̄ at tree level; a
@@ -18681,7 +18684,9 @@ default units (`Column.label`, `Simulation.labels`; the plot's `units` and an ax
 override them) — `two_body_opening` names its axes "parent momentum (GeV/c)" and "smallest opening
 angle θ (deg)". `feynman` with `vertex_rule` in 16:9: the diagram is centred in the frame until the
 first rule card, glides left beside it, and back to the centre after the last one (`_dock`; parts
-not yet drawn are swapped silently). Phase Q baseline 31/31 identical.
+not yet drawn are swapped silently). Phase Q baseline 31/31 identical. (Step 244: the diagram is
+also *laid out* for the whole frame before the first card and after the last — larger, not only
+centred — and refitted beside the cards, in 9:16 above the card band: `_areas[docked]`.)
 
 ### 99.9 Detectors and events: the model (Step 240)
 
@@ -19070,3 +19075,59 @@ for a full chart; `contrast` on a dimmed gluon cell during `couplings`; a 16:9 `
 of the dim generation numeral "II" against a sampled backdrop of #282C32, a sampler effect — the
 numeral reads fine in the stills); the detector's display layout keeps room for the readout on the
 right in 16:9 before the readout appears.
+
+### 99.15 Review of Phase Y (Step 244)
+
+**Physics.** Every value in `data.py` re-read independently against the PDG 2024 summary tables
+(masses, widths / mean lives, charges, spins, J^P, C and G parities, flavour signs): all agree;
+the Step 237 `# check` marks are replaced by "confirmed in review (Step 244)". Couplings: G_F
+1.1663788 × 10⁻⁵ GeV⁻², α_s(m_Z) 0.1180, sin²θ_W (MS-bar) 0.23129 kept as 0.2313; the CKM
+magnitudes rounded to two figures (global fit ≈ 0.974, 0.225, 0.0037; 0.225, 0.973, 0.042; 0.0086, 0.041,
+0.999) — confirmed.
+Branching ratios: Z (hadrons 69.911 %, invisible 20.000 %, e e 3.3632, μμ 3.3662, ττ 3.3696), W
+(hadrons 67.41 %, ℓν 10.86 % universal), K⁺ (63.56, 20.67, 5.583, 5.07, 3.352, 1.760 %), π⁺, π⁰ —
+confirmed, `check` removed. **Left marked for the owner**: the Higgs boson's Standard Model
+predictions from YR4 at m_H = 125.00 GeV (b b̄ 58.24 %, WW* 21.37, gg 8.187, ττ 6.272, c c̄ 2.891,
+ZZ* 2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176 %; Γ_H 4.088 MeV): the reviewer recalls the same
+numbers but cannot confirm the table line by line. Hand computations in
+`tests/test_phase_y_review.py`: p* (π → μν 29.79 MeV/c, Λ → pπ⁻ 100.6 MeV/c, Z → ee), thresholds
+(p p → p p p p̄: E = 7 m_p, T = 6 m_p; π⁻p → K⁰Λ), βγcτ (a 4 GeV/c muon 24.93 km, B⁰ at βγ = 1
+454.8 µm, π⁺ at γ = 10), m_γγ = √(2E₁E₂(1 − cos θ)), R = p_T / (0.299792458 B) and the bend (a μ⁺
+leaving along +x in B along +z turns to −y, clockwise seen from +z; the sagitta matches R),
+Asimov / counting / one-sided p (5σ 2.87 × 10⁻⁷), the Z peak σ⁰_had ≈ 41.5 nb (no radiative
+corrections). Conservation, tried on 24 reactions (p → e⁺π⁰ by B and L_e; μ⁻ → e⁻γ by L_e / L_μ;
+n → p e⁻ ν̄ₑ, π⁰ → γγ, K⁰_S → π⁺π⁻, Λ → pπ⁻, νₑ n → p e⁻, K⁻p → Ω⁻K⁺K⁰ allowed; Z → γγ by
+Landau–Yang; π⁰ → γγγ by C) and vertex rules on 29 vertices (no flavour change by γ / Z / g / H;
+gluons only to quarks and gluons; the W within a doublet, leptons in their family; H only to
+massive particles; no Z Z γ, Z γ γ, Z Z Z, γ γ γ, H γ γ, H g g, H Z γ at tree level).
+
+**Fixes.** (1) `conservation.check`: two real particles merging into one (2 → 1, nothing
+off-shell) must make one at least as heavy as both (√s = M ≥ m_a + m_b) — e⁺e⁻ → γ (real photon)
+and p p̄ → γ were allowed; now refused with "write `gamma*`" (`_merge_problem`). (2)
+`branching.mode_fraction` skips the Z's `invisible` mode (all three νν̄ pairs), so a chain with
+Z → νₑ ν̄ₑ is not labelled 20 %. (3) `feynman` with `vertex_rule`: `_areas = {False: whole frame,
+True: beside the cards}`; `_dock(docked)` re-lays the diagram out (Transform of the drawn parts,
+the time arrow following) — before the first card and after the last the diagram is as large as
+without cards (16:9 and 9:16), not the card-time size shifted to the centre. (4) `plot_live`
+(Phase W, shared): `_readout_label` keeps the latest `READOUT_CACHE` = 64 readout lines instead of
+every text ever shown (`events: N` changes nearly every frame): a 57 s `mass_spectrum` preview
+622 → 392 MB peak RSS, the example's 25 s one 518 → 435 MB. Output frames unchanged (a cache).
+
+**Not changed, on purpose.** The example's 16:9 `detector` circle is 69 % of the frame height
+(375 / 540 px), as in the gallery: in x–y it is bound both by the height under the title and by
+the width between the phone-readable layer key and readout. A corner layout (title top left, text
+in the corners the circle leaves) was tried: 72.5 %, at the cost of a left-aligned title unlike
+every other scene; dropped. The `calculation` in 16:9 fills as its steps come (unchanged).
+
+**Performance** (preview 854 × 480, 15 fps, Kokoro timings; render seconds / peak RSS):
+`standard_model` 36.2 s of video in 19.2 s / 453 MB; `feynman` 21.3 s in 9.4 s / 378 MB, 11.6 s in
+6.4 s / 339 MB; `branching` 32.3 s in 15.5 s / 407 MB; `detector` 20.3 s in 9.2 s / 382 MB;
+`mass_spectrum` 25.3 s in 32.7 s / 518 MB (before the readout fix), 11.1 s in 14.2 s / 412 MB;
+gallery `kinematics` 9.3 s in 7.7 s / 384 MB, `decay_chain` 4.7 s in 6.2 s / 357 MB,
+`branching_pie` 3.9 s in 7.2 s / 305 MB. Final 1080p: 16:9 scenes 299 s in all (diphoton 63.6 s),
+9:16 310 s, each plus the join.
+
+**Compatibility.** Phase Q baseline 31/31 identical (after every shared change); `vidgen validate`
+and `lint` on kphi3 (1 warning, as before), radioactive-decay, mars-transfer, cystic-fibrosis
+(4 info), iso-story, higgs-discovery (3 warnings, the chart's known ones): no errors, no particle
+findings. Gallery entries unchanged (no gallery scene uses `vertex_rule`).

@@ -20,6 +20,8 @@ from vidgen.api import *
 TRAIL_OPACITY = 0.28
 #: Share of a step's slot a growing step uses (the rest is a pause before the next).
 GROW_SHARE = 0.92
+#: Readout lines kept drawn for reuse (the latest; a counter changes nearly every frame).
+READOUT_CACHE = 64
 
 
 class LivePlot:
@@ -337,10 +339,15 @@ class LivePlot:
         plot_draw.morph_into(self._readouts[k], VGroup(plate.set_z_index(3), lines.set_z_index(3.5)))
 
     def _readout_label(self, text: str) -> Mobject:
-        key = ("readout", text)
-        if key not in self._cache:
-            self._cache[key] = plot_draw.label_text(text, size=self._label_size, theme=self.theme)
-        return self._cache[key].copy()
+        """The readout line ``text``, from a small cache of the latest lines: a counter (``events:
+        12 345``) writes a new text nearly every frame, and keeping them all grew a long scene's
+        memory by hundreds of MB (Step 244)."""
+        cache: dict[str, Mobject] = self.__dict__.setdefault("_readout_cache", {})
+        if text not in cache:
+            if len(cache) >= READOUT_CACHE:
+                del cache[next(iter(cache))]   # the oldest
+            cache[text] = plot_draw.label_text(text, size=self._label_size, theme=self.theme)
+        return cache[text].copy()
 
     # ----- growth -------------------------------------------------------------------------------
 

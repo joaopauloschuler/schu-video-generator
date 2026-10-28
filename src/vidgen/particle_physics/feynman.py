@@ -49,9 +49,10 @@ ALPHA_S_MZ = 0.1180
 G_FERMI = 1.1663788e-5
 #: The Higgs field's vacuum value v = (√2 G_F)^(−1/2), in GeV (≈ 246.22).
 V_HIGGS = 1.0 / math.sqrt(math.sqrt(2.0) * G_FERMI)
-#: sin²θ_W (MS-bar at m_Z, PDG 2024), shown rounded to three figures.   # check last digits
+#: sin²θ_W (MS-bar at m_Z, PDG 2024), 0.23129 ± 0.00004, kept as 0.2313 and shown as 0.231 (confirmed in review, Step 244).
 SIN2_THETA_W = 0.2313
-#: |V_ij| of the CKM matrix, rounded to two figures (PDG 2024 CKM review, global fit).   # check (rounded)
+#: |V_ij| of the CKM matrix, rounded to two figures (PDG 2024 CKM review, global fit ≈ 0.974, 0.225,
+#: 0.0037; 0.225, 0.973, 0.042; 0.0086, 0.041, 0.999 — the rounding confirmed in review, Step 244).
 CKM = {("u", "d"): 0.97, ("u", "s"): 0.22, ("u", "b"): 0.004, ("c", "d"): 0.22, ("c", "s"): 0.97, ("c", "b"): 0.04,
        ("t", "d"): 0.009, ("t", "s"): 0.04, ("t", "b"): 1.0}
 

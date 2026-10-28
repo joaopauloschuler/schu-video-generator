@@ -252,9 +252,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   kinematics as momentum arrows in the rest frame and the lab, event displays in a schematic
   detector (tracks bending with R = p_T / 0.3 B, showers, muons, missing p_T), simulated
   invariant-mass spectra filling with a resonance, a peak fit and the local significance, decay
-  chains with lifetimes and branching ratios ([docs](docs/CONFIG.md#standard_model)). The
-  `particle_*` lint rules check masses, charges, spins, lifetimes, branching ratios, conservation
-  claims, bosons, detector signatures and significance claims against the model
+  chains with lifetimes and branching ratios ([docs](docs/CONFIG.md#standard_model)). Twelve
+  lint rules (`particle_mass`, `conservation_claim`, `feynman_boson`, `significance_claim`…)
+  check masses, charges, spins, lifetimes, branching ratios, conservation claims, bosons,
+  detector signatures and significance claims against the model
   ([cookbook](docs/COOKBOOK-PARTICLES.md), [gallery](docs/gallery/README.md#particle-physics),
   [example](examples/higgs-discovery/README.md): how the Higgs boson was found).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a

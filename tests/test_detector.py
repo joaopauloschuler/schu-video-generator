@@ -331,7 +331,8 @@ def test_feynman_diagram_is_centred_without_a_rule_card(make_project, media: Pat
              "beats": [{"text": "they meet"}, {"text": "a photon", "actions": [{"vertex_rule": "vertex:v1"}]}, {"text": "and on"}]}
     project = Project.load(make_project(minimal_config(scenes=[scene], narration=NARRATION)))
     s = render(project, "f", media, (320, 180))
-    assert s._centred[0] > 0 and np.allclose(s._offset, s._centred)   # docked for the card, back after it
+    # docked beside the card, back to the whole frame after it (Step 244: it grows back, not only moves)
+    assert not s._docked and s._area is s._areas[False] and s._areas[True].x1 < s._areas[False].x1 - 1
     dots = [parts["dot"] for name, parts in s._parts.items() if name.startswith("vertex:")]
     middle = (min(d.get_x() for d in dots) + max(d.get_x() for d in dots)) / 2
     assert abs(middle - s.safe_area.center[0]) < 0.6

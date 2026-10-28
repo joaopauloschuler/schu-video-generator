@@ -22500,3 +22500,66 @@ How to test
   passing.
 - Stills: scratchpad `s243/proj/build/preview/frames/` (16:9) and `s243/proj/build/preview_short/frames/`
   (9:16); contact sheets of the final renders `s243/contact_16x9.png`, `s243/contact_9x16.png`.
+
+## Step 244 — Review of Phase Y
+
+What was done
+- Physics-accuracy pass (DESIGN §99.15): every PDG 2024 value, width / lifetime and quantum
+  number in `particle_physics/data.py` re-read; all agree with the reviewer's independent reading;
+  the Step 237 `# check` marks now say "PDG 2024, confirmed in review (Step 244)". sin²θ_W 0.2313
+  (0.23129), the rounded CKM magnitudes, the Z / W / K⁺ branching ratios confirmed (`check=True`
+  removed). **Still for the owner**: the Higgs YR4 predictions at m_H = 125.00 GeV (nine modes,
+  `check=True`) and Γ_H 4.088 MeV (`# check` in `data.py`) — the reviewer recalls the same numbers
+  but cannot confirm the table line by line.
+- Fix: `conservation.check` refused nothing for 2 → 1 merges: e⁺e⁻ → γ (a real photon) and p p̄ → γ
+  were "allowed". Now two real particles merge only into something at least as heavy as both
+  (`_merge_problem`; hint: write `gamma*`); e⁺e⁻ → Z and g g → H stay allowed.
+- Fix: `branching.mode_fraction` gave Z → νₑ ν̄ₑ the Z's whole invisible fraction (20 %, all three
+  pairs); the invisible mode is skipped.
+- Fix (`feynman`, the reviewer's still): with `vertex_rule` cards the diagram was laid out at the
+  card-time size and only shifted to the centre, so "Making a Higgs boson" sat small in 16:9. Now
+  `_areas[False/True]` (whole frame / beside the cards) and `_dock(docked)` re-lays it out: full
+  size before the first card and after the last, in 16:9 and 9:16 (the band case too).
+- Fix (`plot_live`, Phase W, shared): the readout cache kept every frame's `events: N` text; now the
+  latest 64 lines (`READOUT_CACHE`). A 57 s spectrum: 622 → 392 MB; the example's diphoton
+  518 → 435 MB. Frames unchanged.
+- Detector circle (the reviewer's note): measured 69 % of the frame height in the example (375 /
+  540 px at 1080p-scaled), the same as the gallery — bound both by the height under the title and
+  the width between the layer key and the readout. A corner layout (title top left) reached only
+  72.5 % and broke the centred-title look of every other scene: dropped, not committed.
+- README: "Twelve lint rules (`particle_mass`, `conservation_claim`…)" instead of "the
+  `particle_*` rules" (several are not prefixed). Docs otherwise match the code (a script checked
+  every Phase Y scene type, param, action and lint rule id against CONFIG, AGENTS.md (identical to
+  the guide copy), COOKBOOK-PARTICLES, CHANGELOG).
+
+Files: `src/vidgen/particle_physics/{data,feynman,branching,conservation}.py`,
+`src/vidgen/scenes/{feynman,plot_live}.py`, `tests/test_phase_y_review.py` (new, 97 tests),
+`tests/test_detector.py` (the dock test), `tests/test_spectrum.py` (the cache bound), DESIGN §99.2 /
+§99.3 / §99.8 / §99.15, README, CHANGELOG, tasklist.
+
+Public interfaces: none new (`plot_live.READOUT_CACHE` is internal).
+
+Checks
+- Tests, one file at a time: test_phase_y_review 97, test_particle_physics 92, test_standard_model
+  9, test_feynman 79, test_kinematics 24, test_detector 36, test_spectrum 29, test_particle_lint
+  130, test_higgs_discovery 5; test_calculation 16, test_plot 51, test_plot_core 54, test_plot_fit
+  30, test_plot_live 40, test_quantities 92, test_lint 23, test_schema 71, test_registry 23,
+  test_api 10, test_docs 73, test_guide 89, test_gallery 20, test_translation 96, test_extensions
+  25, test_actions_coverage 109, test_builtin_scenes 306, test_builtin_sets 53; tests/test_mcp.py
+  20 — all passing.
+- Phase Q baseline 31/31 identical (run twice: after the Feynman change and after `plot_live`).
+- `vidgen validate` + `lint`: kphi3 (1 warning), radioactive-decay, mars-transfer, cystic-fibrosis
+  (4 info), iso-story (Hazel), higgs-discovery (3 known warnings): no errors, no particle findings.
+- Preview render times / peak RSS per scene type: DESIGN §99.15 (longest: the diphoton spectrum,
+  25.3 s of video in 31 s, 435 MB).
+- Example re-rendered (the `production` scene changed): scratchpad
+  `s243/proj/output/higgs_discovery.mp4` (1920×1080, 3:49, 17.6 MB) and
+  `higgs_discovery_short.mp4` (1080×1920, 3:49, 18.4 MB), cached Kokoro audio, −16.0 LUFS. Gallery
+  unchanged (no gallery scene uses `vertex_rule`): 15.7 MB of 16.5.
+
+Known gaps: the Higgs YR4 values (above); the 16:9 detector keeps room for the readout before it
+appears; the `calculation` in 16:9 leaves space below until its steps arrive (by design).
+
+How to test: `tests/test_phase_y_review.py`, `tests/test_feynman.py`, `tests/test_detector.py`,
+`tests/test_spectrum.py`; stills `s243/proj/build/preview/storyboard/scenes/production-1.png`
+(16:9) and `s243/proj/build/preview_short/storyboard/scenes/production-1.png` (9:16).

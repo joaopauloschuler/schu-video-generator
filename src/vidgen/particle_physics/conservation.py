@@ -8,7 +8,9 @@ explanations ("lepton number L_e not conserved: 0 → +1"):
   over long flights, are seen to change them), angular momentum (as far as counting can tell: a
   half-integer total spin cannot become integer, so the number of fermions changes by an even
   number), and energy: a decay needs the parent heavier than the products (off-shell ``Z*``,
-  ``W*`` do not count); a reaction gets its threshold (√s and the beam energy on a fixed target).
+  ``W*`` do not count); a reaction gets its threshold (√s and the beam energy on a fixed target);
+  two real particles merge into one only if it is at least as heavy as both (e⁺e⁻ → Z can happen
+  at √s = m_Z; e⁺e⁻ → γ with a real photon never can).
 - **Which interaction**: a W, Z or neutrino means the weak interaction, and so does a change of
   quark flavour (S, C, B′, T), by at most one unit each per W (``|ΔS| = 2`` is refused as
   first-order forbidden); a Higgs boson means a Higgs coupling (flavour kept); else photons or
@@ -275,6 +277,26 @@ def _energy(proc: Process, t: Threshold) -> tuple[str, bool | None, list[str]]:
     return f"energy: no threshold (Q = {energy_text(t.q_mev, 4)} ≥ 0)", None, notes
 
 
+def _merge_problem(proc: Process) -> str | None:
+    """Two real particles merging into one: possible only at √s = M of the product (resonance
+    formation, e⁺e⁻ → Z), and √s ≥ m_a + m_b, so the product must be at least as heavy as the
+    two together. A single real photon (M = 0) can never be made this way."""
+    if len(proc.initial) != 2 or len(proc.final) != 1 or any(leg.off_shell for leg in proc.legs):
+        return None
+    a, b = (leg.particle for leg in proc.initial)
+    product = proc.final[0]
+    m = product.particle.mass_mev
+    if m >= a.mass_mev + b.mass_mev and m > 0:
+        return None
+    unit = _unit(max(a.mass_mev + b.mass_mev, m))
+    if m == 0:
+        return (f"energy and momentum: two particles cannot merge into one real massless {product.symbol} — its √s would be 0, but "
+                f"two particles have √s ≥ {_masses(proc.initial, unit, a.mass_mev + b.mass_mev)}; they make two photons, or a virtual "
+                f"one (write {product.particle.key}*) that goes on to something else")
+    return (f"energy and momentum: two particles merge into one only at √s = m({product.symbol}) = {_mass(product.particle, unit)}, "
+            f"below their √s ≥ {_masses(proc.initial, unit, a.mass_mev + b.mass_mev)}")
+
+
 def _product(values: list[int]) -> int:
     return math.prod(values)
 
@@ -302,6 +324,9 @@ def check(process: Process | str) -> Verdict:
     notes += energy_notes
     if energy_ok is False:
         violations.append(energy.replace("energy not conserved: ", "energy: "))
+    merge = _merge_problem(proc)
+    if merge:
+        violations.append(merge)
     ps = proc.particles()
     if (proc.is_decay and proc.initial[0].particle.spin == 1 and len(proc.final) == 2
             and all(leg.particle.key == "gamma" for leg in proc.final)):

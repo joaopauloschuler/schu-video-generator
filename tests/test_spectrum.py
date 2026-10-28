@@ -350,6 +350,10 @@ def test_live_histogram_with_a_grow_action_and_a_note(make_project, media: Path)
     assert p.is_shown("annotation1")
     m = render(project, "m", media, (320, 180))
     assert m._note_follows_fit() and m.is_shown("annotation:significance") and m.is_shown("fit:fit")
+    # Step 244: the counter's readout lines are kept in a small cache, not one text per frame
+    from vidgen.scenes.plot_live import READOUT_CACHE
+
+    assert 0 < len(m._readout_cache) <= READOUT_CACHE
 
 
 @pytest.mark.render

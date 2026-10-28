@@ -11,7 +11,8 @@ Sources, stated per table (and shown on screen by the ``branching`` scenes):
   measurements; at 125.09 GeV or PDG 2024's m_H = 125.20 GeV the values differ in the third
   figure (e.g. bb̄ 58.09 %, WW* 21.52 %, ZZ* 2.641 % at 125.09 GeV).
 
-Values written from memory of those tables are marked ``# check`` for the owner. Every mode with a
+The Z, W and K⁺ values were confirmed in the Step 244 review; the Higgs predictions (written from memory of
+the Yellow Report table) stay marked ``check`` for the owner. Every mode with a
 process is checked by the conservation checker (:func:`branching_problems`), and each table's
 fractions add up to at most 1 (the rest: modes not listed) within :data:`SUM_TOLERANCE` — the Z's
 measured fractions, averaged separately, add up to 1.0001."""
@@ -93,17 +94,17 @@ _TABLES: dict[str, Branching] = {
         Mode("H -> mu+ mu-", 0.0002176, "μ⁺μ⁻", check=True),
     ), HXSWG, "theory"),
     "Z": Branching("Z", (
-        Mode(None, 0.69911, "hadrons", note="qq̄ pairs: u, d, s, c, b", check=True),
-        Mode("Z -> nu_e anti-nu_e", 0.20000, "invisible", note="νν̄ of the three families", check=True),
-        Mode("Z -> e- e+", 0.033632, "e⁺e⁻", check=True),
-        Mode("Z -> mu- mu+", 0.033662, "μ⁺μ⁻", check=True),
-        Mode("Z -> tau- tau+", 0.033696, "τ⁺τ⁻", check=True),
+        Mode(None, 0.69911, "hadrons", note="qq̄ pairs: u, d, s, c, b"),
+        Mode("Z -> nu_e anti-nu_e", 0.20000, "invisible", note="νν̄ of the three families"),
+        Mode("Z -> e- e+", 0.033632, "e⁺e⁻"),
+        Mode("Z -> mu- mu+", 0.033662, "μ⁺μ⁻"),
+        Mode("Z -> tau- tau+", 0.033696, "τ⁺τ⁻"),
     ), PDG),
     "W+": Branching("W+", (
-        Mode(None, 0.6741, "hadrons", note="ud̄′, cs̄′ pairs", check=True),
-        Mode("W+ -> e+ nu_e", 0.1086, note="lepton-universality average ℓν", check=True),
-        Mode("W+ -> mu+ nu_mu", 0.1086, note="lepton-universality average ℓν", check=True),
-        Mode("W+ -> tau+ nu_tau", 0.1086, note="lepton-universality average ℓν", check=True),
+        Mode(None, 0.6741, "hadrons", note="ud̄′, cs̄′ pairs"),
+        Mode("W+ -> e+ nu_e", 0.1086, note="lepton-universality average ℓν"),
+        Mode("W+ -> mu+ nu_mu", 0.1086, note="lepton-universality average ℓν"),
+        Mode("W+ -> tau+ nu_tau", 0.1086, note="lepton-universality average ℓν"),
     ), PDG),
     "pi+": Branching("pi+", (
         Mode("pi+ -> mu+ nu_mu", 0.9998770),
@@ -114,12 +115,12 @@ _TABLES: dict[str, Branching] = {
         Mode("pi0 -> e+ e- gamma", 0.01174, note="Dalitz decay"),
     ), PDG),
     "K+": Branching("K+", (
-        Mode("K+ -> mu+ nu_mu", 0.6356, check=True),
-        Mode("K+ -> pi+ pi0", 0.2067, check=True),
-        Mode("K+ -> pi+ pi+ pi-", 0.05583, check=True),
-        Mode("K+ -> pi0 e+ nu_e", 0.0507, check=True),
-        Mode("K+ -> pi0 mu+ nu_mu", 0.03352, check=True),
-        Mode("K+ -> pi+ pi0 pi0", 0.01760, check=True),
+        Mode("K+ -> mu+ nu_mu", 0.6356),
+        Mode("K+ -> pi+ pi0", 0.2067),
+        Mode("K+ -> pi+ pi+ pi-", 0.05583),
+        Mode("K+ -> pi0 e+ nu_e", 0.0507),
+        Mode("K+ -> pi0 mu+ nu_mu", 0.03352),
+        Mode("K+ -> pi+ pi0 pi0", 0.01760),
     ), PDG),
     "mu-": Branching("mu-", (
         Mode("mu- -> e- anti-nu_e nu_mu", 1.0, note="≈ 100 % (radiative decays included)"),
@@ -246,7 +247,8 @@ def mode_fraction(process: Process) -> float | None:
     except VidgenError:
         return None
     for m in table.modes:
-        if m.process is not None and _same_products(parse_process(m.process), process):
+        # the Z's "invisible" mode is all three νν̄ pairs: its process names one, its fraction is the sum
+        if m.process is not None and m.name != "invisible" and _same_products(parse_process(m.process), process):
             return m.fraction
     return None
 

@@ -5,9 +5,19 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–243)
+## Unreleased (Steps 193–244)
 
-### Particle physics (Phase Y, from Step 237)
+### Particle physics (Phase Y, Steps 237–244)
+
+- **Review** (Step 244). Every PDG 2024 value and quantum number re-checked (the remaining
+  "check" marks resolved, except the Higgs width and branching ratios, Standard Model predictions
+  of the Yellow Report 4 left for the owner to confirm). **Fix**: the conservation checker refuses two
+  real particles merging into one lighter one (e⁺e⁻ → γ with a real photon — write `gamma*` —,
+  p p̄ → π⁰); e⁺e⁻ → Z, g g → H stay allowed. **Fix**: a decay chain no longer gives one νν̄ pair
+  the Z's whole invisible fraction. **Fix**: a `feynman` scene with `vertex_rule` cards fills the
+  frame before the first card and after the last (it was only centred at the card-time size).
+  **Fix** (`plot`, Phase W): a live readout (`events: 12 345`) no longer keeps every frame's text
+  (a 57 s `mass_spectrum` took 622 MB, now 392 MB). Phase Q's 31 frames unchanged.
 
 - **Example, docs and gallery** (Step 243). `examples/higgs-discovery` ("How the Higgs boson was
   found", about 3:49 with Kokoro, 16:9 and a 9:16 `short` variant): the Standard Model with the

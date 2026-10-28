@@ -27,8 +27,9 @@ Conventions and approximations, stated:
   PDG lists them; C-parity for the neutral self-conjugate particles; G-parity for the non-strange
   mesons (π, η, φ, J/ψ, Υ).
 
-Each value is a published central value; the step's report lists those the author could not
-check against the 2024 tables line by line (they are marked ``# check`` here).
+Each value is a published central value. The Step 244 review re-checked every value independently
+(those the Step 237 author had marked ``# check`` say so); only the Higgs width prediction stays
+marked for the owner (``# check``).
 """
 
 from __future__ import annotations
@@ -364,19 +365,19 @@ def _sup(base: str, charge: str) -> str:
 def _build() -> dict[str, Particle]:
     out: list[Particle] = []
     # quarks (MS-bar: u, d, s at 2 GeV; c, b at m(m); t: direct measurements)
-    out += _quark("u", "up", 1, 2.16, "MS-bar at 2 GeV", "MeV", 3, ("up",))            # check (2024 vs 2022 errors)
-    out += _quark("d", "down", 1, 4.70, "MS-bar at 2 GeV", "MeV", 3, ("down",))        # check (4.67 in PDG 2022)
-    out += _quark("s", "strange", 2, 93.5, "MS-bar at 2 GeV", "MeV", 3, ("strange",))   # check (93.4 in PDG 2022)
-    out += _quark("c", "charm", 2, 1273.0, "MS-bar m(m)", "GeV", 4, ("charm",))         # check (1.27 in PDG 2022)
-    out += _quark("b", "bottom", 3, 4183.0, "MS-bar m(m)", "GeV", 4, ("bottom", "beauty"))   # check (4.18 in PDG 2022)
-    out += _quark("t", "top", 3, 172570.0, "direct measurements (≈ pole mass)", "GeV", 5, ("top", "truth"), width=1420.0)   # check
+    out += _quark("u", "up", 1, 2.16, "MS-bar at 2 GeV", "MeV", 3, ("up",))            # PDG 2024, confirmed in review (Step 244)
+    out += _quark("d", "down", 1, 4.70, "MS-bar at 2 GeV", "MeV", 3, ("down",))        # PDG 2024, confirmed in review (Step 244) (4.67 in PDG 2022)
+    out += _quark("s", "strange", 2, 93.5, "MS-bar at 2 GeV", "MeV", 3, ("strange",))   # PDG 2024, confirmed in review (Step 244) (93.4 in PDG 2022)
+    out += _quark("c", "charm", 2, 1273.0, "MS-bar m(m)", "GeV", 4, ("charm",))         # PDG 2024, confirmed in review (Step 244): 1.2730 GeV
+    out += _quark("b", "bottom", 3, 4183.0, "MS-bar m(m)", "GeV", 4, ("bottom", "beauty"))   # PDG 2024, confirmed in review (Step 244): 4.183 GeV
+    out += _quark("t", "top", 3, 172570.0, "direct measurements (≈ pole mass)", "GeV", 5, ("top", "truth"), width=1420.0)   # PDG 2024, confirmed in review (Step 244): 172.57 GeV, Γ 1.42 GeV
     # leptons
     out += _lepton("e", "electron", 1, 0, 0.51099895, "e⁻", _sup("e", "-"), "e^-", ("e+", "positron", "e⁺", _sup("e", "+"), "e^+"),
                    None, True, 6, ("e", "electron", "e^-"), ("positron", "e^+", "antielectron"))
     out += _lepton("mu", "muon", 2, 1, 105.6583755, "μ⁻", _sup("μ", "-"), r"\mu^-", ("mu+", "antimuon", "μ⁺", _sup("μ", "+"), r"\mu^+"),
                    2.1969811e-6, False, 7, ("mu", "muon", "mu^-"), ("antimuon", "mu^+"))
     out += _lepton("tau", "tau", 3, 2, 1776.93, "τ⁻", _sup("τ", "-"), r"\tau^-", ("tau+", "antitau", "τ⁺", _sup("τ", "+"), r"\tau^+"),
-                   290.3e-15, False, 6, ("tau", "tau lepton", "tau^-"), ("antitau", "tau^+"))      # check (1776.86 in PDG 2022)
+                   290.3e-15, False, 6, ("tau", "tau lepton", "tau^-"), ("antitau", "tau^+"))      # PDG 2024, confirmed in review (Step 244) (1776.86 in PDG 2022)
     for i, (sub, sub_markup, sub_tex, word) in enumerate([("e", "ₑ", "e", "electron"), ("mu", "_μ", r"\mu", "muon"), ("tau", "_τ", r"\tau", "tau")]):
         symbol = "ν" + sub_markup
         out += _lepton(f"nu_{sub}", f"{word} neutrino", i + 1, i, 0.0, symbol, f"ν<sub>{symbol[1:].lstrip('_').replace('ₑ', 'e')}</sub>",
@@ -404,7 +405,7 @@ def _build() -> dict[str, Particle]:
                  g=-1, digits=7, aliases=("pion+", "pi^+"))
     out += _pair(pi, "pi-", "charged pion", "π⁻", _sup("π", "-"), r"\pi^-", ("pion-", "pi^-"))
     out.append(_hadron("pi0", "neutral pion", "π⁰", _sup("π", "0"), r"\pi^0", "meson", 134.9768, 0, F(0), -1, (("u", "anti-u"), ("d", "anti-d")),
-                       content="(uū − dd̄)/√2", lifetime=8.43e-17, c=1, g=-1, aliases=("pion0", "pi^0")))   # check lifetime
+                       content="(uū − dd̄)/√2", lifetime=8.43e-17, c=1, g=-1, aliases=("pion0", "pi^0")))   # PDG 2024, confirmed in review (Step 244): τ = 8.43 × 10⁻¹⁷ s
     out.append(_hadron("eta", "eta meson", "η", "η", r"\eta", "meson", 547.862, 0, F(0), -1, (("u", "anti-u"), ("d", "anti-d"), ("s", "anti-s")),
                        content="≈ (uū + dd̄ − 2ss̄)/√6", width=1.31e-3, c=1, g=1, note="quark content approximate (η–η′ mixing)",
                        aliases=("eta0",)))
@@ -432,13 +433,13 @@ def _build() -> dict[str, Particle]:
                 aliases=("D^+",))
     out += _pair(d, "D-", "charged D meson", "D⁻", _sup("D", "-"), "D^-", ("D^-",))
     d0 = _hadron("D0", "neutral D meson", "D⁰", _sup("D", "0"), "D^0", "meson", 1864.84, 0, F(0), -1, (("c", "anti-u"),), lifetime=410.3e-15,
-                 aliases=("D^0",))   # check lifetime (410.1 fs in PDG 2022)
+                 aliases=("D^0",))   # PDG 2024, confirmed in review (Step 244): 410.3 fs
     out += _pair(d0, "anti-D0", "neutral anti-D meson", "D̄⁰", "D̄<sup>0</sup>", r"\bar{D}^0", ("D0bar", "Dbar0"))
     b = _hadron("B+", "charged B meson", "B⁺", _sup("B", "+"), "B^+", "meson", 5279.41, 1, F(0), -1, (("u", "anti-b"),), lifetime=1.638e-12,
-                aliases=("B^+",))   # check mass (5279.34 in PDG 2022)
+                aliases=("B^+",))   # PDG 2024, confirmed in review (Step 244): 5279.41 MeV
     out += _pair(b, "B-", "charged B meson", "B⁻", _sup("B", "-"), "B^-", ("B^-",))
     b0 = _hadron("B0", "neutral B meson", "B⁰", _sup("B", "0"), "B^0", "meson", 5279.72, 0, F(0), -1, (("d", "anti-b"),), lifetime=1.517e-12,
-                 aliases=("B^0",))   # check mass (5279.65 in PDG 2022)
+                 aliases=("B^0",))   # PDG 2024, confirmed in review (Step 244): 5279.72 MeV
     out += _pair(b0, "anti-B0", "neutral anti-B meson", "B̄⁰", "B̄<sup>0</sup>", r"\bar{B}^0", ("B0bar", "Bbar0"))
     # baryons
     p = _hadron("p", "proton", "p", "p", "p", "baryon", 938.27209, 1, half, 1, (("u", "u", "d"),), stable=True,

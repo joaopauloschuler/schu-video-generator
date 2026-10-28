@@ -1421,7 +1421,7 @@ baseline frames when shared code changes). DESIGN §99. Steps 237–244.
 - [x] The conservation checker `check()`: charge, baryon number, L_e / L_μ / L_τ, angular momentum (fermion count), energy (a decay's masses, a reaction's √s and fixed-target threshold), the Landau–Yang theorem; the interaction (strong, electromagnetic, weak, Higgs coupling) with flavour (|ΔS| ≤ 1 per W), C-parity and G-parity rules; teaching-style explanations ("lepton number L_e not conserved: 0 → +1")
 - [x] Scene type `standard_model`: the chart (three generations of quarks and leptons, gauge bosons, Higgs) with mass, charge and spin per cell in colour groups, a key cell and the source line; the classic grid in 16:9, the bosons in two rows under the fermions in 9:16; targets for every particle, generation, group and row; the actions `antiparticles` and `couplings`
 - [x] Tests `tests/test_particle_physics.py` (data sanity, names, parsing, 26 allowed and 17 forbidden textbook processes, thresholds, chart data, no manim) and `tests/test_standard_model.py` (params, targets, action checks, renders 16:9 / 9:16); CONFIG section and targets row, guide chooser row, snippet and actions rows (copied to `AGENTS.md`), gallery entry `standard_model` in a new "Particle physics" section, an `examples/gallery` scene
-- [~] Not yet (planned): Feynman diagrams (238, done), kinematics (239, done), detectors (240, done), data and decays (241, done), lint (242, done), example and cookbook (243, done), review (244)
+- [x] The rest of the phase: Feynman diagrams (238), kinematics (239), detectors (240), data and decays (241), lint (242), example and cookbook (243), review (244) — Phase Y done
 
 ### Step 238 — Feynman diagrams
 - [x] Fixes first: τ(Λ) = 2.617 × 10⁻¹⁰ s (PDG 2024 average; Λ̄ with it), the reviewer-confirmed W, Z, Γ_Z, H values no longer marked `# check`; `test_builtins_use_only_the_public_api` passes again (`orbit_text` and `calculation` go through `vidgen.api`, which now exports `find_scene_type`)
@@ -1460,7 +1460,9 @@ baseline frames when shared code changes). DESIGN §99. Steps 237–244.
 - [x] Guide topic `particle-physics` (not `particles`), `docs/COOKBOOK-PARTICLES.md` (tested pattern), CONFIG unchanged (no new key), the gallery's "Particle physics" note, footer and showcase `higgs_diphoton` (15.7 MB of 16.5), README, `docs/COOKBOOK.md`, CHANGELOG, DESIGN §99.14; fix: the `feynman` vertex-rule card wraps before the reaction
 
 ### Step 244 — Review of Phase Y
-- [ ] Critical review with fixes, including a physics-accuracy pass (PDG values, conservation logic, vertex rules, kinematics), compatibility, render performance, the phase's and related suites, `tests/test_mcp.py` in full
+- [x] Critical review with fixes, including a physics-accuracy pass (PDG values, conservation logic, vertex rules, kinematics), compatibility, render performance, the phase's and related suites, `tests/test_mcp.py` in full
+- [x] Physics: every PDG 2024 value and quantum number re-checked (the Step 237 `# check` marks resolved; sin²θ_W, the CKM magnitudes, the Z / W / K⁺ branching ratios confirmed; the Higgs YR4 predictions and Γ_H stay marked for the owner); fix: two real particles merging into one lighter one (e⁺e⁻ → γ, p p̄ → γ, p p̄ → π⁰) now forbidden; fix: the Z's "invisible" fraction is not given to a single νν̄ pair in decay chains; `tests/test_phase_y_review.py` (hand computations of p*, thresholds, βγcτ, m_γγ, track radius and sign, Asimov / counting / p-values, σ⁰_had, 24 reactions and 29 vertices)
+- [x] Fixes: `feynman` with `vertex_rule` is laid out for the whole frame before the first card and after the last (larger, not only centred; 9:16 too); a live `plot` / `mass_spectrum` readout keeps 64 drawn lines, not one per frame (a 57 s spectrum 622 → 392 MB); example MP4s re-rendered; Phase Q baseline 31/31
 
 ---
 
