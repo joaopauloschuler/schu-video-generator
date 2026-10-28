@@ -17982,7 +17982,8 @@ the `calc_*` / `plot_*` rules they read the config, not the stills: the runner a
 `vidgen.orbits.accuracy`): numbers are read by `quantities.accuracy.said_values` (the `calc_*`
 reader; it gains "one and a half million kilometres": a scale word after "and a half", resolved to
 a quarter of the scale), plus months (a twelfth of a Julian year) and weeks; a number right after
-a digit group ("384 400 km") is skipped. A `Fact` is a value or a range (SI; radians for angles)
+a digit group ("384 400 km") is skipped (Step 236: groups of three digits after spaces — plain,
+thin, no-break — are read as one number, §98.10). A `Fact` is a value or a range (SI; radians for angles)
 of a kind (`KIND_RULES`: period → `orbit_period`; speed, peri_speed, apo_speed, circular, escape,
 v_inf, planet_speed, shot, sun_speed → `orbit_speed`; dv (with its order), dv_total, gain, turn →
 `orbit_dv`; transfer_time, synodic, wait, phase → `orbit_transfer`; distance, peri, apo, altitude,
@@ -18068,7 +18069,7 @@ reads "and a half million". No dependency; shared rendering code unchanged (only
 number reader and the orbit scene's text helpers), so the Phase Q baseline was not re-run.
 
 **Not done**: claims about bodies a scene does not show (no textbook table of the Solar System);
-numbers written with spaces between digit groups are skipped; eccentricities, inclinations and
+numbers written with spaces between digit groups are skipped (read since Step 236); eccentricities, inclinations and
 mass ratios said as pure numbers are not read; a claim of scale about one body among several
 (only the picture as a whole); an observer other than the Earth for event dates.
 
@@ -18130,3 +18131,101 @@ after each event (events of a pair are a synodic period apart).
 **Render note**: the 16:9 check render was made at 1280×720, 30 fps: a 47 s orbit scene at
 1920×1080 takes longer than one 10-minute command on the development machine (rendering is
 per scene; the owner's machine renders 1080p as usual).
+
+**Render note (Step 236)**: the cause was memory, not only time — see §98.10; the example now renders
+at 1920×1080 in about 6½ minutes here.
+
+### 98.10 Review of Phase X (Step 236)
+
+A critical review of Steps 229–235 with fixes: a physics-accuracy pass against independent
+calculations, the reviewer's four points (picture size, units in substitutions, render speed,
+known gaps), compatibility.
+
+**Physics against independent calculations** (scratchpad `s236/physics_check.py`, 133 checks; the
+lasting ones are `tests/test_orbit_review.py`). Written from the textbook formulas, with scipy's
+`brentq` and `solve_ivp` (DOP853, rtol 10⁻¹²): Kepler's equation by bisection for e from 0 to
+0.999999 and 1.000001 to 10, Barker's equation (ν to ≤ 1.1 × 10⁻¹⁵ rad); Vallado's COE2RV and the
+round trip through `Elements.from_state` (300 random ellipses and hyperbolas: 3 × 10⁻¹⁶ relative,
+elements to 8 × 10⁻¹⁵); Kepler propagation of an ellipse, a parabola and a hyperbola against direct
+integration (≤ 2 × 10⁻¹⁰); vis-viva, circular / escape speeds, the Moon's 27.28 d; Hohmann LEO 300 km →
+GEO (2.426 + 1.467 = 3.893 km/s, 5.275 h), Earth → Mars (2.945 / 2.649 km/s, 258.87 d, 44.35°,
+synodic 779.93 d; Table 1's 779.94 d), the bi-elliptic thresholds 11.93877 / 15.58171, a bi-elliptic
+Δv, the plane change and the combined plane change; the flyby turning angle against the integrated
+hyperbola (v∞ out = in, periapsis), the Sun-frame gain |v_p + v∞out| − |v_p + v∞in| and the energy
+change ½(v_after² − v_before²); L1–L3 by root finding for four mass ratios (≤ 5 × 10⁻¹⁴), L4/L5, the
+Jacobi constant at L1 and L4 (3 − μ + μ²), Routh's μ = (1 − √(23/27))/2, the Sun–Earth L1/L2 at
+1.4976 / 1.5077 million km; the figure-eight (Simó's values) integrated back to its start after
+T = 6.32591398 (3.9 × 10⁻⁸); the Galilean period ratios and the Laplace relation n_I − 3n_E + 2n_G;
+heliocentric positions of all nine Table 1 bodies against Standish's method written here
+(6 × 10⁻¹⁶, 1800–2050), Julian dates, 14 published oppositions / conjunctions 2018–2027 (Mars,
+Jupiter, Saturn, Venus: all within 0.48 d), the Earth's longitude at the 2024 March equinox. Every
+constant and preset was compared with the published value it cites: CODATA 2022 G (and scipy), the
+IAU 2012 AU, IAU 2015 B3 GM☉, GM⊕, R☉, R⊕, DE440's planetary GM, JPL SSD's Galilean GM (the sum
+matches DE440's Jupiter system minus the planet), IAU WGCCRE radii, Pluto (975.5 km³ s⁻², 1188.3 km),
+Table 1 (all 108 numbers, also pinned since Step 234), GEO 42 164.17 km, the Galilean distances from
+Kepler III within 3 × 10⁻⁵ of the published means. **No physics error was found.** Two notes: a
+period from Table 1's a by Kepler III (365.2578 d for the Earth–Moon barycentre) differs from the
+table's own mean motion (365.2564 d) by 4 × 10⁻⁶ — the table's a and L-rate are independent fits
+(the scenes use Kepler III, consistently); the lint's facts (`ATMOSPHERES`: the Kármán line; Mars
+125 km entry interface, still for the owner to check) are unchanged.
+
+**Picture size (16:9).** The orbit picture is height-limited (it is round): the caption now stands
+in the side column under the panel, left-aligned and wrapped to at least `COLUMN_CAPTION_WIDTH`
+4.4 units (`CAPTION_GAP` 0.25 under the panel or the flyby / inset box), so the picture takes the
+whole height under the title — 61 % → 69 % of the frame height in the example (≈ +28 % area); the
+caption goes under the picture when the column has no room. Labels keep off the column caption
+(`_static_boxes`). **9:16**: a transfer's Δv₁ / Δv₂ rows are rank 1 in a vertical frame (each burn's
+label carries its Δv; the total stays), so the compact panel has two rows fewer and the picture is
+≈ 25 % taller. Checked on the example's stills, the gallery's orbit entries and the 229–233 scratch
+projects (lint 0 in each).
+
+**Substitutions keep units** (`quantities.calc`, Step 236). A third way of writing a substitution:
+when every value with a unit has the same dimension as the result (or the result is a pure number),
+each value is written in the result's unit and the unit once at the end — `(√(2.945² + 10.93²) −
+7.726) km/s` (a sum or product in brackets; an angle or percentage keeps its own unit). Right
+whatever the formula: numbers in one unit give the result in that unit. `Step.common` /
+`common_stacked` come after the full-unit ways and before the SI numbers; they count as keeping the
+units unless the unit cancels (`common_bare`: a pure-number result, written without a unit — it then
+ranks with the SI numbers, so a readable full-unit line is not replaced: the radioactive-decay
+example's z line is unchanged). The Oberth line of the example now shows its units in 16:9 and
+9:16. Different dimensions (GM, R and h) keep the SI fallback. No author option was needed; the
+calculation's `units` choice still applies (`always` includes the common unit, `never` the SI numbers).
+
+**Render speed and memory.** Profiled on the example's 47 s `hohmann` scene at 1920×1080. The
+cost was the side panel: each new readout string (`t = 82.2 d` changes every frame, the θ label
+too) built a manim `Text` (Pango → SVG → svgelements; ~20 ms) and the panel's caches kept it and a
+deep copy (~0.3 MB each with its SVG path objects) — memory grew past 3 GB (the worker was killed:
+"exit code -9", which is why Step 235 rendered at 720p). Fixes, output unchanged to 10⁻⁷ units:
+`scenes/orbit_text.LiveText` lays a string out once per shape (digits as 0) and draws the real
+digits from glyphs rendered once, shifting the following glyphs by the digits' advances and pair
+kerning (measured once, ten pairs per render); glyphs are plain `VMobject`s (no SVG path); the
+panel's text cache keeps the latest 256 (`TEMPLATE_CACHE`); the panel's plate is built once per box;
+the panel is sized with the same glyphs. And the parts that never change while the clock runs —
+title, caption, axes (`STILL_Z` −2) — lie below the clock's mobject (`CLOCK_Z` −1), so manim draws
+them once per play into its static image instead of every frame. Timings (in-process, Python
+3.13, 1397 frames): **179.9 s, 129 ms/frame, ≥ 1.5 GB → 99.3 s, 71 ms/frame, 0.81 GB**; through
+`vidgen render` (Python 3.12 worker): `straight` 90.5 → 58.9 s, `hohmann` killed at 3 GB → 108 s,
+the whole example 1080p in ~6½ min. Remaining per frame: drawing ~26 ms (Cairo at 1080p), the
+panel ~16 ms, label placement ~10 ms, encoding in its thread.
+
+**Gaps fixed**: the lint reads digit groups written with spaces (plain, thin, no-break, narrow
+no-break: "384 400 km", "1 496 000 000 km"; a year before a number, "2026 300 km", stays out). The
+phase angle's label keeps off its own two lines and the central body's label; the lines start at the
+central body's edge and are drawn in the angle's colour (fainter), apart from the grey gridlines. A
+body's label also keeps off its own dot (a diagonal place could clip it).
+
+**Gaps kept** (documented): n-body runs with burns (refused: burns are Kepler arcs); the flyby in
+the planet's frame with the Sun-frame vector diagram, not a heliocentric trajectory; a LEO at true
+scale shows as a thin ring hugging the planet (the honest picture; a close-up with `center` +
+`extent` shows the gap — an exaggerated-altitude view would need the radial transform in every
+offset, not done); a scene of only open orbits frames 3 × the periapsis (`extent` for more);
+9:16 pictures with an inset or a long panel stay small (height-limited); the Moon on a date; light
+time and aberration.
+
+**Compatibility**: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check236`). Visible
+changes, all orbit scenes: the 16:9 caption beside the picture, the 9:16 transfer panel, the phase
+angle's lines and label; calculation scenes only where a substitution did not fit with its units
+(the example's Oberth line). The gallery's `orbit`, `mars_hohmann` and `jupiter_trojans` were
+regenerated (13.6 MB of 15). Lint sweep (`s236/lint_all.py`: 337 scenes of the examples, gallery and
+s205–s236 projects): 0 findings; the s234 demo still finds its 16 planted mistakes; `vidgen lint` of
+the example (Kokoro audio) 0 in 16:9 and 9:16, and of s230–s233: 0.

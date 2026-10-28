@@ -5,9 +5,23 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–235)
+## Unreleased (Steps 193–236)
 
 ### Orbital mechanics (Phase X, from Step 229)
+
+- **Review of Phase X** (Step 236). The orbit model checked against independent calculations
+  (Kepler's equation, element and state conversions, propagation, vis-viva, Hohmann / bi-elliptic /
+  plane change, flybys, Lagrange points and Jacobi constants, the figure-eight, resonances, the
+  planets' positions and 14 published opposition and conjunction dates, every constant and preset):
+  no physics error found. Orbit scenes render about twice as fast and use half the memory (the
+  side panel's live numbers are drawn from cached glyphs; title, caption and axes are drawn once
+  per stretch) — a 47-second orbit scene at 1080p no longer runs out of memory. In 16:9 the
+  caption stands under the side panel so the orbit picture takes the whole height; in 9:16 a
+  transfer's per-burn Δv rows give way to the burns' own labels. A `calculation` substitution that
+  does not fit with a unit on every value writes them in one unit with the unit once at the end,
+  `(√(2.945² + 10.93²) − 7.726) km/s`, before falling back to SI numbers. The orbit lint reads
+  numbers written with spaces ("384 400 km"). The phase angle's label and lines keep off the
+  labels near them.
 
 - **Example, docs and gallery** (Step 235). `examples/mars-transfer` ("How to get to Mars", about
   3:43 with Kokoro, 16:9 and a 9:16 `short` variant): why a rocket cannot fly straight there, the

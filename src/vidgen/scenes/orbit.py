@@ -33,6 +33,7 @@ from .orbit_many import OrbitMany, many_target_names
 from .orbit_parts import LagrangeName, OrbitBody, OrbitCannon, OrbitCentral, OrbitFlyby, OrbitModel, OrbitTransfer, Value, resolve_model
 from .orbit_sky import OrbitEvent, OrbitSizes, OrbitSky, SkySpec, sky_target_names
 from .orbit_systems import ManySpec, OrbitResonance, OrbitSystem, OrbitTides
+from .orbit_text import LiveText
 
 #: Smallest drawn radius (Manim units) of the central body and of an orbiting body: smaller
 #: bodies are enlarged to it (and the readout says "sizes not to scale").
@@ -52,6 +53,10 @@ BOX_GAP = 0.45
 #: In a vertical frame a panel of more rows than this is set in two columns, this far apart.
 PANEL_ROWS_PORTRAIT = 5
 PANEL_COLUMN_GAP = 0.35
+#: A caption in the 16:9 side column (Step 236): wrapped to at least this width, this far under
+#: the panel.
+COLUMN_CAPTION_WIDTH = 4.4
+CAPTION_GAP = 0.25
 #: Space between the x tick labels and the unit written after them (16:9).
 UNIT_GAP = 0.25
 #: Width kept in a side panel row for the velocity key's arrow and its gap.
@@ -60,6 +65,12 @@ KEY_ROOM = 1.25
 #: scene more than once; an n-body run takes a moment).
 _MODELS: dict[str, OrbitModel] = {}
 MODEL_CACHE = 32
+#: Panel texts kept for drawing in place (the recent ones; a live row's old values are dropped).
+TEMPLATE_CACHE = 256
+#: Drawing order of the parts that never change while the clock runs (the title, the caption,
+#: the axes) and of the clock's mobject just above them: manim draws what lies below the first
+#: updating mobject once per play and reuses that image (Step 236: fewer paths per frame).
+STILL_Z, CLOCK_Z = -2.0, -1.0
 
 
 @scene("orbit")
@@ -141,7 +152,7 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         label_size: ThemeSize | None = None
         """Size of tick labels, body labels and the readout (never below the readable minimum); default: caption (the picture gets the room)."""
         caption: TranslatableStr = ""
-        """Note under the picture (e.g. the source of the elements)."""
+        """Note under the picture (e.g. the source of the elements); in 16:9 under the side panel when the column has room."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""
         caption_color: ThemeColor = "dim"
@@ -380,7 +391,9 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
 
     def construct(self) -> None:
         p = self.params
-        self._clock_mob = Mobject().set_z_index(-1000)   # first in the scene: while it updates, every frame is redrawn
+        # first in the scene's drawing order but for the still parts (title, caption, axes: z
+        # STILL_Z): while it updates, every frame is redrawn on top of their cached image
+        self._clock_mob = Mobject().set_z_index(CLOCK_Z)
         self.add(self._clock_mob)
         begin = float(self.renderer.time)
         model = p.model()
@@ -411,7 +424,7 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             title = chart_title(p.title, size=p.title_size, color=p.title_color, area=self.safe_area)
             body = body.below(title, gap=0.3)
         caption = None
-        if p.caption:
+        if p.caption and portrait:   # 16:9: in the side column under the panel when there is one (below)
             caption = chart_caption(p.caption, body, size=p.caption_size, color=p.caption_color)
             body = body.above(caption, gap=0.2)
         self._colors = {o.name: self.theme.color(spec.color) if spec.color else self.theme.palette_color(k) for k, (spec, o) in enumerate(zip(p.body_specs(), model.system.orbiters))}
@@ -465,16 +478,31 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             side_h *= body.width / side_w
             side_w = body.width
         vec_w, vec_h = self._vector_box_size()   # a flyby's vector diagram: under the panel (16:9), under the picture (9:16)
-        column_h = side_h + (VECTOR_GAP + vec_h if vec_h and not portrait else 0.0)
+        # Step 236: in 16:9 the caption stands in the side column under the panel (the picture
+        # gets the whole height under the title); under the picture when the column has no room
+        cap_box = None
+        if p.caption and not portrait:
+            if has_panel:
+                cap_w = max(side_w, vec_w, COLUMN_CAPTION_WIDTH)
+                cand = fit_text(p.caption, cap_w, 0.2 * body.height, size=p.caption_size, color=p.caption_color, align="left")
+                need = side_h + (VECTOR_GAP + vec_h if vec_h else 0.0) + CAPTION_GAP + cand.height
+                if need <= body.height:
+                    caption = cand
+                    cap_box = (cand.width, cand.height)
+            if caption is None:
+                caption = chart_caption(p.caption, body, size=p.caption_size, color=p.caption_color)
+                body = body.above(caption, gap=0.2)
+        column_h = side_h + (VECTOR_GAP + vec_h if vec_h and not portrait else 0.0) + (CAPTION_GAP + cap_box[1] if cap_box else 0.0)
         side_h = min(side_h, body.height - (VECTOR_GAP + vec_h if vec_h and not portrait else 0.0))
         column_h = min(column_h, body.height)
-        column_w = max(side_w, vec_w if not portrait else 0.0)
+        panel_w = max(side_w, vec_w if not portrait else 0.0)
+        column_w = max(panel_w, cap_box[0] if cap_box else 0.0)
         right, top = (0.0, side_h + BOX_GAP) if portrait and has_panel else ((column_w + BOX_GAP, 0.0) if has_panel else (0.0, 0.0))
         bottom = vec_h + VECTOR_GAP if portrait and vec_h else 0.0
         area = plotcore.Rect(body.x0, body.y0 + bottom, body.x1 - right, body.y1)
         measure = plot_draw.text_measure(size, self.theme)
         lay = self._layout(area, xs / unit_m, ys / unit_m, None if fixed is None else fixed / unit_m, unit_name, measure, top)
-        box = vbox = None
+        box = vbox = cbox = None
         if has_panel:
             if portrait:
                 mid = (lay.plot.x0 + lay.plot.x1) / 2
@@ -482,20 +510,27 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             else:   # beside the plot, its middle level with the plot's
                 cy = min(max((lay.plot.y0 + lay.plot.y1) / 2, body.y0 + column_h / 2), body.y1 - column_h / 2)
                 x0 = lay.plot.x1 + BOX_GAP + self._unit_room(lay)
-                box = plotcore.Rect(x0, cy + column_h / 2 - side_h, x0 + column_w, cy + column_h / 2)
+                box = plotcore.Rect(x0, cy + column_h / 2 - side_h, x0 + panel_w, cy + column_h / 2)
                 if vec_h:
-                    vbox = plotcore.Rect(x0, cy - column_h / 2, x0 + column_w, cy - column_h / 2 + vec_h)
+                    vbox = plotcore.Rect(x0, box.y0 - VECTOR_GAP - vec_h, x0 + panel_w, box.y0 - VECTOR_GAP)
+                if cap_box:
+                    under = (vbox if vbox is not None else box).y0 - CAPTION_GAP
+                    cbox = plotcore.Rect(x0, under - cap_box[1], x0 + cap_box[0], under)
         if portrait and vec_h:
             mid = (lay.plot.x0 + lay.plot.x1) / 2
             w = min(body.width, max(vec_w, lay.plot.width))
             under = min([lay.plot.y0, *[lab.y - lab.height / 2 for lab in lay.x_labels]]) - VECTOR_GAP
             vbox = plotcore.Rect(mid - w / 2, under - vec_h, mid + w / 2, under)
-        x0, y0, x1, y1 = _bounds(lay, box, vbox)
+        x0, y0, x1, y1 = _bounds(lay, box, vbox, cbox)
         dx, dy = (body.x0 + body.x1 - x0 - x1) / 2, (body.y0 + body.y1 - y0 - y1) / 2
         lay = _shifted(lay, dx, dy)
         if box is not None:
             box = plotcore.Rect(box.x0 + dx, box.y0 + dy, box.x1 + dx, box.y1 + dy)
         self._vector_box = plotcore.Rect(vbox.x0 + dx, vbox.y0 + dy, vbox.x1 + dx, vbox.y1 + dy) if vbox is not None else None
+        self._caption_box = None
+        if cbox is not None:
+            self._caption_box = plotcore.Rect(cbox.x0 + dx, cbox.y0 + dy, cbox.x1 + dx, cbox.y1 + dy)
+            caption.move_to([(self._caption_box.x0 + self._caption_box.x1) / 2, (self._caption_box.y0 + self._caption_box.y1) / 2, 0.0])
         self._lay = lay
         self._picture_area = plotcore.Rect(body.x0, body.y0, body.x1, body.y1)   # where overlay labels may stand (the plot, its margins)
         self._scale = lay.plot.width / (lay.x.hi - lay.x.lo) / unit_m   # Manim units per metre
@@ -537,6 +572,11 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             else:
                 h = min(self._panel_size(self._slots)[1], box.height)
                 shift = 0.0 if portrait or self._vector_box is not None else (box.height - h) / 2
+                if self._caption_box is not None and shift > 0:   # the column keeps its middle: the caption moves up with the panel's foot
+                    rise = shift
+                    c = self._caption_box
+                    self._caption_box = plotcore.Rect(c.x0, c.y0 + rise, c.x1, c.y1 + rise)
+                    caption.shift([0.0, rise, 0.0])
                 box = plotcore.Rect(box.x0, box.y1 - shift - h, box.x1, box.y1 - shift)
                 self._readout_box = box
 
@@ -563,7 +603,6 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         self._readout = VGroup()
         self._label_sides: dict[str, int] = {}
         self._last_lines: tuple[str, ...] | None = None
-        self._label_cache: dict[str, Any] = {}
 
         self._build_orbit_overlays()
         self._build_manoeuvres()
@@ -588,8 +627,8 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         for column in self._panel_columns(slots):
             width, height = 0.0, 0.0
             for slot in column:
-                m = plot_draw.text_measure(self._size * slot.scale, self.theme, slot.color)
-                dims = [m(t) for t in slot.probes]
+                m = self._live_text(self._size * slot.scale, slot.color)   # as text_measure, from glyphs
+                dims = [m.size_of(t) for t in slot.probes]
                 w = max(d[0] for d in dims) + (0.32 if slot.swatch else 0.0) + (KEY_ROOM if slot.key else 0.0)
                 width = max(width, w)
                 height += max(d[1] for d in dims) + 0.14 * self._size / 24
@@ -807,6 +846,9 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             self.target("title", title)
         self._title, self._caption = title, caption
         self._frame_parts = frame_parts
+        for still in (title, caption, frame_parts if self._frame_kind() == "axes" else None):   # a scale bar lies over the trails
+            if still is not None:
+                still.set_z_index(STILL_Z)
         self.target("frame", VGroup(frame_parts, *([caption] if caption is not None else [])))
         centre = self._model.system.central.name
         self.target("central", VGroup(*self._central, self._leaders[centre], *([self._trails[centre]] if centre in self._trails else [])))
@@ -991,7 +1033,7 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             if name == self._model.system.central.name and self._label_inside:
                 label.move_to(c)
                 continue
-            obstacles = taken + [d for n, d in dots if n != name]
+            obstacles = taken + [d for n, d in dots]   # its own dot too (Step 236: a diagonal place could clip it)
             k, box, ring = place(c, dot.width / 2, label.width, label.height, obstacles=obstacles, plot=plot, points=points, prev=self._label_sides.get(name))
             self._label_sides[name] = k
             label.move_to([box.center[0], box.center[1], 0])
@@ -1050,34 +1092,48 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
         if fit < 1:
             group.scale(fit)
         group.move_to([box.x0 + pad + group.width / 2, box.y1 - pad - group.height / 2, 0])
-        plate = RoundedRectangle(width=box.width, height=box.height, corner_radius=0.08)
-        plate.set_fill(self.theme.background, opacity=0.88).set_stroke(self.theme.color("dim"), width=1, opacity=0.5)
-        plate.move_to([box.center[0], box.center[1], 0])
-        drawing = VGroup(plate.set_z_index(6), group.set_z_index(6.5))
+        plate = getattr(self, "_plate", None)
+        if plate is None or getattr(plate, "_orbit_box", None) != box:   # built once per box
+            plate = RoundedRectangle(width=box.width, height=box.height, corner_radius=0.08)
+            plate.set_fill(self.theme.background, opacity=0.88).set_stroke(self.theme.color("dim"), width=1, opacity=0.5)
+            plate.move_to([box.center[0], box.center[1], 0]).set_z_index(6)
+            plate._orbit_box = box
+            self._plate = plate
+        drawing = VGroup(plate, group.set_z_index(6.5))
         missing = len(drawing.family_members_with_points()) - len(self._readout.submobjects)
         if missing > 0:   # members of its own, so the cached texts never become the panel's
             self._readout.add(*[VMobject() for _ in range(missing)])
         plot_draw.morph_into(self._readout, drawing)
         for mob in used:
-            for member, points in self._template_points[id(mob)]:
+            for member, points in mob._orbit_points:
                 member.points = points.copy()
 
     def _template(self, text: str, size: float, color: str) -> Mobject:
-        """A cached text drawn in place (not copied); :meth:`_draw_readout` puts its points back."""
+        """A cached text drawn in place (not copied); :meth:`_draw_readout` puts its points back.
+        The most recent :data:`TEMPLATE_CACHE` are kept (a live row makes a new text most frames)."""
         key = f"{color}|{size}|{text}"
         if not hasattr(self, "_templates"):
-            self._templates, self._template_points = {}, {}
+            self._templates = {}
         if key not in self._templates:
+            if len(self._templates) >= TEMPLATE_CACHE:
+                del self._templates[next(iter(self._templates))]
             mob = self._cached(text, size, color)
+            mob._orbit_points = [(m, m.points.copy()) for m in mob.family_members_with_points()]
             self._templates[key] = mob
-            self._template_points[id(mob)] = [(m, m.points.copy()) for m in mob.family_members_with_points()]
         return self._templates[key]
 
     def _cached(self, text: str, size: float, color: str) -> Mobject:
-        key = f"{color}|{size}|{text}"
+        """A new mobject of ``text`` (Step 236: from cached glyphs, :class:`LiveText` — as
+        ``Text`` to a ten-thousandth of a pixel, without a Pango render per new string)."""
+        return self._live_text(size, color).text(text)
+
+    def _live_text(self, size: float, color: str) -> LiveText:
+        key = f"{color}|{size}"
+        if not hasattr(self, "_label_cache"):
+            self._label_cache: dict[str, LiveText] = {}
         if key not in self._label_cache:
-            self._label_cache[key] = plot_draw.label_text(text, size=size, color=color, theme=self.theme)
-        return self._label_cache[key].copy()
+            self._label_cache[key] = LiveText(self.theme, size, color)
+        return self._label_cache[key]
 
 
 def _rect(m: Mobject, pad: float = 0.0) -> Any:

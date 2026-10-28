@@ -1385,7 +1385,7 @@ circular orbits for Hohmann). DESIGN §98. Steps 229–236.
 - [x] The narration–picture rules know orbit scenes: `sweep`, `launch`, `burn`, `flyby` show things; `Orbit.target_text` names orbits, apsis marks, burns (label or "Δv₁ 2.43 km/s prograde"), Lagrange points, the event, the barycentre, the tides' near side, the flyby's planet motion
 - [x] Every example, the gallery and the 229–233 scratch projects lint with 0 orbit findings; a demo project with a planted mistake for each rule finds each (16 findings, the right statements next to them quiet)
 - [x] Tests `tests/test_orbit_lint.py` (15: reading, topics and clauses, dates and 9 published events, scale, ratios, every rule on projects with right and wrong statements, settings, examples clean, narration targets, no manim); CONFIG (rules table, defaults, an "Orbits" example), guide paragraph and troubleshooting rows (copied to `AGENTS.md`), a note in `docs/COOKBOOK-SCIENCE-CHARTS.md`, DESIGN §98.8
-- [~] Not done: claims about bodies the scene does not show (no textbook table of the Solar System); numbers written with spaces ("384 400 km") are skipped; eccentricities, inclinations and mass ratios said as pure numbers are not read; `orbit_scale` only flags enlarged bodies it is sure of (from the extent, before the layout)
+- [~] Not done: claims about bodies the scene does not show (no textbook table of the Solar System); numbers written with spaces ("384 400 km") are skipped; eccentricities, inclinations and mass ratios said as pure numbers are not read; `orbit_scale` only flags enlarged bodies it is sure of (from the extent, before the layout) (numbers with spaces: read since Step 236)
 
 ### Step 235 — Example, docs, gallery
 - [x] Example `examples/mars-transfer` "How to get to Mars" (about 3:43 with Kokoro, `discovery` bed at −9 dB, 9:16 `short` variant): why not straight (orbital speed, a radial burn bent by the Sun), the Hohmann transfer on circular coplanar orbits (stated) with Δv₁ 2.94 / Δv₂ 2.65 km/s, 259 d, Mars 44° ahead, burns on words; a `calculation` of T = π√(a³/GM☉) and θ; the 3.59 km/s departure from a 300 km orbit (Oberth, `from_scene`); the Earth and Mars on 2026-10-28 (Table 1), the next window around early December 2026, opposition 2027-02-19, windows every 780 d (≈ 26 months); lint 0 findings in 16:9 and 9:16 with the Kokoro audio; `tests/test_mars_transfer.py`
@@ -1395,7 +1395,12 @@ circular orbits for Hohmann). DESIGN §98. Steps 229–236.
 - [~] Not done: a gravity-assist aside in the example (the gallery's `orbit` page and the guide have the flyby); the capture at Mars; a 1080p check render (made at 720p: one 47 s orbit scene at 1080p exceeds a 10-minute command here)
 
 ### Step 236 — Review of Phase X
-- [ ] Critical review with fixes, including a physics-accuracy pass (independent calculations; constants and published elements), compatibility, phase tests and related suites, `tests/test_mcp.py` in full
+- [x] Critical review with fixes, including a physics-accuracy pass (independent calculations; constants and published elements), compatibility, phase tests and related suites, `tests/test_mcp.py` in full — 133 independent checks (Kepler, conversions, propagation, manoeuvres, flyby, CR3BP, figure-eight, resonances, ephemeris and 14 published event dates, constants and presets): no physics error found (DESIGN §98.10)
+- [x] 16:9 picture as large as the frame allows (the caption in the side column); 9:16 transfer panel without the per-burn Δv rows (the burns' labels carry them)
+- [x] Substitutions keep units: every value in the result's unit with the unit once at the end, `(√(2.945² + 10.93²) − 7.726) km/s`, when the dimensions allow
+- [x] Render speed and memory: live panel text from cached glyphs (`LiveText`), bounded text cache, still parts drawn once per play — the 47 s `hohmann` scene 1080p: 180 s → 99 s, ≥ 1.5 GB → 0.8 GB (it was killed at 3 GB); the example renders at 1920×1080
+- [x] Lint reads "384 400 km"; the phase angle's label and lines kept off labels; a label keeps off its own dot
+- [~] Kept as gaps: n-body runs with burns; a heliocentric flyby trajectory; an exaggerated-altitude view for LEO at true scale; open-orbit framing beyond 3 × the periapsis without `extent`; small 9:16 pictures with an inset or a long panel
 
 ---
 

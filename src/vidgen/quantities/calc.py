@@ -157,16 +157,24 @@ class Step:
     deep: str = ""
     #: An ``intermediate`` line's evaluated parts (for the lint: a number said for one of them).
     values: list[SymbolValue] = field(default_factory=list)
+    #: Every value in one unit, written once at the end (Step 236; when the values share a
+    #: dimension with the result): ``(√(2.945² + 10.93²) − 7.726) km/s``; and on two lines.
+    common: str = ""
+    common_stacked: str = ""
+    #: The common unit cancels (a pure-number result): ``common`` shows no unit at all.
+    common_bare: bool = False
 
     def variants(self) -> list[str]:
         """The ways to write this line, from the most explicit: with units, with units on two
-        lines, with units one factor per line, SI numbers, SI numbers on two lines (repeats
-        left out)."""
-        return list(dict.fromkeys(t for t in (self.tex, self.stacked, self.deep, self.alt, self.alt_stacked) if t))
+        lines, with units one factor per line, in one common unit (on one line, on two), SI
+        numbers, SI numbers on two lines (repeats left out)."""
+        return list(dict.fromkeys(t for t in (self.tex, self.stacked, self.deep, self.common, self.common_stacked, self.alt, self.alt_stacked) if t))
 
     def unit_variants(self) -> list[str]:
-        """The ways of :meth:`variants` that keep the units."""
-        return list(dict.fromkeys(t for t in (self.tex, self.stacked, self.deep) if t))
+        """The ways of :meth:`variants` that keep the units (the common unit's too, unless it
+        cancels)."""
+        common = () if self.common_bare else (self.common, self.common_stacked)
+        return list(dict.fromkeys(t for t in (self.tex, self.stacked, self.deep, *common) if t))
 
 
 @dataclass
@@ -439,8 +447,9 @@ def _steps(c: CalcInput, tree: ex.Node, q: Quantity, value: SymbolValue, known: 
     leaves = [n for n in tree.walk() if n.kind == "name" and n.value in known]
     if c.substitute and leaves:
         variants = {(units, stack): ex.to_tex(tree, substituted(units), values=True, stack=stack)[0] for units in (True, False) for stack in (0, 1, 2)}
+        common, common_stacked = _common_unit_variants(tree, q, value, {n.value: known[n.value] for n in leaves}, wrap)
         steps.append(Step("substitute", variants[True, 0], alt=variants[False, 0], stacked=variants[True, 1], alt_stacked=variants[False, 1],
-                          deep=variants[True, 2]))
+                          deep=variants[True, 2], common=common, common_stacked=common_stacked, common_bare=bool(common) and q.dim == DIMENSIONLESS))
     want = c.intermediate if c.intermediate is not None else True
     if want and tree.kind in ("call", "^") and len(tree.walk()) > 3:
         replace = {}
@@ -471,6 +480,51 @@ def _steps(c: CalcInput, tree: ex.Node, q: Quantity, value: SymbolValue, known: 
         relation = r"\approx" if q.sig is None and value.number.approx and c.sig is None else "="
         steps.append(Step("result", shown, relation, plain=value.value_text()))
     return steps
+
+
+def _common_unit_variants(tree: ex.Node, q: Quantity, value: SymbolValue, leaves: Mapping[str, SymbolValue], wrap: Wrap) -> tuple[str, str]:
+    """A substitution with every value written in one unit and that unit once at the end —
+    ``(√(2.945² + 10.93²) − 7.726) km/s`` — when it is right to do so: every value with a unit
+    has the same dimension and the result has it too (written in the result's unit) or is a pure
+    number (the values in the first one's unit, nothing appended). Then the numbers in that unit
+    give the result in it, whatever the formula. ``("", "")`` otherwise (different dimensions:
+    the SI numbers of ``alt`` are the unit-free way)."""
+    dims = {v.quantity.dim for v in leaves.values() if v.quantity.dim != DIMENSIONLESS}
+    if len(dims) != 1 or any(v.unit.offset or v.quantity.temperature for v in leaves.values()) or value.unit.offset:
+        return "", ""
+    (dim,) = dims
+    if q.dim == dim:
+        unit, tail = value.unit, value.unit
+    elif q.dim == DIMENSIONLESS:
+        unit, tail = next(v.unit for v in leaves.values() if v.quantity.dim == dim), None
+    else:
+        return "", ""
+    if not unit.parts:
+        return "", ""
+
+    def leaf(node: ex.Node) -> tuple[str, float] | None:
+        v = leaves.get(node.value)
+        if v is None:
+            return None
+        if v.quantity.dim == DIMENSIONLESS:   # a pure number keeps its own unit (30°, 5 %)
+            tex, level = v.value_tex(True)
+        else:
+            number = v.number if v.unit.text == unit.text else _exact_number(v.quantity, unit, None, "auto")
+            tex = number.tex
+            level = ex.PROD if number.sci else (ex.FRAC if number.fraction else ex.ATOM)
+            if tex.startswith("-"):
+                level = ex.NEG
+        return wrap(node.value, "{" + tex + "}"), level
+
+    out = []
+    bracket = ex.to_tex(tree, leaf, values=True)[1] <= ex.PROD   # a sum or product in brackets: the unit is the whole's
+    for stack in (0, 1):
+        tex, _ = ex.to_tex(tree, leaf, values=True, stack=stack)
+        if tail is not None:
+            unit_tex = tail.tex if tail.tex.startswith("^{") else r"\," + tail.tex
+            tex = (rf"\left({tex}\right)" if bracket else tex) + unit_tex
+        out.append(tex)
+    return out[0], (out[1] if out[1] != out[0] else "")
 
 
 __all__ = [

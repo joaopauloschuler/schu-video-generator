@@ -52,6 +52,6 @@ the burn is worked out from `from_scene: hohmann.dv1` so the two scenes cannot d
 under the voice.
 
 **Checks.** `vidgen validate`; `vidgen lint` with the Kokoro narration: 0 findings in 16:9 and in
-9:16. The 16:9 video was rendered at 1280×720, 30 fps (a 47 s orbit scene at 1080p took longer
-than the development machine's 10-minute limit per command): 223.3 s, video and audio the same
-length, −16.0 LUFS integrated, true peak −1.9 dBTP, no silence over 1.5 s. No audio is committed.
+9:16. The 16:9 video renders at 1920×1080, 30 fps in about 6½ minutes on the development machine
+(Step 236; the longest scene, `hohmann`, about 110 s): 223.3 s, video and audio the same length,
+−16.0 LUFS integrated, true peak −1.9 dBTP, LRA 3.3 LU. No audio is committed.

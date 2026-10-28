@@ -5470,7 +5470,9 @@ is as large as `size` allows (1.15x in a vertical frame) within the width; when 
 tall, the largest lines give way first (down to a common size), so a big formula shrinks before
 a long substitution does, and no line is more than 1.6 times the size of the smallest (one block). A long substitution keeps its units when that stays comfortably
 readable (1.2x the readable size or more): with units on one line, on two lines (the outer product
-split) or one factor per line, the most explicit that is nearly as large as the largest of those;
+split) or one factor per line, or — when every value with a unit has the result's dimension, as in
+`√(v∞² + v_esc²) − v_circ` — every value in the result's unit with that unit once at the end,
+`(√(2.945² + 10.93²) − 7.726) km/s`; the most explicit that is nearly as large as the largest of those;
 otherwise it is written in SI numbers without units (on one line, on two) — `units: always` /
 `never` choose. A calculation that still does not fit at the readable size logs a warning (split
 it, or use fewer symbols per formula). Symbols are
@@ -5637,7 +5639,10 @@ panel (beside the picture in 16:9 — the room a tall picture leaves —, above 
 million`), then the few values the scene is about — at most six rows in 16:9 and five in 9:16
 besides the "not to scale" note (rows a scene cannot do without, such as a transfer's Δv, are
 always kept), every row at the readable label size, in one column — and a **legend** of the
-bodies with their periods when it fits (`legend: auto`; `true` always, `false` never).
+bodies with their periods when it fits (`legend: auto`; `true` always, `false` never). In 16:9 the
+`caption` stands under the panel (Step 236: the picture gets the whole height under the title;
+under the picture when the column has no room); in 9:16 a transfer's Δv₁ / Δv₂ rows give way to
+the burns' own labels (the total stays), so the picture is taller.
 Diagnostics — the n-body energy error `ΔE/E`, `ΔL/L`, a Jacobi constant's drift `ΔC/C`, the
 figure-eight's return error — are left out unless asked for (`energy: true`, `panel: full` or by
 name); the lint reads them from the model whatever the panel shows. `panel: full` shows every row

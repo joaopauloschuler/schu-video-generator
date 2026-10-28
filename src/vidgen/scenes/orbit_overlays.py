@@ -377,7 +377,8 @@ class OrbitOverlays:
         p, model = self.params, self._model
         self._held = self._held_patterns()
         self._pins: list[tuple[str | None, Pinned]] = []
-        self._static_boxes: list[Any] = []
+        caption = getattr(self, "_caption_box", None)   # a caption in the 16:9 side column: labels keep off it
+        self._static_boxes: list[Any] = [caption] if caption is not None else []
         self._geometry: dict[str, dict[str, VGroup]] = {}
         self._sectors: dict[str, dict[str, Any]] = {}
         self._velocity: dict[str, dict[str, Any]] = {}

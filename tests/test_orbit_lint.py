@@ -68,7 +68,14 @@ def test_numbers_months_weeks_and_groups() -> None:
     assert months.unit.text == "d" and math.isclose(months.si, 26 * 365.25 / 12 * 86400)
     [weeks] = oa.said_quantities("It takes three weeks.")
     assert math.isclose(weeks.si, 21 * 86400)
-    assert [v.text for v in oa.said_quantities("The Moon is 384 400 km away.")] == []          # the end of a number written with a space
+    # Step 236: digit groups written with spaces (plain, thin, no-break) are one number
+    for space in (" ", " ", " ", " "):
+        [moon] = oa.said_quantities(f"The Moon is 384{space}400 km away.")
+        assert moon.si == 384_400e3 and moon.text == f"384{space}400 km"
+    [far] = oa.said_quantities("Mars is 227 900 000 km from the Sun.")
+    assert far.si == 227.9e9
+    assert [v.si for v in oa.said_quantities("a 3 400 km orbit")] == [3.4e6]
+    assert oa.said_quantities("In 2026 300 km up is low.") == []   # a year then a number: not one number, and the second is left out
     [half] = qa.said_values("L1 lies about one and a half million kilometres away.")
     assert half.value == 1.5e6 and half.unit.text == "km" and half.approx
     assert [oa.quantity_of(v) for v in oa.said_quantities("44 degrees, 3.9 km/s, 259 days, 1.5 AU")] == ["angle", "speed", "time", "length"]

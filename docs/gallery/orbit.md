@@ -133,7 +133,7 @@ From the author guide (`vidgen guide scenes`):
 | `legend` | `bool \| 'auto'` | `'auto'` | List the bodies with their periods in the side panel; auto: with two or more bodies when the panel has room (16:9); true: always. |
 | `panel` | `'compact' \| 'full' \| 'none' \| list[str]` | `'compact'` | The side panel's rows: compact (the time, the speed-up and the few values the scene is about, at a readable size; diagnostics such as ΔE/E, ΔL/L and the Jacobi drift left out), full (every row), none (only a 'not to scale' note), or a list of row names ([time, total_dv, phase]; see the guide). |
 | `label_size` | `size \| None` |  | Size of tick labels, body labels and the readout (never below the readable minimum); default: caption (the picture gets the room). |
-| `caption` | `str` |  | Note under the picture (e.g. the source of the elements). |
+| `caption` | `str` |  | Note under the picture (e.g. the source of the elements); in 16:9 under the side panel when the column has room. |
 | `caption_size` | `size` | `'caption'` | Caption text size. |
 | `caption_color` | `color` | `'dim'` | Caption color. |
 | `title_size` | `size` | `'heading'` | Title size. (also: heading_size) |

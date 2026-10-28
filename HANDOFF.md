@@ -21742,3 +21742,90 @@ How to test
   `test_orbit_laws.py` (139), `test_builtin_scenes` + `test_calc_lint` `-k "orbit or calc"` (43) — all passing.
 - Stills: scratchpad `s235/proj/build/preview/frames/` (16:9) and `s235/proj/build/preview_short/frames/`
   (9:16); contact sheets `s235/contact_16x9.png` (the render) and `s235/short_sheet.png`.
+
+## Step 236 — Review of Phase X
+
+What was done (DESIGN §98.10): a critical review of Steps 229–235 with fixes — a physics-accuracy
+pass against independent calculations, the reviewer's points (picture size, units in substitutions,
+render speed, known gaps), compatibility.
+
+Findings and fixes
+- **Physics** (scratchpad `s236/physics_check.py`, 133 checks; the lasting ones in
+  `tests/test_orbit_review.py`): Kepler's equation (bisection, e 0–0.999999 and 1.000001–10, Barker),
+  Vallado's COE2RV and the `from_state` round trip, propagation against DOP853, vis-viva, Hohmann
+  LEO → GEO and Earth → Mars, bi-elliptic thresholds and Δv, plane changes, the flyby's turn, v∞ and
+  periapsis against an integrated hyperbola, the Sun-frame gain and energy change, L1–L3 by root
+  finding for four μ, L4/L5, Jacobi constants, Routh's μ, Sun–Earth L1/L2, the figure-eight returning
+  after T, the Galilean ratios and Laplace relation, Table 1 positions against Standish's method
+  written here, 14 published opposition / conjunction dates 2018–2027 (all within 0.48 d), every
+  constant and preset against its cited value. **No physics error found.** Noted: Kepler III from
+  Table 1's a gives 365.2578 d for the EMB, the table's mean motion 365.2564 d (independent fits).
+- **Render speed / memory** (the reason Step 235 rendered at 720p): every new readout string built a
+  manim `Text` (~20 ms) and the panel's caches kept it plus a deep copy with its SVG path objects
+  (~0.3 MB each): memory passed 3 GB and the worker was killed (exit −9). New
+  `scenes/orbit_text.LiveText`: a string laid out once per shape (digits as 0), the real digits from
+  glyphs rendered once, following glyphs shifted by advances and pair kerning — equal to `Text` to
+  10⁻⁷ units (tested); plain `VMobject` glyphs; the panel text cache bounded (`TEMPLATE_CACHE` 256,
+  points kept on the mobject); the plate built once; the panel measured with the same glyphs. The
+  title, caption and axes lie below the clock's mobject (`STILL_Z` −2 < `CLOCK_Z` −1), so manim draws
+  them once per play into its static image. `hohmann` 1920×1080 in-process: 179.9 s, 129 ms/frame,
+  ≥ 1.5 GB → 99.3 s, 71 ms/frame, 0.81 GB; via `vidgen render`: `straight` 90.5 → 59 s, `hohmann`
+  killed → 105 s; the whole example at 1080p in ~6½ min.
+- **16:9 picture size**: the caption stands in the side column under the panel (left-aligned, ≥ 4.4
+  units wide; under the picture when the column has no room); the picture takes the height under the
+  title (61 % → 69 % of the frame height in the example). **9:16**: a transfer's Δv₁ / Δv₂ rows are
+  rank 1 in portrait (the burns' labels carry them): two rows fewer, the picture ~25 % taller.
+- **Units in substitutions** (`quantities.calc`): `Step.common` / `common_stacked` — every value in
+  the result's unit, the unit once at the end, `(√(2.945² + 10.93²) − 7.726) km/s` — when all values
+  with units share the result's dimension (or the result is a pure number: `common_bare`, then it
+  ranks with the SI numbers so readable full-unit lines are not replaced). Order: full units (one
+  line, two, per factor), common unit, SI numbers.
+- **Gaps fixed**: the orbit lint reads digit groups with spaces ("384 400 km", thin / no-break too);
+  the phase angle's label keeps off its own lines and the central label, its lines start at the
+  central body's edge, in the highlight colour at 0.6 (they were "dim" like the gridlines, which the
+  `covered_text` lint confused with the labels' grey edges); a label keeps off its own dot.
+
+Files touched
+- New: `src/vidgen/scenes/orbit_text.py`, `tests/test_orbit_review.py` (8).
+- Changed: `src/vidgen/scenes/{orbit,orbit_manoeuvres,orbit_overlays,orbit_many}.py`,
+  `src/vidgen/quantities/calc.py`, `src/vidgen/orbits/accuracy.py`, `tests/test_orbit_lint.py`
+  (digit groups), `docs/CONFIG.md` (calculation substitution, orbit panel/caption),
+  `docs/gallery/orbit.md` + media of `orbit`, `mars_hohmann`, `jupiter_trojans`,
+  `examples/mars-transfer/README.md`, `DESIGN.md` §98.8 notes + §98.10, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): `quantities.Step.common`, `common_stacked`, `common_bare`; the orbit
+`caption` docstring. No config key, no dependency.
+
+Decisions
+- Glyph composition over a cheaper `Text` (manim has no glyph cache): exact, and it fixes memory
+  too; the panel looks the same (tested against `Text`).
+- No `display_unit` option: the common-unit way is right by construction and automatic; `units:
+  always / never` still choose.
+- The title stays in the header band (consistent with the other scenes of a video); only the
+  caption moves.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check236`).
+Calculation scenes: the radioactive-decay `half` scene compared frame by frame with and without the
+common unit (16:9 and 9:16): identical; the gallery's calculation has no common-unit line; the
+example's `leaving` changes deliberately. Orbit scenes change deliberately (caption, 9:16 transfer
+panel, phase angle). Gallery 13.6 MB of 15. Lint sweep `s236/lint_all.py` (337 scenes: examples,
+gallery, s205–s236 projects): 0; `s234/demo` still 16; `vidgen lint` of the example 0 / 0 (16:9 /
+9:16) and of s230, s231, s232, s233: 0.
+
+Known gaps (DESIGN §98.10): n-body runs with burns; the flyby as a heliocentric trajectory; an
+exaggerated-altitude view for LEO at true scale (the radial transform would have to reach every
+offset); open orbits framed at 3 × the periapsis without `extent`; small 9:16 pictures with an inset
+or a long panel; the Moon on a date.
+
+How to test
+- `tests/test_orbit_review.py` (8, ~12 s), `tests/test_orbit.py` (75), `test_orbit_many` +
+  `test_orbit_sky` + `test_orbit_manoeuvres` + `test_orbit_lint` + `test_orbits` + `test_orbit_laws` +
+  `test_mars_transfer` (211); `test_calculation` + `test_calc_lint` + `test_quantities` +
+  `test_science_review` + `test_radioactive_decay` (164); `test_docs` + `test_guide` + `test_gallery`
+  not render (172); `test_builtin_scenes` + `test_actions_coverage -k "orbit or calculation"` (10);
+  `test_schema` + `test_registry` + `test_introspect` + `test_json_output` + `test_extensions` +
+  `test_api` + `test_translation` (254); `test_lint` + `test_narration_rule` + `test_word_anchors` +
+  `test_plot_live` + `test_accuracy` (144); `tests/test_mcp.py` in full (20) — all passing.
+- Video: scratchpad `s236/proj/output/mars_transfer.mp4` (1920×1080, 30 fps, 223.3 s video and audio,
+  −16.0 LUFS, true peak −1.9 dBTP, LRA 3.3 LU); contact sheet `s236/contact_16x9.png`; 9:16 stills
+  `s236/short_sheet.png` and `s236/proj/build/preview_short/`.

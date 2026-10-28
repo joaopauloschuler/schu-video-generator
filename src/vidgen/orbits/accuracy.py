@@ -129,6 +129,10 @@ def show(value: float, quantity: str) -> str:
 
 _GROUP_BEFORE = re.compile(r"\d[    ]$")
 _WEEKS = re.compile(r"\s+(?P<u>weeks?|months?)\b", re.IGNORECASE)
+#: A number written in groups of three digits separated by spaces (plain, no-break, thin or
+#: narrow no-break), 1 to 3 digits first: "384 400", "1 496 000 000".
+_SPACE = re.compile("[    ]")
+_SPACED = re.compile(r"(?<![\d.,])\b\d{1,3}(?:[    ]\d{3})+(?!\d)(?![.,]\d)")
 _MONTH = YEAR / 12
 
 
@@ -149,12 +153,15 @@ def quantity_of(v: qa.SaidValue) -> str | None:
 
 def said_quantities(sentence: str) -> list[qa.SaidValue]:
     """The values of ``sentence`` with a time, speed, length or angle unit, said as values (not
-    a bound or one end of a range); "26 months" and "three weeks" as days. A number right after
-    a digit group ("384 400 km") is left out: it is the end of a number written with spaces."""
+    a bound or one end of a range); "26 months" and "three weeks" as days. Digit groups written
+    with spaces ("384 400 km", thin or no-break spaces too; Step 236) are one number; any other
+    number right after a digit group ("2026 300 km") is left out."""
     out: list[qa.SaidValue] = []
-    for v in qa.said_values(sentence):
-        if not v.checkable or _GROUP_BEFORE.search(sentence[: v.start]):
+    text = _SPACED.sub(lambda m: _SPACE.sub(",", m.group()), sentence)   # same length: the places stay the sentence's
+    for v in qa.said_values(text):
+        if not v.checkable or _GROUP_BEFORE.search(text[: v.start]):
             continue
+        v = replace(v, text=sentence[v.start:v.end])
         if v.unit is None and v.per is None:
             m = _WEEKS.match(sentence, v.end)
             if m is not None:

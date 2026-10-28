@@ -95,8 +95,10 @@ class OrbitManoeuvres:
             slots.append(Slot([f"{dv_name(1)} = {dv_name(2)} = {speed_text(r.dv)}"], scale=0.9, name="phasing", rank=0))
         else:
             dvs = [r.dv1, r.dv2] + ([r.dv3] if info.kind == "bielliptic" else [])
+            # 9:16 (Step 236): each burn's Δv is written at its arrow; the panel keeps the total
+            # and leaves the picture the height of those rows
             for n, dv in enumerate(dvs, start=1):
-                slots.append(Slot([f"{dv_name(n)} = {speed_text(dv)}"], scale=0.9, name="dv", rank=0))
+                slots.append(Slot([f"{dv_name(n)} = {speed_text(dv)}"], scale=0.9, name="dv", rank=1 if self.is_portrait else 0))
         slots.append(Slot([f"total Δv = {speed_text(r.total)}"], name="total_dv", rank=0))
         slots.append(Slot([f"transfer {self._time_text(info.arrival - info.depart)}"], scale=0.9, name="transfer_time", rank=0))
         if info.phase_needed is not None:
@@ -206,7 +208,9 @@ class OrbitManoeuvres:
         group = VGroup(path, mark)   # its time is in the panel
         self._register_overlay(["transfer"], group, o.parent)
         if info.target is not None:
-            lines = VGroup(VMobject(), VMobject()).set_stroke(self.theme.color("dim"), width=2, opacity=0.9).set_z_index(1.4)
+            # in the angle's colour, fainter: told apart from the gridlines and the labels' grey
+            # edges (by eye and by the lint's covered_text)
+            lines = VGroup(VMobject(), VMobject()).set_stroke(self.theme.color("highlight"), width=2, opacity=0.6).set_z_index(1.4)
             arc = VMobject().set_stroke(self.theme.color("highlight"), width=3).set_z_index(1.5)
             text = VGroup()
             group = VGroup(lines, arc, text)
@@ -471,10 +475,12 @@ class OrbitManoeuvres:
         ship = centre + self._offsets(o.positions(tp))[0]
         target = centre + self._offsets(model.system.orbiter(info.target).positions(tp))[0]
         lines, arc = parts["lines"], parts["arc"]
+        core = self._central[0].width / 2   # from the central body's edge (its label may stand close to it)
         for line, end in ((lines[0], ship), (lines[1], target)):   # stopping short of the body: its label stands near it
             d = end - centre
             n = float(np.linalg.norm(d))
-            line.set_points_as_corners(np.array([centre, end - d / n * min(0.3, 0.4 * n) if n > 0 else end]))
+            u = d / n if n > 0 else np.zeros(3)
+            line.set_points_as_corners(np.array([centre + u * min(core, 0.3 * n), end - u * min(0.3, 0.4 * n) if n > 0 else end]))
         lead = self._lead_at(info, tp)
         r_s, v_s = o.states(tp)
         sense = 1.0 if np.cross(r_s, v_s)[2] >= 0 else -1.0
@@ -488,10 +494,12 @@ class OrbitManoeuvres:
         at = centre + np.array([math.cos(mid), math.sin(mid), 0.0]) * (rad + 0.08)
         obstacles = ([self._panel_rect()] if self._readout_box is not None else []) + [mob_rect(self._central[0], 0.04)] * 3
         # the bodies and their labels where they stand (a label sticks to its side, so the angle's text gives way)
-        obstacles += [mob_rect(m, 0.03) for pair in self._bodies.values() for m in pair
+        obstacles += [mob_rect(m, 0.03) for pair in (*self._bodies.values(), self._central) for m in pair
                       if (m.has_points() or len(m)) and m.get_fill_opacity() > 0]
+        lines = self._manoeuvre_lines()   # Step 236: off the angle's own two lines too
         _, box, _ = place(at, 0.02, lab.width, lab.height, obstacles=obstacles, plot=self._lay.plot, rings=WIDE_RINGS,
-                          directions=((math.cos(mid), math.sin(mid)), *DIRECTIONS))
+                          directions=((math.cos(mid), math.sin(mid)), *DIRECTIONS), points=np.concatenate(lines)[:, :2] if lines else None,
+                          line_weight=0.01)
         lab.move_to([box.center[0], box.center[1], 0])
         plot_draw.morph_into(parts["text"], VGroup(lab))
 

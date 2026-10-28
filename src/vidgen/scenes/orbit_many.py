@@ -684,7 +684,6 @@ class OrbitMany:
         }
         self._readout = VGroup()
         self._last_lines = None
-        self._label_cache = {}
         self._burn_video = {}   # the clock's plan takes pauses only here
         if title is not None:
             self.target("title", title)
