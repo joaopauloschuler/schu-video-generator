@@ -81,6 +81,8 @@ class Branching(BarChart):
             out.setdefault("sort", True)
             out.setdefault("horizontal", True)
             out.setdefault("colors", "palette")
+            out.setdefault("label_size", "body")   # the products' symbols are short: read at body size
+            out.setdefault("value_size", "body")
             return out
 
 

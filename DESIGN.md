@@ -18842,7 +18842,8 @@ check)`; `branching(name)` (antiparticles by charge conjugation), `listed()`,
 `branching_problems()` (every process allowed by §99.3's checker, its parent the table's, each
 table ≤ 1 within `SUM_TOLERANCE` = 10⁻³ — the Z's separately averaged measurements add up to
 1.0001). Tables: **H at 125 GeV — Standard Model prediction**, LHC Higgs Cross Section Working
-Group, Yellow Report 4 (2016) at m_H = 125.09 GeV (bb̄ 58.24 %, WW* 21.37, gg 8.187, ττ 6.272, cc̄
+Group, Yellow Report 4 (2016), the table at m_H = 125 GeV (125.00; Step 242: the label said
+125.09, where YR4 gives e.g. bb̄ 58.09, WW* 21.52, ZZ* 2.641 %) (bb̄ 58.24 %, WW* 21.37, gg 8.187, ττ 6.272, cc̄
 2.891, ZZ* 2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176; `kind: theory`, said on screen); PDG 2024
 measurements: Z (hadrons 69.911 %, invisible 20.000, e⁺e⁻ 3.3632, μ⁺μ⁻ 3.3662, τ⁺τ⁻ 3.3696), W⁺
 (hadrons 67.41 %, each ℓν the lepton-universality average 10.86), π⁺ (μ⁺ν 99.98770 %, e⁺ν 1.230 ×
@@ -18880,7 +18881,8 @@ axes). (4) Decay times and the Z line shape are **plot models** (no scene type):
 as Phase W's. The note gives the likelihood-ratio Z and the meaning of its p-value. With a `fit`
 action and no action showing the note, the note is held and follows the fit (`_held`, `entrance`):
 otherwise the plot's own note step would grow the data to its end before the fit. Text at
-`readable_size(margin=1.08)` (lint's `min_font` passes; the plot keeps the room). In 9:16
+`readable_size(margin=1.08)` (lint's `min_font` passes; the plot keeps the room; Step 242: 1.2, a
+short note, headroom in 16:9 and the 9:16 box at `auto` — §99.13). In 9:16
 (`_portrait`): the count axis fixed at 2 × the highest bin (the bars rise into it; the readout finds
 room there), no legend, and one box at the top left — the fitted mass and width, then the
 significance in short lines — instead of the fit box and the note (they overlapped, or every box
@@ -18936,3 +18938,81 @@ with its note trips `max_words` (about 45 words); in 9:16 the fit's values appea
 not with the fit curve; a pie of small modes may label them below the readable size (the pie's
 own behaviour); 4ℓ fits fail for about 1 seed in 40 (a clear error); no lint rules yet (Step 242:
 significance and branching-ratio claims).
+
+### 99.13 Particle-physics accuracy lint (Step 242)
+
+**Review fixes of Step 241 first.** (1) `mass_spectrum` in 16:9: the plot took about 55 % of the
+width beside a column of three boxes in small text, and the full note tripped `max_words`. Now the
+note is short by default — `explain: true | short` gives three short lines (`6.7σ local`, `p = 7.6
+× 10⁻¹²`, `(background only)`; `spectrum.short_meaning`), `explain: long` the four lines of Step
+241 —, the readout is `events: 30 000` / `expected: 5.3σ` / `(local, Asimov)`, the text is 1.2 × the
+readable size (`LABEL_MARGIN`; phones), and the count axis reaches 1.35 × the highest bin
+(`LANDSCAPE_HEADROOM`) so the legend sits above the data: the side column is narrow and the plot
+keeps about 70 % of the width (H → γγ, preview 1280 × 720: 745 px of plot, was 545); `max_words`
+and `min_font` pass. In 9:16 the combined box (fit values + short note) is placed at `auto` — a free
+spot of the plot, else above it — instead of forced top left, where it covered the 4ℓ peak.
+(2) The Higgs branching ratios are YR4's table for m_H = 125 GeV (125.00), not 125.09 (at 125.09:
+bb̄ 58.09, WW* 21.52, ZZ* 2.641 %): the source label says "m(H) = 125 GeV"; values unchanged and
+still `check=True`. The SM width 4.1 MeV is YR4's 4.088 MeV at 125.00 GeV rounded (noted in
+`data.py`, `# check`). (3) `branching` bars use `label_size` and `value_size` `body` (were
+caption / readable size).
+
+**Rules** (scene scope, last in `LINT_RULES`; the runner adds `particle_issues`,
+`lint/particle_rule.py`, to `SceneContext.science` like the calc / plot / orbit rules):
+
+| rule | default | reads |
+|---|---|---|
+| `particle_mass` | warning | a mass said for a particle against PDG 2024 (`tolerance` 0.05 with "about"; quark masses 30 %: the scheme); did-you-mean another particle's mass; a power-of-1000 mix-up |
+| `particle_charge` | error | "X has (a) charge (of) Q", "X carries Q charge", "the charge of X is Q", "X is neutral / positively charged"; sums left alone |
+| `particle_spin` | error | "X has spin S", "spin of X is S", "a spin-S X", "X is a fermion / boson / spinless" |
+| `particle_lifetime` | warning | mean life, half-life (τ ln 2) or width said next to its word; moving particles (dilation words) and fitted widths left alone |
+| `branching_ratio` | warning | "most / mostly", "rarely", "the most common", a % or "1 in N" standing by the decay ("70 % of Z bosons", "… 70 % of the time") against `branching` |
+| `conservation_claim` | warning | allowed / forbidden / "forbidden by X" / "violates X" / "conserves X" per clause, for a process written with an arrow, said in words, or the scene's own |
+| `feynman_boson` | warning | couplings ("couples to"), forces ("feel the strong force"), flavour change by a non-W boson, a boson said exchanged that a `feynman` diagram lacks |
+| `kinematics_number` | warning | a `kinematics` scene's `calc_values` (the `from_scene` names) by the quantity named; βγcτ and γτ said with a momentum / energy / γ anywhere; a written reaction's threshold (√s, fixed-target beam energy and kinetic energy) |
+| `detector_signature` | warning | leave / be seen in / stop in / reach / pass through / curve, against `detector.SIGNATURES` and the layer order tracker < ECAL < HCAL < muon chambers |
+| `significance_claim` | warning | the p-value read as the chance of being wrong or of existing (unless said the right way: "background alone", "if there were no…"); "1 in N" or a % against the σ said (one- or two-sided); in a `mass_spectrum`, a σ for the bump against the Asimov expectation with all events and the likelihood-ratio fit (`sigmas` 0.5; "so far", "already": anything along the filling) |
+| `simulated_label` | warning | "real data", "data from the LHC / CMS…" in a scene with simulated data; a `detector` label or a `plot` of `mass_spectrum` / `decay_times` without "simulated" on screen |
+| `particle_units` | info | masses on screen both in GeV and GeV/c² in one video |
+
+**Knowledge** (`vidgen.particle_physics.accuracy`, no manim, not re-exported): `mentions` (names —
+"the Z boson", "bottom quarks", "positrons", "neutral pions", "electron antineutrinos" — and symbols
+— μ⁺, π⁰, ν̄ₑ, W⁻, e⁺e⁻; generic mentions keep every key: "W" is W⁺ or W⁻, "neutrinos" any flavour,
+"pions" π⁺ π⁻ π⁰; "muon chambers", "electron number" are not particles; single Latin letters only
+with a charge mark or "quark"; W, Z, H only as capitals, never before "="), the claim readers (one
+per rule, each returning `Said(rule, quote, message, severity)`), `said_decays` ("X decays (mostly)
+to Y, Z and W"; counts, pairs, categories hadrons / leptons / invisible), `written_processes`
+(arrow runs; a word is never split into particles: "needs" is not n e e d s). Numbers, units and
+"about" are `quantities.accuracy`'s (`said_values`, `agrees`, `mixup_power`); a value is about the
+particle named just before it in its clause (no other mention between, at most 70 characters).
+
+**Narrow by design.** Negations, contrasts and questions are left alone by every reader except
+`conservation_claim` (`_plain_only`): "photons do not leave tracks", "the W is not a photon",
+"unlike photons, electrons leave tracks". `conservation_claim` reads its own polarity ("not
+allowed", "not forbidden", "violates", "conserves") per clause (", and" / ", but" / ";" / "while";
+a clause without a process takes the one before: "…, but it violates muon number") and reads a
+decay said in words in every way it may mean (a narrator's "a muon" may be μ⁺; "a neutrino" any
+flavour): only when no reading is allowed is "allowed" wrong. A mass claim needs a mass word or
+"X is N GeV"; energies ("a 45 GeV electron", "each photon carries"), differences ("11 GeV
+heavier"), invariant masses of several particles are not masses. Branching shares must stand by
+their decay ("…, twenty percent to neutrinos" is a later clause's).
+
+**The gate.** `particle_charge` and `particle_spin` read every project (their patterns need a
+particle and a charge or spin word); the others only projects with a particle-physics scene
+(the eight Phase Y types, a `plot` of a particle model, a `calculation` with `mass:` /
+`lifetime:` / `width:` symbols). Measured: 0 findings on every example (radioactive-decay,
+mars-transfer, cystic-fibrosis included), the gallery and the Step 237–241 scratch projects; with
+the gate removed, still 0 on the examples' narration and screens; a 60-sentence corpus of correct
+particle narration: 0.
+
+**Scene facts** (`particle_rule.facts`, cached per project): `feynman` — each diagram's process and
+bosons; `decay_chain` — its decays; `kinematics` — `calc_values` and its decay; `mass_spectrum` —
+the Asimov curve's last and largest value and the likelihood-ratio z of the scene's own fit
+(`mass_spectrum.significance`, cached); `detector` / simulated `plot` — simulated, and whether the
+screen says so.
+
+**Known gaps**: claims in other languages are not read; a second clause without its own subject
+("the up quark has +2/3 and the down quark −1/3") is not read; charges of composite systems said
+as sums are skipped; decays said in words with plural products and no count are read as a pair;
+no check of CKM or helicity claims ("the W couples only to left-handed particles"), of cross
+sections, or of a `feynman` scene's narration naming the channel (s / t) wrong.

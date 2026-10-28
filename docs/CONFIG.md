@@ -6668,11 +6668,15 @@ number of events), `fit`, `annotate` and `reveal` are the plot's own.
   Z = √(2((s + b) ln(1 + s/b) − s)) of the s and b expected in the peak window M ± 2√(σ² + (Γ/2)²)
   after that many events (Cowan, Cranmer, Gross, Vitells 2011; ≈ s/√b for s ≪ b) — or `counting`
   (the observed excess in that window over the expected background: √(2(n ln(n/b) − (n − b)))), or
-  `none`. With `explain` (default) a note after the fit (`annotation:significance`) gives the
-  likelihood-ratio significance Z = √(2(ln L_s+b − ln L_b)) (background only against signal +
-  background, Wilks' theorem at the fitted mass) and its meaning: the one-sided p-value is **the
-  chance that background alone fluctuates up this much — not the chance that the result is
-  wrong**; 5σ ↔ p = 2.9 × 10⁻⁷. Above 20σ it says "> 20σ".
+  `none`; it reads `events: 12 400`, `expected: 3.4σ`, `(local, Asimov)` (or `observed:` …
+  `(local, counting)`). With `explain` (default) a note after the fit (`annotation:significance`)
+  gives the likelihood-ratio significance Z = √(2(ln L_s+b − ln L_b)) (background only against
+  signal + background, Wilks' theorem at the fitted mass) and its one-sided p-value — **the chance
+  that background alone fluctuates up this much, not the chance that the result is wrong**; 5σ ↔
+  p = 2.9 × 10⁻⁷. Short by default (`explain: true` or `short`): three short lines, `6.7σ local`,
+  `p = 7.6 × 10⁻¹²`, `(background only)` — the narration says the rest; `explain: long` writes
+  the meaning out in four lines ("…the chance that background alone fluctuates this high, not that
+  the result is wrong (5σ: 2.9 × 10⁻⁷)"). Above 20σ it says "> 20σ".
 - **Data − background** (`subtract: true`): a panel under the plot (the plot's `residuals:
   background`): the counts minus the fitted background with √N bars and the fitted peak over
   them; its axes (with the mass labels) come with the plot's, its content with the fit or with
@@ -6680,12 +6684,15 @@ number of events), `fit`, `annotate` and `reveal` are the plot's own.
 - **Timing**: without actions — the filling over beat 1, the fit, the note, one per beat. With a
   `fit` action and no `annotate` of the note, the note follows the fit (else the plot's own step
   would bring it, growing the data to the end, before the fit).
-- **Layout**: text at the readable size (`label_size`, default the readable minimum, so the plot
-  keeps the room); in 16:9 the fit box, the note and the readout stand in a free corner or a
-  column on the right. In 9:16 the count axis is fixed at twice the highest bin (the bars rise
-  into it, the readout stands there), there is no legend (the caption names the simulated data),
-  and the fit's values and the note are one box at the top left of the plot (the fitted mass and
-  width, then the significance in short lines), which comes with the note.
+- **Layout**: text a little above the readable size (`label_size`, default 1.2 × the readable
+  minimum: the boxes are read on phones). In 16:9 the count axis reaches 1.35 × the highest bin
+  (the legend finds room above the data) and the fit box, the note and the readout stand in a
+  free corner or a narrow column on the right — the plot keeps about 70 % of the width. In 9:16
+  the count axis is fixed at twice the highest bin (the bars rise into it, the readout stands
+  there), there is no legend (the caption names the simulated data), and the fit's values and the
+  note are one box (the fitted mass and width, then the significance in short lines), which comes
+  with the note, in a free spot of the plot where it hides no data, else above the plot. Setting
+  `y: {max: …}` keeps your own axis.
 
 ```yaml
 - id: diphoton
@@ -6724,7 +6731,7 @@ number of events), `fit`, `annotate` and `reveal` are the plot's own.
 | `background_degree` | 0–4 | the channel's | the fit's polynomial background |
 | `fit` | bool | `true` | fit once the data are in |
 | `significance` | `asimov` \| `counting` \| `none` | the channel's (`none` for the Z) | the readout growing with the data |
-| `explain` | bool | `true` | the likelihood-ratio note with the meaning of its p-value |
+| `explain` | `true` \| `short` \| `long` \| `false` | `true` | the likelihood-ratio note: short (three short lines: σ, p, "background only"), long (four lines saying what the p-value means and does not), or none |
 | `subtract` | bool | `false` | the data − background panel |
 | `style` | `bars` \| `points` | `bars` | a filled histogram or markers with √N bars |
 | `ticker` | bool | `true` | `events: 12 400` in the readout |
@@ -6732,8 +6739,9 @@ number of events), `fit`, `annotate` and `reveal` are the plot's own.
 
 The plot's own params apply as for `plot`: `title` (default "H → γγ: invariant mass"), `caption`,
 `x` / `y` (default "m(γγ) (GeV)" and "events / 1 GeV"), `annotations` (added after the scene's
-note), `legend`, `grid`, `rescale`, `reveal`, `point_radius`, `label_size` (default the
-readable minimum here), `caption_size`, `caption_color`, `title_size`, `title_color`.
+note), `legend`, `grid`, `rescale`, `reveal`, `point_radius`, `label_size` (default 1.2 × the
+readable minimum here), `caption_size`, `caption_color`, `title_size`, `title_color`. The spectrum
+module also gives `short_meaning(z, narrow)` (the short note's lines).
 The scene makes `series`, `models`, `fits` and refuses them, `data`, `panels`, `arrange`, `share`
 and `aspect` (use [`plot`](#plot) for data of your own).
 
@@ -6803,7 +6811,7 @@ The model: `particle_physics.branching.chain(decays)` → `Chain` (`nodes` with 
 conjugation) — each mode's share in percent from `particle_physics.branching`, the source in the
 caption: **PDG 2024 measurements** for Z, W, π, K, μ (the W's leptonic modes are the
 lepton-universality average ℓν = 10.86 %); for the **Higgs boson at 125 GeV the Standard Model
-prediction** of the LHC Higgs Cross Section Working Group (Yellow Report 4, 2016, m_H = 125.09 GeV;
+prediction** of the LHC Higgs Cross Section Working Group (Yellow Report 4, 2016, the table for m_H = 125 GeV;
 bb̄ 58.2 %, WW* 21.4 %, gg 8.19 %, τ⁺τ⁻ 6.27 %, cc̄ 2.89 %, ZZ* 2.62 %, γγ 0.227 %, Zγ 0.153 %,
 μ⁺μ⁻ 0.0218 %), which the caption calls "a theory prediction, not a measurement". Labels are the
 products' symbols (bb̄, μ⁺ν_μ) or `hadrons` / `invisible`; they are not translated. Everything
@@ -6823,6 +6831,7 @@ else is [`bar_chart`](#bar_chart)'s.
 | `particle` | particle | — | the decaying particle (above) |
 | `modes` | int | all | only the largest N modes (the caption says so) |
 | `labels`, `values` | — | made | from the model; giving them is an error (use `bar_chart`) |
+| `label_size`, `value_size` | size | `body` | the bar chart's, larger here: the products' symbols are short |
 
 The bar chart's params apply: `title` (default "How the Z decays", "How a 125 GeV Higgs boson
 decays"), `caption` (added after the source), `unit` (` %`), `value_format` (`{:.3g}`), `sort`
@@ -13363,6 +13372,18 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `orbit_scale` | warning | a picture called "to scale" (true scale, real sizes) that is not: an orbit scene whose bodies are drawn enlarged, when the sentence speaks of sizes ("everything is drawn to scale"; "at true scale the inner planets crowd the Sun" speaks of distances and is fine); a `radial: log` view; the `sizes` picture said to show distances; the tides schematic |
 | `orbit_conserved` | warning | an orbit scene's n-body run (`dynamics: nbody`, `system`) whose total energy or angular momentum drifts by more than `tolerance` (0.01, relative) over the run, a body's Jacobi constant in the restricted problem, or a figure-eight that misses its start: the motion shows the integrator's error. Fix: a smaller `step` with leapfrog, or `method: leapfrog` (whatever the panel shows: `Orbit.diagnostics`) |
 | `orbit_crash` | warning | what validation lets through: a periapsis (or one after a burn) inside the atmosphere of the Earth (the Kármán line, 100 km) or Mars (the entry interface, about 125 km), a flyby through the air without `flyby.atmosphere`, bodies of an n-body run passing within their radii (the run treats them as points). Fix: raise the periapsis, or say it is a re-entry or aerobraking pass |
+| `particle_mass` | warning | a particle's mass said or shown differently from PDG 2024 ("the Z weighs about 91 GeV" and "a top quark is 173 GeV" fit; "the W weighs 91 GeV" gets "that is the Z boson's mass: did you mean the Z boson?"; "105.7 GeV" for the muon "a prefix mixed up?"), in eV, eV/c² or kg; quark masses within 30 % (MS-bar or pole: the scheme); a mass for the photon, gluon or above the neutrino limit. The claim needs a mass word ("mass", "weighs", "heavy") or "X is N GeV"; an energy ("a 45 GeV electron", "each photon carries 62.6 GeV"), a difference ("11 GeV heavier") or an invariant mass of several particles is not a mass claim; `tolerance` (0.05) for "about" |
+| `particle_charge` | error | a particle's electric charge said wrong ("the down quark has charge +2/3": −1/3, with "+2/3 is the charge of the up quark, the charm quark, the top quark"; "the neutron is positively charged"); a charge said without a sign is compared by size; sums ("two thirds plus two thirds minus one third") are left alone. Read in every project |
+| `particle_spin` | error | a particle's spin said wrong ("the photon has spin 1/2", "the Higgs boson is a fermion", "the electron is spinless"). Read in every project |
+| `particle_lifetime` | warning | a mean life ("the muon lives 2.2 microseconds" fits 2.197 µs; "2.2 milliseconds" gets "a prefix mixed up?"), a half-life (τ ln 2: "a free neutron has a half-life of about ten minutes") or a width ("the Z is 2.5 GeV wide") said for a particle; a moving particle's dilated life ("in our frame", "cosmic-ray muons") and a fitted or measured width are left to `kinematics_number` and `plot_fit_claims`; `tolerance` (0.05) |
+| `branching_ratio` | warning | a branching ratio said wrong against `particle_physics.branching`: "most Higgs bosons decay to two photons" (γγ 0.227 %, most decay to bb̄ 58.2 %), "the Z decays to hadrons 50 % of the time" (69.9 %), "the W rarely decays to a muon and a neutrino" (10.9 %), "the most common decay of …"; products read loosely ("bottom quarks", "a pair of b quarks", "W bosons", "charged leptons", "hadrons", "neutrinos"); a share must stand by its decay ("70 % of Z bosons", "… 70 % of the time", "with a branching ratio of …"); `tolerance` (0.1) |
+| `conservation_claim` | warning | a reaction or decay called allowed that the conservation checker forbids ("the decay μ⁻ → e⁻ γ is allowed": electron and muon number), called forbidden that it allows, "forbidden by charge" or "violates lepton number" for one that conserves it (what the checker finds broken is named), "conserves X" for one that does not. The process: written with an arrow, said in words ("a muon decays to an electron and a photon": generic charges and neutrino flavours tried both ways), or the scene's own (`feynman`, `decay_chain`, `kinematics`: "this decay is allowed"); each clause about its own process |
+| `feynman_boson` | warning | the wrong boson for an interaction: a coupling the Standard Model does not have ("gluons couple to electrons"; "the Higgs boson couples to photons": only through a loop of top quarks and W bosons), a force a particle does not feel ("neutrinos feel the strong force"), flavour changed by a boson other than the W ("a photon changes the quark's flavour" — did you mean the W?), and in a [`feynman`](#feynman) scene a boson said to be exchanged ("annihilate into a Z") that its diagram does not have |
+| `kinematics_number` | warning | in a [`kinematics`](#kinematics) scene a momentum, energy, invariant mass, Q value, decay length, opening angle or γ said in a sentence naming the quantity that the scene does not compute (its `from_scene` values: "the muon's momentum is 40 MeV/c" for p* = 29.79 MeV/c); anywhere, a decay length βγcτ said with a momentum or energy ("a 5 GeV muon travels about 30 km" fits 31.2 km) or a dilated life γτ said with γ, and a threshold said with a reaction written out ("p p → p p p p̄ needs at least 2 GeV": √s 3.753 GeV, beam 6.568 GeV, kinetic 5.630 GeV); `tolerance` (0.05; decay lengths at least 0.1) |
+| `detector_signature` | warning | a detector signature said wrong against the [`detector`](#detector) scene's signatures: "photons leave tracks", "neutrinos are seen in the calorimeter", "muons stop in the ECAL", "electrons reach the muon chambers", "neutrons curve in the magnetic field", "photons show up as missing momentum" |
+| `significance_claim` | warning | the p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists", "the chance it is a fluke"): it is the chance that background alone fluctuates this high; a "one in N" or a percentage that does not match the σ said (one- or two-sided); in a [`mass_spectrum`](#mass_spectrum) scene a σ said for the bump that it does not compute (its expected Asimov significance with all events and its likelihood-ratio fit; "so far", "already" accept anything along the filling; the 5σ convention itself is not compared); `sigmas` (0.5) |
+| `simulated_label` | warning | simulated data called real ("real collision data", "data from the LHC", "CMS data") in a `mass_spectrum`, `detector` or simulated `plot` scene, or such a picture whose screen does not say "simulated" (a `detector` `label` without it; a `plot` of the `mass_spectrum` or `decay_times` model without "simulated" in a series name, the title or the caption) |
+| `particle_units` | info | masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video: write them one way |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -13437,6 +13458,18 @@ lint:
     orbit_scale: {}
     orbit_conserved: {tolerance: 0.01}      # largest relative drift of energy, angular momentum, Jacobi constant
     orbit_crash: {}
+    particle_mass: {tolerance: 0.05}        # relative, for values said with "about"; quark masses 30 % (the scheme)
+    particle_charge: {}                     # default severity error; read in every project
+    particle_spin: {}                       # default severity error; read in every project
+    particle_lifetime: {tolerance: 0.05}
+    branching_ratio: {tolerance: 0.1}
+    conservation_claim: {}
+    feynman_boson: {}
+    kinematics_number: {tolerance: 0.05}    # decay lengths at least 0.1
+    detector_signature: {}
+    significance_claim: {sigmas: 0.5}       # how far a σ said for a spectrum may be from what it computes
+    simulated_label: {}
+    particle_units: {}                      # default severity info
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -13584,6 +13617,49 @@ the inner planets crowd the Sun". `said_before_shown` and `unsaid_reveal` know o
 `sweep`, `launch`, `burn` and `flyby` show things at their time, and a target's on-screen name is a
 body's label (its `orbit:` too), an apsis mark's name, a burn's label ("Δv₁ 2.43 km/s prograde"),
 a Lagrange point, the event's kind.
+
+**Particle physics** (the rules from `particle_mass` to `particle_units`, Phase Y): the narration
+and the screen texts are read against the particle model (PDG 2024 masses, charges, spins,
+lifetimes, widths; branching ratios), the conservation checker (`particle_physics.check`), the
+Standard Model's vertices, the detector signatures and what the particle scenes compute (a
+`kinematics` scene's values, a `mass_spectrum`'s significances, a `feynman` diagram's bosons, which
+data are simulated). Particles are found by name ("the Z boson", "bottom quarks", "positrons",
+"neutral pions") or symbol (μ⁺, π⁰, ν̄ₑ, W⁻); a claim is about the particle named just before it
+in the same clause, numbers are read as for `calc_numbers`. Every check is narrow: a negation, a
+contrast or a question is left alone ("photons do not leave tracks", "the W is not a photon",
+"unlike photons, electrons leave tracks"), so is a range or a bound, and a finding needs both the
+particle and the quantity to be clear. `particle_charge` and `particle_spin` read every project;
+the others only projects with a particle-physics scene (`standard_model`, `feynman`, `kinematics`,
+`detector`, `mass_spectrum`, `decay_chain`, `branching`, `branching_pie`, a `plot` of a particle
+model, a `calculation` with `mass:` / `lifetime:` / `width:` symbols). Example (the planted mistakes
+of a demo project; its right statements — "the Z weighs about 91 GeV", "p → e⁺ π⁰ is forbidden by
+baryon number", "photons do not leave tracks", "the W is not a photon" — give no finding):
+
+```
+$ vidgen lint demo
+facts:
+  error   particle_charge   facts_b1 @ 0.0s: "The down quark has charge plus two thirds, and the photon has spin 1/2.": the down quark's charge is −1/3 (in units of e), not +2/3; +2/3 is the charge of the up quark, the charm quark, the top quark
+  error   particle_spin     facts_b1 @ 0.0s: "The down quark has charge plus two thirds, and the photon has spin 1/2.": the photon has spin 1 (a boson), not spin 1/2
+  warning particle_mass     facts_b1 @ 0.0s: text 'The W boson: 91 GeV/c²': "91 GeV/c²" for the W boson's mass: PDG 2024 gives 80.369 GeV — that is the Z boson's mass: did you mean the Z boson?
+  warning particle_lifetime facts_b2 @ 5.2s: "The muon lives 2.2 milliseconds;": "2.2 milliseconds" for the muon: its mean life τ is 2.197 µs (PDG 2024) — a prefix mixed up?
+  warning detector_signature facts_b3 @ 9.4s: "Photons leave tracks, and muons stop in the ECAL.": a photon leaves no track: ECAL shower, no track
+  warning detector_signature facts_b3 @ 9.4s: "Photons leave tracks, and muons stop in the ECAL.": a muon does not stop in the ECAL: it passes through everything to the muon chambers (track through everything + muon chambers)
+  warning branching_ratio   facts_b4 @ 15.4s: "Most Higgs bosons decay to two photons.": H → γγ is only 0.227 % (Standard Model prediction); most decay to bb̄ (58.2 %)
+  warning significance_claim facts_b5 @ 18.2s: "Five sigma means we are 99.99994% sure the Higgs boson exists.": the p-value is the chance that background alone fluctuates this high, not the probability that the result is wrong or that the particle exists: say "if there were no Higgs boson, background would fluctuate this high once in 3.5 million tries"
+  warning conservation_claim facts_b6 @ 22.4s: "The decay μ⁻ → e⁻ γ is allowed, and p → e⁺ π⁰ is forbidden by baryon number.": called allowed, but the checker forbids μ⁻ → e⁻ γ: electron number not conserved: L_e = 0 → +1; muon number not conserved: L_μ = +1 → 0
+  warning feynman_boson     facts_b7 @ 29.2s: "A photon changes the quark's flavour.": only the W boson changes a quark's or lepton's flavour (u ↔ d, e ↔ νₑ); the photon keeps it — did you mean the W?
+units:
+  info    particle_units    units_b1 @ 0.0s: text 'The Z boson: mass 91.2 GeV': 91.2 GeV: this video also writes masses in GeV/c² (91 GeV/c²); write them one way (natural units, c = 1: GeV; or GeV/c² throughout)
+bhabha:
+  warning feynman_boson     bhabha_b1 @ 0.0s: "The electron and the positron annihilate into a Z boson.": the Z boson is named, but the diagram's bosons are: photon — did you mean the photon?
+pion:
+  warning kinematics_number pion_b1 @ 0.0s: "In the rest frame the muon's momentum is 40 MeV/c.": "40 MeV/c": the scene computes the momentum p* in the rest frame 29.79 MeV/c
+fourl:
+  warning significance_claim fourl_b1 @ 0.0s: "These are real collision data from CMS, and the bump reaches nine sigma.": "nine" σ: the scene computes 6.0σ (expected, Asimov, all events), 5.5σ (likelihood-ratio fit)
+  warning simulated_label   fourl_b1 @ 0.0s: "These are real collision data from CMS, and the bump reaches nine sigma.": the scene's data are simulated (seeded), not a real experiment's: say "simulated data" — real spectra are the experiments' own (cite them, do not draw them)
+display:
+  warning simulated_label   display_b1 @ 0.0s: the event display does not say on screen that its data are simulated: keep "simulated event" in label
+```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
 `lint` section and `lint_ignore` do not count in a scene's render fingerprint: changing them

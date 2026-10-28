@@ -13,8 +13,10 @@ Conventions and approximations, stated:
 - **Neutrino masses** are not known; ``mass_limit_mev`` holds the direct upper limit on the
   electron-neutrino mass (0.8 eV, KATRIN, as in PDG 2024), which with the measured mass
   splittings bounds all three. Their mass is 0 in energy checks (negligible).
-- The **Higgs width** is the Standard Model prediction (about 4.1 MeV for 125 GeV; the measured
-  value, 3.7 +1.9 −1.4 MeV in PDG 2024, agrees within its large error).
+- The **Higgs width** is the Standard Model prediction, 4.1 MeV: the LHC Higgs Cross Section
+  Working Group's Yellow Report 4 gives 4.088 MeV at m_H = 125 GeV (125.00), rounded to two
+  figures here (# check); the measured value, 3.7 +1.9 −1.4 MeV in PDG 2024, agrees within its
+  large error.
 - The **Δ(1232)** mass and width are the Breit–Wigner values rounded (1232 MeV, 117 MeV): the
   four charge states differ by less than the width.
 - **Flavour quantum numbers** follow the PDG sign convention, the same sign as the quark's
@@ -395,7 +397,7 @@ def _build() -> dict[str, Particle]:
                         kind="gauge boson", aliases=("Z0", "Z^0", "Z boson")))   # PDG 2024, confirmed in review (91.1876 / 2.4952 in PDG 2022)
     out.append(Particle("H", "Higgs boson", "H", "H", "H", "scalar boson", 125200.0, F(0), F(0), "H", parity=1, c_parity=1, width_mev=4.1,
                         unit="GeV", digits=5, kind="scalar boson", note="width: the Standard Model prediction (measured 3.7 +1.9 −1.4 MeV)",
-                        aliases=("H0", "h", "h0", "higgs", "Higgs boson")))   # PDG 2024, confirmed in review (125.25 in PDG 2022)
+                        aliases=("H0", "h", "h0", "higgs", "Higgs boson")))   # PDG 2024, confirmed in review (125.25 in PDG 2022); width: check (YR4 4.088 MeV at 125.00 GeV)
     # light mesons
     half, one, three_halves = F(1, 2), F(1), F(3, 2)
     pi = _hadron("pi+", "charged pion", "π⁺", _sup("π", "+"), r"\pi^+", "meson", 139.57039, 1, F(0), -1, (("u", "anti-d"),), lifetime=2.6033e-8,

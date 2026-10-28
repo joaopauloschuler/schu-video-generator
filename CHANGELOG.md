@@ -5,9 +5,25 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–241)
+## Unreleased (Steps 193–242)
 
 ### Particle physics (Phase Y, from Step 237)
+
+- **Particle-physics accuracy lint** (Step 242). Twelve `vidgen lint` rules read the narration and
+  the screens against the particle model: `particle_mass` ("the W weighs 91 GeV" — that is the
+  Z's; MeV for GeV), `particle_charge` and `particle_spin` (errors: "the down quark has charge +2/3",
+  "the photon has spin 1/2"), `particle_lifetime` (mean lives, half-lives, widths),
+  `branching_ratio` ("most Higgs bosons decay to two photons"), `conservation_claim` ("μ⁻ → e⁻ γ is
+  allowed", "forbidden by charge" against the checker), `feynman_boson` ("a photon changes the
+  quark's flavour", "gluons couple to electrons", a boson the diagram does not have),
+  `kinematics_number` (a kinematics scene's values, decay lengths βγcτ, thresholds),
+  `detector_signature` ("photons leave tracks"), `significance_claim` ("five sigma means 99.99994 %
+  sure the Higgs exists"; σ against a spectrum's computed significance), `simulated_label`
+  (simulated data called real, or not labelled) and `particle_units` (info). Negations and
+  contrasts are left alone; 0 findings on every example. `mass_spectrum` in 16:9: the plot keeps
+  about 70 % of the width, larger text, a short significance note by default (`explain: long` for
+  the full one); in 9:16 the box no longer covers data. The Higgs branching ratios are labelled
+  YR4 at m_H = 125 GeV. `branching` bars have larger labels.
 
 - **Collisions, decays and data** (Step 241). `mass_spectrum`: a simulated invariant-mass spectrum
   (labelled "simulated data") filling event by event with a ticker and the local significance

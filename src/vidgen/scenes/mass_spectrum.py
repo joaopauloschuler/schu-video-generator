@@ -30,6 +30,12 @@ FIT_NAME = "fit"
 #: In 9:16 the count axis reaches this times the highest bin (fixed: the bars rise into it as the
 #: events arrive), so the fit box, the readout and the note find room inside the plot.
 PORTRAIT_HEADROOM = 2.0
+#: In 16:9 the count axis reaches this times the highest bin: the legend, fit box, readout and
+#: note find room inside the plot above the data, and the plot keeps the frame's width (beside
+#: it, a column of boxes took 40 % of the width).
+LANDSCAPE_HEADROOM = 1.35
+#: Label size: this margin over the readable size (the boxes are read on phones).
+LABEL_MARGIN = 1.2
 #: Names of the background shapes as shown in the caption.
 _SHAPE_WORDS = {"exponential": "exponential", "power": "power-law", "flat": "flat"}
 
@@ -88,8 +94,8 @@ class MassSpectrum(Plot):
         """Fit the peak once the data are in (Phase W, binned Poisson likelihood): mass ± uncertainty and width."""
         significance: Literal["asimov", "counting", "none"] | None = None
         """Readout growing with the data: asimov (expected local significance √(2((s+b)ln(1+s/b) − s)) of the s and b expected in the peak window), counting (observed excess in that window over the expected background), none; default from the channel."""
-        explain: bool = True
-        """After the fit, a note: the local significance from the likelihood ratio (background only against signal + background) and what its one-sided p-value means."""
+        explain: bool | Literal["short", "long"] = True
+        """After the fit, a note with the local significance from the likelihood ratio (background only against signal + background) and its one-sided p-value: true or short — three short lines, "6.7σ local", "p = 7.6 × 10⁻¹²", "(background only)" (the narration says the rest); long — four lines saying what the p-value means and what it does not; false — no note."""
         subtract: bool = False
         """A data − background panel under the plot (the fitted background subtracted, the fitted peak drawn over it); reveal residuals:fit to show it on a word."""
         style: Literal["bars", "points"] = "bars"
@@ -138,9 +144,17 @@ class MassSpectrum(Plot):
         self._method = method
         if self.is_portrait:   # 9:16: the plot keeps the height (above, boxes would take half the frame)
             p = self.params = self._portrait(p)
-        if p.label_size is None:   # the readable size (with lint's margin), so the plot keeps the room
-            self.params = p.model_copy(update={"label_size": readable_size(margin=1.08)})
+        elif p.y.max is None:   # 16:9: headroom, so the boxes sit inside the plot and it keeps the width
+            p = self.params = p.model_copy(update={"y": p.y.model_copy(update={"max": self._headroom(p, LANDSCAPE_HEADROOM)})})
+        if p.label_size is None:   # a little above the readable size (lint's margin and phones), the plot keeps the room
+            self.params = p.model_copy(update={"label_size": readable_size(margin=LABEL_MARGIN)})
         super().construct()
+
+    def _headroom(self, p: Any, factor: float) -> float:
+        """The count axis's top: ``factor`` × the highest bin of all the events."""
+        s = p.series[0]
+        hist = plotcore.histogram(list(self._spectrum.masses), "auto", width=s.bin_width, lo=s.bin_range[0], hi=s.bin_range[1])
+        return float(factor * max(hist.counts))
 
     def _portrait(self, p: Any) -> Any:
         """Headroom above the data (the count axis fixed at PORTRAIT_HEADROOM × the highest bin;
@@ -150,9 +164,7 @@ class MassSpectrum(Plot):
         the note: after the fit, or on its ``annotate`` word)."""
         update: dict[str, Any] = {}
         if p.y.max is None:
-            s = p.series[0]
-            hist = plotcore.histogram(list(self._spectrum.masses), "auto", width=s.bin_width, lo=s.bin_range[0], hi=s.bin_range[1])
-            update["y"] = p.y.model_copy(update={"max": float(PORTRAIT_HEADROOM * max(hist.counts))})
+            update["y"] = p.y.model_copy(update={"max": self._headroom(p, PORTRAIT_HEADROOM)})
         if p.legend is None:
             update["legend"] = False
         note = next((a for a in p.annotations if a.id == "significance" and a.at == "auto"), None)
@@ -160,8 +172,9 @@ class MassSpectrum(Plot):
             f = p.fits[0]
             z = significance(p.spectrum_spec(), float(p.series[0].bin_width), f.kind, int(f.background)).z
             values = [line for line in p.resolve(None).fits[0].lines() if not line.startswith("χ²")]
-            text = "\n".join(values + sp.meaning_lines(z, narrow=True))
-            update["annotations"] = [a.model_copy(update={"text": text, "at": "top_left"}) if a is note else a for a in p.annotations]
+            meaning = sp.meaning_lines(z, narrow=True) if p.explain == "long" else sp.short_meaning(z, narrow=True)
+            text = "\n".join(values + meaning)
+            update["annotations"] = [a.model_copy(update={"text": text}) if a is note else a for a in p.annotations]
             update["fits"] = [f.model_copy(update={"show": "none"})]
         return p.model_copy(update=update)
 
@@ -201,8 +214,9 @@ class MassSpectrum(Plot):
             lines.append(f"events: {_thin(n)}")
         if self._z is not None:
             z = float(self._z[min(n, len(self._z) - 1)])
-            lines.append(f"local significance: {sp.sigma_text(z)}")
-            lines.append("(expected, Asimov)" if self._method == "asimov" else "(observed, counting)")
+            asimov = self._method == "asimov"
+            lines.append(f"{'expected' if asimov else 'observed'}: {sp.sigma_text(z)}")
+            lines.append("(local, Asimov)" if asimov else "(local, counting)")
         return lines
 
 
@@ -310,8 +324,10 @@ def build(d: dict[str, Any]) -> dict[str, Any]:
         fits.append({"series": series["name"], "model": peak, "background": degree, "name": FIT_NAME, "params": start,
                      "parameters": ["mu", "sigma"] if peak == "gaussian" else ["M", "Gamma"], "show": ["params", "chi2"],
                      "residuals": "background" if d.get("subtract") else False})
-        if d.get("explain", True):
-            notes.append({"type": "note", "id": "significance", "text": "\n".join(sp.meaning_lines(result.z))})
+        explain = d.get("explain", True)
+        if explain:
+            lines = sp.meaning_lines(result.z) if explain == "long" else sp.short_meaning(result.z, narrow=True)
+            notes.append({"type": "note", "id": "significance", "text": "\n".join(lines)})
     elif d.get("subtract"):
         raise ValueError("subtract needs the fit (fit: true): the background subtracted is the fitted one")
     out["fits"] = fits

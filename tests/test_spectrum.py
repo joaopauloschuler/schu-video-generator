@@ -54,6 +54,10 @@ def test_p_values_and_their_text() -> None:
     for narrow in (False, True):
         text = " ".join(sp.meaning_lines(5.0, narrow=narrow))
         assert "background alone" in text and "not that the result is wrong" in text and "2.9 × 10⁻⁷" in text and "one-sided" in text
+    # Step 242: the short note on screen (the narration says the rest)
+    assert sp.short_meaning(6.7) == ["6.7σ local · p(background only) = 1.0 × 10⁻¹¹"]
+    assert sp.short_meaning(6.7, narrow=True) == ["6.7σ local", "p = 1.0 × 10⁻¹¹", "(background only)"]
+    assert sp.short_meaning(30.0, narrow=True)[0] == "> 20σ local" and sp.short_meaning(30.0, narrow=True)[1].startswith("p < ")
 
 
 def test_counting_significance() -> None:
@@ -236,6 +240,12 @@ def test_mass_spectrum_params() -> None:
     assert z.resolve(None).fits[0].lines()[0].startswith("M = 91.2")
     custom = MassSpectrum.parse_params({"channel": "custom", "mass": 750, "window": [600, 900], "signal": 300, "events": 3000}, "c")
     assert custom.spectrum_spec().mass == 750
+    # Step 242: the note is short by default (three short lines), long on request, or none
+    note = next(a for a in p.annotations if a.id == "significance").text.split("\n")
+    assert len(note) == 3 and note[0].endswith("σ local") and note[2] == "(background only)"
+    long = MassSpectrum.parse_params({"explain": "long"}, "m")
+    assert len(next(a for a in long.annotations if a.id == "significance").text.split("\n")) == 4
+    assert not any(a.id == "significance" for a in MassSpectrum.parse_params({"explain": False}, "m").annotations)
 
 
 @pytest.mark.parametrize("params, message", [
@@ -315,12 +325,13 @@ def test_mass_spectrum_renders(size: tuple[int, int], make_project, media: Path)
     assert set(type(s).target_names(s.params)) <= set(registered)
     assert all(s.is_shown(n) for n in ("axes", "fit:fit", "residuals:fit", "annotation:significance"))
     lines = s._readout_lines(0, None)
-    assert lines[0] == "events: 40" and lines[1].startswith("local significance:")
+    assert lines[0] == "events: 40" and lines[1].startswith("expected: ") and lines[2] == "(local, Asimov)"
     note = next(a for a in s.params.annotations if a.id == "significance")
-    if size[1] > size[0]:   # 9:16: one box (the fit's values, then the significance) at the top left; headroom above the data
-        assert s.params.fits[0].show == "none" and note.text.startswith("μ = ") and note.at == "top_left" and s.params.y.max is not None
-    else:
-        assert s.params.fits[0].show != "none" and note.text.startswith("local significance")
+    assert s.params.y.max is not None   # headroom above the data in both formats (Step 242: 16:9 too)
+    if size[1] > size[0]:   # 9:16: one box (the fit's values, then the significance), placed where it hides no data (else above)
+        assert s.params.fits[0].show == "none" and note.text.startswith("μ = ") and note.at == "auto"
+    else:   # 16:9: the short note (Step 242)
+        assert s.params.fits[0].show != "none" and note.text.split("\n")[0].endswith("σ local") and "(background only)" in note.text
 
 
 @pytest.mark.render

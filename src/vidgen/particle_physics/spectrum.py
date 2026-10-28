@@ -132,6 +132,18 @@ def meaning_lines(z: float, method: str = "likelihood ratio", narrow: bool = Fal
             f"not that the result is wrong (5σ: {p_text(FIVE_SIGMA_P)})"]
 
 
+def short_meaning(z: float, narrow: bool = False) -> list[str]:
+    """The note in brief (the default on screen; the narration carries the rest): the local
+    significance and its p-value as the chance of the background alone — ``6.7σ local ·
+    p(background only) = 7.6 × 10⁻¹²``; ``narrow``: on three short lines (a box beside or in a
+    plot)."""
+    p = p_value(z)
+    stated = f"< {p_text(p_value(20.0))}" if z > 20 else f"= {p_text(p)}"
+    if narrow:
+        return [f"{sigma_text(z)} local", f"p {stated}", "(background only)"]
+    return [f"{sigma_text(z)} local · p(background only) {stated}"]
+
+
 # ----- channels -----------------------------------------------------------------------------------
 
 
@@ -582,6 +594,7 @@ __all__ = [
     "p_value",
     "peak_background",
     "peak_guesses",
+    "short_meaning",
     "sigma_text",
     "window_shares",
     "z_cross_section",

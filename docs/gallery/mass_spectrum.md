@@ -121,7 +121,7 @@ From the author guide (`vidgen guide scenes`):
 | `background_degree` | `int \| None` |  | Degree of the fit's polynomial background (0: flat); default from the channel. |
 | `fit` | `bool` | `True` | Fit the peak once the data are in (Phase W, binned Poisson likelihood): mass ± uncertainty and width. |
 | `significance` | `'asimov' \| 'counting' \| 'none' \| None` |  | Readout growing with the data: asimov (expected local significance √(2((s+b)ln(1+s/b) − s)) of the s and b expected in the peak window), counting (observed excess in that window over the expected background), none; default from the channel. |
-| `explain` | `bool` | `True` | After the fit, a note: the local significance from the likelihood ratio (background only against signal + background) and what its one-sided p-value means. |
+| `explain` | `bool \| 'short' \| 'long'` | `True` | After the fit, a note with the local significance from the likelihood ratio (background only against signal + background) and its one-sided p-value: true or short — three short lines, "6.7σ local", "p = 7.6 × 10⁻¹²", "(background only)" (the narration says the rest); long — four lines saying what the p-value means and what it does not; false — no note. |
 | `subtract` | `bool` | `False` | A data − background panel under the plot (the fitted background subtracted, the fitted peak drawn over it); reveal residuals:fit to show it on a word. |
 | `style` | `'bars' \| 'points'` | `'bars'` | bars (a filled histogram) or points (markers with √N error bars, as in papers). |
 | `ticker` | `bool` | `True` | Count the events in the readout ("events: 12 400"). |

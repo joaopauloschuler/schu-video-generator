@@ -7,8 +7,9 @@ Sources, stated per table (and shown on screen by the ``branching`` scenes):
   lepton-universality average ℓν = 10.86 % (the separately measured e, μ, τ values, 10.71, 10.63
   and 11.38 %, add up with the hadrons to slightly more than 100 % within their errors).
 - **Higgs boson at 125 GeV**: Standard Model **predictions** of the LHC Higgs Cross Section
-  Working Group (CERN Yellow Report 4, 2016, for m_H = 125.09 GeV), not measurements; at PDG
-  2024's m_H = 125.20 GeV the values differ in the last digit.
+  Working Group (CERN Yellow Report 4, 2016, the table for m_H = 125 GeV — 125.00), not
+  measurements; at 125.09 GeV or PDG 2024's m_H = 125.20 GeV the values differ in the third
+  figure (e.g. bb̄ 58.09 %, WW* 21.52 %, ZZ* 2.641 % at 125.09 GeV).
 
 Values written from memory of those tables are marked ``# check`` for the owner. Every mode with a
 process is checked by the conservation checker (:func:`branching_problems`), and each table's
@@ -28,7 +29,7 @@ PDG = "PDG 2024 (measured)"
 #: Measured fractions are averaged separately, so a table may add up to a little over 1 within
 #: the quoted precision (the Z's: 1.0001); more than this is an error.
 SUM_TOLERANCE = 1e-3
-HXSWG = "LHC Higgs XS WG, Yellow Report 4 (2016), SM prediction at m(H) = 125.09 GeV"
+HXSWG = "LHC Higgs XS WG, Yellow Report 4 (2016), SM prediction at m(H) = 125 GeV"
 
 
 @dataclass(frozen=True)

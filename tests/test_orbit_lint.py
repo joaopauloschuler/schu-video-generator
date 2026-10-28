@@ -48,7 +48,8 @@ def _rules_at(project: Project, scene_id: str) -> list[tuple[str, str | None]]:
 
 
 def test_rules_are_registered_last_in_config_order() -> None:
-    assert list(LINT_RULES[-len(ORBIT_RULES):]) == list(ORBIT_RULES)
+    k = LINT_RULES.index(ORBIT_RULES[0])   # Step 242's particle rules come after them
+    assert list(LINT_RULES[k:k + len(ORBIT_RULES)]) == list(ORBIT_RULES) and LINT_RULES[k + len(ORBIT_RULES)] == "particle_mass"
     assert all(RULES[n].scope == "scene" and RULES[n].default == "warning" for n in ORBIT_RULES)
     rules = LintRules()
     assert rules.orbit_conserved.tolerance == 0.01 and rules.orbit_period.tolerance == 0.05 and rules.orbit_date.days == 3.0

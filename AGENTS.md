@@ -1477,7 +1477,9 @@ likelihood; for the Z the fitted Γ includes the resolution (the caption gives b
 background expected in the peak window after that many events (`significance: counting` for the
 observed excess, `none`); the note after the fit gives the likelihood ratio (background only
 against signal + background) and its one-sided p-value: **5σ ↔ p ≈ 2.9 × 10⁻⁷, the chance that
-background alone fluctuates up this much — not the chance that the result is wrong**. Both are
+background alone fluctuates up this much — not the chance that the result is wrong**. The note
+is short by default (`6.7σ local`, `p = 7.6 × 10⁻¹²`, `(background only)`: let the narration say
+what it means); `explain: long` writes the meaning out on screen. Both are
 local: the look-elsewhere effect is not included. Targets are the plot's: `axes`, `series:simulated
 data`, `fit:fit`, `residuals:fit` (with `subtract`), `annotation:significance`, `legend`, `title`.
 A `plot` also takes the models `mass_spectrum` (numbers: mass, width, resolution, lo, hi, events,
@@ -1486,6 +1488,20 @@ expr: "N*exp(-x/tau)"`) and `z_lineshape` (σ(e⁺e⁻ → hadrons) for 2, 3 and
 schematic, no radiative corrections — say so in the caption). `decay_chain` targets: `decay<N>`,
 `particle:<n>` / `particle:mu+`, `lifetime:mu+`, `chain`; `branching` and `branching_pie` take
 `modes` (the largest N) and the targets of `bar_chart` / `pie` (`bar:γγ`, `slice:hadrons`).
+
+`vidgen lint` checks what the narration and the screens say about particles against the same
+model: masses (`particle_mass`: "the W weighs 91 GeV" — that is the Z's), charges and spins
+(`particle_charge`, `particle_spin`, errors: "the down quark has charge +2/3"), lifetimes, half-lives
+and widths (`particle_lifetime`), branching ratios (`branching_ratio`: "most Higgs bosons decay to
+two photons"), "allowed" / "forbidden by …" / "conserves …" against the checker
+(`conservation_claim`), the boson named for an interaction (`feynman_boson`: "a photon changes the
+quark's flavour", "gluons couple to electrons", a boson the diagram does not have), a `kinematics`
+scene's numbers, decay lengths βγcτ and thresholds (`kinematics_number`), detector signatures
+(`detector_signature`: "photons leave tracks"), the meaning of a p-value and the σ a spectrum
+reaches (`significance_claim`: "five sigma means 99.99994 % sure the Higgs exists" is wrong — say
+"background alone would fluctuate this high once in 3.5 million tries"), simulated data called
+real (`simulated_label`), masses written both as GeV and GeV/c² (`particle_units`, info). Negations
+and contrasts are left alone ("photons do not leave tracks" is fine).
 
 ```yaml
 # data
@@ -3530,6 +3546,18 @@ install; `vidgen validate` warns when it is missing.
 | `orbit_scale` | "to scale" said of a picture that is not: enlarged bodies, `radial: log`, the `sizes` picture's distances, the tides | say what is to scale ("the distances are to scale, the sizes are not") |
 | `orbit_conserved` | an n-body run's energy, angular momentum or Jacobi constant drifts beyond 1 % | a smaller `step`, or `method: leapfrog` |
 | `orbit_crash` | a periapsis in the atmosphere (Earth below 100 km), a flyby through the air, n-body bodies passing through each other | raise the periapsis or the flyby; change the starting state |
+| `particle_mass` | a mass said otherwise than PDG 2024 ("the W weighs 91 GeV"; MeV for GeV) | the value in the message, or the particle it names (did you mean …) |
+| `particle_charge` | a charge said wrong ("the down quark has charge +2/3") | the value in the message |
+| `particle_spin` | a spin said wrong ("the photon has spin 1/2", "the Higgs boson is a fermion") | the value in the message |
+| `particle_lifetime` | a mean life, half-life or width said otherwise ("the muon lives 2.2 ms") | the value in the message; a moving particle's life is γτ (say so) |
+| `branching_ratio` | a branching ratio said wrong ("most Higgs bosons decay to two photons") | the share in the message; "most" only for the largest mode |
+| `conservation_claim` | a decay called allowed that the checker forbids, or forbidden by a law it keeps | say what the message says is broken (`particle_physics.check("…").explain()`) |
+| `feynman_boson` | the wrong boson: a coupling that does not exist, flavour changed without a W, a boson the diagram does not show | name the boson in the message, or change the diagram |
+| `kinematics_number` | a momentum, energy, invariant mass, decay length or threshold said otherwise than computed | the scene's value (or `from_scene` it into a calculation) |
+| `detector_signature` | "photons leave tracks", "muons stop in the ECAL", "neutrinos are seen in the calorimeter" | the signature in the message |
+| `significance_claim` | a p-value said as the chance the result is wrong, a σ the spectrum does not reach | "background alone would fluctuate this high once in N tries"; the scene's σ |
+| `simulated_label` | simulated data called real, or a spectrum / event display without "simulated" on screen | say "simulated"; keep it in the label or caption |
+| `particle_units` (info) | masses both in GeV and GeV/c² on screen | one convention throughout |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

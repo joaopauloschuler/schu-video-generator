@@ -22334,3 +22334,94 @@ How to test
   τ fit, the Z line shape): `build/preview/`, `build/preview_vertical/`; `s240/det` (the detector fix):
   `build/preview/frames/zmumu/`; `vidgen lint`: 0 errors (warnings: `max_words` with the note,
   one pie label).
+
+## Step 242 — Particle-physics accuracy lint
+
+What was built (DESIGN §99.13):
+
+- **Review fixes of Step 241 first.** (1) `mass_spectrum` 16:9: a short significance note by
+  default (`explain: true | short` → `6.7σ local` / `p = 7.6 × 10⁻¹²` / `(background only)`;
+  `explain: long` the four lines of 241; `spectrum.short_meaning`), readout `events: 30 000` /
+  `expected: 5.3σ` / `(local, Asimov)`, text 1.2 × the readable size, count axis to 1.35 × the
+  highest bin so the legend sits above the data: the plot keeps ≈ 70 % of the width (745 px of 1280,
+  was 545), `max_words` and `min_font` pass. 9:16: the combined box is placed at `auto` (a free spot,
+  else above the plot) — it no longer covers the 4ℓ peak. (2) Higgs branching ratios: source
+  label "m(H) = 125 GeV" (YR4's 125.00 table; values kept, still `check=True`); Γ_H 4.1 MeV noted as
+  YR4's 4.088 MeV rounded (`data.py`, `# check`). (3) `branching` bars: labels and values at body
+  size. Gallery entries `mass_spectrum` and `branching` regenerated.
+- **Twelve rules** (`lint/particle_rule.py`, config models in `config.py`, last in `LINT_RULES`):
+  `particle_mass`, `particle_charge` (error), `particle_spin` (error), `particle_lifetime`,
+  `branching_ratio`, `conservation_claim`, `feynman_boson`, `kinematics_number`,
+  `detector_signature`, `significance_claim`, `simulated_label`, `particle_units` (info). Settings:
+  `tolerance` on mass (0.05), lifetime (0.05), branching (0.1), kinematics (0.05); `sigmas` (0.5) on
+  significance. The runner adds `particle_issues` to `SceneContext.science`.
+- **Knowledge** `vidgen/particle_physics/accuracy.py` (no manim, not re-exported): `mentions`
+  (names and symbols; generic mentions keep every key), one claim reader per rule returning `Said`,
+  `said_decays` (decays in words), `written_processes` (arrow runs), `_plain_only` (negations,
+  contrasts, questions left alone). Numbers and units: `quantities.accuracy`.
+- **Scene facts** (`particle_rule.facts`, cached): feynman processes and bosons, decay_chain decays,
+  kinematics `calc_values` (the `from_scene` names) and decay, mass_spectrum Asimov (last, largest)
+  and likelihood-ratio z, simulated scenes and whether their screen says so.
+- **Gate**: charge and spin read every project; the rest only projects with a particle-physics
+  scene (the eight Phase Y types, a `plot` of a particle model, a `calculation` with particle
+  symbols).
+
+Files touched
+- New: `src/vidgen/particle_physics/accuracy.py`, `src/vidgen/lint/particle_rule.py`,
+  `tests/test_particle_lint.py` (130).
+- Changed: `src/vidgen/config.py`, `src/vidgen/lint/{__init__,run}.py`,
+  `src/vidgen/particle_physics/{spectrum,branching,data}.py`, `src/vidgen/scenes/{mass_spectrum,branching}.py`,
+  `tests/{test_orbit_lint,test_spectrum}.py`, `docs/CONFIG.md` (12 rule rows, defaults, a "Particle
+  physics" lint paragraph with a demo; `mass_spectrum` note / layout / `explain`; `branching` sizes;
+  the YR4 label), the guide + `AGENTS.md` (a lint paragraph in the particle section, 12
+  troubleshooting rows, the short note), `docs/gallery/{mass_spectrum.md,media/mass_spectrum-*,media/branching-*}`,
+  `DESIGN.md` (§99.11 label, §99.12 note, §99.13), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): the twelve rules and their config models (`ParticleMassRule` …
+`ParticleUnitsRule`); `mass_spectrum` `explain` takes `short` / `long` (true = short; the default
+note is now short); `spectrum.short_meaning`; the module `vidgen.particle_physics.accuracy`. No
+dependency.
+
+Decisions
+- Reuse: numbers, units, "about", rounding and prefix mix-ups are `quantities.accuracy`'s; texts
+  are `calc_rule.screen_texts`; reporting is `science_rule._issues`; verdicts are `check`'s; the
+  signatures are `detector.SIGNATURES`; the p-value is `spectrum.p_value`. The module adds only how
+  a sentence names a particle and what it claims.
+- A claim is about the particle named just before it in its clause (no other mention between, ≤ 70
+  characters); a finding needs both the particle and the quantity clear.
+- `conservation_claim` reads its own polarity per clause and every reading of a decay said in words
+  (a narrator's "a muon" may be μ⁺, "a neutrino" any flavour): "allowed" is wrong only when no
+  reading is allowed.
+- The default severity is error only for charge and spin (exact quantum numbers); `particle_units`
+  is info (a convention).
+- The gate keeps the number-heavy rules out of non-particle videos (radioactive decay's "electron"
+  and "half-life" sentences); measured: with the gate removed the examples still give 0.
+
+Compatibility: rendering changes only in Phase Y scenes (`mass_spectrum`, `branching`; entries
+regenerated); lint changes are not render inputs. Phase Q baseline not re-run (no shared rendering
+code changed). Existing material: 0 particle findings on every example (radioactive-decay,
+mars-transfer, cystic-fibrosis …), the gallery and the s237–s241 projects; the other rules'
+findings unchanged.
+
+Known gaps: see DESIGN §99.13 (other languages; a second clause without its subject; CKM /
+helicity / cross-section claims; the channel named in a feynman scene). In 9:16 the 4ℓ spectrum
+keeps its headroom when the box goes above the plot (the plot is smaller than it could be).
+
+Render performance: unchanged (H → γγ six beats 26.4 s in ≈ 30 s at 1280×720); the lint reads the
+config (spectrum fits cached; a project lints in well under a second).
+
+How to test
+- `tests/test_particle_lint.py` (130, ~4 s), `tests/test_spectrum.py` (29 incl. renders, ~21 s).
+- Related, all passing: `test_orbit_lint` + `test_calc_lint` + `test_genetics_lint` +
+  `test_accuracy` (134); `test_docs` + `test_guide` + `test_config` (180); `test_lint` (22),
+  `test_narration_rule` + `test_schema` (82), `test_api` + `test_json_output` (31) not render;
+  `test_gallery` + `test_builtin_scenes` + `test_translation` + `test_extensions` +
+  `test_actions_coverage` not render (325); `test_particle_physics` + `test_detector` +
+  `test_kinematics` + `test_feynman` + `test_quantities` not render (313).
+- Scratchpad `s242/`: `lint_all.py` (config-only particle lint over examples, gallery, s237–s242:
+  TOTAL 0), `stress.py` (every reader on every example, gate off: 0), `corpus.py` (60 correct
+  particle sentences: 0), `smoke.py` (planted mistakes). Demo: `s242/demo` (`vidgen lint` → 2
+  errors, 13 particle warnings, 1 info; the right statements quiet).
+- Stills: `s242/ms` (Step 241's H → γγ, Z, 4ℓ project): `build/preview/frames/`,
+  `build/preview_light/storyboard/`, `build/preview_vertical/frames/`, `build/preview_vlight/storyboard/`;
+  `s242/dec/build/preview/frames/br/` (the branching bars).
