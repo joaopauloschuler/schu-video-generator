@@ -19016,3 +19016,57 @@ screen says so.
 as sums are skipped; decays said in words with plural products and no count are read as a pair;
 no check of CKM or helicity claims ("the W couples only to left-handed particles"), of cross
 sections, or of a `feynman` scene's narration naming the channel (s / t) wrong.
+
+### 99.14 Example, docs and gallery (Step 243)
+
+**Example** `examples/higgs-discovery` ("How the Higgs boson was found"; `video.yaml`, `README.md`):
+eleven scenes, 3:49 with Kokoro (`af_heart` 0.85), the `discovery` bed at −10 dB, a 9:16 `short`
+variant — `intro` (title); `chart` (`standard_model`, `reveal: all`, flashes on the groups, a box
+on H, `couplings: "particle:H"`; the narration is careful that the Higgs field gives the W and Z
+their masses and the fermions theirs through Yukawa couplings, while most of a proton's mass is
+the energy of its quarks and gluons); `production` (`feynman` `gg_to_h`, `vertex_rule` on the
+t t H vertex, `travel`); `decays` (`branching` H: bb̄ dimmed on "hides", γγ, ZZ*; τ = ħ/Γ =
+1.6 × 10⁻²² s said); `loop` (`h_to_gammagamma`, `reveal: all`, `swap_channel` to the W loop);
+`event` (`detector` `h_to_gammagamma` seed 10, `legend: false`); `mass` (`calculation`: m² = 2
+p_T1 p_T2 (cosh Δη − cos Δφ) = 1.57 × 10⁴ GeV², then m = √m² = 125 GeV, the display's p_T and η
+as its readout writes them, Δφ = 178.2° from the event; natural units, c = 1); `diphoton`
+(`mass_spectrum` seed 13: fitted 124.9 ± 0.4 GeV, local 5.2σ); `four_leptons` (seed 4, points,
+3.9σ); `five_sigma` (`plot`: the one-sided p-value ½ erfc(Z/√2) on a log axis with labels at 2σ
+"1 in 44", 3σ "1 in 740", 5σ "1 in 3.5 million" annotated on words); `recap` (bullets: 4 July
+2012, ATLAS and CMS at CERN's LHC, each about 5σ on its own). No real data, counts or
+significances are shown.
+
+Choices: **seeds** picked by the fitted significance (diphoton seeds 1–20 give 2.9–7.6σ; 13 gives
+5.2σ, near the threshold the video explains; seed 1, the channel default, gives 6.7σ); a
+realistic single-channel 3.9σ for four leptons. **m² then m**: one calculation with an outer
+square root of GeV² wrote its intermediate in SI (kg² m⁴/s⁴) — the calculation's SI fallback for a
+unit it cannot keep under a root; two steps keep GeV throughout (the cookbook says so). The
+**five-sigma picture** is a `plot` of inline p-values (computed with erfc, tested) rather than a
+`function_plot` of the normal curve: the tails beyond 3σ are invisible on a linear axis and the
+area labels overlapped. **Length**: 3:49 (the brief aimed at 2.5–3.5 min); Kokoro faster than
+0.85 put short beats over `narration_speed`, and cutting a scene would drop part of the requested
+arc.
+
+**Guide topic `particle-physics`** (aliases particle, particle_physics, hep, higgs,
+standard-model, collider, feynman-diagrams; not `particles`, the cartoon effect — `vidgen guide
+particles` stays unknown): planning, choosing the scene, units, honesty, pacing, lint, a pattern
+(the m² → m calculation); listed in the guide's topic list; the scenes topic points to it.
+**`docs/COOKBOOK-PARTICLES.md`**: planning the arc, choosing (table), units (natural units vs
+GeV/c², m² first), honesty (simulated data, schematic detector, PDG 2024 and YR4 sources, theory vs
+measurement, local vs global, expected vs observed, what a p-value is, real history), pacing,
+mistakes → the twelve `particle_*` rules and `calc_*`, a validated pattern (tested in
+`test_docs`). CONFIG needed nothing new (no new key).
+
+**Gallery "Particle physics"**: the section note and footer (`gallery.SECTION_NOTES` /
+`SECTION_FOOTERS`) and a showcase `higgs_diphoton` (a `detector` H → γγ event, seed 10, `soft: 0`,
+`legend: false`, the two photons highlighted on words; 0.32 MB, GIFs 103 and 146 KB). The `feynman`
+entry's 9:16 GIF was regenerated for the fix below. The gallery is 15.7 MB of the 16.5 MB budget.
+
+**Fix**: `feynman`'s vertex-rule card writes the reaction with no-break spaces, so it wraps before
+the reaction and never inside it (9:16: "t → t" / "H").
+
+**Known gaps**: the Standard Model chart's own lint warnings remain in the example (`max_words`
+for a full chart; `contrast` on a dimmed gluon cell during `couplings`; a 16:9 `contrast` reading
+of the dim generation numeral "II" against a sampled backdrop of #282C32, a sampler effect — the
+numeral reads fine in the stills); the detector's display layout keeps room for the readout on the
+right in 16:9 before the readout appears.

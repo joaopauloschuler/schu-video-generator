@@ -22425,3 +22425,78 @@ How to test
 - Stills: `s242/ms` (Step 241's H → γγ, Z, 4ℓ project): `build/preview/frames/`,
   `build/preview_light/storyboard/`, `build/preview_vertical/frames/`, `build/preview_vlight/storyboard/`;
   `s242/dec/build/preview/frames/br/` (the branching bars).
+
+## Step 243 — Example, docs and gallery
+
+What was built (DESIGN §99.14)
+- **Example `examples/higgs-discovery`** ("How the Higgs boson was found"; `video.yaml`,
+  `README.md`): `intro`; `chart` (`standard_model`, the Higgs boson boxed, `couplings` on its
+  field: the W and Z masses, the fermions' through Yukawa couplings; "most of a proton's mass is
+  the energy of the quarks and gluons inside it"); `production` (`feynman` `gg_to_h`: gluons are
+  massless, the t t H Yukawa vertex with `vertex_rule`, `travel`); `decays` (`branching` H: bb̄
+  58 % lost in quark jets, γγ a quarter of a percent, ZZ* 2.6 % → the golden channel; τ = 1.6 ×
+  10⁻²² s); `loop` (`h_to_gammagamma`, top loop → W loop by `swap_channel`); `event` (`detector`
+  H → γγ seed 10, `legend: false`, the photons highlighted); `mass` (`calculation`: m² = 2 p_T1
+  p_T2 (cosh Δη − cos Δφ) = 1.57 × 10⁴ GeV², m = 125 GeV, the display's own numbers); `diphoton`
+  (`mass_spectrum` seed 13: fit 124.9 ± 0.4 GeV, local 5.2σ); `four_leptons` (seed 4, 3.9σ);
+  `five_sigma` (`plot` of the one-sided p-value on a log axis: 1 in 44, 740, 3.5 million; "not the
+  chance of being wrong"); `recap` (4 July 2012, ATLAS and CMS at CERN's LHC, each about 5σ on its
+  own). Kokoro `af_heart` 0.85, `discovery` at −10 dB, terms (invariant mass, five sigma), a 9:16
+  `short` variant.
+- **Docs**: guide topic `particle-physics` (aliases particle, particle_physics, hep, higgs,
+  standard-model, collider, feynman-diagrams; `particles` deliberately unknown — the cartoon
+  effect), listed in the topic list, the scenes topic points to it; copied to `AGENTS.md`;
+  `docs/COOKBOOK-PARTICLES.md` (planning, choosing, units, honesty, pacing, mistakes → rules, a
+  validated pattern) linked from README, `docs/COOKBOOK.md`, the guide and the gallery; README
+  feature bullet ("Particle physics"), example and cookbook entries; CHANGELOG; DESIGN §99.14.
+  CONFIG needed nothing new (no new key; the particle types' sections are already complete).
+- **Gallery "Particle physics"**: section note and footer, showcase `higgs_diphoton` (detector
+  H → γγ, 0.32 MB: GIFs 103 / 146 KB); the `feynman` entry's 9:16 GIF regenerated after the fix.
+  15.7 MB of the 16.5 MB budget (unchanged).
+- **Fix**: `scenes/feynman.py` `show_rule` writes the reaction with no-break spaces, so the card
+  wraps before it, not inside it (9:16 "t → t" / "H").
+
+Files touched
+- New: `examples/higgs-discovery/{video.yaml,README.md}`, `docs/COOKBOOK-PARTICLES.md`,
+  `tests/test_higgs_discovery.py` (5), `src/vidgen/data/gallery/showcases/higgs_diphoton.yaml`,
+  `docs/gallery/higgs_diphoton.md` + media.
+- Changed: `src/vidgen/gallery.py`, `src/vidgen/scenes/feynman.py`, the guide + `AGENTS.md`,
+  `README.md`, `docs/COOKBOOK.md`, `docs/gallery/README.md`, `docs/gallery/media/feynman-9x16.gif`,
+  `tests/{test_docs,test_guide,test_gallery}.py`, `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`.
+
+Public interfaces: none new (a showcase, a guide topic). Visible change: the vertex-rule card's
+line breaks.
+
+Decisions
+- Seeds chosen by the fitted significance so the story is honest about the threshold it explains
+  (diphoton 13 → 5.2σ; the default seed 1 gives 6.7σ); four leptons seed 4 (3.9σ).
+- Natural units in the calculation (c = 1, the meaning says so); m² then m, because a root of
+  GeV² falls back to SI in the substitution's intermediate line.
+- The five-sigma picture is a `plot` of inline p-values (a `function_plot` of the normal curve hid
+  the tails and its area labels overlapped).
+- No real event counts or significances; only the announcement date, the two experiments, CERN's
+  LHC and "each about five sigma on its own".
+- Length 3:49 (the brief: about 2.5–3.5 min): Kokoro at 0.9 put short beats over
+  `narration_speed`; every scene is part of the requested arc.
+
+Checks
+- `vidgen lint` with the Kokoro narration: 0 errors, no particle findings in 16:9 and 9:16; left:
+  the chart's `max_words` (both), `contrast` on a dimmed gluon during `couplings` (both), a 16:9
+  `contrast` on the numeral "II" (sampled backdrop #282C32; it reads fine).
+- Renders (scratchpad `s243/proj/output/`): `higgs_discovery.mp4` 1920×1080, 30 fps, 228.6 s,
+  17.5 MB; `higgs_discovery_short.mp4` 1080×1920, 228.6 s, 18.2 MB; video and audio the same
+  length, −16.0 LUFS, true peak −1.9 dBTP. Times under capped3g: 16:9 scenes 321 s in all (diphoton
+  65 s, chart 52 s) plus the join; 9:16 439 s wall with the join, largest process 1.41 GB peak RSS.
+- Compatibility: shared code untouched except `feynman.py` (Phase Y; rule cards only); Phase Q
+  baseline not re-run (no shared rendering code changed).
+
+Known gaps: the chart's own lint warnings (above); the detector's 16:9 layout keeps room for the
+readout before it appears; the video is 3:49, above the brief's 3.5 min.
+
+How to test
+- `tests/test_higgs_discovery.py` (5), `tests/test_docs.py` + `tests/test_guide.py` (162 with it),
+  `tests/test_gallery.py -m "not render"` (19), `tests/test_feynman.py` (79 incl. renders),
+  `tests/test_schema.py` + `test_orbit_lint.py` + `test_particle_lint.py` not render (215) — all
+  passing.
+- Stills: scratchpad `s243/proj/build/preview/frames/` (16:9) and `s243/proj/build/preview_short/frames/`
+  (9:16); contact sheets of the final renders `s243/contact_16x9.png`, `s243/contact_9x16.png`.

@@ -246,6 +246,17 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   claims against the scene's model ([cookbook](docs/COOKBOOK-ORBITS.md),
   [gallery](docs/gallery/README.md#orbital-mechanics), [example](examples/mars-transfer/README.md):
   how to get to Mars).
+- **Particle physics** (Phase Y): the Standard Model chart (PDG 2024 masses, charges, spins;
+  antiparticles; which bosons couple to what), Feynman diagrams in proper notation with every
+  vertex checked against the Standard Model (trees and one-loop H → γγ, gg → H), relativistic
+  kinematics as momentum arrows in the rest frame and the lab, event displays in a schematic
+  detector (tracks bending with R = p_T / 0.3 B, showers, muons, missing p_T), simulated
+  invariant-mass spectra filling with a resonance, a peak fit and the local significance, decay
+  chains with lifetimes and branching ratios ([docs](docs/CONFIG.md#standard_model)). The
+  `particle_*` lint rules check masses, charges, spins, lifetimes, branching ratios, conservation
+  claims, bosons, detector signatures and significance claims against the model
+  ([cookbook](docs/COOKBOOK-PARTICLES.md), [gallery](docs/gallery/README.md#particle-physics),
+  [example](examples/higgs-discovery/README.md): how the Higgs boson was found).
 - **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
   morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
   colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
@@ -863,6 +874,13 @@ my_video/
   Earth orbit (the Oberth effect), and the Earth and Mars on 28 October 2026 from JPL's elements
   with the next window and opposition; a 9:16 variant; about 3:43 with Kokoro narration (no audio
   committed).
+- [examples/higgs-discovery](examples/higgs-discovery/README.md) — "How the Higgs boson was
+  found", a particle-physics explainer: the Standard Model with the Higgs boson's couplings, gluon
+  fusion through a top-quark loop, the predicted decay modes, H → γγ through top and W loops, a
+  simulated diphoton event in a schematic detector, the photons' invariant mass worked out
+  (125 GeV), a simulated spectrum with its bump, fit and local significance, four leptons, what
+  five sigma means, and the announcement of 4 July 2012; a 9:16 variant; about 3:49 with Kokoro
+  narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -881,7 +899,11 @@ my_video/
   and significant figures, pacing a calculation, common mistakes and the lint rules that catch them;
   [docs/COOKBOOK-ORBITS.md](docs/COOKBOOK-ORBITS.md) — orbital mechanics videos: choosing what to
   show, scale honesty, units and Δv, the approximations to state, pacing, common mistakes and the
-  lint rules that catch them.
+  lint rules that catch them;
+  [docs/COOKBOOK-PARTICLES.md](docs/COOKBOOK-PARTICLES.md) — particle-physics videos: planning a
+  discovery story, choosing the scene, natural units (GeV vs GeV/c²), simulated data and schematic
+  detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
+  mistakes and the lint rules that catch them.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

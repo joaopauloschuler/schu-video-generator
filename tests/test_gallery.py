@@ -29,7 +29,8 @@ DOCS = ROOT / "docs" / "gallery"
 #: gallery.CLIP_MAX_BYTES are unchanged. Step 241 (DESIGN §99.12): 15 → 16.5 MB for Phase Y — its four
 #: data types (mass_spectrum, decay_chain, branching, branching_pie; 0.10–0.33 MB each) took the
 #: gallery to 15.4 MB; the rest is room for Step 243's showcase and one more entry; ENTRY_MAX and the
-#: GIF cap are unchanged.
+#: GIF cap are unchanged. Step 243: the `higgs_diphoton` showcase (0.32 MB) took it to 15.7 MB, within
+#: the budget.
 BUDGET = 16_500_000
 #: What one entry may weigh: its two GIFs (each at most gallery.CLIP_MAX_BYTES), two stills and its
 #: page. The heaviest entries before Step 216 weighed 0.33 MB (cross, cell, rainy_evening).
@@ -118,8 +119,10 @@ def test_showcases_are_whole_valid_configs(tmp_path: Path, monkeypatch: pytest.M
     names = [s.name for s in gallery.SHOWCASES]
     assert len(set(names)) == len(names) and not set(names) & types
     assert sorted(p.stem for p in gallery.SHOWCASES_DIR.glob("*.yaml")) == sorted(names)
-    assert {s.section for s in gallery.SHOWCASES} == {"cartoons", "isometric cartoons", "cell biology", "orbital mechanics"}
+    assert {s.section for s in gallery.SHOWCASES} == {"cartoons", "isometric cartoons", "cell biology", "orbital mechanics",
+                                                      "particle physics"}
     assert {s.config()["scenes"][0]["type"] for s in gallery.SHOWCASES if s.section == "orbital mechanics"} == {"orbit"}
+    assert {s.config()["scenes"][0]["type"] for s in gallery.SHOWCASES if s.section == "particle physics"} == {"detector"}
     cell_types = {"cell", "molecule", "pathway", "cell_cycle", "metabolism"}
     assert {s.config()["scenes"][0]["type"] for s in gallery.SHOWCASES if s.section == "cell biology"} == cell_types
     for showcase in gallery.SHOWCASES:
@@ -247,6 +250,13 @@ def test_committed_gallery_has_every_showcase() -> None:
     assert orbital.index("[`orbit`](orbit.md)") < orbital.index("(mars_hohmann.md)") < orbital.index("(jupiter_trojans.md)")
     assert "../../examples/mars-transfer/README.md" in orbital and "../COOKBOOK-ORBITS.md" in orbital
     assert "COOKBOOK-ORBITS.md" in (DOCS / "mars_hohmann.md").read_text(encoding="utf-8")
+    particle = index[index.index("## Particle physics"):]
+    particle = particle[:particle.index("\n## ")] if "\n## " in particle else particle
+    names = ["[`standard_model`]", "[`feynman`]", "[`kinematics`]", "[`detector`]", "[`mass_spectrum`]", "[`decay_chain`]",
+             "[`branching`]", "[`branching_pie`]", "(higgs_diphoton.md)"]
+    assert [particle.index(n) for n in names] == sorted(particle.index(n) for n in names)
+    assert "../../examples/higgs-discovery/README.md" in particle and "../COOKBOOK-PARTICLES.md" in particle
+    assert "COOKBOOK-PARTICLES.md" in (DOCS / "higgs_diphoton.md").read_text(encoding="utf-8")
     section = index[index.index("## 2D cartoons"):]
     assert section.index("[`card`](card.md)") < section.index("(talk_in_a_room.md)") < section.index("## Isometric cartoons") < section.index("(iso_village.md)")
 

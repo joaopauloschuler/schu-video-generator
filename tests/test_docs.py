@@ -288,6 +288,40 @@ def test_orbits_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
         assert "COOKBOOK-ORBITS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
+def test_particles_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 243: the particle-physics cookbook's pattern validates and is lint-clean for the
+    particle_* and calc_* rules, it links every particle scene type and names the rules, and the
+    README, the cookbook, the guide and the gallery point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.lint.calc_rule import calc_issues
+    from vidgen.lint.particle_rule import particle_issues
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-PARTICLES.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    assert len(blocks) == 1
+    scenes = yaml.safe_load(blocks[0])
+    (tmp_path / "video.yaml").write_text(yaml.safe_dump({"title": "t", "scenes": scenes}, allow_unicode=True), encoding="utf-8")
+    project = Project.load(tmp_path)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    for scene in project.config.scenes:
+        rules = project.config.lint.rules
+        assert not particle_issues(project, scene.id, rules) and not calc_issues(project, scene.id, rules), scene.id
+    for kind in ("standard_model", "feynman", "kinematics", "detector", "mass_spectrum", "decay_chain", "branching",
+                 "branching_pie", "calculation", "plot"):
+        assert f"[`{kind}`](CONFIG.md#{kind})" in text, kind
+    for rule in ("particle_mass", "particle_charge", "particle_spin", "particle_lifetime", "branching_ratio", "conservation_claim",
+                 "feynman_boson", "kinematics_number", "detector_signature", "significance_claim", "simulated_label",
+                 "particle_units", "calc_numbers"):
+        assert f"`{rule}`" in text, rule
+    for part in ("PDG 2024", "Yellow Report 4", "look-elsewhere", "simulated", "schematic", "GeV/c²"):
+        assert part in text, part
+    assert "examples/higgs-discovery/README.md" in text
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
+        assert "COOKBOOK-PARTICLES.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
 def test_docs_yaml_snippets_parse() -> None:
     for doc in ("docs/CONFIG.md", "docs/EXTENDING.md", "README.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")

@@ -664,7 +664,8 @@ class Feynman(NarratedScene):
         rule = vc.rule
         lines = []
         if "rule" in show:
-            lines.append(f"{rule.name if rule else 'vertex'}:  {vc.text()}")
+            reaction = vc.text().replace(" ", " ")   # wrapped before the reaction, never inside it
+            lines.append(f"{rule.name if rule else 'vertex'}:  {reaction}")
         if "coupling" in show and rule is not None:
             lines.append(rule.coupling)
         if "checks" in show:

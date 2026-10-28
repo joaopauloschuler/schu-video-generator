@@ -1,0 +1,13 @@
+title: A Higgs boson in two photons
+voice: {provider: kokoro, voice: af_heart}
+scenes:
+  - id: higgs_diphoton
+    type: detector
+    params:
+      title: "H → γγ: two photons, no tracks"
+      event: {preset: h_to_gammagamma, seed: 10, soft: 0}   # simulated; m(γγ) = 125.2 GeV/c², p_T 56.3 and 54.7 GeV/c
+      legend: false
+    beats:
+      - text: "A simulated Higgs boson decays to two photons in a schematic detector."
+      - text: "Neutral, they leave no tracks: each one showers in the electromagnetic calorimeter."
+        actions: [{highlight: "particle:1", at: "@Neutral"}, {highlight: "particle:2", at: "@showers"}]

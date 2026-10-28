@@ -5,9 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–242)
+## Unreleased (Steps 193–243)
 
 ### Particle physics (Phase Y, from Step 237)
+
+- **Example, docs and gallery** (Step 243). `examples/higgs-discovery` ("How the Higgs boson was
+  found", about 3:49 with Kokoro, 16:9 and a 9:16 `short` variant): the Standard Model with the
+  Higgs boson's couplings (the W and Z masses, the fermions' through Yukawa couplings; most of a
+  proton's mass is not from the Higgs), gluon fusion through a top-quark loop, the predicted decay
+  modes, H → γγ through top and W loops, a simulated diphoton event in the schematic detector, the
+  photons' invariant mass worked out from the display's numbers (125 GeV), a simulated spectrum
+  filling with its bump, fit and local significance, the four-lepton channel, what five sigma
+  means (a log plot of the p-value: once in 3.5 million, not "99.99994 % sure"), and the
+  announcement of 4 July 2012 by ATLAS and CMS; lint clean of particle findings. A guide topic
+  `vidgen guide particle-physics` (not `particles`: that is the cartoon effect) and
+  `docs/COOKBOOK-PARTICLES.md` (planning, choosing the scene, natural units, honesty — simulated
+  data, schematic detectors, PDG 2024 and YR4 sources, local significance, what a p-value means —
+  pacing, mistakes and the rules that catch them). The gallery's "Particle physics" section gets
+  its note, footer and a showcase (a Higgs boson in two photons); 15.7 MB of the 16.5 MB budget.
+- **Fix** (Step 243): a `feynman` vertex-rule card wraps before the reaction, never inside it (in
+  9:16 "t → t H" broke before the H).
 
 - **Particle-physics accuracy lint** (Step 242). Twelve `vidgen lint` rules read the narration and
   the screens against the particle model: `particle_mass` ("the W weighs 91 GeV" — that is the

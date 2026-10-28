@@ -153,6 +153,28 @@ def test_the_orbits_topic_covers_the_orbit_scene() -> None:
     assert "vidgen guide orbits" in topic_text("scenes")
 
 
+def test_the_particle_physics_topic_covers_the_particle_scenes() -> None:
+    """Step 243: a topic for particle-physics videos (planning, choosing, units, honesty, pacing,
+    lint), not called `particles` (the cartoon effect)."""
+    text = topic_text("particle-physics")
+    assert find_topic("higgs").name == "particle-physics" and find_topic("particle").name == "particle-physics"
+    assert text.startswith("## Particle physics")
+    for kind in ("standard_model", "feynman", "kinematics", "detector", "mass_spectrum", "decay_chain", "branching",
+                 "branching_pie", "calculation", "plot"):
+        assert f"`{kind}`" in text, kind
+    for part in ("**Planning.**", "**Choosing the scene.**", "**Units.**", "**Honesty.**", "**Pacing.**", "**Lint.**",
+                 "COOKBOOK-PARTICLES.md", "examples/higgs-discovery", "PDG 2024", "Yellow Report 4", "local",
+                 "2.9 × 10⁻⁷", "GeV/c²"):
+        assert part in text, part
+    for rule in ("particle_mass", "particle_charge", "particle_spin", "particle_lifetime", "branching_ratio", "conservation_claim",
+                 "feynman_boson", "kinematics_number", "detector_signature", "significance_claim", "simulated_label",
+                 "particle_units"):
+        assert f"`{rule}`" in text, rule
+    assert "vidgen guide particle-physics" in topic_text("scenes")
+    with pytest.raises(VidgenError):
+        find_topic("particles")
+
+
 def test_unknown_topic_suggests() -> None:
     with pytest.raises(VidgenError, match=r"unknown guide topic 'scene'; did you mean 'scenes'"):
         find_topic("scene")

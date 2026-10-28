@@ -106,12 +106,19 @@ SECTION_NOTES: dict[str, str] = {
         "(`examples/mars-transfer`). Scale honesty, units, approximations to state and pacing: "
         "[the orbits cookbook](../COOKBOOK-ORBITS.md)."
     ),
+    "particle physics": (
+        "A whole particle-physics explainer, the Standard Model, gluon fusion through a top loop, the decay modes, a diphoton "
+        "event, the invariant mass worked out, a simulated spectrum with its bump and fit and what five sigma means: "
+        "[How the Higgs boson was found](../../examples/higgs-discovery/README.md) (`examples/higgs-discovery`). Natural units, "
+        "simulated data, sources, significance and pacing: [the particle-physics cookbook](../COOKBOOK-PARTICLES.md)."
+    ),
 }
 #: The last line of a showcase's page, by section: where to read more.
 SECTION_FOOTERS: dict[str, str] = {
     "cell biology": "`vidgen guide scenes` · [the cell-biology cookbook](../COOKBOOK-CELL-BIOLOGY.md)",
     "genetics": "`vidgen guide genetics` · [the genetics cookbook](../COOKBOOK-GENETICS.md)",
     "orbital mechanics": "`vidgen guide orbits` · [the orbits cookbook](../COOKBOOK-ORBITS.md)",
+    "particle physics": "`vidgen guide particle-physics` · [the particle-physics cookbook](../COOKBOOK-PARTICLES.md)",
 }
 DEFAULT_FOOTER = "`vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`"
 
@@ -198,6 +205,9 @@ SHOWCASES: tuple[Showcase, ...] = (
     Showcase("jupiter_trojans", "orbital mechanics", "Trojans in the rotating frame",
              "a three-body system in the frame turning with Jupiter: the five Lagrange points standing still, a Trojan's tadpole "
              "inside its zero-velocity curve"),
+    Showcase("higgs_diphoton", "particle physics", "A Higgs boson in two photons",
+             "a simulated H → γγ event: two ECAL showers and no tracks, the photons' p_T and η and their invariant mass, "
+             "125 GeV/c²"),
 )
 
 
