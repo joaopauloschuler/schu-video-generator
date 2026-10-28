@@ -826,6 +826,27 @@ LINT_RULES: tuple[str, ...] = (
     "plot_truncated",
     "plot_conserved",
     "plot_fit_claims",
+    "orbit_period",
+    "orbit_speed",
+    "orbit_dv",
+    "orbit_transfer",
+    "orbit_distance",
+    "orbit_date",
+    "orbit_scale",
+    "orbit_conserved",
+    "orbit_crash",
+    "particle_mass",
+    "particle_charge",
+    "particle_spin",
+    "particle_lifetime",
+    "branching_ratio",
+    "conservation_claim",
+    "feynman_boson",
+    "kinematics_number",
+    "detector_signature",
+    "significance_claim",
+    "simulated_label",
+    "particle_units",
 )
 RuleName = Literal[
     "off_frame",
@@ -885,6 +906,27 @@ RuleName = Literal[
     "plot_truncated",
     "plot_conserved",
     "plot_fit_claims",
+    "orbit_period",
+    "orbit_speed",
+    "orbit_dv",
+    "orbit_transfer",
+    "orbit_distance",
+    "orbit_date",
+    "orbit_scale",
+    "orbit_conserved",
+    "orbit_crash",
+    "particle_mass",
+    "particle_charge",
+    "particle_spin",
+    "particle_lifetime",
+    "branching_ratio",
+    "conservation_claim",
+    "feynman_boson",
+    "kinematics_number",
+    "detector_signature",
+    "significance_claim",
+    "simulated_label",
+    "particle_units",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1230,6 +1272,118 @@ class PlotFitClaimsRule(RuleConfig):
     """How far (relative) a value said with "about" may differ."""
 
 
+class _OrbitNumbersRule(RuleConfig):
+    """Settings of the orbital rules that compare said numbers with the model."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a value said with "about" may differ, beyond rounding it to one or two significant figures."""
+
+
+class OrbitPeriodRule(_OrbitNumbersRule):
+    """``orbit_period``: a period said or shown for a body of an orbit scene ("Mars takes three years") that its orbit does not have — Kepler's third law with the scene's masses; "Mars takes about two years" fits 1.88 yr (DESIGN.md §98.8)."""
+
+
+class OrbitSpeedRule(_OrbitNumbersRule):
+    """``orbit_speed``: a speed against the scene's model: vis-viva at the point named (perihelion, aphelion, periapsis...), anywhere along the orbit otherwise, escape and circular speeds, a flyby's v∞ and Sun-frame speeds, the cannon's shots (DESIGN.md §98.8)."""
+
+
+class OrbitDvRule(_OrbitNumbersRule):
+    """``orbit_dv``: a Δv said for a burn or a transfer (the first, the second, the total) that the scene does not compute, or a gravity assist's gain or turning angle (DESIGN.md §98.8)."""
+
+
+class OrbitTransferRule(_OrbitNumbersRule):
+    """``orbit_transfer``: a transfer time, a phase angle (the lead at departure), a synodic period or the time between launch windows, or the wait, against the scene's transfer and bodies (DESIGN.md §98.8)."""
+
+
+class OrbitDistanceRule(_OrbitNumbersRule):
+    """``orbit_distance``: a distance ("the Moon is 384,000 km away" fits; "L2 is 15 million km away" does not), an altitude, a radius or diameter, a Lagrange point's distance, or a ratio of sizes ("eleven times as wide") against the scene (DESIGN.md §98.8)."""
+
+
+class OrbitDateRule(RuleConfig):
+    """``orbit_date``: the date of an opposition or a conjunction of a planet seen from the Earth (a day, a month, a year; a month alone against an orbit scene's event) that JPL's approximate elements do not give (1800–2050) (DESIGN.md §98.8)."""
+
+    days: float = Field(default=3.0, ge=0, le=60)
+    """How many days a said day may differ from the computed event (the elements are good to a day or so)."""
+
+
+class OrbitScaleRule(RuleConfig):
+    """``orbit_scale``: a picture called "to scale" (true scale, real sizes) that is not: bodies drawn enlarged, a log view, the sizes picture's distances, the tides schematic (DESIGN.md §98.8)."""
+
+
+class OrbitConservedRule(RuleConfig):
+    """``orbit_conserved``: an n-body orbit run whose energy, angular momentum or Jacobi constant drifts (or a figure-eight that does not close) by more than tolerance: the motion shows the integrator's error; a smaller step, or leapfrog (DESIGN.md §98.8)."""
+
+    tolerance: float = Field(default=0.01, gt=0, le=0.5)
+    """The largest relative drift accepted (the run's largest |ΔE/E|, |ΔL/L|, |ΔC/C|)."""
+
+
+class OrbitCrashRule(RuleConfig):
+    """``orbit_crash``: a periapsis inside an atmosphere (below the Earth's Kármán line, 100 km; Mars's entry interface) that validation lets through, a flyby through the air, or bodies of an n-body run passing through each other (DESIGN.md §98.8)."""
+
+
+class ParticleMassRule(RuleConfig):
+    """``particle_mass``: a particle's mass said or shown differently from PDG 2024 ("the Z weighs about 91 GeV" fits; "the W weighs 91 GeV" does not — that is the Z's), with a did-you-mean and a MeV / GeV mix-up hint; quark masses within 30 % (the scheme) (DESIGN.md §99.13)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a mass said with "about" may differ, beyond rounding it to one or two significant figures."""
+
+
+class ParticleChargeRule(RuleConfig):
+    """``particle_charge``: a particle's electric charge said wrong ("the down quark has charge +2/3": −1/3; "the neutron is positively charged"); a charge said without a sign is compared by size (DESIGN.md §99.13)."""
+
+
+class ParticleSpinRule(RuleConfig):
+    """``particle_spin``: a particle's spin said wrong ("the photon has spin 1/2", "the Higgs boson is a fermion") (DESIGN.md §99.13)."""
+
+
+class ParticleLifetimeRule(RuleConfig):
+    """``particle_lifetime``: a mean life, half-life (τ ln 2) or width said for a particle differently from PDG 2024 ("the muon lives 2.2 microseconds" fits 2.197 µs); a moving particle's dilated life is kinematics_number's (DESIGN.md §99.13)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a value said with "about" may differ, beyond rounding it to one or two significant figures."""
+
+
+class BranchingRatioRule(RuleConfig):
+    """``branching_ratio``: a branching ratio said wrong ("most Higgs bosons decay to two photons": bb̄ 58 %, γγ 0.23 %; "the Z decays to hadrons 70 % of the time" fits 69.9 %), "most", "rarely", "the most common" and percentages against the tables (DESIGN.md §99.13)."""
+
+    tolerance: float = Field(default=0.1, ge=0, le=0.5)
+    """How far (relative) a share said with "about" may differ."""
+
+
+class ConservationClaimRule(RuleConfig):
+    """``conservation_claim``: a reaction or decay called allowed that the conservation checker forbids (or forbidden that it allows), "forbidden by baryon number" for one that conserves it, "conserves charge" for one that does not; the process written with an arrow, said in words, or the scene's own ("this decay") (DESIGN.md §99.13)."""
+
+
+class FeynmanBosonRule(RuleConfig):
+    """``feynman_boson``: the wrong boson for an interaction: a coupling the Standard Model does not have ("gluons couple to electrons", "the Higgs boson couples to photons": only through a loop), a force a particle does not feel, flavour changed by a boson other than the W ("a photon changes the quark's flavour"), a boson named as exchanged that the feynman scene's diagram does not have (DESIGN.md §99.13)."""
+
+
+class KinematicsNumberRule(RuleConfig):
+    """``kinematics_number``: a momentum, energy, invariant mass, Q value, decay length, opening angle or γ said in a kinematics scene that it does not compute; a decay length βγcτ or dilated life γτ said with a momentum or γ ("a 5 GeV muon travels about 30 km"); a threshold said with a reaction written out (DESIGN.md §99.13)."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a value said with "about" may differ (decay lengths: at least 10 %)."""
+
+
+class DetectorSignatureRule(RuleConfig):
+    """``detector_signature``: a detector signature said wrong ("photons leave tracks", "neutrinos are seen in the calorimeter", "muons stop in the ECAL", "neutrons curve in the field") against the signatures of the detector scene (DESIGN.md §99.13)."""
+
+
+class SignificanceClaimRule(RuleConfig):
+    """``significance_claim``: a p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists"), a "one in N" or percentage that does not match the σ said, a σ said for a mass_spectrum that it does not compute (DESIGN.md §99.13)."""
+
+    sigmas: float = Field(default=0.5, ge=0, le=5)
+    """How far a σ said for a spectrum may be from what it computes (plus 0.5 with "about", plus the rounding)."""
+
+
+class SimulatedLabelRule(RuleConfig):
+    """``simulated_label``: simulated data called real ("real collision data", "data from the LHC") in a scene that simulates them, or a plot of simulated particle data or an event display whose screen does not say "simulated" (DESIGN.md §99.13)."""
+
+
+class ParticleUnitsRule(RuleConfig):
+    """``particle_units``: masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video (info) (DESIGN.md §99.13)."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1432,6 +1586,48 @@ class LintRules(_Strict):
     """A model's conserved quantity drifting beyond tolerance (default: warning)."""
     plot_fit_claims: PlotFitClaimsRule = Field(default_factory=PlotFitClaimsRule)
     """A fitted value said differently from what the fit gives (default: warning)."""
+    orbit_period: OrbitPeriodRule = Field(default_factory=OrbitPeriodRule)
+    """A period said for an orbit scene's body that Kepler's third law does not give (default: warning)."""
+    orbit_speed: OrbitSpeedRule = Field(default_factory=OrbitSpeedRule)
+    """A speed against vis-viva, escape or circular speeds of the scene (default: warning)."""
+    orbit_dv: OrbitDvRule = Field(default_factory=OrbitDvRule)
+    """A Δv of a burn or transfer, or a gravity assist's gain or turn, that the scene does not compute (default: warning)."""
+    orbit_transfer: OrbitTransferRule = Field(default_factory=OrbitTransferRule)
+    """A transfer time, phase angle, synodic period or launch-window wait against the scene (default: warning)."""
+    orbit_distance: OrbitDistanceRule = Field(default_factory=OrbitDistanceRule)
+    """A distance, altitude, radius, Lagrange point or size ratio against the scene (default: warning)."""
+    orbit_date: OrbitDateRule = Field(default_factory=OrbitDateRule)
+    """An opposition or conjunction date that JPL's approximate elements do not give (default: warning)."""
+    orbit_scale: OrbitScaleRule = Field(default_factory=OrbitScaleRule)
+    """A picture called "to scale" that is not (default: warning)."""
+    orbit_conserved: OrbitConservedRule = Field(default_factory=OrbitConservedRule)
+    """An n-body run's conserved quantity drifting beyond tolerance (default: warning)."""
+    orbit_crash: OrbitCrashRule = Field(default_factory=OrbitCrashRule)
+    """A periapsis in an atmosphere, or n-body bodies passing through each other (default: warning)."""
+    particle_mass: ParticleMassRule = Field(default_factory=ParticleMassRule)
+    """A particle's mass said differently from PDG 2024 (default: warning)."""
+    particle_charge: ParticleChargeRule = Field(default_factory=ParticleChargeRule)
+    """A particle's charge said wrong (default: error)."""
+    particle_spin: ParticleSpinRule = Field(default_factory=ParticleSpinRule)
+    """A particle's spin said wrong (default: error)."""
+    particle_lifetime: ParticleLifetimeRule = Field(default_factory=ParticleLifetimeRule)
+    """A mean life, half-life or width said differently from PDG 2024 (default: warning)."""
+    branching_ratio: BranchingRatioRule = Field(default_factory=BranchingRatioRule)
+    """A branching ratio said wrong (default: warning)."""
+    conservation_claim: ConservationClaimRule = Field(default_factory=ConservationClaimRule)
+    """An allowed / forbidden / conserves claim the conservation checker contradicts (default: warning)."""
+    feynman_boson: FeynmanBosonRule = Field(default_factory=FeynmanBosonRule)
+    """The wrong boson for an interaction (default: warning)."""
+    kinematics_number: KinematicsNumberRule = Field(default_factory=KinematicsNumberRule)
+    """A kinematics value, decay length or threshold said differently from what is computed (default: warning)."""
+    detector_signature: DetectorSignatureRule = Field(default_factory=DetectorSignatureRule)
+    """A detector signature said wrong (default: warning)."""
+    significance_claim: SignificanceClaimRule = Field(default_factory=SignificanceClaimRule)
+    """A p-value misread, or a σ the spectrum does not compute (default: warning)."""
+    simulated_label: SimulatedLabelRule = Field(default_factory=SimulatedLabelRule)
+    """Simulated data called real, or not labelled simulated on screen (default: warning)."""
+    particle_units: ParticleUnitsRule = Field(default_factory=ParticleUnitsRule)
+    """Masses written both in GeV and GeV/c² on screen (default: info)."""
 
 
 class LintConfig(_Strict):

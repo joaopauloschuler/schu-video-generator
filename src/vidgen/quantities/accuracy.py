@@ -78,6 +78,7 @@ _SCI_AFTER = re.compile(_SCI_WORDS, re.IGNORECASE)
 _SUPER_DIGITS = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺", "0123456789-+")
 _FRACTION_AFTER = re.compile(rf"[\s-]+(?P<den>(?:(?:{_NW})(?:[\s-]+|\s+and\s+))*(?:{_ORD}))s?\b(?!-)", re.IGNORECASE)
 _HALF_AFTER = re.compile(r"\s+and\s+a\s+half\b", re.IGNORECASE)
+_SCALE_AFTER = re.compile(r"\s+(?P<s>thousand|million|billion)\b", re.IGNORECASE)
 _SLASH_AFTER = re.compile(r"\s*/\s*(?P<b>\d+)(?![\d.])")
 _APPROX = re.compile(r"(?:\b(?:about|approximately|around|roughly|nearly|near|almost|close\s+to|some|circa|ca\.?|just\s+(?:over|under)|"
                      r"of\s+order|order\s+of)|[≈~∼])\s*$", re.IGNORECASE)
@@ -310,6 +311,11 @@ def _numbers(sentence: str) -> list[_Raw]:
         if whole and half is not None:
             raw.value += 0.5 if raw.value >= 0 else -0.5
             raw.end, raw.resolution, raw.exact, raw.sig = half.end(), 0.0, True, None
+            scale = _SCALE_AFTER.match(sentence, raw.end)
+            if scale is not None:   # "one and a half million kilometres": said to a quarter of the scale
+                factor = _SCALES[scale.group("s").lower()]
+                raw.value *= factor
+                raw.end, raw.resolution, raw.exact = scale.end(), 0.25 * factor, False
         elif whole and frac is not None and raw.value > 0 and _denominator(frac.group("den")):
             raw.value /= _denominator(frac.group("den")) or 1
             raw.end, raw.resolution, raw.exact, raw.sig = frac.end(), 0.0, True, None

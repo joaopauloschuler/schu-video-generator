@@ -265,6 +265,13 @@ def _factors(node: Node) -> list[Node]:
     return [f for c in node.children for f in _factors(c)]
 
 
+def _root_side(node: Node) -> bool:
+    """A product with a root of a sum beside the other factor (``sqrt(g^2 - 1)*c``): set apart
+    by a thin space, or the root's last term runs into the factor (``√(γ²−1)cτ`` read as ``1c``)."""
+    left, right = _factors(node.children[0])[-1], _factors(node.children[1])[0]
+    return any(f.kind == "call" and f.value == "sqrt" and f.children and f.children[0].kind in ("+", "-") for f in (left, right))
+
+
 def to_tex(node: Node, leaf: Leaf, replace: Mapping[int, tuple[str, float]] | None = None, values: bool = False,
            stack: int = 0) -> tuple[str, float]:
     """``node`` in TeX and the precedence level of its top part. ``leaf(node)`` writes a name
@@ -313,7 +320,7 @@ def to_tex(node: Node, leaf: Leaf, replace: Mapping[int, tuple[str, float]] | No
         (a, la), (b, lb) = parts
         a, b = (a if la == NEG else _wrap(a, la, PROD)), _wrap(b, lb, PROD)   # -k t: a leading minus needs no brackets
         # symbols side by side (2pq, G M); numbers and substituted values with ×
-        sep = r" \times " if values or re.match(r"(\\frac\{)?[\d.]", b) else (r"\," if "_" in a + b else " ")
+        sep = r" \times " if values or re.match(r"(\\frac\{)?[\d.]", b) else (r"\," if "_" in a + b or _root_side(node) else " ")
         return a + sep + b, PROD
     if k == "/":
         (a, _), (b, _) = parts

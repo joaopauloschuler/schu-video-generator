@@ -21192,3 +21192,1374 @@ How to test
   −16.0 LUFS, true peak −1.9 dBTP); contact sheet `s228/contact_16x9.png`; stills
   `s228/proj/build/preview/storyboard/` and `s228/proj/build/preview_short/frames/`; `vidgen lint`
   16:9 and 9:16: 0 findings.
+
+## Step 229 — Plan and orbital model
+
+What was built (DESIGN §98): the Phase X plan (tasklist Steps 229–236, the "Planetary and orbital
+mechanics" ideas marked as moved; DESIGN §98.1 with how 230–235 plug into the model), the model
+package `vidgen.orbits` (no manim) and the scene type `orbit`.
+
+- `vidgen.orbits`: `kepler` (Kepler's equation: elliptic and hyperbolic by Newton, written without
+  cancellation near e = 1; parabolic Barker in closed form; true ↔ mean anomaly), `elements`
+  (`Elements` stored by p for every conic; from a / periapsis / apsides / a state vector; state
+  at any time; a, b, apsides, period, energy, h, v∞, time of flight, conics), `bodies` (GM and
+  radii from IAU 2015 B3, DE440, IAU WGCCRE; presets: the planets on JPL Table 1 J2000 elements,
+  the Moon, `iss`, `geo`, `halley`; sources in the docstring), `values` (values with units via
+  `quantities`; display units; speed-up text), `system` (hierarchies, the `Playback` clock,
+  `swept_area`), `nbody` (`simulate` on Phase W's `verlet` / `rk45` in scaled units, energy and
+  drift, Hermite interpolation).
+- Scene `orbit` (`scenes/orbit.py`, `scenes/orbit_parts.py`): central body + bodies (preset,
+  elements, or r / v; `around`), conics, motion through one updater on the scene clock at one
+  speed-up from the end of the first beat's entrance to the last frame, trails, equal-aspect
+  `plotcore` axes in AU / km or a scale bar, readout (time, speed-up, ΔE/E, "sizes not to
+  scale"), `follow`, `dynamics: nbody`; validation; targets `title`, `frame`, `central`,
+  `body:<name>`, `orbit:<name>`, `readout`.
+- A previous agent wrote most of the model, the scene and the tests before being interrupted;
+  this step reviewed them (physics values checked against Table 1 / DE440 / the IAU numbers;
+  storyboards in 16:9 dark and 9:16 light), bounded the model cache (32), and added the plan,
+  DESIGN, guide, gallery and handoff.
+
+Files touched
+- New: `src/vidgen/orbits/{__init__,kepler,elements,bodies,values,system,nbody}.py`,
+  `src/vidgen/scenes/{orbit,orbit_parts}.py`, `tests/test_orbits.py` (107), `tests/test_orbit.py`
+  (30 incl. renders), `docs/gallery/orbit.md` + `media/orbit-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py` (exports `orbits`), `src/vidgen/scenes/__init__.py`, the guide
+  (chooser row; an "orbital mechanics" snippet block) + `AGENTS.md`, `docs/CONFIG.md` (`orbit`
+  section and targets row), `docs/gallery/README.md` (new "Orbital mechanics" section),
+  `examples/gallery/video.yaml` (scene `orbits`), `tests/{test_actions_coverage,test_builtin_scenes,
+  test_translation,test_docs,test_extensions}.py`, `DESIGN.md` (layout, §98), `tasklist.md`,
+  `CHANGELOG.md`.
+
+Public interfaces (additive): `vidgen.api.orbits` (module); scene type `orbit`. No dependency.
+
+Decisions
+- Orbits stored by the semi-latus rectum p (a parabola has no a); μ = G(M + m) for each orbit.
+- Motion is driven by the scene clock through `Playback` (constant speed-up, no easing), so
+  Kepler II emerges; Step 230's actions will act on that clock.
+- Inclined orbits are drawn projected on the reference plane (the view from above), documented.
+- A guide snippet block of its own (`# orbital mechanics`) puts `orbit` in a gallery section
+  "Orbital mechanics" now; Step 235 adds the section note (example, cookbook). The gallery is at
+  12.9 MB of its 13 MB budget after this entry (295 kB): Step 235 must optimize or record a budget
+  change for its additions.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0; no shared code changed beyond the
+`api` export and the scene registration; `examples/gallery` lint: the new scene has no findings
+(the existing synthase / krebs / … findings are unchanged).
+
+Known gaps (planned in 230–235): no ellipse-geometry overlays, sectors, velocity vectors or orbit
+actions; no burns / transfers; no rotating frame; J2000 only (no dates); no orbit lint rules; a
+scene of only open orbits frames 3 × the periapsis, so bodies leave the view on a long span
+unless `extent` is set; in 16:9 a tall picture (a flyby) leaves the sides empty.
+
+How to test
+- `tests/test_orbits.py` (107, ~10 s), `tests/test_orbit.py` (30 incl. renders, ~70 s).
+- Related, all passing: `test_docs`, `test_guide`, `test_gallery` (not render), `test_translation`,
+  `test_actions_coverage`, `test_builtin_scenes` (not render + `-k orbit`), `test_extensions`,
+  `test_api`, `test_schema` + `test_registry` + `test_introspect` + `test_json_output`,
+  `test_lint` + `test_narration_rule`.
+- Stills: scratchpad `s229/proj` (inner planets, a comet, ISS + GEO, a flyby, the Moon followed,
+  n-body): `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16
+  light); `vidgen lint` 0 findings.
+
+
+## Step 230 — Kepler's laws and orbital speed
+
+What was built (DESIGN §98.4):
+
+- **229's layout fixed first** (reviewer: the picture used a third of the frame, labels crowded
+  the Sun / Earth, a tall picture left the 16:9 sides empty). The orbit axes have no titles — the
+  unit is written once (after the x ticks in 16:9, above the y ticks in 9:16) — so the picture
+  fills the height in 16:9 (> 60 % of the frame, tested) and the width in 9:16. Labels are placed
+  by a cost search (8 directions × 4 rings, obstacles: the panel, other dots, labels, overlay
+  labels, the cannon; orbit-line points; sticky), with a leader line when pushed out; a planet
+  drawn large carries its name on itself. The readout is a side panel of rows sized once (time,
+  speed-up, ΔE/E, overlay values, a legend of the bodies' periods: `legend: auto`).
+- **Model** `vidgen.orbits.laws` (no manim): `ellipse_geometry`, `apsis_names` (perihelion /
+  aphelion, perigee / apogee, perilune, perijove), `area_between` (½∫r²dν from the shape),
+  `sector_times` / `sector_areas` (anomalies from Kepler's equation, areas from the shape: equal
+  to 1e-11), `cannon_shots` / `classify` / `named_speed` (Newton's cannonball by energy, the
+  impact time of a falling shot), `kepler_planets` (+ the plot model `kepler_planets`).
+- **Scene** `orbit`: `bodies[].geometry` (foci, axes, apsides), `sectors` (count, show),
+  `velocity` (live, along, readout), scene param `cannonball` (speeds as multiples / units /
+  circular / escape, altitude, at, clockwise, show_paths; `bodies` may be empty), `legend`;
+  targets `geometry:`, `foci:`, `axes:`, `periapsis:`, `apoapsis:`, `sectors:`, `velocity:`,
+  `cannon`, `shot:<n>`; actions `sweep` and `launch` (`scenes/orbit_actions.py`; non-animating
+  cues at their word's time); overlays named by a reveal / sweep / launch start hidden.
+- Kepler III: a Phase W `plot` with `models: {planets: {kind: function, function:
+  kepler_planets}}` on log axes with a power fit (k = 1.50008 ± 0.00004) — no plot code changed.
+
+Files touched
+- New: `src/vidgen/orbits/laws.py`, `src/vidgen/scenes/orbit_overlays.py`,
+  `src/vidgen/scenes/orbit_actions.py`, `tests/test_orbit_laws.py` (8).
+- Changed: `src/vidgen/orbits/__init__.py` (exports), `src/vidgen/scenes/orbit.py` (layout,
+  panel, labels, overlays mixin, params `cannonball`, `legend`, `bodies` may be empty),
+  `src/vidgen/scenes/orbit_parts.py` (overlay params, shots, checks), `src/vidgen/scenes/__init__.py`,
+  `tests/test_orbit.py` (+18), `docs/CONFIG.md` (orbit section, targets row, actions row), the
+  guide + `AGENTS.md` (chooser row, two snippets, `sweep` / `launch` rows), `DESIGN.md` (layout,
+  §98.3 note, §98.4), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): in `vidgen.api.orbits` the functions / classes of `laws`; the plot
+model `kepler_planets`; the `orbit` params and targets above; the actions `sweep`, `launch`.
+
+Decisions
+- The clock keeps one constant speed-up (no pause / slow action): that is what makes equal video
+  times equal simulated times. `sweep` / `launch` are cues at their word's time, mapped through
+  `Playback` when drawn (the first beat's cue precedes the motion's clock).
+- Sector areas are integrated from the orbit's shape between the positions Kepler's equation gives
+  at equal times, so their equality checks Kepler II rather than restating it.
+- Shots are classified by energy honestly: 1.414 × v_circ is elliptical; only `escape` (√2 exactly)
+  is parabolic. Shots colour by kind.
+- The `orbit` gallery entry keeps its guide sample (the first `orbit` snippet), so its committed
+  media (229's layout) still pass the gallery tests; Step 235 renders the section anew.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0. Shared code untouched apart from the
+scene registration and the new plot model name.
+
+Known gaps: no clock control on actions; sectors / vectors not with n-body; geometry labels are
+placed once (a satellite's geometry moves with its parent but its labels are not re-placed);
+the panel can be tall in 9:16 with a cannon of many shots (the picture is width-limited there).
+
+How to test
+- `tests/test_orbit_laws.py` (8, < 1 s), `tests/test_orbit.py` (48 incl. renders, ~55 s).
+- Related, passing: `test_orbits`, `test_docs`, `test_guide`, `test_gallery` (not render),
+  `test_actions_coverage` (not render + `-k orbit`), `test_builtin_scenes -k orbit`, `test_schema`
+  + `test_registry` + `test_introspect`, `test_json_output` + `test_extensions` + `test_api`,
+  `test_translation` + `test_plot_live`.
+- Stills: scratchpad `s230/proj` (inner planets, ISS + GEO, ellipse geometry revealed part by part,
+  equal-area sectors swept from a word, velocity arrows, Halley, Newton's cannonball launched on
+  words, Kepler III plot, a flyby): `build/preview/storyboard/` (16:9 dark) and
+  `build/preview_vlight/storyboard/` (9:16 light).
+
+
+## Step 231 — Manoeuvres
+
+What was built (DESIGN §98.5):
+
+- **Model** `vidgen.orbits.manoeuvres` (no manim): the local frame (prograde / radial / normal),
+  burns and trajectories (Kepler arcs between burns, `at` a time or the next periapsis / apoapsis,
+  an arc that would reach the surface before the next burn refused), `hohmann` (Δv₁, Δv₂, time,
+  phase angle from the target's own μ, synodic period), `window_wait`, `synodic_period`,
+  `bielliptic` and `bielliptic_thresholds()` (11.9387654 and 15.58172, computed by bisection),
+  `plane_change` (2 v sin(Δi/2)), `combined_plane_change`, `phasing`. `vidgen.orbits.flyby`:
+  `turning_angle`, `flyby` (the hyperbola from v∞ and r_p, its asymptotes' crossing, aiming
+  distance; a periapsis in the planet or its atmosphere refused), `gravity_assist` (the pass on
+  the chosen side; gain exactly when the periapsis is behind; an impossible side refused with the
+  reason). `Orbiter.trajectory`; `Playback` with knots and `Playback.timed`.
+- **Scene** `orbit`: `bodies[].burns`, `bodies[].alongside`, `transfer` (hohmann, bielliptic,
+  phasing; to a body or a radius; launch window by default), `flyby` (planet frame + Sun-frame
+  vector diagram); targets `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`,
+  `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`; actions `burn`, `flyby`, `pause`,
+  `coast` timing the clock (stretches with their own speed-up shown in the panel); a mission line
+  in the panel; `calc_values` so a `calculation` takes Δv etc. with `from_scene`.
+- Layout fixes met on the way: a 9:16 panel of more than five rows in two columns (and scaled with
+  its rows), no legend in 9:16 when a body burns (`auto`), a 13 % margin when bodies burn, a body
+  coinciding with an earlier one (alongside) shows one label, the scale bar in the least crowded
+  corner and over the orbits (fixes 230's lint warning; the 230 stills project lints clean).
+
+Files touched
+- New: `src/vidgen/orbits/{manoeuvres,flyby}.py`, `src/vidgen/scenes/orbit_manoeuvres.py`,
+  `tests/test_orbit_manoeuvres.py` (10).
+- Changed: `src/vidgen/orbits/{__init__,system}.py`, `src/vidgen/scenes/{orbit,orbit_parts,
+  orbit_overlays,orbit_actions,calculation,__init__}.py`, `src/vidgen/scene.py`
+  (`action_times`, additive), `tests/test_orbit.py` (+27 incl. 3 renders), `docs/CONFIG.md`
+  (orbit section, `from_scene`, targets and actions rows), the guide + `AGENTS.md` (chooser row,
+  two snippets, four action rows), `DESIGN.md` §98.5, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): in `vidgen.api.orbits` the names of `manoeuvres` and `flyby`,
+`Playback.knots / timed / rate / rates`, `Orbiter.trajectory / states / positions / elements_at`;
+`NarratedScene.action_times`; the `orbit` params, targets and actions above; `from_scene` on a
+scene type with `calc_values`.
+
+Decisions
+- Burns keep their simulated time from the orbit (an apoapsis, a launch window); an action on a
+  word moves the *clock* (a knot), not the burn — so the physics never depends on the narration,
+  and the time readout stays true (the panel shows each stretch's speed-up, "clock paused").
+- Transfers refuse eccentric / inclined orbits instead of silently circularising: the author
+  writes `e: 0, i: 0` and says so in a caption (the Earth→Mars example does). With `i: 0` a
+  preset's Ω still rotates the orbit: give `raan: 0, argp: 0` to place bodies by `nu` alone.
+- The flyby is an `orbit` param, not a new scene type: a new type would need a gallery entry and
+  the gallery is at its 13 MB budget (Step 235 decides there).
+- "Behind"/"in front" is decided by the periapsis' side (the sign of the energy change follows
+  from Δv∞ pointing at the planet), not by the turning sense; both ways past can be behind.
+
+Checks: the numbers asked for — LEO (300 km) → GEO 2.426 + 1.467 = 3.893 km/s in 5.28 h (the
+brief's 2.46 is from a lower orbit); Earth → Mars Δv₁ 2.945 km/s (heliocentric), 258.9 d, 44.3°,
+synodic 779.9 d; thresholds 11.9387654 / 15.58172; turning angle and v∞ in = out checked against
+the propagated hyperbola; energy gain sign; equal areas still honest within each clock stretch.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (shared code: `scene.py`
+`action_times`, `calculation.py` `from_scene`). 230 orbit scenes: unchanged except the scale bar's
+corner (only when crowded) and z-order, the 9:16 panel in two columns when long.
+
+Known gaps: n-body with burns (refused); the flyby in the planet's frame only (the vector
+diagram carries the Sun's frame); plane changes seen from above as a projection; LEO scenes at
+true scale hide the low orbit under the planet's disc (by design: sizes are true when large
+enough); the orbit gallery media (Step 235).
+
+How to test
+- `tests/test_orbit_manoeuvres.py` (10, < 1 s), `tests/test_orbit.py` (75 incl. renders, ~80 s),
+  `tests/test_orbits.py`, `tests/test_orbit_laws.py`.
+- Related, passing: `test_docs`, `test_guide`, `test_gallery` (not render), `test_actions_coverage`
+  (not render + render `-k orbit`), `test_builtin_scenes -k orbit`, `test_calculation`,
+  `test_calc_lint`, `test_schema`, `test_registry`, `test_introspect`, `test_json_output`,
+  `test_extensions`, `test_api`, `test_translation`, `test_plot_live`, `test_lint`,
+  `test_narration_rule`, `test_word_anchors`.
+- Stills: scratchpad `s231/proj` (LEO → GEO with burns on words, Earth → Mars with pause / coast
+  and the phase angle, raising and turning with three burns, a Δv budget `calculation` from the
+  orbit scene, bi-elliptic, phasing, a Jupiter gravity assist): `build/preview/storyboard/` (16:9
+  dark) and `build/preview_vlight/storyboard/` (9:16 light); `vidgen lint` 0 findings.
+
+
+## Step 232 — Many bodies
+
+What was built (DESIGN §98.6):
+
+- **Model** `vidgen.orbits.threebody` (no manim): the circular restricted three-body problem in
+  normalised rotating units — L1–L3 from Szebehely's quintics (`numpy.roots` + Newton), L4 / L5,
+  `ROUTH_MU` = 0.0385209 / `routh_stable`, the effective potential, the Jacobi constant (from the
+  rotating frame or from inertial positions about the barycentre), zero-velocity curves
+  (vectorised marching squares), the rotating-frame equations on Phase W's RK45, co-orbital
+  angles and kinds (tadpole L4 / L5, horseshoe, passing), `Restricted` with presets `earth_moon`,
+  `sun_earth` (Sun + Earth–Moon barycentre, 1 AU), `sun_jupiter`. `vidgen.orbits.manybody`: the
+  figure-eight (scaled to a mass and length), barycentres and binary shares, nearest period
+  ratios, the Laplace angle, conjunctions by root finding, `bends_toward`, tidal acceleration and
+  the equilibrium tide. The Galilean moons as body / orbit presets; masses as `'2 Msun'`; n-body
+  runs record the angular momentum and give velocities; `simulate(initial=)`.
+- **Scene** `orbit`: `system` (a pair integrated as n-body about the barycentre, RK45 by default;
+  or `figure_eight`), `view: inertial | rotating` and the actions `corotate` / `inertial`
+  (smooth turn over `run_time`), `lagrange`, `zero_velocity`, bodies `near: L1…L5` with `shift` /
+  `drift` (rotating frame), `origin: barycentre` (binary stars draw both ellipses), `resonance`
+  (ratios, Laplace angle, conjunction lines and counts), bodies' `curvature`, `center` + `extent`
+  close-ups with a pointer to the off-plot central body, `tides` (its own schematic layout: pull,
+  centre pull, tidal arrows with the enlargement factor, bulges, the near side; "schematic: not to
+  scale"). Panel rows: μ, Routh, the frame shown, L1 / L2 distances, Jacobi constant and ΔC/C,
+  the angle ahead of the secondary and the co-orbital kind, the figure-eight's return, a binary's
+  mass ratio, ΔL/L.
+- Performance of the panel (orbit scenes, output unchanged): the cached row texts are drawn in
+  place and their points restored (copying every row each frame dominated long renders: a Trojan
+  scene went from 100 s to 55 s, the tides 56 → 24 s); trails wholly inside the plot skip the
+  per-segment clipping.
+
+Files touched
+- New: `src/vidgen/orbits/{threebody,manybody}.py`, `src/vidgen/scenes/{orbit_systems,orbit_many}.py`,
+  `tests/test_orbit_many.py` (31 incl. 2 renders).
+- Changed: `src/vidgen/orbits/{__init__,bodies,nbody,values}.py`, `src/vidgen/scenes/{orbit,
+  orbit_parts,orbit_overlays,orbit_actions}.py`, `docs/CONFIG.md` (orbit section, param table,
+  targets row, actions row), the guide + `AGENTS.md` (chooser row, two snippets, a paragraph, two
+  action rows), `DESIGN.md` §98.6, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): in `vidgen.api.orbits` the names of `threebody` (`integrate` as
+`integrate_restricted`, `potential` as `restricted_potential`) and `manybody`,
+`GALILEAN_PERIODS`, `GALILEAN_PHASES`; `NBodyRun.angular / angular_scale / angular_drift /
+angular_error / velocity`; `simulate(initial=)`; the `orbit` params, targets and actions above.
+No dependency, no config key.
+
+Decisions
+- The restricted problem is drawn from an inertial n-body run (massless bodies), not from the
+  rotating-frame equations: one integrator path for every view, the switch between frames is a
+  view transform (`OrbitModel.turned`, angle from the run's own secondary), and leapfrog stays
+  available (symplectic only in the inertial frame). RK45 is the default with a pair: leapfrog's
+  fixed step blows the Jacobi constant up at a close pass (seen: ΔC ≈ 12 above Routh's limit);
+  the rotating-frame RK45 integrator in the model serves the tests and authors' own scripts.
+- `sun_earth` uses the Earth–Moon barycentre's GM (the usual pair for L1 / L2): L1 / L2 at
+  1.4976 / 1.5077 million km — the brief's "≈ 1.5 million km" verified.
+- The Galilean moons are defined by their published sidereal periods (a from Kepler III with the
+  `jupiter` preset's system GM; within 0.03 % of the published distances), circular and at phases
+  giving the Laplace angle 180°: the conjunction geometry (Ganymede 90° away at each Io–Europa
+  conjunction) is exact in this model. **For the owner to check**: the satellites' GM values
+  (quoted as JPL JUP310: 5 959.916, 3 202.739, 9 887.834, 7 179.289 km³/s²) and the sidereal
+  periods' last digits; the figure-eight digits are Simó's as commonly quoted, and verified here
+  by integration (back within 10⁻⁶ AU after T).
+- `tides` is an `orbit` param, not a new scene type (a new type needs a gallery entry; the gallery
+  is at its budget until Step 235).
+- `center` is the body's position halfway through the span (a symmetric close-up of a path).
+- The rotating frame's words are in the panel; the plot carries only a small turning arrow.
+
+Compatibility: no shared code changed (only the orbit scene and the `orbits` package), so the
+Phase Q baseline was not re-run; the 229–231 orbit tests pass unchanged (the panel's in-place
+texts draw the same points).
+
+Known gaps: n-body with burns (refused); forbidden regions drawn as their boundary; the tidal
+bulges do not lead (no spin, no friction) and the Sun's tide is not shown; the Moon's
+concave-path close-up is honest but subtle at true scale (the panel row carries the claim); a
+9:16 panel with a pair is long (two columns, smaller text); LEO scenes still hide a low orbit under
+the true-scale Earth (231's note; not addressed here); a lint warning mid-turn (a trail over the
+L2 label while the frame turns); gallery media (Step 235).
+
+How to test
+- `tests/test_orbit_many.py` (31, ~40 s incl. renders), `tests/test_orbit.py`, `tests/test_orbits.py`,
+  `tests/test_orbit_laws.py`, `tests/test_orbit_manoeuvres.py`.
+- Related, passing: `test_docs`, `test_guide`, `test_gallery` (not render), `test_actions_coverage`
+  (not render + `-k orbit`), `test_builtin_scenes -k orbit`, `test_schema`, `test_registry`,
+  `test_introspect`, `test_json_output`, `test_extensions`, `test_api`, `test_translation`,
+  `test_calculation`, `test_calc_lint`, `test_lint`, `test_narration_rule`, `test_word_anchors`,
+  `test_plot_live`.
+- Stills: scratchpad `s232/proj` (Trojans with a frame switch on a word, Earth–Moon points with
+  the zero-velocity curve, the Sun–Earth L1 / L2 close-up, an unstable μ = 0.05, the figure-eight,
+  the Laplace resonance with conjunctions, a binary, the Moon's path, the tides):
+  `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16 light);
+  `vidgen lint`: 0 errors, 1 warning (mid-turn).
+
+
+## Step 233 — The Solar System on a date
+
+What was built (DESIGN §98.7):
+
+- **The compact side panel first** (reviewer: 232's panels had 10–15 rows of tiny text). Every
+  panel row (`Slot`) has a `name` and a `rank`; `choose_rows` keeps rank 0, then ranks 1 / 2 in the
+  scene's order up to 6 rows (16:9) / 5 (9:16) besides the "not to scale" notes, never a
+  diagnostic, every row at least the label size, one column. `panel: compact` (default) | `full`
+  (the old panel) | `none` | a list of row names (`PANEL_ROWS`, did-you-mean). ΔE/E, ΔL/L, the
+  Jacobi drift and the figure-eight's return error are diagnostics (`energy: true` brings ΔE/E and
+  ΔL/L back); `Orbit.diagnostics(params)` gives them to the lint (Step 234) whatever the panel shows.
+  The 229–232 scratch projects were re-rendered (s232 16:9 dark and 9:16 light, s231, s230 16:9)
+  and lint clean (s232's old mid-turn warning is gone too); the tides note is shorter in compact.
+- **Model** `vidgen.orbits.ephemeris` (no manim): Standish's Table 1 (J2000 values and rates per
+  century for Mercury … Neptune and Pluto; source and validity in the docstring), Julian dates,
+  validity checks (1800-01-01 to the end of 2050, start and end), mean elements on a date,
+  heliocentric ecliptic positions (the document's method), longitudes, distances, elongations,
+  sidereal and synodic periods, `next_event` (opposition, conjunction, inferior / superior
+  conjunction, aligned: root finding on the wrapped longitude difference) and `events_between`.
+  The planet presets now read their J2000 values from `TABLE1` (one copy); `preset_on`; Pluto as a
+  body and orbit preset (`kepler_planets` stays the eight planets).
+- **Scene** `orbit` (`scenes/orbit_sky.py`): `date`, `event`, `radial: log`, `inset`, `sizes`
+  (its own picture); targets `event`, `inset`, `rings`; the panel's `date`, `event`, `distance`,
+  `synodic` rows.
+
+Files touched
+- New: `src/vidgen/orbits/ephemeris.py`, `src/vidgen/scenes/orbit_sky.py`, `tests/test_orbit_sky.py` (35).
+- Changed: `src/vidgen/orbits/{__init__,bodies,laws}.py`, `src/vidgen/scenes/{orbit,orbit_parts,
+  orbit_overlays,orbit_manoeuvres,orbit_many}.py`, `tests/test_orbit.py` (3 assertions on panel rows:
+  `energy: true`, `panel: full`, a row list), `tests/test_orbit_many.py` (the Jacobi row is now a
+  diagnostic), `docs/CONFIG.md` (panel paragraph, Step 233 section, params, targets row), the guide +
+  `AGENTS.md` (chooser row, two snippets, two paragraphs), `DESIGN.md` §98.7, `tasklist.md`,
+  `CHANGELOG.md`.
+
+Public interfaces (additive, one visible default): `vidgen.api.orbits` gains the `ephemeris`
+names (`longitude` as `ecliptic_longitude`, `distance` as `planet_distance`, `SOURCE` as
+`TABLE1_SOURCE`), `planet_preset`, `preset_on`, the `pluto` presets; `Orbit.diagnostics`; `orbit`
+params `panel`, `date`, `event`, `radial`, `inset`, `sizes`. Visible change: orbit panels are
+compact by default (ΔE/E hidden unless `energy: true` / `panel: full`).
+
+Decisions
+- Ranks are chosen per scene by what it is about (a transfer's Δv rows always; Routh's test only
+  when L4 / L5 matter; the legend last); the budget leaves out lower ranks rather than shrinking text.
+- Events by heliocentric longitudes (equal or 180° apart): the same instant as the geocentric
+  opposition in longitude and monotone at the synodic rate, so bracketing is robust. Published
+  dates come out within hours (Mars 2020-10-13 23:24 TT vs 23:20 UT published; 2022-12-08 05:32 vs
+  05:36).
+- The Earth's longitude at an equinox is 180° of date; Table 1's frame is J2000, so the tests
+  subtract the precession since 2000 (50.29″/yr) — that is why 2020's raw value is 179.72°.
+- From the date the planets move on two-body Kepler orbits from the date's elements (consistent
+  with every other orbit scene); over a year they stay within 2 × 10⁻⁴ AU of Table 1's positions
+  (tested). Non-Table-1 presets with a date must be placed with `nu` / `mean_anomaly` (the Moon's
+  position on a date is not modelled).
+- `inset` reuses the flyby's side-box slot; the inner planets and the Sun are named in the inset,
+  not at the crowded centre of the main picture. `sizes` is an `orbit` param, not a new scene type
+  (the gallery budget, as for `tides`).
+- Values **for the owner to check**: Table 1's numbers were entered from memory of the document and
+  verified indirectly (the equinoxes, eight published event dates within hours, the sidereal year
+  365.2564 d, synodic periods 779.94 / 583.92 / 398.88 d) — Pluto's rates and the slower planets'
+  rates are the least exercised by the tests; Pluto's GM 975.5 km³ s⁻² (system) and radius
+  1 188.3 km. (Fetching JPL's table file https://ssd.jpl.nasa.gov/txt/p_elem_t1.txt to compare was
+  not permitted in this session.)
+
+Compatibility: shared code untouched (only the orbit scene files and `vidgen.orbits`), so the
+Phase Q baseline was not re-run. Existing orbit scenes render the same picture with a shorter
+panel (the deliberate change above); `panel: full` gives the previous panel.
+
+Known gaps: the Moon / satellites on a date; Table 2a; light-time, aberration, the equinox of
+date; greatest elongations; in 9:16 a true-scale picture with an inset is small (the inset takes
+the room under it); gallery media (Step 235).
+
+How to test
+- `tests/test_orbit_sky.py` (35, ~40 s incl. renders), `tests/test_orbit.py` (75), `tests/test_orbit_many.py`
+  (31), `tests/test_orbits.py`, `tests/test_orbit_laws.py`, `tests/test_orbit_manoeuvres.py`.
+- Related, passing: `test_docs`, `test_guide`, `test_gallery` (not render), `test_translation`,
+  `test_extensions`, `test_api`, `test_schema`, `test_registry`, `test_introspect`,
+  `test_json_output`, `test_actions_coverage` (not render + `-k orbit`), `test_builtin_scenes -k orbit`,
+  `test_lint`, `test_narration_rule`, `test_calculation`, `test_calc_lint`, `test_plot_live`,
+  `test_word_anchors`.
+- Stills: scratchpad `s233/proj` (Mars at opposition from 2020-06-01, the whole Solar System on
+  2024-01-01 with the inset, all planets and Pluto on the log scale, the sizes):
+  `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16 light);
+  `vidgen lint` 0 findings in both. The 232 project's panels: `s232/proj/build/preview/storyboard/`.
+
+## Step 234 — Orbital accuracy lint
+
+What was built (DESIGN §98.8):
+
+- **Data fix first** (reviewer): Neptune's Ω rate in `orbits/ephemeris.py` `TABLE1` was Pluto's
+  (−0.01183482); now JPL's −0.00508664 deg/century. Effect: Neptune's heliocentric direction moves
+  by at most 1.2″ over 1800–2050 (computed in the scratchpad). `tests/test_orbit_sky.py` gains
+  `test_table1_all_values_pinned`: all 108 numbers (the reviewer's "54" are the J2000 values, the
+  test pins the 54 rates too) against a transcription in the test.
+- **Nine lint rules** (`lint/orbit_rule.py`, config models in `config.py`, last in `LINT_RULES`):
+  `orbit_period`, `orbit_speed`, `orbit_dv`, `orbit_transfer`, `orbit_distance` (tolerance 0.05),
+  `orbit_date` (days 3), `orbit_scale`, `orbit_conserved` (tolerance 0.01), `orbit_crash`. The
+  runner adds `orbit_issues` to `SceneContext.science` like the calc / plot rules.
+- **Knowledge** `vidgen/orbits/accuracy.py` (no manim): `Fact` (a value or range of a kind, with the
+  bodies it is about), `said_quantities` (the calc reader + months / weeks, digit groups skipped),
+  `clause`, `topic_groups`, `orbit_claims`, `ratio_claims`, `scale_claims` (`PICTURES`),
+  `said_dates` / `event_claims` (JPL Table 1 events seen from the Earth), `ATMOSPHERES`.
+- **What a scene computes** (`orbit_rule.facts`, cached per project): periods, speed ranges and
+  apsis speeds, escape / circular speeds, distances and altitudes (every arc of a trajectory),
+  sibling distance ranges and synodic periods, a transfer's Δv / time / phase / synodic / wait,
+  burns, a flyby's speeds / gain / turn, the cannon's speeds, Lagrange distances, the figure-eight
+  period, the event distance. Other scenes (cards, captions) are checked against the orbit scenes'
+  facts they name.
+- **Scale, drift, crashes**: `picture_kind` (sizes / schematic / log / surely enlarged / true),
+  `Orbit.diagnostics` above tolerance, periapsis in the Earth's (100 km) or Mars's (≈125 km)
+  atmosphere, an undeclared-atmosphere flyby, n-body bodies within their radii' sum.
+- **Narration–picture rules**: `SHOWING_ACTIONS` += `sweep`, `launch`, `burn`, `flyby`;
+  `Orbit.target_text` answers `orbit:`, `periapsis:` / `apoapsis:`, `burn:<n>`, `lagrange:<L>`,
+  `event`, `barycentre`, `face`, `motion` (`orbit_manoeuvres.burn_text`, shared with the drawing).
+- The shared number reader (`quantities/accuracy.py`) reads "one and a half million kilometres".
+
+Files touched
+- New: `src/vidgen/orbits/accuracy.py`, `src/vidgen/lint/orbit_rule.py`, `tests/test_orbit_lint.py` (15).
+- Changed: `src/vidgen/orbits/ephemeris.py` (the fix), `src/vidgen/config.py`, `src/vidgen/lint/{__init__,run,narration_rule}.py`,
+  `src/vidgen/quantities/accuracy.py`, `src/vidgen/scenes/{orbit,orbit_manoeuvres}.py`, `tests/test_orbit_sky.py`,
+  `tests/test_calc_lint.py` (the calc / plot rules are no longer last), `docs/CONFIG.md` (9 table rows, defaults, the
+  "Orbits" example), the guide + `AGENTS.md` (a paragraph, 9 troubleshooting rows), `docs/COOKBOOK-SCIENCE-CHARTS.md`
+  (a note), `DESIGN.md` §98.8, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): the nine rules and their config models (`OrbitPeriodRule` …
+`OrbitCrashRule`); the module `vidgen.orbits.accuracy` (not re-exported by `vidgen.orbits`);
+`Orbit.target_text` answers more targets. No dependency, no visible change to renders.
+
+Decisions
+- Reuse: numbers, units, "about" and rounding are `quantities.accuracy`'s (`said_values`,
+  `agrees`, `mixup_power`, `statements`), texts are `calc_rule.screen_texts`, reporting is
+  `science_rule._issues`, the drift is `Orbit.diagnostics` — the orbit module adds only what an
+  orbit scene's values are and which one a sentence means.
+- Narrow: a value is compared with the facts of the bodies its clause (else sentence) names, of the
+  kinds its words allow; any agreeing fact clears it (a range: anywhere inside). A finding needs the
+  body and kind to be clear. Precise words (a named apsis, "escape", "L2") check against that kind
+  only. A period needs a period word ("Neptune barely moves in ten years" was the one false positive
+  on existing material; removed).
+- `orbit_scale` with enlarged bodies fires only on size words ("At true scale the inner planets crowd
+  the Sun" — s233 — speaks of distances and is right), and only when the bodies are surely enlarged
+  without running the layout (7 units per reach is more than any layout's scale).
+- `orbit_date` uses the Earth as observer and Table 1 (the scenes' own elements); 3 days default.
+- Mars's 125 km atmosphere (entry interface) is **for the owner to check**; the Earth's is the
+  Kármán line (FAI convention).
+
+Compatibility: rendering code unchanged except the orbit scene's text helper (`burn_text` moved out
+of a method, same text); the lint and the number reader are not render inputs, so the Phase Q
+baseline was not re-run. Existing material: 0 new findings (every example, the gallery, scratch
+s205–s233); the calc / plot findings are unchanged (0).
+
+Known gaps: claims about bodies a scene does not show (no Solar System table of facts); "384 400 km"
+(digit groups with spaces) skipped; eccentricities, inclinations, mass ratios as pure numbers not read;
+scale claims about one body among several; event dates seen from other planets.
+
+How to test
+- `tests/test_orbit_lint.py` (15, ~5 s), `tests/test_orbit_sky.py` (36), `tests/test_calc_lint.py`, `tests/test_lint.py`,
+  `tests/test_docs.py`, `tests/test_guide.py`, `tests/test_narration_rule.py`, `tests/test_orbits.py`,
+  `tests/test_orbit.py`, `tests/test_orbit_laws.py`, `tests/test_orbit_many.py`, `tests/test_orbit_manoeuvres.py`,
+  `tests/test_accuracy.py`, `tests/test_genetics_lint.py`, `tests/test_quantities.py`, `tests/test_schema.py`,
+  `tests/test_api.py`, `tests/test_json_output.py`, `tests/test_config.py` — all passing.
+- Lint everything: scratchpad `s234/lint_all.py` (config-only calc + plot + orbit over the examples, gallery and
+  scratch projects: TOTAL 0). Demo with planted mistakes: scratchpad `s234/demo` (`vidgen lint` → 16 orbit
+  warnings, the right statements quiet; preview storyboard in `s234/demo/build/preview/storyboard/`).
+
+## Step 235 — Example, docs and gallery
+
+What was built (DESIGN §98.9)
+- **Example `examples/mars-transfer`** ("How to get to Mars"; `video.yaml`, `README.md`): `intro`;
+  `straight` (the Earth's 29.8 km/s as a live arrow; a rocket alongside the Earth with a 3 km/s
+  radial burn on "Fire" goes round the Sun out to 1.11 AU, far short of Mars); `hohmann` (circular,
+  coplanar orbits stated in a caption; Mars starts 95° ahead so the live phase angle shrinks to
+  44.3°; Δv₁ 2.94 on "burn", 259 d, Δv₂ 2.65 on "second", 5.59 km/s in all); `timing`
+  (`calculation`: a = 1.262 AU, T = π√(a³/GM☉) = 259 d, θ = π(1 − 2T/T_M) = 44.3°); `leaving`
+  (`calculation` with v∞ `from_scene: hohmann.dv1`: v_circ 7.726, v_esc 10.93, Δv =
+  √(v∞² + v_esc²) − v_circ = 3.59 km/s from 300 km, the Oberth effect); `sky` (`date: 2026-10-28`,
+  Mars 64° ahead, the next window "around early December 2026" (lead = 44.3° on 2026-12-05 in this
+  model), the opposition of 2027-02-19 (`event`), windows every 780 d ≈ 26 months, the next in
+  early 2029); `recap`. Kokoro `af_heart` 0.85, `discovery` at −9 dB, terms (Hohmann transfer,
+  launch window, semi-major axis with TeX `a`), a 9:16 `short` variant.
+- **Docs**: guide topic `orbits` (aliases orbit, orbital, orbital-mechanics, kepler, hohmann,
+  planets, space, spaceflight; listed in the guide's topic list; the scenes topic points to it),
+  copied to `AGENTS.md`; `docs/COOKBOOK-ORBITS.md` (choosing, scale honesty, units and Δv,
+  approximations to state, pacing, mistakes → rules, a validated pattern) linked from README,
+  `docs/COOKBOOK.md` (intro, §12), the guide and the gallery; README feature bullet, example entry
+  and cookbook entry; CHANGELOG; DESIGN §98.9; CONFIG needed nothing new (`test_docs`'s
+  completeness test was already parametrized with `orbits` in Step 229 and passes).
+- **Gallery "Orbital mechanics"**: section note and footer (`gallery.SECTION_NOTES` /
+  `SECTION_FOOTERS`), the `orbit` entry regenerated (current layout, page with Steps 230–233's
+  params; 337 kB), showcases `mars_hohmann` (330 kB) and `jupiter_trojans` (328 kB; rotating view
+  from the start — a frame turn on a word made 170 kB GIFs).
+- **Budget decision: 13 → 15 MB** (`tests/test_gallery.py` `BUDGET`, comment; DESIGN §98.9). The
+  gallery went 12.9 → 13.6 MB. Optimizing first was tried: a lossless Pillow re-save of the GIFs
+  saved ~10 % on some and grew others, and `vidgen gallery` would undo it on the next regeneration
+  (gifsicle is not available and is not a dependency to add); smaller clips would visibly hurt
+  every entry. So the budget grows by Phase X's need plus about three entries; `ENTRY_MAX` 0.36 MB
+  and `CLIP_MAX_BYTES` 150 KB unchanged.
+- **Fixes found on the way**: the transfer's θ label now keeps off the bodies and their labels
+  (`orbit_manoeuvres._draw_phase`; in 9:16 it sat on "Earth"); `ephemeris.events_between` listed the
+  2029-03-25 Mars opposition twice (searches on from ev.jd + 1 d; test in `test_orbit_sky.py`).
+
+Files touched
+- New: `examples/mars-transfer/{video.yaml,README.md}`, `docs/COOKBOOK-ORBITS.md`,
+  `tests/test_mars_transfer.py` (5), `src/vidgen/data/gallery/showcases/{mars_hohmann,jupiter_trojans}.yaml`,
+  `docs/gallery/{mars_hohmann,jupiter_trojans}.md` + media.
+- Changed: `src/vidgen/gallery.py`, `src/vidgen/scenes/orbit_manoeuvres.py`,
+  `src/vidgen/orbits/ephemeris.py`, the guide + `AGENTS.md`, `README.md`, `docs/COOKBOOK.md`,
+  `docs/gallery/{README,orbit}.md` + `media/orbit-*`, `tests/{test_gallery,test_guide,test_docs,test_orbit_sky}.py`,
+  `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`.
+
+Public interfaces: none new (two showcases, a guide topic). Visible changes: the θ label's place
+in transfer scenes; the gallery budget.
+
+Decisions
+- The real date is its own scene (`sky`): a `transfer` needs circular orbits and a `date` places
+  the planets on Table 1's ellipses, so the two are not mixed; the window date comes from the
+  model's heliocentric lead (stated "around", "approximately" in the README) — real windows come
+  from porkchop plots on the true orbits.
+- The departure burn is computed from `from_scene` (never typed in); 300 km is an exact chosen
+  height; the naive "escape then Δv₁" 6.14 km/s is in the README only.
+- No gravity-assist aside: the video is already 3:43 (longer than the ~3 min aimed at; each orbit
+  scene needs time for the motion); the gallery's `orbit` page and the guide show the flyby.
+
+Checks
+- `vidgen lint` with the Kokoro narration: 0 findings in 16:9 and in 9:16 (orbit_*, calc_*,
+  narration and layout rules).
+- Render (scratchpad `s235/proj/output/mars_transfer.mp4`): 1280×720 at 30 fps — a 47 s orbit
+  scene at 1080p did not finish within the 10-minute command limit here, so the check render is
+  720p; 223.3 s video and audio, −16.0 LUFS, true peak −1.9 dBTP, LRA 3.3 LU, no silence over 1.5 s.
+- Compatibility: the shared code is untouched (the orbit scene, `vidgen.orbits` and the gallery
+  data only), so the Phase Q baseline was not re-run; orbit suites pass.
+
+Known gaps: no gravity-assist aside or Mars capture in the example; the 1080p render not made here;
+the 9:16 orbit sample keeps empty space under its picture (229–233 layout); `jupiter_trojans`'s
+L5 zero-velocity lobe is drawn in the Trojan's colour (correct: the curve is symmetric).
+
+How to test
+- `tests/test_mars_transfer.py` (5), `tests/test_docs.py` + `tests/test_guide.py` (154),
+  `tests/test_gallery.py -m "not render"` (19), `tests/test_orbit.py` (75), `tests/test_orbit_many.py` +
+  `tests/test_orbit_sky.py` (67), `tests/test_orbit_manoeuvres.py` + `test_orbit_lint.py` + `test_orbits.py` +
+  `test_orbit_laws.py` (139), `test_builtin_scenes` + `test_calc_lint` `-k "orbit or calc"` (43) — all passing.
+- Stills: scratchpad `s235/proj/build/preview/frames/` (16:9) and `s235/proj/build/preview_short/frames/`
+  (9:16); contact sheets `s235/contact_16x9.png` (the render) and `s235/short_sheet.png`.
+
+## Step 236 — Review of Phase X
+
+What was done (DESIGN §98.10): a critical review of Steps 229–235 with fixes — a physics-accuracy
+pass against independent calculations, the reviewer's points (picture size, units in substitutions,
+render speed, known gaps), compatibility.
+
+Findings and fixes
+- **Physics** (scratchpad `s236/physics_check.py`, 133 checks; the lasting ones in
+  `tests/test_orbit_review.py`): Kepler's equation (bisection, e 0–0.999999 and 1.000001–10, Barker),
+  Vallado's COE2RV and the `from_state` round trip, propagation against DOP853, vis-viva, Hohmann
+  LEO → GEO and Earth → Mars, bi-elliptic thresholds and Δv, plane changes, the flyby's turn, v∞ and
+  periapsis against an integrated hyperbola, the Sun-frame gain and energy change, L1–L3 by root
+  finding for four μ, L4/L5, Jacobi constants, Routh's μ, Sun–Earth L1/L2, the figure-eight returning
+  after T, the Galilean ratios and Laplace relation, Table 1 positions against Standish's method
+  written here, 14 published opposition / conjunction dates 2018–2027 (all within 0.48 d), every
+  constant and preset against its cited value. **No physics error found.** Noted: Kepler III from
+  Table 1's a gives 365.2578 d for the EMB, the table's mean motion 365.2564 d (independent fits).
+- **Render speed / memory** (the reason Step 235 rendered at 720p): every new readout string built a
+  manim `Text` (~20 ms) and the panel's caches kept it plus a deep copy with its SVG path objects
+  (~0.3 MB each): memory passed 3 GB and the worker was killed (exit −9). New
+  `scenes/orbit_text.LiveText`: a string laid out once per shape (digits as 0), the real digits from
+  glyphs rendered once, following glyphs shifted by advances and pair kerning — equal to `Text` to
+  10⁻⁷ units (tested); plain `VMobject` glyphs; the panel text cache bounded (`TEMPLATE_CACHE` 256,
+  points kept on the mobject); the plate built once; the panel measured with the same glyphs. The
+  title, caption and axes lie below the clock's mobject (`STILL_Z` −2 < `CLOCK_Z` −1), so manim draws
+  them once per play into its static image. `hohmann` 1920×1080 in-process: 179.9 s, 129 ms/frame,
+  ≥ 1.5 GB → 99.3 s, 71 ms/frame, 0.81 GB; via `vidgen render`: `straight` 90.5 → 59 s, `hohmann`
+  killed → 105 s; the whole example at 1080p in ~6½ min.
+- **16:9 picture size**: the caption stands in the side column under the panel (left-aligned, ≥ 4.4
+  units wide; under the picture when the column has no room); the picture takes the height under the
+  title (61 % → 69 % of the frame height in the example). **9:16**: a transfer's Δv₁ / Δv₂ rows are
+  rank 1 in portrait (the burns' labels carry them): two rows fewer, the picture ~25 % taller.
+- **Units in substitutions** (`quantities.calc`): `Step.common` / `common_stacked` — every value in
+  the result's unit, the unit once at the end, `(√(2.945² + 10.93²) − 7.726) km/s` — when all values
+  with units share the result's dimension (or the result is a pure number: `common_bare`, then it
+  ranks with the SI numbers so readable full-unit lines are not replaced). Order: full units (one
+  line, two, per factor), common unit, SI numbers.
+- **Gaps fixed**: the orbit lint reads digit groups with spaces ("384 400 km", thin / no-break too);
+  the phase angle's label keeps off its own lines and the central label, its lines start at the
+  central body's edge, in the highlight colour at 0.6 (they were "dim" like the gridlines, which the
+  `covered_text` lint confused with the labels' grey edges); a label keeps off its own dot.
+
+Files touched
+- New: `src/vidgen/scenes/orbit_text.py`, `tests/test_orbit_review.py` (8).
+- Changed: `src/vidgen/scenes/{orbit,orbit_manoeuvres,orbit_overlays,orbit_many}.py`,
+  `src/vidgen/quantities/calc.py`, `src/vidgen/orbits/accuracy.py`, `tests/test_orbit_lint.py`
+  (digit groups), `docs/CONFIG.md` (calculation substitution, orbit panel/caption),
+  `docs/gallery/orbit.md` + media of `orbit`, `mars_hohmann`, `jupiter_trojans`,
+  `examples/mars-transfer/README.md`, `DESIGN.md` §98.8 notes + §98.10, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): `quantities.Step.common`, `common_stacked`, `common_bare`; the orbit
+`caption` docstring. No config key, no dependency.
+
+Decisions
+- Glyph composition over a cheaper `Text` (manim has no glyph cache): exact, and it fixes memory
+  too; the panel looks the same (tested against `Text`).
+- No `display_unit` option: the common-unit way is right by construction and automatic; `units:
+  always / never` still choose.
+- The title stays in the header band (consistent with the other scenes of a video); only the
+  caption moves.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check236`).
+Calculation scenes: the radioactive-decay `half` scene compared frame by frame with and without the
+common unit (16:9 and 9:16): identical; the gallery's calculation has no common-unit line; the
+example's `leaving` changes deliberately. Orbit scenes change deliberately (caption, 9:16 transfer
+panel, phase angle). Gallery 13.6 MB of 15. Lint sweep `s236/lint_all.py` (337 scenes: examples,
+gallery, s205–s236 projects): 0; `s234/demo` still 16; `vidgen lint` of the example 0 / 0 (16:9 /
+9:16) and of s230, s231, s232, s233: 0.
+
+Known gaps (DESIGN §98.10): n-body runs with burns; the flyby as a heliocentric trajectory; an
+exaggerated-altitude view for LEO at true scale (the radial transform would have to reach every
+offset); open orbits framed at 3 × the periapsis without `extent`; small 9:16 pictures with an inset
+or a long panel; the Moon on a date.
+
+How to test
+- `tests/test_orbit_review.py` (8, ~12 s), `tests/test_orbit.py` (75), `test_orbit_many` +
+  `test_orbit_sky` + `test_orbit_manoeuvres` + `test_orbit_lint` + `test_orbits` + `test_orbit_laws` +
+  `test_mars_transfer` (211); `test_calculation` + `test_calc_lint` + `test_quantities` +
+  `test_science_review` + `test_radioactive_decay` (164); `test_docs` + `test_guide` + `test_gallery`
+  not render (172); `test_builtin_scenes` + `test_actions_coverage -k "orbit or calculation"` (10);
+  `test_schema` + `test_registry` + `test_introspect` + `test_json_output` + `test_extensions` +
+  `test_api` + `test_translation` (254); `test_lint` + `test_narration_rule` + `test_word_anchors` +
+  `test_plot_live` + `test_accuracy` (144); `tests/test_mcp.py` in full (20) — all passing.
+- Video: scratchpad `s236/proj/output/mars_transfer.mp4` (1920×1080, 30 fps, 223.3 s video and audio,
+  −16.0 LUFS, true peak −1.9 dBTP, LRA 3.3 LU); contact sheet `s236/contact_16x9.png`; 9:16 stills
+  `s236/short_sheet.png` and `s236/proj/build/preview_short/`.
+
+
+## Step 237 — Plan and particle model
+
+What was built (DESIGN §99): the Phase Y plan (tasklist Steps 237–244, the "Particle physics"
+ideas marked as moved; DESIGN §99.1 with how 238–243 plug into the model and the reuse of Phases W
+and X), the model package `vidgen.particle_physics` (no manim), the conservation checker and the
+scene type `standard_model` with the actions `antiparticles` and `couplings`.
+
+- `vidgen.particle_physics`: `data` (`Particle`; the Standard Model's 30 particle / antiparticle
+  keys and 27 hadrons with antiparticles, 77 keys; PDG 2024 masses, widths or mean lives — the
+  other computed with ħ —, charge, spin, parity, C and G parity, colour, B, L_e / L_μ / L_τ,
+  S / C / B′ / T, quark content; hadron charge and baryon number checked against the quarks by
+  `particle_problems`; the source and the quark-mass schemes in the docstring; uncertain values
+  marked `# check`), `names` (ASCII and Unicode spellings, anti markers, PDG's barred-charge
+  convention, did-you-mean), `process` (`parse_process`, off-shell `Z*`), `conservation` (`check`
+  → `Verdict` with `summary` / `explain`; thresholds; interaction; C / G parity; Landau–Yang),
+  `chart` (cells, grid positions, couplings by boson).
+- Scene `standard_model` (`scenes/standard_model.py`, `scenes/standard_model_actions.py`): the
+  chart in colour groups with mass / charge / spin / name per cell, a key cell, the PDG source line;
+  wide grid in 16:9, bosons in two rows under the fermions in 9:16; row mode (mass and charge on one
+  line) or the classic column, chosen for all cells by what fits at the readable size; targets for
+  every particle (`particle:u` / `particle:up`...), generation, group and row; `reveal: groups |
+  all`; `antiparticles` (cells morph: charge, barred symbol drawn as a line, name; group labels
+  follow) and `couplings` (outline, rings, dimming, the reason in words; undone at the next beat).
+
+Files touched
+- New: `src/vidgen/particle_physics/{__init__,data,names,process,conservation,chart}.py`,
+  `src/vidgen/scenes/{standard_model,standard_model_actions}.py`, `tests/test_particle_physics.py`
+  (92), `tests/test_standard_model.py` (9 incl. 2 renders), `docs/gallery/standard_model.md` +
+  `media/standard_model-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/api.py` (exports `particle_physics`), `src/vidgen/scenes/__init__.py`,
+  `src/vidgen/lint/layout_rules.py` (Greek lowercase glyph heights for the cap-height estimate),
+  the guide (chooser row, a `# particle physics` snippet block, two action rows) + `AGENTS.md`,
+  `docs/CONFIG.md` (`standard_model` section and targets row), `docs/gallery/README.md` (new
+  "Particle physics" section, generated), `examples/gallery/video.yaml` (scene `particles`),
+  `tests/{test_actions_coverage,test_builtin_scenes,test_docs,test_extensions,test_translation}.py`,
+  `DESIGN.md` (§99), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): `vidgen.api.particle_physics` (module); scene type `standard_model`;
+actions `antiparticles`, `couplings`. No dependency, no config key.
+
+Decisions
+- The package is `particle_physics`, not `particles` (`vidgen/particles.py` is the cartoon effect).
+  Step 243's guide topic name should avoid `particles` for the same reason (noted in §99.1).
+- Masses in MeV with c = 1; charges and baryon numbers as Fractions; the PDG flavour sign
+  convention; mixtures (π⁰, η, K⁰_S, K⁰_L) as several quark contents, the checker reading a K⁰_S as
+  whichever of K⁰ / K̄⁰ changes flavour least (said in a note).
+- `check` forbids on absolute laws (Q, B, family L, fermion count, energy for decays, Landau–Yang,
+  C-parity in strong / EM), on |ΔS| > 1 (first-order weak), and on flavour change at a Higgs
+  vertex; a G-parity violation only moves a hadronic decay from strong to electromagnetic with a
+  note ("slow"). Not checked: parity, orbital angular momentum, CKM suppression, FCNC, colour.
+- Chart colours: quarks the palette's third colour, leptons `tertiary`, gauge bosons `accent`,
+  Higgs `secondary` — `highlight` stays free for the actions.
+- Antiparticle bars are drawn as lines (the combining macron sits off-centre on ν and read like a
+  minus); every symbol carries an (invisible) bar so the flip morphs like into like.
+- Lint glyph table: Greek lowercase added (shared code; texts without Greek are measured as
+  before, frames unchanged).
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check237`).
+Existing scenes untouched; the lint change only affects texts with Greek lowercase letters.
+Gallery 13.9 MB of 15 (the entry is within the 0.36 MB share).
+
+Values for the owner to check (DESIGN §99.2, `# check` in `data.py`): written from memory of the
+PDG summary tables; where PDG 2022 and 2024 differ the 2024 value was used as I remember it: quark
+masses (u 2.16, d 4.70, s 93.5 MeV; c 1.273, b 4.183 GeV; t 172.57 GeV, Γ_t 1.42 GeV); m_τ
+1776.93 MeV; m_W 80.3692 GeV; m_Z 91.1880 GeV, Γ_Z 2.4955 GeV; m_H 125.20 GeV; τ(π⁰) 8.43 ×
+10⁻¹⁷ s; τ(D⁰) 410.3 fs; m(B±) 5279.41, m(B⁰) 5279.72 MeV; τ(Λ) 2.632 × 10⁻¹⁰ s (possibly
+updated to about 2.62 in 2024). The Higgs width is the SM prediction (4.1 MeV), not the measured
+value; the neutrino limit 0.8 eV (KATRIN 2022) is shown for all three flavours.
+
+Known gaps (planned in 238–243 or noted): no Feynman diagrams, kinematics, detectors, data or lint
+yet; chart labels and particle names are English only (title and caption translate); a full chart
+trips `max_words` (about 50 words); cells dimmed by `couplings` can trip `contrast` (the backdrop
+sampler counts a dimmed glyph's own pixels); `test_builtin_scenes.py::test_builtins_use_only_the_public_api`
+fails on `scenes/orbit_text.py` (`from vidgen import plot_draw`), unchanged since Step 236 — not
+touched here.
+
+Render performance: the 12.7 s chart scene renders in about 12 s at 1280×720 (preview, 10 fps);
+the couplings scene (four actions) in about 21 s.
+
+How to test
+- `tests/test_particle_physics.py` (92, < 1 s), `tests/test_standard_model.py` (9 incl. renders,
+  ~18 s).
+- Related, all passing except the pre-existing orbit_text import check: `test_docs` +
+  `test_extensions` + `test_translation` + `test_actions_coverage` not render (197);
+  `test_guide` + `test_gallery` not render (102); `test_builtin_scenes -k "standard_model or not
+  render"` (161 of 162); `test_actions_coverage -k standard_model` render (3); `test_api` +
+  `test_schema` + `test_registry` + `test_introspect` + `test_json_output` + `test_narration_rule`
+  not render (150); `test_lint` not render (22); `test_overlays` not render (16); the gallery lint
+  checks of `test_calc_lint`, `test_genetics_lint`, `test_orbit_lint` (3).
+- Stills: scratchpad `s237/proj` (three scenes: the chart by groups, antiparticles, couplings):
+  `build/preview/frames/` and `build/preview/storyboard/` (16:9 dark), `build/preview_light/`
+  (16:9 light), `build/preview_vertical/` (9:16 dark), `build/preview_vlight/` (9:16 light);
+  `vidgen lint`: 0 errors; warnings: `max_words` (dense chart) and `contrast` on dimmed symbols.
+
+## Step 238 — Feynman diagrams
+
+What was built (DESIGN §99.5–§99.6): Feynman diagrams in proper notation, with every vertex checked
+against the Standard Model, as a model (`vidgen.particle_physics.feynman`, `.feynman_layout`, no
+manim) and the scene type `feynman` with the actions `travel`, `vertex_rule`, `swap_channel`.
+
+First, two fixes from the review of Step 237:
+- τ(Λ) corrected to the PDG 2024 average (2.617 ± 0.010) × 10⁻¹⁰ s (2.632 before; Λ̄ follows, it
+  is built by conjugation); m_W 80.3692, m_Z 91.1880, Γ_Z 2.4955, m_H 125.20 GeV are confirmed and
+  no longer marked `# check` (DESIGN §99.2 updated; a test pins the values).
+- `test_builtin_scenes.py::test_builtins_use_only_the_public_api` passes again: `orbit_text.py`
+  imports through `vidgen.api` (which exports `plot_draw`), and `calculation.py` — which also
+  broke the rule (`from vidgen import registry`, since Step 231) — uses the new
+  `vidgen.api.find_scene_type` (= `registry.find`).
+
+The step:
+- **Model** `feynman`: `Diagram` / `DiagramLine` (a particle running forward in time `from` →
+  `to`: vertex ids, `in`, `out`; spectator quarks `in` → `out`), `HadronGroup` (quark lines
+  bracketed as n, p, π⁺…, content checked), `build_diagram` (structure errors), `vertex_rule`
+  (the Standard Model's tree-level vertices; no H γ γ / H g g / H Z γ vertex — "draw the loop
+  (preset h_to_gammagamma)"; flavour change only at a W, leptons within their family, quarks with
+  the CKM element; four fermions → "draw the W"), `check_vertex` (Q, B, L_e/μ/τ with Step 237's
+  `check`, the vertex as a process with all lines off-shell), `colour_problem`, `fermion_chains`,
+  `check_diagram` (+ the whole reaction and the hadron reaction), computed couplings (α, α_s, v, g,
+  Yukawa), 12 presets (`PRESETS`, `preset_diagrams`).
+- **Layout** `feynman_layout.layout`: time order from the legs (timelike / spacelike internal
+  lines, loop vertices early / late), columns, barycentric y, every order of the ends tried for the
+  fewest crossings (u-channel uncrossed), groups beside their spectators, bowed multi-edges.
+- **Scene** `feynman` (`scenes/feynman.py`, `feynman_draw.py`, `feynman_actions.py`): notation
+  (arrows, waves, coils, dashes, dots, labels with drawn bars, brackets), reaction line, time arrow
+  (`time: right | up`), reveal in time order, targets `line:<id>`, `vertex:<id>`,
+  `hadron:<particle>`, `process`, `diagram`, `time_axis`; `travel` (dots along lines on one clock),
+  `vertex_rule` (ring + rule, coupling, checks beside / under the diagram), `swap_channel`
+  (morph between a scene's diagrams; targets follow).
+
+Files touched
+- New: `src/vidgen/particle_physics/{feynman,feynman_layout}.py`,
+  `src/vidgen/scenes/{feynman,feynman_draw,feynman_actions}.py`, `tests/test_feynman.py` (79
+  incl. 3 renders), `docs/gallery/feynman.md` + `media/feynman-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/particle_physics/{__init__,data}.py`, `src/vidgen/api.py`
+  (`find_scene_type`), `src/vidgen/scenes/{__init__,calculation,orbit_text}.py`, the guide
+  (chooser row, a `# particle physics` snippet, three action rows) + `AGENTS.md`, `docs/CONFIG.md`
+  (`feynman` section and targets row), `docs/gallery/README.md` (generated), `examples/gallery/video.yaml`
+  (scene `feynman`), `tests/{test_actions_coverage,test_builtin_scenes,test_docs,test_particle_physics,test_translation}.py`,
+  `DESIGN.md` (§99.2 values, §99.5, §99.6), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): scene type `feynman`; actions `travel`, `vertex_rule`,
+`swap_channel`; `vidgen.api.find_scene_type`; `particle_physics.feynman`, `.feynman_layout`,
+`Diagram`, `DiagramCheck`, `build_diagram`, `check_diagram`, `preset_diagrams`, `vertex_rule`,
+`diagram_layout`. No dependency, no config key.
+
+Decisions
+- A line names the particle that travels forward in time (an incoming positron is `e+ in -> v1`);
+  the arrow is derived from the fermion number, so the author never draws arrows by hand and an
+  antifermion's arrow always points against time.
+- Vertex rules are written on the lines read as all outgoing (crossing symmetry), so one table
+  serves absorption, emission, annihilation and pair creation; conservation reuses `check` with
+  every line off-shell (no energy check at a vertex).
+- The u-channel is drawn uncrossed with the outgoing legs swapped (the same diagram); the brief's
+  "no crossings for tree diagrams" holds for every preset (tested) and a custom diagram that still
+  crosses gets a warning.
+- Internal lines are labelled as written (`γ`, not `γ*`, unless the author writes `gamma*`);
+  presets use `γ*` in Drell–Yan and `Z*` in H → ZZ*.
+- The vertex-rule text takes a column on the right in 16:9 (only when the scene uses
+  `vertex_rule`), a band at the bottom in 9:16; the diagram keeps the rest of the frame.
+- In 9:16 with time left → right the diagram may grow to 1.15 × its width tall (the frame is
+  narrow); `time: up` is the alternative for tall frames.
+- The gallery sample is the guide's first `feynman` snippet (Bhabha with `vertex_rule`,
+  `swap_channel`, `travel`).
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check238`).
+Existing scenes untouched (the two import changes are refactors). Gallery 14.1 MB of 15 (the entry
+about 0.16 MB: GIFs 76 KB and 70 KB).
+
+Values: couplings computed from constants (α), PDG 2024 (α_s(m_Z) = 0.1180, G_F = 1.1663788 ×
+10⁻⁵ GeV⁻², the masses of Step 237). **For the owner to check**: sin²θ_W ≈ 0.231 (shown with three
+figures; the stored 0.2313 is my memory of the PDG 2024 MS-bar value) and the CKM magnitudes
+(two figures: |V_ud| 0.97, |V_us| 0.22, |V_ub| 0.004, |V_cd| 0.22, |V_cs| 0.97, |V_cb| 0.04,
+|V_td| 0.009, |V_ts| 0.04, |V_tb| 1.0); both marked `# check` in `feynman.py`.
+
+Known gaps: two-loop and box diagrams are not laid out (one loop: triangles and bubbles); colour
+flow is checked, not drawn; the vertex-rule text is English only; with `reveal: time` and few
+beats, a diagram's last lines may be drawn in the beat after (steps spread over the beats) — a
+`swap_channel` early in that beat then morphs a diagram not yet complete (use `reveal: all` or
+more beats).
+
+Render performance: preview (1280×720, 10 fps) ≈ 0.6–0.8 s per second of video (Bhabha with
+three actions: 9.9 s of video in 6.7 s); no memory concern (a few hundred mobjects).
+
+How to test
+- `tests/test_feynman.py` (79 incl. 3 renders, ~7 s), `tests/test_particle_physics.py` (92).
+- Related, all passing: `test_docs` + `test_extensions` + `test_translation` +
+  `test_actions_coverage` not render (198); `test_guide` + `test_gallery` + `test_builtin_scenes`
+  not render (265); `test_builtin_scenes` + `test_actions_coverage -k "feynman or standard_model"`
+  with renders (10); `test_api` + `test_schema` + `test_registry` + `test_introspect` +
+  `test_json_output` + `test_narration_rule` not render (150); `test_lint` + `test_overlays` +
+  `test_calculation` + `test_standard_model` + `test_orbit` not render (126); the gallery lint
+  checks of `test_calc_lint`, `test_genetics_lint`, `test_orbit_lint` (3).
+- Stills: scratchpad `s238/proj` (nine scenes: Bhabha with vertex_rule / swap / travel, muon decay
+  with highlights, β decay with spectators, H → γγ top → W loop, gg → H with time up, H → ZZ* → 4ℓ,
+  Compton u, a custom e⁺e⁻ → W⁺W⁻ (ν exchange → s-channel Z), π⁺ decay):
+  `build/preview/storyboard/` (16:9 dark), `build/preview_light/`, `build/preview_vertical/`,
+  `build/preview_vlight/`; `vidgen lint`: 0 errors.
+
+## Step 239 — Relativistic kinematics
+
+What was built (DESIGN §99.6 review fixes, §99.7–§99.8): relativistic kinematics as a model
+(`vidgen.particle_physics.kinematics`, no manim), the scene type `kinematics` (momentum vectors in
+the rest frame and the lab) with the action `boost`, particle values in `calculation` symbols
+(`mass: pi+`, `lifetime: mu-`, `width: Z`) and the plot model `two_body_opening`.
+
+First, the review of Step 238's stills:
+- Gluons now read as coils (radius 0.14, pitch 0.3, every turn closing into a loop), clearly unlike
+  the photon / W / Z waves at preview and 1080p (a test checks the coil runs backwards in each turn).
+- Diagrams take more of the frame (transverse unit up to 3.0, width up to 2.8 × height, 9:16 up to
+  1.8 × the width tall) and the vertex-rule card is 1.3 × the readable size (a 16:9 column up to 5
+  units / 36 %, a 9:16 band of eight lines, at most 30 % of the height). The `feynman` gallery
+  entry was regenerated. `test_feynman`'s portrait label check used `s.frame_height` after the
+  render (the landscape frame by then) and now uses the rendered size.
+
+The step:
+- **Model** `kinematics`: `FourVector` (E, p in MeV, c = 1; mass with negative m² refused, boosts,
+  Minkowski product), `invariant_mass`, rest frames of systems, `Boost` / `motion` (β ≥ 1, γ < 1,
+  E < m refused), `kallen`, `two_body_momentum`, `two_body` (checked by the conservation checker,
+  below threshold refused) with p*, energies, lab vectors and opening angles, `MomentumPicture`
+  (`decay_picture`, `system_picture`), `threshold` (fixed target vs collider), `decay_length`
+  (βγcτ, γτ, survival), SI conversions (`to_si`, `si_text`, `natural_value`), `pdg_value`, the plot
+  model `two_body_opening`.
+- **Scene** `kinematics`: a two-body decay in the parent's rest frame and the lab (side by side in
+  16:9, stacked in 9:16), or particles given in the lab with their rest frame; arrows to scale with
+  momenta at the tips, Σp, β / γ, and each frame's numbers (p*, energies, opening angle, the
+  invariant mass in both frames, βγcτ, SI); targets `panel:*`, `arrow:<n>` / `arrow:<particle>`,
+  `sum`, `values`, `process`; `boost` moves a frame continuously; `calc_values` for `from_scene`.
+- **Calculation**: `{name: m_mu, mass: mu-}` etc. take PDG 2024 values with their figures, meaning
+  and source.
+
+Files touched
+- New: `src/vidgen/particle_physics/kinematics.py`, `src/vidgen/scenes/{kinematics,kinematics_actions}.py`,
+  `tests/test_kinematics.py` (24 incl. 3 renders), `docs/gallery/kinematics.md` +
+  `media/kinematics-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/particle_physics/__init__.py`, `src/vidgen/scenes/{__init__,calculation,feynman,feynman_draw}.py`,
+  the guide (chooser row, calculation row, a `# particle physics` snippet, the `boost` action row)
+  + `AGENTS.md`, `docs/CONFIG.md` (`kinematics` section, the calculation's particle symbols, targets
+  row), `docs/gallery/README.md` and the `feynman` entry (regenerated), `examples/gallery/video.yaml`
+  (scene `kinematics`), `tests/{test_actions_coverage,test_builtin_scenes,test_docs,test_feynman,test_translation}.py`,
+  `DESIGN.md` (§99.6 fixes, §99.7, §99.8), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): scene type `kinematics`; action `boost`; calculation symbol keys
+`mass`, `lifetime`, `width`; `particle_physics.kinematics` (+ `Boost`, `DecayLength`, `FourVector`,
+`Thresholds`, `TwoBodyDecay`, `decay_length`, `invariant_mass`, `threshold`, `two_body`,
+`two_body_momentum` at the package level); plot model `two_body_opening`. No dependency, no config
+key.
+
+Decisions
+- A new scene type rather than a `plot` model: arrows from an origin, two frames and a frame that
+  moves are a picture of their own; worked numbers stay `calculation` scenes (now with PDG values by
+  name and `from_scene` from the picture), curves stay `plot` (a registered model).
+- MeV with c = 1 everywhere inside; units appear only in text (MeV/c, MeV/c²) and in SI conversions
+  through `vidgen.quantities`.
+- Both frames share one arrow scale unless they differ more than 2×; then the header says so
+  (`arrows ×2.4`), so a picture never silently misleads about lengths.
+- A decay is refused unless the checker allows it and it is above threshold; the checker's
+  explanation is the error message.
+- Massless products' minimum opening angle is computed by scanning the emission angle (general for
+  massive products) and matches sin(θ_min/2) = 1/γ (tested).
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check239`).
+Calculations without the new keys are unchanged; the `feynman` look changed as asked (gallery
+entry regenerated). Gallery 14.4 MB of 15 (kinematics GIFs 81 KB and 102 KB).
+
+Values: every number is computed from the PDG 2024 masses and lifetimes of Step 237 (none new);
+no value to check beyond those already listed (DESIGN §99.2).
+
+Known gaps: planar pictures (pz = 0); no three-body decays or sampled angular distributions;
+`two_body_opening` takes masses as numbers; a dense two-frame picture trips `max_words` (warning).
+
+Render performance: preview (1280×720, 10 fps): the two-frame pion scene (15.7 s) in about 9 s;
+the boost scene (7.5 s) in about 9 s; a few hundred mobjects, no memory concern.
+
+How to test
+- `tests/test_kinematics.py` (24 incl. 3 renders, ~12 s); `tests/test_feynman.py` (79),
+  `tests/test_particle_physics.py`, `tests/test_calculation.py`, `tests/test_standard_model.py`
+  (196 together).
+- Related, all passing: `test_docs` + `test_guide` + `test_translation` + `test_extensions` not
+  render (272); `test_actions_coverage` + `test_builtin_scenes` + `test_gallery` not render (183
+  after the gallery); `-k "kinematics or feynman"` renders (10); `test_api` + `test_schema` +
+  `test_registry` + `test_introspect` + `test_json_output` + `test_narration_rule` + `test_lint` +
+  `test_overlays` + `test_orbit` not render (255); the gallery lint checks (3).
+- Stills: scratchpad `s239/kin` (pion decay in two frames with SI, π⁰ boost, diphoton system,
+  K⁺ at γ = 3 lab only, the muon decay length calculation, from_scene, the opening-angle plot):
+  `build/preview/frames/`, `build/preview_vertical/`, `build/preview_vlight/`; `s239/fey` (Step
+  238's project re-rendered): `build/preview_light/storyboard/`, `build/preview_vertical/`,
+  `build/preview_vlight/`.
+
+## Step 240 — Detectors and event displays
+
+What was built (DESIGN §99.8 review note, §99.9–§99.10): event displays in a schematic cylindrical
+detector as a model (`vidgen.particle_physics.detector`, no manim) and the scene type `detector`
+with the action `switch_view`.
+
+First, the review of Step 239's stills:
+- `kinematics`: each frame fills its half (shared arrow scale only within 1.25×, else the larger
+  frame says `arrows ×N`); new param `readout: key | all` — `key` (default) writes at most three
+  main numbers per frame at 1.3 × the readable size, `all` every number as before; `ν_μ` in plain
+  number lines written `νμ`.
+- `calculation` TeX (shared, `quantities/expr.py`): a product beside the root of a sum gets a thin
+  space — `\sqrt{\gamma^2-1}\,c\tau` — so the root's extent is clear; products without a root of a
+  sum are unchanged.
+- Plot models name their axes (shared, additive): `register_model(name, labels=..., units=...)`,
+  `Column.label`, `Simulation.labels`; `plot` uses a column's label when the axis has none.
+  `two_body_opening` gives "parent momentum (GeV/c)" and "smallest opening angle θ (deg)".
+- `feynman` with `vertex_rule` in 16:9: the diagram is centred until the first rule card, glides
+  left for it, and back after the last (`_dock`).
+- `feynman` and `kinematics` gallery entries regenerated.
+
+The step:
+- **Model** `detector`: `Detector(field, return_field)` with the schematic layers (`TRACKER`,
+  `SOLENOID`, `ECAL`, `HCAL`, `IRON`, `MUON`; barrels and endcaps), `bz`; `bending_radius`;
+  `signature` / `signature_problem` / `SIGNATURES`; `EventParticle`, `Jet`, `Event` (`missing_pt`,
+  `met`, `products_mass`, `transverse_mass`, `objects`); `generate(preset, seed, soft)` (presets
+  `z_to_mumu`, `h_to_gammagamma`, `h_to_4l`, `w_to_enu`, `dijet`), `custom_event`, `make_jet`;
+  `trajectory` (stepped helix, curlers, return field, hits, calorimeter entries), `deposits`,
+  `towers`, `tower_fraction`.
+- **Scene** `detector`: x–y / r–z views, layer-by-layer reveal (detector + key + legend, tracks,
+  towers, muons, missing p_T + names + readout), readout table, signature legend with icons and the
+  tower scale, layer key, label line with the field direction, object names in the muon system with
+  a background halo; targets `detector`, `layer:<name>`, `layers`, `tracks`, `ecal`, `hcal`,
+  `muon_hits`, `missing_pt`, `readout`, `legend`, `label`, `particle:<n>` / `particle:<particle>`,
+  `jet:<n>`, `soft`; `switch_view` morphs every part.
+
+Files touched
+- New: `src/vidgen/particle_physics/detector.py`, `src/vidgen/scenes/{detector,detector_actions}.py`,
+  `tests/test_detector.py` (36 incl. 5 renders), `docs/gallery/detector.md` +
+  `media/detector-{16x9,9x16}.{png,gif}`.
+- Changed: `src/vidgen/particle_physics/{__init__,kinematics}.py`, `src/vidgen/plotcore/{data,models}.py`,
+  `src/vidgen/quantities/expr.py`, `src/vidgen/scenes/{__init__,feynman,kinematics,plot}.py`, the
+  guide (chooser row, kinematics notes, a `# particle physics` snippet, the `switch_view` row) +
+  `AGENTS.md`, `docs/CONFIG.md` (`detector` section, targets row, kinematics `readout`, model axis
+  names), `docs/gallery/README.md` and the `feynman` / `kinematics` entries (regenerated),
+  `examples/gallery/video.yaml` (scene `detector`),
+  `tests/{test_actions_coverage,test_builtin_scenes,test_docs,test_translation}.py`, `DESIGN.md`,
+  `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): scene type `detector`; action `switch_view`; `kinematics` param
+`readout`; `particle_physics.detector`; `register_model(..., labels=, units=)`, `Column.label`,
+`Simulation.labels`. No dependency, no config key.
+
+Decisions
+- Name `detector` (as planned in §99.1) and one new action; highlight / dim / reveal are the
+  generic actions on per-particle targets.
+- Geometry is our own generic layout (tracker 1.1 m, calorimeters to 2.9 m, muon system to 4.6 m),
+  drawn to scale in both views; cells coarser than a real calorimeter's so towers read on video
+  (said in DESIGN and the docs). The tower length is log(1 + E) by default with the scale under the
+  legend (linear on request; `tower_max` sets the full depth) — a linear scale made a 30 GeV
+  electron's tower a sliver beside the HCAL.
+- Tracks are stepped numerically (not drawn as ideal arcs) so the same code gives curlers, the
+  field edge and the return-field bend; the test checks the stepped path against the circle of
+  radius p_T / (0.3 B) and its centre side.
+- Preset events balance exactly (recoil + paired soft pions), so the missing p_T is computed from
+  the visible particles yet equals the neutrinos' (tested); listed events are not balanced — their
+  missing p_T is whatever the visible particles leave (documented).
+- Display events are chosen to be seen (leptons / photons |η| ≤ 2.4, p_T ≥ 10 GeV; a W's neutrino
+  ≥ 20 GeV) — said in CONFIG.
+- Object names sit inside the muon system with a background halo instead of a ring outside the
+  detector: the drawing is about 20 % larger.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check240`).
+Existing calculations' TeX unchanged unless a root of a sum stands beside another factor; plots
+without registered labels unchanged; `feynman` without `vertex_rule` unchanged. Gallery 14.7 MB of
+15 (detector entry 0.29 MB: GIFs 117 KB and 135 KB; the sample is the guide's first `detector`
+snippet, two beats with `soft: 0` to stay under the 150 KB GIF cap).
+
+Values: the boson masses and widths are Step 237's PDG 2024 values (no new value); the detector's
+sizes, cell sizes, calorimeter shares and the return field are schematic choices, not
+measurements.
+
+Known gaps: no displaced vertices, material effects, pile-up or resolution smearing; muons leave no
+MIP deposit; a full display trips `max_words` (about 50 words with readout, legend and key); in
+9:16 the legend and readout are drawn at about 0.98 of the readable size (lint `min_font` warns
+by 1–4 %; `legend: false` or `layers: false` avoids it).
+
+Render performance: preview (1280×720, 10 fps): a five-beat Z → μμ scene (15.9 s) in about 9 s,
+a two-beat scene with `switch_view` (5.7 s) in about 9 s; a few hundred mobjects, no memory concern.
+
+How to test
+- `tests/test_detector.py` (36 incl. 5 renders, ~12 s); `tests/test_kinematics.py`,
+  `tests/test_feynman.py`, `tests/test_particle_physics.py`, `tests/test_calculation.py`,
+  `tests/test_standard_model.py` (256 together with test_detector).
+- Related, all passing: `test_docs` + `test_guide` + `test_translation` + `test_extensions` not
+  render (274); `test_actions_coverage` + `test_builtin_scenes` + `test_gallery` not render (197);
+  `-k "detector or kinematics or feynman"` renders (9); `test_plot` + `test_plot_core` +
+  `test_plot_fit` + `test_plot_live` + `test_quantities` + `test_calc_lint` not render (296) and
+  renders (6); `test_api` + `test_schema` + `test_registry` + `test_introspect` + `test_json_output` +
+  `test_narration_rule` + `test_lint` + `test_overlays` not render (188).
+- Stills: scratchpad `s240/det` (Z → μμ in five beats, W → eν, H → γγ with switch_view, dijet, the
+  listed signatures in r–z → x–y): `build/preview/frames/`, `build/preview_light/`,
+  `build/preview_vertical/`; `s240/kin` (the review fixes: pion in two frames, π⁰ boost, diphoton
+  `readout: all`, the muon calculation, the opening-angle plot, Bhabha with vertex_rule):
+  `build/preview_light/`; `vidgen lint`: 0 errors.
+
+## Step 241 — Collisions, decays and data
+
+What was built (DESIGN §99.10 review note, §99.11–§99.12): simulated collision data and what is
+read from it as two model modules (`particle_physics.spectrum`, `particle_physics.branching`, no
+manim), four scene types (`mass_spectrum`, `decay_chain`, `branching`, `branching_pie`), three
+plot models and a few additive `plot` features.
+
+First, the review of Step 240's stills:
+- Display presets draw the boson mass from a Breit–Wigner truncated to M ± Γ
+  (`detector.DISPLAY_WIDTHS` = 1, was ±3Γ), still one seeded uniform: `z_to_mumu` seed 3 now gives
+  m(μμ) = 89.0 GeV (was 85.9); a test checks 20 seeds within Γ_Z.
+- 16:9 detector about 15 % larger (circle 60 → 69 % of the frame height): the label column writes
+  the field on two lines, the side columns stand 0.6 × GAP from the drawing. Gallery entry
+  regenerated.
+
+The step:
+- **Model** `spectrum`: `SpectrumSpec`, `CHANNELS` (z_to_mumu, h_to_gammagamma, h_to_4l),
+  `channel_spec`, `generate` (cached; signal Cauchy(M, Γ) + Gaussian resolution, background
+  exponential / power / flat by inverse CDF), `asimov`, `counting_significance`, `p_value`,
+  `FIVE_SIGMA_P`, `window_shares`, `Spectrum.asimov_curve` / `counting_curve`,
+  `likelihood_significance` (Poisson ML fits, q₀, Z), `peak_guesses`, `meaning_lines`,
+  `decay_times`, `mean_lifetime`, `z_cross_section`; plot models `mass_spectrum`, `decay_times`,
+  `z_lineshape`.
+- **Model** `branching`: tables (H — SM prediction, LHC Higgs XS WG YR4, labelled theory; Z, W, π,
+  π⁰, K, μ — PDG 2024), antiparticles by conjugation, `branching_problems` (checker, sums within
+  10⁻³), `chain` / `ChainNode.lifetime_lines` / `mode_fraction`.
+- **Scenes**: `mass_spectrum` = a `Plot` subclass whose params are made from the physics (live
+  histogram, ticker and significance readout, Phase W peak fit, the 5σ note, data − background,
+  9:16 layout: fixed headroom, no legend, one box with the fit values and the note); `decay_chain`
+  (tidy tree, τ / cτ, fractions, checks); `branching` (`BarChart` subclass) and `branching_pie`
+  (`Pie` subclass).
+- **plot** (shared, additive): fit `residuals: background`, `parameters`; targets `residuals<N>` /
+  `residuals:<name>`; multi-line notes; fixes: a step growing live data no longer fades in axes
+  being re-shaped (crash with a `grow` action and an unheld note); `fit._covariance` rank test on
+  scaled columns (a cubic background at x ≈ 100 was refused).
+
+Files touched
+- New: `src/vidgen/particle_physics/{spectrum,branching}.py`, `src/vidgen/scenes/{mass_spectrum,decay_chain,branching}.py`,
+  `tests/test_spectrum.py` (29 incl. 5 renders), `docs/gallery/{mass_spectrum,decay_chain,branching,branching_pie}.md` + media.
+- Changed: `src/vidgen/particle_physics/{__init__,detector}.py`, `src/vidgen/plotcore/fit.py`,
+  `src/vidgen/scenes/{__init__,detector,plot,plot_figure,plot_live,plot_parts}.py`, the guide
+  (chooser rows, a `# particle physics` snippet block and notes, plot fit notes) + `AGENTS.md`,
+  `docs/CONFIG.md` (four sections, targets rows, plot fit keys, detector note), `docs/gallery/README.md`
+  (generated) and the `detector` entry, `examples/gallery/video.yaml` (four scenes),
+  `tests/{test_actions_coverage,test_builtin_scenes,test_detector,test_docs,test_extensions,test_gallery,test_registry,test_translation}.py`,
+  `DESIGN.md`, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): scene types `mass_spectrum`, `decay_chain`, `branching`,
+`branching_pie`; `particle_physics.spectrum`, `particle_physics.branching`; plot models
+`mass_spectrum`, `decay_times`, `z_lineshape`; plot fit keys `residuals: background`,
+`parameters`; plot targets `residuals<N>`, `residuals:<name>`; `detector.DISPLAY_WIDTHS`. No
+dependency, no config key.
+
+Decisions
+- Reuse first: `mass_spectrum` is a `plot` underneath (params made in a before-validator), so
+  filling, rescaling, fits, zoom and the actions are Phase W's; the scene adds only the readout
+  lines, the note and the portrait layout. Branching charts subclass `bar_chart` / `pie`; decay
+  times and the Z line shape are plot models; `decay_chain` is its own picture.
+- Readout significance = Asimov with the *expected* window shares (the sample's own shares were 0
+  for few events); the fit note = likelihood ratio; both "local", the p-value explained as the
+  chance that background alone fluctuates this high.
+- Fits start from the expected mass / width and the background-only polynomial (the generic peak
+  guess latched on the curvature of an exponential background; 14 of 20 γγ fits failed before).
+- Z fitted with a Breit–Wigner: its Γ includes the resolution (caption and docs say so); no Voigt.
+- 9:16: when all boxes went above the plot it kept a fifth of the frame; a fixed headroom (2× the
+  highest bin), no legend and one combined box inside the plot keep it large.
+- With a `fit` action and no `annotate` of the note, the note follows the fit (the plot's own step
+  would grow the data to the end before the fit).
+- Gallery budget 15 → 16.5 MB (recorded in `tests/test_gallery.py` and DESIGN §99.12): the four
+  entries take 0.74 MB (gallery 15.4 MB); room left for Step 243's showcase.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check241`). Shared
+changes are additive (new keys / targets) or fix crashes and refusals; `_covariance` gives the same
+inverse (Phase W's scipy comparisons pass). The `detector` look changed as asked (entry regenerated).
+
+Values (for the owner to check; DESIGN §99.11): the Higgs branching ratios are the YR4 predictions
+at m_H = 125.09 GeV written from memory (bb̄ 58.24, WW* 21.37, gg 8.187, ττ 6.272, cc̄ 2.891, ZZ*
+2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176 %); Z (hadrons 69.911, invisible 20.000, ee 3.3632, μμ
+3.3662, ττ 3.3696 %); W (hadrons 67.41, ℓν 10.86 % each, the universality average); K⁺ (63.56,
+20.67, 5.583, 5.07, 3.352, 1.760 %) — all marked `check=True`. π⁺, π⁰, μ values are standard. The
+Asimov hand values: s = 10, b = 100 → 0.98399; s = 100, b = 100 → 8.7897 (the brief's "~8.9" is
+approximate; s/√b would say 10); p(5σ) = 2.8665 × 10⁻⁷. σ⁰_had computed 41.51 nb (PDG fit 41.48).
+
+Known gaps: no Voigt fit (Z χ²/ν ≈ 2); significances local (no look-elsewhere); 9:16 shows the fit
+values with the note, not with the curve; the 9:16 box may cover a tall peak's top (4ℓ); full
+spectra with the note trip `max_words` (≈ 45 words); pie labels of small modes can fall under the
+readable size (pie's own behaviour); 4ℓ fits fail for ≈ 1 seed in 40 (clear error); no lint rules
+(Step 242).
+
+Render performance (preview 1280×720, 10 fps): H → γγ six beats (30 000 events, fit, subtraction,
+note, zoom; 26.4 s) in 31–41 s; Z (6.5 s) and 4ℓ (5.4 s) in 10–14 s; decay chain (9.3 s) in 6 s;
+branching bars (4.7 s) in 9 s; simulating 30 000 events ≈ 40 ms (cached). Bars, not events, are
+drawn; no memory concern.
+
+How to test
+- `tests/test_spectrum.py` (29 incl. 5 renders, ~45 s).
+- Related, all passing: `test_detector`, `test_particle_physics`, `test_plot`, `test_plot_live`,
+  `test_plot_fit`, `test_plot_core`, `test_science_review`; `test_builtin_scenes` +
+  `test_actions_coverage` + `test_docs` + `test_extensions` + `test_translation` + `test_guide` +
+  `test_gallery` + `test_registry` not render; renders `-k "mass_spectrum or decay_chain or
+  branching or plot"`; `test_api` + `test_schema` + `test_introspect` + `test_json_output` +
+  `test_narration_rule` + `test_lint` + `test_overlays` + `test_calc_lint` not render; the gallery
+  lint checks (3).
+- Stills: scratchpad `s241/proj` (H → γγ with fill, fit, subtraction, note, zoom; Z; 4ℓ):
+  `build/preview/frames/`, `build/preview_light/`, `build/preview_vertical/`, `build/preview_vlight/`;
+  `s241/proj2` (π decay chain, H → ZZ* → 4ℓ chain, H branching bars, Z pie, muon decay times with a
+  τ fit, the Z line shape): `build/preview/`, `build/preview_vertical/`; `s240/det` (the detector fix):
+  `build/preview/frames/zmumu/`; `vidgen lint`: 0 errors (warnings: `max_words` with the note,
+  one pie label).
+
+## Step 242 — Particle-physics accuracy lint
+
+What was built (DESIGN §99.13):
+
+- **Review fixes of Step 241 first.** (1) `mass_spectrum` 16:9: a short significance note by
+  default (`explain: true | short` → `6.7σ local` / `p = 7.6 × 10⁻¹²` / `(background only)`;
+  `explain: long` the four lines of 241; `spectrum.short_meaning`), readout `events: 30 000` /
+  `expected: 5.3σ` / `(local, Asimov)`, text 1.2 × the readable size, count axis to 1.35 × the
+  highest bin so the legend sits above the data: the plot keeps ≈ 70 % of the width (745 px of 1280,
+  was 545), `max_words` and `min_font` pass. 9:16: the combined box is placed at `auto` (a free spot,
+  else above the plot) — it no longer covers the 4ℓ peak. (2) Higgs branching ratios: source
+  label "m(H) = 125 GeV" (YR4's 125.00 table; values kept, still `check=True`); Γ_H 4.1 MeV noted as
+  YR4's 4.088 MeV rounded (`data.py`, `# check`). (3) `branching` bars: labels and values at body
+  size. Gallery entries `mass_spectrum` and `branching` regenerated.
+- **Twelve rules** (`lint/particle_rule.py`, config models in `config.py`, last in `LINT_RULES`):
+  `particle_mass`, `particle_charge` (error), `particle_spin` (error), `particle_lifetime`,
+  `branching_ratio`, `conservation_claim`, `feynman_boson`, `kinematics_number`,
+  `detector_signature`, `significance_claim`, `simulated_label`, `particle_units` (info). Settings:
+  `tolerance` on mass (0.05), lifetime (0.05), branching (0.1), kinematics (0.05); `sigmas` (0.5) on
+  significance. The runner adds `particle_issues` to `SceneContext.science`.
+- **Knowledge** `vidgen/particle_physics/accuracy.py` (no manim, not re-exported): `mentions`
+  (names and symbols; generic mentions keep every key), one claim reader per rule returning `Said`,
+  `said_decays` (decays in words), `written_processes` (arrow runs), `_plain_only` (negations,
+  contrasts, questions left alone). Numbers and units: `quantities.accuracy`.
+- **Scene facts** (`particle_rule.facts`, cached): feynman processes and bosons, decay_chain decays,
+  kinematics `calc_values` (the `from_scene` names) and decay, mass_spectrum Asimov (last, largest)
+  and likelihood-ratio z, simulated scenes and whether their screen says so.
+- **Gate**: charge and spin read every project; the rest only projects with a particle-physics
+  scene (the eight Phase Y types, a `plot` of a particle model, a `calculation` with particle
+  symbols).
+
+Files touched
+- New: `src/vidgen/particle_physics/accuracy.py`, `src/vidgen/lint/particle_rule.py`,
+  `tests/test_particle_lint.py` (130).
+- Changed: `src/vidgen/config.py`, `src/vidgen/lint/{__init__,run}.py`,
+  `src/vidgen/particle_physics/{spectrum,branching,data}.py`, `src/vidgen/scenes/{mass_spectrum,branching}.py`,
+  `tests/{test_orbit_lint,test_spectrum}.py`, `docs/CONFIG.md` (12 rule rows, defaults, a "Particle
+  physics" lint paragraph with a demo; `mass_spectrum` note / layout / `explain`; `branching` sizes;
+  the YR4 label), the guide + `AGENTS.md` (a lint paragraph in the particle section, 12
+  troubleshooting rows, the short note), `docs/gallery/{mass_spectrum.md,media/mass_spectrum-*,media/branching-*}`,
+  `DESIGN.md` (§99.11 label, §99.12 note, §99.13), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): the twelve rules and their config models (`ParticleMassRule` …
+`ParticleUnitsRule`); `mass_spectrum` `explain` takes `short` / `long` (true = short; the default
+note is now short); `spectrum.short_meaning`; the module `vidgen.particle_physics.accuracy`. No
+dependency.
+
+Decisions
+- Reuse: numbers, units, "about", rounding and prefix mix-ups are `quantities.accuracy`'s; texts
+  are `calc_rule.screen_texts`; reporting is `science_rule._issues`; verdicts are `check`'s; the
+  signatures are `detector.SIGNATURES`; the p-value is `spectrum.p_value`. The module adds only how
+  a sentence names a particle and what it claims.
+- A claim is about the particle named just before it in its clause (no other mention between, ≤ 70
+  characters); a finding needs both the particle and the quantity clear.
+- `conservation_claim` reads its own polarity per clause and every reading of a decay said in words
+  (a narrator's "a muon" may be μ⁺, "a neutrino" any flavour): "allowed" is wrong only when no
+  reading is allowed.
+- The default severity is error only for charge and spin (exact quantum numbers); `particle_units`
+  is info (a convention).
+- The gate keeps the number-heavy rules out of non-particle videos (radioactive decay's "electron"
+  and "half-life" sentences); measured: with the gate removed the examples still give 0.
+
+Compatibility: rendering changes only in Phase Y scenes (`mass_spectrum`, `branching`; entries
+regenerated); lint changes are not render inputs. Phase Q baseline not re-run (no shared rendering
+code changed). Existing material: 0 particle findings on every example (radioactive-decay,
+mars-transfer, cystic-fibrosis …), the gallery and the s237–s241 projects; the other rules'
+findings unchanged.
+
+Known gaps: see DESIGN §99.13 (other languages; a second clause without its subject; CKM /
+helicity / cross-section claims; the channel named in a feynman scene). In 9:16 the 4ℓ spectrum
+keeps its headroom when the box goes above the plot (the plot is smaller than it could be).
+
+Render performance: unchanged (H → γγ six beats 26.4 s in ≈ 30 s at 1280×720); the lint reads the
+config (spectrum fits cached; a project lints in well under a second).
+
+How to test
+- `tests/test_particle_lint.py` (130, ~4 s), `tests/test_spectrum.py` (29 incl. renders, ~21 s).
+- Related, all passing: `test_orbit_lint` + `test_calc_lint` + `test_genetics_lint` +
+  `test_accuracy` (134); `test_docs` + `test_guide` + `test_config` (180); `test_lint` (22),
+  `test_narration_rule` + `test_schema` (82), `test_api` + `test_json_output` (31) not render;
+  `test_gallery` + `test_builtin_scenes` + `test_translation` + `test_extensions` +
+  `test_actions_coverage` not render (325); `test_particle_physics` + `test_detector` +
+  `test_kinematics` + `test_feynman` + `test_quantities` not render (313).
+- Scratchpad `s242/`: `lint_all.py` (config-only particle lint over examples, gallery, s237–s242:
+  TOTAL 0), `stress.py` (every reader on every example, gate off: 0), `corpus.py` (60 correct
+  particle sentences: 0), `smoke.py` (planted mistakes). Demo: `s242/demo` (`vidgen lint` → 2
+  errors, 13 particle warnings, 1 info; the right statements quiet).
+- Stills: `s242/ms` (Step 241's H → γγ, Z, 4ℓ project): `build/preview/frames/`,
+  `build/preview_light/storyboard/`, `build/preview_vertical/frames/`, `build/preview_vlight/storyboard/`;
+  `s242/dec/build/preview/frames/br/` (the branching bars).
+
+## Step 243 — Example, docs and gallery
+
+What was built (DESIGN §99.14)
+- **Example `examples/higgs-discovery`** ("How the Higgs boson was found"; `video.yaml`,
+  `README.md`): `intro`; `chart` (`standard_model`, the Higgs boson boxed, `couplings` on its
+  field: the W and Z masses, the fermions' through Yukawa couplings; "most of a proton's mass is
+  the energy of the quarks and gluons inside it"); `production` (`feynman` `gg_to_h`: gluons are
+  massless, the t t H Yukawa vertex with `vertex_rule`, `travel`); `decays` (`branching` H: bb̄
+  58 % lost in quark jets, γγ a quarter of a percent, ZZ* 2.6 % → the golden channel; τ = 1.6 ×
+  10⁻²² s); `loop` (`h_to_gammagamma`, top loop → W loop by `swap_channel`); `event` (`detector`
+  H → γγ seed 10, `legend: false`, the photons highlighted); `mass` (`calculation`: m² = 2 p_T1
+  p_T2 (cosh Δη − cos Δφ) = 1.57 × 10⁴ GeV², m = 125 GeV, the display's own numbers); `diphoton`
+  (`mass_spectrum` seed 13: fit 124.9 ± 0.4 GeV, local 5.2σ); `four_leptons` (seed 4, 3.9σ);
+  `five_sigma` (`plot` of the one-sided p-value on a log axis: 1 in 44, 740, 3.5 million; "not the
+  chance of being wrong"); `recap` (4 July 2012, ATLAS and CMS at CERN's LHC, each about 5σ on its
+  own). Kokoro `af_heart` 0.85, `discovery` at −10 dB, terms (invariant mass, five sigma), a 9:16
+  `short` variant.
+- **Docs**: guide topic `particle-physics` (aliases particle, particle_physics, hep, higgs,
+  standard-model, collider, feynman-diagrams; `particles` deliberately unknown — the cartoon
+  effect), listed in the topic list, the scenes topic points to it; copied to `AGENTS.md`;
+  `docs/COOKBOOK-PARTICLES.md` (planning, choosing, units, honesty, pacing, mistakes → rules, a
+  validated pattern) linked from README, `docs/COOKBOOK.md`, the guide and the gallery; README
+  feature bullet ("Particle physics"), example and cookbook entries; CHANGELOG; DESIGN §99.14.
+  CONFIG needed nothing new (no new key; the particle types' sections are already complete).
+- **Gallery "Particle physics"**: section note and footer, showcase `higgs_diphoton` (detector
+  H → γγ, 0.32 MB: GIFs 103 / 146 KB); the `feynman` entry's 9:16 GIF regenerated after the fix.
+  15.7 MB of the 16.5 MB budget (unchanged).
+- **Fix**: `scenes/feynman.py` `show_rule` writes the reaction with no-break spaces, so the card
+  wraps before it, not inside it (9:16 "t → t" / "H").
+
+Files touched
+- New: `examples/higgs-discovery/{video.yaml,README.md}`, `docs/COOKBOOK-PARTICLES.md`,
+  `tests/test_higgs_discovery.py` (5), `src/vidgen/data/gallery/showcases/higgs_diphoton.yaml`,
+  `docs/gallery/higgs_diphoton.md` + media.
+- Changed: `src/vidgen/gallery.py`, `src/vidgen/scenes/feynman.py`, the guide + `AGENTS.md`,
+  `README.md`, `docs/COOKBOOK.md`, `docs/gallery/README.md`, `docs/gallery/media/feynman-9x16.gif`,
+  `tests/{test_docs,test_guide,test_gallery}.py`, `CHANGELOG.md`, `DESIGN.md`, `tasklist.md`.
+
+Public interfaces: none new (a showcase, a guide topic). Visible change: the vertex-rule card's
+line breaks.
+
+Decisions
+- Seeds chosen by the fitted significance so the story is honest about the threshold it explains
+  (diphoton 13 → 5.2σ; the default seed 1 gives 6.7σ); four leptons seed 4 (3.9σ).
+- Natural units in the calculation (c = 1, the meaning says so); m² then m, because a root of
+  GeV² falls back to SI in the substitution's intermediate line.
+- The five-sigma picture is a `plot` of inline p-values (a `function_plot` of the normal curve hid
+  the tails and its area labels overlapped).
+- No real event counts or significances; only the announcement date, the two experiments, CERN's
+  LHC and "each about five sigma on its own".
+- Length 3:49 (the brief: about 2.5–3.5 min): Kokoro at 0.9 put short beats over
+  `narration_speed`; every scene is part of the requested arc.
+
+Checks
+- `vidgen lint` with the Kokoro narration: 0 errors, no particle findings in 16:9 and 9:16; left:
+  the chart's `max_words` (both), `contrast` on a dimmed gluon during `couplings` (both), a 16:9
+  `contrast` on the numeral "II" (sampled backdrop #282C32; it reads fine).
+- Renders (scratchpad `s243/proj/output/`): `higgs_discovery.mp4` 1920×1080, 30 fps, 228.6 s,
+  17.5 MB; `higgs_discovery_short.mp4` 1080×1920, 228.6 s, 18.2 MB; video and audio the same
+  length, −16.0 LUFS, true peak −1.9 dBTP. Times under capped3g: 16:9 scenes 321 s in all (diphoton
+  65 s, chart 52 s) plus the join; 9:16 439 s wall with the join, largest process 1.41 GB peak RSS.
+- Compatibility: shared code untouched except `feynman.py` (Phase Y; rule cards only); Phase Q
+  baseline not re-run (no shared rendering code changed).
+
+Known gaps: the chart's own lint warnings (above); the detector's 16:9 layout keeps room for the
+readout before it appears; the video is 3:49, above the brief's 3.5 min.
+
+How to test
+- `tests/test_higgs_discovery.py` (5), `tests/test_docs.py` + `tests/test_guide.py` (162 with it),
+  `tests/test_gallery.py -m "not render"` (19), `tests/test_feynman.py` (79 incl. renders),
+  `tests/test_schema.py` + `test_orbit_lint.py` + `test_particle_lint.py` not render (215) — all
+  passing.
+- Stills: scratchpad `s243/proj/build/preview/frames/` (16:9) and `s243/proj/build/preview_short/frames/`
+  (9:16); contact sheets of the final renders `s243/contact_16x9.png`, `s243/contact_9x16.png`.
+
+## Step 244 — Review of Phase Y
+
+What was done
+- Physics-accuracy pass (DESIGN §99.15): every PDG 2024 value, width / lifetime and quantum
+  number in `particle_physics/data.py` re-read; all agree with the reviewer's independent reading;
+  the Step 237 `# check` marks now say "PDG 2024, confirmed in review (Step 244)". sin²θ_W 0.2313
+  (0.23129), the rounded CKM magnitudes, the Z / W / K⁺ branching ratios confirmed (`check=True`
+  removed). **Still for the owner**: the Higgs YR4 predictions at m_H = 125.00 GeV (nine modes,
+  `check=True`) and Γ_H 4.088 MeV (`# check` in `data.py`) — the reviewer recalls the same numbers
+  but cannot confirm the table line by line.
+- Fix: `conservation.check` refused nothing for 2 → 1 merges: e⁺e⁻ → γ (a real photon) and p p̄ → γ
+  were "allowed". Now two real particles merge only into something at least as heavy as both
+  (`_merge_problem`; hint: write `gamma*`); e⁺e⁻ → Z and g g → H stay allowed.
+- Fix: `branching.mode_fraction` gave Z → νₑ ν̄ₑ the Z's whole invisible fraction (20 %, all three
+  pairs); the invisible mode is skipped.
+- Fix (`feynman`, the reviewer's still): with `vertex_rule` cards the diagram was laid out at the
+  card-time size and only shifted to the centre, so "Making a Higgs boson" sat small in 16:9. Now
+  `_areas[False/True]` (whole frame / beside the cards) and `_dock(docked)` re-lays it out: full
+  size before the first card and after the last, in 16:9 and 9:16 (the band case too).
+- Fix (`plot_live`, Phase W, shared): the readout cache kept every frame's `events: N` text; now the
+  latest 64 lines (`READOUT_CACHE`). A 57 s spectrum: 622 → 392 MB; the example's diphoton
+  518 → 435 MB. Frames unchanged.
+- Detector circle (the reviewer's note): measured 69 % of the frame height in the example (375 /
+  540 px at 1080p-scaled), the same as the gallery — bound both by the height under the title and
+  the width between the layer key and the readout. A corner layout (title top left) reached only
+  72.5 % and broke the centred-title look of every other scene: dropped, not committed.
+- README: "Twelve lint rules (`particle_mass`, `conservation_claim`…)" instead of "the
+  `particle_*` rules" (several are not prefixed). Docs otherwise match the code (a script checked
+  every Phase Y scene type, param, action and lint rule id against CONFIG, AGENTS.md (identical to
+  the guide copy), COOKBOOK-PARTICLES, CHANGELOG).
+
+Files: `src/vidgen/particle_physics/{data,feynman,branching,conservation}.py`,
+`src/vidgen/scenes/{feynman,plot_live}.py`, `tests/test_phase_y_review.py` (new, 97 tests),
+`tests/test_detector.py` (the dock test), `tests/test_spectrum.py` (the cache bound), DESIGN §99.2 /
+§99.3 / §99.8 / §99.15, README, CHANGELOG, tasklist.
+
+Public interfaces: none new (`plot_live.READOUT_CACHE` is internal).
+
+Checks
+- Tests, one file at a time: test_phase_y_review 97, test_particle_physics 92, test_standard_model
+  9, test_feynman 79, test_kinematics 24, test_detector 36, test_spectrum 29, test_particle_lint
+  130, test_higgs_discovery 5; test_calculation 16, test_plot 51, test_plot_core 54, test_plot_fit
+  30, test_plot_live 40, test_quantities 92, test_lint 23, test_schema 71, test_registry 23,
+  test_api 10, test_docs 73, test_guide 89, test_gallery 20, test_translation 96, test_extensions
+  25, test_actions_coverage 109, test_builtin_scenes 306, test_builtin_sets 53; tests/test_mcp.py
+  20 — all passing.
+- Phase Q baseline 31/31 identical (run twice: after the Feynman change and after `plot_live`).
+- `vidgen validate` + `lint`: kphi3 (1 warning), radioactive-decay, mars-transfer, cystic-fibrosis
+  (4 info), iso-story (Hazel), higgs-discovery (3 known warnings): no errors, no particle findings.
+- Preview render times / peak RSS per scene type: DESIGN §99.15 (longest: the diphoton spectrum,
+  25.3 s of video in 31 s, 435 MB).
+- Example re-rendered (the `production` scene changed): scratchpad
+  `s243/proj/output/higgs_discovery.mp4` (1920×1080, 3:49, 17.6 MB) and
+  `higgs_discovery_short.mp4` (1080×1920, 3:49, 18.4 MB), cached Kokoro audio, −16.0 LUFS. Gallery
+  unchanged (no gallery scene uses `vertex_rule`): 15.7 MB of 16.5.
+
+Known gaps: the Higgs YR4 values (above); the 16:9 detector keeps room for the readout before it
+appears; the `calculation` in 16:9 leaves space below until its steps arrive (by design).
+
+How to test: `tests/test_phase_y_review.py`, `tests/test_feynman.py`, `tests/test_detector.py`,
+`tests/test_spectrum.py`; stills `s243/proj/build/preview/storyboard/scenes/production-1.png`
+(16:9) and `s243/proj/build/preview_short/storyboard/scenes/production-1.png` (9:16).

@@ -69,14 +69,15 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
     Action targets: ``title``, ``axes`` (every panel's axes), ``panel<N>`` (with several
     panels), ``legend``, ``series<N>``, ``series:<name>``, ``errors:<name>`` (a series' error
     bars), ``fit<N>``, ``fit:<name>`` (the curve, band, parameter box and residual panel),
-    ``annotation<N>``, ``annotation:<id>``.
+    ``residuals<N>``, ``residuals:<name>`` (a fit's residual panel alone: revealed on its own
+    word, it no longer comes with the fit), ``annotation<N>``, ``annotation:<id>``.
     """
 
     outro = 0.5
     plot_actions = True
     mid_still_actions = frozenset({"grow", "zoom"})
     target_patterns = ("title", "axes", "panel<N>", "legend", "series<N>", "series:<name>", "errors:<name>", "fit<N>", "fit:<name>",
-                       "annotation<N>", "annotation:<id>")
+                       "residuals<N>", "residuals:<name>", "annotation<N>", "annotation:<id>")
 
     class Params(SceneParams):
         title: TranslatableStr = ""
@@ -334,7 +335,7 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
                     a, b = sorted(units)[:2]
                     raise VidgenError(f"{axis}: the series' columns are in different units ({a} and {b}); plot them on separate panels or convert one")
                 unit = param.unit or (units.pop() if units else "")
-                label = str(param.label) or (cols[0].name if cols else "")
+                label = str(param.label) or ((cols[0].label or cols[0].name) if cols else "")
                 first = group[0].series[0]
                 if axis == "y" and not label and first.hist is not None:
                     label = "density" if first.spec.density else "count"
@@ -384,6 +385,11 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
                         lo, hi = max(float(s.hist.edges[0]), lo - s.hist.widths[0] / 2), min(float(s.hist.edges[-1]), hi + s.hist.widths[0] / 2)
             except VidgenError as error:
                 raise VidgenError(f"{where}: {error}") from None
+            for name in f.parameters or []:
+                if name not in result.model.names:
+                    names = list(result.model.names)
+                    raise VidgenError(f"{where}: parameters: the {f.kind} model has no parameter '{name}'; its parameters: {', '.join(names)}"
+                                      + did_you_mean(name, names))
             fit = ResolvedFit(f, s, result, f.kind == "poisson", lo, hi)
             if s.hist is None or f.kind not in plotcore.DISTRIBUTIONS:
                 fit.poisson = None if counts is None else np.broadcast_to(counts, (len(s.xs),)).astype(float)
@@ -413,6 +419,9 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
         names += [f"errors:{s.name}" for s in params.all_series() if s.y_err is not None or s.x_err is not None]
         for i, f in enumerate(params.fits, start=1):
             names += [f"fit{i}", f"fit:{f.label()}"]
+        for i, f in enumerate(params.fits, start=1):
+            if f.residuals:
+                names += [f"residuals{i}", f"residuals:{f.label()}"]
         for i, a in enumerate(params.annotations, start=1):
             names += [f"annotation{i}"] + ([f"annotation:{a.id}"] if a.id else [])
         return names
@@ -524,7 +533,8 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
         wanted = self._legend_panels(p)
         entries = [self._legend_entries(panel, fits, k, colors, index, shapes, fit_colors) if wanted[k] else [] for k, panel in enumerate(panels)]
         fit_boxes = [self._fit_box(f, size) for f in fits]
-        note_plates = {i: plot_draw.plate(plot_draw.label_text(str(a.text), size=size, theme=self.theme), theme=self.theme)
+        note_plates = {i: plot_draw.plate(plot_draw.text_lines(str(a.text).split("\n"), size=size, theme=self.theme) if "\n" in str(a.text)
+                                          else plot_draw.label_text(str(a.text), size=size, theme=self.theme), theme=self.theme)
                        for i, a in enumerate(p.annotations) if a.type == "note"}
         note_panel = {i: (p.annotations[i].panel or 1) - 1 for i in note_plates}
         # live readouts: boxes of their widest text, placed like notes (plot_live.py draws them)
@@ -688,6 +698,9 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
         self.conservation = p.conservation()   # (model, quantity, drift) for lint
         data_pos = [i for i, (kind, _) in enumerate(figure) if kind == "data"]
         axes_mobs = [self._axes_flat.get(i, drawn[i]) for i in data_pos]
+        for i, (kind, j) in enumerate(figure):   # a background-subtracted panel's axes come with the plot (its x labels are the plot's)
+            if kind == "residual" and fits[j].spec.residuals == "background":
+                frame.append(self._axes_flat.get(i, drawn[i].group))
         self._steps(title, frame, legends, boxes, legend_items, axes_mobs, self._parts, self._errors, series, fit_parts, fits, notes)
 
     # ----- steps -----------------------------------------------------------------------------
@@ -798,10 +811,12 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
         fit_targets = []
         for j, (f, fp) in enumerate(zip(fits, fit_parts)):
             residual = fp["residual"]
+            res_names = [f"residuals{j + 1}", f"residuals:{f.spec.label()}"]
+            separate = residual is not None and held(res_names)   # an action shows the residual panel on its own word
 
-            def fit_entrance(j: int = j, fp: dict[str, Any] = fp, residual: Any = residual) -> list[Animation]:
+            def fit_entrance(j: int = j, fp: dict[str, Any] = fp, separate: bool = separate) -> list[Animation]:
                 k = series.index(fits[j].series)
-                residual = fp["residual"]
+                residual = None if separate else fp["residual"]
                 anims = self.complete([k]) if series[k].live else self.entrance(series_targets[k])
                 own: list[Animation] = []
                 if len(fp["band"]):
@@ -818,8 +833,17 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
                     return after_growth(anims, own)
                 return anims + [AnimationGroup(*own, lag_ratio=0.3)]
 
-            mob = VGroup(fp["band"], fp["curve"], fp["box"], *([residual] if residual is not None else []))
+            mob = VGroup(fp["band"], fp["curve"], fp["box"], *([residual] if residual is not None and not separate else []))
             fit_targets.append(self.target([f"fit{j + 1}", f"fit:{f.spec.label()}"], mob, entrance=fit_entrance))
+            if residual is not None:
+                def residual_entrance(j: int = j, fp: dict[str, Any] = fp, separate: bool = separate) -> list[Animation]:
+                    pre = self.entrance(fit_targets[j])   # the fit (and its data) first
+                    if not separate:
+                        return pre
+                    own = [FadeIn(fp["residual"][0]), FadeIn(VGroup(*fp["residual"][1:]))]
+                    return [Succession(AnimationGroup(*pre), AnimationGroup(*own))] if pre else [AnimationGroup(*own)]
+
+                self.target(res_names, residual, entrance=residual_entrance)
 
         note_targets = []
         for i, n in enumerate(notes):
@@ -847,7 +871,13 @@ class Plot(LivePlot, PlotFigure, NarratedScene):
             """The targets' entrances (the axes, a legend's frame: once)."""
             self._batch = set()
             try:
-                return [a for t in [chart, *targets] for a in self.entrance(t)]
+                head = self.entrance(chart)
+                rest = [a for t in targets for a in self.entrance(t)]
+                if head and any(isinstance(a, Succession) for a in rest):
+                    # the targets first grow live data (a grow action holds the series): the axes come in
+                    # before, as manim cannot fade in a group whose parts the growth re-shapes meanwhile
+                    return [Succession(AnimationGroup(*head), AnimationGroup(*rest))]
+                return head + rest
             finally:
                 self._batch = None
 

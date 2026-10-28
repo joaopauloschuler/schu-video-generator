@@ -217,6 +217,10 @@ src/vidgen/
   quantities/             # units and worked calculations (§97.9; no manim): units.py (dimensions, units, prefixes,
                           # parsing, SI display), constants.py (CODATA 2022, SI 2019, IAU), quantity.py (values with
                           # exactness and significant figures), expr.py (expressions with units, TeX), calc.py
+  orbits/                 # orbital mechanics (§98; no manim): kepler.py (Kepler's equation, every conic), elements.py
+                          # (elements <-> state vectors, vis-viva, period, energy), bodies.py (GM, radii, preset orbits
+                          # with sources), values.py (values with units), system.py (hierarchies, the clock), nbody.py,
+                          # laws.py (ellipse geometry, equal-time areas, Newton's cannon, Kepler III; §98.4)
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
@@ -17470,3 +17474,1660 @@ the calculation hand-over timing. The gallery is unchanged (no gallery scene use
 
 Public (additive): `plotcore.fit_curve(..., poisson=)`, `AxisSpec.ticks`,
 `quantities.Quantity.temperature`, `quantities.Step.values`. No config key, no dependency.
+
+## 98. Orbital mechanics (Phase X, Steps 229–236)
+
+Orbital-mechanics videos at university level (and for science YouTube): real physics, computed
+exactly, honest about scale, in vidgen's flat style, 16:9 and 9:16. The phase **builds on Phase
+W** and re-implements none of it: axes, equal aspect, ticks in AU / km and line clipping come from
+`vidgen.plotcore` / `vidgen.plot_draw` (§97.3); n-body motion from its integrators (`verlet`,
+`rk45`, §97.7); values with units and the IAU / CODATA constants from `vidgen.quantities`
+(§97.9); worked Δv budgets are `calculation` scenes (§97.10); the accuracy lint extends the
+`calc_*` / `plot_*` machinery (§97.11). Additive and opt-in: a new package and a new scene type;
+existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q baseline
+31/31 after Step 229).
+
+### 98.1 The phase (plan)
+
+- **Step 229, plan and orbital model** (this section): the model package `vidgen.orbits` (no
+  manim, §98.2), the `orbit` scene type (§98.3) with bodies, conic orbits, motion in correct
+  timing, trails, an equal-aspect frame, scale ticks / a scale bar, a time readout with the
+  speed-up, a view following a body, `dynamics: nbody`; validation with clear errors.
+- **Step 230, Kepler's laws and orbital speed**: on the `orbit` scene, overlays drawn from the
+  same `Elements`: the ellipse's geometry (foci, a, b, e, periapsis / apoapsis marks), equal areas
+  as shaded sectors between clock times (`System.position` at the sector's two times; the area
+  from `swept_area`), velocity vectors and a speed readout (vis-viva), Newton's cannonball (one
+  start point, speeds circular / elliptic / escape / hyperbolic: `Elements.from_state`); orbit
+  actions timed to beats and words (the clock is `Playback`: an action can pause, slow or jump it,
+  which is why the motion lives in one updater driven by the scene clock). T² ∝ a³ is a `plot`
+  (log–log, a fitted slope 3/2, §97.5) fed from the presets' `a` and `period`.
+- **Step 231, manoeuvres**: impulsive burns as a sequence of Kepler arcs (a burn changes v at a
+  time: the next arc is `Elements.from_state(r, v + Δv)`; the scene draws Δv arrows), Hohmann
+  (Δv₁, Δv₂, transfer time = half the transfer ellipse's period, phase angle, synodic period),
+  bi-elliptic, plane change (2 v sin(Δi/2)), raising / lowering, phasing; gravity assists by
+  patched conics (a hyperbola in the planet's frame from v∞ and periapsis: turning angle
+  2 asin(1/e), velocity addition in the Sun's frame). Validation: a burn whose new periapsis lies
+  inside a body (the same check as §98.3), an arc that hits the planet. Δv budgets as
+  `calculation` scenes (`from_scene` reads the manoeuvre's computed values).
+- **Step 232, many bodies**: the circular restricted three-body problem in the rotating frame
+  (the view rotates with the primaries: a `follow`-like frame transform in `OrbitModel.view`),
+  Lagrange points L1–L5 (roots of the collinear quintic for a mass ratio; L4 / L5 at 60°; the
+  Routh stability condition μ < 0.0385), Trojan-like motion, resonances (Io–Europa–Ganymede
+  1:2:4), the figure-eight solution (Chenciner–Montgomery initial values), energy drift readouts
+  leapfrog against RK45 (both already here, §98.2), tides as a schematic.
+- **Step 233, the Solar System on a date**: the presets' JPL Table 1 elements gain their rates
+  (per century) and a `date:` (validity 1800–2050, refused outside), true-scale and log-radial
+  views, insets, "sizes not to scale" labels (already shown by §98.3 when bodies are enlarged),
+  synodic periods, conjunctions / oppositions by root finding on the angle between two planets.
+- **Step 234, accuracy lint**: narration and labels against the model — periods against
+  semi-major axes (Kepler III with the right μ), speeds (vis-viva), Δv, transfer times, escape
+  speeds, distances, scale claims, energy drift of a declared-conserved run, a periapsis inside a
+  body; on `calc_numbers` and `plot_conserved`'s machinery, with `target_text` (§98.3) for names.
+- **Step 235, example, docs, gallery**: "How to get to Mars" (Hohmann Earth → Mars, computed Δv
+  budget and ~259-day transfer, ~44° phase angle, ~26-month synodic period), Kokoro narration,
+  16:9 and 9:16; guide topic `orbits`; CONFIG; `docs/COOKBOOK-ORBITS.md`; the gallery section
+  "Orbital mechanics" (started in Step 229 with `orbit`; the gallery is at 12.9 of 13 MB after
+  it, so 235 must optimize or record a budget change); README; CHANGELOG.
+- **Step 236, review**: physics against independent calculations (constants, published elements,
+  Kepler solver, conversions), compatibility, the phase's and related suites, `tests/test_mcp.py`.
+
+### 98.2 The model: `vidgen.orbits` (Step 229)
+
+A package without manim (checked in a fresh interpreter by a test), exported by `vidgen.api` as
+the module `orbits` (like `plotcore` and `quantities`). SI throughout: m, s, rad, μ = GM in m³ s⁻².
+
+| module | contents |
+|---|---|
+| `kepler` | Kepler's equation for every conic, element-wise on floats or arrays: elliptic `M = E − e sin E` (Newton from Danby's start E₀ = M + 0.85 e sign(sin M), in the same turn as M), hyperbolic `M = e sinh H − H` (Newton), parabolic Barker `M = D + D³/3`, D = tan(ν/2), in closed form (Cardano, written without cancellation); `E − e sin E` and `e sinh H − H` are evaluated as `(E − sin E) + (1 − e) sin E` with a series for small arguments, so the solvers stay at rounding level near e = 1 (tests: e = 0.999999 and 1.000001 to 1e-13). `true_from_mean`, `mean_from_true` (refusing ν beyond a hyperbola's asymptotes), `mean_motion` (√(μ/|a|³); 2√(μ/p³) for Barker's convention), `kind_of` (a parabola within `PARABOLIC_TOLERANCE` = 1e-9) |
+| `elements` | `Elements(mu, p, e, i, raan, argp, nu)`: stored by the semi-latus rectum p so one representation serves ellipse, parabola and hyperbola. Constructors `from_a`, `from_periapsis`, `from_apsides`, `from_state(mu, r, v)` (2 or 3 components; a radial trajectory refused); `state()` / `state_at_anomaly` / `states(t)` / `positions(t)` (perifocal → reference rotation R₃(−Ω) R₁(−i) R₃(−ω)); derived `a`, `b`, `periapsis`, `apoapsis`, `period`, `mean_motion`, `energy` (−μ/2a), `angular_momentum` (√(μp)), `v_infinity`, `nu_limit`, `radius_at`, `speed_at` (vis-viva), `time_of_flight`, `at(t)`, `conic(samples, r_max)` (an ellipse sampled evenly in E, an open conic in its anomaly out to r_max). Conventions for degenerate cases: equatorial → Ω = 0 (ω is the longitude of periapsis), circular → ω = 0 (ν is the argument of latitude / true longitude). Functions `vis_viva`, `period`, `semi_major_axis` (from a period), `circular_speed`, `escape_speed`, `specific_energy` |
+| `bodies` | `Body(name, gm, radius, color, source)`; `BODIES` (Sun, Mercury … Neptune, Moon) and `ORBITS` presets (the planets on JPL's Table 1 J2000 mean elements, ω = ϖ − Ω, M = L − ϖ, the Earth's being the Earth–Moon barycentre's; the Moon at 384 400 km, e = 0.0549, i = 5.145°; `iss` circular at 420 km, 51.64°; `geo` from one sidereal day; `halley` with rounded 1986 elements, "for illustration"); the sources in the module docstring: IAU 2015 B3 nominal GM☉, GM⊕, R☉, R⊕ via `quantities.constants`; DE440 planetary GM (planet systems from Mars outwards); IAU WGCCRE 2015 radii. `body_preset`, `orbit_preset` with did-you-mean |
+| `values` | `value_si(value, kind, where)`: an author's value with its unit (`'1.5 AU'`, `'7.8 km/s'`, `'92 min'`, `'3.986e14 m^3/s^2'`, `'5.97e24 kg'`; angles: a bare number is degrees) through the units engine of `quantities`, the dimension checked and explained; `length_unit` (AU above 0.05 AU in auto), `time_unit` (min / h / d / yr), `speedup_text` (`× 6.1 million`); `G` (CODATA 2022), `AU` (IAU 2012), `DAY`, `YEAR` (Julian) |
+| `system` | `Orbiter(name, body, elements, parent)` and `System(central, orbiters)`: hierarchical Kepler motion (the Moon around the Earth around the Sun: positions added up the parent chain); `Playback(start, seconds, span)`: video time → simulated time at one constant speed-up; `swept_area` (Kepler II check) |
+| `nbody` | `simulate(system, span, method, step, samples)` → `NBodyRun`: every body with gm > 0 pulls on every other (gm 0: test particles), from the Kepler states at t = 0, in the barycentre, integrated in scaled units (the largest starting separation; the time in which the total mass turns a body one radian there) with Phase W's `verlet` (leapfrog, default step 1/1000 of the shortest 2π√(q³/μ)) or `rk45` (rtol = atol = 1e-10); outputs relative to the central body, Hermite-interpolated between samples; the total energy (Σ½GMᵢvᵢ² − ΣGMᵢGMⱼ/rᵢⱼ, i.e. the energy times G) or, with one massive body, the test particles' specific energies; `drift` |
+
+**μ for a body's orbit** is G(M + m): the parent's GM plus the body's own (the Moon's month uses
+GM⊕ + GM☾: 27.28 d at the mean distance 384 400 km). A planet preset's orbit therefore uses
+GM☉ + GM_planet, which is what Table 1's mean motions assume to within their accuracy.
+
+**Why stored by p**: a parabola (the escape case of Newton's cannonball, Step 230) has no finite
+a; with p every conic has the same formulas for r(ν) = p / (1 + e cos ν) and the perifocal velocity
+√(μ/p) (−sin ν, e + cos ν).
+
+### 98.3 The `orbit` scene type (Step 229)
+
+Name checked: no scene type, param or target is called `orbit` (`orbit:<name>` is the scene's own
+target). `scenes/orbit.py` (drawing, timing) and `scenes/orbit_parts.py` (the YAML bodies:
+`OrbitCentral`, `OrbitBody`, `build_system`, `resolve_model` → `OrbitModel`).
+
+- **Bodies**: a preset, elements (the size one way: `a` with `e`, `periapsis` with `apoapsis` or
+  `e`, `apoapsis` with `e`, `altitude`; then `i`, `raan`, `argp`, `nu` or `mean_anomaly`), or a
+  state `r`, `v`; `around` another body listed before (a preset's primary is found by itself when
+  listed). Elements written next to a preset override it.
+- **Timing**: the first beat's entrance (frame, title, central body, orbits drawn, bodies) takes at
+  most 1.2 s; then one updater on a z-first clock mobject reads the scene's clock
+  (`renderer.time`, not a sum of dt: manim gives the first frame of every play a dt of 0) and maps
+  it through `Playback` from that moment to the scene's last frame (the beats' windows in whole
+  frames, as `narrate` waits them) onto 0 … `span`. Equal video times are equal simulated times,
+  so Kepler's second law shows unforced (tested on the rendered scene's own clock: equal areas to
+  1e-4). `span` (a time) or `orbits` (periods of the first body; refused for an open orbit).
+- **Picture**: the view's extent covers every body's path over the span (in the view's frame) and
+  the closed orbits around a still centre, open orbits capped at 3 × the rest (a lone flyby: 3 ×
+  its periapsis); a 6 % margin; `frame: axes` is a `plotcore.layout_figure` panel with
+  `aspect="equal"` and ticks in AU or km (10³ moved into the title by the core), `scale_bar` a
+  1-2-5 bar, `none`. The readout box sits beside the plot in 16:9 and above it in 9:16, sized
+  for the widest time it will show (no re-layout while it plays). Bodies drawn at true size when
+  that is at least 0.12 (central) / 0.075 (orbiter) Manim units, else enlarged to it, and then the
+  readout says "sizes not to scale". Orbits: thin conics in the body's colour (dashed when open),
+  around their parent's current position. Trails: 8 pieces fading to the tail (a quarter orbit by
+  default; a share; a time). Labels pick the first of eight sides free of other bodies, labels and
+  the readout, keeping their side while it stays free (no jumping). A body outside the plot is
+  hidden with its label. (Step 230 revised the picture's layout and the labels: §98.4.)
+- **Follow**: positions are shown relative to the followed body (`OrbitModel.view`); its
+  satellites' conics stay still, everything else moves with the view.
+- **n-body**: `dynamics: nbody` integrates once at validation (cached by the params' JSON, the 32
+  most recent kept), the readout adds ΔE/E at the nearest output; the conics drawn are the
+  osculating starting orbits, the trails show the real paths.
+- **Validation** (`VidgenError` → `ValidationError` at `vidgen validate`): units of the right kind,
+  unit-less lengths, negative masses, e < 0, two ways of giving a size, periapsis inside the body
+  orbited ("it would crash", with both distances), `orbits` of an open orbit, a preset whose primary
+  is missing, unknown presets / bodies / `follow` with did-you-mean, radial velocities, ν beyond
+  the asymptotes, `energy` / `method` / `step` without n-body, duplicate names.
+- **Targets**: `title`, `frame`, `central`, `body:<name>` (dot, label, trail), `orbit:<name>`,
+  `readout`; `target_text` gives on-screen names for the narration lint. Actions: the generic
+  ones; Step 230 adds overlay targets and the actions `sweep` and `launch` (§98.4).
+
+**Public (additive)**: `vidgen.api.orbits` (the module above); the scene type `orbit`. No config
+key outside the scene's params, no dependency.
+
+**Known gaps after Step 229** (planned later in the phase): no sectors, vectors or orbit actions
+(230); no burns or transfers (231); no rotating frame (232); presets at J2000 only, no dates (233);
+no orbit lint rules (234). Inclined orbits are drawn as their projection on the reference plane
+(the view from above; documented). A scene of only open orbits frames 3 × the periapsis: bodies
+leave the view at the end of a long span unless `extent` is set.
+
+### 98.4 Kepler's laws and orbital speed (Step 230)
+
+**Layout fixes first** (the reviewer's notes on 229's stills: the picture used a third of the
+frame, labels crowded the Sun and the Earth, a tall picture left the 16:9 sides empty):
+
+- The axes carry **no titles**: both axes are lengths in one unit, written once — after the x tick
+  labels in 16:9 (the layout is redone in an area grown by the two title rows and narrowed by the
+  unit's width), above the y ticks in 9:16 (the x title's row goes to the picture). Title and
+  caption gaps 0.3 / 0.2. The picture now takes the whole height between title and caption in
+  16:9 (tested: plot height > 0.6 of the frame) and the whole width in 9:16.
+- The readout box is a **side panel** of rows (`Slot`: probed texts sizing it once — no re-layout
+  while it plays —, a dynamic value by the simulated time, a colour swatch, or the velocity key's
+  arrow): time, speed-up, ΔE/E, the overlays' values, and a **legend** of the bodies with their
+  periods (`legend: auto` = two or more bodies), so the room a tall picture leaves beside it in
+  16:9 holds information. Beside the picture in 16:9 (level with its middle), above it in 9:16; it
+  drops its last row when no size is enlarged ("sizes not to scale" absent); an empty row keeps
+  its height (the probe's text at opacity 0: a text without points would break `arrange`).
+- **Labels** (`orbit_overlays.place`): candidates in 8 directions × rings 0 / 0.3 / 0.65 / 1.1
+  units further out; the cost is the overlap with obstacles (the panel, every other body's dot,
+  labels placed before, the overlays' labels, the cannon) × 10, the area outside the plot × 20,
+  orbit-line points under it × 0.004, 0.12 per unit of ring; the previous candidate is kept while
+  within 0.03 of the best (no jumping). Beyond ring 0 a thin leader line joins label and dot. A
+  central body drawn large (wider than 1.4 × its label) carries its name on itself, in the
+  background colour. Tested: no label overlaps another label, a dot or the panel.
+
+**Model** (`vidgen.orbits.laws`, no manim): `ellipse_geometry(el)` (a, b, c = ae, q, Q, the centre,
+the empty focus, the apsides, an end of the minor axis, the perifocal unit vectors; refused for
+e ≥ 1); `apsis_names(body)` (perihelion / aphelion, perigee / apogee, perilune / apolune, perijove
+/ apojove, else periapsis / apoapsis); `area_between(el, ν₁, ν₂)` = ½ ∫ r(ν)² dν by Gauss–Legendre
+(48 nodes per ≤ 45° piece) — from the shape alone; `sector_times` / `sector_areas(el, count,
+start)`: the anomalies at equal times come from Kepler's equation, the areas from the shape, so
+their equality (to 1e-11 in the tests, Halley included) is Kepler's second law checked rather than
+assumed; `cannon_shots(mu, radius, r0, speeds, angle, clockwise)` → `Shot` (speed, multiple of
+the circular speed, elements from the state, kind, energy, impact time) with `classify` by the
+specific energy ε = v²/2 − μ/r: parabolic within 10⁻⁹ μ/r of zero (then e set to exactly 1),
+hyperbolic above, else suborbital when the periapsis lies inside the planet, circular (e = 0 from
+`from_state`) or elliptical — so 1.414 × v_circ is honestly elliptical and only `escape` (√2
+exactly) parabolic; a suborbital shot's impact at the inbound crossing ν = −acos((p/R − 1)/e)
+through `time_of_flight`, the ball held there afterwards; `named_speed` (`circular`, `escape`);
+`kepler_planets()` (a in AU, T in Julian years with μ = G(M☉ + m), T without the planet's mass,
+a³, T²) registered as the plot model **`kepler_planets`** (`kind: function`), so Kepler III is a
+Phase W `plot` with a `power` fit (exponent 1.50008 ± 0.00004: the planets' masses) — no new plot
+code.
+
+**Scene** (`scenes/orbit_overlays.py`, a mixin of `Orbit`; `scenes/orbit_actions.py`):
+
+- A body's `geometry` (`true` or some of `foci`, `axes`, `apsides`; refused on an open orbit):
+  F′ ring and C cross; the major axis dashed, a (centre → apoapsis) and b (centre → minor end) solid
+  with their lengths; apsis dots with "perihelion 0.586 AU" (in km around a body with a radius:
+  "(420 km up)"). Overlay labels are placed once by the same `place` with the ellipse and the axis
+  lines as heavy point obstacles (0.05 each), the tick labels as obstacles, and the whole picture
+  area (not only the plot) allowed. Targets `geometry:<name>` and `foci:`, `axes:`, `periapsis:`,
+  `apoapsis:`; `e = …` in the panel.
+- `sectors` (`count` 2–36, `show: alternate | all`; refused on an open orbit and with n-body):
+  polygons focus → arc (48 samples between the sector's two times) → focus, redrawn each frame
+  from the sweep's start; the panel lists Δt and the latest 4 areas (from `sector_areas` with the
+  actual start). Target `sectors:<name>`.
+- `velocity` (`live`, `along` 0–24, `readout`; refused with n-body): arrows in the text colour, one
+  scale for the scene (the fastest periapsis speed = ⅕ of the plot's shorter side), a 1-2-5 key
+  (≤ 0.6 × the fastest, ≤ 1.1 units) in the panel, the speed now and its max / min with the apsis
+  names. Target `velocity:<name>`.
+- `cannonball` (scene param; `bodies` may then be empty; refused with n-body, without a radius,
+  under the surface): a grey mountain and a barrel, shots coloured by kind (falling red, circular,
+  elliptical, parabolic, hyperbolic yellow; later shots of a kind lighter), paths drawn from the
+  launch to now (220 samples, clipped), a × at the impact; the view centred on the planet,
+  covering the closed and falling shots (at least 1.6 r₀), open ones leaving it; default span the
+  longest closed shot's period (≤ 4 circular periods). Targets `cannon`, `shot:<n>`.
+- **Held targets**: an overlay named by a `reveal`, `sweep` or `launch` of the scene starts hidden;
+  everything else enters with the first beat. Overlays of a satellite whose parent moves in the
+  view are `Pinned`: their points re-set from the parent's position each frame (so a FadeIn's
+  interpolation cannot leave them behind).
+- **Actions** `sweep` and `launch` (`animates = False`): the runner calls `cue(scene, time)` when
+  their beat starts with the frame time they are due; the scene stores that video time and maps it
+  through `Playback` when it draws (the first beat's cue comes before the motion's clock exists),
+  and adds the group to the scene. Their `scene_problems` check the scene type and the targets.
+  Tested on a render: the sweep starts at its word, both alternate sectors complete with areas
+  πab/4 (the drawn polygons too, to 1 %), the arrow's length is the speed × the scale, shots
+  launch in order and a falling one lies on the ground.
+
+**Public (additive)**: in `vidgen.api.orbits` the functions and classes above (`EllipseGeometry`,
+`ellipse_geometry`, `apsis_names`, `APSIS_NAMES`, `area_between`, `sector_times`, `sector_areas`,
+`Shot`, `SHOT_KINDS`, `classify`, `cannon_shots`, `named_speed`, `kepler_planets`,
+`kepler_planet_names`); the plot model `kepler_planets`; the `orbit` params `cannonball`,
+`legend`, `bodies[].geometry`, `sectors`, `velocity`; the actions `sweep`, `launch`. No
+dependency, no config key.
+
+**Not done**: pausing or slowing the clock on an action (the speed-up stays constant, which is
+what makes the equal areas honest; Step 231 added clock stretches, §98.5); n-body
+sectors / vectors; the orbit gallery media still show 229's layout (Step 235 renders the
+section).
+
+
+### 98.5 Manoeuvres and gravity assists (Step 231)
+
+**Approximations, stated**: two-body Kepler arcs; burns are impulsive (Δv at an instant);
+transfers between circular coplanar orbits (an eccentric or inclined target is refused with the
+reason and the way to state the approximation: `e: 0`, `i: 0`); gravity assists by patched
+conics (the planet's gravity alone near it, its velocity constant during the pass).
+
+**Model** (no manim):
+
+| module | contents |
+|---|---|
+| `manoeuvres` | `local_frame(r, v)` (prograde along v, radial = prograde × normal — in the plane, outwards —, normal along r × v), `burn_vector` / `burn_components`, `direction_name` (a component ≥ 90 % of Δv names it, else "prograde + normal"); `BurnPlan(at, components, label)` (`at` seconds or `periapsis` / `apoapsis`: the next one, strictly after the burn before), `Burn` (time, position, velocity before / after, Δv, components, orbits before / after), `Arc`, `Trajectory` (arcs between burns; `states(t)` by arc, `elements_at`, `total_dv`); `fly(start, plans, radius, body, horizon)` — each burn adds Δv to the velocity there, the next arc is `Elements.from_state`; refuses burns out of order, an apsis of a circle, and an arc that reaches the surface moving inwards before the next burn (`crash_time`: the inbound crossing ν = −acos((p/R − 1)/e) through `time_of_flight`; the last arc to `horizon`, default for ever). `Hohmann` / `hohmann(mu, r1, r2, mu_target, mu_from)` (a, e, circular and transfer speeds, Δv₁, Δv₂, time = π√(a³/μ), phase = π − n₂ t wrapped to (−π, π] with n₂ from the target's own μ, synodic 2π/|n₁ − n₂|), `window_wait(now, needed, n_from, n_to)` (the next time the lead angle equals the needed one), `synodic_period`; `BiElliptic` / `bielliptic(mu, r1, r2, rb)` (rb beyond both orbits), `bielliptic_thresholds()` — bisection: 11.938765 (Hohmann = the rb → ∞ limit (√2 − 1)(1 + 1/√R) in units of v₁) and 15.58172 (d total / d rb = 0 at rb = r₂); `plane_change(v, Δi)` = 2 v sin(Δi/2), `combined_plane_change` (law of cosines); `Phasing` / `phasing(mu, r, angle, revolutions, radius)` (T_ph = T(1 − θ/2πk); refuses a phasing orbit into the planet: "take more revolutions") |
+| `flyby` | `turning_angle(mu, v∞, r_p)` = 2 asin(1/(1 + r_p v∞²/μ)); `Flyby` / `flyby(mu, v∞, r_p, radius, atmosphere, direction, clockwise)` — the hyperbola from its periapsis state (the incoming asymptote at π/2 − δ/2 from the periapsis direction), e, δ, v_p, a < 0, the aiming distance b, the centre where the asymptotes cross (|a| e beyond the periapsis), v∞ in / out; refuses a periapsis inside the planet or its atmosphere; `GravityAssist` / `gravity_assist(mu, v_planet, v∞_in, r_p, side)` — of the two ways past (clockwise, counterclockwise) the one on `side`: the pull turns v∞ by Δv∞ pointing from the periapsis to the planet, so the energy change v_planet · Δv∞ is positive exactly when the periapsis lies behind (r̂_p · v̂_planet < 0); a direction of arrival from which both ways go behind (or in front) is refused with the reason; speeds before / after, `gain`, `energy_change` (= ½(v_after² − v_before²), tested) |
+
+`Orbiter.trajectory` (optional) makes `System.position` / `state` follow the burns; `Orbiter.states`,
+`positions`, `elements_at`.
+
+**Scene** (`scenes/orbit_manoeuvres.py`, a mixin of `Orbit`; params in `orbit_parts.py`):
+
+- `bodies[].burns: [{at, prograde | retrograde | radial | anti_radial | normal | anti_normal, label}]`
+  (positive speeds; a minus sign is refused: "use the opposite direction"); `bodies[].alongside:
+  Earth` — the body starts at that body's state, the same circle under its own μ (a spacecraft
+  leaving with its planet; one label for both while they coincide).
+- `transfer: {kind: hohmann | bielliptic | phasing, ship, to, depart, apoapsis, revolutions}` —
+  `to` a body (same parent, circular within 1e-6, planes within 1e-6 rad) or a radius; `depart:
+  window` (default) = `window_wait` from the lead angle at t = 0 (0 for a radius or phasing), or a
+  time (then the panel says how far the target is missed). The transfer becomes the ship's burns
+  (Hohmann: prograde / retrograde Δv₁ at departure, Δv₂ after half the ellipse; bi-elliptic: three;
+  phasing: two opposite burns `revolutions` phasing periods apart, the lead angle at departure
+  closed). Default span: arrival + 20 % of the transfer time. `TransferInfo` keeps what the panel
+  shows. Refused: a ship with burns of its own, a non-circular ship, `apoapsis` without bi-elliptic,
+  a radius inside the planet, the same orbit ("use kind: phasing"), burns after the span.
+- `flyby: {v_inf, periapsis | altitude, side, angle, planet_speed, atmosphere, name, reach,
+  vectors}` — the probe is a body the scene adds (`OrbitModel.extra_bodies`; `Params.body_specs()`
+  is the bodies as written plus it) starting `reach` periapsis distances out (default max(6 r_p,
+  1.6 × the asymptotes' crossing) so the crossing is in the picture); the planet's motion is +x;
+  `planet_speed` defaults to a planet preset's √(G(M☉ + m)/a). Default span: the whole pass.
+- **Drawing**: a ship's orbits arc by arc (the current one solid, earlier ones faint and dashed,
+  later ones not yet); Δv arrows on one scale (the largest Δv = 0.16 of the plot's shorter side,
+  at least 0.12 units) with a ring and a label placed once (obstacles: panel, central body ×3,
+  ticks, other burns' labels and arrows; orbit lines); the transfer's planned path dashed with a
+  ring at the arrival (`transfer`); the phase angle (`phase`): lines from the centre towards ship
+  and target (stopping short of them), an arc and θ, live until departure, then held. The flyby:
+  asymptotes (dashed, clipped), δ at their crossing, v∞ arrows at 10 % / 90 % of the pass along the
+  asymptotic directions, the periapsis "400,000 km up", a dashed atmosphere ring, the planet's
+  motion in the plot corner the path and asymptotes keep away from; the **vector diagram** in a box
+  under the panel (16:9) or under the picture (9:16): V from O, v∞ in / out from its tip on a dashed
+  circle of radius v∞, before / after from O with their speeds.
+- **Panel**: a transfer's kind and target, Δv₁ … , total, transfer time, "Mars leads by 52.0°"
+  (live until departure), "window at 44.3°, every 780 d", the mission line ("next: Δv₂ in 3.3 h",
+  "next: Δv₁ now", "all burns done"); plain burns are listed with "Δv spent … of …"; a flyby's v∞,
+  δ and e, the side, the Sun-frame speeds and the gain. In 9:16 a panel of more than five rows is
+  set in two columns, wider rows scale the panel down with them, and the legend (`auto`) is left
+  out when a body burns.
+- **The clock** (the 230 gap): `Playback` gains inner `knots` (video s, simulated s) and
+  `Playback.timed(start, seconds, span, events, holds)`: fixed points at each event (a burn's
+  simulated time on its word, the flyby's periapsis passage), and between two of them one speed-up
+  over the time not held; holds (a `pause` until the next `coast`, else its beat's end) keep the
+  simulated time still. Refused with the reason: an event before the motion starts or after it
+  ends, events out of order, a hold over an event's word, holds leaving no time to move. A burn
+  at t = 0 on a later word makes the clock wait at 0 (and the burn happens on the word, not at the
+  start). The video times come from `NarratedScene.action_times(name, start)` (new, additive:
+  the frame each use falls due at, counted as `narrate` and the runner count them), computed when
+  the motion starts; the panel's speed-up row shows the current stretch's rate ("clock paused").
+  Within a stretch equal video times are still equal simulated times, so Kepler II stays honest.
+- **Actions** (`orbit_actions.py`, cues): `burn` (target `burn:<n>`), `flyby`, `pause`, `coast`
+  (no target: `- action: pause`; checked: the scene type, a flyby for `flyby`, no target given).
+- **Δv budgets**: `Orbit.calc_values(params)` → {name: (SI value, unit)} (`dv1`, `dv2`, `dv3`,
+  `dv_total`, `t_transfer`, `r1`, `r2`, `v1`, `v2`, `phase_angle`, `synodic_period`, `wait`, `dv`,
+  `t_phasing`, `dv_burn<n>`, `dv_spent`, `v_inf`, `r_p`, `e`, `delta`, `v_planet`, `v_before`,
+  `v_after`, `gain`); `calculation`'s `from_scene` reads them from a scene type that has
+  `calc_values` (4 significant figures), with the same did-you-mean errors.
+- Layout additions on the way: a margin of 13 % (instead of 6 %) when bodies burn (room for the
+  arrows' labels); the scale bar takes the plot corner the paths keep away from and lies over the
+  orbits and sectors (the 230 lint warning of a comet crossing it).
+
+**Public (additive)**: in `vidgen.api.orbits` the names of `manoeuvres` and `flyby` above;
+`Playback.knots`, `Playback.timed`, `rate`, `rates`; `Orbiter.trajectory`;
+`NarratedScene.action_times`; the `orbit` params `bodies[].burns`, `bodies[].alongside`,
+`transfer`, `flyby`; its targets and actions above; `from_scene` on orbit scenes. No dependency,
+no config key. Phase Q baseline 31/31 identical.
+
+**Not done**: n-body with burns (refused); the flyby is shown in the planet's frame only (no
+heliocentric before / after orbits; the vector diagram carries the Sun's frame); a plane change
+is seen from above as its projection (its Δv is right; a 3D view is not planned); finite burns;
+the orbit gallery media (Step 235).
+
+### 98.6 Many bodies (Step 232)
+
+**Approximations, stated**: the restricted problem is *circular* (the secondary on a circle at
+the mean distance: the Moon's e = 0.055 is left out) and its small bodies are massless; the
+Galilean moons are on circles in Jupiter's equator around a point-mass Jupiter (J2 neglected), at
+phases that give the Laplace angle 180°, not their positions on a date; the tides are a schematic
+(the static equilibrium tide; no oceans' dynamics, Love numbers, the bulges' lead or the Sun's
+tide).
+
+**Model** (no manim):
+
+| module | contents |
+|---|---|
+| `threebody` | normalised rotating frame (separation 1, Ω = 1, the primaries at −μ and 1 − μ): `collinear_gamma(μ, point)` — the real positive root of Szebehely's quintic (`numpy.roots`, then Newton on the quintic), `lagrange_points(μ)` (L4 / L5 at (½ − μ, ±√3/2)), `ROUTH_MU` = (1 − √(23/27))/2 = 0.038 520 9 and `routh_stable`, `potential` Ω, `jacobi` C = 2Ω − v², `jacobi_inertial` (the same from inertial positions and velocities about the barycentre), `lagrange_jacobi`, `zero_velocity_segments` (vectorised marching squares on 2Ω = C, saddles paired by the centre's sign), `equations` / `integrate` (the rotating-frame equations on Phase W's RK45, rtol 10⁻¹¹: the Coriolis term depends on the velocity, so leapfrog is not symplectic there), `coorbital_angles` / `coorbital_kind` (tadpole L4 / L5, horseshoe, passing); `Restricted(key, primary, secondary, separation)` with `mu`, `omega`, `period`, `points()`, `distances()`, `with_mu`; presets `RESTRICTED`: `earth_moon` (384 400 km), `sun_earth` (the Sun with the Earth–Moon barycentre's GM, 1 AU), `sun_jupiter` (Table 1's a) |
+| `manybody` | `figure_eight(gm, length)` (Simó's values as quoted by Chenciner–Montgomery, scaled: T = 6.32591398 √(L³/GM)), `barycentre`, `binary_shares`, `nearest_ratio`, `laplace_angle`, `conjunctions` (zeros of the angle between two bodies, bisection; not its ±π jumps), `bends_toward` (sign(v × a) = sign(v × s)), `tidal_acceleration`, `equilibrium_tide` ((M_s/M_p) R⁴/d³) |
+
+Also: the Galilean moons in `BODIES` and `ORBITS` (GM from JPL's satellite ephemeris, JUP310
+values — **for the owner to check**; their sum is DE440's Jupiter-system GM minus the planet's;
+published sidereal periods; a from Kepler III with the `jupiter` preset's GM: within 0.03 % of the
+published mean distances); `value_si(..., "mass")` reads `'2 Msun'` / `'3 Mearth'` as that many
+nominal GM☉ / GM⊕ over G; `simulate(..., initial=)` takes starting states that replace bodies'
+Kepler states (the figure-eight: B's velocity relative to A is radial, no conic), and every run
+records the angular momentum (`angular`, `angular_scale` = Σ|r||v| with the same weights, so a
+total of zero — the figure-eight's — has a meaningful error; `angular_drift`, `angular_error`)
+and gives velocities (`NBodyRun.velocity`: the Hermite interpolant's derivative).
+
+**Checks against published values** (tests): Earth–Moon μ = 0.012 150 6, γ₁ = 0.150 934, γ₂ =
+0.167 833, L3 at −1.005 063 (Koon, Lo, Marsden & Ross 2011); L1 / L2 at 326 400 / 448 900 km from
+the Earth; Sun–(Earth + Moon) γ₁ = 0.010 011, γ₂ = 0.010 078: L1 / L2 at 1.4976 / 1.5077 million
+km from the Earth ("about 1.5 million km" verified); every point an equilibrium (∇Ω = 0 by finite
+differences, independent of the quintics); C₁ > C₂ > C₃ > C₄ = C₅ = 3 − μ(1 − μ); Routh
+27 μ(1 − μ) = 1; the figure-eight back at its start after T to 10⁻⁶ AU; Europa/Io = 2.0073,
+Ganymede/Europa = 2.0147, n_I − 3 n_E + 2 n_G = 0 to 10⁻⁸ rad/d, Io–Europa conjunctions every
+3.5256 d with Ganymede 90° away each time (and Io 180° from every Europa–Ganymede conjunction);
+the Earth–Moon barycentre 4 671 km from the Earth's centre, the Sun–Jupiter one outside the Sun;
+the tidal acceleration 2GMR/d³ ≈ 1.1 × 10⁻⁶ m/s² (1/29 of the Moon's pull), the equilibrium
+tide 0.36 m.
+
+**Scene** (`scenes/orbit_systems.py`: params and resolution; `scenes/orbit_many.py`: a mixin
+of `Orbit`, the drawing; `ManySpec` carries the params into `resolve_model`):
+
+- `system`: a restricted pair becomes the central body (the primary) and a first body (the
+  secondary on a circle at ν = 0, so the rotating frame's +x is the secondary at t = 0); the run
+  is n-body (the restricted problem is n-body with massless bodies) — RK45 by default with a pair
+  (a small body may pass close to the secondary; leapfrog's fixed step fails there), with output
+  samples scaled to the span (96 per turn of the pair, ≤ 40 000). `figure_eight`: A central, B
+  and C with stand-in Kepler orbits and their true states passed as `initial`; leapfrog at T/4000.
+- **The view** (`OrbitModel.view`): with `origin: barycentre` positions are taken from the
+  barycentre of the massive bodies, then turned by `turn` × θ(t) — θ the pair's angle, unwrapped
+  (Ω t corrected to the run's own positions, so the secondary sits exactly on +x). `turn` (0 the
+  inertial view, 1 the rotating frame) is set by the scene each frame from `view` and the actions
+  `corotate` / `inertial` (smoothstep over `run_time`, default 2 s); `from_rotating` places
+  rotating-frame points (Lagrange points, zero-velocity curves) in the view. The view's extent
+  covers the paths in every view the scene uses (a disc when it switches). Trails are sampled
+  64 per turn of the pair (≤ 2 400) so a many-turn trail redraws correctly in the turning frame;
+  Kepler conics are not drawn about the barycentre (they are not the paths there) except a
+  binary's two ellipses (each the relative orbit scaled by the other's mass share).
+- Overlays: Lagrange × marks (labels under them, L1's and L2's on the sides facing away from each
+  other, kept in the plot), the secondary's circle (dashed, clipped), a turning-arrow badge in the
+  least crowded plot corner while the frame turns (the words in the panel), the zero-velocity
+  curve (computed once in the rotating frame over the view, turned in the inertial view),
+  conjunction lines (always with points, hidden by opacity, so a reveal's fade keeps its shape),
+  the barycentre mark, the pointer to an off-plot central body (moved off a Lagrange mark).
+- Panel rows: μ, Routh, the frame shown, L1 / L2 distances, each `near` body's Jacobi constant
+  and ΔC/C, its angle ahead of / behind the secondary and its co-orbital kind over the span; the
+  figure-eight's T and return; a binary's mass ratio and barycentre; resonance ratios, the
+  Laplace angle (1:2:4), conjunction counts; curvature; ΔL/L with ΔE/E. The legend in 9:16 is
+  left out with a pair or a resonance (labels name the bodies).
+- `tides`: its own layout (no axes): the planet large, the satellite on a schematic circle at
+  its real angle and time, the real tidal geometry (d ≫ R) for the arrows: pull at `points`
+  surface points (scaled so the centre's pull is 0.55 units), the centre's pull, the difference
+  (scaled so the longest is 0.5 units; the panel gives the factor, ×27 for the Moon), a bulge
+  ellipse along the line, the near-side mark (locked: it faces the planet; `locking: false` keeps
+  it fixed in space). Labels placed by `place` off the panel and the planet.
+- **Performance** (shared code, output unchanged): the panel reuses each row's cached text in
+  place and restores its points after drawing (copying every row each frame was most of a
+  long scene's render time); a trail run wholly inside the plot skips the per-segment clipping.
+
+**Public (additive)**: in `vidgen.api.orbits` the names of `threebody` (`integrate` as
+`integrate_restricted`, `potential` as `restricted_potential`) and `manybody`, `GALILEAN_PERIODS`,
+`GALILEAN_PHASES`; `NBodyRun.angular / angular_scale / angular_drift / angular_error /
+velocity`; `simulate(initial=)`; the `orbit` params `system`, `view`, `origin`, `lagrange`,
+`zero_velocity`, `resonance`, `center`, `tides`, `bodies[].near / shift / drift / curvature`; the
+targets `lagrange`, `lagrange:L1`…, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`,
+`pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`; the actions `corotate`, `inertial`. No
+dependency, no config key.
+
+**Not done**: n-body with burns (refused); the forbidden regions are drawn as their boundary only;
+the bulges' lead and the planet's spin; resonances with eccentricities (the conjunctions' slow
+drift here comes from the period ratios alone); the gallery media (Step 235).
+
+### 98.7 The Solar System on a date, and the compact panel (Step 233)
+
+**The compact side panel first** (the reviewer's note on 232's stills: 10–15 rows of small text,
+unreadable on a phone, crowding the picture). Every panel row (`Slot`) now has a `name` and a
+`rank`: 0 always shown, 1 then 2 while there is room, `DIAGNOSTIC` (9) only on request.
+`choose_rows(slots, mode, budget)`: `compact` (default) keeps rank 0, then fills ranks 1 and 2 in
+the scene's order — a name's rows together (a legend, the areas) — up to `PANEL_BUDGET` = 6 rows
+in 16:9 / 5 in 9:16 besides the "not to scale" notes; `full` every row (the panel as before,
+including 9:16's two columns); `none` only the notes; a list of names (`PANEL_ROWS`, checked with
+did-you-mean). Compact and listed rows are set at least at scale 1 (the label size, never under
+the readable minimum) in one column. What each scene is about decides the ranks: time and
+speed-up 0; ΔE/E, ΔL/L, the Jacobi constant's drift and the figure-eight's return error are
+diagnostics (`energy: true` makes ΔE/E and ΔL/L rank 0); a transfer's Δv rows, total, time and live
+phase angle 0, the window and kind 2; a flyby's v∞, δ, Sun-frame speeds and gain 0; a pair's μ, the
+frame, the co-orbital kind 0, Routh's test 0 when L4 / L5 matter, the L1 / L2 distances 0 unless
+it is a Trojan scene; the legend 2 (`legend: true`: 0); tides: the pull, tidal acceleration, the
+arrows' factor 0, the tide and locking 1, the speed-up 2. The lint gets the diagnostics from the
+model, whatever the panel shows: `Orbit.diagnostics(params)` → `energy_drift`, `angular_drift`,
+`jacobi_drift:<name>`, `closure` (largest relative errors over the run; Step 234 reads them). The
+229–232 scratch projects lint clean after it (s232's mid-turn warning gone).
+
+**Model** `vidgen.orbits.ephemeris` (no manim): E. M. Standish's *Keplerian Elements for
+Approximate Positions of the Major Planets* (JPL SSD), **Table 1** — a, e, I, L, ϖ, Ω at J2000 and
+their rates per Julian century, mean ecliptic and equinox of J2000, valid 1800–2050 — for Mercury …
+Neptune (the Earth's row is the Earth–Moon barycentre) and Pluto. `TABLE1` is the one copy (the
+presets in `bodies` read their J2000 values from it). `julian_date` (Gregorian dates and times,
+taken as TT; 2000-01-01 12:00 = 2451545.0), `calendar`, `date_text` (the day it falls on);
+`check_valid` refuses 1800-01-01 ≤ JD < 2051-01-01 violations for a start and an end;
+`mean_elements` (J2000 + rate × T), `heliocentric` (the document's method: M = L − ϖ, Kepler's
+equation, the orbit plane rotated by ω, I, Ω; vectorised), `longitude`, `distance`, `elongation`;
+`sidereal_period` (360°/L̇) and `planet_synodic_period`; `next_event(kind, observer, target,
+after)` — opposition / conjunction (outer target), inferior / superior conjunction (inner target),
+aligned — the root of the wrapped difference of heliocentric longitudes (0° or 180°) bracketed on
+1/24 of the synodic period and bisected to 10⁻⁵ d, refused outside the validity; `events_between`.
+`bodies`: `planet_preset` (from Table 1 values), `preset_on(key, jd)`, Pluto's body (GM of the
+Pluto–Charon system 975.5 km³ s⁻², radius 1 188.3 km — **for the owner to check**) and preset;
+`kepler_planets` stays the eight planets.
+
+**Checks against independent values** (tests): the Earth at the 2020 and 2021 March and the 2022
+September equinoxes and 1900's March one at heliocentric longitude 180° / 0° of date minus the
+precession since J2000 (50.29″/yr) within 0.03° — the J2000 frame is why the raw value is
+179.72° in 2020; every planet's distance within its perihelion–aphelion over 1800–2050; Mars's
+J2000 distance against Kepler's equation by hand; the sidereal year 365.2564 d; synodic periods
+Mars 779.94 d, Venus 583.92 d, Jupiter 398.88 d, Mercury 115.88 d, Saturn 378.1 d; Mars oppositions
+2018-07-27, 2020-10-13, 2022-12-08, 2025-01-16, Venus inferior conjunctions 2020-06-03 and
+2023-08-13, Jupiter's 2023-11-03 and Saturn's 2023-08-27 oppositions within ±2 d (they come out
+within hours: 2020-10-13 23:24, 2022-12-08 05:32 TT); the scene's Kepler motion from the date's
+elements within 2 × 10⁻⁴ AU of the table's positions over its span.
+
+**Scene** (`scenes/orbit_sky.py`: params, resolution and the mixin `OrbitSky`):
+
+- `date`: `build_system(..., jd)` gives Table 1 planets their elements on the day (`dated_preset`);
+  another preset needs `nu` / `mean_anomaly`. The model's `sky` (`SkyInfo`) keeps the start's JD;
+  the span's end is checked too. The panel's first row is the date (`date`), the time row drops to
+  rank 2.
+- `event: {kind, of, observer}`: `next_event` after the date (both bodies of the scene); default
+  span 1.15 × the time to it (at least 30 d); drawn once as the dashed line from the Sun through
+  both planets' positions at the event (rings on them; for a conjunction from the near planet
+  through the Sun's side), the kind's name placed by `place`; rows `event` (`Mars opposition
+  2020-10-13`), `distance` (live), `synodic`.
+- `radial: log`: positions drawn at log₁₀(1 + r/r₀) along their direction (r₀ = ⅓ of the smallest
+  perihelion), in `_frame_point(s)` and the extent, so conics, trails and labels follow; no axes
+  (`frame: axes` refused) but dashed rings at 0.1 / 0.3 / 1 / 3 / 10 / 30 / 100 AU (those ≥ 0.5
+  units and 0.35 apart), labelled along the ray the bodies cross least, on a plate over the orbits;
+  every body a dot; the note "distances compressed (log)" is always in the panel. Refused with any
+  overlay that measures lengths or speeds, n-body, transfers, flybys, systems, `follow`.
+- `inset`: the box of a flyby's vector diagram (`_vector_box_size`; 3.7 × 3.7 beside, under the
+  picture in 9:16) holds the bodies whose orbits lie within the radius (`true`: 1.08 × the largest
+  aphelion below 2 AU), their conics and dots moving, labels placed by `place` inside; their labels
+  and the Sun's leave the main picture (named in the inset); the region is a dashed circle there.
+- `sizes`: a picture of its own (`_construct_sizes`, like the tides): discs of the bodies' radii to
+  one scale chosen by bisection so discs and labels fit (16:9 a row with labels in two staggered
+  rows — the row's ends keep their whole label inside —; 9:16 a column with the text beside), the
+  Sun's limb (the same scale, clipped to the frame's edge) first in 16:9 and at the foot in 9:16,
+  "radii to scale (distances are not)". Refused with anything else of the scene's motion.
+
+**Public (additive)**: in `vidgen.api.orbits` the names of `ephemeris` (`longitude` as
+`ecliptic_longitude`, `distance` as `planet_distance`, `SOURCE` as `TABLE1_SOURCE`),
+`planet_preset`, `preset_on`; the preset `pluto` (body and orbit); `Orbit.diagnostics`; the
+`orbit` params `panel`, `date`, `event`, `radial`, `inset`, `sizes`; targets `event`, `inset`,
+`rings`. Changed defaults (visible): orbit panels are compact — ΔE/E and the other diagnostics are
+off unless asked for; `panel: full` restores the old panel. No dependency, no config key; shared
+code untouched (only the orbit scene and `vidgen.orbits`), so the Phase Q baseline was not re-run.
+
+**Not done**: the Moon's (and other satellites') positions on a date; dwarf planets other than
+Pluto (Ceres is not in Table 1); Table 2a (3000 BC – 3000 AD with Jupiter–Pluto's extra terms);
+light-time, aberration and the equinox of date (positions are geometric, J2000 frame); greatest
+elongations; the gallery media (Step 235).
+
+### 98.8 Orbital accuracy lint (Step 234)
+
+**A data fix first** (the reviewer's comparison of `TABLE1` with an independent transcription of
+JPL's Table 1): Neptune's rate of Ω had been entered as Pluto's (−0.01183482); it is
+−0.00508664 deg/century. Neptune's heliocentric direction moves by at most 1.2″ over 1800–2050
+(computed), below the table's accuracy; the event tests were unaffected. `tests/test_orbit_sky.py`
+now pins all 108 numbers (9 bodies × 6 values and 6 rates) against a transcription in the test.
+
+Nine rules (scene scope, last in `LINT_RULES`, default warning): `orbit_period`, `orbit_speed`,
+`orbit_dv`, `orbit_transfer`, `orbit_distance` (each with `tolerance` 0.05 for "about"),
+`orbit_date` (`days` 3), `orbit_scale`, `orbit_conserved` (`tolerance` 0.01), `orbit_crash`. Like
+the `calc_*` / `plot_*` rules they read the config, not the stills: the runner appends
+`orbit_issues` (`lint/orbit_rule.py`) to `SceneContext.science`; `science_rule._issues` reports.
+
+**Knowledge** (`vidgen/orbits/accuracy.py`, no manim, not re-exported — reached as
+`vidgen.orbits.accuracy`): numbers are read by `quantities.accuracy.said_values` (the `calc_*`
+reader; it gains "one and a half million kilometres": a scale word after "and a half", resolved to
+a quarter of the scale), plus months (a twelfth of a Julian year) and weeks; a number right after
+a digit group ("384 400 km") is skipped (Step 236: groups of three digits after spaces — plain,
+thin, no-break — are read as one number, §98.10). A `Fact` is a value or a range (SI; radians for angles)
+of a kind (`KIND_RULES`: period → `orbit_period`; speed, peri_speed, apo_speed, circular, escape,
+v_inf, planet_speed, shot, sun_speed → `orbit_speed`; dv (with its order), dv_total, gain, turn →
+`orbit_dv`; transfer_time, synodic, wait, phase → `orbit_transfer`; distance, peri, apo, altitude,
+radius, diameter, lagrange, between → `orbit_distance`) with the names of the bodies it is about.
+`orbit_claims(sentence, facts)`: for each time, speed, length or angle said (checkable: not a
+bound or a range end), the **clause** around it (between commas, semicolons, colons, dashes,
+"and", "but", "while" — not inside a number: "two hundred and fifty-nine days") names the bodies
+(else the sentence; none named: every fact of the scene; another scene's facts only when named)
+and its words give the kinds (`topic_groups`): time — "transfer / trip / later…" transfer times,
+"every / window / synodic…" synodic periods and waits, period words ("takes", "around", "orbit",
+"period") periods, else nothing ("Neptune barely moves in ten years" is a span); speed — Δv words,
+"escape", a named apsis (perihelion, apogee… one of the two), else speeds along the orbit, then
+v∞, Sun-frame and circular speeds; length — "L1"…"L5", radius words, altitude words, a named apsis,
+else distances (from the parent; two siblings' range; the event's distance); angle — phase
+(departure words choose the lead at departure over the lead at the start), else the turning angle.
+A value agreeing (as `calc_numbers` agrees: resolution, "about" with 1–2 figures or the tolerance;
+a range anywhere inside) with any fact of those kinds — of the first kinds only when the words are
+precise (a named apsis, "escape", a Lagrange point) — is fine; else it is reported against the
+nearest fact of the first kinds (Δv narrowed by "first / second / Δv₂ / arrival / total"), when the
+bodies it can be about are clear; a factor of 1000 off is "a prefix mixed up?". `ratio_claims`:
+"N times as wide as / wider than / the diameter of B" against the radii. `scale_claims`: "to
+scale", "true scale", "real sizes" against `PICTURES` — `enlarged` (flagged only with size words:
+"at true scale the inner planets crowd the Sun" speaks of distances), `log` and `schematic`
+(always), `sizes` (with distance words). `said_dates` (ISO, "13 October 2020", "October 13,
+2020", "the first of June 2020", "October 2020", "in 2021", "in mid October") and `event_claims`:
+an opposition / (inferior, superior) conjunction of a named planet seen from the Earth, compared
+with `events_between` over the said day (± `days`), month or year (1800–2050 only); a month alone
+against the scene's own `event`. `ATMOSPHERES`: the Earth 100 km (the Kármán line, FAI
+convention), Mars about 125 km (the entry interface used for Mars landings — **for the owner to
+check**).
+
+**What each orbit scene computes** (`orbit_rule.facts`, cached per project): every body's radius,
+diameter, surface escape and circular speeds; for every orbit (each arc of a trajectory) the
+periapsis speed and distance, the altitude range, and when closed the period, the speed range
+apoapsis–periapsis, the apoapsis speed and distance, the distance range from the parent, the
+escape speed from the parent along it; when open the speed range from v∞ and v∞; two closed
+siblings' distance range and synodic period; a transfer's Δv (by order), total, time of flight,
+phase angle needed (order 1) and at the start, the synodic period and wait (phasing: each burn,
+its time, the lead); plain burns' Δv and total; a flyby's planet speed, Sun-frame speeds, gain and
+turning angle; the cannon's shots, circular and escape speeds there; a restricted pair's L1–L5
+distances from both primaries; the figure-eight's period; the event's distance. Stand-in orbits
+(`near:` bodies, the figure-eight's) give no orbit facts. The sizes picture gives radii only.
+
+**Scale** (`picture_kind`): `sizes`, `schematic` (tides), `log`, else `enlarged` when some body is
+surely drawn enlarged — 7 × R / reach below the scene's minimum drawn radius (0.12 / 0.075 units),
+reach being `extent` or the farthest point of the paths in view (no layout is run: 7 units per
+reach is more than any layout gives) — else `true` (no finding).
+
+**Drift and crashes**: `orbit_conserved` reads `Orbit.diagnostics(params)` (Step 233) — the largest
+|ΔE/E|, |ΔL/L|, each near body's |ΔC/C|, the figure-eight's return — above `tolerance`, with the
+fix for the method (leapfrog: halve the step; else leapfrog or a smaller step; the Jacobi drift:
+RK45 or a smaller step). `orbit_crash`: a periapsis (or one after a burn) above the surface but
+below `ATMOSPHERES` (the body found by name with its preset's radius), a flyby without
+`flyby.atmosphere` passing below it, and in an n-body run two bodies closer than their radii' sum
+at an output sample (validation checks only the Kepler start).
+
+**Other scenes**: a scene that is not an orbit, a calculation or a plot with fits is checked
+against every orbit scene's facts that the sentence names (a card "Jupiter takes 20 years to orbit
+the Sun"); `orbit_date` reads every scene. Texts: beats, the `calc_rule.screen_texts` params,
+callout labels, burn labels.
+
+**Narration–picture rules**: `SHOWING_ACTIONS` gains `sweep`, `launch`, `burn`, `flyby`;
+`Orbit.target_text` adds `orbit:<name>` (the body's label), `periapsis:` / `apoapsis:` (perihelion,
+apogee…), `burn:<n>` (its label or "Δv₁ 2.43 km/s prograde": `orbit_manoeuvres.burn_text`, shared
+with the drawing), `lagrange:<L>`, `event` (its kind), `barycentre`, `face` ("near side"),
+`motion` (the planet's motion).
+
+**Checked**: every example, the gallery and the 229–233 scratch projects give 0 findings (one
+false positive met on the way and removed: "Neptune barely moves in ten years" — periods now need a
+period word); a demo project finds each planted mistake (16) with its right statements quiet.
+
+**Choices**: narrow, as the other accuracy rules — negations, questions, hypotheticals, bounds,
+ranges and comparisons are not read; a number is reported only when the bodies and kind it is
+about are clear. A range fact (a speed along an ellipse, the Moon's distance) accepts any value in
+it: "the Moon is 384,000 km away" and "405,000 km" are both true. `orbit_date` uses the Earth as
+the observer and JPL's Table 1 (the elements the scenes use), so its dates are the model's; the
+tolerance of 3 days is above the table's accuracy for oppositions (hours) and below the motion of
+a planet across the sky in a few days.
+
+Public (additive): lint rules and their config models (`OrbitPeriodRule` … `OrbitCrashRule`); the
+module `vidgen.orbits.accuracy`; `Orbit.target_text` answers more targets; `quantities.accuracy`
+reads "and a half million". No dependency; shared rendering code unchanged (only the lint, the
+number reader and the orbit scene's text helpers), so the Phase Q baseline was not re-run.
+
+**Not done**: claims about bodies a scene does not show (no textbook table of the Solar System);
+numbers written with spaces between digit groups are skipped (read since Step 236); eccentricities, inclinations and
+mass ratios said as pure numbers are not read; a claim of scale about one body among several
+(only the picture as a whole); an observer other than the Earth for event dates.
+
+### 98.9 Example, docs and gallery (Step 235)
+
+**Example** `examples/mars-transfer` ("How to get to Mars", about 3:43 with Kokoro `af_heart` 0.85,
+the `discovery` bed at −9 dB, a 9:16 `short` variant; terms in concept colours: Hohmann transfer,
+launch window, semi-major axis with TeX `a`). Seven scenes: `intro` (title); `straight` (the
+Earth's 29.8 km/s as a live arrow, a rocket alongside the Earth with a 3 km/s radial burn on
+"Fire": it goes round the Sun on an ellipse out to 1.11 AU, far short of Mars); `hohmann` (the
+transfer on circular, coplanar orbits, Mars starting 95° ahead so the live phase angle shrinks to
+44.3° before the first burn; burns on "burn" and "second"); `timing` (a `calculation`: a = (r_E +
+r_M)/2 = 1.262 AU, T = π√(a³/GM☉) = 259 d, θ = π(1 − 2T/T_M) = 44.3°); `leaving` (a `calculation`
+taking v∞ `from_scene: hohmann.dv1`: v_circ 7.726, v_esc 10.93, Δv = √(v∞² + v_esc²) − v_circ =
+3.59 km/s from 300 km — the Oberth effect; computed, never typed in); `sky` (`date: 2026-10-28`,
+the Earth and Mars from Table 1 with `event: {kind: opposition, of: Mars}` → 2027-02-19; the
+narration's next window "around early December 2026" and "early 2029" are where the heliocentric
+lead equals the Hohmann 44.3° in this model, 2026-12-05 and 2029-01-07, stated as approximate);
+`recap` (bullets). Every narrated number passes the `orbit_*` and `calc_*` rules (0 findings with
+the Kokoro audio in 16:9 and 9:16); `tests/test_mars_transfer.py` pins the numbers against
+`vidgen.orbits` directly. Approximations are stated on screen (captions on the orbit scenes) and in
+the recap ("real missions fly computed, tilted, elliptical paths").
+
+**Docs.** A guide topic `orbits` (aliases orbit, orbital, orbital-mechanics, kepler, hohmann,
+planets, space, spaceflight: choosing a view, scale honesty, panels, presets and units,
+manoeuvres, three bodies, dates, pacing, lint, a snippet); the `scenes` topic points to it.
+`docs/COOKBOOK-ORBITS.md` (choosing, scale honesty, units and Δv — heliocentric Δv versus the burn
+from low orbit —, a table of approximations to state, pacing, mistakes → rules, a pattern that a
+test validates and lints), linked from the README, `docs/COOKBOOK.md` (intro and §12), the guide
+and the gallery's section note. The CONFIG completeness test (`test_docs`, parametrized `orbits`)
+already covers every param of the scene, nested ones included.
+
+**Gallery.** The section "Orbital mechanics" has its note (`gallery.SECTION_NOTES`: the example and
+the cookbook) and footer; the `orbit` entry is regenerated (the current layout and page: 0.34 MB);
+two showcases (`gallery.SHOWCASES`, section `orbital mechanics`): `mars_hohmann` (the transfer with
+the phase angle and burns on words, 0.33 MB) and `jupiter_trojans` (`sun_jupiter` in the rotating
+view with L1–L5, a Trojan's tadpole and its zero-velocity curve, 0.33 MB; a first version turning
+the frame on a word made GIFs above 150 KB even at the fallback frame rates, so the showcase starts
+in the rotating frame).
+
+**Budget decision: 13 → 15 MB.** The gallery was at 12.9 MB of 13 before this step and 13.6 MB
+after it. Making room first was tried: the GIFs are 10.3 of the 12.9 MB; a lossless re-save of the
+GIFs with Pillow's optimiser saved about 10 % on some files and grew others, needs checking frame
+by frame, and is not what `vidgen gallery` writes — the next regeneration of an entry would undo it
+(gifsicle, which does this well, is not installed here and is not a dependency the owner's Windows
+setup has). Lowering the clip frame rate or width would visibly hurt every entry. So the budget
+grows by what Phase X needs plus room for about three more entries (each ≤ 0.36 MB): 15 MB, with
+`ENTRY_MAX` (0.36 MB per entry) and `gallery.CLIP_MAX_BYTES` (150 KB per GIF) unchanged
+(`tests/test_gallery.py`).
+
+**Fix found on the way**: the transfer's phase-angle label (`orbit_manoeuvres._draw_phase`) kept
+off the panel and the central body only; in 9:16 it could stand on the Earth's label (which keeps
+its side while it stays about as good). It now keeps off the bodies and their labels too. Orbit
+scenes with a transfer may place θ's label differently; no other picture changes (the scene is not
+in the Phase Q baseline). And `ephemeris.events_between` listed an event twice when the bisection
+stopped just before its root (the Mars opposition of 2029-03-25): it now searches on from a day
+after each event (events of a pair are a synodic period apart).
+
+**Render note**: the 16:9 check render was made at 1280×720, 30 fps: a 47 s orbit scene at
+1920×1080 takes longer than one 10-minute command on the development machine (rendering is
+per scene; the owner's machine renders 1080p as usual).
+
+**Render note (Step 236)**: the cause was memory, not only time — see §98.10; the example now renders
+at 1920×1080 in about 6½ minutes here.
+
+### 98.10 Review of Phase X (Step 236)
+
+A critical review of Steps 229–235 with fixes: a physics-accuracy pass against independent
+calculations, the reviewer's four points (picture size, units in substitutions, render speed,
+known gaps), compatibility.
+
+**Physics against independent calculations** (scratchpad `s236/physics_check.py`, 133 checks; the
+lasting ones are `tests/test_orbit_review.py`). Written from the textbook formulas, with scipy's
+`brentq` and `solve_ivp` (DOP853, rtol 10⁻¹²): Kepler's equation by bisection for e from 0 to
+0.999999 and 1.000001 to 10, Barker's equation (ν to ≤ 1.1 × 10⁻¹⁵ rad); Vallado's COE2RV and the
+round trip through `Elements.from_state` (300 random ellipses and hyperbolas: 3 × 10⁻¹⁶ relative,
+elements to 8 × 10⁻¹⁵); Kepler propagation of an ellipse, a parabola and a hyperbola against direct
+integration (≤ 2 × 10⁻¹⁰); vis-viva, circular / escape speeds, the Moon's 27.28 d; Hohmann LEO 300 km →
+GEO (2.426 + 1.467 = 3.893 km/s, 5.275 h), Earth → Mars (2.945 / 2.649 km/s, 258.87 d, 44.35°,
+synodic 779.93 d; Table 1's 779.94 d), the bi-elliptic thresholds 11.93877 / 15.58171, a bi-elliptic
+Δv, the plane change and the combined plane change; the flyby turning angle against the integrated
+hyperbola (v∞ out = in, periapsis), the Sun-frame gain |v_p + v∞out| − |v_p + v∞in| and the energy
+change ½(v_after² − v_before²); L1–L3 by root finding for four mass ratios (≤ 5 × 10⁻¹⁴), L4/L5, the
+Jacobi constant at L1 and L4 (3 − μ + μ²), Routh's μ = (1 − √(23/27))/2, the Sun–Earth L1/L2 at
+1.4976 / 1.5077 million km; the figure-eight (Simó's values) integrated back to its start after
+T = 6.32591398 (3.9 × 10⁻⁸); the Galilean period ratios and the Laplace relation n_I − 3n_E + 2n_G;
+heliocentric positions of all nine Table 1 bodies against Standish's method written here
+(6 × 10⁻¹⁶, 1800–2050), Julian dates, 14 published oppositions / conjunctions 2018–2027 (Mars,
+Jupiter, Saturn, Venus: all within 0.48 d), the Earth's longitude at the 2024 March equinox. Every
+constant and preset was compared with the published value it cites: CODATA 2022 G (and scipy), the
+IAU 2012 AU, IAU 2015 B3 GM☉, GM⊕, R☉, R⊕, DE440's planetary GM, JPL SSD's Galilean GM (the sum
+matches DE440's Jupiter system minus the planet), IAU WGCCRE radii, Pluto (975.5 km³ s⁻², 1188.3 km),
+Table 1 (all 108 numbers, also pinned since Step 234), GEO 42 164.17 km, the Galilean distances from
+Kepler III within 3 × 10⁻⁵ of the published means. **No physics error was found.** Two notes: a
+period from Table 1's a by Kepler III (365.2578 d for the Earth–Moon barycentre) differs from the
+table's own mean motion (365.2564 d) by 4 × 10⁻⁶ — the table's a and L-rate are independent fits
+(the scenes use Kepler III, consistently); the lint's facts (`ATMOSPHERES`: the Kármán line; Mars
+125 km entry interface, still for the owner to check) are unchanged.
+
+**Picture size (16:9).** The orbit picture is height-limited (it is round): the caption now stands
+in the side column under the panel, left-aligned and wrapped to at least `COLUMN_CAPTION_WIDTH`
+4.4 units (`CAPTION_GAP` 0.25 under the panel or the flyby / inset box), so the picture takes the
+whole height under the title — 61 % → 69 % of the frame height in the example (≈ +28 % area); the
+caption goes under the picture when the column has no room. Labels keep off the column caption
+(`_static_boxes`). **9:16**: a transfer's Δv₁ / Δv₂ rows are rank 1 in a vertical frame (each burn's
+label carries its Δv; the total stays), so the compact panel has two rows fewer and the picture is
+≈ 25 % taller. Checked on the example's stills, the gallery's orbit entries and the 229–233 scratch
+projects (lint 0 in each).
+
+**Substitutions keep units** (`quantities.calc`, Step 236). A third way of writing a substitution:
+when every value with a unit has the same dimension as the result (or the result is a pure number),
+each value is written in the result's unit and the unit once at the end — `(√(2.945² + 10.93²) −
+7.726) km/s` (a sum or product in brackets; an angle or percentage keeps its own unit). Right
+whatever the formula: numbers in one unit give the result in that unit. `Step.common` /
+`common_stacked` come after the full-unit ways and before the SI numbers; they count as keeping the
+units unless the unit cancels (`common_bare`: a pure-number result, written without a unit — it then
+ranks with the SI numbers, so a readable full-unit line is not replaced: the radioactive-decay
+example's z line is unchanged). The Oberth line of the example now shows its units in 16:9 and
+9:16. Different dimensions (GM, R and h) keep the SI fallback. No author option was needed; the
+calculation's `units` choice still applies (`always` includes the common unit, `never` the SI numbers).
+
+**Render speed and memory.** Profiled on the example's 47 s `hohmann` scene at 1920×1080. The
+cost was the side panel: each new readout string (`t = 82.2 d` changes every frame, the θ label
+too) built a manim `Text` (Pango → SVG → svgelements; ~20 ms) and the panel's caches kept it and a
+deep copy (~0.3 MB each with its SVG path objects) — memory grew past 3 GB (the worker was killed:
+"exit code -9", which is why Step 235 rendered at 720p). Fixes, output unchanged to 10⁻⁷ units:
+`scenes/orbit_text.LiveText` lays a string out once per shape (digits as 0) and draws the real
+digits from glyphs rendered once, shifting the following glyphs by the digits' advances and pair
+kerning (measured once, ten pairs per render); glyphs are plain `VMobject`s (no SVG path); the
+panel's text cache keeps the latest 256 (`TEMPLATE_CACHE`); the panel's plate is built once per box;
+the panel is sized with the same glyphs. And the parts that never change while the clock runs —
+title, caption, axes (`STILL_Z` −2) — lie below the clock's mobject (`CLOCK_Z` −1), so manim draws
+them once per play into its static image instead of every frame. Timings (in-process, Python
+3.13, 1397 frames): **179.9 s, 129 ms/frame, ≥ 1.5 GB → 99.3 s, 71 ms/frame, 0.81 GB**; through
+`vidgen render` (Python 3.12 worker): `straight` 90.5 → 58.9 s, `hohmann` killed at 3 GB → 108 s,
+the whole example 1080p in ~6½ min. Remaining per frame: drawing ~26 ms (Cairo at 1080p), the
+panel ~16 ms, label placement ~10 ms, encoding in its thread.
+
+**Gaps fixed**: the lint reads digit groups written with spaces (plain, thin, no-break, narrow
+no-break: "384 400 km", "1 496 000 000 km"; a year before a number, "2026 300 km", stays out). The
+phase angle's label keeps off its own two lines and the central body's label; the lines start at the
+central body's edge and are drawn in the angle's colour (fainter), apart from the grey gridlines. A
+body's label also keeps off its own dot (a diagonal place could clip it).
+
+**Gaps kept** (documented): n-body runs with burns (refused: burns are Kepler arcs); the flyby in
+the planet's frame with the Sun-frame vector diagram, not a heliocentric trajectory; a LEO at true
+scale shows as a thin ring hugging the planet (the honest picture; a close-up with `center` +
+`extent` shows the gap — an exaggerated-altitude view would need the radial transform in every
+offset, not done); a scene of only open orbits frames 3 × the periapsis (`extent` for more);
+9:16 pictures with an inset or a long panel stay small (height-limited); the Moon on a date; light
+time and aberration.
+
+**Compatibility**: Phase Q baseline 31 frames, max difference 0 (`phase-q-baseline/check236`). Visible
+changes, all orbit scenes: the 16:9 caption beside the picture, the 9:16 transfer panel, the phase
+angle's lines and label; calculation scenes only where a substitution did not fit with its units
+(the example's Oberth line). The gallery's `orbit`, `mars_hohmann` and `jupiter_trojans` were
+regenerated (13.6 MB of 15). Lint sweep (`s236/lint_all.py`: 337 scenes of the examples, gallery and
+s205–s236 projects): 0 findings; the s234 demo still finds its 16 planted mistakes; `vidgen lint` of
+the example (Kokoro audio) 0 in 16:9 and 9:16, and of s230–s233: 0.
+
+
+## 99. Particle physics (Phase Y, Steps 237–244)
+
+Particle-physics videos at university level (and for science YouTube): the Standard Model, Feynman
+diagrams in proper notation with conservation checked at every vertex, relativistic kinematics,
+detectors and event displays, resonances emerging from data. The phase **builds on Phase W and
+Phase X's patterns** and re-implements none of them: histograms, peak fits (Gaussian,
+Breit–Wigner, polynomial backgrounds, Poisson likelihood), live plots and the plot core are Phase
+W's (§97.3–§97.7); worked numbers with units are `calculation` scenes and `vidgen.quantities`
+(GeV, GeV/c, GeV/c², ħ and e from the SI 2019 constants, §97.9–§97.10); the accuracy lint extends
+`calc_*` / `plot_*` as Phase X's did (§97.11, §98.8); `from_scene` (§98.5) lets a calculation read
+a scene's computed values. Additive and opt-in: a new package, a new scene type, two new actions;
+existing projects, scenes, gallery frames, audio and the studio unchanged (Phase Q baseline 31/31
+after Step 237).
+
+**Physics honesty**: values from the Particle Data Group, PDG 2024 (S. Navas et al., *Review of
+Particle Physics*, Phys. Rev. D 110, 030001 (2024)), stated in the module and on the chart;
+schemes and approximations stated (quark masses MS-bar / direct; neutrino masses only bounded; the
+Δ(1232) Breit–Wigner values rounded; diagrams and detectors schematic and labelled so); computed
+rather than hard-coded (Q values, thresholds, Γ = ħ/τ, p*, decay lengths, significances); data in
+examples simulated and labelled "simulated data"; no real experiment's logo or exact geometry.
+
+### 99.1 The phase (plan)
+
+- **Step 237, plan and particle model** (this section): `vidgen.particle_physics` (no manim,
+  §99.2), the conservation checker (§99.3), the `standard_model` scene type with the actions
+  `antiparticles` and `couplings` (§99.4).
+- **Step 238, Feynman diagrams**: a `feynman` scene type (name checked: no type, action or target
+  is called `feynman`). The diagram is data in a model module of the package (`feynman.py`: lines
+  between vertices, each line a particle key from §99.2 with a direction — fermion arrows,
+  antifermions against time —, external legs before / after); the layout of tree diagrams (s-, t-,
+  u-channel, decays) and one-loop diagrams (a triangle for H → γγ / gg → H) is computed there; the
+  scene draws the notation (fermion lines with arrows, wavy γ / W / Z with labels, curly g, dashed
+  H, vertex dots, time left → right by default, `time: up` configurable). **Vertex checks reuse
+  §99.3**: each vertex is a little process (the particles into it → the particles out of it) checked
+  with `check` for charge, baryon and lepton numbers, plus the allowed vertex types of the Standard
+  Model (from `chart.COUPLINGS`: which boson meets which fermion; flavour change only at a W vertex;
+  colour flow at q q g and g g g). Presets: e⁺e⁻ → μ⁺μ⁻, Compton, Møller, Bhabha, β⁻ decay at quark
+  level, μ⁻ decay, Drell–Yan, gg → H, H → γγ, H → ZZ* → 4ℓ, t → Wb. Animation: lines drawn in time
+  order, a particle travelling along them, labels.
+- **Step 239, relativistic kinematics**: a model module `kinematics.py` (four-vectors (E, p) in
+  MeV with c = 1, conversions shown with units through `vidgen.quantities`; invariant mass;
+  two-body decay momentum p* from the masses (the Källén function); boosts; thresholds — the
+  checker's `Threshold` (§99.3) already gives √s and the fixed-target energy —; time dilation and
+  decay length βγcτ from §99.2's lifetimes). Pictures: a momentum-vector diagram view (a new scene
+  type or a `plot` model; decided in 239), and `calculation` scenes for the worked numbers (units
+  GeV, GeV/c, GeV/c²; `from_scene` reading the diagram's values).
+- **Step 240, detectors and event displays**: a `detector` scene type: a schematic cylindrical
+  detector in the transverse (x–y) and longitudinal (r–z) views (pixel / strip tracker, solenoid,
+  ECAL, HCAL, muon chambers; sizes generic, labelled schematic), particles from §99.2 leaving their
+  signatures (e: track + ECAL; γ: ECAL, no track; μ: track through everything + muon chambers;
+  charged hadron: track + HCAL; neutral hadron: HCAL; ν: missing p_T), tracks as helices with the
+  right sign and radius (p_T [GeV/c] = 0.3 B [T] R [m]), jets as cones, seeded events; actions to
+  build the event layer by layer, highlight a particle, show missing p_T.
+- **Step 241, collisions, decays and data**: invariant-mass histograms filling event by event are
+  Phase W's live `plot` with a new built-in model for sampling a resonance (Breit–Wigner with the
+  §99.2 mass and width, or Gaussian resolution) on a falling background (seeded, labelled
+  simulated); fits and a local significance (Asimov / likelihood ratio on Phase W's Poisson
+  likelihood, clearly labelled); decay chains and exponential decay times from §99.2's lifetimes;
+  branching ratios from PDG as pie / bar (values sourced in the module).
+- **Step 242, accuracy lint**: rules on the narration, labels and calculations against the model:
+  masses, charges, spins, lifetimes, branching ratios (§99.2), "allowed" / "forbidden" claims
+  against `check` (§99.3), the boson named for an interaction (`chart.COUPLINGS`), kinematics
+  numbers (239), detector signature claims (240), significance claims (241); on the
+  `calc_numbers` / `plot_*` machinery, with `target_text` (§99.4) for on-screen names. The
+  checker's explanations are the lint's messages.
+- **Step 243, example, docs, gallery**: "How the Higgs boson was found" (the chart, gg → H and
+  H → γγ / H → ZZ* → 4ℓ diagrams, the two-photon signature, the diphoton invariant mass in a
+  `calculation`, a simulated spectrum with a bump near 125 GeV and its fit, the meaning of 5σ),
+  Kokoro, music bed low, 16:9 and 9:16; a guide topic (**name to settle**: `particles` collides in
+  spirit with the cartoon `particles` action and `vidgen/particles.py`; `particle-physics` is
+  clearer); CONFIG; `docs/COOKBOOK-PARTICLES.md`; the gallery section "Particle physics" (started
+  in Step 237 with `standard_model`; the gallery is 13.9 MB of 15 after it: room for about three
+  entries); README; CHANGELOG.
+- **Step 244, review**: physics against independent sources (the PDG values marked `# check` in
+  `data.py`, conservation logic, vertex rules, kinematics), compatibility, render performance, the
+  phase's and related suites, `tests/test_mcp.py`.
+
+**Names** (checked against the registry and the code): the package `vidgen.particle_physics`
+(`vidgen.particles` is the cartoon particle effects); scene types `standard_model` (237),
+`feynman` (238), `kinematics` (239), `detector` (240), `mass_spectrum`, `decay_chain`, `branching`,
+`branching_pie` (241); actions `antiparticles`, `couplings` (237), `travel`,
+`vertex_rule`, `swap_channel` (238), `boost` (239), `switch_view` (240); no collisions.
+
+### 99.2 The model: `vidgen.particle_physics` (Step 237)
+
+A package without manim (a fresh-interpreter test), exported by `vidgen.api` as the module
+`particle_physics`. Energies and masses in MeV (c = 1), times in seconds.
+
+| module | contents |
+|---|---|
+| `data` | `Particle` (frozen): `key` (ASCII: `e-`, `anti-nu_e`, `pi0`, `K0_S`, `J/psi`), `name`, `symbol` (Unicode: `ν̄ₑ`, `π⁰`), `markup` (Pango), `tex`, `family` (quark, lepton, gauge boson, scalar boson, meson, baryon), `mass_mev` (0 for γ, g and the neutrinos, whose `mass_limit_mev` is 0.8 eV), `charge`, `spin`, `baryon` (Fractions), `lepton` (L_e, L_μ, L_τ), `flavour_numbers` (S, C, B′, T in the PDG sign convention: the quark's charge sign), `parity`, `c_parity`, `g_parity`, `colour` (1, 3, 3̄, 8), `lifetime_s` or `width_mev` (the one PDG quotes; `lifetime` / `width` compute the other with ħ = 6.582 × 10⁻²² MeV s from the exact SI h and e), `stable`, `mass_scheme`, `content` / `components` (quark keys; several for a mixture: π⁰, η, K⁰_S, K⁰_L, whose undefined numbers are `None` in `flavour`), `generation`, `note`, `aliases`; text helpers `mass_text`, `charge_text`, `lifetime_text`, `width_text` (`energy_text`, `time_text`). `PARTICLES`: the Standard Model particles (6 quarks, 6 leptons and their antiparticles, γ, g, W⁺, W⁻, Z, H: 30 keys) and 27 hadrons with their antiparticles (47 keys; 77 in all). Hadrons get their baryon number and flavour from their quarks; their charge is given and checked (`particle_problems`). Antiparticles by conjugation (`_anti`): charge, baryon, lepton, flavour reversed, colour conjugated, a fermion's parity reversed. Unsure values are marked `# check` in the source |
+| `names` | `particle(text)`: the key, an alias, Unicode as printed (combining macron / overline = anti; superscript charges; Greek → ASCII), ASCII anti markers (`anti-`, `anti`, `bar`, `~`, `nubar_e`), unique case-insensitive matches; **a bar keeps the antiparticle's own charge, as PDG writes it** (`Σ̄⁻` is the antiparticle of Σ⁺); `VidgenError` with did-you-mean. `antiparticle`, `find_key`, `normalize`, `suggestions` |
+| `process` | `parse_process("n -> p e- anti-nu_e")` → `Process(initial, final)` of `Leg(particle, off_shell)`: one arrow (`->`, `→`, `=>`, `⟶`), spaces, `+` and commas between, runs such as `e+e-` split greedily; `Z*` / `W*` off-shell (bosons and fermions only; `K*` refused: excited hadrons are not in the table); `Process.text("unicode" | "ascii" | "tex")` |
+| `conservation` | `check(process)` → `Verdict` (§99.3); `CONSERVATION_TABLE` (what strong / EM / weak conserve), `INTERACTIONS` (one line each) |
+| `chart` | `Cell` (the particle shown, target label and other names, group, fermion row, generation, grid position wide / tall, label and Pango symbol for particle and antiparticle, `bar`); `CELLS` (17); `GRID` (wide 5 × 4, tall 3 × 6); `COUPLINGS` (by boson: the fermions and bosons it couples to and why, tree level: g → quarks + g; γ → quarks, charged leptons + W; Z → all fermions + W, H; W → all fermions (flavour-changing) + γ, Z, W, H; H → quarks, charged leptons + W, Z, H); `SHORT_LABELS` |
+
+**Values** (PDG 2024 central values; masses in MeV unless GeV is given): u 2.16, d 4.70, s 93.5
+(MS-bar, μ = 2 GeV), c 1.273 GeV, b 4.183 GeV (MS-bar m(m)), t 172.57 GeV (direct, Γ 1.42 GeV);
+e 0.51099895, μ 105.6583755 (τ 2.1969811 µs), τ 1776.93 (290.3 fs); W 80.3692 GeV (Γ 2.085 GeV),
+Z 91.1880 GeV (Γ 2.4955 GeV), H 125.20 GeV (Γ 4.1 MeV, the SM prediction); p 938.27209, n
+939.56542 (878.4 s); π± 139.57039 (26.033 ns), π⁰ 134.9768 (8.43 × 10⁻¹⁷ s), η 547.862 (1.31 keV),
+K± 493.677 (12.38 ns), K⁰ 497.611, K⁰_S 89.54 ps, K⁰_L 51.16 ns, φ 1019.461 (4.249 MeV), J/ψ 3096.900
+(92.6 keV), Υ(1S) 9460.40 (54.02 keV), D± 1869.66 (1.033 ps), D⁰ 1864.84 (410.3 fs), B± 5279.41
+(1.638 ps), B⁰ 5279.72 (1.517 ps), Λ 1115.683 (261.7 ps), Σ⁺ 1189.37 (80.18 ps), Σ⁰ 1192.642
+(7.4 × 10⁻²⁰ s), Σ⁻ 1197.449 (147.9 ps), Ξ⁰ 1314.86 (290 ps), Ξ⁻ 1321.71 (163.9 ps), Ω⁻ 1672.45
+(82.1 ps), Δ(1232) 1232 (117 MeV). The values Step 237 marked for the owner (the quark masses u,
+d, s, c, b, t and Γ_t; m_τ; τ(π⁰); τ(D⁰); m(B±), m(B⁰)) were **re-checked in Step 244's review**
+(the reviewer's independent reading of the PDG 2024 summary tables agrees with every one; §99.15);
+only the Higgs width prediction stays marked. **Checked in Step 238's
+review** against the PDG 2024 summary tables: m_W 80.3692 GeV, m_Z 91.1880 GeV, Γ_Z 2.4955 GeV,
+m_H 125.20 GeV confirmed; τ(Λ) corrected from 2.632 to the PDG 2024 average (2.617 ± 0.010) ×
+10⁻¹⁰ s (and Λ̄ with it).
+
+### 99.3 The conservation checker (Step 237)
+
+`check(process)` → `Verdict(process, allowed, interaction, checks, violations, notes, threshold,
+energy, energy_ok)`; `summary()` ("allowed: weak interaction", "forbidden: baryon number not
+conserved: B = +1 → 0"), `explain()` (every `Check` with ✓ / ✗ / Δ — Δ: a flavour the weak
+interaction may change — and each particle's share: "L_e: n 0 → p 0, e⁻ +1, ν̄ₑ −1 (total 0)", the
+energy line, notes).
+
+1. **Every interaction**: Q, B, L_e / L_μ / L_τ (checked when a lepton of that family takes part;
+   a note says that only neutrino oscillations change family numbers); angular momentum as far as
+   counting can tell (the number of fermions changes by an even number); energy — a decay needs the
+   parent heavier than the on-shell products ("m(H) = 125.2 GeV is not more than the products' 182.4
+   GeV", with the hint "write Z*" when one W / Z off-shell would do; a massless parent: "pair
+   production needs a nucleus"; p → n e⁺ νₑ: "in a nucleus the binding energy can make up the
+   difference"); a reaction gets `Threshold` (masses before and after, Q, the least √s, and for two
+   particles the fixed-target beam energy E = (M² − m_a² − m_b²) / 2m_b and its kinetic part: p p →
+   p p p p̄ needs 6 m_p = 5.63 GeV); the **Landau–Yang theorem** (a spin-1 particle never decays to
+   γγ: Z, J/ψ, φ, Υ); **two real particles merging into one** (Step 244): only at √s = M of the
+   product, so it must weigh at least m_a + m_b (e⁺e⁻ → Z allowed; e⁺e⁻ → γ and p p̄ → γ with a
+   real photon forbidden, with the hint to write `gamma*`; p p̄ → π⁰ forbidden).
+2. **Flavour**: S, C, B′, T summed per side; a mixture (K⁰_S, K⁰_L) is read as the component that
+   changes flavour least, said in a note ("read here as K⁰ (S = +1)").
+3. **The interaction**: a Higgs boson → `higgs` (flavour must be kept: no H → b s̄ at tree level; a
+   note for H with only massless partners: "a loop of heavy particles"); a W, Z or neutrino, or any
+   flavour change → `weak`, each flavour changing by at most one unit ("strangeness changes by 2 …
+   it would take two weak steps", Ξ⁻ → n π⁻); otherwise photons or charged leptons →
+   `electromagnetic`, else `strong`. Strong and electromagnetic processes conserve **C-parity**
+   (checked when every particle has one: π⁰ → γγγ refused) and the strong one **G-parity** (all
+   particles with G: η → πππ is then electromagnetic with the note "not strong … slow").
+4. Quark-level processes get a note: current-quark masses depend on the scheme and quarks are
+   bound, so the energy check is indicative; colour is not checked (238 does colour flow).
+
+Not checked: parity and orbital angular momentum (they need partial waves), CKM suppression,
+FCNC loops (a K⁺ → π⁺ e⁺ e⁻ passes as weak), isospin beyond G.
+
+### 99.4 The `standard_model` scene type (Step 237)
+
+`scenes/standard_model.py` (drawing, targets), `scenes/standard_model_actions.py` (actions).
+
+- **Arrangement**: `layout: auto` = `wide` in 16:9 (the classic grid: generations I–III, rows
+  up-type quarks, down-type quarks, charged leptons, neutrinos; a column of gauge bosons g, γ, Z, W;
+  the Higgs boson; the source note in the free cells under H; the key cell at the bottom right) and
+  `tall` in 9:16 (the fermion grid, the bosons in two rows under it: g γ Z / W H key, the source
+  line as a caption). Rotated group labels on the left (quarks, leptons; tall: bosons), the
+  generation numbers above; wide: "gauge bosons" and "scalar boson" over their columns. The grid
+  fills the area under the title: cell width from the width, height from the height, width at most
+  1.9 × height, height at most the width.
+- **Cells**: a rounded outline in the group colour (`quark_color` default the palette's third
+  colour, `lepton_color` tertiary, `gauge_color` accent, `higgs_color` secondary — the theme's
+  `highlight` stays free for actions), fill 0.1; texts at the readable size (×1.08 margin for the
+  lint's cap-height estimate), up to 25 % larger when wide cells have room. **Row mode** when every
+  cell's mass and charge fit on one line (16:9): mass top left, charge top right, spin right of the
+  middle, the symbol in the middle, the name at the bottom; **column mode** (the classic chart, 9:16)
+  when they do not and the height holds three lines over the name: mass, charge, spin down the left,
+  the symbol beside them. Lines share baselines. If neither fits, row mode with the top line scaled
+  down and a warning. Names that do not fit take shorter forms for all cells alike (`electron
+  neutrino` → `e-neutrino` → `neutrino`, separately for the antiparticle names). Antiparticle bars
+  are drawn as lines over the first glyph (a combining macron sits badly on ν); every symbol carries
+  its bar (invisible when none), so the flip morphs letters into letters and bar into bar (a
+  `Transform` between different structures left a copy that the layout dump read as text).
+- **Reveal**: `groups` (default): frame and quarks, leptons, gauge bosons, Higgs (+ key, source,
+  caption) as four steps over the beats; `all`: one step.
+- **Targets**: `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<target>`
+  and `particle:<name>` (u / up, e / electron, nu_e / electron_neutrino, g / gluon, photon / gamma,
+  Z / Z_boson, W / W_boson, H / higgs / Higgs), `generation:1`–`3` (with the numeral),
+  `group:quarks | leptons | fermions | gauge_bosons | scalar_bosons | bosons` (with their labels),
+  `row:up_type | down_type | charged_leptons | neutrinos`; `target_text` gives the on-screen names
+  (the antiparticle's when `antiparticles: true`).
+- **Actions**: `antiparticles` (no target: all fermions; or targets; reversible): each cell's
+  charge, symbol and name `Transform` into the antiparticle look built beside the particle look;
+  the group label becomes antiquarks / antileptons once all its cells are anti. `couplings`
+  (target: a boson cell; `color`, `dim`, `note`; reversible, `until_next_beat`): an outline around
+  the fermion block the boson couples to (contiguous rows by construction), a solid ring on the
+  boson, dashed rings on the bosons it meets, the rest dimmed to 0.45 (`dim_to` of the built-in
+  actions; restored by `Repaint`), the reason in words in the note area (wide: under H; tall: in
+  place of the source line). Both check the scene type; `couplings` checks that its targets are
+  boson cells.
+
+**Shared code** (Step 237): `lint/layout_rules._GLYPH_EM` knows Greek lowercase heights (x-height
+α ε ι κ ν ο π σ τ υ ω; descenders γ η μ ρ ς φ χ ψ): the cap-height estimate of `τ-neutrino` or a
+`ν_μ` symbol was 10–15 % low (texts without Greek letters are measured as before; frames unchanged).
+
+**Public (additive)**: `vidgen.api.particle_physics` (the module); the scene type
+`standard_model`; the actions `antiparticles`, `couplings`. No dependency, no config key.
+
+**Known gaps after Step 237**: the chart's labels and names are English only (not translatable;
+`title` and `caption` are); `max_words` warns on a full chart (about 50 words: `show:` fewer
+fields or `key: false`); cells dimmed by `couplings` can get `contrast` warnings for their large
+symbols (the backdrop sampler counts a dimmed glyph's own pixels); the neutrino-mass display uses
+one limit for all three flavours; no lint rules (242).
+
+### 99.5 Feynman diagrams: the model (Step 238)
+
+Two modules of `vidgen.particle_physics` (no manim), exported with `Diagram`, `DiagramCheck`,
+`build_diagram`, `check_diagram`, `preset_diagrams`, `vertex_rule` and `diagram_layout`.
+
+**`feynman`**: a `Diagram(name, lines, groups, label)` of `DiagramLine(id, particle, start, end,
+off_shell, label)`: the particle that runs **forward in time** from `start` to `end`, each a vertex
+id, `in` (an incoming leg starts there) or `out`; `in` → `out` is a spectator quark. The fermion
+arrow follows the fermion-number flow (`flow` +1 for a fermion, −1 for an antifermion, whose arrow
+points back along the line); vertices are the ends other than `in` / `out`. `HadronGroup(particle,
+side, lines)` brackets quark lines as a hadron (its quark content must match). `build_diagram`
+refuses what is not a diagram (an `in` at a line's end, a vertex joining fewer than 3 or more than 4
+lines, pieces not joined, more than one loop, tadpoles, a hadron as a line, a non-quark spectator,
+groups not on their side).
+
+`check_diagram(d)` → `DiagramCheck(vertices, chains, verdict, hadron_verdict)` with `problems`,
+`ok`, `explain()`:
+1. **Vertex rule** (`vertex_rule(into, out)` → `VertexRule(kind, name, coupling, interaction,
+   note)` or why not), on the lines read as all outgoing (crossing): two fermions (one fermion,
+   one antifermion: "the arrows must run through the vertex") and one boson — γ: same flavour,
+   charged (`QED`); g: same quark flavour (`QCD`); Z: same flavour (`NC`); H: same flavour,
+   massive (`Hff`; neutrinos massless in the SM); W: a weak doublet — a charged lepton with the
+   neutrino of its family, an up-type with a down-type quark (`CC`, the CKM element in the coupling
+   text, "CKM-suppressed" across generations); a flavour change at γ / g / Z / H is refused ("no
+   flavour-changing neutral currents at tree level"); three or four bosons — g g g, g g g g, W W γ,
+   W W Z, H W W, H Z Z, H H H, W W W W, W W Z Z, W W γ γ, W W Z γ, H H W W, H H Z Z, H H H H; **H γ γ,
+   H g g and H Z γ are refused with the loop** ("the Higgs boson couples to mass and the photon is
+   massless; … draw the loop (preset h_to_gammagamma)"); four fermions: "Fermi's contact is the
+   low-energy picture of a W exchanged: draw the W".
+2. **Conservation at the vertex** with §99.3's `check` (the vertex as a process, every line
+   off-shell so no energy check; a vertex with every line on one side is crossed): Q, B, L_e, L_μ,
+   L_τ (`VertexCheck.conservation_text()`: "Q: −1 → 0 + −1 ✓ · L_μ: +1 → +1 + 0 ✓").
+3. **Colour** (basic, `colour_problem`): the colours as outgoing (3, 3̄, 8) must be able to make a
+   singlet — triplets minus antitriplets a multiple of 3, a gluon never alone among colourless
+   lines.
+4. **Fermion lines** (`fermion_chains`): each chain in the direction of its fermion number (d → u,
+   νₑ → e⁻, a closed top loop) with the conserved number along it ("B = 1/3 along the line").
+5. **The reaction** of the external legs with `check` (spectators left out) and, with groups, the
+   hadron reaction (n → p e⁻ ν̄ₑ, π⁺ → μ⁺ ν_μ). The scene refuses a diagram with any problem.
+
+Couplings shown (computed): α = e²/4πε₀ħc from the SI 2019 / CODATA 2022 constants (1/137.036);
+α_s(m_Z) = 0.1180 (PDG 2024); G_F = 1.1663788 × 10⁻⁵ GeV⁻² (PDG 2024) → v = (√2 G_F)^−½ = 246.22
+GeV, g = 2m_W/v = 0.653, y_f = √2 m_f/v (top 0.991), H W W 2m_W²/v ≈ 52 GeV, H H H 3m_H²/v ≈ 191
+GeV. Rounded and marked for checking: sin²θ_W ≈ 0.231 (MS-bar at m_Z), the CKM magnitudes to two
+figures.
+
+**Presets** (`PRESETS`, `preset_diagrams(key, spectators)`; line ids are stable across a preset's
+diagrams so `swap_channel` can morph them): `ee_to_mumu` (photon, Z), `compton` (s, u),
+`bhabha` (s, t), `moller` (t, u), `beta_decay` (quark; `spectators` adds u, d and the n / p
+groups), `muon_decay`, `pion_decay` (group π⁺), `drell_yan` (photon γ*, Z), `gg_to_h` (top loop),
+`h_to_gammagamma` (top, W loops), `h_to_zz_4l`, `top_decay` (W, leptonic).
+
+**`feynman_layout.layout(d)`** → `DiagramLayout(vertices, lines, columns, timelike, groups,
+crossings, bounds)` in (t, y): t = 0 incoming ends, 1 outgoing ends; y spread −1 … 1 (spectators
+above). (1) Time order: a bridge line whose one side holds no incoming leg (or the other no outgoing
+one) is timelike and orders its vertices, otherwise spacelike (shared time); on a loop, vertices
+whose outside part holds only incoming legs are early, only outgoing late; spacelike-joined
+vertices form columns layered by the longest path, placed at fixed t (0.31 / 0.69 for two
+columns). (2) Vertex y: the weighted mean of the neighbours with the external ends fixed (solved
+exactly), same-column vertices at least 1.0 apart. (3) Every order of the incoming and of the
+outgoing ends (up to 4 per side) is scored by (crossings + lines passing through a vertex dot,
+hadron groups not beside their spectators, inversions of the written order): the u-channel comes out
+uncrossed with its outgoing legs swapped. Two lines between the same vertices bow apart (±0.32 of
+the chord). Every preset: 0 crossings, deterministic.
+
+### 99.6 The `feynman` scene type (Step 238)
+
+`scenes/feynman.py` (params, layout on screen, targets, reveal, the actions' drawing),
+`scenes/feynman_draw.py` (notation), `scenes/feynman_actions.py`.
+
+- **Params**: `preset` or `diagrams` (`{name, label, lines, groups}`; a line `{id, particle, from,
+  to, label}` or the string `"id: particle from -> to"`), `diagram` (shown first), `spectators`,
+  `time` (`right` | `up`), `time_axis`, `process`, `labels`, `reveal` (`time` | `all`), `title`,
+  `caption`, `fermion_color` (text), `boson_color` (accent), `higgs_color` (secondary). Validation
+  builds and checks every diagram: a rule broken is a param error with the reason.
+- **Notation**: fermions solid with a filled arrowhead on the fermion-number flow; γ, W, Z a sine
+  wave (amplitude 0.075, wavelength ≈ 0.3); g a coil (a circle rolling along the line); H dashed;
+  vertices dots; labels from the particle's Pango markup with the antiparticle bar drawn as a line
+  (as §99.4), `*` for off-shell; hadron brackets with the hadron's name outside the quark labels.
+  External labels sit beyond the open ends; internal ones beside the middle, away from the centre
+  unless that side meets another line. Lines are drawn from their earlier end (`Create` draws in
+  time order).
+- **Screen**: title, the reaction line (`e⁻ e⁺ → μ⁻ μ⁺ · s-channel`, hadrons when grouped),
+  caption; the diagram fitted into the rest with room for the labels and brackets (a transverse
+  unit at most 3.0, width at most 2.8 × height; 9:16 may grow to 1.8 × its width tall; Step 239); the `time`
+  arrow under the diagram's left end (time right) or left of its bottom (up). When the scene uses
+  `vertex_rule`, its text (1.3 × the readable size) gets a column on the right (16:9, up to 5 units / 36 %) or a band at the
+  bottom (9:16, eight lines, at most 30 % of the height; Step 239).
+- **Reveal** (`time`): the incoming lines with title, reaction and time arrow; then per column the
+  vertex dots and the lines beginning there (outgoing legs with their vertex), spread over the beats.
+- **Targets**: `title`, `caption`, `process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`,
+  `hadron:<particle>` — the union over the scene's diagrams; each is a container whose parts are
+  swapped by `swap_channel`, so targets follow their lines. `target_text`: a line's particle name.
+- **Actions**: `travel` (targets `line:<id>` / `diagram`; one clock from the earliest to the latest
+  time of the lines; each dot on its line while the clock is within the line's times, a spacelike
+  line crossed in ±0.08; fades in the last 12 %, removed at the end), `vertex_rule` (one vertex: a
+  ring, the rule text — name and lines, coupling, each conservation check; `until_next_beat`),
+  `swap_channel` (`to`, default the next diagram; same-id parts `Transform`, others `Create` /
+  `FadeOut`, the reaction line morphs; reversible).
+
+**Shared code** (Step 238): `vidgen.api.find_scene_type` (= `registry.find`) so that
+`scenes/calculation.py` no longer imports `vidgen.registry`; `scenes/orbit_text.py` imports through
+`vidgen.api` (the built-ins' public-API rule). No frame changes (Phase Q baseline 31/31).
+
+**Public (additive)**: scene type `feynman`; actions `travel`, `vertex_rule`, `swap_channel`;
+`vidgen.api.find_scene_type`; `particle_physics.feynman`, `particle_physics.feynman_layout` and the
+names above. No dependency, no config key.
+
+**Known gaps after Step 238**: two-loop and box diagrams are not laid out (one loop: triangles and
+bubbles); vertices with more than four ends per side keep the written order (no search); colour
+flow is checked, not drawn (no colour lines on the quarks); CKM magnitudes and sin²θ_W are rounded
+display values; the vertex-rule text is English only (the scene's title and caption translate);
+`travel` follows lines, not a fermion chain by name.
+
+**Step 239 review fixes** (notation and frame use, from the stills of 238): gluons are drawn as
+proper coils — radius 0.14, one turn per 0.3 units, each turn swinging back by its full radius so
+it closes into a loop (`COIL_RADIUS`, `COIL_PITCH`, squash 1.0; tested: the gluon's path runs
+backwards in every turn, the photon's never) — clearly unlike the photon's sine wave in a
+thumbnail; the diagram may take more of the frame (`MAX_UNIT` 2.3 → 3.0, `MAX_STRETCH` 2.3 → 2.8,
+in 9:16 up to 1.8 × its width tall, was 1.15); the vertex-rule text is 1.3 × the readable size
+(`NOTE_SCALE`), its column in 16:9 up to 5 units / 36 % of the width, its band in 9:16 eight lines
+(at most 30 % of the height). The `feynman` gallery entry was regenerated. A test of 238 compared
+label boxes with `config.frame_height` after the render (restored to the landscape frame by then);
+it now uses the rendered size.
+
+### 99.7 Relativistic kinematics: the model (Step 239)
+
+`particle_physics.kinematics` (no manim). **Natural units**: energies, momenta and masses in MeV
+with c = 1 (`value_text(29.79, "momentum")` → `29.79 MeV/c`, `"mass"` → MeV/c², the unit growing to
+GeV / TeV as `energy_text` does); **SI** through `vidgen.quantities`' units (`to_si`, `from_si`,
+`si_text`: `29.79 MeV/c = 1.592 × 10⁻²⁰ kg·m/s`, exact e and c), `natural_value("10 GeV/c")` parses a
+value with any unit of the right dimension.
+
+- `FourVector(energy, px, py, pz)`: `from_mass(m, p, angle)` (x–y plane), `p`, `mass2` (rounding
+  below 10⁻⁹ E² is 0), `mass` (**negative m² is an error** with the numbers), `beta_vector`,
+  `gamma` (massless: error), `dot` (Minkowski), `boost(beta)` — the vector seen from a frame in
+  which the current one moves with velocity β (a number along x or a vector): E' = γ(E + β·p),
+  p' = p + [(γ − 1)(β·p)/β² + γE] β; `total`, `invariant_mass`, `rest_frame_beta` (Σp/ΣE; a
+  massless system has no rest frame), `to_rest_frame`.
+- `gamma_of(β)` (**β ≥ 1 is refused**: "superluminal"), `Boost(beta, gamma)` with `from_beta`,
+  `from_gamma` (≥ 1), `from_momentum` (βγ = p/m), `from_energy` (**E < m refused**: "did you mean
+  the kinetic energy?"), `from_kinetic`; `motion(m, momentum= | energy= | kinetic= | beta= |
+  gamma=)` (exactly one).
+- **Two-body decays**: `kallen(x, y, z)`, `two_body_momentum(M, m₁, m₂)` = √λ(M², m₁², m₂²)/2M
+  (**below threshold refused**); `two_body("pi+ -> mu+ nu_mu")` → `TwoBodyDecay` (one particle into
+  two on-shell ones, allowed by §99.3's `check` — the checker's explanation is the error —, above
+  threshold) with `p_star`, `energies` (E₁ = (M² + m₁² − m₂²)/2M), `q_value`, `rest_vectors(angle)`
+  (back to back), `lab_vectors(boost, angle)`, `parent_vector`, `opening_angle(boost, angle)`,
+  `min_opening_angle` (scanned over the emission angle; massless products: sin(θ_min/2) = 1/γ).
+  Textbook values (tested): π⁺ → μ⁺ν_μ 29.79 MeV/c, K⁺ → π⁺π⁰ 205.1, Λ → pπ⁻ 100.6, Z → μ⁺μ⁻
+  45.59 GeV/c, H → γγ 62.60 GeV/c, π⁰ → γγ 67.49 MeV/c.
+- `MomentumPicture` (the scene's model): the particles' four-vectors in the system's rest frame,
+  the boost direction and the lab rapidity η (β = tanh η); `vectors(eta)` any frame along the
+  boost. `decay_picture(decay, angle, lab)` (the parent along +x), `system_picture([(particle,
+  p, angle), ...])` (lab given; the rest frame from Σp/ΣE).
+- **Thresholds**: `threshold("p p -> p p p anti-p")` → `Thresholds` built on §99.3's `Threshold`
+  (the reaction must be allowed): `sqrt_s` (Σ m after), `fixed_target` E = (s − m_a² − m_b²)/2m_b and
+  its kinetic part, `collider` (the beams' energies in the centre-of-momentum frame, (s + m_a² −
+  m_b²)/2√s), `ratio`. The antiproton: √s = 4m_p, fixed target E = 7m_p (kinetic 6m_p = 5.63 GeV),
+  collider 2m_p per beam (kinetic m_p). `fixed_target_energy(M, m_a, m_b)`.
+- **Time dilation and decay length**: `decay_length("mu-", energy=4000)` → `DecayLength` with
+  `c_tau`, `lab_lifetime` (γτ), `length` (βγcτ), `survival(d)` = e^(−d/L), `text()`; stable
+  particles refused. A 4 GeV muon: γ = 37.86, L = 24.93 km; B⁺ at 30 GeV/c: 2.8 mm; π± at 10 GeV/c:
+  559 m; π⁰: 1.9 µm. `length_text` (km … fm).
+- **PDG values for calculations**: `pdg_value(name, "mass" | "lifetime" | "width", unit)` →
+  `PdgValue(number, unit, meaning, source)`: the table's figures as a decimal string (`139.57039`
+  MeV/c²; masses below 1 GeV in MeV/c², else GeV/c²; a width computed from the mean life with 4
+  figures), "π⁺ mass", "PDG 2024"; a neutrino mass (only bounded) and a stable particle's lifetime
+  refused.
+- **Plot model** `two_body_opening` (registered with `plotcore.register_model`, `kind:
+  function`): params `M`, `m1`, `m2` (GeV/c²), `p_min`, `p_max` (GeV/c), `samples`; columns `p`,
+  `gamma`, `theta_min`, `theta_90` (degrees). The opening-angle plot is Phase W's `plot` — nothing
+  re-implemented.
+
+### 99.8 The `kinematics` scene type and PDG symbols in calculations (Step 239)
+
+**Decision**: a new scene type `kinematics` (name checked: no type, action or target is called
+so; the action `boost` neither), not a `plot` model: arrows from a common origin with labels at
+their tips, two frames side by side and a frame that moves continuously are a picture of their
+own, not data on axes; the numbers are worked out by `calculation` scenes (`from_scene` and the
+new particle symbols), the curves by `plot` (`two_body_opening`).
+
+`scenes/kinematics.py`, `scenes/kinematics_actions.py`.
+
+- **Params**: `decay` (two-body) with the parent's `momentum` / `energy` / `kinetic` (text with a
+  unit) / `beta` / `gamma` (at most one; needed unless `frames: rest`) and `angle` (the first
+  product's rest-frame direction from the flight direction, default 60°); or `particles` (`{particle,
+  momentum, angle}` in the lab); `frames: both | rest | lab`; `values`, `sum`, `decay_length`, `si`,
+  `process`, `reveal: steps | all`, title, caption. Validation builds the picture: the errors of
+  §99.7 become param errors.
+- **Layout**: panels side by side (16:9) or stacked (9:16), each with a header ("rest frame of π⁺",
+  "lab frame", "rest frame (Σp = 0)", "boosted frame"), a β / γ readout (not in a rest frame shown
+  beside the lab), the arrows and the numbers under them (room reserved for the tallest set the
+  frame will show). The arrow scale fills the panel with the labels (name + momentum beyond each
+  tip, the centre moved along the arrow just far enough for its box to clear the tip; a label that
+  overlaps an earlier one moves up or down): found by a few rounds since labels do not scale. Both
+  frames share one scale unless they differ more than 2× — then the larger one's header says
+  `arrows ×2.4`. One decay frame in 9:16 turns the picture a quarter (the flight direction up).
+  Particle colours from the theme palette; Σp grey at 0.75 opacity.
+- **Numbers**: decay at rest — p*, the products' energies, √((ΣE)² − |Σp|²) = M; a moving frame —
+  the parent's p and E, the opening angle, the same invariant mass, βγcτ; particles — ΣE, |Σp|, the
+  opening angle of two, the invariant mass; `si` adds one SI line.
+- **Reveal**: (1) title, process, headers, the first frame's arrows; (2) the second frame's arrows;
+  (3) sums, numbers, caption.
+- **Targets**: `title`, `caption`, `process`, `panel:rest`, `panel:lab`, `arrow:<n>` /
+  `arrow:<particle>` (unique keys; every frame's arrow and label), `sum`, `values`.
+- **`boost`** (`to: lab | rest | β`; reversible): the last frame's rapidity runs linearly from its
+  value to the target; each frame redraws arrows, labels, Σp and the readout (`orbit_text.LiveText`
+  for the changing numbers — no `Text` per frame); header and numbers `Transform` into the new
+  frame's. The containers keep their identity (targets follow); the parts they drop are made
+  invisible, because the renderer keeps drawing the family it collected when the animation began
+  (a first version left the rest-frame arrows on screen). The panel's scale covers every rapidity
+  its boosts pass through.
+- **`calc_values`** (`from_scene`): decay `M`, `p_star`, `E1`, `E2`, `Q`, with the lab `beta`,
+  `gamma`, `beta_gamma`, `p_lab`, `E_lab`, `opening_angle` (rad, shown in deg), `decay_length`;
+  particles `m_inv`, `E_total`, `p_total`, `opening_angle`.
+
+**`calculation` symbols** (shared code, additive): `{name, mass: pi+}`, `lifetime: mu-`, `width:
+Z` — one more kind of source beside `value`, `constant`, `from_scene` (exactly one); written into
+`quantities` as the value string and unit of `pdg_value` (meaning and source by default), so the
+substitution, significant figures and lint are those of any measured value. `CalcSymbol.pdg()`,
+`source_input()`. Existing calculations are unchanged.
+
+**Render performance**: a two-frame scene of 15.7 s renders in about 9 s at preview (1280×720,
+10 fps); the boost scene (7.5 s) in about 9 s.
+
+**Public (additive)**: scene type `kinematics`; action `boost`; calculation symbol keys `mass`,
+`lifetime`, `width`; `particle_physics.kinematics` and the names `Boost`, `DecayLength`,
+`FourVector`, `Thresholds`, `TwoBodyDecay`, `decay_length`, `invariant_mass`, `threshold`,
+`two_body`, `two_body_momentum`; the plot model `two_body_opening`. No dependency, no config key.
+
+**Known gaps after Step 239**: the pictures are planar (pz = 0); three-body decays (Dalitz plots,
+the muon's electron spectrum) are not modelled; lab distributions are shown as single events and
+the opening-angle curve, not as sampled angular distributions; the opening-angle model takes masses
+as numbers (plot params are numbers), not particle names; a dense two-frame picture trips
+`max_words` (about 45 words with every number: `values: false` or fewer beats' worth of detail).
+
+**Review of 239's stills (Step 240)**: each frame fills its half (`SHARED_SCALE_LIMIT` 2 → 1.25,
+the larger frame's header says `arrows ×N`); `readout: key` (new default) writes at most three
+key numbers per frame at 1.3 × the readable size (rest: p*, the invariant mass, the SI value when
+`si`; lab: the parent's p, the invariant mass, βγcτ — or the opening angle for a stable parent),
+`readout: all` every number at 1.15 ×; plain-text symbols drop the subscript underscore (`νμ`).
+Shared code, additive: a product next to the root of a sum is set apart by a thin space
+(`\sqrt{\gamma^2-1}\,c\tau`: the root's last term no longer runs into the factor; other products
+unchanged); `register_model(name, labels=..., units=...)` gives a model's columns axis names and
+default units (`Column.label`, `Simulation.labels`; the plot's `units` and an axis `label`
+override them) — `two_body_opening` names its axes "parent momentum (GeV/c)" and "smallest opening
+angle θ (deg)". `feynman` with `vertex_rule` in 16:9: the diagram is centred in the frame until the
+first rule card, glides left beside it, and back to the centre after the last one (`_dock`; parts
+not yet drawn are swapped silently). Phase Q baseline 31/31 identical. (Step 244: the diagram is
+also *laid out* for the whole frame before the first card and after the last — larger, not only
+centred — and refitted beside the cards, in 9:16 above the card band: `_areas[docked]`.)
+
+### 99.9 Detectors and events: the model (Step 240)
+
+`particle_physics/detector.py`, no manim. Lengths in metres, momenta and energies in GeV (c = 1),
+angles in radians, the field in tesla along +z.
+
+- **Geometry (schematic, generic sizes of our own; no experiment's)**: tracker r ≤ 1.10 m, |z| ≤
+  2.6 m (pixel layers at 5, 9, 13 cm; strips at 0.30–1.05 m), solenoid 1.18–1.30 m (|z| ≤ 2.8 m; the
+  field volume is inside it), ECAL 1.40–1.80 m (endcaps |z| 3.05–3.45 m), HCAL 1.90–2.90 m (endcaps
+  |z| 3.55–4.55 m), two iron layers interleaved with three muon stations to 4.60 m (endcaps to |z|
+  6.02 m). `Layer` (barrel shell and endcap discs), `Detector(field, return_field)` refuses a field
+  ≤ 0; `bz(r, z)`: B inside the coil, −`yoke_field` (default B/2, schematic) in the barrel iron, 0
+  elsewhere.
+- **Signatures** (`signature(p)`): electron, photon, muon, charged hadron, neutral hadron, neutrino
+  with what each must / may leave (`SIGNATURES`; parts track, ecal, hcal, muon, missing).
+  Particles that never reach the detector are errors with the reason: cτ < 1 m (τ, K⁰_S, Λ, D, B…:
+  "decays before it reaches the detector (cτ = 87 µm)"; π⁰: "give two photons"), Z / W / H / t
+  ("decays at the collision point; give its products or use a preset"), quarks and gluons ("make a
+  jet"). `signature_problem(p, parts)` checks a claim ("a photon leaves no track (it is neutral)") —
+  for Step 242's lint too.
+- **Trajectories** (`trajectory`): stepped in transverse steps (≤ 1 cm, ≤ R/40, ≤ 1 cm along z for
+  forward tracks); the heading turns by −0.2998 q B / p_T per metre (clockwise for qB > 0: the force
+  q v × B), z = sinh η per metre of transverse path; stops where absorbed (e, γ at the ECAL; hadrons
+  at the HCAL, whose ECAL entry is recorded on the way), after a full turn inside the field (a
+  curler; drawn for one turn) or at the envelope (muons). Records tracker-layer crossings, the
+  middle of each muon station crossed, calorimeter entry points. Verified: the path lies on the
+  circle of radius p_T / (0.3 B) with its centre on the force's side.
+- **Deposits and towers**: the energy shared by `CALO_SHARE` (e, γ: ECAL; charged hadrons 30 / 70 %;
+  neutral hadrons HCAL; schematic), at the entry points; `towers` bins them in cells (ECAL 7.5° /
+  HCAL 12° in φ; 6° / 9° in θ — coarser than real cells so a tower reads on video), hadron
+  showers spread 20 / 60 / 20 % over three cells; `tower_fraction` (linear or log, a floor of 0.12).
+- **Events**: `generate(preset, seed, soft)` with `SplitMix64` (seed × 1000003 + preset index):
+  `z_to_mumu`, `h_to_gammagamma`, `h_to_4l` (H → Z Z*, the Z* mass uniform from 12 GeV to what is
+  left, Z → e⁺e⁻, Z* → μ⁺μ⁻), `w_to_enu` (W⁺ → e⁺ν_e), `dijet` (two jets of equal p_T, back to
+  back). Boson mass from a Breit–Wigner (PDG mass and width, within ±3Γ), p_T exponential (mean 8 or
+  15 GeV, ≤ 60), rapidity in [−1, 1]; isotropic two-body decay in the rest frame boosted with
+  `FourVector.boost` (Step 239); retried until leptons and photons have |η| ≤ 2.4 and p_T ≥ 10 GeV
+  and a neutrino p_T ≥ 20 GeV (display events are chosen to be seen). The boson's p_T is balanced by a
+  recoil jet (≥ 15 GeV) or two soft pions; soft pions come in back-to-back pairs of equal p_T. So
+  every preset event balances exactly and its missing p_T is the neutrinos' (tested). Jets
+  (`make_jet`): 5–10 constituents (60 % charged pions, 25 % photons, 15 % K⁰_L / n) within ΔR ≲ 0.25,
+  rotated and scaled so their p_T sums exactly to the jet's. `custom_event` takes listed particles
+  (`particle: jet` allowed; |η| ≤ 3, p_T > 0) and `products` for the invariant mass.
+  `Event.missing_pt()` = −Σ visible p_T; `products_mass()`; `transverse_mass()` (one visible
+  product); `objects()` (by p_T for presets, listed order for lists).
+
+### 99.10 The `detector` scene type (Step 240)
+
+**Decision**: the scene type is `detector` (planned in §99.1; no type, action or target is called
+so) and the one new action `switch_view` (checked: `switch_on` / `switch_off` exist, no clash).
+Highlighting, dimming and revealing reuse the generic actions on the scene's targets.
+
+`scenes/detector.py`, `scenes/detector_actions.py`.
+
+- **Views**: x–y (circles, annuli; the field out of the screen, said in the label line) and r–z
+  (barrel and endcap rectangles, the beam dashed; a particle is drawn on the side of the beam its
+  azimuth points to, a tower on its own deposit's side). Each view's scale is fitted to the room
+  between the side columns (16:9) or above the blocks (9:16); object names sit in the muon system
+  (0.8 of the way out) beside their direction with a halo of the background (no ring of room around
+  the drawing — the detector is larger).
+- **Parts**: tracks as polylines (≤ 160 points) in the kind's colour (e primary, μ accent, hadrons
+  text; soft tracks thinner), tracker hits as dots, a muon's outer path and chamber hits (small
+  bars across the track); towers per owner (a listed particle, a jet, the soft tracks) as annular
+  sectors (x–y, at the barrel's radius by azimuth) or quadrilaterals along their polar angle (r–z,
+  clipped to the barrel's length / the endcap's radii); jet cones (ΔR 0.4); the missing p_T as a
+  dashed arrow ∝ p_T (its share of the largest object's p_T, at most 0.95 of the HCAL's radius;
+  x–y only).
+- **Side blocks**: the readout table (object, p_T, η; then p_T miss and the invariant or transverse
+  mass), the signature legend with small icons and the tower scale, the layer key, the label line
+  ("schematic detector · simulated event · B = 2 T out of the screen"). 16:9: key and label left,
+  readout and legend right; 9:16: readout beside the key, the legend in two columns, the label at
+  the bottom, the stack centred.
+- **Reveal** (`layers`): (1) detector, layer key, legend, label, title; (2) tracks (Create from the
+  collision point) and hits; (3) towers growing outward from the inner face (one
+  `UpdateFromAlphaFunc` on the container so the scene holds the container — a first version with a
+  `GrowFromPoint` per tower left the towers top-level and a view switch could not morph them) and
+  jet cones; (4) muons beyond the tracker and their hits; (5) missing p_T, names, readout, caption.
+  `all` deduplicates the entrances.
+- **Targets** registered on containers (one per part, holding the current view's mobject) so
+  `switch_view` can `Transform` each part into its counterpart and targets follow; parts not on
+  screen are swapped silently; an empty part (the missing p_T in r–z) is put on screen empty so
+  switching back draws it.
+- **Validation**: `field > 0`, the event (preset name with did-you-mean, particle names, reach,
+  |η| ≤ 3, p_T > 0), `products` numbering, `leaves` claims, `soft` 0–40.
+
+**Render performance**: preview (1280×720, 10 fps): a five-beat Z → μμ scene (15.9 s) renders in
+about 9 s; one with `switch_view` (5.7 s) in about 9 s; a few hundred mobjects, no memory concern.
+
+**Public (additive)**: scene type `detector`; action `switch_view`; `particle_physics.detector`;
+`register_model(..., labels=, units=)` keywords, `Column.label`, `Simulation.labels`. No
+dependency, no config key.
+
+**Known gaps after Step 240**: no displaced vertices (K⁰_S, Λ, b hadrons decay before the
+detector is drawn), no material effects (bremsstrahlung, conversions, multiple scattering), no
+pile-up and no resolution smearing (missing p_T of a simulated event is exact); muons leave no MIP
+deposit in the calorimeters; endcap muons in x–y are drawn where they cross the stations; a full
+display trips `max_words` (about 50 words with readout, legend and key: `legend: false` /
+`layers: false` for a busy narration).
+
+**Review of 240's stills (Step 241)**: a display preset's boson mass is now a Breit–Wigner draw
+truncated to M ± Γ (`DISPLAY_WIDTHS` = 1; was ±3Γ: `z_to_mumu` seed 3 gave 85.9 GeV, now 89.0),
+still one seeded uniform through the truncated inverse CDF, so presets stay deterministic (a test
+checks 20 seeds within Γ_Z). In 16:9 the drawing is about 15 % larger (the circle 60 → 69 % of the
+frame height): the label column writes the field on two lines ("B = 2 T", "out of the screen") so
+it is as narrow as the layer key, and the columns stand 0.6 × `GAP` from the drawing (its labels
+sit inside it). The `detector` gallery entry was regenerated.
+
+### 99.11 Collisions, decays and data: the model (Step 241)
+
+Two modules of `vidgen.particle_physics` (no manim), exported as `particle_physics.spectrum` and
+`particle_physics.branching`.
+
+**`spectrum`** — everything simulated from a seed (`SplitMix64`, the same seed the same events with
+any numpy) and labelled so on screen.
+
+- `SpectrumSpec(mass, width, resolution, lo, hi, events, signal, shape, slope, index, seed)` with
+  `problems()` (window, widths, 1 ≤ events ≤ 200 000, 0 ≤ signal ≤ events, shape parameters),
+  `window` (the peak window M ± 2√(σ² + (Γ/2)²)); `CHANNELS` (`z_to_mumu`: 70–110 GeV, 6000 events,
+  ≈4800 Z, σ = 1 GeV, exponential λ = 18 GeV, Breit–Wigner fit, no significance readout;
+  `h_to_gammagamma`: 100–160 GeV, 30 000 events, ≈320 H, σ = 1.6 GeV, exponential λ = 30 GeV,
+  Gaussian on a cubic, expected 5.3σ; `h_to_4l`: 100–160 GeV in 2 GeV bins, 40 events, ≈16 H, σ = 1.8
+  GeV, flat, Gaussian on a constant; masses and widths from §99.2; counts and shapes schematic),
+  `channel_spec(channel, seed, **overrides)`.
+- `generate(spec)` → `Spectrum(spec, masses, signal)` (cached): each event signal with probability
+  signal/events; signal = Cauchy(M, Γ) + σ·N(0, 1), redrawn until inside [lo, hi]; background by the
+  inverse CDF of `exponential` (∝ e^(−m/λ)), `power` (∝ m^−k) or `flat`, truncated to the window.
+- Significance (all local): `asimov(s, b)` = √(2((s + b) ln(1 + s/b) − s)) (Cowan et al. 2011);
+  `counting_significance(n, b)` = √(2(n ln(n/b) − (n − b))) for n > b; `p_value(z)` = ½ erfc(z/√2)
+  (`FIVE_SIGMA_P` = 2.867 × 10⁻⁷); `Spectrum.asimov_curve()` / `counting_curve()` after 0 … N events
+  with s, b expected in the window from `window_shares(spec)` (the background's CDF; the signal's
+  share from 20 000 draws with a fixed seed of its own — the simulation's own shares fluctuated to
+  0 with few events); `likelihood_significance(edges, counts, peak, degree, guesses)` → `Significance`
+  (`z`, `q0`, `p`, `fit`, `background`, `lnl_sb`, `lnl_b`): binned Poisson maximum-likelihood fits
+  (Phase W's `fit_curve(poisson=1)`) of a polynomial alone and of the peak on it, started from the
+  expected mass and width (`peak_guesses`) and the background-only polynomial (the plain peak guess
+  latches on the curvature of an exponential background), q₀ = 2(ln L_s+b − ln L_b), Z = √q₀;
+  `meaning_lines(z, method, narrow)` (the p-value said correctly: "the chance that background alone
+  fluctuates this high, not that the result is wrong (5σ: p = 2.9 × 10⁻⁷)"; "> 20σ" beyond 20).
+- Decay times: `decay_times(tau, events, seed)` (inverse CDF), `mean_lifetime(times)` → (τ̂ = mean,
+  τ̂/√N).
+- `z_cross_section(√s, neutrinos)`: σ(e⁺e⁻ → Z → hadrons) in nb, relativistic Breit–Wigner with an
+  s-dependent width, peak 12π Γ_ee Γ_had / (m_Z² Γ_Z²) × (ħc)² = 41.5 nb (the PDG pole fit 41.48);
+  each neutrino family adds Γ_inv/3 = 166 MeV. Schematic: no initial-state radiation.
+- Plot models (`register_model`): `mass_spectrum` (numbers only: mass, width, resolution, lo, hi,
+  events, signal, slope | index | flat; columns `n`, `m`, `signal`), `decay_times` (`tau`, `events`;
+  `n`, `t`), `z_lineshape` (`lo`, `hi`, `samples`; `sqrt_s`, `sigma`, `sigma_2nu`, `sigma_4nu`).
+
+Measured behaviour (40 seeds; tests on 20): the fitted mass is unbiased (mean pull ≈ 0); Z and 4ℓ
+pulls have the expected spread (≥ 90 % within 2σ); H → γγ, a 1 % signal on a cubic-approximated
+exponential, has wider pulls (sd ≈ 1.4, ≥ 75 % within 2σ: the Fisher errors underestimate a little
+when the bump is small) — said in the docs. The likelihood-ratio Z is a little above the Asimov
+expectation on average (6.0 against 5.3 for γγ: the mass and width are fitted, Wilks at the best
+point). 4ℓ fits fail for about 1 seed in 40 (a narrow spike in one bin): the scene's error says to
+try another seed, more events or wider bins.
+
+**`branching`**: `Branching(parent, modes, source, kind)` of `Mode(process, fraction, name, note,
+check)`; `branching(name)` (antiparticles by charge conjugation), `listed()`,
+`branching_problems()` (every process allowed by §99.3's checker, its parent the table's, each
+table ≤ 1 within `SUM_TOLERANCE` = 10⁻³ — the Z's separately averaged measurements add up to
+1.0001). Tables: **H at 125 GeV — Standard Model prediction**, LHC Higgs Cross Section Working
+Group, Yellow Report 4 (2016), the table at m_H = 125 GeV (125.00; Step 242: the label said
+125.09, where YR4 gives e.g. bb̄ 58.09, WW* 21.52, ZZ* 2.641 %) (bb̄ 58.24 %, WW* 21.37, gg 8.187, ττ 6.272, cc̄
+2.891, ZZ* 2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176; `kind: theory`, said on screen); PDG 2024
+measurements: Z (hadrons 69.911 %, invisible 20.000, e⁺e⁻ 3.3632, μ⁺μ⁻ 3.3662, τ⁺τ⁻ 3.3696), W⁺
+(hadrons 67.41 %, each ℓν the lepton-universality average 10.86), π⁺ (μ⁺ν 99.98770 %, e⁺ν 1.230 ×
+10⁻⁴), π⁰ (γγ 98.823 %, e⁺e⁻γ 1.174), K⁺ (μ⁺ν 63.56 %, π⁺π⁰ 20.67, π⁺π⁺π⁻ 5.583, π⁰e⁺ν 5.07, π⁰μ⁺ν
+3.352, π⁺π⁰π⁰ 1.760), μ⁻ (e⁻ν̄ₑν_μ ≈ 100 %). **For the owner to check** (`check=True`, written from
+memory of the tables): every H, Z, W and K value. Decay chains: `chain(decays)` → `Chain(nodes,
+decays, fractions)`; each later decay's parent is the first product not yet decayed with that key
+(an off-shell `Z*` matches its own leg first); every decay checked (the checker's summary is the
+error); `ChainNode.lifetime_lines()` (τ and cτ; a resonance Γ and τ = ħ/Γ, Γ_H to two figures; an
+off-shell leg "off shell (virtual)"); `mode_fraction(process)`.
+
+### 99.12 Scenes: `mass_spectrum`, `decay_chain`, `branching`, `branching_pie` (Step 241)
+
+**Decisions.** (1) The spectrum is **a `plot` underneath**: `MassSpectrum(Plot)` whose `Params`
+(a subclass of the plot's) turn the physics (`channel`, `seed`, `events`, `signal`, `mass`,
+`width`, `resolution`, `window`, `bin_width`, `background`, `slope`, `index`, `peak`,
+`background_degree`, `fit`, `significance`, `explain`, `subtract`, `style`, `ticker`, `label`) into
+plot params in a `mode="before"` validator: the model `mass_spectrum`, one live histogram series,
+the Phase W peak fit (starting values from the likelihood fit), the significance note
+(`annotation:significance`), axis names, caption. Filling, rescaling, fits, `zoom`, `grow`, `fit`,
+`annotate`, `reveal` are the plot's — nothing re-implemented. `series`, `fits`, `panels` are typed
+loosely there (converted by field validators) so translation does not offer the made texts; an
+author giving `series`, `models`, `fits`, `data`, `panels`, `arrange`, `share` or `aspect` is told to
+use `plot`. (2) Branching ratios are **`bar_chart` and `pie` subclasses** (`branching`,
+`branching_pie`) whose labels, values, unit, format, title and source caption come from the model —
+two types because a scene type is one class; bars are the default (the Higgs boson's γγ at 0.23 %
+is a sliver in a pie). (3) `decay_chain` is a scene of its own (a tree of particles is not data on
+axes). (4) Decay times and the Z line shape are **plot models** (no scene type): a histogram of
+`decay_times` with `model: custom, expr: "N*exp(-x/tau)"` gives τ ± its error; `z_lineshape` gives
+σ for 2, 3, 4 neutrino families.
+
+**`mass_spectrum`** (`scenes/mass_spectrum.py`): the readout (`_readout_lines` override) writes
+`events: 12 400` (a narrow no-break space) and `local significance: 3.4σ` / `(expected, Asimov)` or
+`(observed, counting)` from the precomputed curve — boxes sized to the widest text over the growth
+as Phase W's. The note gives the likelihood-ratio Z and the meaning of its p-value. With a `fit`
+action and no action showing the note, the note is held and follows the fit (`_held`, `entrance`):
+otherwise the plot's own note step would grow the data to its end before the fit. Text at
+`readable_size(margin=1.08)` (lint's `min_font` passes; the plot keeps the room; Step 242: 1.2, a
+short note, headroom in 16:9 and the 9:16 box at `auto` — §99.13). In 9:16
+(`_portrait`): the count axis fixed at 2 × the highest bin (the bars rise into it; the readout finds
+room there), no legend, and one box at the top left — the fitted mass and width, then the
+significance in short lines — instead of the fit box and the note (they overlapped, or every box
+went above the plot and left it a fifth of the frame).
+
+**`plot` additions** (shared, additive): fits take `residuals: background` (a peak fit with a
+background: the data minus the fitted background, √N bars, the fitted peak drawn over them; its
+axes enter with the plot's — they carry the x labels — and its content with the fit) and
+`parameters` (which parameters the box lists; unknown names are an error with the model's); targets
+`residuals<N>` / `residuals:<name>` (a residual panel revealed on its own word, then not with the
+fit); a note's text with line breaks is drawn line by line. **Fixed**: a note or fit step on a live
+histogram whose series a `grow` action holds faded in the re-shaping axes while the data grew (manim
+"zip() argument 2 is shorter"); the axes now come in first (`reveal()` plays them before targets
+whose entrance grows data). `plotcore.fit._covariance` scales J's columns before the rank test and
+inverts the scaled matrix (the same inverse): a cubic background in x ≈ 100–160 (columns 1 … 10⁶
+apart) was taken for rank-deficient.
+
+**`decay_chain`** (`scenes/decay_chain.py`): a tidy tree (each subtree as wide as its node or its
+children side by side; parents centred), depth along the flow — left → right in 16:9, top → bottom
+in 9:16 — scaled to fill the room up to 1.6×; symbols at 2 × the readable size with a rounded
+outline when they decay, family colours (neutrinos dim); τ / cτ (or Γ / τ) under each decaying
+particle; arrows from the parent (below its lifetime lines in 9:16) to each product; the branching
+fraction above the top arrow (16:9) or right of the rightmost (9:16), clear of it; the caption states
+the sources. Steps: the first particle, then one decay per beat (arrows grow, products fade in).
+Targets `title`, `caption`, `chain`, `decay<N>`, `particle:<n>`, `particle:<particle>`,
+`lifetime:<particle>`.
+
+**`branching` / `branching_pie`** (`scenes/branching.py`): `particle`, `modes` (the largest N, the
+caption says so); bars sorted and horizontal, values `{:.3g} %`; the pie shows values in % and
+groups modes under 1.5 %. Labels are the products' symbols (not translated).
+
+**Gallery budget** (recorded change): 15 → 16.5 MB (`tests/test_gallery.py`). The four types' entries
+(mass_spectrum 0.33 MB, decay_chain 0.15, branching 0.17, branching_pie 0.10) took the gallery to
+15.4 MB; the rest leaves room for Step 243's showcase and one more entry. `ENTRY_MAX` (0.36 MB) and the
+150 KB GIF cap are unchanged; the guide's first `mass_spectrum` snippet has two beats so its GIF
+stays under the cap.
+
+**Render performance**: preview 1280×720 at 10 fps — the six-beat H → γγ scene (30 000 events,
+26.4 s with fit, subtraction, note and zoom) in about 35–40 s (bars are drawn, one `bincount` per
+frame); the Z (6.5 s) and 4ℓ (5.4 s) scenes in about 10–14 s; a decay chain (9.3 s) in 6 s;
+branching bars in 9 s. Simulating 30 000 events takes about 40 ms (cached per spec).
+
+**Public (additive)**: scene types `mass_spectrum`, `decay_chain`, `branching`, `branching_pie`;
+`particle_physics.spectrum`, `particle_physics.branching`; plot models `mass_spectrum`,
+`decay_times`, `z_lineshape`; `plot` fit keys `residuals: background`, `parameters`; targets
+`residuals<N>`, `residuals:<name>`; `particle_physics.detector.DISPLAY_WIDTHS`. No dependency, no
+config key.
+
+**Known gaps after Step 241**: the Z peak is fitted with a Breit–Wigner (no Voigt): its Γ includes
+the resolution and χ²/ν ≈ 2 (said in the caption and docs); significances are local (no
+look-elsewhere effect); the 9:16 note box can cover the top of a tall peak (4ℓ); a full spectrum
+with its note trips `max_words` (about 45 words); in 9:16 the fit's values appear with the note,
+not with the fit curve; a pie of small modes may label them below the readable size (the pie's
+own behaviour); 4ℓ fits fail for about 1 seed in 40 (a clear error); no lint rules yet (Step 242:
+significance and branching-ratio claims).
+
+### 99.13 Particle-physics accuracy lint (Step 242)
+
+**Review fixes of Step 241 first.** (1) `mass_spectrum` in 16:9: the plot took about 55 % of the
+width beside a column of three boxes in small text, and the full note tripped `max_words`. Now the
+note is short by default — `explain: true | short` gives three short lines (`6.7σ local`, `p = 7.6
+× 10⁻¹²`, `(background only)`; `spectrum.short_meaning`), `explain: long` the four lines of Step
+241 —, the readout is `events: 30 000` / `expected: 5.3σ` / `(local, Asimov)`, the text is 1.2 × the
+readable size (`LABEL_MARGIN`; phones), and the count axis reaches 1.35 × the highest bin
+(`LANDSCAPE_HEADROOM`) so the legend sits above the data: the side column is narrow and the plot
+keeps about 70 % of the width (H → γγ, preview 1280 × 720: 745 px of plot, was 545); `max_words`
+and `min_font` pass. In 9:16 the combined box (fit values + short note) is placed at `auto` — a free
+spot of the plot, else above it — instead of forced top left, where it covered the 4ℓ peak.
+(2) The Higgs branching ratios are YR4's table for m_H = 125 GeV (125.00), not 125.09 (at 125.09:
+bb̄ 58.09, WW* 21.52, ZZ* 2.641 %): the source label says "m(H) = 125 GeV"; values unchanged and
+still `check=True`. The SM width 4.1 MeV is YR4's 4.088 MeV at 125.00 GeV rounded (noted in
+`data.py`, `# check`). (3) `branching` bars use `label_size` and `value_size` `body` (were
+caption / readable size).
+
+**Rules** (scene scope, last in `LINT_RULES`; the runner adds `particle_issues`,
+`lint/particle_rule.py`, to `SceneContext.science` like the calc / plot / orbit rules):
+
+| rule | default | reads |
+|---|---|---|
+| `particle_mass` | warning | a mass said for a particle against PDG 2024 (`tolerance` 0.05 with "about"; quark masses 30 %: the scheme); did-you-mean another particle's mass; a power-of-1000 mix-up |
+| `particle_charge` | error | "X has (a) charge (of) Q", "X carries Q charge", "the charge of X is Q", "X is neutral / positively charged"; sums left alone |
+| `particle_spin` | error | "X has spin S", "spin of X is S", "a spin-S X", "X is a fermion / boson / spinless" |
+| `particle_lifetime` | warning | mean life, half-life (τ ln 2) or width said next to its word; moving particles (dilation words) and fitted widths left alone |
+| `branching_ratio` | warning | "most / mostly", "rarely", "the most common", a % or "1 in N" standing by the decay ("70 % of Z bosons", "… 70 % of the time") against `branching` |
+| `conservation_claim` | warning | allowed / forbidden / "forbidden by X" / "violates X" / "conserves X" per clause, for a process written with an arrow, said in words, or the scene's own |
+| `feynman_boson` | warning | couplings ("couples to"), forces ("feel the strong force"), flavour change by a non-W boson, a boson said exchanged that a `feynman` diagram lacks |
+| `kinematics_number` | warning | a `kinematics` scene's `calc_values` (the `from_scene` names) by the quantity named; βγcτ and γτ said with a momentum / energy / γ anywhere; a written reaction's threshold (√s, fixed-target beam energy and kinetic energy) |
+| `detector_signature` | warning | leave / be seen in / stop in / reach / pass through / curve, against `detector.SIGNATURES` and the layer order tracker < ECAL < HCAL < muon chambers |
+| `significance_claim` | warning | the p-value read as the chance of being wrong or of existing (unless said the right way: "background alone", "if there were no…"); "1 in N" or a % against the σ said (one- or two-sided); in a `mass_spectrum`, a σ for the bump against the Asimov expectation with all events and the likelihood-ratio fit (`sigmas` 0.5; "so far", "already": anything along the filling) |
+| `simulated_label` | warning | "real data", "data from the LHC / CMS…" in a scene with simulated data; a `detector` label or a `plot` of `mass_spectrum` / `decay_times` without "simulated" on screen |
+| `particle_units` | info | masses on screen both in GeV and GeV/c² in one video |
+
+**Knowledge** (`vidgen.particle_physics.accuracy`, no manim, not re-exported): `mentions` (names —
+"the Z boson", "bottom quarks", "positrons", "neutral pions", "electron antineutrinos" — and symbols
+— μ⁺, π⁰, ν̄ₑ, W⁻, e⁺e⁻; generic mentions keep every key: "W" is W⁺ or W⁻, "neutrinos" any flavour,
+"pions" π⁺ π⁻ π⁰; "muon chambers", "electron number" are not particles; single Latin letters only
+with a charge mark or "quark"; W, Z, H only as capitals, never before "="), the claim readers (one
+per rule, each returning `Said(rule, quote, message, severity)`), `said_decays` ("X decays (mostly)
+to Y, Z and W"; counts, pairs, categories hadrons / leptons / invisible), `written_processes`
+(arrow runs; a word is never split into particles: "needs" is not n e e d s). Numbers, units and
+"about" are `quantities.accuracy`'s (`said_values`, `agrees`, `mixup_power`); a value is about the
+particle named just before it in its clause (no other mention between, at most 70 characters).
+
+**Narrow by design.** Negations, contrasts and questions are left alone by every reader except
+`conservation_claim` (`_plain_only`): "photons do not leave tracks", "the W is not a photon",
+"unlike photons, electrons leave tracks". `conservation_claim` reads its own polarity ("not
+allowed", "not forbidden", "violates", "conserves") per clause (", and" / ", but" / ";" / "while";
+a clause without a process takes the one before: "…, but it violates muon number") and reads a
+decay said in words in every way it may mean (a narrator's "a muon" may be μ⁺; "a neutrino" any
+flavour): only when no reading is allowed is "allowed" wrong. A mass claim needs a mass word or
+"X is N GeV"; energies ("a 45 GeV electron", "each photon carries"), differences ("11 GeV
+heavier"), invariant masses of several particles are not masses. Branching shares must stand by
+their decay ("…, twenty percent to neutrinos" is a later clause's).
+
+**The gate.** `particle_charge` and `particle_spin` read every project (their patterns need a
+particle and a charge or spin word); the others only projects with a particle-physics scene
+(the eight Phase Y types, a `plot` of a particle model, a `calculation` with `mass:` /
+`lifetime:` / `width:` symbols). Measured: 0 findings on every example (radioactive-decay,
+mars-transfer, cystic-fibrosis included), the gallery and the Step 237–241 scratch projects; with
+the gate removed, still 0 on the examples' narration and screens; a 60-sentence corpus of correct
+particle narration: 0.
+
+**Scene facts** (`particle_rule.facts`, cached per project): `feynman` — each diagram's process and
+bosons; `decay_chain` — its decays; `kinematics` — `calc_values` and its decay; `mass_spectrum` —
+the Asimov curve's last and largest value and the likelihood-ratio z of the scene's own fit
+(`mass_spectrum.significance`, cached); `detector` / simulated `plot` — simulated, and whether the
+screen says so.
+
+**Known gaps**: claims in other languages are not read; a second clause without its own subject
+("the up quark has +2/3 and the down quark −1/3") is not read; charges of composite systems said
+as sums are skipped; decays said in words with plural products and no count are read as a pair;
+no check of CKM or helicity claims ("the W couples only to left-handed particles"), of cross
+sections, or of a `feynman` scene's narration naming the channel (s / t) wrong.
+
+### 99.14 Example, docs and gallery (Step 243)
+
+**Example** `examples/higgs-discovery` ("How the Higgs boson was found"; `video.yaml`, `README.md`):
+eleven scenes, 3:49 with Kokoro (`af_heart` 0.85), the `discovery` bed at −10 dB, a 9:16 `short`
+variant — `intro` (title); `chart` (`standard_model`, `reveal: all`, flashes on the groups, a box
+on H, `couplings: "particle:H"`; the narration is careful that the Higgs field gives the W and Z
+their masses and the fermions theirs through Yukawa couplings, while most of a proton's mass is
+the energy of its quarks and gluons); `production` (`feynman` `gg_to_h`, `vertex_rule` on the
+t t H vertex, `travel`); `decays` (`branching` H: bb̄ dimmed on "hides", γγ, ZZ*; τ = ħ/Γ =
+1.6 × 10⁻²² s said); `loop` (`h_to_gammagamma`, `reveal: all`, `swap_channel` to the W loop);
+`event` (`detector` `h_to_gammagamma` seed 10, `legend: false`); `mass` (`calculation`: m² = 2
+p_T1 p_T2 (cosh Δη − cos Δφ) = 1.57 × 10⁴ GeV², then m = √m² = 125 GeV, the display's p_T and η
+as its readout writes them, Δφ = 178.2° from the event; natural units, c = 1); `diphoton`
+(`mass_spectrum` seed 13: fitted 124.9 ± 0.4 GeV, local 5.2σ); `four_leptons` (seed 4, points,
+3.9σ); `five_sigma` (`plot`: the one-sided p-value ½ erfc(Z/√2) on a log axis with labels at 2σ
+"1 in 44", 3σ "1 in 740", 5σ "1 in 3.5 million" annotated on words); `recap` (bullets: 4 July
+2012, ATLAS and CMS at CERN's LHC, each about 5σ on its own). No real data, counts or
+significances are shown.
+
+Choices: **seeds** picked by the fitted significance (diphoton seeds 1–20 give 2.9–7.6σ; 13 gives
+5.2σ, near the threshold the video explains; seed 1, the channel default, gives 6.7σ); a
+realistic single-channel 3.9σ for four leptons. **m² then m**: one calculation with an outer
+square root of GeV² wrote its intermediate in SI (kg² m⁴/s⁴) — the calculation's SI fallback for a
+unit it cannot keep under a root; two steps keep GeV throughout (the cookbook says so). The
+**five-sigma picture** is a `plot` of inline p-values (computed with erfc, tested) rather than a
+`function_plot` of the normal curve: the tails beyond 3σ are invisible on a linear axis and the
+area labels overlapped. **Length**: 3:49 (the brief aimed at 2.5–3.5 min); Kokoro faster than
+0.85 put short beats over `narration_speed`, and cutting a scene would drop part of the requested
+arc.
+
+**Guide topic `particle-physics`** (aliases particle, particle_physics, hep, higgs,
+standard-model, collider, feynman-diagrams; not `particles`, the cartoon effect — `vidgen guide
+particles` stays unknown): planning, choosing the scene, units, honesty, pacing, lint, a pattern
+(the m² → m calculation); listed in the guide's topic list; the scenes topic points to it.
+**`docs/COOKBOOK-PARTICLES.md`**: planning the arc, choosing (table), units (natural units vs
+GeV/c², m² first), honesty (simulated data, schematic detector, PDG 2024 and YR4 sources, theory vs
+measurement, local vs global, expected vs observed, what a p-value is, real history), pacing,
+mistakes → the twelve `particle_*` rules and `calc_*`, a validated pattern (tested in
+`test_docs`). CONFIG needed nothing new (no new key).
+
+**Gallery "Particle physics"**: the section note and footer (`gallery.SECTION_NOTES` /
+`SECTION_FOOTERS`) and a showcase `higgs_diphoton` (a `detector` H → γγ event, seed 10, `soft: 0`,
+`legend: false`, the two photons highlighted on words; 0.32 MB, GIFs 103 and 146 KB). The `feynman`
+entry's 9:16 GIF was regenerated for the fix below. The gallery is 15.7 MB of the 16.5 MB budget.
+
+**Fix**: `feynman`'s vertex-rule card writes the reaction with no-break spaces, so it wraps before
+the reaction and never inside it (9:16: "t → t" / "H").
+
+**Known gaps**: the Standard Model chart's own lint warnings remain in the example (`max_words`
+for a full chart; `contrast` on a dimmed gluon cell during `couplings`; a 16:9 `contrast` reading
+of the dim generation numeral "II" against a sampled backdrop of #282C32, a sampler effect — the
+numeral reads fine in the stills); the detector's display layout keeps room for the readout on the
+right in 16:9 before the readout appears.
+
+### 99.15 Review of Phase Y (Step 244)
+
+**Physics.** Every value in `data.py` re-read independently against the PDG 2024 summary tables
+(masses, widths / mean lives, charges, spins, J^P, C and G parities, flavour signs): all agree;
+the Step 237 `# check` marks are replaced by "confirmed in review (Step 244)". Couplings: G_F
+1.1663788 × 10⁻⁵ GeV⁻², α_s(m_Z) 0.1180, sin²θ_W (MS-bar) 0.23129 kept as 0.2313; the CKM
+magnitudes rounded to two figures (global fit ≈ 0.974, 0.225, 0.0037; 0.225, 0.973, 0.042; 0.0086, 0.041,
+0.999) — confirmed.
+Branching ratios: Z (hadrons 69.911 %, invisible 20.000 %, e e 3.3632, μμ 3.3662, ττ 3.3696), W
+(hadrons 67.41 %, ℓν 10.86 % universal), K⁺ (63.56, 20.67, 5.583, 5.07, 3.352, 1.760 %), π⁺, π⁰ —
+confirmed, `check` removed. **Left marked for the owner**: the Higgs boson's Standard Model
+predictions from YR4 at m_H = 125.00 GeV (b b̄ 58.24 %, WW* 21.37, gg 8.187, ττ 6.272, c c̄ 2.891,
+ZZ* 2.619, γγ 0.2270, Zγ 0.1533, μμ 0.02176 %; Γ_H 4.088 MeV): the reviewer recalls the same
+numbers but cannot confirm the table line by line. Hand computations in
+`tests/test_phase_y_review.py`: p* (π → μν 29.79 MeV/c, Λ → pπ⁻ 100.6 MeV/c, Z → ee), thresholds
+(p p → p p p p̄: E = 7 m_p, T = 6 m_p; π⁻p → K⁰Λ), βγcτ (a 4 GeV/c muon 24.93 km, B⁰ at βγ = 1
+454.8 µm, π⁺ at γ = 10), m_γγ = √(2E₁E₂(1 − cos θ)), R = p_T / (0.299792458 B) and the bend (a μ⁺
+leaving along +x in B along +z turns to −y, clockwise seen from +z; the sagitta matches R),
+Asimov / counting / one-sided p (5σ 2.87 × 10⁻⁷), the Z peak σ⁰_had ≈ 41.5 nb (no radiative
+corrections). Conservation, tried on 24 reactions (p → e⁺π⁰ by B and L_e; μ⁻ → e⁻γ by L_e / L_μ;
+n → p e⁻ ν̄ₑ, π⁰ → γγ, K⁰_S → π⁺π⁻, Λ → pπ⁻, νₑ n → p e⁻, K⁻p → Ω⁻K⁺K⁰ allowed; Z → γγ by
+Landau–Yang; π⁰ → γγγ by C) and vertex rules on 29 vertices (no flavour change by γ / Z / g / H;
+gluons only to quarks and gluons; the W within a doublet, leptons in their family; H only to
+massive particles; no Z Z γ, Z γ γ, Z Z Z, γ γ γ, H γ γ, H g g, H Z γ at tree level).
+
+**Fixes.** (1) `conservation.check`: two real particles merging into one (2 → 1, nothing
+off-shell) must make one at least as heavy as both (√s = M ≥ m_a + m_b) — e⁺e⁻ → γ (real photon)
+and p p̄ → γ were allowed; now refused with "write `gamma*`" (`_merge_problem`). (2)
+`branching.mode_fraction` skips the Z's `invisible` mode (all three νν̄ pairs), so a chain with
+Z → νₑ ν̄ₑ is not labelled 20 %. (3) `feynman` with `vertex_rule`: `_areas = {False: whole frame,
+True: beside the cards}`; `_dock(docked)` re-lays the diagram out (Transform of the drawn parts,
+the time arrow following) — before the first card and after the last the diagram is as large as
+without cards (16:9 and 9:16), not the card-time size shifted to the centre. (4) `plot_live`
+(Phase W, shared): `_readout_label` keeps the latest `READOUT_CACHE` = 64 readout lines instead of
+every text ever shown (`events: N` changes nearly every frame): a 57 s `mass_spectrum` preview
+622 → 392 MB peak RSS, the example's 25 s one 518 → 435 MB. Output frames unchanged (a cache).
+
+**Not changed, on purpose.** The example's 16:9 `detector` circle is 69 % of the frame height
+(375 / 540 px), as in the gallery: in x–y it is bound both by the height under the title and by
+the width between the phone-readable layer key and readout. A corner layout (title top left, text
+in the corners the circle leaves) was tried: 72.5 %, at the cost of a left-aligned title unlike
+every other scene; dropped. The `calculation` in 16:9 fills as its steps come (unchanged).
+
+**Performance** (preview 854 × 480, 15 fps, Kokoro timings; render seconds / peak RSS):
+`standard_model` 36.2 s of video in 19.2 s / 453 MB; `feynman` 21.3 s in 9.4 s / 378 MB, 11.6 s in
+6.4 s / 339 MB; `branching` 32.3 s in 15.5 s / 407 MB; `detector` 20.3 s in 9.2 s / 382 MB;
+`mass_spectrum` 25.3 s in 32.7 s / 518 MB (before the readout fix), 11.1 s in 14.2 s / 412 MB;
+gallery `kinematics` 9.3 s in 7.7 s / 384 MB, `decay_chain` 4.7 s in 6.2 s / 357 MB,
+`branching_pie` 3.9 s in 7.2 s / 305 MB. Final 1080p: 16:9 scenes 299 s in all (diphoton 63.6 s),
+9:16 310 s, each plus the join.
+
+**Compatibility.** Phase Q baseline 31/31 identical (after every shared change); `vidgen validate`
+and `lint` on kphi3 (1 warning, as before), radioactive-decay, mars-transfer, cystic-fibrosis
+(4 info), iso-story, higgs-discovery (3 warnings, the chart's known ones): no errors, no particle
+findings. Gallery entries unchanged (no gallery scene uses `vertex_rule`).

@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "calculation", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "line_chart", "linkage_map", "map", "metabolism", "molecule", "mutation", "network", "number_line", "pathway", "pedigree", "pie", "plot", "population", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["bar_chart", "branching", "branching_pie", "bullets", "calculation", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "decay_chain", "detector", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "feynman", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "kinematics", "line_chart", "linkage_map", "map", "mass_spectrum", "metabolism", "molecule", "mutation", "network", "number_line", "orbit", "pathway", "pedigree", "pie", "plot", "population", "process", "quote", "scatter", "screenshot", "stage", "standard_model", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -86,6 +86,15 @@ SAMPLES: dict[str, dict[str, Any]] = {
              "series": [{"name": "data", "style": "points", "x": [0, 8, 16], "y": [1000, 510, 240]}, {"name": "model", "dashed": True, "points": [[0, 1000], [16, 250]]}]},
     "calculation": {"title": "Speed", "symbols": [{"name": "d", "value": "42.2 km", "meaning": "distance"}, {"name": "t", "value": "2.0 h"}],
                     "calculations": [{"name": "v", "expr": "d/t", "unit": "km/h", "convert": "m/s", "meaning": "speed"}]},
+    "orbit": {"title": "A year", "central": "sun", "bodies": [{"preset": "earth"}, {"name": "Comet", "a": "2 AU", "e": 0.7, "argp": 90}], "span": "1 yr"},
+    "standard_model": {"title": "The Standard Model", "antiparticles": True, "layout": "tall"},
+    "feynman": {"title": "Bhabha scattering", "preset": "bhabha", "diagram": "t", "time": "up"},
+    "kinematics": {"title": "Pion decay", "decay": "pi+ -> mu+ nu_mu", "momentum": "200 MeV/c", "si": True},
+    "detector": {"title": "Two photons", "event": {"preset": "h_to_gammagamma", "seed": 5}, "reveal": "all"},
+    "mass_spectrum": {"channel": "h_to_4l", "style": "points", "subtract": True, "reveal": "all"},
+    "decay_chain": {"title": "Pion decay", "decays": ["pi+ -> mu+ nu_mu", "mu+ -> e+ nu_e anti-nu_mu"], "reveal": "all"},
+    "branching": {"particle": "Z"},
+    "branching_pie": {"particle": "W+"},
     "histogram": {"title": "Spread", "values": [1, 2, 2, 3, 3, 3, 4, 4, 5, 7], "mean": True, "median": True, "compare": {"name": "b", "values": [2, 3, 4, 4, 5, 6]}, "highlight": [1]},
     "pie": {"title": "Shares", "labels": ["a", "b", "c", "d", "e"], "values": [50, 25, 15, 6, 4], "donut": True, "center_label": "total", "other_below": 10, "highlight": "b"},
     "map": {"title": "World", "view": "world", "countries": ["USA"], "values": {"Brazil": 3, "India": 5}, "legend_label": "v",

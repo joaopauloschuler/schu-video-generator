@@ -1,0 +1,227 @@
+# How the Higgs boson was found: a narrated particle-physics explainer (about 3:50) built on Phase
+# Y's scene types (docs/CONFIG.md `standard_model`, `feynman`, `branching`, `detector`,
+# `mass_spectrum`) with a `calculation` and a `plot` (DESIGN §99; the craft:
+# docs/COOKBOOK-PARTICLES.md):
+#   - the Standard Model chart with the Higgs boson highlighted and what its field does (the W and
+#     Z masses, the fermions' through Yukawa couplings; not most of the proton's mass)
+#   - gluon fusion gg → H through a top-quark loop (no H g g vertex), the decay modes (SM
+#     prediction, LHC Higgs XS WG YR4), the γγ loop of top quarks or W bosons
+#   - a simulated H → γγ event in a schematic detector, the photons' invariant mass worked out in a
+#     `calculation` from the display's numbers
+#   - a simulated diphoton spectrum filling with a bump near 125 GeV, its fit and local
+#     significance; the four-lepton channel; what 5σ means on a log plot of the one-sided p-value
+#     (p ≈ 2.9 × 10⁻⁷, once in 3.5 million: the chance background alone fluctuates this high, not
+#     the chance of being wrong)
+#   - the announcement of 4 July 2012 by ATLAS and CMS at CERN's LHC
+#   - Kokoro narration, a quiet music bed, a 9:16 `short` variant
+#
+#   vidgen validate examples/higgs-discovery          # checks the short variant too
+#   vidgen lint examples/higgs-discovery [--variant short]   # incl. the particle_* rules
+#   vidgen storyboard examples/higgs-discovery --per-beat 2 [--variant short]
+#   vidgen tts examples/higgs-discovery               # Kokoro: local and free (the kokoro extra)
+#   vidgen render examples/higgs-discovery [--preview] [--variant short]
+#
+# Every event is simulated from its seed (labelled "simulated data" / "simulated event" on screen):
+# no experiment's data, counts or significances are shown. Masses and widths: PDG 2024; the Higgs
+# branching ratios and width: the Standard Model prediction (YR4, m_H = 125 GeV). The diphoton
+# event is `h_to_gammagamma` seed 10; the calculation takes its photons' p_T and η as the readout
+# writes them and Δφ = 178.2° from the event (m = 125 GeV, the readout 125.2 GeV/c²; natural units,
+# c = 1). Spectra: diphoton seed 13 (fitted 125.0 GeV, local 5.2σ), four leptons seed 4 (3.9σ).
+# The p-values of the five-sigma plot are the one-sided normal tail ½ erfc(Z/√2). No audio is
+# committed: before `vidgen tts` beats are timed from their word count.
+title: "How the Higgs boson was found"
+output: higgs_discovery
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  short:                          # a 9:16 Short of the same video
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart, speed: 0.85}   # local and free, with word timings
+stt: {provider: faster_whisper, model: base.en}
+
+pronunciation:
+  Yukawa: Yu-kah-wah
+  CERN: Sern
+  ATLAS: At-lus
+
+terms:
+  invariant mass: {color: primary}
+  five sigma: {color: secondary}
+
+music: {source: discovery, volume: -10}
+transition: {type: crossfade, duration: 0.4}
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "PARTICLE PHYSICS"
+      title: "How the Higgs boson was found"
+      subtitle: "From a loop of top quarks to five sigma"
+    beats:
+      - text: "How do you find a particle that falls apart almost at once? This is how the Higgs boson was found."
+        actions: [{highlight: subtitle, at: "@falls"}]
+
+  - id: chart
+    type: standard_model
+    params:
+      title: "The Standard Model"
+      reveal: all
+    beats:
+      - text: "The Standard Model lists every known elementary particle: quarks, leptons, and the bosons that carry forces."
+        actions: [{highlight: "group:quarks", style: flash, at: "@quarks"}, {highlight: "group:leptons", style: flash, at: "@leptons"}, {highlight: "group:gauge_bosons", style: flash, at: "@bosons"}]
+      - text: "Its last missing piece was the Higgs boson: no charge, spin zero, and a mass of about one hundred and twenty-five GeV."
+        actions: [{highlight: "particle:H", style: box, at: "@Higgs"}, {highlight: "particle:H", style: flash, at: "@mass"}]
+      - text: "Its field gives mass to the W and Z bosons, and, through Yukawa couplings, to the quarks and charged leptons."
+        actions: [{couplings: "particle:H", at: "@field"}, {highlight: "row:charged_leptons", style: flash, at: "@charged"}]
+      - text: "Not to everything, though: most of a proton's mass is the energy of the quarks and gluons inside it."
+        actions: [{highlight: "row:up_type", style: flash, at: "@proton's"}, {highlight: "particle:g", style: box, at: "@gluons"}]
+
+  - id: production
+    type: feynman
+    params:
+      title: "Making a Higgs boson"
+      preset: gg_to_h
+    beats:
+      - text: "At the Large Hadron Collider, protons collide, and a gluon from each one takes part."
+        actions: [{highlight: "line:g1", at: "@gluon"}, {highlight: "line:g2", at: "@each"}]
+      - text: "Gluons are massless, so they cannot couple to the Higgs directly. They meet through a loop of top quarks, the heaviest quarks."
+        actions: [{vertex_rule: "vertex:v3", show: [rule, coupling], at: "@loop"}]
+      - text: "Two gluons in, one Higgs boson out: gluon fusion."
+        actions: [{travel: diagram, at: "@Two"}]
+
+  - id: decays
+    type: branching
+    params:
+      particle: H
+    beats:
+      - text: "It lives about one point six times ten to the minus twenty-two seconds: we only see what it decays into."
+        actions: [{highlight: title, style: flash, at: "@lives"}, {highlight: title, style: flash, at: "@decays"}]
+      - text: "Mostly a bottom quark pair, about fifty-eight percent, but that hides in a huge background of quark jets."
+        actions: [{highlight: "bar:bb̄", at: "@bottom"}, {dim: "bar:bb̄", at: "@hides"}]
+      - text: "Two photons: only about a quarter of a percent. Rare, but clean."
+        actions: [{highlight: "bar:γγ", at: "@Two"}]
+      - text: "Two Z bosons, one of them virtual: about two point six percent. Decaying to electrons or muons, they make the golden channel."
+        actions: [{highlight: "bar:ZZ*", at: "@Z"}, {highlight: "bar:ZZ*", style: box, at: "@Decaying"}]
+
+  - id: loop
+    type: feynman
+    params:
+      title: "Two photons from a loop"
+      preset: h_to_gammagamma
+      reveal: all
+    beats:
+      - text: "Photons are massless too, so two photons also come from a loop: of top quarks,"
+        actions: [{travel: diagram, at: "@loop"}]
+      - text: "or of W bosons, which contribute the most."
+        actions: [{action: swap_channel, to: W, at: "@W"}]
+
+  - id: event
+    type: detector
+    params:
+      title: "A diphoton event"
+      event: {preset: h_to_gammagamma, seed: 10}
+      legend: false               # the narration says the signatures; the layer key stays
+    beats:
+      - text: "A simulated diphoton event in a schematic detector: soft charged particles curl in the magnetic field."
+      - text: "The photons leave no tracks: they are neutral. Each one showers in the electromagnetic calorimeter."
+        actions: [{highlight: "particle:1", at: "@Each"}, {highlight: "particle:2", at: "@showers"}]
+      - text: "We measure their energies and directions."
+        actions: [{highlight: readout, at: "@measure"}]
+
+  - id: mass
+    type: calculation
+    params:
+      title: "The invariant mass of the two photons"
+      symbols:
+        - {name: pT1, value: "56.3 GeV", meaning: "photon 1, c = 1", source: "the event", tex: "p_{T1}"}
+        - {name: pT2, value: "54.7 GeV", meaning: "photon 2, c = 1", source: "the event", tex: "p_{T2}"}
+        - {name: deta, value: "1.00", meaning: "0.93 − (−0.07)", source: "the event", tex: "\\Delta\\eta"}
+        - {name: dphi, value: "178.2 deg", meaning: "angle across the beam", source: "the event", tex: "\\Delta\\phi"}
+      calculations:
+        - {name: m2, expr: "2*pT1*pT2*(cosh(deta) - cos(dphi))", unit: GeV^2, meaning: "its square", symbol: "m_{\\gamma\\gamma}^2"}
+        - {name: m, expr: "sqrt(m2)", unit: GeV, meaning: "invariant mass of the two photons", symbol: "m_{\\gamma\\gamma}"}
+    beats:
+      - text: "From the two photons we compute their invariant mass. If they came from one particle, it is that particle's mass."
+        actions: [{highlight: table, style: flash, at: "@two"}, {highlight: formula1, at: "@mass"}]
+      - text: "For photons it needs only their transverse momenta and the angles between them."
+        actions: [{substitute: calc1, at: "@photons"}, {compute: calc1, at: "@angles"}]
+      - text: "This event gives one hundred and twenty-five GeV."
+        actions: [{compute: calc2, at: "@This"}]
+
+  - id: diphoton
+    type: mass_spectrum
+    params:
+      title: "Many photon pairs: simulated data"
+      channel: h_to_gammagamma
+      seed: 13
+    beats:
+      - text: "But one event proves nothing. So we collect many, here simulated, and histogram their mass."
+        actions: [{grow: axes, to: 12000}]
+      - text: "The background falls smoothly, and a small bump grows near one hundred and twenty-five GeV."
+        actions: [{grow: axes}]
+      - text: "A fit on a smooth background finds its mass."
+        actions: [{fit: "fit:fit", at: "@fit"}]
+      - text: "Could background alone have made it? The local significance here is about five sigma."
+        actions: [{annotate: "annotation:significance", at: "@significance"}]
+
+  - id: four_leptons
+    type: mass_spectrum
+    params:
+      title: "Four leptons: simulated data"
+      channel: h_to_4l
+      seed: 4
+      style: points
+    beats:
+      - text: "Four leptons: only a handful of events, but little background."
+        actions: [{grow: axes}]
+      - text: "The same peak appears, at about four sigma from this channel alone."
+        actions: [{fit: "fit:fit", at: "@peak"}]
+
+  - id: five_sigma
+    type: plot
+    params:
+      title: "What five sigma means"
+      x: {label: "significance (σ)"}
+      y: {label: "chance from background alone", scale: log}
+      series:
+        - name: one-sided p-value
+          x: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6]
+          y: [0.5, 0.3085, 0.1587, 0.06681, 0.02275, 0.006210, 0.001350, 2.326e-4, 3.167e-5, 3.398e-6, 2.867e-7, 1.899e-8, 9.866e-10]
+          style: line
+      annotations:
+        - {type: label, series: one-sided p-value, x: 2, text: "2σ: 1 in 44", id: two}
+        - {type: label, series: one-sided p-value, x: 3, text: "3σ: 1 in 740", id: three}
+        - {type: label, series: one-sided p-value, x: 5, text: "5σ: 1 in 3.5 million", id: five}
+      caption: "p = the chance that background alone fluctuates this high (one-sided, normal distribution)"
+    beats:
+      - text: "Background alone fluctuates: a two sigma bump happens by chance about one time in forty-four,"
+        actions: [{annotate: "annotation:two", at: "@two"}]
+      - text: "three sigma about once in seven hundred and forty."
+        actions: [{annotate: "annotation:three", at: "@three"}]
+      - text: "A discovery needs five sigma: background alone gets that high about once in three and a half million tries. That is not the chance of being wrong."
+        actions: [{annotate: "annotation:five", at: "@five"}, {highlight: "annotation:five", style: box, at: "@tries"}]
+
+  - id: recap
+    type: bullets
+    params:
+      heading: "Found: 4 July 2012"
+      items:
+        - {text: "Announced by ATLAS and CMS at CERN's LHC", icon: calendar}
+        - {text: "Each reached about 5σ on its own", icon: chart-line}
+        - {text: "Seen as two photons and as four leptons", icon: search}
+        - {text: "A new boson near 125 GeV", icon: star}
+    beats:
+      - text: "On the fourth of July 2012, the ATLAS and CMS experiments at CERN announced the discovery."
+        actions: [{highlight: item1, style: flash, at: "@ATLAS"}]
+      - text: "Each had reached about five sigma, on its own,"
+      - text: "with bumps in two photons and in four leptons:"
+      - text: "a new boson near one hundred and twenty-five GeV. The Higgs boson, found."
+        actions: [{highlight: item4, at: "@Higgs"}]

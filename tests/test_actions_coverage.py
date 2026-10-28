@@ -76,6 +76,15 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "calculation": {"title": "Speed", "symbols": [{"name": "d", "value": "42.2 km"}, {"name": "t", "value": "2.0 h"}],
                     "calculations": [{"name": "v", "expr": "d/t", "unit": "km/h", "convert": "m/s"}, {"name": "w", "expr": "2*v"}]},
     "population": {"title": "Drift", "model": "drift", "N": 20, "p0": 0.5, "generations": 20, "replicates": 3},
+    "orbit": {"title": "Orbits", "central": "sun", "bodies": [{"preset": "earth"}, {"name": "Comet", "a": "2 AU", "e": 0.7, "orbit": False}], "span": "1 yr"},
+    "standard_model": {"title": "Particles", "caption": "C"},
+    "feynman": {"title": "Diagram", "caption": "C", "preset": "muon_decay"},
+    "kinematics": {"title": "Decay", "caption": "C", "decay": "pi+ -> mu+ nu_mu", "momentum": "200 MeV/c"},
+    "detector": {"title": "Event", "caption": "C", "event": {"particles": [{"particle": "mu+", "pt": 40}, {"particle": "jet", "pt": 50, "phi": 180}]}},
+    "mass_spectrum": {"title": "Spectrum", "channel": "h_to_4l", "subtract": True},
+    "decay_chain": {"title": "Chain", "caption": "C", "decays": ["pi+ -> mu+ nu_mu"]},
+    "branching": {"title": "BR", "particle": "pi+"},
+    "branching_pie": {"title": "BR", "particle": "Z"},
     "gwas": {"title": "GWAS", "plot": "both", "background": 400, "peaks": [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]},
     "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
@@ -228,6 +237,25 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("calculation") == ["title", "table", "symbol:d", "row:d", "symbol:t", "row:t", "calc1", "calc:v", "formula1", "substitution1",
                                     "result1", "result:v", "conversion1", "symbol:v", "row:v", "calc2", "calc:w", "formula2", "substitution2",
                                     "result2", "result:w", "symbol:w"]
+    assert names("orbit") == ["title", "frame", "central", "body:Earth", "orbit:Earth", "body:Comet", "readout"]
+    assert names("orbit", title="", readout=False) == ["frame", "central", "body:Earth", "orbit:Earth", "body:Comet"]
+    sm = names("standard_model")
+    assert sm[:9] == ["title", "chart", "header", "labels", "key", "source", "caption", "particle:u", "particle:up"]
+    assert sm[-6:] == ["group:scalar_bosons", "group:bosons", "row:up_type", "row:down_type", "row:charged_leptons", "row:neutrinos"]
+    assert names("standard_model", title="", caption="", key=False, source=False)[:3] == ["chart", "header", "labels"]
+    assert names("feynman") == ["title", "caption", "process", "diagram", "time_axis", "line:mu", "line:nu_mu", "line:W", "line:e", "line:nu_e",
+                                "vertex:v1", "vertex:v2"]
+    assert names("feynman", title="", caption="", process=False, time_axis=False, preset="pion_decay")[:2] == ["diagram", "line:u"]
+    assert names("feynman", preset="pion_decay")[-1] == "hadron:pi+"
+    assert names("kinematics") == ["title", "caption", "process", "panel:rest", "panel:lab", "arrow:1", "arrow:2", "arrow:mu+", "arrow:nu_mu", "sum", "values"]
+    assert names("kinematics", title="", caption="", process=False, frames="rest", sum=False, values=False, momentum=None,
+                 decay=None, particles=[{"particle": "gamma", "momentum": "1 GeV/c"}, {"particle": "gamma", "momentum": "1 GeV/c", "angle": 120}]) == [
+        "panel:rest", "arrow:1", "arrow:2"]
+    layers = ["layer:tracker", "layer:solenoid", "layer:ecal", "layer:hcal", "layer:iron", "layer:muon"]
+    assert names("detector") == ["title", "caption", "detector", *layers, "layers", "tracks", "ecal", "hcal", "muon_hits", "missing_pt", "readout",
+                                 "legend", "label", "particle:1", "particle:2", "particle:mu+", "jet:1"]
+    assert names("detector", title="", caption="", layers=False, readout=False, legend=False, label="",
+                 event={"preset": "z_to_mumu", "seed": 3})[-5:] == ["particle:1", "particle:2", "particle:mu-", "particle:mu+", "soft"]
     assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
     assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",
@@ -561,7 +589,7 @@ def test_a_type_without_targets_rejects_actions(make_project) -> None:
                     pass
     '''})
     (problem,) = project_problems(Project.load(root))
-    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, calculation, card, cell, cell_cycle, chapter, code,")
+    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, branching, branching_pie, bullets, calculation, card, cell, cell_cycle, chapter, code,")
 
 
 def test_config_md_action_examples_validate(make_project) -> None:

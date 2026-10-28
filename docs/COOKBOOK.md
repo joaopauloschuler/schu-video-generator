@@ -13,7 +13,10 @@ explainers (accuracy, level of detail, zooming, pacing dense content), see
 ISCN, HGVS notation, exact numbers, a counselling tone), see
 [COOKBOOK-GENETICS.md](COOKBOOK-GENETICS.md); for scientific plots and worked calculations
 (honest axes, error bars, fits and their uncertainties, units and significant figures), see
-[COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md).
+[COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md); for orbital mechanics (scale honesty,
+units and Δv, approximations to state, pacing an orbit), see [COOKBOOK-ORBITS.md](COOKBOOK-ORBITS.md);
+for particle physics (natural units, simulated data, sources, local significance and p-values),
+see [COOKBOOK-PARTICLES.md](COOKBOOK-PARTICLES.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 
@@ -487,7 +490,14 @@ second", "one in a hundred and fifty") against them:
 The whole craft (plot or chart, honest axes, error-bar meanings, fits and their uncertainties,
 units and significant figures, pacing a calculation, common mistakes with the rule that catches
 each) is in [COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md), with the worked example
-[`examples/radioactive-decay`](../examples/radioactive-decay/README.md).
+[`examples/radioactive-decay`](../examples/radioactive-decay/README.md). Orbits have their own
+craft notes (scale honesty, Δv around the Sun versus the burn from low orbit, the approximations
+to state, the `orbit_*` rules) in [COOKBOOK-ORBITS.md](COOKBOOK-ORBITS.md), with the worked example
+[`examples/mars-transfer`](../examples/mars-transfer/README.md). Particle physics too (planning a
+discovery story, choosing among the particle scenes, natural units, simulated data and schematic
+detectors, PDG and theory sources, local significance and what a p-value means, the `particle_*`
+rules) in [COOKBOOK-PARTICLES.md](COOKBOOK-PARTICLES.md), with the worked example
+[`examples/higgs-discovery`](../examples/higgs-discovery/README.md).
 
 ## 13. Editorial options (example style choices)
 

@@ -5,7 +5,246 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–228)
+## Unreleased (Steps 193–244)
+
+### Particle physics (Phase Y, Steps 237–244)
+
+- **Review** (Step 244). Every PDG 2024 value and quantum number re-checked (the remaining
+  "check" marks resolved, except the Higgs width and branching ratios, Standard Model predictions
+  of the Yellow Report 4 left for the owner to confirm). **Fix**: the conservation checker refuses two
+  real particles merging into one lighter one (e⁺e⁻ → γ with a real photon — write `gamma*` —,
+  p p̄ → π⁰); e⁺e⁻ → Z, g g → H stay allowed. **Fix**: a decay chain no longer gives one νν̄ pair
+  the Z's whole invisible fraction. **Fix**: a `feynman` scene with `vertex_rule` cards fills the
+  frame before the first card and after the last (it was only centred at the card-time size).
+  **Fix** (`plot`, Phase W): a live readout (`events: 12 345`) no longer keeps every frame's text
+  (a 57 s `mass_spectrum` took 622 MB, now 392 MB). Phase Q's 31 frames unchanged.
+
+- **Example, docs and gallery** (Step 243). `examples/higgs-discovery` ("How the Higgs boson was
+  found", about 3:49 with Kokoro, 16:9 and a 9:16 `short` variant): the Standard Model with the
+  Higgs boson's couplings (the W and Z masses, the fermions' through Yukawa couplings; most of a
+  proton's mass is not from the Higgs), gluon fusion through a top-quark loop, the predicted decay
+  modes, H → γγ through top and W loops, a simulated diphoton event in the schematic detector, the
+  photons' invariant mass worked out from the display's numbers (125 GeV), a simulated spectrum
+  filling with its bump, fit and local significance, the four-lepton channel, what five sigma
+  means (a log plot of the p-value: once in 3.5 million, not "99.99994 % sure"), and the
+  announcement of 4 July 2012 by ATLAS and CMS; lint clean of particle findings. A guide topic
+  `vidgen guide particle-physics` (not `particles`: that is the cartoon effect) and
+  `docs/COOKBOOK-PARTICLES.md` (planning, choosing the scene, natural units, honesty — simulated
+  data, schematic detectors, PDG 2024 and YR4 sources, local significance, what a p-value means —
+  pacing, mistakes and the rules that catch them). The gallery's "Particle physics" section gets
+  its note, footer and a showcase (a Higgs boson in two photons); 15.7 MB of the 16.5 MB budget.
+- **Fix** (Step 243): a `feynman` vertex-rule card wraps before the reaction, never inside it (in
+  9:16 "t → t H" broke before the H).
+
+- **Particle-physics accuracy lint** (Step 242). Twelve `vidgen lint` rules read the narration and
+  the screens against the particle model: `particle_mass` ("the W weighs 91 GeV" — that is the
+  Z's; MeV for GeV), `particle_charge` and `particle_spin` (errors: "the down quark has charge +2/3",
+  "the photon has spin 1/2"), `particle_lifetime` (mean lives, half-lives, widths),
+  `branching_ratio` ("most Higgs bosons decay to two photons"), `conservation_claim` ("μ⁻ → e⁻ γ is
+  allowed", "forbidden by charge" against the checker), `feynman_boson` ("a photon changes the
+  quark's flavour", "gluons couple to electrons", a boson the diagram does not have),
+  `kinematics_number` (a kinematics scene's values, decay lengths βγcτ, thresholds),
+  `detector_signature` ("photons leave tracks"), `significance_claim` ("five sigma means 99.99994 %
+  sure the Higgs exists"; σ against a spectrum's computed significance), `simulated_label`
+  (simulated data called real, or not labelled) and `particle_units` (info). Negations and
+  contrasts are left alone; 0 findings on every example. `mass_spectrum` in 16:9: the plot keeps
+  about 70 % of the width, larger text, a short significance note by default (`explain: long` for
+  the full one); in 9:16 the box no longer covers data. The Higgs branching ratios are labelled
+  YR4 at m_H = 125 GeV. `branching` bars have larger labels.
+
+- **Collisions, decays and data** (Step 241). `mass_spectrum`: a simulated invariant-mass spectrum
+  (labelled "simulated data") filling event by event with a ticker and the local significance
+  growing as the data arrive (Asimov, or the observed excess), Z → μμ with its width, H → γγ as a
+  small resolution-dominated bump on a large falling background, H → ZZ* → 4ℓ with a handful of
+  events, or your own resonance; the peak fitted with Phase W's Gaussian or Breit–Wigner on a
+  polynomial background (mass ± uncertainty, width), a note with the likelihood-ratio significance
+  and what its p-value means (5σ ↔ 2.9 × 10⁻⁷: background alone fluctuating this high — not the
+  chance the result is wrong), an optional data − background panel; a `plot` underneath (grow, fit,
+  annotate, reveal, zoom). `decay_chain`: decays as a tree with τ and cτ (PDG 2024), branching
+  fractions, each decay checked. `branching` (bars) and `branching_pie`: branching ratios from the
+  model (the Higgs boson's are the LHC Higgs XS WG prediction, said so). Plot models
+  `mass_spectrum`, `decay_times` and `z_lineshape` (2, 3, 4 neutrino families; schematic). `plot`
+  fits gain `residuals: background` and `parameters`, residual panels their own targets; a note on
+  a live histogram whose growth a `grow` action holds no longer crashes the render; fits with a
+  polynomial in large x (a cubic background at 100–160 GeV) are no longer refused as undetermined.
+  Also: display events of `detector` presets sit on the resonance peak (mass within ± Γ), and the
+  16:9 detector is drawn about 15 % larger.
+
+- **Event displays: the `detector` scene type** (Step 240). A schematic cylindrical detector
+  (tracker, solenoid, ECAL, HCAL, iron yoke, muon chambers; generic sizes, labelled "schematic
+  detector · simulated event") across the beam (x–y) or along it (r–z; the action `switch_view`
+  morphs one into the other), with a seeded simulated event built layer by layer over the beats:
+  tracks bending in the field with radius p_T / (0.3 B) and the sign of their charge (low-p_T ones
+  curl up), calorimeter towers growing with the energy (log or linear, stated), muons through
+  everything with chamber hits, jets as cones, the missing transverse momentum computed from the
+  visible particles, a readout (p_T, η, invariant or transverse mass), a signature legend and a
+  layer key. Presets `z_to_mumu`, `h_to_gammagamma`, `h_to_4l`, `w_to_enu`, `dijet` (decays in the
+  boson's rest frame boosted to the lab) or listed particles; what never reaches a detector (τ, π⁰,
+  Z, quarks) is refused with the reason, and a claimed signature is checked ("a photon leaves no
+  track"). Also: `kinematics` frames fill their halves with three large key numbers each
+  (`readout: all` for every number), a root of a sum is set apart from the next factor in
+  calculations, plot models can name their axes (`two_body_opening` does), and a `feynman` diagram
+  stays centred until a vertex-rule card needs the room.
+
+- **Relativistic kinematics: the `kinematics` scene type** (Step 239). Momentum vectors to scale: a
+  two-body decay (`decay: "pi+ -> mu+ nu_mu"`) in the parent's rest frame — the products back to
+  back with p* from the masses (29.79 MeV/c) — and in the lab where the parent moves (`momentum:
+  200 MeV/c`), side by side in 16:9 and stacked in 9:16; or particles given in the lab with their sum
+  and rest frame. Each frame shows β and γ, the energies, the opening angle, the invariant mass
+  √((ΣE)² − |Σp|²) — the same in both frames —, the decay length βγcτ and, with `si: true`, SI
+  values. The action `boost` speeds a frame up continuously. A `calculation` takes a particle's
+  PDG value by name (`{name: m_mu, mass: mu-}`, `lifetime`, `width`) and the picture's numbers
+  (`from_scene: pion.p_star`); the plot model `two_body_opening` draws the opening angle against
+  momentum. The model `particle_physics.kinematics` adds four-vectors, boosts, thresholds (fixed
+  target vs collider) and decay lengths. Decays below threshold or forbidden, β ≥ 1, E < m and
+  negative m² are refused with the numbers. Also: gluons in `feynman` diagrams are proper coils,
+  diagrams fill more of the frame and the vertex-rule card is larger.
+- **Feynman diagrams: the `feynman` scene type** (Step 238). Diagrams in proper notation — fermion
+  arrows on the fermion-number flow (antifermions against time), wavy photons, W and Z, curly
+  gluons, a dashed Higgs, vertex dots, every line named (e⁻, ν̄ₑ, u, d̄), the time direction stated
+  (left → right, or `time: up`) — from 12 presets (e⁺e⁻ → μ⁺μ⁻, Compton, Bhabha, Møller, β⁻ decay
+  at quark level with optional spectator quarks, μ⁻ decay, π⁺ → μ⁺ ν_μ, Drell–Yan, gg → H,
+  H → γγ through a top or W loop, H → ZZ* → 4ℓ, t → W⁺b) or written by their lines
+  (`"photon: gamma v1 -> v2"`). The layout is automatic (s-, t-, u-channel, decays, cascades, one
+  loop; no crossings) and every vertex is checked against the Standard Model before it is drawn:
+  the allowed vertex types (no H γ γ vertex — "draw the loop"; a W only within a doublet), charge,
+  baryon and lepton family numbers at every vertex and along the fermion lines, colour, and the
+  whole reaction. Lines appear in time order over the beats; the actions `travel` (a particle
+  dot), `vertex_rule` (the vertex type, its coupling — α ≈ 1/137, α_s ≈ 0.118, g ≈ 0.65, Higgs ∝
+  mass — and the conservation checks) and `swap_channel` (s ↔ t, γ ↔ Z, top ↔ W loop). Fixed with
+  it: the Λ mean life (PDG 2024: 2.617 × 10⁻¹⁰ s).
+- **The `standard_model` scene type and the particle model** (Step 237). The Standard Model chart:
+  quarks and leptons in three generations, the gauge bosons and the Higgs boson, each cell with
+  its mass (PDG 2024), charge and spin, in colour groups with a key and the values' source; the
+  classic grid in 16:9, the bosons in rows under the fermions in 9:16. Every particle, generation,
+  group and row is a target; the actions `antiparticles` (cells turn into their antiparticles:
+  ū, ν̄ₑ, e⁺, the charge reversed) and `couplings` (which particles the photon, gluon, W, Z or Higgs
+  couples to, and why). The model is `vidgen.api.particle_physics` (no manim): the Standard Model
+  particles and 27 common hadrons with their antiparticles (masses, widths or lifetimes, quantum
+  numbers, quark content), names in ASCII or Unicode, and `check("n -> p e- anti-nu_e")`, which
+  explains whether a reaction or decay can happen (charge, baryon and lepton family numbers,
+  angular momentum, energy and thresholds; flavour, C- and G-parity) and through which
+  interaction.
+
+### Orbital mechanics (Phase X, from Step 229)
+
+- **Review of Phase X** (Step 236). The orbit model checked against independent calculations
+  (Kepler's equation, element and state conversions, propagation, vis-viva, Hohmann / bi-elliptic /
+  plane change, flybys, Lagrange points and Jacobi constants, the figure-eight, resonances, the
+  planets' positions and 14 published opposition and conjunction dates, every constant and preset):
+  no physics error found. Orbit scenes render about twice as fast and use half the memory (the
+  side panel's live numbers are drawn from cached glyphs; title, caption and axes are drawn once
+  per stretch) — a 47-second orbit scene at 1080p no longer runs out of memory. In 16:9 the
+  caption stands under the side panel so the orbit picture takes the whole height; in 9:16 a
+  transfer's per-burn Δv rows give way to the burns' own labels. A `calculation` substitution that
+  does not fit with a unit on every value writes them in one unit with the unit once at the end,
+  `(√(2.945² + 10.93²) − 7.726) km/s`, before falling back to SI numbers. The orbit lint reads
+  numbers written with spaces ("384 400 km"). The phase angle's label and lines keep off the
+  labels near them.
+
+- **Example, docs and gallery** (Step 235). `examples/mars-transfer` ("How to get to Mars", about
+  3:43 with Kokoro, 16:9 and a 9:16 `short` variant): why a rocket cannot fly straight there, the
+  Hohmann transfer (Δv₁ 2.94 + Δv₂ 2.65 km/s, 259 days, Mars 44° ahead) with burns on words, the
+  transfer time and phase angle worked out in a `calculation`, the 3.59 km/s departure burn from
+  low Earth orbit (the Oberth effect, from `from_scene`), and the Earth and Mars on 28 October 2026
+  with the next window (around early December 2026) and the opposition of 19 February 2027. A
+  guide topic `vidgen guide orbits` and `docs/COOKBOOK-ORBITS.md` (choosing, scale honesty, units
+  and Δv, approximations to state, pacing, mistakes and the rules that catch them). The gallery's
+  "Orbital mechanics" section: the `orbit` entry regenerated with the current layout and two
+  showcases (the Hohmann transfer to Mars; Jupiter's Trojans in the rotating frame); the gallery's
+  size budget grows from 13 to 15 MB (each entry still at most 0.36 MB, each GIF 150 KB).
+- **Fix** (Step 235): a transfer's phase-angle label keeps off the bodies and their labels (it
+  could sit on the Earth's name in 9:16); `orbits.events_between` no longer lists an event twice
+  (the 2029 Mars opposition came twice).
+
+- **Orbital accuracy lint** (Step 234). Nine `vidgen lint` rules compare what the narration and
+  the screen say with what each `orbit` scene computes: `orbit_period` ("Mars takes three years"
+  for 1.88 yr; "about two years" is fine), `orbit_speed` (vis-viva at the perihelion or aphelion
+  named, escape and circular speeds), `orbit_dv` (the first, second and total Δv of a transfer or
+  burns), `orbit_transfer` (transfer time, phase angle, synodic period, launch windows),
+  `orbit_distance` ("the Moon is 384,000 km away" fits, "L2 is 15 million km away" does not;
+  altitudes, radii, size ratios), `orbit_date` (opposition and conjunction dates in any scene,
+  against JPL's elements), `orbit_scale` ("drawn to scale" for enlarged bodies or a log view),
+  `orbit_conserved` (an n-body run's energy, angular momentum or Jacobi constant drifting) and
+  `orbit_crash` (a periapsis in the atmosphere, bodies passing through each other). Cards and
+  captions naming a body are checked against the orbit scenes. `said_before_shown` knows the
+  orbit actions and targets. The number reader understands "one and a half million kilometres".
+- **Fix** (Step 234): Neptune's rate of the longitude of the ascending node in the JPL Table 1
+  data was Pluto's (−0.01183482 instead of −0.00508664 deg/century); Neptune's heliocentric
+  direction on a date moves by at most 1.2″ over 1800–2050 (below the table's own accuracy). A test
+  now pins every number of the table.
+
+- **The Solar System on a date** (Step 233). `date: 2020-06-01` places the planet presets (and
+  the new `pluto`) where JPL's approximate elements (Standish, Table 1, valid 1800–2050; dates
+  outside refused) put them that day, the panel showing the date as the clock runs; `event: {kind:
+  opposition, of: Mars}` finds the next opposition / conjunction after it by root finding and
+  draws the line the planets will stand on (Mars 2020-10-13); `radial: log` fits Mercury to Pluto
+  in one picture with labelled rings and "distances compressed (log)"; `inset: true` adds the inner
+  planets to scale beside a true-scale picture; `sizes: true` compares radii to scale side by side
+  with the Sun's edge. The model: `vidgen.api.orbits` gains `julian_date`, `heliocentric`,
+  `mean_elements`, `next_event`, `sidereal_period`, `planet_synodic_period`, `elongation`, `TABLE1`
+  and more.
+- **Compact orbit panels** (Step 233). The `orbit` scene's side panel now shows the time, the
+  speed-up and the few values the scene is about (at most six rows in 16:9, five in 9:16, at a
+  readable size); diagnostics such as ΔE/E, ΔL/L and a Jacobi constant's drift are left out unless
+  asked for (`energy: true`, `panel: full`, or by name: `panel: [time, total_dv, phase]`;
+  `panel: none`). `panel: full` restores the earlier panel.
+
+- **Many bodies** (Step 232). `system: earth_moon | sun_earth | sun_jupiter` (or your own pair
+  with a mass ratio `mu`): the circular restricted three-body problem integrated about the
+  barycentre, seen in the inertial or the rotating frame (`view: rotating`; the actions
+  `corotate` / `inertial` turn the view on a word), the Lagrange points L1–L5 computed for μ
+  (`lagrange`), Routh's stability test, bodies placed `near: L4` with a `shift` (tadpoles,
+  horseshoes, or a body leaving L4 above μ = 0.0385), the Jacobi constant and its drift, the
+  zero-velocity curve; Sun–Earth L1 / L2 shown 1.50 / 1.51 million km from the Earth in a close-up
+  (`center` with `extent`, an arrow to the off-plot Sun). `system: figure_eight` (three equal
+  masses, Chenciner–Montgomery); `origin: barycentre` (binary stars on their two ellipses);
+  `resonance: [Io, Europa, Ganymede]` with the Galilean moons as presets (period ratios, the
+  Laplace angle 180°, conjunction lines as they happen); a body's `curvature` (the Moon's path
+  always bends towards the Sun); `tides` (a schematic: the Moon's pull, the tidal arrows, two
+  bulges, tidal locking). n-body panels show ΔL/L with ΔE/E; masses may be written `'2 Msun'`.
+  The model: `vidgen.api.orbits` gains `lagrange_points`, `collinear_gamma`, `routh_stable`,
+  `jacobi`, `zero_velocity_segments`, `integrate_restricted`, `figure_eight`, `conjunctions`,
+  `laplace_angle`, `tidal_acceleration`, `equilibrium_tide` and more.
+
+- **Manoeuvres and gravity assists** (Step 231). A body's `burns` (Δv prograde, retrograde,
+  radial, normal… at a time or the next periapsis / apoapsis: the Δv arrow at the burn point, the
+  orbit before faint and after drawn, a mission line in the panel); `transfer` — Hohmann (Δv₁, Δv₂,
+  total, transfer time, the phase angle drawn live until the launch window, the synodic period),
+  bi-elliptic, phasing — between circular coplanar orbits, with clear errors for eccentric or
+  inclined orbits; `alongside: Earth` starts a spacecraft with its planet; `flyby` — a gravity
+  assist in the planet's frame (asymptotes, v∞ in and out, the turning angle δ, the periapsis,
+  the atmosphere) with the Sun-frame vector diagram (speed gained behind the planet, lost in
+  front); the clock actions `burn` (a burn on its word), `flyby`, `pause`, `coast`, each stretch
+  of the clock showing its own speed-up; a `calculation` takes the computed Δv, times and angles
+  with `from_scene`. The model: `vidgen.api.orbits` gains burns and trajectories, `hohmann`,
+  `bielliptic` (and its thresholds 11.94 / 15.58, computed), `plane_change`, `phasing`,
+  `synodic_period`, `flyby`, `gravity_assist`. In 9:16 a long panel is set in two columns; a
+  scale bar takes the corner the paths keep away from.
+
+- **Kepler's laws and orbital speed** (Step 230). A body's `geometry` (the empty focus and the
+  centre, a and b with their lengths, perihelion / aphelion — perigee / apogee around the Earth —
+  with their distances), `sectors` (equal areas in equal times: each sector shaded as it is swept,
+  its area computed and listed), `velocity` (arrows ∝ speed with a key, the vis-viva speed and
+  its range); `cannonball` (Newton's cannon: shots from one point at increasing speeds, each
+  classified by its energy as suborbital, circular, elliptical, parabolic or hyperbolic); the
+  actions `sweep` and `launch` on a word, `reveal` / `highlight` of every overlay; the plot model
+  `kepler_planets` for Kepler's third law on log axes. **Changed look of `orbit`:** the picture
+  fills the frame's height (the axes' unit written once instead of two axis titles), labels never
+  overlap (further out with a leader line when crowded), and a side panel beside the picture
+  holds the readout and a legend of the bodies' periods.
+
+- **The `orbit` scene type and the orbital model** (Step 229). Planets, moons, satellites and
+  comets on Kepler orbits, moving in correct timing at one speed-up from the first beat to the
+  scene's end (so equal areas in equal times show as they are), with conic orbits, fading trails,
+  an equal-aspect frame in AU or km (or a scale bar), a readout of the simulated time and the
+  speed-up, "sizes not to scale" when bodies are enlarged, a view that follows a body, and
+  `dynamics: nbody` (mutual gravity on leapfrog or RK45, with the energy error). Bodies from
+  presets (the planets on JPL's approximate J2000 elements, the Moon, an ISS-like orbit,
+  geostationary, Halley), from elements with units (`a: "1.5 AU"`, `periapsis`, `altitude`, `i`,
+  `raan`, `argp`, `nu`) or from a position and velocity; clear errors such as a periapsis inside
+  the planet. The model is `vidgen.api.orbits` (no manim): Kepler's equation for every conic,
+  elements ↔ state vectors, vis-viva, periods, energies, n-body runs.
 
 ### Science foundation: scientific charts and worked calculations (Phase W, from Step 222)
 

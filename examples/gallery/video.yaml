@@ -343,6 +343,92 @@ scenes:
       - text: "That gives eight point oh four days."
         actions: [{compute: calc1, at: "@gives"}]
 
+  - id: orbits
+    type: orbit           # bodies on Kepler orbits, moving in correct timing at one speed-up; equal-aspect frame in AU or km
+    params:
+      title: "Equal areas in equal times"
+      central: sun
+      bodies:
+        - {preset: earth}
+        - {name: Comet, a: "1.5 AU", e: 0.7, argp: 180, nu: 180, trail: 0.15}
+      orbits: 1
+    beats:
+      - text: "Far from the Sun the comet crawls."
+      - text: "Near the Sun it sweeps round in a few weeks."
+
+  - id: particles
+    type: standard_model  # the Standard Model chart: quarks, leptons, gauge bosons, Higgs; PDG 2024 masses, charges, spins
+    params:
+      title: "The Standard Model"
+      reveal: all
+    beats:
+      - text: "Twelve matter particles in three generations, and the bosons."
+      - text: "Every quark and lepton has an antiparticle with the opposite charge."
+        actions: [{action: antiparticles, at: "@antiparticle"}]
+
+  - id: feynman
+    type: feynman         # a Feynman diagram, every vertex checked against the Standard Model; presets or your own lines
+    params:
+      title: "Muon decay"
+      preset: muon_decay
+    beats:
+      - text: "The muon turns into its neutrino and a W minus."
+        actions: [{highlight: "line:W", at: "@W"}]
+      - text: "The W decays into an electron and an electron antineutrino."
+        actions: [{travel: diagram, at: 0.2}]
+
+  - id: kinematics
+    type: kinematics      # momentum arrows of a decay in the rest frame and the lab; p* from the masses, invariant mass, βγcτ
+    params:
+      title: "Kaon decay in two frames"
+      decay: "K+ -> pi+ pi0"
+      gamma: 2
+      angle: 120
+    beats:
+      - text: "At rest, the two pions leave back to back."
+      - text: "In the lab the kaon moves, and both pions are thrown forward."
+
+  - id: detector
+    type: detector        # an event display in a schematic detector: tracks bending in the field, towers, muon hits, missing pT
+    params:
+      title: "Two photons"
+      event: {preset: h_to_gammagamma, seed: 5}
+      reveal: all
+    beats:
+      - text: "Two photons: showers in the calorimeter, and no tracks."
+      - text: "Seen from the side."
+        actions: [{action: switch_view, to: rz}]
+
+  - id: spectrum
+    type: mass_spectrum   # a simulated invariant-mass histogram filling event by event, a peak fit, the local significance
+    params:
+      channel: h_to_4l
+      style: points
+    beats:
+      - text: "Four-lepton events arrive one by one."
+      - text: "A fit finds the peak near one hundred and twenty-five GeV."
+
+  - id: chain
+    type: decay_chain     # decays with lifetimes and branching fractions, each one checked
+    params:
+      title: "From a pion to an electron"
+      decays: ["pi+ -> mu+ nu_mu", "mu+ -> e+ nu_e anti-nu_mu"]
+      reveal: all
+    beats:
+      - text: "A pion becomes a muon, and the muon an electron."
+
+  - id: higgs_decays
+    type: branching       # branching ratios from the model, the source in the caption
+    params: {particle: H, modes: 6}
+    beats:
+      - text: "How a Higgs boson decays, as the Standard Model predicts."
+
+  - id: z_decays
+    type: branching_pie
+    params: {particle: Z}
+    beats:
+      - text: "Seventy percent of Z bosons decay to hadrons."
+
   - id: share
     type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
     params:

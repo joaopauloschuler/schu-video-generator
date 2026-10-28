@@ -171,7 +171,8 @@ def _plot(project: Project, scene_id: str) -> list[tuple[str, str]]:
 
 def test_rules_are_registered_in_config_order() -> None:
     names = CALC_RULES + PLOT_RULES
-    assert list(LINT_RULES[-len(names):]) == list(names)
+    start = LINT_RULES.index(names[0])   # the orbital rules (Step 234) come after them
+    assert list(LINT_RULES[start:start + len(names)]) == list(names)
     defaults = {name: RULES[name].default for name in names}
     assert defaults.pop("calc_sigfigs") == "info" and defaults.pop("plot_truncated") == "info"
     assert set(defaults.values()) == {"warning"} and all(RULES[n].scope == "scene" for n in names)

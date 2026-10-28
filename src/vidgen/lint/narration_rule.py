@@ -34,7 +34,8 @@ if TYPE_CHECKING:
 #: Actions that bring something on screen at their time: the built-in ones, the cell-biology
 #: scenes' actions that bring labels, captions, badges or a zoomed view's part names (§95.14), the
 #: genetics scenes' actions that bring gametes, cells, tables, cards and plots (§96.18), and the
-#: plot and calculation actions that bring fits, notes, growing series and worked steps (§97.11).
+#: plot and calculation actions that bring fits, notes, growing series and worked steps (§97.11),
+#: the orbit actions that bring sectors, shots, burns with their Δv labels and a flyby (§98.8).
 SHOWING_ACTIONS = frozenset({
     "reveal", "callout", "transform",
     "zoom_to", "advance", "checkpoint", "signal", "knockout", "drug", "inhibit", "amplify", "transcribe", "cap", "splice", "polyadenylate",
@@ -43,6 +44,7 @@ SHOWING_ACTIONS = frozenset({
     "form_gametes", "fill", "count", "ratio", "chi_square", "deduce", "analyse", "risk", "cross_over", "measure", "rearrange", "mutate",
     "scan", "cleave", "repair", "run", "simulate", "resample", "regional",
     "fit", "annotate", "grow", "substitute", "compute", "convert",
+    "sweep", "launch", "burn", "flyby",
 })
 
 _WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)*")

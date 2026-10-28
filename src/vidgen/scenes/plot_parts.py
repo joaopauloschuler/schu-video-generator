@@ -265,10 +265,12 @@ class PlotFit(SceneParams):
     """Shade the confidence band (where the true curve lies) or the prediction band (where a new measurement would lie)."""
     level: float = Field(default=0.95, gt=0, lt=1)
     """The band's confidence level."""
-    residuals: bool | Literal["normalized"] = False
-    """A residual panel under the plot (y − fit), sharing x; normalized: (y − fit)/σ."""
+    residuals: bool | Literal["normalized", "background"] = False
+    """A residual panel under the plot (y − fit), sharing x; normalized: (y − fit)/σ; background (a peak fit with a background): the data minus the fitted background, with the fitted peak drawn over it."""
     show: Literal["auto", "none"] | list[Literal["formula", "params", "r2", "chi2", "n"]] = "auto"
     """What the box beside the curve says: auto (parameters ± standard errors, R², χ²/ν when the points have errors), none, or a list of formula, params, r2, chi2, n. The legend names the fit by its name, else its formula."""
+    parameters: list[str] | None = None
+    """Which parameters the box lists, by their names in the model (gaussian: A, mu, sigma, b0…; breit_wigner: A, M, Gamma, b0…); default all."""
     extend: bool = False
     """Draw the curve across the whole x axis (default: over the fitted points)."""
     color: ThemeColor | None = None
@@ -296,6 +298,8 @@ class PlotFit(SceneParams):
             raise ValueError("range must be [low, high] with high > low")
         if self.band != "none" and kind == "poisson":
             raise ValueError("a Poisson fit is drawn as steps and has no band")
+        if self.residuals == "background" and (kind not in plotcore.PEAK_KINDS or self.background is None):
+            raise ValueError("residuals: background subtracts a peak fit's background: use model: gaussian or breit_wigner with background: <degree>")
         return self
 
     @property
@@ -455,7 +459,8 @@ class ResolvedFit:
         if "formula" in wanted:
             out.append(r.model.formula)
         if "params" in wanted:
-            out += r.parameter_lines(self.x_unit, self.y_unit)
+            chosen = self.spec.parameters
+            out += [line for name, line in zip(r.model.names, r.parameter_lines(self.x_unit, self.y_unit)) if chosen is None or name in chosen]
         if "r2" in wanted and "dof" not in r.extra:
             out.append(f"R² = {r.r2:.4f}" if r.r2 > 0.99 else f"R² = {r.r2:.3f}")
         chi = self.reduced_chi2()

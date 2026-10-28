@@ -4418,8 +4418,9 @@ errors); the legend names the fit (`name`, else its formula):
 | `range` | — | fit only the points with x in `[low, high]` |
 | `weighted` | `true` | weight by the series' y errors (absolute: χ²/ν tells whether they match the scatter), use its x errors (effective variance); counts — a histogram, or a series with `y_err: sqrt` — by Poisson maximum likelihood (the variance is the fitted curve's, not the count's: √N weights from the data pull a fit low; χ²/ν is Pearson's; a 0 count is a point like any other); without errors the parameter errors come from the scatter (as `scipy.optimize.curve_fit`) |
 | `band`, `level` | `none`, `0.95` | `confidence` (where the true curve lies) or `prediction` (where a new point would lie), shaded in the curve's colour; Student's t with n − p degrees of freedom (the normal quantile when the points have errors) |
-| `residuals` | `false` | `true`: a panel under the plot sharing x with y − fit (and the error bars); `normalized`: (y − fit)/σ (counts: σ = √fit), symmetric about 0 and ticked at ±2 |
+| `residuals` | `false` | `true`: a panel under the plot sharing x with y − fit (and the error bars); `normalized`: (y − fit)/σ (counts: σ = √fit), symmetric about 0 and ticked at ±2; `background` (a `gaussian` / `breit_wigner` fit with a `background`): the data minus the fitted background, with √N bars and the fitted peak drawn over them, titled "data − background" — its axes come with the plot's (they carry the x labels), its content with the fit, or on a word with `reveal: "residuals:<fit name>"` (targets `residuals<N>`, `residuals:<name>` for any residual panel: revealed by an action, the panel no longer comes with its fit) |
 | `show` | `auto` | the box: `auto` (parameters, R², χ²/ν with errors), `none`, or a list of `formula`, `params`, `r2`, `chi2`, `n` |
+| `parameters` | all | which parameters the box lists, by their model names (`gaussian`: `A`, `mu`, `sigma`, `b0`…; `breit_wigner`: `A`, `M`, `Gamma`, `b0`…; `custom`: its params); an unknown name is an error listing the model's |
 | `color`, `dashed`, `width` | accent (several fits: the series' colour), `false`, 4 | |
 
 Values ± errors are written as results are: the error with two significant digits (one from 355
@@ -5470,7 +5471,9 @@ is as large as `size` allows (1.15x in a vertical frame) within the width; when 
 tall, the largest lines give way first (down to a common size), so a big formula shrinks before
 a long substitution does, and no line is more than 1.6 times the size of the smallest (one block). A long substitution keeps its units when that stays comfortably
 readable (1.2x the readable size or more): with units on one line, on two lines (the outer product
-split) or one factor per line, the most explicit that is nearly as large as the largest of those;
+split) or one factor per line, or — when every value with a unit has the result's dimension, as in
+`√(v∞² + v_esc²) − v_circ` — every value in the result's unit with that unit once at the end,
+`(√(2.945² + 10.93²) − 7.726) km/s`; the most explicit that is nearly as large as the largest of those;
 otherwise it is written in SI numbers without units (on one line, on two) — `units: always` /
 `never` choose. A calculation that still does not fit at the readable size logs a warning (split
 it, or use fewer symbols per formula). Symbols are
@@ -5485,8 +5488,18 @@ scene's own steps, comes with the lines before it that are not on screen yet, an
 lines after it that no action names (a `compute` brings an unnamed conversion).
 
 **Results of other scenes.** `from_scene: orbit` takes the result with the symbol's name from the
-calculation scene `orbit`; `from_scene: orbit.v` names the result. Checked by `vidgen validate`
+calculation scene `orbit`; `from_scene: orbit.v` names the result; an [`orbit`](#orbit) scene with a
+transfer, burns or a flyby gives its computed numbers the same way (`from_scene: geo.dv1`). Checked by `vidgen validate`
 (an unknown scene or result with did-you-mean, scenes taking values from each other in a loop).
+A [`kinematics`](#kinematics) scene gives p*, β, γ, the opening angle, the decay length or an
+invariant mass the same way (`from_scene: pion.p_star`).
+
+**Particle values.** `{name: m_pi, mass: pi+}` takes the mass from the particle table (PDG 2024,
+`vidgen.particle_physics`) with the figures the table gives (139.57039 MeV/c²), the meaning "π⁺
+mass" and the source "PDG 2024"; `lifetime: mu-` the mean life (2.1969811 × 10⁻⁶ s), `width: Z`
+the width (2.4955 GeV; computed from the mean life as ħ/τ with 4 figures when PDG quotes a
+lifetime); `unit:` converts. A name the table does not know gets did-you-mean; a neutrino's mass
+(only bounded) and a stable particle's lifetime are refused.
 
 **Errors** (at `vidgen validate`, naming the symbol or calculation): an unknown symbol (did you
 mean…; a constant's key not in the table: "add `{name: G, constant: G}`"; a result computed by a
@@ -5502,12 +5515,13 @@ in the lines on screen, its substituted value too — for `highlight`), `row:<na
 | param | type | default | |
 |---|---|---|---|
 | `title` | str | `""` | heading |
-| `symbols` | list | `[]` | the symbol table: `{name, value, unit, meaning, source}`, `{name, constant}` or `{name, from_scene}` |
+| `symbols` | list | `[]` | the symbol table: `{name, value, unit, meaning, source}`, `{name, constant}`, `{name, from_scene}` or `{name, mass: pi+}` |
 | `symbols[].name` | str | required | the name formulas use: letters, digits and `_` (`v`, `M_sun`, `t_half`, `lambda`) |
 | `symbols[].value` | number \| str | — | a number, `"1/25"`, `"6.674e-11"`, optionally with its unit (`"29.8 km/s"`) |
 | `symbols[].unit` | str | `""` | its unit, if not after the value; for a constant, the unit to show it in |
 | `symbols[].constant` | str | — | a constant's key (list above; aliases such as `kB`, `Msun` work) |
-| `symbols[].from_scene` | str | — | `scene_id` or `scene_id.result`: a result of another calculation scene |
+| `symbols[].from_scene` | str | — | `scene_id` or `scene_id.result`: a result of another calculation scene, or a number an [`orbit`](#orbit) scene computed (`geo.dv1`) |
+| `symbols[].mass`, `symbols[].lifetime`, `symbols[].width` | particle | — | a particle's PDG 2024 value by name ([`kinematics`](#kinematics)): `mass: pi+` (MeV/c² below 1 GeV, else GeV/c²), `lifetime: mu-` (s), `width: Z` (MeV or GeV); `unit` converts (`GeV/c^2`, `us`, `ps`) |
 | `symbols[].sig` | int (1–15) | from the digits | its significant figures (the value is rounded to them) |
 | `symbols[].exact` | bool | — | `true`: exact (never limits a result) |
 | `symbols[].digits` | int | as written; constants 4 | figures to show (the full value is used) |
@@ -5539,6 +5553,1326 @@ in the lines on screen, its substituted value too — for `highlight`), `row:<na
 | `caption` | str | `""` | note under the calculation |
 | `caption_size` | size | `caption` | |
 | `caption_color` | color | `dim` | |
+
+### `orbit`
+
+**Bodies on their orbits, moving in correct timing** (Phase X): a central body, bodies on
+Kepler orbits drawn as conics, the bodies moving along them by Kepler's equation from the start
+of the scene to its end at one constant speed-up — so equal video times are equal simulated
+times and the second law (equal areas in equal times) shows as it is —, fading trails, an
+equal-aspect frame in AU or km, a readout of the simulated time and the speed-up, and a view
+that can follow a body. `dynamics: nbody` integrates the mutual gravity of every body with mass
+instead (leapfrog by default, with the energy error shown). Values carry their units as text
+(`"1.5 AU"`, `"7.8 km/s"`, `"92 min"`); angles are degrees (or `"0.9 rad"`).
+
+```yaml
+- id: inner
+  type: orbit
+  params:
+    title: "The inner planets for one Earth year"
+    central: sun                         # a preset, or {name, gm or mass, radius}
+    bodies:
+      - {preset: mercury}                # the planets on their J2000 orbits (JPL)
+      - {preset: venus}
+      - {preset: earth}
+      - {preset: mars}
+    span: "1 yr"                         # or orbits: 2 (periods of the first body)
+    caption: "J2000 elements (JPL approximate positions)"
+  beats:
+    - text: "Mercury races around the Sun in eighty-eight days."
+    - text: "The Earth takes a year, Mars almost two."
+- id: comet
+  type: orbit
+  params:
+    title: "Equal areas in equal times"
+    bodies:
+      - {name: Comet, a: "3 AU", e: 0.8, argp: 90, nu: 180, trail: 0.15}
+    frame: scale_bar                     # axes (default) | scale_bar | none
+  beats:
+    - text: "Far from the Sun the comet crawls; near it, it sweeps round in weeks."
+- id: low_orbit
+  type: orbit
+  params:
+    central: earth
+    bodies:
+      - {preset: iss}                    # circular, 420 km up, 51.6°: 93 min
+      - {name: Probe, periapsis: "7000 km", e: 1.4, nu: -100, trail: "1 h"}   # an open orbit (hyperbola)
+      - {name: Ship, r: ["10000 km", 0], v: [0, "7.5 km/s"]}                  # from a position and velocity
+    span: "3 h"
+- id: moon
+  type: orbit
+  params:
+    central: sun
+    bodies: [{preset: earth}, {preset: moon}]   # the Moon goes around the Earth (its preset's primary)
+    span: "60 d"
+    follow: Earth                        # the view moves with the Earth
+```
+
+**Bodies** (`bodies`, in order; a body another one goes `around` comes first). A body is given by
+a **preset** (`mercury` … `neptune`: the J2000 mean elements of JPL's *Approximate Positions of
+the Planets*, Table 1, the Earth's being the Earth–Moon barycentre; `moon` around the Earth;
+`iss`: circular at 420 km, 51.64°; `geo`: geostationary, period one sidereal day; `halley`:
+rounded 1986 elements, for illustration), by **elements** — its size and shape one way: `a`
+(semi-major axis) with `e`, `periapsis` with `apoapsis`, `periapsis` with `e`, `apoapsis` with `e`,
+or `altitude` above the surface (a circle unless `e` is given); then `i`, `raan` (Ω), `argp` (ω),
+and where it starts, `nu` (true anomaly, default 0: at periapsis) or `mean_anomaly` — or by a
+**state**, `r` (position) and `v` (velocity) relative to what it orbits (2 or 3 components with
+units). Elements written next to a preset override the preset's. `e` = 0 is a circle, below 1 an
+ellipse, 1 a parabola (escape speed exactly), above 1 a hyperbola (for which `a` is |a|).
+`around` names the body it orbits (default: the central body, or the preset's primary when that
+body is listed). μ = G(M + m): a body's own `gm` or `mass` adds to its parent's (the Moon's
+month uses GM⊕ + GM☾).
+
+**Checks** (`vidgen validate`): units of the right kind (`'7.8 km'` for a speed is refused; a
+bare number for a length asks for a unit), a negative mass, an eccentricity below 0, two ways of
+giving the size, a periapsis inside the body it orbits ("its periapsis (6,000 km from the centre
+of Earth) lies inside Earth (radius 6,378 km): it would crash"), `orbits:` of an open orbit (it
+has no period: give `span`), a preset whose primary is missing, unknown presets, bodies and
+`follow` with did-you-mean, a radial velocity (no conic), `energy` / `method` / `step` without
+`dynamics: nbody`.
+
+**Picture.** The view shows every body's path over the span and the whole closed orbits (an open
+orbit out to three times the size of the rest), with a 6 % margin, at an equal aspect; `extent:`
+gives the half-width instead. `frame: axes` draws x and y axes on the plot core in AU or km
+(`unit: auto`: AU when the view spans more than 0.05 AU; large km values get 10³ in the unit),
+`scale_bar` a bar of a round length, `none` nothing. The axes carry no titles — both are lengths
+in one unit, written once (after the x tick labels in 16:9, above the y ticks in 9:16) — so the
+picture takes the whole height between the title and the caption. Bodies are drawn to scale when
+large enough to see (the Earth under the ISS's orbit), else as dots — then the panel says
+**"sizes not to scale"**. Labels stand beside their body where they cover no body, other label,
+overlay label or the panel and cross few orbit lines; when there is no room close by they stand
+further out with a thin leader line, and they keep their place while it stays free (no jumping).
+Orbits are thin lines in the body's colour, dashed for an open one; `trail` is a fading line
+behind the body (`true`: a quarter of its orbit; a share of it; a time; `false`). `follow: Earth`
+keeps the Earth at the centre: orbits around it stay still, the rest move with the view. The side
+panel (beside the picture in 16:9 — the room a tall picture leaves —, above it in 9:16) is
+**compact** by default (Step 233): `t = 182 d` (min, h, d or yr by the span), the speed-up (`× 6
+million`), then the few values the scene is about — at most six rows in 16:9 and five in 9:16
+besides the "not to scale" note (rows a scene cannot do without, such as a transfer's Δv, are
+always kept), every row at the readable label size, in one column — and a **legend** of the
+bodies with their periods when it fits (`legend: auto`; `true` always, `false` never). In 16:9 the
+`caption` stands under the panel (Step 236: the picture gets the whole height under the title;
+under the picture when the column has no room); in 9:16 a transfer's Δv₁ / Δv₂ rows give way to
+the burns' own labels (the total stays), so the picture is taller.
+Diagnostics — the n-body energy error `ΔE/E`, `ΔL/L`, a Jacobi constant's drift `ΔC/C`, the
+figure-eight's return error — are left out unless asked for (`energy: true`, `panel: full` or by
+name); the lint reads them from the model whatever the panel shows. `panel: full` shows every row
+(as before Step 233: in 9:16 more than five rows in two columns), `panel: none` only the "not to
+scale" note, and a list names the rows — `panel: [time, total_dv, phase]` — from: `time`,
+`speedup`, `date`, `event`, `distance`, `synodic`, `energy`, `angular`, `e`, `speed`,
+`speed_range`, `key`, `dt`, `areas`, `cannon_speeds`, `shots`, `legend`, `burns`, `dv_spent`,
+`next`, `transfer_kind`, `dv`, `total_dv`, `transfer_time`, `phasing`, `phase`, `window`, `miss`,
+`v_inf`, `turn_angle`, `side`, `sun_speeds`, `gain`, `mu`, `routh`, `frame`, `l1_l2`, `jacobi`,
+`angle`, `coorbital`, `eight`, `closure`, `mass_ratio`, `barycentre`, `binary_period`, `ratios`,
+`laplace`, `laplace_formula`, `conjunctions`, `curvature`, `pull`, `tidal`, `arrows`, `tide`,
+`locked` (rows that do not apply to the scene are skipped; the "not to scale" notes are always
+kept). A scale bar stands in the corner of the plot the paths keep away from (bottom left unless
+crowded).
+
+**Timing.** The first beat brings the frame, the central body, the orbits (drawn) and the bodies;
+then the bodies move until the scene's last frame, the time running from 0 to `span` (or
+`orbits` periods of the first body, default 1) at one speed-up. Equal video times are equal
+simulated times, so a comet is slow far out and fast near the Sun as Kepler's second law says.
+
+**N-body** (`dynamics: nbody`): every body with mass (`gm`, `mass` or a preset's) pulls on every
+other, from the Kepler states at the start; `method: leapfrog` (velocity Verlet: symplectic, its
+energy error stays bounded over many orbits; `step` default 1/1000 of the shortest orbital time
+scale) or `rk45` (adaptive Dormand–Prince: precise over a short run, its energy drifts over a long
+one). Orbits drawn are the starting (osculating) ones; trails show the real paths.
+
+**Kepler's laws and orbital speed** (Step 230). Overlays drawn from the same orbit, each a target
+an action can bring in on a word:
+
+```yaml
+- id: kepler
+  type: orbit
+  params:
+    title: "Equal areas in equal times"
+    bodies:
+      - name: Comet
+        a: "3 AU"
+        e: 0.75
+        nu: 150
+        geometry: true                   # or [foci, axes, apsides]
+        sectors: {count: 8, show: alternate}   # or sectors: 8 / true
+        velocity: {live: true, along: 12, readout: true}   # or velocity: true
+    orbits: 1.2
+  beats:
+    - text: "The Sun sits at one focus; the other is empty."
+      actions:
+        - {reveal: "foci:Comet", at: "@focus"}
+    - text: "From now on we sweep eight equal times."
+      actions:
+        - {sweep: "sectors:Comet", at: "@sweep"}
+    - text: "Every sector has the same area, and it is fastest at perihelion."
+      actions:
+        - {highlight: "periapsis:Comet", at: "@perihelion"}
+- id: cannon
+  type: orbit
+  params:
+    title: "Newton's cannonball"
+    central: earth
+    cannonball:
+      altitude: "1500 km"                # default a tenth of the radius
+      speeds: [0.6, 0.85, circular, 1.2, escape, 1.6]   # × the circular speed, '9 km/s', circular, escape
+      at: 90                             # where the cannon stands (degrees; 90 = the top)
+      clockwise: true                    # fired to the right
+      show_paths: false                  # draw the paths to come, faint
+    span: "6 h"
+  beats:
+    - text: "Fired slowly, the ball falls back to the ground."
+      actions:
+        - {launch: "shot:1", at: "@slowly"}
+        - {launch: "shot:2", at: "@falls"}
+```
+
+- **`geometry`** (an ellipse, e < 1): `foci` — the empty focus F′ and the centre C (the body
+  orbited sits at the other focus); `axes` — the major axis dashed, the semi-major axis a and the
+  semi-minor axis b with their lengths; `apsides` — the closest and farthest points with their
+  names and distances from the centre of the body orbited: **perihelion / aphelion** (the Sun),
+  **perigee / apogee** (the Earth; with the height above the surface in km), perilune / apolune,
+  perijove / apojove, else periapsis / apoapsis. The panel adds `e = 0.750`. Targets
+  `geometry:<name>` (all), `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`.
+- **`sectors`** (Kepler's second law): one period cut into `count` equal times (2–36, default 8;
+  Δt = period / count), each sector shaded as the body sweeps it — `show: alternate` every other
+  one (the textbook picture), `all` every one in two tints. The panel lists Δt and the latest
+  sectors' areas (`A₃ = 2.338 AU²`), each computed from the orbit's shape (½ ∫ r² dν between the
+  positions Kepler's equation gives at the sector's two times): they agree to rounding. Without a
+  `sweep` action the sectors start with the motion; `sweep: "sectors:Comet"` starts them on a word.
+- **`velocity`**: an arrow on the body (`live`), turning and stretching with its velocity, and
+  `along` fixed arrows at equal times around the orbit — one scale for the whole scene (the fastest
+  arrow a fifth of the picture) with a key in the panel (`→ 20 km/s`); with `readout` the speed
+  now from vis-viva, v² = μ(2/r − 1/a), and its range: `max 50.1 km/s at perihelion`, `min 8.85
+  km/s at aphelion`. Target `velocity:<name>`.
+- **`cannonball`** (Newton's cannon; `bodies` may then be empty): shots fired horizontally from
+  one point at `altitude` above the central body (which needs a radius), at each of `speeds` —
+  numbers are multiples of the circular speed there, `circular` and `escape` that speed exactly
+  (escape = √2 × circular), or speeds with units. Each shot is classified by its energy ε = v²/2 −
+  μ/r: **suborbital** (bound, its periapsis inside the planet: it lands, marked ×), **circular**,
+  **elliptical**, **parabolic** (exactly the escape speed) or **hyperbolic** — listed in the panel
+  with its speed and colour (by kind) under the circular and escape speeds. The view keeps the
+  planet in the middle and the closed paths whole; open ones leave it. Without `launch` actions
+  every shot flies from the start; `launch: "shot:3"` fires one on a word. Default span: long
+  enough for the closed shots to come round (at most four circular periods). Targets `cannon`,
+  `shot:<n>` (1 = first speed).
+- **Actions** `sweep` and `launch` happen at their moment on the scene's clock (the bodies keep
+  moving); `reveal`, `highlight`, `dim` work on every overlay target. Checks: geometry or sectors
+  on an open orbit, sectors or velocity with `dynamics: nbody`, a cannon without a radius or under
+  the surface, a speed with the wrong unit, `sweep` / `launch` without sectors / a cannon.
+- **Kepler's third law** is a `plot` of the planets' periods against their semi-major axes from
+  the built-in model `kepler_planets` (JPL Table 1 elements; columns `a` in AU, `T` in Julian
+  years with T = 2π √(a³ / G(M☉ + m)), `T_law` without the planet's mass, `a3`, `T2`): on log axes
+  with a power fit the exponent comes out 1.5000 (Jupiter's mass moves it by 10⁻⁴).
+
+```yaml
+- id: third_law
+  type: plot
+  params:
+    title: "Kepler's third law"
+    models:
+      planets: {kind: function, function: kepler_planets, units: {a: AU, T: yr}}
+    x: {scale: log, label: "semi-major axis a"}
+    y: {scale: log, label: "period T"}
+    series:
+      - {name: Planets, x: a, y: T, model: planets, style: points, live: false}
+    fits:
+      - {series: Planets, model: power, name: "T ∝ aᵏ"}
+    annotations:
+      - {type: note, text: "T = 2π √(a³ / GM☉)"}
+      - {type: label, series: Planets, index: 3, text: Earth}
+  beats:
+    - text: "On log axes the planets lie on a line of slope three halves."
+      actions:
+        - {fit: "fit:T ∝ aᵏ", at: "@slope"}
+```
+
+**Manoeuvres** (Step 231): impulsive burns, transfers between circular orbits and gravity assists,
+every number computed (two-body orbits; burns are instantaneous; patched conics for a flyby — say
+so in a caption).
+
+```yaml
+- id: geo
+  type: orbit
+  params:
+    title: "From low orbit to geostationary"
+    central: earth
+    bodies:
+      - {name: Satellite, altitude: "300 km", trail: false}
+    transfer: {ship: Satellite, to: "42164 km"}   # Hohmann: Δv₁ 2.43 + Δv₂ 1.47 = 3.89 km/s, 5.28 h
+  beats:
+    - text: "A prograde burn starts the transfer."
+      actions:
+        - {burn: "burn:1", at: "@burn"}          # the clock runs so the burn falls on this word
+    - text: "At apogee a second burn makes the orbit circular."
+      actions:
+        - {burn: "burn:2", at: "@second"}
+- id: mars
+  type: orbit
+  params:
+    title: "Earth to Mars"
+    bodies:
+      - {preset: earth, e: 0, i: 0, raan: 0, argp: 0}            # circular, coplanar: the approximation
+      - {preset: mars, e: 0, i: 0, raan: 0, argp: 0, nu: 75}
+      - {name: Ship, alongside: Earth}                          # starts with the Earth
+    transfer: {ship: Ship, to: Mars}             # departs at the launch window (Mars 44.3° ahead)
+    caption: "Circular, coplanar orbits (an approximation)"
+  beats:
+    - text: "Mars must lead by forty-four degrees when we leave."
+      actions:
+        - {action: pause, at: "@forty-four"}     # the clock holds still...
+    - text: "We wait for the window and burn."
+      actions:
+        - {action: coast, at: "@wait"}           # ...and runs again
+        - {burn: "burn:1", at: "@burn"}
+- id: raise
+  type: orbit
+  params:
+    central: earth
+    bodies:
+      - name: Sat
+        altitude: "400 km"
+        burns:
+          - {at: "20 min", prograde: "0.6 km/s"}
+          - {at: apoapsis, prograde: "0.55 km/s"}
+          - {at: "4 h", radial: "0.5 km/s", label: "a radial kick"}
+    span: "6 h"
+- id: jupiter
+  type: orbit
+  params:
+    title: "A gravity assist at Jupiter"
+    central: jupiter
+    flyby: {v_inf: "5.6 km/s", altitude: "400000 km", angle: 100, side: behind}
+  beats:
+    - text: "It passes behind Jupiter and is turned through a large angle."
+      actions:
+        - {action: flyby, at: "@behind"}         # the closest approach on this word
+```
+
+- **`burns`** (on a body): `{at, prograde, retrograde, radial, anti_radial, normal, anti_normal,
+  label}` in time order — `at` a time from the start (`'45 min'`, 0) or `periapsis` / `apoapsis`
+  (the next one after the burn before); the Δv as positive speeds along the local directions
+  (prograde along the velocity, radial perpendicular to it in the plane, outwards, normal along the
+  angular momentum: a plane change, seen from above only as its projection). Each burn adds Δv to
+  the velocity there and the body flies on the new orbit (`Elements` from the state). Drawn: a Δv
+  arrow at the burn point (one scale for the scene) labelled `Δv₁ 2.43 km/s prograde`, the orbit
+  before faint and dashed, the one after in the body's colour; the panel lists the burns, `Δv spent
+  … of …` and the mission line (`next: Δv₂ in 2.6 h`, then `all burns done`). `alongside: Earth`
+  starts a body where another one is, moving with it (a spacecraft leaving with its planet).
+- **`transfer`**: `{kind, ship, to, depart, apoapsis, revolutions}` flown by the body `ship` from
+  its circular orbit. `kind: hohmann` (default): two burns, half an ellipse — Δv₁, Δv₂, the total,
+  the transfer time (half the ellipse's period); with `to` a body (circular, in the same plane) the
+  phase angle it must lead by at departure (θ = 180° − n₂ t; drawn live as the angle between ship
+  and target until the departure) and the synodic period between launch windows; `depart: window`
+  (default) waits for the first window, a time (`'30 d'`) departs then — and the panel says by how
+  much the target is missed. `to` may be a radius (`'42164 km'`). `kind: bielliptic` with
+  `apoapsis` (its far point, beyond both orbits): three burns; it beats Hohmann only for r₂/r₁ above
+  11.94 (with a far apoapsis) and for any apoapsis above 15.58 (`orbits.bielliptic_thresholds()`).
+  `kind: phasing` with `to` a body on the same orbit: the chaser drops to a faster orbit (or rises
+  to a slower one) for `revolutions` turns and meets it. The planned path is drawn dashed (target
+  `transfer`) to a ring where it arrives; the panel lists the numbers (`Hohmann transfer to Mars`,
+  Δv₁, Δv₂, total Δv, `transfer 259 d`, `Mars leads by 52.0°`, `window at 44.3°, every 780 d`, the
+  next burn); the phase angle is target `phase`. Checks: a ship or target not on a
+  circular orbit ("give Mars e: 0 — the circular approximation"), orbits in different planes
+  ("inclined 1.85°: give both the same plane or add a plane-change burn, Δv = 2 v sin(Δi/2)"), a
+  radius inside the planet, a ship already there, a bi-elliptic apoapsis inside the orbits, a
+  phasing orbit dipping into the planet ("take more revolutions"), burns after the span.
+- **`flyby`**: `{v_inf, periapsis or altitude, side, angle, planet_speed, atmosphere, name, reach,
+  vectors}` — a gravity assist past the central body, in its frame: the probe (`name`, default
+  Probe; target `body:Probe`) arrives with the excess speed `v_inf` from the direction `angle`
+  (degrees from the planet's motion, which points to +x) and leaves on a hyperbola with e = 1 + r_p
+  v∞²/μ, turned by δ with sin(δ/2) = 1/e, at the same speed. Drawn: the asymptotes (dashed,
+  crossing at the hyperbola's centre; target `asymptotes`), δ at their crossing (`turn`), v∞ in
+  and out (`v_inf`), the periapsis (`periapsis:Probe`), the atmosphere's top (`atmosphere`), the
+  planet's motion (`motion`) and, beside the panel (under the picture in 9:16), the **Sun-frame
+  vector diagram** (`vectors`; parts `v_before`, `v_after`): the planet's velocity plus v∞ before
+  and after on a circle of radius v∞, so the speed around the Sun changes — `side: behind` (passing
+  on the side the planet comes from) gains, `in_front` loses; a direction from which both ways past
+  go behind (or in front) is refused with the reason. `planet_speed` defaults to a planet preset's
+  circular speed at its mean distance. Checks: a periapsis inside the planet or its atmosphere.
+  The pass runs from `reach` periapsis distances out (default: far enough to show where the
+  asymptotes cross) and back.
+- **The clock**: the motion keeps one speed-up unless actions time it — `burn: "burn:2"` puts a
+  burn on its word (one speed-up before, another after), `- action: flyby` the closest approach,
+  `- action: pause` holds the clock still from its word until a `- action: coast` (or the end of
+  its beat). The panel always shows the stretch's own speed-up (`× 5 000`, `clock paused`), so the
+  time readout stays true. Burns on words keep their order; a word before the motion starts (the
+  first beat's entrance) is refused.
+- **Δv budgets as calculations**: a `calculation` scene takes these numbers with `from_scene`:
+  `{name: dv1, from_scene: geo}` — `dv1`, `dv2`, `dv3`, `dv_total`, `t_transfer`, `r1`, `r2`,
+  `v1`, `v2`, `phase_angle`, `synodic_period`, `wait` (a transfer), `dv`, `t_phasing` (phasing),
+  `dv_burn1`…, `dv_spent` (burns), `v_inf`, `r_p`, `e`, `delta`, `v_planet`, `v_before`,
+  `v_after`, `gain` (a flyby), each to four significant figures.
+
+**Many bodies** (Step 232): the circular restricted three-body problem in the inertial or the
+rotating frame, Lagrange points, Trojans, the figure-eight, binary stars, resonances, the Moon's
+path around the Sun and the tides (a schematic).
+
+```yaml
+- id: trojans
+  type: orbit
+  params:
+    title: "Trojans of Jupiter"
+    system: sun_jupiter                 # earth_moon | sun_earth | sun_jupiter | {primary, secondary, mu, separation} | figure_eight
+    lagrange: true                      # or [L4, L5]
+    zero_velocity: true                 # the Trojan's zero-velocity curve (its Jacobi constant)
+    bodies:
+      - {name: Trojan, near: L4, shift: [0.004, 0.0069], trail: "150 yr"}   # shares of the separation
+    span: "300 yr"
+  beats:
+    - text: "Seen from the fixed stars, Jupiter and its Trojan go round the Sun together."
+    - text: "Now let the frame turn with Jupiter."
+      actions:
+        - {action: corotate, at: "@turn", run_time: 2}   # inertial -> rotating (inertial: back)
+- id: l1l2
+  type: orbit
+  params:
+    system: sun_earth
+    view: rotating                      # start in the rotating frame
+    lagrange: [L1, L2]
+    center: Earth                       # a close-up: the Sun off-plot, an arrow points to it
+    extent: "2.2e6 km"
+    orbits: 0.25
+- id: eight
+  type: orbit
+  params: {system: figure_eight}        # {preset: figure_eight, mass: '1 Msun', scale: '1 AU'}
+- id: laplace
+  type: orbit
+  params:
+    central: jupiter
+    bodies: [{preset: io}, {preset: europa}, {preset: ganymede}]
+    resonance: [Io, Europa, Ganymede]   # or {bodies, conjunctions: true, keep: 6}
+    span: "21 d"
+  beats:
+    - text: "Every time Io overtakes Europa, Ganymede is a quarter turn away."
+      actions:
+        - {reveal: conjunctions, at: "@overtakes"}
+- id: binary
+  type: orbit
+  params:
+    central: {name: A, mass: "2 Msun"}
+    bodies: [{name: B, mass: "1 Msun", a: "10 AU", e: 0.5}]
+    origin: barycentre                  # both stars go round their barycentre
+- id: moonpath
+  type: orbit
+  params:
+    bodies: [{preset: earth}, {preset: moon, curvature: true}]
+    span: "30 d"
+    center: Earth
+    extent: "4.5e7 km"
+- id: tides
+  type: orbit
+  params:
+    central: earth
+    tides: true                         # or {satellite: moon, locking: true, points: 12}
+  beats:
+    - text: "The Moon pulls every part of the Earth almost equally."
+      actions: [{reveal: pull, at: "@pulls"}]
+    - text: "What is left after the pull at the centre stretches the Earth."
+      actions: [{reveal: tidal, at: "@left"}]
+```
+
+- **`system`** — a **restricted three-body pair**: `earth_moon` (μ = 0.012 15, the mean distance
+  384 400 km), `sun_earth` (the Sun with the Earth–Moon barycentre, 1 AU: μ = 3.04 × 10⁻⁶),
+  `sun_jupiter` (μ = 9.54 × 10⁻⁴), or `{primary, secondary, mu, separation}` (preset bodies; `mu`
+  sets the secondary's mass for that ratio). The secondary goes round on a circle (the
+  *circular* restricted problem: the Moon's e = 0.055 is left out), every other body is massless
+  and everything is integrated as n-body (RK45 by default: a small body may pass close to the
+  secondary; `method: leapfrog` to compare) in the barycentre's frame. The central body and the
+  secondary are the system's own (leave `central` out; do not list them in `bodies`). The panel:
+  μ, Routh's test (`μ < 0.0385: L4, L5 stable (Routh)`), which frame is shown, the distances of the
+  L1 / L2 shown from the secondary (Sun–Earth: 1.50 / 1.51 million km), for each body placed near a
+  point its Jacobi constant `C = 2.999236, ΔC/C = 1.5 × 10⁻¹⁰` (it should not change: the drift is
+  the integration's error), its angle ahead of or behind the secondary and what its motion is over
+  the span (`tadpole about L4 (31° to 108°)`, `horseshoe: round past L3 and back`, `passes the
+  secondary: not co-orbital`), and with the energy error ΔE/E the angular-momentum error ΔL/L.
+  `system: figure_eight`: three equal masses on the Chenciner–Montgomery figure-eight (Simó's
+  initial values; `mass` default 1 M☉, `scale` default 1 AU: T = 1.007 yr), seen about their
+  barycentre; the panel says how close they come back after one period.
+- **`view`**: `inertial` (default: the pair goes round) or `rotating` (the frame turns with the
+  pair: both primaries and the Lagrange points stand still; a turning arrow in a corner of the plot
+  and the panel's `rotating frame: one turn / 11.9 yr`). The actions **`corotate`** and
+  **`inertial`** switch on a word (`run_time`, default 2 s: the view turns smoothly); trails are
+  redrawn in the frame shown, so a Trojan's tadpole appears as the frame starts to turn.
+- **`lagrange`**: `true` (L1–L5) or a list: × marks at the points computed for μ (L1–L3 from
+  Szebehely's quintics, L4 / L5 at 60°), turning with the pair in the inertial view. Targets
+  `lagrange` and `lagrange:L1`…
+- **`bodies[].near`** (`L1` … `L5`) with `shift: [x, y]` (in the rotating frame, x along the
+  primary → secondary line; numbers are shares of the separation, or lengths) and `drift: [x, y]`
+  (a velocity in the rotating frame: shares of the secondary's orbital speed, or speeds): the body
+  starts there at rest in the rotating frame (moving with Ω × r). A tadpole: `near: L4, shift:
+  [0.004, 0.0069]`; a horseshoe: `near: L3, shift: [-0.003, 0]` with `sun_jupiter` over ~2 000 yr.
+- **`zero_velocity`**: `true` (the first body placed near a point) or a body's name: the curve
+  2Ω(x, y) = C for its Jacobi constant, which it cannot cross (target `zero_velocity`).
+- **`origin`**: `central` or `barycentre` (default with a `system`): what stays at the centre of
+  the view. A binary star — a central body and one massive body with `origin: barycentre` — draws
+  both ellipses about the barycentre (the lighter star on the larger one; target `barycentre`,
+  `orbit:<name>` for each) and the panel gives the mass ratio and where the barycentre lies.
+- **`resonance`**: two or three bodies around one body, inner first: their period ratios (`T
+  Europa / T Io = 2.0073 ≈ 2:1`), for a 1:2:4 chain the Laplace angle φ = λ₁ − 3λ₂ + 2λ₃ (180°
+  for Io, Europa and Ganymede, whose presets start in that configuration), and each conjunction of
+  neighbours as it happens: a line from the centre through both, bright for a moment and then
+  faint (the last `keep` of each pair), with their count (target `conjunctions`). The Galilean
+  presets `io`, `europa`, `ganymede`, `callisto` have their published sidereal periods (1.769,
+  3.551, 7.155, 16.69 d) on circles in Jupiter's equator.
+- **`bodies[].curvature`**: whether the body's path bends towards the central body over the span,
+  from the forces (the Moon's path around the Sun: `always` — the Sun pulls the Moon about twice as
+  hard as the Earth does).
+- **`center`** (with `extent`): the view centred on where a body is halfway through the span; the
+  central body, when outside the plot, gets an arrow at the edge pointing to it (target `pointer`).
+- **`tides`** — the tidal schematic, a scene of its own (no `bodies`): the planet (the central
+  body, default the satellite's primary) large, the satellite (`satellite`, default `moon`) on a
+  schematic circle moving in real time, arrows of its pull at `points` points of the surface (all
+  nearly equal and parallel; target `pull`), its pull at the centre (`mean`), their difference —
+  the tidal acceleration, outwards on the near and far sides, inwards around the middle, drawn
+  longer by the factor the panel gives (`tidal`) —, the two bulges along the line to the satellite
+  (`bulges`, exaggerated) and with `locking` its near side marked (`face`): it spins once per orbit.
+  The panel gives the pull (3.32 × 10⁻⁵ m/s²), the tidal acceleration (1.13 × 10⁻⁶ m/s², 1/29 of
+  it), the equilibrium tide (0.36 m) and "schematic: not to scale" (`panel: full`: "schematic:
+  sizes, distance and arrows not to scale"). Not
+  simulated: the oceans' dynamics, the bulges' lead from the Earth's spin, the Sun's tide.
+- **Checks**: an unknown system (did-you-mean), `central` or `dynamics: kepler` with a system,
+  bodies with the figure-eight, a `near` body with elements, `near` / `view: rotating` /
+  `lagrange` / `zero_velocity` / `corotate` without a pair, a primary lighter than its secondary,
+  `follow` with the barycentre's view, `center` without `extent`, a resonance not inside-out or
+  around different bodies, `tides` with bodies, a system, a transfer.
+
+**The Solar System on a date** (Step 233): the planets where JPL's approximate elements put them
+on a day, the next opposition or conjunction, honest scale (true scale with an inset, or
+distances compressed and labelled so) and the planets' sizes side by side.
+
+```yaml
+- id: opposition
+  type: orbit
+  params:
+    title: "Mars at opposition"
+    date: 2020-06-01                     # 1800-01-01 … 2050-12-31; '2020-06-01 12:00' for a time (TT)
+    bodies: [{preset: earth}, {preset: mars}]
+    event: {kind: opposition, of: Mars}  # observer: Earth (default)
+    caption: "Positions from JPL's approximate planetary elements (valid 1800–2050)"
+- id: whole
+  type: orbit
+  params:
+    date: 2024-01-01
+    bodies: [{preset: mercury}, {preset: venus}, {preset: earth}, {preset: mars}, {preset: jupiter},
+             {preset: saturn}, {preset: uranus}, {preset: neptune}]
+    inset: true                          # or a radius: '1.8 AU'
+    span: "10 yr"
+- id: logview
+  type: orbit
+  params:
+    date: 2024-01-01
+    bodies: [{preset: mercury}, {preset: earth}, {preset: jupiter}, {preset: neptune}, {preset: pluto}]
+    radial: log
+    span: "2 yr"
+- id: sizes
+  type: orbit
+  params: {title: "The planets' sizes to scale", sizes: true}   # or {bodies: [earth, moon, mars], sun: false}
+```
+
+- **`date`**: the planet presets (`mercury` … `neptune` and `pluto`) take their elements on that
+  day from JPL's *Keplerian Elements for Approximate Positions of the Major Planets* (E. M.
+  Standish), **Table 1**: the J2000 values plus their rates per century, valid **1800–2050** — a
+  date or a span ending outside it is refused (the table is a fit to that interval). The Earth's
+  entry is the Earth–Moon barycentre (within 4 700 km of the Earth). From the date the planets move
+  on those Kepler orbits (two-body; within 0.0002 AU of the table's own positions over a year).
+  Another preset (the Moon, the ISS, Halley, the Galilean moons) has no position on a date here:
+  give its `nu` or `mean_anomaly`. The panel's first row is the date as the clock runs.
+- **`event`**: `{kind, of, observer}` — the first `kind` after the date of the planet `of` seen
+  from `observer` (default Earth; both must be bodies of the scene): `opposition` (an outer planet
+  opposite the Sun), `conjunction` (behind the Sun), `inferior_conjunction` / `superior_conjunction`
+  (an inner planet between us and the Sun / beyond it), `aligned` (equal heliocentric longitudes).
+  Found by root finding on the difference of the two heliocentric ecliptic longitudes (0° or 180°;
+  the same instant as the geocentric opposition in longitude); the published Mars oppositions
+  (2018-07-27, 2020-10-13, 2022-12-08, 2025-01-16) come out within hours. Drawn: the line from the
+  Sun through both planets where they will be (rings on them, the kind's name); the panel gives
+  `Mars opposition 2020-10-13`, the distance between them now and the synodic period. Default
+  span: until a little after the event. Target `event`.
+- **`radial: log`**: every distance r from the central body drawn as log₁₀(1 + r/r₀) (r₀ a third of
+  the smallest perihelion) along its true direction — Mercury and Pluto in one picture —, with
+  dashed rings at round distances (0.3, 1, 3, 10, 30 AU, labelled) instead of axes, every body a
+  dot, and the panel says "distances compressed (log)" (target `rings`). Overlays that measure
+  lengths or speeds (geometry, sectors, velocity, burns, transfers, flybys, systems) are refused on
+  it.
+- **`inset`**: `true` (the orbits within 2 AU: the inner planets) or a radius — a box beside the
+  panel (under the picture in 9:16) with those bodies to scale around the Sun, moving, named there
+  (their labels leave the crowded centre of the main picture), the region dashed in the main
+  picture (target `inset`).
+- **`sizes`**: a picture of its own: the radii of `bodies` (body presets with a radius; default the
+  scene's bodies or the eight planets) to one scale side by side (in a column in 9:16), the Sun's
+  edge first (16:9) or at the foot (9:16) when the central body is the Sun (`sun: false` leaves it
+  out), each with its name and equatorial radius, and "radii to scale (distances are not)".
+  Targets `central` (the Sun), `body:<name>`.
+- **Checks**: a date that is not one (`2020-13-01`), outside 1800–2050 (start or end), a non-Table-1
+  preset without `nu`, an event without a date, of a body not in the scene, the wrong kind for the
+  pair ("Venus is closer to the Sun than Earth, so it is never in opposition seen from there"),
+  `radial: log` with `frame: axes` or overlays, `inset` with `radial: log`, an inset holding every
+  body or none, `sizes` with anything else, an unknown size body (did-you-mean).
+
+| param | type | default | meaning |
+| --- | --- | --- | --- |
+| `title` | str | `""` | title |
+| `central` | preset \| `{preset, name, label, show_label, gm, mass, radius, color}` | `sun` | the central body: `sun`, `mercury` … `neptune`, `pluto`, `moon`, or your own (`gm` as `'3.986e14 m^3/s^2'` or `mass` as `'5.97e24 kg'`, `radius` with its unit) |
+| `bodies` | list | required (may be empty with `cannonball`) | the orbiting bodies (below) |
+| `cannonball` | `{speeds, altitude, at, clockwise, show_paths}` | — | Newton's cannon (above) |
+| `transfer` | `{kind, ship, to, depart, apoapsis, revolutions}` | — | a Hohmann, bi-elliptic or phasing transfer (above) |
+| `flyby` | `{v_inf, periapsis, altitude, side, angle, planet_speed, atmosphere, name, reach, vectors}` | — | a gravity assist in the planet's frame (above) |
+| `legend` | bool \| `auto` | `auto` | the bodies and their periods in the side panel (auto: two or more bodies when the compact panel has room; not in 9:16 with burns) |
+| `span` | time | one period | simulated time shown (`'1 yr'`, `'92 min'`) |
+| `orbits` | number | `1` | instead of `span`: periods of the first body (a closed orbit) |
+| `dynamics` | `kepler` \| `nbody` | `kepler` | two-body Kepler orbits, or mutual gravity integrated |
+| `method` | `leapfrog` \| `rk45` | `leapfrog` | n-body integrator (also `verlet`, `adaptive`) |
+| `step` | time | auto | n-body leapfrog step |
+| `frame` | `axes` \| `scale_bar` \| `none` | `axes` | what shows the scale |
+| `unit` | `auto` \| `AU` \| `km` | `auto` | unit of the axes and the scale bar |
+| `extent` | length | auto | half-width of the view around its centre |
+| `follow` | body name | — | the view moves with this body |
+| `readout` | bool | `true` | time and speed-up |
+| `energy` | bool | with nbody, in `panel: full` | the n-body energy error ΔE/E (`true`: in a compact panel too) |
+| `label_size` | size | `caption` | ticks, labels and readout |
+| `caption` | str | `""` | note under the picture |
+| `caption_size` | size | `caption` | |
+| `caption_color` | color | `dim` | |
+| `title_size` | size | `heading` | |
+| `title_color` | color | `text` | |
+| `bodies[].name` | str | the preset's | name (targets `body:<name>`, `orbit:<name>`; `around`, `follow`) |
+| `bodies[].preset` | str | — | a preset orbit (above) |
+| `bodies[].around` | body name | central | what it orbits |
+| `bodies[].a`, `e` | length, number | —, `0` | semi-major axis and eccentricity |
+| `bodies[].periapsis`, `apoapsis`, `altitude` | length | — | the size another way |
+| `bodies[].i`, `raan`, `argp` | angle | `0` | inclination, ascending node Ω, argument of periapsis ω (the picture is the view from above the reference plane) |
+| `bodies[].nu`, `mean_anomaly` | angle | `0` | where it starts (true or mean anomaly) |
+| `bodies[].r`, `v` | list of lengths / speeds | — | a starting state instead of elements |
+| `bodies[].gm`, `mass`, `radius` | GM / mass / length | `0` or the preset's | its own gravity and size |
+| `bodies[].label`, `show_label` | str, bool | its name, `true` | the text beside it |
+| `bodies[].color` | color | palette | colour of the body, its orbit and trail |
+| `bodies[].trail` | bool \| number \| time | `true` | the fading trail |
+| `bodies[].orbit` | bool | `true` | draw its orbit |
+| `bodies[].geometry` | bool \| list of `foci`, `axes`, `apsides` | `false` | the ellipse's geometry |
+| `bodies[].sectors` | bool \| number \| `{count, show}` | `false` | equal-time sectors (`count` 8, `show: alternate` \| `all`) |
+| `bodies[].velocity` | bool \| `{live, along, readout}` | `false` | velocity vectors (`live` true, `along` 0, `readout` true) |
+| `bodies[].alongside` | body name | — | start where that body is, moving with it |
+| `bodies[].burns` | list of `{at, prograde, retrograde, radial, anti_radial, normal, anti_normal, label}` | `[]` | impulsive burns (above) |
+| `system` | `earth_moon` \| `sun_earth` \| `sun_jupiter` \| `figure_eight` \| `{preset, primary, secondary, mu, separation, mass, scale}` | — | a restricted three-body pair or the figure-eight (above) |
+| `view` | `inertial` \| `rotating` | `inertial` | the frame shown with a three-body pair |
+| `origin` | `central` \| `barycentre` | `barycentre` with a system, else `central` | what stays at the centre |
+| `lagrange` | bool \| list of `L1`…`L5` | `false` | Lagrange points of the pair |
+| `zero_velocity` | bool \| body name | `false` | a body's zero-velocity curve |
+| `resonance` | list of 2–3 names \| `{bodies, conjunctions, keep}` | — | period ratios, the Laplace angle, conjunctions |
+| `center` | body name | — | centre a close-up (with `extent`) on a body |
+| `tides` | bool \| `{satellite, locking, points}` | — | the tidal schematic |
+| `bodies[].near` | `L1` … `L5` | — | start at a Lagrange point (with a system) |
+| `bodies[].shift`, `drift` | `[x, y]` | — | the start moved / given a velocity, in the rotating frame |
+| `bodies[].curvature` | bool | `false` | which way its path bends around the central body |
+| `panel` | `compact` \| `full` \| `none` \| list of row names | `compact` | the side panel's rows (above) |
+| `date` | date | — | the planets on that day (1800–2050) |
+| `event` | `{kind, of, observer}` | — | the next opposition / conjunction after the date |
+| `radial` | `linear` \| `log` | `linear` | distances true, or compressed (log) |
+| `inset` | bool \| length | — | the inner Solar System to scale in a box |
+| `sizes` | bool \| `{bodies, sun}` | — | radii to scale side by side (a picture of its own) |
+
+### `standard_model`
+
+**The Standard Model chart** (Phase Y): the six quarks and six leptons in three generations, the
+gauge bosons (g, γ, Z, W) and the Higgs boson, each cell with its mass, charge and spin and its
+name, in colour groups (quarks, leptons, gauge bosons, scalar boson). Values: **PDG 2024**
+(Review of Particle Physics) from `vidgen.particle_physics`; quark masses are MS-bar (u, d, s at
+2 GeV; c, b at their own mass) and the top's from direct measurements; the neutrinos show the
+direct limit `< 0.8 eV` (KATRIN); the source line says so on the chart (`source: false` drops it).
+In 16:9 the classic grid (bosons in columns on the right, the source note under the Higgs boson);
+in 9:16 the fermions in three columns and the bosons in two rows under them, each cell in the
+classic arrangement (mass, charge and spin down the left, the symbol beside them). A key cell names
+the positions.
+
+```yaml
+- id: chart
+  type: standard_model
+  params:
+    title: "The Standard Model of particle physics"
+    reveal: groups            # quarks, leptons, gauge bosons, Higgs over the beats (all: everything in beat 1)
+  beats:
+    - text: "Six quarks, in three generations."
+    - text: "Six leptons: the electron, the muon, the tau and three neutrinos."
+      actions: [{highlight: "row:neutrinos", style: box, at: "@neutrinos"}]
+    - text: "The gauge bosons carry the forces."
+    - text: "And the Higgs boson."
+- id: antimatter
+  type: standard_model
+  params: {reveal: all}
+  beats:
+    - text: "Every quark and lepton has an antiparticle."
+      actions: [{action: antiparticles, at: "@antiparticle"}]   # or a target: antiparticles: "group:leptons"
+    - text: "The photon couples to electric charge: never to neutrinos."
+      actions: [{couplings: "particle:photon"}]                 # undone when the next beat starts
+```
+
+**Targets**: `title`, `chart`, `header` (the generation numbers), `labels` (the group names),
+`key`, `source`, `caption`; every particle as `particle:<name>` — the symbol's ASCII name or the
+particle's name: `particle:u` / `particle:up`, `particle:e` / `particle:electron`,
+`particle:nu_e` / `particle:electron_neutrino`, `particle:g` / `particle:gluon`,
+`particle:photon` / `particle:gamma`, `particle:Z`, `particle:W`, `particle:H` / `particle:higgs`;
+`generation:1` … `generation:3` (a column with its number); `group:quarks`, `group:leptons`,
+`group:fermions`, `group:gauge_bosons`, `group:scalar_bosons`, `group:bosons`; `row:up_type`,
+`row:down_type`, `row:charged_leptons`, `row:neutrinos`. `highlight` and `dim` work on all of
+them.
+
+**Actions**: `antiparticles` turns quark and lepton cells into their antiparticles (all of them
+with `- action: antiparticles`, or a target such as `group:quarks` or `particle:e`): the charge
+reverses, the symbol takes its bar (ū, ν̄ₑ) or its sign (e⁺), the name changes (positron,
+anti-up); mass and spin stay; the bosons are their own antiparticles (W⁺ and W⁻ share the W
+cell); the group names become antiquarks / antileptons; `until:` turns them back. `couplings:
+"particle:<boson>"` shows which particles a boson couples to: an outline (in `color`, default
+`highlight`) around the quarks and leptons it acts on, a solid ring on the boson and dashed rings
+on the bosons it meets, the rest dimmed (`dim: false` keeps them), and the reason in words (`note:
+false` leaves it out): the gluon couples to colour (the quarks and itself), the photon to electric
+charge (quarks, charged leptons, W), the Z and the W to every quark and lepton (the W changing
+flavour), the Higgs boson to mass (quarks, charged leptons, W, Z and itself; neutrinos are
+massless in the Standard Model). It is undone when the next beat starts (or at `until:`).
+
+Lint: a full chart has about 50 words on screen, so `max_words` warns; `show: [mass]` or `key:
+false` makes it lighter. Cells dimmed by `couplings` may get a `contrast` warning for their large
+symbols (the lint samples the dimmed glyph as its own backdrop).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `title` | text | `""` | title above the chart |
+| `caption` | text | `""` | note under the chart |
+| `source` | bool | `true` | the values' source line (PDG 2024, the quark-mass scheme) |
+| `show` | list of `mass`, `charge`, `spin`, `name` | all four | what each cell shows besides the symbol |
+| `antiparticles` | bool | `false` | start with the quarks and leptons as their antiparticles |
+| `reveal` | `groups` \| `all` | `groups` | quarks, leptons, gauge bosons, Higgs one after another over the beats, or all in beat 1 |
+| `layout` | `auto` \| `wide` \| `tall` | `auto` | the classic grid, or the bosons in rows under the fermions; `auto`: by the frame |
+| `key` | bool | `true` | a key cell naming each position (mass, charge, spin, symbol, name) |
+| `quark_color` | colour | the theme's third palette colour | the quarks' colour |
+| `lepton_color` | colour | `tertiary` | the leptons' colour |
+| `gauge_color` | colour | `accent` | the gauge bosons' colour |
+| `higgs_color` | colour | `secondary` | the Higgs boson's colour |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | title and caption style |
+
+The model behind it is `vidgen.api.particle_physics` (no manim): the particles and common hadrons
+with PDG 2024 masses, widths or mean lives, quantum numbers and quark content; names in ASCII or
+Unicode (`"pi+"`, `"π⁺"`, `"anti-nu_e"`, `"ν̄ₑ"`, `"Σ̄⁻"`); and `check("n -> p e- anti-nu_e")`,
+which explains whether a reaction or decay can happen (charge, baryon number, lepton family
+numbers, angular momentum, energy and thresholds; flavour, C- and G-parity for the strong and
+electromagnetic interactions) and through which interaction.
+
+### `feynman`
+
+**Feynman diagrams** (Phase Y) in standard notation: quark and lepton lines with an arrow on the
+fermion-number flow (an antifermion's arrow points against time: an incoming positron's arrow
+points back), photons wavy, W and Z wavy with their names, gluons as coils, the Higgs boson
+dashed, vertices as dots, every line named with its particle (`e⁻`, `ν̄ₑ`, `u`, `d̄`, `W⁻`,
+`Z*`), and the time direction stated by an arrow (`time: right`, the usual convention, or `up`).
+The layout is automatic and deterministic: s-channel (the incoming pair meets at one vertex, the
+propagator runs along time), t-channel (the exchange is drawn across, its vertices at one time),
+u-channel (drawn uncrossed, the outgoing legs swapped), decays 1 → 2 and 1 → 3 (μ⁻ → ν_μ W⁻,
+W⁻ → e⁻ ν̄ₑ), cascades (H → ZZ* → 4ℓ) and one-loop triangles (H → γγ, gg → H); no two lines cross
+in the presets. The reaction is written under the title (`e⁻ e⁺ → μ⁻ μ⁺ · s-channel`; hadrons when
+quarks are grouped: `n → p e⁻ ν̄ₑ`).
+
+**Checked before anything is drawn** (`vidgen validate` refuses a diagram that breaks a rule, and
+says why): each vertex must be a Standard Model vertex at tree level — f f γ for charged fermions
+(no photon on a neutrino), q q g (no gluon on a lepton), g g g and g g g g, f f′ W changing
+flavour within a doublet (u ↔ d, c ↔ s, any up-type with any down-type quark through the CKM
+matrix; a charged lepton only with the neutrino of its own family), f f Z, f f H for massive
+fermions, H W W, H Z Z, H H H, W W γ, W W Z and the quartic gauge and Higgs vertices; **no H γ γ or
+H g g vertex** ("the Higgs boson couples to mass and the photon is massless; this goes through a
+loop of heavy particles: draw the loop (preset h_to_gammagamma)"); no flavour change at a photon,
+gluon, Z or Higgs vertex; four fermions never meet at one point ("draw the W"). At every vertex the
+charge, the baryon number and the lepton family numbers are conserved (the 237 checker, each vertex
+read as a little process with every line virtual), the fermion arrows run through it, and the
+colours can balance (a basic check: a quark's colour runs on, a gluon meets quarks or gluons). The
+fermion lines are followed through the diagram (d → u: B = 1/3 along the line; νₑ → e⁻: L_e = +1),
+and the whole reaction is checked with `particle_physics.check` (and the hadron reaction when quarks
+are grouped: π⁺ → μ⁺ ν_μ).
+
+```yaml
+- id: bhabha
+  type: feynman
+  params:
+    title: "Bhabha scattering"
+    preset: bhabha            # diagrams s and t; the first is shown (diagram: t starts with t)
+  beats:
+    - text: "An electron and a positron come in."
+    - text: "They annihilate into a photon."
+      actions: [{vertex_rule: "vertex:v1", show: [rule, coupling, checks], at: "@photon"}]
+    - text: "Or they simply exchange one: the t channel."
+      actions: [{action: swap_channel, to: t, at: "@exchange"}]
+    - text: "Follow them through."
+      actions: [{travel: diagram}]
+- id: own
+  type: feynman
+  params:
+    diagrams:                 # written by their lines: "id: particle from -> to" (ids for targets)
+      - name: W
+        lines:
+          - "mu: mu- in -> v1"
+          - "nu_mu: nu_mu v1 -> out"
+          - "W: W- v1 -> v2"
+          - "e: e- v2 -> out"
+          - {id: nu_e, particle: anti-nu_e, from: v2, to: out, label: true}
+  beats:
+    - text: "The muon turns into its neutrino and a W minus."
+      actions: [{highlight: "line:W", at: "@W"}]
+```
+
+**Lines**: each line is a particle running **forward in time** `from` → `to`, where an end is a
+vertex id (any name: `v1`, `a`), `in` (an incoming line starts there) or `out` (an outgoing line
+ends there); the vertices are the ends other than `in` and `out`. Write the particle as it travels
+forward in time: an incoming positron is `e+ in -> v1` (its arrow is drawn back against time), an
+outgoing antineutrino `anti-nu_e v2 -> out`. Any spelling of `vidgen.particle_physics` works (`e-`,
+`positron`, `ν̄ₑ`, `anti-u`, `gamma`, `g`, `W+`, `Z`, `H`); a trailing `*` marks a line off-shell
+(`Z*`, `gamma*`). A line `in -> out` is a spectator quark (drawn straight through). `id` names the
+target `line:<id>` (default `l1`, `l2`… in order); `label: false` leaves a line unnamed. A hadron is
+drawn as its quark lines in a `groups` entry `{particle, side, lines}`: a bracket and its name
+beside the lines (`{particle: pi+, side: initial, lines: [u, dbar]}`; the quark content must match).
+Tree diagrams and one-loop diagrams are drawn (a vertex joins three or four lines; one connected
+piece; two lines between the same vertices bow apart).
+
+**Presets** (each with its line ids, as targets): `ee_to_mumu` (e⁺e⁻ → μ⁺μ⁻; diagrams `photon`, `Z`;
+lines `e_minus`, `e_plus`, `boson`, `mu_minus`, `mu_plus`), `compton` (e⁻γ → e⁻γ; `s`, `u`; `e_in`,
+`gamma_in`, `e_mid`, `e_out`, `gamma_out`), `bhabha` (e⁺e⁻ → e⁺e⁻; `s`, `t`; `e_minus`, `e_plus`,
+`photon`, `e_minus_out`, `e_plus_out`), `moller` (e⁻e⁻ → e⁻e⁻; `t`, `u`), `beta_decay` (d → u e⁻ ν̄ₑ
+through a W⁻; `spectators: true` draws the neutron's and the proton's other quarks with brackets n
+and p; `d_in`, `u_out`, `W`, `e`, `nu`, `u_spec`, `d_spec`), `muon_decay` (μ⁻ → ν_μ e⁻ ν̄ₑ; `mu`,
+`nu_mu`, `W`, `e`, `nu_e`), `pion_decay` (π⁺ → μ⁺ ν_μ: u d̄ → W⁺; `u`, `dbar`, `W`, `mu`, `nu`;
+bracket π⁺), `drell_yan` (u ū → γ*/Z → μ⁻μ⁺; `photon`, `Z`; `q`, `qbar`, `boson`, `mu_minus`,
+`mu_plus`), `gg_to_h` (a top-quark loop; `g1`, `g2`, `loop1`–`loop3`, `H`), `h_to_gammagamma`
+(`top` and `W` loops; `H`, `loop1`–`loop3`, `gamma1`, `gamma2`), `h_to_zz_4l` (H → Z Z* → e⁻e⁺ μ⁻μ⁺;
+`H`, `Z`, `Zstar`, `e_minus`, `e_plus`, `mu_minus`, `mu_plus`), `top_decay` (t → W⁺ b; `W` and
+`leptonic` with W⁺ → e⁺ νₑ; `t`, `W`, `b`, `e`, `nu`). Vertices are `v1`, `v2`, `v3`.
+
+**Reveal**: `reveal: time` (default) draws the incoming lines (with the title, the reaction and the
+time arrow), then each vertex and the lines that begin there, in time order, spread over the beats;
+`reveal: all` draws everything in the first beat.
+
+**Targets**: `title`, `caption`, `process` (the reaction line), `diagram` (everything), `time_axis`,
+`line:<id>` (the line, its arrow and its name), `vertex:<id>` (the dot), `hadron:<particle>` (a
+group's bracket and name: `hadron:n`, `hadron:pi+`). `highlight` and `dim` work on all of them.
+
+**Actions**: `travel` — a particle dot runs along lines in time order (`travel: "line:mu"`, a list of
+lines on one clock, or `travel: diagram`: a dot on every line at once, the reaction flowing through;
+an exchange drawn across is crossed in a moment); `color` (default `highlight`); about 2 s.
+`vertex_rule: "vertex:v1"` — a ring on the vertex and its rule in words beside the diagram (wide
+frames) or under it (tall): the vertex type and the lines meeting there ("electromagnetic vertex
+(QED): e⁻ e⁺ → γ"), the coupling ("coupling Q·e …; α = e²/4πε₀ħc ≈ 1/137"; QCD: α_s(m_Z) ≈ 0.118;
+W: g/√2 with g = 2m_W/v ≈ 0.65 and the CKM element; Higgs: y = √2 m/v, proportional to the mass)
+and with `show: [rule, coupling, checks]` the conservation at the vertex ("Q: −1 + +1 → 0 ✓");
+undone when the next beat starts. `swap_channel` — morph into another diagram of the scene (`to:
+t`; default the next one): lines and vertices with the same id move, the others are drawn or fade,
+the reaction line takes the new label (`until:` swaps back).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `preset` | name | — | a standard diagram (list above); or `diagrams` |
+| `diagrams` | list of `{name, label, lines, groups}` | — | diagrams written by their lines; several for `swap_channel` |
+| `diagram` | name | the first | which diagram to show first (`s`, `t`, `u`, `photon`, `Z`, `top`, `W`, `leptonic`…) |
+| `spectators` | bool | `false` | `beta_decay`: the neutron and proton with their spectator quarks |
+| `time` | `right` \| `up` | `right` | the direction of time |
+| `time_axis` | bool | `true` | the `time →` arrow |
+| `process` | bool | `true` | the reaction line under the title (with the diagram's `label`) |
+| `labels` | bool | `true` | particle names on the lines |
+| `reveal` | `time` \| `all` | `time` | lines drawn in time order over the beats, or all in beat 1 |
+| `title`, `caption` | text | `""` | title above, note under the diagram |
+| `fermion_color` | colour | `text` | quark and lepton lines |
+| `boson_color` | colour | `accent` | photon, gluon, W and Z lines |
+| `higgs_color` | colour | `secondary` | Higgs lines |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | title and caption style |
+
+The model is `vidgen.api.particle_physics` (no manim): `preset_diagrams("bhabha")`,
+`build_diagram(name, lines, groups)`, `check_diagram(d).explain()` (every vertex with its rule and
+conservation, the fermion lines, the reaction), `vertex_rule([...into], [...out])` and
+`diagram_layout(d)` (positions; `crossings`). Coupling values: α from the SI 2019 / CODATA 2022
+constants; α_s(m_Z) = 0.118 and G_F (hence v ≈ 246 GeV and g = 2m_W/v ≈ 0.65) from PDG 2024;
+sin²θ_W ≈ 0.231 and the CKM magnitudes rounded to two figures. Diagrams are schematic: lengths and
+angles carry no meaning.
+
+### `kinematics`
+
+**Relativistic kinematics** (Phase Y) as momentum vectors: arrows for the particles in a frame,
+drawn to scale from a common origin with their momenta written at the tips, the sum Σp (grey;
+zero in a rest frame) and the numbers the frame shows. Natural units (c = 1): energies in
+MeV / GeV, momenta in MeV/c / GeV/c, masses in MeV/c² / GeV/c², the masses from PDG 2024
+(`particle_physics`); `si: true` adds the SI value (J, kg·m/s, kg) through `vidgen.quantities`.
+
+- **A two-body decay** (`decay: "pi+ -> mu+ nu_mu"`): in the parent's **rest frame** the two
+  products leave back to back with p* = √λ(M², m₁², m₂²) / 2M (the Källén function λ; π⁺ → μ⁺ ν_μ
+  29.79 MeV/c, K⁺ → π⁺ π⁰ 205.1 MeV/c, Λ → p π⁻ 100.6 MeV/c, H → γγ 62.60 GeV/c each), the first
+  at `angle` degrees from the flight direction; in the **lab** the parent moves along +x with
+  `momentum` (or `energy`, `kinetic`, `beta`, `gamma`) and each product's four-vector is boosted.
+  The decay is checked first: one particle into two real ones, allowed by the conservation checker
+  (π⁺ → μ⁺ νₑ is refused: "electron number not conserved") and above threshold ("below threshold:
+  M = 135.0 MeV/c² is less than μ⁺ + μ⁻ = 211.3 MeV/c²").
+- **Particles given in the lab** (`particles: [{particle: gamma, momentum: "80 GeV/c", angle: 25},
+  ...]`): their sum, the invariant mass m = √((ΣE)² − |Σp|²) and their **rest frame** (centre of
+  momentum, β = Σp/ΣE, where Σp = 0). Photons all moving one way have none (refused).
+- **Frames**: `frames: both` (default) shows the rest frame and the lab side by side (16:9) or
+  stacked (9:16); `rest` or `lab` one frame, which the action `boost` moves. Each frame fills its
+  half: one arrow scale for both unless their best fits differ by more than 1.25× — then the
+  larger frame's header says so (`arrows ×2.7`). With one decay frame in a tall picture the flight
+  direction points up.
+- **Numbers** (`values: true`): the rest frame of a decay — p*, both energies, √((ΣE)² − |Σp|²) = M;
+  the lab — the parent's p and E, the opening angle of the products, the same invariant mass (the
+  point: it does not depend on the frame), the mean decay length βγcτ (`decay_length: true`, when
+  the parent has a lifetime; time dilation, γτ, is behind it); for particles: ΣE, |Σp|, the opening
+  angle of two, the invariant mass. Under each frame's header: β and γ of the frame. With
+  `readout: key` (default) only the main numbers, large (p*, the invariant mass and the SI value;
+  the parent's p, the invariant mass and βγcτ or the opening angle); `readout: all` writes every
+  number, smaller.
+
+```yaml
+- id: pion
+  type: kinematics
+  params:
+    title: "Pion decay in two frames"
+    decay: "pi+ -> mu+ nu_mu"
+    momentum: "200 MeV/c"     # the pion in the lab (or energy: 4 GeV, kinetic, beta: 0.82, gamma: 1.75)
+    angle: 60                 # the muon's direction in the rest frame, from the flight direction
+    si: true                  # p* = 29.79 MeV/c = 1.592 × 10⁻²⁰ kg·m/s
+  beats:
+    - text: "At rest, the muon and the neutrino fly apart back to back."
+    - text: "In the lab the pion moves, and both are thrown forward."
+    - text: "The invariant mass is the same in both frames: the pion's mass."
+      actions: [{highlight: values}]
+- id: fast
+  type: kinematics
+  params: {decay: "pi0 -> gamma gamma", frames: rest, momentum: "1 GeV/c", angle: 90}
+  beats:
+    - text: "At rest the two photons leave back to back."
+    - text: "Speed the pion up, and they close up."
+      actions: [{action: boost, to: lab}]     # or to: 0.99 (a β), to: rest
+- id: diphoton
+  type: kinematics
+  params:
+    particles:
+      - {particle: gamma, momentum: "80 GeV/c", angle: 25}
+      - {particle: gamma, momentum: "57.39 GeV/c", angle: -110}
+  beats:
+    - text: "Two photons: their invariant mass is the Higgs boson's, 125 GeV."
+```
+
+**Targets**: `title`, `caption`, `process` (the decay or the particles under the title),
+`panel:rest`, `panel:lab` (a frame: header, arrows, numbers), `arrow:<n>` (the n-th particle's
+arrows and labels in every frame, 1, 2…) and `arrow:<particle>` (`arrow:mu+`, when the particle is
+there once), `sum`, `values`. `highlight` and `dim` work on all of them.
+
+**Action** `boost` (`- action: boost`; `to: lab | rest | <β>`, default the lab from the rest
+frame, else the rest frame): the last frame speeds up continuously (rapidity linear in time) — the
+products swing forward and close up, Σp grows from zero, β and γ count up — and its header and
+numbers morph into the new frame's; the invariant mass stays. `until:` boosts back. About 2.5 s.
+`vidgen validate` refuses `to: 1.2` (faster than light) and `to: lab` without the parent's motion.
+
+**Values for a calculation** (`from_scene: pion.p_star`): a decay gives `M`, `p_star`, `E1`, `E2`,
+`Q` and with the lab `beta`, `gamma`, `beta_gamma`, `p_lab`, `E_lab`, `opening_angle`,
+`decay_length`; particles give `m_inv`, `E_total`, `p_total` and `opening_angle` (two).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `decay` | text | — | a two-body decay, `"K+ -> pi+ pi0"`; or `particles` |
+| `particles` | list of `{particle, momentum, angle}` | `[]` | particles in the lab: name, momentum with its unit (`"62.6 GeV/c"`), direction in degrees from the x axis |
+| `momentum`, `energy`, `kinetic` | text with unit | — | the decaying particle in the lab: `"10 GeV/c"`, `"4 GeV"` (total), `"1 GeV"` (kinetic); one of these, `beta` or `gamma` |
+| `beta`, `gamma` | number | — | the decaying particle's speed β (0 ≤ β < 1) or Lorentz factor γ (≥ 1) |
+| `angle` | degrees | `60` | the first product's direction in the rest frame, from the flight direction |
+| `frames` | `both` \| `rest` \| `lab` | `both` | which frames to show (one frame: `boost` moves it) |
+| `values` | bool | `true` | each frame's numbers |
+| `readout` | `key` \| `all` | `key` | the main numbers, large (at most three a frame), or every number, smaller |
+| `sum` | bool | `true` | the sum vector Σp |
+| `decay_length` | bool | `true` | the parent's βγcτ in the lab |
+| `si` | bool | `false` | the SI conversion of the main value |
+| `process` | bool | `true` | the decay or particles under the title |
+| `reveal` | `steps` \| `all` | `steps` | the first frame, the second, then sums and numbers over the beats; or all in beat 1 |
+| `title`, `caption` | text | `""` | title above, note under the picture |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | title and caption style |
+
+The model is `vidgen.api.particle_physics.kinematics` (no manim): `FourVector` (E, p in MeV;
+`mass`, `boost(beta)`, `dot`), `invariant_mass`, `two_body("pi+ -> mu+ nu_mu")` (`p_star`,
+`energies`, `lab_vectors`, `min_opening_angle`), `kallen`, `Boost.from_momentum` / `from_energy` /
+`from_beta` / `from_gamma`, `threshold("p p -> p p p anti-p")` (√s_min = 4m_p; fixed target
+E = 7m_p, kinetic 6m_p = 5.63 GeV; collider 2m_p per beam), `decay_length("mu-", energy=4000)`
+(βγcτ = 24.9 km for a 4 GeV muon), `to_si` / `si_text`, `pdg_value`. The plot model
+`two_body_opening` (`kind: function`; params `M`, `m1`, `m2` in GeV/c², `p_min`, `p_max` in GeV/c)
+gives the opening angle of a two-body decay against the parent's momentum: columns `p`, `gamma`,
+`theta_min` (degrees; massless products: sin(θ_min/2) = 1/γ) and `theta_90`. The model gives its
+columns' units (GeV/c, deg) and axis names ("parent momentum", "smallest opening angle θ"), so the
+axes need no `label` (a registered model may do the same: `register_model(name, labels={...},
+units={...})`; the plot's `units` and an axis `label` override them):
+
+```yaml
+- id: opening
+  type: plot
+  params:
+    title: "Opening angle of the two photons"
+    models:
+      pi0: {kind: function, function: two_body_opening, params: {M: 0.1349768, p_min: 0.2, p_max: 20}}
+    x: {scale: log}
+    series: [{name: smallest opening angle, x: p, y: theta_min}]
+  beats:
+    - text: "The faster the pion, the closer its photons."
+```
+
+### `detector`
+
+**Event displays** (Phase Y) in a **schematic** cylindrical general-purpose detector — generic
+sizes of our own, no real experiment's geometry or logo; the line "schematic detector · simulated
+event" says so on screen. From the beam outwards: a pixel and a strip tracker (radius 1.1 m), the
+solenoid (1.18–1.30 m; its field `field`, default 2 T, fills the tracker), the electromagnetic
+calorimeter (ECAL, 1.4–1.8 m), the hadronic calorimeter (HCAL, 1.9–2.9 m), then the iron return
+yoke interleaved with three muon stations (to 4.6 m); barrels and endcaps (|z| to 6 m).
+
+- **Views**: `view: xy` across the beam (transverse; the field points out of the screen) or `rz`
+  along it (longitudinal; the beam horizontal, each particle drawn on the side of the beam its
+  azimuth points to). The action `switch_view` morphs one into the other.
+- **Tracks** are stepped through the field: a charge q turns with radius R [m] = p_T [GeV/c] /
+  (0.3 |q| B [T]) (2 T: a 1 GeV/c pion R = 1.67 m, a 30 GeV/c muon 50 m), **clockwise for q > 0**
+  in the x–y view, straight outside the coil; in the barrel iron the return field (`return_field`,
+  default half of `field`, opposite; schematic) bends a muon the other way. A track with 2R smaller
+  than the ECAL's radius **curls up** in the tracker (drawn for one turn). Hits mark the tracker
+  layers it crosses.
+- **Signatures**: electron — track + ECAL shower; photon — ECAL shower, no track; muon — a track
+  through everything + hits in the muon chambers; charged hadron (π±, K±, p) — track + HCAL shower
+  with some ECAL (30 / 70 %, schematic); neutral hadron (n, K⁰_L) — HCAL only; neutrino — nothing:
+  **missing transverse momentum**, computed as minus the visible particles' summed p_T and drawn as a
+  dashed arrow (x–y only; it is transverse). Particles that decay before the detector are refused
+  with the reason (τ: "cτ = 87 µm, give its products", π⁰: "give two photons", Z / W / H: "use a
+  preset or give its products", quarks and gluons: "make a jet").
+- **Towers**: deposits binned in cells (ECAL 7.5°, HCAL 12° in azimuth; 6° and 9° in polar
+  angle — coarser than real calorimeters, to read at video size; hadron showers spread to the
+  neighbouring cells), each drawn from the calorimeter's inner face with a length ∝ log(1 + E/GeV)
+  (`energy_scale: log`, default) or ∝ E (`linear`), the whole depth at `tower_max` GeV — stated
+  under the legend.
+- **Jets** are cones (ΔR ≈ 0.4) of 5–10 charged pions, photons from π⁰ and neutral hadrons whose
+  p_T sum to the jet's.
+- **Events** are simulated from a seed (the same seed, the same event): presets `z_to_mumu`,
+  `h_to_gammagamma`, `h_to_4l` (H → ZZ* → e⁺e⁻μ⁺μ⁻), `w_to_enu` (W⁺ → e⁺ν_e), `dijet`. A boson
+  (PDG 2024 mass, drawn from a Breit–Wigner with its width, truncated to M ± Γ so the showcase
+  event sits on the peak) is produced with some p_T, decays
+  isotropically in its rest frame and its products are boosted to the lab (Step 239's
+  kinematics); its p_T is balanced by a recoil (a jet, or two soft pions), and `soft` (default 4)
+  soft charged pions in back-to-back pairs show low-p_T curlers — so a preset's missing p_T is its
+  neutrino's. Leptons and photons are chosen within |η| ≤ 2.4 and p_T ≥ 10 GeV/c, a W's neutrino
+  p_T ≥ 20 GeV/c (a display event is one you can see). Or list particles: `{particle, pt (GeV/c),
+  eta, phi (degrees)}`, `particle: jet` for a jet; `products: [1, 2]` names those whose invariant
+  mass the readout states; `leaves: [track, ecal]` states what a particle leaves and is checked
+  ("a photon leaves no track (it is neutral): ECAL shower, no track").
+- **Readout**: the objects (leptons, photons, jets; by p_T for a preset, in order for a list) with
+  p_T and η, the missing p_T, the decay products' invariant mass (`m(μ⁺μ⁻) = 90.8 GeV/c²`) or a
+  W's transverse mass; the signature **legend**; the **layer key**; each object's name in the
+  detector beside its direction.
+- **Built layer by layer** (`reveal: layers`): the detector (with the layer key and the legend), the
+  tracks growing out of the collision point, the calorimeter towers growing outward, the muons
+  through the outer layers and their chamber hits, then the missing p_T, the names and the readout
+  — spread over the beats; `reveal: all` shows everything in beat 1.
+
+```yaml
+- id: z
+  type: detector
+  params:
+    title: "A Z boson decays to two muons"
+    event: {preset: z_to_mumu, seed: 3}   # or just event: z_to_mumu (seed 1)
+  beats:
+    - text: "A schematic detector, seen along the beam."
+    - text: "Charged particles leave curved tracks."
+    - text: "The calorimeters measure the energy."
+    - text: "Two muons cross everything and reach the muon chambers."
+      actions: [{highlight: "particle:mu+", at: "@muons"}]
+    - text: "Their invariant mass is close to the Z boson's."
+- id: signatures
+  type: detector
+  params:
+    event:
+      particles:
+        - {particle: e-, pt: 30, eta: 0.3, phi: 20}
+        - {particle: gamma, pt: 40, eta: -0.5, phi: 100, leaves: [ecal]}
+        - {particle: mu+, pt: 25, phi: 200}
+        - {particle: pi+, pt: 8, phi: 280}
+        - {particle: n, pt: 15, phi: 320}
+        - {particle: nu_e, pt: 35, phi: 150}
+    reveal: all
+  beats:
+    - text: "Each particle leaves its own signature."
+    - text: "Seen from the side."
+      actions: [{action: switch_view, to: rz}]
+```
+
+**Targets**: `title`, `caption`, `detector` (every layer), `layer:tracker`, `layer:solenoid`,
+`layer:ecal`, `layer:hcal`, `layer:iron`, `layer:muon`, `layers` (the key), `tracks`, `ecal`,
+`hcal` (the towers), `muon_hits` (the muons outside the tracker and their hits), `missing_pt` (the
+arrow and its readout row), `readout`, `legend`, `label`, `particle:<n>` (the readout's objects, 1,
+2…: track, hits, towers, name and row), `particle:<particle>` (`particle:mu+`, when there is one),
+`jet:<n>` (with its cone), `soft` (the soft and recoil tracks). `highlight`, `dim` and `reveal` work
+on all of them.
+
+**Action** `switch_view` (`- action: switch_view`; `to: xy | rz`, default the other view): every
+ring, track, tower and hit morphs into its counterpart; the missing p_T shows only in x–y. `until:`
+switches back. About 1.6 s.
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `event` | preset \| `{preset, seed, soft}` \| `{particles, seed, soft, products}` | `z_to_mumu` | the event: a preset (seed 1) or one with its seed, or listed particles `{particle, pt, eta, phi, leaves}` |
+| `view` | `xy` \| `rz` | `xy` | transverse (across the beam) or longitudinal (along it) |
+| `field` | tesla | `2.0` | the solenoid's field (> 0) |
+| `return_field` | tesla | half of `field` | the return field in the barrel iron (opposite; schematic) |
+| `energy_scale` | `log` \| `linear` | `log` | tower length ∝ log(1 + E) or E |
+| `tower_max` | GeV | `100` | the energy that fills a calorimeter's whole depth |
+| `readout` | bool | `true` | the objects' p_T and η, the missing p_T, the invariant or transverse mass |
+| `legend` | bool | `true` | the signature legend |
+| `layers` | bool | `true` | the layer key |
+| `labels` | bool | `true` | the objects' names in the detector |
+| `reveal` | `layers` \| `all` | `layers` | layer by layer over the beats, or everything in beat 1 |
+| `label` | text | `schematic detector · simulated event` | the line saying what is schematic and simulated (the field follows it) |
+| `title`, `caption` | text | `""` | title above, note under the display |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | title and caption style |
+
+The model is `vidgen.api.particle_physics.detector` (no manim): `Detector(field, return_field)`
+(`bz(r, z)`, `layers`), `bending_radius(pt, field, charge)`, `signature("gamma")` → `photon`,
+`signature_problem("gamma", ["track"])`, `generate("z_to_mumu", seed)` / `custom_event([...])` →
+`Event` (`particles` with `pt`, `eta`, `phi`, `missing_pt()`, `met`, `products_mass()`,
+`transverse_mass()`, `objects()`), `trajectory(particle, detector)` (points, tracker and muon hits,
+calorimeter entries, `curled`), `deposits`, `towers`. Sizes are generic and schematic; no
+resolution smearing (a simulated event's missing p_T is exact). A preset's boson mass is a
+Breit–Wigner draw truncated to M ± Γ (`DISPLAY_WIDTHS`), so a showcase event sits on the peak (a
+histogram of many events is a `mass_spectrum`).
+
+### `mass_spectrum`
+
+**A resonance emerging from data** (Phase Y): a **simulated** invariant-mass spectrum filling event
+by event, its peak fit and the local significance of the bump — labelled "simulated data" in the
+legend and the caption (the caption also states the seed, the width and resolution, the
+background shape; a caption of your own is kept, prefixed with the label when it does not say
+"simulated"). Underneath it is a [`plot`](#plot) whose series, model and fit the scene makes from
+the physics: the filling, the axes widening, the fit, `zoom` (`x: [120, 130]`), `grow` (`to:` a
+number of events), `fit`, `annotate` and `reveal` are the plot's own.
+
+- **Channels** (`channel`): `z_to_mumu` (Z → μ⁺μ⁻, 70–110 GeV, 6000 events of which about 4800 Z, a
+  1 GeV resolution, an exponential Drell–Yan-like background, a Breit–Wigner fit),
+  `h_to_gammagamma` (H → γγ, 100–160 GeV, 30 000 events with about 320 Higgs bosons, resolution 1.6
+  GeV, an exponential background falling with λ = 30 GeV, a Gaussian fit on a cubic background —
+  tuned so the expected local significance reaches about 5σ), `h_to_4l` (H → ZZ* → 4ℓ, 40 events
+  of which about 16 signal on a flat background, 2 GeV bins, a Gaussian on a constant), `custom`
+  (give `mass` and `window`; resolution default 1 % of the mass, 5000 events, 5 % signal). Masses
+  and widths are PDG 2024's (Γ_H = 4.1 MeV is the Standard Model prediction: the H peaks are
+  resolution-dominated); counts and background shapes are schematic choices, not any
+  experiment's data.
+- **Simulation** (seeded, the same seed the same events): each event is signal with probability
+  `signal / events` (the signal count fluctuates as in real data); signal = a Breit–Wigner draw of
+  the mass and `width` plus a Gaussian draw of the `resolution`, redrawn until it lies in the
+  window; background by the inverse of its CDF in the window: `exponential` (∝ exp(−m/`slope`)),
+  `power` (∝ m^−`index`) or `flat`.
+- **The fit** (`fit: true`): `peak: gaussian` (μ, σ) or `breit_wigner` (M, Γ — for the Z the fitted
+  Γ includes the resolution, larger than the natural 2.50 GeV) on a polynomial background of
+  `background_degree`, by binned Poisson maximum likelihood (Phase W), started at the expected mass
+  and width and the background-only polynomial; the box lists the mass and width ± their standard
+  errors and χ²/ν. A fit that fails for a simulation is an error suggesting another seed, more
+  events or wider bins.
+- **Significance** (local; the look-elsewhere effect is not included): the readout under
+  `events: 12 400` gives, as the data arrive, `significance: asimov` — the expected (median)
+  Z = √(2((s + b) ln(1 + s/b) − s)) of the s and b expected in the peak window M ± 2√(σ² + (Γ/2)²)
+  after that many events (Cowan, Cranmer, Gross, Vitells 2011; ≈ s/√b for s ≪ b) — or `counting`
+  (the observed excess in that window over the expected background: √(2(n ln(n/b) − (n − b)))), or
+  `none`; it reads `events: 12 400`, `expected: 3.4σ`, `(local, Asimov)` (or `observed:` …
+  `(local, counting)`). With `explain` (default) a note after the fit (`annotation:significance`)
+  gives the likelihood-ratio significance Z = √(2(ln L_s+b − ln L_b)) (background only against
+  signal + background, Wilks' theorem at the fitted mass) and its one-sided p-value — **the chance
+  that background alone fluctuates up this much, not the chance that the result is wrong**; 5σ ↔
+  p = 2.9 × 10⁻⁷. Short by default (`explain: true` or `short`): three short lines, `6.7σ local`,
+  `p = 7.6 × 10⁻¹²`, `(background only)` — the narration says the rest; `explain: long` writes
+  the meaning out in four lines ("…the chance that background alone fluctuates this high, not that
+  the result is wrong (5σ: 2.9 × 10⁻⁷)"). Above 20σ it says "> 20σ".
+- **Data − background** (`subtract: true`): a panel under the plot (the plot's `residuals:
+  background`): the counts minus the fitted background with √N bars and the fitted peak over
+  them; its axes (with the mass labels) come with the plot's, its content with the fit or with
+  `reveal: "residuals:fit"` on a word.
+- **Timing**: without actions — the filling over beat 1, the fit, the note, one per beat. With a
+  `fit` action and no `annotate` of the note, the note follows the fit (else the plot's own step
+  would bring it, growing the data to the end, before the fit).
+- **Layout**: text a little above the readable size (`label_size`, default 1.2 × the readable
+  minimum: the boxes are read on phones). In 16:9 the count axis reaches 1.35 × the highest bin
+  (the legend finds room above the data) and the fit box, the note and the readout stand in a
+  free corner or a narrow column on the right — the plot keeps about 70 % of the width. In 9:16
+  the count axis is fixed at twice the highest bin (the bars rise into it, the readout stands
+  there), there is no legend (the caption names the simulated data), and the fit's values and the
+  note are one box (the fitted mass and width, then the significance in short lines), which comes
+  with the note, in a free spot of the plot where it hides no data, else above the plot. Setting
+  `y: {max: …}` keeps your own axis.
+
+```yaml
+- id: diphoton
+  type: mass_spectrum
+  params: {channel: h_to_gammagamma, seed: 1, subtract: true}
+  beats:
+    - text: "Simulated collisions arrive, and we histogram the mass of each photon pair."
+      actions: [{grow: axes, to: 12000}]
+    - text: "As the data pile up, a small bump appears near one hundred and twenty-five."
+      actions: [{grow: axes}]
+    - text: "A fit on a smooth background finds it."
+      actions: [{fit: "fit:fit", at: "@fit"}]
+    - text: "Subtract the background, and the bump stands out."
+      actions: [{reveal: "residuals:fit", at: "@Subtract"}]
+    - text: "Five sigma: background alone would fluctuate this high less than once in three million tries."
+      actions: [{annotate: "annotation:significance", at: "@Five"}]
+```
+
+**Targets** (the plot's): `title`, `axes`, `legend`, `series1` / `series:simulated data`, `fit1` /
+`fit:fit`, `residuals1` / `residuals:fit` (with `subtract`), `annotation1` /
+`annotation:significance` (with `explain`), and annotations of your own.
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `channel` | `z_to_mumu` \| `h_to_gammagamma` \| `h_to_4l` \| `custom` | `h_to_gammagamma` | the resonance and its decay (above) |
+| `seed` | int | `1` | the simulation's seed |
+| `events` | 10–200 000 | the channel's | events in all (bars are drawn, not events) |
+| `signal` | number | the channel's | expected signal events among them |
+| `mass`, `width` | GeV | PDG 2024 | the resonance (`custom`: `mass` needed, `width` 0) |
+| `resolution` | GeV | the channel's | Gaussian mass resolution σ |
+| `window` | `[low, high]` GeV | the channel's | the mass range (`custom`: needed) |
+| `bin_width` | GeV | the channel's | at most 400 bins |
+| `background` | `exponential` \| `power` \| `flat` | the channel's | the background's shape, with `slope` (GeV) or `index` |
+| `slope`, `index` | number | `30`, `4` | exp(−m/slope); m^−index |
+| `peak` | `gaussian` \| `breit_wigner` | the channel's | the fitted peak |
+| `background_degree` | 0–4 | the channel's | the fit's polynomial background |
+| `fit` | bool | `true` | fit once the data are in |
+| `significance` | `asimov` \| `counting` \| `none` | the channel's (`none` for the Z) | the readout growing with the data |
+| `explain` | `true` \| `short` \| `long` \| `false` | `true` | the likelihood-ratio note: short (three short lines: σ, p, "background only"), long (four lines saying what the p-value means and does not), or none |
+| `subtract` | bool | `false` | the data − background panel |
+| `style` | `bars` \| `points` | `bars` | a filled histogram or markers with √N bars |
+| `ticker` | bool | `true` | `events: 12 400` in the readout |
+| `label` | text | `simulated data` | what the data are called (always says simulated) |
+
+The plot's own params apply as for `plot`: `title` (default "H → γγ: invariant mass"), `caption`,
+`x` / `y` (default "m(γγ) (GeV)" and "events / 1 GeV"), `annotations` (added after the scene's
+note), `legend`, `grid`, `rescale`, `reveal`, `point_radius`, `label_size` (default 1.2 × the
+readable minimum here), `caption_size`, `caption_color`, `title_size`, `title_color`. The spectrum
+module also gives `short_meaning(z, narrow)` (the short note's lines).
+The scene makes `series`, `models`, `fits` and refuses them, `data`, `panels`, `arrange`, `share`
+and `aspect` (use [`plot`](#plot) for data of your own).
+
+The model is `vidgen.api.particle_physics.spectrum` (no manim): `CHANNELS`, `channel_spec`,
+`SpectrumSpec`, `generate(spec)` → `Spectrum` (`masses`, `signal`, `counts(edges, n)`,
+`expected(n)`, `asimov_curve()`, `counting_curve()`), `asimov(s, b)`, `counting_significance(n, b)`,
+`p_value(z)`, `FIVE_SIGMA_P`, `likelihood_significance(edges, counts, peak, degree, guesses)`,
+`window_shares`, `decay_times(tau, events, seed)`, `mean_lifetime(times)`, `z_cross_section(√s,
+neutrinos)`. **Plot models** for a `plot` (`kind: function`): `mass_spectrum` (params `mass`,
+`width`, `resolution`, `lo`, `hi`, `events`, `signal`, `slope` | `index` | `flat: 1`; columns `n`,
+`m`, `signal`), `decay_times` (`tau`, `events`; columns `n`, `t` — give the unit with `units: {t:
+µs}` and fit `model: custom, expr: "N*exp(-x/tau)"` for τ ± its error) and `z_lineshape` (`lo`,
+`hi`, `samples`; columns `sqrt_s` (GeV), `sigma`, `sigma_2nu`, `sigma_4nu` (nb): σ(e⁺e⁻ → hadrons)
+for 3, 2 and 4 light neutrino families, a relativistic Breit–Wigner with peak 12π Γ_ee Γ_had /
+(m_Z² Γ_Z²) = 41.5 nb from the PDG 2024 Z values — **schematic**: no QED radiative corrections,
+which lower the measured peak to about 30 nb; say so in the caption).
+
+### `decay_chain`
+
+**A chain of decays** (Phase Y) drawn as a tree, left to right in 16:9 and top to bottom in 9:16:
+`decays: ["pi+ -> mu+ nu_mu", "mu+ -> e+ nu_e anti-nu_mu"]` — the first decay's parent starts the
+chain; each later decay's parent is a product not yet decayed (`Z*` matches an off-shell `Z*`).
+Every decay is checked by the conservation checker (charge, baryon and lepton numbers, energy):
+a forbidden one is an error with the reason ("muon number not conserved: L_μ = +1 → 0"). Under
+each particle that decays: its mean life τ and cτ (PDG 2024; `lifetimes`), or for a resonance its
+width Γ and τ = ħ/Γ (the Higgs boson's Γ = 4.1 MeV is the Standard Model prediction); an
+off-shell particle says "off shell (virtual)". Beside each decay's arrows: its branching fraction
+when the model lists it (`branching`; see `branching`). The caption states the sources. One
+decay per beat (`reveal: decays`): the first particle, then each decay's arrows growing and its
+products.
+
+```yaml
+- id: chain
+  type: decay_chain
+  params:
+    title: "From a pion to an electron"
+    decays: ["pi+ -> mu+ nu_mu", "mu+ -> e+ nu_e anti-nu_mu"]
+  beats:
+    - text: "A positive pion."
+    - text: "It lives twenty-six nanoseconds, then becomes a muon and a neutrino."
+    - text: "The muon lives two point two microseconds."
+      actions: [{highlight: "lifetime:mu+", at: "@microseconds"}]
+```
+
+**Targets**: `title`, `caption`, `chain` (everything), `decay<N>` (the N-th decay's arrows,
+fraction and products), `particle:<n>` (the n-th particle: 1 the first parent, then the products
+in order), `particle:<particle>` (`particle:mu+`, when it appears once), `lifetime:<particle>`
+(its τ / cτ lines).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `decays` | list of decays | — | in order (above) |
+| `lifetimes` | bool | `true` | τ and cτ (Γ and τ) under each particle that decays |
+| `branching` | bool | `true` | each decay's branching fraction when listed |
+| `stable` | bool | `false` | also write "stable" under stable final particles |
+| `reveal` | `decays` \| `all` | `decays` | one decay per beat, or all in beat 1 |
+| `title`, `caption` | text | `""`, the sources | title above, note under the chain |
+| `title_size`, `title_color`, `caption_color` | size, colour | `heading`, `text`, `dim` | style |
+
+The model: `particle_physics.branching.chain(decays)` → `Chain` (`nodes` with `leg`, `parent`,
+`made_by`, `decay`, `lifetime_lines()`; `decays`, `fractions`, `children(i)`), `mode_fraction`.
+
+### `branching`
+
+**Branching ratios** (Phase Y) of a particle as horizontal bars, largest first: `particle: H` (also
+`Z`, `W+` / `W-`, `pi+` / `pi-`, `pi0`, `K+` / `K-`, `mu-` / `mu+`; antiparticles by charge
+conjugation) — each mode's share in percent from `particle_physics.branching`, the source in the
+caption: **PDG 2024 measurements** for Z, W, π, K, μ (the W's leptonic modes are the
+lepton-universality average ℓν = 10.86 %); for the **Higgs boson at 125 GeV the Standard Model
+prediction** of the LHC Higgs Cross Section Working Group (Yellow Report 4, 2016, the table for m_H = 125 GeV;
+bb̄ 58.2 %, WW* 21.4 %, gg 8.19 %, τ⁺τ⁻ 6.27 %, cc̄ 2.89 %, ZZ* 2.62 %, γγ 0.227 %, Zγ 0.153 %,
+μ⁺μ⁻ 0.0218 %), which the caption calls "a theory prediction, not a measurement". Labels are the
+products' symbols (bb̄, μ⁺ν_μ) or `hadrons` / `invisible`; they are not translated. Everything
+else is [`bar_chart`](#bar_chart)'s.
+
+```yaml
+- id: higgs_decays
+  type: branching
+  params: {particle: H}
+  beats:
+    - text: "Most Higgs bosons decay to a bottom quark pair; two photons, a quarter of a percent."
+      actions: [{highlight: "bar:γγ", at: "@photons"}]
+```
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `particle` | particle | — | the decaying particle (above) |
+| `modes` | int | all | only the largest N modes (the caption says so) |
+| `labels`, `values` | — | made | from the model; giving them is an error (use `bar_chart`) |
+| `label_size`, `value_size` | size | `body` | the bar chart's, larger here: the products' symbols are short |
+
+The bar chart's params apply: `title` (default "How the Z decays", "How a 125 GeV Higgs boson
+decays"), `caption` (added after the source), `unit` (` %`), `value_format` (`{:.3g}`), `sort`
+(`true`), `horizontal` (`true`), `colors` (`palette`), `changes`, `highlight`, `highlight_color`,
+`reveal`, `baseline`, `caption_size`, `caption_color`, `title_size`, `title_color`, `label_size`,
+`value_size`. **Targets**: the bar chart's (`bar<N>`, `bar:<label>` — `bar:γγ`, `bar:hadrons` —,
+`title`, `change<N>`).
+
+### `branching_pie`
+
+The same branching ratios (see [`branching`](#branching)) as a [`pie`](#pie): `particle: Z`, the
+values in percent with the source in the caption; modes under `other_below` % (default `1.5`)
+are grouped — a pie hides the Higgs boson's γγ (0.23 %) in a sliver, so use `branching` bars for
+it.
+
+```yaml
+- id: z_decays
+  type: branching_pie
+  params: {particle: Z}
+  beats:
+    - text: "Seventy percent of Z bosons decay to hadrons, twenty percent to neutrinos."
+```
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `particle` | particle | — | the decaying particle |
+| `modes` | int | all | only the largest N modes |
+| `labels`, `values` | — | made | from the model (use `pie` for your own) |
+
+The pie's params apply: `title`, `caption`, `show_values` (`value`), `unit` (` %`),
+`value_format` (`{:.3g}`), `other_below` (`1.5`), `sort` (`true`), `donut`, `hole`, `center`,
+`center_label`, `percent_decimals`, `colors`, `max_slices`, `other_label`, `other_color`,
+`label_position`, `legend`, `reveal`, `highlight`, `explode`, `start_angle`, `clockwise`,
+`label_size`, `center_size`, `caption_size`, `caption_color`, `title_size`, `title_color`.
+**Targets**: the pie's (`slice<N>`, `slice:<label>`, `center`, `legend`, `title`).
+
+The tables: `particle_physics.branching.branching("H")` → `Branching` (`modes` with `process`,
+`fraction`, `label`, `percent`, `note`; `source`, `kind`: `measured` | `theory`; `total`,
+`mode(label)`), `listed()`, `branching_problems()` (every mode allowed by the checker, each table
+adding up to at most 1 within `SUM_TOLERANCE` = 10⁻³ — the Z's separately averaged measurements
+add up to 1.0001).
 
 ### `function_plot`
 
@@ -11211,8 +12545,17 @@ a title card, a `transform` of a bar).
 | `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>`, `change<N>` | reveal, dim, highlight, zoom, trace | a series is its line, markers and end label; `point:sparse@8`; `change<N>` is the axes and lines, revealing it plays that change; `trace` a series to sweep a cursor along it |
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
-| `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
+| `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `residuals<N>`, `residuals:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `residuals1` / `residuals:decay` the residual panel alone (revealed on its own word, it no longer comes with the fit); `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
+| `mass_spectrum` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `residuals<N>`, `residuals:<name>`, `annotation<N>`, `annotation:<id>` | grow, fit, annotate, reveal, zoom, highlight | the plot's: `series:simulated data` the filling histogram (and its readout), `fit:fit` the peak fit, `residuals:fit` the data − background panel (`subtract`), `annotation:significance` the note on the significance and its p-value; `grow` with `to:` a number of events |
+| `decay_chain` | `title`, `caption`, `chain`, `decay<N>`, `particle:<n>`, `particle:<particle>`, `lifetime:<particle>` | reveal, highlight, dim, callout | `decay2` the second decay's arrows, fraction and products; `particle:mu+` a particle (with its lifetime lines); `lifetime:mu+` its τ and cτ |
+| `branching` | `title`, `bar<N>`, `bar:<label>`, `change<N>` | reveal, dim, highlight, zoom | the bar chart's: `bar:γγ`, `bar:hadrons` a mode's bar and labels |
+| `branching_pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | the pie's: `slice:hadrons` a mode's wedge and label |
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
+| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `lagrange`, `lagrange:<L>`, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`, `pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`, `event`, `inset`, `rings`, `readout` | reveal, highlight, sweep, launch, burn, corotate, inertial, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); a three-body pair's `lagrange` (`lagrange:L4` one point), `zero_velocity` curve and `rotation` badge; `barycentre`; a resonance's `conjunctions`; a close-up's `pointer` to the central body; the tidal schematic's `pull`, `mean`, `tidal`, `bulges`, `face`; an event's alignment `event`, the `inset` box, the log view's `rings`; the sizes picture's `body:<name>` discs and `central` (the Sun's edge); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
+| `standard_model` | `title`, `chart`, `header`, `labels`, `key`, `source`, `caption`, `particle:<name>`, `generation:<N>`, `group:<group>`, `row:<row>` | reveal, highlight, dim, antiparticles, couplings, callout | `particle:e` (or `particle:electron`) one cell; `generation:2` a column with its number; `group:quarks` the quark cells and their label; `row:neutrinos` a row; `antiparticles` turns cells into their antiparticles, `couplings: particle:photon` outlines what a boson couples to |
+| `feynman` | `title`, `caption`, `process`, `diagram`, `time_axis`, `line:<id>`, `vertex:<id>`, `hadron:<particle>` | reveal, highlight, dim, travel, vertex_rule, swap_channel, callout | `line:W` a line with its arrow and name; `vertex:v1` a vertex dot (`vertex_rule` rings it and states its rule); `hadron:n` a hadron's bracket; `travel: diagram` runs a dot along every line in time order; `swap_channel` morphs into another diagram, the targets following their lines |
+| `kinematics` | `title`, `caption`, `process`, `panel:rest`, `panel:lab`, `arrow:<n>`, `arrow:<particle>`, `sum`, `values` | reveal, highlight, dim, boost, callout | `arrow:mu+` the muon's arrow and label in every frame; `panel:lab` one frame with its numbers; `boost` speeds the last frame up (`to: lab`, `rest`, a β), the arrows changing continuously |
+| `detector` | `title`, `caption`, `detector`, `layer:<name>`, `layers`, `tracks`, `ecal`, `hcal`, `muon_hits`, `missing_pt`, `readout`, `legend`, `label`, `particle:<n>`, `particle:<particle>`, `jet:<n>`, `soft` | reveal, highlight, dim, switch_view, callout | `particle:mu+` the muon's track, hits, name and readout row; `missing_pt` the dashed arrow and its row; `switch_view` turns x–y into r–z (`to: rz`) and back |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
@@ -11285,6 +12628,9 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `fit`, `annotate` | as the target: a fit (`- fit: "fit:decay"`) or an annotation (`- annotate: annotation2`) | on a [`plot`](#plot): draws the fit on a word (its band, the curve, its legend entry and parameter box, its residual panel; the data first if not shown yet; 1.6 s) or shows the annotation (its ring, arrow, line or shaded range and its text; 1 s); the plot's own steps leave them to the action. `reveal` does the same for a series or its error bars (`errors:<name>`). On live data both wait for the data to finish growing. |
 | `grow` | the target: a live series (`- grow: "series:x"`), `axes` (every live series) or `panel<N>`; `to` (the model's time, or the point number of live data; default the end) | on a [`plot`](#live-plots-models-and-grow): grows the live series from where they are to `to`, with the head marker and readout, the axes widening as the data reach their edge; it lasts until the beat's next action or the beat's end (or `run_time`); a later `grow` continues. The plot's own steps leave those series to it. |
 | `substitute`, `compute`, `convert` | as the target: a calculation (`- compute: calc1` or `"calc:v"`) | on a [`calculation`](#calculation): shows the values substituted into its formula (1.2 s), its result in its box (1.4 s; an intermediate value first) or its conversions (1.2 s) on a word, with the lines before it that are not on screen yet (an earlier calculation leaves, its result joining the table) and the lines after it that no action names; the scene's own steps leave those lines to the action. `reveal: formula2` shows a formula; `highlight: "symbol:G"` marks a symbol in the table and the lines on screen. `convert` needs `convert:` units. |
+| `sweep`, `launch` | as the target: a body's sectors (`- sweep: "sectors:Comet"`) or a shot of the cannon (`- launch: "shot:3"`, `"shot:*"`) | on an [`orbit`](#orbit): from that moment on the scene's clock the body's equal-time sectors fill as it sweeps them, or the shot flies (the bodies keep moving; no animation of its own). Without these actions sectors and shots start with the motion. |
+| `burn`, `flyby`, `pause`, `coast` | `burn`: a burn (`- burn: "burn:2"`); the others no target (`- action: pause`) | on an [`orbit`](#orbit): the scene's clock is planned through their words — `burn` puts a burn (its simulated time fixed by the orbit) on its word, `flyby` the closest approach, `pause` holds the clock still until a `coast` (or the end of its beat); each stretch runs at its own speed-up, shown in the panel. Burns on words keep their order. |
+| `corotate`, `inertial` | none (`- action: corotate`, `run_time` default 2 s) | on an [`orbit`](#orbit) with a three-body `system`: the view turns smoothly into the frame rotating with the pair (`corotate`) or back to the fixed stars (`inertial`); trails redraw in the frame shown. |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |
@@ -12017,6 +13363,27 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `plot_truncated` | info | bars that do not start at zero: a histogram drawn as bars on a y axis with `breaks`; a [`bar_chart`](#bar_chart) whose `baseline` is not 0 while every bar is on one side of it |
 | `plot_conserved` | warning | a quantity a plot model declares `conserved` drifting by more than `tolerance` (0.01, relative: max \|q − q₀\| / max \|q\|) over the run: the plot shows the integrator's error; use `method: leapfrog` (symplectic) or a smaller `step` |
 | `plot_fit_claims` | warning | narration or a plot note stating a fitted value the fit does not give, within `sigmas` (2) standard errors and the said value's rounding: an exponential's half-life, lifetime / time constant, decay constant (growth: doubling time, growth rate), a power law's exponent ("three halves"), a line's slope and intercept, a peak's centre / mass, σ and width (FWHM), a logistic's carrying capacity and midpoint, a distribution's mean, a custom model's parameters by name; in the fit's units (the axes'), converted from the unit said |
+| `orbit_period` | warning | in an [`orbit`](#orbit) scene, a period said or shown for a body ("Mars takes three years to go around the Sun") that its orbit does not have: Kepler's third law with the scene's μ = G(M + m) — "Mars takes about two years" fits 1.88 yr, "eighty-eight days" Mercury's 87.97 d. Read only with words of a period ("takes", "around", "orbit", "period"): "Neptune barely moves in ten years" is a span. Other scenes (a `text_card`, a caption) are checked against the orbit scenes' bodies they name. Numbers, units, "about" and rounding as `calc_numbers`; months (a twelfth of a Julian year) and weeks too; `tolerance` (0.05) |
+| `orbit_speed` | warning | a speed against the scene's model: at the point named by its apsis name (perihelion, aphelion, perigee, apogee, periapsis…) the vis-viva speed there; otherwise anywhere between the apoapsis and periapsis speeds of the bodies named; "escape" the escape speed from a body's surface or from the central body at the orbit's distance; a flyby's v∞ and Sun-frame speeds, the cannon's shots, circular speeds. Each value is read in its clause ("the Earth moves at about 30 km/s, and its escape velocity is 11.2 km/s" checks two different things) |
+| `orbit_dv` | warning | a Δv said with "burn", "Δv", "delta-v", "kick", "budget", "in all"… that the scene's transfer or burns do not compute: "the first burn" is Δv₁, "the second" Δv₂, "in total" the sum ("Almost four kilometres per second in all" fits 3.89 km/s); a gravity assist's gain and turning angle |
+| `orbit_transfer` | warning | a transfer time ("the trip to Mars takes about 180 days" for 259 d), the phase angle the target must lead by at departure ("forty-four degrees"; without "leave", "launch", "window" also the lead at the start), the synodic period or time between launch windows ("every 26 months" fits 780 d) and the wait for the window |
+| `orbit_distance` | warning | a distance, altitude, radius or diameter against the scene's bodies and orbits ("the Moon is 384,000 km away" fits 363,000–406,000 km; "the ISS orbits 420 km up"), a Lagrange point's distance from either primary ("L2 is 15 million km away" for 1.51 million km), the distance of two planets at the scene's `event`, a ratio of radii ("Jupiter is eleven times as wide as the Earth") |
+| `orbit_date` | warning | in any scene, the date of an opposition or a conjunction (inferior, superior) of a planet seen from the Earth that JPL's approximate elements (Table 1, 1800–2050) do not give: a day more than `days` (3) from the computed event, a month or year without one ("Mars was at opposition in 2021"); a month alone ("in mid October") against an orbit scene's `event` |
+| `orbit_scale` | warning | a picture called "to scale" (true scale, real sizes) that is not: an orbit scene whose bodies are drawn enlarged, when the sentence speaks of sizes ("everything is drawn to scale"; "at true scale the inner planets crowd the Sun" speaks of distances and is fine); a `radial: log` view; the `sizes` picture said to show distances; the tides schematic |
+| `orbit_conserved` | warning | an orbit scene's n-body run (`dynamics: nbody`, `system`) whose total energy or angular momentum drifts by more than `tolerance` (0.01, relative) over the run, a body's Jacobi constant in the restricted problem, or a figure-eight that misses its start: the motion shows the integrator's error. Fix: a smaller `step` with leapfrog, or `method: leapfrog` (whatever the panel shows: `Orbit.diagnostics`) |
+| `orbit_crash` | warning | what validation lets through: a periapsis (or one after a burn) inside the atmosphere of the Earth (the Kármán line, 100 km) or Mars (the entry interface, about 125 km), a flyby through the air without `flyby.atmosphere`, bodies of an n-body run passing within their radii (the run treats them as points). Fix: raise the periapsis, or say it is a re-entry or aerobraking pass |
+| `particle_mass` | warning | a particle's mass said or shown differently from PDG 2024 ("the Z weighs about 91 GeV" and "a top quark is 173 GeV" fit; "the W weighs 91 GeV" gets "that is the Z boson's mass: did you mean the Z boson?"; "105.7 GeV" for the muon "a prefix mixed up?"), in eV, eV/c² or kg; quark masses within 30 % (MS-bar or pole: the scheme); a mass for the photon, gluon or above the neutrino limit. The claim needs a mass word ("mass", "weighs", "heavy") or "X is N GeV"; an energy ("a 45 GeV electron", "each photon carries 62.6 GeV"), a difference ("11 GeV heavier") or an invariant mass of several particles is not a mass claim; `tolerance` (0.05) for "about" |
+| `particle_charge` | error | a particle's electric charge said wrong ("the down quark has charge +2/3": −1/3, with "+2/3 is the charge of the up quark, the charm quark, the top quark"; "the neutron is positively charged"); a charge said without a sign is compared by size; sums ("two thirds plus two thirds minus one third") are left alone. Read in every project |
+| `particle_spin` | error | a particle's spin said wrong ("the photon has spin 1/2", "the Higgs boson is a fermion", "the electron is spinless"). Read in every project |
+| `particle_lifetime` | warning | a mean life ("the muon lives 2.2 microseconds" fits 2.197 µs; "2.2 milliseconds" gets "a prefix mixed up?"), a half-life (τ ln 2: "a free neutron has a half-life of about ten minutes") or a width ("the Z is 2.5 GeV wide") said for a particle; a moving particle's dilated life ("in our frame", "cosmic-ray muons") and a fitted or measured width are left to `kinematics_number` and `plot_fit_claims`; `tolerance` (0.05) |
+| `branching_ratio` | warning | a branching ratio said wrong against `particle_physics.branching`: "most Higgs bosons decay to two photons" (γγ 0.227 %, most decay to bb̄ 58.2 %), "the Z decays to hadrons 50 % of the time" (69.9 %), "the W rarely decays to a muon and a neutrino" (10.9 %), "the most common decay of …"; products read loosely ("bottom quarks", "a pair of b quarks", "W bosons", "charged leptons", "hadrons", "neutrinos"); a share must stand by its decay ("70 % of Z bosons", "… 70 % of the time", "with a branching ratio of …"); `tolerance` (0.1) |
+| `conservation_claim` | warning | a reaction or decay called allowed that the conservation checker forbids ("the decay μ⁻ → e⁻ γ is allowed": electron and muon number), called forbidden that it allows, "forbidden by charge" or "violates lepton number" for one that conserves it (what the checker finds broken is named), "conserves X" for one that does not. The process: written with an arrow, said in words ("a muon decays to an electron and a photon": generic charges and neutrino flavours tried both ways), or the scene's own (`feynman`, `decay_chain`, `kinematics`: "this decay is allowed"); each clause about its own process |
+| `feynman_boson` | warning | the wrong boson for an interaction: a coupling the Standard Model does not have ("gluons couple to electrons"; "the Higgs boson couples to photons": only through a loop of top quarks and W bosons), a force a particle does not feel ("neutrinos feel the strong force"), flavour changed by a boson other than the W ("a photon changes the quark's flavour" — did you mean the W?), and in a [`feynman`](#feynman) scene a boson said to be exchanged ("annihilate into a Z") that its diagram does not have |
+| `kinematics_number` | warning | in a [`kinematics`](#kinematics) scene a momentum, energy, invariant mass, Q value, decay length, opening angle or γ said in a sentence naming the quantity that the scene does not compute (its `from_scene` values: "the muon's momentum is 40 MeV/c" for p* = 29.79 MeV/c); anywhere, a decay length βγcτ said with a momentum or energy ("a 5 GeV muon travels about 30 km" fits 31.2 km) or a dilated life γτ said with γ, and a threshold said with a reaction written out ("p p → p p p p̄ needs at least 2 GeV": √s 3.753 GeV, beam 6.568 GeV, kinetic 5.630 GeV); `tolerance` (0.05; decay lengths at least 0.1) |
+| `detector_signature` | warning | a detector signature said wrong against the [`detector`](#detector) scene's signatures: "photons leave tracks", "neutrinos are seen in the calorimeter", "muons stop in the ECAL", "electrons reach the muon chambers", "neutrons curve in the magnetic field", "photons show up as missing momentum" |
+| `significance_claim` | warning | the p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists", "the chance it is a fluke"): it is the chance that background alone fluctuates this high; a "one in N" or a percentage that does not match the σ said (one- or two-sided); in a [`mass_spectrum`](#mass_spectrum) scene a σ said for the bump that it does not compute (its expected Asimov significance with all events and its likelihood-ratio fit; "so far", "already" accept anything along the filling; the 5σ convention itself is not compared); `sigmas` (0.5) |
+| `simulated_label` | warning | simulated data called real ("real collision data", "data from the LHC", "CMS data") in a `mass_spectrum`, `detector` or simulated `plot` scene, or such a picture whose screen does not say "simulated" (a `detector` `label` without it; a `plot` of the `mass_spectrum` or `decay_times` model without "simulated" in a series name, the title or the caption) |
+| `particle_units` | info | masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video: write them one way |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -12082,6 +13449,27 @@ lint:
     plot_truncated: {}                      # info by default
     plot_conserved: {tolerance: 0.01}       # largest relative drift of a conserved quantity
     plot_fit_claims: {sigmas: 2.0, tolerance: 0.05}   # standard errors of the fitted value; relative, for "about"
+    orbit_period: {tolerance: 0.05}         # relative, for values said with "about" (beyond rounding to 1-2 figures)
+    orbit_speed: {tolerance: 0.05}
+    orbit_dv: {tolerance: 0.05}
+    orbit_transfer: {tolerance: 0.05}
+    orbit_distance: {tolerance: 0.05}
+    orbit_date: {days: 3.0}                 # how far a said day may be from the computed event
+    orbit_scale: {}
+    orbit_conserved: {tolerance: 0.01}      # largest relative drift of energy, angular momentum, Jacobi constant
+    orbit_crash: {}
+    particle_mass: {tolerance: 0.05}        # relative, for values said with "about"; quark masses 30 % (the scheme)
+    particle_charge: {}                     # default severity error; read in every project
+    particle_spin: {}                       # default severity error; read in every project
+    particle_lifetime: {tolerance: 0.05}
+    branching_ratio: {tolerance: 0.1}
+    conservation_claim: {}
+    feynman_boson: {}
+    kinematics_number: {tolerance: 0.05}    # decay lengths at least 0.1
+    detector_signature: {}
+    significance_claim: {sigmas: 0.5}       # how far a σ said for a spectrum may be from what it computes
+    simulated_label: {}
+    particle_units: {}                      # default severity info
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -12176,6 +13564,102 @@ kepler:
 `substitute`, `compute` and `convert` show things at their time, and a target's on-screen name is
 a plot series' name, a named fit's name, an annotation's text, or a calculation table row's
 meaning and source.
+
+**Orbits** (the `orbit_*` rules, for [`orbit`](#orbit) scenes and any narration naming their
+bodies): each orbit scene's model is resolved as the render resolves it, and its values — every
+body's period (Kepler III with μ = G(M + m)), speeds (vis-viva: a range along the orbit, the
+apsides' speeds, escape and circular speeds), distances and altitudes, radii, a transfer's Δv,
+time, phase angle, synodic period and wait, burns, a flyby's speeds, gain and turning angle,
+Lagrange points, the distance at an event — are compared with the numbers said and shown (read as
+for `calc_numbers`, with months and weeks). A number is compared with the values of the bodies its
+clause (else its sentence) names — all the scene's when it names none — of the kind its words
+point to ("burn", "Δv", "trip", "every", "perihelion", "escape", "L2", "up"); any of them it agrees
+with is fine, and a finding is made only when it is clear which value is meant. Dates of
+oppositions and conjunctions are checked in every scene against JPL's Table 1 (1800–2050).
+`orbit_scale` knows what each picture keeps to scale, `orbit_conserved` reads `Orbit.diagnostics`
+(whatever the panel shows), `orbit_crash` what validation cannot refuse. Example (the planted
+mistakes of a demo project):
+
+```
+$ vidgen lint demo --rule orbit_period --rule orbit_speed --rule orbit_dv --rule orbit_transfer ...
+periods:
+  warning orbit_period      periods_b2 @ 3.0s: "Mars takes three years to go around the Sun.": "three years", but Mars's orbital period around the Sun is 687 d (1.88 yr) in the scene's model: say that, or change the scene
+speeds:
+  warning orbit_speed       speeds_b2 @ 3.3s: "At aphelion Mercury still moves at fifty-nine kilometres per second.": "fifty-nine kilometres per second", but Mercury's speed at aphelion is 38.9 km/s in the scene's model: say that, or change the scene
+geo:
+  warning orbit_dv          geo_b1 @ 0.0s: "The first burn takes 3.2 km/s.": "3.2 km/s", but Δv₁ of the Hohmann transfer is 2.43 km/s in the scene's model: say that, or change the scene
+mars:
+  warning orbit_transfer    mars_b2 @ 4.0s: "The trip to Mars takes about 180 days.": "180 days", but the Hohmann transfer's time of flight is 259 d in the scene's model: say that, or change the scene
+  warning orbit_transfer    mars_b4 @ 10.0s: "Launch windows to Mars come every 18 months.": "18 months", but the synodic period of Earth and Mars is 780 d (2.14 yr) in the scene's model: say that, or change the scene
+moon:
+  warning orbit_distance    moon_b2 @ 2.3s: "The Moon is 38,000 km away.": "38,000 km", but the Moon's distance from the Earth is between 363,000 km and 406,000 km in the scene's model: say that, or change the scene
+lpoints:
+  warning orbit_distance    lpoints_b2 @ 5.0s: "L2 is 15 million km away.": "15 million km", but L2's distance from the Earth is 1.51 million km (0.0101 AU) in the scene's model: say that, or change the scene
+opposition:
+  warning orbit_date        opposition_b4 @ 10.0s: "Mars was at opposition in 2021.": "in 2021": no opposition of Mars (seen from the Earth) in 2021 by JPL's approximate elements; the nearest is on 2020-10-13
+whole:
+  warning orbit_scale       whole_b2 @ 3.3s: "Here everything is drawn to scale." claims scale, but only the distances are: the bodies are drawn enlarged (the panel says 'sizes not to scale'); say that the distances are to scale and the sizes are not
+drift:
+  warning orbit_conserved   drift_b1 @ 0.0s: the total energy is conserved by the physics but drifts by 29.43% over the run (more than 1.00%): the motion shows the integrator's error, not physics; halve the step (now step 12 d)
+graze:
+  warning orbit_crash       graze_b1 @ 0.0s: Sat's periapsis is 80 km above the Earth, inside its atmosphere (the Kármán line, 100 km): drag would bring it down within a few passes; raise the periapsis, or say it is a re-entry or aerobraking pass
+card:
+  warning orbit_period      card_b1 @ 0.0s: text 'Jupiter takes 20 years to orbit the Sun': "20 years", but Jupiter's orbital period around the Sun (scene 'whole') is 11.9 yr (4,333 d) in the scene's model: say that, or change the scene
+```
+
+The same project's right statements give no finding: "Mars takes about two years", "Mercury
+races around the Sun in eighty-eight days", "the Earth moves at about thirty kilometres per second,
+and its escape velocity is 11.2 km/s", "Almost four kilometres per second in all", "Mars must lead
+the Earth by forty-four degrees when we leave", "every 26 months", "The Moon is 384,000 km away",
+"L1 and L2 lie about one and a half million kilometres from the Earth", "Jupiter is eleven times as
+wide as the Earth", "In mid October Mars is at opposition, 62 million km from us", "At true scale
+the inner planets crowd the Sun". `said_before_shown` and `unsaid_reveal` know orbit scenes too:
+`sweep`, `launch`, `burn` and `flyby` show things at their time, and a target's on-screen name is a
+body's label (its `orbit:` too), an apsis mark's name, a burn's label ("Δv₁ 2.43 km/s prograde"),
+a Lagrange point, the event's kind.
+
+**Particle physics** (the rules from `particle_mass` to `particle_units`, Phase Y): the narration
+and the screen texts are read against the particle model (PDG 2024 masses, charges, spins,
+lifetimes, widths; branching ratios), the conservation checker (`particle_physics.check`), the
+Standard Model's vertices, the detector signatures and what the particle scenes compute (a
+`kinematics` scene's values, a `mass_spectrum`'s significances, a `feynman` diagram's bosons, which
+data are simulated). Particles are found by name ("the Z boson", "bottom quarks", "positrons",
+"neutral pions") or symbol (μ⁺, π⁰, ν̄ₑ, W⁻); a claim is about the particle named just before it
+in the same clause, numbers are read as for `calc_numbers`. Every check is narrow: a negation, a
+contrast or a question is left alone ("photons do not leave tracks", "the W is not a photon",
+"unlike photons, electrons leave tracks"), so is a range or a bound, and a finding needs both the
+particle and the quantity to be clear. `particle_charge` and `particle_spin` read every project;
+the others only projects with a particle-physics scene (`standard_model`, `feynman`, `kinematics`,
+`detector`, `mass_spectrum`, `decay_chain`, `branching`, `branching_pie`, a `plot` of a particle
+model, a `calculation` with `mass:` / `lifetime:` / `width:` symbols). Example (the planted mistakes
+of a demo project; its right statements — "the Z weighs about 91 GeV", "p → e⁺ π⁰ is forbidden by
+baryon number", "photons do not leave tracks", "the W is not a photon" — give no finding):
+
+```
+$ vidgen lint demo
+facts:
+  error   particle_charge   facts_b1 @ 0.0s: "The down quark has charge plus two thirds, and the photon has spin 1/2.": the down quark's charge is −1/3 (in units of e), not +2/3; +2/3 is the charge of the up quark, the charm quark, the top quark
+  error   particle_spin     facts_b1 @ 0.0s: "The down quark has charge plus two thirds, and the photon has spin 1/2.": the photon has spin 1 (a boson), not spin 1/2
+  warning particle_mass     facts_b1 @ 0.0s: text 'The W boson: 91 GeV/c²': "91 GeV/c²" for the W boson's mass: PDG 2024 gives 80.369 GeV — that is the Z boson's mass: did you mean the Z boson?
+  warning particle_lifetime facts_b2 @ 5.2s: "The muon lives 2.2 milliseconds;": "2.2 milliseconds" for the muon: its mean life τ is 2.197 µs (PDG 2024) — a prefix mixed up?
+  warning detector_signature facts_b3 @ 9.4s: "Photons leave tracks, and muons stop in the ECAL.": a photon leaves no track: ECAL shower, no track
+  warning detector_signature facts_b3 @ 9.4s: "Photons leave tracks, and muons stop in the ECAL.": a muon does not stop in the ECAL: it passes through everything to the muon chambers (track through everything + muon chambers)
+  warning branching_ratio   facts_b4 @ 15.4s: "Most Higgs bosons decay to two photons.": H → γγ is only 0.227 % (Standard Model prediction); most decay to bb̄ (58.2 %)
+  warning significance_claim facts_b5 @ 18.2s: "Five sigma means we are 99.99994% sure the Higgs boson exists.": the p-value is the chance that background alone fluctuates this high, not the probability that the result is wrong or that the particle exists: say "if there were no Higgs boson, background would fluctuate this high once in 3.5 million tries"
+  warning conservation_claim facts_b6 @ 22.4s: "The decay μ⁻ → e⁻ γ is allowed, and p → e⁺ π⁰ is forbidden by baryon number.": called allowed, but the checker forbids μ⁻ → e⁻ γ: electron number not conserved: L_e = 0 → +1; muon number not conserved: L_μ = +1 → 0
+  warning feynman_boson     facts_b7 @ 29.2s: "A photon changes the quark's flavour.": only the W boson changes a quark's or lepton's flavour (u ↔ d, e ↔ νₑ); the photon keeps it — did you mean the W?
+units:
+  info    particle_units    units_b1 @ 0.0s: text 'The Z boson: mass 91.2 GeV': 91.2 GeV: this video also writes masses in GeV/c² (91 GeV/c²); write them one way (natural units, c = 1: GeV; or GeV/c² throughout)
+bhabha:
+  warning feynman_boson     bhabha_b1 @ 0.0s: "The electron and the positron annihilate into a Z boson.": the Z boson is named, but the diagram's bosons are: photon — did you mean the photon?
+pion:
+  warning kinematics_number pion_b1 @ 0.0s: "In the rest frame the muon's momentum is 40 MeV/c.": "40 MeV/c": the scene computes the momentum p* in the rest frame 29.79 MeV/c
+fourl:
+  warning significance_claim fourl_b1 @ 0.0s: "These are real collision data from CMS, and the bump reaches nine sigma.": "nine" σ: the scene computes 6.0σ (expected, Asimov, all events), 5.5σ (likelihood-ratio fit)
+  warning simulated_label   fourl_b1 @ 0.0s: "These are real collision data from CMS, and the bump reaches nine sigma.": the scene's data are simulated (seeded), not a real experiment's: say "simulated data" — real spectra are the experiments' own (cite them, do not draw them)
+display:
+  warning simulated_label   display_b1 @ 0.0s: the event display does not say on screen that its data are simulated: keep "simulated event" in label
+```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
 `lint` section and `lint_ignore` do not count in a scene's render fingerprint: changing them

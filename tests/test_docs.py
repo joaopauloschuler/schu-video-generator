@@ -152,11 +152,11 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
 GENETICS_TYPES = ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas")
 
 
-@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES, ("plot", "calculation")],
-                         ids=["cell_biology", "genetics", "science_charts"])
+@pytest.mark.parametrize("kinds", [("cell", "molecule", "pathway", "cell_cycle", "metabolism"), GENETICS_TYPES, ("plot", "calculation"), ("orbit",), ("standard_model", "feynman", "kinematics", "detector", "decay_chain")],
+                         ids=["cell_biology", "genetics", "science_charts", "orbits", "particles"])
 def test_science_sections_name_every_nested_option(kinds: tuple[str, ...]) -> None:
-    """Steps 210, 220 and 227: every param of the cell-biology, the genetics and the science-chart
-    types, nested options too (an object's `coat`, a gene's `introns`, a node's marks' `domain`, a
+    """Steps 210, 220, 227 and 229: every param of the cell-biology, the genetics, the science-chart
+    and the orbit types, nested options too (an object's `coat`, a gene's `introns`, a node's marks' `domain`, a
     fit's `residuals`, a symbol's `from_scene`), is named in its CONFIG.md section."""
     from vidgen.describe import nested_models
 
@@ -256,6 +256,70 @@ def test_science_charts_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
     assert "examples/radioactive-decay/README.md" in text
     for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
         assert "COOKBOOK-SCIENCE-CHARTS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
+def test_orbits_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 235: the orbits cookbook's pattern validates and is lint-clean for the orbit_* and
+    calc_* rules, it names the rules, and the README, the cookbook, the guide and the gallery
+    point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.lint.calc_rule import calc_issues
+    from vidgen.lint.orbit_rule import orbit_issues
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-ORBITS.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    assert len(blocks) == 1
+    scenes = yaml.safe_load(blocks[0])
+    (tmp_path / "video.yaml").write_text(yaml.safe_dump({"title": "t", "scenes": scenes}, allow_unicode=True), encoding="utf-8")
+    project = Project.load(tmp_path)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    for scene in project.config.scenes:
+        rules = project.config.lint.rules
+        assert not orbit_issues(project, scene.id, rules) and not calc_issues(project, scene.id, rules), scene.id
+    for kind in ("orbit", "calculation", "plot"):
+        assert f"[`{kind}`](CONFIG.md#{kind})" in text, kind
+    for rule in ("orbit_period", "orbit_speed", "orbit_dv", "orbit_transfer", "orbit_distance", "orbit_date", "orbit_scale",
+                 "orbit_conserved", "orbit_crash", "calc_numbers"):
+        assert f"`{rule}`" in text, rule
+    assert "examples/mars-transfer/README.md" in text
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
+        assert "COOKBOOK-ORBITS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
+def test_particles_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 243: the particle-physics cookbook's pattern validates and is lint-clean for the
+    particle_* and calc_* rules, it links every particle scene type and names the rules, and the
+    README, the cookbook, the guide and the gallery point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.lint.calc_rule import calc_issues
+    from vidgen.lint.particle_rule import particle_issues
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-PARTICLES.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    assert len(blocks) == 1
+    scenes = yaml.safe_load(blocks[0])
+    (tmp_path / "video.yaml").write_text(yaml.safe_dump({"title": "t", "scenes": scenes}, allow_unicode=True), encoding="utf-8")
+    project = Project.load(tmp_path)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    for scene in project.config.scenes:
+        rules = project.config.lint.rules
+        assert not particle_issues(project, scene.id, rules) and not calc_issues(project, scene.id, rules), scene.id
+    for kind in ("standard_model", "feynman", "kinematics", "detector", "mass_spectrum", "decay_chain", "branching",
+                 "branching_pie", "calculation", "plot"):
+        assert f"[`{kind}`](CONFIG.md#{kind})" in text, kind
+    for rule in ("particle_mass", "particle_charge", "particle_spin", "particle_lifetime", "branching_ratio", "conservation_claim",
+                 "feynman_boson", "kinematics_number", "detector_signature", "significance_claim", "simulated_label",
+                 "particle_units", "calc_numbers"):
+        assert f"`{rule}`" in text, rule
+    for part in ("PDG 2024", "Yellow Report 4", "look-elsewhere", "simulated", "schematic", "GeV/c²"):
+        assert part in text, part
+    assert "examples/higgs-discovery/README.md" in text
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md", "docs/gallery/README.md"):
+        assert "COOKBOOK-PARTICLES.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
 def test_docs_yaml_snippets_parse() -> None:

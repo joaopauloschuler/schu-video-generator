@@ -58,6 +58,8 @@ class Column:
     name: str
     unit: str
     values: tuple[float, ...]
+    label: str = ""
+    """How an axis title names it when the author gives no label (a model's ``θ_min``); "" for the name."""
 
 
 @dataclass(frozen=True)

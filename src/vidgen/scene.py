@@ -757,6 +757,28 @@ class NarratedScene(MovingCameraScene):
         ``enter`` brings in off stage until then)."""
         return [u.action for u in self._actions.uses if u.kind.name == name] if self._actions is not None else []
 
+    def action_times(self, name: str, start: float | None = None) -> list[tuple[Any, float, float]]:
+        """When each use of action type ``name`` falls due, the beats narrated one after another
+        from scene time ``start`` (default: now, before the first beat): ``(action, due time,
+        end of its beat)`` in seconds of the scene's clock, counted in whole frames as
+        :meth:`narrate` and the action runner count them (an ``orbit`` scene times its clock to
+        its ``burn`` words, DESIGN.md §98.5)."""
+        if self._actions is None or not self.beats:
+            return []
+        fps = config.frame_rate
+        frame = round((float(self.renderer.time) if start is None else start) * fps)
+        starts: dict[str, tuple[int, Any]] = {}
+        for b in self.beats:
+            window = self.beat_window(b)
+            starts[b.id] = (frame, window)
+            frame += round(window.window * fps)
+        out = []
+        for u in self._actions.uses:
+            if u.kind.name == name and u.beat in starts:
+                first, window = starts[u.beat]
+                out.append((u.action, (first + round(u.config.at * window.body * fps)) / fps, (first + round(window.window * fps)) / fps))
+        return out
+
     @contextmanager
     def narrate(self, beat: str | int | BeatConfig) -> Iterator[float]:
         """Narrate one beat: ``with self.narrate(0) as d: ...``.

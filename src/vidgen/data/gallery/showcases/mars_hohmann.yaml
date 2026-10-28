@@ -1,0 +1,18 @@
+title: Earth to Mars
+voice: {provider: kokoro, voice: af_heart}
+scenes:
+  - id: mars_hohmann
+    type: orbit
+    params:
+      title: "The Hohmann transfer to Mars"
+      bodies:
+        - {preset: earth, e: 0, i: 0, raan: 0, argp: 0, trail: false}   # a transfer is between circular, coplanar orbits
+        - {preset: mars, e: 0, i: 0, raan: 0, argp: 0, nu: 95, trail: false}
+        - {name: Ship, alongside: Earth, trail: 0.15}
+      transfer: {ship: Ship, to: Mars}   # Δv₁ 2.94 + Δv₂ 2.65 km/s, 259 d, Mars 44.3° ahead, windows every 780 d
+      caption: "Circular, coplanar orbits (an approximation)"
+    beats:
+      - text: "We leave when Mars leads by forty-four degrees, with a prograde burn."
+        actions: [{highlight: phase, at: "@forty-four"}, {burn: "burn:1", at: "@burn"}]
+      - text: "Two hundred and fifty-nine days later a second burn matches the speed of Mars."
+        actions: [{burn: "burn:2", at: "@second"}]
