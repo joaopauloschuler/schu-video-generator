@@ -5,6 +5,7 @@ the units orbits are shown in (Phase X, DESIGN §98). No manim."""
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 from vidgen.errors import VidgenError
@@ -27,7 +28,7 @@ EXAMPLES = {
     "time": "'365.25 d', '92 min', '2 yr' or '3600 s'",
     "angle": "a number of degrees (51.6), '51.6 deg' or '0.9 rad'",
     "gm": "'3.986e14 m^3/s^2' (or give mass: '5.97e24 kg')",
-    "mass": "'5.97e24 kg'",
+    "mass": "'5.97e24 kg', '2.1 Msun' or '0.5 Mearth'",
 }
 #: The gravitational constant (CODATA 2022) for a body given by its mass, and the astronomical
 #: unit (IAU 2012), from :mod:`vidgen.quantities.constants`.
@@ -35,6 +36,11 @@ G = float(constant("G").number())
 AU = float(constant("AU").number())
 DAY = 86_400.0
 YEAR = 365.25 * DAY
+#: Masses in solar and Earth masses ('2.1 Msun', '0.5 Mearth'), read as GM / G with the IAU
+#: nominal GM so a body given in solar masses has exactly that many GM☉.
+GM_SUN_NOMINAL = float(constant("GM_sun").number())
+GM_EARTH_NOMINAL = float(constant("GM_earth").number())
+_SOLAR = re.compile(r"([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*(M_?sun|M☉|M_?earth|M⊕)", re.IGNORECASE)
 
 
 def value_si(value: Any, kind: str, where: str) -> float:
@@ -47,6 +53,9 @@ def value_si(value: Any, kind: str, where: str) -> float:
         return math.radians(float(value))
     if isinstance(value, (int, float)):
         raise VidgenError(f"{where}: {value:g} needs a unit; write {EXAMPLES[kind]}")
+    solar = _SOLAR.fullmatch(str(value).strip()) if kind == "mass" else None
+    if solar is not None:   # '2.1 Msun': the mass whose G × mass is that many nominal GM☉ (GM⊕)
+        return float(solar.group(1)) * (GM_SUN_NOMINAL if solar.group(2).lower().replace("_", "") in ("msun", "m☉") else GM_EARTH_NOMINAL) / G
     try:
         w = written(str(value).strip())
     except QuantityError as error:

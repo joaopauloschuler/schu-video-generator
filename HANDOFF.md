@@ -21408,3 +21408,94 @@ How to test
   and the phase angle, raising and turning with three burns, a Δv budget `calculation` from the
   orbit scene, bi-elliptic, phasing, a Jupiter gravity assist): `build/preview/storyboard/` (16:9
   dark) and `build/preview_vlight/storyboard/` (9:16 light); `vidgen lint` 0 findings.
+
+
+## Step 232 — Many bodies
+
+What was built (DESIGN §98.6):
+
+- **Model** `vidgen.orbits.threebody` (no manim): the circular restricted three-body problem in
+  normalised rotating units — L1–L3 from Szebehely's quintics (`numpy.roots` + Newton), L4 / L5,
+  `ROUTH_MU` = 0.0385209 / `routh_stable`, the effective potential, the Jacobi constant (from the
+  rotating frame or from inertial positions about the barycentre), zero-velocity curves
+  (vectorised marching squares), the rotating-frame equations on Phase W's RK45, co-orbital
+  angles and kinds (tadpole L4 / L5, horseshoe, passing), `Restricted` with presets `earth_moon`,
+  `sun_earth` (Sun + Earth–Moon barycentre, 1 AU), `sun_jupiter`. `vidgen.orbits.manybody`: the
+  figure-eight (scaled to a mass and length), barycentres and binary shares, nearest period
+  ratios, the Laplace angle, conjunctions by root finding, `bends_toward`, tidal acceleration and
+  the equilibrium tide. The Galilean moons as body / orbit presets; masses as `'2 Msun'`; n-body
+  runs record the angular momentum and give velocities; `simulate(initial=)`.
+- **Scene** `orbit`: `system` (a pair integrated as n-body about the barycentre, RK45 by default;
+  or `figure_eight`), `view: inertial | rotating` and the actions `corotate` / `inertial`
+  (smooth turn over `run_time`), `lagrange`, `zero_velocity`, bodies `near: L1…L5` with `shift` /
+  `drift` (rotating frame), `origin: barycentre` (binary stars draw both ellipses), `resonance`
+  (ratios, Laplace angle, conjunction lines and counts), bodies' `curvature`, `center` + `extent`
+  close-ups with a pointer to the off-plot central body, `tides` (its own schematic layout: pull,
+  centre pull, tidal arrows with the enlargement factor, bulges, the near side; "schematic: not to
+  scale"). Panel rows: μ, Routh, the frame shown, L1 / L2 distances, Jacobi constant and ΔC/C,
+  the angle ahead of the secondary and the co-orbital kind, the figure-eight's return, a binary's
+  mass ratio, ΔL/L.
+- Performance of the panel (orbit scenes, output unchanged): the cached row texts are drawn in
+  place and their points restored (copying every row each frame dominated long renders: a Trojan
+  scene went from 100 s to 55 s, the tides 56 → 24 s); trails wholly inside the plot skip the
+  per-segment clipping.
+
+Files touched
+- New: `src/vidgen/orbits/{threebody,manybody}.py`, `src/vidgen/scenes/{orbit_systems,orbit_many}.py`,
+  `tests/test_orbit_many.py` (31 incl. 2 renders).
+- Changed: `src/vidgen/orbits/{__init__,bodies,nbody,values}.py`, `src/vidgen/scenes/{orbit,
+  orbit_parts,orbit_overlays,orbit_actions}.py`, `docs/CONFIG.md` (orbit section, param table,
+  targets row, actions row), the guide + `AGENTS.md` (chooser row, two snippets, a paragraph, two
+  action rows), `DESIGN.md` §98.6, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): in `vidgen.api.orbits` the names of `threebody` (`integrate` as
+`integrate_restricted`, `potential` as `restricted_potential`) and `manybody`,
+`GALILEAN_PERIODS`, `GALILEAN_PHASES`; `NBodyRun.angular / angular_scale / angular_drift /
+angular_error / velocity`; `simulate(initial=)`; the `orbit` params, targets and actions above.
+No dependency, no config key.
+
+Decisions
+- The restricted problem is drawn from an inertial n-body run (massless bodies), not from the
+  rotating-frame equations: one integrator path for every view, the switch between frames is a
+  view transform (`OrbitModel.turned`, angle from the run's own secondary), and leapfrog stays
+  available (symplectic only in the inertial frame). RK45 is the default with a pair: leapfrog's
+  fixed step blows the Jacobi constant up at a close pass (seen: ΔC ≈ 12 above Routh's limit);
+  the rotating-frame RK45 integrator in the model serves the tests and authors' own scripts.
+- `sun_earth` uses the Earth–Moon barycentre's GM (the usual pair for L1 / L2): L1 / L2 at
+  1.4976 / 1.5077 million km — the brief's "≈ 1.5 million km" verified.
+- The Galilean moons are defined by their published sidereal periods (a from Kepler III with the
+  `jupiter` preset's system GM; within 0.03 % of the published distances), circular and at phases
+  giving the Laplace angle 180°: the conjunction geometry (Ganymede 90° away at each Io–Europa
+  conjunction) is exact in this model. **For the owner to check**: the satellites' GM values
+  (quoted as JPL JUP310: 5 959.916, 3 202.739, 9 887.834, 7 179.289 km³/s²) and the sidereal
+  periods' last digits; the figure-eight digits are Simó's as commonly quoted, and verified here
+  by integration (back within 10⁻⁶ AU after T).
+- `tides` is an `orbit` param, not a new scene type (a new type needs a gallery entry; the gallery
+  is at its budget until Step 235).
+- `center` is the body's position halfway through the span (a symmetric close-up of a path).
+- The rotating frame's words are in the panel; the plot carries only a small turning arrow.
+
+Compatibility: no shared code changed (only the orbit scene and the `orbits` package), so the
+Phase Q baseline was not re-run; the 229–231 orbit tests pass unchanged (the panel's in-place
+texts draw the same points).
+
+Known gaps: n-body with burns (refused); forbidden regions drawn as their boundary; the tidal
+bulges do not lead (no spin, no friction) and the Sun's tide is not shown; the Moon's
+concave-path close-up is honest but subtle at true scale (the panel row carries the claim); a
+9:16 panel with a pair is long (two columns, smaller text); LEO scenes still hide a low orbit under
+the true-scale Earth (231's note; not addressed here); a lint warning mid-turn (a trail over the
+L2 label while the frame turns); gallery media (Step 235).
+
+How to test
+- `tests/test_orbit_many.py` (31, ~40 s incl. renders), `tests/test_orbit.py`, `tests/test_orbits.py`,
+  `tests/test_orbit_laws.py`, `tests/test_orbit_manoeuvres.py`.
+- Related, passing: `test_docs`, `test_guide`, `test_gallery` (not render), `test_actions_coverage`
+  (not render + `-k orbit`), `test_builtin_scenes -k orbit`, `test_schema`, `test_registry`,
+  `test_introspect`, `test_json_output`, `test_extensions`, `test_api`, `test_translation`,
+  `test_calculation`, `test_calc_lint`, `test_lint`, `test_narration_rule`, `test_word_anchors`,
+  `test_plot_live`.
+- Stills: scratchpad `s232/proj` (Trojans with a frame switch on a word, Earth–Moon points with
+  the zero-velocity curve, the Sun–Earth L1 / L2 close-up, an unstable μ = 0.05, the figure-eight,
+  the Laplace resonance with conjunctions, a binary, the Moon's path, the tides):
+  `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16 light);
+  `vidgen lint`: 0 errors, 1 warning (mid-turn).

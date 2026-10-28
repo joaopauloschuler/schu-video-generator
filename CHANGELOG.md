@@ -5,9 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–231)
+## Unreleased (Steps 193–232)
 
 ### Orbital mechanics (Phase X, from Step 229)
+
+- **Many bodies** (Step 232). `system: earth_moon | sun_earth | sun_jupiter` (or your own pair
+  with a mass ratio `mu`): the circular restricted three-body problem integrated about the
+  barycentre, seen in the inertial or the rotating frame (`view: rotating`; the actions
+  `corotate` / `inertial` turn the view on a word), the Lagrange points L1–L5 computed for μ
+  (`lagrange`), Routh's stability test, bodies placed `near: L4` with a `shift` (tadpoles,
+  horseshoes, or a body leaving L4 above μ = 0.0385), the Jacobi constant and its drift, the
+  zero-velocity curve; Sun–Earth L1 / L2 shown 1.50 / 1.51 million km from the Earth in a close-up
+  (`center` with `extent`, an arrow to the off-plot Sun). `system: figure_eight` (three equal
+  masses, Chenciner–Montgomery); `origin: barycentre` (binary stars on their two ellipses);
+  `resonance: [Io, Europa, Ganymede]` with the Galilean moons as presets (period ratios, the
+  Laplace angle 180°, conjunction lines as they happen); a body's `curvature` (the Moon's path
+  always bends towards the Sun); `tides` (a schematic: the Moon's pull, the tidal arrows, two
+  bulges, tidal locking). n-body panels show ΔL/L with ΔE/E; masses may be written `'2 Msun'`.
+  The model: `vidgen.api.orbits` gains `lagrange_points`, `collinear_gamma`, `routh_stable`,
+  `jacobi`, `zero_velocity_segments`, `integrate_restricted`, `figure_eight`, `conjunctions`,
+  `laplace_angle`, `tidal_acceleration`, `equilibrium_tide` and more.
 
 - **Manoeuvres and gravity assists** (Step 231). A body's `burns` (Δv prograde, retrograde,
   radial, normal… at a time or the next periapsis / apoapsis: the Δv arrow at the burn point, the

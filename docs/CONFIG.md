@@ -5873,6 +5873,138 @@ so in a caption).
   `dv_burn1`…, `dv_spent` (burns), `v_inf`, `r_p`, `e`, `delta`, `v_planet`, `v_before`,
   `v_after`, `gain` (a flyby), each to four significant figures.
 
+**Many bodies** (Step 232): the circular restricted three-body problem in the inertial or the
+rotating frame, Lagrange points, Trojans, the figure-eight, binary stars, resonances, the Moon's
+path around the Sun and the tides (a schematic).
+
+```yaml
+- id: trojans
+  type: orbit
+  params:
+    title: "Trojans of Jupiter"
+    system: sun_jupiter                 # earth_moon | sun_earth | sun_jupiter | {primary, secondary, mu, separation} | figure_eight
+    lagrange: true                      # or [L4, L5]
+    zero_velocity: true                 # the Trojan's zero-velocity curve (its Jacobi constant)
+    bodies:
+      - {name: Trojan, near: L4, shift: [0.004, 0.0069], trail: "150 yr"}   # shares of the separation
+    span: "300 yr"
+  beats:
+    - text: "Seen from the fixed stars, Jupiter and its Trojan go round the Sun together."
+    - text: "Now let the frame turn with Jupiter."
+      actions:
+        - {action: corotate, at: "@turn", run_time: 2}   # inertial -> rotating (inertial: back)
+- id: l1l2
+  type: orbit
+  params:
+    system: sun_earth
+    view: rotating                      # start in the rotating frame
+    lagrange: [L1, L2]
+    center: Earth                       # a close-up: the Sun off-plot, an arrow points to it
+    extent: "2.2e6 km"
+    orbits: 0.25
+- id: eight
+  type: orbit
+  params: {system: figure_eight}        # {preset: figure_eight, mass: '1 Msun', scale: '1 AU'}
+- id: laplace
+  type: orbit
+  params:
+    central: jupiter
+    bodies: [{preset: io}, {preset: europa}, {preset: ganymede}]
+    resonance: [Io, Europa, Ganymede]   # or {bodies, conjunctions: true, keep: 6}
+    span: "21 d"
+  beats:
+    - text: "Every time Io overtakes Europa, Ganymede is a quarter turn away."
+      actions:
+        - {reveal: conjunctions, at: "@overtakes"}
+- id: binary
+  type: orbit
+  params:
+    central: {name: A, mass: "2 Msun"}
+    bodies: [{name: B, mass: "1 Msun", a: "10 AU", e: 0.5}]
+    origin: barycentre                  # both stars go round their barycentre
+- id: moonpath
+  type: orbit
+  params:
+    bodies: [{preset: earth}, {preset: moon, curvature: true}]
+    span: "30 d"
+    center: Earth
+    extent: "4.5e7 km"
+- id: tides
+  type: orbit
+  params:
+    central: earth
+    tides: true                         # or {satellite: moon, locking: true, points: 12}
+  beats:
+    - text: "The Moon pulls every part of the Earth almost equally."
+      actions: [{reveal: pull, at: "@pulls"}]
+    - text: "What is left after the pull at the centre stretches the Earth."
+      actions: [{reveal: tidal, at: "@left"}]
+```
+
+- **`system`** — a **restricted three-body pair**: `earth_moon` (μ = 0.012 15, the mean distance
+  384 400 km), `sun_earth` (the Sun with the Earth–Moon barycentre, 1 AU: μ = 3.04 × 10⁻⁶),
+  `sun_jupiter` (μ = 9.54 × 10⁻⁴), or `{primary, secondary, mu, separation}` (preset bodies; `mu`
+  sets the secondary's mass for that ratio). The secondary goes round on a circle (the
+  *circular* restricted problem: the Moon's e = 0.055 is left out), every other body is massless
+  and everything is integrated as n-body (RK45 by default: a small body may pass close to the
+  secondary; `method: leapfrog` to compare) in the barycentre's frame. The central body and the
+  secondary are the system's own (leave `central` out; do not list them in `bodies`). The panel:
+  μ, Routh's test (`μ < 0.0385: L4, L5 stable (Routh)`), which frame is shown, the distances of the
+  L1 / L2 shown from the secondary (Sun–Earth: 1.50 / 1.51 million km), for each body placed near a
+  point its Jacobi constant `C = 2.999236, ΔC/C = 1.5 × 10⁻¹⁰` (it should not change: the drift is
+  the integration's error), its angle ahead of or behind the secondary and what its motion is over
+  the span (`tadpole about L4 (31° to 108°)`, `horseshoe: round past L3 and back`, `passes the
+  secondary: not co-orbital`), and with the energy error ΔE/E the angular-momentum error ΔL/L.
+  `system: figure_eight`: three equal masses on the Chenciner–Montgomery figure-eight (Simó's
+  initial values; `mass` default 1 M☉, `scale` default 1 AU: T = 1.007 yr), seen about their
+  barycentre; the panel says how close they come back after one period.
+- **`view`**: `inertial` (default: the pair goes round) or `rotating` (the frame turns with the
+  pair: both primaries and the Lagrange points stand still; a turning arrow in a corner of the plot
+  and the panel's `rotating frame: one turn / 11.9 yr`). The actions **`corotate`** and
+  **`inertial`** switch on a word (`run_time`, default 2 s: the view turns smoothly); trails are
+  redrawn in the frame shown, so a Trojan's tadpole appears as the frame starts to turn.
+- **`lagrange`**: `true` (L1–L5) or a list: × marks at the points computed for μ (L1–L3 from
+  Szebehely's quintics, L4 / L5 at 60°), turning with the pair in the inertial view. Targets
+  `lagrange` and `lagrange:L1`…
+- **`bodies[].near`** (`L1` … `L5`) with `shift: [x, y]` (in the rotating frame, x along the
+  primary → secondary line; numbers are shares of the separation, or lengths) and `drift: [x, y]`
+  (a velocity in the rotating frame: shares of the secondary's orbital speed, or speeds): the body
+  starts there at rest in the rotating frame (moving with Ω × r). A tadpole: `near: L4, shift:
+  [0.004, 0.0069]`; a horseshoe: `near: L3, shift: [-0.003, 0]` with `sun_jupiter` over ~2 000 yr.
+- **`zero_velocity`**: `true` (the first body placed near a point) or a body's name: the curve
+  2Ω(x, y) = C for its Jacobi constant, which it cannot cross (target `zero_velocity`).
+- **`origin`**: `central` or `barycentre` (default with a `system`): what stays at the centre of
+  the view. A binary star — a central body and one massive body with `origin: barycentre` — draws
+  both ellipses about the barycentre (the lighter star on the larger one; target `barycentre`,
+  `orbit:<name>` for each) and the panel gives the mass ratio and where the barycentre lies.
+- **`resonance`**: two or three bodies around one body, inner first: their period ratios (`T
+  Europa / T Io = 2.0073 ≈ 2:1`), for a 1:2:4 chain the Laplace angle φ = λ₁ − 3λ₂ + 2λ₃ (180°
+  for Io, Europa and Ganymede, whose presets start in that configuration), and each conjunction of
+  neighbours as it happens: a line from the centre through both, bright for a moment and then
+  faint (the last `keep` of each pair), with their count (target `conjunctions`). The Galilean
+  presets `io`, `europa`, `ganymede`, `callisto` have their published sidereal periods (1.769,
+  3.551, 7.155, 16.69 d) on circles in Jupiter's equator.
+- **`bodies[].curvature`**: whether the body's path bends towards the central body over the span,
+  from the forces (the Moon's path around the Sun: `always` — the Sun pulls the Moon about twice as
+  hard as the Earth does).
+- **`center`** (with `extent`): the view centred on where a body is halfway through the span; the
+  central body, when outside the plot, gets an arrow at the edge pointing to it (target `pointer`).
+- **`tides`** — the tidal schematic, a scene of its own (no `bodies`): the planet (the central
+  body, default the satellite's primary) large, the satellite (`satellite`, default `moon`) on a
+  schematic circle moving in real time, arrows of its pull at `points` points of the surface (all
+  nearly equal and parallel; target `pull`), its pull at the centre (`mean`), their difference —
+  the tidal acceleration, outwards on the near and far sides, inwards around the middle, drawn
+  longer by the factor the panel gives (`tidal`) —, the two bulges along the line to the satellite
+  (`bulges`, exaggerated) and with `locking` its near side marked (`face`): it spins once per orbit.
+  The panel gives the pull (3.32 × 10⁻⁵ m/s²), the tidal acceleration (1.13 × 10⁻⁶ m/s², 1/29 of
+  it), the equilibrium tide (0.36 m) and "schematic: sizes, distance and arrows not to scale". Not
+  simulated: the oceans' dynamics, the bulges' lead from the Earth's spin, the Sun's tide.
+- **Checks**: an unknown system (did-you-mean), `central` or `dynamics: kepler` with a system,
+  bodies with the figure-eight, a `near` body with elements, `near` / `view: rotating` /
+  `lagrange` / `zero_velocity` / `corotate` without a pair, a primary lighter than its secondary,
+  `follow` with the barycentre's view, `center` without `extent`, a resonance not inside-out or
+  around different bodies, `tides` with bodies, a system, a transfer.
+
 | param | type | default | meaning |
 | --- | --- | --- | --- |
 | `title` | str | `""` | title |
@@ -5917,6 +6049,17 @@ so in a caption).
 | `bodies[].velocity` | bool \| `{live, along, readout}` | `false` | velocity vectors (`live` true, `along` 0, `readout` true) |
 | `bodies[].alongside` | body name | — | start where that body is, moving with it |
 | `bodies[].burns` | list of `{at, prograde, retrograde, radial, anti_radial, normal, anti_normal, label}` | `[]` | impulsive burns (above) |
+| `system` | `earth_moon` \| `sun_earth` \| `sun_jupiter` \| `figure_eight` \| `{preset, primary, secondary, mu, separation, mass, scale}` | — | a restricted three-body pair or the figure-eight (above) |
+| `view` | `inertial` \| `rotating` | `inertial` | the frame shown with a three-body pair |
+| `origin` | `central` \| `barycentre` | `barycentre` with a system, else `central` | what stays at the centre |
+| `lagrange` | bool \| list of `L1`…`L5` | `false` | Lagrange points of the pair |
+| `zero_velocity` | bool \| body name | `false` | a body's zero-velocity curve |
+| `resonance` | list of 2–3 names \| `{bodies, conjunctions, keep}` | — | period ratios, the Laplace angle, conjunctions |
+| `center` | body name | — | centre a close-up (with `extent`) on a body |
+| `tides` | bool \| `{satellite, locking, points}` | — | the tidal schematic |
+| `bodies[].near` | `L1` … `L5` | — | start at a Lagrange point (with a system) |
+| `bodies[].shift`, `drift` | `[x, y]` | — | the start moved / given a velocity, in the rotating frame |
+| `bodies[].curvature` | bool | `false` | which way its path bends around the central body |
 
 ### `function_plot`
 
@@ -11591,7 +11734,7 @@ a title card, a `transform` of a bar).
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
-| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `readout` | reveal, highlight, sweep, launch, burn, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
+| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `burn:<n>`, `transfer`, `phase`, `asymptotes`, `turn`, `v_inf`, `motion`, `atmosphere`, `vectors`, `v_before`, `v_after`, `lagrange`, `lagrange:<L>`, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`, `pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`, `readout` | reveal, highlight, sweep, launch, burn, corotate, inertial, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `burn:1` a burn's Δv arrow and label (`burn` times it to a word); `transfer` the planned path, `phase` the phase angle; a flyby's `asymptotes`, `turn` (δ), `v_inf`, `motion`, `atmosphere` and its vector diagram `vectors` (`v_before`, `v_after`); a three-body pair's `lagrange` (`lagrange:L4` one point), `zero_velocity` curve and `rotation` badge; `barycentre`; a resonance's `conjunctions`; a close-up's `pointer` to the central body; the tidal schematic's `pull`, `mean`, `tidal`, `bulges`, `face`; `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
@@ -11666,6 +11809,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `substitute`, `compute`, `convert` | as the target: a calculation (`- compute: calc1` or `"calc:v"`) | on a [`calculation`](#calculation): shows the values substituted into its formula (1.2 s), its result in its box (1.4 s; an intermediate value first) or its conversions (1.2 s) on a word, with the lines before it that are not on screen yet (an earlier calculation leaves, its result joining the table) and the lines after it that no action names; the scene's own steps leave those lines to the action. `reveal: formula2` shows a formula; `highlight: "symbol:G"` marks a symbol in the table and the lines on screen. `convert` needs `convert:` units. |
 | `sweep`, `launch` | as the target: a body's sectors (`- sweep: "sectors:Comet"`) or a shot of the cannon (`- launch: "shot:3"`, `"shot:*"`) | on an [`orbit`](#orbit): from that moment on the scene's clock the body's equal-time sectors fill as it sweeps them, or the shot flies (the bodies keep moving; no animation of its own). Without these actions sectors and shots start with the motion. |
 | `burn`, `flyby`, `pause`, `coast` | `burn`: a burn (`- burn: "burn:2"`); the others no target (`- action: pause`) | on an [`orbit`](#orbit): the scene's clock is planned through their words — `burn` puts a burn (its simulated time fixed by the orbit) on its word, `flyby` the closest approach, `pause` holds the clock still until a `coast` (or the end of its beat); each stretch runs at its own speed-up, shown in the panel. Burns on words keep their order. |
+| `corotate`, `inertial` | none (`- action: corotate`, `run_time` default 2 s) | on an [`orbit`](#orbit) with a three-body `system`: the view turns smoothly into the frame rotating with the pair (`corotate`) or back to the fixed stars (`inertial`); trails redraw in the frame shown. |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |

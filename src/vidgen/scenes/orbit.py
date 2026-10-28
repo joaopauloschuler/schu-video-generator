@@ -9,8 +9,11 @@ shows as it is. Step 230 adds the overlays of Kepler's laws and orbital speed (t
 geometry, equal-time sectors, velocity vectors, Newton's cannonball: ``orbit_overlays.py``) and
 the actions ``sweep`` and ``launch`` (``orbit_actions.py``). Step 231 adds manoeuvres — burns,
 transfers (Hohmann, bi-elliptic, phasing), a flyby with its Sun-frame vector diagram — and a
-clock that can run in stretches (a burn on its word, pauses): ``orbit_manoeuvres.py``. The params
-and the model are in ``orbit_parts.py``; the physics in ``vidgen.orbits``."""
+clock that can run in stretches (a burn on its word, pauses): ``orbit_manoeuvres.py``. Step 232
+adds many bodies — a restricted three-body pair in the inertial or rotating frame with its
+Lagrange points, the figure-eight, binaries, resonances, the tidal schematic:
+``orbit_systems.py`` (params) and ``orbit_many.py`` (drawing). The params and the model are in
+``orbit_parts.py``; the physics in ``vidgen.orbits``."""
 
 import math
 from dataclasses import replace
@@ -22,7 +25,9 @@ from vidgen.api import *
 
 from .orbit_manoeuvres import VECTOR_GAP, OrbitManoeuvres
 from .orbit_overlays import OrbitOverlays, Slot, arrow_shape, leader_points, mob_rect, new_arrow, place
-from .orbit_parts import OrbitBody, OrbitCannon, OrbitCentral, OrbitFlyby, OrbitModel, OrbitTransfer, Value, resolve_model
+from .orbit_many import OrbitMany, many_target_names
+from .orbit_parts import LagrangeName, OrbitBody, OrbitCannon, OrbitCentral, OrbitFlyby, OrbitModel, OrbitTransfer, Value, resolve_model
+from .orbit_systems import ManySpec, OrbitResonance, OrbitSystem, OrbitTides
 
 #: Smallest drawn radius (Manim units) of the central body and of an orbiting body: smaller
 #: bodies are enlarged to it (and the readout says "sizes not to scale").
@@ -53,7 +58,7 @@ MODEL_CACHE = 32
 
 
 @scene("orbit")
-class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
+class Orbit(OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
     """Orbits in correct timing: a central body (``central``: a preset or your own) and
     ``bodies`` on Kepler orbits (presets, elements, or a position and velocity), drawn as conics
     with the bodies moving along them through the whole scene at one speed-up (``span`` or
@@ -71,16 +76,22 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
     ``geometry:<name>``, ``foci:<name>``, ``axes:<name>``, ``periapsis:<name>``,
     ``apoapsis:<name>``, ``sectors:<name>``, ``velocity:<name>``, ``cannon``, ``shot:<n>``,
     ``burn:<n>``, ``transfer``, ``phase``, ``asymptotes``, ``turn``, ``v_inf``, ``motion``,
-    ``atmosphere``, ``vectors``, ``v_before``, ``v_after``, ``readout``; actions ``sweep``
-    (sectors), ``launch`` (shots), ``burn`` (a burn on its word), ``flyby`` (the periapsis
-    passage on its word), ``pause`` and ``coast`` (the clock held and run again).
+    ``atmosphere``, ``vectors``, ``v_before``, ``v_after``, ``lagrange``, ``lagrange:<L>``,
+    ``zero_velocity``, ``rotation``, ``barycentre``, ``conjunctions``, ``pointer``, ``pull``,
+    ``mean``, ``tidal``, ``bulges``, ``face``, ``readout``; actions ``sweep`` (sectors),
+    ``launch`` (shots), ``burn`` (a burn on its word), ``flyby`` (the periapsis passage on its
+    word), ``pause`` and ``coast`` (the clock held and run again), ``corotate`` and ``inertial``
+    (the view of a three-body pair turned on a word). Many bodies (Step 232): ``system`` (a
+    restricted three-body pair or the figure-eight), ``view``, ``origin``, ``lagrange``,
+    ``zero_velocity``, ``resonance``, ``center``, ``tides``.
     """
 
     outro = 0.5
     orbit_actions = True
     target_patterns = ("title", "frame", "central", "body:<name>", "orbit:<name>", "geometry:<name>", "foci:<name>", "axes:<name>",
                        "periapsis:<name>", "apoapsis:<name>", "sectors:<name>", "velocity:<name>", "cannon", "shot:<n>", "burn:<n>", "transfer",
-                       "phase", "asymptotes", "turn", "v_inf", "motion", "atmosphere", "vectors", "v_before", "v_after", "readout")
+                       "phase", "asymptotes", "turn", "v_inf", "motion", "atmosphere", "vectors", "v_before", "v_after", "lagrange", "lagrange:<L>",
+                       "zero_velocity", "rotation", "barycentre", "conjunctions", "pointer", "pull", "mean", "tidal", "bulges", "face", "readout")
 
     class Params(SceneParams):
         title: TranslatableStr = ""
@@ -102,7 +113,7 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         dynamics: Literal["kepler", "nbody"] = "kepler"
         """kepler: each body on its two-body orbit (exact, Kepler's equation); nbody: every body with mass pulls on every other (integrated)."""
         method: str = "leapfrog"
-        """n-body method: leapfrog (velocity Verlet, symplectic: energy error bounded) or rk45 (adaptive; drifts over long runs)."""
+        """n-body method: leapfrog (velocity Verlet, symplectic: energy error bounded) or rk45 (adaptive; drifts over long runs; the default with a three-body pair, whose small body may pass close to the secondary)."""
         step: Value | None = None
         """n-body leapfrog step ('1 h'); default 1/1000 of the shortest orbital time scale."""
         frame: Literal["axes", "scale_bar", "none"] = "axes"
@@ -131,13 +142,37 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         """Title size."""
         title_color: ThemeColor = "text"
         """Title color."""
+        system: OrbitSystem | None = None
+        """Many bodies (Step 232): a circular restricted three-body pair — earth_moon, sun_earth, sun_jupiter, or {primary: sun, secondary: jupiter, mu: 0.05} — integrated with every body near it (n-body), or figure_eight (three equal masses, Chenciner–Montgomery)."""
+        view: Literal["inertial", "rotating"] = "inertial"
+        """With a three-body pair: inertial (the pair goes round) or rotating (the frame turns with the pair: both stand still, the Lagrange points too); the actions corotate and inertial switch on a word."""
+        origin: Literal["central", "barycentre"] | None = None
+        """What stays at the centre of the view: the central body, or the barycentre of the bodies with mass (default with system; a binary star: both stars go round it)."""
+        lagrange: bool | list[LagrangeName] = False
+        """With a three-body pair: mark the Lagrange points (true: L1–L5, or some of them) computed for its mass ratio; their distances and Routh's stability test in the panel."""
+        zero_velocity: bool | str = False
+        """With a three-body pair: draw the zero-velocity curve of a body placed near a Lagrange point (true: the first), for its Jacobi constant: it cannot cross it."""
+        resonance: OrbitResonance | None = None
+        """A mean-motion resonance: [Io, Europa, Ganymede] or {bodies, conjunctions, keep}: period ratios, the Laplace angle of a 1:2:4 chain, conjunctions marked as they happen."""
+        center: str | None = None
+        """Centre the view on where this body is halfway through the span (with extent: a close-up; the central body far off is shown by an arrow at the edge)."""
+        tides: OrbitTides | bool | None = None
+        """The tidal schematic (true or {satellite: moon, locking, points}): the satellite's pull at points of the planet, the differential (tidal) arrows, the two bulges, tidal locking; labelled schematic, not to scale."""
 
         @model_validator(mode="after")
         def _consistent(self) -> "Orbit.Params":
-            if self.energy and self.dynamics != "nbody":
+            if self.tides is False:
+                self.tides = None
+            if self.tides is True:
+                self.tides = OrbitTides()
+            if self.energy and self.dynamics != "nbody" and self.system is None:
                 raise ValueError("energy: the energy error is shown for dynamics: nbody (Kepler orbits conserve it exactly)")
-            if self.method != "leapfrog" and self.dynamics != "nbody":
+            if self.method != "leapfrog" and self.dynamics != "nbody" and self.system is None:
                 raise ValueError("method is the n-body integrator; it needs dynamics: nbody")
+            if self.center is not None and self.extent is None:
+                raise ValueError("center: give extent too (the half-width of the close-up around it, '3e6 km')")
+            if self.center is not None and self.follow is not None:
+                raise ValueError("center: the view stays still around the body's start; leave out follow (or center)")
             try:
                 self.model()
             except VidgenError as error:
@@ -150,25 +185,32 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
             if key not in _MODELS:
                 if len(_MODELS) >= MODEL_CACHE:   # a long-running process (the MCP server) keeps the recent ones
                     del _MODELS[next(iter(_MODELS))]
+                fields = self.model_fields_set
+                many = ManySpec(self.system, "central" in fields, "dynamics" in fields, self.resonance, self.origin, self.view, self.center,
+                                self.tides if isinstance(self.tides, OrbitTides) else None, self.lagrange, self.zero_velocity, "method" in fields)
                 _MODELS[key] = resolve_model(self.central, self.bodies, span=self.span, orbit_count=self.orbits, dynamics=self.dynamics,
                                              method=self.method, step=self.step, follow=self.follow, cannon=self.cannonball, transfer=self.transfer,
-                                             flyby=self.flyby)
+                                             flyby=self.flyby, many=many)
             return _MODELS[key]
 
         def body_specs(self) -> list[OrbitBody]:
-            """The bodies as written, then those the scene adds (a flyby's probe)."""
-            return [*self.bodies, *self.model().extra_bodies]
+            """The bodies as resolved: a system's own first, then those written, then those the
+            scene adds (a flyby's probe)."""
+            return self.model().specs
 
         def shows_energy(self) -> bool:
-            return self.dynamics == "nbody" and self.energy is not False
+            return self.model().run is not None and self.energy is not False
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
         names = (["title"] if params.title else []) + ["frame", "central"]
         model = params.model()
+        many, no_orbit = many_target_names(params)
+        if model.many is not None and model.many.tides is not None:
+            return names + [f"body:{model.system.orbiters[0].name}", *many, "readout"]
         for spec, o in zip(params.body_specs(), model.system.orbiters):
             names.append(f"body:{o.name}")
-            if spec.orbit:
+            if spec.orbit and o.name not in no_orbit:
                 names.append(f"orbit:{o.name}")
             parts = spec.geometry_parts()
             if parts:
@@ -190,6 +232,7 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
             names += ["asymptotes", "turn", "v_inf", f"periapsis:{model.assist.probe}", "motion"] + (["atmosphere"] if fb.atmosphere > 0 else [])
             if params.flyby.vectors:
                 names += ["vectors", "v_before", "v_after"]
+        names += many
         if params.readout or params.shows_energy() or any(s.velocity_spec() or s.sector_spec() or s.geometry_parts() for s in params.body_specs()) \
                 or model.shots or model.burns() or model.assist is not None:
             names.append("readout")
@@ -207,6 +250,8 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
                     return str(spec.label) or key
         if kind == "central":
             central = params.central
+            if params.system is not None or params.tides:   # the system's own primary (the figure-eight's A, the tides' planet)
+                return params.model().system.central.name
             return (str(central.label) or central.name or central.preset) if isinstance(central, OrbitCentral) else central.capitalize()
         return None
 
@@ -267,6 +312,17 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         portrait = self.is_portrait
         size = chart_label_size(p.label_size if p.label_size is not None else "caption", self.theme)
         self._size = size
+        self._begin = begin
+        self._video_now = begin
+        if model.many is not None:
+            model.turn = model.many.turn0   # a model is shared by renders: each starts from its own view
+            self._switches = self._turn_plan()
+            if model.many.tides is not None:
+                self._held = self._held_patterns()
+                self._construct_tides(begin)
+                return
+        else:
+            self._switches = []
         body = self.safe_area
         title = None
         if p.title:
@@ -287,14 +343,16 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         reach = fixed if fixed is not None else max(np.max(np.abs(xs)), np.max(np.abs(ys)))
         unit_name, unit_m = orbits.length_unit(reach, p.unit)
         self._unit_m, self._unit_name = unit_m, unit_name
+        self._view_centre = (0.0, 0.0)
+        if model.many is not None and model.many.center is not None:
+            at = model.view(model.many.center, model.span / 2)
+            self._view_centre = (float(at[0]) / unit_m, float(at[1]) / unit_m)
 
         # the side panel (time, speed-up, energy, the overlays' values, a legend), beside the
         # plot (16:9) or above it (9:16), sized for the widest value it will show
-        self._begin = begin
         self._lines_static = [orbits.speedup_text(model.span / self._motion_seconds())] if p.readout else []
         self._t_unit = orbits.time_unit(model.span)
         self._note = ""   # "sizes not to scale", known once the drawing scale is
-        self._video_now = begin
         slots: list[Slot] = []
         if p.readout:
             slots.append(Slot([self._time_line(model.span * k / 200) for k in range(201)], value=self._time_line))
@@ -302,6 +360,9 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
             slots.append(Slot(list(self._lines_static) + rates, value=lambda t: self._rate_text()))
         if p.shows_energy():
             slots.append(Slot([self._energy_line(-1.23e-10), self._energy_line(-9.99e-9)], value=lambda t: self._energy_line(self._model.energy_error(t))))
+            if model.many is not None:   # Step 232: the angular momentum's too
+                slots += self._angular_slot()
+        slots += self._many_slots()
         slots += self._manoeuvre_slots()
         slots += self._overlay_slots()
         has_panel = bool(slots)
@@ -353,6 +414,7 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         central_spec = p.central if isinstance(p.central, OrbitCentral) else OrbitCentral(preset=p.central)
         centre = model.system.central
         central_color = self.theme.color(central_spec.color or centre.color or "highlight")
+        self._central_color = central_color
         enlarged = False
         true_r = centre.radius * self._scale
         central_dot = Circle(radius=max(true_r, MIN_CENTRAL_RADIUS)).set_fill(central_color, opacity=1).set_stroke(width=0).set_z_index(3)
@@ -388,6 +450,8 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         for spec, o in zip(p.body_specs(), model.system.orbiters):
             if not spec.orbit or o.trajectory is not None:   # a body that burns: its orbits arc by arc (orbit_manoeuvres)
                 continue
+            if model.many is not None and model.many.origin == "barycentre":   # its Kepler orbit is not its path there (orbit_many draws a binary's)
+                continue
             rel = o.elements.conic(CONIC_SAMPLES, r_max=1.5 * diagonal)
             moves = model.run is not None or not (o.parent == model.follow)
             container = VGroup()
@@ -396,7 +460,7 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         self._trails = {name: VGroup(*[VMobject() for _ in range(TRAIL_PIECES)]) for name, seconds in model.trails.items() if seconds > 0}
         for name, group in self._trails.items():
             for k, piece in enumerate(group):
-                piece.set_stroke(colors[name], width=4, opacity=0.08 + 0.8 * (k + 1) / TRAIL_PIECES)
+                piece.set_stroke(colors.get(name, central_color), width=4, opacity=0.08 + 0.8 * (k + 1) / TRAIL_PIECES)
             group.set_z_index(2)
 
         self._readout = VGroup()
@@ -406,6 +470,7 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
 
         self._build_orbit_overlays()
         self._build_manoeuvres()
+        self._build_many()
         self._t = 0.0
         self._draw(0.0)
         self._register(title, caption, frame_parts)
@@ -462,6 +527,9 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         """x and y (m) of what the view must show: every body over the span in the view's
         frame and the whole closed orbits around a still centre, the cannon's closed shots and
         falling ones whole; an open orbit only out to three times the size of the rest."""
+        many = self._many_extent_points()
+        if many is not None:   # Step 232: the barycentre's view (inertial and / or rotating)
+            return many
         ts = np.linspace(0.0, model.span, 400)
         system = model.system
         follow = model.follow
@@ -529,7 +597,8 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         p = self.params
         portrait = self.is_portrait
         if extent is not None:
-            x_lo, x_hi, y_lo, y_hi = -extent, extent, -extent, extent
+            cx, cy = self._view_centre   # Step 232: a close-up around a body's start (else the centre)
+            x_lo, x_hi, y_lo, y_hi = cx - extent, cx + extent, cy - extent, cy + extent
         else:   # the data's box with a margin: the plot hugs the orbits (no axis runs on past them)
             x_lo, x_hi, y_lo, y_hi = float(xs.min()), float(xs.max()), float(ys.min()), float(ys.max())
             span = max(x_hi - x_lo, y_hi - y_lo, 1e-12)
@@ -629,7 +698,8 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         self._title, self._caption = title, caption
         self._frame_parts = frame_parts
         self.target("frame", VGroup(frame_parts, *([caption] if caption is not None else [])))
-        self.target("central", VGroup(*self._central, self._leaders[self._model.system.central.name]))
+        centre = self._model.system.central.name
+        self.target("central", VGroup(*self._central, self._leaders[centre], *([self._trails[centre]] if centre in self._trails else [])))
         for spec, o in zip(p.body_specs(), self._model.system.orbiters):
             dot, label = self._bodies[o.name]
             parts = [dot, label, self._leaders[o.name]] + ([self._trails[o.name]] if o.name in self._trails else [])
@@ -716,6 +786,8 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         """Put everything where it is at simulated time ``t`` (s)."""
         self._t = t
         model = self._model
+        if model.many is not None:   # how far the view turns with a three-body pair now (a switch on a word)
+            model.turn = self._turn_at(self._video_now)
         plot = self._lay.plot
         centre = model.system.central.name
         anchors = {centre: model.view(centre, t)}
@@ -738,7 +810,8 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
             plot_draw.morph_into(container, line)
         for name, group in self._trails.items():
             length = model.trails[name]
-            ts = np.linspace(max(0.0, t - length), t, TRAIL_SAMPLES + 1)
+            samples = model.many.trail_samples.get(name, TRAIL_SAMPLES) if model.many is not None else TRAIL_SAMPLES
+            ts = np.linspace(max(0.0, t - length), t, samples + 1)
             if ts[-1] - ts[0] <= 0:
                 for piece in group:
                     piece.clear_points()
@@ -747,18 +820,21 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
             # a trail starts where the motion started: its pieces cover the length it has
             share = (ts[-1] - ts[0]) / length
             first = TRAIL_PIECES - max(1, math.ceil(share * TRAIL_PIECES - 1e-9))
-            bounds = np.linspace(0, TRAIL_SAMPLES, TRAIL_PIECES - first + 1).round().astype(int)
+            bounds = np.linspace(0, samples, TRAIL_PIECES - first + 1).round().astype(int)
             for k, piece in enumerate(group):
                 piece.clear_points()
                 if k < first:
                     continue
                 a, b = bounds[k - first], bounds[k - first + 1]
-                for run in plotcore.clip_polyline(pts[a:b + 1], plot):
+                seg = pts[a:b + 1]
+                inside = bool(np.all((seg[:, 0] >= plot.x0) & (seg[:, 0] <= plot.x1) & (seg[:, 1] >= plot.y0) & (seg[:, 1] <= plot.y1)))
+                for run in ([seg] if inside else plotcore.clip_polyline(seg, plot)):   # all inside: the same run, without the per-segment clipping
                     if len(run) >= 2:
                         piece.start_new_path(run[0])
                         piece.add_points_as_corners(run[1:])
         self._draw_orbit_overlays(t, anchors)
         self._draw_manoeuvres(t, anchors)
+        self._draw_many(t, anchors)
         self._place_labels(items, plot)
         self._draw_readout(t)
 
@@ -777,7 +853,7 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         sides, else further out with a thin leader line to it. A label keeps its place while
         that stays about as good (labels move with their bodies without jumping about)."""
         dots = [(name, _rect(dot, 0.03)) for name, dot, _ in items if getattr(dot, "_orbit_shown", True)]
-        taken = ([self._panel_rect()] if self._readout_box is not None else []) + list(self._static_boxes) + self._manoeuvre_boxes()
+        taken = ([self._panel_rect()] if self._readout_box is not None else []) + list(self._static_boxes) + self._manoeuvre_boxes() + self._many_boxes()
         lines = [pts for pts in self._conic_points.values() if len(pts)] + self._manoeuvre_lines()
         points = np.concatenate(lines)[:, :2] if lines else None
         placed: list[np.ndarray] = []
@@ -828,10 +904,17 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
             return
         self._last_lines = key
         rows = []
+        used: list[Any] = []
         for slot, text in zip(self._slots, lines):
             size = self._size * slot.scale
-            mob = self._cached(text or slot.probes[0], size, slot.color)
-            if not text:   # an empty row keeps its height (a text without points would not)
+            if text:   # the cached text itself (its points put back after the panel is drawn: copying every row each frame is slow)
+                mob = self._template(text, size, slot.color)
+                if any(m is mob for m in used):   # the same text twice in one panel: the second a copy
+                    mob = self._cached(text, size, slot.color)
+                else:
+                    used.append(mob)
+            else:   # an empty row keeps its height (a text without points would not)
+                mob = self._cached(slot.probes[0], size, slot.color)
                 mob.set_opacity(0)
             if slot.swatch is not None:
                 dot = Circle(radius=0.07).set_fill(slot.swatch, opacity=1).set_stroke(width=0)
@@ -855,7 +938,25 @@ class Orbit(OrbitManoeuvres, OrbitOverlays, NarratedScene):
         plate = RoundedRectangle(width=box.width, height=box.height, corner_radius=0.08)
         plate.set_fill(self.theme.background, opacity=0.88).set_stroke(self.theme.color("dim"), width=1, opacity=0.5)
         plate.move_to([box.center[0], box.center[1], 0])
-        plot_draw.morph_into(self._readout, VGroup(plate.set_z_index(6), group.set_z_index(6.5)))
+        drawing = VGroup(plate.set_z_index(6), group.set_z_index(6.5))
+        missing = len(drawing.family_members_with_points()) - len(self._readout.submobjects)
+        if missing > 0:   # members of its own, so the cached texts never become the panel's
+            self._readout.add(*[VMobject() for _ in range(missing)])
+        plot_draw.morph_into(self._readout, drawing)
+        for mob in used:
+            for member, points in self._template_points[id(mob)]:
+                member.points = points.copy()
+
+    def _template(self, text: str, size: float, color: str) -> Mobject:
+        """A cached text drawn in place (not copied); :meth:`_draw_readout` puts its points back."""
+        key = f"{color}|{size}|{text}"
+        if not hasattr(self, "_templates"):
+            self._templates, self._template_points = {}, {}
+        if key not in self._templates:
+            mob = self._cached(text, size, color)
+            self._templates[key] = mob
+            self._template_points[id(mob)] = [(m, m.points.copy()) for m in mob.family_members_with_points()]
+        return self._templates[key]
 
     def _cached(self, text: str, size: float, color: str) -> Mobject:
         key = f"{color}|{size}|{text}"

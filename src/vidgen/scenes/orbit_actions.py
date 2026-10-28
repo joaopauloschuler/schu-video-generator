@@ -5,7 +5,8 @@ on the scene's clock (the bodies keep moving; nothing pauses). ``reveal`` shows 
 (``foci:Comet``, ``axes:Comet``, ``periapsis:Comet``...) or the velocity arrows
 (``velocity:Comet``), ``highlight`` marks them. Step 231 adds the clock actions ``burn`` (a burn
 on its word), ``flyby`` (the closest approach on its word), ``pause`` and ``coast``: the scene
-plans its clock through their words when the motion starts. Written against ``vidgen.api``; the
+plans its clock through their words when the motion starts. Step 232 adds ``corotate`` and
+``inertial``: the view of a three-body pair turned on a word. Written against ``vidgen.api``; the
 scene draws (``scenes/orbit.py``, ``scenes/orbit_overlays.py``, ``scenes/orbit_manoeuvres.py``)."""
 
 from fnmatch import fnmatchcase
@@ -104,6 +105,36 @@ class PauseAction(_ClockCue):
 @action("coast")
 class CoastAction(_ClockCue):
     """Run the clock again from a word after a ``pause`` (``- action: coast``, ``at: "@on"``)."""
+
+
+class _FrameCue(_ClockCue):
+    """Switch the view of a three-body pair on a word (Step 232)."""
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        out = super().scene_problems(scene_cls, params)
+        if out:
+            return out
+        name = type(self).__name__.removesuffix("Action").lower()
+        try:
+            many = params.model().many
+        except VidgenError:
+            return []
+        if many is None or many.restricted is None:
+            return [("action", f"{name} turns the view of a three-body pair; it needs system: earth_moon, sun_earth, sun_jupiter or {{primary, secondary}}")]
+        return []
+
+
+@action("corotate")
+class CorotateAction(_FrameCue):
+    """Turn the view into the frame rotating with a three-body pair (``- action: corotate``,
+    ``at: "@rotating"``, ``run_time: 2``): over the run time the view turns until both primaries
+    stand still, the Lagrange points with them; trails redraw in that frame (a Trojan's tadpole).
+    The panel says which frame is shown."""
+
+
+@action("inertial")
+class InertialAction(_FrameCue):
+    """Turn the view back to the inertial frame (the fixed stars): the pair goes round again."""
 
 
 @action("launch")

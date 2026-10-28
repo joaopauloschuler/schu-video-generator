@@ -42,13 +42,45 @@ class NBodyRun:
     energy: np.ndarray
     method: str
     step: float | None
+    angular: np.ndarray | None = None
+    angular_scale: float = 0.0
 
     @property
     def drift(self) -> float:
         """The largest relative change of the energy: max |E − E₀| / max(|E₀|, max |E|)."""
-        e = self.energy
-        scale = max(abs(float(e[0])), float(np.max(np.abs(e))))
-        return float(np.max(np.abs(e - e[0])) / scale) if scale > 0 else 0.0
+        return _relative_drift(self.energy)
+
+    def _l_scale(self) -> float:
+        """What an angular-momentum change is measured against: |L₀|, or Σ GMᵢ |rᵢ| |vᵢ| when the
+        total is (near) zero (the figure-eight's)."""
+        return max(abs(float(self.angular[0])), self.angular_scale)
+
+    @property
+    def angular_drift(self) -> float:
+        """The largest relative change of the angular momentum (Step 232; 0 when not recorded)."""
+        if self.angular is None or self._l_scale() == 0:
+            return 0.0
+        return float(np.max(np.abs(self.angular - self.angular[0]))) / self._l_scale()
+
+    def angular_error(self, k: int) -> float:
+        """(L − L₀)/|L₀| at output ``k`` (|L₀| replaced as in :attr:`angular_drift`; 0 when not recorded)."""
+        if self.angular is None or self._l_scale() == 0:
+            return 0.0
+        return float(self.angular[k] - self.angular[0]) / self._l_scale()
+
+    def velocity(self, name: str, t: Any) -> np.ndarray:
+        """Velocity relative to the central body at time(s) ``t`` (the derivative of the
+        Hermite interpolant of :meth:`position`)."""
+        k = self.names.index(name)
+        ts = np.atleast_1d(np.asarray(t, dtype=float))
+        times = self.times
+        j = np.clip(np.searchsorted(times, ts, side="right") - 1, 0, len(times) - 2)
+        h = (times[j + 1] - times[j])[:, None]
+        s = np.clip((ts - times[j])[:, None] / h, 0.0, 1.0)
+        p0, p1 = self.positions[k, j], self.positions[k, j + 1]
+        v0, v1 = self.velocities[k, j], self.velocities[k, j + 1]
+        out = ((6 * s**2 - 6 * s) * p0 / h + (3 * s**2 - 4 * s + 1) * v0 + (-6 * s**2 + 6 * s) * p1 / h + (3 * s**2 - 2 * s) * v1)
+        return out[0] if np.ndim(t) == 0 else out
 
     def position(self, name: str, t: Any) -> np.ndarray:
         """Position relative to the central body at time(s) ``t``, between the outputs by cubic
@@ -84,13 +116,16 @@ def default_step(system: System) -> float:
     return min(scales) / STEPS_PER_ORBIT
 
 
-def simulate(system: System, span: float, *, method: str = "leapfrog", step: float | None = None, samples: int = 2000) -> NBodyRun:
+def simulate(system: System, span: float, *, method: str = "leapfrog", step: float | None = None, samples: int = 2000,
+             initial: dict[str, tuple[Any, Any]] | None = None) -> NBodyRun:
     """Integrate the system from its Kepler states at t = 0 for ``span`` seconds, every body
     with ``gm`` > 0 pulling on all others (bodies of ``gm`` 0 are test particles). ``step``:
     the leapfrog step (default :func:`default_step`). The energy is the total
     Σ ½ GMᵢ vᵢ² − Σ GMᵢ GMⱼ / rᵢⱼ (the energy times G, in the barycentre's frame) when more than
     one body has mass; with the central body's mass alone, the test particles' specific energies
-    ½ v² − GM/r added up."""
+    ½ v² − GM/r added up. ``initial`` (Step 232): starting states (position, velocity relative to
+    the central body) that replace bodies' Kepler states — the figure-eight, whose bodies' states
+    relative to one of them are no Kepler orbit."""
     method = method_name(method)
     if span <= 0:
         raise VidgenError(f"an n-body run needs a positive time span (got {span:g} s)")
@@ -99,7 +134,10 @@ def simulate(system: System, span: float, *, method: str = "leapfrog", step: flo
     n = len(names)
     r0, v0 = np.zeros((n, 3)), np.zeros((n, 3))
     for k, name in enumerate(system.names, start=1):
-        r0[k], v0[k] = system.state(name, 0.0)
+        if initial is not None and name in initial:
+            r0[k], v0[k] = (np.asarray(x, dtype=float) for x in initial[name])
+        else:
+            r0[k], v0[k] = system.state(name, 0.0)
     total = float(gm.sum())
     r0 -= (gm[:, None] * r0).sum(axis=0) / total   # barycentric
     v0 -= (gm[:, None] * v0).sum(axis=0) / total
@@ -135,7 +173,29 @@ def simulate(system: System, span: float, *, method: str = "leapfrog", step: flo
     pos = xs.reshape(len(times), n, 3).transpose(1, 0, 2) * length
     vel = us.reshape(len(times), n, 3).transpose(1, 0, 2) * unit_v
     energy = _energy(gm, pos, vel)
-    return NBodyRun(names, np.asarray(times) * unit_t, pos - pos[0], vel - vel[0], energy, method, None if h is None else h * unit_t)
+    angular, scale = _angular(gm, pos, vel)
+    return NBodyRun(names, np.asarray(times) * unit_t, pos - pos[0], vel - vel[0], energy, method, None if h is None else h * unit_t, angular, scale)
+
+
+def _relative_drift(e: np.ndarray) -> float:
+    scale = max(abs(float(e[0])), float(np.max(np.abs(e))))
+    return float(np.max(np.abs(e - e[0])) / scale) if scale > 0 else 0.0
+
+
+def _angular(gm: np.ndarray, pos: np.ndarray, vel: np.ndarray) -> tuple[np.ndarray, float]:
+    """The conserved angular momentum's z part at each output — Σ GMᵢ (rᵢ × vᵢ) in the
+    barycentre with more than one massive body, else the test particles' specific r × v about
+    the central body added up (Step 232) — and its natural size at the start, Σ |rᵢ| |vᵢ| with
+    the same weights."""
+    massive = np.flatnonzero(gm > 0)
+    if len(massive) > 1:
+        w, r, v = gm, pos, vel
+    else:
+        c = massive[0]
+        w, r, v = np.where(np.arange(len(gm)) == c, 0.0, 1.0), pos - pos[c], vel - vel[c]
+    lz = np.einsum("i,it->t", w, r[:, :, 0] * v[:, :, 1] - r[:, :, 1] * v[:, :, 0])
+    scale = float(np.sum(w * np.linalg.norm(r[:, 0], axis=-1) * np.linalg.norm(v[:, 0], axis=-1)))
+    return lz, scale
 
 
 def _energy(gm: np.ndarray, pos: np.ndarray, vel: np.ndarray) -> np.ndarray:

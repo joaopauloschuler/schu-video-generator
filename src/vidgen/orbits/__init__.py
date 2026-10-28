@@ -4,7 +4,9 @@ quantities — vis-viva, period, energy, angular momentum, apsides, time of flig
 (:mod:`.elements`), bodies and preset orbits with their sources (:mod:`.bodies`), values with
 units (:mod:`.values`), systems of bodies moved by Kepler's laws and the video's clock
 (:mod:`.system`), n-body motion on Phase W's integrators (:mod:`.nbody`), Kepler's laws
-(:mod:`.laws`), burns and transfers (:mod:`.manoeuvres`) and gravity assists (:mod:`.flyby`). The ``orbit``
+(:mod:`.laws`), burns and transfers (:mod:`.manoeuvres`), gravity assists (:mod:`.flyby`), the
+restricted three-body problem (:mod:`.threebody`) and many bodies — the figure-eight, binaries,
+resonances, tides (:mod:`.manybody`). The ``orbit``
 scene type draws them. Exported by ``vidgen.api`` as the module ``orbits``."""
 
 from .bodies import ALIASES as PRESET_ALIASES, BODIES, GM_EARTH, GM_SUN, ORBITS, R_EARTH, SIDEREAL_DAY, Body, OrbitPreset, body_preset, orbit_preset, preset_key
@@ -53,11 +55,78 @@ from .manoeuvres import (
     synodic_period,
     window_wait,
 )
+from .manybody import (
+    FIGURE_EIGHT_PERIOD,
+    FIGURE_EIGHT_V3,
+    FIGURE_EIGHT_X1,
+    Choreography,
+    barycentre,
+    bends_toward,
+    binary_shares,
+    conjunctions,
+    equilibrium_tide,
+    figure_eight,
+    laplace_angle,
+    nearest_ratio,
+    tidal_acceleration,
+)
 from .nbody import METHOD_ALIASES, METHODS, NBodyRun, default_step, method_name, simulate
 from .system import Orbiter, Playback, System, swept_area
+from .threebody import (
+    LAGRANGE_NAMES,
+    RESTRICTED,
+    RESTRICTED_ALIASES,
+    ROUTH_MU,
+    Restricted,
+    collinear_gamma,
+    coorbital_angles,
+    coorbital_kind,
+    integrate as integrate_restricted,
+    jacobi,
+    jacobi_inertial,
+    lagrange_jacobi,
+    lagrange_points,
+    potential as restricted_potential,
+    restricted_preset,
+    routh_stable,
+    zero_velocity_segments,
+)
+from .bodies import GALILEAN_PERIODS, GALILEAN_PHASES
 from .values import AU, DAY, G, YEAR, length_unit, speedup_text, time_unit, value_si
 
 __all__ = [
+    "FIGURE_EIGHT_PERIOD",
+    "FIGURE_EIGHT_V3",
+    "FIGURE_EIGHT_X1",
+    "GALILEAN_PERIODS",
+    "GALILEAN_PHASES",
+    "LAGRANGE_NAMES",
+    "RESTRICTED",
+    "RESTRICTED_ALIASES",
+    "ROUTH_MU",
+    "Choreography",
+    "Restricted",
+    "barycentre",
+    "bends_toward",
+    "binary_shares",
+    "collinear_gamma",
+    "conjunctions",
+    "coorbital_angles",
+    "coorbital_kind",
+    "equilibrium_tide",
+    "figure_eight",
+    "integrate_restricted",
+    "jacobi",
+    "jacobi_inertial",
+    "lagrange_jacobi",
+    "lagrange_points",
+    "laplace_angle",
+    "nearest_ratio",
+    "restricted_potential",
+    "restricted_preset",
+    "routh_stable",
+    "tidal_acceleration",
+    "zero_velocity_segments",
     "APSIS_NAMES",
     "AU",
     "BODIES",

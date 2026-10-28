@@ -331,7 +331,7 @@ project's own scene types, in its theme).
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
-| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side); the actions sweep, launch, burn, flyby, pause, coast |
+| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity; manoeuvres: burns, Hohmann / bi-elliptic / phasing transfers with their Δv, phase angle and launch windows, a gravity assist; many bodies: Lagrange points and Trojans in the rotating frame, the figure-eight, binary stars, the Io–Europa–Ganymede resonance, tides (a schematic) | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley, io; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity; near: L4), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude), bodies[].burns, `transfer` (ship, to), `flyby` (v_inf, altitude, side), `system` (sun_jupiter, earth_moon, figure_eight), `view` (rotating), `lagrange`, `resonance`, `origin` (barycentre), `tides`; the actions sweep, launch, burn, flyby, pause, coast, corotate, inertial |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1183,7 +1183,32 @@ Planets, moons and spacecraft on their orbits, in correct timing:
   beats:
     - text: "Passing behind Jupiter, the probe leaves faster around the Sun."
       actions: [{action: flyby, at: "@behind"}]   # the closest approach on this word
+- id: trojans
+  type: orbit
+  params:
+    title: "Trojans of Jupiter"
+    system: sun_jupiter   # earth_moon, sun_earth, sun_jupiter, {primary, secondary, mu}, figure_eight
+    lagrange: true        # L1–L5 for the mass ratio; Routh's test and the Jacobi constant in the panel
+    bodies:
+      - {name: Trojan, near: L4, shift: [0.004, 0.0069], trail: "150 yr"}
+    span: "300 yr"
+  beats:
+    - text: "Seen from the stars, Jupiter and its Trojan go round together."
+    - text: "Now let the frame turn with Jupiter: the Trojan traces a tadpole."
+      actions: [{action: corotate, at: "@turn"}]   # inertial -> rotating frame on this word
+- id: tides
+  type: orbit
+  params: {central: earth, tides: true}   # a schematic: pull, tidal arrows, bulges, the Moon's near side
+  beats:
+    - text: "Take away the pull at the centre, and what is left stretches the Earth."
+      actions: [{reveal: tidal, at: "@left"}]
 ```
+
+Many bodies: `system` (a restricted three-body pair or the figure-eight), `view: rotating`,
+`lagrange`, `zero_velocity`, bodies `near: L4` with `shift`; `resonance: [Io, Europa, Ganymede]`
+(period ratios, the Laplace angle, conjunctions); `origin: barycentre` (a binary star);
+`curvature: true` on a body; `center` with `extent` for a close-up; the actions `corotate` and
+`inertial` switch the frame on a word.
 
 Burns on a body: `burns: [{at: "20 min", prograde: "0.6 km/s"}, {at: apoapsis, prograde: "0.55
 km/s"}]` (also retrograde, radial, anti_radial, normal, anti_normal); `transfer: {kind: hohmann |
@@ -1502,6 +1527,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `flyby` | on an `orbit` with a `flyby`: the closest approach on a word (`- action: flyby`) | when the narration says the probe swings past |
 | `pause` | on an `orbit`: hold the clock still from a word (`- action: pause`) until a `coast` (or the end of the beat); the panel says "clock paused" | while the narration explains a moment (the launch window) |
 | `coast` | on an `orbit`: run the clock again after a `pause` (`- action: coast`) | when the narration moves on |
+| `corotate` | on an `orbit` with a three-body `system`: turn the view into the frame rotating with the pair (`- action: corotate`, `run_time: 2`): both primaries and the Lagrange points stand still, trails redraw in that frame | "now let the frame turn with Jupiter" (a Trojan's tadpole appears) |
+| `inertial` | on an `orbit` with a three-body `system`: turn the view back to the fixed stars (`- action: inertial`) | "seen from the stars again" |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |

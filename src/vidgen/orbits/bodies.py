@@ -21,6 +21,15 @@ Sources (SI; marked in each entry):
   420 km altitude, i = 51.64°. The geostationary orbit: circular, equatorial, period one
   sidereal day (86 164.0905 s). Halley's comet: osculating elements of its 1986 apparition,
   rounded (a = 17.834 AU, e = 0.96714, i = 162.26°, Ω = 58.42°, ω = 111.33°), for illustration.
+- The Galilean moons (Step 232): GM (km³ s⁻²) Io 5 959.916, Europa 3 202.739, Ganymede
+  9 887.834, Callisto 7 179.289 (JPL's satellite ephemeris JUP310 values — their sum is the
+  difference between DE440's Jupiter-system GM and the planet's 126 686 534 km³ s⁻²; marked for
+  the owner to check), mean radii 1 821.6, 1 560.8, 2 631.2, 2 410.3 km; sidereal periods
+  1.769 137 786, 3.551 181 041, 7.154 552 96, 16.689 018 4 d (the published mean values), on
+  circles in Jupiter's equator, a from Kepler's third law (Io 421 707 km, Europa 671 040 km,
+  Ganymede 1 070 440 km, Callisto 1 882 745 km, within about 0.03 % of the published mean
+  distances ≈ 421 700, 671 000, 1 070 400, 1 882 700 km: Jupiter's J2 is neglected), starting
+  phases set so the Laplace angle is 180°.
 """
 
 from __future__ import annotations
@@ -81,6 +90,7 @@ class OrbitPreset:
 
 
 _DE440 = "JPL DE440 (GM); IAU WGCCRE 2015 (radius)"
+_GALILEAN = "JPL satellite ephemeris GM (JUP310 values); mean radius"
 #: Bodies that can be the central body, by preset key.
 BODIES: dict[str, Body] = {
     "sun": Body("Sun", GM_SUN, 695_700e3, "highlight", "IAU 2015 B3 (nominal)"),
@@ -93,7 +103,28 @@ BODIES: dict[str, Body] = {
     "saturn": Body("Saturn", 37_940_584.8418 * _KM3, 60_268e3, "highlight", _DE440),
     "uranus": Body("Uranus", 5_794_556.4 * _KM3, 25_559e3, "primary", _DE440),
     "neptune": Body("Neptune", 6_836_527.10058 * _KM3, 24_764e3, "primary", _DE440),
+    "io": Body("Io", 5_959.916 * _KM3, 1_821.6e3, "highlight", _GALILEAN),
+    "europa": Body("Europa", 3_202.739 * _KM3, 1_560.8e3, "primary", _GALILEAN),
+    "ganymede": Body("Ganymede", 9_887.834 * _KM3, 2_631.2e3, "secondary", _GALILEAN),
+    "callisto": Body("Callisto", 7_179.289 * _KM3, 2_410.3e3, "dim", _GALILEAN),
 }
+#: The Galilean moons' sidereal periods (days) and the mean anomalies they start at (degrees):
+#: Io 40°, Europa 0°, Ganymede 70° make the Laplace angle λ_Io − 3λ_Europa + 2λ_Ganymede = 180°
+#: (its observed value; the moons' real positions on a date are not modelled).
+GALILEAN_PERIODS = {"io": 1.769137786, "europa": 3.551181041, "ganymede": 7.15455296, "callisto": 16.6890184}
+GALILEAN_PHASES = {"io": 40.0, "europa": 0.0, "ganymede": 70.0, "callisto": 200.0}
+
+
+def _galilean(key: str) -> OrbitPreset:
+    """A Galilean moon on a circle in Jupiter's equator with its published sidereal period: a from
+    Kepler's third law with μ = GM(Jupiter preset) + GM(moon) (a point-mass Jupiter: its J2 is
+    neglected, so a comes out within about 0.03 % of the published mean distances)."""
+    body = BODIES[key]
+    mu = BODIES["jupiter"].gm + body.gm
+    period = GALILEAN_PERIODS[key] * 86_400.0
+    a = (mu * period**2 / (4 * math.pi**2)) ** (1 / 3)
+    return OrbitPreset(key, body, "jupiter", a, 0.0, mean_anomaly=math.radians(GALILEAN_PHASES[key]),
+                       source="sidereal period (published mean value); circular, equatorial; phase set for the Laplace angle 180°")
 
 _JPL = "JPL approximate planetary elements, Table 1 (J2000; valid 1800–2050)"
 
@@ -126,6 +157,7 @@ ORBITS: dict[str, OrbitPreset] = {
                     source="geostationary: period one sidereal day"),
         OrbitPreset("halley", Body("Halley", 0.0, 0.0, "", "1P/Halley"), "sun", 17.834 * AU, 0.96714, math.radians(162.26), math.radians(58.42),
                     math.radians(111.33), source="1P/Halley, 1986 osculating elements (rounded; for illustration)"),
+        *[_galilean(k) for k in GALILEAN_PERIODS],
     ]
 }
 #: Other spellings of preset keys.
@@ -164,4 +196,4 @@ def preset_key(body: Body) -> str | None:
     return next((k for k, b in BODIES.items() if b == body), None)
 
 
-__all__ = ["ALIASES", "BODIES", "GM_EARTH", "GM_SUN", "ORBITS", "R_EARTH", "SIDEREAL_DAY", "Body", "OrbitPreset", "body_preset", "orbit_preset", "preset_key"]
+__all__ = ["ALIASES", "BODIES", "GALILEAN_PERIODS", "GALILEAN_PHASES", "GM_EARTH", "GM_SUN", "ORBITS", "R_EARTH", "SIDEREAL_DAY", "Body", "OrbitPreset", "body_preset", "orbit_preset", "preset_key"]

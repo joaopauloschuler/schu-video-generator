@@ -23,6 +23,8 @@ GeometryPart = Literal["foci", "axes", "apsides"]
 SECTOR_COUNTS = (2, 36)
 #: Most shots of one cannon.
 MAX_SHOTS = 8
+#: The Lagrange points a body can start near.
+LagrangeName = Literal["L1", "L2", "L3", "L4", "L5"]
 
 
 class OrbitSectors(SceneParams):
@@ -245,6 +247,14 @@ class OrbitBody(SceneParams):
     """Start where another body listed before is, moving with it ('Earth': a spacecraft leaving with the planet), instead of elements."""
     burns: list[OrbitBurn] = Field(default_factory=list)
     """Impulsive burns, in time order: [{at: '45 min', prograde: '0.5 km/s'}, {at: apoapsis, prograde: '0.4 km/s'}]; each Δv drawn as an arrow at its point, the orbits before and after."""
+    near: LagrangeName | None = None
+    """With a three-body system: start at this Lagrange point (L1…L5), at rest in the rotating frame (a Trojan near L4)."""
+    shift: list[float | str] | None = None
+    """With near: move the start by [x, y] in the rotating frame (x away from the primary along the line to the secondary): numbers are shares of the separation (0.004), or lengths ('0.02 AU')."""
+    drift: list[float | str] | None = None
+    """With near: a starting velocity [x, y] in the rotating frame: numbers are shares of the secondary's orbital speed, or speeds ('0.1 km/s')."""
+    curvature: bool = False
+    """Check which way its path bends around the central body (the Moon's path around the Sun is always concave towards it): the result in the panel."""
 
     @field_validator("geometry")
     @classmethod
@@ -498,13 +508,19 @@ class OrbitModel:
 
     def __init__(self, system: Any, span: float, run: Any, follow: str | None, trails: dict[str, float], shots: list[Any] | None = None,
                  cannon_at: Any = None, transfer: "TransferInfo | None" = None, assist: "AssistInfo | None" = None,
-                 extra_bodies: list["OrbitBody"] | None = None) -> None:
+                 extra_bodies: list["OrbitBody"] | None = None, specs: list["OrbitBody"] | None = None, many: Any = None) -> None:
         self.system, self.span, self.run, self.follow, self.trails = system, span, run, follow, trails
         self.shots = list(shots or [])
         self.cannon_at = cannon_at
         self.transfer = transfer
         self.assist = assist
         self.extra_bodies = list(extra_bodies or [])
+        self.specs = list(specs) if specs is not None else None
+        #: Step 232: the many-body additions (:class:`~vidgen.scenes.orbit_systems.ManyInfo`;
+        #: ``None`` without them) and how far the view turns with a restricted pair (0 the
+        #: inertial view, 1 the rotating frame; the scene sets it as it draws).
+        self.many = many
+        self.turn = many.turn0 if many is not None else 0.0
 
     def burns(self) -> list[tuple[str, Any]]:
         """Every burn of the scene in order of the bodies, then time: (body name, :class:`orbits.Burn`)
@@ -525,9 +541,70 @@ class OrbitModel:
         return self.run.position(name, t) if self.run is not None else self.system.position(name, t)
 
     def view(self, name: str, t: Any) -> Any:
-        """Position (m) in the view's frame: relative to the followed body, else the central one."""
+        """Position (m) in the view's frame: relative to the followed body, else the central one
+        (Step 232: or the barycentre, turned by :attr:`turn` of the restricted pair's angle)."""
         p = self.position(name, t)
-        return p - self.position(self.follow, t) if self.follow is not None else p
+        if self.follow is not None:
+            return p - self.position(self.follow, t)
+        if self.many is None or self.many.origin != "barycentre":
+            return p
+        return self.turned(p - self.barycentre(t), t)
+
+    def velocity(self, name: str, t: Any) -> Any:
+        """Velocity (m/s) relative to the central body at time(s) ``t``."""
+        if name == self.system.central.name:
+            return np.zeros(3) if np.ndim(t) == 0 else np.zeros((len(t), 3))
+        if self.run is not None:
+            return self.run.velocity(name, t)
+        v = np.zeros(3) if np.ndim(t) == 0 else np.zeros((len(t), 3))
+        for o in self.system.chain(name):
+            v = v + o.states(t)[1]
+        return v
+
+    def massive(self) -> list[str]:
+        """The names of the bodies with mass (the central body first)."""
+        return [self.system.central.name] + [o.name for o in self.system.orbiters if o.body.gm > 0]
+
+    def barycentre(self, t: Any) -> Any:
+        """The barycentre of the bodies with mass (m, relative to the central body) at time(s) ``t``."""
+        names = self.massive()
+        gms = [self.system.central.gm] + [self.system.orbiter(n).body.gm for n in names[1:]]
+        return orbits.barycentre(gms, np.array([self.position(n, t) for n in names]))
+
+    def theta(self, t: Any) -> Any:
+        """The restricted pair's angle (rad, unwrapped): the secondary's direction from the
+        primary, continuous in time (Ω t plus its start, corrected to the run's own positions)."""
+        info = self.many.restricted
+        omega = info.pair.omega
+        p = self.position(info.secondary, t)
+        actual = np.arctan2(p[..., 1], p[..., 0])
+        nominal = omega * np.asarray(t, dtype=float)
+        return nominal + np.mod(actual - nominal + math.pi, 2 * math.pi) - math.pi
+
+    def turned(self, p: Any, t: Any, turn: float | None = None) -> Any:
+        """Points (m, from the barycentre) at time(s) ``t`` seen in the view turned by ``turn`` (default
+        :attr:`turn`) of the restricted pair's angle: 0 inertial, 1 the frame turning with it."""
+        turn = self.turn if turn is None else turn
+        if not turn or self.many is None or self.many.restricted is None:
+            return p
+        a = -turn * self.theta(t)
+        c, s = np.cos(a), np.sin(a)
+        p = np.asarray(p, dtype=float)
+        out = p.copy()
+        out[..., 0] = c * p[..., 0] - s * p[..., 1]
+        out[..., 1] = s * p[..., 0] + c * p[..., 1]
+        return out
+
+    def from_rotating(self, points: Any, t: float) -> np.ndarray:
+        """Points fixed in the rotating frame (m, from the barycentre, the secondary on +x) where
+        the view shows them at time ``t`` (they turn with the pair in the inertial view)."""
+        pts = np.atleast_2d(np.asarray(points, dtype=float))
+        a = (1.0 - self.turn) * float(self.theta(float(t)))
+        c, s = math.cos(a), math.sin(a)
+        out = np.zeros((len(pts), 3))
+        out[:, 0] = c * pts[:, 0] - s * pts[:, 1]
+        out[:, 1] = s * pts[:, 0] + c * pts[:, 1]
+        return out
 
     def energy_error(self, t: float) -> float:
         """The n-body run's relative energy error (E − E₀)/|E₀| at the output nearest ``t``."""
@@ -536,16 +613,29 @@ class OrbitModel:
         e0 = float(run.energy[0])
         return float(run.energy[k] - e0) / abs(e0) if e0 else 0.0
 
+    def angular_error(self, t: float) -> float:
+        """The n-body run's relative angular-momentum error at the output nearest ``t`` (Step 232)."""
+        run = self.run
+        return run.angular_error(int(np.clip(np.searchsorted(run.times, t), 0, len(run.times) - 1)))
+
 
 def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, orbit_count: float | None, dynamics: str, method: str,
                   step: str | None, follow: str | None, cannon: OrbitCannon | None = None, transfer: OrbitTransfer | None = None,
-                  flyby: OrbitFlyby | None = None) -> OrbitModel:
+                  flyby: OrbitFlyby | None = None, many: Any = None) -> OrbitModel:
     """Everything an ``orbit`` scene computes before drawing, checked (``VidgenError`` with the
     reason): the system, the span (``span``, or ``orbit_count`` periods of the first body —
     default one; with only a cannon, the longest closed shot's period; with a transfer, until a
     little after it arrives; with a flyby, the whole pass), the n-body run, the followed body,
     the trails, the cannon's shots, the transfer's burns, the flyby's probe and the overlays'
-    needs."""
+    needs. Step 232: ``many`` (:class:`~vidgen.scenes.orbit_systems.ManySpec`) adds a
+    three-body system, bodies near Lagrange points, a resonance, the barycentre or rotating
+    view, the tidal schematic."""
+    info_many = None
+    if many is not None and many.wanted(bodies):
+        from .orbit_systems import prepare_many   # the many-body module builds on this one
+        central, bodies, dynamics, info_many = prepare_many(many, central, bodies, dynamics, cannon=cannon, transfer=transfer, flyby=flyby, follow=follow)
+        if info_many.restricted is not None and not many.method_given:   # adaptive: a body may pass close to the secondary
+            method = "rk45"
     assist = None
     extra: list[OrbitBody] = []
     if flyby is not None:
@@ -577,6 +667,8 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
         seconds = info.arrival + 0.2 * (info.arrival - info.depart)
     elif assist is not None and orbit_count is None:
         seconds = 2 * assist.t_periapsis
+    elif info_many is not None and info_many.eight is not None:   # the figure-eight: its own period
+        seconds = (orbit_count if orbit_count is not None else 1.0) * info_many.eight.period
     elif not all_bodies:
         if orbit_count is not None:
             raise VidgenError("orbits counts periods of the first body; with only a cannonball give span: '3 h' (a time), or leave it out")
@@ -603,13 +695,30 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
             step_s = orbits.value_si(step, "time", "step")
             if step_s <= 0:
                 raise VidgenError(f"step: '{step}' must be a positive time")
-        run = orbits.simulate(system, seconds, method=orbits.method_name(method), step=step_s)
+        samples, initial = 2000, None
+        if info_many is not None and info_many.restricted is not None:   # enough outputs per turn of the pair for smooth trails
+            samples = int(min(40_000, max(2000, 96 * seconds / info_many.restricted.pair.period)))
+        if info_many is not None and info_many.eight is not None:   # the true starting states; a step of 1/4000 of its period
+            from .orbit_systems import eight_initial
+            initial = eight_initial(info_many.eight)
+            step_s = step_s if step_s is not None else info_many.eight.period / 4000
+        run = orbits.simulate(system, seconds, method=orbits.method_name(method), step=step_s, samples=samples, initial=initial)
     elif step is not None:
         raise VidgenError("step is the n-body integration step; it needs dynamics: nbody")
     trails = {}
     for spec, o in zip(all_bodies, system.orbiters):
-        trails[o.name] = _trail_seconds(spec.trail, o.elements.period, seconds, f"{o.name}.trail")
-    return OrbitModel(system, seconds, run, None if follow == system.central.name else follow, trails, shots, cannon_at, info, assist, extra)
+        whole = o.elements.period
+        if info_many is not None and info_many.eight is not None:
+            whole = info_many.eight.period
+        elif info_many is not None and info_many.restricted is not None and o.name in info_many.near:
+            whole = info_many.restricted.pair.period
+        trails[o.name] = _trail_seconds(spec.trail, whole, seconds, f"{o.name}.trail")
+    follow_name = None if follow == system.central.name else follow
+    model = OrbitModel(system, seconds, run, follow_name, trails, shots, cannon_at, info, assist, extra, specs=all_bodies, many=info_many)
+    if info_many is not None:
+        from .orbit_systems import finish_many
+        finish_many(model, many)
+    return model
 
 
 def _time(seconds: float) -> str:

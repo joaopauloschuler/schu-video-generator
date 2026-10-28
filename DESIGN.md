@@ -17783,3 +17783,94 @@ no config key. Phase Q baseline 31/31 identical.
 heliocentric before / after orbits; the vector diagram carries the Sun's frame); a plane change
 is seen from above as its projection (its Δv is right; a 3D view is not planned); finite burns;
 the orbit gallery media (Step 235).
+
+### 98.6 Many bodies (Step 232)
+
+**Approximations, stated**: the restricted problem is *circular* (the secondary on a circle at
+the mean distance: the Moon's e = 0.055 is left out) and its small bodies are massless; the
+Galilean moons are on circles in Jupiter's equator around a point-mass Jupiter (J2 neglected), at
+phases that give the Laplace angle 180°, not their positions on a date; the tides are a schematic
+(the static equilibrium tide; no oceans' dynamics, Love numbers, the bulges' lead or the Sun's
+tide).
+
+**Model** (no manim):
+
+| module | contents |
+|---|---|
+| `threebody` | normalised rotating frame (separation 1, Ω = 1, the primaries at −μ and 1 − μ): `collinear_gamma(μ, point)` — the real positive root of Szebehely's quintic (`numpy.roots`, then Newton on the quintic), `lagrange_points(μ)` (L4 / L5 at (½ − μ, ±√3/2)), `ROUTH_MU` = (1 − √(23/27))/2 = 0.038 520 9 and `routh_stable`, `potential` Ω, `jacobi` C = 2Ω − v², `jacobi_inertial` (the same from inertial positions and velocities about the barycentre), `lagrange_jacobi`, `zero_velocity_segments` (vectorised marching squares on 2Ω = C, saddles paired by the centre's sign), `equations` / `integrate` (the rotating-frame equations on Phase W's RK45, rtol 10⁻¹¹: the Coriolis term depends on the velocity, so leapfrog is not symplectic there), `coorbital_angles` / `coorbital_kind` (tadpole L4 / L5, horseshoe, passing); `Restricted(key, primary, secondary, separation)` with `mu`, `omega`, `period`, `points()`, `distances()`, `with_mu`; presets `RESTRICTED`: `earth_moon` (384 400 km), `sun_earth` (the Sun with the Earth–Moon barycentre's GM, 1 AU), `sun_jupiter` (Table 1's a) |
+| `manybody` | `figure_eight(gm, length)` (Simó's values as quoted by Chenciner–Montgomery, scaled: T = 6.32591398 √(L³/GM)), `barycentre`, `binary_shares`, `nearest_ratio`, `laplace_angle`, `conjunctions` (zeros of the angle between two bodies, bisection; not its ±π jumps), `bends_toward` (sign(v × a) = sign(v × s)), `tidal_acceleration`, `equilibrium_tide` ((M_s/M_p) R⁴/d³) |
+
+Also: the Galilean moons in `BODIES` and `ORBITS` (GM from JPL's satellite ephemeris, JUP310
+values — **for the owner to check**; their sum is DE440's Jupiter-system GM minus the planet's;
+published sidereal periods; a from Kepler III with the `jupiter` preset's GM: within 0.03 % of the
+published mean distances); `value_si(..., "mass")` reads `'2 Msun'` / `'3 Mearth'` as that many
+nominal GM☉ / GM⊕ over G; `simulate(..., initial=)` takes starting states that replace bodies'
+Kepler states (the figure-eight: B's velocity relative to A is radial, no conic), and every run
+records the angular momentum (`angular`, `angular_scale` = Σ|r||v| with the same weights, so a
+total of zero — the figure-eight's — has a meaningful error; `angular_drift`, `angular_error`)
+and gives velocities (`NBodyRun.velocity`: the Hermite interpolant's derivative).
+
+**Checks against published values** (tests): Earth–Moon μ = 0.012 150 6, γ₁ = 0.150 934, γ₂ =
+0.167 833, L3 at −1.005 063 (Koon, Lo, Marsden & Ross 2011); L1 / L2 at 326 400 / 448 900 km from
+the Earth; Sun–(Earth + Moon) γ₁ = 0.010 011, γ₂ = 0.010 078: L1 / L2 at 1.4976 / 1.5077 million
+km from the Earth ("about 1.5 million km" verified); every point an equilibrium (∇Ω = 0 by finite
+differences, independent of the quintics); C₁ > C₂ > C₃ > C₄ = C₅ = 3 − μ(1 − μ); Routh
+27 μ(1 − μ) = 1; the figure-eight back at its start after T to 10⁻⁶ AU; Europa/Io = 2.0073,
+Ganymede/Europa = 2.0147, n_I − 3 n_E + 2 n_G = 0 to 10⁻⁸ rad/d, Io–Europa conjunctions every
+3.5256 d with Ganymede 90° away each time (and Io 180° from every Europa–Ganymede conjunction);
+the Earth–Moon barycentre 4 671 km from the Earth's centre, the Sun–Jupiter one outside the Sun;
+the tidal acceleration 2GMR/d³ ≈ 1.1 × 10⁻⁶ m/s² (1/29 of the Moon's pull), the equilibrium
+tide 0.36 m.
+
+**Scene** (`scenes/orbit_systems.py`: params and resolution; `scenes/orbit_many.py`: a mixin
+of `Orbit`, the drawing; `ManySpec` carries the params into `resolve_model`):
+
+- `system`: a restricted pair becomes the central body (the primary) and a first body (the
+  secondary on a circle at ν = 0, so the rotating frame's +x is the secondary at t = 0); the run
+  is n-body (the restricted problem is n-body with massless bodies) — RK45 by default with a pair
+  (a small body may pass close to the secondary; leapfrog's fixed step fails there), with output
+  samples scaled to the span (96 per turn of the pair, ≤ 40 000). `figure_eight`: A central, B
+  and C with stand-in Kepler orbits and their true states passed as `initial`; leapfrog at T/4000.
+- **The view** (`OrbitModel.view`): with `origin: barycentre` positions are taken from the
+  barycentre of the massive bodies, then turned by `turn` × θ(t) — θ the pair's angle, unwrapped
+  (Ω t corrected to the run's own positions, so the secondary sits exactly on +x). `turn` (0 the
+  inertial view, 1 the rotating frame) is set by the scene each frame from `view` and the actions
+  `corotate` / `inertial` (smoothstep over `run_time`, default 2 s); `from_rotating` places
+  rotating-frame points (Lagrange points, zero-velocity curves) in the view. The view's extent
+  covers the paths in every view the scene uses (a disc when it switches). Trails are sampled
+  64 per turn of the pair (≤ 2 400) so a many-turn trail redraws correctly in the turning frame;
+  Kepler conics are not drawn about the barycentre (they are not the paths there) except a
+  binary's two ellipses (each the relative orbit scaled by the other's mass share).
+- Overlays: Lagrange × marks (labels under them, L1's and L2's on the sides facing away from each
+  other, kept in the plot), the secondary's circle (dashed, clipped), a turning-arrow badge in the
+  least crowded plot corner while the frame turns (the words in the panel), the zero-velocity
+  curve (computed once in the rotating frame over the view, turned in the inertial view),
+  conjunction lines (always with points, hidden by opacity, so a reveal's fade keeps its shape),
+  the barycentre mark, the pointer to an off-plot central body (moved off a Lagrange mark).
+- Panel rows: μ, Routh, the frame shown, L1 / L2 distances, each `near` body's Jacobi constant
+  and ΔC/C, its angle ahead of / behind the secondary and its co-orbital kind over the span; the
+  figure-eight's T and return; a binary's mass ratio and barycentre; resonance ratios, the
+  Laplace angle (1:2:4), conjunction counts; curvature; ΔL/L with ΔE/E. The legend in 9:16 is
+  left out with a pair or a resonance (labels name the bodies).
+- `tides`: its own layout (no axes): the planet large, the satellite on a schematic circle at
+  its real angle and time, the real tidal geometry (d ≫ R) for the arrows: pull at `points`
+  surface points (scaled so the centre's pull is 0.55 units), the centre's pull, the difference
+  (scaled so the longest is 0.5 units; the panel gives the factor, ×27 for the Moon), a bulge
+  ellipse along the line, the near-side mark (locked: it faces the planet; `locking: false` keeps
+  it fixed in space). Labels placed by `place` off the panel and the planet.
+- **Performance** (shared code, output unchanged): the panel reuses each row's cached text in
+  place and restores its points after drawing (copying every row each frame was most of a
+  long scene's render time); a trail run wholly inside the plot skips the per-segment clipping.
+
+**Public (additive)**: in `vidgen.api.orbits` the names of `threebody` (`integrate` as
+`integrate_restricted`, `potential` as `restricted_potential`) and `manybody`, `GALILEAN_PERIODS`,
+`GALILEAN_PHASES`; `NBodyRun.angular / angular_scale / angular_drift / angular_error /
+velocity`; `simulate(initial=)`; the `orbit` params `system`, `view`, `origin`, `lagrange`,
+`zero_velocity`, `resonance`, `center`, `tides`, `bodies[].near / shift / drift / curvature`; the
+targets `lagrange`, `lagrange:L1`…, `zero_velocity`, `rotation`, `barycentre`, `conjunctions`,
+`pointer`, `pull`, `mean`, `tidal`, `bulges`, `face`; the actions `corotate`, `inertial`. No
+dependency, no config key.
+
+**Not done**: n-body with burns (refused); the forbidden regions are drawn as their boundary only;
+the bulges' lead and the planet's spin; resonances with eccentricities (the conjunctions' slow
+drift here comes from the period ratios alone); the gallery media (Step 235).

@@ -251,9 +251,14 @@ class OrbitOverlays:
             for k, shot in enumerate(model.shots):
                 slots.append(Slot([f"{speed_text(shot.speed)}  {shot.kind}"], swatch=self._shot_colors[k], scale=0.9))
         if self._legend_wanted():
+            for text, color in self._many_legend_first():
+                slots.append(Slot([text], swatch=color, scale=0.9))
             for spec, o in bodies:
                 el = o.elements
-                if o.trajectory is not None:   # its orbit changes with its burns
+                many = self._many_legend(o)   # Step 232: a body of a three-body system or the figure-eight
+                if many is not None:
+                    text = many
+                elif o.trajectory is not None:   # its orbit changes with its burns
                     count = len(o.trajectory.burns)
                     text = f"{o.name}  {count} burn{'s' if count > 1 else ''}"
                 else:
@@ -261,10 +266,20 @@ class OrbitOverlays:
                 slots.append(Slot([text], swatch=self._colors[o.name], scale=0.9))
         return slots
 
+    def _many_legend(self, o: Any) -> str | None:
+        """A legend row of the many-body mixin (``None``: the usual one)."""
+        return None
+
+    def _many_legend_first(self) -> list[tuple[str, str]]:
+        """Legend rows (text, colour) the many-body mixin puts before the bodies' (the central body
+        when it moves too)."""
+        return []
+
     def _legend_wanted(self) -> bool:
         legend = self.params.legend
         if legend == "auto":   # a vertical frame with a manoeuvre keeps its rows for the numbers (labels name the bodies)
-            busy = self.is_portrait and (self._model.transfer is not None or bool(self._model.burns()))
+            many = self._model.many is not None and (self._model.many.restricted is not None or self._model.many.resonance is not None)
+            busy = self.is_portrait and (self._model.transfer is not None or bool(self._model.burns()) or many)
             return len(self._model.system.orbiters) >= 2 and not busy
         return bool(legend)
 
