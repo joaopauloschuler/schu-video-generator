@@ -5620,15 +5620,21 @@ has no period: give `span`), a preset whose primary is missing, unknown presets,
 **Picture.** The view shows every body's path over the span and the whole closed orbits (an open
 orbit out to three times the size of the rest), with a 6 % margin, at an equal aspect; `extent:`
 gives the half-width instead. `frame: axes` draws x and y axes on the plot core in AU or km
-(`unit: auto`: AU when the view spans more than 0.05 AU; large km values get 10³ in the title),
-`scale_bar` a bar of a round length, `none` nothing. Bodies are drawn to scale when large enough
-to see (the Earth under the ISS's orbit), else as dots — then the readout says **"sizes not to
-scale"**. Labels take the side of their body that covers no other body or label. Orbits are thin
-lines in the body's colour, dashed for an open one; `trail` is a fading line behind the body
-(`true`: a quarter of its orbit; a share of it; a time; `false`). `follow: Earth` keeps the Earth
-at the centre: orbits around it stay still, the rest move with the view. The readout (beside the
-plot in 16:9, above it in 9:16) shows `t = 182 d` (min, h, d or yr by the span), the speed-up
-(`× 6 million`) and with n-body the energy error `ΔE/E` (`energy: false` hides it).
+(`unit: auto`: AU when the view spans more than 0.05 AU; large km values get 10³ in the unit),
+`scale_bar` a bar of a round length, `none` nothing. The axes carry no titles — both are lengths
+in one unit, written once (after the x tick labels in 16:9, above the y ticks in 9:16) — so the
+picture takes the whole height between the title and the caption. Bodies are drawn to scale when
+large enough to see (the Earth under the ISS's orbit), else as dots — then the panel says
+**"sizes not to scale"**. Labels stand beside their body where they cover no body, other label,
+overlay label or the panel and cross few orbit lines; when there is no room close by they stand
+further out with a thin leader line, and they keep their place while it stays free (no jumping).
+Orbits are thin lines in the body's colour, dashed for an open one; `trail` is a fading line
+behind the body (`true`: a quarter of its orbit; a share of it; a time; `false`). `follow: Earth`
+keeps the Earth at the centre: orbits around it stay still, the rest move with the view. The side
+panel (beside the picture in 16:9 — the room a tall picture leaves —, above it in 9:16) shows
+`t = 182 d` (min, h, d or yr by the span), the speed-up (`× 6 million`), with n-body the energy
+error `ΔE/E` (`energy: false` hides it), the overlays' values below, and a **legend** of the
+bodies with their periods (`legend: auto`: with two or more bodies; `true`, `false`).
 
 **Timing.** The first beat brings the frame, the central body, the orbits (drawn) and the bodies;
 then the bodies move until the scene's last frame, the time running from 0 to `span` (or
@@ -5641,11 +5647,119 @@ energy error stays bounded over many orbits; `step` default 1/1000 of the shorte
 scale) or `rk45` (adaptive Dormand–Prince: precise over a short run, its energy drifts over a long
 one). Orbits drawn are the starting (osculating) ones; trails show the real paths.
 
+**Kepler's laws and orbital speed** (Step 230). Overlays drawn from the same orbit, each a target
+an action can bring in on a word:
+
+```yaml
+- id: kepler
+  type: orbit
+  params:
+    title: "Equal areas in equal times"
+    bodies:
+      - name: Comet
+        a: "3 AU"
+        e: 0.75
+        nu: 150
+        geometry: true                   # or [foci, axes, apsides]
+        sectors: {count: 8, show: alternate}   # or sectors: 8 / true
+        velocity: {live: true, along: 12, readout: true}   # or velocity: true
+    orbits: 1.2
+  beats:
+    - text: "The Sun sits at one focus; the other is empty."
+      actions:
+        - {reveal: "foci:Comet", at: "@focus"}
+    - text: "From now on we sweep eight equal times."
+      actions:
+        - {sweep: "sectors:Comet", at: "@sweep"}
+    - text: "Every sector has the same area, and it is fastest at perihelion."
+      actions:
+        - {highlight: "periapsis:Comet", at: "@perihelion"}
+- id: cannon
+  type: orbit
+  params:
+    title: "Newton's cannonball"
+    central: earth
+    cannonball:
+      altitude: "1500 km"                # default a tenth of the radius
+      speeds: [0.6, 0.85, circular, 1.2, escape, 1.6]   # × the circular speed, '9 km/s', circular, escape
+      at: 90                             # where the cannon stands (degrees; 90 = the top)
+      clockwise: true                    # fired to the right
+      show_paths: false                  # draw the paths to come, faint
+    span: "6 h"
+  beats:
+    - text: "Fired slowly, the ball falls back to the ground."
+      actions:
+        - {launch: "shot:1", at: "@slowly"}
+        - {launch: "shot:2", at: "@falls"}
+```
+
+- **`geometry`** (an ellipse, e < 1): `foci` — the empty focus F′ and the centre C (the body
+  orbited sits at the other focus); `axes` — the major axis dashed, the semi-major axis a and the
+  semi-minor axis b with their lengths; `apsides` — the closest and farthest points with their
+  names and distances from the centre of the body orbited: **perihelion / aphelion** (the Sun),
+  **perigee / apogee** (the Earth; with the height above the surface in km), perilune / apolune,
+  perijove / apojove, else periapsis / apoapsis. The panel adds `e = 0.750`. Targets
+  `geometry:<name>` (all), `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`.
+- **`sectors`** (Kepler's second law): one period cut into `count` equal times (2–36, default 8;
+  Δt = period / count), each sector shaded as the body sweeps it — `show: alternate` every other
+  one (the textbook picture), `all` every one in two tints. The panel lists Δt and the latest
+  sectors' areas (`A₃ = 2.338 AU²`), each computed from the orbit's shape (½ ∫ r² dν between the
+  positions Kepler's equation gives at the sector's two times): they agree to rounding. Without a
+  `sweep` action the sectors start with the motion; `sweep: "sectors:Comet"` starts them on a word.
+- **`velocity`**: an arrow on the body (`live`), turning and stretching with its velocity, and
+  `along` fixed arrows at equal times around the orbit — one scale for the whole scene (the fastest
+  arrow a fifth of the picture) with a key in the panel (`→ 20 km/s`); with `readout` the speed
+  now from vis-viva, v² = μ(2/r − 1/a), and its range: `max 50.1 km/s at perihelion`, `min 8.85
+  km/s at aphelion`. Target `velocity:<name>`.
+- **`cannonball`** (Newton's cannon; `bodies` may then be empty): shots fired horizontally from
+  one point at `altitude` above the central body (which needs a radius), at each of `speeds` —
+  numbers are multiples of the circular speed there, `circular` and `escape` that speed exactly
+  (escape = √2 × circular), or speeds with units. Each shot is classified by its energy ε = v²/2 −
+  μ/r: **suborbital** (bound, its periapsis inside the planet: it lands, marked ×), **circular**,
+  **elliptical**, **parabolic** (exactly the escape speed) or **hyperbolic** — listed in the panel
+  with its speed and colour (by kind) under the circular and escape speeds. The view keeps the
+  planet in the middle and the closed paths whole; open ones leave it. Without `launch` actions
+  every shot flies from the start; `launch: "shot:3"` fires one on a word. Default span: long
+  enough for the closed shots to come round (at most four circular periods). Targets `cannon`,
+  `shot:<n>` (1 = first speed).
+- **Actions** `sweep` and `launch` happen at their moment on the scene's clock (the bodies keep
+  moving); `reveal`, `highlight`, `dim` work on every overlay target. Checks: geometry or sectors
+  on an open orbit, sectors or velocity with `dynamics: nbody`, a cannon without a radius or under
+  the surface, a speed with the wrong unit, `sweep` / `launch` without sectors / a cannon.
+- **Kepler's third law** is a `plot` of the planets' periods against their semi-major axes from
+  the built-in model `kepler_planets` (JPL Table 1 elements; columns `a` in AU, `T` in Julian
+  years with T = 2π √(a³ / G(M☉ + m)), `T_law` without the planet's mass, `a3`, `T2`): on log axes
+  with a power fit the exponent comes out 1.5000 (Jupiter's mass moves it by 10⁻⁴).
+
+```yaml
+- id: third_law
+  type: plot
+  params:
+    title: "Kepler's third law"
+    models:
+      planets: {kind: function, function: kepler_planets, units: {a: AU, T: yr}}
+    x: {scale: log, label: "semi-major axis a"}
+    y: {scale: log, label: "period T"}
+    series:
+      - {name: Planets, x: a, y: T, model: planets, style: points, live: false}
+    fits:
+      - {series: Planets, model: power, name: "T ∝ aᵏ"}
+    annotations:
+      - {type: note, text: "T = 2π √(a³ / GM☉)"}
+      - {type: label, series: Planets, index: 3, text: Earth}
+  beats:
+    - text: "On log axes the planets lie on a line of slope three halves."
+      actions:
+        - {fit: "fit:T ∝ aᵏ", at: "@slope"}
+```
+
 | param | type | default | meaning |
 | --- | --- | --- | --- |
 | `title` | str | `""` | title |
 | `central` | preset \| `{preset, name, label, show_label, gm, mass, radius, color}` | `sun` | the central body: `sun`, `mercury` … `neptune`, `moon`, or your own (`gm` as `'3.986e14 m^3/s^2'` or `mass` as `'5.97e24 kg'`, `radius` with its unit) |
-| `bodies` | list | required | the orbiting bodies (below) |
+| `bodies` | list | required (may be empty with `cannonball`) | the orbiting bodies (below) |
+| `cannonball` | `{speeds, altitude, at, clockwise, show_paths}` | — | Newton's cannon (above) |
+| `legend` | bool \| `auto` | `auto` | the bodies and their periods in the side panel (auto: two or more bodies) |
 | `span` | time | one period | simulated time shown (`'1 yr'`, `'92 min'`) |
 | `orbits` | number | `1` | instead of `span`: periods of the first body (a closed orbit) |
 | `dynamics` | `kepler` \| `nbody` | `kepler` | two-body Kepler orbits, or mutual gravity integrated |
@@ -5676,6 +5790,9 @@ one). Orbits drawn are the starting (osculating) ones; trails show the real path
 | `bodies[].color` | color | palette | colour of the body, its orbit and trail |
 | `bodies[].trail` | bool \| number \| time | `true` | the fading trail |
 | `bodies[].orbit` | bool | `true` | draw its orbit |
+| `bodies[].geometry` | bool \| list of `foci`, `axes`, `apsides` | `false` | the ellipse's geometry |
+| `bodies[].sectors` | bool \| number \| `{count, show}` | `false` | equal-time sectors (`count` 8, `show: alternate` \| `all`) |
+| `bodies[].velocity` | bool \| `{live, along, readout}` | `false` | velocity vectors (`live` true, `along` 0, `readout` true) |
 
 ### `function_plot`
 
@@ -11350,7 +11467,7 @@ a title card, a `transform` of a bar).
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `plot` | `title`, `axes`, `panel<N>`, `legend`, `series<N>`, `series:<name>`, `errors:<name>`, `fit<N>`, `fit:<name>`, `annotation<N>`, `annotation:<id>` | fit, annotate, reveal, dim, highlight, zoom, callout | a series is its line runs, markers or bars (its legend entry comes with it); `errors:m` the error bars of series `m`; `fit1` / `fit:decay` a fit's band, curve, parameter box and residual panel; `annotation2` / `annotation:peak` an annotation's mark and text; `axes` every panel's axes, ticks and titles, `panel2` the second panel's (with several panels); `legend` when one is drawn |
 | `calculation` | `title`, `table`, `symbol:<name>`, `row:<name>`, `calc<N>`, `calc:<name>`, `formula<N>`, `substitution<N>`, `result<N>`, `result:<name>`, `conversion<N>` | substitute, compute, convert, reveal, highlight, dim | `symbol:G` the symbol in the table and in the lines on screen (its substituted value too); `row:G` its table row (a result's row joins the table when the next calculation starts); `calc2` / `calc:v` a whole calculation; `substitute: calc1` (`compute`, `convert`) shows that step with the ones before it; `reveal: formula2` shows a formula |
-| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `readout` | highlight, dim, reveal, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `frame` the axes or scale bar; `central` the central body; `readout` the time and speed-up box (the bodies keep moving: a highlight on a moving body holds it still while it plays — Step 230 adds orbit actions) |
+| `orbit` | `title`, `frame`, `central`, `body:<name>`, `orbit:<name>`, `geometry:<name>`, `foci:<name>`, `axes:<name>`, `periapsis:<name>`, `apoapsis:<name>`, `sectors:<name>`, `velocity:<name>`, `cannon`, `shot:<n>`, `readout` | reveal, highlight, sweep, launch, dim, callout | `body:Earth` the body, its label and trail; `orbit:Earth` its drawn orbit; `geometry:Comet` (and its parts `foci:`, `axes:`, `periapsis:`, `apoapsis:`) the ellipse's geometry; `sectors:Comet` the equal-time sectors (`sweep` starts them); `velocity:Comet` its velocity arrows; `cannon`, `shot:2` Newton's cannon and a shot (`launch` fires it); `frame` the axes or scale bar; `central` the central body; `readout` the side panel (the bodies keep moving: a highlight on a moving body holds it still while it plays) |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
@@ -11423,6 +11540,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `fit`, `annotate` | as the target: a fit (`- fit: "fit:decay"`) or an annotation (`- annotate: annotation2`) | on a [`plot`](#plot): draws the fit on a word (its band, the curve, its legend entry and parameter box, its residual panel; the data first if not shown yet; 1.6 s) or shows the annotation (its ring, arrow, line or shaded range and its text; 1 s); the plot's own steps leave them to the action. `reveal` does the same for a series or its error bars (`errors:<name>`). On live data both wait for the data to finish growing. |
 | `grow` | the target: a live series (`- grow: "series:x"`), `axes` (every live series) or `panel<N>`; `to` (the model's time, or the point number of live data; default the end) | on a [`plot`](#live-plots-models-and-grow): grows the live series from where they are to `to`, with the head marker and readout, the axes widening as the data reach their edge; it lasts until the beat's next action or the beat's end (or `run_time`); a later `grow` continues. The plot's own steps leave those series to it. |
 | `substitute`, `compute`, `convert` | as the target: a calculation (`- compute: calc1` or `"calc:v"`) | on a [`calculation`](#calculation): shows the values substituted into its formula (1.2 s), its result in its box (1.4 s; an intermediate value first) or its conversions (1.2 s) on a word, with the lines before it that are not on screen yet (an earlier calculation leaves, its result joining the table) and the lines after it that no action names; the scene's own steps leave those lines to the action. `reveal: formula2` shows a formula; `highlight: "symbol:G"` marks a symbol in the table and the lines on screen. `convert` needs `convert:` units. |
+| `sweep`, `launch` | as the target: a body's sectors (`- sweep: "sectors:Comet"`) or a shot of the cannon (`- launch: "shot:3"`, `"shot:*"`) | on an [`orbit`](#orbit): from that moment on the scene's clock the body's equal-time sectors fill as it sweeps them, or the shot flies (the bodies keep moving; no animation of its own). Without these actions sectors and shots start with the motion. |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes; a door too (`by`: who opens it; on a level a locked door needs its key, [story props](#story-props-on-a-level-keys-doors-coins-stars-blockers)) |

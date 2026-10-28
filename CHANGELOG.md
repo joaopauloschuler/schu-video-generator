@@ -5,9 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–229)
+## Unreleased (Steps 193–230)
 
 ### Orbital mechanics (Phase X, from Step 229)
+
+- **Kepler's laws and orbital speed** (Step 230). A body's `geometry` (the empty focus and the
+  centre, a and b with their lengths, perihelion / aphelion — perigee / apogee around the Earth —
+  with their distances), `sectors` (equal areas in equal times: each sector shaded as it is swept,
+  its area computed and listed), `velocity` (arrows ∝ speed with a key, the vis-viva speed and
+  its range); `cannonball` (Newton's cannon: shots from one point at increasing speeds, each
+  classified by its energy as suborbital, circular, elliptical, parabolic or hyperbolic); the
+  actions `sweep` and `launch` on a word, `reveal` / `highlight` of every overlay; the plot model
+  `kepler_planets` for Kepler's third law on log axes. **Changed look of `orbit`:** the picture
+  fills the frame's height (the axes' unit written once instead of two axis titles), labels never
+  overlap (further out with a leader line when crowded), and a side panel beside the picture
+  holds the readout and a legend of the bodies' periods.
 
 - **The `orbit` scene type and the orbital model** (Step 229). Planets, moons, satellites and
   comets on Kepler orbits, moving in correct timing at one speed-up from the first beat to the

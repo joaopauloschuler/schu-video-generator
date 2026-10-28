@@ -219,7 +219,8 @@ src/vidgen/
                           # exactness and significant figures), expr.py (expressions with units, TeX), calc.py
   orbits/                 # orbital mechanics (§98; no manim): kepler.py (Kepler's equation, every conic), elements.py
                           # (elements <-> state vectors, vis-viva, period, energy), bodies.py (GM, radii, preset orbits
-                          # with sources), values.py (values with units), system.py (hierarchies, the clock), nbody.py
+                          # with sources), values.py (values with units), system.py (hierarchies, the clock), nbody.py,
+                          # laws.py (ellipse geometry, equal-time areas, Newton's cannon, Kepler III; §98.4)
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
@@ -17580,7 +17581,7 @@ target). `scenes/orbit.py` (drawing, timing) and `scenes/orbit_parts.py` (the YA
   around their parent's current position. Trails: 8 pieces fading to the tail (a quarter orbit by
   default; a share; a time). Labels pick the first of eight sides free of other bodies, labels and
   the readout, keeping their side while it stays free (no jumping). A body outside the plot is
-  hidden with its label.
+  hidden with its label. (Step 230 revised the picture's layout and the labels: §98.4.)
 - **Follow**: positions are shown relative to the followed body (`OrbitModel.view`); its
   satellites' conics stay still, everything else moves with the view.
 - **n-body**: `dynamics: nbody` integrates once at validation (cached by the params' JSON, the 32
@@ -17593,7 +17594,7 @@ target). `scenes/orbit.py` (drawing, timing) and `scenes/orbit_parts.py` (the YA
   the asymptotes, `energy` / `method` / `step` without n-body, duplicate names.
 - **Targets**: `title`, `frame`, `central`, `body:<name>` (dot, label, trail), `orbit:<name>`,
   `readout`; `target_text` gives on-screen names for the narration lint. Actions: the generic
-  ones; Step 230 adds orbit actions.
+  ones; Step 230 adds overlay targets and the actions `sweep` and `launch` (§98.4).
 
 **Public (additive)**: `vidgen.api.orbits` (the module above); the scene type `orbit`. No config
 key outside the scene's params, no dependency.
@@ -17603,3 +17604,94 @@ key outside the scene's params, no dependency.
 no orbit lint rules (234). Inclined orbits are drawn as their projection on the reference plane
 (the view from above; documented). A scene of only open orbits frames 3 × the periapsis: bodies
 leave the view at the end of a long span unless `extent` is set.
+
+### 98.4 Kepler's laws and orbital speed (Step 230)
+
+**Layout fixes first** (the reviewer's notes on 229's stills: the picture used a third of the
+frame, labels crowded the Sun and the Earth, a tall picture left the 16:9 sides empty):
+
+- The axes carry **no titles**: both axes are lengths in one unit, written once — after the x tick
+  labels in 16:9 (the layout is redone in an area grown by the two title rows and narrowed by the
+  unit's width), above the y ticks in 9:16 (the x title's row goes to the picture). Title and
+  caption gaps 0.3 / 0.2. The picture now takes the whole height between title and caption in
+  16:9 (tested: plot height > 0.6 of the frame) and the whole width in 9:16.
+- The readout box is a **side panel** of rows (`Slot`: probed texts sizing it once — no re-layout
+  while it plays —, a dynamic value by the simulated time, a colour swatch, or the velocity key's
+  arrow): time, speed-up, ΔE/E, the overlays' values, and a **legend** of the bodies with their
+  periods (`legend: auto` = two or more bodies), so the room a tall picture leaves beside it in
+  16:9 holds information. Beside the picture in 16:9 (level with its middle), above it in 9:16; it
+  drops its last row when no size is enlarged ("sizes not to scale" absent); an empty row keeps
+  its height (the probe's text at opacity 0: a text without points would break `arrange`).
+- **Labels** (`orbit_overlays.place`): candidates in 8 directions × rings 0 / 0.3 / 0.65 / 1.1
+  units further out; the cost is the overlap with obstacles (the panel, every other body's dot,
+  labels placed before, the overlays' labels, the cannon) × 10, the area outside the plot × 20,
+  orbit-line points under it × 0.004, 0.12 per unit of ring; the previous candidate is kept while
+  within 0.03 of the best (no jumping). Beyond ring 0 a thin leader line joins label and dot. A
+  central body drawn large (wider than 1.4 × its label) carries its name on itself, in the
+  background colour. Tested: no label overlaps another label, a dot or the panel.
+
+**Model** (`vidgen.orbits.laws`, no manim): `ellipse_geometry(el)` (a, b, c = ae, q, Q, the centre,
+the empty focus, the apsides, an end of the minor axis, the perifocal unit vectors; refused for
+e ≥ 1); `apsis_names(body)` (perihelion / aphelion, perigee / apogee, perilune / apolune, perijove
+/ apojove, else periapsis / apoapsis); `area_between(el, ν₁, ν₂)` = ½ ∫ r(ν)² dν by Gauss–Legendre
+(48 nodes per ≤ 45° piece) — from the shape alone; `sector_times` / `sector_areas(el, count,
+start)`: the anomalies at equal times come from Kepler's equation, the areas from the shape, so
+their equality (to 1e-11 in the tests, Halley included) is Kepler's second law checked rather than
+assumed; `cannon_shots(mu, radius, r0, speeds, angle, clockwise)` → `Shot` (speed, multiple of
+the circular speed, elements from the state, kind, energy, impact time) with `classify` by the
+specific energy ε = v²/2 − μ/r: parabolic within 10⁻⁹ μ/r of zero (then e set to exactly 1),
+hyperbolic above, else suborbital when the periapsis lies inside the planet, circular (e = 0 from
+`from_state`) or elliptical — so 1.414 × v_circ is honestly elliptical and only `escape` (√2
+exactly) parabolic; a suborbital shot's impact at the inbound crossing ν = −acos((p/R − 1)/e)
+through `time_of_flight`, the ball held there afterwards; `named_speed` (`circular`, `escape`);
+`kepler_planets()` (a in AU, T in Julian years with μ = G(M☉ + m), T without the planet's mass,
+a³, T²) registered as the plot model **`kepler_planets`** (`kind: function`), so Kepler III is a
+Phase W `plot` with a `power` fit (exponent 1.50008 ± 0.00004: the planets' masses) — no new plot
+code.
+
+**Scene** (`scenes/orbit_overlays.py`, a mixin of `Orbit`; `scenes/orbit_actions.py`):
+
+- A body's `geometry` (`true` or some of `foci`, `axes`, `apsides`; refused on an open orbit):
+  F′ ring and C cross; the major axis dashed, a (centre → apoapsis) and b (centre → minor end) solid
+  with their lengths; apsis dots with "perihelion 0.586 AU" (in km around a body with a radius:
+  "(420 km up)"). Overlay labels are placed once by the same `place` with the ellipse and the axis
+  lines as heavy point obstacles (0.05 each), the tick labels as obstacles, and the whole picture
+  area (not only the plot) allowed. Targets `geometry:<name>` and `foci:`, `axes:`, `periapsis:`,
+  `apoapsis:`; `e = …` in the panel.
+- `sectors` (`count` 2–36, `show: alternate | all`; refused on an open orbit and with n-body):
+  polygons focus → arc (48 samples between the sector's two times) → focus, redrawn each frame
+  from the sweep's start; the panel lists Δt and the latest 4 areas (from `sector_areas` with the
+  actual start). Target `sectors:<name>`.
+- `velocity` (`live`, `along` 0–24, `readout`; refused with n-body): arrows in the text colour, one
+  scale for the scene (the fastest periapsis speed = ⅕ of the plot's shorter side), a 1-2-5 key
+  (≤ 0.6 × the fastest, ≤ 1.1 units) in the panel, the speed now and its max / min with the apsis
+  names. Target `velocity:<name>`.
+- `cannonball` (scene param; `bodies` may then be empty; refused with n-body, without a radius,
+  under the surface): a grey mountain and a barrel, shots coloured by kind (falling red, circular,
+  elliptical, parabolic, hyperbolic yellow; later shots of a kind lighter), paths drawn from the
+  launch to now (220 samples, clipped), a × at the impact; the view centred on the planet,
+  covering the closed and falling shots (at least 1.6 r₀), open ones leaving it; default span the
+  longest closed shot's period (≤ 4 circular periods). Targets `cannon`, `shot:<n>`.
+- **Held targets**: an overlay named by a `reveal`, `sweep` or `launch` of the scene starts hidden;
+  everything else enters with the first beat. Overlays of a satellite whose parent moves in the
+  view are `Pinned`: their points re-set from the parent's position each frame (so a FadeIn's
+  interpolation cannot leave them behind).
+- **Actions** `sweep` and `launch` (`animates = False`): the runner calls `cue(scene, time)` when
+  their beat starts with the frame time they are due; the scene stores that video time and maps it
+  through `Playback` when it draws (the first beat's cue comes before the motion's clock exists),
+  and adds the group to the scene. Their `scene_problems` check the scene type and the targets.
+  Tested on a render: the sweep starts at its word, both alternate sectors complete with areas
+  πab/4 (the drawn polygons too, to 1 %), the arrow's length is the speed × the scale, shots
+  launch in order and a falling one lies on the ground.
+
+**Public (additive)**: in `vidgen.api.orbits` the functions and classes above (`EllipseGeometry`,
+`ellipse_geometry`, `apsis_names`, `APSIS_NAMES`, `area_between`, `sector_times`, `sector_areas`,
+`Shot`, `SHOT_KINDS`, `classify`, `cannon_shots`, `named_speed`, `kepler_planets`,
+`kepler_planet_names`); the plot model `kepler_planets`; the `orbit` params `cannonball`,
+`legend`, `bodies[].geometry`, `sectors`, `velocity`; the actions `sweep`, `launch`. No
+dependency, no config key.
+
+**Not done**: pausing or slowing the clock on an action (the speed-up stays constant, which is
+what makes the equal areas honest; a `clock` action could come with 231's manoeuvres); n-body
+sectors / vectors; the orbit gallery media still show 229's layout (Step 235 renders the
+section).

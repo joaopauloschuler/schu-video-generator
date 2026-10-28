@@ -5,7 +5,7 @@ orbits, the Moon, an ISS-like orbit, a geostationary one, Halley's comet), from 
 position and velocity, with values written with their units (``"1 AU"``, ``"7.8 km/s"``)."""
 
 import math
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -15,6 +15,48 @@ from vidgen.api import *
 Value = str | float
 #: Shape keys of an orbit (at most one way of giving its size and shape).
 SHAPE_KEYS = ("a", "periapsis", "apoapsis", "altitude")
+#: The parts of an ellipse's geometry overlay (``geometry: [foci, axes]``).
+GEOMETRY_PARTS = ("foci", "axes", "apsides")
+GeometryPart = Literal["foci", "axes", "apsides"]
+#: Fewest and most equal-time sectors per orbit.
+SECTOR_COUNTS = (2, 36)
+#: Most shots of one cannon.
+MAX_SHOTS = 8
+
+
+class OrbitSectors(SceneParams):
+    """Equal-time sectors (Kepler's second law): ``{count, show}``."""
+
+    count: int = Field(default=8, ge=SECTOR_COUNTS[0], le=SECTOR_COUNTS[1])
+    """How many equal times one orbit is cut into (each Δt = period / count)."""
+    show: Literal["alternate", "all"] = "alternate"
+    """alternate: every other sector shaded (gaps between them, the textbook picture); all: every one, in two alternating tints."""
+
+
+class OrbitVelocity(SceneParams):
+    """Velocity vectors and the speed: ``{live, along, readout}``."""
+
+    live: bool = True
+    """An arrow on the moving body, turning and stretching with its velocity."""
+    along: int = Field(default=0, ge=0, le=24)
+    """Also this many fixed arrows along the orbit at equal times (crowded where it is slow, long where it is fast)."""
+    readout: bool = True
+    """The speed now (vis-viva, v² = μ(2/r − 1/a)) and its range, fastest at periapsis, in the readout."""
+
+
+class OrbitCannon(SceneParams):
+    """Newton's cannonball: ``{altitude, speeds, at}``."""
+
+    speeds: list[float | str] = Field(min_length=1, max_length=MAX_SHOTS)
+    """Launch speeds, slowest first: numbers are multiples of the circular speed at the cannon (0.8, 1, 1.2), or speeds with units ('7.9 km/s'), or circular / escape (exactly)."""
+    altitude: Value | None = None
+    """Height of the cannon above the surface ('600 km'); default a tenth of the radius."""
+    at: float = 90.0
+    """Where the cannon stands, in degrees from +x (90: the top of the planet)."""
+    clockwise: bool = True
+    """Fire to the right of the top (clockwise); false: counterclockwise."""
+    show_paths: bool = False
+    """Draw each shot's whole path faintly from the start (the trajectories to come)."""
 
 
 class OrbitCentral(SceneParams):
@@ -106,6 +148,46 @@ class OrbitBody(SceneParams):
     """A fading trail behind it: true (a quarter of its orbit), a share of its orbit (0.5), a time ('30 d') or false."""
     orbit: bool = True
     """Draw its orbit (the conic of its Kepler orbit, dashed for an open one)."""
+    geometry: bool | list[GeometryPart] = False
+    """The ellipse's geometry (an orbit with e < 1): true for all of it, or some of foci (the empty focus F′ and the centre C), axes (a and b with their lengths), apsides (periapsis and apoapsis with their names and distances: perihelion / aphelion, perigee / apogee...)."""
+    sectors: bool | int | OrbitSectors = False
+    """Kepler's second law: shaded sectors swept in equal times (true: 8 per orbit; a number; or {count, show}), each one's area computed and listed."""
+    velocity: bool | OrbitVelocity = False
+    """Velocity vectors (length ∝ speed, one scale for the scene, with a key) and the speed from vis-viva: true, or {live, along, readout}."""
+
+    @field_validator("geometry")
+    @classmethod
+    def _geometry(cls, v: Any) -> Any:
+        if isinstance(v, list) and not v:
+            raise ValueError("geometry: name at least one part (foci, axes, apsides) or write true")
+        return v
+
+    @field_validator("sectors")
+    @classmethod
+    def _sectors(cls, v: Any) -> Any:
+        if isinstance(v, int) and not isinstance(v, bool) and not SECTOR_COUNTS[0] <= v <= SECTOR_COUNTS[1]:
+            raise ValueError(f"sectors: give {SECTOR_COUNTS[0]} to {SECTOR_COUNTS[1]} equal times per orbit (got {v})")
+        return v
+
+    def geometry_parts(self) -> list[str]:
+        """The geometry parts it shows (none, some or all of :data:`GEOMETRY_PARTS`)."""
+        if self.geometry is True:
+            return list(GEOMETRY_PARTS)
+        return [p for p in GEOMETRY_PARTS if isinstance(self.geometry, list) and p in self.geometry]
+
+    def sector_spec(self) -> "OrbitSectors | None":
+        if self.sectors is False:
+            return None
+        if self.sectors is True:
+            return OrbitSectors()
+        if isinstance(self.sectors, int):
+            return OrbitSectors(count=self.sectors)
+        return self.sectors
+
+    def velocity_spec(self) -> "OrbitVelocity | None":
+        if self.velocity is False:
+            return None
+        return OrbitVelocity() if self.velocity is True else self.velocity
 
     def display_name(self) -> str:
         if self.name:
@@ -286,10 +368,20 @@ def _elements(spec: OrbitBody, preset: Any, where: str, mu: float, parent: Any) 
 class OrbitModel:
     """A resolved ``orbit`` scene: the ``system``, the simulated ``span`` (s), the n-body
     ``run`` (``None``: Kepler orbits), the body the view ``follow``s (``None``: the central
-    body stays at the centre) and each body's trail length (s)."""
+    body stays at the centre), each body's trail length (s), and Newton's cannon: its ``shots``
+    (:class:`orbits.Shot`, fired from ``cannon_at``, a 3-vector in m) and ``cannon_radius``."""
 
-    def __init__(self, system: Any, span: float, run: Any, follow: str | None, trails: dict[str, float]) -> None:
+    def __init__(self, system: Any, span: float, run: Any, follow: str | None, trails: dict[str, float], shots: list[Any] | None = None,
+                 cannon_at: Any = None) -> None:
         self.system, self.span, self.run, self.follow, self.trails = system, span, run, follow, trails
+        self.shots = list(shots or [])
+        self.cannon_at = cannon_at
+
+    def shot_view(self, k: int, t: Any, launch: float) -> Any:
+        """Shot ``k``'s position(s) in the view's frame at time(s) ``t`` when fired at ``launch``
+        (at the cannon before it)."""
+        p = self.shots[k].positions(np.asarray(t, dtype=float) - launch)
+        return p - self.position(self.follow, t) if self.follow is not None else p
 
     def position(self, name: str, t: Any) -> Any:
         """Position (m) relative to the central body at time(s) ``t``; the central body's own
@@ -312,17 +404,28 @@ class OrbitModel:
 
 
 def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, orbit_count: float | None, dynamics: str, method: str,
-                  step: str | None, follow: str | None) -> OrbitModel:
+                  step: str | None, follow: str | None, cannon: OrbitCannon | None = None) -> OrbitModel:
     """Everything an ``orbit`` scene computes before drawing, checked (``VidgenError`` with the
     reason): the system, the span (``span``, or ``orbit_count`` periods of the first body —
-    default one), the n-body run, the followed body, the trails."""
+    default one; with only a cannon, the longest closed shot's period), the n-body run, the
+    followed body, the trails, the cannon's shots and the overlays' needs."""
     system = build_system(central, bodies)
+    if not bodies and cannon is None:
+        raise VidgenError("bodies: give at least 1 item (a body), or a cannonball")
+    if cannon is not None and dynamics == "nbody":
+        raise VidgenError("cannonball: the shots fly on Kepler orbits around the central body; use dynamics: kepler")
+    shots, cannon_at = _shots(system.central, cannon) if cannon is not None else ([], None)
+    _check_overlays(bodies, system, dynamics)
     if span is not None and orbit_count is not None:
         raise VidgenError("give span (a time) or orbits (periods of the first body), not both")
     if span is not None:
         seconds = orbits.value_si(span, "time", "span")
         if seconds <= 0:
             raise VidgenError(f"span: '{span}' must be a positive time")
+    elif not bodies:
+        if orbit_count is not None:
+            raise VidgenError("orbits counts periods of the first body; with only a cannonball give span: '3 h' (a time), or leave it out")
+        seconds = _cannon_span(shots, system.central.gm, float(np.linalg.norm(cannon_at)))
     else:
         first, period = system.first_period()
         if period is None:
@@ -346,7 +449,56 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
     trails = {}
     for spec, o in zip(bodies, system.orbiters):
         trails[o.name] = _trail_seconds(spec.trail, o.elements.period, seconds, f"{o.name}.trail")
-    return OrbitModel(system, seconds, run, None if follow == system.central.name else follow, trails)
+    return OrbitModel(system, seconds, run, None if follow == system.central.name else follow, trails, shots, cannon_at)
+
+
+def _check_overlays(bodies: list[OrbitBody], system: Any, dynamics: str) -> None:
+    """The overlays a body asks for fit its orbit: an ellipse's geometry and equal-time sectors
+    need a closed orbit; sectors and velocity vectors follow the Kepler orbit (not n-body)."""
+    for k, (spec, o) in enumerate(zip(bodies, system.orbiters), start=1):
+        where = f"bodies[{k}] '{o.name}'"
+        el = o.elements
+        if spec.geometry_parts() and not el.closed:
+            raise VidgenError(f"{where}: geometry: its orbit is a {el.kind} (e = {el.e:g}); foci, axes and an apoapsis belong to an ellipse (e < 1)")
+        if spec.sector_spec() is not None:
+            if not el.closed:
+                raise VidgenError(f"{where}: sectors: its orbit is a {el.kind} (e = {el.e:g}) with no period to cut into equal times")
+            if dynamics == "nbody":
+                raise VidgenError(f"{where}: sectors are swept on the Kepler orbit; with dynamics: nbody the path is not one (use dynamics: kepler)")
+        if spec.velocity_spec() is not None and dynamics == "nbody":
+            raise VidgenError(f"{where}: velocity vectors come from the Kepler orbit (vis-viva); with dynamics: nbody use dynamics: kepler")
+
+
+def _shots(centre: Any, cannon: OrbitCannon) -> tuple[list[Any], Any]:
+    """Newton's cannonball: the shots and the cannon's position (m)."""
+    if centre.radius <= 0:
+        raise VidgenError(f"cannonball: the central body {centre.name} needs a radius (give central: {{radius: '6371 km', ...}})")
+    height = orbits.value_si(cannon.altitude, "length", "cannonball.altitude") if cannon.altitude is not None else centre.radius / 10
+    if height <= 0:
+        raise VidgenError(f"cannonball.altitude: '{cannon.altitude}' puts the cannon on or under the surface of {centre.name}")
+    r0 = centre.radius + height
+    speeds = []
+    for n, s in enumerate(cannon.speeds, start=1):
+        where = f"cannonball.speeds[{n}]"
+        if isinstance(s, str):
+            named = orbits.named_speed(s, centre.gm, r0)
+            value = named if named is not None else orbits.value_si(s, "speed", where)
+        else:
+            value = float(s) * orbits.circular_speed(centre.gm, r0)
+        if not value > 0:
+            raise VidgenError(f"{where}: a launch speed must be positive (got {s})")
+        speeds.append(value)
+    angle = math.radians(cannon.at)
+    shots = orbits.cannon_shots(centre.gm, centre.radius, r0, speeds, angle, cannon.clockwise)
+    return shots, np.array([math.cos(angle), math.sin(angle), 0.0]) * r0
+
+
+def _cannon_span(shots: list[Any], mu: float, r0: float) -> float:
+    """A cannonball scene's default span: long enough for every closed shot to come round
+    (at most four circular periods), at least one circular period."""
+    circular = 2 * math.pi * math.sqrt(r0**3 / mu)
+    closed = [s.elements.period for s in shots if s.kind in ("circular", "elliptical")]
+    return min(max([circular, *closed]), 4 * circular)
 
 
 def _trail_seconds(trail: Any, period: float | None, span: float, where: str) -> float:
@@ -367,4 +519,5 @@ def _trail_seconds(trail: Any, period: float | None, span: float, where: str) ->
     return seconds
 
 
-__all__ = ["SHAPE_KEYS", "OrbitBody", "OrbitCentral", "OrbitModel", "Value", "build_system", "resolve_model"]
+__all__ = ["GEOMETRY_PARTS", "MAX_SHOTS", "SECTOR_COUNTS", "SHAPE_KEYS", "OrbitBody", "OrbitCannon", "OrbitCentral", "OrbitModel", "OrbitSectors",
+           "OrbitVelocity", "Value", "build_system", "resolve_model"]

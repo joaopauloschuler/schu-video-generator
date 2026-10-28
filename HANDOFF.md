@@ -21260,3 +21260,72 @@ How to test
 - Stills: scratchpad `s229/proj` (inner planets, a comet, ISS + GEO, a flyby, the Moon followed,
   n-body): `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16
   light); `vidgen lint` 0 findings.
+
+
+## Step 230 — Kepler's laws and orbital speed
+
+What was built (DESIGN §98.4):
+
+- **229's layout fixed first** (reviewer: the picture used a third of the frame, labels crowded
+  the Sun / Earth, a tall picture left the 16:9 sides empty). The orbit axes have no titles — the
+  unit is written once (after the x ticks in 16:9, above the y ticks in 9:16) — so the picture
+  fills the height in 16:9 (> 60 % of the frame, tested) and the width in 9:16. Labels are placed
+  by a cost search (8 directions × 4 rings, obstacles: the panel, other dots, labels, overlay
+  labels, the cannon; orbit-line points; sticky), with a leader line when pushed out; a planet
+  drawn large carries its name on itself. The readout is a side panel of rows sized once (time,
+  speed-up, ΔE/E, overlay values, a legend of the bodies' periods: `legend: auto`).
+- **Model** `vidgen.orbits.laws` (no manim): `ellipse_geometry`, `apsis_names` (perihelion /
+  aphelion, perigee / apogee, perilune, perijove), `area_between` (½∫r²dν from the shape),
+  `sector_times` / `sector_areas` (anomalies from Kepler's equation, areas from the shape: equal
+  to 1e-11), `cannon_shots` / `classify` / `named_speed` (Newton's cannonball by energy, the
+  impact time of a falling shot), `kepler_planets` (+ the plot model `kepler_planets`).
+- **Scene** `orbit`: `bodies[].geometry` (foci, axes, apsides), `sectors` (count, show),
+  `velocity` (live, along, readout), scene param `cannonball` (speeds as multiples / units /
+  circular / escape, altitude, at, clockwise, show_paths; `bodies` may be empty), `legend`;
+  targets `geometry:`, `foci:`, `axes:`, `periapsis:`, `apoapsis:`, `sectors:`, `velocity:`,
+  `cannon`, `shot:<n>`; actions `sweep` and `launch` (`scenes/orbit_actions.py`; non-animating
+  cues at their word's time); overlays named by a reveal / sweep / launch start hidden.
+- Kepler III: a Phase W `plot` with `models: {planets: {kind: function, function:
+  kepler_planets}}` on log axes with a power fit (k = 1.50008 ± 0.00004) — no plot code changed.
+
+Files touched
+- New: `src/vidgen/orbits/laws.py`, `src/vidgen/scenes/orbit_overlays.py`,
+  `src/vidgen/scenes/orbit_actions.py`, `tests/test_orbit_laws.py` (8).
+- Changed: `src/vidgen/orbits/__init__.py` (exports), `src/vidgen/scenes/orbit.py` (layout,
+  panel, labels, overlays mixin, params `cannonball`, `legend`, `bodies` may be empty),
+  `src/vidgen/scenes/orbit_parts.py` (overlay params, shots, checks), `src/vidgen/scenes/__init__.py`,
+  `tests/test_orbit.py` (+18), `docs/CONFIG.md` (orbit section, targets row, actions row), the
+  guide + `AGENTS.md` (chooser row, two snippets, `sweep` / `launch` rows), `DESIGN.md` (layout,
+  §98.3 note, §98.4), `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): in `vidgen.api.orbits` the functions / classes of `laws`; the plot
+model `kepler_planets`; the `orbit` params and targets above; the actions `sweep`, `launch`.
+
+Decisions
+- The clock keeps one constant speed-up (no pause / slow action): that is what makes equal video
+  times equal simulated times. `sweep` / `launch` are cues at their word's time, mapped through
+  `Playback` when drawn (the first beat's cue precedes the motion's clock).
+- Sector areas are integrated from the orbit's shape between the positions Kepler's equation gives
+  at equal times, so their equality checks Kepler II rather than restating it.
+- Shots are classified by energy honestly: 1.414 × v_circ is elliptical; only `escape` (√2 exactly)
+  is parabolic. Shots colour by kind.
+- The `orbit` gallery entry keeps its guide sample (the first `orbit` snippet), so its committed
+  media (229's layout) still pass the gallery tests; Step 235 renders the section anew.
+
+Compatibility: Phase Q baseline 31 frames, max difference 0. Shared code untouched apart from the
+scene registration and the new plot model name.
+
+Known gaps: no clock control on actions; sectors / vectors not with n-body; geometry labels are
+placed once (a satellite's geometry moves with its parent but its labels are not re-placed);
+the panel can be tall in 9:16 with a cannon of many shots (the picture is width-limited there).
+
+How to test
+- `tests/test_orbit_laws.py` (8, < 1 s), `tests/test_orbit.py` (48 incl. renders, ~55 s).
+- Related, passing: `test_orbits`, `test_docs`, `test_guide`, `test_gallery` (not render),
+  `test_actions_coverage` (not render + `-k orbit`), `test_builtin_scenes -k orbit`, `test_schema`
+  + `test_registry` + `test_introspect`, `test_json_output` + `test_extensions` + `test_api`,
+  `test_translation` + `test_plot_live`.
+- Stills: scratchpad `s230/proj` (inner planets, ISS + GEO, ellipse geometry revealed part by part,
+  equal-area sectors swept from a word, velocity arrows, Halley, Newton's cannonball launched on
+  words, Kepler III plot, a flyby): `build/preview/storyboard/` (16:9 dark) and
+  `build/preview_vlight/storyboard/` (9:16 light).

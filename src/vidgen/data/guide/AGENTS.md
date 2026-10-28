@@ -331,7 +331,7 @@ project's own scene types, in its theme).
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a worked calculation with units and significant figures: a formula, the values put in with their units, the result (orbital speed, half-life, a photon's energy in eV) or an exact probability (2/3 × 1/25 × 1/4 = 1/150); chains of results | `calculation` | `symbols` (name, value with its unit, or constant: G, meaning, source; from_scene: an earlier scene's result), `calculations` (name, expr, unit, convert, sig, format); the actions substitute, compute, convert |
-| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity) |
+| planets, moons, satellites or a comet on their orbits, moving in correct timing (Kepler's laws, the inner planets for a year, the ISS and a geostationary orbit, a flyby); mutual gravity | `orbit` | `central` (sun, earth... or {name, gm or mass, radius}), `bodies` (preset: mars, moon, iss, geo, halley; or a and e, periapsis, altitude, i, raan, argp, nu; or r and v with units; geometry, sectors, velocity), `span` or `orbits`, `follow`, `frame` (axes, scale_bar), `dynamics` (nbody: mutual gravity), `cannonball` (Newton's cannon: speeds, altitude); the actions sweep, launch |
 | a function's graph: slope, tangent, area under a curve | `function_plot` | `title`, `functions` (expressions: x^2, f(x) = sin(x)...), `x_range`, `y_range`, `dots`, `areas`, `aspect` |
 | geometry, vectors: a triangle with braces and angles, adding and scaling vectors | `function_plot` | `points` (at, name), `vectors` (from, to, or sum: [a, b]), `marks` (segment, brace, angle, dimension), `axes` (false: pure geometry) |
 | a number line: points, intervals, jumps (+3) | `number_line` | `title`, `range`, `points`, `intervals` ("[-1, 3)"), `jumps` ([2, 5]: an arc labelled +3), `step` |
@@ -1129,7 +1129,41 @@ Planets, moons and spacecraft on their orbits, in correct timing:
   beats:
     - text: "Mercury races around the Sun in eighty-eight days."
     - text: "The comet crawls far out and sweeps past the Sun."
+- id: kepler_laws
+  type: orbit
+  params:
+    title: "Equal areas in equal times"
+    bodies:
+      - name: Comet
+        a: "3 AU"
+        e: 0.75
+        nu: 150
+        geometry: true        # foci, a and b, perihelion / aphelion with their distances
+        sectors: 8            # Kepler II: 8 equal times, each area computed and listed
+        velocity: {along: 12} # arrows ∝ speed with a key, the vis-viva speed in the panel
+    orbits: 1.2
+  beats:
+    - text: "The Sun sits at one focus; the other is empty."
+      actions: [{reveal: "foci:Comet", at: "@focus"}]
+    - text: "From now on we sweep eight equal times."
+      actions: [{sweep: "sectors:Comet", at: "@sweep"}]
+- id: newtons_cannon
+  type: orbit
+  params:
+    title: "Newton's cannonball"
+    central: earth
+    cannonball: {altitude: "1500 km", speeds: [0.6, circular, 1.2, escape, 1.6]}   # × circular speed; classified by energy
+    span: "6 h"
+  beats:
+    - text: "Too slow, it falls back; at the circular speed it falls around the Earth."
+      actions: [{launch: "shot:1", at: "@slow"}, {launch: "shot:2", at: "@circular"}]
+    - text: "Faster, an ellipse; at the escape speed it never returns."
+      actions: [{launch: "shot:3", at: "@ellipse"}, {launch: "shot:4", at: "@escape"}, {launch: "shot:5"}]
 ```
+
+Kepler's third law is a `plot` fed by the built-in model `kepler_planets` (the planets' `a` in
+AU, `T` in years): `models: {planets: {kind: function, function: kepler_planets, units: {a: AU,
+T: yr}}}`, log axes and a `power` fit, whose exponent comes out 1.500.
 
 ```yaml
 # data
@@ -1433,6 +1467,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `substitute` | on a `calculation`: show a calculation's values put into its formula on a word (`- substitute: calc1`; the formula first if it is not on screen); `reveal: formula2` shows a formula, `highlight: "symbol:G"` marks a symbol | when the narration says the numbers |
 | `compute` | on a `calculation`: show its result on a word (`- compute: calc1`; the steps before it come first) | when the narration says the result |
 | `convert` | on a `calculation`: show the result in its `convert` units on a word (`- convert: calc1`) | when the narration says the result in other units |
+| `sweep` | on an `orbit`: start a body's equal-time sectors on a word (`- sweep: "sectors:Comet"`); `reveal: "foci:Comet"` (`axes:`, `periapsis:`, `velocity:`) shows an overlay, `highlight: "periapsis:Comet"` marks it | when the narration starts counting equal times |
+| `launch` | on an `orbit` with a `cannonball`: fire a shot on a word (`- launch: "shot:3"`; without launches every shot flies from the start) | when the narration says the speed of the shot |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
 | `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
