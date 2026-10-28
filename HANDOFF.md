@@ -21584,3 +21584,82 @@ How to test
   2024-01-01 with the inset, all planets and Pluto on the log scale, the sizes):
   `build/preview/storyboard/` (16:9 dark) and `build/preview_vlight/storyboard/` (9:16 light);
   `vidgen lint` 0 findings in both. The 232 project's panels: `s232/proj/build/preview/storyboard/`.
+
+## Step 234 — Orbital accuracy lint
+
+What was built (DESIGN §98.8):
+
+- **Data fix first** (reviewer): Neptune's Ω rate in `orbits/ephemeris.py` `TABLE1` was Pluto's
+  (−0.01183482); now JPL's −0.00508664 deg/century. Effect: Neptune's heliocentric direction moves
+  by at most 1.2″ over 1800–2050 (computed in the scratchpad). `tests/test_orbit_sky.py` gains
+  `test_table1_all_values_pinned`: all 108 numbers (the reviewer's "54" are the J2000 values, the
+  test pins the 54 rates too) against a transcription in the test.
+- **Nine lint rules** (`lint/orbit_rule.py`, config models in `config.py`, last in `LINT_RULES`):
+  `orbit_period`, `orbit_speed`, `orbit_dv`, `orbit_transfer`, `orbit_distance` (tolerance 0.05),
+  `orbit_date` (days 3), `orbit_scale`, `orbit_conserved` (tolerance 0.01), `orbit_crash`. The
+  runner adds `orbit_issues` to `SceneContext.science` like the calc / plot rules.
+- **Knowledge** `vidgen/orbits/accuracy.py` (no manim): `Fact` (a value or range of a kind, with the
+  bodies it is about), `said_quantities` (the calc reader + months / weeks, digit groups skipped),
+  `clause`, `topic_groups`, `orbit_claims`, `ratio_claims`, `scale_claims` (`PICTURES`),
+  `said_dates` / `event_claims` (JPL Table 1 events seen from the Earth), `ATMOSPHERES`.
+- **What a scene computes** (`orbit_rule.facts`, cached per project): periods, speed ranges and
+  apsis speeds, escape / circular speeds, distances and altitudes (every arc of a trajectory),
+  sibling distance ranges and synodic periods, a transfer's Δv / time / phase / synodic / wait,
+  burns, a flyby's speeds / gain / turn, the cannon's speeds, Lagrange distances, the figure-eight
+  period, the event distance. Other scenes (cards, captions) are checked against the orbit scenes'
+  facts they name.
+- **Scale, drift, crashes**: `picture_kind` (sizes / schematic / log / surely enlarged / true),
+  `Orbit.diagnostics` above tolerance, periapsis in the Earth's (100 km) or Mars's (≈125 km)
+  atmosphere, an undeclared-atmosphere flyby, n-body bodies within their radii' sum.
+- **Narration–picture rules**: `SHOWING_ACTIONS` += `sweep`, `launch`, `burn`, `flyby`;
+  `Orbit.target_text` answers `orbit:`, `periapsis:` / `apoapsis:`, `burn:<n>`, `lagrange:<L>`,
+  `event`, `barycentre`, `face`, `motion` (`orbit_manoeuvres.burn_text`, shared with the drawing).
+- The shared number reader (`quantities/accuracy.py`) reads "one and a half million kilometres".
+
+Files touched
+- New: `src/vidgen/orbits/accuracy.py`, `src/vidgen/lint/orbit_rule.py`, `tests/test_orbit_lint.py` (15).
+- Changed: `src/vidgen/orbits/ephemeris.py` (the fix), `src/vidgen/config.py`, `src/vidgen/lint/{__init__,run,narration_rule}.py`,
+  `src/vidgen/quantities/accuracy.py`, `src/vidgen/scenes/{orbit,orbit_manoeuvres}.py`, `tests/test_orbit_sky.py`,
+  `tests/test_calc_lint.py` (the calc / plot rules are no longer last), `docs/CONFIG.md` (9 table rows, defaults, the
+  "Orbits" example), the guide + `AGENTS.md` (a paragraph, 9 troubleshooting rows), `docs/COOKBOOK-SCIENCE-CHARTS.md`
+  (a note), `DESIGN.md` §98.8, `tasklist.md`, `CHANGELOG.md`.
+
+Public interfaces (additive): the nine rules and their config models (`OrbitPeriodRule` …
+`OrbitCrashRule`); the module `vidgen.orbits.accuracy` (not re-exported by `vidgen.orbits`);
+`Orbit.target_text` answers more targets. No dependency, no visible change to renders.
+
+Decisions
+- Reuse: numbers, units, "about" and rounding are `quantities.accuracy`'s (`said_values`,
+  `agrees`, `mixup_power`, `statements`), texts are `calc_rule.screen_texts`, reporting is
+  `science_rule._issues`, the drift is `Orbit.diagnostics` — the orbit module adds only what an
+  orbit scene's values are and which one a sentence means.
+- Narrow: a value is compared with the facts of the bodies its clause (else sentence) names, of the
+  kinds its words allow; any agreeing fact clears it (a range: anywhere inside). A finding needs the
+  body and kind to be clear. Precise words (a named apsis, "escape", "L2") check against that kind
+  only. A period needs a period word ("Neptune barely moves in ten years" was the one false positive
+  on existing material; removed).
+- `orbit_scale` with enlarged bodies fires only on size words ("At true scale the inner planets crowd
+  the Sun" — s233 — speaks of distances and is right), and only when the bodies are surely enlarged
+  without running the layout (7 units per reach is more than any layout's scale).
+- `orbit_date` uses the Earth as observer and Table 1 (the scenes' own elements); 3 days default.
+- Mars's 125 km atmosphere (entry interface) is **for the owner to check**; the Earth's is the
+  Kármán line (FAI convention).
+
+Compatibility: rendering code unchanged except the orbit scene's text helper (`burn_text` moved out
+of a method, same text); the lint and the number reader are not render inputs, so the Phase Q
+baseline was not re-run. Existing material: 0 new findings (every example, the gallery, scratch
+s205–s233); the calc / plot findings are unchanged (0).
+
+Known gaps: claims about bodies a scene does not show (no Solar System table of facts); "384 400 km"
+(digit groups with spaces) skipped; eccentricities, inclinations, mass ratios as pure numbers not read;
+scale claims about one body among several; event dates seen from other planets.
+
+How to test
+- `tests/test_orbit_lint.py` (15, ~5 s), `tests/test_orbit_sky.py` (36), `tests/test_calc_lint.py`, `tests/test_lint.py`,
+  `tests/test_docs.py`, `tests/test_guide.py`, `tests/test_narration_rule.py`, `tests/test_orbits.py`,
+  `tests/test_orbit.py`, `tests/test_orbit_laws.py`, `tests/test_orbit_many.py`, `tests/test_orbit_manoeuvres.py`,
+  `tests/test_accuracy.py`, `tests/test_genetics_lint.py`, `tests/test_quantities.py`, `tests/test_schema.py`,
+  `tests/test_api.py`, `tests/test_json_output.py`, `tests/test_config.py` — all passing.
+- Lint everything: scratchpad `s234/lint_all.py` (config-only calc + plot + orbit over the examples, gallery and
+  scratch projects: TOTAL 0). Demo with planted mistakes: scratchpad `s234/demo` (`vidgen lint` → 16 orbit
+  warnings, the right statements quiet; preview storyboard in `s234/demo/build/preview/storyboard/`).

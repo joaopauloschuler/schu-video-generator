@@ -133,6 +133,13 @@ the axes (`min` / `max`) when several live series share a panel.
 Run `vidgen lint` on the preview in 16:9 and 9:16 before the final render; the rules read the
 config and the narration (in words too), and each message gives the fix.
 
+Orbits have their own rules, on the same number reader: an [`orbit`](CONFIG.md#orbit) scene's
+periods, speeds, Δv, transfer times, distances and event dates are checked against what the scene
+computes (`orbit_period`, `orbit_speed`, `orbit_dv`, `orbit_transfer`, `orbit_distance`,
+`orbit_date`), "to scale" against what is drawn to scale (`orbit_scale`), an n-body run's energy
+drift like `plot_conserved` (`orbit_conserved`), and a periapsis in the air (`orbit_crash`). A
+`calculation` that takes its Δv `from_scene` an orbit scene is checked by the `calc_*` rules.
+
 ## 9. The pattern
 
 ```yaml

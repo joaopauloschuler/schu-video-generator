@@ -826,6 +826,15 @@ LINT_RULES: tuple[str, ...] = (
     "plot_truncated",
     "plot_conserved",
     "plot_fit_claims",
+    "orbit_period",
+    "orbit_speed",
+    "orbit_dv",
+    "orbit_transfer",
+    "orbit_distance",
+    "orbit_date",
+    "orbit_scale",
+    "orbit_conserved",
+    "orbit_crash",
 )
 RuleName = Literal[
     "off_frame",
@@ -885,6 +894,15 @@ RuleName = Literal[
     "plot_truncated",
     "plot_conserved",
     "plot_fit_claims",
+    "orbit_period",
+    "orbit_speed",
+    "orbit_dv",
+    "orbit_transfer",
+    "orbit_distance",
+    "orbit_date",
+    "orbit_scale",
+    "orbit_conserved",
+    "orbit_crash",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1230,6 +1248,55 @@ class PlotFitClaimsRule(RuleConfig):
     """How far (relative) a value said with "about" may differ."""
 
 
+class _OrbitNumbersRule(RuleConfig):
+    """Settings of the orbital rules that compare said numbers with the model."""
+
+    tolerance: float = Field(default=0.05, ge=0, le=0.5)
+    """How far (relative) a value said with "about" may differ, beyond rounding it to one or two significant figures."""
+
+
+class OrbitPeriodRule(_OrbitNumbersRule):
+    """``orbit_period``: a period said or shown for a body of an orbit scene ("Mars takes three years") that its orbit does not have — Kepler's third law with the scene's masses; "Mars takes about two years" fits 1.88 yr (DESIGN.md §98.8)."""
+
+
+class OrbitSpeedRule(_OrbitNumbersRule):
+    """``orbit_speed``: a speed against the scene's model: vis-viva at the point named (perihelion, aphelion, periapsis...), anywhere along the orbit otherwise, escape and circular speeds, a flyby's v∞ and Sun-frame speeds, the cannon's shots (DESIGN.md §98.8)."""
+
+
+class OrbitDvRule(_OrbitNumbersRule):
+    """``orbit_dv``: a Δv said for a burn or a transfer (the first, the second, the total) that the scene does not compute, or a gravity assist's gain or turning angle (DESIGN.md §98.8)."""
+
+
+class OrbitTransferRule(_OrbitNumbersRule):
+    """``orbit_transfer``: a transfer time, a phase angle (the lead at departure), a synodic period or the time between launch windows, or the wait, against the scene's transfer and bodies (DESIGN.md §98.8)."""
+
+
+class OrbitDistanceRule(_OrbitNumbersRule):
+    """``orbit_distance``: a distance ("the Moon is 384,000 km away" fits; "L2 is 15 million km away" does not), an altitude, a radius or diameter, a Lagrange point's distance, or a ratio of sizes ("eleven times as wide") against the scene (DESIGN.md §98.8)."""
+
+
+class OrbitDateRule(RuleConfig):
+    """``orbit_date``: the date of an opposition or a conjunction of a planet seen from the Earth (a day, a month, a year; a month alone against an orbit scene's event) that JPL's approximate elements do not give (1800–2050) (DESIGN.md §98.8)."""
+
+    days: float = Field(default=3.0, ge=0, le=60)
+    """How many days a said day may differ from the computed event (the elements are good to a day or so)."""
+
+
+class OrbitScaleRule(RuleConfig):
+    """``orbit_scale``: a picture called "to scale" (true scale, real sizes) that is not: bodies drawn enlarged, a log view, the sizes picture's distances, the tides schematic (DESIGN.md §98.8)."""
+
+
+class OrbitConservedRule(RuleConfig):
+    """``orbit_conserved``: an n-body orbit run whose energy, angular momentum or Jacobi constant drifts (or a figure-eight that does not close) by more than tolerance: the motion shows the integrator's error; a smaller step, or leapfrog (DESIGN.md §98.8)."""
+
+    tolerance: float = Field(default=0.01, gt=0, le=0.5)
+    """The largest relative drift accepted (the run's largest |ΔE/E|, |ΔL/L|, |ΔC/C|)."""
+
+
+class OrbitCrashRule(RuleConfig):
+    """``orbit_crash``: a periapsis inside an atmosphere (below the Earth's Kármán line, 100 km; Mars's entry interface) that validation lets through, a flyby through the air, or bodies of an n-body run passing through each other (DESIGN.md §98.8)."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -1432,6 +1499,24 @@ class LintRules(_Strict):
     """A model's conserved quantity drifting beyond tolerance (default: warning)."""
     plot_fit_claims: PlotFitClaimsRule = Field(default_factory=PlotFitClaimsRule)
     """A fitted value said differently from what the fit gives (default: warning)."""
+    orbit_period: OrbitPeriodRule = Field(default_factory=OrbitPeriodRule)
+    """A period said for an orbit scene's body that Kepler's third law does not give (default: warning)."""
+    orbit_speed: OrbitSpeedRule = Field(default_factory=OrbitSpeedRule)
+    """A speed against vis-viva, escape or circular speeds of the scene (default: warning)."""
+    orbit_dv: OrbitDvRule = Field(default_factory=OrbitDvRule)
+    """A Δv of a burn or transfer, or a gravity assist's gain or turn, that the scene does not compute (default: warning)."""
+    orbit_transfer: OrbitTransferRule = Field(default_factory=OrbitTransferRule)
+    """A transfer time, phase angle, synodic period or launch-window wait against the scene (default: warning)."""
+    orbit_distance: OrbitDistanceRule = Field(default_factory=OrbitDistanceRule)
+    """A distance, altitude, radius, Lagrange point or size ratio against the scene (default: warning)."""
+    orbit_date: OrbitDateRule = Field(default_factory=OrbitDateRule)
+    """An opposition or conjunction date that JPL's approximate elements do not give (default: warning)."""
+    orbit_scale: OrbitScaleRule = Field(default_factory=OrbitScaleRule)
+    """A picture called "to scale" that is not (default: warning)."""
+    orbit_conserved: OrbitConservedRule = Field(default_factory=OrbitConservedRule)
+    """An n-body run's conserved quantity drifting beyond tolerance (default: warning)."""
+    orbit_crash: OrbitCrashRule = Field(default_factory=OrbitCrashRule)
+    """A periapsis in an atmosphere, or n-body bodies passing through each other (default: warning)."""
 
 
 class LintConfig(_Strict):

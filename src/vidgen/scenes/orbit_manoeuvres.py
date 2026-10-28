@@ -42,6 +42,11 @@ def dv_name(n: int) -> str:
     return "Δv" + str(n).translate(_SUB)
 
 
+def burn_text(n: int, b: Any) -> str:
+    """Burn ``n``'s label: its own, else "Δv₁ 2.43 km/s prograde"."""
+    return getattr(b, "label", "") or f"{dv_name(n)} {speed_text(b.magnitude)} {b.direction}"
+
+
 def _deg(rad: float) -> str:
     return f"{math.degrees(rad):.1f}°"
 
@@ -52,8 +57,7 @@ class OrbitManoeuvres:
     # ----- text ------------------------------------------------------------------------------------
 
     def _burn_text(self, n: int, b: Any) -> str:
-        label = getattr(b, "label", "")
-        return label or f"{dv_name(n)} {speed_text(b.magnitude)} {b.direction}"
+        return burn_text(n, b)
 
     # ----- the side panel ----------------------------------------------------------------------------
 

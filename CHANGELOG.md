@@ -5,9 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–233)
+## Unreleased (Steps 193–234)
 
 ### Orbital mechanics (Phase X, from Step 229)
+
+- **Orbital accuracy lint** (Step 234). Nine `vidgen lint` rules compare what the narration and
+  the screen say with what each `orbit` scene computes: `orbit_period` ("Mars takes three years"
+  for 1.88 yr; "about two years" is fine), `orbit_speed` (vis-viva at the perihelion or aphelion
+  named, escape and circular speeds), `orbit_dv` (the first, second and total Δv of a transfer or
+  burns), `orbit_transfer` (transfer time, phase angle, synodic period, launch windows),
+  `orbit_distance` ("the Moon is 384,000 km away" fits, "L2 is 15 million km away" does not;
+  altitudes, radii, size ratios), `orbit_date` (opposition and conjunction dates in any scene,
+  against JPL's elements), `orbit_scale` ("drawn to scale" for enlarged bodies or a log view),
+  `orbit_conserved` (an n-body run's energy, angular momentum or Jacobi constant drifting) and
+  `orbit_crash` (a periapsis in the atmosphere, bodies passing through each other). Cards and
+  captions naming a body are checked against the orbit scenes. `said_before_shown` knows the
+  orbit actions and targets. The number reader understands "one and a half million kilometres".
+- **Fix** (Step 234): Neptune's rate of the longitude of the ascending node in the JPL Table 1
+  data was Pluto's (−0.01183482 instead of −0.00508664 deg/century); Neptune's heliocentric
+  direction on a date moves by at most 1.2″ over 1800–2050 (below the table's own accuracy). A test
+  now pins every number of the table.
 
 - **The Solar System on a date** (Step 233). `date: 2020-06-01` places the planet presets (and
   the new `pluto`) where JPL's approximate elements (Standish, Table 1, valid 1800–2050; dates

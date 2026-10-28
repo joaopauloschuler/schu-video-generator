@@ -17963,3 +17963,111 @@ code untouched (only the orbit scene and `vidgen.orbits`), so the Phase Q baseli
 Pluto (Ceres is not in Table 1); Table 2a (3000 BC – 3000 AD with Jupiter–Pluto's extra terms);
 light-time, aberration and the equinox of date (positions are geometric, J2000 frame); greatest
 elongations; the gallery media (Step 235).
+
+### 98.8 Orbital accuracy lint (Step 234)
+
+**A data fix first** (the reviewer's comparison of `TABLE1` with an independent transcription of
+JPL's Table 1): Neptune's rate of Ω had been entered as Pluto's (−0.01183482); it is
+−0.00508664 deg/century. Neptune's heliocentric direction moves by at most 1.2″ over 1800–2050
+(computed), below the table's accuracy; the event tests were unaffected. `tests/test_orbit_sky.py`
+now pins all 108 numbers (9 bodies × 6 values and 6 rates) against a transcription in the test.
+
+Nine rules (scene scope, last in `LINT_RULES`, default warning): `orbit_period`, `orbit_speed`,
+`orbit_dv`, `orbit_transfer`, `orbit_distance` (each with `tolerance` 0.05 for "about"),
+`orbit_date` (`days` 3), `orbit_scale`, `orbit_conserved` (`tolerance` 0.01), `orbit_crash`. Like
+the `calc_*` / `plot_*` rules they read the config, not the stills: the runner appends
+`orbit_issues` (`lint/orbit_rule.py`) to `SceneContext.science`; `science_rule._issues` reports.
+
+**Knowledge** (`vidgen/orbits/accuracy.py`, no manim, not re-exported — reached as
+`vidgen.orbits.accuracy`): numbers are read by `quantities.accuracy.said_values` (the `calc_*`
+reader; it gains "one and a half million kilometres": a scale word after "and a half", resolved to
+a quarter of the scale), plus months (a twelfth of a Julian year) and weeks; a number right after
+a digit group ("384 400 km") is skipped. A `Fact` is a value or a range (SI; radians for angles)
+of a kind (`KIND_RULES`: period → `orbit_period`; speed, peri_speed, apo_speed, circular, escape,
+v_inf, planet_speed, shot, sun_speed → `orbit_speed`; dv (with its order), dv_total, gain, turn →
+`orbit_dv`; transfer_time, synodic, wait, phase → `orbit_transfer`; distance, peri, apo, altitude,
+radius, diameter, lagrange, between → `orbit_distance`) with the names of the bodies it is about.
+`orbit_claims(sentence, facts)`: for each time, speed, length or angle said (checkable: not a
+bound or a range end), the **clause** around it (between commas, semicolons, colons, dashes,
+"and", "but", "while" — not inside a number: "two hundred and fifty-nine days") names the bodies
+(else the sentence; none named: every fact of the scene; another scene's facts only when named)
+and its words give the kinds (`topic_groups`): time — "transfer / trip / later…" transfer times,
+"every / window / synodic…" synodic periods and waits, period words ("takes", "around", "orbit",
+"period") periods, else nothing ("Neptune barely moves in ten years" is a span); speed — Δv words,
+"escape", a named apsis (perihelion, apogee… one of the two), else speeds along the orbit, then
+v∞, Sun-frame and circular speeds; length — "L1"…"L5", radius words, altitude words, a named apsis,
+else distances (from the parent; two siblings' range; the event's distance); angle — phase
+(departure words choose the lead at departure over the lead at the start), else the turning angle.
+A value agreeing (as `calc_numbers` agrees: resolution, "about" with 1–2 figures or the tolerance;
+a range anywhere inside) with any fact of those kinds — of the first kinds only when the words are
+precise (a named apsis, "escape", a Lagrange point) — is fine; else it is reported against the
+nearest fact of the first kinds (Δv narrowed by "first / second / Δv₂ / arrival / total"), when the
+bodies it can be about are clear; a factor of 1000 off is "a prefix mixed up?". `ratio_claims`:
+"N times as wide as / wider than / the diameter of B" against the radii. `scale_claims`: "to
+scale", "true scale", "real sizes" against `PICTURES` — `enlarged` (flagged only with size words:
+"at true scale the inner planets crowd the Sun" speaks of distances), `log` and `schematic`
+(always), `sizes` (with distance words). `said_dates` (ISO, "13 October 2020", "October 13,
+2020", "the first of June 2020", "October 2020", "in 2021", "in mid October") and `event_claims`:
+an opposition / (inferior, superior) conjunction of a named planet seen from the Earth, compared
+with `events_between` over the said day (± `days`), month or year (1800–2050 only); a month alone
+against the scene's own `event`. `ATMOSPHERES`: the Earth 100 km (the Kármán line, FAI
+convention), Mars about 125 km (the entry interface used for Mars landings — **for the owner to
+check**).
+
+**What each orbit scene computes** (`orbit_rule.facts`, cached per project): every body's radius,
+diameter, surface escape and circular speeds; for every orbit (each arc of a trajectory) the
+periapsis speed and distance, the altitude range, and when closed the period, the speed range
+apoapsis–periapsis, the apoapsis speed and distance, the distance range from the parent, the
+escape speed from the parent along it; when open the speed range from v∞ and v∞; two closed
+siblings' distance range and synodic period; a transfer's Δv (by order), total, time of flight,
+phase angle needed (order 1) and at the start, the synodic period and wait (phasing: each burn,
+its time, the lead); plain burns' Δv and total; a flyby's planet speed, Sun-frame speeds, gain and
+turning angle; the cannon's shots, circular and escape speeds there; a restricted pair's L1–L5
+distances from both primaries; the figure-eight's period; the event's distance. Stand-in orbits
+(`near:` bodies, the figure-eight's) give no orbit facts. The sizes picture gives radii only.
+
+**Scale** (`picture_kind`): `sizes`, `schematic` (tides), `log`, else `enlarged` when some body is
+surely drawn enlarged — 7 × R / reach below the scene's minimum drawn radius (0.12 / 0.075 units),
+reach being `extent` or the farthest point of the paths in view (no layout is run: 7 units per
+reach is more than any layout gives) — else `true` (no finding).
+
+**Drift and crashes**: `orbit_conserved` reads `Orbit.diagnostics(params)` (Step 233) — the largest
+|ΔE/E|, |ΔL/L|, each near body's |ΔC/C|, the figure-eight's return — above `tolerance`, with the
+fix for the method (leapfrog: halve the step; else leapfrog or a smaller step; the Jacobi drift:
+RK45 or a smaller step). `orbit_crash`: a periapsis (or one after a burn) above the surface but
+below `ATMOSPHERES` (the body found by name with its preset's radius), a flyby without
+`flyby.atmosphere` passing below it, and in an n-body run two bodies closer than their radii' sum
+at an output sample (validation checks only the Kepler start).
+
+**Other scenes**: a scene that is not an orbit, a calculation or a plot with fits is checked
+against every orbit scene's facts that the sentence names (a card "Jupiter takes 20 years to orbit
+the Sun"); `orbit_date` reads every scene. Texts: beats, the `calc_rule.screen_texts` params,
+callout labels, burn labels.
+
+**Narration–picture rules**: `SHOWING_ACTIONS` gains `sweep`, `launch`, `burn`, `flyby`;
+`Orbit.target_text` adds `orbit:<name>` (the body's label), `periapsis:` / `apoapsis:` (perihelion,
+apogee…), `burn:<n>` (its label or "Δv₁ 2.43 km/s prograde": `orbit_manoeuvres.burn_text`, shared
+with the drawing), `lagrange:<L>`, `event` (its kind), `barycentre`, `face` ("near side"),
+`motion` (the planet's motion).
+
+**Checked**: every example, the gallery and the 229–233 scratch projects give 0 findings (one
+false positive met on the way and removed: "Neptune barely moves in ten years" — periods now need a
+period word); a demo project finds each planted mistake (16) with its right statements quiet.
+
+**Choices**: narrow, as the other accuracy rules — negations, questions, hypotheticals, bounds,
+ranges and comparisons are not read; a number is reported only when the bodies and kind it is
+about are clear. A range fact (a speed along an ellipse, the Moon's distance) accepts any value in
+it: "the Moon is 384,000 km away" and "405,000 km" are both true. `orbit_date` uses the Earth as
+the observer and JPL's Table 1 (the elements the scenes use), so its dates are the model's; the
+tolerance of 3 days is above the table's accuracy for oppositions (hours) and below the motion of
+a planet across the sky in a few days.
+
+Public (additive): lint rules and their config models (`OrbitPeriodRule` … `OrbitCrashRule`); the
+module `vidgen.orbits.accuracy`; `Orbit.target_text` answers more targets; `quantities.accuracy`
+reads "and a half million". No dependency; shared rendering code unchanged (only the lint, the
+number reader and the orbit scene's text helpers), so the Phase Q baseline was not re-run.
+
+**Not done**: claims about bodies a scene does not show (no textbook table of the Solar System);
+numbers written with spaces between digit groups are skipped; eccentricities, inclinations and
+mass ratios said as pure numbers are not read; a claim of scale about one body among several
+(only the picture as a whole); an observer other than the Earth for event dates.

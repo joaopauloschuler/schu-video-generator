@@ -1246,6 +1246,18 @@ Kepler's third law is a `plot` fed by the built-in model `kepler_planets` (the p
 AU, `T` in years): `models: {planets: {kind: function, function: kepler_planets, units: {a: AU,
 T: yr}}}`, log axes and a `power` fit, whose exponent comes out 1.500.
 
+`vidgen lint` checks orbit scenes against their own model (the config, not the stills): a period
+said for a body (`orbit_period`: "Mars takes about two years" fits 1.88 yr, "three years" does
+not), a speed at the point named (`orbit_speed`: vis-viva at perihelion / aphelion, escape and
+circular speeds), Δv (`orbit_dv`: "the first burn", "in all"), transfer times, phase angles and
+launch windows (`orbit_transfer`), distances, altitudes, Lagrange points and size ratios
+(`orbit_distance`: "the Moon is 384,000 km away" fits; "L2 is 15 million km away" does not),
+opposition and conjunction dates in any scene (`orbit_date`), "to scale" said of enlarged bodies
+or a log view (`orbit_scale`: say "the distances are to scale, the sizes are not"), an n-body run
+drifting (`orbit_conserved`) and a periapsis in the atmosphere (`orbit_crash`). A card or caption
+naming a body is checked against the orbit scenes too. Write numbers as a viewer hears them, with
+"about" when rounded.
+
 ```yaml
 # data
 - id: devices
@@ -3190,6 +3202,15 @@ install; `vidgen validate` warns when it is missing.
 | `plot_truncated` | (info) bars not starting at zero: a histogram on a broken y axis, a `bar_chart` `baseline` other than 0 | drop the break / baseline, or say so on screen |
 | `plot_conserved` | a model's `conserved` quantity drifts beyond 1 % | `method: leapfrog`, or a smaller `step` |
 | `plot_fit_claims` | a fitted value said otherwise ("a half-life of twelve days" for 8.0 ± 0.1 d, "exponent five halves") | the value the fit gives, or fit what you say |
+| `orbit_period` | a period said for an `orbit` scene's body that its orbit does not have ("Mars takes three years" for 1.88 yr) | the period the message gives ("about two years" is fine), or change the orbit |
+| `orbit_speed` | a speed against vis-viva at the point named (perihelion, aphelion…), an escape or circular speed | the speed the message gives, or name the right point |
+| `orbit_dv` | a burn's or transfer's Δv said otherwise ("the first burn takes 3.2 km/s" for 2.43) | the Δv the panel shows (first, second, total) |
+| `orbit_transfer` | a transfer time, phase angle or launch-window interval said otherwise ("180 days" for 259 d, "every 18 months" for 780 d) | the value the message gives |
+| `orbit_distance` | a distance, altitude, radius, Lagrange point or size ratio said otherwise ("L2 is 15 million km away" for 1.5 million) | the value the message gives |
+| `orbit_date` | an opposition or conjunction date JPL's elements do not give ("Mars was at opposition in 2021") | the date the message gives |
+| `orbit_scale` | "to scale" said of a picture that is not: enlarged bodies, `radial: log`, the `sizes` picture's distances, the tides | say what is to scale ("the distances are to scale, the sizes are not") |
+| `orbit_conserved` | an n-body run's energy, angular momentum or Jacobi constant drifts beyond 1 % | a smaller `step`, or `method: leapfrog` |
+| `orbit_crash` | a periapsis in the atmosphere (Earth below 100 km), a flyby through the air, n-body bodies passing through each other | raise the periapsis or the flyby; change the starting state |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

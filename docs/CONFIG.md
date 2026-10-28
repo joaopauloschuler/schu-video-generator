@@ -12635,6 +12635,15 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `plot_truncated` | info | bars that do not start at zero: a histogram drawn as bars on a y axis with `breaks`; a [`bar_chart`](#bar_chart) whose `baseline` is not 0 while every bar is on one side of it |
 | `plot_conserved` | warning | a quantity a plot model declares `conserved` drifting by more than `tolerance` (0.01, relative: max \|q − q₀\| / max \|q\|) over the run: the plot shows the integrator's error; use `method: leapfrog` (symplectic) or a smaller `step` |
 | `plot_fit_claims` | warning | narration or a plot note stating a fitted value the fit does not give, within `sigmas` (2) standard errors and the said value's rounding: an exponential's half-life, lifetime / time constant, decay constant (growth: doubling time, growth rate), a power law's exponent ("three halves"), a line's slope and intercept, a peak's centre / mass, σ and width (FWHM), a logistic's carrying capacity and midpoint, a distribution's mean, a custom model's parameters by name; in the fit's units (the axes'), converted from the unit said |
+| `orbit_period` | warning | in an [`orbit`](#orbit) scene, a period said or shown for a body ("Mars takes three years to go around the Sun") that its orbit does not have: Kepler's third law with the scene's μ = G(M + m) — "Mars takes about two years" fits 1.88 yr, "eighty-eight days" Mercury's 87.97 d. Read only with words of a period ("takes", "around", "orbit", "period"): "Neptune barely moves in ten years" is a span. Other scenes (a `text_card`, a caption) are checked against the orbit scenes' bodies they name. Numbers, units, "about" and rounding as `calc_numbers`; months (a twelfth of a Julian year) and weeks too; `tolerance` (0.05) |
+| `orbit_speed` | warning | a speed against the scene's model: at the point named by its apsis name (perihelion, aphelion, perigee, apogee, periapsis…) the vis-viva speed there; otherwise anywhere between the apoapsis and periapsis speeds of the bodies named; "escape" the escape speed from a body's surface or from the central body at the orbit's distance; a flyby's v∞ and Sun-frame speeds, the cannon's shots, circular speeds. Each value is read in its clause ("the Earth moves at about 30 km/s, and its escape velocity is 11.2 km/s" checks two different things) |
+| `orbit_dv` | warning | a Δv said with "burn", "Δv", "delta-v", "kick", "budget", "in all"… that the scene's transfer or burns do not compute: "the first burn" is Δv₁, "the second" Δv₂, "in total" the sum ("Almost four kilometres per second in all" fits 3.89 km/s); a gravity assist's gain and turning angle |
+| `orbit_transfer` | warning | a transfer time ("the trip to Mars takes about 180 days" for 259 d), the phase angle the target must lead by at departure ("forty-four degrees"; without "leave", "launch", "window" also the lead at the start), the synodic period or time between launch windows ("every 26 months" fits 780 d) and the wait for the window |
+| `orbit_distance` | warning | a distance, altitude, radius or diameter against the scene's bodies and orbits ("the Moon is 384,000 km away" fits 363,000–406,000 km; "the ISS orbits 420 km up"), a Lagrange point's distance from either primary ("L2 is 15 million km away" for 1.51 million km), the distance of two planets at the scene's `event`, a ratio of radii ("Jupiter is eleven times as wide as the Earth") |
+| `orbit_date` | warning | in any scene, the date of an opposition or a conjunction (inferior, superior) of a planet seen from the Earth that JPL's approximate elements (Table 1, 1800–2050) do not give: a day more than `days` (3) from the computed event, a month or year without one ("Mars was at opposition in 2021"); a month alone ("in mid October") against an orbit scene's `event` |
+| `orbit_scale` | warning | a picture called "to scale" (true scale, real sizes) that is not: an orbit scene whose bodies are drawn enlarged, when the sentence speaks of sizes ("everything is drawn to scale"; "at true scale the inner planets crowd the Sun" speaks of distances and is fine); a `radial: log` view; the `sizes` picture said to show distances; the tides schematic |
+| `orbit_conserved` | warning | an orbit scene's n-body run (`dynamics: nbody`, `system`) whose total energy or angular momentum drifts by more than `tolerance` (0.01, relative) over the run, a body's Jacobi constant in the restricted problem, or a figure-eight that misses its start: the motion shows the integrator's error. Fix: a smaller `step` with leapfrog, or `method: leapfrog` (whatever the panel shows: `Orbit.diagnostics`) |
+| `orbit_crash` | warning | what validation lets through: a periapsis (or one after a burn) inside the atmosphere of the Earth (the Kármán line, 100 km) or Mars (the entry interface, about 125 km), a flyby through the air without `flyby.atmosphere`, bodies of an n-body run passing within their radii (the run treats them as points). Fix: raise the periapsis, or say it is a re-entry or aerobraking pass |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -12700,6 +12709,15 @@ lint:
     plot_truncated: {}                      # info by default
     plot_conserved: {tolerance: 0.01}       # largest relative drift of a conserved quantity
     plot_fit_claims: {sigmas: 2.0, tolerance: 0.05}   # standard errors of the fitted value; relative, for "about"
+    orbit_period: {tolerance: 0.05}         # relative, for values said with "about" (beyond rounding to 1-2 figures)
+    orbit_speed: {tolerance: 0.05}
+    orbit_dv: {tolerance: 0.05}
+    orbit_transfer: {tolerance: 0.05}
+    orbit_distance: {tolerance: 0.05}
+    orbit_date: {days: 3.0}                 # how far a said day may be from the computed event
+    orbit_scale: {}
+    orbit_conserved: {tolerance: 0.01}      # largest relative drift of energy, angular momentum, Jacobi constant
+    orbit_crash: {}
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -12794,6 +12812,59 @@ kepler:
 `substitute`, `compute` and `convert` show things at their time, and a target's on-screen name is
 a plot series' name, a named fit's name, an annotation's text, or a calculation table row's
 meaning and source.
+
+**Orbits** (the `orbit_*` rules, for [`orbit`](#orbit) scenes and any narration naming their
+bodies): each orbit scene's model is resolved as the render resolves it, and its values — every
+body's period (Kepler III with μ = G(M + m)), speeds (vis-viva: a range along the orbit, the
+apsides' speeds, escape and circular speeds), distances and altitudes, radii, a transfer's Δv,
+time, phase angle, synodic period and wait, burns, a flyby's speeds, gain and turning angle,
+Lagrange points, the distance at an event — are compared with the numbers said and shown (read as
+for `calc_numbers`, with months and weeks). A number is compared with the values of the bodies its
+clause (else its sentence) names — all the scene's when it names none — of the kind its words
+point to ("burn", "Δv", "trip", "every", "perihelion", "escape", "L2", "up"); any of them it agrees
+with is fine, and a finding is made only when it is clear which value is meant. Dates of
+oppositions and conjunctions are checked in every scene against JPL's Table 1 (1800–2050).
+`orbit_scale` knows what each picture keeps to scale, `orbit_conserved` reads `Orbit.diagnostics`
+(whatever the panel shows), `orbit_crash` what validation cannot refuse. Example (the planted
+mistakes of a demo project):
+
+```
+$ vidgen lint demo --rule orbit_period --rule orbit_speed --rule orbit_dv --rule orbit_transfer ...
+periods:
+  warning orbit_period      periods_b2 @ 3.0s: "Mars takes three years to go around the Sun.": "three years", but Mars's orbital period around the Sun is 687 d (1.88 yr) in the scene's model: say that, or change the scene
+speeds:
+  warning orbit_speed       speeds_b2 @ 3.3s: "At aphelion Mercury still moves at fifty-nine kilometres per second.": "fifty-nine kilometres per second", but Mercury's speed at aphelion is 38.9 km/s in the scene's model: say that, or change the scene
+geo:
+  warning orbit_dv          geo_b1 @ 0.0s: "The first burn takes 3.2 km/s.": "3.2 km/s", but Δv₁ of the Hohmann transfer is 2.43 km/s in the scene's model: say that, or change the scene
+mars:
+  warning orbit_transfer    mars_b2 @ 4.0s: "The trip to Mars takes about 180 days.": "180 days", but the Hohmann transfer's time of flight is 259 d in the scene's model: say that, or change the scene
+  warning orbit_transfer    mars_b4 @ 10.0s: "Launch windows to Mars come every 18 months.": "18 months", but the synodic period of Earth and Mars is 780 d (2.14 yr) in the scene's model: say that, or change the scene
+moon:
+  warning orbit_distance    moon_b2 @ 2.3s: "The Moon is 38,000 km away.": "38,000 km", but the Moon's distance from the Earth is between 363,000 km and 406,000 km in the scene's model: say that, or change the scene
+lpoints:
+  warning orbit_distance    lpoints_b2 @ 5.0s: "L2 is 15 million km away.": "15 million km", but L2's distance from the Earth is 1.51 million km (0.0101 AU) in the scene's model: say that, or change the scene
+opposition:
+  warning orbit_date        opposition_b4 @ 10.0s: "Mars was at opposition in 2021.": "in 2021": no opposition of Mars (seen from the Earth) in 2021 by JPL's approximate elements; the nearest is on 2020-10-13
+whole:
+  warning orbit_scale       whole_b2 @ 3.3s: "Here everything is drawn to scale." claims scale, but only the distances are: the bodies are drawn enlarged (the panel says 'sizes not to scale'); say that the distances are to scale and the sizes are not
+drift:
+  warning orbit_conserved   drift_b1 @ 0.0s: the total energy is conserved by the physics but drifts by 29.43% over the run (more than 1.00%): the motion shows the integrator's error, not physics; halve the step (now step 12 d)
+graze:
+  warning orbit_crash       graze_b1 @ 0.0s: Sat's periapsis is 80 km above the Earth, inside its atmosphere (the Kármán line, 100 km): drag would bring it down within a few passes; raise the periapsis, or say it is a re-entry or aerobraking pass
+card:
+  warning orbit_period      card_b1 @ 0.0s: text 'Jupiter takes 20 years to orbit the Sun': "20 years", but Jupiter's orbital period around the Sun (scene 'whole') is 11.9 yr (4,333 d) in the scene's model: say that, or change the scene
+```
+
+The same project's right statements give no finding: "Mars takes about two years", "Mercury
+races around the Sun in eighty-eight days", "the Earth moves at about thirty kilometres per second,
+and its escape velocity is 11.2 km/s", "Almost four kilometres per second in all", "Mars must lead
+the Earth by forty-four degrees when we leave", "every 26 months", "The Moon is 384,000 km away",
+"L1 and L2 lie about one and a half million kilometres from the Earth", "Jupiter is eleven times as
+wide as the Earth", "In mid October Mars is at opposition, 62 million km from us", "At true scale
+the inner planets crowd the Sun". `said_before_shown` and `unsaid_reveal` know orbit scenes too:
+`sweep`, `launch`, `burn` and `flyby` show things at their time, and a target's on-screen name is a
+body's label (its `orbit:` too), an apsis mark's name, a burn's label ("Δv₁ 2.43 km/s prograde"),
+a Lagrange point, the event's kind.
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
 `lint` section and `lint_ignore` do not count in a scene's render fingerprint: changing them

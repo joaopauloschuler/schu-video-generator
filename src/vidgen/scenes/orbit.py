@@ -26,7 +26,7 @@ import numpy as np
 
 from vidgen.api import *
 
-from .orbit_manoeuvres import VECTOR_GAP, OrbitManoeuvres
+from .orbit_manoeuvres import VECTOR_GAP, OrbitManoeuvres, burn_text
 from .orbit_overlays import (DIAGNOSTIC, PANEL_BUDGET, PANEL_ROWS, OrbitOverlays, PanelMode, Slot, arrow_shape, choose_rows, leader_points, mob_rect,
                              new_arrow, place)
 from .orbit_many import OrbitMany, many_target_names
@@ -272,22 +272,40 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
 
     @classmethod
     def target_text(cls, params: Any, name: str) -> str | None:
-        """What a target is called on screen (for the narration lint): a body's label, the title."""
+        """What a target is called on screen (for the narration lint): a body's label (its
+        orbit's too), the title, an apsis mark's name (perihelion...), a burn's label (its own
+        or "Δv₁ 2.43 km/s prograde"), a Lagrange point, the event's kind, the barycentre, the
+        tides' near side, the flyby's planet motion (Step 234)."""
         if name == "title":
             return str(params.title) or None
         kind, _, key = name.partition(":")
-        sky = params.model().sky
+        model = params.model()
+        sky = model.sky
         if sky is not None and sky.sizes is not None:   # the sizes picture: its bodies' names
             return key if kind == "body" else ("Sun" if kind == "central" else None)
-        if kind == "body":
+        if kind in ("body", "orbit"):
             for spec in params.body_specs():
                 if spec.display_name() == key:
                     return str(spec.label) or key
         if kind == "central":
             central = params.central
             if params.system is not None or params.tides:   # the system's own primary (the figure-eight's A, the tides' planet)
-                return params.model().system.central.name
+                return model.system.central.name
             return (str(central.label) or central.name or central.preset) if isinstance(central, OrbitCentral) else central.capitalize()
+        if kind in ("periapsis", "apoapsis") and key in model.system.names:
+            parent = model.system.parent_body(model.system.orbiter(key))
+            return orbits.apsis_names(parent.name)[0 if kind == "periapsis" else 1]
+        if kind == "burn" and key.isdigit() and 1 <= int(key) <= len(model.burns()):
+            _, b = model.burns()[int(key) - 1]
+            return burn_text(int(key), b)
+        if kind == "lagrange" and key:
+            return key
+        if name == "event" and sky is not None and sky.event is not None:
+            return sky.event.kind.replace("_", " ")
+        if name in ("barycentre", "face"):
+            return {"barycentre": "barycentre", "face": "near side"}[name]
+        if name == "motion" and model.assist is not None:
+            return f"{model.assist.planet}'s motion"
         return None
 
     @classmethod
