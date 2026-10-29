@@ -460,13 +460,14 @@ from vidgen.cartoon.lighting import (  # noqa: E402
     blend_grades,
     grade_pixels,
     grade_rgbas,
+    lifted,
     light_at,
     light_grade,
     night_stars,
     shadow_ellipse,
     tint_grade,
 )
-from vidgen.cartoon.shading import CustomLight, LightSetting, ShadowCaster, StageLight, StageShadows, StarField, LampLit, mark_lamp_lit, mark_lit, resolve_light  # noqa: E402
+from vidgen.cartoon.shading import CustomLight, LightSetting, ShadowCaster, StageLight, StageShadows, StarField, LampLit, mark_lamp_lit, mark_light_lift, mark_lit, resolve_light  # noqa: E402
 from vidgen.cartoon.drawing_style import DrawingStyle, mark_shaded  # noqa: E402
 from vidgen.config import DrawingConfig  # noqa: E402
 from vidgen.cartoon.wind import (  # noqa: E402
@@ -1233,6 +1234,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "mark_lit",
     "LampLit",
     "mark_lamp_lit",
+    "mark_light_lift",
+    "lifted",
     "resolve_light",
     "DrawingConfig",
     "DrawingStyle",

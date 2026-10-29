@@ -22759,3 +22759,91 @@ How to test: `tests/test_story_fx.py`; stills (scratchpad, private)
 `video-2.png` (9:16); feature stills `s246/t1/build/preview/storyboard/scenes/memory-1.png`
 (flashback), `s246/t2/build/preview/storyboard/scenes/fx-1.png` (afterimages, hand in hand,
 text display, dematerialise); gallery `docs/gallery/media/iso_lab-16x9.png`.
+
+## Step 247 — The story video, light on the characters, hands that show
+
+A private story project (an isometric cartoon, narrator + five character voices) was built,
+previewed and rendered in the scratchpad (`story-qeh/proj`, never committed). The reviewer's
+notes on the 246 test cut (night faces dark, darker skin especially; the visitors not reading
+tall and their iridescence muted; held hands not visible, one character in front of the other)
+led to three generic fixes, all opt-in or on features new in 246 (DESIGN §100.15).
+
+What was built
+- **`fill_light`** (stage param 0–1, default 0): a soft light on the characters alone —
+  `lighting.lifted(grade, share)` (a grade moved back towards the colours as drawn), applied by
+  `StageLight._grade_of` to members marked with `shading.mark_light_lift` (after a lamp's light;
+  cached per grade and share). `StoryStaging._fill_lights` marks each non-hologram character.
+- **`iridescent.glow`** (0–1, default 0.5): an iridescent visitor shines partly by its own
+  light (the same lift), so its colours stay vivid at night or under an alarm.
+- **Hands that show** (`HandHold._keep_close`): two holding hands further apart than their arms
+  reach step in across the picture until the hands meet (never closer than 0.42 of the taller
+  one's height at the feet); while both walk, the second keeps its place beside the first, so
+  they go side by side (walks with the same `run_time`).
+- **Tall visitors**: `scale` does apply on an iso place (checked in layout, shots, two-shots);
+  1.45 next to a `tall` human read human-sized, so the docs now suggest 1.5–1.8 and a
+  `two_shot` with a human (the story uses 1.75 / 1.7).
+
+Files
+- New: `tests/test_story_light_hands.py` (5).
+- Changed: `cartoon/lighting.py` (`lifted`), `cartoon/shading.py` (`LIGHT_LIFT`,
+  `mark_light_lift`, `StageLight._grade_of` / `_lifted`), `cartoon/figure_fx.py` (`HandHold`:
+  `_keep_close`, `HAND_REACH`, `HAND_MIN_GAP`, `HAND_MIN_APART`), `config.py`
+  (`IridescentConfig.glow`), `scenes/stage.py` (`fill_light`, `_fill_lights` call),
+  `scenes/stage_story.py` (`_fill_lights`), `api.py` (`lifted`, `mark_light_lift`); docs CONFIG
+  (stage table, Light and shadows, Iridescent skins, Holding hands), guide (copied to
+  `AGENTS.md`), CHANGELOG, DESIGN §100.15, tasklist.
+
+Public interfaces: `vidgen.api` adds `lifted`, `mark_light_lift`. Config: stage `fill_light`;
+`characters[].iridescent.glow`.
+
+Decisions
+- A fill light as a lift of the stage's grade per character (the lamp mechanism), not a light
+  source in the scene: it follows every light change, alarm pulse and flash, and costs one
+  cached grade per (grade, share).
+- Iridescent `glow` defaults to 0.5 (not 0): new in 246, no committed render shows it.
+- Holding hands moves the figures across the picture only; the iso cells, draw order and
+  `iso_feet` stay the walks' (neighbouring cells side by side are 1.7 tiles apart, far more than
+  arms reach).
+
+The story video (private, scratchpad)
+- 16 scenes (title, 13 iso stage scenes — the lab at night, four flashback memory vignettes —,
+  end card), 54 beats; Kokoro: narrator `bm_fable` 1.0, heroine `af_heart` 0.95, hero
+  `am_michael` 0.95, the lab AI `af_nicole` 1.2 + `echo`, the visitor `am_onyx` 0.9 +
+  `otherworldly`, the building's voice `am_echo` + `{robot, pitch -5}`; music `enigma`, `lullaby`,
+  `calm` at −4/−5 dB; sounds (alarm bed, slams, crackle, drone, riser, chime, whoosh, typing).
+- Final 16:9 1080p30: 7:12 (432.1 s), 96.6 MB, −16.4 LUFS integrated, true peak −1.9 dBTP.
+  Median pitch of one line each: narrator 126 Hz, heroine 191, hero 129 (another accent), AI
+  154 (with echo), visitor 80 (deep, chorus, hall), building 140 (a flat buzz); speech levels
+  within 2 dB except the robot (+5 dB, one line).
+- Render: scenes at 1080p take 5–18× real time (the alarm scenes the most: every frame regraded);
+  peak RSS 1.1–1.4 GB per process (two scenes in parallel under the 3 GB cap). A long scene would
+  pass the 10-minute tool limit, so the three longest were split in two (beats keep their ids,
+  so their audio is reused) and rendered with `storyboard --final --scene ... --jobs 2`; then
+  `vidgen render` joined them (447 s, mostly the music and the mix). Kokoro TTS: 54 beats in
+  205 s, peak 2.8 GB.
+- Lint: 0 errors, 17 warnings (narration speed of a few short or slow lines, a rushed entrance,
+  facing while a character looks at a display, the heroine and her memory self look alike — on
+  purpose, and walk overlaps where four characters step into a portal and fade out).
+- 9:16 not made: the iso wides keep every character in view and show the room small in a tall
+  frame; close-ups read well, but a vertical cut would need its own staging.
+
+Checks
+- Tests (one file at a time or two): test_story_light_hands 5, test_story_fx 20 (2 renders),
+  test_cartoon_lighting + test_config + test_api 39, test_schema 71, test_docs + test_guide 163,
+  test_cartoon_stage + test_portal_hologram 36, test_iso_mood + test_cartoon_storm +
+  test_introspect 44 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check247`).
+
+Known gaps / for 248
+- A `zoom` with `until` across a beat that has its own `shot` moves the camera back during that
+  shot (and a later beat without a shot returns to the zoomed view); the story uses `until` the
+  next beat only. Worth a lint warning or a fix.
+- `render` of a long project renders every stale scene in one call; scenes over ~60 s of video
+  at 1080p with many characters pass a 10-minute run (split scenes, or a resumable render).
+- Kokoro reads a few short lines fast (whisper / excited) and the AI slow; the robot voice is
+  louder than the others.
+
+How to test: `tests/test_story_light_hands.py`; stills (scratchpad, private)
+`story-qeh/proj/build/final/storyboard/scenes/*.png` (1080p), `story-qeh/proj/build/preview/
+storyboard/scenes/*.png`, the contact sheet `story-qeh/contact.png`; the video (MP4 and SRT)
+in `story-qeh/proj/output/`.

@@ -1494,7 +1494,8 @@ audio and the studio unchanged (Phase Q's 31 baseline frames when shared code ch
 - [x] Tests `tests/test_story_fx.py`; CONFIG, guide (`AGENTS.md`), README; the Listen page (a story row, two beds); gallery showcase `iso_lab` (16.1 of 16.5 MB); Phase Q baseline 31/31
 
 ### Step 247 — The story video
-- [ ] Build the private story project (scratchpad), render previews, look at stills, iterate; Kokoro narration with the chosen voices and effects; music cues and sounds; lint clean; final 16:9 1080p (and 9:16 if it reads well)
+- [x] Build the private story project (scratchpad), render previews, look at stills, iterate; Kokoro narration with the chosen voices and effects; music cues and sounds; lint clean (0 errors); final 16:9 1080p, 7:12, −16.4 LUFS (9:16 not made: the iso wides read too small in a tall frame)
+- [x] Generic fixes from the reviewer's notes (§100.15): a stage's `fill_light` (faces readable in a dark light), an iridescent visitor's own `glow` (default 0.5), holding hands steps the two in close and keeps them side by side while they walk; tests `tests/test_story_light_hands.py`; CONFIG, guide; Phase Q baseline 31/31
 
 ### Step 248 — Review of Phase Z
 - [ ] Story fidelity, visual quality (stills of every shot, 16:9 / 9:16), audio (distinct voices, levels, −16 LUFS), compatibility (Phase Q baseline), tests, docs; final render

@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–246)
+## Unreleased (Steps 193–247)
 
 ### Story-cartoon features (Phase Z, Steps 245–248)
 
@@ -43,6 +43,11 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 - **Sounds** (Step 246). Built-in `alarm`, `crackle`, `hum`, `drone` (a crystalline singing
   drone) and `slam`; ambience beds `hum` (`ambience: hum`) and `alarm` (under an alarm). The
   Listen page has a row for them. Gallery showcase `iso_lab`.
+- **Light on the characters** (Step 247). `fill_light: 0–1` on a stage: a soft light on the
+  characters alone, so faces read at night or under an alarm while the set stays dark. An
+  iridescent visitor shines partly by its own light (`iridescent: {glow}`, default 0.5).
+- **Hand in hand, side by side** (Step 247). Two holding hands step in close enough for their
+  joined hands to show, and walking together (same `run_time`) they go side by side.
 
 ### Particle physics (Phase Y, Steps 237–244)
 

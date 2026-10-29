@@ -140,6 +140,18 @@ def lamp_lit(base: LightGrade, share: float) -> LightGrade:
     return blend_grades(base, tint_grade(*LAMP_LIGHT), lift)
 
 
+def lifted(grade: LightGrade, share: float) -> LightGrade:
+    """``grade`` lifted ``share`` 0..1 of the way back to the colours as drawn: a fill light on
+    what it grades (a stage's ``fill_light`` on its characters, a visitor's own ``glow``,
+    DESIGN.md §100.15). Its stars, shadows and saturation are kept; 0 returns ``grade`` itself."""
+    s = min(max(float(share), 0.0), 1.0)
+    if s <= 1e-9:
+        return grade
+    multiply = tuple(m + (1.0 - m) * s for m in grade.multiply)
+    glow = tuple(g * (1.0 - s) for g in grade.glow)
+    return LightGrade(multiply, glow, grade.stars, grade.shadow, grade.saturation)  # type: ignore[arg-type]
+
+
 def grade_rgbas(rgbas: np.ndarray, grade: LightGrade) -> np.ndarray:
     """RGBA rows (components 0..1) with the grade applied; alpha unchanged; a new array."""
     graded = np.array(rgbas, dtype=float, copy=True)

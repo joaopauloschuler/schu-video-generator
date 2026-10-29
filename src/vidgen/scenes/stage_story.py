@@ -5,6 +5,7 @@ and a flashback needs, written against ``vidgen.api`` only; :class:`StoryStaging
 - Characters: a hologram's flicker, an iridescent skin, afterimages, the ``materialise`` /
   ``dematerialise`` actions, holding hands (``hold_hands`` / ``let_go_hands``), and a shot that
   hides the characters it does not frame (``shot: {kind, of, clear: true}``).
+- Light on the characters: a stage's ``fill_light`` and an iridescent visitor's ``glow``.
 - The set: an alarm (``alarm: start`` / ``stop``: a dark room under a pulsing red light, a siren),
   the shutters over an iso room's windows (``shutters: close`` / ``open``), a flashback's look
   (``flashback``: faded warm colours and a soft vignette).
@@ -102,6 +103,17 @@ class StoryStaging:
         self._story_updater = self._story_step
         if self.figure_fx or self.action_uses("hold_hands"):
             self.add_updater(self._story_updater)
+
+    def _fill_lights(self) -> None:
+        """Each character's fill light (DESIGN.md §100.15): the stage's ``fill_light``, or an
+        iridescent character's own ``glow`` when that is more; holograms are not graded at all."""
+        entries = {entry.name: entry for entry in self.project.config.characters}
+        for name, figure in self.cast.items():
+            entry = entries.get(name)
+            iridescent = entry.iridescent_look() if entry is not None else None
+            share = max(float(self.params.fill_light), iridescent.glow if iridescent is not None else 0.0)
+            if share > 0.0 and not is_hologram(figure):
+                mark_light_lift(figure, share)
 
     def _story_step(self, dt: float) -> None:
         """Scene updater: every character effect for the scene time now (after the animations,

@@ -32,6 +32,7 @@ from vidgen.cartoon.lighting import (
     lamp_lit,
     light_at,
     light_changing,
+    lifted,
     light_grade,
     shadow_ellipse,
     tint_grade,
@@ -104,6 +105,17 @@ def mark_lamp_lit(mobject: Mobject, lamp: LampLit) -> None:
         setattr(member, LAMP_LIT, lamp)
 
 
+#: The attribute holding how much a fill light lifts what the light grades (0..1, DESIGN.md §100.15).
+LIGHT_LIFT = "light_lift"
+
+
+def mark_light_lift(mobject: Mobject, share: float) -> None:
+    """Let a fill light lift ``mobject`` and everything in it ``share`` (0..1) of the way from
+    the stage's light back to its colours as drawn (:func:`~vidgen.cartoon.lighting.lifted`)."""
+    for member in mobject.get_family():
+        setattr(member, LIGHT_LIFT, float(share))
+
+
 def mark_lit(*mobjects: Mobject) -> None:
     """Mark ``mobjects`` and everything in them as graded by the stage's light."""
     for mob in mobjects:
@@ -133,6 +145,8 @@ class StageLight:
         #: how bright the lightning lights the set now (0..1)
         self.flash = 0.0
         self._listeners: list[Callable[[LightGrade], None]] = []
+        #: grades lifted by a fill light, by (grade, share): made once (§100.15)
+        self._lifted: dict[tuple[LightGrade, float], LightGrade] = {}
         if flat:
             return
         fill, stroke, image = camera.get_fill_rgbas, camera.get_stroke_rgbas, camera.display_image_mobject
@@ -141,9 +155,20 @@ class StageLight:
         camera.display_image_mobject = lambda image_mobject, pixel_array: self._draw_image(image, image_mobject, pixel_array)
 
     def _grade_of(self, mob: Any) -> LightGrade:
-        """The grade of a lit ``mob``: the light's, with a lamp's light on it (§89.13)."""
+        """The grade of a lit ``mob``: the light's, with a lamp's light on it (§89.13), lifted
+        by a fill light (§100.15)."""
         lamp = getattr(mob, LAMP_LIT, None)
-        return self.grade if lamp is None else lamp.grade(self.grade)
+        grade = self.grade if lamp is None else lamp.grade(self.grade)
+        lift = getattr(mob, LIGHT_LIFT, 0.0)
+        if lift <= 0.0:
+            return grade
+        key = (grade, lift)
+        found = self._lifted.get(key)
+        if found is None:
+            if len(self._lifted) > 256:
+                self._lifted.clear()
+            found = self._lifted[key] = lifted(grade, lift)
+        return found
 
     def _graded(self, mob: Any, rgbas: np.ndarray) -> np.ndarray:
         if not self.grade.changes_colors or not getattr(mob, LIT, False):

@@ -2033,7 +2033,8 @@ asks for one, say vidgen makes original characters and offer one with the same r
   the frame (`width: 2`), the camera goes along with `follow`.
 - **Light and mood**: `light: morning | sunset | night | indoor` (or `{tint, strength}`) grades
   the whole set and the characters, never the bubbles or text; `night` adds stars on a colour
-  background. Time passing is a `- light: night` action (it fades, 2 s). Characters and props on
+  background. Time passing is a `- light: night` action (it fades, 2 s); `fill_light: 0.4` keeps
+  the characters' faces readable in a dark light (the set stays dark). Characters and props on
   the ground get soft shadows on their own (`shadows: false` for none). `wind: breeze | windy |
   gale` (or 0..1; negative blows left) sways trees and bushes, makes scarves, long hair, ears and
   hats trail and particles drift; `- wind: gale` fades it in a beat. From `windy` on it shows
@@ -2546,10 +2547,12 @@ and give each scene `set: village`.
   coast` (or `stars`, `meadow`) shows another place inside it. `- alarm: start` darkens the room
   under a pulsing red light with a siren (`stop` ends it), `- shutters: close` slams steel
   shutters over the windows; `ambience: hum` gives a lab its hum.
-- Visitors: `iridescent: true` (skin shifting colours like oil on water) and `afterimages: true`
-  (faint copies trailing a move) on a character, a `scale` of 1.4–1.5 on the stage to stand
-  taller. Two characters `- {hold_hands: ana, with: ben}` (they stay hand in hand as they walk
-  side by side; `let_go_hands`).
+- Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
+  `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
+  character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a
+  `two_shot` with a human). Two characters `- {hold_hands: ana, with: ben}` step in close
+  enough for the joined hands to show; walk both in one beat with the same `run_time` and they
+  go side by side (`let_go_hands`). At night give the stage `fill_light: 0.4` so faces read.
 - Framing: `iso: {wide: fill}` (or a number 1–2.5) brings a room's wide view closer;
   `shot: closeup ana ben` frames two faces together, `{kind: closeup, of: guide, clear: true}`
   hides everyone else for the beat. A memory: `flashback: true` on a stage (faded warm colours,

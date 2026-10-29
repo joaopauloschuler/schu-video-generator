@@ -833,6 +833,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         """A memory's look: true or {tint, strength, saturation, vignette, color}: the set and the characters in faded, warm colours (like an old photograph, over its light) and a soft dark frame at the edges of the view; bubbles, tags and captions stay clear."""
         light: LightSetting = "day"
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene; default day (on an iso place where it rains from the start: an overcast tint)."""
+        fill_light: float = Field(0.0, ge=0.0, le=1.0)
+        """A soft light on the characters only, so faces stay readable in a dark light (night, an alarm, a dim tint): 0 none (graded like the set), 1 the characters as drawn whatever the light; 0.3-0.5 keeps the mood. A lamp's light adds to it."""
         shadows: bool = True
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
         wind: WindSetting = 0.0
@@ -2009,6 +2011,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         for figure in self.cast.values():   # a hologram glows the same in any light (DESIGN.md §100.3)
             if is_hologram(figure):
                 unmark_lit(figure)
+        self._fill_lights()   # faces readable in the dark, visitors shining (§100.15)
         self._start_living(living)
         self._start_story()   # flickers, iridescence, afterimages, materialising, a lab's lights (§100.9)
         still, moving = self._shadows(placements)

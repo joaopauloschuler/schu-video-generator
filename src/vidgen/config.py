@@ -620,6 +620,9 @@ class IridescentConfig(_Strict):
     """Seconds for its colours to go once round the rainbow (slow: 8-20)."""
     strength: float = Field(default=0.8, ge=0.1, le=1.0)
     """How much of the shifting colour shows over the colours it was drawn with (0.1-1)."""
+    glow: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much it shines by its own light: 0 graded by the stage's light like anyone (muted at
+    night or under an alarm), 1 never darkened (like a hologram); default 0.5."""
 
 
 class AfterimageConfig(_Strict):

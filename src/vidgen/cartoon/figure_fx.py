@@ -189,22 +189,80 @@ class Afterimages:
 #: they meet (a share of the taller one's height).
 HAND_REACH_SECONDS = 0.4
 HAND_DROP = 0.3
+#: Two holding hands stand close enough for their hands to meet (DESIGN.md §100.15): each arm
+#: reaches at most this share of its length, their shoulders stay at least :data:`HAND_MIN_GAP`
+#: of the taller one's height apart and their feet :data:`HAND_MIN_APART` (side by side, not
+#: one in front of the other, whichever way they turn).
+HAND_REACH = 0.92
+HAND_MIN_GAP = 0.22
+HAND_MIN_APART = 0.42
 
 
 class HandHold:
     """Two characters holding hands (DESIGN.md §100.10): from ``start`` (scene time) each one's
     hand nearer the other reaches for the point between their shoulders, a little lower
-    (:data:`HAND_DROP`), wherever they stand or walk, until :meth:`release`."""
+    (:data:`HAND_DROP`), wherever they stand or walk, until the hold ends. Standing further
+    apart than their arms reach, they step in towards each other across the picture as the
+    hands reach; walking together (both moved by their walks on a frame), the second keeps its
+    place beside the first, so they go side by side instead of one behind the other
+    (:meth:`_keep_close`, §100.15)."""
 
     def __init__(self, a: Character, b: Character, start: float) -> None:
         self.a, self.b, self.start = a, b, float(start)
         self.hands = (_nearer_hand(a, b), _nearer_hand(b, a))
         self.rest = {figure.name: _arm_poses(figure, hand) for figure, hand in zip((a, b), self.hands)}
+        #: each arm's length (shoulder to hand, as it hangs at the start)
+        self.arm = [float(np.linalg.norm(np.asarray(f.hand_point(h))[:2] - np.asarray(f.shoulder_point(h))[:2]))
+                    for f, h in zip((a, b), self.hands)]
+        #: each one's offset from where the stage or its walk puts it, and where its feet were
+        #: drawn after the last frame (an animation that places it anew moved them since)
+        self.offsets: dict[str, np.ndarray] = {}
+        self.drawn: dict[str, np.ndarray] = {}
+        #: where the second stands from the first while they walk together
+        self.formation: np.ndarray | None = None
+
+    def _keep_close(self, share: float) -> None:
+        """Place both for this frame: each at its own place (where the stage or its walk puts
+        it) plus its offset. Standing, the offsets step them ``share`` of the way in towards
+        each other across the picture until their hands can meet; both walking, the first keeps
+        its offset and the second its place beside the first."""
+        own: dict[str, np.ndarray] = {}
+        moved: dict[str, bool] = {}
+        for figure in (self.a, self.b):
+            feet = np.asarray(figure.feet(), dtype=float)[:2]
+            last, offset = self.drawn.get(figure.name), self.offsets.get(figure.name, np.zeros(2))
+            moved[figure.name] = last is None or float(np.linalg.norm(feet - last)) > 1e-9
+            own[figure.name] = feet if moved[figure.name] else feet - offset
+            figure.shift(np.array([*(own[figure.name] - feet), 0.0]))
+        walking = all(moved.values()) and self.formation is not None and self.drawn
+        if walking:
+            first = self.offsets.get(self.a.name, np.zeros(2))
+            offsets = {self.a.name: first, self.b.name: own[self.a.name] + first + self.formation - own[self.b.name]}
+        else:
+            sa, sb = self.a.shoulder_point(self.hands[0]), self.b.shoulder_point(self.hands[1])
+            height = max(self.a.standing_height, self.b.standing_height)
+            drop = HAND_DROP * height
+            reach = HAND_REACH * min(self.arm)
+            want = max(2.0 * math.sqrt(max(reach * reach - drop * drop, 0.0)), HAND_MIN_GAP * height)
+            gap = float(sb[0] - sa[0])
+            across = float(own[self.b.name][0] - own[self.a.name][0])
+            step = min(max(abs(gap) - want, 0.0), max(abs(across) - HAND_MIN_APART * height, 0.0)) / 2.0 * share
+            side = 1.0 if across >= 0 else -1.0
+            offsets = {self.a.name: np.array([side * step, 0.0]), self.b.name: np.array([-side * step, 0.0])}
+        for figure in (self.a, self.b):
+            offset = offsets[figure.name]
+            if float(np.linalg.norm(offset)) > 1e-12:
+                figure.shift(np.array([*offset, 0.0]))
+            self.offsets[figure.name] = offset
+            self.drawn[figure.name] = np.asarray(figure.feet(), dtype=float)[:2]
+        if not walking:
+            self.formation = self.drawn[self.b.name] - self.drawn[self.a.name]
 
     def update(self, now: float) -> None:
-        """Pose both arms for scene time ``now``."""
+        """Pose both arms for scene time ``now`` (stepping in close enough first)."""
         share = min(max((now - self.start) / HAND_REACH_SECONDS, 0.0), 1.0)
         share = share * share * (3.0 - 2.0 * share)
+        self._keep_close(share)
         sa, sb = self.a.shoulder_point(self.hands[0]), self.b.shoulder_point(self.hands[1])
         drop = HAND_DROP * max(self.a.standing_height, self.b.standing_height)
         meet = (np.asarray(sa) + np.asarray(sb)) / 2 - np.array([0.0, drop, 0.0])
@@ -245,6 +303,9 @@ __all__ = [
     "AFTERIMAGE_SPACING",
     "FIGURE_ALPHA",
     "HAND_DROP",
+    "HAND_MIN_APART",
+    "HAND_MIN_GAP",
+    "HAND_REACH",
     "HAND_REACH_SECONDS",
     "Afterimages",
     "FigureAlpha",

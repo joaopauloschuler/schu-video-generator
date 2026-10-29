@@ -19475,3 +19475,46 @@ of 2–3; iso objects as §100.11; actions `alarm`, `shutters`, `materialise`, `
 `hold_hands`, `let_go_hands`; sounds and beds as §100.8. Tests updated for the new counts and lists: the switched props
 (`hologram_display`), 71 prop kinds, the shot names message, the set beds (the first four), the
 portal's parts without a view, the Listen page budget.
+
+### 100.15 Light on the characters, hands that show (Step 247)
+
+From a reviewer's notes on the 246 test cut (night faces too dark, darker skin especially; the
+visitors' iridescence swallowed by the night light; held hands not visible, one character in
+front of the other; the visitors not reading tall) and the story video built in Step 247.
+
+- **Fill light** (stage param `fill_light`, 0–1, default 0): `lighting.lifted(grade, share)` moves
+  a grade `share` of the way back to the colours as drawn (`multiply` towards 1, `glow` towards
+  0; stars, shadows and saturation kept; 0 returns the grade itself). `shading.mark_light_lift`
+  sets `LIGHT_LIFT` on a mobject's family; `StageLight._grade_of` applies it after a lamp's
+  light (§89.13), each (grade, share) made once (`_lifted`, cleared past 256). `StoryStaging
+  ._fill_lights` marks each non-hologram character with `max(fill_light, iridescent.glow)`.
+  Computed: skin `#B98560` at `night` has a mean channel 0.25, with 0.45 of fill 0.38. An alarm's
+  grade (§100.7) is lifted the same way: faces show red, not black. A draft is flat anyway.
+- **An iridescent visitor's glow** (`IridescentConfig.glow`, 0–1, default 0.5): how much of the
+  stage's light it shrugs off. Default 0.5, not 0: iridescence was new in 246 (no committed
+  render or sample shows it), and a muted shimmer at night was the reviewer's note.
+- **Hands that show** (`HandHold._keep_close`): each of the two is drawn at its own place (where
+  the stage or its walk puts it: when its feet moved since the last frame an animation placed
+  it anew, else the last offset is taken back) plus an offset. Standing, the offsets step both in
+  across the picture, `share` of the reach blend, until the shoulders are no further apart than
+  the arms reach to the meeting point (`HAND_REACH` 0.92 of the shorter arm, measured as it hangs
+  at the start, at `HAND_DROP` below the shoulders), never closer than `HAND_MIN_GAP` 0.22 at the
+  shoulders nor `HAND_MIN_APART` 0.42 (of the taller one's height) at the feet. Both moved by
+  walks on a frame: the first keeps its offset and the second its place beside the first (the
+  formation from the last standing frame), so two walking to neighbouring spots go side by side
+  instead of one behind the other on their routes (give the walks the same `run_time`). On an
+  iso place the offsets are across the picture only while standing; the cells, draw order and
+  `iso_feet` stay the walks'. Decided over moving the spots or planning a joint route: the
+  stage's spots are cells, and two neighbouring cells side by side are 1.7 tiles apart, much
+  further than arms reach.
+- **Tall visitors** checked: `scale` does apply on an iso place (layout, shots, two-shots); at
+  1.45 next to a `tall` human the visitor read human-sized in wide views (its small head, the
+  room's depth). The guide and CONFIG now suggest 1.5–1.8 and a `two_shot` with a human.
+- **Not done** (seen in the story video): a 9:16 variant of an iso story whose characters spread
+  over the whole room shows the room small in a tall frame (the portrait rule keeps all bodies in
+  view) — a vertical cut would need its own staging; zooms with `until` across a beat with a
+  `shot` move the camera back during that shot (write `until` as the next beat, or none).
+- **Public** (`vidgen.api` adds): `lifted`, `mark_light_lift`. Config: stage `fill_light`,
+  `characters[].iridescent.glow`.
+- **Compatibility**: `fill_light` defaults to 0 (nothing marked); `HandHold` is used only by
+  `hold_hands` (new in 246, no committed render); iridescence likewise. Phase Q baseline 31/31.

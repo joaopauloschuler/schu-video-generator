@@ -1732,18 +1732,20 @@ beats:
 
 Two looks for visitors from elsewhere, on a stage:
 
-- **`iridescent: true`** (or `{seconds, strength}`) makes a character's skin and clothes shift
+- **`iridescent: true`** (or `{seconds, strength, glow}`) makes a character's skin and clothes shift
   colours like oil on water: bands of hue running up the figure, drifting once round the rainbow
   in `seconds` (default 12; slow reads best), mixed in by `strength` (0.1–1, default 0.8). Its
   outlines, dark features and white eye-whites keep their colours; pale colours get a sheen
-  (at least half saturated). The stage's light grades it like any character.
+  (at least half saturated). It shines partly by its own light: `glow` (0–1, default 0.5) is how
+  much of the stage's light it shrugs off (0: graded like anyone, muted at night or under an
+  alarm; 1: never darkened, like a hologram), so the colours stay vivid in a dark room.
 - **`afterimages: true`** (or `{spacing, life, opacity}`) leaves faint copies of the character
   where it was while it moves (a walk, an entrance, a keyframe move): one every `spacing` s
   (default 0.12) once it has moved a little, each starting at `opacity` (default 0.35) of the
   figure and fading over `life` s (default 0.6), drawn just behind it. Nothing while it stands
   still.
 - A tall, slender visitor: `look: {body: tall, head_size: 0.8}` and a `scale` on the stage
-  (`1.4`–`1.5`: taller than the others; on an iso place a character's `scale` is its size).
+  (`1.5`–`1.8`: towering over the others, which a `two_shot` with a human shows; on an iso place a character's `scale` is its size).
 - Render cost: an iridescent character is recoloured on every frame; afterimages are copies of
   the figure (a few at a time). A draft render shows neither.
 
@@ -10113,6 +10115,7 @@ never leaves the stage.
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene; on an [iso place](#isometric-places-iso) where it rains from the start, the rainy day's tint |
+| `fill_light` | float 0–1 | `0` | a soft [fill light](#light-and-shadows-light-shadows) on the characters only, so faces stay readable in a dark light (night, an alarm, a dim tint): 0 none, 1 the characters as drawn whatever the light; 0.3–0.5 keeps the mood |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `drawing` | mapping | none (the video's `drawing`) | this scene's [drawing style](#drawing-style-drawing): `{outline, shading, texture, seed}`; the keys given win over the video's `drawing` |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
@@ -11567,9 +11570,14 @@ scenes:
 **`- {hold_hands: ana, with: ben}`** has two characters of a stage take each other's hand: each
 one's hand nearer the other reaches (0.4 s) for a point between their shoulders, a little lower,
 and they keep holding hands from then on wherever they stand or walk, the arms following every
-frame. To walk hand in hand, walk both in the same beat to places side by side (`- {walk_to:
-ana, to: 0.4}`, `- {walk_to: ben, to: 0.55}`; on an iso place to two neighbouring spots); far
-apart, their arms reach towards each other, straight. **`- let_go_hands: ana`** ends it (the
+frame. Standing further apart than their arms reach (two neighbouring spots of an iso place),
+they step in towards each other across the picture as the hands reach, close enough for the
+joined hands to show between them (never on top of each other); they keep that place when they
+let go. To walk hand in hand, walk both in the same beat to places side by side (`- {walk_to:
+ana, to: 0.4}`, `- {walk_to: ben, to: 0.55}`; on an iso place to two neighbouring spots), with
+the same `run_time` so they set off and arrive together: while both walk, the second keeps its
+place beside the first (side by side, not one behind the other on their routes).
+**`- let_go_hands: ana`** ends it (the
 other lets go too): the arms come back to their sides. While holding, the holding arm takes no
 other action (a `gesture` or `pick_up` with it is overridden); the other arm is free. Generated
 characters only (an SVG character's arms do not bend).
@@ -12447,6 +12455,19 @@ particles keep their colours too.
 | `night` | dark blue; stars in the sky (on a colour background only, behind the layers, above the characters' heads) and faint shadows |
 | `indoor` | warm lamplight, a little dimmer |
 | `{tint, strength}` | a light of your own: every colour multiplied towards `tint` (a theme token or `#hex`) by `strength` (0 = no change, 1 = fully, default `0.5`) |
+
+**`fill_light`** (0–1, default 0) adds a soft light on the characters alone, as a film lights
+its actors apart from the set: each character is graded that share of the way back to its own
+colours, so faces and expressions read at `night`, under an [alarm](#alarms-and-shutters-alarm-shutters) or in
+a dim tint while the room stays dark (a lamp's light on an iso place adds to it; holograms are
+never graded). `fill_light: 0.45` with `light: night` keeps a dark-skinned face readable; 1 shows
+the characters as drawn.
+
+```yaml
+- id: late_lab
+  type: stage
+  params: {light: night, fill_light: 0.45, characters: [pip, kit]}
+```
 
 The `light` [beat action](#beat-actions) changes the light during the scene: `- light: night`
 (or `tint` + `strength`) fades from the light at its `at` over `run_time` seconds (default `2`)
